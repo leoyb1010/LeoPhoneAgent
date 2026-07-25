@@ -38,9 +38,31 @@ Cursor / Grok Build / Hermes Agent 没有可查询的 npm 包(`npmPackage: null`
 ## 验证
 - 门禁全绿:typecheck 0、ESLint 0、client 71/71、server **336/336**、生产构建通过。
 - 新增 4 条回归测试锁死重试语义:EBADF 会重试到成功、超出上限后返回真实错误、**普通失败绝不重试**(坏掉的 CLI 仍然快速失败)、退避序列累计 ≥10 秒。
-- 装机后在真实运行版上**实测触发了一次 Claude Code 更新**(结果见下方「实测」)。
+- 装机后在真实运行版上**实测触发了那个一直失败的动作**——结果如下。
+
+### 实测(1.61.0 装机后,真机真实更新)
+更新前:`current=2.1.217`(终端实际在跑)、另有副本 `2.1.218` / `2.1.207`、`updateAvailable=true`。
+
+触发 `POST /cli/claude/update`:
+
+```
+success      : true
+previous     : 2.1.217   →   current : 2.1.220
+changed      : true
+error        : none            ← 之前这里是 `which claude: spawn EBADF`
+activePath   : ~/.nvm/versions/node/v22.22.3/bin/claude
+```
+
+更新后复核:
+- 终端解析到的那份二进制 `claude --version` = **2.1.220**;
+- `hasNewerShadowCopy=false`、`updateAvailable=false` —— **「另有更新的副本未生效」的提示自行消失**,因为更新精确落在了终端在跑的那一份上;
+- cursor / hermes / grok 的 `latestVersionSource=unsupported`,界面显示为**「自更新」**而非「无法检查」。
+
+(更新输出里另有一条 npm `allow-scripts` 提示,那是 npm 自己的正常告知,应用如实转达了,不是故障。)
 
 ## 下载校验
-- DMG SHA-256:`PENDING`
-- ZIP SHA-256:`PENDING`
-- `latest-mac.yml` SHA-256:`PENDING`
+- DMG SHA-256:`fbdc0aa488fd826181424cf5d19c91f0f1c86beb3d42c9f2961d4379bbbf073c`
+- ZIP SHA-256:`1b02e6582cd60e546a873415b7c6fc5fb9ead73cff4f6079c5377b652e52ed12`
+- `latest-mac.yml` SHA-256:`25a28b6890d8ec67428120904967fe7b5fdabcb7d11cf16b4d98115d49fe0a2b`
+
+> 注:本版 DMG 未做窗口背景美化(本机 Finder 自动化权限被系统重置,-1743),纯功能包,不影响安装/签名/公证/热更新。
