@@ -18,15 +18,6 @@ export function formatTokensCn(n: number): string {
   return String(Math.round(n));
 }
 
-/** Compact variant for tight spaces (chart axes, dense rows). */
-export function formatTokensCnShort(n: number): string {
-  if (!Number.isFinite(n)) return '0';
-  const abs = Math.abs(n);
-  if (abs >= 100_000_000) return `${trimTrailingZero(n / 100_000_000)}亿`;
-  if (abs >= 10_000) return `${trimTrailingZero(n / 10_000)}万`;
-  return String(Math.round(n));
-}
-
 function trimTrailingZero(value: number): string {
   const fixed = value >= 100 ? value.toFixed(0) : value.toFixed(1);
   return fixed.endsWith('.0') ? fixed.slice(0, -2) : fixed;
@@ -37,11 +28,21 @@ export function usdToCny(usd: number): number {
   return usd * USD_TO_CNY;
 }
 
-/** Format a USD amount as 人民币: "¥31.5" (or "¥3,140.00" for large). */
-export function formatCny(usd: number, { decimals }: { decimals?: number } = {}): string {
-  const cny = usdToCny(usd);
-  const d = decimals ?? (cny >= 100 ? 0 : cny >= 10 ? 1 : 2);
-  return `¥${cny.toLocaleString('zh-CN', { minimumFractionDigits: d, maximumFractionDigits: d })}`;
+/**
+ * Format an amount that is ALREADY in 人民币. Use this for values converted
+ * upstream (e.g. an animated CNY counter) so they render identically to
+ * `formatCny` — the dashboard used to show the same cost as both "¥1234.56"
+ * (hand-rolled toFixed) and "¥1,235" on one screen.
+ */
+export function formatCnyAmount(cny: number, { decimals }: { decimals?: number } = {}): string {
+  const value = Number.isFinite(cny) ? cny : 0;
+  const d = decimals ?? (value >= 100 ? 0 : value >= 10 ? 1 : 2);
+  return `¥${value.toLocaleString('zh-CN', { minimumFractionDigits: d, maximumFractionDigits: d })}`;
+}
+
+/** Format a USD amount as 人民币: "¥31.5" (or "¥3,140" for large). */
+export function formatCny(usd: number, options: { decimals?: number } = {}): string {
+  return formatCnyAmount(usdToCny(usd), options);
 }
 
 /** Plain count with Chinese grouping: 12345 → "1.2万", small → locale string. */

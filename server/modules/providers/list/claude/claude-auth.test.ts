@@ -18,7 +18,7 @@ const allSpawnsFail = async () => ({ error: ebadf(), status: null, stdout: '', s
 
 const HOUR = 60 * 60 * 1000;
 
-async function statusWithCredentials(oauth: Record<string, unknown>) {
+async function statusWithCredentials(oauth: Record<string, unknown>, accountEmail?: string) {
   const dir = mkdtempSync(path.join(tmpdir(), 'claude-auth-'));
   const saved = {
     cfg: process.env.CLAUDE_CONFIG_DIR,
@@ -30,6 +30,9 @@ async function statusWithCredentials(oauth: Record<string, unknown>) {
   delete process.env.ANTHROPIC_API_KEY;
   try {
     writeFileSync(path.join(dir, '.credentials.json'), JSON.stringify({ claudeAiOauth: oauth }), 'utf8');
+    if (accountEmail) {
+      writeFileSync(path.join(dir, '.claude.json'), JSON.stringify({ oauthAccount: { emailAddress: accountEmail } }), 'utf8');
+    }
     return await new ClaudeProviderAuth(allSpawnsFail).getStatus();
   } finally {
     if (saved.cfg === undefined) delete process.env.CLAUDE_CONFIG_DIR; else process.env.CLAUDE_CONFIG_DIR = saved.cfg;
@@ -54,6 +57,23 @@ test('expired access token WITH a refreshToken still reads as logged in', async 
 test('unexpired access token reads as logged in (unchanged)', async () => {
   const status = await statusWithCredentials({ accessToken: 'fresh', refreshToken: 'r', expiresAt: Date.now() + HOUR });
   assert.equal(status.authenticated, true);
+});
+
+test('the account email is shown instead of the "Authenticated" placeholder', async () => {
+  const status = await statusWithCredentials(
+    { accessToken: 'a', refreshToken: 'r', expiresAt: Date.now() + HOUR },
+    'someone@example.com',
+  );
+  assert.equal(status.authenticated, true);
+  assert.equal(status.email, 'someone@example.com');
+});
+
+test('with no known address the email is null, never an English placeholder', async () => {
+  const status = await statusWithCredentials({ accessToken: 'a', refreshToken: 'r', expiresAt: Date.now() + HOUR });
+  assert.equal(status.authenticated, true);
+  // null on purpose: the UI renders its own localized "已登录" label. A string
+  // like "Authenticated" here would leak English into a Chinese account tile.
+  assert.equal(status.email, null);
 });
 
 test('expired access token WITHOUT a refreshToken still reports expired', async () => {

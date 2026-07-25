@@ -55,23 +55,34 @@ export const READ_ONLY_TOOL_SPECS: ToolSpec[] = [
 
 /** Resolve a requested path inside `root`, following symlinks, refusing any escape. */
 async function resolveWithin(root: string, requested: unknown): Promise<string> {
+  const escape = () => new Error('path escapes the task root');
   const rel = typeof requested === 'string' ? requested : '';
   const candidate = path.resolve(root, rel);
   // Lexical containment first (covers `..` before touching disk).
-  if (candidate !== root && !candidate.startsWith(root + path.sep)) {
-    throw new Error('path escapes the task root');
+  if (candidate !== root && !candidate.startsWith(root + path.sep)) throw escape();
+
+  // Compare against the REAL root, so a symlinked root still matches itself.
+  const realRoot = await fs.realpath(root).catch(() => root);
+  const inside = (p: string) => p === realRoot || p.startsWith(realRoot + path.sep);
+
+  // The target often does not exist yet (write_file creates it). Resolving only
+  // the full path would then silently fall back to the lexical one and follow a
+  // symlink out of the root — e.g. `root/link -> /etc` plus `write_file(
+  // "link/foo")` used to land in /etc. So walk up to the nearest EXISTING
+  // ancestor, verify that after symlink resolution, and re-append the rest.
+  const tail: string[] = [];
+  let probe = candidate;
+  for (;;) {
+    const real = await fs.realpath(probe).catch(() => null);
+    if (real !== null) {
+      if (!inside(real)) throw escape();
+      return tail.length ? path.join(real, ...tail.reverse()) : real;
+    }
+    const parent = path.dirname(probe);
+    if (parent === probe) throw escape(); // walked past the filesystem root
+    tail.push(path.basename(probe));
+    probe = parent;
   }
-  // Then follow symlinks and re-check, so a symlink inside root can't point out.
-  let real: string;
-  try {
-    real = await fs.realpath(candidate);
-  } catch {
-    real = candidate; // not yet existing / unreadable — let the caller's op report it
-  }
-  if (real !== root && !real.startsWith(root + path.sep)) {
-    throw new Error('path escapes the task root');
-  }
-  return candidate;
 }
 
 async function readFileTool(root: string, input: Record<string, unknown>): Promise<ToolResult> {
@@ -147,18 +158,54 @@ async function runShellTool(root: string, input: Record<string, unknown>): Promi
     return { content: 'refused: command matches a blocked destructive pattern', isError: true };
   }
   return new Promise<ToolResult>((resolve) => {
-    const child = spawn('sh', ['-c', command], { cwd: root, timeout: SHELL_TIMEOUT_MS });
+    // `detached` puts the command in its own process group so a timeout can
+    // kill the WHOLE tree — spawn's built-in `timeout` only signals `sh` and
+    // leaves its children running.
+    const child = spawn('sh', ['-c', command], { cwd: root, detached: true });
     let out = '';
-    let killed = false;
+    let timedOut = false;
+    let settled = false;
+    let graceTimer: NodeJS.Timeout | undefined;
+
     const append = (chunk: Buffer) => { if (out.length < SHELL_MAX_OUTPUT) out += chunk.toString('utf8'); };
     child.stdout.on('data', append);
     child.stderr.on('data', append);
-    child.on('error', (error) => resolve({ content: `run_shell failed: ${error.message}`, isError: true }));
-    child.on('close', (code, signal) => {
-      if (signal === 'SIGTERM') killed = true;
+
+    const finish = (code: number | null) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (graceTimer) clearTimeout(graceTimer);
       const capped = out.length >= SHELL_MAX_OUTPUT ? `${out.slice(0, SHELL_MAX_OUTPUT)}\n[output truncated]` : out;
-      const note = killed ? `\n[timed out after ${SHELL_TIMEOUT_MS}ms]` : '';
-      resolve({ content: `exit ${code ?? 'null'}${note}\n${capped}`.trim(), isError: killed || (code ?? 1) !== 0 });
+      const note = timedOut ? `\n[timed out after ${SHELL_TIMEOUT_MS}ms]` : '';
+      resolve({ content: `exit ${code ?? 'null'}${note}\n${capped}`.trim(), isError: timedOut || (code ?? 1) !== 0 });
+    };
+
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try {
+        if (child.pid) process.kill(-child.pid, 'SIGKILL'); // whole group
+        else child.kill('SIGKILL');
+      } catch { child.kill('SIGKILL'); }
+      finish(null);
+    }, SHELL_TIMEOUT_MS);
+
+    child.on('error', (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ content: `run_shell failed: ${error.message}`, isError: true });
+    });
+
+    // Resolve on 'exit' (the shell itself is done) rather than waiting for
+    // 'close': if the command backgrounded anything, that grandchild keeps the
+    // stdio pipes open and 'close' NEVER fires — which used to hang the whole
+    // /kernel/run request for the lifetime of the orphan. A short grace lets
+    // trailing output arrive on the normal path.
+    child.on('close', (code) => finish(code));
+    child.on('exit', (code) => {
+      if (settled) return;
+      graceTimer = setTimeout(() => finish(code), 200);
     });
   });
 }

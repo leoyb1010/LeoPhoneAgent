@@ -11,6 +11,9 @@ type ProjectsOverviewCardProps = {
   loading: boolean;
   error: string | null;
   onOpenProjects: () => void;
+  /** Re-fetches after a load failure. Without it the 重试 button used to
+   *  navigate away instead of retrying. */
+  onRetry?: () => void;
   delay?: number;
 };
 
@@ -25,7 +28,7 @@ const PROVIDER_SHORT: Record<string, string> = {
 };
 
 /** Compact projects overview: total count, starred, and per-project session chips. */
-export default function ProjectsOverviewCard({ projects, loading, error, onOpenProjects, delay = 0 }: ProjectsOverviewCardProps) {
+export default function ProjectsOverviewCard({ projects, loading, error, onOpenProjects, onRetry, delay = 0 }: ProjectsOverviewCardProps) {
   const { t } = useTranslation();
 
   const stats = useMemo(() => {
@@ -61,7 +64,7 @@ export default function ProjectsOverviewCard({ projects, loading, error, onOpenP
       {loading ? (
         <DashSkeleton rows={3} />
       ) : error && !projects ? (
-        <DashError message={error} onRetry={onOpenProjects} />
+        <DashError message={error} onRetry={onRetry} />
       ) : stats.total === 0 ? (
         <DashEmpty
           message={t('dashboard.projectsEmpty', { defaultValue: '还没有项目' })}

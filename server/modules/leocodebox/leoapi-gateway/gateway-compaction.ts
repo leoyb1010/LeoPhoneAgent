@@ -18,8 +18,13 @@
 
 const KEEP_FIRST = 1; // first turn (task framing) always kept verbatim
 const KEEP_RECENT = 20; // last N turns always kept verbatim
-const MIN_MESSAGES = KEEP_FIRST + KEEP_RECENT + 4; // below this, never act
+// Below this, never act. It must clear the quantized boundary below, otherwise
+// the boundary rounds down to zero and compaction is a silent no-op anyway.
+const MIN_MESSAGES = KEEP_FIRST + KEEP_RECENT + 20;
 const MAX_OLD_TOOL_RESULT = 2000; // chars kept from an old tool_result before trimming
+/** The trim boundary only advances in blocks of this many messages, so the
+ *  compacted prefix stays byte-identical (and prompt-cacheable) between turns. */
+const BOUNDARY_STEP = 20;
 
 export type CompactionStats = { touchedBlocks: number; savedChars: number };
 type Block = Record<string, unknown>;
@@ -91,7 +96,15 @@ export function compactMessages(body: MessagesBody): { body: MessagesBody; stats
   const messages = body?.messages;
   if (!Array.isArray(messages) || messages.length < MIN_MESSAGES) return { body, stats };
 
-  const lastMiddle = messages.length - KEEP_RECENT; // exclusive upper bound of the middle
+  // Quantize the boundary so it does NOT advance every turn. A per-turn
+  // boundary rewrote a message that the previous request had sent verbatim,
+  // which changes the prompt prefix and invalidates the client's prompt cache
+  // on essentially every request — re-billing the whole history as cache writes
+  // and making a cost-saving feature cost MORE on exactly the long
+  // conversations it targets. Moving in blocks keeps the compacted prefix
+  // byte-identical across a run of turns.
+  const lastMiddle = Math.floor((messages.length - KEEP_RECENT) / BOUNDARY_STEP) * BOUNDARY_STEP;
+  if (lastMiddle <= KEEP_FIRST) return { body, stats };
   const next = messages.map((message, index) => {
     if (index < KEEP_FIRST || index >= lastMiddle) return message; // keep first + recent verbatim
     return compactMessage(message as Message, stats);

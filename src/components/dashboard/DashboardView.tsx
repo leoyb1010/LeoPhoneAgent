@@ -84,6 +84,7 @@ export default function DashboardView({ onNavigateToSession, onShowTab, onNewCha
               loading={data.projects.loading}
               error={data.projects.error}
               onOpenProjects={handleOpenProjects}
+              onRetry={data.refresh}
               delay={80}
             />
           </div>
@@ -96,6 +97,7 @@ export default function DashboardView({ onNavigateToSession, onShowTab, onNewCha
               loading={data.missions.loading}
               error={data.missions.error}
               onOpenMissions={handleOpenMissions}
+              onRetry={data.refresh}
               delay={160}
             />
           </div>

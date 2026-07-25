@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -110,6 +110,39 @@ test('write_file writes inside the root, refuses to escape it', async () => {
   }
 });
 
+test('write_file cannot escape through a symlink to a not-yet-existing path', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'kernel-'));
+  const outside = mkdtempSync(path.join(tmpdir(), 'outside-'));
+  try {
+    // The classic shape: a symlinked directory inside the root (node_modules
+    // links, workspace links, or the user's own). The target does not exist
+    // yet, which is exactly when realpath used to fail open.
+    symlinkSync(outside, path.join(root, 'link'));
+    const { execute } = createKernelTools(root, { allowWrite: true });
+
+    const escaped = await execute('write_file', { path: 'link/pwned.txt', content: 'nope' });
+    assert.equal(escaped.isError, true);
+    assert.equal(existsSync(path.join(outside, 'pwned.txt')), false);
+
+    // Creating a whole new tree behind the link must fail too.
+    const deep = await execute('write_file', { path: 'link/newdir/deep.txt', content: 'nope' });
+    assert.equal(deep.isError, true);
+    assert.equal(existsSync(path.join(outside, 'newdir')), false);
+
+    // Reading through the link stays blocked as well.
+    const read = await execute('read_file', { path: 'link/anything.txt' });
+    assert.equal(read.isError, true);
+
+    // A normal nested write inside the root still works.
+    const ok = await execute('write_file', { path: 'sub/dir/ok.txt', content: 'yes' });
+    assert.equal(ok.isError, undefined);
+    assert.equal(readFileSync(path.join(root, 'sub/dir/ok.txt'), 'utf8'), 'yes');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
+  }
+});
+
 test('run_shell executes in the root and blocks destructive patterns', async () => {
   const root = mkdtempSync(path.join(tmpdir(), 'kernel-'));
   try {
@@ -121,6 +154,22 @@ test('run_shell executes in the root and blocks destructive patterns', async () 
     const danger = await execute('run_shell', { command: 'rm -rf /tmp/whatever' });
     assert.equal(danger.isError, true);
     assert.match(danger.content, /blocked destructive pattern/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('run_shell returns promptly even when the command backgrounds a child', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'kernel-'));
+  try {
+    const { execute } = createKernelTools(root, { allowExec: true });
+    const started = Date.now();
+    // The backgrounded `sleep` keeps the stdio pipes open, so 'close' never
+    // fires and this used to hang the request for the orphan's full lifetime.
+    const result = await execute('run_shell', { command: 'sleep 20 & echo started' });
+    const elapsed = Date.now() - started;
+    assert.match(result.content, /started/);
+    assert.ok(elapsed < 5000, `run_shell should not wait for the orphan (took ${elapsed}ms)`);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

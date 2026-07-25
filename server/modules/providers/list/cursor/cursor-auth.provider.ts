@@ -21,7 +21,9 @@ export function parseCursorLoginStatus(output: string): CursorLoginStatus {
     return { authenticated: true, email: emailMatch[1], method: 'cli' };
   }
   if (/Login successful|Logged in/i.test(output)) {
-    return { authenticated: true, email: 'Logged in', method: 'cli' };
+    // Logged in but the address wasn't in the output — `null` lets the UI show
+    // its own localized label rather than a stray English string.
+    return { authenticated: true, email: null, method: 'cli' };
   }
   return { authenticated: false, email: null, method: null, error: 'Not logged in' };
 }

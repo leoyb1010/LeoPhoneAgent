@@ -98,7 +98,10 @@ export class OpenCodeProviderAuth implements IProviderAuth {
         if (hasCredential) {
           return {
             authenticated: true,
-            email: `${providerId} credentials`,
+            // The bare provider id ("xai") — which credential is in use is the
+            // useful part, and it reads the same in any UI language, unlike the
+            // old "<id> credentials" English label.
+            email: providerId,
             method: 'credentials_file',
           };
         }

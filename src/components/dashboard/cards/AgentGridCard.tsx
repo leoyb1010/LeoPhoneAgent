@@ -31,6 +31,7 @@ type AgentGridCardProps = {
 export default function AgentGridCard({ cliTools, providerAuth, loading, error, onRefresh, delay = 0 }: AgentGridCardProps) {
   const { t } = useTranslation();
   const [installing, setInstalling] = useState<string | null>(null);
+  const [installError, setInstallError] = useState<string | null>(null);
 
   const toolById = useMemo(() => {
     const map: Record<string, CliToolStatus> = {};
@@ -46,11 +47,21 @@ export default function AgentGridCard({ cliTools, providerAuth, loading, error, 
 
   const handleInstall = async (id: string) => {
     setInstalling(id);
+    setInstallError(null);
     try {
-      await apiClient.post(`/api/leocodebox/cli/${id}/install`);
+      // A failed install answers HTTP 200 with `success:false`, so a resolved
+      // promise is NOT proof it worked — check the flag too. Previously both
+      // this and the thrown 409 ("没有经过验证的一键安装方式") were swallowed,
+      // so the button just flashed and the tool stayed uninstalled with no
+      // explanation.
+      const result = await apiClient.post<{ success?: boolean; error?: string }>(`/api/leocodebox/cli/${id}/install`);
+      if (result?.success === false) {
+        setInstallError(result.error || t('dashboard.installFailed', { defaultValue: '安装失败,请查看设置里的详细输出。' }));
+        return;
+      }
       onRefresh();
-    } catch {
-      // Error surfaces on next poll; keep the card usable.
+    } catch (error) {
+      setInstallError(error instanceof Error ? error.message : t('dashboard.installFailed', { defaultValue: '安装失败,请查看设置里的详细输出。' }));
     } finally {
       setInstalling(null);
     }
@@ -75,6 +86,13 @@ export default function AgentGridCard({ cliTools, providerAuth, loading, error, 
         <DashEmpty message={t('dashboard.agentsEmpty', { defaultValue: '未检测到任何 Agent CLI' })} />
       ) : (
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {installError && (
+            <div className="sm:col-span-2">
+              {/* No retry button: the fix is usually manual (see the message),
+                  and a 重试 that only dismissed would be its own small lie. */}
+              <DashError message={installError} />
+            </div>
+          )}
           {AGENT_ORDER.map((agent) => {
             const tool = toolById[agent.id];
             const auth = providerAuth?.[agent.id];

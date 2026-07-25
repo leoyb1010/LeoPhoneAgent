@@ -6,7 +6,7 @@ import { startVisibleInterval } from '../../../utils/visibilityInterval';
 import { apiClient } from '../../../utils/apiClient';
 import type { RunningSession } from '../dashboardTypes';
 
-import { DashCard, DashCardTitle, DashEmpty, DashSkeleton } from './dashShared';
+import { DashCard, DashCardTitle, DashEmpty, DashError, DashSkeleton } from './dashShared';
 
 type RunningSessionsCardProps = {
   onOpenSession?: (sessionId: string) => void;
@@ -15,12 +15,19 @@ type RunningSessionsCardProps = {
   delay?: number;
 };
 
-function useNow(intervalMs = 1000): number {
+/**
+ * Ticks once a second so run durations stay live. `active` is false when there
+ * is nothing to count up — otherwise the card re-rendered every second forever,
+ * including with zero sessions and the window in the background. Uses the same
+ * visibility-aware timer as the poll below.
+ */
+function useNow(active: boolean, intervalMs = 1000): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), intervalMs);
-    return () => window.clearInterval(id);
-  }, [intervalMs]);
+    if (!active) return;
+    setNow(Date.now());
+    return startVisibleInterval(() => setNow(Date.now()), intervalMs);
+  }, [active, intervalMs]);
   return now;
 }
 
@@ -50,15 +57,19 @@ export default function RunningSessionsCard({ onOpenSession, onCountChange, dela
   const { t } = useTranslation();
   const { subscribe } = useWebSocket();
   const [sessions, setSessions] = useState<RunningSession[] | null>(null);
-  const now = useNow(1000);
+  const [error, setError] = useState<string | null>(null);
+  const now = useNow((sessions?.length ?? 0) > 0);
 
   const load = useCallback(async () => {
     try {
       const payload = await apiClient.get<{ data?: { sessions?: RunningSession[] } }>('/api/providers/sessions/running');
       setSessions(Array.isArray(payload.data?.sessions) ? payload.data.sessions : []);
-    } catch {
-      // Keep last-known list on a failed poll.
-      setSessions((prev) => prev ?? []);
+      setError(null);
+    } catch (err) {
+      // Keep the last-known list on a failed poll, but do NOT invent an empty
+      // one: right after launch the server is often not up yet, and claiming
+      // "当前没有运行中的 Agent" when we simply couldn't ask is a lie.
+      setError(err instanceof Error ? err.message : '读取运行中会话失败');
     }
   }, []);
 
@@ -104,7 +115,11 @@ export default function RunningSessionsCard({ onOpenSession, onCountChange, dela
         }
       />
 
-      {sessions === null ? (
+      {sessions === null && error ? (
+        // Never loaded AND the poll failed — show why, instead of an empty
+        // state that would claim nothing is running.
+        <DashError message={error} onRetry={() => void load()} />
+      ) : sessions === null ? (
         <DashSkeleton rows={2} />
       ) : sessions.length === 0 ? (
         <DashEmpty

@@ -6,6 +6,7 @@ import type { ProviderStore } from '../provider-store.service.js';
 import { buildUpstreamHeaders, parseAnthropicUsage, parseGatewayToken, selectUpstreamChain } from './gateway.service.js';
 import { __resetGatewayMeter, gatewayMeterSnapshot, recordGatewayRequest } from './gateway-meter.js';
 import { __resetCompaction, compactionSnapshot, compactMessages, compactRequestBody, recordCompaction } from './gateway-compaction.js';
+import { upstreamUrl } from './gateway.routes.js';
 
 function fakeStore(): ProviderStore {
   return {
@@ -122,18 +123,21 @@ test('routing signal counts distinct nodes and failover attempts', () => {
 
 const BIG = 'x'.repeat(5000);
 
-/** A 26-turn body: [0]=first, [1..5]=middle, [6..25]=recent. Oversized tool_result
- *  at a middle index and a recent index; a middle text block that must survive. */
+/**
+ * A 45-turn body. With KEEP_FIRST=1, KEEP_RECENT=20 and a boundary quantized to
+ * blocks of 20, the trim window is indices 1..19: [0] first (kept), [2] an
+ * oversized tool_result inside the window (trimmed), [3] an oversized TEXT
+ * block (never trimmed), [30] an oversized tool_result in the recent tail
+ * (kept).
+ */
 function longMessagesBody() {
   const messages: Array<{ role: string; content: unknown }> = [];
   messages.push({ role: 'user', content: 'first turn: the task' }); // 0 (kept)
   messages.push({ role: 'assistant', content: 'thinking' }); // 1
-  messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: 't2', content: BIG }] }); // 2 middle → trim
-  messages.push({ role: 'user', content: [{ type: 'text', text: BIG }] }); // 3 middle text → keep
-  messages.push({ role: 'assistant', content: 'ok' }); // 4
-  messages.push({ role: 'user', content: 'more' }); // 5
-  for (let i = 6; i < 26; i += 1) {
-    if (i === 24) messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: 't24', content: BIG }] }); // recent → keep
+  messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: 't2', content: BIG }] }); // 2 → trim
+  messages.push({ role: 'user', content: [{ type: 'text', text: BIG }] }); // 3 text → keep
+  for (let i = 4; i < 45; i += 1) {
+    if (i === 30) messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: 't30', content: BIG }] }); // recent → keep
     else messages.push({ role: i % 2 ? 'assistant' : 'user', content: `turn ${i}` });
   }
   return { system: 'SYSTEM PROMPT', model: 'claude-sonnet-4-5', messages };
@@ -155,7 +159,7 @@ test('compaction trims only old oversized tool_result, keeping system/first/rece
   // middle TEXT block never trimmed.
   assert.equal((msgs[3].content as Array<{ text: string }>)[0].text.length, 5000);
   // recent tool_result (index 24) never trimmed.
-  assert.equal((msgs[24].content as Array<{ content: string }>)[0].content.length, 5000);
+  assert.equal((msgs[30].content as Array<{ content: string }>)[0].content.length, 5000);
   // input object was not mutated.
   assert.equal(JSON.stringify(input), before);
 });
@@ -174,6 +178,33 @@ test('compactRequestBody trims a long JSON body and fails open on anything else'
   assert.ok(JSON.parse(long.body.toString()).messages[2].content[0].content.includes('已裁剪'));
   assert.equal(compactRequestBody(Buffer.from('not json')), null); // malformed → use original
   assert.equal(compactRequestBody(Buffer.from(JSON.stringify({ messages: [] }))), null); // nothing to trim
+});
+
+test('upstreamUrl does not double a /v1 the provider baseUrl already has', () => {
+  assert.equal(upstreamUrl('https://relay.example/v1', '/v1/messages'), 'https://relay.example/v1/messages');
+  assert.equal(upstreamUrl('https://relay.example/v1/', '/v1/messages'), 'https://relay.example/v1/messages');
+  assert.equal(upstreamUrl('https://api.example', '/v1/messages'), 'https://api.example/v1/messages');
+  // A non-/v1 path is appended verbatim either way.
+  assert.equal(upstreamUrl('https://relay.example/v1', '/health'), 'https://relay.example/v1/health');
+  assert.equal(upstreamUrl('https://relay.example/v1', '/v1/messages?beta=1'), 'https://relay.example/v1/messages?beta=1');
+});
+
+test('the compaction boundary is stable between turns (keeps the prompt cache)', () => {
+  const big = 'y'.repeat(5000);
+  const build = (n: number) => ({
+    system: 's',
+    messages: Array.from({ length: n }, (_, i) => (
+      i === 2
+        ? { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't', content: big }] }
+        : { role: i % 2 ? 'assistant' : 'user', content: `turn ${i}` }
+    )),
+  });
+  // Two consecutive turns must produce an identical prefix for message 2 —
+  // a boundary that advanced every turn re-wrote already-sent history.
+  const a = compactMessages(build(30));
+  const b = compactMessages(build(31));
+  const at = (r: { body: { messages?: unknown } }) => JSON.stringify((r.body.messages as unknown[])[2]);
+  assert.equal(at(a), at(b));
 });
 
 test('compaction snapshot accumulates savings', () => {

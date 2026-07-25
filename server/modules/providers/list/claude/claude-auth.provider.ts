@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 
 import { resolveClaudeCodeExecutablePath } from '@/shared/claude-cli-path.js';
@@ -44,6 +45,29 @@ export function parseClaudeCliAuthStatus(output: string): ClaudeCliAuthStatus | 
 const hasErrorCode = (error: unknown, code: string): boolean => (
   error instanceof Error && 'code' in error && error.code === code
 );
+
+/**
+ * The signed-in account's email, read from Claude Code's own config file.
+ * `.credentials.json` carries only tokens, so without this the account tile
+ * fell back to the literal placeholder "Authenticated" while every sibling
+ * provider showed a real address. Read from disk (never spawned), so it also
+ * works in the packaged GUI app where spawning the CLI can fail.
+ */
+async function readAccountEmail(): Promise<string | null> {
+  // A custom CLAUDE_CONFIG_DIR keeps the config inside it; the default install
+  // keeps ~/.claude.json beside the ~/.claude dir. Exactly one location — never
+  // fall back across that boundary, or a configured directory would silently
+  // leak the machine account.
+  const configPath = process.env.CLAUDE_CONFIG_DIR?.trim()
+    ? path.join(getClaudeConfigDir(), '.claude.json')
+    : path.join(os.homedir(), '.claude.json');
+  try {
+    const parsed = readObjectRecord(JSON.parse(await readFile(configPath, 'utf8')));
+    return readOptionalString(readObjectRecord(parsed?.oauthAccount)?.emailAddress) ?? null;
+  } catch {
+    return null; // missing or unreadable config is normal
+  }
+}
 
 export class ClaudeProviderAuth implements IProviderAuth {
   constructor(private readonly runCommand: CliCommandRunner = runProviderCliCommand) {}
@@ -91,7 +115,10 @@ export class ClaudeProviderAuth implements IProviderAuth {
       installed,
       provider: 'claude',
       authenticated: credentials.authenticated,
-      email: credentials.authenticated ? credentials.email || 'Authenticated' : credentials.email,
+      // No English placeholder: when the real address is unknown, `null` lets the
+      // UI render its own localized "已登录" label instead of leaking a stray
+      // English string into a Chinese account tile.
+      email: credentials.email,
       method: credentials.method,
       version,
       error: credentials.authenticated ? undefined : credentials.error || 'Not authenticated',
@@ -118,21 +145,16 @@ export class ClaudeProviderAuth implements IProviderAuth {
   private async checkCredentials(): Promise<ClaudeCredentialsStatus> {
     const missingCredentialsError = 'Claude CLI is not authenticated. Run claude /login or configure ANTHROPIC_API_KEY.';
 
-    if (process.env.ANTHROPIC_AUTH_TOKEN?.trim()) {
-      return { authenticated: true, email: 'Auth Token', method: 'api_key' };
-    }
-
-    if (process.env.ANTHROPIC_API_KEY?.trim()) {
-      return { authenticated: true, email: 'API Key Auth', method: 'api_key' };
+    // These branches authenticate via a key, not an account, so there is no
+    // address to show — `method: 'api_key'` already carries that fact and the UI
+    // renders its own localized label.
+    if (process.env.ANTHROPIC_AUTH_TOKEN?.trim() || process.env.ANTHROPIC_API_KEY?.trim()) {
+      return { authenticated: true, email: null, method: 'api_key' };
     }
 
     const settingsEnv = await this.loadSettingsEnv();
-    if (readOptionalString(settingsEnv.ANTHROPIC_API_KEY)) {
-      return { authenticated: true, email: 'API Key Auth', method: 'api_key' };
-    }
-
-    if (readOptionalString(settingsEnv.ANTHROPIC_AUTH_TOKEN)) {
-      return { authenticated: true, email: 'Configured via settings.json', method: 'api_key' };
+    if (readOptionalString(settingsEnv.ANTHROPIC_API_KEY) || readOptionalString(settingsEnv.ANTHROPIC_AUTH_TOKEN)) {
+      return { authenticated: true, email: null, method: 'api_key' };
     }
 
     // Only a POSITIVE CLI result is authoritative. In the GUI-launched app the
@@ -154,7 +176,9 @@ export class ClaudeProviderAuth implements IProviderAuth {
 
       if (accessToken) {
         const expiresAt = typeof oauth?.expiresAt === 'number' ? oauth.expiresAt : undefined;
-        const email = readOptionalString(creds.email) ?? readOptionalString(creds.user) ?? null;
+        const email = readOptionalString(creds.email)
+          ?? readOptionalString(creds.user)
+          ?? await readAccountEmail();
         if (!expiresAt || Date.now() < expiresAt) {
           return {
             authenticated: true,

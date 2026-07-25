@@ -138,13 +138,14 @@ export class CodexProviderAuth implements IProviderAuth {
       if (idToken || accessToken) {
         return {
           authenticated: true,
-          email: idToken ? this.readEmailFromIdToken(idToken) : 'Authenticated',
+          email: idToken ? this.readEmailFromIdToken(idToken) : null,
           method: 'credentials_file',
         };
       }
 
       if (readOptionalString(auth.OPENAI_API_KEY)) {
-        return { authenticated: true, email: 'API Key Auth', method: 'api_key' };
+        // Key-based auth has no account address; `method` already says so.
+        return { authenticated: true, email: null, method: 'api_key' };
       }
 
       return { authenticated: false, email: null, method: null, error: 'No valid tokens found' };
@@ -162,17 +163,17 @@ export class CodexProviderAuth implements IProviderAuth {
   /**
    * Extracts the user email from a Codex id_token when a readable JWT payload exists.
    */
-  private readEmailFromIdToken(idToken: string): string {
+  private readEmailFromIdToken(idToken: string): string | null {
     try {
       const parts = idToken.split('.');
       if (parts.length >= 2) {
         const payload = readObjectRecord(JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')));
-        return readOptionalString(payload?.email) ?? readOptionalString(payload?.user) ?? 'Authenticated';
+        return readOptionalString(payload?.email) ?? readOptionalString(payload?.user) ?? null;
       }
     } catch {
-      // Fall back to a generic authenticated marker if the token payload is not readable.
+      // Unreadable payload — `null` lets the UI show its own localized label.
     }
 
-    return 'Authenticated';
+    return null;
   }
 }

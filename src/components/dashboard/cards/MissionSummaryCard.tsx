@@ -10,6 +10,9 @@ type MissionSummaryCardProps = {
   loading: boolean;
   error: string | null;
   onOpenMissions: () => void;
+  /** Re-fetches after a load failure. Without it the 重试 button used to
+   *  navigate away instead of retrying. */
+  onRetry?: () => void;
   delay?: number;
 };
 
@@ -20,7 +23,7 @@ const COLUMNS: Array<{ key: MissionCard['status']; tone: string }> = [
   { key: 'done', tone: 'text-foreground' },
 ];
 
-export default function MissionSummaryCard({ missions, loading, error, onOpenMissions, delay = 0 }: MissionSummaryCardProps) {
+export default function MissionSummaryCard({ missions, loading, error, onOpenMissions, onRetry, delay = 0 }: MissionSummaryCardProps) {
   const { t } = useTranslation();
 
   const counts = useMemo(() => {
@@ -50,7 +53,7 @@ export default function MissionSummaryCard({ missions, loading, error, onOpenMis
       {loading ? (
         <DashSkeleton rows={2} />
       ) : error && !missions ? (
-        <DashError message={error} onRetry={onOpenMissions} />
+        <DashError message={error} onRetry={onRetry} />
       ) : (missions ?? []).length === 0 ? (
         <DashEmpty
           message={t('dashboard.missionsEmpty', { defaultValue: '还没有 Mission' })}

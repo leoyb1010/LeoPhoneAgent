@@ -4,9 +4,9 @@ import { Radio, ArrowRight } from 'lucide-react';
 
 import { apiClient } from '../../../utils/apiClient';
 import { startVisibleInterval } from '../../../utils/visibilityInterval';
-import { formatCny, formatCountCn, formatTokensCnShort } from '../format';
+import { formatCny, formatCountCn, formatTokensCn } from '../format';
 
-import { DashCard, DashCardTitle, StatusDot } from './dashShared';
+import { DashCard, DashCardTitle, DashError, StatusDot } from './dashShared';
 
 type MeterTotals = { requests: number; inputTokens: number; outputTokens: number; costUsd: number; day?: string };
 type MeterRecord = { at: number; provider: string; model: string | null; inputTokens: number; outputTokens: number; costUsd: number; ok: boolean };
@@ -32,13 +32,20 @@ export default function GatewayCard({ delay = 0 }: { delay?: number }) {
   const { t } = useTranslation();
   const [status, setStatus] = useState<GatewayStatus | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const mounted = useRef(true);
 
   const load = useCallback(async () => {
     try {
       const data = await apiClient.get<GatewayStatus>('/api/leocodebox/gateway/status');
-      if (mounted.current) setStatus(data);
-    } catch { /* keep last known; a transient failure shouldn't blank the card */ }
+      if (mounted.current) { setStatus(data); setLoadError(null); }
+    } catch (error) {
+      // Keep the last known status (a transient failure shouldn't blank the
+      // card), but if we never got one, say so: rendering the "off" copy with a
+      // dead toggle made an unreachable gateway look identical to a disabled
+      // one, and clicking did nothing.
+      if (mounted.current) setLoadError(error instanceof Error ? error.message : '网关状态读取失败');
+    }
   }, []);
 
   useEffect(() => {
@@ -140,7 +147,7 @@ export default function GatewayCard({ delay = 0 }: { delay?: number }) {
           <div className="grid grid-cols-3 gap-2">
             {[
               { label: t('dashboard.gatewayRequests', { defaultValue: '请求' }), value: formatCountCn(today?.requests ?? 0) },
-              { label: 'Tokens', value: formatTokensCnShort((today?.inputTokens ?? 0) + (today?.outputTokens ?? 0)) },
+              { label: 'Tokens', value: formatTokensCn((today?.inputTokens ?? 0) + (today?.outputTokens ?? 0)) },
               { label: t('dashboard.gatewayCost', { defaultValue: '成本' }), value: formatCny(today?.costUsd ?? 0, { decimals: 2 }) },
             ].map((tile) => (
               <div key={tile.label} className="rounded-lg bg-secondary/60 px-2 py-2 text-center">
@@ -177,13 +184,17 @@ export default function GatewayCard({ delay = 0 }: { delay?: number }) {
                   <StatusDot tone={r.ok ? 'ok' : 'fail'} />
                   <span className="truncate font-mono text-foreground/80">{r.model || r.provider}</span>
                   <span className="ml-auto flex items-center gap-0.5 tabular-nums">
-                    {formatTokensCnShort(r.inputTokens)}<ArrowRight className="h-3 w-3" />{formatTokensCnShort(r.outputTokens)}
+                    {formatTokensCn(r.inputTokens)}<ArrowRight className="h-3 w-3" />{formatTokensCn(r.outputTokens)}
                   </span>
                 </div>
               ))}
             </div>
           )}
         </>
+      ) : !status && loadError ? (
+        // Never loaded: distinguish "unreachable" from "switched off", so the
+        // dead toggle has an explanation instead of looking merely disabled.
+        <DashError message={loadError} onRetry={() => void load()} />
       ) : (
         <p className="text-[12px] leading-relaxed text-muted-foreground">
           {t('dashboard.gatewayOff', { defaultValue: '开启后,当前 Leoapi 节点的 Claude 流量将经本机网关转发并按请求实时计量(可随时关闭,默认关)。' })}

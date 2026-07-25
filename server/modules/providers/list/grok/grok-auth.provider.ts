@@ -37,7 +37,9 @@ export class GrokProviderAuth implements IProviderAuth {
       installed: true,
       provider: 'grok',
       authenticated: authed,
-      email: authed ? 'Logged in' : null,
+      // The grok CLI exposes no account address; `null` lets the UI show its own
+      // localized "已登录" instead of a stray English placeholder.
+      email: null,
       method: authed ? 'cli' : null,
       version: install.version,
       error: authed ? undefined : 'Not logged in. Run `grok` once to authenticate.',

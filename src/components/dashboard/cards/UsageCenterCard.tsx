@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useAnimatedNumber } from '../../../hooks/useAnimatedNumber';
 import type { ClaudeQuotaEstimate, UsageSummaryRow } from '../dashboardTypes';
-import { formatCny, formatTokensCn, usdToCny } from '../format';
+import { formatCny, formatCnyAmount, formatTokensCn, usdToCny } from '../format';
 
 import ClaudeQuotaRings from './ClaudeQuotaRings';
 import { DashCard, DashCardTitle, DashEmpty, DashError, DashSkeleton } from './dashShared';
@@ -116,7 +116,7 @@ export default function UsageCenterCard({ usage, quota, quotaLoading, loading, e
             </div>
             <div className="dash-stat rounded-lg px-2.5 py-2">
               <div className="text-[11px] text-muted-foreground">{t('dashboard.cost', { defaultValue: '成本' })}</div>
-              <div className="text-[18px] font-medium tabular-nums text-foreground">¥{animatedCostCny.toFixed(2)}</div>
+              <div className="text-[18px] font-medium tabular-nums text-foreground">{formatCnyAmount(animatedCostCny)}</div>
             </div>
           </div>
 

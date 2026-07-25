@@ -81,7 +81,13 @@ export default function ClaudeQuotaRings({ quota, loading }: ClaudeQuotaRingsPro
     );
   }
 
-  if (!quota) return null;
+  // Hide the block entirely when there is nothing measured. The service always
+  // returns an object, and with no local Claude session logs it reports zeros
+  // with `resetsAt = now` — which rendered as "0 tokens · 0 轮 · ¥0.00 ·
+  // <current time> 重置", i.e. a Claude quota that looks broken or expired, on
+  // every fresh install and for every Codex/Cursor-only user.
+  const measuredTokens = (quota?.fiveHour?.countedTokens ?? 0) + (quota?.weekly?.countedTokens ?? 0);
+  if (!quota || measuredTokens <= 0) return null;
 
   return (
     <div className="border-y border-border py-3">

@@ -29,8 +29,27 @@ function isRetryableStatus(status: number): boolean {
   return status === 429 || status >= 500;
 }
 
+/**
+ * Join the upstream base with the incoming path without doubling `/v1`.
+ * Providers are commonly stored as `https://relay.example/v1`, and the CLI asks
+ * for `/v1/messages` — raw concatenation produced `/v1/v1/messages` (a 404 that
+ * is not retryable, so every request through such a node failed while the app's
+ * own health probe, which already collapses this, kept reporting it healthy).
+ */
+export function upstreamUrl(baseUrl: string, requestUrl: string): string {
+  const base = baseUrl.replace(/\/+$/, '');
+  if (/\/v1$/i.test(base) && /^\/v1(\/|$)/i.test(requestUrl)) return `${base}${requestUrl.slice(3)}`;
+  return `${base}${requestUrl}`;
+}
+
+// Metering reads a bounded copy of the body. Keep a HEAD and a TAIL slice: the
+// token totals live in the final `message_delta` of an SSE stream, so a
+// head-only cap silently metered long responses at ~1 output token.
+const METER_HEAD_BYTES = 256_000;
+const METER_TAIL_BYTES = 64_000;
+
 /** Faithfully stream an upstream response back + tee-meter it. */
-async function streamAndMeter(res: express.Response, upstreamResponse: Response, providerName: string): Promise<void> {
+async function streamAndMeter(res: express.Response, upstreamResponse: Response, providerName: string, signal: AbortSignal): Promise<void> {
   res.status(upstreamResponse.status);
   upstreamResponse.headers.forEach((value, key) => {
     if (!gatewayInternals.STRIP_RESPONSE_HEADERS.has(key.toLowerCase())) res.setHeader(key, value);
@@ -43,19 +62,29 @@ async function streamAndMeter(res: express.Response, upstreamResponse: Response,
   }
   const reader = upstreamResponse.body.getReader();
   const decoder = new TextDecoder();
-  let copy = '';
+  let head = '';
+  let tail = '';
   try {
     for (;;) {
       const { value, done } = await reader.read();
       if (done) break;
-      if (value) {
-        res.write(Buffer.from(value));
-        if (copy.length < 512_000) copy += decoder.decode(value, { stream: true });
+      if (!value) continue;
+      res.write(Buffer.from(value));
+      const chunk = decoder.decode(value, { stream: true });
+      if (head.length < METER_HEAD_BYTES) head += chunk;
+      else {
+        tail += chunk;
+        if (tail.length > METER_TAIL_BYTES) tail = tail.slice(-METER_TAIL_BYTES);
+      }
+      // The client went away: stop pulling (and paying for) the generation.
+      if (signal.aborted) {
+        await reader.cancel().catch(() => { /* already gone */ });
+        break;
       }
     }
   } catch { /* client disconnect / upstream abort — end below */ }
   res.end();
-  meterFromResponse(providerName, copy, upstreamResponse.status);
+  meterFromResponse(providerName, tail ? `${head}\n${tail}` : head, upstreamResponse.status);
 }
 
 const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
@@ -71,7 +100,17 @@ router.all(/.*/, async (req, res) => {
     res.status(503).json({ error: { type: 'gateway_disabled', message: 'Leoapi gateway is off.' } });
     return;
   }
-  const chain: ResolvedUpstream[] = await resolveUpstreamChain(req.headers);
+  // Express 4 does not adopt a returned promise, so an unhandled rejection here
+  // would take the whole server down under Node's default policy rather than
+  // failing this one request. Resolving the store touches disk and decrypts
+  // keys, both of which can throw.
+  let chain: ResolvedUpstream[];
+  try {
+    chain = await resolveUpstreamChain(req.headers);
+  } catch (error) {
+    res.status(500).json({ error: { type: 'gateway_error', message: error instanceof Error ? error.message : 'Could not resolve an upstream.' } });
+    return;
+  }
   if (chain.length === 0) {
     res.status(401).json({ error: { type: 'authentication_error', message: 'Unknown or missing Leoapi gateway token.' } });
     return;
@@ -101,15 +140,20 @@ router.all(/.*/, async (req, res) => {
   // so a client never sees a half-response from two nodes. Each attempt is
   // metered. If every node fails, fail closed with the last real error.
   const upstreamHeaders = buildUpstreamHeaders(req.headers, '');
+  // If the user aborts (Ctrl-C in the CLI), abort the upstream too — otherwise
+  // the gateway kept pulling, and paying for, a generation nobody would read.
+  const abort = new AbortController();
+  req.on('close', () => abort.abort());
   for (let i = 0; i < chain.length; i += 1) {
     const upstream = chain[i];
     const isLast = i === chain.length - 1;
     let upstreamResponse: Response;
     try {
-      upstreamResponse = await fetch(`${upstream.baseUrl}${req.url}`, {
+      upstreamResponse = await fetch(upstreamUrl(upstream.baseUrl, req.url), {
         method: req.method,
         headers: { ...upstreamHeaders, 'x-api-key': upstream.apiKey, authorization: `Bearer ${upstream.apiKey}` },
         body: req.method === 'GET' || req.method === 'HEAD' ? undefined : body,
+        signal: abort.signal,
       });
     } catch (error) {
       meterFromResponse(upstream.providerName, '', 502);
@@ -124,7 +168,7 @@ router.all(/.*/, async (req, res) => {
       continue;
     }
 
-    await streamAndMeter(res, upstreamResponse, upstream.providerName);
+    await streamAndMeter(res, upstreamResponse, upstream.providerName, abort.signal);
     return;
   }
 });

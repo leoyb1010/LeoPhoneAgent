@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { apiClient } from '../utils/apiClient';
 import { startVisibleInterval } from '../utils/visibilityInterval';
@@ -8,7 +8,6 @@ import type {
   CliToolsStatusPayload,
   MissionCard,
   ProviderAuthStatus,
-  RunningSession,
   UsageSummaryRow,
 } from '../components/dashboard/dashboardTypes';
 
@@ -42,10 +41,7 @@ export type DashboardData = {
   authUser: Slice<{ username: string }>;
   quota: Slice<ClaudeQuotaEstimate>;
   projects: Slice<ProjectSummary[]>;
-  running: Slice<RunningSession[]>;
   refresh: () => void;
-  /** True only while every slice is still on its very first load. */
-  initialLoading: boolean;
 };
 
 function toErrorMessage(error: unknown): string {
@@ -74,7 +70,6 @@ export function useDashboardData(): DashboardData {
   const [authUser, setAuthUser] = useState<Slice<{ username: string }>>(idleSlice);
   const [quota, setQuota] = useState<Slice<ClaudeQuotaEstimate>>(idleSlice);
   const [projects, setProjects] = useState<Slice<ProjectSummary[]>>(idleSlice);
-  const [running, setRunning] = useState<Slice<RunningSession[]>>(idleSlice);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -188,17 +183,9 @@ export function useDashboardData(): DashboardData {
     }
   }, []);
 
-  const loadRunning = useCallback(async () => {
-    try {
-      const payload = await apiClient.get<{ data?: { sessions?: RunningSession[] } }>('/api/providers/sessions/running');
-      if (!mountedRef.current) return;
-      setRunning({ data: Array.isArray(payload.data?.sessions) ? payload.data.sessions : [], loading: false, error: null });
-    } catch (error) {
-      if (!mountedRef.current) return;
-      setRunning((prev) => ({ ...prev, loading: false, error: toErrorMessage(error) }));
-    }
-  }, []);
-
+  // No running-sessions slice here on purpose: RunningSessionsCard owns that
+  // data and polls /sessions/running every 5s itself. This hook used to fetch
+  // the same endpoint every 30s into a slice nothing ever read.
   const loadAll = useCallback(() => {
     void loadCliTools();
     void loadProviderAuth();
@@ -207,19 +194,13 @@ export function useDashboardData(): DashboardData {
     void loadAuthUser();
     void loadQuota();
     void loadProjects();
-    void loadRunning();
-  }, [loadCliTools, loadProviderAuth, loadUsage, loadMissions, loadAuthUser, loadQuota, loadProjects, loadRunning]);
+  }, [loadCliTools, loadProviderAuth, loadUsage, loadMissions, loadAuthUser, loadQuota, loadProjects]);
 
   useEffect(() => {
     loadAll();
     const stop = startVisibleInterval(loadAll, REFRESH_INTERVAL_MS);
     return stop;
   }, [loadAll]);
-
-  const initialLoading = useMemo(
-    () => cliTools.loading && providerAuth.loading && usage.loading && missions.loading,
-    [cliTools.loading, providerAuth.loading, usage.loading, missions.loading],
-  );
 
   return {
     cliTools,
@@ -229,8 +210,6 @@ export function useDashboardData(): DashboardData {
     authUser,
     quota,
     projects,
-    running,
     refresh: loadAll,
-    initialLoading,
   };
 }
