@@ -1,8 +1,6 @@
 import os from 'node:os';
 import path from 'node:path';
-import { promises as fsPromises } from 'node:fs';
-
-import chokidar, { type FSWatcher } from 'chokidar';
+import fs, { promises as fsPromises } from 'node:fs';
 
 import { logger } from '@/modules/logging/index.js';
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
@@ -37,20 +35,21 @@ const PROVIDER_WATCH_PATHS: Array<{ provider: LLMProvider; rootPath: string }> =
   },
 ];
 
-const WATCHER_IGNORED_PATTERNS = [
-  '**/node_modules/**',
-  '**/.git/**',
-  '**/dist/**',
-  '**/build/**',
-  '**/*.tmp',
-  '**/*.swp',
-  '**/.DS_Store',
-];
+/**
+ * Paths the watcher must ignore. Plain segment/suffix checks — the old glob
+ * list only existed because chokidar took globs.
+ */
+function isIgnoredWatchPath(relativePath: string): boolean {
+  const segments = relativePath.split(path.sep);
+  if (segments.some((segment) => segment === 'node_modules' || segment === '.git' || segment === 'dist' || segment === 'build')) return true;
+  const name = segments[segments.length - 1] || '';
+  return name === '.DS_Store' || name.endsWith('.tmp') || name.endsWith('.swp');
+}
 
 const PROJECTS_UPDATE_DEBOUNCE_MS = 500;
 const PROJECTS_UPDATE_MAX_WAIT_MS = 2_000;
 
-const watchers: FSWatcher[] = [];
+const watchers: fs.FSWatcher[] = [];
 
 type PendingWatcherUpdate = {
   providers: Set<LLMProvider>;
@@ -276,30 +275,33 @@ export async function initializeSessionsWatcher(): Promise<void> {
     try {
       await fsPromises.mkdir(rootPath, { recursive: true });
 
-      const watcher = chokidar.watch(rootPath, {
-        ignored: WATCHER_IGNORED_PATTERNS,
-        persistent: true,
-        ignoreInitial: true,
-        followSymlinks: false,
-        // chokidar uses native FSEvents/inotify by default. Polling is a costly
-        // fallback for network mounts, not the normal local desktop path.
-        depth: 4,
-        usePolling: process.env.LEOCODEBOX_WATCH_POLLING === 'true',
-        interval: 10_000,
-        binaryInterval: 10_000,
+      // ONE native recursive watcher per provider root.
+      //
+      // This used to be chokidar, which on macOS keeps an open file descriptor
+      // for EVERY watched file (measured: 2000 files → +2000 fds; the native
+      // recursive watch → +0). With ~19k session transcripts under
+      // ~/.claude/projects the app leaked ~19k fds and, once exhausted, EVERY
+      // spawn failed with `spawn EBADF` — which is what made CLI install/update
+      // "always fail" the longer the app had been running. Retries could never
+      // fix that; it is exhaustion, not a race.
+      const watcher = fs.watch(rootPath, { recursive: true, persistent: true }, (_eventType, filename) => {
+        if (!filename) return;
+        const relativePath = String(filename);
+        if (isIgnoredWatchPath(relativePath)) return;
+        const filePath = path.join(rootPath, relativePath);
+        // fs.watch reports 'rename' for both create and delete and 'change' for
+        // writes; the synchronizer only cares that this path moved, and it
+        // re-reads from disk anyway, so classify by existence.
+        void fsPromises.stat(filePath).then(
+          (stat) => { if (stat.isFile()) void onUpdate('change', filePath, provider); },
+          () => { /* deleted or unreadable — the periodic sync reconciles it */ },
+        );
       });
 
-      watcher
-        .on('add', (filePath: string) => {
-          void onUpdate('add', filePath, provider);
-        })
-        .on('change', (filePath: string) => {
-          void onUpdate('change', filePath, provider);
-        })
-        .on('error', (error: unknown) => {
-          const message = error instanceof Error ? error.message : String(error);
-          console.error(`Session watcher error for provider "${provider}"`, { error: message });
-        });
+      watcher.on('error', (error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`Session watcher error for provider "${provider}"`, { error: message });
+      });
 
       watchers.push(watcher);
     } catch (error) {
@@ -318,16 +320,14 @@ export async function initializeSessionsWatcher(): Promise<void> {
 export async function closeSessionsWatcher(): Promise<void> {
   clearPendingWatcherFlushTimer();
 
-  await Promise.all(
-    watchers.map(async (watcher) => {
-      try {
-        await watcher.close();
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error('Failed to close session watcher', { error: message });
-      }
-    })
-  );
+  for (const watcher of watchers) {
+    try {
+      watcher.close();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('Failed to close session watcher', { error: message });
+    }
+  }
   watchers.length = 0;
   pendingWatcherUpdate = null;
   pendingWatcherUpdateStartedAt = null;
