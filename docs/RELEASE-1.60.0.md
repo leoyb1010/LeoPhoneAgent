@@ -34,6 +34,8 @@
 - 新增回归测试:符号链接逃逸(写/建目录/读三个方向 + 正常嵌套写仍可用)、后台化子进程不再挂起、`/v1` 拼接、compaction 边界跨轮稳定、账号邮箱与 null 兜底。
 
 ## 下载校验
-- DMG SHA-256:`PENDING`
-- ZIP SHA-256:`PENDING`
-- `latest-mac.yml` SHA-256:`PENDING`
+- DMG SHA-256:`2472a6248d680ad9571295836b6c9882ca446d581155bc4b0efb069ed771ceaa`
+- ZIP SHA-256:`28381f511278d895e8d44345efb3f80ed496522474211c9e2fbe01e92127c1cb`
+- `latest-mac.yml` SHA-256:`fbdb3d85ac9e55052b37babc9a25c3f4fd59be1869ea6614f11e0978a8949968`
+
+> 注:本版 DMG 未做窗口背景美化(本机 Finder 自动化权限被系统重置,-1743),纯功能包,不影响安装/签名/公证/热更新。
