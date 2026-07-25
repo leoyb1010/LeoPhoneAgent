@@ -31,11 +31,23 @@
 - 新增回归测试:监视 500 个文件的目录,断言新增 fd < 50(逐文件监视会加 ~500)。这条测试会在任何人把逐文件监视改回来时立刻失败。
 - 门禁全绿:typecheck 0、ESLint 0、client 71/71、server **337/337**、生产构建通过。
 
+### 装机实测(1.62.0)
+| 指标 | 1.61.0(跑 3 小时后) | 1.62.0(同一台机、同一个 19k 目录) |
+|---|---|---|
+| 进程 fd 总数 | 22,209 | **45** |
+| 该 19k 目录占用的 fd | 19,021 | **0** |
+| `POST /cli/opencode/update` | ✗ 54 秒后 `spawn EBADF` | ✓ **5.4 秒,1.18.4 → 1.18.5** |
+| `POST /cli/gemini/update` | — | ✓ **0.51.0 → 0.52.0** |
+
+两次更新跑完后 fd 仍为 55,不再随时间增长。
+
 ## 你需要知道的
 - 那个 19,021 个文件、1.2 GB 的目录是 **claude-mem 插件**在持续写入的,而且还在增长。leocodebox 现在不会再被它拖垮,但这个目录本身是否需要清理,由你决定(不是 leocodebox 生成的,我不会替你删)。
 - 装上本版后,**先退出并重开 app**,让泄漏的 fd 释放掉。
 
 ## 下载校验
-- DMG SHA-256:`PENDING`
-- ZIP SHA-256:`PENDING`
-- `latest-mac.yml` SHA-256:`PENDING`
+- DMG SHA-256:`7059d981aa689d5426cbeddd41b0e8fddf5d31470b288d0220ef30e9fcf3880c`
+- ZIP SHA-256:`46ad23ddf3acadaa112dabb82fdff66739261af57de88c13cc0206a7616bbdb9`
+- `latest-mac.yml` SHA-256:`d12a521b6e2ccf11e0427facf24dbafa4a75738280596daf19eef19f770bf161`
+
+> 注:本版 DMG 未做窗口背景美化(-1743),纯功能包,不影响安装/签名/公证/热更新。
