@@ -386,6 +386,7 @@
       "actionFailed": "{{tool}} {{action}} failed: {{error}}",
       "unknownError": "unknown error",
       "unavailable": "Unable to check",
+      "selfUpdate": "Self-updating",
       "checkAndUpdate": "Check and update",
       "manualUpdate": "Copy update command",
       "desktopOnly": "Install and update are available only in local desktop mode.",
@@ -716,5 +717,6 @@
     "releaseHistory": "Review detailed notes from recent releases.",
     "currentRelease": "Current version",
     "viewRelease": "View full release",
-    "noReleaseNotes": "No detailed release notes are available."  }
+    "noReleaseNotes": "No detailed release notes are available."
+  }
 }

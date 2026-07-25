@@ -18,6 +18,7 @@ import {
   readCliLatestVersion,
   resolveCliUpdateCommand,
   withCliMutation,
+  retryOnTransientSpawn,
   default as cliToolsRoutes,
   mergeToolWithLastGood,
   toolLooksTransient,
@@ -301,4 +302,53 @@ test('transient EBADF results never replace last-good tool state', () => {
   assert.equal(mergeToolWithLastGood(ebadf, null), ebadf);
   assert.equal(toolLooksTransient(ebadf as { error?: string | null }), true);
   assert.equal(toolLooksTransient(missing as { error?: string | null }), false);
+});
+
+// --- EBADF retry: the bug that made 更新 fail outright -----------------------
+// The retry loop used to live INSIDE the branch that also applied the probe
+// concurrency gate, so install/update (which skip the gate because they run for
+// minutes) skipped the retry too and died on the first `spawn EBADF`. Both
+// paths now share retryOnTransientSpawn; these lock its semantics.
+
+const ebadf = () => ({ ok: false as const, code: 'EBADF', stdout: '', stderr: '', error: 'spawn EBADF' });
+const fine = () => ({ ok: true as const, code: 0, stdout: 'ok', stderr: '', error: null });
+const noSleep = async () => undefined;
+
+test('retryOnTransientSpawn retries an EBADF failure until it succeeds', async () => {
+  let calls = 0;
+  const result = await retryOnTransientSpawn(async () => {
+    calls += 1;
+    return calls < 4 ? ebadf() : fine();
+  }, { sleep: noSleep });
+  assert.equal(result.ok, true);
+  assert.equal(calls, 4);
+});
+
+test('retryOnTransientSpawn gives up after the limit and returns the real failure', async () => {
+  let calls = 0;
+  const result = await retryOnTransientSpawn(async () => { calls += 1; return ebadf(); }, { limit: 3, sleep: noSleep });
+  assert.equal(result.ok, false);
+  assert.match(String(result.error), /EBADF/);
+  assert.equal(calls, 4); // first attempt + 3 retries
+});
+
+test('retryOnTransientSpawn does NOT retry an ordinary failure', async () => {
+  let calls = 0;
+  const result = await retryOnTransientSpawn(async () => {
+    calls += 1;
+    return { ok: false as const, code: 1, stdout: '', stderr: 'command not found', error: 'Exited with code 1' };
+  }, { sleep: noSleep });
+  assert.equal(calls, 1); // a genuinely broken CLI must fail fast
+  assert.equal(result.ok, false);
+});
+
+test('the retry backoff grows so it can outlast an npm-install EBADF window', async () => {
+  const waited: number[] = [];
+  await retryOnTransientSpawn(async () => ebadf(), {
+    limit: 8,
+    sleep: async (ms: number) => { waited.push(ms); },
+  });
+  assert.equal(waited.length, 8);
+  assert.deepEqual(waited, [300, 600, 900, 1200, 1500, 1800, 2100, 2400]);
+  assert.ok(waited.reduce((a, b) => a + b, 0) >= 10_000); // ~10.8s of cover
 });

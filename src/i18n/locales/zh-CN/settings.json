@@ -364,6 +364,7 @@
       "actionFailed": "{{tool}} {{action}}失败：{{error}}",
       "unknownError": "未知错误",
       "unavailable": "无法检查",
+      "selfUpdate": "自更新",
       "checkAndUpdate": "检查并更新",
       "manualUpdate": "复制更新命令",
       "desktopOnly": "安装和更新仅在桌面本机模式可用。",
@@ -689,5 +690,6 @@
     "releaseHistory": "查看近期版本的详细更新记录。",
     "currentRelease": "当前版本",
     "viewRelease": "查看完整更新",
-    "noReleaseNotes": "暂无详细更新说明。"  }
+    "noReleaseNotes": "暂无详细更新说明。"
+  }
 }

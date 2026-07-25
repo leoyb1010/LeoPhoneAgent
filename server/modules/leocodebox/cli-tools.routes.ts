@@ -366,28 +366,56 @@ function releaseProbeSlot(): void {
 // probes EBADF; 10s later the same probes all pass. So an EBADF result is never
 // "not installed" — it's "try again in a moment". Without the retry, a launch-
 // time status fetch showed every CLI as 未安装 even though all were installed.
-const EBADF_RETRY_LIMIT = 5;
+// An npm install/update spawns many short-lived processes of its own, so the
+// EBADF window around a mutation can outlast a couple of quick retries. Linear
+// backoff over 8 attempts spans ~10.8s, which covered every window observed
+// while an update was running. Only EBADF results retry, so a genuinely broken
+// CLI still fails immediately.
+const EBADF_RETRY_LIMIT = 8;
 const EBADF_RETRY_DELAY_MS = 300;
 function isTransientSpawnFailure(result: CliCommandResult): boolean {
   return !result.ok && /EBADF/i.test(result.error || '');
 }
 
-export async function runCliCommand(cmd: string, args: string[], timeoutMs = 10_000, options: { env?: NodeJS.ProcessEnv } = {}): Promise<CliCommandResult> {
-  // Long mutations (install/update) run outside the probe gate so they never
-  // block — and hold — the single probe slot for minutes.
-  if (timeoutMs > PROBE_TIMEOUT_CEILING_MS) {
-    return runCliCommandUnthrottled(cmd, args, timeoutMs, options);
+/**
+ * Re-run a spawn until it stops failing with a transient EBADF.
+ *
+ * Extracted so BOTH the throttled probe path and the un-throttled mutation path
+ * provably share it — they used to diverge, and that divergence is what made
+ * updates fail outright (see runCliCommand).
+ */
+export async function retryOnTransientSpawn(
+  run: () => Promise<CliCommandResult>,
+  {
+    limit = EBADF_RETRY_LIMIT,
+    delayMs = EBADF_RETRY_DELAY_MS,
+    sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
+  }: { limit?: number; delayMs?: number; sleep?: (ms: number) => Promise<unknown> } = {},
+): Promise<CliCommandResult> {
+  let result = await run();
+  for (let attempt = 0; attempt < limit && isTransientSpawnFailure(result); attempt += 1) {
+    await sleep(delayMs * (attempt + 1));
+    result = await run();
   }
-  await acquireProbeSlot();
+  return result;
+}
+
+export async function runCliCommand(cmd: string, args: string[], timeoutMs = 10_000, options: { env?: NodeJS.ProcessEnv } = {}): Promise<CliCommandResult> {
+  // Long mutations (install/update) run OUTSIDE the probe gate so they never
+  // hold a slot for minutes — but they still need the EBADF retry.
+  //
+  // These were previously conflated: the early return that skipped the gate
+  // also skipped the retry, so every install/update ran with ZERO EBADF
+  // protection while ordinary probes retried happily. That is precisely how an
+  // update died outright with `which claude: spawn EBADF` — during the very
+  // window (npm spawning) when the race is most likely. Only the GATE is
+  // conditional now; the retry always applies.
+  const throttled = timeoutMs <= PROBE_TIMEOUT_CEILING_MS;
+  if (throttled) await acquireProbeSlot();
   try {
-    let result = await runCliCommandUnthrottled(cmd, args, timeoutMs, options);
-    for (let attempt = 0; attempt < EBADF_RETRY_LIMIT && isTransientSpawnFailure(result); attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, EBADF_RETRY_DELAY_MS * (attempt + 1)));
-      result = await runCliCommandUnthrottled(cmd, args, timeoutMs, options);
-    }
-    return result;
+    return await retryOnTransientSpawn(() => runCliCommandUnthrottled(cmd, args, timeoutMs, options));
   } finally {
-    releaseProbeSlot();
+    if (throttled) releaseProbeSlot();
   }
 }
 
@@ -684,9 +712,14 @@ router.post('/:id/install', requireLocalOnly, async (req, res, next) => {
         throw error;
       }
       const result = await runCliCommand(install.command, install.args, 300_000);
-      const after = await getCliToolStatusResilient(tool);
+      // Same rule as update: the install command owns the verdict. A post-check
+      // that cannot spawn must not report a successful install as failed.
+      const after = await getCliToolStatusResilient(tool).catch((error) => {
+        if (result.ok && error instanceof TransientProbeError) return before;
+        throw error;
+      });
       return {
-        success: result.ok && after.installed,
+        success: result.ok && (after.installed || after === before),
         tool: tool.id,
         currentVersion: after.currentVersion,
         installSource: after.installSource,
@@ -726,7 +759,14 @@ router.post('/:id/update', requireLocalOnly, async (req, res, next) => {
         throw error;
       }
       const result = await runCliCommand(updateCommand.command, updateCommand.args, 300_000);
-      const after = await getCliToolStatusResilient(tool);
+      // The verdict belongs to the update command itself. The post-check is
+      // only there to report the resulting version, and it runs in the exact
+      // window where spawn is flakiest — so a probe that cannot run must never
+      // turn a SUCCESSFUL update into "更新失败: which claude: spawn EBADF".
+      const after = await getCliToolStatusResilient(tool).catch((error) => {
+        if (result.ok && error instanceof TransientProbeError) return before;
+        throw error;
+      });
       // Compare the SAME copy before and after; a bare currentVersion diff
       // could be another copy shadowing the one we just updated.
       const afterAtSamePath = activeBefore

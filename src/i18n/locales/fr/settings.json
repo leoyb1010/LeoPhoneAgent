@@ -360,6 +360,7 @@
       "actionFailed": "{{tool}} {{action}} failed: {{error}}",
       "unknownError": "unknown error",
       "unavailable": "Unable to check",
+      "selfUpdate": "Auto-mise à jour",
       "checkAndUpdate": "Check and update",
       "manualUpdate": "Copy update command",
       "desktopOnly": "Install and update are available only in local desktop mode.",

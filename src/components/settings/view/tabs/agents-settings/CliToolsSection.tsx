@@ -230,6 +230,14 @@ export default function CliToolsSection({ onToolsChange }: CliToolsSectionProps)
                       <CheckCircle2 className="h-3 w-3" />
                       {t('agents.cliTools.latest')}
                     </span>
+                  ) : tool.latestVersionSource === 'unsupported' ? (
+                    // Not a failure: this CLI publishes no registry we can query,
+                    // it updates itself via its own `update` command. Saying
+                    // 无法检查 made a perfectly healthy tool look broken.
+                    <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                      <RefreshCw className="h-3 w-3" />
+                      {t('agents.cliTools.selfUpdate')}
+                    </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
                       <CircleHelp className="h-3 w-3" />

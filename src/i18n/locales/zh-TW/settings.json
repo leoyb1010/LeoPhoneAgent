@@ -363,6 +363,7 @@
       "actionFailed": "{{tool}} {{action}}失敗：{{error}}",
       "unknownError": "未知錯誤",
       "unavailable": "無法檢查",
+      "selfUpdate": "自更新",
       "checkAndUpdate": "檢查並更新",
       "manualUpdate": "複製更新命令",
       "desktopOnly": "安裝和更新僅在桌面本機模式可用。",
