@@ -10,7 +10,7 @@
 |---|---|---|---|
 | 14 | ChatStore Schema Contract、迁移与恢复测试门禁 | 已完成 | 不新增用户数据类型，可直接回到 1.0.12 |
 | 15 | Artifact 本地模型与文件生命周期 | 已完成 | 尚未接入 UI/CloudKit，独立提交可整体回滚 |
-| 16 | Artifact Tray、Quick Look、分享 | 待开始 | UI 与数据模型分离 |
+| 16 | Artifact Tray、Quick Look、分享 | 已完成 | UI 只调用 Build 15 Repository，可独立移除 |
 | 17 | Artifact 版本与聊天/任务/Files 统一引用 | 待开始 | 保留原始文件引用 |
 | 18 | CloudKit V2 / CKAsset | 待开始 | 默认关闭同步，先完成双读与回滚演练 |
 | 19 | 个人任务模板与结构化输出 | 待开始 | 独立数据类型 |
@@ -61,6 +61,16 @@ xcrun swiftc -parse-as-library \
   -o /tmp/LeoPhoneAgentArtifactRepositorySmoke
 /tmp/LeoPhoneAgentArtifactRepositorySmoke
 ```
+
+## Build 16 证据
+
+- 聊天更多菜单新增会话级 Artifacts 入口，不改变主导航信息架构。
+- Tray 使用系统 List、Quick Look 与 Share Sheet，覆盖加载、空、错误、列表和回收站状态。
+- 支持预览、分享、下拉刷新、软删除、恢复与永久删除确认。
+- 动态字体、VoiceOver 合并标签、系统深浅色与 Reduce Motion 已接入。
+- taste-skill 审查结论：原生移动端以 Apple HIG 为主，不引入网页式玻璃卡片或装饰动画。
+- `MinisTests.xctest` 编译及链接成功；通用 iOS arm64 主 App `BUILD SUCCEEDED`。
+- 本检查点不创建 Artifact，不改变聊天消息结构，不写入 CloudKit，不安装到真机。
 
 ## 回滚规则
 

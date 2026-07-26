@@ -254,6 +254,7 @@ struct AIChatView: View {
     private static let kSendSwipeArmFraction: CGFloat = 0.8
     @State private var floatingBarHeight: CGFloat = 0
     @State private var showFileBrowser = false
+    @State private var showArtifactTray = false
     // [T-browser-download-ux-v2] Downloads panel + "Show in Files" locate target.
     @State private var showDownloadsPanel = false
     @State private var locateDownloadTarget: DownloadLocateTarget?
@@ -354,7 +355,7 @@ struct AIChatView: View {
 
     /// True when any sheet or fullScreenCover is presented (suppress auto-focus to avoid keyboard bugs).
     private var hasOverlayPresented: Bool {
-        showFileBrowser || showBrowserSheet || showTerminal || showCamera
+        showFileBrowser || showArtifactTray || showBrowserSheet || showTerminal || showCamera
             || showPhotoPicker || showDocumentPicker || showModelPicker
     }
 
@@ -876,6 +877,9 @@ struct AIChatView: View {
                 let base = RootfsManager.shared.dataPath
                 FileBrowserView(rootPath: base, initialPath: base.appendingPathComponent("var/minis"), rootLabel: "/")
             }
+        }
+        .sheet(isPresented: $showArtifactTray) {
+            ArtifactTrayView(sessionId: vm.sessionId)
         }
         .sheet(isPresented: $showBrowserSheet) {
             BrowserSheetView(pool: vm.browserTabPool, isAgentBusy: vm.browserTabPool.isAgentBrowsing, onTakeover: {
@@ -1578,6 +1582,7 @@ struct AIChatView: View {
             onOpenTerminal: { showTerminal = true },
             onOpenBrowser: { showBrowserSheet = true },
             onBrowseFiles: { showFileBrowser = true },
+            onArtifacts: { showArtifactTray = true },
             onSkills: { showSessionSkills = true },
             onMCPs: { showSessionMCPs = true },
             onMemories: { showSessionMemory = true },
@@ -4647,6 +4652,7 @@ private struct ChatTrailingMenu: View, Equatable {
     let onOpenTerminal: () -> Void
     let onOpenBrowser: () -> Void
     let onBrowseFiles: () -> Void
+    let onArtifacts: () -> Void
     let onSkills: () -> Void
     let onMCPs: () -> Void
     let onMemories: () -> Void
@@ -4723,6 +4729,10 @@ private struct ChatTrailingMenu: View, Equatable {
 
             Button { onBrowseFiles() } label: {
                 Label(String(localized: "Browse Chat Files"), systemImage: "folder")
+            }
+
+            Button { onArtifacts() } label: {
+                Label(String(localized: "Artifacts"), systemImage: "shippingbox")
             }
 
             Divider()
@@ -4827,6 +4837,7 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
     let onOpenTerminal: () -> Void
     let onOpenBrowser: () -> Void
     let onBrowseFiles: () -> Void
+    let onArtifacts: () -> Void
     let onSkills: () -> Void
     let onMCPs: () -> Void
     let onMemories: () -> Void
@@ -4945,6 +4956,8 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
                      image: UIImage(systemName: "globe")) { _ in coordinator.parent.onOpenBrowser() },
             UIAction(title: String(localized: "Browse Chat Files"),
                      image: UIImage(systemName: "folder")) { _ in coordinator.parent.onBrowseFiles() },
+            UIAction(title: String(localized: "Artifacts"),
+                     image: UIImage(systemName: "shippingbox")) { _ in coordinator.parent.onArtifacts() },
         ]))
 
         var sessionGroup: [UIMenuElement] = [
