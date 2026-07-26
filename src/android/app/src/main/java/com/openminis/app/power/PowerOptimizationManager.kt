@@ -1,4 +1,4 @@
-package com.openminis.app.power
+package com.leoyuan.leophoneagent.power
 
 import android.app.Activity
 import android.content.ActivityNotFoundException
@@ -9,7 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.logging.AppLogger
 
 /**
  * T50: helpers for two pieces of Android-only background-keep-alive
@@ -114,7 +114,7 @@ object PowerOptimizationManager {
      * True when the device is from a vendor known to enforce
      * autostart-on-top-of-stock-Android — meaning the user almost
      * certainly needs to grant the OEM-specific permission for
-     * Minis to keep running in the background. [Vendor.OTHER]
+     * LeoPhoneAgent to keep running in the background. [Vendor.OTHER]
      * (Pixel, generic AOSP, etc.) returns false because stock
      * Android's own foreground-service guarantees suffice.
      */

@@ -63,11 +63,11 @@ extension AIChatViewModel {
         return result
     }
 
-    /// Resolve a minis:// URL string to a host filesystem URL.
+    /// Resolve a leophoneagent:// URL string to a host filesystem URL.
     /// Global dirs (memory/skills/shared) live in the App Group container;
     /// session dirs live under minisPersistentBase/<sessionId>/<host>/.
     private func resolveMinisURL(_ urlString: String) -> URL? {
-        guard let url = URL(string: urlString), url.scheme == "minis",
+        guard let url = URL(string: urlString), url.scheme == "leophoneagent",
               let host = url.host else { return nil }
         // Tolerate double-encoded links. Prefer a variant that exists on disk;
         // otherwise return the first (single-decoded) so the write path still
@@ -91,7 +91,7 @@ extension AIChatViewModel {
             ?? candidates.first
     }
 
-    /// Convert a Linux path under /var/minis/ to a minis:// URL, or nil if not under /var/minis/.
+    /// Convert a Linux path under /var/minis/ to a leophoneagent:// URL, or nil if not under /var/minis/.
     func linuxPathToMinisURL(_ path: String) -> String? {
         let prefix = "/var/minis/"
         guard path.hasPrefix(prefix) else { return nil }
@@ -100,7 +100,7 @@ extension AIChatViewModel {
         let namespace = String(rest[rest.startIndex..<slashIdx])
         let filename = String(rest[rest.index(after: slashIdx)...])  // "foo.png"
         let encoded = filename.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? filename
-        return "minis://\(namespace)/\(encoded)"
+        return "leophoneagent://\(namespace)/\(encoded)"
     }
 
     /// Resolve a Linux path for direct file reads (read_image, file_read, file_write).
@@ -130,11 +130,11 @@ extension AIChatViewModel {
         return fallback
     }
 
-    /// Resolve a minis:// URL or /var/minis/ Linux path for direct reads.
+    /// Resolve a leophoneagent:// URL or /var/minis/ Linux path for direct reads.
     /// Unifies both URL schemes into a single async resolution path.
     func resolveMinisPath(_ pathOrURL: String) async -> URL? {
-        if pathOrURL.hasPrefix("minis://") {
-            // Convert minis:// URL to Linux path, then resolve via mount table
+        if pathOrURL.hasPrefix("leophoneagent://") {
+            // Convert leophoneagent:// URL to Linux path, then resolve via mount table
             guard let url = URL(string: pathOrURL), let host = url.host else { return nil }
             let subPath = url.path.hasPrefix("/") ? String(url.path.dropFirst()) : url.path
             let linuxPath = "/var/minis/\(host)" + (subPath.isEmpty ? "" : "/\(subPath)")

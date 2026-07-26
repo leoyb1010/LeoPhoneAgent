@@ -23,12 +23,12 @@ struct AboutView: View {
                                     .stroke(Color(UIColor.separator), lineWidth: 0.5)
                             )
                     }
-                    Text("Minis")
+                    Text("LeoPhoneAgent")
                         .font(.title2.bold())
                     Text("Version \(appVersion)")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                    Text("Minis is Your Fully Local, Fully Private On-Device Agent.")
+                    Text("LeoPhoneAgent is Your Fully Local, Fully Private On-Device Agent.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -39,7 +39,7 @@ struct AboutView: View {
 
             // MARK: - Links
             Section("Links") {
-                Link(destination: URL(string: "https://github.com/OpenMinis")!) {
+                Link(destination: URL(string: "https://github.com/leoyb1010/LeoPhoneAgent")!) {
                     Label {
                         HStack {
                             Text("GitHub Repository")
@@ -53,7 +53,7 @@ struct AboutView: View {
                         Image(systemName: "link.circle.fill")
                     }
                 }
-                Link(destination: URL(string: "https://github.com/OpenMinis/OpenMinis/issues")!) {
+                Link(destination: URL(string: "https://github.com/leoyb1010/LeoPhoneAgent/issues")!) {
                     Label {
                         HStack {
                             Text("Report an Issue")

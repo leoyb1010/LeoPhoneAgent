@@ -13,7 +13,7 @@
 #include "kernel/native_offload.h"
 #include <unistd.h>
 
-#import "Minis-Swift.h"
+#import "LeoPhoneAgent-Swift.h"
 
 static NSString *const TOOL_NAME = @"apple-player";
 

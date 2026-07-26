@@ -1,10 +1,10 @@
-package com.openminis.app.offload
+package com.leoyuan.leophoneagent.offload
 
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.logging.AppLogger
 import rikka.shizuku.Shizuku
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean

@@ -1,10 +1,10 @@
-package com.openminis.app.browser
+package com.leoyuan.leophoneagent.browser
 
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.logging.AppLogger
 import java.net.URI
 
 /**

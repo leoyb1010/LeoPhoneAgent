@@ -1,9 +1,9 @@
-package com.openminis.app.webapp
+package com.leoyuan.leophoneagent.webapp
 
 import android.content.Context
-import com.openminis.app.data.db.WebAppShortcutEntity
-import com.openminis.app.data.repository.WebAppShortcutRepository
-import com.openminis.app.sandbox.PRootKernel
+import com.leoyuan.leophoneagent.data.db.WebAppShortcutEntity
+import com.leoyuan.leophoneagent.data.repository.WebAppShortcutRepository
+import com.leoyuan.leophoneagent.sandbox.PRootKernel
 import java.io.File
 
 /**
@@ -48,7 +48,7 @@ object WebAppPathResolver {
     fun inferScope(hostFile: File): Triple<String, String?, String>? {
         val hostAbs = hostFile.absolutePath
         // Longest host-prefix wins, mirroring resolveHostPath's longest-key match.
-        val sorted = com.openminis.app.sandbox.PRootKernel
+        val sorted = com.leoyuan.leophoneagent.sandbox.PRootKernel
             .bindMounts.entries.sortedByDescending { it.value.length }
         for ((linuxPrefix, hostBase) in sorted) {
             val baseNorm = hostBase.trimEnd('/')

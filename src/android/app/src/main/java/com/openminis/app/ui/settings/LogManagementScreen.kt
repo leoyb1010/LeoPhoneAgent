@@ -1,7 +1,7 @@
-package com.openminis.app.ui.settings
+package com.leoyuan.leophoneagent.ui.settings
 
-import com.openminis.app.R
-import com.openminis.app.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
 
 import android.content.Context
 import android.content.Intent
@@ -50,7 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.FileProvider
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.logging.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -91,7 +91,7 @@ fun LogManagementScreen(
     // "logs"; a `?tab=config-audit` deep-link query lands users straight
     // on the audit list. Mirrors iOS LogManagementView.
     val initialTab = remember {
-        com.openminis.app.deeplink.DeepLinkCoordinator.consumePendingLogsTab() ?: "logs"
+        com.leoyuan.leophoneagent.deeplink.DeepLinkCoordinator.consumePendingLogsTab() ?: "logs"
     }
     var tab by remember { mutableStateOf(initialTab) }
 

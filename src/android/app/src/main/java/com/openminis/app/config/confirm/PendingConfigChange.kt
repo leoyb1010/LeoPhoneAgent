@@ -1,6 +1,6 @@
-package com.openminis.app.config.confirm
+package com.leoyuan.leophoneagent.config.confirm
 
-import com.openminis.app.config.ConfigRisk
+import com.leoyuan.leophoneagent.config.ConfigRisk
 import java.util.UUID
 
 /**

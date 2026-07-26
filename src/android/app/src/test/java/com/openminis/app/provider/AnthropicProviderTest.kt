@@ -1,12 +1,12 @@
-package com.openminis.app.provider
+package com.leoyuan.leophoneagent.provider
 
-import com.openminis.app.data.model.AgentContentPart
-import com.openminis.app.data.model.LLMError
-import com.openminis.app.data.model.LLMMessage
-import com.openminis.app.data.model.LLMModel
-import com.openminis.app.data.model.LLMStreamChunk
-import com.openminis.app.data.model.ThinkingLevel
-import com.openminis.app.provider.anthropic.AnthropicProvider
+import com.leoyuan.leophoneagent.data.model.AgentContentPart
+import com.leoyuan.leophoneagent.data.model.LLMError
+import com.leoyuan.leophoneagent.data.model.LLMMessage
+import com.leoyuan.leophoneagent.data.model.LLMModel
+import com.leoyuan.leophoneagent.data.model.LLMStreamChunk
+import com.leoyuan.leophoneagent.data.model.ThinkingLevel
+import com.leoyuan.leophoneagent.provider.anthropic.AnthropicProvider
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse

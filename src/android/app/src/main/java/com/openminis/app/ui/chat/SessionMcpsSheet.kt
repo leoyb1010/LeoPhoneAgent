@@ -1,4 +1,4 @@
-package com.openminis.app.ui.chat
+package com.leoyuan.leophoneagent.ui.chat
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,10 +27,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import com.openminis.app.R
-import com.openminis.app.data.repository.MCPRepository
-import com.openminis.app.ui.settings.SettingsRow
-import com.openminis.app.ui.settings.SettingsSection
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.data.repository.MCPRepository
+import com.leoyuan.leophoneagent.ui.settings.SettingsRow
+import com.leoyuan.leophoneagent.ui.settings.SettingsSection
 
 private const val MCP_NOTE_TRUNC = 200
 

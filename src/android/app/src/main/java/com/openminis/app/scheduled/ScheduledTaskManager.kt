@@ -1,4 +1,4 @@
-package com.openminis.app.scheduled
+package com.leoyuan.leophoneagent.scheduled
 
 import android.app.AlarmManager
 import android.app.NotificationChannel
@@ -7,7 +7,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.logging.AppLogger
 
 /**
  * [T-android-scheduled-tasks-design] Schedules / cancels AlarmManager
@@ -60,7 +60,7 @@ class ScheduledTaskManager(private val context: Context) {
 
     /**
      * Re-register every enabled task with AlarmManager. Called from
-     * [com.openminis.app.offload.AlarmReceiver]'s BOOT_COMPLETED branch
+     * [com.leoyuan.leophoneagent.offload.AlarmReceiver]'s BOOT_COMPLETED branch
      * so persisted tasks survive a device reboot.
      */
     fun rescheduleAll() {
@@ -168,7 +168,7 @@ class ScheduledTaskManager(private val context: Context) {
 
     companion object {
         private const val TAG = "ScheduledTaskManager"
-        const val ACTION_FIRE = "com.openminis.app.scheduled.FIRE"
+        const val ACTION_FIRE = "com.leoyuan.leophoneagent.scheduled.FIRE"
         const val EXTRA_TASK_ID = "task_id"
         const val CHANNEL_ID = "minis_scheduled_tasks"
         private const val CHANNEL_NAME = "Scheduled Tasks"

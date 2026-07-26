@@ -1,4 +1,4 @@
-package com.openminis.app.ui.chat
+package com.leoyuan.leophoneagent.ui.chat
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -9,11 +9,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.compose.foundation.lazy.LazyListState
-import com.openminis.app.agent.Level
-import com.openminis.app.agent.ToolLoopDetector
-import com.openminis.app.browser.BrowserActionInput
-import com.openminis.app.browser.BrowserTabPool
-import com.openminis.app.data.db.MessageEntity
+import com.leoyuan.leophoneagent.agent.Level
+import com.leoyuan.leophoneagent.agent.ToolLoopDetector
+import com.leoyuan.leophoneagent.browser.BrowserActionInput
+import com.leoyuan.leophoneagent.browser.BrowserTabPool
+import com.leoyuan.leophoneagent.data.db.MessageEntity
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Compress
 import androidx.compose.material.icons.filled.Delete
@@ -21,45 +21,45 @@ import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Extension
-import com.openminis.app.data.BPETokenizer
-import com.openminis.app.data.ContextOffload
-import com.openminis.app.data.ContextPolicy
-import com.openminis.app.logging.AppLogger
-import com.openminis.app.data.FileMentionIndex
-import com.openminis.app.data.db.CompactMarkerEntity
-import com.openminis.app.data.model.AgentContentPart
-import com.openminis.app.data.model.AgentToolDefinition
-import com.openminis.app.data.model.LLMMessage
-import com.openminis.app.data.model.LLMModel
-import com.openminis.app.data.model.LLMStreamChunk
-import com.openminis.app.data.model.LLMUsage
-import com.openminis.app.data.model.ModelGroup
-import com.openminis.app.data.model.ThinkingLevel
-import com.openminis.app.R
-import com.openminis.app.data.repository.ChatRepository
-import com.openminis.app.data.repository.MemoryRepository
-import com.openminis.app.data.repository.ProviderRepository
-import com.openminis.app.provider.ImageBudget
-import com.openminis.app.provider.LLMProvider
-import com.openminis.app.provider.ProviderFactory
-import com.openminis.app.provider.catalogMaxThinkingLevel
-import com.openminis.app.provider.effectiveMaxThinkingLevel
-import com.openminis.app.agent.shell.BashismDetector
-import com.openminis.app.agent.shell.BashismReminder
-import com.openminis.app.agent.shell.OnDemandBash
-import com.openminis.app.sandbox.ExecutionCoordinator
-import com.openminis.app.terminal.MinisOpenUrlBroker
-import com.openminis.app.terminal.MinisUrlMarker
-import com.openminis.app.tools.AgentTools
-import com.openminis.app.tools.FileEditTool
-import com.openminis.app.tools.FileReadTool
-import com.openminis.app.tools.FileWriteTool
-import com.openminis.app.tools.MemoryTools
-import com.openminis.app.tools.ReadImageTool
-import com.openminis.app.tools.ToolExecutionResult
-import com.openminis.app.offload.OffloadPermissionManager
-import com.openminis.app.service.SessionActivityTracker
-import com.openminis.app.service.SessionConcurrencyManager
+import com.leoyuan.leophoneagent.data.BPETokenizer
+import com.leoyuan.leophoneagent.data.ContextOffload
+import com.leoyuan.leophoneagent.data.ContextPolicy
+import com.leoyuan.leophoneagent.logging.AppLogger
+import com.leoyuan.leophoneagent.data.FileMentionIndex
+import com.leoyuan.leophoneagent.data.db.CompactMarkerEntity
+import com.leoyuan.leophoneagent.data.model.AgentContentPart
+import com.leoyuan.leophoneagent.data.model.AgentToolDefinition
+import com.leoyuan.leophoneagent.data.model.LLMMessage
+import com.leoyuan.leophoneagent.data.model.LLMModel
+import com.leoyuan.leophoneagent.data.model.LLMStreamChunk
+import com.leoyuan.leophoneagent.data.model.LLMUsage
+import com.leoyuan.leophoneagent.data.model.ModelGroup
+import com.leoyuan.leophoneagent.data.model.ThinkingLevel
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.data.repository.ChatRepository
+import com.leoyuan.leophoneagent.data.repository.MemoryRepository
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.provider.ImageBudget
+import com.leoyuan.leophoneagent.provider.LLMProvider
+import com.leoyuan.leophoneagent.provider.ProviderFactory
+import com.leoyuan.leophoneagent.provider.catalogMaxThinkingLevel
+import com.leoyuan.leophoneagent.provider.effectiveMaxThinkingLevel
+import com.leoyuan.leophoneagent.agent.shell.BashismDetector
+import com.leoyuan.leophoneagent.agent.shell.BashismReminder
+import com.leoyuan.leophoneagent.agent.shell.OnDemandBash
+import com.leoyuan.leophoneagent.sandbox.ExecutionCoordinator
+import com.leoyuan.leophoneagent.terminal.MinisOpenUrlBroker
+import com.leoyuan.leophoneagent.terminal.MinisUrlMarker
+import com.leoyuan.leophoneagent.tools.AgentTools
+import com.leoyuan.leophoneagent.tools.FileEditTool
+import com.leoyuan.leophoneagent.tools.FileReadTool
+import com.leoyuan.leophoneagent.tools.FileWriteTool
+import com.leoyuan.leophoneagent.tools.MemoryTools
+import com.leoyuan.leophoneagent.tools.ReadImageTool
+import com.leoyuan.leophoneagent.tools.ToolExecutionResult
+import com.leoyuan.leophoneagent.offload.OffloadPermissionManager
+import com.leoyuan.leophoneagent.service.SessionActivityTracker
+import com.leoyuan.leophoneagent.service.SessionConcurrencyManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -88,8 +88,8 @@ class ChatViewModel(
     private val providerRepository: ProviderRepository,
     internal val context: Context,
     val memoryRepository: MemoryRepository? = null,
-    val skillRepository: com.openminis.app.data.repository.SkillRepository? = null,
-    val mcpRepository: com.openminis.app.data.repository.MCPRepository? = null,
+    val skillRepository: com.leoyuan.leophoneagent.data.repository.SkillRepository? = null,
+    val mcpRepository: com.leoyuan.leophoneagent.data.repository.MCPRepository? = null,
 ) : ViewModel() {
 
     companion object {
@@ -223,7 +223,7 @@ class ChatViewModel(
             ToolBlockStatus.RUNNING,
         )
         // T145 phase 1: dedicated tag so the streaming-state debug pipeline
-        // can be filtered with `adb logcat -s Minis.ChatVMStream:D`.
+        // can be filtered with `adb logcat -s LeoPhoneAgent.ChatVMStream:D`.
         // Removed once the retry-state regression is rooted out.
         private const val TAG_STREAM = "ChatVMStream"
         /**
@@ -297,8 +297,8 @@ class ChatViewModel(
             providerRepository: ProviderRepository,
             appContext: Context,
             memoryRepository: MemoryRepository?,
-            skillRepository: com.openminis.app.data.repository.SkillRepository?,
-            mcpRepository: com.openminis.app.data.repository.MCPRepository? = null,
+            skillRepository: com.leoyuan.leophoneagent.data.repository.SkillRepository?,
+            mcpRepository: com.leoyuan.leophoneagent.data.repository.MCPRepository? = null,
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -315,7 +315,7 @@ class ChatViewModel(
         }
     }
 
-    private val mediaStore = com.openminis.app.data.storage.MediaStore(context)
+    private val mediaStore = com.leoyuan.leophoneagent.data.storage.MediaStore(context)
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     val messages: StateFlow<List<ChatMessage>> = _messages.asStateFlow()
@@ -807,13 +807,13 @@ class ChatViewModel(
      * conversation history untouched — only the on-disk entry and the
      * op-log row are mutated.
      */
-    fun revokeMemoryRecord(record: MemoryToolRecord): com.openminis.app.data.repository.MemoryRepository.EntryMutationResult {
+    fun revokeMemoryRecord(record: MemoryToolRecord): com.leoyuan.leophoneagent.data.repository.MemoryRepository.EntryMutationResult {
         val repo = memoryRepository
-            ?: return com.openminis.app.data.repository.MemoryRepository.EntryMutationResult.IOError("Memory not available")
+            ?: return com.leoyuan.leophoneagent.data.repository.MemoryRepository.EntryMutationResult.IOError("Memory not available")
         val written = record.writtenContent
-            ?: return com.openminis.app.data.repository.MemoryRepository.EntryMutationResult.NotFound
+            ?: return com.leoyuan.leophoneagent.data.repository.MemoryRepository.EntryMutationResult.NotFound
         val result = repo.revokeEntry(written)
-        if (result is com.openminis.app.data.repository.MemoryRepository.EntryMutationResult.Success) {
+        if (result is com.leoyuan.leophoneagent.data.repository.MemoryRepository.EntryMutationResult.Success) {
             _memoryToolRecords.value = _memoryToolRecords.value - record
         }
         return result
@@ -871,13 +871,13 @@ class ChatViewModel(
     fun replaceMemoryRecord(
         record: MemoryToolRecord,
         newContent: String,
-    ): com.openminis.app.data.repository.MemoryRepository.EntryMutationResult {
+    ): com.leoyuan.leophoneagent.data.repository.MemoryRepository.EntryMutationResult {
         val repo = memoryRepository
-            ?: return com.openminis.app.data.repository.MemoryRepository.EntryMutationResult.IOError("Memory not available")
+            ?: return com.leoyuan.leophoneagent.data.repository.MemoryRepository.EntryMutationResult.IOError("Memory not available")
         val old = record.writtenContent
-            ?: return com.openminis.app.data.repository.MemoryRepository.EntryMutationResult.NotFound
+            ?: return com.leoyuan.leophoneagent.data.repository.MemoryRepository.EntryMutationResult.NotFound
         val result = repo.replaceEntryBody(old, newContent)
-        if (result is com.openminis.app.data.repository.MemoryRepository.EntryMutationResult.Success) {
+        if (result is com.leoyuan.leophoneagent.data.repository.MemoryRepository.EntryMutationResult.Success) {
             _memoryToolRecords.value = _memoryToolRecords.value.map {
                 if (it === record) it.copy(
                     writtenContent = newContent,
@@ -896,7 +896,7 @@ class ChatViewModel(
     // overwrites this with the per-session DB value, which takes
     // precedence — the global pref only applies to drafts.
     internal val _memoryEnabled =
-        MutableStateFlow(com.openminis.app.data.MemoryGlobalPrefs.isGlobalEnabled(context))
+        MutableStateFlow(com.leoyuan.leophoneagent.data.MemoryGlobalPrefs.isGlobalEnabled(context))
     val memoryEnabled: StateFlow<Boolean> = _memoryEnabled.asStateFlow()
 
     internal val _thinkingLevel = MutableStateFlow(ThinkingLevel.OFF)
@@ -929,7 +929,7 @@ class ChatViewModel(
             val entry = entryId?.let { id -> config.modelEntries.find { it.id == id } }
             val instance = entry?.let { e -> config.instances.find { it.id == e.providerInstanceId } }
             instance != null &&
-                instance.providerType == com.openminis.app.data.model.ProviderType.anthropic &&
+                instance.providerType == com.leoyuan.leophoneagent.data.model.ProviderType.anthropic &&
                 instance.customBaseURL.isNullOrBlank()
         }.stateIn(
             viewModelScope,
@@ -939,7 +939,7 @@ class ChatViewModel(
 
     /** [T-android-enhanced-cache] True once the user accepted the one-time warning. */
     fun isEnhancedCacheConfirmed(): Boolean =
-        com.openminis.app.data.EnhancedCachePrefs.isConfirmed(context)
+        com.leoyuan.leophoneagent.data.EnhancedCachePrefs.isConfirmed(context)
 
     /**
      * [T-android-enhanced-cache] Enable Enhanced Cache after the confirmation
@@ -947,7 +947,7 @@ class ChatViewModel(
      * in-memory toggle on.
      */
     fun confirmAndEnableEnhancedCache() {
-        com.openminis.app.data.EnhancedCachePrefs.setConfirmed(context)
+        com.leoyuan.leophoneagent.data.EnhancedCachePrefs.setConfirmed(context)
         _enhancedCacheEnabled.value = true
     }
 
@@ -968,11 +968,11 @@ class ChatViewModel(
      * request-build time, so this flow only drives the menu row + nav badge.
      */
     internal val _fastModeEnabled =
-        MutableStateFlow(com.openminis.app.data.FastModePrefs.isEnabled())
+        MutableStateFlow(com.leoyuan.leophoneagent.data.FastModePrefs.isEnabled())
     val fastModeEnabled: StateFlow<Boolean> = _fastModeEnabled.asStateFlow()
 
     fun setFastModeEnabled(enabled: Boolean) {
-        com.openminis.app.data.FastModePrefs.setEnabled(context, enabled)
+        com.leoyuan.leophoneagent.data.FastModePrefs.setEnabled(context, enabled)
         _fastModeEnabled.value = enabled
     }
 
@@ -996,8 +996,8 @@ class ChatViewModel(
             val entry = entryId?.let { id -> config.modelEntries.find { it.id == id } }
             val instance = entry?.let { e -> config.instances.find { it.id == e.providerInstanceId } }
             val isCodexOAuth = instance != null &&
-                instance.providerType == com.openminis.app.data.model.ProviderType.openAI &&
-                instance.credentialType == com.openminis.app.data.model.ProviderCredential.oauth &&
+                instance.providerType == com.leoyuan.leophoneagent.data.model.ProviderType.openAI &&
+                instance.credentialType == com.leoyuan.leophoneagent.data.model.ProviderCredential.oauth &&
                 instance.customBaseURL.isNullOrBlank()
             entry != null && instance != null &&
                 entry.model.id.contains("gpt", ignoreCase = true) &&
@@ -1054,7 +1054,7 @@ class ChatViewModel(
         FileMentionIndex(
             filesDir = java.io.File(context.applicationContext.filesDir, "minis-global"),
             mountsProvider = {
-                com.openminis.app.sandbox.PRootKernel
+                com.leoyuan.leophoneagent.sandbox.PRootKernel
                     .mountEntriesForIndex(context.applicationContext)
             },
         )
@@ -2241,7 +2241,7 @@ class ChatViewModel(
      * resolve boundaries the same way iOS `cachedLatestMarker` does. Refreshed
      * on every compactAll write and on session reload. */
     @Volatile
-    private var _cachedLatestMarker: com.openminis.app.data.db.CompactMarkerEntity? = null
+    private var _cachedLatestMarker: com.leoyuan.leophoneagent.data.db.CompactMarkerEntity? = null
 
     /**
      * Result of a bounded walk-back. `priorIdx` is the agentHistory index
@@ -2579,14 +2579,14 @@ class ChatViewModel(
         viewModelScope.launch {
             canResume.collect { interrupted ->
                 if (interrupted) {
-                    com.openminis.app.service.SessionBadgeStore.push(
+                    com.leoyuan.leophoneagent.service.SessionBadgeStore.push(
                         sessionId,
-                        com.openminis.app.service.SessionBadgeStore.SessionBadgeState.PAUSED,
+                        com.leoyuan.leophoneagent.service.SessionBadgeStore.SessionBadgeState.PAUSED,
                     )
                 } else {
-                    com.openminis.app.service.SessionBadgeStore.remove(
+                    com.leoyuan.leophoneagent.service.SessionBadgeStore.remove(
                         sessionId,
-                        com.openminis.app.service.SessionBadgeStore.SessionBadgeState.PAUSED,
+                        com.leoyuan.leophoneagent.service.SessionBadgeStore.SessionBadgeState.PAUSED,
                     )
                 }
             }
@@ -2596,7 +2596,7 @@ class ChatViewModel(
         // cold start. loadSession() is idempotent (re-checks isSafeMode
         // on entry; sessionLoaded gate prevents double-population), so
         // this is a clean "now finish the work you skipped" hook.
-        com.openminis.app.crash.CrashFrequencyDetector
+        com.leoyuan.leophoneagent.crash.CrashFrequencyDetector
             .registerSafeModeClearedListener {
                 viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
                     runCatching { loadSession() }
@@ -2732,7 +2732,7 @@ class ChatViewModel(
     internal val activeSessionId: String
         get() = realSessionId.ifEmpty { sessionId }
 
-    /** Public accessor used by ChatScreen to resolve session-scoped minis:// links. */
+    /** Public accessor used by ChatScreen to resolve session-scoped leophoneagent:// links. */
     val currentSessionId: String
         get() = activeSessionId
 
@@ -2740,7 +2740,7 @@ class ChatViewModel(
      *  current session so the shared edit-title sheet (reused from the session
      *  list) can be opened from the in-chat title pill. Returns null for
      *  drafts that haven't been persisted yet. */
-    suspend fun loadSessionEntity(): com.openminis.app.data.db.ChatSessionEntity? {
+    suspend fun loadSessionEntity(): com.leoyuan.leophoneagent.data.db.ChatSessionEntity? {
         val sid = realSessionId.ifEmpty { return null }
         return runCatching { chatRepository.getSession(sid) }.getOrNull()
     }
@@ -2896,13 +2896,13 @@ class ChatViewModel(
         // a re-crash loop while the user is staring at the share dialog.
         // The flag clears the moment the dialog closes (share / dismiss /
         // cancel) — see CrashFrequencyDetector.maybeShowOnActivity.
-        if (com.openminis.app.crash.CrashFrequencyDetector.isSafeMode()) {
+        if (com.leoyuan.leophoneagent.crash.CrashFrequencyDetector.isSafeMode()) {
             android.util.Log.w(TAG, "loadSession: safe-mode active, skipping session restore")
             // [T-android-perf-logging] Surface the skip on the Perf timeline
             // too — when a crash_or_stall recovery loop is suspected, this
             // distinguishes "loadSession ran and was slow" from "loadSession
             // was skipped (safe-mode), so the stall is elsewhere".
-            com.openminis.app.diagnostics.PerfLongCtx.step(
+            com.leoyuan.leophoneagent.diagnostics.PerfLongCtx.step(
                 sessionId,
                 "loadSession.skipped",
                 "reason=safeMode",
@@ -2917,7 +2917,7 @@ class ChatViewModel(
             // an early-return / exception path.
             val tHangDiagStart = System.currentTimeMillis()
             println("[T-HANG-DIAG] loadSession ENTER session=$sessionId isDraft=$isDraft")
-            com.openminis.app.diagnostics.PerfLongCtx.step(sessionId, "loadSession.enter", "isDraft=$isDraft")
+            com.leoyuan.leophoneagent.diagnostics.PerfLongCtx.step(sessionId, "loadSession.enter", "isDraft=$isDraft")
             try {
             val config = providerRepository.config.value
             _availableGroups.value = config.modelGroups
@@ -3019,25 +3019,25 @@ class ChatViewModel(
             // (#466/#470) — we only move work, not gating.
             val tHangDiagBeforeLoad = System.currentTimeMillis()
             data class LoadedSessionData(
-                val messages: List<com.openminis.app.data.db.MessageEntity>,
+                val messages: List<com.leoyuan.leophoneagent.data.db.MessageEntity>,
                 val ordered: List<ChatMessage>,
                 val llmHistory: List<LLMMessage>,
                 val loadMs: Long,
                 val transformMs: Long,
             )
-            com.openminis.app.diagnostics.PerfLongCtx.step(sessionId, "db.query.begin")
+            com.leoyuan.leophoneagent.diagnostics.PerfLongCtx.step(sessionId, "db.query.begin")
             val loaded = withContext(Dispatchers.IO) {
                 val tIoBeforeLoad = System.currentTimeMillis()
                 val rows = chatRepository.loadMessages(sessionId)
                 val tIoAfterLoad = System.currentTimeMillis()
-                com.openminis.app.diagnostics.PerfLongCtx.step(
+                com.leoyuan.leophoneagent.diagnostics.PerfLongCtx.step(
                     sessionId,
                     "db.query.end",
                     "count=${rows.size}",
                 )
                 val chatUi = rows.toChatMessages()
                 val tIoAfterTransform = System.currentTimeMillis()
-                com.openminis.app.diagnostics.PerfLongCtx.step(
+                com.leoyuan.leophoneagent.diagnostics.PerfLongCtx.step(
                     sessionId,
                     "toChatMessages.end",
                     "count=${chatUi.size}",
@@ -3054,7 +3054,7 @@ class ChatViewModel(
                     totalPartsChars += entity.partsJson.length
                     llm.add(entity.toLLMMessage())
                 }
-                com.openminis.app.diagnostics.PerfLongCtx.step(
+                com.leoyuan.leophoneagent.diagnostics.PerfLongCtx.step(
                     sessionId,
                     "toLLMMessage.end",
                     "count=${llm.size} totalPartsChars=$totalPartsChars",
@@ -3161,7 +3161,7 @@ class ChatViewModel(
             _compactSummary.value = marker?.summary
             _cachedLatestMarker = marker
 
-            com.openminis.app.diagnostics.PerfLongCtx.step(
+            com.leoyuan.leophoneagent.diagnostics.PerfLongCtx.step(
                 sessionId,
                 "stateflow.emit.begin",
                 "count=${ordered.size}",
@@ -3236,7 +3236,7 @@ class ChatViewModel(
                     "[T-HANG-DIAG] loadSession EXIT session=$sessionId " +
                         "totalMs=${System.currentTimeMillis() - tHangDiagStart}",
                 )
-                com.openminis.app.diagnostics.PerfLongCtx.step(
+                com.leoyuan.leophoneagent.diagnostics.PerfLongCtx.step(
                     sessionId,
                     "loadSession.exit",
                     "totalMs=${System.currentTimeMillis() - tHangDiagStart}",
@@ -3289,8 +3289,8 @@ class ChatViewModel(
      */
     private suspend fun applyCompactMarkerGraying(
         messages: List<ChatMessage>,
-        marker: com.openminis.app.data.db.CompactMarkerEntity,
-        rawMessages: List<com.openminis.app.data.db.MessageEntity>,
+        marker: com.leoyuan.leophoneagent.data.db.CompactMarkerEntity,
+        rawMessages: List<com.leoyuan.leophoneagent.data.db.MessageEntity>,
         historyDbIds: Set<String>,
     ): List<ChatMessage> {
         // Some legacy rows have empty-string boundaries instead of NULL —
@@ -3311,7 +3311,7 @@ class ChatViewModel(
         // Used when even createdAt fallback fails — better to show no
         // divider than to incorrectly gray live messages.
         var insertIdx = -1
-        var healedMarker: com.openminis.app.data.db.CompactMarkerEntity? = null
+        var healedMarker: com.leoyuan.leophoneagent.data.db.CompactMarkerEntity? = null
 
         // Helper: locate the UI message whose sourceDbIds (or id) contains
         // the given dbId. Matches iOS uiIndexForAnchorRaw, which scans by
@@ -3456,10 +3456,10 @@ class ChatViewModel(
      * Mirrors iOS AIChatViewModel+Compaction.swift:125.
      */
     private fun anchorByCreatedAt(
-        rawMessages: List<com.openminis.app.data.db.MessageEntity>,
+        rawMessages: List<com.leoyuan.leophoneagent.data.db.MessageEntity>,
         markerCreatedAt: Long,
         historyDbIds: Set<String>,
-    ): com.openminis.app.data.db.MessageEntity? {
+    ): com.leoyuan.leophoneagent.data.db.MessageEntity? {
         return rawMessages.lastOrNull { raw ->
             raw.createdAt < markerCreatedAt &&
                 (historyDbIds.isEmpty() || raw.id in historyDbIds)
@@ -3476,10 +3476,10 @@ class ChatViewModel(
      * Mirrors iOS AIChatViewModel+Compaction.swift:150.
      */
     private fun rewriteMarkerForHeal(
-        original: com.openminis.app.data.db.CompactMarkerEntity,
-        newAnchor: com.openminis.app.data.db.MessageEntity,
-        lastRaw: com.openminis.app.data.db.MessageEntity?,
-    ): com.openminis.app.data.db.CompactMarkerEntity {
+        original: com.leoyuan.leophoneagent.data.db.CompactMarkerEntity,
+        newAnchor: com.leoyuan.leophoneagent.data.db.MessageEntity,
+        lastRaw: com.leoyuan.leophoneagent.data.db.MessageEntity?,
+    ): com.leoyuan.leophoneagent.data.db.CompactMarkerEntity {
         // Legacy sort-order fallback writes a past-end sentinel so any
         // hypothetical v1 reader sees "everything compacted, nothing
         // kept" (graceful degradation, no overlap with live tail).
@@ -3839,7 +3839,7 @@ class ChatViewModel(
     /**
      * Convert a staged share file (under filesDir/share_extension/) into
      * an [InputAttachment] and add it to the composer. Called by
-     * ChatScreen when draining a [com.openminis.app.share.PendingShare].
+     * ChatScreen when draining a [com.leoyuan.leophoneagent.share.PendingShare].
      */
     fun addAttachmentFromStagedShare(file: java.io.File): InputAttachment? {
         if (!file.exists()) return null
@@ -3882,7 +3882,7 @@ class ChatViewModel(
      * [T-android-rerun-from-tool-block-position] Resolve the live UI assistant
      * bubble id that currently owns the tool block with [blockId] (== its
      * tool_use id). Returns null when no live bubble holds it. Used by the
-     * debug RPC ([com.openminis.app.debug.HeadlessChatRunner.rerunFromToolBlock])
+     * debug RPC ([com.leoyuan.leophoneagent.debug.HeadlessChatRunner.rerunFromToolBlock])
      * because the in-memory bubble id is a volatile `assistant_<ts>` runtime id
      * (not the DB row id a caller would read from `chat.messages.list`), so the
      * harness can't supply it directly.
@@ -4266,19 +4266,19 @@ class ChatViewModel(
     ): Boolean {
         var provider = initialProvider
         // Refresh OAuth token if needed
-        if ((provider as? com.openminis.app.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
+        if ((provider as? com.leoyuan.leophoneagent.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
             try {
                 val activeEntryId = _activeEntryId.value
                 val entry = activeEntryId?.let { id -> providerRepository.config.value.modelEntries.find { it.id == id } }
                 val instance = entry?.let { e -> providerRepository.config.value.instances.find { it.id == e.providerInstanceId } }
                 if (instance != null) {
-                    val manager = com.openminis.app.auth.OAuthManager.forInstance(context, instance)
+                    val manager = com.leoyuan.leophoneagent.auth.OAuthManager.forInstance(context, instance)
                     val freshToken = manager?.validAccessToken()
                     if (freshToken != null) {
                         val storedKey = providerRepository.loadApiKey(instance.id)
                         if (freshToken != storedKey) {
                             providerRepository.saveApiKey(instance.id, freshToken)
-                            provider = com.openminis.app.provider.ProviderFactory.create(
+                            provider = com.leoyuan.leophoneagent.provider.ProviderFactory.create(
                                 instance, freshToken, currentModel ?: provider.model, context
                             )
                             currentProvider = provider
@@ -4291,8 +4291,8 @@ class ChatViewModel(
         }
 
         val baseSystemPrompt = buildSystemPrompt()
-        val systemPrompt = if ((provider as? com.openminis.app.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
-            val prefix = com.openminis.app.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
+        val systemPrompt = if ((provider as? com.leoyuan.leophoneagent.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
+            val prefix = com.leoyuan.leophoneagent.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
             if (baseSystemPrompt?.startsWith(prefix) == true) baseSystemPrompt
             else "$prefix\n\n${baseSystemPrompt ?: ""}"
         } else baseSystemPrompt
@@ -4308,7 +4308,7 @@ class ChatViewModel(
                 val activeFallbackStrategy = run {
                     val groupId = _selectedGroupId.value
                     groupId?.let { providerRepository.config.value.modelGroups.find { g -> g.id == it }?.fallbackStrategy }
-                        ?: com.openminis.app.data.model.FallbackStrategy.default
+                        ?: com.leoyuan.leophoneagent.data.model.FallbackStrategy.default
                 }
                 val fallbackProviders = buildFallbackProviders(launchedProvider)
                 try {
@@ -4714,7 +4714,7 @@ class ChatViewModel(
         provider: LLMProvider,
         systemPrompt: String?,
         fallbackProviders: List<LLMProvider>,
-        fallbackStrategy: com.openminis.app.data.model.FallbackStrategy,
+        fallbackStrategy: com.leoyuan.leophoneagent.data.model.FallbackStrategy,
     ) {
         while (_promptQueue.value.isNotEmpty()) {
             val queued = _promptQueue.value
@@ -4921,20 +4921,20 @@ class ChatViewModel(
             ))
 
             // Refresh OAuth token if needed before sending (mirrors iOS validAccessToken)
-            if ((provider as? com.openminis.app.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
+            if ((provider as? com.leoyuan.leophoneagent.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
                 try {
                     val activeEntryId = _activeEntryId.value
                     val entry = activeEntryId?.let { id -> providerRepository.config.value.modelEntries.find { it.id == id } }
                     val instance = entry?.let { e -> providerRepository.config.value.instances.find { it.id == e.providerInstanceId } }
                     if (instance != null) {
-                        val manager = com.openminis.app.auth.OAuthManager.forInstance(context, instance)
+                        val manager = com.leoyuan.leophoneagent.auth.OAuthManager.forInstance(context, instance)
                         val freshToken = manager?.validAccessToken()
                         if (freshToken != null) {
                             val storedKey = providerRepository.loadApiKey(instance.id)
                             if (freshToken != storedKey) {
                                 providerRepository.saveApiKey(instance.id, freshToken)
                                 // Recreate provider with fresh token
-                                provider = com.openminis.app.provider.ProviderFactory.create(
+                                provider = com.leoyuan.leophoneagent.provider.ProviderFactory.create(
                                     instance, freshToken, currentModel ?: provider.model, context
                                 )
                                 currentProvider = provider
@@ -4950,8 +4950,8 @@ class ChatViewModel(
             // Build system prompt
             // Anthropic OAuth requires the Claude Code prefix in the system prompt
             val baseSystemPrompt = buildSystemPrompt()
-            val systemPrompt = if ((provider as? com.openminis.app.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
-                val prefix = com.openminis.app.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
+            val systemPrompt = if ((provider as? com.leoyuan.leophoneagent.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
+                val prefix = com.leoyuan.leophoneagent.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
                 if (baseSystemPrompt?.startsWith(prefix) == true) baseSystemPrompt
                 else "$prefix\n\n${baseSystemPrompt ?: ""}"
             } else baseSystemPrompt
@@ -4970,7 +4970,7 @@ class ChatViewModel(
                     val activeFallbackStrategy = run {
                         val groupId = _selectedGroupId.value
                         groupId?.let { providerRepository.config.value.modelGroups.find { g -> g.id == it }?.fallbackStrategy }
-                            ?: com.openminis.app.data.model.FallbackStrategy.default
+                            ?: com.leoyuan.leophoneagent.data.model.FallbackStrategy.default
                     }
 
                     // Build full fallback provider list upfront (mirrors iOS triedEntries approach)
@@ -5039,7 +5039,7 @@ class ChatViewModel(
      *
      *  Also clears [ChatMessage.isAwaitingModelResponse] — without this, an
      *  exception thrown after a tool turn (which sets isAwaitingModelResponse=
-     *  true at runAgentLoop ~4015) leaves the "Minis is thinking" indicator
+     *  true at runAgentLoop ~4015) leaves the "LeoPhoneAgent is thinking" indicator
      *  on screen even though streaming is over. The flag is per-message and
      *  is not implicitly cleared by isStreaming=false. */
     private fun setInlineError(errorText: String) {
@@ -5269,13 +5269,13 @@ class ChatViewModel(
             }
 
             // Refresh OAuth token if needed
-            if ((provider as? com.openminis.app.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
+            if ((provider as? com.leoyuan.leophoneagent.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
                 try {
                     val activeEntryId = _activeEntryId.value
                     val entry = activeEntryId?.let { id -> providerRepository.config.value.modelEntries.find { it.id == id } }
                     val instance = entry?.let { e -> providerRepository.config.value.instances.find { it.id == e.providerInstanceId } }
                     if (instance != null) {
-                        val manager = com.openminis.app.auth.OAuthManager.forInstance(context, instance)
+                        val manager = com.leoyuan.leophoneagent.auth.OAuthManager.forInstance(context, instance)
                         val freshToken = manager?.validAccessToken()
                         if (freshToken != null) {
                             val storedKey = providerRepository.loadApiKey(instance.id)
@@ -5292,8 +5292,8 @@ class ChatViewModel(
             }
 
             val baseSystemPrompt = buildSystemPrompt()
-            val systemPrompt = if ((provider as? com.openminis.app.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
-                val prefix = com.openminis.app.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
+            val systemPrompt = if ((provider as? com.leoyuan.leophoneagent.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
+                val prefix = com.leoyuan.leophoneagent.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
                 if (baseSystemPrompt?.startsWith(prefix) == true) baseSystemPrompt
                 else "$prefix\n\n${baseSystemPrompt ?: ""}"
             } else baseSystemPrompt
@@ -5309,7 +5309,7 @@ class ChatViewModel(
                     val activeFallbackStrategy = run {
                         val groupId = _selectedGroupId.value
                         groupId?.let { providerRepository.config.value.modelGroups.find { g -> g.id == it }?.fallbackStrategy }
-                            ?: com.openminis.app.data.model.FallbackStrategy.default
+                            ?: com.leoyuan.leophoneagent.data.model.FallbackStrategy.default
                     }
                     val fallbackProviders = buildFallbackProviders(provider)
                     try {
@@ -5456,7 +5456,7 @@ class ChatViewModel(
     private fun unwrapFlowException(e: Throwable): Throwable {
         var cause: Throwable? = e
         while (cause != null) {
-            if (cause is com.openminis.app.data.model.LLMError) return cause
+            if (cause is com.leoyuan.leophoneagent.data.model.LLMError) return cause
             cause = cause.cause
         }
         return e
@@ -5498,7 +5498,7 @@ class ChatViewModel(
     // Mirrors iOS `AIChatViewModel.swift`:
     //   - estimateContextTokens()        (line 7451)
     //   - offloadContextIfNeeded()       (line 7481)
-    // Per-tool writers live in [com.openminis.app.data.ContextOffload].
+    // Per-tool writers live in [com.leoyuan.leophoneagent.data.ContextOffload].
     //
     // The agent loop calls [offloadContextIfNeeded] once per turn just before
     // the next API call. When token usage crosses the policy threshold, large
@@ -5780,7 +5780,7 @@ class ChatViewModel(
         provider: LLMProvider,
         systemPrompt: String?,
         fallbackProviders: List<LLMProvider> = emptyList(),
-        fallbackStrategy: com.openminis.app.data.model.FallbackStrategy = com.openminis.app.data.model.FallbackStrategy.default,
+        fallbackStrategy: com.leoyuan.leophoneagent.data.model.FallbackStrategy = com.leoyuan.leophoneagent.data.model.FallbackStrategy.default,
     ) {
         AppLogger.info(TAG_STREAM, "runAgentLoop ENTER provider=${provider.javaClass.simpleName} historySize=${agentHistory.size}")
         // [T-android-queued-message-interrupt-on-toolclose] `assistantId` is
@@ -5858,7 +5858,7 @@ class ChatViewModel(
         val allToolInputs = mutableMapOf<String, String>()
 
         // Add placeholder assistant message (once). Mark as awaiting so the
-        // "Minis is thinking" indicator shows during the initial request gap
+        // "LeoPhoneAgent is thinking" indicator shows during the initial request gap
         // before the first stream chunk arrives. Mirrors iOS isAwaitingModelResponse.
         // T300: snapshot the user's current thinking level at message
         // creation so the renderer can hide Deep Thinking blocks for
@@ -6015,7 +6015,7 @@ class ChatViewModel(
                     // choke point every turn passes through, regardless of how
                     // currentProvider was (re)assigned by the fallback loop.
                     // Non-Anthropic providers ignore it (cast fails silently).
-                    (currentProvider as? com.openminis.app.provider.anthropic.AnthropicProvider)
+                    (currentProvider as? com.leoyuan.leophoneagent.provider.anthropic.AnthropicProvider)
                         ?.enhancedCache = _enhancedCacheEnabled.value
                     // Route through effectiveAgentHistory() so a populated
                     // [_compactSummary] is prepended as a `<context-summary>`
@@ -6375,15 +6375,15 @@ class ChatViewModel(
                 } catch (e: Exception) {
                     if (e is CancellationException && e.cause == null) throw e  // real job cancellation
                     val actual = unwrapFlowException(e)
-                    val isRateLimit = actual is com.openminis.app.data.model.LLMError.RateLimited
-                    val is5xx = actual is com.openminis.app.data.model.LLMError.ProviderError &&
+                    val isRateLimit = actual is com.leoyuan.leophoneagent.data.model.LLMError.RateLimited
+                    val is5xx = actual is com.leoyuan.leophoneagent.data.model.LLMError.ProviderError &&
                         actual.detail.contains(Regex("[5][0-9]{2}"))
                     // Auto-retry on transient network/5xx/transient errors on the SAME provider
                     // before considering a fallback (mirrors iOS streamWithAutoRetry).
                     // Rate limits are provider-level signals that should trigger fallback immediately,
                     // not retry on the same provider.
-                    val isTransient = actual is com.openminis.app.data.model.LLMError.NetworkError ||
-                        actual is com.openminis.app.data.model.LLMError.TransientError ||
+                    val isTransient = actual is com.leoyuan.leophoneagent.data.model.LLMError.NetworkError ||
+                        actual is com.leoyuan.leophoneagent.data.model.LLMError.TransientError ||
                         is5xx
                     if (isTransient && retryAttempt < AUTO_RETRY_DELAYS_SEC.size) {
                         val delaySec = AUTO_RETRY_DELAYS_SEC[retryAttempt]
@@ -6464,12 +6464,12 @@ class ChatViewModel(
                     // flash of the stale banner.
                     withContext(Dispatchers.Main) { clearInlineError() }
                     val shouldFallback = isRateLimit || is5xx ||
-                        fallbackStrategy == com.openminis.app.data.model.FallbackStrategy.always
+                        fallbackStrategy == com.leoyuan.leophoneagent.data.model.FallbackStrategy.always
                     val next = if (shouldFallback) remainingFallbacks.removeFirstOrNull() else null
                     if (next != null) {
                         val reason = when {
                             isRateLimit -> "Rate limited"
-                            actual is com.openminis.app.data.model.LLMError.ProviderError -> actual.detail
+                            actual is com.leoyuan.leophoneagent.data.model.LLMError.ProviderError -> actual.detail
                             else -> actual.message ?: "Error"
                         }
                         // [T-android-model-indicator-flash-on-endpoint-retry]
@@ -6556,7 +6556,7 @@ class ChatViewModel(
                             if (fallbackReasons.isNotEmpty() || skipped.isNotEmpty()) {
                                 val trail = (fallbackReasons + skipped).joinToString("\n")
                                 val finalDesc = actual.message ?: actual.toString()
-                                throw com.openminis.app.data.model.LLMError.ProviderError("$trail\n$finalDesc")
+                                throw com.leoyuan.leophoneagent.data.model.LLMError.ProviderError("$trail\n$finalDesc")
                             }
                         }
                         throw actual  // re-throw unwrapped, all fallbacks exhausted
@@ -6736,7 +6736,7 @@ class ChatViewModel(
                 // Mutates `args` in place; downstream argsStr and preflight see
                 // the repaired payload. Mirrors iOS repairToolArgs in
                 // AIChatViewModel.swift.
-                val repairs = com.openminis.app.provider.ToolJsonRepair.repair(
+                val repairs = com.leoyuan.leophoneagent.provider.ToolJsonRepair.repair(
                     name, args, toolInputChunkRings[id]?.lastOrNull(), agentTools,
                 )
                 if (repairs.isNotEmpty()) {
@@ -6899,10 +6899,10 @@ class ChatViewModel(
                     // SUCCESS / TIMEOUT / FAILED result instead of
                     // text-sniffing the stale "Running: foo" status.
                     val toolOutcome = when (finalStatus) {
-                        ToolBlockStatus.SUCCESS -> com.openminis.app.service.ToolOutcome.Success
-                        ToolBlockStatus.TIMEOUT -> com.openminis.app.service.ToolOutcome.Timeout
-                        ToolBlockStatus.FAILED -> com.openminis.app.service.ToolOutcome.Error
-                        else -> com.openminis.app.service.ToolOutcome.Unknown
+                        ToolBlockStatus.SUCCESS -> com.leoyuan.leophoneagent.service.ToolOutcome.Success
+                        ToolBlockStatus.TIMEOUT -> com.leoyuan.leophoneagent.service.ToolOutcome.Timeout
+                        ToolBlockStatus.FAILED -> com.leoyuan.leophoneagent.service.ToolOutcome.Error
+                        else -> com.leoyuan.leophoneagent.service.ToolOutcome.Unknown
                     }
                     SessionActivityTracker.clearToolRunning(toolOutcome)
                     android.util.Log.d("ToolChain[VM]", "[turn=$turn] block[$blockIdx] status→$finalStatus title=${result.toolTitle} contentLen=${finalContent.length}")
@@ -6928,7 +6928,7 @@ class ChatViewModel(
             }
 
             // Update UI with tool statuses. Mark as awaiting the next model
-            // response so "Minis is thinking" shows during the network gap
+            // response so "LeoPhoneAgent is thinking" shows during the network gap
             // between tool results being sent and the next turn's first chunk.
             // Mirrors iOS isAwaitingModelResponse.
             withContext(Dispatchers.Main) {
@@ -7349,7 +7349,7 @@ class ChatViewModel(
             // contain a secret that escaped masking. The user-visible streamed
             // content (toolBlocks above) is intentionally left unmasked.
             val finalOutput = "$output$exitInfo"
-            val (redactedOut, redactHits) = com.openminis.app.data.EnvVarRedactor.redactIfEnabled(finalOutput)
+            val (redactedOut, redactHits) = com.leoyuan.leophoneagent.data.EnvVarRedactor.redactIfEnabled(finalOutput)
             if (redactHits > 0) {
                 android.util.Log.i("EnvVarRedact", "shell_execute: masked $redactHits env-var value(s) in tool result")
             }
@@ -7392,7 +7392,7 @@ class ChatViewModel(
             var inferenceBytes: ByteArray? = null
 
             // Persist browser screenshots to /var/minis/browser/<session>/ so the
-            // agent can reference them via minis:// in subsequent tool calls
+            // agent can reference them via leophoneagent:// in subsequent tool calls
             // (mirrors iOS AIChatViewModel case "browser_use").
             val base64 = result.base64Image
             var linuxImagePath: String? = null
@@ -7444,7 +7444,7 @@ class ChatViewModel(
     /**
      * Write bytes to <filesDir>/minis-sessions/<sessionId>/browser/<filename>.
      * That directory is bind-mounted to `/var/minis/browser/` so the agent can
-     * read it back via file_read / file_write / minis:// URLs.
+     * read it back via file_read / file_write / leophoneagent:// URLs.
      * Returns the host absolute path on success, null otherwise.
      */
     private fun persistBrowserArtifact(filename: String, data: ByteArray): String? {
@@ -7461,7 +7461,7 @@ class ChatViewModel(
     }
 
     /**
-     * Convert a Linux path under /var/minis/ to a percent-encoded minis:// URL.
+     * Convert a Linux path under /var/minis/ to a percent-encoded leophoneagent:// URL.
      * Mirrors iOS AIChatViewModel.linuxPathToMinisURL.
      */
     private fun linuxPathToMinisURL(path: String): String? {
@@ -7473,7 +7473,7 @@ class ChatViewModel(
         val namespace = rest.substring(0, slash)
         val filename = rest.substring(slash + 1)
         val encoded = java.net.URLEncoder.encode(filename, "UTF-8").replace("+", "%20")
-        return "minis://$namespace/$encoded"
+        return "leophoneagent://$namespace/$encoded"
     }
 
     /**
@@ -7646,7 +7646,7 @@ class ChatViewModel(
             //
             // 𝙓𝙄𝙉 TG36302 (0.10): user saw a red "timeout / retry" banner
             // glued to the bottom of the conversation while the agent
-            // continued running (LM Studio tool loop on 30/30, "Minis is
+            // continued running (LM Studio tool loop on 30/30, "LeoPhoneAgent is
             // thinking" indicator). Caused by (a) the fallback-switch branch in
             // runAgentLoop not calling clearInlineError(), and (b) the
             // streaming-side-channel writing every subsequent delta into
@@ -7945,7 +7945,7 @@ class ChatViewModel(
         // has no personality body, identitySection() returns the identity
         // sentence with its original single trailing space — the full
         // assembled prompt then matches the pre-SOUL prompt byte-for-byte.
-        val identitySection = com.openminis.app.agent.SystemPromptBuilder.identitySection(context)
+        val identitySection = com.leoyuan.leophoneagent.agent.SystemPromptBuilder.identitySection(context)
         // [T-memory-toggle-gates-injection-and-tools-android] Mirror the iOS
         // gate: when memory is disabled for this session, replace the
         // "memory_write / memory_get" tool bullets and the "Memory system:"
@@ -7983,7 +7983,7 @@ Memory system (currently ENABLED):
 
 Memory system (currently DISABLED):
 - The user has turned OFF memory injection and memory tools for this session. GLOBAL.md and recent daily logs are NOT included in this prompt, and the memory_write / memory_get tools are NOT available — do not attempt to call them.
-- If the user asks why earlier memories aren't visible, or asks you to save something, tell them memory is currently disabled and point them at the /memory slash command or [Settings → Memory](minis://settings/memory) to re-enable it.
+- If the user asks why earlier memories aren't visible, or asks you to save something, tell them memory is currently disabled and point them at the /memory slash command or [Settings → Memory](leophoneagent://settings/memory) to re-enable it.
 - SOUL.md (personality / identity) is unaffected by this toggle; the persona section above still applies."""
         }
         val base = identitySection + """You should proactively use shell commands to accomplish the user's tasks — installing packages (apk add), writing and running scripts, managing files, networking, and any other operations a Linux terminal can perform.
@@ -7997,8 +7997,8 @@ Available tools:
   当 browser_use 触达 Google 登录 / OAuth 页（accounts.google.com、signin.google.com、myaccount.google.com、oauth2.googleapis.com 等）或网页返回 "disallowed_useragent" / 403 包含 "browser is not secure" 字样时，**不要重试或尝试登录** — Google 永久禁止 in-app WebView 完成登录，重试只会浪费 turn。改为告诉用户："此页面需要在系统 Chrome 完成登录" 并给出可点击的 Markdown link [在 Chrome 中打开](https://accounts.google.com/...)。点该 link 时 app 会跳出 Custom Tab；用户在 Chrome 完成操作后，请他**把所需结果（邮件正文 / 文档摘要 / 表格数据）粘贴回 chat**，你再继续帮他处理。这是 Android 平台限制，不是 bug。${toolListMemoryBullets}
 
 Shared directory /var/minis/ (bidirectional read/write between shell and app):
-  /var/minis/attachments/ — Media files (images, audio, video). Display inline with ![desc](minis://attachments/filename).
-  /var/minis/workspace/   — Working files (scripts, data, configs). Link with [name](minis://workspace/filename).
+  /var/minis/attachments/ — Media files (images, audio, video). Display inline with ![desc](leophoneagent://attachments/filename).
+  /var/minis/workspace/   — Working files (scripts, data, configs). Link with [name](leophoneagent://workspace/filename).
   /var/minis/offloads/    — Auto-saved large outputs. Read with file_read.
   /var/minis/browser/     — Browser screenshots and extracts.
   /var/minis/shared/      — Cross-session shared storage for artifacts and documents. Organize by project or topic (e.g. shared/myproject/, shared/datasets/). Do NOT store temporary files here.
@@ -8006,23 +8006,23 @@ Shared directory /var/minis/ (bidirectional read/write between shell and app):
   /var/minis/memory/YYYY-MM-DD.md — Daily memory log.
   /var/minis/mounts/<name>/      — User-mounted external folders from Settings → Mount External Folders. Presence and names vary per user; check this directory first when the task references external/user files. Some mounts may be read-only — file_write / file_edit will reject writes with a clear error message.
 
-The minis:// URL scheme:
-  minis://attachments/file.png  →  /var/minis/attachments/file.png
-  minis://workspace/data.csv    →  /var/minis/workspace/data.csv
-  minis://shared/project/f.txt  →  /var/minis/shared/project/f.txt
+The leophoneagent:// URL scheme:
+  leophoneagent://attachments/file.png  →  /var/minis/attachments/file.png
+  leophoneagent://workspace/data.csv    →  /var/minis/workspace/data.csv
+  leophoneagent://shared/project/f.txt  →  /var/minis/shared/project/f.txt
 
-IMPORTANT: minis:// URLs are app-internal — they are NOT web URLs. Do NOT pass minis:// action URLs (open_terminal, views, settings) to browser_use — those are app deep links, use Markdown links in chat instead. However, minis:// resource URLs CAN be opened in browser_use with navigate. All directories under /var/minis/ are accessible: workspace, attachments, offloads, shared, etc. The built-in browser fully supports minis:// — HTML pages and all sub-resources (JS, CSS, images, fonts, etc.) referenced via minis:// absolute URLs or relative paths resolve correctly within the current session. When building multi-file web projects, use file_write to create files in the same directory (e.g. /var/minis/workspace/myapp/), then reference sub-resources with relative paths in HTML (e.g. <link href="style.css">, <script src="app.js">, <img src="logo.png">). The browser resolves relative paths against the minis:// base URL automatically. Cross-directory references also work with absolute minis:// URLs (e.g. <img src="minis://attachments/photo.png"> from a workspace HTML page). Navigate to the entry HTML to preview, e.g. minis://workspace/myapp/index.html.
-To display a minis:// URL in chat, write it as a Markdown link or image (e.g. [name](minis://...)) — the app handles it when the user taps it.
-IMPORTANT: minis:// URLs MUST be percent-encoded. Non-ASCII characters (Chinese, emoji, spaces, etc.) in filenames will break Markdown rendering if not encoded. Use the minis_url from tool results directly — it is already encoded. If you construct a minis:// URL manually, percent-encode the filename (e.g. %E4%B8%AD%E6%96%87 for non-ASCII characters).
+IMPORTANT: leophoneagent:// URLs are app-internal — they are NOT web URLs. Do NOT pass leophoneagent:// action URLs (open_terminal, views, settings) to browser_use — those are app deep links, use Markdown links in chat instead. However, leophoneagent:// resource URLs CAN be opened in browser_use with navigate. All directories under /var/minis/ are accessible: workspace, attachments, offloads, shared, etc. The built-in browser fully supports leophoneagent:// — HTML pages and all sub-resources (JS, CSS, images, fonts, etc.) referenced via leophoneagent:// absolute URLs or relative paths resolve correctly within the current session. When building multi-file web projects, use file_write to create files in the same directory (e.g. /var/minis/workspace/myapp/), then reference sub-resources with relative paths in HTML (e.g. <link href="style.css">, <script src="app.js">, <img src="logo.png">). The browser resolves relative paths against the leophoneagent:// base URL automatically. Cross-directory references also work with absolute leophoneagent:// URLs (e.g. <img src="leophoneagent://attachments/photo.png"> from a workspace HTML page). Navigate to the entry HTML to preview, e.g. leophoneagent://workspace/myapp/index.html.
+To display a leophoneagent:// URL in chat, write it as a Markdown link or image (e.g. [name](leophoneagent://...)) — the app handles it when the user taps it.
+IMPORTANT: leophoneagent:// URLs MUST be percent-encoded. Non-ASCII characters (Chinese, emoji, spaces, etc.) in filenames will break Markdown rendering if not encoded. Use the minis_url from tool results directly — it is already encoded. If you construct a leophoneagent:// URL manually, percent-encode the filename (e.g. %E4%B8%AD%E6%96%87 for non-ASCII characters).
 When you write files to /var/minis/, the tool result includes a minis_url you can embed directly in Markdown.
-Inline media — use the ![desc](minis://...) image syntax for ALL of images, audio, AND video. The same ![]() syntax renders an inline audio player or video player, not just images:
-  - Images: ![chart](minis://attachments/chart.png)   → inline image (.png/.jpg/.gif/.webp)
-  - Audio:  ![song](minis://attachments/song.mp3)     → inline audio player (.mp3/.m4a/.wav)
-  - Video:  ![clip](minis://attachments/clip.mp4)     → inline video player (.mp4/.mov/.m4v)
+Inline media — use the ![desc](leophoneagent://...) image syntax for ALL of images, audio, AND video. The same ![]() syntax renders an inline audio player or video player, not just images:
+  - Images: ![chart](leophoneagent://attachments/chart.png)   → inline image (.png/.jpg/.gif/.webp)
+  - Audio:  ![song](leophoneagent://attachments/song.mp3)     → inline audio player (.mp3/.m4a/.wav)
+  - Video:  ![clip](leophoneagent://attachments/clip.mp4)     → inline video player (.mp4/.mov/.m4v)
 Do NOT use the [text](url) link form for audio/video when you want them to play inline — that only produces a tappable link. Use ![]() to embed an actual player.
-For non-media files, use Markdown links: [filename](minis://workspace/filename).
-Tappable link previews: text/code (.py/.json/.md/etc), images, audio, video, HTML, and PDF files open native previews when the user taps a [name](minis://...) link.
-Use Markdown links for all non-media minis:// files — the user can tap to preview them directly in chat.
+For non-media files, use Markdown links: [filename](leophoneagent://workspace/filename).
+Tappable link previews: text/code (.py/.json/.md/etc), images, audio, video, HTML, and PDF files open native previews when the user taps a [name](leophoneagent://...) link.
+Use Markdown links for all non-media leophoneagent:// files — the user can tap to preview them directly in chat.
 
 File creation guidelines:
 - Use file_write to CREATE new files. Use file_edit to MODIFY existing files. The shell is BusyBox ash: heredoc syntax (cat << EOF, python3 << 'EOF') may mis-parse braces, quotes, or special characters and execute abnormally — avoid it whenever possible, and prefer file_write over echo/printf for writing file contents. When you hit escaping or parsing errors with long inline content, write the content to a file first (file_write), then pass or execute the file (e.g. `python3 /tmp/script.py`).
@@ -8047,8 +8047,8 @@ Tone and style:
 - Be concise. Prefer action over explanation — when the user asks for something that can be done via shell, do it directly.
 
 Android-only tools (android-* CLIs):
-CLI tools at /usr/local/bin with the `android-` prefix give you access to Android framework capabilities and on-device control. Invoke them from shell_execute like any other binary — they are already on PATH. Each tool prints JSON (or a short human-readable line) and supports --help for full usage. Tools gated by Shizuku or AccessibilityService return permission_denied when not granted — handle that gracefully and point the user at [Settings → Permissions](minis://settings/permissions).
-- android-alarm — schedule alarms/timers in the system Clock app (`schedule <HH:MM> --label <L> [--repeat ONCE|DAILY|WEEKDAYS]`, `timer <seconds> --label <L>`, `open`). Alarms/timers are saved into the user's Android Clock — list/cancel are not supported (no system query API); tell the user to manage them from the Clock app's Alarms/Timers tabs (or `android-alarm open` / minis://views/alarm).
+CLI tools at /usr/local/bin with the `android-` prefix give you access to Android framework capabilities and on-device control. Invoke them from shell_execute like any other binary — they are already on PATH. Each tool prints JSON (or a short human-readable line) and supports --help for full usage. Tools gated by Shizuku or AccessibilityService return permission_denied when not granted — handle that gracefully and point the user at [Settings → Permissions](leophoneagent://settings/permissions).
+- android-alarm — schedule alarms/timers in the system Clock app (`schedule <HH:MM> --label <L> [--repeat ONCE|DAILY|WEEKDAYS]`, `timer <seconds> --label <L>`, `open`). Alarms/timers are saved into the user's Android Clock — list/cancel are not supported (no system query API); tell the user to manage them from the Clock app's Alarms/Timers tabs (or `android-alarm open` / leophoneagent://views/alarm).
 - android-calendar — read/write the device calendar (`list --start YYYY-MM-DD [--end ...] [--max N]`; `create --title <T> --start <ISO> [--end <ISO>] [--description <D>] [--location <L>] [--all-day]`).
 - android-clipboard — `get | set <text> [--label L] | clear`.
 - android-contacts — `list [--max N] | search <query> [--max N] | get <id> | delete <id>`. Requires READ_CONTACTS (delete also needs WRITE_CONTACTS).
@@ -8063,17 +8063,17 @@ CLI tools at /usr/local/bin with the `android-` prefix give you access to Androi
 - android-weather <latitude> <longitude> — Open-Meteo forecast (current + hourly + daily). No API key needed.
 - android-shizuku-cli — invoke privileged Android system APIs (package management, settings, system commands) via Shizuku when granted. Curated subcommands return structured JSON; for anything not covered, fall back to `android-shizuku-cli exec <any shell command>` which runs the command via `sh -c` with Shizuku privilege (same surface as `adb shell`). Run with no args (or --help) for the subcommand list.
 - android-a11y-cli — drive system UI (read screen, tap, type, swipe, scroll) via the Android AccessibilityService when enabled. Run with no args (or --help) for the subcommand list.
-- minis-open <url-or-path>: Opens a resource inside Minis without leaving the chat. Accepts http/https URLs (→ built-in WebKit preview) and chat-resource file paths under /var/minis/** (→ built-in file preview, routed by extension: images to the image viewer, .md to markdown preview, .html to HTML preview, .pdf/office docs to QuickLook, audio/video to the media player, else share sheet). Examples: minis-open https://example.com, minis-open /var/minis/workspace/report.md, minis-open /var/minis/attachments/chart.png. Prefer this over android-open for anything that can be previewed in-app so the user doesn't lose conversation context. Use android-open for non-web schemes (tel:, mailto:, geo:, intent:, etc.) or when the user explicitly wants the system handler.
+- minis-open <url-or-path>: Opens a resource inside LeoPhoneAgent without leaving the chat. Accepts http/https URLs (→ built-in WebKit preview) and chat-resource file paths under /var/minis/** (→ built-in file preview, routed by extension: images to the image viewer, .md to markdown preview, .html to HTML preview, .pdf/office docs to QuickLook, audio/video to the media player, else share sheet). Examples: minis-open https://example.com, minis-open /var/minis/workspace/report.md, minis-open /var/minis/attachments/chart.png. Prefer this over android-open for anything that can be previewed in-app so the user doesn't lose conversation context. Use android-open for non-web schemes (tel:, mailto:, geo:, intent:, etc.) or when the user explicitly wants the system handler.
 - minis-sessions-cli: Manage chat sessions. `list` recent or by date range, `search --keywords` cross-session, `messages --id` to read, `send` to create/continue a session, `retry` to re-run, `status` to check, `open` to navigate the app UI. Run --help for full options.
 - minis-model-use: Invoke other LLM models pre-configured by the user. Use `minis-model-use list` to see them (includes each model's modality capabilities like image_output, audio_output, etc.), `minis-model-use search <query>` to filter by name/provider. `minis-model-use run --model <id_or_name>` sends an OpenAI-compatible messages request; pass input via --input <json_file> or stdin, output goes to stdout or --output <path>. The OpenAI shape is the PRIMARY input for every model and modality; standard params are auto-converted to the underlying provider, so do not hand-write provider-native bodies as the primary input. For provider-specific extras the standard schema doesn't model (web-search plugins, image-to-image fields, TTS/video or other custom endpoints), escape hatches exist for OpenAI-compatible providers (they error or are ignored on Anthropic/Gemini models): `extra_body` (object merged verbatim into the request body), a custom `endpoint` path, and a top-level `passthrough` envelope for fully verbatim requests with RAW (unparsed) responses. Results may carry `warnings` (fields that were ignored/downgraded and why) and `applied_extras` (which extras actually took effect) — read them to self-correct. Run --help for the full contract before using these. Models may support multimodal output (image generation, TTS/audio, video) — check the modalities field in list output. For image_output models, pass generation params in the input JSON: top-level `n`/`size`/`quality`/`prompt` (OpenAI /images/generations style) or `generation_config.{aspect_ratio,image_size,number_of_images,person_generation}` (Gemini). Run with --help for full usage.
-- minis-config: Read or change Minis settings programmatically. Run `minis-config --help` for subcommands and `minis-config topic-help <topic>` for details on a specific area. For array-valued fields (e.g. `models`, `groups`, `envvars`, `defaults.agentLoopEntries`) the `get` subcommand accepts `--filter <keywords>` (whitespace-AND, case-insensitive substring match against each element's JSON) and `--page <N> --page-size <N>` (default 20, max 100) — use these instead of dumping the full list when you only need a subset, and check the response's `pagination` / `agent_hint` fields for the next-page command. Every write triggers an in-app confirmation sheet and is logged to a revertable audit (1000-entry rolling log). After a successful change the response includes a `user_message` field — relay it (or paraphrase) so the user knows how to review or revert via Settings → Logs → Config Changes. If the call returns `permission_denied`, the user has disabled minis-config in [Settings → Permissions](minis://settings/permissions); relay that message and don't retry. You CAN add new providers and write their `apiKey` (literal string OR a `${'$'}${'$'}ENV_VAR` reference to copy from an env var at write time), but `get` never echoes API keys / OAuth tokens / env var values back — those reads return `permission_denied` by design. OAuth tokens and env var values are not settable via this tool; for an env var, point the user at [Set ENV_NAME](minis://settings/environments?create_key=ENV_NAME&create_value=) so they enter the value themselves.
+- minis-config: Read or change LeoPhoneAgent settings programmatically. Run `minis-config --help` for subcommands and `minis-config topic-help <topic>` for details on a specific area. For array-valued fields (e.g. `models`, `groups`, `envvars`, `defaults.agentLoopEntries`) the `get` subcommand accepts `--filter <keywords>` (whitespace-AND, case-insensitive substring match against each element's JSON) and `--page <N> --page-size <N>` (default 20, max 100) — use these instead of dumping the full list when you only need a subset, and check the response's `pagination` / `agent_hint` fields for the next-page command. Every write triggers an in-app confirmation sheet and is logged to a revertable audit (1000-entry rolling log). After a successful change the response includes a `user_message` field — relay it (or paraphrase) so the user knows how to review or revert via Settings → Logs → Config Changes. If the call returns `permission_denied`, the user has disabled minis-config in [Settings → Permissions](leophoneagent://settings/permissions); relay that message and don't retry. You CAN add new providers and write their `apiKey` (literal string OR a `${'$'}${'$'}ENV_VAR` reference to copy from an env var at write time), but `get` never echoes API keys / OAuth tokens / env var values back — those reads return `permission_denied` by design. OAuth tokens and env var values are not settable via this tool; for an env var, point the user at [Set ENV_NAME](leophoneagent://settings/environments?create_key=ENV_NAME&create_value=) so they enter the value themselves.
 - minis-scheduled: Create and manage scheduled tasks — prompts that run automatically at a chosen time. `minis-scheduled create --time HH:MM --prompt "..." [--label L] [--repeat once|daily|weekdays|custom --days mon,tue,...] [--target new|follow-up|rerun --session <id> --message <id>] [--model <modelId>] [--start YYYY-MM-DD] [--end YYYY-MM-DD]` schedules it; `list` shows existing tasks (with nextTriggerMs and run history), `delete --id <taskId>`, `enable`/`disable --id <taskId>`, and `run --id <taskId>` fires one immediately. Target modes: `new` runs the prompt in a fresh chat; `follow-up` appends the prompt to an existing chat (--session); `rerun` re-runs an existing chat (--session) from a chosen user message (--message). Use this when the user asks to "remind me / do X every morning / run this later / schedule a task". Run --help for full usage.
-Interactive terminal: minis://open_terminal opens a terminal for tasks that require interactive stdin (passwords, ssh, TUI apps like htop/vi). Write it as a Markdown link in your response — the app opens it when tapped. The optional init_command parameter pre-fills (NOT executes) a command; it MUST be fully percent-encoded (spaces → %20, & → %26, | → %7C, etc.). Only use this for genuinely interactive sessions — for everything else, use shell_execute. Examples: [Open Terminal](minis://open_terminal), [Login to SSH](minis://open_terminal?init_command=ssh%20user%40host).
+Interactive terminal: leophoneagent://open_terminal opens a terminal for tasks that require interactive stdin (passwords, ssh, TUI apps like htop/vi). Write it as a Markdown link in your response — the app opens it when tapped. The optional init_command parameter pre-fills (NOT executes) a command; it MUST be fully percent-encoded (spaces → %20, & → %26, | → %7C, etc.). Only use this for genuinely interactive sessions — for everything else, use shell_execute. Examples: [Open Terminal](leophoneagent://open_terminal), [Login to SSH](leophoneagent://open_terminal?init_command=ssh%20user%40host).
 
 Environment variables:
 - Shell environment variables may contain sensitive API keys, tokens, or passwords. NEVER echo, print, cat, or otherwise output their values to stdout/stderr. Always reference them by variable name (e.g. ${'$'}API_KEY) inside scripts or commands — never inline the literal value.
-- When a skill or task requires an environment variable that is not set, tell the user which variable is missing and provide a tappable deep link to create it: [Set ENV_NAME](minis://settings/environments?create_key=ENV_NAME&create_value=) — the user can tap it to open the Environment Variables page with the key pre-filled.
-- Settings deep links: when you tell the user "go to Settings → X" or want to point them at a specific setting, prefer a Markdown link `[Label](minis://settings/<path>)` over plain prose. Available paths: providers (list), providers/<instanceId> (one provider), model-groups (incl. Agent Loop), model-groups/<groupId>, usage (token usage), skills, memory, storage, shared-folders (Shared Folders: /var/minis/{shared,skills,memory}), mount-external (Mount External Folders), logs, appearance, background, about, permissions, environments[?create_key=K&create_value=V[&create_note=N]], rootfs (also reachable as mirrors). Unknown paths fall back to Settings home, but prefer the exact path so users land where they want. These settings/action links are app deep links — render them as Markdown links in chat (same action-vs-resource rule as the minis:// section above: only /var/minis resource URLs may go to browser_use).
+- When a skill or task requires an environment variable that is not set, tell the user which variable is missing and provide a tappable deep link to create it: [Set ENV_NAME](leophoneagent://settings/environments?create_key=ENV_NAME&create_value=) — the user can tap it to open the Environment Variables page with the key pre-filled.
+- Settings deep links: when you tell the user "go to Settings → X" or want to point them at a specific setting, prefer a Markdown link `[Label](leophoneagent://settings/<path>)` over plain prose. Available paths: providers (list), providers/<instanceId> (one provider), model-groups (incl. Agent Loop), model-groups/<groupId>, usage (token usage), skills, memory, storage, shared-folders (Shared Folders: /var/minis/{shared,skills,memory}), mount-external (Mount External Folders), logs, appearance, background, about, permissions, environments[?create_key=K&create_value=V[&create_note=N]], rootfs (also reachable as mirrors). Unknown paths fall back to Settings home, but prefer the exact path so users land where they want. These settings/action links are app deep links — render them as Markdown links in chat (same action-vs-resource rule as the leophoneagent:// section above: only /var/minis resource URLs may go to browser_use).
 - To check if a variable is set, use `[ -n "${'$'}VAR" ] && echo 'set' || echo 'not set'`. NEVER use echo ${'$'}VAR, printenv VAR, or any command that would output the actual value into the conversation context.${memorySystemSection}
 
 Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended, so in-app scheduled scripts may not run as expected. For recurring tasks that must fire while the app is backgrounded, use the native alarm tool (AlarmManager) or tell the user to set up a system-level schedule (Google Calendar event, Tasker automation, etc.). (Waiting or polling WITHIN the current turn is different — that is what shell_execute `delay` chains are for, per the shell_execute notes above.)"""
@@ -8475,7 +8475,7 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
                 val urlPath = m.linuxPath.removePrefix("/var/minis/")
                 append("  <file path=\"")
                 append(m.linuxPath)
-                append("\" url=\"minis://")
+                append("\" url=\"leophoneagent://")
                 append(urlPath)
                 append("\" size=\"")
                 append(m.size)
@@ -8521,7 +8521,7 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     }
 
     private fun buildMediaRefPartJson(
-        ref: com.openminis.app.data.model.MediaRef,
+        ref: com.leoyuan.leophoneagent.data.model.MediaRef,
         linuxPath: String? = null,
     ): String {
         val value = JSONObject()
@@ -8814,9 +8814,9 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         // and proceed with the stale token so the request's own 401 flows into
         // the existing error/fallback handling. runBlocking is safe here — this
         // is only reached from the suspend agent loop on a background thread.
-        if (instance.credentialType == com.openminis.app.data.model.ProviderCredential.oauth) {
+        if (instance.credentialType == com.leoyuan.leophoneagent.data.model.ProviderCredential.oauth) {
             try {
-                val manager = com.openminis.app.auth.OAuthManager.forInstance(context, instance)
+                val manager = com.leoyuan.leophoneagent.auth.OAuthManager.forInstance(context, instance)
                 val freshToken = kotlinx.coroutines.runBlocking { manager?.validAccessToken() }
                 if (freshToken != null && freshToken != apiKey) {
                     providerRepository.saveApiKey(instance.id, freshToken)
@@ -8889,7 +8889,7 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         // Cancelled so the overlay's glyph reflects the actual end
         // state (⊘) instead of carrying over the prior tool's outcome.
         publishOverlayReplyExcerpt(activeSessionId)
-        SessionActivityTracker.clearToolRunning(com.openminis.app.service.ToolOutcome.Cancelled)
+        SessionActivityTracker.clearToolRunning(com.leoyuan.leophoneagent.service.ToolOutcome.Cancelled)
         SessionActivityTracker.setInactive(activeSessionId)
         if (isDraft && realSessionId.isNotEmpty() && activeSessionId != sessionId) {
             SessionActivityTracker.setInactive(sessionId)
@@ -8952,19 +8952,19 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
             var provider: LLMProvider = initialProvider
 
             // Refresh OAuth token if needed (mirrors sendMessage L2477-2501).
-            if ((provider as? com.openminis.app.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
+            if ((provider as? com.leoyuan.leophoneagent.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
                 try {
                     val activeEntryId = _activeEntryId.value
                     val entry = activeEntryId?.let { id -> providerRepository.config.value.modelEntries.find { it.id == id } }
                     val instance = entry?.let { e -> providerRepository.config.value.instances.find { it.id == e.providerInstanceId } }
                     if (instance != null) {
-                        val manager = com.openminis.app.auth.OAuthManager.forInstance(context, instance)
+                        val manager = com.leoyuan.leophoneagent.auth.OAuthManager.forInstance(context, instance)
                         val freshToken = manager?.validAccessToken()
                         if (freshToken != null) {
                             val storedKey = providerRepository.loadApiKey(instance.id)
                             if (freshToken != storedKey) {
                                 providerRepository.saveApiKey(instance.id, freshToken)
-                                provider = com.openminis.app.provider.ProviderFactory.create(
+                                provider = com.leoyuan.leophoneagent.provider.ProviderFactory.create(
                                     instance, freshToken, currentModel ?: provider.model, context
                                 )
                                 currentProvider = provider
@@ -8977,8 +8977,8 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
             }
 
             val baseSystemPrompt = buildSystemPrompt()
-            val systemPrompt = if ((provider as? com.openminis.app.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
-                val prefix = com.openminis.app.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
+            val systemPrompt = if ((provider as? com.leoyuan.leophoneagent.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
+                val prefix = com.leoyuan.leophoneagent.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
                 if (baseSystemPrompt?.startsWith(prefix) == true) baseSystemPrompt
                 else "$prefix\n\n${baseSystemPrompt ?: ""}"
             } else baseSystemPrompt
@@ -9001,7 +9001,7 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
                     val activeFallbackStrategy = run {
                         val groupId = _selectedGroupId.value
                         groupId?.let { providerRepository.config.value.modelGroups.find { g -> g.id == it }?.fallbackStrategy }
-                            ?: com.openminis.app.data.model.FallbackStrategy.default
+                            ?: com.leoyuan.leophoneagent.data.model.FallbackStrategy.default
                     }
                     val fallbackProviders = buildFallbackProviders(provider)
 
@@ -9070,7 +9070,7 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         if (lastIdx < 0) return
         var last = msgs[lastIdx]
 
-        // T73: clear "Minis is thinking…" the moment the user taps Stop.
+        // T73: clear "LeoPhoneAgent is thinking…" the moment the user taps Stop.
         // isAwaitingModelResponse is set true at runAgentLoop entry (≈ line
         // 2785) so the typing indicator shows during the initial request
         // gap before the first stream chunk. The cancel paths below didn't
@@ -9132,7 +9132,7 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         // Stop fired while still in the pre-first-chunk thinking gap (no
         // partial text, no tool_use emitted, no committed history for this
         // turn). The placeholder ChatMessage runAgentLoop pushed at L5248 is
-        // not in the DB and would otherwise render as an empty "Minis" header
+        // not in the DB and would otherwise render as an empty "LeoPhoneAgent" header
         // bubble with no body. Drop it so the UI snaps back to idle the
         // instant the user taps Stop. Mirrors the iOS #566/#569 boundary:
         // a candidate WITH real text or any emitted tool_use is kept (handled
@@ -9246,8 +9246,8 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         viewModelScope.launch {
             val baseSystemPrompt = buildSystemPrompt()
             val systemPrompt =
-                if ((provider as? com.openminis.app.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
-                    val prefix = com.openminis.app.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
+                if ((provider as? com.leoyuan.leophoneagent.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
+                    val prefix = com.leoyuan.leophoneagent.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
                     if (baseSystemPrompt?.startsWith(prefix) == true) baseSystemPrompt
                     else "$prefix\n\n${baseSystemPrompt ?: ""}"
                 } else baseSystemPrompt
@@ -9264,7 +9264,7 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
                         val groupId = _selectedGroupId.value
                         groupId?.let {
                             providerRepository.config.value.modelGroups.find { g -> g.id == it }?.fallbackStrategy
-                        } ?: com.openminis.app.data.model.FallbackStrategy.default
+                        } ?: com.leoyuan.leophoneagent.data.model.FallbackStrategy.default
                     }
                     val fallbackProviders = buildFallbackProviders(provider)
                     try {

@@ -4,7 +4,7 @@ import UIKit
 
 private let logger = AppLogger(category: "AIChatVM")
 
-// MARK: - Request-level image budget + Minis paths + tool-output offload
+// MARK: - Request-level image budget + LeoPhoneAgent paths + tool-output offload
 
 extension AIChatViewModel {
 
@@ -244,7 +244,7 @@ extension AIChatViewModel {
     /// App Group container root for FileProvider-visible directories.
     /// Everything under this path is exposed to iOS Files via the replicated
     /// FileProvider extension. Keep ONLY user-facing subdirs (shared, skills,
-    /// memory) here — anything else leaks into "On My iPhone → Minis".
+    /// memory) here — anything else leaks into "On My iPhone → LeoPhoneAgent".
     nonisolated static var minisAppGroupRoot: URL {
         FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: SharedContainerStore.appGroupID
@@ -288,10 +288,10 @@ extension AIChatViewModel {
         minisConfigRoot.appendingPathComponent("mcp-servers", isDirectory: true)
     }
 
-    /// Resolve a `minis://` URL to a host filesystem URL.
+    /// Resolve a `leophoneagent://` URL to a host filesystem URL.
     /// Shared resolution logic used by Markdown link handlers and the browser's WKURLSchemeHandler.
     nonisolated static func resolveMinisURL(_ url: URL) -> URL? {
-        guard url.scheme == "minis", let host = url.host else { return nil }
+        guard url.scheme == "leophoneagent", let host = url.host else { return nil }
         // Tolerate double-encoded links (%25E6…) alongside the correct
         // single-encoded form. [T-fix-double-encoding]
         let subPaths = MinisURLPathDecoding.subPathCandidates(for: url)

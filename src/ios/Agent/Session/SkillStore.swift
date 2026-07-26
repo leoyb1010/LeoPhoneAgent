@@ -982,7 +982,7 @@ Do not create extraneous files: README.md, INSTALLATION_GUIDE.md, CHANGELOG.md, 
     ///
     /// Registers the orphan (parse frontmatter → DB row with `.session` source →
     /// in-memory array) AND markDirty so it enters the upload queue. The
-    /// directory name is the id (NOT a re-slugified name) so the `minis://` link
+    /// directory name is the id (NOT a re-slugified name) so the `leophoneagent://` link
     /// keeps resolving. Idempotent: a no-op when the id is already loaded, and
     /// `dbInsertSkill`'s `ON CONFLICT` preserves `use_count`. Returns true if a
     /// new orphan was ingested.

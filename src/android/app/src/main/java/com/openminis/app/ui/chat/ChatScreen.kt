@@ -1,4 +1,4 @@
-package com.openminis.app.ui.chat
+package com.leoyuan.leophoneagent.ui.chat
 
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -135,13 +135,13 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Switch
-import com.openminis.app.BuildConfig
-import com.openminis.app.R
-import com.openminis.app.data.FileMentionIndex
-import com.openminis.app.logging.AppLogger
-import com.openminis.app.ui.components.MinisAlertDialog
-import com.openminis.app.ui.components.MinisMenu
-import com.openminis.app.ui.components.MinisMenuDivider
+import com.leoyuan.leophoneagent.BuildConfig
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.data.FileMentionIndex
+import com.leoyuan.leophoneagent.logging.AppLogger
+import com.leoyuan.leophoneagent.ui.components.MinisAlertDialog
+import com.leoyuan.leophoneagent.ui.components.MinisMenu
+import com.leoyuan.leophoneagent.ui.components.MinisMenuDivider
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -257,26 +257,26 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.openminis.app.offload.OffloadPermissionManager
+import com.leoyuan.leophoneagent.offload.OffloadPermissionManager
 import com.mikepenz.markdown.compose.components.markdownComponents
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
 import com.mikepenz.markdown.m3.markdownTypography
 import org.intellij.markdown.ast.ASTNode
 import org.intellij.markdown.ast.getTextInNode
-import com.openminis.app.data.model.LLMModel
-import com.openminis.app.data.model.ModelEntry
-import com.openminis.app.data.model.ModelGroup
-import com.openminis.app.data.model.ProviderConfig
-import com.openminis.app.data.model.ProviderType
-import com.openminis.app.data.model.RoutingStrategy
-import com.openminis.app.data.model.ThinkingLevel
-import com.openminis.app.data.repository.ChatRepository
-import com.openminis.app.data.repository.MemoryRepository
-import com.openminis.app.data.repository.ProviderRepository
-import com.openminis.app.ui.browser.BrowserSheet
-import com.openminis.app.ui.theme.ChatColors
-import com.openminis.app.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.data.model.LLMModel
+import com.leoyuan.leophoneagent.data.model.ModelEntry
+import com.leoyuan.leophoneagent.data.model.ModelGroup
+import com.leoyuan.leophoneagent.data.model.ProviderConfig
+import com.leoyuan.leophoneagent.data.model.ProviderType
+import com.leoyuan.leophoneagent.data.model.RoutingStrategy
+import com.leoyuan.leophoneagent.data.model.ThinkingLevel
+import com.leoyuan.leophoneagent.data.repository.ChatRepository
+import com.leoyuan.leophoneagent.data.repository.MemoryRepository
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.ui.browser.BrowserSheet
+import com.leoyuan.leophoneagent.ui.theme.ChatColors
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
 
 // iOS ChatColors equivalent
 internal val ToolCheckColor = Color(0xFF34C759) // iOS .green
@@ -382,8 +382,8 @@ fun ChatScreen(
     chatRepository: ChatRepository,
     providerRepository: ProviderRepository,
     memoryRepository: MemoryRepository? = null,
-    skillRepository: com.openminis.app.data.repository.SkillRepository? = null,
-    mcpRepository: com.openminis.app.data.repository.MCPRepository? = null,
+    skillRepository: com.leoyuan.leophoneagent.data.repository.SkillRepository? = null,
+    mcpRepository: com.leoyuan.leophoneagent.data.repository.MCPRepository? = null,
     onBack: () -> Unit,
     /** [T-new-chat-menu-entry] "New Chat" from the chat "..." menu: caller
      *  navigates to a fresh draft chat (same funnel as the session list's
@@ -401,7 +401,7 @@ fun ChatScreen(
     onMoveToSession: (sessionId: String) -> Unit = {},
     onBrowseChatFiles: () -> Unit = {},
     /** T150: open FilePreviewScreen for a non-image attachment in a user bubble. */
-    onPreviewAttachment: (com.openminis.app.ui.sandbox.FileItem) -> Unit = {},
+    onPreviewAttachment: (com.leoyuan.leophoneagent.ui.sandbox.FileItem) -> Unit = {},
     /** [T-android-modelpicker-group-edit] Navigate to the Model Groups
      *  management screen — wired to the "Edit" button on the model picker's
      *  Model Groups section header. */
@@ -463,20 +463,20 @@ fun ChatScreen(
                 android.content.pm.PackageManager.PERMISSION_GRANTED
         }
         if (hasPerm()) return@ensure true
-        var result = com.openminis.app.offload.OffloadPermissionManager
+        var result = com.leoyuan.leophoneagent.offload.OffloadPermissionManager
             .requestAndroidPermission(listOf(perm))
-        if (result == com.openminis.app.offload.OffloadPermissionManager
+        if (result == com.leoyuan.leophoneagent.offload.OffloadPermissionManager
                 .AndroidPermissionResult.DENIED &&
-            com.openminis.app.offload.OffloadPermissionManager.pollForPermissionGrant(hasPerm)
+            com.leoyuan.leophoneagent.offload.OffloadPermissionManager.pollForPermissionGrant(hasPerm)
         ) {
-            result = com.openminis.app.offload.OffloadPermissionManager
+            result = com.leoyuan.leophoneagent.offload.OffloadPermissionManager
                 .AndroidPermissionResult.GRANTED
         }
-        if (result == com.openminis.app.offload.OffloadPermissionManager
+        if (result == com.leoyuan.leophoneagent.offload.OffloadPermissionManager
                 .AndroidPermissionResult.DENIED
         ) {
-            result = com.openminis.app.offload.OffloadPermissionManager.requestSettingsGate(
-                com.openminis.app.offload.OffloadPermissionManager.SettingsGateRequest(
+            result = com.leoyuan.leophoneagent.offload.OffloadPermissionManager.requestSettingsGate(
+                com.leoyuan.leophoneagent.offload.OffloadPermissionManager.SettingsGateRequest(
                     id = perm,
                     title = context.getString(R.string.mic_permission_title),
                     message = context.getString(R.string.mic_permission_message),
@@ -488,7 +488,7 @@ fun ChatScreen(
                 check = hasPerm,
             )
         }
-        result == com.openminis.app.offload.OffloadPermissionManager.AndroidPermissionResult.GRANTED
+        result == com.leoyuan.leophoneagent.offload.OffloadPermissionManager.AndroidPermissionResult.GRANTED
     }
     // Hoisted to ChatViewModel so it survives ChatScreen disposal/recomposition
     // across forward navigation (file preview, env vars, etc.); see
@@ -504,19 +504,19 @@ fun ChatScreen(
     // bufferVersion already non-zero on first composition; warm start =
     // version increments while the user is mid-session). Runs on every
     // bufferVersion bump.
-    val shareBufferVersion by com.openminis.app.share.ShareCoordinator.bufferVersion.collectAsState()
+    val shareBufferVersion by com.leoyuan.leophoneagent.share.ShareCoordinator.bufferVersion.collectAsState()
     androidx.compose.runtime.LaunchedEffect(shareBufferVersion) {
         if (shareBufferVersion == 0) return@LaunchedEffect
-        val pending = com.openminis.app.share.ShareCoordinator.consumeBuffer(context)
+        val pending = com.leoyuan.leophoneagent.share.ShareCoordinator.consumeBuffer(context)
             ?: return@LaunchedEffect
-        com.openminis.app.logging.AppLogger.info(
+        com.leoyuan.leophoneagent.logging.AppLogger.info(
             "ChatScreen",
             "[Share] injecting ${pending.items.size} item(s) into chat session=$sessionId",
         )
-        val sharedDir = com.openminis.app.share.SharedShareStore.sharedFileDirectory(context)
+        val sharedDir = com.leoyuan.leophoneagent.share.SharedShareStore.sharedFileDirectory(context)
         for (item in pending.items) {
             when (item.kind) {
-                com.openminis.app.share.PendingShare.Item.Kind.INLINE_TEXT -> {
+                com.leoyuan.leophoneagent.share.PendingShare.Item.Kind.INLINE_TEXT -> {
                     val sep = if (inputText.isNotEmpty()) "\n" else ""
                     val needsTrailingSpace = item.value.startsWith("http://") ||
                         item.value.startsWith("https://")
@@ -525,13 +525,13 @@ fun ChatScreen(
                             if (needsTrailingSpace) " " else "",
                     )
                 }
-                com.openminis.app.share.PendingShare.Item.Kind.ATTACHMENT -> {
+                com.leoyuan.leophoneagent.share.PendingShare.Item.Kind.ATTACHMENT -> {
                     viewModel.addAttachmentFromStagedShare(java.io.File(sharedDir, item.value))
                 }
             }
         }
         viewModel.markShareInjected()
-        com.openminis.app.share.SharedShareStore.cleanSharedFiles(context)
+        com.leoyuan.leophoneagent.share.SharedShareStore.cleanSharedFiles(context)
     }
 
     // T311: publish "this is the active chat" while ChatScreen is composed,
@@ -550,9 +550,9 @@ fun ChatScreen(
         // `[T-HANG-DIAG]` from this file.
         println(
             "[T-HANG-DIAG] ChatScreen MOUNT session=$sessionId hangCount=" +
-                com.openminis.app.diagnostics.HangDetector.currentHangCount(tHangDiagAppContext),
+                com.leoyuan.leophoneagent.diagnostics.HangDetector.currentHangCount(tHangDiagAppContext),
         )
-        com.openminis.app.diagnostics.PerfLongCtx.step(sessionId, "chatScreen.mount")
+        com.leoyuan.leophoneagent.diagnostics.PerfLongCtx.step(sessionId, "chatScreen.mount")
         onDispose {
             println("[T-HANG-DIAG] ChatScreen UNMOUNT session=$sessionId")
             ChatViewModelStore.setActiveSession(null)
@@ -576,7 +576,7 @@ fun ChatScreen(
     // itself is cheap — early-returns when the count is already zero.
     androidx.compose.runtime.LaunchedEffect(sessionId) {
         kotlinx.coroutines.delay(10_000)
-        com.openminis.app.diagnostics.HangDetector.markHealthyTick()
+        com.leoyuan.leophoneagent.diagnostics.HangDetector.markHealthyTick()
     }
 
     // Drain any pending Move-to transfer when entering this session — the
@@ -584,7 +584,7 @@ fun ChatScreen(
     // ChatViewModelStore.pendingTransfer slot before navigating here.
     androidx.compose.runtime.LaunchedEffect(sessionId) {
         val transfer = ChatViewModelStore.consumePendingTransfer() ?: return@LaunchedEffect
-        com.openminis.app.logging.AppLogger.info(
+        com.leoyuan.leophoneagent.logging.AppLogger.info(
             "ChatScreen",
             "[MoveTo] draining transfer into session=$sessionId text=${transfer.inputText.length}ch attachments=${transfer.attachments.size}",
         )
@@ -626,7 +626,7 @@ fun ChatScreen(
         // typed vocabulary: the message is committed, and the builder's own
         // hourly throttle makes the common case a no-op. Consent-gated and
         // fire-and-forget inside.
-        com.openminis.app.speech.correction.VoiceCorrection.mineVocabularyIfNeeded(context)
+        com.leoyuan.leophoneagent.speech.correction.VoiceCorrection.mineVocabularyIfNeeded(context)
     }
     // [T-android-send-no-autoscroll-behind-preview] Timestamp of the most
     // recent USER message append, stamped in LE(messages.size) so it covers
@@ -777,7 +777,7 @@ fun ChatScreen(
         // gate as soon as we hear back from the camera Activity (success,
         // cancel, or system kill). Without this the floating overlay
         // would stay suppressed indefinitely after a single capture.
-        com.openminis.app.service.SessionActivityTracker.setCameraSuppressActive(false)
+        com.leoyuan.leophoneagent.service.SessionActivityTracker.setCameraSuppressActive(false)
         val uri = pendingCameraUri
         val file = pendingCameraFilePath?.let { java.io.File(it) }
         pendingCameraUri = null
@@ -817,15 +817,15 @@ fun ChatScreen(
         // [T-android-overlay-hide-camera] Suppress the floating bg-overlay
         // BEFORE handing off to the system camera. The camera Activity
         // takes foreground, which by #451's rule would otherwise satisfy
-        // "Minis backgrounded → show overlay" and the capsule would draw
+        // "LeoPhoneAgent backgrounded → show overlay" and the capsule would draw
         // on top of the viewfinder. Cleared in the ActivityResult callback.
-        com.openminis.app.service.SessionActivityTracker.setCameraSuppressActive(true)
+        com.leoyuan.leophoneagent.service.SessionActivityTracker.setCameraSuppressActive(true)
         runCatching { cameraLauncher.launch(intent) }
             .onFailure {
                 AppLogger.warning("Camera", "launch failed: ${it.message}")
                 // Launch never reached the camera Activity — release the
                 // suppress flag here since the result callback won't fire.
-                com.openminis.app.service.SessionActivityTracker.setCameraSuppressActive(false)
+                com.leoyuan.leophoneagent.service.SessionActivityTracker.setCameraSuppressActive(false)
                 pendingCameraUri = null
                 pendingCameraFilePath = null
                 file.delete()
@@ -838,17 +838,17 @@ fun ChatScreen(
     }
 
     // App-icon quick action: when the user launched via
-    // `minis://action/camera_chat`, auto-open the camera on first compose.
+    // `leophoneagent://action/camera_chat`, auto-open the camera on first compose.
     // Consumed exactly once so re-entering the chat later does NOT re-trigger.
     // Voice variant lives next to the MicButton because it needs sttAvailable
     // — camera is always available so it can fire from the top-level scope.
     LaunchedEffect(sessionId) {
-        val pending = com.openminis.app.deeplink.DeepLinkCoordinator
+        val pending = com.leoyuan.leophoneagent.deeplink.DeepLinkCoordinator
             .pendingChatAction.value
-        if (pending == com.openminis.app.deeplink.DeepLinkCoordinator
+        if (pending == com.leoyuan.leophoneagent.deeplink.DeepLinkCoordinator
                 .ChatAction.OPEN_CAMERA
         ) {
-            com.openminis.app.deeplink.DeepLinkCoordinator
+            com.leoyuan.leophoneagent.deeplink.DeepLinkCoordinator
                 .consumePendingChatAction()
             val granted = ContextCompat.checkSelfPermission(
                 context,
@@ -1339,7 +1339,7 @@ fun ChatScreen(
     // [T-android-tool-autoscroll] Start-of-turn edge from ViewModel: resume() /
     // retryLast() / retryFromMessage() / rerunFromToolBlock() emit Unit on
     // forceScrollToBottom because they don't append a new user-message row, so
-    // LE(messages.size) below skips them. Without this collector the "Minis is
+    // LE(messages.size) below skips them. Without this collector the "LeoPhoneAgent is
     // thinking…" placeholder stays parked behind the input bar until the first
     // streamed token finally bumps the auto-follow tuple.
     LaunchedEffect(listState, viewModel) {
@@ -1716,32 +1716,32 @@ fun ChatScreen(
         }
     }
 
-    val appearancePrefs = remember { com.openminis.app.ui.settings.getAppearancePrefs(context) }
-    var messageFontLevel by remember { mutableStateOf(appearancePrefs.getInt(com.openminis.app.ui.settings.KEY_FONT_MESSAGE, 0)) }
-    var chatInputLevel by remember { mutableStateOf(appearancePrefs.getInt(com.openminis.app.ui.settings.KEY_FONT_CHAT_INPUT, 0)) }
-    var toolPreviewEnabled by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_TOOL_PREVIEW, true)) }
+    val appearancePrefs = remember { com.leoyuan.leophoneagent.ui.settings.getAppearancePrefs(context) }
+    var messageFontLevel by remember { mutableStateOf(appearancePrefs.getInt(com.leoyuan.leophoneagent.ui.settings.KEY_FONT_MESSAGE, 0)) }
+    var chatInputLevel by remember { mutableStateOf(appearancePrefs.getInt(com.leoyuan.leophoneagent.ui.settings.KEY_FONT_CHAT_INPUT, 0)) }
+    var toolPreviewEnabled by remember { mutableStateOf(appearancePrefs.getBoolean(com.leoyuan.leophoneagent.ui.settings.KEY_TOOL_PREVIEW, true)) }
     // T-chat-title-pill: live-toggled by Settings → Appearance and by
     // `minis-config set appearance.show_chat_title …`. Default ON.
-    var showChatTitlePill by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_CHAT_TITLE, true)) }
+    var showChatTitlePill by remember { mutableStateOf(appearancePrefs.getBoolean(com.leoyuan.leophoneagent.ui.settings.KEY_SHOW_CHAT_TITLE, true)) }
     // T-chat-title-pill-edit: state for the in-chat edit-title sheet (the
     // exact same SessionEditSheet hosted by the session list home screen,
     // reused via `internal` visibility — no duplicate UI). Populated by an
     // async repo lookup once the user taps the title pill.
-    var editingSession by remember { mutableStateOf<com.openminis.app.data.db.ChatSessionEntity?>(null) }
+    var editingSession by remember { mutableStateOf<com.leoyuan.leophoneagent.data.db.ChatSessionEntity?>(null) }
     DisposableEffect(appearancePrefs) {
         val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { sp, key ->
             when (key) {
-                com.openminis.app.ui.settings.KEY_FONT_MESSAGE -> messageFontLevel = sp.getInt(key, 0)
-                com.openminis.app.ui.settings.KEY_FONT_CHAT_INPUT -> chatInputLevel = sp.getInt(key, 0)
-                com.openminis.app.ui.settings.KEY_TOOL_PREVIEW -> toolPreviewEnabled = sp.getBoolean(key, true)
-                com.openminis.app.ui.settings.KEY_SHOW_CHAT_TITLE -> showChatTitlePill = sp.getBoolean(key, true)
+                com.leoyuan.leophoneagent.ui.settings.KEY_FONT_MESSAGE -> messageFontLevel = sp.getInt(key, 0)
+                com.leoyuan.leophoneagent.ui.settings.KEY_FONT_CHAT_INPUT -> chatInputLevel = sp.getInt(key, 0)
+                com.leoyuan.leophoneagent.ui.settings.KEY_TOOL_PREVIEW -> toolPreviewEnabled = sp.getBoolean(key, true)
+                com.leoyuan.leophoneagent.ui.settings.KEY_SHOW_CHAT_TITLE -> showChatTitlePill = sp.getBoolean(key, true)
             }
         }
         appearancePrefs.registerOnSharedPreferenceChangeListener(listener)
         onDispose { appearancePrefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
-    val markdownFontScale = com.openminis.app.ui.settings.fontScaleForLevel(messageFontLevel)
-    val chatInputFontScale = com.openminis.app.ui.settings.fontScaleForLevel(chatInputLevel)
+    val markdownFontScale = com.leoyuan.leophoneagent.ui.settings.fontScaleForLevel(messageFontLevel)
+    val chatInputFontScale = com.leoyuan.leophoneagent.ui.settings.fontScaleForLevel(chatInputLevel)
 
     var previewUrl by remember { mutableStateOf<String?>(null) }
     // T146: dedicated state for the immersive HTML preview path. Holding
@@ -1749,7 +1749,7 @@ fun ChatScreen(
     // states) ensures the same WebView survives the sheet→fullscreen
     // toggle without reloading the page (iOS parity, WebPreviewSheet.swift).
     var htmlPreviewHolder by remember {
-        mutableStateOf<com.openminis.app.ui.preview.WebViewHolder?>(null)
+        mutableStateOf<com.leoyuan.leophoneagent.ui.preview.WebViewHolder?>(null)
     }
     var htmlPreviewFallbackTitle by remember { mutableStateOf("") }
     var htmlPreviewFullscreen by remember { mutableStateOf(false) }
@@ -1763,26 +1763,26 @@ fun ChatScreen(
             val existing = htmlPreviewHolder
             if (existing == null || existing.currentUrl != url) {
                 existing?.destroy()
-                htmlPreviewHolder = com.openminis.app.ui.preview.WebViewHolder(appCtx, url)
+                htmlPreviewHolder = com.leoyuan.leophoneagent.ui.preview.WebViewHolder(appCtx, url)
             }
             htmlPreviewFallbackTitle = title
             htmlPreviewFullscreen = false
         }
     }
-    // Pinned-shortcut deep link: minis://session/<id>/<resource-path>
+    // Pinned-shortcut deep link: leophoneagent://session/<id>/<resource-path>
     // consumes here on first composition iff this screen is showing the
     // matching session; opens fullscreen HTML preview backed by a fresh
     // holder. Pending state is left untouched when a different chat is on
     // screen so the right ChatScreen instance still consumes it later.
     LaunchedEffect(sessionId) {
-        val pending = com.openminis.app.deeplink.DeepLinkCoordinator
+        val pending = com.leoyuan.leophoneagent.deeplink.DeepLinkCoordinator
             .pendingHtmlPreview.value ?: return@LaunchedEffect
         if (pending.sessionId != sessionId) return@LaunchedEffect
-        com.openminis.app.deeplink.DeepLinkCoordinator.consumePendingHtmlPreview()
+        com.leoyuan.leophoneagent.deeplink.DeepLinkCoordinator.consumePendingHtmlPreview()
         val absPath = "/var/minis" + pending.resourcePath
         val file = java.io.File(absPath)
         if (!file.exists()) {
-            com.openminis.app.logging.AppLogger.warning(
+            com.leoyuan.leophoneagent.logging.AppLogger.warning(
                 "ChatScreen",
                 "pinned HTML preview path missing: $absPath",
             )
@@ -1790,7 +1790,7 @@ fun ChatScreen(
         }
         val url = "file://${file.absolutePath}"
         htmlPreviewHolder?.destroy()
-        htmlPreviewHolder = com.openminis.app.ui.preview.WebViewHolder(appCtx, url)
+        htmlPreviewHolder = com.leoyuan.leophoneagent.ui.preview.WebViewHolder(appCtx, url)
         htmlPreviewFallbackTitle = pending.title
         htmlPreviewFullscreen = true
     }
@@ -1799,7 +1799,7 @@ fun ChatScreen(
     // chip row, message attachments, file-browser dir contents). Single-image
     // taps still work — they pass a 1-item list.
     var previewImageGallery by remember {
-        mutableStateOf<Pair<List<com.openminis.app.ui.components.ImageGalleryItem>, Int>?>(null)
+        mutableStateOf<Pair<List<com.leoyuan.leophoneagent.ui.components.ImageGalleryItem>, Int>?>(null)
     }
     // Video links from chat go through MinisFullscreenVideoPlayer rather than
     // FilePreviewScreen → InlineVideoPlayer. The inline player wraps a bare
@@ -1814,7 +1814,7 @@ fun ChatScreen(
     var webAppSheetTarget by remember { mutableStateOf<InputAttachment?>(null) }
     val urlClickHandler = remember<(String) -> Unit>(viewModel) {
         { url ->
-            // Pass the current session id so `minis://attachments/...` resolves
+            // Pass the current session id so `leophoneagent://attachments/...` resolves
             // against this chat's session directory rather than whichever
             // session booted its PRoot shell most recently (which is what
             // the global bindMounts map would answer).
@@ -1828,7 +1828,7 @@ fun ChatScreen(
                             // plumbed here (iOS does cross-session
                             // assistant images via fingerprint).
                             previewImageGallery = listOf(
-                                com.openminis.app.ui.components.ImageGalleryItem(
+                                com.leoyuan.leophoneagent.ui.components.ImageGalleryItem(
                                     model = action.item.file,
                                     caption = action.item.name,
                                 ),
@@ -1851,7 +1851,7 @@ fun ChatScreen(
                     }
                 }
                 is ChatLinkAction.ExternalApp ->
-                    com.openminis.app.ui.browser.BrowserExternalSchemeHandler
+                    com.leoyuan.leophoneagent.ui.browser.BrowserExternalSchemeHandler
                         .handle(context, action.url)
                 is ChatLinkAction.Web -> previewUrl = action.url
             }
@@ -1862,11 +1862,11 @@ fun ChatScreen(
     // OSC MinisOpenURL marker (via /usr/local/bin/minis-open). The broker is
     // populated by ChatViewModel's shell lineCallback; forwarding the URL
     // into `urlClickHandler` routes it exactly like a chat-link tap —
-    // http(s)/about → UrlPreviewSheet, minis:// deep links → DeepLinkHandler,
-    // minis://<host>/<path> → in-app file preview by extension.
-    val pendingMinisOpenUrl by com.openminis.app.terminal.MinisOpenUrlBroker.pendingUrl
+    // http(s)/about → UrlPreviewSheet, leophoneagent:// deep links → DeepLinkHandler,
+    // leophoneagent://<host>/<path> → in-app file preview by extension.
+    val pendingMinisOpenUrl by com.leoyuan.leophoneagent.terminal.MinisOpenUrlBroker.pendingUrl
         .collectAsState()
-    val minisOpenTerminalVisible by com.openminis.app.terminal.MinisOpenUrlBroker.terminalVisible
+    val minisOpenTerminalVisible by com.leoyuan.leophoneagent.terminal.MinisOpenUrlBroker.terminalVisible
         .collectAsState()
     LaunchedEffect(pendingMinisOpenUrl, minisOpenTerminalVisible) {
         val url = pendingMinisOpenUrl ?: return@LaunchedEffect
@@ -1875,7 +1875,7 @@ fun ChatScreen(
         // so we don't try to open a sheet on a covered ChatScreen.
         if (minisOpenTerminalVisible) return@LaunchedEffect
         urlClickHandler(url.toString())
-        com.openminis.app.terminal.MinisOpenUrlBroker.consume()
+        com.leoyuan.leophoneagent.terminal.MinisOpenUrlBroker.consume()
     }
 
     // [T-android-markdown-image-gallery-cross-message] Collect every
@@ -1886,7 +1886,7 @@ fun ChatScreen(
     // matches the standard inline image form; tool-block content stays
     // untouched (toolBlocks live in a separate AssistantBlock list, not
     // in `content`). Video/audio extensions are filtered out so the gallery
-    // only contains still images. Resolution of `minis://` → host File is
+    // only contains still images. Resolution of `leophoneagent://` → host File is
     // deferred to the gallery's Coil model — Coil's MinisImageFetcher walks
     // the same session-aware resolver we use for inline rendering.
     val markdownImageTapHandler = remember<(String, String) -> Unit>(messages, sessionId) {
@@ -1925,12 +1925,12 @@ fun ChatScreen(
                 ?: refs.indexOfFirst { it.source == tappedUrl }.takeIf { it >= 0 }
                 ?: 0
             val items = refs.map { ref ->
-                // Resolve minis://... / file:// / /abs → host File so Coil
+                // Resolve leophoneagent://... / file:// / /abs → host File so Coil
                 // doesn't have to re-walk PRootKernel for every page swipe.
                 // Falls back to the raw URL string when resolution misses —
                 // AsyncImage will route it through MinisImageFetcher anyway.
                 val resolved = resolveMdMediaFile(context, ref.source, sessionId)
-                com.openminis.app.ui.components.ImageGalleryItem(
+                com.leoyuan.leophoneagent.ui.components.ImageGalleryItem(
                     model = resolved ?: ref.source,
                     caption = ref.title,
                 )
@@ -1946,7 +1946,7 @@ fun ChatScreen(
         LocalMarkdownUrlClickHandler provides urlClickHandler,
         LocalMarkdownImageTapHandler provides markdownImageTapHandler,
         // Route markdown media resolution through this chat's session so
-        // minis://attachments/* lookups don't rely on the global bindMounts
+        // leophoneagent://attachments/* lookups don't rely on the global bindMounts
         // map (which is last-writer-wins across sessions).
         LocalMarkdownSessionId provides sessionId,
     ) {
@@ -1956,7 +1956,7 @@ fun ChatScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    // iOS-style centered layout: "Minis" + group row + provider·model row
+                    // iOS-style centered layout: "LeoPhoneAgent" + group row + provider·model row
                     Box(
                         modifier = Modifier.fillMaxWidth(),
                         contentAlignment = Alignment.Center,
@@ -1993,14 +1993,14 @@ fun ChatScreen(
                             // exists and the toggle is on, else fall back to
                             // the Soul name (matches the input placeholder
                             // "Message <SoulName>"), then to app_name
-                            // ("Minis") as the terminal fallback.
+                            // ("LeoPhoneAgent") as the terminal fallback.
                             // Tap opens the same SessionEditSheet used from
                             // the session list — drafts return null from
                             // loadSessionEntity so the sheet stays closed.
                             // SoulStore.cachedMetadata is the same source the
                             // input placeholder uses (see ~line 3581), so
                             // soul renames in Soul Settings reflect here live.
-                            val topBarSoul by com.openminis.app.agent.SoulStore
+                            val topBarSoul by com.leoyuan.leophoneagent.agent.SoulStore
                                 .cachedMetadata.collectAsState()
                             val displayTitle = when {
                                 showChatTitlePill
@@ -2516,7 +2516,7 @@ fun ChatScreen(
                 // in-flight tool is invisible to this predicate → reserve
                 // collapsed to 20dp while a 65dp+6dp floating bar covered
                 // the bottom of the LazyColumn. The new arrivals (status
-                // pill, "Minis is thinking" indicator, inline retry banner) landed
+                // pill, "LeoPhoneAgent is thinking" indicator, inline retry banner) landed
                 // behind the bar with no way to scroll them into view.
                 //
                 // Fix: also subscribe to streamingById so the predicate
@@ -2686,7 +2686,7 @@ fun ChatScreen(
                             val tickStartNs = System.nanoTime()
                             if (stream.isNotEmpty() && !streamWasActive) {
                                 streamWasActive = true
-                                com.openminis.app.diagnostics.StreamPerfMonitor.turnStart(sessionId)
+                                com.leoyuan.leophoneagent.diagnostics.StreamPerfMonitor.turnStart(sessionId)
                             }
                             // First message carrying a live overlay; everything
                             // before it is frozen. Empty stream → whole list is
@@ -2706,7 +2706,7 @@ fun ChatScreen(
                                 // gap to buildFlatChatItems.firstBuild bounds
                                 // the construction cost in isolation.
                                 if (wasEmptyPre && stream.isEmpty()) {
-                                    com.openminis.app.diagnostics.PerfLongCtx.step(
+                                    com.leoyuan.leophoneagent.diagnostics.PerfLongCtx.step(
                                         sessionId,
                                         "buildFlatChatItems.start",
                                         "msgCount=${msgs.size}",
@@ -2760,7 +2760,7 @@ fun ChatScreen(
                                             prewarmMarkdown(raws)
                                             val prewarmMs = (System.nanoTime() - tPrewarmNs) / 1_000_000
                                             lastColdPrewarmMs = prewarmMs
-                                            com.openminis.app.diagnostics.PerfLongCtx.step(
+                                            com.leoyuan.leophoneagent.diagnostics.PerfLongCtx.step(
                                                 sessionId,
                                                 "coldPrewarm.done",
                                                 "rows=${raws.size} chars=$charSum prewarmMs=$prewarmMs",
@@ -2772,7 +2772,7 @@ fun ChatScreen(
                                 // session (cheap reentry-path marker) or whenever
                                 // build takes >50 ms (i.e. real work).
                                 if ((wasEmptyPre || buildMs >= 50) && stream.isEmpty()) {
-                                    com.openminis.app.diagnostics.PerfLongCtx.step(
+                                    com.leoyuan.leophoneagent.diagnostics.PerfLongCtx.step(
                                         sessionId,
                                         if (wasEmptyPre) "buildFlatChatItems.firstBuild"
                                         else "buildFlatChatItems.slow",
@@ -2783,7 +2783,7 @@ fun ChatScreen(
                                     // biggest contributor to cold-open GC
                                     // pressure.
                                     if (rows.size > 3000) {
-                                        com.openminis.app.diagnostics.PerfLongCtx.step(
+                                        com.leoyuan.leophoneagent.diagnostics.PerfLongCtx.step(
                                             sessionId,
                                             "buildFlatChatItems.highRowCount",
                                             "rowCount=${rows.size} threshold=3000 msgCount=${msgs.size}",
@@ -2804,7 +2804,7 @@ fun ChatScreen(
                                 }
                             }
                             flatItems = if (liveRows.isEmpty()) frozenRows else frozenRows + liveRows
-                            com.openminis.app.diagnostics.StreamPerfMonitor.tick(
+                            com.leoyuan.leophoneagent.diagnostics.StreamPerfMonitor.tick(
                                 flattenNanos = System.nanoTime() - tickStartNs,
                                 frozenReused = frozenReused,
                                 frozenRows = frozenRows.size,
@@ -2812,14 +2812,14 @@ fun ChatScreen(
                             )
                             if (stream.isEmpty() && streamWasActive) {
                                 streamWasActive = false
-                                com.openminis.app.diagnostics.StreamPerfMonitor.turnEnd()
+                                com.leoyuan.leophoneagent.diagnostics.StreamPerfMonitor.turnEnd()
                             }
                         }
                     } finally {
                         // Effect cancelled (turn-end drain emit / session
                         // switch / screen dispose) — flush the open turn.
                         if (streamWasActive) {
-                            com.openminis.app.diagnostics.StreamPerfMonitor.turnEnd()
+                            com.leoyuan.leophoneagent.diagnostics.StreamPerfMonitor.turnEnd()
                         }
                     }
                 }
@@ -3034,7 +3034,7 @@ fun ChatScreen(
                             listRootCoords = it
                             if (perfFirstLayoutFired.compareAndSet(false, true)) {
                                 val info = listState.layoutInfo
-                                com.openminis.app.diagnostics.PerfLongCtx.step(
+                                com.leoyuan.leophoneagent.diagnostics.PerfLongCtx.step(
                                     sessionId,
                                     "lazyColumn.firstLayout",
                                     "totalItems=${info.totalItemsCount} visibleItems=${info.visibleItemsInfo.size} viewport=${info.viewportSize.width}x${info.viewportSize.height}",
@@ -3109,7 +3109,7 @@ fun ChatScreen(
                                 viewModel.resume()
                                 // T282: same dual-scroll trick as the regular
                                 // send paths (T281). Resume kicks off a fresh
-                                // stream, so the "Minis is thinking" indicator
+                                // stream, so the "LeoPhoneAgent is thinking" indicator
                                 // mounts a frame or two later — pin once now,
                                 // then again after 100ms so the indicator
                                 // doesn't land below the fold.
@@ -3135,7 +3135,7 @@ fun ChatScreen(
                         // (before measure); onPlaced fires after layout.
                         if (item == flatItems.lastOrNull()) {
                             androidx.compose.runtime.SideEffect {
-                                com.openminis.app.diagnostics.PerfLongCtx.step(
+                                com.leoyuan.leophoneagent.diagnostics.PerfLongCtx.step(
                                     sessionId,
                                     "lazyColumn.firstItem.compose",
                                 )
@@ -3148,7 +3148,7 @@ fun ChatScreen(
                         // the wall-time since `lazyColumn.firstLayout` plus
                         // the row's class — gives a "per-N-rows compose
                         // budget" signal without per-row log spam.
-                        com.openminis.app.diagnostics.PerfLongCtx.maybeReportRowComposed(
+                        com.leoyuan.leophoneagent.diagnostics.PerfLongCtx.maybeReportRowComposed(
                             sessionId,
                             item::class.java.simpleName,
                         )
@@ -3192,7 +3192,7 @@ fun ChatScreen(
                                 .then(
                                     if (isNewestItem) {
                                         Modifier.onPlaced {
-                                            com.openminis.app.diagnostics.PerfLongCtx.step(
+                                            com.leoyuan.leophoneagent.diagnostics.PerfLongCtx.step(
                                                 sessionId,
                                                 "lazyColumn.firstItem.placed",
                                                 "size=${it.size.width}x${it.size.height}",
@@ -3210,15 +3210,15 @@ fun ChatScreen(
                                                     "[JankDiag] coldOpen summary session=$sessionId msgs=${messages.size} rows=${flatItems.size} " +
                                                         "totalChars=$totalChars maxChars=$maxChars prewarmMs=$lastColdPrewarmMs " +
                                                         "sinceMountMs=${System.currentTimeMillis() - screenMountAtMs} " +
-                                                        "hangCount=${com.openminis.app.diagnostics.HangDetector.currentHangCount(context)}",
+                                                        "hangCount=${com.leoyuan.leophoneagent.diagnostics.HangDetector.currentHangCount(context)}",
                                                 )
                                                 // [T-android-content-perf-diag] Per-large-message structural
                                                 // fingerprint so a future hang report maps straight to "which
                                                 // message, what structure" without re-querying the DB. Gated at
                                                 // 5000 chars — small messages never drive a render hang.
                                                 messages.forEachIndexed { idx, m ->
-                                                    if (m.content.length >= com.openminis.app.diagnostics.CONTENT_DIAG_MIN_CHARS) {
-                                                        val s = com.openminis.app.diagnostics.ContentDiag.summarize(m.content)
+                                                    if (m.content.length >= com.leoyuan.leophoneagent.diagnostics.CONTENT_DIAG_MIN_CHARS) {
+                                                        val s = com.leoyuan.leophoneagent.diagnostics.ContentDiag.summarize(m.content)
                                                         AppLogger.info(
                                                             "Perf",
                                                             "[Perf][ContentDiag] session=$sessionId msgIdx=$idx role=${m.role} " +
@@ -3289,7 +3289,7 @@ fun ChatScreen(
                                     val file = uri.path?.let { java.io.File(it) }
                                     if (file != null && file.exists()) {
                                         onPreviewAttachment(
-                                            com.openminis.app.ui.sandbox.FileItem(
+                                            com.leoyuan.leophoneagent.ui.sandbox.FileItem(
                                                 file = file,
                                                 name = name,
                                                 isDirectory = false,
@@ -3755,7 +3755,7 @@ fun ChatScreen(
             // edits from the in-chat pill are visually + behaviourally
             // identical to the home-screen long-press flow.
             editingSession?.let { session ->
-                com.openminis.app.ui.sessions.SessionEditSheet(
+                com.leoyuan.leophoneagent.ui.sessions.SessionEditSheet(
                     session = session,
                     onDismiss = { editingSession = null },
                     onSave = { newTitle, newCategory ->
@@ -4430,7 +4430,7 @@ fun ChatScreen(
                                             val startIdx = imageChips.indexOfFirst { it.id == attachment.id }
                                                 .coerceAtLeast(0)
                                             previewImageGallery = imageChips.map { ic ->
-                                                com.openminis.app.ui.components.ImageGalleryItem(
+                                                com.leoyuan.leophoneagent.ui.components.ImageGalleryItem(
                                                     model = ic.uri,
                                                     caption = ic.fileName,
                                                 )
@@ -4462,7 +4462,7 @@ fun ChatScreen(
                                             } else null
                                             if (asFile != null && asFile.exists()) {
                                                 onPreviewAttachment(
-                                                    com.openminis.app.ui.sandbox.FileItem(
+                                                    com.leoyuan.leophoneagent.ui.sandbox.FileItem(
                                                         file = asFile,
                                                         name = attachment.fileName,
                                                         isDirectory = false,
@@ -4498,7 +4498,7 @@ fun ChatScreen(
                                 // feature not yet validated/complete. Re-enable
                                 // by removing `false &&` from the guard below.
                                 if (false && isHtmlAttachment) {
-                                    com.openminis.app.ui.components.MinisMenu(
+                                    com.leoyuan.leophoneagent.ui.components.MinisMenu(
                                         expanded = webAppMenuExpanded,
                                         onDismissRequest = { webAppMenuExpanded = false },
                                     ) {
@@ -4529,18 +4529,18 @@ fun ChatScreen(
                     // text is already delta-appended into `inputText` by the
                     // mic button's callback, so when recording ends the field
                     // shows the full recognized string automatically.
-                    val recSttState by com.openminis.app.speech.SpeechRecognitionManager
+                    val recSttState by com.leoyuan.leophoneagent.speech.SpeechRecognitionManager
                         .state.collectAsState()
-                    val recIsRecording = recSttState == com.openminis.app.speech.RecognitionState.RECORDING ||
-                        recSttState == com.openminis.app.speech.RecognitionState.STARTING ||
-                        recSttState == com.openminis.app.speech.RecognitionState.FINISHING
+                    val recIsRecording = recSttState == com.leoyuan.leophoneagent.speech.RecognitionState.RECORDING ||
+                        recSttState == com.leoyuan.leophoneagent.speech.RecognitionState.STARTING ||
+                        recSttState == com.leoyuan.leophoneagent.speech.RecognitionState.FINISHING
                     // [T-android-voice-panel] Inline voice mode replaces the text
                     // field with the panel (mirrors iOS inputFieldOrWaveform →
                     // InlineVoiceInputView). The legacy in-composer waveform
                     // branch below only serves captures started OUTSIDE the
                     // panel (none today, kept as a safety net).
-                    if (com.openminis.app.ui.chat.voice.VoiceModePrefs.isVoiceActive) {
-                        com.openminis.app.ui.chat.voice.InlineVoiceInputPanel(
+                    if (com.leoyuan.leophoneagent.ui.chat.voice.VoiceModePrefs.isVoiceActive) {
+                        com.leoyuan.leophoneagent.ui.chat.voice.InlineVoiceInputPanel(
                             providerRepository = providerRepository,
                             inputText = inputText,
                             onInputTextChange = { text ->
@@ -4554,14 +4554,14 @@ fun ChatScreen(
                             // older turns still contribute rare-term grounding;
                             // evaluated lazily at correction time.
                             conversationContextProvider = {
-                                com.openminis.app.speech.correction.VoiceCorrection
+                                com.leoyuan.leophoneagent.speech.correction.VoiceCorrection
                                     .buildConversationContext(context, viewModel.messages.value)
                             },
                         )
                     } else if (recIsRecording) {
-                        val levels by com.openminis.app.speech.SpeechRecognitionManager
+                        val levels by com.leoyuan.leophoneagent.speech.SpeechRecognitionManager
                             .audioLevels.collectAsState()
-                        val partial by com.openminis.app.speech.SpeechRecognitionManager
+                        val partial by com.leoyuan.leophoneagent.speech.SpeechRecognitionManager
                             .recognizedText.collectAsState()
                         Column(
                             modifier = Modifier
@@ -4584,7 +4584,7 @@ fun ChatScreen(
                             }
                         }
                     } else
-                    // Text field (iOS: placeholder "Message Minis", no border)
+                    // Text field (iOS: placeholder "Message LeoPhoneAgent", no border)
                     run {
                         val interactionSource = remember { MutableInteractionSource() }
                         val mergedTextStyle = MaterialTheme.typography.bodyMedium.copy(
@@ -4596,7 +4596,7 @@ fun ChatScreen(
                         // captured at BasicTextField construction) so a
                         // toggle in Settings reflects on the next IME
                         // commit without recomposing the chat tree.
-                        val sendOnEnter = com.openminis.app.ui.settings
+                        val sendOnEnter = com.leoyuan.leophoneagent.ui.settings
                             .returnKeySendsMessage(context)
                         // Shared "Enter pressed → send" body used by BOTH
                         // the hardware-keyboard onKeyEvent path AND the
@@ -4830,7 +4830,7 @@ fun ChatScreen(
                                         // source for the Soul-customized name
                                         // so renames in Soul Settings reflect
                                         // here live.
-                                        val soulName by com.openminis.app.agent.SoulStore
+                                        val soulName by com.leoyuan.leophoneagent.agent.SoulStore
                                             .cachedMetadata.collectAsState()
                                         Text(
                                             stringResource(
@@ -4988,20 +4988,20 @@ fun ChatScreen(
                         // Right: Mic button — only renders when a speech engine
                         // is actually available on this device (handles the
                         // AOSP / HarmonyOS / GMS-free case).
-                        val sttAvailable by com.openminis.app.speech.SpeechRecognitionManager
+                        val sttAvailable by com.leoyuan.leophoneagent.speech.SpeechRecognitionManager
                             .isAvailable.collectAsState()
-                        val sttState by com.openminis.app.speech.SpeechRecognitionManager
+                        val sttState by com.leoyuan.leophoneagent.speech.SpeechRecognitionManager
                             .state.collectAsState()
-                        val sttLocale by com.openminis.app.speech.SpeechRecognitionManager
+                        val sttLocale by com.leoyuan.leophoneagent.speech.SpeechRecognitionManager
                             .locale.collectAsState()
                         var showLangSheet by remember { mutableStateOf(false) }
                         // While recording, a tappable 2-letter language pill
                         // appears to the left of the mic button. Outside a
                         // session the mic button's own badge stays hidden and
                         // the pill is not rendered — matches iOS.
-                        if (sttAvailable && !com.openminis.app.ui.chat.voice.VoiceModePrefs.isVoiceActive &&
-                            (sttState == com.openminis.app.speech.RecognitionState.RECORDING ||
-                                sttState == com.openminis.app.speech.RecognitionState.STARTING)
+                        if (sttAvailable && !com.leoyuan.leophoneagent.ui.chat.voice.VoiceModePrefs.isVoiceActive &&
+                            (sttState == com.leoyuan.leophoneagent.speech.RecognitionState.RECORDING ||
+                                sttState == com.leoyuan.leophoneagent.speech.RecognitionState.STARTING)
                         ) {
                             Box(
                                 modifier = Modifier
@@ -5033,36 +5033,36 @@ fun ChatScreen(
                             // the INLINE VOICE PANEL (mirrors iOS MicButton →
                             // voiceInputActive). Capture start/stop lives inside
                             // the panel; this button only enters/exits the mode.
-                            if (com.openminis.app.ui.chat.voice.VoiceModePrefs.isVoiceActive) {
+                            if (com.leoyuan.leophoneagent.ui.chat.voice.VoiceModePrefs.isVoiceActive) {
                                 // Exit voice → keyboard. Keep the transcript: the
                                 // composer mirrors it (iOS keyboard-text-carry).
-                                if (com.openminis.app.speech.SpeechRecognitionManager.state.value !=
-                                    com.openminis.app.speech.RecognitionState.IDLE
+                                if (com.leoyuan.leophoneagent.speech.SpeechRecognitionManager.state.value !=
+                                    com.leoyuan.leophoneagent.speech.RecognitionState.IDLE
                                 ) {
-                                    com.openminis.app.speech.SpeechRecognitionManager.stopRecording()
+                                    com.leoyuan.leophoneagent.speech.SpeechRecognitionManager.stopRecording()
                                 }
-                                com.openminis.app.ui.chat.voice.VoiceModePrefs.isVoiceActive = false
+                                com.leoyuan.leophoneagent.ui.chat.voice.VoiceModePrefs.isVoiceActive = false
                                 ComposerInputModePrefs.save(context, voice = false)
                                 voiceUsedSinceClear = false
                             } else {
                                 voiceUsedSinceClear = true
-                                com.openminis.app.ui.chat.voice.VoiceModePrefs.enteredFromText = true
-                                com.openminis.app.ui.chat.voice.VoiceModePrefs.isVoiceActive = true
+                                com.leoyuan.leophoneagent.ui.chat.voice.VoiceModePrefs.enteredFromText = true
+                                com.leoyuan.leophoneagent.ui.chat.voice.VoiceModePrefs.isVoiceActive = true
                             }
                         }
 
                         // App-icon quick action: when the user launched via
-                        // `minis://action/voice_chat`, auto-fire the mic on
+                        // `leophoneagent://action/voice_chat`, auto-fire the mic on
                         // first compose. Consumed exactly once so re-entering
                         // the chat later does NOT re-trigger.
                         LaunchedEffect(sttAvailable) {
                             if (!sttAvailable) return@LaunchedEffect
-                            val pending = com.openminis.app.deeplink.DeepLinkCoordinator
+                            val pending = com.leoyuan.leophoneagent.deeplink.DeepLinkCoordinator
                                 .pendingChatAction.value
-                            if (pending == com.openminis.app.deeplink.DeepLinkCoordinator
+                            if (pending == com.leoyuan.leophoneagent.deeplink.DeepLinkCoordinator
                                     .ChatAction.START_VOICE
                             ) {
-                                com.openminis.app.deeplink.DeepLinkCoordinator
+                                com.leoyuan.leophoneagent.deeplink.DeepLinkCoordinator
                                     .consumePendingChatAction()
                                 triggerVoiceInput()
                             }
@@ -5080,7 +5080,7 @@ fun ChatScreen(
                         // same bottom row, and both capsules plus their spacers
                         // overflow the constrained width and render overlapped
                         // (iOS af9f3d3e parity).
-                        if (com.openminis.app.ui.chat.voice.VoiceModePrefs.isVoiceActive && editingId == null) {
+                        if (com.leoyuan.leophoneagent.ui.chat.voice.VoiceModePrefs.isVoiceActive && editingId == null) {
                             var readReplies by remember {
                                 mutableStateOf(
                                     context.getSharedPreferences("voice_prefs", android.content.Context.MODE_PRIVATE)
@@ -5093,7 +5093,7 @@ fun ChatScreen(
                             // fallback) instead of always using the on-device
                             // engine, and sanitizes Markdown before speaking.
                             val replyTts = remember {
-                                com.openminis.app.speech.ReadAloudPlayer(context)
+                                com.leoyuan.leophoneagent.speech.ReadAloudPlayer(context)
                             }
                             // The previous bare TextToSpeechManager() was never
                             // shut down, leaking an engine binding on every
@@ -5200,16 +5200,16 @@ fun ChatScreen(
                                 // started streaming, or one still in flight.
                                 val key = lastAssistantId?.hashCode() ?: text.hashCode()
                                 if (spokenUpTo == 0) {
-                                    val alreadySeen = com.openminis.app.ui.chat.voice.VoiceModePrefs
+                                    val alreadySeen = com.leoyuan.leophoneagent.ui.chat.voice.VoiceModePrefs
                                         .lastSpokenAssistantKey == key
                                     if (alreadySeen || !isStreaming) {
                                         // Pre-existing message — mark it seen and stay silent.
-                                        com.openminis.app.ui.chat.voice.VoiceModePrefs
+                                        com.leoyuan.leophoneagent.ui.chat.voice.VoiceModePrefs
                                             .lastSpokenAssistantKey = key
                                         spokenUpTo = text.length
                                         return@LaunchedEffect
                                     }
-                                    com.openminis.app.ui.chat.voice.VoiceModePrefs
+                                    com.leoyuan.leophoneagent.ui.chat.voice.VoiceModePrefs
                                         .lastSpokenAssistantKey = key
                                 }
                                 if (text.length > spokenUpTo) {
@@ -5233,13 +5233,13 @@ fun ChatScreen(
 
                         if (sttAvailable) {
                             MicButton(
-                                isRecording = !com.openminis.app.ui.chat.voice.VoiceModePrefs.isVoiceActive &&
-                                    (sttState == com.openminis.app.speech.RecognitionState.RECORDING ||
-                                        sttState == com.openminis.app.speech.RecognitionState.STARTING),
+                                isRecording = !com.leoyuan.leophoneagent.ui.chat.voice.VoiceModePrefs.isVoiceActive &&
+                                    (sttState == com.leoyuan.leophoneagent.speech.RecognitionState.RECORDING ||
+                                        sttState == com.leoyuan.leophoneagent.speech.RecognitionState.STARTING),
                                 localeBadge = null,
                                 onClick = { triggerVoiceInput() },
                                 onLongClick = { showLangSheet = true },
-                                isVoiceActive = com.openminis.app.ui.chat.voice.VoiceModePrefs.isVoiceActive,
+                                isVoiceActive = com.leoyuan.leophoneagent.ui.chat.voice.VoiceModePrefs.isVoiceActive,
                             )
                         }
 
@@ -5604,7 +5604,7 @@ fun ChatScreen(
 
     // URL preview sheet — shown when a markdown link is tapped
     previewUrl?.let { url ->
-        com.openminis.app.ui.components.UrlPreviewSheet(
+        com.leoyuan.leophoneagent.ui.components.UrlPreviewSheet(
             url = url,
             onDismiss = { previewUrl = null },
         )
@@ -5621,7 +5621,7 @@ fun ChatScreen(
             htmlPreviewFullscreen = false
         }
         if (htmlPreviewFullscreen) {
-            com.openminis.app.ui.preview.WebPreviewFullscreenScreen(
+            com.leoyuan.leophoneagent.ui.preview.WebPreviewFullscreenScreen(
                 holder = holder,
                 fallbackTitle = htmlPreviewFallbackTitle,
                 onCollapseToSheet = {
@@ -5631,7 +5631,7 @@ fun ChatScreen(
                 onDismiss = onFullDismiss,
             )
         } else {
-            com.openminis.app.ui.preview.WebPreviewBottomSheet(
+            com.leoyuan.leophoneagent.ui.preview.WebPreviewBottomSheet(
                 holder = holder,
                 fallbackTitle = htmlPreviewFallbackTitle,
                 pinSessionId = sessionId,
@@ -5657,7 +5657,7 @@ fun ChatScreen(
     // composer chip. Pager-backed so multi-image messages support iOS-
     // style swipe between images. Single-image case is a 1-item list.
     previewImageGallery?.let { (items, startIdx) ->
-        com.openminis.app.ui.components.ImageGalleryViewer(
+        com.leoyuan.leophoneagent.ui.components.ImageGalleryViewer(
             items = items,
             startIndex = startIdx,
             onDismiss = { previewImageGallery = null },
@@ -5666,10 +5666,10 @@ fun ChatScreen(
 
     // Fullscreen video player — tapped video link (mp4/mov/m4v/…) from chat
     // markdown. Reuses the same dialog player as the markdown-rendered
-    // ![](minis://...) syntax so behaviour is consistent regardless of how
+    // ![](leophoneagent://...) syntax so behaviour is consistent regardless of how
     // the LLM emitted the reference.
     previewVideoFile?.let { file ->
-        com.openminis.app.ui.media.MinisFullscreenVideoPlayer(
+        com.leoyuan.leophoneagent.ui.media.MinisFullscreenVideoPlayer(
             file = file,
             onDismiss = { previewVideoFile = null },
         )
@@ -5679,8 +5679,8 @@ fun ChatScreen(
     // outlive the chip that triggered it (the chip Box may scroll out of
     // composition while the sheet is up).
     webAppSheetTarget?.let { target ->
-        com.openminis.app.webapp.AddToHomeSheet(
-            source = com.openminis.app.webapp.WebAppSource.ChatAttachment(
+        com.leoyuan.leophoneagent.webapp.AddToHomeSheet(
+            source = com.leoyuan.leophoneagent.webapp.WebAppSource.ChatAttachment(
                 uri = target.uri,
                 fileName = target.fileName,
                 sessionId = sessionId,
@@ -5754,7 +5754,7 @@ fun ChatScreen(
  */
 @Composable
 private fun ThinkingLevelBadge(
-    level: com.openminis.app.data.model.ThinkingLevel,
+    level: com.leoyuan.leophoneagent.data.model.ThinkingLevel,
     onClick: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -5797,17 +5797,17 @@ private fun ThinkingLevelBadge(
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun ThinkingLevelSheet(
-    currentLevel: com.openminis.app.data.model.ThinkingLevel,
-    availableLevels: List<com.openminis.app.data.model.ThinkingLevel>,
-    onSelect: (com.openminis.app.data.model.ThinkingLevel) -> Unit,
+    currentLevel: com.leoyuan.leophoneagent.data.model.ThinkingLevel,
+    availableLevels: List<com.leoyuan.leophoneagent.data.model.ThinkingLevel>,
+    onSelect: (com.leoyuan.leophoneagent.data.model.ThinkingLevel) -> Unit,
     onDismiss: () -> Unit,
 ) {
     // Off is always offered (turns thinking off); availableLevels already
     // excludes Off, so prepend it. De-dup defensively in case a caller ever
     // includes it.
     val rows = remember(availableLevels) {
-        listOf(com.openminis.app.data.model.ThinkingLevel.OFF) +
-            availableLevels.filter { it != com.openminis.app.data.model.ThinkingLevel.OFF }
+        listOf(com.leoyuan.leophoneagent.data.model.ThinkingLevel.OFF) +
+            availableLevels.filter { it != com.leoyuan.leophoneagent.data.model.ThinkingLevel.OFF }
     }
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
@@ -5823,7 +5823,7 @@ private fun ThinkingLevelSheet(
             rows.forEach { level ->
                 // "Off selected" = the current level is disabled; otherwise an
                 // exact match.
-                val isSelected = if (level == com.openminis.app.data.model.ThinkingLevel.OFF) {
+                val isSelected = if (level == com.leoyuan.leophoneagent.data.model.ThinkingLevel.OFF) {
                     !currentLevel.isEnabled
                 } else {
                     currentLevel == level
@@ -5839,7 +5839,7 @@ private fun ThinkingLevelSheet(
                         imageVector = Icons.Default.Lightbulb,
                         contentDescription = null,
                         tint = ChatColors.thinking.copy(
-                            alpha = if (level == com.openminis.app.data.model.ThinkingLevel.OFF) 0.4f else 1f,
+                            alpha = if (level == com.leoyuan.leophoneagent.data.model.ThinkingLevel.OFF) 0.4f else 1f,
                         ),
                         modifier = Modifier.size(18.dp),
                     )

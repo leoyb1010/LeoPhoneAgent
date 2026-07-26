@@ -1,4 +1,4 @@
-package com.openminis.app.debug
+package com.leoyuan.leophoneagent.debug
 
 import android.app.Activity
 import android.content.Context
@@ -9,10 +9,10 @@ import android.os.Looper
 import android.os.SystemClock
 import android.view.InputDevice
 import android.view.MotionEvent
-import com.openminis.app.BuildConfig
-import com.openminis.app.logging.AppLogger
-import com.openminis.app.sandbox.ExecutionCoordinator
-import com.openminis.app.sandbox.PRootKernel
+import com.leoyuan.leophoneagent.BuildConfig
+import com.leoyuan.leophoneagent.logging.AppLogger
+import com.leoyuan.leophoneagent.sandbox.ExecutionCoordinator
+import com.leoyuan.leophoneagent.sandbox.PRootKernel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -757,7 +757,7 @@ class DebugRPCHandler(private val context: Context) {
                 command = command,
                 timeout = timeoutSec * 1000L,
                 lineCallback = { rawLine ->
-                    val (_, urls) = com.openminis.app.terminal.MinisUrlMarker.extract(rawLine)
+                    val (_, urls) = com.leoyuan.leophoneagent.terminal.MinisUrlMarker.extract(rawLine)
                     capturedUrls.addAll(urls)
                 },
             )
@@ -765,7 +765,7 @@ class DebugRPCHandler(private val context: Context) {
             throw RPCException(-32000, "Shell execute failed: ${e.message}")
         }
         for (raw in capturedUrls) {
-            com.openminis.app.terminal.MinisOpenUrlBroker.offer(raw)
+            com.leoyuan.leophoneagent.terminal.MinisOpenUrlBroker.offer(raw)
         }
         return JSONObject()
             .put("output", result.output)
@@ -776,8 +776,8 @@ class DebugRPCHandler(private val context: Context) {
     // ── Update checker (T33) — exposed only via DebugRPC so the e2e flow can
     // be exercised before the production UI entry point lands.
     private suspend fun handleUpdateCheck(): JSONObject {
-        return when (val r = com.openminis.app.data.UpdateChecker.check()) {
-            is com.openminis.app.data.UpdateChecker.CheckResult.UpdateAvailable -> JSONObject()
+        return when (val r = com.leoyuan.leophoneagent.data.UpdateChecker.check()) {
+            is com.leoyuan.leophoneagent.data.UpdateChecker.CheckResult.UpdateAvailable -> JSONObject()
                 .put("status", "update_available")
                 .put("tag_name", r.tagName)
                 .put("version_name", r.versionName)
@@ -785,17 +785,17 @@ class DebugRPCHandler(private val context: Context) {
                 .put("apk_url", r.apkUrl)
                 .put("apk_size", r.apkSizeBytes)
                 .put("changelog", r.changelog)
-            com.openminis.app.data.UpdateChecker.CheckResult.UpToDate ->
+            com.leoyuan.leophoneagent.data.UpdateChecker.CheckResult.UpToDate ->
                 JSONObject().put("status", "up_to_date")
-            com.openminis.app.data.UpdateChecker.CheckResult.NoReleaseAvailable ->
+            com.leoyuan.leophoneagent.data.UpdateChecker.CheckResult.NoReleaseAvailable ->
                 JSONObject().put("status", "no_release")
-            is com.openminis.app.data.UpdateChecker.CheckResult.NoApkAsset ->
+            is com.leoyuan.leophoneagent.data.UpdateChecker.CheckResult.NoApkAsset ->
                 JSONObject().put("status", "no_apk_asset").put("tag_name", r.tagName)
-            com.openminis.app.data.UpdateChecker.CheckResult.Forbidden ->
+            com.leoyuan.leophoneagent.data.UpdateChecker.CheckResult.Forbidden ->
                 JSONObject().put("status", "forbidden")
-            com.openminis.app.data.UpdateChecker.CheckResult.NetworkUnreachable ->
+            com.leoyuan.leophoneagent.data.UpdateChecker.CheckResult.NetworkUnreachable ->
                 JSONObject().put("status", "network_unreachable")
-            is com.openminis.app.data.UpdateChecker.CheckResult.Error ->
+            is com.leoyuan.leophoneagent.data.UpdateChecker.CheckResult.Error ->
                 JSONObject().put("status", "error").put("message", r.message)
         }
     }
@@ -804,12 +804,12 @@ class DebugRPCHandler(private val context: Context) {
         val url = params.optString("url").ifEmpty {
             throw RPCException(-32602, "Missing 'url' parameter")
         }
-        return when (val r = com.openminis.app.data.UpdateChecker.download(context, url)) {
-            is com.openminis.app.data.UpdateChecker.DownloadResult.Success -> JSONObject()
+        return when (val r = com.leoyuan.leophoneagent.data.UpdateChecker.download(context, url)) {
+            is com.leoyuan.leophoneagent.data.UpdateChecker.DownloadResult.Success -> JSONObject()
                 .put("status", "ok")
                 .put("path", r.file.absolutePath)
                 .put("size", r.file.length())
-            is com.openminis.app.data.UpdateChecker.DownloadResult.Error -> JSONObject()
+            is com.leoyuan.leophoneagent.data.UpdateChecker.DownloadResult.Error -> JSONObject()
                 .put("status", "error")
                 .put("message", r.message)
         }
@@ -821,9 +821,9 @@ class DebugRPCHandler(private val context: Context) {
         }
         val file = java.io.File(path)
         if (!file.exists()) throw RPCException(-32000, "APK not found: $path")
-        val canInstall = com.openminis.app.data.UpdateChecker.canInstall(context)
+        val canInstall = com.leoyuan.leophoneagent.data.UpdateChecker.canInstall(context)
         return try {
-            com.openminis.app.data.UpdateChecker.installApk(context, file)
+            com.leoyuan.leophoneagent.data.UpdateChecker.installApk(context, file)
             JSONObject().put("status", "launched").put("can_install", canInstall)
         } catch (e: Exception) {
             JSONObject()
@@ -914,7 +914,7 @@ class DebugRPCHandler(private val context: Context) {
         // want to stage files BEFORE booting, so route through the rootfs
         // dir directly when the kernel isn't ready yet.
         val hostFile = PRootKernel.resolveHostPath(path) ?: run {
-            val rootfsDir = com.openminis.app.sandbox.RootfsManager.getInstance(context).rootfsDir
+            val rootfsDir = com.leoyuan.leophoneagent.sandbox.RootfsManager.getInstance(context).rootfsDir
             File(rootfsDir, path.removePrefix("/"))
         }
 
@@ -985,20 +985,20 @@ class DebugRPCHandler(private val context: Context) {
      */
     private fun handlePermissionsList(): JSONObject {
         val arr = org.json.JSONArray()
-        for (tool in com.openminis.app.offload.OffloadPermissionManager.toolRegistry) {
+        for (tool in com.leoyuan.leophoneagent.offload.OffloadPermissionManager.toolRegistry) {
             arr.put(JSONObject()
                 .put("toolName", tool.toolName)
                 .put("displayName", tool.displayName)
                 .put("category", tool.category.name)
                 .put("defaultLevel", tool.defaultLevel.name)
-                .put("currentLevel", com.openminis.app.offload.OffloadPermissionManager.getLevel(tool.toolName).name)
+                .put("currentLevel", com.leoyuan.leophoneagent.offload.OffloadPermissionManager.getLevel(tool.toolName).name)
                 .put("showInSettings", tool.showInSettings))
         }
         return JSONObject().put("tools", arr).put("count", arr.length())
     }
 
     /**
-     * T344: Direct invocation of [com.openminis.app.sandbox.offload.ShizukuOffloadHandler]
+     * T344: Direct invocation of [com.leoyuan.leophoneagent.sandbox.offload.ShizukuOffloadHandler]
      * for e2e harnesses. Bypasses the agent loop so debug clients can verify Shizuku
      * CLI behavior without driving a chat. DEBUG-build only — gated in [dispatch].
      *
@@ -1019,10 +1019,10 @@ class DebugRPCHandler(private val context: Context) {
             else -> throw RPCException(-32602, "Missing 'args' (array) or 'command' (string)")
         }
         AppLogger.info("DebugRPC", "debug.shizuku.exec argv=${argvTail.joinToString(" ")}")
-        val handler = com.openminis.app.sandbox.offload.ShizukuOffloadHandler(context)
+        val handler = com.leoyuan.leophoneagent.sandbox.offload.ShizukuOffloadHandler(context)
         // ShizukuOffloadHandler.handle() drops argv[0]; prepend the CLI name so the
         // tail aligns with what `android-shizuku-cli` would receive in-shell.
-        val request = com.openminis.app.sandbox.NativeOffloadRequest(
+        val request = com.leoyuan.leophoneagent.sandbox.NativeOffloadRequest(
             pid = -1,
             argv = listOf("android-shizuku-cli") + argvTail,
             env = emptyMap(),
@@ -1038,7 +1038,7 @@ class DebugRPCHandler(private val context: Context) {
     }
 
     /**
-     * Direct invocation of [com.openminis.app.sandbox.offload.ModelUseOffloadHandler]
+     * Direct invocation of [com.leoyuan.leophoneagent.sandbox.offload.ModelUseOffloadHandler]
      * for e2e harnesses. Mirrors [handleShizukuExec]; lets callers exercise the
      * `minis-model-use` CLI without going through a real Alpine shell prompt.
      * DEBUG-only.
@@ -1063,7 +1063,7 @@ class DebugRPCHandler(private val context: Context) {
         val finalArgv: List<String> = if (params.has("input")) {
             val inputBlob = params.optString("input", "")
             val linuxPath = "/tmp/.debug-modeluse-input-${System.currentTimeMillis()}.json"
-            val hostFile = com.openminis.app.sandbox.PRootKernel.resolveHostPath(linuxPath)
+            val hostFile = com.leoyuan.leophoneagent.sandbox.PRootKernel.resolveHostPath(linuxPath)
                 ?: throw RPCException(-32603, "cannot resolve $linuxPath under rootfs")
             hostFile.parentFile?.mkdirs()
             hostFile.writeText(inputBlob)
@@ -1071,9 +1071,9 @@ class DebugRPCHandler(private val context: Context) {
         } else argvTail
 
         AppLogger.info("DebugRPC", "debug.modelUse.exec argv=${finalArgv.joinToString(" ")}")
-        val app = context.applicationContext as com.openminis.app.MinisApp
-        val handler = com.openminis.app.sandbox.offload.ModelUseOffloadHandler(context, app.providerRepository)
-        val request = com.openminis.app.sandbox.NativeOffloadRequest(
+        val app = context.applicationContext as com.leoyuan.leophoneagent.MinisApp
+        val handler = com.leoyuan.leophoneagent.sandbox.offload.ModelUseOffloadHandler(context, app.providerRepository)
+        val request = com.leoyuan.leophoneagent.sandbox.NativeOffloadRequest(
             pid = -1,
             argv = listOf("minis-model-use") + finalArgv,
             env = emptyMap(),
@@ -1090,7 +1090,7 @@ class DebugRPCHandler(private val context: Context) {
 
     /**
      * [T-android-sessions-cli-full] Direct invocation of
-     * [com.openminis.app.sandbox.offload.SessionsOffloadHandler] for e2e
+     * [com.leoyuan.leophoneagent.sandbox.offload.SessionsOffloadHandler] for e2e
      * harnesses. Mirrors [handleModelUseExec]; lets callers exercise the
      * `minis-sessions-cli` CLI (list / search / messages, incl. --full)
      * without going through a real Alpine shell prompt. DEBUG-only.
@@ -1109,9 +1109,9 @@ class DebugRPCHandler(private val context: Context) {
         }
 
         AppLogger.info("DebugRPC", "debug.sessions.exec argv=${argvTail.joinToString(" ")}")
-        val app = context.applicationContext as com.openminis.app.MinisApp
-        val handler = com.openminis.app.sandbox.offload.SessionsOffloadHandler(app.chatRepository)
-        val request = com.openminis.app.sandbox.NativeOffloadRequest(
+        val app = context.applicationContext as com.leoyuan.leophoneagent.MinisApp
+        val handler = com.leoyuan.leophoneagent.sandbox.offload.SessionsOffloadHandler(app.chatRepository)
+        val request = com.leoyuan.leophoneagent.sandbox.NativeOffloadRequest(
             pid = -1,
             argv = listOf("minis-sessions-cli") + argvTail,
             env = emptyMap(),
@@ -1157,7 +1157,7 @@ class DebugRPCHandler(private val context: Context) {
                 // Hop to the main thread because performWriteBatch is a
                 // suspend fun that uses Dispatchers.Main internally.
                 kotlinx.coroutines.runBlocking {
-                    com.openminis.app.config.ConfigBridge.performWriteBatch(
+                    com.leoyuan.leophoneagent.config.ConfigBridge.performWriteBatch(
                         items = items,
                         caption = "debug.minisConfig.exec",
                         actorRaw = "debug-rpc",
@@ -1170,7 +1170,7 @@ class DebugRPCHandler(private val context: Context) {
                 val path = params.optString("path", "").takeIf { it.isNotEmpty() }
                     ?: throw RPCException(-32602, "Missing 'path' for subcommand=get")
                 AppLogger.info("DebugRPC", "debug.minisConfig.exec get path=$path")
-                com.openminis.app.config.ConfigBridge.readField(
+                com.leoyuan.leophoneagent.config.ConfigBridge.readField(
                     path = path,
                     filter = null,
                     page = 0,
@@ -1179,7 +1179,7 @@ class DebugRPCHandler(private val context: Context) {
             }
             "audit-list" -> {
                 val limit = params.optInt("limit", 100).coerceIn(1, 1000)
-                com.openminis.app.config.ConfigBridge.auditList(limit, null)
+                com.leoyuan.leophoneagent.config.ConfigBridge.auditList(limit, null)
             }
             else -> throw RPCException(-32602, "Unknown subcommand '$sub'")
         }

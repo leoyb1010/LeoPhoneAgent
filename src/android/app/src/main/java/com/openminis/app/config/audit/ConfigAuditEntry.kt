@@ -1,4 +1,4 @@
-package com.openminis.app.config.audit
+package com.leoyuan.leophoneagent.config.audit
 
 /** Who initiated the change. Mirrors iOS `ConfigAuditActor`. */
 enum class ConfigAuditActor(val raw: String) {

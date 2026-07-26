@@ -7,14 +7,14 @@
       "tier": "T1",
       "pattern": "^#!.*\\bbash\\b",
       "behaviorNote": "Script declares a bash interpreter; without bash installed the kernel reports 'not found'.",
-      "fixHint": "Use `#!/bin/sh` and remove bash-only syntax, or let Minis install bash."
+      "fixHint": "Use `#!/bin/sh` and remove bash-only syntax, or let LeoPhoneAgent install bash."
     },
     {
       "name": "bash-invoke",
       "tier": "T1",
       "pattern": "^(?!#!)(.*(?:[;&|]\\s*|\\$\\(\\s*|\\b(?:sudo|exec|nohup|time)\\s+))?bash\\b",
       "behaviorNote": "bash is invoked as a command (command-head position only; `grep bash` etc. does not match).",
-      "fixHint": "Invoke `sh` instead if the target script is POSIX, or let Minis install bash."
+      "fixHint": "Invoke `sh` instead if the target script is POSIX, or let LeoPhoneAgent install bash."
     },
     {
       "name": "arith-command",

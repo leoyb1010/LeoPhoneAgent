@@ -1,8 +1,8 @@
-package com.openminis.app.provider
+package com.leoyuan.leophoneagent.provider
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.logging.AppLogger
 import java.io.ByteArrayOutputStream
 
 /**

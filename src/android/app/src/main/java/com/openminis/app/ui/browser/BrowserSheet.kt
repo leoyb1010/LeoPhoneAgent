@@ -1,6 +1,6 @@
-package com.openminis.app.ui.browser
+package com.leoyuan.leophoneagent.ui.browser
 
-import com.openminis.app.R
+import com.leoyuan.leophoneagent.R
 import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
@@ -75,10 +75,10 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.openminis.app.browser.BrowserHistoryStore
-import com.openminis.app.browser.BrowserTabPool
-import com.openminis.app.browser.UserAgentProfile
-import com.openminis.app.ui.chat.StandardChatSheet
+import com.leoyuan.leophoneagent.browser.BrowserHistoryStore
+import com.leoyuan.leophoneagent.browser.BrowserTabPool
+import com.leoyuan.leophoneagent.browser.UserAgentProfile
+import com.leoyuan.leophoneagent.ui.chat.StandardChatSheet
 import kotlinx.coroutines.launch
 
 /**

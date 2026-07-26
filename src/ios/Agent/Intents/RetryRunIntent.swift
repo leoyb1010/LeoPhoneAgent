@@ -161,7 +161,7 @@ struct RetryRunIntent: AppIntent {
 
         ShortcutNotification.post(
             id: "shortcut-retry-\(sid)",
-            title: "Minis: Retrying",
+            title: "LeoPhoneAgent: Retrying",
             body: "\(modelName): \(promptPreview)\(targetMessage.content.count > 50 ? "…" : "")",
             sessionId: sid
         )
@@ -178,7 +178,7 @@ struct RetryRunIntent: AppIntent {
 
             ShortcutNotification.post(
                 id: "shortcut-retry-done-\(sid)",
-                title: "Minis: Retry Done",
+                title: "LeoPhoneAgent: Retry Done",
                 body: "\(modelName): \(String(responseText.prefix(200)))",
                 sessionId: sid
             )
@@ -210,7 +210,7 @@ struct RetryRunIntent: AppIntent {
 
             ShortcutNotification.post(
                 id: "shortcut-retry-done-\(capturedSid)",
-                title: "Minis: Retry Done",
+                title: "LeoPhoneAgent: Retry Done",
                 body: "\(capturedModelName): \(summary)",
                 sessionId: capturedSid
             )

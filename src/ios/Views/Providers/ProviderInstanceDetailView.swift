@@ -562,7 +562,7 @@ struct ProviderInstanceDetailView: View {
         } header: {
             Text(String(localized: "Custom User-Agent"))
         } footer: {
-            Text(String(localized: "Override the User-Agent header sent to this endpoint. Leave empty to use the Minis default. Useful for relays that only accept specific clients (e.g. \"claude-cli/1.0\")."))
+            Text(String(localized: "Override the User-Agent header sent to this endpoint. Leave empty to use the LeoPhoneAgent default. Useful for relays that only accept specific clients (e.g. \"claude-cli/1.0\")."))
         }
     }
 

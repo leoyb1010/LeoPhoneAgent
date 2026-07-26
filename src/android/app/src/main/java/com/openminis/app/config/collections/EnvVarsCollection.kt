@@ -1,15 +1,15 @@
-package com.openminis.app.config.collections
+package com.leoyuan.leophoneagent.config.collections
 
-import com.openminis.app.config.ConfigCollection
-import com.openminis.app.config.ConfigError
-import com.openminis.app.config.ConfigField
-import com.openminis.app.config.ConfigRisk
-import com.openminis.app.config.ConfigSchema
-import com.openminis.app.config.ConfigValue
-import com.openminis.app.config.fields.ClosureField
-import com.openminis.app.config.fields.HiddenField
-import com.openminis.app.config.fields.ReadOnlyField
-import com.openminis.app.data.repository.EnvVarRepository
+import com.leoyuan.leophoneagent.config.ConfigCollection
+import com.leoyuan.leophoneagent.config.ConfigError
+import com.leoyuan.leophoneagent.config.ConfigField
+import com.leoyuan.leophoneagent.config.ConfigRisk
+import com.leoyuan.leophoneagent.config.ConfigSchema
+import com.leoyuan.leophoneagent.config.ConfigValue
+import com.leoyuan.leophoneagent.config.fields.ClosureField
+import com.leoyuan.leophoneagent.config.fields.HiddenField
+import com.leoyuan.leophoneagent.config.fields.ReadOnlyField
+import com.leoyuan.leophoneagent.data.repository.EnvVarRepository
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -23,7 +23,7 @@ import java.util.TimeZone
  * The agent can list keys, attach a note, or remove a variable, but
  * the actual secret only ever moves through the encrypted prefs and
  * the user-facing UI. Adding a variable goes through the deep link
- * `minis://settings/environments?create_key=…` so the user supplies
+ * `leophoneagent://settings/environments?create_key=…` so the user supplies
  * the value directly.
  */
 class EnvVarsCollection(
@@ -62,7 +62,7 @@ class EnvVarsCollection(
 
     override fun add(payload: ConfigValue): String {
         throw ConfigError.PermissionDenied(
-            "Use the deep link `minis://settings/environments?create_key=…` so the user enters the value directly"
+            "Use the deep link `leophoneagent://settings/environments?create_key=…` so the user enters the value directly"
         )
     }
 

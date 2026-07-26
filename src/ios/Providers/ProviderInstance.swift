@@ -32,7 +32,7 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
     /// the user changes `customBaseURL`/`appendV1Suffix` so we re-probe the new endpoint.
     var imageEndpointResolved: ImageEndpointMode?
     /// Optional custom `User-Agent` header for outbound requests. nil/empty = use the
-    /// Minis default UA. Set for proxy/relay endpoints that gate on client UA (only
+    /// LeoPhoneAgent default UA. Set for proxy/relay endpoints that gate on client UA (only
     /// allow e.g. Claude Code). Applied to chat/models/responses requests of API-key
     /// and manual-token providers; OAuth providers keep their required client UA.
     var customUserAgent: String?
@@ -200,7 +200,7 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
 
     /// Keychain service name for storing this instance's API key.
     var keychainService: String {
-        "com.openminis.app.provider.\(id)"
+        "com.leoyuan.leophoneagent.provider.\(id)"
     }
 
     /// Whether this provider type's image-output models flow through OpenAIProvider

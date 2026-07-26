@@ -1,10 +1,10 @@
-package com.openminis.app.provider
+package com.leoyuan.leophoneagent.provider
 
-import com.openminis.app.data.model.LLMError
-import com.openminis.app.data.model.LLMMessage
-import com.openminis.app.data.model.LLMModel
-import com.openminis.app.data.model.LLMStreamChunk
-import com.openminis.app.provider.gemini.GeminiProvider
+import com.leoyuan.leophoneagent.data.model.LLMError
+import com.leoyuan.leophoneagent.data.model.LLMMessage
+import com.leoyuan.leophoneagent.data.model.LLMModel
+import com.leoyuan.leophoneagent.data.model.LLMStreamChunk
+import com.leoyuan.leophoneagent.provider.gemini.GeminiProvider
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse

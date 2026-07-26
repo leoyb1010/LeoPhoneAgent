@@ -1,4 +1,4 @@
-package com.openminis.app.data.repository
+package com.leoyuan.leophoneagent.data.repository
 
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
@@ -571,9 +571,9 @@ class SkillRepository(private val context: Context) {
         val urlString = existing.sourceURL
         if (urlString.isNullOrBlank()) {
             // Older imports (pre-fix) never persisted the source URL. Users need
-            // to re-import the skill from Minis Skills so the URL gets saved.
+            // to re-import the skill from LeoPhoneAgent Skills so the URL gets saved.
             return@withContext UpdateResult.Failure(
-                "No source URL on file. Re-import this skill from Minis Skills to enable updates."
+                "No source URL on file. Re-import this skill from LeoPhoneAgent Skills to enable updates."
             )
         }
 

@@ -1,4 +1,4 @@
-package com.openminis.app.ui.chat
+package com.leoyuan.leophoneagent.ui.chat
 
 import android.app.ActivityManager
 import android.content.Context
@@ -44,7 +44,7 @@ import java.io.File
  *   and the HUD read "CPU 0%" under any load. PRoot on Android works via
  *   ptrace, so foreign syscalls run inside the app's own PID anyway and
  *   `/proc/self/stat` does cover hf-render etc. (verified: `top` reports
- *   the same ~110% on com.openminis.app while hf-render runs).
+ *   the same ~110% on com.leoyuan.leophoneagent while hf-render runs).
  * - **Memory**: `Debug.getMemoryInfo().totalPss * 1024` for "used" (matches
  *   what task_info(TASK_VM_INFO) reports on iOS — proportional set size,
  *   the closest cross-platform equivalent to "what this process owns now");

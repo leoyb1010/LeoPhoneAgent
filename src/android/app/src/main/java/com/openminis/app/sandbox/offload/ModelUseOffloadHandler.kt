@@ -1,18 +1,18 @@
-package com.openminis.app.sandbox.offload
+package com.leoyuan.leophoneagent.sandbox.offload
 
 import android.content.Context
 import android.util.Base64
 import android.util.Log
-import com.openminis.app.data.model.LLMMessage
-import com.openminis.app.data.model.ModelEntry
-import com.openminis.app.data.model.ProviderType
-import com.openminis.app.data.repository.ProviderRepository
-import com.openminis.app.provider.ProviderFactory
-import com.openminis.app.provider.safeOptString
-import com.openminis.app.sandbox.NativeOffloadHandler
-import com.openminis.app.sandbox.NativeOffloadRequest
-import com.openminis.app.sandbox.NativeOffloadResult
-import com.openminis.app.sandbox.PRootKernel
+import com.leoyuan.leophoneagent.data.model.LLMMessage
+import com.leoyuan.leophoneagent.data.model.ModelEntry
+import com.leoyuan.leophoneagent.data.model.ProviderType
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.provider.ProviderFactory
+import com.leoyuan.leophoneagent.provider.safeOptString
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadHandler
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadRequest
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadResult
+import com.leoyuan.leophoneagent.sandbox.PRootKernel
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
@@ -277,7 +277,7 @@ class ModelUseOffloadHandler(
         // chat/completions + responses paths only. Other provider types would
         // drop the audio at their own serialization layer — fail loudly here
         // instead. Mirrors iOS ModelUseOffloadBridge.
-        if (hasAudioInput && provider !is com.openminis.app.provider.openai.OpenAIProvider) {
+        if (hasAudioInput && provider !is com.leoyuan.leophoneagent.provider.openai.OpenAIProvider) {
             return NativeOffloadResult(
                 2,
                 JSONObject().put("error", "audio_input_unsupported_provider")
@@ -298,7 +298,7 @@ class ModelUseOffloadHandler(
         // iOS ModelUseOffloadBridge passthrough branch.
         val ptSpec = parsePassthroughEnvelope(inputText)
         if (ptSpec.active) {
-            val openAI = provider as? com.openminis.app.provider.openai.OpenAIProvider
+            val openAI = provider as? com.leoyuan.leophoneagent.provider.openai.OpenAIProvider
                 ?: return NativeOffloadResult(
                     2,
                     JSONObject().put("error", "passthrough_unsupported")
@@ -334,7 +334,7 @@ class ModelUseOffloadHandler(
         // are attached to the final result JSON. Mirrors iOS performRun.
         val callWarnings = ptSpec.warnings.toMutableList()
         val appliedExtras = JSONObject()
-        (provider as? com.openminis.app.provider.openai.OpenAIProvider)?.let { openAI ->
+        (provider as? com.leoyuan.leophoneagent.provider.openai.OpenAIProvider)?.let { openAI ->
             val chatExtra = parseChatExtraBody(inputText, callWarnings)
             if (chatExtra.isNotEmpty()) {
                 openAI.chatExtraBody = chatExtra
@@ -490,7 +490,7 @@ class ModelUseOffloadHandler(
         val n: Int = 1,
         val size: String? = null,
         val quality: String? = null,
-        val endpointOverride: com.openminis.app.data.model.ImageEndpointMode? = null,
+        val endpointOverride: com.leoyuan.leophoneagent.data.model.ImageEndpointMode? = null,
     )
 
     private fun parseImageGenConfig(inputJson: String): ImageGenConfig {
@@ -525,11 +525,11 @@ class ModelUseOffloadHandler(
             }
         }
         val endpoint = when (rawEndpoint.lowercase()) {
-            "auto" -> com.openminis.app.data.model.ImageEndpointMode.auto
+            "auto" -> com.leoyuan.leophoneagent.data.model.ImageEndpointMode.auto
             "images_generations", "images-generations", "images-gen" ->
-                com.openminis.app.data.model.ImageEndpointMode.imagesGenerations
+                com.leoyuan.leophoneagent.data.model.ImageEndpointMode.imagesGenerations
             "chat_completions", "chat-completions", "chat" ->
-                com.openminis.app.data.model.ImageEndpointMode.chatCompletions
+                com.leoyuan.leophoneagent.data.model.ImageEndpointMode.chatCompletions
             else -> null
         }
         return ImageGenConfig(prompt, n, size, quality, endpoint)
@@ -880,7 +880,7 @@ class ModelUseOffloadHandler(
     private fun performRawPassthrough(
         spec: PassthroughSpec,
         entry: ModelEntry,
-        openAI: com.openminis.app.provider.openai.OpenAIProvider,
+        openAI: com.leoyuan.leophoneagent.provider.openai.OpenAIProvider,
         systemPrompt: String?,
         messages: List<LLMMessage>,
         maxTokens: Int,
@@ -1032,8 +1032,8 @@ class ModelUseOffloadHandler(
      */
     private fun tryImageGenerationRoute(
         entry: ModelEntry,
-        instance: com.openminis.app.data.model.ProviderInstance,
-        provider: com.openminis.app.provider.LLMProvider,
+        instance: com.leoyuan.leophoneagent.data.model.ProviderInstance,
+        provider: com.leoyuan.leophoneagent.provider.LLMProvider,
         inputJson: String,
         fallbackPromptMessages: List<ParsedMessage>,
         hasInputImages: Boolean,
@@ -1044,12 +1044,12 @@ class ModelUseOffloadHandler(
     ): NativeOffloadResult? {
         val outputs = entry.model.outputModalities.orEmpty()
         val wantsImageOutput = "image" in outputs
-        val openAI = provider as? com.openminis.app.provider.openai.OpenAIProvider
+        val openAI = provider as? com.leoyuan.leophoneagent.provider.openai.OpenAIProvider
         // Only OpenAI-compatible API-key instances with an image-output model.
         if (!wantsImageOutput || openAI == null) return null
         val pType = instance.providerType
         if (pType != ProviderType.openAI && pType != ProviderType.openRouter && pType != ProviderType.xAI) return null
-        if (instance.credentialType == com.openminis.app.data.model.ProviderCredential.oauth) return null
+        if (instance.credentialType == com.leoyuan.leophoneagent.data.model.ProviderCredential.oauth) return null
 
         val cfg = parseImageGenConfig(inputJson)
         val prompt = cfg.prompt
@@ -1114,8 +1114,8 @@ class ModelUseOffloadHandler(
 
         val effectiveMode = when {
             cfg.endpointOverride != null -> cfg.endpointOverride
-            isPureImageGenerator -> com.openminis.app.data.model.ImageEndpointMode.imagesGenerations
-            instance.imageEndpointMode == com.openminis.app.data.model.ImageEndpointMode.auto &&
+            isPureImageGenerator -> com.leoyuan.leophoneagent.data.model.ImageEndpointMode.imagesGenerations
+            instance.imageEndpointMode == com.leoyuan.leophoneagent.data.model.ImageEndpointMode.auto &&
                 instance.imageEndpointResolved != null -> instance.imageEndpointResolved!!
             else -> instance.imageEndpointMode
         }
@@ -1127,11 +1127,11 @@ class ModelUseOffloadHandler(
         )
 
         // chatCompletions → no image route; fall through to normal sendMessage.
-        if (effectiveMode == com.openminis.app.data.model.ImageEndpointMode.chatCompletions) return null
+        if (effectiveMode == com.leoyuan.leophoneagent.data.model.ImageEndpointMode.chatCompletions) return null
 
         // imagesGenerations (forced/cached/pure) → call directly; a failure here
         // is terminal (no silent fallback) so the caller sees the real error.
-        if (effectiveMode == com.openminis.app.data.model.ImageEndpointMode.imagesGenerations) {
+        if (effectiveMode == com.leoyuan.leophoneagent.data.model.ImageEndpointMode.imagesGenerations) {
             val response = try {
                 runBlocking { openAI.generateImage(prompt, cfg.n, cfg.size, cfg.quality) }
             } catch (e: Throwable) {
@@ -1153,17 +1153,17 @@ class ModelUseOffloadHandler(
         val response = try {
             runBlocking { openAI.generateImage(prompt, cfg.n, cfg.size, cfg.quality) }.also {
                 providerRepository.setImageEndpointResolved(
-                    instance.id, com.openminis.app.data.model.ImageEndpointMode.imagesGenerations,
+                    instance.id, com.leoyuan.leophoneagent.data.model.ImageEndpointMode.imagesGenerations,
                 )
             }
         } catch (e: Throwable) {
             val msg = e.message ?: ""
-            val routeMissing = (e is com.openminis.app.data.model.LLMError.ProviderError ||
-                e is com.openminis.app.data.model.LLMError.InvalidApiKey) && looksLikeEndpointMissing(msg)
+            val routeMissing = (e is com.leoyuan.leophoneagent.data.model.LLMError.ProviderError ||
+                e is com.leoyuan.leophoneagent.data.model.LLMError.InvalidApiKey) && looksLikeEndpointMissing(msg)
             if (routeMissing) {
                 Log.i(TAG, "[ModelUseRoute] auto probe → route missing (${msg.take(120)}) — caching chat_completions, falling back")
                 providerRepository.setImageEndpointResolved(
-                    instance.id, com.openminis.app.data.model.ImageEndpointMode.chatCompletions,
+                    instance.id, com.leoyuan.leophoneagent.data.model.ImageEndpointMode.chatCompletions,
                 )
                 return null // fall through to chat path
             }
@@ -1189,7 +1189,7 @@ class ModelUseOffloadHandler(
      */
     private fun writeImageResult(
         entry: ModelEntry,
-        response: com.openminis.app.data.model.LLMResponse,
+        response: com.leoyuan.leophoneagent.data.model.LLMResponse,
         outputPath: String?,
         outputExt: String,
         endpointUsed: String,
@@ -1409,7 +1409,7 @@ class ModelUseOffloadHandler(
         providerRepository.instance(entry.providerInstanceId)?.label.orEmpty()
 
     private fun entryDict(entry: ModelEntry): JSONObject =
-        com.openminis.app.offload.ModelUseManager.entryDict(
+        com.leoyuan.leophoneagent.offload.ModelUseManager.entryDict(
             entry,
             providerRepository.instance(entry.providerInstanceId),
         )

@@ -3,7 +3,7 @@ import UIKit
 
 private let logger = AppLogger(category: "AIChatVM")
 
-// MARK: - Kernel Boot + Prompt Queue + Minis paths + Dynamic Max Tokens
+// MARK: - Kernel Boot + Prompt Queue + LeoPhoneAgent paths + Dynamic Max Tokens
 
 extension AIChatViewModel {
 

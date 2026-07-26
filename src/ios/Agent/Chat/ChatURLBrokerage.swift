@@ -18,7 +18,7 @@ final class SpeechFinishedDelegate: NSObject, AVSpeechSynthesizerDelegate {
     }
 }
 
-// MARK: - Minis URL Capture Broker
+// MARK: - LeoPhoneAgent URL Capture Broker
 
 /// Shared broker for URLs captured from shell tool stdout via the OSC
 /// MinisOpenURL marker (emitted by /usr/local/bin/minis-open). Both
@@ -32,7 +32,7 @@ final class MinisOpenURLBroker: ObservableObject {
     @Published var pendingURL: URL?
     /// True while `ToolLiveSheet` is on-screen. When set, `AIChatView`
     /// skips auto-presenting *web* URLs so ToolLiveSheet can show the
-    /// preview nested on top of itself instead. `minis://` resource
+    /// preview nested on top of itself instead. `leophoneagent://` resource
     /// previews are still dispatched by AIChatView because ToolLiveSheet
     /// cannot host image/markdown/QuickLook sheets.
     @Published var toolSheetVisible: Bool = false
@@ -53,11 +53,11 @@ final class MinisOpenURLBroker: ObservableObject {
     /// file preview via `handleMinisURLTap`.
     nonisolated static func isSupportedScheme(_ scheme: String?) -> Bool {
         guard let s = scheme?.lowercased() else { return false }
-        return s == "http" || s == "https" || s == "about" || s == "minis"
+        return s == "http" || s == "https" || s == "about" || s == "leophoneagent"
     }
 
     /// True for schemes that render as an in-chat WKWebView (safariURL /
-    /// ToolLiveSheet.linkPreviewURL). `minis://` resources render as
+    /// ToolLiveSheet.linkPreviewURL). `leophoneagent://` resources render as
     /// full-screen file previews instead and must be dispatched by
     /// AIChatView even when a tool sheet is on top.
     nonisolated static func isWebScheme(_ scheme: String?) -> Bool {
@@ -66,7 +66,7 @@ final class MinisOpenURLBroker: ObservableObject {
     }
 }
 
-// MARK: - Minis URL Marker Parser
+// MARK: - LeoPhoneAgent URL Marker Parser
 
 /// Recognises the OSC 1337 `MinisOpenURL` escape sequence emitted by the
 /// rootfs shim at `/usr/local/bin/minis-open` (see default_mount). The shim

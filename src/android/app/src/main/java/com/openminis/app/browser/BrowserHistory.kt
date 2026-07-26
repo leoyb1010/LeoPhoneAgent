@@ -1,4 +1,4 @@
-package com.openminis.app.browser
+package com.leoyuan.leophoneagent.browser
 
 import android.content.Context
 import android.util.Log

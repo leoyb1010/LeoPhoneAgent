@@ -1,4 +1,4 @@
-package com.openminis.app.data.model
+package com.leoyuan.leophoneagent.data.model
 
 /**
  * [T-android-provider-voice] Virtual System voice entries — Android port of

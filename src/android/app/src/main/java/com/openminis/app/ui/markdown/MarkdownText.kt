@@ -1,4 +1,4 @@
-package com.openminis.app.ui.markdown
+package com.leoyuan.leophoneagent.ui.markdown
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -51,7 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
-import com.openminis.app.sandbox.PRootKernel
+import com.leoyuan.leophoneagent.sandbox.PRootKernel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -525,7 +525,7 @@ private fun InlineContent(
     val linkListener = remember(context) {
         LinkInteractionListener { link ->
             val url = (link as? LinkAnnotation.Url)?.url ?: return@LinkInteractionListener
-            val handled = com.openminis.app.ui.browser.BrowserExternalSchemeHandler
+            val handled = com.leoyuan.leophoneagent.ui.browser.BrowserExternalSchemeHandler
                 .handle(context, url)
             if (handled) return@LinkInteractionListener
             runCatching {
@@ -671,7 +671,7 @@ private fun parseInline(
 // ─── Media blocks (inline image / video / audio) ────────────────────────────
 
 /**
- * Resolve a URL used in Markdown (`minis://...` or a plain path) to a host
+ * Resolve a URL used in Markdown (`leophoneagent://...` or a plain path) to a host
  * File, suitable for MediaPlayer, MediaMetadataRetriever, or file share
  * intents. Returns null when the path can't be resolved or the file is
  * missing. Mirrors MinisImageFetcher's resolution logic so inline media
@@ -680,12 +680,12 @@ private fun parseInline(
 private fun resolveMediaFile(url: String): File? {
     if (url.isBlank()) return null
     // Strip a real query string, but NOT `#`: attachment filenames can
-    // contain '#' (e.g. `foo #China.mp4`). `minis://` URLs don't use
+    // contain '#' (e.g. `foo #China.mp4`). `leophoneagent://` URLs don't use
     // fragments, so truncating at '#' would lose part of the filename.
     val stripped = url.substringBefore('?')
     val hostFile: File? = when {
-        stripped.startsWith("minis://") -> {
-            val decoded = java.net.URLDecoder.decode(stripped.removePrefix("minis://"), "UTF-8")
+        stripped.startsWith("leophoneagent://") -> {
+            val decoded = java.net.URLDecoder.decode(stripped.removePrefix("leophoneagent://"), "UTF-8")
             PRootKernel.resolveHostPath("/var/minis/$decoded")
         }
         stripped.startsWith("file://") -> File(Uri.parse(stripped).path ?: return null)

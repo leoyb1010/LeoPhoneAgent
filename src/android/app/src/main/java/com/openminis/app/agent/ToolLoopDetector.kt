@@ -1,6 +1,6 @@
-package com.openminis.app.agent
+package com.leoyuan.leophoneagent.agent
 
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.logging.AppLogger
 import org.json.JSONArray
 import org.json.JSONObject
 import java.security.MessageDigest

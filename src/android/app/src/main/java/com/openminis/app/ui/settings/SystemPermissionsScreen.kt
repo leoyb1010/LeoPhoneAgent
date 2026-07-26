@@ -1,4 +1,4 @@
-package com.openminis.app.ui.settings
+package com.leoyuan.leophoneagent.ui.settings
 
 import android.widget.Toast
 import android.app.Activity
@@ -36,9 +36,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import com.openminis.app.R
-import com.openminis.app.accessibility.MinisAccessibilityService
-import com.openminis.app.power.PowerOptimizationManager
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.accessibility.MinisAccessibilityService
+import com.leoyuan.leophoneagent.power.PowerOptimizationManager
 import kotlinx.coroutines.delay
 
 /**
@@ -151,7 +151,7 @@ fun SystemPermissionsScreen(onBack: () -> Unit) {
             // because it is a privacy control, matching iOS's Permissions page.
             var correctionEnabled by remember {
                 mutableStateOf(
-                    com.openminis.app.speech.correction.VoiceCorrectionConsent.isEnabled(context),
+                    com.leoyuan.leophoneagent.speech.correction.VoiceCorrectionConsent.isEnabled(context),
                 )
             }
             var showClearCorrectionConfirm by remember { mutableStateOf(false) }
@@ -166,11 +166,11 @@ fun SystemPermissionsScreen(onBack: () -> Unit) {
                     checked = correctionEnabled,
                     onCheckedChange = { on ->
                         correctionEnabled = on
-                        com.openminis.app.speech.correction.VoiceCorrectionConsent
+                        com.leoyuan.leophoneagent.speech.correction.VoiceCorrectionConsent
                             .setEnabled(context, on)
                         // Turning the toggle off counts as an answer, so the
                         // one-time prompt must not reappear afterwards.
-                        com.openminis.app.speech.correction.VoiceCorrectionConsent
+                        com.leoyuan.leophoneagent.speech.correction.VoiceCorrectionConsent
                             .setPrompted(context, true)
                     },
                 )
@@ -191,7 +191,7 @@ fun SystemPermissionsScreen(onBack: () -> Unit) {
                     confirmButton = {
                         TextButton(onClick = {
                             showClearCorrectionConfirm = false
-                            com.openminis.app.speech.correction.VoiceCorrection
+                            com.leoyuan.leophoneagent.speech.correction.VoiceCorrection
                                 .clearAllData(context)
                             Toast.makeText(
                                 context,

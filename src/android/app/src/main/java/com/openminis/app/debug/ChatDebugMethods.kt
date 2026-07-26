@@ -1,11 +1,11 @@
-package com.openminis.app.debug
+package com.leoyuan.leophoneagent.debug
 
 import android.content.Context
-import com.openminis.app.MinisApp
-import com.openminis.app.data.db.MessageEntity
-import com.openminis.app.data.repository.ChatRepository
-import com.openminis.app.data.repository.ProviderRepository
-import com.openminis.app.service.SessionActivityTracker
+import com.leoyuan.leophoneagent.MinisApp
+import com.leoyuan.leophoneagent.data.db.MessageEntity
+import com.leoyuan.leophoneagent.data.repository.ChatRepository
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.service.SessionActivityTracker
 import org.json.JSONArray
 import org.json.JSONObject
 

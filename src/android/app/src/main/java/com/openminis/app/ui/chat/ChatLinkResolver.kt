@@ -1,20 +1,20 @@
-package com.openminis.app.ui.chat
+package com.leoyuan.leophoneagent.ui.chat
 
 import android.content.Context
 import android.content.Intent
 import androidx.core.net.toUri
-import com.openminis.app.deeplink.DeepLinkAction
-import com.openminis.app.deeplink.DeepLinkHandler
-import com.openminis.app.sandbox.PRootKernel
-import com.openminis.app.ui.sandbox.FileItem
+import com.leoyuan.leophoneagent.deeplink.DeepLinkAction
+import com.leoyuan.leophoneagent.deeplink.DeepLinkHandler
+import com.leoyuan.leophoneagent.sandbox.PRootKernel
+import com.leoyuan.leophoneagent.ui.sandbox.FileItem
 import java.io.File
 
 /**
  * Decides what should happen when a link inside chat markdown is tapped.
  *
  * Routing order:
- *  1. Recognized minis:// deep-link action  → DeepLink (delegated to MainActivity via Intent.ACTION_VIEW)
- *  2. minis://<sandbox path>, file://, or absolute /var/minis|/root path → SandboxFile
+ *  1. Recognized leophoneagent:// deep-link action  → DeepLink (delegated to MainActivity via Intent.ACTION_VIEW)
+ *  2. leophoneagent://<sandbox path>, file://, or absolute /var/minis|/root path → SandboxFile
  *  3. Non-http(s) external schemes (intent://, mailto:, tel:, geo:, …)   → ExternalApp
  *  4. Anything else (http(s), about, file)                                → Web
  */
@@ -34,9 +34,9 @@ object ChatLinkResolver {
         val uri = runCatching { trimmed.toUri() }.getOrNull()
         val scheme = uri?.scheme?.lowercase()
 
-        // 1. minis:// deep links — only branch out when the URL maps to a known action,
+        // 1. leophoneagent:// deep links — only branch out when the URL maps to a known action,
         //    otherwise fall through to sandbox-path handling.
-        if (scheme == "minis") {
+        if (scheme == "leophoneagent") {
             val action = DeepLinkHandler.parse(uri)
             if (action !is DeepLinkAction.Unknown) {
                 return ChatLinkAction.DeepLink(action)
@@ -60,7 +60,7 @@ object ChatLinkResolver {
         // trip `shouldOverrideUrlLoading` for the initial URL, so without
         // this hop those schemes hit the WebView and surface as
         // ERR_UNKNOWN_URL_SCHEME.
-        if (com.openminis.app.ui.browser.BrowserExternalSchemeHandler.shouldHandleExternally(trimmed)) {
+        if (com.leoyuan.leophoneagent.ui.browser.BrowserExternalSchemeHandler.shouldHandleExternally(trimmed)) {
             return ChatLinkAction.ExternalApp(trimmed)
         }
 
@@ -70,8 +70,8 @@ object ChatLinkResolver {
     /**
      * Map a chat link to a host File when it points into the sandbox, else null.
      * Accepts:
-     *   minis://attachments/foo.png        → /var/minis/attachments/foo.png
-     *   minis:///var/minis/workspace/x.csv → /var/minis/workspace/x.csv (absolute)
+     *   leophoneagent://attachments/foo.png        → /var/minis/attachments/foo.png
+     *   leophoneagent:///var/minis/workspace/x.csv → /var/minis/workspace/x.csv (absolute)
      *   file:///path/to/file               → /path/to/file
      *   /var/minis/workspace/x.csv         → resolved via bind mount
      *   /root/whatever                     → resolved relative to rootfs
@@ -89,11 +89,11 @@ object ChatLinkResolver {
                 PRootKernel.resolveHostPath(linuxPath)
             }
         return when (scheme) {
-            "minis" -> {
+            "leophoneagent" -> {
                 // Keep '#' — attachment filenames legitimately contain it.
-                // `minis://` URLs don't use fragments, so stripping at '#'
+                // `leophoneagent://` URLs don't use fragments, so stripping at '#'
                 // would truncate filenames like `foo #China.mp4`.
-                val stripped = raw.removePrefix("minis://").substringBefore('?')
+                val stripped = raw.removePrefix("leophoneagent://").substringBefore('?')
                 val decoded = runCatching { java.net.URLDecoder.decode(stripped, "UTF-8") }.getOrDefault(stripped)
                 val linuxPath = if (decoded.startsWith("/")) decoded else "/var/minis/$decoded"
                 lookup(linuxPath)

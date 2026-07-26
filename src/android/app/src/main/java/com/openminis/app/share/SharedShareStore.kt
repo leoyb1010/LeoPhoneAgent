@@ -1,7 +1,7 @@
-package com.openminis.app.share
+package com.leoyuan.leophoneagent.share
 
 import android.content.Context
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.logging.AppLogger
 import org.json.JSONObject
 import java.io.File
 

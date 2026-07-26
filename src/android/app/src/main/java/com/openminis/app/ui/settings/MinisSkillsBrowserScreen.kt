@@ -1,7 +1,7 @@
-package com.openminis.app.ui.settings
+package com.leoyuan.leophoneagent.ui.settings
 
-import com.openminis.app.R
-import com.openminis.app.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -53,7 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.res.stringResource
-import com.openminis.app.data.repository.SkillRepository
+import com.leoyuan.leophoneagent.data.repository.SkillRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -162,16 +162,16 @@ fun MinisSkillsBrowserScreen(
                                 // T234: Google permanently disallows WebView
                                 // for sign-in / OAuth. Hand auth-domain nav
                                 // to Chrome Custom Tab.
-                                if (com.openminis.app.browser.GoogleAuthRouter.shouldRouteExternally(urlStr)) {
+                                if (com.leoyuan.leophoneagent.browser.GoogleAuthRouter.shouldRouteExternally(urlStr)) {
                                     if (urlStr != null) {
-                                        com.openminis.app.browser.GoogleAuthRouter.openInCustomTab(ctx, urlStr)
+                                        com.leoyuan.leophoneagent.browser.GoogleAuthRouter.openInCustomTab(ctx, urlStr)
                                     }
                                     return true
                                 }
                                 // T134: hand off intent:// / market:// /
                                 // tel: / mailto: links to the system so the
                                 // user doesn't see ERR_UNKNOWN_URL_SCHEME.
-                                return com.openminis.app.ui.browser
+                                return com.leoyuan.leophoneagent.ui.browser
                                     .BrowserExternalSchemeHandler
                                     .handle(ctx, request?.url)
                             }

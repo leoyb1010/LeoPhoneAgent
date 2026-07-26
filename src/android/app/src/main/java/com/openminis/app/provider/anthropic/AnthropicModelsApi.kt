@@ -1,9 +1,9 @@
-package com.openminis.app.provider.anthropic
+package com.leoyuan.leophoneagent.provider.anthropic
 
 import android.content.Context
-import com.openminis.app.data.model.LLMModel
-import com.openminis.app.provider.ModelsDevApi
-import com.openminis.app.provider.applyUserAgentOverride
+import com.leoyuan.leophoneagent.data.model.LLMModel
+import com.leoyuan.leophoneagent.provider.ModelsDevApi
+import com.leoyuan.leophoneagent.provider.applyUserAgentOverride
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull

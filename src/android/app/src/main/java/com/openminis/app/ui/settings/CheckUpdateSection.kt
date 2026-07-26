@@ -1,4 +1,4 @@
-package com.openminis.app.ui.settings
+package com.leoyuan.leophoneagent.ui.settings
 
 import android.content.Intent
 import android.net.Uri
@@ -40,12 +40,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.text.ClickableText
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import com.openminis.app.BuildConfig
-import com.openminis.app.R
-import com.openminis.app.data.UpdateChecker
+import com.leoyuan.leophoneagent.BuildConfig
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.data.UpdateChecker
 import kotlinx.coroutines.launch
-import com.openminis.app.ui.components.MinisButton
-import com.openminis.app.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.ui.components.MinisButton
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
 
 /**
  * Settings section that talks to [UpdateChecker] to surface a "Check for

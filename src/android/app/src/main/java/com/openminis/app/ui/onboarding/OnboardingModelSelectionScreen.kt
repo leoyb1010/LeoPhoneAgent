@@ -1,9 +1,9 @@
-package com.openminis.app.ui.onboarding
+package com.leoyuan.leophoneagent.ui.onboarding
 
-import com.openminis.app.R
+import com.leoyuan.leophoneagent.R
 import androidx.compose.ui.res.stringResource
-import com.openminis.app.ui.components.MinisButton
-import com.openminis.app.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.ui.components.MinisButton
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -50,8 +50,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.openminis.app.data.model.ModelGroup
-import com.openminis.app.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.data.model.ModelGroup
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
 
 /**
  * Onboarding step 2: pick 1-3 models from configured providers

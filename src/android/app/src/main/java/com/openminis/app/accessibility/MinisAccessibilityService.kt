@@ -1,4 +1,4 @@
-package com.openminis.app.accessibility
+package com.leoyuan.leophoneagent.accessibility
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
@@ -14,7 +14,7 @@ import android.view.Display
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.annotation.RequiresApi
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.logging.AppLogger
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
@@ -29,7 +29,7 @@ class MinisAccessibilityService : AccessibilityService() {
 
     companion object {
         private const val TAG = "MinisA11y"
-        const val SERVICE_ID = "com.openminis.app/.accessibility.MinisAccessibilityService"
+        const val SERVICE_ID = "com.leoyuan.leophoneagent/.accessibility.MinisAccessibilityService"
         private const val EVENT_RING_CAP = 1024
 
         @Volatile

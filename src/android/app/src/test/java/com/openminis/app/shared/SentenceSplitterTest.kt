@@ -1,4 +1,4 @@
-package com.openminis.app.shared
+package com.leoyuan.leophoneagent.shared
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

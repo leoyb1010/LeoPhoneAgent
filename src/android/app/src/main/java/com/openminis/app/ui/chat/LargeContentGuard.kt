@@ -1,4 +1,4 @@
-package com.openminis.app.ui.chat
+package com.leoyuan.leophoneagent.ui.chat
 
 import android.content.Intent
 import android.widget.Toast
@@ -32,8 +32,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
-import com.openminis.app.R
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.logging.AppLogger
 import java.io.File
 
 /**
@@ -217,7 +217,7 @@ internal fun LargeContentGuard(
     // cost) when the turn ends.
     val wasDegraded = remember(stableKey) { mutableStateOf(false) }
     if (isStreaming) {
-        val breakerActive by com.openminis.app.diagnostics.HangDetector
+        val breakerActive by com.leoyuan.leophoneagent.diagnostics.HangDetector
             .renderBreakerActive.collectAsState()
         if (breakerActive || content.length > STREAM_DEGRADE_CHARS) {
             wasDegraded.value = true
@@ -225,7 +225,7 @@ internal fun LargeContentGuard(
             // fingerprint (once per ~2K growth) so a hang report shows exactly
             // what shape the tail had. Only summarize the tail window we scan.
             remember(content.length / 2000) {
-                val s = com.openminis.app.diagnostics.ContentDiag.summarize(content)
+                val s = com.leoyuan.leophoneagent.diagnostics.ContentDiag.summarize(content)
                 AppLogger.info(
                     "Perf",
                     "[Perf][ContentDiag] stream-degrade key=$stableKey breaker=$breakerActive " +
@@ -247,7 +247,7 @@ internal fun LargeContentGuard(
         if (!isStreaming && wasDegraded.value) {
             wasDegraded.value = false
             remember(stableKey, content.length) {
-                val s = com.openminis.app.diagnostics.ContentDiag.summarize(content)
+                val s = com.leoyuan.leophoneagent.diagnostics.ContentDiag.summarize(content)
                 AppLogger.info(
                     "Perf",
                     "[Perf][ContentDiag] stream-end-swap key=$stableKey ${s.asLogFields()}",
@@ -260,15 +260,15 @@ internal fun LargeContentGuard(
         // its markdown parse is on the main thread can name it + its structure.
         // Only for large bodies — small ones never hang and the churn isn't worth
         // it. messageId is the first segment of stableKey after its type prefix.
-        if (content.length >= com.openminis.app.diagnostics.CONTENT_DIAG_MIN_CHARS) {
+        if (content.length >= com.leoyuan.leophoneagent.diagnostics.CONTENT_DIAG_MIN_CHARS) {
             val msgId = remember(stableKey) { stableKey.substringAfter(':').substringBefore(':') }
             androidx.compose.runtime.DisposableEffect(stableKey, content.length) {
-                com.openminis.app.diagnostics.ContentDiag.setCurrentRender(
+                com.leoyuan.leophoneagent.diagnostics.ContentDiag.setCurrentRender(
                     sessionId = "",
                     messageId = msgId,
-                    summary = com.openminis.app.diagnostics.ContentDiag.summarize(content),
+                    summary = com.leoyuan.leophoneagent.diagnostics.ContentDiag.summarize(content),
                 )
-                onDispose { com.openminis.app.diagnostics.ContentDiag.clearCurrentRender(msgId) }
+                onDispose { com.leoyuan.leophoneagent.diagnostics.ContentDiag.clearCurrentRender(msgId) }
             }
         }
         renderer()

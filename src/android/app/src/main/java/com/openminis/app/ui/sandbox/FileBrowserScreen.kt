@@ -1,6 +1,6 @@
-package com.openminis.app.ui.sandbox
+package com.leoyuan.leophoneagent.ui.sandbox
 
-import com.openminis.app.R
+import com.leoyuan.leophoneagent.R
 import androidx.compose.ui.res.stringResource
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -69,7 +69,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.openminis.app.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,7 +82,7 @@ fun FileBrowserScreen(
     var deleteTarget by remember { mutableStateOf<FileItem?>(null) }
     // T-pwa-3: long-press → "Add to Home Screen" sheet, hosted at screen
     // scope so the dropdown can dismiss before the bottom-sheet appears.
-    var webAppSheetSource by remember { mutableStateOf<com.openminis.app.webapp.WebAppSource.HostFile?>(null) }
+    var webAppSheetSource by remember { mutableStateOf<com.leoyuan.leophoneagent.webapp.WebAppSource.HostFile?>(null) }
 
     // When navigated into a subdirectory, the top-bar back button and the
     // system back gesture both pop one directory level first. The
@@ -223,7 +223,7 @@ fun FileBrowserScreen(
     // outlives the row that triggered it (rows scroll out of composition
     // and the menu dismisses before the sheet animates in).
     webAppSheetSource?.let { src ->
-        com.openminis.app.webapp.AddToHomeSheet(
+        com.leoyuan.leophoneagent.webapp.AddToHomeSheet(
             source = src,
             onDismiss = { webAppSheetSource = null },
         )
@@ -283,7 +283,7 @@ private fun FileItemRow(
     currentLinuxPath: String?,
     onClick: () -> Unit,
     onDelete: () -> Unit,
-    onAddToHome: (com.openminis.app.webapp.WebAppSource.HostFile) -> Unit,
+    onAddToHome: (com.leoyuan.leophoneagent.webapp.WebAppSource.HostFile) -> Unit,
 ) {
     // T-pwa-3: long-press menu for .html / .htm files whose host path
     // sits under a recognised PRoot bind mount (`/var/minis/shared` or
@@ -391,7 +391,7 @@ private fun FileItemRow(
     // WebApp entry point (TODO webapp-hidden).
     run {
         val context = LocalContext.current
-        com.openminis.app.ui.components.MinisMenu(
+        com.leoyuan.leophoneagent.ui.components.MinisMenu(
             expanded = menuExpanded,
             onDismissRequest = { menuExpanded = false },
         ) {
@@ -427,11 +427,11 @@ private fun FileItemRow(
                 },
                 onClick = {
                     menuExpanded = false
-                    val triple = com.openminis.app.webapp.WebAppPathResolver.inferScope(item.file)
+                    val triple = com.leoyuan.leophoneagent.webapp.WebAppPathResolver.inferScope(item.file)
                     if (triple != null) {
                         val (scope, ctx, linuxPath) = triple
                         onAddToHome(
-                            com.openminis.app.webapp.WebAppSource.HostFile(
+                            com.leoyuan.leophoneagent.webapp.WebAppSource.HostFile(
                                 file = item.file,
                                 fileName = item.name,
                                 pathScope = scope,
@@ -467,7 +467,7 @@ private fun MoreMenu(
         IconButton(onClick = { expanded = true }) {
             Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.filebrowser_more_action))
         }
-        com.openminis.app.ui.components.MinisMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        com.leoyuan.leophoneagent.ui.components.MinisMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             // Display options — sort key choices first so the most
             // frequent toggle (sort) is the closest tap.
             for (key in FileSortKey.entries) {

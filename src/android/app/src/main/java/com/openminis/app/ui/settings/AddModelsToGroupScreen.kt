@@ -1,4 +1,4 @@
-package com.openminis.app.ui.settings
+package com.leoyuan.leophoneagent.ui.settings
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -23,13 +23,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
-import com.openminis.app.R
-import com.openminis.app.data.model.SystemVoiceEntries
-import com.openminis.app.data.repository.ProviderRepository
-import com.openminis.app.ui.components.PickerModalityFilter
-import com.openminis.app.ui.components.modelEntryPickerItems
-import com.openminis.app.ui.components.MinisButton
-import com.openminis.app.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.data.model.SystemVoiceEntries
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.ui.components.PickerModalityFilter
+import com.leoyuan.leophoneagent.ui.components.modelEntryPickerItems
+import com.leoyuan.leophoneagent.ui.components.MinisButton
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,7 +63,7 @@ fun AddModelsToGroupScreen(
 
     val searchQuery = remember { mutableStateOf("") }
     var selectedIds by remember { mutableStateOf(setOf<String>()) }
-    var quickTestEntry by remember { mutableStateOf<com.openminis.app.data.model.ModelEntry?>(null) }
+    var quickTestEntry by remember { mutableStateOf<com.leoyuan.leophoneagent.data.model.ModelEntry?>(null) }
     val collapsedInstanceIds = remember(config) {
         // T185: default-collapsed mirrors pre-refactor behaviour. The
         // shared picker auto-expands when search is non-empty so hits
@@ -140,7 +140,7 @@ fun AddModelsToGroupScreen(
     }
 
     quickTestEntry?.let { entry ->
-        com.openminis.app.ui.components.QuickTestSheet(
+        com.leoyuan.leophoneagent.ui.components.QuickTestSheet(
             entry = entry,
             providerRepository = providerRepository,
             onDismiss = { quickTestEntry = null },

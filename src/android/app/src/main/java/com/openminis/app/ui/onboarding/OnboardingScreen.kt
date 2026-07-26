@@ -1,6 +1,6 @@
-package com.openminis.app.ui.onboarding
+package com.leoyuan.leophoneagent.ui.onboarding
 
-import com.openminis.app.R
+import com.leoyuan.leophoneagent.R
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,13 +42,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.openminis.app.data.model.ModelEntry
-import com.openminis.app.data.model.ModelGroup
-import com.openminis.app.data.model.ProviderInstance
-import com.openminis.app.data.model.ProviderType
-import com.openminis.app.data.repository.ProviderRepository
-import com.openminis.app.ui.components.MinisButton
-import com.openminis.app.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.data.model.ModelEntry
+import com.leoyuan.leophoneagent.data.model.ModelGroup
+import com.leoyuan.leophoneagent.data.model.ProviderInstance
+import com.leoyuan.leophoneagent.data.model.ProviderType
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.ui.components.MinisButton
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
 
 /**
  * Multi-step onboarding flow shown on first launch.
@@ -174,7 +174,7 @@ private fun ApiKeyStep(
                             id = "${selectedType.name}_onboarding",
                             label = selectedType.displayName,
                             providerType = selectedType,
-                            credentialType = com.openminis.app.data.model.ProviderCredential.apiKey,
+                            credentialType = com.leoyuan.leophoneagent.data.model.ProviderCredential.apiKey,
                         )
                         providerRepository.addInstance(instance)
                         providerRepository.saveApiKey(instance.id, apiKey.trim())

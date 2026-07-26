@@ -3,11 +3,11 @@ import UIKit
 
 /// The app's default outbound User-Agent for LLM provider requests.
 ///
-/// Without an explicit header, URLSession sends `Minis/<CFBundleVersion>
-/// CFNetwork/… Darwin/…` — i.e. the **build number** (e.g. `Minis/1`), not the
+/// Without an explicit header, URLSession sends `LeoPhoneAgent/<CFBundleVersion>
+/// CFNetwork/… Darwin/…` — i.e. the **build number** (e.g. `LeoPhoneAgent/1`), not the
 /// marketing version users recognize. This helper produces a stable, readable
 /// default that carries the marketing version (CFBundleShortVersionString),
-/// e.g. `Minis/1.10 (iOS 26.5; iPhone)`.
+/// e.g. `LeoPhoneAgent/1.10 (iOS 26.5; iPhone)`.
 ///
 /// Scope: applied as the DEFAULT only where a request would otherwise fall back
 /// to the system UA AND the endpoint does not require an identity-locked UA. A
@@ -26,7 +26,7 @@ enum MinisUserAgent {
         let device = UIDevice.current
         let osVersion = device.systemVersion          // e.g. "26.5"
         let model = device.model                        // "iPhone" / "iPad"
-        let ua = "Minis/\(version) (iOS \(osVersion); \(model))"
+        let ua = "LeoPhoneAgent/\(version) (iOS \(osVersion); \(model))"
         cached = ua
         return ua
     }

@@ -1,4 +1,4 @@
-package com.openminis.app.auth
+package com.leoyuan.leophoneagent.auth
 
 import android.app.Activity
 import android.os.Bundle

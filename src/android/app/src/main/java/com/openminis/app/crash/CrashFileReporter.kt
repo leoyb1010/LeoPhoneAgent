@@ -1,4 +1,4 @@
-package com.openminis.app.crash
+package com.leoyuan.leophoneagent.crash
 
 import android.content.Context
 import org.acra.config.CoreConfiguration
@@ -14,7 +14,7 @@ import java.util.Locale
 /**
  * T283: Java/Kotlin crash → file. Writes a single text report into
  * `filesDir/logs/` using the same `.log` extension that
- * [com.openminis.app.logging.AppLogger.listLogFiles] already filters
+ * [com.leoyuan.leophoneagent.logging.AppLogger.listLogFiles] already filters
  * for, so reports surface in LogManagementScreen without needing a
  * separate crash-files screen.
  *
@@ -32,7 +32,7 @@ class CrashFileSender : ReportSender {
         val out = File(dir, "crash-$stamp.log")
 
         val body = buildString {
-            appendLine("=== Minis Java/Kotlin Crash ===")
+            appendLine("=== LeoPhoneAgent Java/Kotlin Crash ===")
             appendLine("Time: $stamp")
             appendLine("Version: ${errorContent.getString(ReportField.APP_VERSION_NAME)} " +
                 "(${errorContent.getString(ReportField.APP_VERSION_CODE)})")

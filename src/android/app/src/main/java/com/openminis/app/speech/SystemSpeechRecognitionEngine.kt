@@ -1,4 +1,4 @@
-package com.openminis.app.speech
+package com.leoyuan.leophoneagent.speech
 
 import android.Manifest
 import android.content.BroadcastReceiver

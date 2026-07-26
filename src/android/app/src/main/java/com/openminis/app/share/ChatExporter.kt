@@ -1,13 +1,13 @@
-package com.openminis.app.share
+package com.leoyuan.leophoneagent.share
 
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.core.content.FileProvider
-import com.openminis.app.data.db.ChatSessionEntity
-import com.openminis.app.data.db.MessageEntity
-import com.openminis.app.data.repository.ChatRepository
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.data.db.ChatSessionEntity
+import com.leoyuan.leophoneagent.data.db.MessageEntity
+import com.leoyuan.leophoneagent.data.repository.ChatRepository
+import com.leoyuan.leophoneagent.logging.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

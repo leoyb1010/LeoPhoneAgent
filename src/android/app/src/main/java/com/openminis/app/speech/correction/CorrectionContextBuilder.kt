@@ -1,7 +1,7 @@
-package com.openminis.app.speech.correction
+package com.leoyuan.leophoneagent.speech.correction
 
 import android.util.Log
-import com.openminis.app.shared.SentenceSplitter
+import com.leoyuan.leophoneagent.shared.SentenceSplitter
 
 /**
  * [T-android-voice-correction] Scores how "rare" a term is, i.e. how likely a

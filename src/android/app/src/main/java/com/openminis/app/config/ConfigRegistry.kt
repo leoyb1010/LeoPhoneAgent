@@ -1,9 +1,9 @@
-package com.openminis.app.config
+package com.leoyuan.leophoneagent.config
 
 import android.content.Context
-import com.openminis.app.data.repository.ChatRepository
-import com.openminis.app.data.repository.EnvVarRepository
-import com.openminis.app.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.data.repository.ChatRepository
+import com.leoyuan.leophoneagent.data.repository.EnvVarRepository
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**

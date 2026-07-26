@@ -1,4 +1,4 @@
-package com.openminis.app.agent.shell
+package com.leoyuan.leophoneagent.agent.shell
 
 /**
  * Builds the <system-reminder> appended after a sh tool-result when a script hit

@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Minis"
+rootProject.name = "LeoPhoneAgent"
 include(":app")

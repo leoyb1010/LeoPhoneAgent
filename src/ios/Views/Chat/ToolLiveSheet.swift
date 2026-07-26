@@ -455,7 +455,7 @@ struct ToolLiveSheet: View {
         // Auto-present an in-app browser preview when a shell tool emits an
         // OSC MinisOpenURL marker while this sheet is visible.
         //
-        // Only intercepts http/https/about: URLs — `minis://` chat-resource
+        // Only intercepts http/https/about: URLs — `leophoneagent://` chat-resource
         // previews (images, markdown, QuickLook, ...) are left for
         // AIChatView to handle since this sheet cannot host file previews.
         //
@@ -532,7 +532,7 @@ struct ToolLiveSheet: View {
                 // out to the step pill's trailing column (under the
                 // elapsed-duration "5s" text) so it lives next to where the
                 // user is already scanning timing info.
-                Text("Minis Computer")
+                Text("LeoPhoneAgent Computer")
                     .font(.system(size: 15, weight: .semibold))
 
                 Spacer()
@@ -1977,16 +1977,16 @@ struct ToolLiveSheet: View {
 
     private var toolTitle: String {
         switch block.kind {
-        case .shellTool: return "Minis is using Shell"
-        case .fileReadTool: return "Minis is reading File"
-        case .fileWriteTool: return "Minis is using Editor"
-        case .fileEditTool: return "Minis is editing File"
-        case .browserTool: return "Minis is using Browser"
-        case .readImageTool: return "Minis is reading Image"
-        case .memoryTool: return "Minis is using Memory"
-        case .info: return "Minis"
-        case .text: return "Minis"
-        case .thinking: return "Minis"
+        case .shellTool: return "LeoPhoneAgent is using Shell"
+        case .fileReadTool: return "LeoPhoneAgent is reading File"
+        case .fileWriteTool: return "LeoPhoneAgent is using Editor"
+        case .fileEditTool: return "LeoPhoneAgent is editing File"
+        case .browserTool: return "LeoPhoneAgent is using Browser"
+        case .readImageTool: return "LeoPhoneAgent is reading Image"
+        case .memoryTool: return "LeoPhoneAgent is using Memory"
+        case .info: return "LeoPhoneAgent"
+        case .text: return "LeoPhoneAgent"
+        case .thinking: return "LeoPhoneAgent"
         }
     }
 

@@ -1,4 +1,4 @@
-package com.openminis.app.browser
+package com.leoyuan.leophoneagent.browser
 
 import org.json.JSONArray
 import org.json.JSONObject

@@ -1,6 +1,6 @@
-package com.openminis.app.data
+package com.leoyuan.leophoneagent.data
 
-import com.openminis.app.data.repository.EnvVarRepository
+import com.leoyuan.leophoneagent.data.repository.EnvVarRepository
 
 /**
  * Masks env-var values that leaked into shell tool output before they
@@ -32,7 +32,7 @@ object EnvVarRedactor {
     /**
      * Static handoff so non-DI call sites (e.g. ShellExecutor on a
      * background coroutine) can reach the repository without plumbing
-     * it through every layer. Set once from [com.openminis.app.MinisApp.onCreate].
+     * it through every layer. Set once from [com.leoyuan.leophoneagent.MinisApp.onCreate].
      */
     @Volatile
     var envVarRepository: EnvVarRepository? = null

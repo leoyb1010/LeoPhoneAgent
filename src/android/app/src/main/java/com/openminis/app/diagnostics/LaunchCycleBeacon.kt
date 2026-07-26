@@ -1,7 +1,7 @@
-package com.openminis.app.diagnostics
+package com.leoyuan.leophoneagent.diagnostics
 
 import android.content.Context
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.logging.AppLogger
 import java.io.File
 
 /**

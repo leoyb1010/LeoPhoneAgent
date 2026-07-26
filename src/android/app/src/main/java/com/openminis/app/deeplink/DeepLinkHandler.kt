@@ -1,44 +1,44 @@
-package com.openminis.app.deeplink
+package com.leoyuan.leophoneagent.deeplink
 
 import android.net.Uri
-import com.openminis.app.ui.navigation.Routes
+import com.leoyuan.leophoneagent.ui.navigation.Routes
 
 /**
- * Parses minis:// deep link URIs into navigation actions.
+ * Parses leophoneagent:// deep link URIs into navigation actions.
  *
  * Supported routes (matching iOS):
- *   minis://share                              → open share flow
- *   minis://views/alarm                        → open alarm list
- *   minis://open_terminal?init_command=...      → open terminal with command
- *   minis://session/<id>                        → open specific session
- *   minis://settings                            → Settings home
- *   minis://settings/providers                  → Provider list
- *   minis://settings/providers/<instanceId>     → Provider detail
- *   minis://settings/model-groups               → Model Groups (incl. Agent Loop section)
- *   minis://settings/model-groups/<groupId>     → Model Group detail
- *   minis://settings/usage                      → Token usage
- *   minis://settings/skills                     → Skills management
- *   minis://settings/memory                     → Memory management
- *   minis://settings/storage                    → Storage management
- *   minis://settings/mount-external             → Mount External Folders list
- *   minis://settings/mounts                     → alias for mount-external
- *   minis://settings/shared-folders             → Shared Folders list (T235)
- *   minis://settings/shared_folders             → alias for shared-folders
- *   minis://settings/logs                       → Log management
- *   minis://settings/appearance                 → Appearance
- *   minis://settings/background                 → Background settings
- *   minis://settings/about                      → About
- *   minis://settings/permissions                → Permissions
- *   minis://settings/environments[?create_key=...&create_value=...&create_note=...]
+ *   leophoneagent://share                              → open share flow
+ *   leophoneagent://views/alarm                        → open alarm list
+ *   leophoneagent://open_terminal?init_command=...      → open terminal with command
+ *   leophoneagent://session/<id>                        → open specific session
+ *   leophoneagent://settings                            → Settings home
+ *   leophoneagent://settings/providers                  → Provider list
+ *   leophoneagent://settings/providers/<instanceId>     → Provider detail
+ *   leophoneagent://settings/model-groups               → Model Groups (incl. Agent Loop section)
+ *   leophoneagent://settings/model-groups/<groupId>     → Model Group detail
+ *   leophoneagent://settings/usage                      → Token usage
+ *   leophoneagent://settings/skills                     → Skills management
+ *   leophoneagent://settings/memory                     → Memory management
+ *   leophoneagent://settings/storage                    → Storage management
+ *   leophoneagent://settings/mount-external             → Mount External Folders list
+ *   leophoneagent://settings/mounts                     → alias for mount-external
+ *   leophoneagent://settings/shared-folders             → Shared Folders list (T235)
+ *   leophoneagent://settings/shared_folders             → alias for shared-folders
+ *   leophoneagent://settings/logs                       → Log management
+ *   leophoneagent://settings/appearance                 → Appearance
+ *   leophoneagent://settings/background                 → Background settings
+ *   leophoneagent://settings/about                      → About
+ *   leophoneagent://settings/permissions                → Permissions
+ *   leophoneagent://settings/environments[?create_key=...&create_value=...&create_note=...]
  *                                               → Environment variables
- *   minis://settings/rootfs                     → Rootfs management (mirror config lives here)
- *   minis://settings/mirrors                    → alias for rootfs (mirrors live inside Rootfs UI)
+ *   leophoneagent://settings/rootfs                     → Rootfs management (mirror config lives here)
+ *   leophoneagent://settings/mirrors                    → alias for rootfs (mirrors live inside Rootfs UI)
  *
  * Unknown settings paths fall back to Settings home rather than
  * Unknown — matches iOS's "best-effort land somewhere reasonable"
  * behavior so an LLM-generated link can never strand the user.
  *
- * Resource-class URIs (`minis://workspace/...`, `minis://skills/...`,
+ * Resource-class URIs (`leophoneagent://workspace/...`, `leophoneagent://skills/...`,
  * etc.) are intentionally NOT handled here — they resolve to on-disk
  * files and go through `ChatLinkResolver` at the chat-view layer. This
  * parser only handles *navigation* targets that change the app's top-
@@ -59,9 +59,9 @@ sealed class DeepLinkAction {
      *  - [NewVoiceChat] — new chat + auto-trigger voice input mic on first compose
      *  - [NewCameraChat] — new chat + auto-launch camera attachment on first compose
      *
-     * Encoded as `minis://action/<name>` so the static shortcuts XML can
+     * Encoded as `leophoneagent://action/<name>` so the static shortcuts XML can
      * point to them via plain Intent.data without any custom extras —
-     * matches the existing minis:// deep-link conventions.
+     * matches the existing leophoneagent:// deep-link conventions.
      */
     data object NewChat : DeepLinkAction()
     data object NewVoiceChat : DeepLinkAction()
@@ -71,7 +71,7 @@ sealed class DeepLinkAction {
      * T183: any settings screen reachable by route string. Extends the
      * sealed family so consumers don't have to learn 14 new case types
      * — they `safeNavigate(action.route)` and the route table in
-     * [com.openminis.app.ui.navigation.Routes] does the rest. Routes
+     * [com.leoyuan.leophoneagent.ui.navigation.Routes] does the rest. Routes
      * with arguments (provider detail, model-group detail) carry the
      * already-formatted route ("provider/<id>", "model_group/<id>").
      */
@@ -81,7 +81,7 @@ sealed class DeepLinkAction {
      * Launch the in-chat HTML preview, fullscreen, for a pinned home-screen
      * shortcut.
      *
-     * Encoded as `minis://session/<sessionId>/<resource-path>` —
+     * Encoded as `leophoneagent://session/<sessionId>/<resource-path>` —
      * [sessionId] selects which chat to land in; [resourcePath] is the
      * resource path under `/var/minis/` (e.g. `/browser/snake.html`).
      * [title] is the cached page title at pin time, used as the fallback
@@ -98,7 +98,7 @@ sealed class DeepLinkAction {
 
 object DeepLinkHandler {
     fun parse(uri: Uri?): DeepLinkAction {
-        if (uri == null || uri.scheme != "minis") return DeepLinkAction.Unknown
+        if (uri == null || uri.scheme != "leophoneagent") return DeepLinkAction.Unknown
         val host = uri.host ?: return DeepLinkAction.Unknown
         val path = uri.path.orEmpty()
 
@@ -122,8 +122,8 @@ object DeepLinkHandler {
             }
             "settings" -> parseSettingsPath(uri)
             "session" -> {
-                // minis://session/<sessionId>                → OpenSession
-                // minis://session/<sessionId>/<resource-path> → OpenHtmlPreview
+                // leophoneagent://session/<sessionId>                → OpenSession
+                // leophoneagent://session/<sessionId>/<resource-path> → OpenHtmlPreview
                 val segments = path.removePrefix("/")
                     .split('/')
                     .filter { it.isNotEmpty() }
@@ -143,7 +143,7 @@ object DeepLinkHandler {
     }
 
     /**
-     * T183: walk a `minis://settings/<path>` URI to the right NavHost
+     * T183: walk a `leophoneagent://settings/<path>` URI to the right NavHost
      * route. Two cases stay distinct:
      *
      *  - `environments?create_key=…` — keeps the dedicated
@@ -204,7 +204,7 @@ object DeepLinkHandler {
                 // iOS parity (AIChatView.swift L1407-1411): only `create_key`
                 // is required. Missing `create_value`/`create_note` default
                 // to empty string so a link like
-                //   minis://settings/environments?create_key=GH_TOKEN&create_value=
+                //   leophoneagent://settings/environments?create_key=GH_TOKEN&create_value=
                 // (where `create_value=` is present-but-blank) still opens
                 // the prefilled form. Without create_key, plain navigation
                 // to the Env Vars list.

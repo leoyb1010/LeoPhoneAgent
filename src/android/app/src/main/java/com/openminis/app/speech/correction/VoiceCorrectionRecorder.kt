@@ -1,8 +1,8 @@
-package com.openminis.app.speech.correction
+package com.leoyuan.leophoneagent.speech.correction
 
 import android.content.Context
 import android.util.Log
-import com.openminis.app.shared.SentenceSplitter
+import com.leoyuan.leophoneagent.shared.SentenceSplitter
 
 /**
  * [T-android-voice-correction] Captures the user's own fixes as training

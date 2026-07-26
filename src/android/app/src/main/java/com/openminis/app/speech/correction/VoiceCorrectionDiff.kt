@@ -1,4 +1,4 @@
-package com.openminis.app.speech.correction
+package com.leoyuan.leophoneagent.speech.correction
 
 /**
  * [T-android-voice-correction] Turns a before/after edit into learnable

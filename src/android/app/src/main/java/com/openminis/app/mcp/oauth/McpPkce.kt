@@ -1,4 +1,4 @@
-package com.openminis.app.mcp.oauth
+package com.leoyuan.leophoneagent.mcp.oauth
 
 import java.net.URI
 import java.net.URLEncoder

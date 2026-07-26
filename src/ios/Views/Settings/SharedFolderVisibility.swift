@@ -6,14 +6,14 @@
 //  (shared / skills / memory) should appear in the iOS Files app.
 //  Both the main app process and the FileProvider extension read this.
 //
-//  Backing store: App Group UserDefaults (`group.com.openminis.app`) so
+//  Backing store: App Group UserDefaults (`group.com.leoyuan.leophoneagent`) so
 //  the FileProvider extension sees the same state as the main app.
 //
 //  Semantics:
 //    - Default = visible (all three are exposed on first launch).
 //    - Toggling an entry off does NOT delete any data — it just hides the
 //      subdir from the FileProvider enumerator so iOS Files no longer
-//      shows it under "On My iPhone → Minis".
+//      shows it under "On My iPhone → LeoPhoneAgent".
 //
 
 import Foundation
@@ -23,7 +23,7 @@ enum SharedFolderVisibility {
     /// Must match FileProviderExtension.topLevelSubdirs.
     static let allFolderNames: [String] = ["shared", "skills", "memory"]
 
-    private static let appGroupID = "group.com.openminis.app"
+    private static let appGroupID = "group.com.leoyuan.leophoneagent"
     private static let userDefaultsKeyPrefix = "fileProviderVisible."
 
     private static var store: UserDefaults {

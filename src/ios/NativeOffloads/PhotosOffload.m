@@ -119,7 +119,7 @@ static dispatch_queue_t authQueue(void) {
     static dispatch_queue_t q = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        q = dispatch_queue_create("com.openminis.photos.auth", DISPATCH_QUEUE_SERIAL);
+        q = dispatch_queue_create("com.leoyuan.leophoneagent.photos.auth", DISPATCH_QUEUE_SERIAL);
     });
     return q;
 }
@@ -157,7 +157,7 @@ static BOOL requestPhotosAccess(NSString **outError) {
     if (!granted && outError) {
         *outError = @"Photo library access not granted. "
                      "To grant access, open Settings > Privacy & Security > Photos "
-                     "and enable Minis.";
+                     "and enable LeoPhoneAgent.";
     }
     return granted;
 }

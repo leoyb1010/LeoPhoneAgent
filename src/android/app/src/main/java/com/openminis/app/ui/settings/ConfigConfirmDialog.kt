@@ -1,4 +1,4 @@
-package com.openminis.app.ui.settings
+package com.leoyuan.leophoneagent.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -37,15 +37,15 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
-import com.openminis.app.config.ConfigRisk
-import com.openminis.app.config.confirm.ConfigConfirmationGate
-import com.openminis.app.config.confirm.PendingConfigChange
-import com.openminis.app.config.confirm.PendingConfigChangeItem
-import com.openminis.app.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.config.ConfigRisk
+import com.leoyuan.leophoneagent.config.confirm.ConfigConfirmationGate
+import com.leoyuan.leophoneagent.config.confirm.PendingConfigChange
+import com.leoyuan.leophoneagent.config.confirm.PendingConfigChangeItem
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
 
 /**
  * Root-level confirmation dialog for every minis-config write.
- * Mirrors iOS `ConfigConfirmSheet`. Mounted in [com.openminis.app.MainActivity]
+ * Mirrors iOS `ConfigConfirmSheet`. Mounted in [com.leoyuan.leophoneagent.MainActivity]
  * so it shows over any active screen. Bound to
  * [ConfigConfirmationGate.pending].
  *

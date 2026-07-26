@@ -1,4 +1,4 @@
-package com.openminis.app.ui.settings
+package com.leoyuan.leophoneagent.ui.settings
 
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -13,9 +13,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import com.openminis.app.R
-import com.openminis.app.offload.ShizukuBackend
-import com.openminis.app.offload.ShizukuManager
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.offload.ShizukuBackend
+import com.leoyuan.leophoneagent.offload.ShizukuManager
 
 /**
  * T322 / [T-android-privileged-backend]: state-driven Shizuku-protocol
@@ -29,7 +29,7 @@ import com.openminis.app.offload.ShizukuManager
  *                        whichever they prefer.
  *   NOT_RUNNING       → "Open Manager App and press Start" — launches the
  *                        installed manager.
- *   NEED_PERMISSION   → "Authorize Minis" CTA → triggers system dialog.
+ *   NEED_PERMISSION   → "Authorize LeoPhoneAgent" CTA → triggers system dialog.
  *   READY             → green status row with version + uid.
  */
 @Composable

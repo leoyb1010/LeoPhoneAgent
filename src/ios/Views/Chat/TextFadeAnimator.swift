@@ -1,5 +1,5 @@
 //  TextFadeAnimator.swift
-//  Minis
+//  LeoPhoneAgent
 //
 //  Word-by-word fade-in animation for streaming Markdown output.
 //

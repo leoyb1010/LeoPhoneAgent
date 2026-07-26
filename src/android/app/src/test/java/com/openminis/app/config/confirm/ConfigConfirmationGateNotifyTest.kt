@@ -1,6 +1,6 @@
-package com.openminis.app.config.confirm
+package com.leoyuan.leophoneagent.config.confirm
 
-import com.openminis.app.config.ConfigRisk
+import com.leoyuan.leophoneagent.config.ConfigRisk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch

@@ -3,7 +3,7 @@ import Foundation
 private let deepLinkLog = AppLogger(category: "DeepLink")
 
 extension Notification.Name {
-    /// Posted by `DeepLinkRouter` when `minis://open?session=…&path=…` lands
+    /// Posted by `DeepLinkRouter` when `leophoneagent://open?session=…&path=…` lands
     /// from the openminis.app launcher. `userInfo["shortcut"]` is a
     /// `WebAppShortcut` reconstructed from the deep-link params; not
     /// necessarily persisted. (Relocated here from the removed
@@ -11,33 +11,33 @@ extension Notification.Name {
     static let openWebAppDeepLink = Notification.Name("openWebAppDeepLink")
 }
 
-/// Parses `minis://` URLs into navigation actions and dispatches them
+/// Parses `leophoneagent://` URLs into navigation actions and dispatches them
 /// to the relevant coordinator. Mirrors the Android `DeepLinkHandler`
 /// route table at `src/android/.../deeplink/DeepLinkHandler.kt`.
 ///
 /// Supported URLs (all aliases match the Android side):
-///   minis://share
-///   minis://views/alarm
-///   minis://open_terminal[?init_command=…]
-///   minis://open?session=<sid>&path=<scope-prefixed-path>  (openminis.app launcher round-trip)
-///   minis://session/<id>      (legacy singular alias)
-///   minis://sessions/<id>     (canonical — matches minis-sessions-cli)
-///   minis://settings
-///   minis://settings/providers[/<instanceId>]
-///   minis://settings/model-groups[/<groupId>]   (alias: model_groups)
-///   minis://settings/usage                      (alias: usage-stats, usage_stats)
-///   minis://settings/skills
-///   minis://settings/memory
-///   minis://settings/storage
-///   minis://settings/mount-external             (alias: mount_external, mounts, mounted-folders, mounted_folders)
-///   minis://settings/shared-folders             (alias: shared_folders)
-///   minis://settings/logs
-///   minis://settings/appearance
-///   minis://settings/background
-///   minis://settings/about
-///   minis://settings/permissions
-///   minis://settings/environments[?create_key=…&create_value=…&create_note=…]
-///   minis://settings/rootfs                     (alias: mirrors, rootfs-management, rootfs_management)
+///   leophoneagent://share
+///   leophoneagent://views/alarm
+///   leophoneagent://open_terminal[?init_command=…]
+///   leophoneagent://open?session=<sid>&path=<scope-prefixed-path>  (openminis.app launcher round-trip)
+///   leophoneagent://session/<id>      (legacy singular alias)
+///   leophoneagent://sessions/<id>     (canonical — matches minis-sessions-cli)
+///   leophoneagent://settings
+///   leophoneagent://settings/providers[/<instanceId>]
+///   leophoneagent://settings/model-groups[/<groupId>]   (alias: model_groups)
+///   leophoneagent://settings/usage                      (alias: usage-stats, usage_stats)
+///   leophoneagent://settings/skills
+///   leophoneagent://settings/memory
+///   leophoneagent://settings/storage
+///   leophoneagent://settings/mount-external             (alias: mount_external, mounts, mounted-folders, mounted_folders)
+///   leophoneagent://settings/shared-folders             (alias: shared_folders)
+///   leophoneagent://settings/logs
+///   leophoneagent://settings/appearance
+///   leophoneagent://settings/background
+///   leophoneagent://settings/about
+///   leophoneagent://settings/permissions
+///   leophoneagent://settings/environments[?create_key=…&create_value=…&create_note=…]
+///   leophoneagent://settings/rootfs                     (alias: mirrors, rootfs-management, rootfs_management)
 ///
 /// Unknown settings paths fall back to the Settings home rather than
 /// failing — same as Android — so an LLM-generated link can never
@@ -46,7 +46,7 @@ enum DeepLinkRouter {
 
     @MainActor
     static func handle(url: URL, shareCoordinator: ShareCoordinator) {
-        guard url.scheme == "minis", let host = url.host else {
+        guard url.scheme == "leophoneagent", let host = url.host else {
             deepLinkLog.info("ignored — non-minis or missing host: \(url.absoluteString)")
             return
         }
@@ -106,7 +106,7 @@ enum DeepLinkRouter {
             .split(separator: "/", omittingEmptySubsequences: true)
             .map { String($0) }
         guard let head = segments.first else {
-            // bare `minis://settings`
+            // bare `leophoneagent://settings`
             coord.pendingSettingsTarget = .home
             return
         }
@@ -130,9 +130,9 @@ enum DeepLinkRouter {
         case "skills":
             coord.pendingSettingsTarget = .skills
 
-        // [T-mcp-oauth-deeplink] minis://settings/mcp-servers/<serverId> —
+        // [T-mcp-oauth-deeplink] leophoneagent://settings/mcp-servers/<serverId> —
         // jump straight to the server's edit form (Authorize button). The
-        // AUTH_REQUIRED error from minis-mcp-cli embeds this link. Server
+        // AUTH_REQUIRED error from leophoneagent-mcp-cli embeds this link. Server
         // names may be percent-encoded; url.path already decodes them.
         case "mcp-servers", "mcp_servers", "mcp":
             coord.pendingSettingsTarget = (arg?.isEmpty == false)
@@ -210,7 +210,7 @@ enum DeepLinkRouter {
 
     // MARK: - openminis.app launcher round-trip
 
-    /// Parses a `minis://open?session=…&path=…` URL fired by the
+    /// Parses a `leophoneagent://open?session=…&path=…` URL fired by the
     /// openminis.app launcher when the pinned home-screen tile is
     /// launched in standalone mode. The `path` query is scope-prefixed
     /// so we can recover `(scope, scopeContext, htmlPath)` without
@@ -230,7 +230,7 @@ enum DeepLinkRouter {
         let session = components?.queryItems?.first(where: { $0.name == "session" })?.value
         guard let rawPath = components?.queryItems?.first(where: { $0.name == "path" })?.value,
               !rawPath.isEmpty else {
-            deepLinkLog.warning("minis://open missing path")
+            deepLinkLog.warning("leophoneagent://open missing path")
             return
         }
 
@@ -240,7 +240,7 @@ enum DeepLinkRouter {
 
         if rawPath.hasPrefix("attachments/") {
             guard let sid = session, !sid.isEmpty else {
-                deepLinkLog.warning("minis://open path=attachments/… missing session")
+                deepLinkLog.warning("leophoneagent://open path=attachments/… missing session")
                 return
             }
             scope = .sessionAttachment
@@ -248,7 +248,7 @@ enum DeepLinkRouter {
             htmlPath = String(rawPath.dropFirst("attachments/".count))
         } else if rawPath.hasPrefix("workspace/") {
             guard let sid = session, !sid.isEmpty else {
-                deepLinkLog.warning("minis://open path=workspace/… missing session")
+                deepLinkLog.warning("leophoneagent://open path=workspace/… missing session")
                 return
             }
             scope = .sessionWorkspace
@@ -262,14 +262,14 @@ enum DeepLinkRouter {
             // mount:<uuid>/<rest>
             let rest = rawPath.dropFirst("mount:".count)
             guard let slash = rest.firstIndex(of: "/") else {
-                deepLinkLog.warning("minis://open path=mount:… missing /<rest>")
+                deepLinkLog.warning("leophoneagent://open path=mount:… missing /<rest>")
                 return
             }
             scope = .mount
             ctx = String(rest[..<slash])
             htmlPath = String(rest[rest.index(after: slash)...])
         } else {
-            deepLinkLog.warning("minis://open unknown path prefix in \(rawPath)")
+            deepLinkLog.warning("leophoneagent://open unknown path prefix in \(rawPath)")
             return
         }
 
@@ -286,7 +286,7 @@ enum DeepLinkRouter {
             sourceSessionId: (scope == .sessionAttachment || scope == .sessionWorkspace) ? ctx : nil
         )
 
-        deepLinkLog.info("minis://open scope=\(scope.rawValue) ctx=\(ctx ?? "nil") htmlPath=\(htmlPath)")
+        deepLinkLog.info("leophoneagent://open scope=\(scope.rawValue) ctx=\(ctx ?? "nil") htmlPath=\(htmlPath)")
         // Dismiss any leftover fullScreenCover (image gallery, in-chat
         // web preview, camera, etc.) BEFORE attempting to present the
         // WebApp. iOS only allows one fullScreenCover per host view at a

@@ -1,6 +1,6 @@
 import Foundation
 
-/// Shared percent-decoding helpers for resolving `minis://` URLs to on-disk
+/// Shared percent-decoding helpers for resolving `leophoneagent://` URLs to on-disk
 /// subpaths.
 ///
 /// A correctly-formed `minis_url` percent-encodes the filename exactly once
@@ -19,7 +19,7 @@ import Foundation
 /// filename that legitimately contains a `%` is still resolved by the first
 /// candidate and never reaches the extra decode.
 enum MinisURLPathDecoding {
-    /// Candidate subpaths for a `minis://` URL, in priority order.
+    /// Candidate subpaths for a `leophoneagent://` URL, in priority order.
     /// `url.path` already strips the scheme/host and percent-decodes once.
     static func subPathCandidates(for url: URL) -> [String] {
         let p = url.path

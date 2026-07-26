@@ -1,4 +1,4 @@
-package com.openminis.app.ui.browser
+package com.leoyuan.leophoneagent.ui.browser
 
 import androidx.compose.ui.res.stringResource
 import android.webkit.CookieManager
@@ -56,13 +56,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.openminis.app.R
-import com.openminis.app.browser.BrowserTabPool
-import com.openminis.app.browser.UserAgentProfile
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.browser.BrowserTabPool
+import com.leoyuan.leophoneagent.browser.UserAgentProfile
+import com.leoyuan.leophoneagent.logging.AppLogger
 import kotlinx.coroutines.launch
-import com.openminis.app.ui.components.MinisTextButton
-import com.openminis.app.ui.util.bringIntoViewOnFocus
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.ui.util.bringIntoViewOnFocus
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -340,7 +340,7 @@ fun BrowserSettingsSheet(
             Spacer(Modifier.height(8.dp))
 
             val hasCookies = CookieManager.getInstance().hasCookies()
-            val historyStore = remember { com.openminis.app.browser.BrowserHistoryStore.getInstance(context) }
+            val historyStore = remember { com.leoyuan.leophoneagent.browser.BrowserHistoryStore.getInstance(context) }
             val allDomains = remember(hasCookies) { historyStore.uniqueDomains() }
             val domains = remember(allDomains, cookieFilterText) {
                 if (cookieFilterText.isBlank()) allDomains

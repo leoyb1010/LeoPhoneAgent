@@ -93,7 +93,7 @@ struct ISHTerminalView: View {
             )
         }
         .background(Color.black)
-        .navigationTitle("Minis Shell")
+        .navigationTitle("LeoPhoneAgent Shell")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if showCloseButton {
@@ -163,7 +163,7 @@ struct ISHTerminalView: View {
         // `.dropFirst()` skips the broker's current value on first attach
         // so a stale URL from an earlier session isn't re-presented.
         .onReceive(MinisOpenURLBroker.shared.$pendingURL.dropFirst().compactMap { $0 }) { url in
-            // Only web schemes are routed here — minis:// resource
+            // Only web schemes are routed here — leophoneagent:// resource
             // previews need AIChatView's `handleMinisURLTap` and aren't
             // reachable from the standalone terminal. Consume either way
             // so the broker doesn't leak a stale pendingURL back to chat
@@ -408,7 +408,7 @@ class ISHTerminalViewModel: ObservableObject {
     /// Serial queue for sending input to the kernel TTY.
     /// tty_input() acquires a pthread mutex that can block when the kernel is busy,
     /// so we must never call it on the main thread.
-    private let inputQueue = DispatchQueue(label: "com.openminis.terminal.input")
+    private let inputQueue = DispatchQueue(label: "com.leoyuan.leophoneagent.terminal.input")
 
     func sendInput(_ data: Data) {
         let tEnq = TerminalRedrawLog.nowMs()

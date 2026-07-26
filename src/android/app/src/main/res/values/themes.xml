@@ -7,7 +7,7 @@
      skins is a light grey — visible as a 1-frame jog during nav
      transitions. -->
 <resources>
-    <style name="Theme.Minis" parent="android:Theme.Material.Light.NoActionBar">
+    <style name="Theme.LeoPhoneAgent" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@android:color/white</item>
         <item name="android:colorBackground">@android:color/white</item>
     </style>

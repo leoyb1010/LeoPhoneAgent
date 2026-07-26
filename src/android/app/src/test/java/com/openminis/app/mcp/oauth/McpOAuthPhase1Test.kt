@@ -1,4 +1,4 @@
-package com.openminis.app.mcp.oauth
+package com.leoyuan.leophoneagent.mcp.oauth
 
 import org.json.JSONObject
 import org.junit.Assert.assertEquals

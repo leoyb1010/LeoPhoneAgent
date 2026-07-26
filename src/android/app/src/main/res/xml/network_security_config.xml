@@ -2,7 +2,7 @@
 <network-security-config>
     <!-- T354: allow cleartext HTTP globally so user-configured provider
          endpoints (private/LAN LLM servers like http://192.168.x.x:port or
-         http://my-host:8080) work. Minis is a tool where the user supplies
+         http://my-host:8080) work. LeoPhoneAgent is a tool where the user supplies
          the endpoint — they own the trust decision. -->
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>

@@ -1,10 +1,10 @@
-package com.openminis.app.provider.gemini
+package com.leoyuan.leophoneagent.provider.gemini
 
 import android.content.Context
-import com.openminis.app.data.model.LLMModel
-import com.openminis.app.provider.ModelsDevApi
-import com.openminis.app.provider.ProviderModelsCache
-import com.openminis.app.provider.applyUserAgentOverride
+import com.leoyuan.leophoneagent.data.model.LLMModel
+import com.leoyuan.leophoneagent.provider.ModelsDevApi
+import com.leoyuan.leophoneagent.provider.ProviderModelsCache
+import com.leoyuan.leophoneagent.provider.applyUserAgentOverride
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient

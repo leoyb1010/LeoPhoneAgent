@@ -1,7 +1,7 @@
-package com.openminis.app.ui.sandbox
+package com.leoyuan.leophoneagent.ui.sandbox
 
-import com.openminis.app.R
-import com.openminis.app.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
 
 import android.text.format.Formatter
 import androidx.compose.foundation.background
@@ -53,8 +53,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.openminis.app.ui.components.SettingsRowDivider
-import com.openminis.app.ui.components.SettingsSection
+import com.leoyuan.leophoneagent.ui.components.SettingsRowDivider
+import com.leoyuan.leophoneagent.ui.components.SettingsSection
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

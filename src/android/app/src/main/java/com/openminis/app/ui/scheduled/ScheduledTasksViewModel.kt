@@ -1,11 +1,11 @@
-package com.openminis.app.ui.scheduled
+package com.leoyuan.leophoneagent.ui.scheduled
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.openminis.app.scheduled.ScheduledTask
-import com.openminis.app.scheduled.ScheduledTaskManager
+import com.leoyuan.leophoneagent.scheduled.ScheduledTask
+import com.leoyuan.leophoneagent.scheduled.ScheduledTaskManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -23,7 +23,7 @@ import kotlinx.coroutines.withContext
 class ScheduledTasksViewModel(private val appContext: Context) : ViewModel() {
 
     private val manager = ScheduledTaskManager(appContext)
-    private val app get() = appContext as com.openminis.app.MinisApp
+    private val app get() = appContext as com.leoyuan.leophoneagent.MinisApp
 
     /** Exposed for the editor's ModelPickerSheet — read-only access to the
      *  same ProviderRepository the chat screen uses. */
@@ -139,7 +139,7 @@ class ScheduledTasksViewModel(private val appContext: Context) : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             _runNowState.value = RunNowState(taskId = task.id, status = RunStatus.RUNNING)
             val sid = runCatching {
-                com.openminis.app.scheduled.ScheduledAgentRunner.run(
+                com.leoyuan.leophoneagent.scheduled.ScheduledAgentRunner.run(
                     appContext, task, waitForCompletion = false,
                 )
             }.getOrNull()

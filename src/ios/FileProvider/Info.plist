@@ -5,7 +5,7 @@
 	<key>NSExtension</key>
 	<dict>
 		<key>NSExtensionFileProviderDocumentGroup</key>
-		<string>group.com.openminis.app</string>
+		<string>group.com.leoyuan.leophoneagent</string>
 		<key>NSExtensionFileProviderSupportsEnumeration</key>
 		<true/>
 		<key>NSExtensionFileProviderSupportsTrash</key>

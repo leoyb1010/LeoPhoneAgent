@@ -47,10 +47,10 @@ final class WebViewHolder: NSObject, ObservableObject {
         config.websiteDataStore = .default()
         config.defaultWebpagePreferences.allowsContentJavaScript = true
         config.preferences.isElementFullscreenEnabled = true
-        config.setURLSchemeHandler(BrowserUseManager.sharedMinisSchemeHandler, forURLScheme: "minis")
+        config.setURLSchemeHandler(BrowserUseManager.sharedMinisSchemeHandler, forURLScheme: "leophoneagent")
 
         // Bridge JS window.print() to the native print dialog, matching
-        // BrowserUseManager so minis:// HTML opened from chat (which routes
+        // BrowserUseManager so leophoneagent:// HTML opened from chat (which routes
         // through this holder, not the agent browser) can print too.
         config.userContentController.addUserScript(BrowserUseManager.printBridgeScript())
 
@@ -264,7 +264,7 @@ struct WebPreviewMoreMenu: View {
     /// Inverse of `onExpand` — fullscreen preview wires it up to return to
     /// the sheet presentation. Sheet preview passes nil.
     var onCollapse: (() -> Void)? = nil
-    /// Only the minis:// HTML preview wires this up — it triggers the
+    /// Only the leophoneagent:// HTML preview wires this up — it triggers the
     /// existing `WebAppAddToHomeSheet` flow. http(s) previews pass nil so
     /// the entry is hidden (Safari shortcut sheets aren't reachable from
     /// inside our app anyway).

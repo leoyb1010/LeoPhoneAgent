@@ -1,7 +1,7 @@
-package com.openminis.app.agent
+package com.leoyuan.leophoneagent.agent
 
 import android.content.Context
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.logging.AppLogger
 import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -59,7 +59,7 @@ data class SoulMetadata(
         const val DISPLAY_EMOJI = "✨"
 
         val DEFAULT = SoulMetadata(
-            name = "Minis",
+            name = "LeoPhoneAgent",
             // Default emoji is intentionally empty — UI uses the fixed
             // [displayEmoji] sparkle and [SoulMDParser.serialize] no longer
             // writes the `emoji:` line. The field is kept on the struct only
@@ -286,7 +286,7 @@ object SoulStore {
      * `SoulStore.defaultContent` byte-for-byte (74c0daf).
      */
     val DEFAULT_CONTENT: String = """---
-name: "Minis"
+name: "LeoPhoneAgent"
 style: ""
 lang: "auto"
 ---
@@ -426,7 +426,7 @@ object SystemPromptBuilder {
      * append the user-authored personality body from SOUL.md.
      *
      * Two distinct trailing-whitespace contracts so the next concatenated
-     * sentence in [com.openminis.app.ui.chat.ChatViewModel.buildSystemPrompt]
+     * sentence in [com.leoyuan.leophoneagent.ui.chat.ChatViewModel.buildSystemPrompt]
      * glues correctly:
      *   - No personality body → identity sentence with its original
      *     single trailing space (byte-identical to the pre-SOUL prompt).
@@ -450,7 +450,7 @@ object SystemPromptBuilder {
         val file = SoulStore.load(context)
         val name = (file?.metadata?.name ?: SoulMetadata.DEFAULT.name)
             .trim()
-            .ifEmpty { "Minis" }
+            .ifEmpty { "LeoPhoneAgent" }
 
         val style = (file?.metadata?.style ?: "").trim()
 

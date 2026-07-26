@@ -1,4 +1,4 @@
-package com.openminis.app.provider.voice
+package com.leoyuan.leophoneagent.provider.voice
 
 import android.util.Base64
 import android.util.Log
@@ -225,7 +225,7 @@ open class VoiceProvider(
      * and must be the fallback. Model NAME is the signal — modality bits can't
      * distinguish a hand-annotated Whisper from a true audio chat model.
      */
-    open fun usesChatBasedASR(model: com.openminis.app.data.model.LLMModel): Boolean {
+    open fun usesChatBasedASR(model: com.leoyuan.leophoneagent.data.model.LLMModel): Boolean {
         val id = model.id.lowercase()
         if (id.contains("omni")) return true
         if (!id.contains("audio")) return false

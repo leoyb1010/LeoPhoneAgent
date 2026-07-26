@@ -1,9 +1,9 @@
-package com.openminis.app.data.repository
+package com.leoyuan.leophoneagent.data.repository
 
 import android.database.sqlite.SQLiteBlobTooBigException
-import com.openminis.app.data.db.ChatDao
-import com.openminis.app.data.db.ChatSessionEntity
-import com.openminis.app.data.db.MessageEntity
+import com.leoyuan.leophoneagent.data.db.ChatDao
+import com.leoyuan.leophoneagent.data.db.ChatSessionEntity
+import com.leoyuan.leophoneagent.data.db.MessageEntity
 import kotlinx.coroutines.flow.Flow
 import java.util.UUID
 
@@ -65,7 +65,7 @@ class ChatRepository(internal val dao: ChatDao) {
      *     fired), OR the single synthetic "Continue" reminder text part, OR
      *   - role ASSISTANT + any tool_use part (model asked for tools that never ran)
      * Part type discriminator is the JSON "type" field — the @SerialName values
-     * from [com.openminis.app.data.model.ContentPart]: "toolUse" / "toolResult"
+     * from [com.leoyuan.leophoneagent.data.model.ContentPart]: "toolUse" / "toolResult"
      * / "text" (camelCase, NOT snake_case); text payload is the "value" field.
      */
     private fun isInterruptedTail(role: String, partsJson: String): Boolean {
@@ -140,7 +140,7 @@ class ChatRepository(internal val dao: ChatDao) {
         // from a foreground retry or a Flow collector before the safe-mode
         // dialog is dismissed. Returning an empty list mirrors the "no rows
         // for this session" branch and is harmless for every caller.
-        if (com.openminis.app.crash.CrashFrequencyDetector.isSafeMode()) {
+        if (com.leoyuan.leophoneagent.crash.CrashFrequencyDetector.isSafeMode()) {
             android.util.Log.w(
                 "ChatRepository",
                 "loadMessages: safe-mode active, skipping (sessionId=$sessionId)",
@@ -200,7 +200,7 @@ class ChatRepository(internal val dao: ChatDao) {
 
     /**
      * Rewrite a single message row's parts_json in place. Used by
-     * [com.openminis.app.ui.chat.ChatViewModel.rerunFromToolBlock]'s block-
+     * [com.leoyuan.leophoneagent.ui.chat.ChatViewModel.rerunFromToolBlock]'s block-
      * boundary cut to trim the kept assistant row to the parts before the
      * target tool_use. Mirrors iOS ChatStore.updateMessageParts.
      */
@@ -578,7 +578,7 @@ class ChatRepository(internal val dao: ChatDao) {
     suspend fun messageCount(sessionId: String): Int = dao.messageCountForSession(sessionId)
 
     /**
-     * Paginated raw [MessageEntity] page — used by [com.openminis.app.share.ChatExporter]
+     * Paginated raw [MessageEntity] page — used by [com.leoyuan.leophoneagent.share.ChatExporter]
      * to stream-export long sessions without loading every message into
      * memory. Unlike [loadMessagePage] this does not strip / project the
      * row; the exporter needs the full `parts_json` payload to serialize.

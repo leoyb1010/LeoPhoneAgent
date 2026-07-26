@@ -1,6 +1,6 @@
-# Building Minis
+# Building LeoPhoneAgent
 
-Minis ships a full Linux sandbox inside the app, so a first build is not just
+LeoPhoneAgent ships a full Linux sandbox inside the app, so a first build is not just
 "open the project and press Run": the native dependencies (iSH on iOS, PRoot on
 Android, FFmpeg, LAME) and the Alpine rootfs are **built from source by the
 scripts in `deps/`**, not committed as binaries. Budget ~30–60 minutes for the
@@ -18,8 +18,8 @@ Clone with submodules — the iSH and PRoot forks are submodules, and a clone
 without them will fail at the native build step:
 
 ```sh
-git clone --recurse-submodules https://github.com/OpenMinis/OpenMinis.git
-cd OpenMinis
+git clone --recurse-submodules https://github.com/leoyb1010/LeoPhoneAgent.git
+cd LeoPhoneAgent
 
 # Already cloned without --recurse-submodules?
 git submodule update --init --recursive
@@ -77,8 +77,8 @@ without setting this.
 |---|---|
 | macOS | Apple Silicon strongly recommended (see the simulator note below) |
 | Xcode | With the iOS SDK; the project targets **iOS 26.2** and **Swift 6.0** |
-| Homebrew packages | `brew install ninja llvm libarchive pkg-config` |
-| Python 3 + Meson | `pip3 install meson` |
+| Homebrew packages | `brew install ninja llvm lld libarchive pkg-config meson` |
+| Python 3 | Included with current macOS/Xcode or install through Homebrew |
 
 `llvm` is needed to compile the guest VDSO, `libarchive` to unpack the rootfs,
 and Meson/Ninja to build the iSH kernel.
@@ -113,17 +113,18 @@ by hand.
 ### 2. Build the app
 
 ```sh
-open src/ios/Minis.xcodeproj
+open src/ios/LeoPhoneAgent.xcodeproj
 ```
 
-Select the **Minis** scheme and build. For a device build, set your own team
-under *Signing & Capabilities* — the project ships with an empty
-`DEVELOPMENT_TEAM`.
+Select the **LeoPhoneAgent** scheme and build. The 1.0 project is configured for
+team `54UB8X9C5F`; sign into that Apple developer account in Xcode → Settings →
+Accounts before requesting automatic provisioning. Change the team and bundle
+identifiers if you are building under another account.
 
 From the command line:
 
 ```sh
-xcodebuild -project src/ios/Minis.xcodeproj -scheme Minis \
+xcodebuild -project src/ios/LeoPhoneAgent.xcodeproj -scheme LeoPhoneAgent \
            -configuration Debug -destination 'generic/platform=iOS' \
            CODE_SIGNING_ALLOWED=NO build
 ```
@@ -136,7 +137,7 @@ xcodebuild -project src/ios/Minis.xcodeproj -scheme Minis \
 
 ### Targets
 
-`Minis` (app), `MinisShare` (share extension), `AgentWidgetExtension`,
+`LeoPhoneAgent` (app), `MinisShare` (share extension), `AgentWidgetExtension`,
 `MinisFileProvider`, plus `MinisTests` / `MinisUITests`.
 
 ---
@@ -229,7 +230,7 @@ from the customization file; see [Build-time customization](#build-time-customiz
 
 ## Licensing note
 
-Minis is **GPLv3** because it links iSH (GPLv3) and PRoot (GPLv2). If you
+LeoPhoneAgent is **GPLv3** because it links iSH (GPLv3) and PRoot (GPLv2). If you
 change how the native dependencies are built, keep FFmpeg on its LGPL
 configuration and preserve the vendored `LICENSE` files. See
 [LICENSE](LICENSE) and [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).

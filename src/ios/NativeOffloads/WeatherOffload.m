@@ -16,7 +16,7 @@
 #import <Foundation/Foundation.h>
 #import <CoreLocation/CoreLocation.h>
 #import "NativeOffloadUtils.h"
-#import "Minis-Swift.h"
+#import "LeoPhoneAgent-Swift.h"
 #include "kernel/native_offload.h"
 #include <unistd.h>
 
@@ -107,7 +107,7 @@ static CLLocation *get_location_sync(int argc, char **argv) {
                                userInfo:@{NSLocalizedDescriptionKey:
                                    @"Location access denied. To grant access, open "
                                     "Settings > Privacy & Security > Location Services "
-                                    "and enable Minis."}];
+                                    "and enable LeoPhoneAgent."}];
             dispatch_semaphore_signal(delegate.semaphore);
         }
     });

@@ -1,8 +1,8 @@
-package com.openminis.app.offload
+package com.leoyuan.leophoneagent.offload
 
 import android.media.MediaPlayer
 import android.util.Log
-import com.openminis.app.sandbox.PRootKernel
+import com.leoyuan.leophoneagent.sandbox.PRootKernel
 import java.io.File
 
 /**

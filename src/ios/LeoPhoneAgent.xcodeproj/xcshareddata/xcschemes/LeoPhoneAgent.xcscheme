@@ -16,9 +16,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "E51000040"
-               BuildableName = "Minis.app"
-               BlueprintName = "Minis"
-               ReferencedContainer = "container:Minis.xcodeproj">
+               BuildableName = "LeoPhoneAgent.app"
+               BlueprintName = "LeoPhoneAgent"
+               ReferencedContainer = "container:LeoPhoneAgent.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -38,7 +38,7 @@
                BlueprintIdentifier = "BB1000070F700000000000AA"
                BuildableName = "MinisTests.xctest"
                BlueprintName = "MinisTests"
-               ReferencedContainer = "container:Minis.xcodeproj">
+               ReferencedContainer = "container:LeoPhoneAgent.xcodeproj">
             </BuildableReference>
          </TestableReference>
          <TestableReference
@@ -49,7 +49,7 @@
                BlueprintIdentifier = "AA8A568A2F6FBB7A00A3E54E"
                BuildableName = "MinisUITests.xctest"
                BlueprintName = "MinisUITests"
-               ReferencedContainer = "container:Minis.xcodeproj">
+               ReferencedContainer = "container:LeoPhoneAgent.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -70,9 +70,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "E51000040"
-            BuildableName = "Minis.app"
-            BlueprintName = "Minis"
-            ReferencedContainer = "container:Minis.xcodeproj">
+            BuildableName = "LeoPhoneAgent.app"
+            BlueprintName = "LeoPhoneAgent"
+            ReferencedContainer = "container:LeoPhoneAgent.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
       <AdditionalOptions>
@@ -99,9 +99,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "E51000040"
-            BuildableName = "Minis.app"
-            BlueprintName = "Minis"
-            ReferencedContainer = "container:Minis.xcodeproj">
+            BuildableName = "LeoPhoneAgent.app"
+            BlueprintName = "LeoPhoneAgent"
+            ReferencedContainer = "container:LeoPhoneAgent.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

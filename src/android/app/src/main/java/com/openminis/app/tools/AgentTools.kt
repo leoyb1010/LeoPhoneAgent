@@ -1,8 +1,8 @@
-package com.openminis.app.tools
+package com.leoyuan.leophoneagent.tools
 
-import com.openminis.app.browser.BrowserAction
-import com.openminis.app.data.model.AgentToolDefinition
-import com.openminis.app.data.model.AgentToolParam
+import com.leoyuan.leophoneagent.browser.BrowserAction
+import com.leoyuan.leophoneagent.data.model.AgentToolDefinition
+import com.leoyuan.leophoneagent.data.model.AgentToolParam
 
 /**
  * Central registry of all agent tool definitions.
@@ -56,15 +56,15 @@ object AgentTools {
     private fun browserUseDefinition(): AgentToolDefinition = AgentToolDefinition(
         name = "browser_use",
         description = "Control a web browser with up to 3 tabs. " +
-            "Do NOT use this tool for minis:// action URLs (open_terminal, views, settings) — those are app deep links, use Markdown links in chat instead. " +
-            "The browser supports both web URLs and minis:// resource URLs. Use minis:// URLs to preview session files (e.g. navigate to minis://workspace/index.html). " +
-            "Sub-resources (JS, CSS, images, fonts) referenced via minis:// absolute paths or relative paths within HTML pages resolve correctly. " +
+            "Do NOT use this tool for leophoneagent:// action URLs (open_terminal, views, settings) — those are app deep links, use Markdown links in chat instead. " +
+            "The browser supports both web URLs and leophoneagent:// resource URLs. Use leophoneagent:// URLs to preview session files (e.g. navigate to leophoneagent://workspace/index.html). " +
+            "Sub-resources (JS, CSS, images, fonts) referenced via leophoneagent:// absolute paths or relative paths within HTML pages resolve correctly. " +
             "Use navigate to open URLs, screenshot to see the page (returns an image), " +
             "click/type to interact with elements, get_text/get_readable to extract content, " +
             "scroll to navigate long pages, scroll_and_collect to scroll through infinite-scroll/virtual-rendered pages (like Twitter/X timelines) and accumulate unique content items across scroll positions in a single call, " +
             "find_elements to discover interactive elements, " +
             "get_page_info for page metadata, get_backbone to get a structural overview of the page DOM as a simplified tree, " +
-            "fetch to download files/resources using the page's session (returns metadata and a minis:// URL), " +
+            "fetch to download files/resources using the page's session (returns metadata and a leophoneagent:// URL), " +
             "new_tab to open an additional tab, close_tab to close a tab, and list_tabs to see all open tabs. " +
             "Use set_viewport with viewport_width + viewport_height to override the viewport for the current session (e.g. before screenshotting a 1920×1080 HTML composition that would otherwise be cropped to the phone viewport); pass reset=true to drop the session override and fall back to the global browser setting. " +
             "Use get_cookies to retrieve cookies for the current page URL / current site root domain only (including HttpOnly cookies). get_cookies supports optional 'keywords' (filter by cookie name) and 'fuzzy' (true=contains match, false=exact match, default true). It returns only a summary and an offload env file path — raw cookie values are NOT included in the tool response. To reuse cookies in shell commands: `. /var/minis/offloads/env_cookies_xxx.sh && command`. You may define alias variables when needed. " +

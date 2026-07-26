@@ -1,4 +1,4 @@
-package com.openminis.app.mcp.oauth
+package com.leoyuan.leophoneagent.mcp.oauth
 
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

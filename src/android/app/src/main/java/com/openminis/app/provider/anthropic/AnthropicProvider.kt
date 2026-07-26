@@ -1,20 +1,20 @@
-package com.openminis.app.provider.anthropic
+package com.leoyuan.leophoneagent.provider.anthropic
 
 import android.util.Base64
-import com.openminis.app.data.model.AgentContentPart
-import com.openminis.app.data.model.AgentToolDefinition
-import com.openminis.app.data.model.sanitizeToolId
-import com.openminis.app.data.model.LLMError
-import com.openminis.app.data.model.LLMMessage
-import com.openminis.app.data.model.LLMModel
-import com.openminis.app.data.model.LLMResponse
-import com.openminis.app.data.model.LLMStreamChunk
-import com.openminis.app.data.model.LLMUsage
-import com.openminis.app.data.model.ThinkingLevel
-import com.openminis.app.provider.ImageBudget
-import com.openminis.app.provider.LLMProvider
-import com.openminis.app.provider.applyUserAgentOverride
-import com.openminis.app.provider.safeOptString
+import com.leoyuan.leophoneagent.data.model.AgentContentPart
+import com.leoyuan.leophoneagent.data.model.AgentToolDefinition
+import com.leoyuan.leophoneagent.data.model.sanitizeToolId
+import com.leoyuan.leophoneagent.data.model.LLMError
+import com.leoyuan.leophoneagent.data.model.LLMMessage
+import com.leoyuan.leophoneagent.data.model.LLMModel
+import com.leoyuan.leophoneagent.data.model.LLMResponse
+import com.leoyuan.leophoneagent.data.model.LLMStreamChunk
+import com.leoyuan.leophoneagent.data.model.LLMUsage
+import com.leoyuan.leophoneagent.data.model.ThinkingLevel
+import com.leoyuan.leophoneagent.provider.ImageBudget
+import com.leoyuan.leophoneagent.provider.LLMProvider
+import com.leoyuan.leophoneagent.provider.applyUserAgentOverride
+import com.leoyuan.leophoneagent.provider.safeOptString
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.awaitClose
@@ -30,7 +30,7 @@ import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.util.concurrent.TimeUnit
-import com.openminis.app.provider.failOnSilentEmptyCompletion
+import com.leoyuan.leophoneagent.provider.failOnSilentEmptyCompletion
 
 class AnthropicProvider(
     private val apiKey: String,
@@ -78,7 +78,7 @@ class AnthropicProvider(
         .writeTimeout(30, TimeUnit.SECONDS)
         // [T-android-stale-conn-retry-hang] Shared pool — see NetworkMonitor.
         // Network-transition eviction must reach provider connections.
-        .connectionPool(com.openminis.app.network.NetworkMonitor.sharedLLMConnectionPool)
+        .connectionPool(com.leoyuan.leophoneagent.network.NetworkMonitor.sharedLLMConnectionPool)
         .build()
 
     override suspend fun sendMessageClamped(
@@ -150,9 +150,9 @@ class AnthropicProvider(
             // see OpenAIProvider for the full rationale (release users never
             // reach debug.llmRequests, so retaining multi-MB request bodies
             // there is pure OOM risk for zero benefit).
-            if (com.openminis.app.BuildConfig.DEBUG) {
-                com.openminis.app.debug.LLMRequestLog.add(
-                    com.openminis.app.debug.LLMRequestLog.Entry(
+            if (com.leoyuan.leophoneagent.BuildConfig.DEBUG) {
+                com.leoyuan.leophoneagent.debug.LLMRequestLog.add(
+                    com.leoyuan.leophoneagent.debug.LLMRequestLog.Entry(
                         provider = "anthropic",
                         requestURL = request.url.toString(),
                         requestHeaders = headerMap,
@@ -168,9 +168,9 @@ class AnthropicProvider(
         }
 
         // Log successful request (debug builds only — see above)
-        if (com.openminis.app.BuildConfig.DEBUG) {
-            com.openminis.app.debug.LLMRequestLog.add(
-                com.openminis.app.debug.LLMRequestLog.Entry(
+        if (com.leoyuan.leophoneagent.BuildConfig.DEBUG) {
+            com.leoyuan.leophoneagent.debug.LLMRequestLog.add(
+                com.leoyuan.leophoneagent.debug.LLMRequestLog.Entry(
                     provider = "anthropic",
                     requestURL = request.url.toString(),
                     requestHeaders = headerMap,
@@ -285,7 +285,7 @@ class AnthropicProvider(
      *   Returns null when the prompt is null/empty (iOS parity — no empty `system` field).
      */
     internal fun resolveSystemPrompt(userPrompt: String?): JSONArray? {
-        val claudeCodePrefix = com.openminis.app.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
+        val claudeCodePrefix = com.leoyuan.leophoneagent.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
         if (isOAuth) {
             // Strip the prefix if the caller already prepended it; the tail is the real user prompt.
             val tail = when {
@@ -967,7 +967,7 @@ class AnthropicProvider(
 
         // [T-provider-custom-user-agent] Applied last so a non-blank override
         // wins over the OAuth claude-cli UA above. null/blank → fall back to
-        // the branded Minis UA on the regular apiKey path, but on the OAuth
+        // the branded LeoPhoneAgent UA on the regular apiKey path, but on the OAuth
         // path keep the claude-cli/2.1.195 fingerprint set at line ~779 (the
         // Anthropic OAuth backend pairs UA + X-Stainless-* and rejects calls
         // whose UA doesn't match the registered client identity). T-android-
@@ -975,7 +975,7 @@ class AnthropicProvider(
         // everywhere else.
         builder.applyUserAgentOverride(
             customUserAgent,
-            defaultUserAgent = if (isOAuth) null else com.openminis.app.provider.MinisUserAgent.DEFAULT,
+            defaultUserAgent = if (isOAuth) null else com.leoyuan.leophoneagent.provider.MinisUserAgent.DEFAULT,
         )
         return builder.build()
     }

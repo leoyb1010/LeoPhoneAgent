@@ -742,7 +742,7 @@
       }
     },
     "%@ is thinking" : {
-      "comment" : "Streaming indicator shown while the assistant is composing a reply. {name} is the Soul-customized assistant name (default 'Minis').",
+      "comment" : "Streaming indicator shown while the assistant is composing a reply. {name} is the Soul-customized assistant name (default 'LeoPhoneAgent').",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -2933,7 +2933,7 @@
         }
       }
     },
-    "1. Open the verification page\n2. Enter this code to authorize Minis" : {
+    "1. Open the verification page\n2. Enter this code to authorize LeoPhoneAgent" : {
 
     },
     "4 MB" : {
@@ -3348,54 +3348,54 @@
         }
       }
     },
-    "A Shortcut sent to Minis may not have finished. Open the session to check." : {
+    "A Shortcut sent to LeoPhoneAgent may not have finished. Open the session to check." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ein an Minis gesendeter Kurzbefehl wurde möglicherweise nicht abgeschlossen. Öffne die Sitzung, um dies zu prüfen."
+            "value" : "Ein an LeoPhoneAgent gesendeter Kurzbefehl wurde möglicherweise nicht abgeschlossen. Öffne die Sitzung, um dies zu prüfen."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "A Shortcut sent to Minis may not have finished. Open the session to check."
+            "value" : "A Shortcut sent to LeoPhoneAgent may not have finished. Open the session to check."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Un raccourci envoyé à Minis n’est peut-être pas terminé. Ouvre la session pour vérifier."
+            "value" : "Un raccourci envoyé à LeoPhoneAgent n’est peut-être pas terminé. Ouvre la session pour vérifier."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis に送信されたショートカットが完了していない可能性があります。セッションを開いて確認してください。"
+            "value" : "LeoPhoneAgent に送信されたショートカットが完了していない可能性があります。セッションを開いて確認してください。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis로 보낸 단축어가 완료되지 않았을 수 있습니다. 세션을 열어 확인하세요."
+            "value" : "LeoPhoneAgent로 보낸 단축어가 완료되지 않았을 수 있습니다. 세션을 열어 확인하세요."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Быстрая команда, отправленная в Minis, возможно, не завершилась. Откройте сессию, чтобы проверить."
+            "value" : "Быстрая команда, отправленная в LeoPhoneAgent, возможно, не завершилась. Откройте сессию, чтобы проверить."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "发送给 Minis 的快捷指令可能尚未完成。请打开会话查看。"
+            "value" : "发送给 LeoPhoneAgent 的快捷指令可能尚未完成。请打开会话查看。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "傳送給 Minis 的捷徑可能尚未完成。請開啟工作階段查看。"
+            "value" : "傳送給 LeoPhoneAgent 的捷徑可能尚未完成。請開啟工作階段查看。"
           }
         }
       }
@@ -3573,54 +3573,54 @@
         }
       }
     },
-    "About Minis" : {
+    "About LeoPhoneAgent" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Über Minis"
+            "value" : "Über LeoPhoneAgent"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "About Minis"
+            "value" : "About LeoPhoneAgent"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "À propos de Minis"
+            "value" : "À propos de LeoPhoneAgent"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis について"
+            "value" : "LeoPhoneAgent について"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 정보"
+            "value" : "LeoPhoneAgent 정보"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "О Minis"
+            "value" : "О LeoPhoneAgent"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "关于 Minis"
+            "value" : "关于 LeoPhoneAgent"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "關於 Minis"
+            "value" : "關於 LeoPhoneAgent"
           }
         }
       }
@@ -5699,54 +5699,54 @@
         }
       }
     },
-    "All Minis data has been removed from iCloud. This device is now re-uploading its local content to a fresh iCloud zone." : {
+    "All LeoPhoneAgent data has been removed from iCloud. This device is now re-uploading its local content to a fresh iCloud zone." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alle Minis-Daten wurden aus iCloud entfernt. Dieses Gerät lädt jetzt seinen lokalen Inhalt in eine neue iCloud-Zone hoch."
+            "value" : "Alle LeoPhoneAgent-Daten wurden aus iCloud entfernt. Dieses Gerät lädt jetzt seinen lokalen Inhalt in eine neue iCloud-Zone hoch."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "All Minis data has been removed from iCloud. This device is now re-uploading its local content to a fresh iCloud zone."
+            "value" : "All LeoPhoneAgent data has been removed from iCloud. This device is now re-uploading its local content to a fresh iCloud zone."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Toutes les données Minis ont été supprimées d'iCloud. Cet appareil téléverse maintenant son contenu local dans une nouvelle zone iCloud."
+            "value" : "Toutes les données LeoPhoneAgent ont été supprimées d'iCloud. Cet appareil téléverse maintenant son contenu local dans une nouvelle zone iCloud."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "すべての Minis データを iCloud から削除しました。このデバイスは、ローカルのコンテンツを新しい iCloud ゾーンに再アップロードしています。"
+            "value" : "すべての LeoPhoneAgent データを iCloud から削除しました。このデバイスは、ローカルのコンテンツを新しい iCloud ゾーンに再アップロードしています。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "모든 Minis 데이터가 iCloud에서 제거되었습니다. 이 기기는 이제 로컬 콘텐츠를 새로운 iCloud 영역에 다시 업로드하고 있습니다."
+            "value" : "모든 LeoPhoneAgent 데이터가 iCloud에서 제거되었습니다. 이 기기는 이제 로컬 콘텐츠를 새로운 iCloud 영역에 다시 업로드하고 있습니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Все данные Minis удалены из iCloud. Это устройство сейчас повторно загружает своё локальное содержимое в новую зону iCloud."
+            "value" : "Все данные LeoPhoneAgent удалены из iCloud. Это устройство сейчас повторно загружает своё локальное содержимое в новую зону iCloud."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "所有 Minis 数据已从 iCloud 中移除。本设备正在将其本地内容重新上传到新的 iCloud 区域。"
+            "value" : "所有 LeoPhoneAgent 数据已从 iCloud 中移除。本设备正在将其本地内容重新上传到新的 iCloud 区域。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "所有 Minis 數據已從 iCloud 中移除。本設備正在將其本地內容重新上傳到新的 iCloud 區域。"
+            "value" : "所有 LeoPhoneAgent 數據已從 iCloud 中移除。本設備正在將其本地內容重新上傳到新的 iCloud 區域。"
           }
         }
       }
@@ -7497,54 +7497,54 @@
         }
       }
     },
-    "Ask Minis" : {
+    "Ask LeoPhoneAgent" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis fragen"
+            "value" : "LeoPhoneAgent fragen"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ask Minis"
+            "value" : "Ask LeoPhoneAgent"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Demander à Minis"
+            "value" : "Demander à LeoPhoneAgent"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis に聞く"
+            "value" : "LeoPhoneAgent に聞く"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis에게 묻기"
+            "value" : "LeoPhoneAgent에게 묻기"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Спросить Minis"
+            "value" : "Спросить LeoPhoneAgent"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "询问 Minis"
+            "value" : "询问 LeoPhoneAgent"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "詢問 Minis"
+            "value" : "詢問 LeoPhoneAgent"
           }
         }
       }
@@ -13212,54 +13212,54 @@
         }
       }
     },
-    "Clearing cookies will sign you out of all websites in the Minis browser." : {
+    "Clearing cookies will sign you out of all websites in the LeoPhoneAgent browser." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Das Löschen der Cookies meldet Sie von allen Websites im Minis-Browser ab."
+            "value" : "Das Löschen der Cookies meldet Sie von allen Websites im LeoPhoneAgent-Browser ab."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Clearing cookies will sign you out of all websites in the Minis browser."
+            "value" : "Clearing cookies will sign you out of all websites in the LeoPhoneAgent browser."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "La suppression des cookies vous déconnectera de tous les sites dans le navigateur Minis."
+            "value" : "La suppression des cookies vous déconnectera de tous les sites dans le navigateur LeoPhoneAgent."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cookie をクリアすると、Minis ブラウザのすべてのウェブサイトからログアウトされます。"
+            "value" : "Cookie をクリアすると、LeoPhoneAgent ブラウザのすべてのウェブサイトからログアウトされます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "쿠키를 지우면 Minis 브라우저의 모든 웹사이트에서 로그아웃됩니다."
+            "value" : "쿠키를 지우면 LeoPhoneAgent 브라우저의 모든 웹사이트에서 로그아웃됩니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Удаление файлов cookie приведёт к выходу из всех сайтов в браузере Minis."
+            "value" : "Удаление файлов cookie приведёт к выходу из всех сайтов в браузере LeoPhoneAgent."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "清除 Cookie 将退出 Minis 浏览器中所有网站的登录。"
+            "value" : "清除 Cookie 将退出 LeoPhoneAgent 浏览器中所有网站的登录。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "清除 Cookie 將退出 Minis 瀏覽器中所有網站的登錄。"
+            "value" : "清除 Cookie 將退出 LeoPhoneAgent 瀏覽器中所有網站的登錄。"
           }
         }
       }
@@ -13430,54 +13430,54 @@
         }
       }
     },
-    "CloudKit built-in zone. Not used by Minis." : {
+    "CloudKit built-in zone. Not used by LeoPhoneAgent." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Integrierte CloudKit-Zone. Wird von Minis nicht verwendet."
+            "value" : "Integrierte CloudKit-Zone. Wird von LeoPhoneAgent nicht verwendet."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "CloudKit built-in zone. Not used by Minis."
+            "value" : "CloudKit built-in zone. Not used by LeoPhoneAgent."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Zone intégrée CloudKit. Non utilisée par Minis."
+            "value" : "Zone intégrée CloudKit. Non utilisée par LeoPhoneAgent."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "CloudKit の組み込みゾーン。Minis では使用されません。"
+            "value" : "CloudKit の組み込みゾーン。LeoPhoneAgent では使用されません。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "CloudKit 기본 제공 영역. Minis에서 사용하지 않음."
+            "value" : "CloudKit 기본 제공 영역. LeoPhoneAgent에서 사용하지 않음."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Встроенная зона CloudKit. Minis не использует."
+            "value" : "Встроенная зона CloudKit. LeoPhoneAgent не использует."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "CloudKit 内置区域。Minis 未使用。"
+            "value" : "CloudKit 内置区域。LeoPhoneAgent 未使用。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "CloudKit 內建區域。Minis 未使用。"
+            "value" : "CloudKit 內建區域。LeoPhoneAgent 未使用。"
           }
         }
       }
@@ -23768,54 +23768,54 @@
         }
       }
     },
-    "Every zone Minis has created in your iCloud private database. **V2** holds the current sync engine's data; **V1** holds legacy per-device backups from older builds. Deleting a zone is permanent and removes everything inside (records + assets). Use this to reclaim space after migration completes." : {
+    "Every zone LeoPhoneAgent has created in your iCloud private database. **V2** holds the current sync engine's data; **V1** holds legacy per-device backups from older builds. Deleting a zone is permanent and removes everything inside (records + assets). Use this to reclaim space after migration completes." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Jede Zone, die Minis in deiner privaten iCloud-Datenbank erstellt hat. **V2** enthält die Daten der aktuellen Sync-Engine; **V1** enthält ältere gerätebezogene Backups aus früheren Builds. Das Löschen einer Zone ist endgültig und entfernt alles darin (Datensätze + Assets). Nutze dies, um nach Abschluss der Migration Speicher freizugeben."
+            "value" : "Jede Zone, die LeoPhoneAgent in deiner privaten iCloud-Datenbank erstellt hat. **V2** enthält die Daten der aktuellen Sync-Engine; **V1** enthält ältere gerätebezogene Backups aus früheren Builds. Das Löschen einer Zone ist endgültig und entfernt alles darin (Datensätze + Assets). Nutze dies, um nach Abschluss der Migration Speicher freizugeben."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Every zone Minis has created in your iCloud private database. **V2** holds the current sync engine's data; **V1** holds legacy per-device backups from older builds. Deleting a zone is permanent and removes everything inside (records + assets). Use this to reclaim space after migration completes."
+            "value" : "Every zone LeoPhoneAgent has created in your iCloud private database. **V2** holds the current sync engine's data; **V1** holds legacy per-device backups from older builds. Deleting a zone is permanent and removes everything inside (records + assets). Use this to reclaim space after migration completes."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Chaque zone créée par Minis dans ta base de données privée iCloud. **V2** contient les données du moteur de synchronisation actuel ; **V1** contient les anciennes sauvegardes par appareil des versions antérieures. La suppression d’une zone est définitive et supprime tout ce qu’elle contient (enregistrements + ressources). Utilise ceci pour récupérer de l’espace une fois la migration terminée."
+            "value" : "Chaque zone créée par LeoPhoneAgent dans ta base de données privée iCloud. **V2** contient les données du moteur de synchronisation actuel ; **V1** contient les anciennes sauvegardes par appareil des versions antérieures. La suppression d’une zone est définitive et supprime tout ce qu’elle contient (enregistrements + ressources). Utilise ceci pour récupérer de l’espace une fois la migration terminée."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis が iCloud プライベートデータベースに作成したすべてのゾーン。**V2** は現在の同期エンジンのデータを保持し、**V1** は古いビルドのデバイスごとのレガシーバックアップを保持します。ゾーンの削除は取り消せず、その中のすべて（レコード + アセット）が削除されます。移行完了後に容量を取り戻すために使用します。"
+            "value" : "LeoPhoneAgent が iCloud プライベートデータベースに作成したすべてのゾーン。**V2** は現在の同期エンジンのデータを保持し、**V1** は古いビルドのデバイスごとのレガシーバックアップを保持します。ゾーンの削除は取り消せず、その中のすべて（レコード + アセット）が削除されます。移行完了後に容量を取り戻すために使用します。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis가 iCloud 개인 데이터베이스에 만든 모든 영역입니다. **V2**는 현재 동기화 엔진의 데이터를, **V1**은 이전 빌드의 기기별 레거시 백업을 담고 있습니다. 영역 삭제는 영구적이며 내부의 모든 것(레코드 + 자산)을 제거합니다. 마이그레이션 완료 후 공간을 확보하는 데 사용하세요."
+            "value" : "LeoPhoneAgent가 iCloud 개인 데이터베이스에 만든 모든 영역입니다. **V2**는 현재 동기화 엔진의 데이터를, **V1**은 이전 빌드의 기기별 레거시 백업을 담고 있습니다. 영역 삭제는 영구적이며 내부의 모든 것(레코드 + 자산)을 제거합니다. 마이그레이션 완료 후 공간을 확보하는 데 사용하세요."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Каждая зона, созданная Minis в вашей приватной базе данных iCloud. **V2** содержит данные текущего движка синхронизации; **V1** содержит устаревшие резервные копии по устройствам из старых сборок. Удаление зоны необратимо и удаляет всё внутри (записи + объекты). Используйте это, чтобы освободить место после завершения миграции."
+            "value" : "Каждая зона, созданная LeoPhoneAgent в вашей приватной базе данных iCloud. **V2** содержит данные текущего движка синхронизации; **V1** содержит устаревшие резервные копии по устройствам из старых сборок. Удаление зоны необратимо и удаляет всё внутри (записи + объекты). Используйте это, чтобы освободить место после завершения миграции."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 在你的 iCloud 私有数据库中创建的所有区域。**V2** 保存当前同步引擎的数据；**V1** 保存旧版本按设备的遗留备份。删除区域是永久操作，会移除其中的所有内容（记录 + 资源）。可在迁移完成后用它来释放空间。"
+            "value" : "LeoPhoneAgent 在你的 iCloud 私有数据库中创建的所有区域。**V2** 保存当前同步引擎的数据；**V1** 保存旧版本按设备的遗留备份。删除区域是永久操作，会移除其中的所有内容（记录 + 资源）。可在迁移完成后用它来释放空间。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 在你的 iCloud 私人資料庫中建立的所有區域。**V2** 保存目前同步引擎的資料；**V1** 保存舊版本按裝置的舊備份。刪除區域是永久操作，會移除其中的所有內容（記錄 + 資源）。可在遷移完成後用它來釋放空間。"
+            "value" : "LeoPhoneAgent 在你的 iCloud 私人資料庫中建立的所有區域。**V2** 保存目前同步引擎的資料；**V1** 保存舊版本按裝置的舊備份。刪除區域是永久操作，會移除其中的所有內容（記錄 + 資源）。可在遷移完成後用它來釋放空間。"
           }
         }
       }
@@ -27200,19 +27200,19 @@
         }
       }
     },
-    "Friendly name shown to your other Minis devices." : {
+    "Friendly name shown to your other LeoPhoneAgent devices." : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Friendly name shown to your other Minis devices."
+            "value" : "Friendly name shown to your other LeoPhoneAgent devices."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在你其他 Minis 设备上显示的友好名称。"
+            "value" : "在你其他 LeoPhoneAgent 设备上显示的友好名称。"
           }
         }
       }
@@ -27480,54 +27480,54 @@
         }
       }
     },
-    "Gets the current status of a Minis session, including whether the agent is still running, the latest message, and last tool call." : {
+    "Gets the current status of a LeoPhoneAgent session, including whether the agent is still running, the latest message, and last tool call." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ruft den aktuellen Status einer Minis-Sitzung ab, einschließlich ob der Agent noch läuft, die letzte Nachricht und den letzten Tool-Aufruf."
+            "value" : "Ruft den aktuellen Status einer LeoPhoneAgent-Sitzung ab, einschließlich ob der Agent noch läuft, die letzte Nachricht und den letzten Tool-Aufruf."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Gets the current status of a Minis session, including whether the agent is still running, the latest message, and last tool call."
+            "value" : "Gets the current status of a LeoPhoneAgent session, including whether the agent is still running, the latest message, and last tool call."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Obtient l'état actuel d'une session Minis, y compris si l'agent est encore en cours d'exécution, le dernier message et le dernier appel d'outil."
+            "value" : "Obtient l'état actuel d'une session LeoPhoneAgent, y compris si l'agent est encore en cours d'exécution, le dernier message et le dernier appel d'outil."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis セッションの現在の状態を取得します。エージェントがまだ実行中か、最新のメッセージ、最後のツール呼び出しを含みます。"
+            "value" : "LeoPhoneAgent セッションの現在の状態を取得します。エージェントがまだ実行中か、最新のメッセージ、最後のツール呼び出しを含みます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 세션의 현재 상태를 가져옵니다. 에이전트 실행 여부, 최신 메시지, 마지막 도구 호출 포함."
+            "value" : "LeoPhoneAgent 세션의 현재 상태를 가져옵니다. 에이전트 실행 여부, 최신 메시지, 마지막 도구 호출 포함."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Получает текущий статус сессии Minis, включая то, выполняется ли ещё Agent, последнее сообщение и последний вызов инструмента."
+            "value" : "Получает текущий статус сессии LeoPhoneAgent, включая то, выполняется ли ещё Agent, последнее сообщение и последний вызов инструмента."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "获取 Minis 会话的当前状态，包括代理是否仍在运行、最新消息和最后的工具调用。"
+            "value" : "获取 LeoPhoneAgent 会话的当前状态，包括代理是否仍在运行、最新消息和最后的工具调用。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "獲取 Minis 會話的當前狀態，包括代理是否仍在運行、最新消息和最後的工具調用。"
+            "value" : "獲取 LeoPhoneAgent 會話的當前狀態，包括代理是否仍在運行、最新消息和最後的工具調用。"
           }
         }
       }
@@ -29046,54 +29046,54 @@
       }
       }
     },
-    "How long to wait for this server's first initialize. Raise it for slow-starting servers (e.g. uvx). Leave blank for the default (60s). Minis setting, not part of the MCP protocol." : {
+    "How long to wait for this server's first initialize. Raise it for slow-starting servers (e.g. uvx). Leave blank for the default (60s). LeoPhoneAgent setting, not part of the MCP protocol." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Wie lange auf das erste Initialisieren dieses Servers gewartet wird. Für langsam startende Server (z. B. uvx) erhöhen. Leer lassen für den Standard (60 s). Minis-Einstellung, nicht Teil des MCP-Protokolls."
+            "value" : "Wie lange auf das erste Initialisieren dieses Servers gewartet wird. Für langsam startende Server (z. B. uvx) erhöhen. Leer lassen für den Standard (60 s). LeoPhoneAgent-Einstellung, nicht Teil des MCP-Protokolls."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "How long to wait for this server's first initialize. Raise it for slow-starting servers (e.g. uvx). Leave blank for the default (60s). Minis setting, not part of the MCP protocol."
+            "value" : "How long to wait for this server's first initialize. Raise it for slow-starting servers (e.g. uvx). Leave blank for the default (60s). LeoPhoneAgent setting, not part of the MCP protocol."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Durée d'attente de la première initialisation de ce serveur. Augmentez-la pour les serveurs lents à démarrer (p. ex. uvx). Laissez vide pour la valeur par défaut (60 s). Réglage Minis, ne fait pas partie du protocole MCP."
+            "value" : "Durée d'attente de la première initialisation de ce serveur. Augmentez-la pour les serveurs lents à démarrer (p. ex. uvx). Laissez vide pour la valeur par défaut (60 s). Réglage LeoPhoneAgent, ne fait pas partie du protocole MCP."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "このサーバーの初回初期化を待つ時間。起動の遅いサーバー（例: uvx）では長くしてください。空欄でデフォルト（60秒）。Minis の設定であり、MCP プロトコルの一部ではありません。"
+            "value" : "このサーバーの初回初期化を待つ時間。起動の遅いサーバー（例: uvx）では長くしてください。空欄でデフォルト（60秒）。LeoPhoneAgent の設定であり、MCP プロトコルの一部ではありません。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이 서버의 첫 초기화를 기다리는 시간입니다. 시작이 느린 서버(예: uvx)는 값을 늘리세요. 비워 두면 기본값(60초). Minis 설정이며 MCP 프로토콜의 일부가 아닙니다."
+            "value" : "이 서버의 첫 초기화를 기다리는 시간입니다. 시작이 느린 서버(예: uvx)는 값을 늘리세요. 비워 두면 기본값(60초). LeoPhoneAgent 설정이며 MCP 프로토콜의 일부가 아닙니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Сколько ждать первой инициализации этого сервера. Увеличьте для медленно запускающихся серверов (например, uvx). Оставьте пустым для значения по умолчанию (60 с). Настройка Minis, не часть протокола MCP."
+            "value" : "Сколько ждать первой инициализации этого сервера. Увеличьте для медленно запускающихся серверов (например, uvx). Оставьте пустым для значения по умолчанию (60 с). Настройка LeoPhoneAgent, не часть протокола MCP."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "等待该服务器首次 initialize 的时长。启动较慢的服务器（如 uvx）可调大。留空则用默认值（60 秒）。这是 Minis 配置，并非 MCP 协议的一部分。"
+            "value" : "等待该服务器首次 initialize 的时长。启动较慢的服务器（如 uvx）可调大。留空则用默认值（60 秒）。这是 LeoPhoneAgent 配置，并非 MCP 协议的一部分。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "等待此伺服器首次 initialize 的時間。啟動較慢的伺服器（如 uvx）可調大。留空則用預設值（60 秒）。這是 Minis 設定，並非 MCP 協定的一部分。"
+            "value" : "等待此伺服器首次 initialize 的時間。啟動較慢的伺服器（如 uvx）可調大。留空則用預設值（60 秒）。這是 LeoPhoneAgent 設定，並非 MCP 協定的一部分。"
           }
         }
       }
@@ -34221,54 +34221,54 @@
         }
       }
     },
-    "Lists all Minis chat sessions with their titles and IDs." : {
+    "Lists all LeoPhoneAgent chat sessions with their titles and IDs." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Listet alle Minis-Chatsitzungen mit Titeln und IDs auf."
+            "value" : "Listet alle LeoPhoneAgent-Chatsitzungen mit Titeln und IDs auf."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lists all Minis chat sessions with their titles and IDs."
+            "value" : "Lists all LeoPhoneAgent chat sessions with their titles and IDs."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Liste toutes les sessions de chat Minis avec leurs titres et identifiants."
+            "value" : "Liste toutes les sessions de chat LeoPhoneAgent avec leurs titres et identifiants."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "すべての Minis チャットセッションとそのタイトル・IDを一覧表示します。"
+            "value" : "すべての LeoPhoneAgent チャットセッションとそのタイトル・IDを一覧表示します。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "모든 Minis 채팅 세션과 제목 및 ID를 나열합니다."
+            "value" : "모든 LeoPhoneAgent 채팅 세션과 제목 및 ID를 나열합니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Перечисляет все сессии чата Minis с их названиями и ID."
+            "value" : "Перечисляет все сессии чата LeoPhoneAgent с их названиями и ID."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "列出所有 Minis 聊天会话及其标题和 ID。"
+            "value" : "列出所有 LeoPhoneAgent 聊天会话及其标题和 ID。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "列出所有 Minis 聊天會話及其標題和 ID。"
+            "value" : "列出所有 LeoPhoneAgent 聊天會話及其標題和 ID。"
           }
         }
       }
@@ -37098,7 +37098,7 @@
       }
     },
     "Message %@ (@ to mention files)" : {
-      "comment" : "Chat input placeholder. %@ is the Soul-customized assistant name (default 'Minis'). The parenthetical is an inline hint reminding the user that typing '@' opens the file-mention picker.",
+      "comment" : "Chat input placeholder. %@ is the Soul-customized assistant name (default 'LeoPhoneAgent'). The parenthetical is an inline hint reminding the user that typing '@' opens the file-mention picker.",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -37203,55 +37203,55 @@
         }
       }
     },
-    "Message Minis" : {
+    "Message LeoPhoneAgent" : {
       "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Nachricht an Minis"
+            "value" : "Nachricht an LeoPhoneAgent"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Message Minis"
+            "value" : "Message LeoPhoneAgent"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Message à Minis"
+            "value" : "Message à LeoPhoneAgent"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis にメッセージ"
+            "value" : "LeoPhoneAgent にメッセージ"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis에게 메시지 보내기"
+            "value" : "LeoPhoneAgent에게 메시지 보내기"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Написать Minis"
+            "value" : "Написать LeoPhoneAgent"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "向 Minis 发消息"
+            "value" : "向 LeoPhoneAgent 发消息"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "向 Minis 發消息"
+            "value" : "向 LeoPhoneAgent 發消息"
           }
         }
       }
@@ -37567,995 +37567,995 @@
         }
       }
     },
-    "Minis" : {
+    "LeoPhoneAgent" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis"
+            "value" : "LeoPhoneAgent"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis"
+            "value" : "LeoPhoneAgent"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis"
+            "value" : "LeoPhoneAgent"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis"
+            "value" : "LeoPhoneAgent"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis"
+            "value" : "LeoPhoneAgent"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis"
+            "value" : "LeoPhoneAgent"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis"
+            "value" : "LeoPhoneAgent"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis"
+            "value" : "LeoPhoneAgent"
           }
         }
       }
     },
-    "Minis can store your transcript fixes (original → corrected pairs) and accepted AI corrections in a local on-device database to make future voice corrections smarter. Nothing is uploaded. You can change this or clear the data anytime in Settings → Permissions." : {
+    "LeoPhoneAgent can store your transcript fixes (original → corrected pairs) and accepted AI corrections in a local on-device database to make future voice corrections smarter. Nothing is uploaded. You can change this or clear the data anytime in Settings → Permissions." : {
       "comment" : "One-time prompt body: correction data collection",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis kann Ihre Transkript-Korrekturen (Original → korrigiert) und angenommene KI-Korrekturen in einer lokalen Datenbank auf dem Gerät speichern, um künftige Sprachkorrekturen zu verbessern. Es wird nichts hochgeladen. Sie können dies jederzeit unter Einstellungen → Berechtigungen ändern oder die Daten löschen."
+            "value" : "LeoPhoneAgent kann Ihre Transkript-Korrekturen (Original → korrigiert) und angenommene KI-Korrekturen in einer lokalen Datenbank auf dem Gerät speichern, um künftige Sprachkorrekturen zu verbessern. Es wird nichts hochgeladen. Sie können dies jederzeit unter Einstellungen → Berechtigungen ändern oder die Daten löschen."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis can store your transcript fixes (original → corrected pairs) and accepted AI corrections in a local on-device database to make future voice corrections smarter. Nothing is uploaded. You can change this or clear the data anytime in Settings → Permissions."
+            "value" : "LeoPhoneAgent can store your transcript fixes (original → corrected pairs) and accepted AI corrections in a local on-device database to make future voice corrections smarter. Nothing is uploaded. You can change this or clear the data anytime in Settings → Permissions."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis peut enregistrer vos corrections de transcription (paires original → corrigé) et les corrections IA acceptées dans une base de données locale sur l'appareil afin d'améliorer les futures corrections vocales. Rien n'est envoyé en ligne. Vous pouvez modifier ce réglage ou effacer les données à tout moment dans Réglages → Autorisations."
+            "value" : "LeoPhoneAgent peut enregistrer vos corrections de transcription (paires original → corrigé) et les corrections IA acceptées dans une base de données locale sur l'appareil afin d'améliorer les futures corrections vocales. Rien n'est envoyé en ligne. Vous pouvez modifier ce réglage ou effacer les données à tout moment dans Réglages → Autorisations."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis は文字起こしの修正内容(修正前→修正後のペア)と採用された AI 修正を端末内のローカルデータベースに保存し、今後の音声修正の精度向上に役立てることができます。データはアップロードされません。設定 → 権限からいつでも変更・消去できます。"
+            "value" : "LeoPhoneAgent は文字起こしの修正内容(修正前→修正後のペア)と採用された AI 修正を端末内のローカルデータベースに保存し、今後の音声修正の精度向上に役立てることができます。データはアップロードされません。設定 → 権限からいつでも変更・消去できます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis는 음성 인식 수정 내용(원본 → 수정 쌍)과 채택된 AI 교정을 기기 내 로컬 데이터베이스에 저장하여 향후 음성 교정을 더 똑똑하게 만들 수 있습니다. 어떤 데이터도 업로드되지 않습니다. 설정 → 권한에서 언제든지 변경하거나 데이터를 지울 수 있습니다."
+            "value" : "LeoPhoneAgent는 음성 인식 수정 내용(원본 → 수정 쌍)과 채택된 AI 교정을 기기 내 로컬 데이터베이스에 저장하여 향후 음성 교정을 더 똑똑하게 만들 수 있습니다. 어떤 데이터도 업로드되지 않습니다. 설정 → 권한에서 언제든지 변경하거나 데이터를 지울 수 있습니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis может сохранять ваши правки транскрипции (пары «оригинал → исправлено») и принятые ИИ-коррекции в локальной базе данных на устройстве, чтобы улучшать будущие голосовые коррекции. Ничего не загружается в сеть. Изменить настройку или удалить данные можно в любой момент в «Настройки → Разрешения»."
+            "value" : "LeoPhoneAgent может сохранять ваши правки транскрипции (пары «оригинал → исправлено») и принятые ИИ-коррекции в локальной базе данных на устройстве, чтобы улучшать будущие голосовые коррекции. Ничего не загружается в сеть. Изменить настройку или удалить данные можно в любой момент в «Настройки → Разрешения»."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 可以将你对语音转录的修改(原文 → 修正对)以及被采纳的 AI 纠错保存到设备本地数据库,用于让后续语音纠错更聪明。数据不会上传。你可以随时在 设置 → 权限 中更改或清除这些数据。"
+            "value" : "LeoPhoneAgent 可以将你对语音转录的修改(原文 → 修正对)以及被采纳的 AI 纠错保存到设备本地数据库,用于让后续语音纠错更聪明。数据不会上传。你可以随时在 设置 → 权限 中更改或清除这些数据。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 可以將你對語音轉錄的修改(原文 → 修正對)以及被採納的 AI 糾錯儲存到裝置本機資料庫,用於讓後續語音糾錯更聰明。資料不會上傳。你可以隨時在 設定 → 權限 中更改或清除這些資料。"
+            "value" : "LeoPhoneAgent 可以將你對語音轉錄的修改(原文 → 修正對)以及被採納的 AI 糾錯儲存到裝置本機資料庫,用於讓後續語音糾錯更聰明。資料不會上傳。你可以隨時在 設定 → 權限 中更改或清除這些資料。"
           }
         }
       }
     },
-    "Minis can’t open the page because it can’t connect to the server." : {
+    "LeoPhoneAgent can’t open the page because it can’t connect to the server." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis kann die Seite nicht öffnen, da keine Verbindung zum Server hergestellt werden kann."
+            "value" : "LeoPhoneAgent kann die Seite nicht öffnen, da keine Verbindung zum Server hergestellt werden kann."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis can’t open the page because it can’t connect to the server."
+            "value" : "LeoPhoneAgent can’t open the page because it can’t connect to the server."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis ne peut pas ouvrir la page car il ne parvient pas à se connecter au serveur."
+            "value" : "LeoPhoneAgent ne peut pas ouvrir la page car il ne parvient pas à se connecter au serveur."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "サーバーに接続できないため、Minis はページを開けません。"
+            "value" : "サーバーに接続できないため、LeoPhoneAgent はページを開けません。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "서버에 연결할 수 없어 Minis가 페이지를 열 수 없습니다."
+            "value" : "서버에 연결할 수 없어 LeoPhoneAgent가 페이지를 열 수 없습니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis не может открыть страницу, так как не удаётся подключиться к серверу."
+            "value" : "LeoPhoneAgent не может открыть страницу, так как не удаётся подключиться к серверу."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 无法打开该页面，因为无法连接到服务器。"
+            "value" : "LeoPhoneAgent 无法打开该页面，因为无法连接到服务器。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 無法開啟該頁面，因為無法連線到伺服器。"
+            "value" : "LeoPhoneAgent 無法開啟該頁面，因為無法連線到伺服器。"
           }
         }
       }
     },
-    "Minis can’t open the page because it can’t find the server “%@”." : {
+    "LeoPhoneAgent can’t open the page because it can’t find the server “%@”." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis kann die Seite nicht öffnen, da der Server „%@“ nicht gefunden werden kann."
+            "value" : "LeoPhoneAgent kann die Seite nicht öffnen, da der Server „%@“ nicht gefunden werden kann."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis can’t open the page because it can’t find the server “%@”."
+            "value" : "LeoPhoneAgent can’t open the page because it can’t find the server “%@”."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis ne peut pas ouvrir la page car il ne trouve pas le serveur « %@ »."
+            "value" : "LeoPhoneAgent ne peut pas ouvrir la page car il ne trouve pas le serveur « %@ »."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "サーバー「%@」が見つからないため、Minis はページを開けません。"
+            "value" : "サーバー「%@」が見つからないため、LeoPhoneAgent はページを開けません。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "서버 “%@”을(를) 찾을 수 없어 Minis가 페이지를 열 수 없습니다."
+            "value" : "서버 “%@”을(를) 찾을 수 없어 LeoPhoneAgent가 페이지를 열 수 없습니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis не может открыть страницу, так как не удаётся найти сервер «%@»."
+            "value" : "LeoPhoneAgent не может открыть страницу, так как не удаётся найти сервер «%@»."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 无法打开该页面，因为找不到服务器“%@”。"
+            "value" : "LeoPhoneAgent 无法打开该页面，因为找不到服务器“%@”。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 無法開啟該頁面，因為找不到伺服器「%@」。"
+            "value" : "LeoPhoneAgent 無法開啟該頁面，因為找不到伺服器「%@」。"
           }
         }
       }
     },
-    "Minis can’t open the page because it can’t find the server." : {
+    "LeoPhoneAgent can’t open the page because it can’t find the server." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis kann die Seite nicht öffnen, da der Server nicht gefunden werden kann."
+            "value" : "LeoPhoneAgent kann die Seite nicht öffnen, da der Server nicht gefunden werden kann."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis can’t open the page because it can’t find the server."
+            "value" : "LeoPhoneAgent can’t open the page because it can’t find the server."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis ne peut pas ouvrir la page car il ne trouve pas le serveur."
+            "value" : "LeoPhoneAgent ne peut pas ouvrir la page car il ne trouve pas le serveur."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "サーバーが見つからないため、Minis はページを開けません。"
+            "value" : "サーバーが見つからないため、LeoPhoneAgent はページを開けません。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "서버를 찾을 수 없어 Minis가 페이지를 열 수 없습니다."
+            "value" : "서버를 찾을 수 없어 LeoPhoneAgent가 페이지를 열 수 없습니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis не может открыть страницу, так как не удаётся найти сервер."
+            "value" : "LeoPhoneAgent не может открыть страницу, так как не удаётся найти сервер."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 无法打开该页面，因为找不到服务器。"
+            "value" : "LeoPhoneAgent 无法打开该页面，因为找不到服务器。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 無法開啟該頁面，因為找不到伺服器。"
+            "value" : "LeoPhoneAgent 無法開啟該頁面，因為找不到伺服器。"
           }
         }
       }
     },
-    "Minis can’t verify the identity of the server “%@”." : {
+    "LeoPhoneAgent can’t verify the identity of the server “%@”." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis kann die Identität des Servers „%@“ nicht überprüfen."
+            "value" : "LeoPhoneAgent kann die Identität des Servers „%@“ nicht überprüfen."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis can’t verify the identity of the server “%@”."
+            "value" : "LeoPhoneAgent can’t verify the identity of the server “%@”."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis ne peut pas vérifier l’identité du serveur « %@ »."
+            "value" : "LeoPhoneAgent ne peut pas vérifier l’identité du serveur « %@ »."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis はサーバー「%@」の識別情報を確認できません。"
+            "value" : "LeoPhoneAgent はサーバー「%@」の識別情報を確認できません。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis가 서버 “%@”의 신원을 확인할 수 없습니다."
+            "value" : "LeoPhoneAgent가 서버 “%@”의 신원을 확인할 수 없습니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis не может проверить подлинность сервера «%@»."
+            "value" : "LeoPhoneAgent не может проверить подлинность сервера «%@»."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 无法验证服务器“%@”的身份。"
+            "value" : "LeoPhoneAgent 无法验证服务器“%@”的身份。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 無法驗證伺服器「%@」的身分。"
+            "value" : "LeoPhoneAgent 無法驗證伺服器「%@」的身分。"
           }
         }
       }
     },
-    "Minis can’t verify the identity of the server." : {
+    "LeoPhoneAgent can’t verify the identity of the server." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis kann die Identität des Servers nicht überprüfen."
+            "value" : "LeoPhoneAgent kann die Identität des Servers nicht überprüfen."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis can’t verify the identity of the server."
+            "value" : "LeoPhoneAgent can’t verify the identity of the server."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis ne peut pas vérifier l’identité du serveur."
+            "value" : "LeoPhoneAgent ne peut pas vérifier l’identité du serveur."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis はサーバーの識別情報を確認できません。"
+            "value" : "LeoPhoneAgent はサーバーの識別情報を確認できません。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis가 서버의 신원을 확인할 수 없습니다."
+            "value" : "LeoPhoneAgent가 서버의 신원을 확인할 수 없습니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis не может проверить подлинность сервера."
+            "value" : "LeoPhoneAgent не может проверить подлинность сервера."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 无法验证服务器的身份。"
+            "value" : "LeoPhoneAgent 无法验证服务器的身份。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 無法驗證伺服器的身分。"
+            "value" : "LeoPhoneAgent 無法驗證伺服器的身分。"
           }
         }
       }
     },
-    "Minis Computer" : {
+    "LeoPhoneAgent Computer" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis Computer"
+            "value" : "LeoPhoneAgent Computer"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis Computer"
+            "value" : "LeoPhoneAgent Computer"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis Computer"
+            "value" : "LeoPhoneAgent Computer"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis コンピュータ"
+            "value" : "LeoPhoneAgent コンピュータ"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 컴퓨터"
+            "value" : "LeoPhoneAgent 컴퓨터"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis Computer"
+            "value" : "LeoPhoneAgent Computer"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 电脑"
+            "value" : "LeoPhoneAgent 电脑"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 電腦"
+            "value" : "LeoPhoneAgent 電腦"
           }
         }
       }
     },
-    "Minis does not operate any server and does not collect, store, or process any of your personal data. All data stays on your device." : {
+    "LeoPhoneAgent does not operate any server and does not collect, store, or process any of your personal data. All data stays on your device." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis betreibt keinen Server und erhebt, speichert oder verarbeitet keine Ihrer persönlichen Daten. Alle Daten verbleiben auf Ihrem Gerät."
+            "value" : "LeoPhoneAgent betreibt keinen Server und erhebt, speichert oder verarbeitet keine Ihrer persönlichen Daten. Alle Daten verbleiben auf Ihrem Gerät."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis does not operate any server and does not collect, store, or process any of your personal data. All data stays on your device."
+            "value" : "LeoPhoneAgent does not operate any server and does not collect, store, or process any of your personal data. All data stays on your device."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis n'exploite aucun serveur et ne collecte, stocke ou traite aucune de vos données personnelles. Toutes les données restent sur votre appareil."
+            "value" : "LeoPhoneAgent n'exploite aucun serveur et ne collecte, stocke ou traite aucune de vos données personnelles. Toutes les données restent sur votre appareil."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis はサーバーを運営しておらず、個人データの収集、保存、処理を一切行いません。すべてのデータはお使いのデバイスに保存されます。"
+            "value" : "LeoPhoneAgent はサーバーを運営しておらず、個人データの収集、保存、処理を一切行いません。すべてのデータはお使いのデバイスに保存されます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis는 서버를 운영하지 않으며 개인 데이터를 수집, 저장 또는 처리하지 않습니다. 모든 데이터는 기기에 보관됩니다."
+            "value" : "LeoPhoneAgent는 서버를 운영하지 않으며 개인 데이터를 수집, 저장 또는 처리하지 않습니다. 모든 데이터는 기기에 보관됩니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis не использует серверы и не собирает, не хранит и не обрабатывает ваши личные данные. Все данные остаются на вашем устройстве."
+            "value" : "LeoPhoneAgent не использует серверы и не собирает, не хранит и не обрабатывает ваши личные данные. Все данные остаются на вашем устройстве."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 不运营任何服务器，不会收集、存储或处理您的任何个人数据。所有数据都保存在您的设备上。"
+            "value" : "LeoPhoneAgent 不运营任何服务器，不会收集、存储或处理您的任何个人数据。所有数据都保存在您的设备上。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 不運營任何服務器，不會收集、存儲或處理您的任何個人數據。所有數據都保存在您的設備上。"
+            "value" : "LeoPhoneAgent 不運營任何服務器，不會收集、存儲或處理您的任何個人數據。所有數據都保存在您的設備上。"
           }
         }
       }
     },
-    "Minis Files" : {
+    "LeoPhoneAgent Files" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis-Dateien"
+            "value" : "LeoPhoneAgent-Dateien"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis Files"
+            "value" : "LeoPhoneAgent Files"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fichiers Minis"
+            "value" : "Fichiers LeoPhoneAgent"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis ファイル"
+            "value" : "LeoPhoneAgent ファイル"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 파일"
+            "value" : "LeoPhoneAgent 파일"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Файлы Minis"
+            "value" : "Файлы LeoPhoneAgent"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 文件"
+            "value" : "LeoPhoneAgent 文件"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 文件"
+            "value" : "LeoPhoneAgent 文件"
           }
         }
       }
     },
-    "Minis is browsing" : {
+    "LeoPhoneAgent is browsing" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis durchsucht das Web"
+            "value" : "LeoPhoneAgent durchsucht das Web"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis is browsing"
+            "value" : "LeoPhoneAgent is browsing"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis navigue"
+            "value" : "LeoPhoneAgent navigue"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis がブラウジング中"
+            "value" : "LeoPhoneAgent がブラウジング中"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis가 탐색 중"
+            "value" : "LeoPhoneAgent가 탐색 중"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis просматривает"
+            "value" : "LeoPhoneAgent просматривает"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 正在浏览"
+            "value" : "LeoPhoneAgent 正在浏览"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 正在瀏覽"
+            "value" : "LeoPhoneAgent 正在瀏覽"
           }
         }
       }
     },
-    "Minis is built on the shoulders of these open source projects. Thank you to all contributors." : {
+    "LeoPhoneAgent is built on the shoulders of these open source projects. Thank you to all contributors." : {
       "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis basiert auf diesen Open-Source-Projekten. Vielen Dank an alle Mitwirkenden."
+            "value" : "LeoPhoneAgent basiert auf diesen Open-Source-Projekten. Vielen Dank an alle Mitwirkenden."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis is built on the shoulders of these open source projects. Thank you to all contributors."
+            "value" : "LeoPhoneAgent is built on the shoulders of these open source projects. Thank you to all contributors."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis est construit grâce à ces projets open source. Merci à tous les contributeurs."
+            "value" : "LeoPhoneAgent est construit grâce à ces projets open source. Merci à tous les contributeurs."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis はこれらのオープンソースプロジェクトを基盤としています。すべての貢献者に感謝します。"
+            "value" : "LeoPhoneAgent はこれらのオープンソースプロジェクトを基盤としています。すべての貢献者に感謝します。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis는 이러한 오픈 소스 프로젝트를 기반으로 합니다. 모든 기여자에게 감사드립니다."
+            "value" : "LeoPhoneAgent는 이러한 오픈 소스 프로젝트를 기반으로 합니다. 모든 기여자에게 감사드립니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis построен на основе этих проектов с открытым исходным кодом. Спасибо всем участникам."
+            "value" : "LeoPhoneAgent построен на основе этих проектов с открытым исходным кодом. Спасибо всем участникам."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 构建于这些开源项目之上。感谢所有贡献者。"
+            "value" : "LeoPhoneAgent 构建于这些开源项目之上。感谢所有贡献者。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 構建於這些開源項目之上。感謝所有貢獻者。"
+            "value" : "LeoPhoneAgent 構建於這些開源項目之上。感謝所有貢獻者。"
           }
         }
       }
     },
-    "Minis is Locked" : {
+    "LeoPhoneAgent is Locked" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis ist gesperrt"
+            "value" : "LeoPhoneAgent ist gesperrt"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis is Locked"
+            "value" : "LeoPhoneAgent is Locked"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis est verrouillé"
+            "value" : "LeoPhoneAgent est verrouillé"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis はロックされています"
+            "value" : "LeoPhoneAgent はロックされています"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis가 잠김"
+            "value" : "LeoPhoneAgent가 잠김"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis заблокирован"
+            "value" : "LeoPhoneAgent заблокирован"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 已锁定"
+            "value" : "LeoPhoneAgent 已锁定"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 已鎖定"
+            "value" : "LeoPhoneAgent 已鎖定"
           }
         }
       }
     },
-    "Minis is thinking" : {
+    "LeoPhoneAgent is thinking" : {
       "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis denkt nach"
+            "value" : "LeoPhoneAgent denkt nach"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis is thinking"
+            "value" : "LeoPhoneAgent is thinking"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis réfléchit"
+            "value" : "LeoPhoneAgent réfléchit"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis が考えています"
+            "value" : "LeoPhoneAgent が考えています"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis가 생각하는 중"
+            "value" : "LeoPhoneAgent가 생각하는 중"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis думает"
+            "value" : "LeoPhoneAgent думает"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 正在思考"
+            "value" : "LeoPhoneAgent 正在思考"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 正在思考"
+            "value" : "LeoPhoneAgent 正在思考"
           }
         }
       }
     },
-    "Minis is Your Fully Local, Fully Private On-Device Agent." : {
+    "LeoPhoneAgent is Your Fully Local, Fully Private On-Device Agent." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis ist Ihr vollständig lokaler, vollständig privater Agent auf dem Gerät."
+            "value" : "LeoPhoneAgent ist Ihr vollständig lokaler, vollständig privater Agent auf dem Gerät."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis is Your Fully Local, Fully Private On-Device Agent."
+            "value" : "LeoPhoneAgent is Your Fully Local, Fully Private On-Device Agent."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis est votre agent embarqué, entièrement local et entièrement privé."
+            "value" : "LeoPhoneAgent est votre agent embarqué, entièrement local et entièrement privé."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis は、完全にローカルで完全にプライベートなオンデバイスエージェントです。"
+            "value" : "LeoPhoneAgent は、完全にローカルで完全にプライベートなオンデバイスエージェントです。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis는 완전히 로컬이고 완전히 비공개인 온디바이스 에이전트입니다."
+            "value" : "LeoPhoneAgent는 완전히 로컬이고 완전히 비공개인 온디바이스 에이전트입니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis — это полностью локальный, полностью приватный агент на вашем устройстве."
+            "value" : "LeoPhoneAgent — это полностью локальный, полностью приватный агент на вашем устройстве."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 是您完全本地、完全私密的设备端代理。"
+            "value" : "LeoPhoneAgent 是您完全本地、完全私密的设备端代理。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 是您完全本機、完全私密的裝置端代理。"
+            "value" : "LeoPhoneAgent 是您完全本機、完全私密的裝置端代理。"
           }
         }
       }
     },
-    "Minis Shell" : {
+    "LeoPhoneAgent Shell" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis Shell"
+            "value" : "LeoPhoneAgent Shell"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis Shell"
+            "value" : "LeoPhoneAgent Shell"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis Shell"
+            "value" : "LeoPhoneAgent Shell"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis Shell"
+            "value" : "LeoPhoneAgent Shell"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis Shell"
+            "value" : "LeoPhoneAgent Shell"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis Shell"
+            "value" : "LeoPhoneAgent Shell"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis Shell"
+            "value" : "LeoPhoneAgent Shell"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis Shell"
+            "value" : "LeoPhoneAgent Shell"
           }
         }
       }
     },
-    "Minis Skills" : {
+    "LeoPhoneAgent Skills" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis-Fähigkeiten"
+            "value" : "LeoPhoneAgent-Fähigkeiten"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis Skills"
+            "value" : "LeoPhoneAgent Skills"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Compétences Minis"
+            "value" : "Compétences LeoPhoneAgent"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis スキル"
+            "value" : "LeoPhoneAgent スキル"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 스킬"
+            "value" : "LeoPhoneAgent 스킬"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Навыки Minis"
+            "value" : "Навыки LeoPhoneAgent"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 技能"
+            "value" : "LeoPhoneAgent 技能"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 技能"
+            "value" : "LeoPhoneAgent 技能"
           }
         }
       }
     },
-    "Minis will create folders for this conversation" : {
+    "LeoPhoneAgent will create folders for this conversation" : {
       "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis erstellt für diese Unterhaltung folgende Ordner"
+            "value" : "LeoPhoneAgent erstellt für diese Unterhaltung folgende Ordner"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis will create folders for this conversation"
+            "value" : "LeoPhoneAgent will create folders for this conversation"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis créera ces dossiers pour cette conversation"
+            "value" : "LeoPhoneAgent créera ces dossiers pour cette conversation"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis はこの会話のために次のフォルダを作成します"
+            "value" : "LeoPhoneAgent はこの会話のために次のフォルダを作成します"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis가 이 대화를 위해 다음 폴더를 생성합니다"
+            "value" : "LeoPhoneAgent가 이 대화를 위해 다음 폴더를 생성합니다"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis создаст папки для этого разговора"
+            "value" : "LeoPhoneAgent создаст папки для этого разговора"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 会为本次会话创建以下目录"
+            "value" : "LeoPhoneAgent 会为本次会话创建以下目录"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 會為本次會話建立以下目錄"
+            "value" : "LeoPhoneAgent 會為本次會話建立以下目錄"
           }
         }
       }
     },
-    "Minis will use shared across all conversations" : {
+    "LeoPhoneAgent will use shared across all conversations" : {
       "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis nutzt diese Ordner gemeinsam in allen Unterhaltungen"
+            "value" : "LeoPhoneAgent nutzt diese Ordner gemeinsam in allen Unterhaltungen"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis will use shared across all conversations"
+            "value" : "LeoPhoneAgent will use shared across all conversations"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis utilisera ces dossiers partagés dans toutes les conversations"
+            "value" : "LeoPhoneAgent utilisera ces dossiers partagés dans toutes les conversations"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis はすべての会話で次のフォルダを共有して使用します"
+            "value" : "LeoPhoneAgent はすべての会話で次のフォルダを共有して使用します"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis가 모든 대화에서 공유하여 사용하는 폴더"
+            "value" : "LeoPhoneAgent가 모든 대화에서 공유하여 사용하는 폴더"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis будет использовать общие для всех разговоров"
+            "value" : "LeoPhoneAgent будет использовать общие для всех разговоров"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 会在所有会话间共享使用以下目录"
+            "value" : "LeoPhoneAgent 会在所有会话间共享使用以下目录"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 會在所有會話間共用以下目錄"
+            "value" : "LeoPhoneAgent 會在所有會話間共用以下目錄"
           }
         }
       }
@@ -41583,55 +41583,55 @@
         }
       }
     },
-    "No data is shared with Minis or any other party beyond the provider you select" : {
+    "No data is shared with LeoPhoneAgent or any other party beyond the provider you select" : {
       "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Es werden keine Daten mit Minis oder anderen Parteien außer dem von Ihnen gewählten KI-Anbieter geteilt"
+            "value" : "Es werden keine Daten mit LeoPhoneAgent oder anderen Parteien außer dem von Ihnen gewählten KI-Anbieter geteilt"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No data is shared with Minis or any other party beyond the provider you select"
+            "value" : "No data is shared with LeoPhoneAgent or any other party beyond the provider you select"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aucune donnée n'est partagée avec Minis ou toute autre partie au-delà du fournisseur AI que vous sélectionnez"
+            "value" : "Aucune donnée n'est partagée avec LeoPhoneAgent ou toute autre partie au-delà du fournisseur AI que vous sélectionnez"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis や選択したAIプロバイダー以外の第三者とデータが共有されることはありません"
+            "value" : "LeoPhoneAgent や選択したAIプロバイダー以外の第三者とデータが共有されることはありません"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "선택한 AI 공급자 외에 Minis나 다른 당사자와 데이터가 공유되지 않습니다"
+            "value" : "선택한 AI 공급자 외에 LeoPhoneAgent나 다른 당사자와 데이터가 공유되지 않습니다"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Никакие данные не передаются Minis или другим сторонам, кроме выбранного вами провайдера"
+            "value" : "Никакие данные не передаются LeoPhoneAgent или другим сторонам, кроме выбранного вами провайдера"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "除您选择的 AI 服务商外，数据不会与 Minis 或任何其他方共享"
+            "value" : "除您选择的 AI 服务商外，数据不会与 LeoPhoneAgent 或任何其他方共享"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "除您選擇的 AI 服務商外，數據不會與 Minis 或任何其他方共享"
+            "value" : "除您選擇的 AI 服務商外，數據不會與 LeoPhoneAgent 或任何其他方共享"
           }
         }
       }
@@ -42269,7 +42269,7 @@
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keine Minis-Dateien"
+            "value" : "Keine LeoPhoneAgent-Dateien"
           }
         },
         "en" : {
@@ -42281,19 +42281,19 @@
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Aucun fichier Minis"
+            "value" : "Aucun fichier LeoPhoneAgent"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis ファイルなし"
+            "value" : "LeoPhoneAgent ファイルなし"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 파일 없음"
+            "value" : "LeoPhoneAgent 파일 없음"
           }
         },
         "ru" : {
@@ -42305,13 +42305,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "无 Minis 文件"
+            "value" : "无 LeoPhoneAgent 文件"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "無 Minis 文件"
+            "value" : "無 LeoPhoneAgent 文件"
           }
         }
       }
@@ -44498,54 +44498,54 @@
     "On" : {
 
     },
-    "On it — opening Minis." : {
+    "On it — opening LeoPhoneAgent." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Erledige ich – Minis wird geöffnet."
+            "value" : "Erledige ich – LeoPhoneAgent wird geöffnet."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "On it — opening Minis."
+            "value" : "On it — opening LeoPhoneAgent."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "C’est parti — ouverture de Minis."
+            "value" : "C’est parti — ouverture de LeoPhoneAgent."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "了解しました — Minis を開きます。"
+            "value" : "了解しました — LeoPhoneAgent を開きます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "알겠습니다 — Minis를 엽니다."
+            "value" : "알겠습니다 — LeoPhoneAgent를 엽니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Выполняю — открываю Minis."
+            "value" : "Выполняю — открываю LeoPhoneAgent."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "好的 — 正在打开 Minis。"
+            "value" : "好的 — 正在打开 LeoPhoneAgent。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "好的 — 正在開啟 Minis。"
+            "value" : "好的 — 正在開啟 LeoPhoneAgent。"
           }
         }
       }
@@ -45181,106 +45181,106 @@
         }
       }
     },
-    "Opens a Minis chat session in the app." : {
+    "Opens a LeoPhoneAgent chat session in the app." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Öffnet eine Minis-Chatsitzung in der App."
+            "value" : "Öffnet eine LeoPhoneAgent-Chatsitzung in der App."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Opens a Minis chat session in the app."
+            "value" : "Opens a LeoPhoneAgent chat session in the app."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ouvre une session de chat Minis dans l'application."
+            "value" : "Ouvre une session de chat LeoPhoneAgent dans l'application."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "アプリで Minis チャットセッションを開きます。"
+            "value" : "アプリで LeoPhoneAgent チャットセッションを開きます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "앱에서 Minis 채팅 세션을 엽니다."
+            "value" : "앱에서 LeoPhoneAgent 채팅 세션을 엽니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Открывает сессию чата Minis в приложении."
+            "value" : "Открывает сессию чата LeoPhoneAgent в приложении."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在应用中打开一个 Minis 聊天会话。"
+            "value" : "在应用中打开一个 LeoPhoneAgent 聊天会话。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在應用中打開一個 Minis 聊天會話。"
+            "value" : "在應用中打開一個 LeoPhoneAgent 聊天會話。"
           }
         }
       }
     },
-    "Opens Minis, sends your prompt, and shows the conversation. Starts a new session, or continues an existing one when you pick a session." : {
+    "Opens LeoPhoneAgent, sends your prompt, and shows the conversation. Starts a new session, or continues an existing one when you pick a session." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Öffnet Minis, sendet deine Eingabe und zeigt die Unterhaltung an. Startet eine neue Sitzung oder setzt eine bestehende fort, wenn du eine Sitzung auswählst."
+            "value" : "Öffnet LeoPhoneAgent, sendet deine Eingabe und zeigt die Unterhaltung an. Startet eine neue Sitzung oder setzt eine bestehende fort, wenn du eine Sitzung auswählst."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Opens Minis, sends your prompt, and shows the conversation. Starts a new session, or continues an existing one when you pick a session."
+            "value" : "Opens LeoPhoneAgent, sends your prompt, and shows the conversation. Starts a new session, or continues an existing one when you pick a session."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ouvre Minis, envoie ton invite et affiche la conversation. Démarre une nouvelle session, ou en poursuit une existante si tu choisis une session."
+            "value" : "Ouvre LeoPhoneAgent, envoie ton invite et affiche la conversation. Démarre une nouvelle session, ou en poursuit une existante si tu choisis une session."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis を開いてプロンプトを送信し、会話を表示します。新しいセッションを開始するか、セッションを選ぶと既存のものを続行します。"
+            "value" : "LeoPhoneAgent を開いてプロンプトを送信し、会話を表示します。新しいセッションを開始するか、セッションを選ぶと既存のものを続行します。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis를 열어 프롬프트를 보내고 대화를 표시합니다. 새 세션을 시작하거나, 세션을 선택하면 기존 세션을 이어갑니다."
+            "value" : "LeoPhoneAgent를 열어 프롬프트를 보내고 대화를 표시합니다. 새 세션을 시작하거나, 세션을 선택하면 기존 세션을 이어갑니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Открывает Minis, отправляет ваш запрос и показывает диалог. Начинает новую сессию или продолжает существующую, если вы выберете сессию."
+            "value" : "Открывает LeoPhoneAgent, отправляет ваш запрос и показывает диалог. Начинает новую сессию или продолжает существующую, если вы выберете сессию."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "打开 Minis，发送你的提示词并显示对话。开始新会话，或在你选择某个会话时继续该会话。"
+            "value" : "打开 LeoPhoneAgent，发送你的提示词并显示对话。开始新会话，或在你选择某个会话时继续该会话。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "開啟 Minis，傳送你的提示詞並顯示對話。開始新工作階段，或在你選擇某個工作階段時繼續該工作階段。"
+            "value" : "開啟 LeoPhoneAgent，傳送你的提示詞並顯示對話。開始新工作階段，或在你選擇某個工作階段時繼續該工作階段。"
           }
         }
       }
@@ -46086,54 +46086,54 @@
         }
       }
     },
-    "Override the User-Agent header sent to this endpoint. Leave empty to use the Minis default. Useful for relays that only accept specific clients (e.g. \"claude-cli/1.0\")." : {
+    "Override the User-Agent header sent to this endpoint. Leave empty to use the LeoPhoneAgent default. Useful for relays that only accept specific clients (e.g. \"claude-cli/1.0\")." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Überschreibe den an diesen Endpunkt gesendeten User-Agent-Header. Leer lassen, um den Minis-Standard zu verwenden. Nützlich für Relays, die nur bestimmte Clients akzeptieren (z. B. „claude-cli/1.0“)."
+            "value" : "Überschreibe den an diesen Endpunkt gesendeten User-Agent-Header. Leer lassen, um den LeoPhoneAgent-Standard zu verwenden. Nützlich für Relays, die nur bestimmte Clients akzeptieren (z. B. „claude-cli/1.0“)."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Override the User-Agent header sent to this endpoint. Leave empty to use the Minis default. Useful for relays that only accept specific clients (e.g. \"claude-cli/1.0\")."
+            "value" : "Override the User-Agent header sent to this endpoint. Leave empty to use the LeoPhoneAgent default. Useful for relays that only accept specific clients (e.g. \"claude-cli/1.0\")."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Remplace l’en-tête User-Agent envoyé à ce point de terminaison. Laisse vide pour utiliser la valeur par défaut de Minis. Utile pour les relais qui n’acceptent que certains clients (par ex. « claude-cli/1.0 »)."
+            "value" : "Remplace l’en-tête User-Agent envoyé à ce point de terminaison. Laisse vide pour utiliser la valeur par défaut de LeoPhoneAgent. Utile pour les relais qui n’acceptent que certains clients (par ex. « claude-cli/1.0 »)."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "このエンドポイントに送信される User-Agent ヘッダーを上書きします。空欄にすると Minis のデフォルトを使用します。特定のクライアントのみを受け付けるリレー（例：「claude-cli/1.0」）に便利です。"
+            "value" : "このエンドポイントに送信される User-Agent ヘッダーを上書きします。空欄にすると LeoPhoneAgent のデフォルトを使用します。特定のクライアントのみを受け付けるリレー（例：「claude-cli/1.0」）に便利です。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이 엔드포인트로 전송되는 User-Agent 헤더를 재정의합니다. 비워 두면 Minis 기본값을 사용합니다. 특정 클라이언트만 허용하는 릴레이(예: \"claude-cli/1.0\")에 유용합니다."
+            "value" : "이 엔드포인트로 전송되는 User-Agent 헤더를 재정의합니다. 비워 두면 LeoPhoneAgent 기본값을 사용합니다. 특정 클라이언트만 허용하는 릴레이(예: \"claude-cli/1.0\")에 유용합니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Переопределяет заголовок User-Agent, отправляемый на этот эндпойнт. Оставьте пустым, чтобы использовать значение Minis по умолчанию. Полезно для реле, принимающих только определённых клиентов (напр. «claude-cli/1.0»)."
+            "value" : "Переопределяет заголовок User-Agent, отправляемый на этот эндпойнт. Оставьте пустым, чтобы использовать значение LeoPhoneAgent по умолчанию. Полезно для реле, принимающих только определённых клиентов (напр. «claude-cli/1.0»)."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "覆盖发送到此接口的 User-Agent 头。留空则使用 Minis 默认值。适用于仅接受特定客户端的中继（例如“claude-cli/1.0”）。"
+            "value" : "覆盖发送到此接口的 User-Agent 头。留空则使用 LeoPhoneAgent 默认值。适用于仅接受特定客户端的中继（例如“claude-cli/1.0”）。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "覆寫傳送到此端點的 User-Agent 標頭。留空則使用 Minis 預設值。適用於僅接受特定用戶端的中繼（例如「claude-cli/1.0」）。"
+            "value" : "覆寫傳送到此端點的 User-Agent 標頭。留空則使用 LeoPhoneAgent 預設值。適用於僅接受特定用戶端的中繼（例如「claude-cli/1.0」）。"
           }
         }
       }
@@ -47249,54 +47249,54 @@
         }
       }
     },
-    "Permanently erase all Minis data from iCloud. Local data on this device is not affected." : {
+    "Permanently erase all LeoPhoneAgent data from iCloud. Local data on this device is not affected." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Alle Minis-Daten dauerhaft aus iCloud löschen. Lokale Daten auf diesem Gerät sind nicht betroffen."
+            "value" : "Alle LeoPhoneAgent-Daten dauerhaft aus iCloud löschen. Lokale Daten auf diesem Gerät sind nicht betroffen."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Permanently erase all Minis data from iCloud. Local data on this device is not affected."
+            "value" : "Permanently erase all LeoPhoneAgent data from iCloud. Local data on this device is not affected."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Effacer définitivement toutes les données Minis d'iCloud. Les données locales sur cet appareil ne sont pas affectées."
+            "value" : "Effacer définitivement toutes les données LeoPhoneAgent d'iCloud. Les données locales sur cet appareil ne sont pas affectées."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis のすべてのデータを iCloud から完全に削除します。このデバイスのローカルデータは影響を受けません。"
+            "value" : "LeoPhoneAgent のすべてのデータを iCloud から完全に削除します。このデバイスのローカルデータは影響を受けません。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "iCloud의 모든 Minis 데이터를 영구적으로 삭제합니다. 이 기기의 로컬 데이터에는 영향을 미치지 않습니다."
+            "value" : "iCloud의 모든 LeoPhoneAgent 데이터를 영구적으로 삭제합니다. 이 기기의 로컬 데이터에는 영향을 미치지 않습니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Безвозвратно удалить все данные Minis из iCloud. Локальные данные на этом устройстве не затрагиваются."
+            "value" : "Безвозвратно удалить все данные LeoPhoneAgent из iCloud. Локальные данные на этом устройстве не затрагиваются."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "永久从 iCloud 中删除所有 Minis 数据。本设备上的本地数据不受影响。"
+            "value" : "永久从 iCloud 中删除所有 LeoPhoneAgent 数据。本设备上的本地数据不受影响。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "永久從 iCloud 中刪除所有 Minis 數據。本設備上的本地數據不受影響。"
+            "value" : "永久從 iCloud 中刪除所有 LeoPhoneAgent 數據。本設備上的本地數據不受影響。"
           }
         }
       }
@@ -47753,13 +47753,13 @@
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "選択したフォルダは /var/minis/mounts/<name> にバインドマウントされます。ファイルブラウザから参照でき、Minis Shell からも /var/minis/shared と同じように読み書きできます。同時に最大 10 個までマウントできます。"
+            "value" : "選択したフォルダは /var/minis/mounts/<name> にバインドマウントされます。ファイルブラウザから参照でき、LeoPhoneAgent Shell からも /var/minis/shared と同じように読み書きできます。同時に最大 10 個までマウントできます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "선택한 폴더는 /var/minis/mounts/<name>에 바인드 마운트됩니다. 파일 브라우저에서 탐색할 수 있고 Minis Shell에서 /var/minis/shared처럼 직접 읽고 쓸 수 있습니다. 동시에 최대 10개의 폴더를 마운트할 수 있습니다."
+            "value" : "선택한 폴더는 /var/minis/mounts/<name>에 바인드 마운트됩니다. 파일 브라우저에서 탐색할 수 있고 LeoPhoneAgent Shell에서 /var/minis/shared처럼 직접 읽고 쓸 수 있습니다. 동시에 최대 10개의 폴더를 마운트할 수 있습니다."
           }
         },
         "ru" : {
@@ -47771,13 +47771,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "所选文件夹将以 bind 方式挂载到 /var/minis/mounts/<name>。您可以在“浏览文件”中查看，也可以直接在 Minis Shell 中读写，就像 /var/minis/shared 一样。最多可同时挂载 10 个文件夹。"
+            "value" : "所选文件夹将以 bind 方式挂载到 /var/minis/mounts/<name>。您可以在“浏览文件”中查看，也可以直接在 LeoPhoneAgent Shell 中读写，就像 /var/minis/shared 一样。最多可同时挂载 10 个文件夹。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "所選文件夾將以 bind 方式掛載到 /var/minis/mounts/<name>。您可以在“瀏覽文件”中查看，也可以直接在 Minis Shell 中讀寫，就像 /var/minis/shared 一樣。最多可同時掛載 10 個文件夾。"
+            "value" : "所選文件夾將以 bind 方式掛載到 /var/minis/mounts/<name>。您可以在“瀏覽文件”中查看，也可以直接在 LeoPhoneAgent Shell 中讀寫，就像 /var/minis/shared 一樣。最多可同時掛載 10 個文件夾。"
           }
         }
       }
@@ -52692,54 +52692,54 @@
         }
       }
     },
-    "Require %@ to open Minis." : {
+    "Require %@ to open LeoPhoneAgent." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%@ zum Öffnen von Minis erforderlich."
+            "value" : "%@ zum Öffnen von LeoPhoneAgent erforderlich."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Require %@ to open Minis."
+            "value" : "Require %@ to open LeoPhoneAgent."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Exiger %@ pour ouvrir Minis."
+            "value" : "Exiger %@ pour ouvrir LeoPhoneAgent."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis を開くのに %@ を要求します。"
+            "value" : "LeoPhoneAgent を開くのに %@ を要求します。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis를 열려면 %@가 필요합니다."
+            "value" : "LeoPhoneAgent를 열려면 %@가 필요합니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Требовать %@ для открытия Minis."
+            "value" : "Требовать %@ для открытия LeoPhoneAgent."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "打开 Minis 需要 %@。"
+            "value" : "打开 LeoPhoneAgent 需要 %@。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "開啟 Minis 需要 %@。"
+            "value" : "開啟 LeoPhoneAgent 需要 %@。"
           }
         }
       }
@@ -55751,54 +55751,54 @@
         }
       }
     },
-    "Runs a predefined Minis task like sleep analysis, weather check, or morning briefing." : {
+    "Runs a predefined LeoPhoneAgent task like sleep analysis, weather check, or morning briefing." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Führt eine vordefinierte Minis-Aufgabe wie Schlafanalyse, Wettercheck oder Morgenbriefing aus."
+            "value" : "Führt eine vordefinierte LeoPhoneAgent-Aufgabe wie Schlafanalyse, Wettercheck oder Morgenbriefing aus."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Runs a predefined Minis task like sleep analysis, weather check, or morning briefing."
+            "value" : "Runs a predefined LeoPhoneAgent task like sleep analysis, weather check, or morning briefing."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Exécute une tâche Minis prédéfinie comme l'analyse du sommeil, la météo ou le briefing matinal."
+            "value" : "Exécute une tâche LeoPhoneAgent prédéfinie comme l'analyse du sommeil, la météo ou le briefing matinal."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "睡眠分析、天気確認、朝のブリーフィングなど、事前定義された Minis タスクを実行します。"
+            "value" : "睡眠分析、天気確認、朝のブリーフィングなど、事前定義された LeoPhoneAgent タスクを実行します。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "수면 분석, 날씨 확인, 아침 브리핑 등 사전 정의된 Minis 작업을 실행합니다."
+            "value" : "수면 분석, 날씨 확인, 아침 브리핑 등 사전 정의된 LeoPhoneAgent 작업을 실행합니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Запускает предопределённую задачу Minis, например анализ сна, проверку погоды или утреннюю сводку."
+            "value" : "Запускает предопределённую задачу LeoPhoneAgent, например анализ сна, проверку погоды или утреннюю сводку."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "运行预定义的 Minis 任务，如睡眠分析、天气查看或早间简报。"
+            "value" : "运行预定义的 LeoPhoneAgent 任务，如睡眠分析、天气查看或早间简报。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "運行預定義的 Minis 任務，如睡眠分析、天氣查看或早間簡報。"
+            "value" : "運行預定義的 LeoPhoneAgent 任務，如睡眠分析、天氣查看或早間簡報。"
           }
         }
       }
@@ -57318,106 +57318,106 @@
         }
       }
     },
-    "Sends a follow-up prompt to an existing Minis session, continuing the conversation with the AI agent." : {
+    "Sends a follow-up prompt to an existing LeoPhoneAgent session, continuing the conversation with the AI agent." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sendet einen Folgeprompt an eine bestehende Minis-Sitzung und setzt das Gespräch mit dem KI-Agenten fort."
+            "value" : "Sendet einen Folgeprompt an eine bestehende LeoPhoneAgent-Sitzung und setzt das Gespräch mit dem KI-Agenten fort."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sends a follow-up prompt to an existing Minis session, continuing the conversation with the AI agent."
+            "value" : "Sends a follow-up prompt to an existing LeoPhoneAgent session, continuing the conversation with the AI agent."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Envoie un prompt de suivi à une session Minis existante, poursuivant la conversation avec l'agent IA."
+            "value" : "Envoie un prompt de suivi à une session LeoPhoneAgent existante, poursuivant la conversation avec l'agent IA."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "既存の Minis セッションにフォローアッププロンプトを送信し、AIエージェントとの会話を続けます。"
+            "value" : "既存の LeoPhoneAgent セッションにフォローアッププロンプトを送信し、AIエージェントとの会話を続けます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "기존 Minis 세션에 후속 프롬프트를 보내 AI 에이전트와의 대화를 계속합니다."
+            "value" : "기존 LeoPhoneAgent 세션에 후속 프롬프트를 보내 AI 에이전트와의 대화를 계속합니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Отправляет дополнительный запрос в существующую сессию Minis, продолжая диалог с AI-агентом."
+            "value" : "Отправляет дополнительный запрос в существующую сессию LeoPhoneAgent, продолжая диалог с AI-агентом."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "向现有 Minis 会话发送跟进提示，继续与 AI 代理的对话。"
+            "value" : "向现有 LeoPhoneAgent 会话发送跟进提示，继续与 AI 代理的对话。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "向現有 Minis 會話發送跟進提示，繼續與 AI 代理的對話。"
+            "value" : "向現有 LeoPhoneAgent 會話發送跟進提示，繼續與 AI 代理的對話。"
           }
         }
       }
     },
-    "Sends a prompt to the Minis AI agent. Returns session info immediately while the task runs in the background." : {
+    "Sends a prompt to the LeoPhoneAgent AI agent. Returns session info immediately while the task runs in the background." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sendet einen Prompt an den Minis-KI-Agenten. Gibt Sitzungsinformationen sofort zurück, während die Aufgabe im Hintergrund läuft."
+            "value" : "Sendet einen Prompt an den LeoPhoneAgent-KI-Agenten. Gibt Sitzungsinformationen sofort zurück, während die Aufgabe im Hintergrund läuft."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sends a prompt to the Minis AI agent. Returns session info immediately while the task runs in the background."
+            "value" : "Sends a prompt to the LeoPhoneAgent AI agent. Returns session info immediately while the task runs in the background."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Envoie un prompt à l'agent IA Minis. Retourne les informations de session immédiatement pendant que la tâche s'exécute en arrière-plan."
+            "value" : "Envoie un prompt à l'agent IA LeoPhoneAgent. Retourne les informations de session immédiatement pendant que la tâche s'exécute en arrière-plan."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis AI エージェントにプロンプトを送信します。タスクがバックグラウンドで実行される間、セッション情報を即座に返します。"
+            "value" : "LeoPhoneAgent AI エージェントにプロンプトを送信します。タスクがバックグラウンドで実行される間、セッション情報を即座に返します。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis AI 에이전트에 프롬프트를 보냅니다. 작업이 백그라운드에서 실행되는 동안 세션 정보를 즉시 반환합니다."
+            "value" : "LeoPhoneAgent AI 에이전트에 프롬프트를 보냅니다. 작업이 백그라운드에서 실행되는 동안 세션 정보를 즉시 반환합니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Отправляет запрос AI-агенту Minis. Сразу возвращает информацию о сессии, пока задача выполняется в фоне."
+            "value" : "Отправляет запрос AI-агенту LeoPhoneAgent. Сразу возвращает информацию о сессии, пока задача выполняется в фоне."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "向 Minis AI 代理发送提示。任务在后台运行时立即返回会话信息。"
+            "value" : "向 LeoPhoneAgent AI 代理发送提示。任务在后台运行时立即返回会话信息。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "向 Minis AI 代理發送提示。任務在後臺運行時立即返回會話信息。"
+            "value" : "向 LeoPhoneAgent AI 代理發送提示。任務在後臺運行時立即返回會話信息。"
           }
         }
       }
@@ -66314,54 +66314,54 @@
         }
       }
     },
-    "The Shortcut sent to Minis may not have finished running in the background. Turn on Background Keep-Alive in Settings so automations can complete reliably." : {
+    "The Shortcut sent to LeoPhoneAgent may not have finished running in the background. Turn on Background Keep-Alive in Settings so automations can complete reliably." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Der an Minis gesendete Kurzbefehl wurde im Hintergrund möglicherweise nicht fertig ausgeführt. Aktiviere „Hintergrund aktiv halten“ in den Einstellungen, damit Automatisierungen zuverlässig abgeschlossen werden können."
+            "value" : "Der an LeoPhoneAgent gesendete Kurzbefehl wurde im Hintergrund möglicherweise nicht fertig ausgeführt. Aktiviere „Hintergrund aktiv halten“ in den Einstellungen, damit Automatisierungen zuverlässig abgeschlossen werden können."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The Shortcut sent to Minis may not have finished running in the background. Turn on Background Keep-Alive in Settings so automations can complete reliably."
+            "value" : "The Shortcut sent to LeoPhoneAgent may not have finished running in the background. Turn on Background Keep-Alive in Settings so automations can complete reliably."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Le raccourci envoyé à Minis n’a peut-être pas fini de s’exécuter en arrière-plan. Active « Maintien en arrière-plan » dans Réglages pour que les automatisations puissent se terminer de manière fiable."
+            "value" : "Le raccourci envoyé à LeoPhoneAgent n’a peut-être pas fini de s’exécuter en arrière-plan. Active « Maintien en arrière-plan » dans Réglages pour que les automatisations puissent se terminer de manière fiable."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis に送信されたショートカットがバックグラウンドで完了していない可能性があります。オートメーションを確実に完了させるには、設定で「バックグラウンド動作の維持」をオンにしてください。"
+            "value" : "LeoPhoneAgent に送信されたショートカットがバックグラウンドで完了していない可能性があります。オートメーションを確実に完了させるには、設定で「バックグラウンド動作の維持」をオンにしてください。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis로 보낸 단축어가 백그라운드에서 실행을 마치지 못했을 수 있습니다. 자동화가 안정적으로 완료되도록 설정에서 백그라운드 유지를 켜세요."
+            "value" : "LeoPhoneAgent로 보낸 단축어가 백그라운드에서 실행을 마치지 못했을 수 있습니다. 자동화가 안정적으로 완료되도록 설정에서 백그라운드 유지를 켜세요."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Быстрая команда, отправленная в Minis, возможно, не завершила работу в фоне. Включите «Сохранение активности в фоне» в Настройках, чтобы автоматизации надёжно завершались."
+            "value" : "Быстрая команда, отправленная в LeoPhoneAgent, возможно, не завершила работу в фоне. Включите «Сохранение активности в фоне» в Настройках, чтобы автоматизации надёжно завершались."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "发送给 Minis 的快捷指令可能未在后台运行完成。请在“设置”中开启“后台保活”，以便自动化能够可靠地完成。"
+            "value" : "发送给 LeoPhoneAgent 的快捷指令可能未在后台运行完成。请在“设置”中开启“后台保活”，以便自动化能够可靠地完成。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "傳送給 Minis 的捷徑可能未在背景執行完成。請在「設定」中開啟「背景保活」，以便自動化能夠可靠地完成。"
+            "value" : "傳送給 LeoPhoneAgent 的捷徑可能未在背景執行完成。請在「設定」中開啟「背景保活」，以便自動化能夠可靠地完成。"
           }
         }
       }
@@ -66681,54 +66681,54 @@
         }
       }
     },
-    "These directories appear in iOS Files under On My iPhone → Minis. Tap a row to see details, browse, or toggle visibility." : {
+    "These directories appear in iOS Files under On My iPhone → LeoPhoneAgent. Tap a row to see details, browse, or toggle visibility." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Diese Verzeichnisse erscheinen in der iOS-App „Dateien“ unter „Auf meinem iPhone“ → Minis. Tippen Sie auf einen Eintrag, um Details anzuzeigen, zu durchsuchen oder die Sichtbarkeit umzuschalten."
+            "value" : "Diese Verzeichnisse erscheinen in der iOS-App „Dateien“ unter „Auf meinem iPhone“ → LeoPhoneAgent. Tippen Sie auf einen Eintrag, um Details anzuzeigen, zu durchsuchen oder die Sichtbarkeit umzuschalten."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "These directories appear in iOS Files under On My iPhone → Minis. Tap a row to see details, browse, or toggle visibility."
+            "value" : "These directories appear in iOS Files under On My iPhone → LeoPhoneAgent. Tap a row to see details, browse, or toggle visibility."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ces dossiers apparaissent dans l'app Fichiers d'iOS sous Sur mon iPhone → Minis. Touchez une ligne pour voir les détails, parcourir ou activer/désactiver la visibilité."
+            "value" : "Ces dossiers apparaissent dans l'app Fichiers d'iOS sous Sur mon iPhone → LeoPhoneAgent. Touchez une ligne pour voir les détails, parcourir ou activer/désactiver la visibilité."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "これらのディレクトリは iOS の「ファイル」App の「この iPhone 内」→ Minis に表示されます。行をタップすると詳細の確認、ブラウズ、表示/非表示の切り替えができます。"
+            "value" : "これらのディレクトリは iOS の「ファイル」App の「この iPhone 内」→ LeoPhoneAgent に表示されます。行をタップすると詳細の確認、ブラウズ、表示/非表示の切り替えができます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이 디렉터리는 iOS 파일 앱의 내 iPhone → Minis에 표시됩니다. 행을 탭하여 세부 정보 보기, 탐색 또는 표시 여부를 전환할 수 있습니다."
+            "value" : "이 디렉터리는 iOS 파일 앱의 내 iPhone → LeoPhoneAgent에 표시됩니다. 행을 탭하여 세부 정보 보기, 탐색 또는 표시 여부를 전환할 수 있습니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Эти папки отображаются в «Файлах» iOS в разделе «На моём iPhone» → Minis. Нажмите строку, чтобы посмотреть сведения, просмотреть содержимое или изменить видимость."
+            "value" : "Эти папки отображаются в «Файлах» iOS в разделе «На моём iPhone» → LeoPhoneAgent. Нажмите строку, чтобы посмотреть сведения, просмотреть содержимое или изменить видимость."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "这些目录会显示在 iOS“文件”App 的“我的 iPhone → Minis”下。轻点某一行可查看详情、浏览内容或切换可见性。"
+            "value" : "这些目录会显示在 iOS“文件”App 的“我的 iPhone → LeoPhoneAgent”下。轻点某一行可查看详情、浏览内容或切换可见性。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "這些目錄會顯示在 iOS“文件”App 的“我的 iPhone → Minis”下。輕點某一行可查看詳情、瀏覽內容或切換可見性。"
+            "value" : "這些目錄會顯示在 iOS“文件”App 的“我的 iPhone → LeoPhoneAgent”下。輕點某一行可查看詳情、瀏覽內容或切換可見性。"
           }
         }
       }
@@ -66889,54 +66889,54 @@
         }
       }
     },
-    "This action cannot be undone. All Minis data stored in iCloud will be erased immediately. Other devices signed into the same iCloud account will lose their synced copies on the next sync.\n\nLocal data on this device is safe." : {
+    "This action cannot be undone. All LeoPhoneAgent data stored in iCloud will be erased immediately. Other devices signed into the same iCloud account will lose their synced copies on the next sync.\n\nLocal data on this device is safe." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Diese Aktion kann nicht rückgängig gemacht werden. Alle in iCloud gespeicherten Minis-Daten werden sofort gelöscht. Andere Geräte, die mit demselben iCloud-Konto angemeldet sind, verlieren bei der nächsten Synchronisation ihre synchronisierten Kopien.\n\nLokale Daten auf diesem Gerät sind sicher."
+            "value" : "Diese Aktion kann nicht rückgängig gemacht werden. Alle in iCloud gespeicherten LeoPhoneAgent-Daten werden sofort gelöscht. Andere Geräte, die mit demselben iCloud-Konto angemeldet sind, verlieren bei der nächsten Synchronisation ihre synchronisierten Kopien.\n\nLokale Daten auf diesem Gerät sind sicher."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This action cannot be undone. All Minis data stored in iCloud will be erased immediately. Other devices signed into the same iCloud account will lose their synced copies on the next sync.\n\nLocal data on this device is safe."
+            "value" : "This action cannot be undone. All LeoPhoneAgent data stored in iCloud will be erased immediately. Other devices signed into the same iCloud account will lose their synced copies on the next sync.\n\nLocal data on this device is safe."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cette action est irréversible. Toutes les données Minis stockées dans iCloud seront effacées immédiatement. Les autres appareils connectés au même compte iCloud perdront leurs copies synchronisées lors de la prochaine synchronisation.\n\nLes données locales sur cet appareil sont en sécurité."
+            "value" : "Cette action est irréversible. Toutes les données LeoPhoneAgent stockées dans iCloud seront effacées immédiatement. Les autres appareils connectés au même compte iCloud perdront leurs copies synchronisées lors de la prochaine synchronisation.\n\nLes données locales sur cet appareil sont en sécurité."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "この操作は取り消せません。iCloud に保存されているすべての Minis データは直ちに削除されます。同じ iCloud アカウントにサインインしている他のデバイスは、次回の同期時に同期されたコピーを失います。\n\nこのデバイスのローカルデータは安全です。"
+            "value" : "この操作は取り消せません。iCloud に保存されているすべての LeoPhoneAgent データは直ちに削除されます。同じ iCloud アカウントにサインインしている他のデバイスは、次回の同期時に同期されたコピーを失います。\n\nこのデバイスのローカルデータは安全です。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이 작업은 취소할 수 없습니다. iCloud에 저장된 모든 Minis 데이터가 즉시 삭제됩니다. 동일한 iCloud 계정에 로그인된 다른 기기는 다음 동기화 시 동기화된 복사본을 잃게 됩니다.\n\n이 기기의 로컬 데이터는 안전합니다."
+            "value" : "이 작업은 취소할 수 없습니다. iCloud에 저장된 모든 LeoPhoneAgent 데이터가 즉시 삭제됩니다. 동일한 iCloud 계정에 로그인된 다른 기기는 다음 동기화 시 동기화된 복사본을 잃게 됩니다.\n\n이 기기의 로컬 데이터는 안전합니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Это действие нельзя отменить. Все данные Minis, хранящиеся в iCloud, будут немедленно удалены. Другие устройства, выполнившие вход в тот же аккаунт iCloud, потеряют свои синхронизированные копии при следующей синхронизации.\n\nЛокальные данные на этом устройстве в безопасности."
+            "value" : "Это действие нельзя отменить. Все данные LeoPhoneAgent, хранящиеся в iCloud, будут немедленно удалены. Другие устройства, выполнившие вход в тот же аккаунт iCloud, потеряют свои синхронизированные копии при следующей синхронизации.\n\nЛокальные данные на этом устройстве в безопасности."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此操作无法撤销。iCloud 中存储的所有 Minis 数据将立即被删除。登录同一 iCloud 账户的其他设备将在下次同步时失去已同步的副本。\n\n本设备上的本地数据是安全的。"
+            "value" : "此操作无法撤销。iCloud 中存储的所有 LeoPhoneAgent 数据将立即被删除。登录同一 iCloud 账户的其他设备将在下次同步时失去已同步的副本。\n\n本设备上的本地数据是安全的。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此操作無法撤銷。iCloud 中存儲的所有 Minis 數據將立即被刪除。登錄同一 iCloud 賬戶的其他設備將在下次同步時失去已同步的副本。\n\n本設備上的本地數據是安全的。"
+            "value" : "此操作無法撤銷。iCloud 中存儲的所有 LeoPhoneAgent 數據將立即被刪除。登錄同一 iCloud 賬戶的其他設備將在下次同步時失去已同步的副本。\n\n本設備上的本地數據是安全的。"
           }
         }
       }
@@ -67114,54 +67114,54 @@
         }
       }
     },
-    "This folder appears in Files → On My iPhone → Minis." : {
+    "This folder appears in Files → On My iPhone → LeoPhoneAgent." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dieser Ordner erscheint in „Dateien“ → „Auf meinem iPhone“ → Minis."
+            "value" : "Dieser Ordner erscheint in „Dateien“ → „Auf meinem iPhone“ → LeoPhoneAgent."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This folder appears in Files → On My iPhone → Minis."
+            "value" : "This folder appears in Files → On My iPhone → LeoPhoneAgent."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Ce dossier apparaît dans Fichiers → Sur mon iPhone → Minis."
+            "value" : "Ce dossier apparaît dans Fichiers → Sur mon iPhone → LeoPhoneAgent."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "このフォルダは「ファイル」→「この iPhone 内」→ Minis に表示されます。"
+            "value" : "このフォルダは「ファイル」→「この iPhone 内」→ LeoPhoneAgent に表示されます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이 폴더는 파일 → 내 iPhone → Minis에 표시됩니다."
+            "value" : "이 폴더는 파일 → 내 iPhone → LeoPhoneAgent에 표시됩니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Эта папка отображается в «Файлах» → «На моём iPhone» → Minis."
+            "value" : "Эта папка отображается в «Файлах» → «На моём iPhone» → LeoPhoneAgent."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此文件夹会显示在“文件”→“我的 iPhone”→ Minis 中。"
+            "value" : "此文件夹会显示在“文件”→“我的 iPhone”→ LeoPhoneAgent 中。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此文件夾會顯示在“文件”→“我的 iPhone”→ Minis 中。"
+            "value" : "此文件夾會顯示在“文件”→“我的 iPhone”→ LeoPhoneAgent 中。"
           }
         }
       }
@@ -68512,54 +68512,54 @@
         }
       }
     },
-    "This will permanently delete everything Minis has uploaded to your iCloud account, across ALL of your devices:\n\n• Chat sessions & messages\n• Session files & attachments\n• Skills\n• Provider configurations\n• Environment variables\n\nThis device's local data will NOT be deleted — only the cloud copy. After the wipe, this device will re-upload its local content to a fresh iCloud zone." : {
+    "This will permanently delete everything LeoPhoneAgent has uploaded to your iCloud account, across ALL of your devices:\n\n• Chat sessions & messages\n• Session files & attachments\n• Skills\n• Provider configurations\n• Environment variables\n\nThis device's local data will NOT be deleted — only the cloud copy. After the wipe, this device will re-upload its local content to a fresh iCloud zone." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dadurch werden alle Daten, die Minis in dein iCloud-Konto hochgeladen hat, auf ALLEN deinen Geräten dauerhaft gelöscht:\n\n• Chat-Sitzungen & Nachrichten\n• Sitzungsdateien & Anhänge\n• Skills\n• Anbieter-Konfigurationen\n• Umgebungsvariablen\n\nDie lokalen Daten dieses Geräts werden NICHT gelöscht – nur die Kopie in der Cloud. Nach dem Löschen lädt dieses Gerät seinen lokalen Inhalt in eine neue iCloud-Zone hoch."
+            "value" : "Dadurch werden alle Daten, die LeoPhoneAgent in dein iCloud-Konto hochgeladen hat, auf ALLEN deinen Geräten dauerhaft gelöscht:\n\n• Chat-Sitzungen & Nachrichten\n• Sitzungsdateien & Anhänge\n• Skills\n• Anbieter-Konfigurationen\n• Umgebungsvariablen\n\nDie lokalen Daten dieses Geräts werden NICHT gelöscht – nur die Kopie in der Cloud. Nach dem Löschen lädt dieses Gerät seinen lokalen Inhalt in eine neue iCloud-Zone hoch."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This will permanently delete everything Minis has uploaded to your iCloud account, across ALL of your devices:\n\n• Chat sessions & messages\n• Session files & attachments\n• Skills\n• Provider configurations\n• Environment variables\n\nThis device's local data will NOT be deleted — only the cloud copy. After the wipe, this device will re-upload its local content to a fresh iCloud zone."
+            "value" : "This will permanently delete everything LeoPhoneAgent has uploaded to your iCloud account, across ALL of your devices:\n\n• Chat sessions & messages\n• Session files & attachments\n• Skills\n• Provider configurations\n• Environment variables\n\nThis device's local data will NOT be deleted — only the cloud copy. After the wipe, this device will re-upload its local content to a fresh iCloud zone."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cela supprimera définitivement tout ce que Minis a téléversé vers votre compte iCloud, sur TOUS vos appareils :\n\n• Sessions & messages de chat\n• Fichiers de session & pièces jointes\n• Compétences\n• Configurations de fournisseurs\n• Variables d'environnement\n\nLes données locales de cet appareil ne seront PAS supprimées — seule la copie dans le cloud. Après l'effacement, cet appareil téléversera son contenu local dans une nouvelle zone iCloud."
+            "value" : "Cela supprimera définitivement tout ce que LeoPhoneAgent a téléversé vers votre compte iCloud, sur TOUS vos appareils :\n\n• Sessions & messages de chat\n• Fichiers de session & pièces jointes\n• Compétences\n• Configurations de fournisseurs\n• Variables d'environnement\n\nLes données locales de cet appareil ne seront PAS supprimées — seule la copie dans le cloud. Après l'effacement, cet appareil téléversera son contenu local dans une nouvelle zone iCloud."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "この操作により、Minis が iCloud アカウントにアップロードしたすべてのデータが、すべてのデバイスで永久に削除されます：\n\n• チャットセッションとメッセージ\n• セッションファイルと添付ファイル\n• スキル\n• プロバイダー設定\n• 環境変数\n\nこのデバイスのローカルデータは削除されません。クラウドのコピーのみが削除されます。削除後、このデバイスはローカルのコンテンツを新しい iCloud ゾーンに再アップロードします。"
+            "value" : "この操作により、LeoPhoneAgent が iCloud アカウントにアップロードしたすべてのデータが、すべてのデバイスで永久に削除されます：\n\n• チャットセッションとメッセージ\n• セッションファイルと添付ファイル\n• スキル\n• プロバイダー設定\n• 環境変数\n\nこのデバイスのローカルデータは削除されません。クラウドのコピーのみが削除されます。削除後、このデバイスはローカルのコンテンツを新しい iCloud ゾーンに再アップロードします。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "이 작업은 Minis가 iCloud 계정에 업로드한 모든 데이터를 모든 기기에서 영구적으로 삭제합니다:\n\n• 채팅 세션 및 메시지\n• 세션 파일 및 첨부파일\n• 스킬\n• 공급자 구성\n• 환경 변수\n\n이 기기의 로컬 데이터는 삭제되지 않으며, 클라우드 복사본만 삭제됩니다. 삭제 후, 이 기기는 로컬 콘텐츠를 새로운 iCloud 영역에 다시 업로드합니다."
+            "value" : "이 작업은 LeoPhoneAgent가 iCloud 계정에 업로드한 모든 데이터를 모든 기기에서 영구적으로 삭제합니다:\n\n• 채팅 세션 및 메시지\n• 세션 파일 및 첨부파일\n• 스킬\n• 공급자 구성\n• 환경 변수\n\n이 기기의 로컬 데이터는 삭제되지 않으며, 클라우드 복사본만 삭제됩니다. 삭제 후, 이 기기는 로컬 콘텐츠를 새로운 iCloud 영역에 다시 업로드합니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Это безвозвратно удалит всё, что Minis загрузил в ваш аккаунт iCloud, на ВСЕХ ваших устройствах:\n\n• Сессии чатов и сообщения\n• Файлы и вложения сессий\n• Навыки\n• Конфигурации провайдеров\n• Переменные окружения\n\nЛокальные данные на этом устройстве НЕ будут удалены — только облачная копия. После очистки это устройство заново загрузит своё локальное содержимое в новую зону iCloud."
+            "value" : "Это безвозвратно удалит всё, что LeoPhoneAgent загрузил в ваш аккаунт iCloud, на ВСЕХ ваших устройствах:\n\n• Сессии чатов и сообщения\n• Файлы и вложения сессий\n• Навыки\n• Конфигурации провайдеров\n• Переменные окружения\n\nЛокальные данные на этом устройстве НЕ будут удалены — только облачная копия. После очистки это устройство заново загрузит своё локальное содержимое в новую зону iCloud."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此操作将永久删除 Minis 上传到您 iCloud 账户中的所有内容，跨您所有的设备：\n\n• 聊天会话和消息\n• 会话文件和附件\n• 技能\n• 服务商配置\n• 环境变量\n\n本设备上的本地数据不会被删除 —— 仅删除云端副本。删除后，本设备将把其本地内容重新上传到新的 iCloud 区域。"
+            "value" : "此操作将永久删除 LeoPhoneAgent 上传到您 iCloud 账户中的所有内容，跨您所有的设备：\n\n• 聊天会话和消息\n• 会话文件和附件\n• 技能\n• 服务商配置\n• 环境变量\n\n本设备上的本地数据不会被删除 —— 仅删除云端副本。删除后，本设备将把其本地内容重新上传到新的 iCloud 区域。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "此操作將永久刪除 Minis 上傳到您 iCloud 賬戶中的所有內容，跨您所有的設備：\n\n• 聊天會話和消息\n• 會話文件和附件\n• 技能\n• 服務商配置\n• 環境變量\n\n本設備上的本地數據不會被刪除 —— 僅刪除雲端副本。刪除後，本設備將把其本地內容重新上傳到新的 iCloud 區域。"
+            "value" : "此操作將永久刪除 LeoPhoneAgent 上傳到您 iCloud 賬戶中的所有內容，跨您所有的設備：\n\n• 聊天會話和消息\n• 會話文件和附件\n• 技能\n• 服務商配置\n• 環境變量\n\n本設備上的本地數據不會被刪除 —— 僅刪除雲端副本。刪除後，本設備將把其本地內容重新上傳到新的 iCloud 區域。"
           }
         }
       }
@@ -68668,54 +68668,54 @@
         }
       }
     },
-    "This will remove all cookies and website data from the Minis browser." : {
+    "This will remove all cookies and website data from the LeoPhoneAgent browser." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Dies entfernt alle Cookies und Website-Daten aus dem Minis-Browser."
+            "value" : "Dies entfernt alle Cookies und Website-Daten aus dem LeoPhoneAgent-Browser."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This will remove all cookies and website data from the Minis browser."
+            "value" : "This will remove all cookies and website data from the LeoPhoneAgent browser."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cela supprimera tous les cookies et données de sites web du navigateur Minis."
+            "value" : "Cela supprimera tous les cookies et données de sites web du navigateur LeoPhoneAgent."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis ブラウザからすべての Cookie とウェブサイトデータが削除されます。"
+            "value" : "LeoPhoneAgent ブラウザからすべての Cookie とウェブサイトデータが削除されます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 브라우저에서 모든 쿠키와 웹사이트 데이터가 삭제됩니다."
+            "value" : "LeoPhoneAgent 브라우저에서 모든 쿠키와 웹사이트 데이터가 삭제됩니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Это удалит все файлы cookie и данные сайтов из браузера Minis."
+            "value" : "Это удалит все файлы cookie и данные сайтов из браузера LeoPhoneAgent."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "这将从 Minis 浏览器中删除所有 Cookie 和网站数据。"
+            "value" : "这将从 LeoPhoneAgent 浏览器中删除所有 Cookie 和网站数据。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "這將從 Minis 瀏覽器中刪除所有 Cookie 和網站數據。"
+            "value" : "這將從 LeoPhoneAgent 瀏覽器中刪除所有 Cookie 和網站數據。"
           }
         }
       }
@@ -69637,54 +69637,54 @@
         }
       }
     },
-    "Toggles play/pause on Minis audio narration from the Live Activity." : {
+    "Toggles play/pause on LeoPhoneAgent audio narration from the Live Activity." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Schaltet die Audio-Erzählung von Minis über die Live-Aktivität zwischen Wiedergabe und Pause um."
+            "value" : "Schaltet die Audio-Erzählung von LeoPhoneAgent über die Live-Aktivität zwischen Wiedergabe und Pause um."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Toggles play/pause on Minis audio narration from the Live Activity."
+            "value" : "Toggles play/pause on LeoPhoneAgent audio narration from the Live Activity."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Active/désactive la lecture/pause de la narration audio de Minis depuis l’activité en direct."
+            "value" : "Active/désactive la lecture/pause de la narration audio de LeoPhoneAgent depuis l’activité en direct."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "ライブアクティビティから Minis の音声ナレーションの再生／一時停止を切り替えます。"
+            "value" : "ライブアクティビティから LeoPhoneAgent の音声ナレーションの再生／一時停止を切り替えます。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "실시간 활동에서 Minis 오디오 내레이션의 재생/일시정지를 전환합니다."
+            "value" : "실시간 활동에서 LeoPhoneAgent 오디오 내레이션의 재생/일시정지를 전환합니다."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Переключает воспроизведение/паузу аудиоозвучивания Minis из Live Activity."
+            "value" : "Переключает воспроизведение/паузу аудиоозвучивания LeoPhoneAgent из Live Activity."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "从实时活动切换 Minis 音频朗读的播放/暂停。"
+            "value" : "从实时活动切换 LeoPhoneAgent 音频朗读的播放/暂停。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "從即時動態切換 Minis 音訊朗讀的播放/暫停。"
+            "value" : "從即時動態切換 LeoPhoneAgent 音訊朗讀的播放/暫停。"
           }
         }
       }
@@ -71039,54 +71039,54 @@
         }
       }
     },
-    "Unlock Minis" : {
+    "Unlock LeoPhoneAgent" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis entsperren"
+            "value" : "LeoPhoneAgent entsperren"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unlock Minis"
+            "value" : "Unlock LeoPhoneAgent"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Déverrouiller Minis"
+            "value" : "Déverrouiller LeoPhoneAgent"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis のロックを解除"
+            "value" : "LeoPhoneAgent のロックを解除"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 잠금 해제"
+            "value" : "LeoPhoneAgent 잠금 해제"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Разблокировать Minis"
+            "value" : "Разблокировать LeoPhoneAgent"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "解锁 Minis"
+            "value" : "解锁 LeoPhoneAgent"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "解鎖 Minis"
+            "value" : "解鎖 LeoPhoneAgent"
           }
         }
       }
@@ -74620,54 +74620,54 @@
         }
       }
     },
-    "Welcome to Minis" : {
+    "Welcome to LeoPhoneAgent" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Willkommen bei Minis"
+            "value" : "Willkommen bei LeoPhoneAgent"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Welcome to Minis"
+            "value" : "Welcome to LeoPhoneAgent"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Bienvenue dans Minis"
+            "value" : "Bienvenue dans LeoPhoneAgent"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis へようこそ"
+            "value" : "LeoPhoneAgent へようこそ"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis에 오신 것을 환영합니다"
+            "value" : "LeoPhoneAgent에 오신 것을 환영합니다"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Добро пожаловать в Minis"
+            "value" : "Добро пожаловать в LeoPhoneAgent"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "欢迎使用 Minis"
+            "value" : "欢迎使用 LeoPhoneAgent"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "歡迎使用 Minis"
+            "value" : "歡迎使用 LeoPhoneAgent"
           }
         }
       }
@@ -74724,54 +74724,54 @@
         }
       }
     },
-    "What would you like to ask Minis?" : {
+    "What would you like to ask LeoPhoneAgent?" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Was möchten Sie Minis fragen?"
+            "value" : "Was möchten Sie LeoPhoneAgent fragen?"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "What would you like to ask Minis?"
+            "value" : "What would you like to ask LeoPhoneAgent?"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Que souhaitez-vous demander à Minis ?"
+            "value" : "Que souhaitez-vous demander à LeoPhoneAgent ?"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis に何を聞きたいですか？"
+            "value" : "LeoPhoneAgent に何を聞きたいですか？"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis에게 무엇을 물어보시겠어요?"
+            "value" : "LeoPhoneAgent에게 무엇을 물어보시겠어요?"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "О чём вы хотите спросить Minis?"
+            "value" : "О чём вы хотите спросить LeoPhoneAgent?"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "您想问 Minis 什么？"
+            "value" : "您想问 LeoPhoneAgent 什么？"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "您想問 Minis 什麼？"
+            "value" : "您想問 LeoPhoneAgent 什麼？"
           }
         }
       }
@@ -75268,13 +75268,13 @@
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "オフにすると、Minis Shell と AI ツールはこのマウント内のファイルを作成・編集・削除できません。"
+            "value" : "オフにすると、LeoPhoneAgent Shell と AI ツールはこのマウント内のファイルを作成・編集・削除できません。"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "꺼져 있으면 Minis Shell과 AI 도구는 이 마운트의 파일을 만들거나 편집하거나 삭제할 수 없습니다."
+            "value" : "꺼져 있으면 LeoPhoneAgent Shell과 AI 도구는 이 마운트의 파일을 만들거나 편집하거나 삭제할 수 없습니다."
           }
         },
         "ru" : {
@@ -75286,13 +75286,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "关闭后，Minis Shell 和 AI 工具将无法在此挂载中创建、编辑或删除文件。"
+            "value" : "关闭后，LeoPhoneAgent Shell 和 AI 工具将无法在此挂载中创建、编辑或删除文件。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "關閉後，Minis Shell 和 AI 工具將無法在此掛載中創建、編輯或刪除文件。"
+            "value" : "關閉後，LeoPhoneAgent Shell 和 AI 工具將無法在此掛載中創建、編輯或刪除文件。"
           }
         }
       }
@@ -75756,13 +75756,13 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 工作目录结构"
+            "value" : "LeoPhoneAgent 工作目录结构"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minis 工作目錄結構"
+            "value" : "LeoPhoneAgent 工作目錄結構"
           }
         }
       }

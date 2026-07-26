@@ -1,4 +1,4 @@
-package com.openminis.app.agent.shell
+package com.leoyuan.leophoneagent.agent.shell
 
 import android.content.Context
 import android.util.Log

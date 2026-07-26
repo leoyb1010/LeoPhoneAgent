@@ -59,7 +59,7 @@ struct SessionStatusQuery: EntityQuery {
 /// the latest message text, last tool summary, etc. Use after SendPrompt to poll.
 struct GetSessionStatusIntent: AppIntent {
     static var title: LocalizedStringResource = "Get Session Status"
-    static var description = IntentDescription("Gets the current status of a Minis session, including whether the agent is still running, the latest message, and last tool call.")
+    static var description = IntentDescription("Gets the current status of a LeoPhoneAgent session, including whether the agent is still running, the latest message, and last tool call.")
     static var openAppWhenRun = false
 
     @Parameter(title: "Session ID")

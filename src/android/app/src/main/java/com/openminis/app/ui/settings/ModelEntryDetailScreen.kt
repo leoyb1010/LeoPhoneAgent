@@ -1,4 +1,4 @@
-package com.openminis.app.ui.settings
+package com.leoyuan.leophoneagent.ui.settings
 
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,14 +22,14 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
-import com.openminis.app.data.model.ModelOverrides
-import com.openminis.app.data.model.normalizeModalityName
-import com.openminis.app.data.repository.ProviderRepository
-import com.openminis.app.ui.components.RowLabel
-import com.openminis.app.ui.components.SectionTextField
-import com.openminis.app.R
-import com.openminis.app.ui.components.MinisButton
-import com.openminis.app.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.data.model.ModelOverrides
+import com.leoyuan.leophoneagent.data.model.normalizeModalityName
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.ui.components.RowLabel
+import com.leoyuan.leophoneagent.ui.components.SectionTextField
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.ui.components.MinisButton
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
 
 /**
  * Detail / edit screen for a single ModelEntry. T210: brought to iOS
@@ -319,7 +319,7 @@ fun ModelEntryDetailScreen(
     }
 
     if (showQuickTest) {
-        com.openminis.app.ui.components.QuickTestSheet(
+        com.leoyuan.leophoneagent.ui.components.QuickTestSheet(
             entry = entry,
             providerRepository = providerRepository,
             onDismiss = { showQuickTest = false },

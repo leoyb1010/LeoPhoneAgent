@@ -1,4 +1,4 @@
-package com.openminis.app.speech.correction
+package com.leoyuan.leophoneagent.speech.correction
 
 /**
  * [T-android-correction-admission-multisignal] Decides whether one diffed edit

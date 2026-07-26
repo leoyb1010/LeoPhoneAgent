@@ -1,4 +1,4 @@
-package com.openminis.app.share
+package com.leoyuan.leophoneagent.share
 
 import org.json.JSONArray
 import org.json.JSONObject

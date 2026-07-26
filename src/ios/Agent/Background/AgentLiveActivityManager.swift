@@ -153,7 +153,7 @@ final class AgentLiveActivityManager {
     /// DON'T tear the Live Activity down. Flip it to a "completed" resting state
     /// (checkmark + each session's last message, carousel frozen) and leave it on
     /// the Lock Screen / Dynamic Island. It's dismissed later — when the user taps
-    /// it and Minis comes to the foreground (see `dismissFinishedActivityOnForeground`).
+    /// it and LeoPhoneAgent comes to the foreground (see `dismissFinishedActivityOnForeground`).
     /// Falls back to a hard end if there's no prior running snapshot to complete.
     func finishActivity(lastMessages: [String: String] = [:]) async {
         guard Self.isActivityKitAvailable else { return }
@@ -287,7 +287,7 @@ final class AgentLiveActivityManager {
 
     static func currentSoulName() -> String {
         let name = SoulStore.cachedMetadata.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        return name.isEmpty ? "Minis" : name
+        return name.isEmpty ? "LeoPhoneAgent" : name
     }
 
     /// SF Symbol for the most-recently-invoked tool across all active sessions,
@@ -774,7 +774,7 @@ final class AgentLiveActivityManager {
         s.privacyMode = true
         // [T-ios-live-activity-privacy-duration] soulName deliberately survives
         // redaction now: it is the user's chosen Soul persona (an identity
-        // label), not conversation content — forcing "Minis" made Privacy Mode
+        // label), not conversation content — forcing "LeoPhoneAgent" made Privacy Mode
         // gratuitously anonymous. The remaining redactions still strip
         // everything conversation-derived.
         // Neutral icon for the Dynamic Island trailing/expanded glyphs, and never

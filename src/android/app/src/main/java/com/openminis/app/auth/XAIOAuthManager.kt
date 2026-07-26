@@ -1,4 +1,4 @@
-package com.openminis.app.auth
+package com.leoyuan.leophoneagent.auth
 
 import android.content.Context
 import android.net.Uri
@@ -66,7 +66,7 @@ class XAIOAuthManager(context: Context, instanceId: String) : OAuthManager(conte
         suspend fun login(
             context: Context,
             instanceId: String,
-            providerRepository: com.openminis.app.data.repository.ProviderRepository,
+            providerRepository: com.leoyuan.leophoneagent.data.repository.ProviderRepository,
         ): String {
             val manager = XAIOAuthManager(context, instanceId)
             val token = manager.performLogin(context)

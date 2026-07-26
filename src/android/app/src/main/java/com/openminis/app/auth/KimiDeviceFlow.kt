@@ -1,4 +1,4 @@
-package com.openminis.app.auth
+package com.leoyuan.leophoneagent.auth
 
 import org.json.JSONObject
 

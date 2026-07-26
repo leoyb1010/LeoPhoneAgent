@@ -1,4 +1,4 @@
-package com.openminis.app.service
+package com.leoyuan.leophoneagent.service
 
 import android.content.Context
 import android.util.Log
@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 /**
  * Singleton that tracks two independent kinds of "session is alive":
  *
- *  - `activeSessions`: at least one [com.openminis.app.ui.chat.ChatViewModel.streamJob]
+ *  - `activeSessions`: at least one [com.leoyuan.leophoneagent.ui.chat.ChatViewModel.streamJob]
  *    is in flight (LLM call, tool execution).
  *  - `presentSessions` (T166): the user is sitting on a chat screen
  *    with the composer mounted, regardless of whether a stream is
@@ -62,7 +62,7 @@ object SessionActivityTracker {
      * static per-tool label ("Browser", "Shell", …) so users see the
      * actual intent of the call rather than just the tool kind.
      *
-     * Populated from the dispatch loop in [com.openminis.app.ui.chat.ChatViewModel]
+     * Populated from the dispatch loop in [com.leoyuan.leophoneagent.ui.chat.ChatViewModel]
      * by reading the `tool_title` arg uniformly for ALL tools — so
      * browser_use (which has no per-tool status override) surfaces the
      * title alongside shell_execute and friends.
@@ -74,7 +74,7 @@ object SessionActivityTracker {
      * T-bg-overlay phase 1: true while a tool call is actively executing
      * (between dispatch and result). Drives the notification's
      * indeterminate progress bar so the user can tell at a glance whether
-     * Minis is "between turns" (false → no progress) vs "doing something"
+     * LeoPhoneAgent is "between turns" (false → no progress) vs "doing something"
      * (true → spinning bar).
      */
     private val _isToolRunning = MutableStateFlow(false)
@@ -112,7 +112,7 @@ object SessionActivityTracker {
      * [T-android-overlay-reply-status-34599] Truncated excerpt of the
      * most recent assistant reply for the currently-tracked session.
      * Published by ChatViewModel via [publishLastReply] right before
-     * [setInactive] so the overlay can show "what did Minis just say".
+     * [setInactive] so the overlay can show "what did LeoPhoneAgent just say".
      * Null when no reply has been observed yet this session-cycle;
      * cleared when a fresh session goes active (so the previous
      * session's reply doesn't bleed into a newly-started turn).
@@ -124,7 +124,7 @@ object SessionActivityTracker {
      * [T-android-overlay-reply-status-34599] Session ID associated with
      * [lastReplyExcerpt] and the current activity. Drives the
      * "tap-overlay → open chat" intent in [ToolOverlayController] by
-     * synthesising a `minis://session/<id>` deep-link the existing
+     * synthesising a `leophoneagent://session/<id>` deep-link the existing
      * DeepLinkHandler already understands.
      */
     private val _currentSessionId = MutableStateFlow<String?>(null)
@@ -135,10 +135,10 @@ object SessionActivityTracker {
 
     /**
      * [T-android-overlay-hide-camera] True while the user has launched the
-     * system camera (ACTION_IMAGE_CAPTURE) from inside Minis and we're
+     * system camera (ACTION_IMAGE_CAPTURE) from inside LeoPhoneAgent and we're
      * waiting on the ActivityResult callback. The overlay observer in
      * [AgentForegroundService] gates `shouldShow` on this flag so the
-     * floating capsule doesn't obstruct the camera viewfinder — Minis is
+     * floating capsule doesn't obstruct the camera viewfinder — LeoPhoneAgent is
      * technically backgrounded during the capture (the camera Activity is
      * on top), which would otherwise satisfy the bg-only show rule from
      * #451. Cleared in the camera launcher's result callback (success,
@@ -165,7 +165,7 @@ object SessionActivityTracker {
 
     /**
      * T50: per-session stream-cancel callbacks. Each ChatViewModel
-     * registers its own [com.openminis.app.ui.chat.ChatViewModel.cancelStream]
+     * registers its own [com.leoyuan.leophoneagent.ui.chat.ChatViewModel.cancelStream]
      * here when [setActive] is called and unregisters in [setInactive].
      * The foreground service's notification "Stop" action calls
      * [cancelAllActiveStreams] which iterates this map — without it the
@@ -187,7 +187,7 @@ object SessionActivityTracker {
 
     /**
      * T180-bg-notif: completion listener. Wired in MinisApp.onCreate to
-     * a [com.openminis.app.notification.BackgroundTaskNotifier] so when
+     * a [com.leoyuan.leophoneagent.notification.BackgroundTaskNotifier] so when
      * an agent loop ends while the app is backgrounded, the user gets a
      * tap-to-open-session notification — mirrors iOS
      * `BackgroundKeepAliveManager.postBackgroundTaskNotification` (L274).
@@ -546,16 +546,16 @@ object SessionActivityTracker {
                     tool
                 } else if (ctx != null) {
                     if (activeCount == 1) {
-                        ctx.getString(com.openminis.app.R.string.notif_one_task_running)
+                        ctx.getString(com.leoyuan.leophoneagent.R.string.notif_one_task_running)
                     } else {
-                        ctx.getString(com.openminis.app.R.string.notif_n_tasks_running, activeCount)
+                        ctx.getString(com.leoyuan.leophoneagent.R.string.notif_n_tasks_running, activeCount)
                     }
                 } else {
                     if (activeCount == 1) "1 task running" else "$activeCount tasks running"
                 }
             }
             _presentSessions.value.isNotEmpty() ->
-                ctx?.getString(com.openminis.app.R.string.notif_in_session) ?: "In session"
+                ctx?.getString(com.leoyuan.leophoneagent.R.string.notif_in_session) ?: "In session"
             else -> "Idle"
         }
     }

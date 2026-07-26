@@ -1,4 +1,4 @@
-package com.openminis.app.sandbox.offload
+package com.leoyuan.leophoneagent.sandbox.offload
 
 import android.Manifest
 import android.content.ContentValues
@@ -6,11 +6,11 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.provider.CalendarContract
 import androidx.core.content.ContextCompat
-import com.openminis.app.logging.AppLogger
-import com.openminis.app.offload.OffloadPermissionManager
-import com.openminis.app.sandbox.NativeOffloadHandler
-import com.openminis.app.sandbox.NativeOffloadRequest
-import com.openminis.app.sandbox.NativeOffloadResult
+import com.leoyuan.leophoneagent.logging.AppLogger
+import com.leoyuan.leophoneagent.offload.OffloadPermissionManager
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadHandler
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadRequest
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadResult
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
@@ -105,7 +105,7 @@ class CalendarOffloadHandler(private val context: Context) : NativeOffloadHandle
                     OffloadPermissionManager.SettingsGateRequest(
                         id = settingsId,
                         title = "Calendar permission needed",
-                        message = "Minis needs $humanLabel permission to $humanLabel your calendar. Open Settings to allow it.",
+                        message = "LeoPhoneAgent needs $humanLabel permission to $humanLabel your calendar. Open Settings to allow it.",
                         settingsAction = android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                         requiresPackageUri = true,
                         positiveLabel = "Open Settings",

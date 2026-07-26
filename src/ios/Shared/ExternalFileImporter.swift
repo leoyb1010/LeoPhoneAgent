@@ -2,7 +2,7 @@ import Foundation
 
 private let importLog = AppLogger(category: "Share")
 
-/// Ingests a `file://` URL that arrived via "Open in Minis" / "Copy to Minis"
+/// Ingests a `file://` URL that arrived via "Open in LeoPhoneAgent" / "Copy to LeoPhoneAgent"
 /// from the Files app (or any document provider) into the SAME PendingShare
 /// pipeline the Share Extension uses. The file is copied into the App Group
 /// shared transfer directory and surfaced as a `.attachment` item, so it flows
@@ -11,7 +11,7 @@ private let importLog = AppLogger(category: "Share")
 /// detection path. [T-ios-json-open-provider-import-prompt]
 enum ExternalFileImporter {
 
-    /// True if `url` is a local file we should ingest (vs a `minis://` deep link).
+    /// True if `url` is a local file we should ingest (vs a `leophoneagent://` deep link).
     static func canIngest(_ url: URL) -> Bool {
         url.isFileURL
     }

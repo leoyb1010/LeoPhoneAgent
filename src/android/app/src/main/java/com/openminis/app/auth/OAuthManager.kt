@@ -1,4 +1,4 @@
-package com.openminis.app.auth
+package com.leoyuan.leophoneagent.auth
 
 import android.content.Context
 import android.content.Intent
@@ -50,12 +50,12 @@ abstract class OAuthManager(
         }
 
         /** Create the appropriate OAuthManager for a provider instance. */
-        fun forInstance(context: Context, instance: com.openminis.app.data.model.ProviderInstance): OAuthManager? {
+        fun forInstance(context: Context, instance: com.leoyuan.leophoneagent.data.model.ProviderInstance): OAuthManager? {
             return when (instance.providerType) {
-                com.openminis.app.data.model.ProviderType.anthropic -> ClaudeOAuthManager(context, instance.id)
-                com.openminis.app.data.model.ProviderType.openAI -> OpenAIOAuthManager(context, instance.id)
-                com.openminis.app.data.model.ProviderType.xAI -> XAIOAuthManager(context, instance.id)
-                com.openminis.app.data.model.ProviderType.kimiCode -> KimiOAuthManager(context, instance.id)
+                com.leoyuan.leophoneagent.data.model.ProviderType.anthropic -> ClaudeOAuthManager(context, instance.id)
+                com.leoyuan.leophoneagent.data.model.ProviderType.openAI -> OpenAIOAuthManager(context, instance.id)
+                com.leoyuan.leophoneagent.data.model.ProviderType.xAI -> XAIOAuthManager(context, instance.id)
+                com.leoyuan.leophoneagent.data.model.ProviderType.kimiCode -> KimiOAuthManager(context, instance.id)
                 else -> null
             }
         }
@@ -395,7 +395,7 @@ abstract class OAuthManager(
     // key under the user, and OAuth callers can't afford a crash here
     // since some of them run in the background refresh path.
     private fun getEncryptedPrefs() =
-        com.openminis.app.util.EncryptedPrefsFactory.safeCreate(context, "oauth_prefs")
+        com.leoyuan.leophoneagent.util.EncryptedPrefsFactory.safeCreate(context, "oauth_prefs")
 
     protected open suspend fun onTokensReceived(json: JSONObject) {}
 }

@@ -19,8 +19,8 @@ final class AppGroupChangeWatcher {
     static let shared = AppGroupChangeWatcher()
 
     private let logger = AppLogger(category: "FPWatcher")
-    private let queue = DispatchQueue(label: "com.openminis.app.fpwatcher", qos: .utility)
-    private let domainIdentifier = NSFileProviderDomainIdentifier("com.openminis.app.files")
+    private let queue = DispatchQueue(label: "com.leoyuan.leophoneagent.fpwatcher", qos: .utility)
+    private let domainIdentifier = NSFileProviderDomainIdentifier("com.leoyuan.leophoneagent.files")
 
     /// Hard cap on simultaneous watched directories. Each watch holds an `O_EVTONLY`
     /// fd; iOS apps typically have a per-process limit around 256. We cap well below

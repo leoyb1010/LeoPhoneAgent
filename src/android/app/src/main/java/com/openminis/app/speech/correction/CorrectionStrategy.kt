@@ -1,12 +1,12 @@
-package com.openminis.app.speech.correction
+package com.leoyuan.leophoneagent.speech.correction
 
 import android.content.Context
 import android.util.Log
-import com.openminis.app.data.model.LLMMessage
-import com.openminis.app.data.model.ModelEntry
-import com.openminis.app.data.model.ThinkingLevel
-import com.openminis.app.data.repository.ProviderRepository
-import com.openminis.app.provider.ProviderFactory
+import com.leoyuan.leophoneagent.data.model.LLMMessage
+import com.leoyuan.leophoneagent.data.model.ModelEntry
+import com.leoyuan.leophoneagent.data.model.ThinkingLevel
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.provider.ProviderFactory
 
 /** Result of one correction attempt. */
 data class CorrectionOutcome(

@@ -3,7 +3,7 @@ import Foundation
 // MARK: - VoiceProviderFactory
 //
 // Maps a configured ProviderInstance to a concrete VoiceProvider. Because
-// Minis has no dedicated "voice provider type", vendors that ride on top of an
+// LeoPhoneAgent has no dedicated "voice provider type", vendors that ride on top of an
 // OpenAI/Anthropic-compatible instance (Groq, MiniMax, Doubao, Xunfei, Alibaba)
 // are detected from the instance's custom base URL.
 //

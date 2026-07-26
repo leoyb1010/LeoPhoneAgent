@@ -1,4 +1,4 @@
-package com.openminis.app.util
+package com.leoyuan.leophoneagent.util
 
 import android.content.Context
 import android.content.SharedPreferences

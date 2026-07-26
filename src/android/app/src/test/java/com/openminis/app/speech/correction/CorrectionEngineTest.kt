@@ -1,4 +1,4 @@
-package com.openminis.app.speech.correction
+package com.leoyuan.leophoneagent.speech.correction
 
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals

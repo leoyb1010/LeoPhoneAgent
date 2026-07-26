@@ -1,4 +1,4 @@
-package com.openminis.app.crash
+package com.leoyuan.leophoneagent.crash
 
 import android.app.Activity
 import android.app.AlertDialog
@@ -19,7 +19,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.FileProvider
-import com.openminis.app.R
+import com.leoyuan.leophoneagent.R
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -38,7 +38,7 @@ import java.util.zip.ZipOutputStream
  * next foreground Activity gets a one-shot AlertDialog offering to share
  * the logs via ACTION_SEND_MULTIPLE.
  *
- * Self-contained on purpose: zero Minis-internal dependencies (no
+ * Self-contained on purpose: zero LeoPhoneAgent-internal dependencies (no
  * AppLogger / ChatViewModel / ProviderRepository etc), uses
  * `android.util.Log` directly, every entry point wrapped in try/catch.
  * Runs early enough that a partial-init / pre-DI launch can't break it.
@@ -187,7 +187,7 @@ object CrashFrequencyDetector {
      * (either share or dismiss button) so the app resumes normal
      * operation. The next launch starts from a fresh flag value.
      *
-     * Kept as a static getter to preserve the "zero Minis internal
+     * Kept as a static getter to preserve the "zero LeoPhoneAgent internal
      * dependencies" contract — callers from anywhere in the app can
      * check the flag without introducing a reverse import on this file.
      */
@@ -882,7 +882,7 @@ object CrashFrequencyDetector {
      * Bundle [files] into a single zip under cacheDir/share/. Returns the
      * zip File on success or null if the input list is effectively empty.
      * Uses the cache dir so the OS cleans up stale archives if the user
-     * shares but never re-opens Minis; FileProvider already grants the
+     * shares but never re-opens LeoPhoneAgent; FileProvider already grants the
      * receiving app read access via FLAG_GRANT_READ_URI_PERMISSION.
      */
     private fun packageZip(ctx: Context, files: List<File>): File? {

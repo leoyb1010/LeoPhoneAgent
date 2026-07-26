@@ -1,4 +1,4 @@
-package com.openminis.app.ui.chat
+package com.leoyuan.leophoneagent.ui.chat
 
 import android.content.ClipboardManager
 import android.content.Context
@@ -35,7 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
-import com.openminis.app.R
+import com.leoyuan.leophoneagent.R
 
 /**
  * Replaces the system Copy/Cut/Paste/SelectAll toolbar that a
@@ -272,7 +272,7 @@ internal fun MinisMarkdownTextToolbarHost(toolbar: MinisMarkdownTextToolbar) {
                     }
                 }
                 // [T-android-selection-readaloud] Speak just the selected
-                // substring through Minis TTS (provider voice with the system
+                // substring through LeoPhoneAgent TTS (provider voice with the system
                 // engine as fallback), mirroring iOS's "Read Aloud / Read
                 // Selection" selection-menu action. Available for any
                 // selection, like Add to Chat Input.

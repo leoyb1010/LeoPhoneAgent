@@ -16,8 +16,8 @@
 #include <unistd.h>
 
 // Swift bridge — generated header
-#if __has_include("Minis-Swift.h")
-#import "Minis-Swift.h"
+#if __has_include("LeoPhoneAgent-Swift.h")
+#import "LeoPhoneAgent-Swift.h"
 #elif __has_include("MinisApp-Swift.h")
 #import "MinisApp-Swift.h"
 #endif
@@ -91,13 +91,13 @@ static NSString *const HELP_TEXT =
      "    page_url          URL after the action (when applicable)\n"
      "    image_path        Linux path of the persisted JPEG, e.g.\n"
      "                      /var/minis/browser/screenshot_<ms>.jpg\n"
-     "    minis_url         minis://browser/<filename> — stable reference for\n"
+     "    minis_url         leophoneagent://browser/<filename> — stable reference for\n"
      "                      read_image / downstream tools\n"
      "    image_base64      Base64 JPEG (only when --with-base64 is set)\n"
      "    fetched_file      Filename of the downloaded resource (fetch action)\n"
      "    fetched_path      Linux path of the persisted download under\n"
      "                      /var/minis/browser/\n"
-     "    fetched_minis_url minis://browser/<filename> for the download\n"
+     "    fetched_minis_url leophoneagent://browser/<filename> for the download\n"
      "\n"
      "EXAMPLES:\n"
      "  minis-browser-use navigate --url https://example.com\n"

@@ -1,4 +1,4 @@
-package com.openminis.app.ui.sessions
+package com.leoyuan.leophoneagent.ui.sessions
 
 import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
@@ -80,9 +80,9 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import com.openminis.app.ui.components.MinisAlertDialog
-import com.openminis.app.ui.components.MinisMenu
-import com.openminis.app.ui.components.MinisMenuDivider
+import com.leoyuan.leophoneagent.ui.components.MinisAlertDialog
+import com.leoyuan.leophoneagent.ui.components.MinisMenu
+import com.leoyuan.leophoneagent.ui.components.MinisMenuDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -112,7 +112,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.Size
-import com.openminis.app.service.SessionActivityTracker
+import com.leoyuan.leophoneagent.service.SessionActivityTracker
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -136,19 +136,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.openminis.app.R
-import com.openminis.app.data.db.ChatSessionEntity
-import com.openminis.app.ui.theme.ChatColors
-import com.openminis.app.ui.theme.minisFabColor
-import com.openminis.app.data.repository.ChatRepository
-import com.openminis.app.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.data.db.ChatSessionEntity
+import com.leoyuan.leophoneagent.ui.theme.ChatColors
+import com.leoyuan.leophoneagent.ui.theme.minisFabColor
+import com.leoyuan.leophoneagent.data.repository.ChatRepository
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.TimeUnit
-import com.openminis.app.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
 
 // FAB color — use shared theme values
 
@@ -347,7 +347,7 @@ fun SessionListScreen(
     var editSession by remember { mutableStateOf<ChatSessionEntity?>(null) }
     var showBrowserSheet by remember { mutableStateOf(false) }
     var showBrowserSettings by remember { mutableStateOf(false) }
-    val browserTabPool = remember { com.openminis.app.browser.BrowserTabPool(context) }
+    val browserTabPool = remember { com.leoyuan.leophoneagent.browser.BrowserTabPool(context) }
 
     val groupedSessions = remember(sessions) { groupSessionsByDate(sessions) }
 
@@ -380,7 +380,7 @@ fun SessionListScreen(
     // badge reflects what's actually active — disabled tasks don't contribute,
     // and with none enabled the count is 0 (badge hidden by the >0 gate below).
     val scheduledTaskCount by remember {
-        com.openminis.app.scheduled.ScheduledTaskStore(context).observe()
+        com.leoyuan.leophoneagent.scheduled.ScheduledTaskStore(context).observe()
             .map { list -> list.count { it.enabled } }
     }.collectAsState(initial = 0)
 
@@ -731,7 +731,7 @@ fun SessionListScreen(
 
     // Browser sheet
     if (showBrowserSheet) {
-        com.openminis.app.ui.browser.BrowserSheet(
+        com.leoyuan.leophoneagent.ui.browser.BrowserSheet(
             tabPool = browserTabPool,
             onDismiss = { showBrowserSheet = false },
         )
@@ -739,7 +739,7 @@ fun SessionListScreen(
 
     // Browser Settings sheet
     if (showBrowserSettings) {
-        com.openminis.app.ui.browser.BrowserSettingsSheet(
+        com.leoyuan.leophoneagent.ui.browser.BrowserSettingsSheet(
             tabPool = browserTabPool,
             onDismiss = { showBrowserSettings = false },
         )
@@ -760,7 +760,7 @@ private fun DualFabRow(
     hasSessions: Boolean,
     onNewChat: () -> Unit,
     onNewChatWithGroup: (String) -> Unit,
-    modelGroups: List<com.openminis.app.data.model.ModelGroup>,
+    modelGroups: List<com.leoyuan.leophoneagent.data.model.ModelGroup>,
     onSearchToggle: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onSearchDismiss: () -> Unit,
@@ -1297,7 +1297,7 @@ private fun SessionRow(
                     Modifier.pointerInput(Unit) {
                         detectTapGestures(
                             onTap = {
-                                com.openminis.app.diagnostics.PerfLongCtx.click(session.id)
+                                com.leoyuan.leophoneagent.diagnostics.PerfLongCtx.click(session.id)
                                 onClick()
                             },
                             onLongPress = { offset -> onLongClick(offset) },
@@ -1305,7 +1305,7 @@ private fun SessionRow(
                     }
                 } else {
                     Modifier.clickable {
-                        com.openminis.app.diagnostics.PerfLongCtx.click(session.id)
+                        com.leoyuan.leophoneagent.diagnostics.PerfLongCtx.click(session.id)
                         onClick()
                     }
                 }
@@ -1325,7 +1325,7 @@ private fun SessionRow(
         // — null for the common case. Renders as an overlay in the icon's
         // bottom-right corner, mirroring where iOS's iCloud badge sits so
         // future ICLOUD_SYNCING uses the same anchor.
-        val badgeMap by com.openminis.app.service.SessionBadgeStore.byId.collectAsState()
+        val badgeMap by com.leoyuan.leophoneagent.service.SessionBadgeStore.byId.collectAsState()
         val badgeHead = badgeMap[session.id]?.firstOrNull()
         Box(
             modifier = Modifier.size(44.dp),
@@ -1470,11 +1470,11 @@ private fun SpinningRing(
  */
 @Composable
 private fun SessionBadgeOverlay(
-    state: com.openminis.app.service.SessionBadgeStore.SessionBadgeState,
+    state: com.leoyuan.leophoneagent.service.SessionBadgeStore.SessionBadgeState,
     modifier: Modifier = Modifier,
 ) {
     when (state) {
-        com.openminis.app.service.SessionBadgeStore.SessionBadgeState.PAUSED -> {
+        com.leoyuan.leophoneagent.service.SessionBadgeStore.SessionBadgeState.PAUSED -> {
             Box(
                 modifier = modifier
                     .offset(x = 2.dp, y = 2.dp)
@@ -1502,7 +1502,7 @@ private fun SessionBadgeOverlay(
                 )
             }
         }
-        com.openminis.app.service.SessionBadgeStore.SessionBadgeState.ICLOUD_SYNCING -> {
+        com.leoyuan.leophoneagent.service.SessionBadgeStore.SessionBadgeState.ICLOUD_SYNCING -> {
             // Reserved for the upcoming iCloud-equivalent sync surface;
             // not produced yet. Render nothing rather than a placeholder
             // so a stray persisted entry from a future build doesn't
@@ -1847,7 +1847,7 @@ internal fun SessionEditSheet(
  * [Intent.EXTRA_TEXT]. Hundreds of messages caused jank, "ghost" frames
  * and OOM crashes — see linked feedback.
  *
- * Now: hand off to [com.openminis.app.share.ChatExporter] which paginates
+ * Now: hand off to [com.leoyuan.leophoneagent.share.ChatExporter] which paginates
  * (50 rows / batch) on [kotlinx.coroutines.Dispatchers.IO], streams to a
  * staging file under `cacheDir/export-staging/`, then zips into
  * `cacheDir/shared/` and hands the resulting [android.net.Uri] to the
@@ -1863,7 +1863,7 @@ private fun exportSession(
 ) {
     scope.launch {
         try {
-            val (uri, _) = com.openminis.app.share.ChatExporter.exportToZip(
+            val (uri, _) = com.leoyuan.leophoneagent.share.ChatExporter.exportToZip(
                 context = context,
                 session = session,
                 repository = chatRepository,

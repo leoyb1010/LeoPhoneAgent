@@ -5,7 +5,7 @@ import UIKit
 /// Stable device identity persisted in Keychain (survives app reinstall).
 /// Used for per-device CKRecordZone naming in iCloud sync.
 enum DeviceIdentity {
-    private static let keychainService = "com.openminis.app.device"
+    private static let keychainService = "com.leoyuan.leophoneagent.device"
     private static let keychainAccount = "deviceId"
 
     /// Stable UUID for this device, persisted in Keychain.

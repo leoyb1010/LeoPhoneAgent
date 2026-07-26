@@ -1,14 +1,14 @@
-package com.openminis.app.sandbox.offload
+package com.leoyuan.leophoneagent.sandbox.offload
 
 import android.util.Log
-import com.openminis.app.MinisApp
-import com.openminis.app.browser.BrowserAction
-import com.openminis.app.browser.BrowserActionInput
-import com.openminis.app.browser.BrowserActionResult
-import com.openminis.app.sandbox.NativeOffloadHandler
-import com.openminis.app.sandbox.NativeOffloadRequest
-import com.openminis.app.sandbox.NativeOffloadResult
-import com.openminis.app.sandbox.PRootKernel
+import com.leoyuan.leophoneagent.MinisApp
+import com.leoyuan.leophoneagent.browser.BrowserAction
+import com.leoyuan.leophoneagent.browser.BrowserActionInput
+import com.leoyuan.leophoneagent.browser.BrowserActionResult
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadHandler
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadRequest
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadResult
+import com.leoyuan.leophoneagent.sandbox.PRootKernel
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -79,7 +79,7 @@ class BrowserUseOffloadHandler(private val app: MinisApp) : NativeOffloadHandler
         // overlay capsule + FGS notification show what the agent is
         // actually doing — "browser_use: navigate https://example.com"
         // instead of the static "Running: browser_use".
-        com.openminis.app.service.SessionActivityTracker.updateToolStatus(
+        com.leoyuan.leophoneagent.service.SessionActivityTracker.updateToolStatus(
             statusForBrowserAction(actionName, inputJson),
         )
 
@@ -261,7 +261,7 @@ class BrowserUseOffloadHandler(private val app: MinisApp) : NativeOffloadHandler
                     val linuxPath = "$VAR_MINIS_BROWSER/$filename"
                     persistedImagePath = linuxPath
                     out.put("image_path", linuxPath)
-                    out.put("minis_url", "minis://browser/$filename")
+                    out.put("minis_url", "leophoneagent://browser/$filename")
                 } else {
                     Log.w(TAG, "Failed to persist screenshot to ${dest.absolutePath}")
                 }
@@ -290,7 +290,7 @@ class BrowserUseOffloadHandler(private val app: MinisApp) : NativeOffloadHandler
                     val dest = File(browserHostDir, fname)
                     if (runCatching { dest.writeBytes(data) }.isSuccess) {
                         out.put("fetched_path", "$VAR_MINIS_BROWSER/$fname")
-                        out.put("fetched_minis_url", "minis://browser/$fname")
+                        out.put("fetched_minis_url", "leophoneagent://browser/$fname")
                     } else {
                         Log.w(TAG, "Failed to persist fetched file to ${dest.absolutePath}")
                     }
@@ -464,12 +464,12 @@ OUTPUT:
     success           true / false
     page_url          URL after the action (when applicable)
     image_path        Linux path of the persisted JPEG under /var/minis/browser/
-    minis_url         minis://browser/<filename> — stable reference for
+    minis_url         leophoneagent://browser/<filename> — stable reference for
                       read_image / downstream tools
     image_base64      Base64 JPEG (only when --with-base64 is set)
     fetched_file      Filename of the downloaded resource (fetch action)
     fetched_path      Linux path of the persisted download under /var/minis/browser/
-    fetched_minis_url minis://browser/<filename> for the download
+    fetched_minis_url leophoneagent://browser/<filename> for the download
 
 EXAMPLES:
   minis-browser-use navigate --url https://example.com

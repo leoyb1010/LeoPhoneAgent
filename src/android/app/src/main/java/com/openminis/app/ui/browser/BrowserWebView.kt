@@ -1,4 +1,4 @@
-package com.openminis.app.ui.browser
+package com.leoyuan.leophoneagent.ui.browser
 
 import android.annotation.SuppressLint
 import android.view.MotionEvent

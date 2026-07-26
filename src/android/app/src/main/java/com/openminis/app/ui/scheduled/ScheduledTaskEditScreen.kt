@@ -1,4 +1,4 @@
-package com.openminis.app.ui.scheduled
+package com.leoyuan.leophoneagent.ui.scheduled
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -61,10 +61,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.openminis.app.R
-import com.openminis.app.scheduled.ScheduledRepeatMode
-import com.openminis.app.scheduled.ScheduledTargetMode
-import com.openminis.app.scheduled.ScheduledTask
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.scheduled.ScheduledRepeatMode
+import com.leoyuan.leophoneagent.scheduled.ScheduledTargetMode
+import com.leoyuan.leophoneagent.scheduled.ScheduledTask
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -573,10 +573,10 @@ private fun EditFormBody(
         // entry). The picker doesn't surface a "default model" option — we
         // model that as null binding via the row's onClear action above.
         val cfg by vm.providerRepository.config.collectAsState()
-        val entryById: (String) -> com.openminis.app.data.model.ModelEntry? = { id ->
+        val entryById: (String) -> com.leoyuan.leophoneagent.data.model.ModelEntry? = { id ->
             cfg.modelEntries.firstOrNull { it.id == id }
         }
-        val groupById: (String) -> com.openminis.app.data.model.ModelGroup? = { id ->
+        val groupById: (String) -> com.leoyuan.leophoneagent.data.model.ModelGroup? = { id ->
             cfg.modelGroups.firstOrNull { it.id == id }
         }
         // Pre-highlight the user's prior pick when re-opening the sheet:
@@ -602,7 +602,7 @@ private fun EditFormBody(
                 parsed.optString("entryId").takeIf { it.isNotEmpty() }
             } else null
         }
-        com.openminis.app.ui.chat.ModelPickerSheet(
+        com.leoyuan.leophoneagent.ui.chat.ModelPickerSheet(
             groups = cfg.modelGroups,
             selectedGroupId = preselectGroupId,
             activeEntryId = preselectEntryId,

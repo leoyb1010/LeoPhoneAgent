@@ -535,7 +535,7 @@ private struct HTMLFilePreview: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.defaultWebpagePreferences.allowsContentJavaScript = true
-        config.setURLSchemeHandler(BrowserUseManager.sharedMinisSchemeHandler, forURLScheme: "minis")
+        config.setURLSchemeHandler(BrowserUseManager.sharedMinisSchemeHandler, forURLScheme: "leophoneagent")
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
         return webView
@@ -781,7 +781,7 @@ private struct FileBrowserRow: View {
             .sheet(isPresented: $showAddWebApp) {
                 // The browser exposes already-resolved host URLs via
                 // FileItem.url, so we hand the URL straight to the sheet
-                // without going through minis:// resolution.
+                // without going through leophoneagent:// resolution.
                 WebAppAddToHomeSheet(htmlURL: item.url, sourceSessionId: nil)
             }
     }
@@ -1093,7 +1093,7 @@ class FileBrowserViewModel: ObservableObject {
         }
         guard let targetID = parentID else { return }
 
-        let domainIdentifier = NSFileProviderDomainIdentifier("com.openminis.app.files")
+        let domainIdentifier = NSFileProviderDomainIdentifier("com.leoyuan.leophoneagent.files")
         NSFileProviderManager.getDomainsWithCompletionHandler { domains, _ in
             guard let domain = domains.first(where: { $0.identifier == domainIdentifier }) else {
                 return

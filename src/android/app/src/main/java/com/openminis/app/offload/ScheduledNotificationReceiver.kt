@@ -1,4 +1,4 @@
-package com.openminis.app.offload
+package com.leoyuan.leophoneagent.offload
 
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
@@ -6,8 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
-import com.openminis.app.R
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.logging.AppLogger
 
 /**
  * Fires when an `android-notification schedule` AlarmManager alarm
@@ -33,7 +33,7 @@ class ScheduledNotificationReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val id = intent.getStringExtra(EXTRA_ID) ?: "unknown"
-        val title = intent.getStringExtra(EXTRA_TITLE) ?: "Minis"
+        val title = intent.getStringExtra(EXTRA_TITLE) ?: "LeoPhoneAgent"
         val body = intent.getStringExtra(EXTRA_BODY) ?: ""
         AppLogger.debug(TAG, "scheduled notification fired: id=$id title='$title'")
 

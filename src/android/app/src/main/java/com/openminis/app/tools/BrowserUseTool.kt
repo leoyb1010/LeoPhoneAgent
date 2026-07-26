@@ -1,6 +1,6 @@
-package com.openminis.app.tools
+package com.leoyuan.leophoneagent.tools
 
-import com.openminis.app.browser.BrowserAction
+import com.leoyuan.leophoneagent.browser.BrowserAction
 import org.json.JSONArray
 import org.json.JSONObject
 

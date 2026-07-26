@@ -1,9 +1,9 @@
 #!/bin/sh
-# minis-mcp-cli — MinisApp MCP (Model Context Protocol) client for iSH/PRoot.
+# leophoneagent-mcp-cli — MinisApp MCP (Model Context Protocol) client for iSH/PRoot.
 #
 # Thin sh wrapper: ensures the python3 + httpx runtime is present, then execs
 # the shared Python implementation. The Python under
-# /usr/local/lib/minis-mcp-cli is platform-neutral and is shipped identically
+# /usr/local/lib/leophoneagent-mcp-cli is platform-neutral and is shipped identically
 # on iOS (iSH) and Android (PRoot/Alpine) — keep it POSIX + dependency-light.
 #
 # Data file: /var/minis/mcp-servers/servers.json (mcpServers object format,
@@ -28,4 +28,4 @@ if ! python3 -c "import httpx" 2>/dev/null; then
     pip install --quiet --break-system-packages httpx >> "$LOG" 2>&1
 fi
 
-exec python3 /usr/local/lib/minis-mcp-cli/main.py "$@"
+exec python3 /usr/local/lib/leophoneagent-mcp-cli/main.py "$@"

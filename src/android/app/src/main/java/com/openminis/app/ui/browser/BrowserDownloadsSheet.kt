@@ -1,4 +1,4 @@
-package com.openminis.app.ui.browser
+package com.leoyuan.leophoneagent.ui.browser
 
 import android.content.Context
 import android.content.Intent
@@ -41,8 +41,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
-import com.openminis.app.R
-import com.openminis.app.browser.BrowserTabPool
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.browser.BrowserTabPool
 
 /**
  * [T-android-browser-download-ux] Downloads panel — Android port of iOS

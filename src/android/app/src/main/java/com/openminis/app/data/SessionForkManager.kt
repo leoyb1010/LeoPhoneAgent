@@ -1,9 +1,9 @@
-package com.openminis.app.data
+package com.leoyuan.leophoneagent.data
 
 import android.content.Context
-import com.openminis.app.data.repository.ChatRepository
-import com.openminis.app.data.repository.SkillRepository
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.data.repository.ChatRepository
+import com.leoyuan.leophoneagent.data.repository.SkillRepository
+import com.leoyuan.leophoneagent.logging.AppLogger
 import java.io.File
 
 /**

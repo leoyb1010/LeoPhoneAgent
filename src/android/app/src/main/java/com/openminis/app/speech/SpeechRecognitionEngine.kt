@@ -1,4 +1,4 @@
-package com.openminis.app.speech
+package com.leoyuan.leophoneagent.speech
 
 import java.util.Locale
 

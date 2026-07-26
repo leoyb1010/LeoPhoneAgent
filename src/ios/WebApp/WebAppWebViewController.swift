@@ -13,7 +13,7 @@ private let webAppWebLogger = AppLogger(category: "WebAppWeb")
 ///     scope root from `WebAppPathResolver` bounds what the page can pull in.
 ///   - Navigation policy rejects every non-`file:` / non-`about:` URL.
 ///     `http://`, `https://`, `data:`, and any custom scheme (including our
-///     own `minis://`) are blocked so a hostile HTML can't escape into the
+///     own `leophoneagent://`) are blocked so a hostile HTML can't escape into the
 ///     real browser or the host app.
 ///   - Persistent website data store, isolated per shortcut by its UUID
 ///     (iOS 17+ `WKWebsiteDataStore(forIdentifier:)`; `.default()` on older
@@ -243,7 +243,7 @@ final class WebAppWebViewController: UIViewController, WKNavigationDelegate, WKU
             return
         }
         // Block everything else — http(s), data:, custom schemes (incl.
-        // minis://), tel:, mailto:, etc. The HTML stays sandboxed to its
+        // leophoneagent://), tel:, mailto:, etc. The HTML stays sandboxed to its
         // own assets. A future enhancement could open external links in
         // SFSafariViewController on user confirmation.
         webAppWebLogger.info("blocking external nav scheme=\(scheme) url=\(url.absoluteString.prefix(120))")

@@ -1,4 +1,4 @@
-package com.openminis.app.shared
+package com.leoyuan.leophoneagent.shared
 
 import android.icu.text.BreakIterator
 import java.util.Locale

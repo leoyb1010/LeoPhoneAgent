@@ -1,6 +1,6 @@
 //
 //  JiebaWrapper.mm
-//  Minis
+//  LeoPhoneAgent
 //
 //  ObjC++ bridge to CppJieba. Built on MixSegment (Cut) + QuerySegment
 //  (CutForSearch) sharing one DictTrie + HMMModel, rather than the full

@@ -1,8 +1,8 @@
-package com.openminis.app.ui.settings
+package com.leoyuan.leophoneagent.ui.settings
 
-import com.openminis.app.R
-import com.openminis.app.ui.components.MinisButton
-import com.openminis.app.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.ui.components.MinisButton
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
 
 import android.net.Uri
 import android.widget.Toast
@@ -59,7 +59,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import com.openminis.app.ui.components.DialogTextField
+import com.leoyuan.leophoneagent.ui.components.DialogTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
@@ -87,8 +87,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
-import com.openminis.app.data.repository.SkillRepository
-import com.openminis.app.ui.markdown.MarkdownText
+import com.leoyuan.leophoneagent.data.repository.SkillRepository
+import com.leoyuan.leophoneagent.ui.markdown.MarkdownText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -169,7 +169,7 @@ fun SkillsManagementScreen(
                         contentDescription = stringResource(R.string.filebrowser_sort_by),
                     )
                 }
-                com.openminis.app.ui.components.MinisMenu(
+                com.leoyuan.leophoneagent.ui.components.MinisMenu(
                     expanded = sortMenuExpanded,
                     onDismissRequest = { sortMenuExpanded = false },
                 ) {

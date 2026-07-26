@@ -10,7 +10,7 @@
 import SwiftUI
 
 struct MCPIntegrationsView: View {
-    /// [T-mcp-oauth-deeplink] When set (minis://settings/mcp-servers/<id>),
+    /// [T-mcp-oauth-deeplink] When set (leophoneagent://settings/mcp-servers/<id>),
     /// open this server's edit form on appear — that's where the Authorize
     /// button lives. Unknown/deleted ids fall through to the plain list.
     var initialEditServerId: String? = nil
@@ -64,7 +64,7 @@ struct MCPIntegrationsView: View {
         .navigationTitle(Text("MCP Integrations"))
         .navigationBarTitleDisplayMode(.inline)
         // [T-ios-mcp-list-reload-on-appear] Re-read servers.json on appear so a
-        // server written by minis-mcp-cli after launch shows up without an app
+        // server written by leophoneagent-mcp-cli after launch shows up without an app
         // restart (MCPStore.load() otherwise runs only in init). Mirrors
         // SkillsManagementView's .onAppear { store.reload() }.
         .onAppear {
@@ -163,7 +163,7 @@ struct MCPIntegrationsView: View {
 // MARK: - Tools sheet [T-mcp-tools-refresh]
 
 /// Live tools list for one server. Opening the sheet performs a FORCED
-/// refresh (`minis-mcp-cli refresh <name>`: evict the daemon session,
+/// refresh (`leophoneagent-mcp-cli refresh <name>`: evict the daemon session,
 /// re-handshake, tools/list) so tools the remote server added after we first
 /// connected appear without restarting the app or the daemon.
 struct MCPToolsSheet: View {

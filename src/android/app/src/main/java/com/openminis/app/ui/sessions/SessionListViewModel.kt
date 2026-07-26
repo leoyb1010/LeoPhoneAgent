@@ -1,17 +1,17 @@
-package com.openminis.app.ui.sessions
+package com.leoyuan.leophoneagent.ui.sessions
 
 import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import com.openminis.app.data.db.ChatSessionEntity
-import com.openminis.app.data.model.LLMMessage
-import com.openminis.app.data.model.ThinkingLevel
-import com.openminis.app.data.repository.ChatRepository
-import com.openminis.app.data.repository.ProviderRepository
-import com.openminis.app.provider.ProviderFactory
-import com.openminis.app.ui.chat.ChatViewModelStore
+import com.leoyuan.leophoneagent.data.db.ChatSessionEntity
+import com.leoyuan.leophoneagent.data.model.LLMMessage
+import com.leoyuan.leophoneagent.data.model.ThinkingLevel
+import com.leoyuan.leophoneagent.data.repository.ChatRepository
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.provider.ProviderFactory
+import com.leoyuan.leophoneagent.ui.chat.ChatViewModelStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -141,7 +141,7 @@ class SessionListViewModel(
         // to the crash burst, we don't want to re-deserialize it before the
         // user has acknowledged the share-logs dialog.
         viewModelScope.launch {
-            if (com.openminis.app.crash.CrashFrequencyDetector.isSafeMode()) {
+            if (com.leoyuan.leophoneagent.crash.CrashFrequencyDetector.isSafeMode()) {
                 android.util.Log.w(
                     TAG,
                     "SessionListVM init: safe-mode active, deferring observeSessions",
@@ -154,7 +154,7 @@ class SessionListViewModel(
                 // once on ON → OFF; after that we start the Flow collector
                 // for the rest of the VM's life.
                 val started = kotlinx.coroutines.CompletableDeferred<Unit>()
-                val unsub = com.openminis.app.crash.CrashFrequencyDetector
+                val unsub = com.leoyuan.leophoneagent.crash.CrashFrequencyDetector
                     .registerSafeModeClearedListener {
                         if (!started.isCompleted) started.complete(Unit)
                     }
@@ -236,7 +236,7 @@ class SessionListViewModel(
                 // [T-android-session-paused-badge] Drop badges for the
                 // deleted session so persisted PAUSED entries don't leak
                 // forever in SharedPreferences.
-                com.openminis.app.service.SessionBadgeStore.clear(it)
+                com.leoyuan.leophoneagent.service.SessionBadgeStore.clear(it)
             }
         }
         clearSelection()
@@ -246,7 +246,7 @@ class SessionListViewModel(
         viewModelScope.launch {
             chatRepository.deleteSession(id)
             ChatViewModelStore.release(id)
-            com.openminis.app.service.SessionBadgeStore.clear(id)
+            com.leoyuan.leophoneagent.service.SessionBadgeStore.clear(id)
         }
     }
 
@@ -300,7 +300,7 @@ class SessionListViewModel(
                     if (firstAssistantText.isNotEmpty()) append("Assistant: $firstAssistantText\n")
                     if (lastUserText.isNotEmpty()) append("User: $lastUserText\n")
                     if (lastAssistantText.isNotEmpty()) append("Assistant: $lastAssistantText\n")
-                    append(com.openminis.app.ui.chat.titleLanguageDirective())
+                    append(com.leoyuan.leophoneagent.ui.chat.titleLanguageDirective())
                 }
 
                 // Build candidate list: session's model first, then all others.
@@ -340,9 +340,9 @@ class SessionListViewModel(
                     var apiKey = providerRepository.loadApiKey(instance.id) ?: continue
 
                     // Refresh OAuth token if needed
-                    if (instance.credentialType == com.openminis.app.data.model.ProviderCredential.oauth) {
+                    if (instance.credentialType == com.leoyuan.leophoneagent.data.model.ProviderCredential.oauth) {
                         try {
-                            val manager = com.openminis.app.auth.OAuthManager.forInstance(context, instance)
+                            val manager = com.leoyuan.leophoneagent.auth.OAuthManager.forInstance(context, instance)
                             val freshToken = manager?.validAccessToken()
                             if (freshToken != null && freshToken != apiKey) {
                                 providerRepository.saveApiKey(instance.id, freshToken)
@@ -383,7 +383,7 @@ class SessionListViewModel(
                             // the auto path via TITLE_GEN_SYSTEM_PROMPT (iOS-aligned
                             // wording). Passed bare — AnthropicProvider handles the
                             // OAuth Claude Code prefix at the provider layer.
-                            systemPrompt = com.openminis.app.ui.chat.TITLE_GEN_SYSTEM_PROMPT,
+                            systemPrompt = com.leoyuan.leophoneagent.ui.chat.TITLE_GEN_SYSTEM_PROMPT,
                             maxTokens = titleMaxTokens,
                             // [T-android-titlegen-temperature] null (not 0.3) so
                             // buildRequestBody omits the field — the gpt-5.x

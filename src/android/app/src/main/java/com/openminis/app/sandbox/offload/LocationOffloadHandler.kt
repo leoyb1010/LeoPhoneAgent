@@ -1,4 +1,4 @@
-package com.openminis.app.sandbox.offload
+package com.leoyuan.leophoneagent.sandbox.offload
 
 import android.Manifest
 import android.content.Context
@@ -9,11 +9,11 @@ import android.os.Build
 import android.os.CancellationSignal
 import android.os.Looper
 import androidx.core.content.ContextCompat
-import com.openminis.app.logging.AppLogger
-import com.openminis.app.offload.OffloadPermissionManager
-import com.openminis.app.sandbox.NativeOffloadHandler
-import com.openminis.app.sandbox.NativeOffloadRequest
-import com.openminis.app.sandbox.NativeOffloadResult
+import com.leoyuan.leophoneagent.logging.AppLogger
+import com.leoyuan.leophoneagent.offload.OffloadPermissionManager
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadHandler
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadRequest
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadResult
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
@@ -131,7 +131,7 @@ class LocationOffloadHandler(private val context: Context) : NativeOffloadHandle
                         OffloadPermissionManager.SettingsGateRequest(
                             id = Manifest.permission.ACCESS_FINE_LOCATION,
                             title = "Location permission needed",
-                            message = "Minis needs location permission to get your current location. Open Settings to allow it.",
+                            message = "LeoPhoneAgent needs location permission to get your current location. Open Settings to allow it.",
                             settingsAction = android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                             requiresPackageUri = true,
                             positiveLabel = "Open Settings",
@@ -206,7 +206,7 @@ class LocationOffloadHandler(private val context: Context) : NativeOffloadHandle
             Build.MANUFACTURER.equals("OnePlus", ignoreCase = true) ||
             Build.MANUFACTURER.equals("Vivo", ignoreCase = true)
         ) {
-            " On ${OsCompat.oemLabel()} devices, disable battery optimization and enable autostart for Minis so background location stays active."
+            " On ${OsCompat.oemLabel()} devices, disable battery optimization and enable autostart for LeoPhoneAgent so background location stays active."
         } else ""
         val body = JSONObject()
             .put("error", "location_unavailable_stale")

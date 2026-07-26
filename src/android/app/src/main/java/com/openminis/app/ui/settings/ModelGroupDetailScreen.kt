@@ -1,4 +1,4 @@
-package com.openminis.app.ui.settings
+package com.leoyuan.leophoneagent.ui.settings
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -57,19 +57,19 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.graphics.Color
-import com.openminis.app.data.model.FallbackStrategy
-import com.openminis.app.data.model.RoutingStrategy
-import com.openminis.app.data.model.ThinkingLevel
-import com.openminis.app.provider.effectiveMaxThinkingLevel
-import com.openminis.app.data.repository.ProviderRepository
-import com.openminis.app.R
+import com.leoyuan.leophoneagent.data.model.FallbackStrategy
+import com.leoyuan.leophoneagent.data.model.RoutingStrategy
+import com.leoyuan.leophoneagent.data.model.ThinkingLevel
+import com.leoyuan.leophoneagent.provider.effectiveMaxThinkingLevel
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.R
 import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
-import com.openminis.app.ui.components.MinisButton
-import com.openminis.app.ui.components.MinisOutlinedButton
-import com.openminis.app.ui.components.MinisTextButton
-import com.openminis.app.ui.components.SectionTextField
+import com.leoyuan.leophoneagent.ui.components.MinisButton
+import com.leoyuan.leophoneagent.ui.components.MinisOutlinedButton
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.ui.components.SectionTextField
 import kotlin.math.roundToInt
 
 /**
@@ -280,7 +280,7 @@ fun ModelGroupDetailScreen(
                     // default Voice Input/Output members render normally instead
                     // of as stale rows (mirrors iOS system virtual entries).
                     val entry = config.modelEntries.find { it.id == entryId }
-                        ?: com.openminis.app.data.model.SystemVoiceEntries.resolve(entryId)
+                        ?: com.leoyuan.leophoneagent.data.model.SystemVoiceEntries.resolve(entryId)
 
                     if (entry == null) {
                         // Stale member: UUID no longer resolves to any ModelEntry
@@ -361,7 +361,7 @@ fun ModelGroupDetailScreen(
                                         IconButton(onClick = { showMenu = true }) {
                                             Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.model_group_detail_more_options))
                                         }
-                                        com.openminis.app.ui.components.MinisMenu(
+                                        com.leoyuan.leophoneagent.ui.components.MinisMenu(
                                             expanded = showMenu,
                                             onDismissRequest = { showMenu = false },
                                         ) {

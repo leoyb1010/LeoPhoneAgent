@@ -1,11 +1,11 @@
-package com.openminis.app.debug
+package com.leoyuan.leophoneagent.debug
 
 import android.content.Context
-import com.openminis.app.MinisApp
-import com.openminis.app.browser.BrowserAction
-import com.openminis.app.browser.BrowserActionInput
-import com.openminis.app.browser.BrowserTabPool
-import com.openminis.app.browser.BrowserUseManager
+import com.leoyuan.leophoneagent.MinisApp
+import com.leoyuan.leophoneagent.browser.BrowserAction
+import com.leoyuan.leophoneagent.browser.BrowserActionInput
+import com.leoyuan.leophoneagent.browser.BrowserTabPool
+import com.leoyuan.leophoneagent.browser.BrowserUseManager
 import org.json.JSONArray
 import org.json.JSONObject
 

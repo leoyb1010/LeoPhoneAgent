@@ -1,8 +1,8 @@
-package com.openminis.app.provider.xai
+package com.leoyuan.leophoneagent.provider.xai
 
-import com.openminis.app.data.model.LLMModel
-import com.openminis.app.logging.AppLogger
-import com.openminis.app.provider.ModelsDevApi
+import com.leoyuan.leophoneagent.data.model.LLMModel
+import com.leoyuan.leophoneagent.logging.AppLogger
+import com.leoyuan.leophoneagent.provider.ModelsDevApi
 
 /**
  * Static catalog of xAI (Grok) models exposed to OAuth users.

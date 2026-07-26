@@ -1,4 +1,4 @@
-package com.openminis.app.browser
+package com.leoyuan.leophoneagent.browser
 
 import android.content.Context
 import android.os.Message
@@ -19,7 +19,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import com.openminis.app.R
+import com.leoyuan.leophoneagent.R
 import org.json.JSONObject
 import java.io.File
 import java.util.Date
@@ -490,7 +490,7 @@ class BrowserTabPool(private val context: Context) {
         Log.i(TAG, "download finished: ${dest.name} ($sizeText) → ${dest.absolutePath}")
         // [T-android-browser-download-ux] iOS v3 semantics: the human-facing
         // notice is just name+size (middle-truncated) — the old full
-        // "/var/minis/workspace/… — minis://workspace/…" path+link tail
+        // "/var/minis/workspace/… — leophoneagent://workspace/…" path+link tail
         // wrapped badly in the bubble, and path navigation is the downloads
         // panel's job now.
         onDownloadEvent?.invoke("Downloaded ${middleTruncated(dest.name)} ($sizeText)")

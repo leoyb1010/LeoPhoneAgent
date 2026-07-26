@@ -1,4 +1,4 @@
-package com.openminis.app.ui
+package com.leoyuan.leophoneagent.ui
 
 import org.junit.Assert.assertTrue
 import org.junit.Test

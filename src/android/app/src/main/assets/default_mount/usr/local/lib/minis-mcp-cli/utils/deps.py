@@ -2,7 +2,7 @@
 
 When a server's `command` is something like `npx`/`uvx` that isn't installed in
 the minimal Alpine rootfs, resolve it silently (log only, never touch stdout)
-so the agent's `minis-mcp-cli call` just works. Shared iOS/Android.
+so the agent's `leophoneagent-mcp-cli call` just works. Shared iOS/Android.
 """
 
 import os

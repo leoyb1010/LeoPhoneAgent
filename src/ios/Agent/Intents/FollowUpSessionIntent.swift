@@ -7,7 +7,7 @@ private let logger = AppLogger(category: "FollowUpIntent")
 /// Sends a follow-up prompt to an existing session, continuing the conversation.
 struct FollowUpSessionIntent: AppIntent {
     static var title: LocalizedStringResource = "Follow Up Session"
-    static var description = IntentDescription("Sends a follow-up prompt to an existing Minis session, continuing the conversation with the AI agent.")
+    static var description = IntentDescription("Sends a follow-up prompt to an existing LeoPhoneAgent session, continuing the conversation with the AI agent.")
     static var openAppWhenRun = false
 
     @Parameter(title: "Session")
@@ -104,7 +104,7 @@ struct FollowUpSessionIntent: AppIntent {
         let promptPreview = String(prompt.prefix(50))
         ShortcutNotification.post(
             id: "shortcut-followup-\(sid)",
-            title: "Minis: Follow-up Sent",
+            title: "LeoPhoneAgent: Follow-up Sent",
             body: "\(modelName): \(promptPreview)\(prompt.count > 50 ? "…" : "")",
             sessionId: sid
         )
@@ -123,7 +123,7 @@ struct FollowUpSessionIntent: AppIntent {
 
             ShortcutNotification.post(
                 id: "shortcut-followup-done-\(sid)",
-                title: "Minis: Follow-up Done",
+                title: "LeoPhoneAgent: Follow-up Done",
                 body: "\(modelName): \(String(responseText.prefix(200)))",
                 sessionId: sid
             )
@@ -159,7 +159,7 @@ struct FollowUpSessionIntent: AppIntent {
 
             ShortcutNotification.post(
                 id: "shortcut-followup-done-\(capturedSid)",
-                title: "Minis: Follow-up Done",
+                title: "LeoPhoneAgent: Follow-up Done",
                 body: "\(capturedModelName): \(summary)",
                 sessionId: capturedSid
             )

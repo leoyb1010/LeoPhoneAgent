@@ -1,4 +1,4 @@
-package com.openminis.app.ui.chat
+package com.leoyuan.leophoneagent.ui.chat
 
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -28,8 +28,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.openminis.app.R
-import com.openminis.app.ui.theme.ChatColors
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.ui.theme.ChatColors
 
 // [T-android-split-chat] Self-contained "thinking / streaming" dot indicators
 // extracted verbatim from ChatScreen.kt. `internal` so the chat package can
@@ -95,8 +95,8 @@ internal fun TypingIndicator() {
     // that's updated on save (SoulSettingsScreen) and at app start
     // (MinisApp.onCreate via refreshCache); collectAsState makes Compose
     // recompose the indicator immediately when it changes.
-    val soulMeta by com.openminis.app.agent.SoulStore.cachedMetadata.collectAsState()
-    val soulName = soulMeta.name.trim().ifEmpty { "Minis" }
+    val soulMeta by com.leoyuan.leophoneagent.agent.SoulStore.cachedMetadata.collectAsState()
+    val soulName = soulMeta.name.trim().ifEmpty { "LeoPhoneAgent" }
 
     Row(
         modifier = Modifier.padding(top = 2.dp, bottom = 8.dp),

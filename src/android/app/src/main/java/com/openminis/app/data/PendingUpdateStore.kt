@@ -1,8 +1,8 @@
-package com.openminis.app.data
+package com.leoyuan.leophoneagent.data
 
 import android.content.Context
 import android.content.SharedPreferences
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.logging.AppLogger
 import org.json.JSONObject
 import java.io.File
 import java.security.MessageDigest
@@ -14,7 +14,7 @@ import java.security.MessageDigest
  * Why this exists: the original update flow held the downloaded [File]
  * reference in a Composable `remember{}` slot. When the user tapped "Open
  * Settings" to grant "install unknown apps" permission, the system pushed
- * Minis to the background; on return the Activity often recreated, the slot
+ * LeoPhoneAgent to the background; on return the Activity often recreated, the slot
  * was reset, and the UI silently asked the user to download the APK again.
  *
  * Storage: a single SharedPreferences key holding a small JSON blob. We

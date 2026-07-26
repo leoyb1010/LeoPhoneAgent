@@ -5,7 +5,7 @@
 //  [T-mcp-static-oauth] Native OAuth for MCP servers — Static mode (user-supplied
 //  Client ID + optional Client Secret, PKCE Authorization Code flow).
 //
-//  Ownership split with the in-guest minis-mcp-cli:
+//  Ownership split with the in-guest leophoneagent-mcp-cli:
 //    • Native (this file): interactive authorization (ASWebAuthenticationSession),
 //      token exchange, credential storage (Keychain, non-synchronizable), and
 //      materializing the "token bridge" file the guest transport reads.
@@ -44,7 +44,7 @@ struct MCPOAuthConfig: Codable, Hashable {
     var tokenEndpoint: String = ""
     /// Space-separated scopes, e.g. "openid email https://www.googleapis.com/auth/calendar".
     var scopes: String?
-    /// Custom redirect URI. Default minis-mcp://oauth/callback; Google installed
+    /// Custom redirect URI. Default leophoneagent-mcp://oauth/callback; Google installed
     /// apps need the reversed-client-id scheme (com.googleusercontent.apps.X:/oauth2redirect).
     var redirectURI: String?
 }
@@ -89,7 +89,7 @@ final class MCPOAuthController: NSObject, ObservableObject {
 
     // MARK: - Keychain (non-synchronizable — secrets never ride iCloud)
 
-    nonisolated private static let keychainService = "com.openminis.app.mcp-oauth"
+    nonisolated private static let keychainService = "com.leoyuan.leophoneagent.mcp-oauth"
 
     nonisolated private static func keychainSet(_ data: Data, account: String) {
         let match: [String: Any] = [
@@ -152,7 +152,7 @@ final class MCPOAuthController: NSObject, ObservableObject {
 
     // MARK: - CLI-seeded client secret [T-mcp-cli-oauth-flags]
 
-    /// `minis-mcp-cli add --oauth-client-secret` can't reach the Keychain from
+    /// `leophoneagent-mcp-cli add --oauth-client-secret` can't reach the Keychain from
     /// the guest, so it seeds <mcp-servers>/oauth/<name>.secret. Import it
     /// into the Keychain (the authority) and delete the file. Called when the
     /// server's edit form opens and before authorize — the seed is a handoff,

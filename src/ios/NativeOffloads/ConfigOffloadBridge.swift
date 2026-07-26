@@ -37,7 +37,7 @@ private let logger = AppLogger(category: "ConfigOffload")
             "ok": false,
             "error": "permission_denied",
             "reason": "minis-config is disabled in Settings → Permissions.",
-            "user_message": "I tried to change a setting but minis-config is currently disabled. You can enable it at [Settings → Permissions](minis://settings/permissions), then ask me again. Or change the setting yourself directly through the relevant Settings screen.",
+            "user_message": "I tried to change a setting but minis-config is currently disabled. You can enable it at [Settings → Permissions](leophoneagent://settings/permissions), then ask me again. Or change the setting yourself directly through the relevant Settings screen.",
         ]
     }
 
@@ -788,8 +788,8 @@ private let logger = AppLogger(category: "ConfigOffload")
                 "ok": true,
                 "applied": applied,
                 "audit_ids": auditIds,
-                "audit_url": "minis://settings/logs?tab=config-audit",
-                "user_message": "Settings updated. Review or revert at [Logs → Config Changes](minis://settings/logs?tab=config-audit).",
+                "audit_url": "leophoneagent://settings/logs?tab=config-audit",
+                "user_message": "Settings updated. Review or revert at [Logs → Config Changes](leophoneagent://settings/logs?tab=config-audit).",
             ]
         }
     }

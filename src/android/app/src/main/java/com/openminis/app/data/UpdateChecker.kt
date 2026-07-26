@@ -1,4 +1,4 @@
-package com.openminis.app.data
+package com.leoyuan.leophoneagent.data
 
 import android.content.Context
 import android.content.Intent
@@ -6,8 +6,8 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
-import com.openminis.app.BuildConfig
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.BuildConfig
+import com.leoyuan.leophoneagent.logging.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient

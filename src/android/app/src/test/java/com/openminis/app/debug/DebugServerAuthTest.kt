@@ -1,4 +1,4 @@
-package com.openminis.app.debug
+package com.leoyuan.leophoneagent.debug
 
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

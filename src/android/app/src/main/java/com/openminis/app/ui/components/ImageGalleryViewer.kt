@@ -1,4 +1,4 @@
-package com.openminis.app.ui.components
+package com.leoyuan.leophoneagent.ui.components
 
 import android.view.WindowManager
 import android.widget.Toast
@@ -46,7 +46,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
-import com.openminis.app.R
+import com.leoyuan.leophoneagent.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp

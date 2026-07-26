@@ -42,7 +42,7 @@ struct MountedFolderEntry: Codable, Identifiable, Equatable {
     /// decoding defaults to `true` so existing entries keep working.
     var isWritable: Bool = true
 
-    /// User intent: does the user *want* Minis (shell + AI + Browse Files) to
+    /// User intent: does the user *want* LeoPhoneAgent (shell + AI + Browse Files) to
     /// be allowed to modify this folder? This is a soft lock layered on top
     /// of `isWritable` — it lets users mount a writable folder and still keep
     /// AI from deleting or editing its contents.
@@ -145,7 +145,7 @@ final class MountedFoldersManager {
     // MARK: - Persistence
 
     /// Mounts metadata lives in the App Group's private MinisConfig subdir
-    /// so it does NOT leak into iOS Files' "On My iPhone → Minis" view.
+    /// so it does NOT leak into iOS Files' "On My iPhone → LeoPhoneAgent" view.
     /// Historically stored in `minisAppGroupRoot/mounted-folders.json`, but
     /// that path sits inside the FileProvider's exposed root.
     private static var storeURL: URL {
@@ -302,7 +302,7 @@ final class MountedFoldersManager {
     }
 
     /// Toggle the user's allow-write intent for a mount. This is the
-    /// Minis-internal soft lock on top of the OS-level `isWritable`. Calling
+    /// LeoPhoneAgent-internal soft lock on top of the OS-level `isWritable`. Calling
     /// with `true` when the source is read-only at the OS level has no effect.
     func setUserAllowWrite(id: UUID, to allow: Bool) {
         guard let idx = entries.firstIndex(where: { $0.id == id }) else { return }

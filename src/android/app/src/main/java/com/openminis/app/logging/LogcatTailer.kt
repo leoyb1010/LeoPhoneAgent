@@ -1,4 +1,4 @@
-package com.openminis.app.logging
+package com.leoyuan.leophoneagent.logging
 
 import android.util.Log
 import java.io.BufferedReader
@@ -43,7 +43,7 @@ internal class LogcatTailer(private val sink: (String) -> Unit) {
             // Per-tag silencing via `TagName:S` and a wildcard fallthrough
             // (`*:V`) restricts the suppression to those three tags only —
             // all other framework warnings/errors still flow through, and
-            // app-emitted `Minis.<category>` lines (AppLogger) are
+            // app-emitted `LeoPhoneAgent.<category>` lines (AppLogger) are
             // unaffected. Doing this at the logcat command line keeps the
             // bytes out of the JNI stream → the LogcatTailer reader thread
             // never sees them, no per-line filter cost.

@@ -1,7 +1,7 @@
-package com.openminis.app.ui.chat
+package com.leoyuan.leophoneagent.ui.chat
 
-import com.openminis.app.data.model.AgentToolDefinition
-import com.openminis.app.data.model.AgentToolParam
+import com.leoyuan.leophoneagent.data.model.AgentToolDefinition
+import com.leoyuan.leophoneagent.data.model.AgentToolParam
 import org.json.JSONObject
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull

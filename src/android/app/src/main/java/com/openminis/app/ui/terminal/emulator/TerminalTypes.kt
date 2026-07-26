@@ -1,4 +1,4 @@
-package com.openminis.app.ui.terminal.emulator
+package com.leoyuan.leophoneagent.ui.terminal.emulator
 
 import androidx.compose.ui.graphics.Color
 

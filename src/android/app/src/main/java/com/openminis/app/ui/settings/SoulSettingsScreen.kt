@@ -1,4 +1,4 @@
-package com.openminis.app.ui.settings
+package com.leoyuan.leophoneagent.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -37,12 +37,12 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.openminis.app.R
-import com.openminis.app.agent.SoulBodyLimitCheck
-import com.openminis.app.agent.SoulFile
-import com.openminis.app.agent.SoulMDParser
-import com.openminis.app.agent.SoulMetadata
-import com.openminis.app.agent.SoulStore
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.agent.SoulBodyLimitCheck
+import com.leoyuan.leophoneagent.agent.SoulFile
+import com.leoyuan.leophoneagent.agent.SoulMDParser
+import com.leoyuan.leophoneagent.agent.SoulMetadata
+import com.leoyuan.leophoneagent.agent.SoulStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
@@ -124,7 +124,7 @@ fun SoulSettingsScreen(onBack: () -> Unit) {
                 )
                 Column(modifier = Modifier.padding(start = 4.dp)) {
                     Text(
-                        text = name.ifBlank { "Minis" },
+                        text = name.ifBlank { "LeoPhoneAgent" },
                         fontSize = 17.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,

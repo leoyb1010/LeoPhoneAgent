@@ -1,4 +1,4 @@
-package com.openminis.app.sandbox
+package com.leoyuan.leophoneagent.sandbox
 
 import android.content.Context
 import android.util.Log
@@ -109,7 +109,7 @@ class PersistentShell(
 
         cmd.add("/bin/sh")
 
-        val debugOffload = com.openminis.app.BuildConfig.DEBUG
+        val debugOffload = com.leoyuan.leophoneagent.BuildConfig.DEBUG
 
         val processBuilder = ProcessBuilder(cmd)
         // In debug builds we want proot's native_offload stderr logs in

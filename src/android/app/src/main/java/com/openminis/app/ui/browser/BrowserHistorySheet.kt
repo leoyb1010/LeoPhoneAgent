@@ -1,6 +1,6 @@
-package com.openminis.app.ui.browser
+package com.leoyuan.leophoneagent.ui.browser
 
-import com.openminis.app.R
+import com.leoyuan.leophoneagent.R
 import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -39,11 +39,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.openminis.app.browser.BrowserHistoryStore
+import com.leoyuan.leophoneagent.browser.BrowserHistoryStore
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import com.openminis.app.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

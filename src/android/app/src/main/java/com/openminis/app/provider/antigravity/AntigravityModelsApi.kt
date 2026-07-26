@@ -1,9 +1,9 @@
-package com.openminis.app.provider.antigravity
+package com.leoyuan.leophoneagent.provider.antigravity
 
 import android.content.Context
-import com.openminis.app.data.model.LLMModel
-import com.openminis.app.provider.ModelsDevApi
-import com.openminis.app.provider.ProviderModelsCache
+import com.leoyuan.leophoneagent.data.model.LLMModel
+import com.leoyuan.leophoneagent.provider.ModelsDevApi
+import com.leoyuan.leophoneagent.provider.ProviderModelsCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType

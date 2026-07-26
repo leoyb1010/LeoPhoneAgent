@@ -3,7 +3,7 @@ import AppIntents
 /// Registers app shortcuts so they appear in Shortcuts with zero user setup.
 ///
 /// Phrase localization: the English phrases below are the KEYS. Localized
-/// Siri trigger phrases (zh-Hans/zh-Hant, e.g. "问问Minis") live in
+/// Siri trigger phrases (zh-Hans/zh-Hant, e.g. "问问LeoPhoneAgent") live in
 /// `src/ios/<locale>.lproj/AppShortcuts.strings` — the table name
 /// AppShortcuts is what the AppIntents runtime looks up. Legacy .strings
 /// (not .xcstrings) because the deployment target is iOS 16 and Xcode
@@ -13,7 +13,7 @@ import AppIntents
 @available(iOS 17.0, *)
 struct MinisShortcutsProvider: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
-        // Siri-facing "ask Minis" entry — opens the app and lands in the
+        // Siri-facing "ask LeoPhoneAgent" entry — opens the app and lands in the
         // conversation. Note: iOS App Intents cannot capture free-form trailing
         // text from the phrase itself (e.g. "…the weather today"); Siri collects
         // the prompt via the parameter's requestValueDialog follow-up. The
@@ -26,7 +26,7 @@ struct MinisShortcutsProvider: AppShortcutsProvider {
                 "Talk to \(.applicationName)",
                 "New \(.applicationName) chat",
             ],
-            shortTitle: "Ask Minis",
+            shortTitle: "Ask LeoPhoneAgent",
             systemImageName: "sparkles"
         )
         AppShortcut(

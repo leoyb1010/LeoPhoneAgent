@@ -1,4 +1,4 @@
-package com.openminis.app.browser
+package com.leoyuan.leophoneagent.browser
 
 /**
  * All browser actions available to the agent, mirroring iOS BrowserAction.

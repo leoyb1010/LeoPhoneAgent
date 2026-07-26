@@ -205,7 +205,7 @@ final class OpenAIProvider: LLMProvider {
     /// where `deployment` is the model id and `path` is e.g. `chat/completions`.
     /// The user pastes the resource/endpoint as the custom base — typically the
     /// bare `azure_endpoint` (`https://x.openai.azure.com`), optionally already
-    /// including `/openai`, and Minis instructs them to put `?api-version=…` on
+    /// including `/openai`, and LeoPhoneAgent instructs them to put `?api-version=…` on
     /// the base. We:
     ///   1. split off the `?api-version=…` query,
     ///   2. strip a trailing `/`, and a trailing `/openai` (we re-add it) and any

@@ -15,8 +15,8 @@
 #include <unistd.h>
 
 // Swift bridge — generated header
-#if __has_include("Minis-Swift.h")
-#import "Minis-Swift.h"
+#if __has_include("LeoPhoneAgent-Swift.h")
+#import "LeoPhoneAgent-Swift.h"
 #else
 @interface SessionsOffloadBridge : NSObject
 + (NSDictionary * _Nonnull)querySessionsWithSessionIds:(NSArray<NSString *> * _Nullable)sessionIds
@@ -49,7 +49,7 @@
 static NSString *const TOOL_NAME = @"minis-sessions-cli";
 
 static NSString *const HELP_TEXT =
-    @"minis-sessions-cli - Query and send Minis chat sessions\n"
+    @"minis-sessions-cli - Query and send LeoPhoneAgent chat sessions\n"
      "\n"
      "USAGE:\n"
      "  minis-sessions-cli <command> [options]\n"

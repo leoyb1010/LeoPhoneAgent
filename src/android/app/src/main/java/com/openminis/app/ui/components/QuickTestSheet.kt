@@ -1,4 +1,4 @@
-package com.openminis.app.ui.components
+package com.leoyuan.leophoneagent.ui.components
 
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
@@ -52,15 +52,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.openminis.app.R
-import com.openminis.app.data.model.LLMMessage
-import com.openminis.app.data.model.LLMMediaAttachment
-import com.openminis.app.data.model.ModelEntry
-import com.openminis.app.data.model.normalizeModalityName
-import com.openminis.app.data.repository.ProviderRepository
-import com.openminis.app.logging.AppLogger
-import com.openminis.app.provider.ProviderFactory
-import com.openminis.app.provider.openai.OpenAIProvider
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.data.model.LLMMessage
+import com.leoyuan.leophoneagent.data.model.LLMMediaAttachment
+import com.leoyuan.leophoneagent.data.model.ModelEntry
+import com.leoyuan.leophoneagent.data.model.normalizeModalityName
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.logging.AppLogger
+import com.leoyuan.leophoneagent.provider.ProviderFactory
+import com.leoyuan.leophoneagent.provider.openai.OpenAIProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -452,7 +452,7 @@ private suspend fun performTest(
     // stack (vendor adapters + endpoints), NOT the chat provider — mirrors iOS
     // ModelQuickTestSheet .speechOut / .transcription.
     if (kind == QuickTestKind.SPEECH_OUT || kind == QuickTestKind.TRANSCRIPTION) {
-        val voice = com.openminis.app.provider.voice.VoiceProviderFactory.make(instance, apiKey)
+        val voice = com.leoyuan.leophoneagent.provider.voice.VoiceProviderFactory.make(instance, apiKey)
             ?: return@withContext failure(context.getString(R.string.quicktest_voice_unsupported))
         return@withContext when (kind) {
             QuickTestKind.SPEECH_OUT -> {
@@ -465,8 +465,8 @@ private suspend fun performTest(
                         // iOS 0a52bdbf: pass entry.model.id for both so the test
                         // speaks in THAT voice, not the vendor default.
                         val data = voice.synthesize(
-                            com.openminis.app.provider.voice.VoiceOutputRequest(
-                                input = "Hi! This is Minis testing text to speech.",
+                            com.leoyuan.leophoneagent.provider.voice.VoiceOutputRequest(
+                                input = "Hi! This is LeoPhoneAgent testing text to speech.",
                                 model = entry.model.id,
                                 voice = entry.model.id,
                             ),
@@ -483,12 +483,12 @@ private suspend fun performTest(
                 if (!voice.supportsVoiceInput) {
                     failure(context.getString(R.string.quicktest_voice_unsupported))
                 } else {
-                    val spoken = "Hello from Minis, testing speech to text."
+                    val spoken = "Hello from LeoPhoneAgent, testing speech to text."
                     val clip = synthesizeTestClip(context, spoken)
                         ?: return@withContext failure(context.getString(R.string.quicktest_clip_failed))
                     runCatching {
                         val resp = voice.transcribe(
-                            com.openminis.app.provider.voice.VoiceInputRequest(
+                            com.leoyuan.leophoneagent.provider.voice.VoiceInputRequest(
                                 audioData = clip,
                                 model = entry.baseModel.id,
                                 language = "en",
@@ -516,7 +516,7 @@ private suspend fun performTest(
                     messages = listOf(
                         LLMMessage(
                             role = LLMMessage.Role.USER,
-                            content = "Hi! I'm setting you up in Minis. Say hello back in one short, friendly sentence.",
+                            content = "Hi! I'm setting you up in LeoPhoneAgent. Say hello back in one short, friendly sentence.",
                         ),
                     ),
                     systemPrompt = null,
@@ -535,7 +535,7 @@ private suspend fun performTest(
                 ?: return@withContext failure(context.getString(R.string.quicktest_image_unsupported))
             runCatching {
                 val resp = openAI.generateImage(
-                    prompt = "A friendly cute mascot logo for an app called Minis, minimalist, centered, soft colors",
+                    prompt = "A friendly cute mascot logo for an app called LeoPhoneAgent, minimalist, centered, soft colors",
                     n = 1,
                     size = "1024x1024",
                     quality = null,

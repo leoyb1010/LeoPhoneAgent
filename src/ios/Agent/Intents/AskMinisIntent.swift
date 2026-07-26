@@ -3,23 +3,23 @@ import Foundation
 
 private let logger = AppLogger(category: "AskMinisIntent")
 
-/// Siri-facing "ask Minis" entry point. Unlike `SendPromptIntent` (which runs
+/// Siri-facing "ask LeoPhoneAgent" entry point. Unlike `SendPromptIntent` (which runs
 /// headless with `openAppWhenRun = false` for Shortcuts automations), this
 /// intent OPENS the app and routes to the session so the user lands in the live
-/// conversation — matching the "Hey Siri, ask Minis to …" experience.
+/// conversation — matching the "Hey Siri, ask LeoPhoneAgent to …" experience.
 ///
 /// It reuses the exact normal send pipeline (`AIChatViewModel.send()`) and the
 /// existing `.openSessionFromIntent` navigation path — no separate agent logic.
 /// New session when `session` is nil; follow-up when a `SessionEntity` is given.
 struct AskMinisIntent: AppIntent {
-    static var title: LocalizedStringResource = "Ask Minis"
-    static var description = IntentDescription("Opens Minis, sends your prompt, and shows the conversation. Starts a new session, or continues an existing one when you pick a session.")
+    static var title: LocalizedStringResource = "Ask LeoPhoneAgent"
+    static var description = IntentDescription("Opens LeoPhoneAgent, sends your prompt, and shows the conversation. Starts a new session, or continues an existing one when you pick a session.")
 
     // Open the app and land in the conversation (the Siri experience). The send
     // itself still goes through the normal in-app pipeline.
     static var openAppWhenRun = true
 
-    @Parameter(title: "Prompt", requestValueDialog: "What would you like to ask Minis?")
+    @Parameter(title: "Prompt", requestValueDialog: "What would you like to ask LeoPhoneAgent?")
     var prompt: String
 
     @Parameter(title: "Session", description: "Existing session to continue. Leave empty to start a new session.")
@@ -88,6 +88,6 @@ struct AskMinisIntent: AppIntent {
             )
         }
 
-        return .result(dialog: "On it — opening Minis.")
+        return .result(dialog: "On it — opening LeoPhoneAgent.")
     }
 }

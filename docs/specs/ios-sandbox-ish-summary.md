@@ -126,7 +126,7 @@ Updated in real-time from iOS system resolver (falls back to `8.8.8.8`, `8.8.4.4
 
 - **Guest → Host**: Linux path `/foo/bar` → `~/Documents/alpine-rootfs/data/foo/bar`
 - **Host → Guest**: Bind mounts make host files appear at `/var/minis/...`
-- **minis:// URL scheme**: Resolved by `MinisImageProvider` to local images
+- **leophoneagent:// URL scheme**: Resolved by `MinisImageProvider` to local images
 
 ---
 

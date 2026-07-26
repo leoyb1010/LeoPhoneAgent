@@ -1,17 +1,17 @@
-package com.openminis.app.config.collections
+package com.leoyuan.leophoneagent.config.collections
 
-import com.openminis.app.config.ConfigCollection
-import com.openminis.app.config.ConfigError
-import com.openminis.app.config.ConfigField
-import com.openminis.app.config.ConfigRisk
-import com.openminis.app.config.ConfigSchema
-import com.openminis.app.config.ConfigValue
-import com.openminis.app.config.fields.ClosureField
-import com.openminis.app.data.model.FallbackStrategy
-import com.openminis.app.data.model.ModelGroup
-import com.openminis.app.data.model.RoutingStrategy
-import com.openminis.app.data.model.ThinkingLevel
-import com.openminis.app.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.config.ConfigCollection
+import com.leoyuan.leophoneagent.config.ConfigError
+import com.leoyuan.leophoneagent.config.ConfigField
+import com.leoyuan.leophoneagent.config.ConfigRisk
+import com.leoyuan.leophoneagent.config.ConfigSchema
+import com.leoyuan.leophoneagent.config.ConfigValue
+import com.leoyuan.leophoneagent.config.fields.ClosureField
+import com.leoyuan.leophoneagent.data.model.FallbackStrategy
+import com.leoyuan.leophoneagent.data.model.ModelGroup
+import com.leoyuan.leophoneagent.data.model.RoutingStrategy
+import com.leoyuan.leophoneagent.data.model.ThinkingLevel
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
 
 /**
  * Exposes ModelGroup fields under `groups.<id>.…`. Mirrors iOS

@@ -1,6 +1,6 @@
-package com.openminis.app.ui.sandbox
+package com.leoyuan.leophoneagent.ui.sandbox
 
-import com.openminis.app.R
+import com.leoyuan.leophoneagent.R
 import androidx.compose.ui.res.stringResource
 import android.content.ContentValues
 import android.content.Context
@@ -77,18 +77,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.FileProvider
-import com.openminis.app.logging.AppLogger
-import com.openminis.app.ui.components.rememberIosBounceOverscrollEffect
-import com.openminis.app.ui.markdown.MarkdownText
-import com.openminis.app.ui.chat.StreamingMarkdownText
-import com.openminis.app.ui.media.InlineAudioPlayer
-import com.openminis.app.ui.media.InlineVideoPlayer
+import com.leoyuan.leophoneagent.logging.AppLogger
+import com.leoyuan.leophoneagent.ui.components.rememberIosBounceOverscrollEffect
+import com.leoyuan.leophoneagent.ui.markdown.MarkdownText
+import com.leoyuan.leophoneagent.ui.chat.StreamingMarkdownText
+import com.leoyuan.leophoneagent.ui.media.InlineAudioPlayer
+import com.leoyuan.leophoneagent.ui.media.InlineVideoPlayer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.OutputStream
-import com.openminis.app.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
 
 private const val MAX_TEXT_PREVIEW_BYTES = 512_000 // 500 KB
 
@@ -146,7 +146,7 @@ fun FilePreviewScreen(
         val galleryState = remember(item.file.absolutePath) {
             collectImageGallery(item.file)
         }
-        com.openminis.app.ui.components.ImageGalleryViewer(
+        com.leoyuan.leophoneagent.ui.components.ImageGalleryViewer(
             items = galleryState.first,
             startIndex = galleryState.second,
             onDismiss = onBack,
@@ -433,7 +433,7 @@ private fun MarkdownPreview(item: FileItem) {
         error != null -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(error!!, color = MaterialTheme.colorScheme.error)
         }
-        content != null -> com.openminis.app.ui.chat.MarkdownDocument(
+        content != null -> com.leoyuan.leophoneagent.ui.chat.MarkdownDocument(
             // T285-md: was StreamingMarkdownText inside verticalScroll{}, which
             // composed the full document up-front and stalled the chat-tap →
             // preview transition with main-thread parseInline scans across
@@ -1131,7 +1131,7 @@ private suspend fun saveImageToGallery(context: Context, src: File): Boolean =
                     put(MediaStore.Images.Media.MIME_TYPE, mime)
                     put(
                         MediaStore.Images.Media.RELATIVE_PATH,
-                        Environment.DIRECTORY_PICTURES + "/Minis",
+                        Environment.DIRECTORY_PICTURES + "/LeoPhoneAgent",
                     )
                     put(MediaStore.Images.Media.IS_PENDING, 1)
                 }
@@ -1149,7 +1149,7 @@ private suspend fun saveImageToGallery(context: Context, src: File): Boolean =
                 val dir = Environment.getExternalStoragePublicDirectory(
                     Environment.DIRECTORY_PICTURES,
                 )
-                val minisDir = File(dir, "Minis").also { it.mkdirs() }
+                val minisDir = File(dir, "LeoPhoneAgent").also { it.mkdirs() }
                 val dest = File(minisDir, filename)
                 src.inputStream().use { input ->
                     dest.outputStream().use { input.copyTo(it) }
@@ -1166,7 +1166,7 @@ private suspend fun saveImageToGallery(context: Context, src: File): Boolean =
  * Build the swipe-able gallery's (items, startIndex) for a tapped image
  * file: enumerate all image siblings in its parent directory (sorted by
  * name, case-insensitive), find the tapped one's index, and wrap them as
- * [com.openminis.app.ui.components.ImageGalleryItem]. Non-image files are
+ * [com.leoyuan.leophoneagent.ui.components.ImageGalleryItem]. Non-image files are
  * filtered by extension here — matches [FileItem.isImageFile].
  *
  * Falls back to a 1-item list (just the tapped file) when the parent dir
@@ -1177,7 +1177,7 @@ private val IMAGE_GALLERY_EXTENSIONS =
 
 private fun collectImageGallery(
     file: java.io.File,
-): Pair<List<com.openminis.app.ui.components.ImageGalleryItem>, Int> {
+): Pair<List<com.leoyuan.leophoneagent.ui.components.ImageGalleryItem>, Int> {
     val parent = file.parentFile
     val siblings = parent?.listFiles()
         ?.filter {
@@ -1189,7 +1189,7 @@ private fun collectImageGallery(
     val startIdx = list.indexOfFirst { it.absolutePath == file.absolutePath }
         .coerceAtLeast(0)
     val items = list.map {
-        com.openminis.app.ui.components.ImageGalleryItem(
+        com.leoyuan.leophoneagent.ui.components.ImageGalleryItem(
             model = it,
             caption = it.name,
         )

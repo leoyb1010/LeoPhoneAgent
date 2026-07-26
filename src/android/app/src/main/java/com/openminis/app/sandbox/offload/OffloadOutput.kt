@@ -1,6 +1,6 @@
-package com.openminis.app.sandbox.offload
+package com.leoyuan.leophoneagent.sandbox.offload
 
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.logging.AppLogger
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -27,7 +27,7 @@ import org.json.JSONObject
  *
  * Handlers feed `body` without a trailing newline; the formatter never
  * adds one — the caller appends `"\n"` when wrapping in
- * [com.openminis.app.sandbox.NativeOffloadResult], matching the
+ * [com.leoyuan.leophoneagent.sandbox.NativeOffloadResult], matching the
  * existing pattern.
  */
 internal object OffloadOutput {

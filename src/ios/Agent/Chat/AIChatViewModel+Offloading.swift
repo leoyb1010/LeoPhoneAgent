@@ -109,7 +109,7 @@ extension AIChatViewModel {
         }
     }
 
-    /// Decide whether a file path (Linux view) or minis:// URL is backed by
+    /// Decide whether a file path (Linux view) or leophoneagent:// URL is backed by
     /// persistent session storage under `/var/minis/*`. Paths in those
     /// locations survive shell restarts, session reloads, and cross-day
     /// reopens, so we don't need to write a snapshot copy of the bytes.
@@ -123,11 +123,11 @@ extension AIChatViewModel {
         if path.hasPrefix("/var/minis/browser/") { return true }
         if path.hasPrefix("/var/minis/attachments/") { return true }
         if path.hasPrefix("/var/minis/offloads/") { return true }
-        // minis:// URL view maps 1:1 to the directories above
-        if path.hasPrefix("minis://workspace/") { return true }
-        if path.hasPrefix("minis://browser/") { return true }
-        if path.hasPrefix("minis://attachments/") { return true }
-        if path.hasPrefix("minis://offloads/") { return true }
+        // leophoneagent:// URL view maps 1:1 to the directories above
+        if path.hasPrefix("leophoneagent://workspace/") { return true }
+        if path.hasPrefix("leophoneagent://browser/") { return true }
+        if path.hasPrefix("leophoneagent://attachments/") { return true }
+        if path.hasPrefix("leophoneagent://offloads/") { return true }
         return false
     }
 
@@ -145,7 +145,7 @@ extension AIChatViewModel {
     /// - `input`: the `tool_use` input JSON for this call.
     /// - `content`: the textual `tool_result` body. Used to recover paths
     ///   that only the tool knows at runtime (e.g. browser screenshot URLs
-    ///   emitted as `minis_url: minis://...`).
+    ///   emitted as `minis_url: leophoneagent://...`).
     private static func originalImagePath(
         toolName: String,
         input: [String: Any]?,
@@ -155,11 +155,11 @@ extension AIChatViewModel {
         if toolName == "read_image", let path = input?["path"] as? String, !path.isEmpty {
             return path
         }
-        // browser_use (any action) appends `minis_url: minis://...` to the
+        // browser_use (any action) appends `minis_url: leophoneagent://...` to the
         // result content when it persists a screenshot or fetched file to
         // /var/minis/browser/. Extract that URL.
         if toolName == "browser_use" || toolName.isEmpty {
-            if let urlRange = content.range(of: #"minis://\S+"#, options: .regularExpression) {
+            if let urlRange = content.range(of: #"leophoneagent://\S+"#, options: .regularExpression) {
                 return String(content[urlRange])
             }
         }
@@ -799,7 +799,7 @@ extension AIChatViewModel {
 
     /// Save an attachment (image, media) to the session's persistent attachments directory.
     /// With bind mounts, writing to persistent storage is automatically visible to iSH.
-    /// Returns a `minis://attachments/<filename>` URL string, or nil on failure.
+    /// Returns a `leophoneagent://attachments/<filename>` URL string, or nil on failure.
     func saveAttachment(_ data: Data, filename: String) -> String? {
         let fm = FileManager.default
         let sid = sessionId ?? "unknown"
@@ -812,7 +812,7 @@ extension AIChatViewModel {
         guard (try? data.write(to: persistPath)) != nil else { return nil }
 
         let encoded = filename.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? filename
-        return "minis://attachments/\(encoded)"
+        return "leophoneagent://attachments/\(encoded)"
     }
 
 }

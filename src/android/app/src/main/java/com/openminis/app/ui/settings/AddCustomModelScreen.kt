@@ -1,4 +1,4 @@
-package com.openminis.app.ui.settings
+package com.leoyuan.leophoneagent.ui.settings
 
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,13 +16,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
-import com.openminis.app.data.model.LLMModel
-import com.openminis.app.data.model.ModelEntry
-import com.openminis.app.data.repository.ProviderRepository
-import com.openminis.app.ui.components.RowLabel
-import com.openminis.app.ui.components.SectionTextField
-import com.openminis.app.R
-import com.openminis.app.ui.components.MinisButton
+import com.leoyuan.leophoneagent.data.model.LLMModel
+import com.leoyuan.leophoneagent.data.model.ModelEntry
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.ui.components.RowLabel
+import com.leoyuan.leophoneagent.ui.components.SectionTextField
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.ui.components.MinisButton
 
 /**
  * Add Custom Model — adopts the SettingsScaffold/SettingsSection toolkit

@@ -1,4 +1,4 @@
-package com.openminis.app.data.repository
+package com.leoyuan.leophoneagent.data.repository
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -43,7 +43,7 @@ class EnvVarRepository(private val context: Context) {
 
     private val encryptedPrefs: SharedPreferences by lazy {
         // T-android-keystore-aead-fail: self-healing wrapper.
-        com.openminis.app.util.EncryptedPrefsFactory.safeCreate(context, ENCRYPTED_PREFS_NAME)
+        com.leoyuan.leophoneagent.util.EncryptedPrefsFactory.safeCreate(context, ENCRYPTED_PREFS_NAME)
     }
 
     private val metadataFile: File

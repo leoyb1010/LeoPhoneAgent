@@ -1,11 +1,11 @@
-package com.openminis.app.offload
+package com.leoyuan.leophoneagent.offload
 
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.logging.AppLogger
 
 /**
  * BroadcastReceiver that fires when an alarm or timer triggers.
@@ -31,7 +31,7 @@ class AlarmReceiver : BroadcastReceiver() {
             // are repeating alarms and DO survive reboot via the OS, so
             // we don't have to re-register them here.
             try {
-                com.openminis.app.scheduled.ScheduledTaskManager(context).rescheduleAll()
+                com.leoyuan.leophoneagent.scheduled.ScheduledTaskManager(context).rescheduleAll()
             } catch (t: Throwable) {
                 AppLogger.warning(TAG, "scheduled-task rescheduleAll failed: ${t.message}")
             }
@@ -71,7 +71,7 @@ class AlarmReceiver : BroadcastReceiver() {
 
         val notification = NotificationCompat.Builder(context, AlarmOffloadManager.CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-            .setContentTitle("Minis Alarm")
+            .setContentTitle("LeoPhoneAgent Alarm")
             .setContentText(label)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_ALARM)

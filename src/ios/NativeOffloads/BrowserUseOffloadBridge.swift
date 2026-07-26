@@ -205,7 +205,7 @@ import Foundation
                     let linuxPath = "\(AIChatViewModel.minisBrowserLinuxDir)/\(filename)"
                     persistedImagePath = linuxPath
                     out["image_path"] = linuxPath
-                    out["minis_url"] = "minis://browser/\(filename)"
+                    out["minis_url"] = "leophoneagent://browser/\(filename)"
                 } catch {
                     logger.warning("Failed to persist screenshot to \(dest.path): \(error.localizedDescription)")
                 }
@@ -235,7 +235,7 @@ import Foundation
                         try data.write(to: dest)
                         let linuxPath = "\(AIChatViewModel.minisBrowserLinuxDir)/\(name)"
                         out["fetched_path"] = linuxPath
-                        out["fetched_minis_url"] = "minis://browser/\(name)"
+                        out["fetched_minis_url"] = "leophoneagent://browser/\(name)"
                     } catch {
                         logger.warning("Failed to persist fetched file to \(dest.path): \(error.localizedDescription)")
                     }

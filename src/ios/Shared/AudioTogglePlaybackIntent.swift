@@ -20,7 +20,7 @@ import Foundation
 /// and the toggle takes effect immediately without opening the app to foreground.
 enum AudioTogglePlaybackBridge {
     /// Darwin notification name the widget posts and the app observes.
-    static let darwinNotificationName = "com.openminis.app.liveActivity.audioToggle"
+    static let darwinNotificationName = "com.leoyuan.leophoneagent.liveActivity.audioToggle"
 }
 
 /// [T-ios-live-activity-audio-toggle] Live Activity button intent that toggles
@@ -32,7 +32,7 @@ enum AudioTogglePlaybackBridge {
 @available(iOS 17.0, *)
 struct AudioTogglePlaybackIntent: LiveActivityIntent {
     static var title: LocalizedStringResource = "Play or Pause Narration"
-    static var description = IntentDescription("Toggles play/pause on Minis audio narration from the Live Activity.")
+    static var description = IntentDescription("Toggles play/pause on LeoPhoneAgent audio narration from the Live Activity.")
     /// Never bring the app to the foreground — the whole point is to control
     /// playback from the Lock Screen / Dynamic Island in place.
     static var openAppWhenRun = false

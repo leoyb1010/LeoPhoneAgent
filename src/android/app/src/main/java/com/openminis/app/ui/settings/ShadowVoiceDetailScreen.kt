@@ -1,4 +1,4 @@
-package com.openminis.app.ui.settings
+package com.leoyuan.leophoneagent.ui.settings
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -26,11 +26,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.openminis.app.R
-import com.openminis.app.data.model.ModelEntry
-import com.openminis.app.data.model.hasAudioInput
-import com.openminis.app.data.model.hasAudioOutput
-import com.openminis.app.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.data.model.ModelEntry
+import com.leoyuan.leophoneagent.data.model.hasAudioInput
+import com.leoyuan.leophoneagent.data.model.hasAudioOutput
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
 
 /**
  * [T-android-provider-voice] Read-only detail of a shadow Voice Service —
@@ -117,7 +117,7 @@ fun ShadowVoiceDetailScreen(
     }
 
     quickTestEntry?.let { entry ->
-        com.openminis.app.ui.components.QuickTestSheet(
+        com.leoyuan.leophoneagent.ui.components.QuickTestSheet(
             entry = entry,
             providerRepository = providerRepository,
             onDismiss = { quickTestEntry = null },

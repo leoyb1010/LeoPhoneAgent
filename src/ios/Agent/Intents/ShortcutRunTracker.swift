@@ -229,12 +229,12 @@ enum ShortcutRunTracker {
         switch category {
         case .keepAliveDisabled:
             title = String(localized: "Automation may not have completed")
-            body = String(localized: "The Shortcut sent to Minis may not have finished running in the background. Turn on Background Keep-Alive in Settings so automations can complete reliably.")
+            body = String(localized: "The Shortcut sent to LeoPhoneAgent may not have finished running in the background. Turn on Background Keep-Alive in Settings so automations can complete reliably.")
         case .keepAliveEnabledButStillOrphaned:
             // Softer wording — the user already did the right thing; we
             // still tell them but avoid finger-pointing at their setup.
             title = String(localized: "Automation may not have completed")
-            body = String(localized: "A Shortcut sent to Minis may not have finished. Open the session to check.")
+            body = String(localized: "A Shortcut sent to LeoPhoneAgent may not have finished. Open the session to check.")
         }
 
         let center = UNUserNotificationCenter.current()

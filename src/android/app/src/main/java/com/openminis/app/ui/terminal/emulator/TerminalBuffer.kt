@@ -1,4 +1,4 @@
-package com.openminis.app.ui.terminal.emulator
+package com.leoyuan.leophoneagent.ui.terminal.emulator
 
 /**
  * Terminal screen buffer — port of iOS TerminalBuffer.swift.

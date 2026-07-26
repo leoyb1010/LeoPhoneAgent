@@ -1,4 +1,4 @@
-package com.openminis.app.ui.sessions
+package com.leoyuan.leophoneagent.ui.sessions
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable

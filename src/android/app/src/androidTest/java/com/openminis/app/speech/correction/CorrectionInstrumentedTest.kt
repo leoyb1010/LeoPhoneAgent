@@ -1,4 +1,4 @@
-package com.openminis.app.speech.correction
+package com.leoyuan.leophoneagent.speech.correction
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -13,7 +13,7 @@ import java.io.File
 class CorrectionInstrumentedTest {
     private val ctx = InstrumentationRegistry.getInstrumentation().targetContext
     private val seg: (String) -> List<String> = {
-        com.openminis.app.shared.TextSegmenter.getInstance(ctx).segment(it)
+        com.leoyuan.leophoneagent.shared.TextSegmenter.getInstance(ctx).segment(it)
     }
     private fun db() = VoiceCorrectionDb.getInstance(ctx)!!
     private fun recorder() = VoiceCorrectionRecorder(ctx, db(), seg)
@@ -132,7 +132,7 @@ class CorrectionInstrumentedTest {
     }
 
     @Test fun posTagAndBackgroundListAreAvailable() {
-        val tagged = com.openminis.app.shared.TextSegmenter.getInstance(ctx)
+        val tagged = com.leoyuan.leophoneagent.shared.TextSegmenter.getInstance(ctx)
             .posTag("马云在杭州创办了阿里巴巴集团")
         assertTrue(tagged.isNotEmpty())
         assertTrue(tagged.any { it.second in setOf("nr", "ns", "nz", "nt", "nrt") })

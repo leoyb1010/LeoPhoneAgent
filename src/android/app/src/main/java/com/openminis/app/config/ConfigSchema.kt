@@ -1,4 +1,4 @@
-package com.openminis.app.config
+package com.leoyuan.leophoneagent.config
 
 /**
  * Type tag + per-type constraints for a [ConfigField]. Drives the

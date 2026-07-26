@@ -50,7 +50,7 @@ Transport notes (Android differs from iOS!):
     /pair step. Do not use the iOS protocol-v1 clients against this server.
   - Auth: loopback (via `adb forward`) needs no token. NON-loopback (LAN)
     clients must send the per-install device token:
-        adb shell run-as com.openminis.app cat files/debug_server_token
+        adb shell run-as com.leoyuan.leophoneagent cat files/debug_server_token
     Passed as X-Minis-Token (Authorization: Bearer also accepted).
     Or set MINIS_DEBUG_TOKEN in the environment.
 """
@@ -80,7 +80,7 @@ def call(host: str, method: str, params: dict, token: str | None) -> dict:
             raise SystemExit(
                 "401 Unauthorized — this is a non-loopback (LAN) connection, so a token is\n"
                 "required. Read it with:\n"
-                "  adb shell run-as com.openminis.app cat files/debug_server_token\n"
+                "  adb shell run-as com.leoyuan.leophoneagent cat files/debug_server_token\n"
                 "then pass --token / MINIS_DEBUG_TOKEN. (Over `adb forward` no token is needed.)\n"
                 f"server said: {payload}"
             )
@@ -121,7 +121,7 @@ adb forward tcp:5321 tcp:5321
 curl -s localhost:5321/ -d '{"jsonrpc":"2.0","id":1,"method":"debug.appInfo","params":{}}'
 
 # LAN (non-loopback) — token required
-TOK=$(adb shell run-as com.openminis.app cat files/debug_server_token)
+TOK=$(adb shell run-as com.leoyuan.leophoneagent cat files/debug_server_token)
 curl -s http://<device-ip>:5321/ \
      -H "X-Minis-Token: $TOK" \
      -d '{"jsonrpc":"2.0","id":1,"method":"debug.appInfo","params":{}}'

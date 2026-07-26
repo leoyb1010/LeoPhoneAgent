@@ -1,10 +1,10 @@
-package com.openminis.app.debug
+package com.leoyuan.leophoneagent.debug
 
 import android.content.Context
 import androidx.core.content.FileProvider
-import com.openminis.app.MinisApp
-import com.openminis.app.data.model.ThinkingLevel
-import com.openminis.app.ui.chat.InputAttachment
+import com.leoyuan.leophoneagent.MinisApp
+import com.leoyuan.leophoneagent.data.model.ThinkingLevel
+import com.leoyuan.leophoneagent.ui.chat.InputAttachment
 import org.json.JSONObject
 import java.io.File
 
@@ -26,7 +26,7 @@ internal object ChatMutationMethods {
     /**
      * [T-android-ui-prompt-rpc] Send a prompt through the ON-SCREEN chat's own
      * UI ChatViewModel (the one ChatScreen is composed with, cached in
-     * [com.openminis.app.ui.chat.ChatViewModelStore]) — unlike [prompt], which
+     * [com.leoyuan.leophoneagent.ui.chat.ChatViewModelStore]) — unlike [prompt], which
      * drives a separate headless VM whose streaming side-channel the visible
      * ChatScreen never observes. This is the only way an e2e harness can
      * exercise the LIVE streaming render pipeline (frozen/live flatten,
@@ -39,14 +39,14 @@ internal object ChatMutationMethods {
             throw RPCException(-32602, "Missing 'prompt' param")
         }
         val app = app(context)
-        val store = com.openminis.app.ui.chat.ChatViewModelStore
+        val store = com.leoyuan.leophoneagent.ui.chat.ChatViewModelStore
         val sessionId = params.optString("sessionId", "").ifEmpty { null }
             ?: store.activeSessionId
             ?: throw RPCException(-32000, "No chat is on screen (activeSessionId is null) and no sessionId was given")
         val vm = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
             androidx.lifecycle.ViewModelProvider(
                 store.ownerFor(sessionId),
-                com.openminis.app.ui.chat.ChatViewModel.factory(
+                com.leoyuan.leophoneagent.ui.chat.ChatViewModel.factory(
                     sessionId = sessionId,
                     chatRepository = app.chatRepository,
                     providerRepository = app.providerRepository,
@@ -55,7 +55,7 @@ internal object ChatMutationMethods {
                     skillRepository = app.skillRepository,
                     mcpRepository = app.mcpRepository,
                 ),
-            )[com.openminis.app.ui.chat.ChatViewModel::class.java].also { it.sendMessage(text) }
+            )[com.leoyuan.leophoneagent.ui.chat.ChatViewModel::class.java].also { it.sendMessage(text) }
         }
         return JSONObject().apply {
             put("ok", true)
@@ -201,7 +201,7 @@ internal object ChatMutationMethods {
             put("sessionId", sessionId)
             put("title", s.title ?: JSONObject.NULL)
             put("modelName", resolveDisplay(context, s.modelId))
-            put("isRunning", com.openminis.app.service.SessionActivityTracker.isActive(sessionId))
+            put("isRunning", com.leoyuan.leophoneagent.service.SessionActivityTracker.isActive(sessionId))
             put("messageCount", msgs.size)
             put("lastMessageRole", lastMsg?.role ?: JSONObject.NULL)
             put("updatedAt", s.updatedAt)

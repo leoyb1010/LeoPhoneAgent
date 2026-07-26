@@ -1,6 +1,6 @@
-package com.openminis.app.ui.settings
+package com.leoyuan.leophoneagent.ui.settings
 
-import com.openminis.app.R
+import com.leoyuan.leophoneagent.R
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
@@ -30,9 +30,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
-import com.openminis.app.data.db.ChatDao
-import com.openminis.app.data.model.LLMModel
-import com.openminis.app.data.model.ProviderConfig
+import com.leoyuan.leophoneagent.data.db.ChatDao
+import com.leoyuan.leophoneagent.data.model.LLMModel
+import com.leoyuan.leophoneagent.data.model.ProviderConfig
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date

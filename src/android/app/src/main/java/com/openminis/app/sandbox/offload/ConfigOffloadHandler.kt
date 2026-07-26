@@ -1,11 +1,11 @@
-package com.openminis.app.sandbox.offload
+package com.leoyuan.leophoneagent.sandbox.offload
 
-import com.openminis.app.config.ConfigBridge
-import com.openminis.app.logging.AppLogger
-import com.openminis.app.sandbox.NativeOffloadHandler
-import com.openminis.app.sandbox.NativeOffloadRequest
-import com.openminis.app.sandbox.NativeOffloadResult
-import com.openminis.app.sandbox.PRootKernel
+import com.leoyuan.leophoneagent.config.ConfigBridge
+import com.leoyuan.leophoneagent.logging.AppLogger
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadHandler
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadRequest
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadResult
+import com.leoyuan.leophoneagent.sandbox.PRootKernel
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -46,7 +46,7 @@ class ConfigOffloadHandler : NativeOffloadHandler {
         const val EXIT_PERMISSION_DENIED = 126
 
         const val HELP_TEXT =
-            "minis-config - read or change Minis app settings (logged + revertable)\n" +
+            "minis-config - read or change LeoPhoneAgent app settings (logged + revertable)\n" +
                 "\n" +
                 "USAGE:\n" +
                 "  minis-config <subcommand> [args]\n" +

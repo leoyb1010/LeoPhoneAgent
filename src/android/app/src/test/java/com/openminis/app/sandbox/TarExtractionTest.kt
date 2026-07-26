@@ -1,4 +1,4 @@
-package com.openminis.app.sandbox
+package com.leoyuan.leophoneagent.sandbox
 
 import org.junit.After
 import org.junit.Assert.*

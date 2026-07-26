@@ -1,4 +1,4 @@
-package com.openminis.app.browser
+package com.leoyuan.leophoneagent.browser
 
 /**
  * Injectable JavaScript for browser_use actions.

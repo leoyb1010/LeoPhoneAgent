@@ -1,4 +1,4 @@
-package com.openminis.app.ui.terminal
+package com.leoyuan.leophoneagent.ui.terminal
 
 import android.content.Context
 import android.graphics.Typeface
@@ -9,7 +9,7 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.core.content.res.ResourcesCompat
-import com.openminis.app.R
+import com.leoyuan.leophoneagent.R
 
 /**
  * JetBrains Mono — bundled TTF, used wherever the terminal renders code-

@@ -1,4 +1,4 @@
-package com.openminis.app.webapp
+package com.leoyuan.leophoneagent.webapp
 
 import android.content.Context
 import android.content.Intent
@@ -8,8 +8,8 @@ import android.widget.Toast
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
-import com.openminis.app.R
-import com.openminis.app.data.db.WebAppShortcutEntity
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.data.db.WebAppShortcutEntity
 
 /**
  * T-pwa-1 (renamed Pwa → WebApp): pin a WebApp shortcut to the user's

@@ -67,8 +67,8 @@ enum LLMProviderFactory {
             return provider
         }
         // Otherwise inject the app default UA so outbound requests carry the
-        // marketing version (Minis/1.10 …) instead of URLSession's build-number
-        // default (Minis/1 CFNetwork/… Darwin/…). Don't clobber a UA another
+        // marketing version (LeoPhoneAgent/1.10 …) instead of URLSession's build-number
+        // default (LeoPhoneAgent/1 CFNetwork/… Darwin/…). Don't clobber a UA another
         // builder already set (e.g. some future provider-specific UA).
         if provider.extraHeaders["User-Agent"] == nil {
             provider.extraHeaders["User-Agent"] = MinisUserAgent.default
@@ -88,7 +88,7 @@ enum LLMProviderFactory {
         switch instance.credentialType {
         case .apiKey:
             let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) ?? ""
-            // No user custom UA → send the app default (Minis/<marketing>) so the
+            // No user custom UA → send the app default (LeoPhoneAgent/<marketing>) so the
             // SDK (which sets no UA itself) doesn't fall back to URLSession's
             // build-number default. OAuth branches below keep nil so the
             // claude-cli UA set in OAuthURLProtocol is preserved.
@@ -178,8 +178,8 @@ enum LLMProviderFactory {
         let customBase = instance.effectiveCustomBaseURL
         let provider = OpenAIProvider(apiKey: key, model: model, customBaseURL: customBase ?? "https://openrouter.ai/api", appendV1Suffix: customBase == nil)
         provider.extraHeaders = [
-            "HTTP-Referer": "https://github.com/OpenMinis/OpenMinis",
-            "X-Title": "Minis App",
+            "HTTP-Referer": "https://github.com/leoyb1010/LeoPhoneAgent",
+            "X-Title": "LeoPhoneAgent App",
         ]
         provider.useOpenRouterCompat = true
         return applyCustomUserAgent(provider, instance: instance)

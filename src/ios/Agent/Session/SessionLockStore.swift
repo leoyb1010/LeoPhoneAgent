@@ -475,7 +475,7 @@ enum BiometricAuth {
 
     /// Prompt the user. Tries biometrics first, falls back to passcode if
     /// biometrics is unavailable / not enrolled / locked-out — matches
-    /// the user's intent ("Face ID OR passcode unlocks Minis sessions").
+    /// the user's intent ("Face ID OR passcode unlocks LeoPhoneAgent sessions").
     /// Returns true on success, false on any error/cancellation.
     @MainActor
     static func authenticate(reason: String) async -> Bool {
@@ -486,7 +486,7 @@ enum BiometricAuth {
         // LAError.userFallback (and biometry lockout returns .biometryLockout),
         // so the user taps "Use Passcode" and nothing happens (the reported bug).
         // `.deviceOwnerAuthentication` natively chains biometrics → system-managed
-        // passcode fallback, which is exactly "Face ID OR passcode unlocks Minis".
+        // passcode fallback, which is exactly "Face ID OR passcode unlocks LeoPhoneAgent".
         // Do NOT set localizedFallbackTitle: under this policy the system manages
         // the fallback button; an empty/custom title can suppress the immediate
         // passcode affordance.

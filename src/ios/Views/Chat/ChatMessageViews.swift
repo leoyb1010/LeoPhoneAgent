@@ -252,7 +252,7 @@ struct ChatMessageRow: View {
             // [T-browser-download-ux-v4] No .lineLimit(1).fixedSize() here:
             // fixedSize forced the text to its full ideal width, so a long
             // systemInfo line (e.g. pre-v3 "Downloaded … to /var/minis/… —
-            // minis://…" rows persisted in history) overflowed BOTH screen
+            // leophoneagent://…" rows persisted in history) overflowed BOTH screen
             // edges from this centered row. layoutPriority keeps the flexible
             // dividers from squeezing the text; past the available width the
             // text wraps (UIKit breaks unspaced tokens like paths/URLs

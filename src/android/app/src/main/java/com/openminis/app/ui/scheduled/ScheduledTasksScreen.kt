@@ -1,4 +1,4 @@
-package com.openminis.app.ui.scheduled
+package com.leoyuan.leophoneagent.ui.scheduled
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -52,9 +52,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.openminis.app.R
-import com.openminis.app.scheduled.ScheduledRepeatMode
-import com.openminis.app.scheduled.ScheduledTask
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.scheduled.ScheduledRepeatMode
+import com.leoyuan.leophoneagent.scheduled.ScheduledTask
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -246,7 +246,7 @@ private fun ScheduledTaskRow(
 
         // [T-android-scheduled-tasks-run-records] Long-press menu: Edit / Run
         // records / Delete (delete is confirmed by the caller's dialog).
-        com.openminis.app.ui.components.MinisMenu(
+        com.leoyuan.leophoneagent.ui.components.MinisMenu(
             expanded = menuExpanded,
             onDismissRequest = { menuExpanded = false },
         ) {

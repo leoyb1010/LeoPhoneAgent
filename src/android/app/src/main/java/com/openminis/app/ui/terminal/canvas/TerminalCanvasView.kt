@@ -1,4 +1,4 @@
-package com.openminis.app.ui.terminal.canvas
+package com.leoyuan.leophoneagent.ui.terminal.canvas
 
 import android.graphics.Paint
 import android.graphics.Typeface
@@ -25,12 +25,12 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.sp
-import com.openminis.app.ui.terminal.emulator.CursorShape
-import com.openminis.app.ui.terminal.emulator.TerminalCell
-import com.openminis.app.ui.terminal.emulator.TerminalColor
-import com.openminis.app.ui.terminal.emulator.TerminalEmulator
-import com.openminis.app.ui.terminal.emulator.TerminalPalette
-import com.openminis.app.ui.terminal.emulator.TextAttributes
+import com.leoyuan.leophoneagent.ui.terminal.emulator.CursorShape
+import com.leoyuan.leophoneagent.ui.terminal.emulator.TerminalCell
+import com.leoyuan.leophoneagent.ui.terminal.emulator.TerminalColor
+import com.leoyuan.leophoneagent.ui.terminal.emulator.TerminalEmulator
+import com.leoyuan.leophoneagent.ui.terminal.emulator.TerminalPalette
+import com.leoyuan.leophoneagent.ui.terminal.emulator.TextAttributes
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -59,7 +59,7 @@ fun TerminalCanvasView(
     // same on every device. `Typeface.MONOSPACE` aliases to whatever the
     // OEM ships (Droid Sans Mono / Roboto Mono / vendor custom), and
     // those each measure characters slightly differently.
-    val terminalTypeface = com.openminis.app.ui.terminal.rememberJetBrainsMonoTypeface()
+    val terminalTypeface = com.leoyuan.leophoneagent.ui.terminal.rememberJetBrainsMonoTypeface()
     val paint = remember(fontSizePx, terminalTypeface) {
         Paint().apply {
             typeface = terminalTypeface

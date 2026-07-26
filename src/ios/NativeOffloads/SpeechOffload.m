@@ -134,7 +134,7 @@ static dispatch_queue_t authQueue(void) {
     static dispatch_queue_t q = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        q = dispatch_queue_create("com.openminis.speech.auth", DISPATCH_QUEUE_SERIAL);
+        q = dispatch_queue_create("com.leoyuan.leophoneagent.speech.auth", DISPATCH_QUEUE_SERIAL);
     });
     return q;
 }
@@ -165,7 +165,7 @@ static int cmd_transcribe(int argc, char **argv, int stdout_fd, BOOL compact, BO
                                              NOFF_ERR_AUTHORIZATION_DENIED,
                                              [NSString stringWithFormat:@"Speech recognition not authorized (status: %@). "
                                               "To grant access, open Settings > Privacy & Security > Speech Recognition "
-                                              "and enable Minis.",
+                                              "and enable LeoPhoneAgent.",
                                               auth_status_string(authStatus)]);
         noff_emit_json(stdout_fd, err, compact, quiet);
         return NOFF_EXIT_AUTH_DENIED;

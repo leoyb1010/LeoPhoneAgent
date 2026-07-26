@@ -5,18 +5,18 @@ import QuickLook
 
 
 private let minisLogger = AppLogger(category: "MinisMedia")
-// MARK: - minis:// Media Provider
+// MARK: - leophoneagent:// Media Provider
 
 // MARK: Media Cache — avoids re-loading/decoding when LazyVStack recycles cells
 
 final class MinisMediaCache {
     static let shared = MinisMediaCache()
 
-    /// Downsampled UIImage cache keyed by absolute minis:// URL string.
+    /// Downsampled UIImage cache keyed by absolute leophoneagent:// URL string.
     private let imageCache = NSCache<NSString, UIImage>()
     /// Video thumbnail cache keyed by file path.
     private let thumbnailCache = NSCache<NSString, UIImage>()
-    /// Resolved host file URL cache keyed by minis:// URL string.
+    /// Resolved host file URL cache keyed by leophoneagent:// URL string.
     private let resolvedURLCache = NSCache<NSString, NSURL>()
 
     private init() {
@@ -68,10 +68,10 @@ func downsampleImage(data: Data, maxPixelSize: CGFloat = 2048) -> UIImage? {
     return UIImage(cgImage: cgImage)
 }
 
-/// Resolve a minis:// URL with caching to avoid repeated FileManager lookups.
+/// Resolve a leophoneagent:// URL with caching to avoid repeated FileManager lookups.
 ///
 /// Cache key is scoped by the active session id because per-session paths
-/// (e.g. `minis://attachments/foo.png`) resolve to different files in
+/// (e.g. `leophoneagent://attachments/foo.png`) resolve to different files in
 /// `Library/MinisChat/minis/<sessionId>/…` depending on which session is
 /// active. Keying on `url.absoluteString` alone caused cross-session hits
 /// where a bubble in session B resolved to session A's file.
@@ -96,7 +96,7 @@ func resolveMinisFileURLCached(url: URL) -> URL? {
 /// caches naturally invalidate whenever the file on disk is rewritten
 /// (e.g. the agent regenerates a chart at the same path).
 ///
-/// For `minis://` sources we resolve to the host file URL and stat it.
+/// For `leophoneagent://` sources we resolve to the host file URL and stat it.
 /// For `http(s)://` and anything we can't resolve we fall back to the
 /// plain source string — remote caches are managed by URL loading layers
 /// above us, and a stale in-memory hit there is acceptable for this tool.
@@ -109,7 +109,7 @@ func minisMediaCacheKey(for source: String) -> String {
 func minisMediaCacheKey(for url: URL) -> String {
     let base = url.absoluteString
     // Non-minis schemes: return as-is, we don't own that file's lifecycle.
-    guard url.scheme == "minis" else { return base }
+    guard url.scheme == "leophoneagent" else { return base }
     guard let fileURL = resolveMinisFileURLCached(url: url) else {
         // File not resolvable (yet) — use the base key so a later real
         // fingerprint load replaces it naturally.
@@ -152,7 +152,7 @@ let minisDocumentExtensions: Set<String> = [
     "rtf", "rtfd",
 ]
 
-/// Resolve a minis:// URL to a host filesystem URL.
+/// Resolve a leophoneagent:// URL to a host filesystem URL.
 /// Maps directly to persistent storage: Library/MinisChat/minis/<sessionId>/<subdir>/<path>
 /// No dependency on iSH boot or bind mounts.
 func resolveMinisFileURL(url: URL) -> URL? {
@@ -196,7 +196,7 @@ func resolveMinisFileURL(url: URL) -> URL? {
         }
     }
 
-    // User-mounted external folders: minis://mounts/<name>/<path>
+    // User-mounted external folders: leophoneagent://mounts/<name>/<path>
     // → resolve <name> through MountedFoldersManager, then append <path>.
     if host == "mounts" {
         for subPath in subPaths {
@@ -231,7 +231,7 @@ func resolveMinisFileURL(url: URL) -> URL? {
     }
 
     // [T-ios-minisurl-cross-session-isolation] DO NOT scan other sessions.
-    // minis://attachments/<file> is session-scoped: it must only resolve
+    // leophoneagent://attachments/<file> is session-scoped: it must only resolve
     // inside the ACTIVE session's directory (handled above), plus the genuinely
     // global dirs (skills/memory/shared) and user-mounted folders. The old
     // "scan all session directories and return the first same-named file"
@@ -243,7 +243,7 @@ func resolveMinisFileURL(url: URL) -> URL? {
     return nil
 }
 
-// MARK: - minis:// Link Handling
+// MARK: - leophoneagent:// Link Handling
 
 /// SF Symbol icon for a given file extension.
 private func minisFileIcon(for ext: String) -> String {
@@ -272,7 +272,7 @@ private func minisFileIcon(for ext: String) -> String {
     }
 }
 
-/// Tappable file chip for minis:// links in Markdown.
+/// Tappable file chip for leophoneagent:// links in Markdown.
 private struct MinisFileChipView: View {
     let url: URL
     @State private var showShareSheet = false
@@ -337,7 +337,7 @@ struct AsyncImageTile: View {
         }
         .buttonStyle(.plain)
         // Fingerprint id (path + size + mtime) so an in-place rewrite of
-        // the underlying minis:// file invalidates the displayed
+        // the underlying leophoneagent:// file invalidates the displayed
         // thumbnail (T-image-cache-mtime-35133). URL string alone would
         // keep the stale image until the cell recycles.
         .task(id: minisMediaCacheKey(for: meta.minisURL)) { loadThumbnail() }
@@ -345,7 +345,7 @@ struct AsyncImageTile: View {
 
     private func loadThumbnail() {
         // Fingerprint key captures file size + mtime so a rewrite of the
-        // same minis:// path invalidates the cache automatically.
+        // same leophoneagent:// path invalidates the cache automatically.
         let cacheKey = "attach:\(minisMediaCacheKey(for: meta.minisURL))"
         if let cached = NativeMediaImageCache.shared.image(for: cacheKey) {
             thumbnail = cached
@@ -400,7 +400,7 @@ struct AsyncVideoTile: View {
         }
         .buttonStyle(.plain)
         // Fingerprint id (path + size + mtime) so an in-place rewrite of
-        // the underlying minis:// file invalidates the displayed
+        // the underlying leophoneagent:// file invalidates the displayed
         // thumbnail (T-image-cache-mtime-35133). URL string alone would
         // keep the stale image until the cell recycles.
         .task(id: minisMediaCacheKey(for: meta.minisURL)) { loadThumbnail() }
@@ -475,7 +475,7 @@ struct AsyncCacheURLImageTile: View {
     }
 }
 
-/// Environment action for handling minis:// and http(s):// URL taps.
+/// Environment action for handling leophoneagent:// and http(s):// URL taps.
 ///
 /// Cell-level views (MessageRowView, MarkdownBlockView) live inside UICollectionView
 /// cells whose window hierarchy is unstable. Presenting a sheet from those views causes
@@ -528,7 +528,7 @@ private struct MinisImageView: View {
     @State private var didNotifySizeChange = false
 
     var body: some View {
-        if let url, url.scheme == "minis" {
+        if let url, url.scheme == "leophoneagent" {
             let ext = url.pathExtension.lowercased()
             let _ = minisLogger.info("[MinisImage][View] render url=\(url.absoluteString) ext=\(ext) hasLoadedImage=\(self.loadedImage != nil) attempt=\(self.loadAttempt)")
             if minisAudioExtensions.contains(ext) {
@@ -686,7 +686,7 @@ private struct MinisImageView: View {
 
 
 
-// MARK: - minis:// Image File Preview (from URL handler)
+// MARK: - leophoneagent:// Image File Preview (from URL handler)
 
 /// Fullscreen image preview loading from a local file URL.
 struct MinisImageFilePreviewView: View {
@@ -725,7 +725,7 @@ struct MinisImageFilePreviewView: View {
     }
 }
 
-// MARK: - minis:// Text/Code Preview
+// MARK: - leophoneagent:// Text/Code Preview
 
 /// File-preview navigation title that toggles between the file's last path
 /// component and its full path on tap. Long paths get middle-truncated since
@@ -756,7 +756,7 @@ struct PreviewTitleToggle: View {
 /// appearance). The bubble image path already solved this with
 /// `.task(id: minisMediaCacheKey(...))`; mirror it here with a cheap stat so a
 /// same-path rewrite re-reads the file. Unlike minisMediaCacheKey this takes the
-/// already-resolved disk URL directly (no minis:// re-resolve).
+/// already-resolved disk URL directly (no leophoneagent:// re-resolve).
 private func filePreviewFingerprint(_ url: URL) -> String {
     var st = stat()
     guard stat(url.path, &st) == 0 else { return url.absoluteString }
@@ -861,7 +861,7 @@ private struct MinisTextView: UIViewRepresentable {
     }
 }
 
-// MARK: - minis:// Markdown Preview
+// MARK: - leophoneagent:// Markdown Preview
 
 /// On iPad the default `.sheet` presents as a ~540pt-wide form sheet which
 /// wastes most of the screen for long-form markdown. iOS 18 introduced
@@ -962,7 +962,7 @@ struct MinisMarkdownPreviewView: View {
     }
 }
 
-// MARK: - minis:// HTML Preview
+// MARK: - leophoneagent:// HTML Preview
 
 struct MinisHTMLPreviewView: View {
     let fileURL: URL
@@ -1039,7 +1039,7 @@ struct MinisHTMLPreviewView: View {
 }
 
 
-// MARK: - minis:// Document Preview
+// MARK: - leophoneagent:// Document Preview
 
 import QuickLook
 

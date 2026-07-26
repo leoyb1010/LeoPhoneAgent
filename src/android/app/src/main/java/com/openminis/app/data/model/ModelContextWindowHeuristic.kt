@@ -1,4 +1,4 @@
-package com.openminis.app.data.model
+package com.leoyuan.leophoneagent.data.model
 
 /**
  * T-ctxslider 54ab8e93: heuristic context-window inference used by the

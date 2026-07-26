@@ -13,10 +13,10 @@ class RootfsManager {
     static let shared = RootfsManager()
     private let logger = AppLogger(category: "RootfsManager")
 
-    /// [T-mcp-cli-help-and-readonly-ios] Guest path of the bundled minis-mcp-cli
+    /// [T-mcp-cli-help-and-readonly-ios] Guest path of the bundled leophoneagent-mcp-cli
     /// Python lib. Its files are mounted read-only (see applyDefaultMountOverlay).
-    private static let mcpCliLibDir = "/usr/local/lib/minis-mcp-cli"
-    private static let mcpCliLibPrefix = "/usr/local/lib/minis-mcp-cli/"
+    private static let mcpCliLibDir = "/usr/local/lib/leophoneagent-mcp-cli"
+    private static let mcpCliLibPrefix = "/usr/local/lib/leophoneagent-mcp-cli/"
 
     /// [T-rootfs-reset-terminal-crash] Set once `reset()` deletes the rootfs
     /// directory from disk. The `ISHKernel` singleton boots exactly once per
@@ -227,7 +227,7 @@ class RootfsManager {
                 if binDirs.contains(where: { relativePath.hasPrefix($0) }) {
                     posixMode = 0o755
                 }
-                // [T-mcp-cli-help-and-readonly-ios] The bundled minis-mcp-cli
+                // [T-mcp-cli-help-and-readonly-ios] The bundled leophoneagent-mcp-cli
                 // Python lib is app-managed and shipped read-only so users
                 // cannot tamper with it from inside iSH (e.g. `vi`). Register
                 // these regular files as 0o444 (read-only) — iSH's access_check
@@ -251,7 +251,7 @@ class RootfsManager {
         }
 
         // [T-mcp-cli-help-and-readonly-ios] The per-file loop above stamped the
-        // minis-mcp-cli lib FILES read-only (0o444), but ensureParentDirsInMetaDB
+        // leophoneagent-mcp-cli lib FILES read-only (0o444), but ensureParentDirsInMetaDB
         // creates the containing directories with the default writable mode
         // (0o040755) — which would still let the guest create/delete files
         // inside them. Re-register the lib directories as 0o555 (read+execute,

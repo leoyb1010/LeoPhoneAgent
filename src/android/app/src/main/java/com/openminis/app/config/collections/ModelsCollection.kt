@@ -1,17 +1,17 @@
-package com.openminis.app.config.collections
+package com.leoyuan.leophoneagent.config.collections
 
-import com.openminis.app.config.ConfigCollection
-import com.openminis.app.config.ConfigError
-import com.openminis.app.config.ConfigField
-import com.openminis.app.config.ConfigRisk
-import com.openminis.app.config.ConfigSchema
-import com.openminis.app.config.ConfigValue
-import com.openminis.app.config.fields.ClosureField
-import com.openminis.app.config.fields.ReadOnlyField
-import com.openminis.app.data.model.LLMModel
-import com.openminis.app.data.model.ModelEntry
-import com.openminis.app.data.model.ModelOverrides
-import com.openminis.app.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.config.ConfigCollection
+import com.leoyuan.leophoneagent.config.ConfigError
+import com.leoyuan.leophoneagent.config.ConfigField
+import com.leoyuan.leophoneagent.config.ConfigRisk
+import com.leoyuan.leophoneagent.config.ConfigSchema
+import com.leoyuan.leophoneagent.config.ConfigValue
+import com.leoyuan.leophoneagent.config.fields.ClosureField
+import com.leoyuan.leophoneagent.config.fields.ReadOnlyField
+import com.leoyuan.leophoneagent.data.model.LLMModel
+import com.leoyuan.leophoneagent.data.model.ModelEntry
+import com.leoyuan.leophoneagent.data.model.ModelOverrides
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
 
 /**
  * Exposes ModelEntry overrides under `models.<entryUUID>.…`. Mirrors

@@ -1,7 +1,7 @@
-package com.openminis.app.ui.chat
+package com.leoyuan.leophoneagent.ui.chat
 
 import android.content.Context
-import com.openminis.app.speech.ReadAloudPlayer
+import com.leoyuan.leophoneagent.speech.ReadAloudPlayer
 
 /**
  * [T-android-selection-readaloud] Defers [ReadAloudPlayer] construction until

@@ -1,6 +1,6 @@
-package com.openminis.app.provider
+package com.leoyuan.leophoneagent.provider
 
-import com.openminis.app.data.model.AgentToolDefinition
+import com.leoyuan.leophoneagent.data.model.AgentToolDefinition
 import org.json.JSONObject
 
 /**

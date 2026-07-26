@@ -1,10 +1,10 @@
-package com.openminis.app.auth
+package com.leoyuan.leophoneagent.auth
 
 import android.content.Context
 import android.net.Uri
 import android.util.Log
 import androidx.browser.customtabs.CustomTabsIntent
-import com.openminis.app.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -160,7 +160,7 @@ object OpenRouterOAuthManager {
             .post(body.toString().toRequestBody("application/json".toMediaType()))
             .header("Content-Type", "application/json")
             .header("HTTP-Referer", "https://github.com/OpenMinis/OpenMinis")
-            .header("X-Title", "Minis App")
+            .header("X-Title", "LeoPhoneAgent App")
             .build()
 
         val response = client.newCall(request).execute()

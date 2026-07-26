@@ -417,7 +417,7 @@ final class CookieBackupStore {
     /// HttpOnly uses curl's convention: the domain field is prefixed with
     /// `#HttpOnly_`.
     private static func renderNetscape(_ cookies: [BackupCookie]) -> String {
-        var lines = ["# Netscape HTTP Cookie File", "# Written by Minis CookieBackupStore — do not edit while the app runs", ""]
+        var lines = ["# Netscape HTTP Cookie File", "# Written by LeoPhoneAgent CookieBackupStore — do not edit while the app runs", ""]
         for c in cookies.sorted(by: { ($0.domain, $0.path, $0.name) < ($1.domain, $1.path, $1.name) }) {
             let domainField = (c.httpOnly ? "#HttpOnly_" : "") + c.domain
             let includeSubdomains = c.domain.hasPrefix(".") ? "TRUE" : "FALSE"

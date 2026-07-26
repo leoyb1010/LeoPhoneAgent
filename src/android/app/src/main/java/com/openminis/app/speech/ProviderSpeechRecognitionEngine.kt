@@ -1,4 +1,4 @@
-package com.openminis.app.speech
+package com.leoyuan.leophoneagent.speech
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -6,11 +6,11 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.util.Log
-import com.openminis.app.MinisApp
-import com.openminis.app.provider.voice.VoiceInputRequest
-import com.openminis.app.provider.voice.VoiceProvider
-import com.openminis.app.provider.voice.VoiceProviderException
-import com.openminis.app.provider.voice.VoiceProviderFactory
+import com.leoyuan.leophoneagent.MinisApp
+import com.leoyuan.leophoneagent.provider.voice.VoiceInputRequest
+import com.leoyuan.leophoneagent.provider.voice.VoiceProvider
+import com.leoyuan.leophoneagent.provider.voice.VoiceProviderException
+import com.leoyuan.leophoneagent.provider.voice.VoiceProviderFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job

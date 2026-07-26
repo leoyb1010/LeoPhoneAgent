@@ -1,4 +1,4 @@
-package com.openminis.app.ui.markdown
+package com.leoyuan.leophoneagent.ui.markdown
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
@@ -34,7 +34,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.logging.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 

@@ -16,7 +16,7 @@ private let sheetLogger = AppLogger(category: "WebAppAddSheet")
 ///   3. `UIApplication.shared.open(url)` hands the user off to Safari so
 ///      they can use Share → Add to Home Screen. The pinned tile loads
 ///      the launcher; when launched in standalone mode it deep-links back
-///      to `minis://open?session=…&path=…`, which `DeepLinkRouter` routes
+///      to `leophoneagent://open?session=…&path=…`, which `DeepLinkRouter` routes
 ///      into the immersive WebView.
 struct WebAppAddToHomeSheet: View {
     let htmlURL: URL

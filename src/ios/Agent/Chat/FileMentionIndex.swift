@@ -119,7 +119,7 @@ final class FileMentionIndex: ObservableObject {
 
     private var lastScanAt: Date?
     private var lastScannedSessionId: String?
-    private var scanQueue = DispatchQueue(label: "com.openminis.filementionindex", qos: .userInitiated)
+    private var scanQueue = DispatchQueue(label: "com.leoyuan.leophoneagent.filementionindex", qos: .userInitiated)
     /// Monotonic token — cancels stale scans when a new one starts.
     private var currentScanToken: UUID?
 

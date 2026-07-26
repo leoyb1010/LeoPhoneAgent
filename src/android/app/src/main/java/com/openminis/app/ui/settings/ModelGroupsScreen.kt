@@ -1,4 +1,4 @@
-package com.openminis.app.ui.settings
+package com.leoyuan.leophoneagent.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -71,17 +71,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
-import com.openminis.app.data.model.ModelGroup
-import com.openminis.app.data.model.RoutingStrategy
-import com.openminis.app.data.repository.ProviderRepository
-import com.openminis.app.R
-import com.openminis.app.ui.components.MinisOutlinedButton
-import com.openminis.app.ui.components.MinisTextButton
-import com.openminis.app.ui.components.SectionCard
-import com.openminis.app.ui.components.SectionDesign
-import com.openminis.app.ui.components.SectionDivider
-import com.openminis.app.ui.components.SectionFooter
-import com.openminis.app.ui.components.SectionHeader
+import com.leoyuan.leophoneagent.data.model.ModelGroup
+import com.leoyuan.leophoneagent.data.model.RoutingStrategy
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.ui.components.MinisOutlinedButton
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.ui.components.SectionCard
+import com.leoyuan.leophoneagent.ui.components.SectionDesign
+import com.leoyuan.leophoneagent.ui.components.SectionDivider
+import com.leoyuan.leophoneagent.ui.components.SectionFooter
+import com.leoyuan.leophoneagent.ui.components.SectionHeader
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -437,7 +437,7 @@ private fun GroupDropdown(
 @OptIn(ExperimentalMaterial3Api::class)
 private fun LazyListScope.agentLoopModelsSectionItems(
     providerRepository: ProviderRepository,
-    config: com.openminis.app.data.model.ProviderConfig,
+    config: com.leoyuan.leophoneagent.data.model.ProviderConfig,
     reorderState: ReorderableLazyListState,
     onAddModelsTap: () -> Unit,
     onAddGroupsTap: () -> Unit,
@@ -757,7 +757,7 @@ private val GROUP_MODALITY_PRIORITY: List<GroupModalityMarker> = listOf(
  */
 private fun groupTopModalities(
     group: ModelGroup,
-    config: com.openminis.app.data.model.ProviderConfig,
+    config: com.leoyuan.leophoneagent.data.model.ProviderConfig,
 ): List<GroupModalityMarker> {
     val inputs = mutableSetOf<String>()
     val outputs = mutableSetOf<String>()
@@ -804,7 +804,7 @@ private fun GroupModalityIcon(marker: GroupModalityMarker) {
 @Composable
 private fun GroupRow(
     group: ModelGroup,
-    config: com.openminis.app.data.model.ProviderConfig,
+    config: com.leoyuan.leophoneagent.data.model.ProviderConfig,
     onClick: () -> Unit,
 ) {
     val memberNames = group.memberEntryIds.mapNotNull { entryId ->

@@ -368,9 +368,9 @@ struct AIChatView: View {
     /// Session being edited via the title-pill tap. Drives the SessionEditSheet.
     @State private var titlePillEditSession: ChatSession?
     /// Default chat title for sessions without a generated title. Sourced
-    /// from SOUL.md (`name`), falls back to "Minis". Refreshed on .soulMdChanged.
+    /// from SOUL.md (`name`), falls back to "LeoPhoneAgent". Refreshed on .soulMdChanged.
     @State private var soulName: String = SoulStore.cachedMetadata.name.isEmpty
-        ? "Minis" : SoulStore.cachedMetadata.name
+        ? "LeoPhoneAgent" : SoulStore.cachedMetadata.name
 
     /// True when any sheet or fullScreenCover is presented (suppress auto-focus to avoid keyboard bugs).
     private var hasOverlayPresented: Bool {
@@ -383,7 +383,7 @@ struct AIChatView: View {
     /// used to suppress auto-focus so the keyboard doesn't pop up behind other pages.
     @State private var isChatViewVisible: Bool = false
 
-    // minis:// link preview sheet state — hoisted from MinisOpenURLHandler so
+    // leophoneagent:// link preview sheet state — hoisted from MinisOpenURLHandler so
     // sheet presentation originates from a stable window-hierarchy root and
     // plays its slide-up transition correctly. See MinisOpenURLHandler for rationale.
     @State private var previewImageFile: URL?
@@ -399,7 +399,7 @@ struct AIChatView: View {
     @State private var fullBrowserURL: URL?
     @State private var fullBrowserIsLocal = false
     /// Filename to show in the "file missing" alert. Set by `handleMinisURLTap`
-    /// when `resolveMinisFileURL` returns nil for a tapped `minis://` link
+    /// when `resolveMinisFileURL` returns nil for a tapped `leophoneagent://` link
     /// (file was deleted, the session was pruned, or iCloud hasn't synced yet).
     @State private var missingMinisFileName: String?
 
@@ -845,7 +845,7 @@ struct AIChatView: View {
         //  - http/https/about: in-chat WKWebView preview. ToolLiveSheet
         //    observes the same broker and takes priority for web URLs when
         //    it is on top (broker.toolSheetVisible).
-        //  - minis://...: chat-resource file preview (image/markdown/html/
+        //  - leophoneagent://...: chat-resource file preview (image/markdown/html/
         //    pdf/...). Routed through handleMinisURLTap which already
         //    picks the right sheet by extension. Always dispatched here
         //    because ToolLiveSheet cannot host fullscreen file previews.
@@ -1845,7 +1845,7 @@ struct AIChatView: View {
         // when one exists (auto-generated or user-renamed). Tap opens the
         // same SessionEditSheet used from the home screen so users can
         // rename / re-categorize without leaving the chat. Falls back to
-        // the SOUL.md `name` (or "Minis") for draft sessions or before a
+        // the SOUL.md `name` (or "LeoPhoneAgent") for draft sessions or before a
         // title has been generated.
         let sessionTitle: String? = (titlePillSession?.title?.trimmingCharacters(in: .whitespacesAndNewlines))
             .flatMap { $0.isEmpty ? nil : $0 }
@@ -1882,7 +1882,7 @@ struct AIChatView: View {
         // 2026-05-20 tightening overlapped row 2 into the title's line box by
         // 8pt — more than the 13pt font's entire descender zone (~3.1pt), so
         // any title containing g/p/y/z visually fused with the model pill
-        // (only descender-less titles like "Minis" hid it). -3 keeps a ~2pt
+        // (only descender-less titles like "LeoPhoneAgent" hid it). -3 keeps a ~2pt
         // visible gap for descender titles. HEIGHT-NEUTRAL: the 5pt spent
         // here is reclaimed inside row 2 (provider-row bottom clearance
         // 4 → 1 and group vertical padding 3 → 2 on legacy), so the stack's
@@ -1940,7 +1940,7 @@ struct AIChatView: View {
                     .padding(.top, legacyLayout ? 0 : 2)
                     .onReceive(NotificationCenter.default.publisher(for: .soulMdChanged)) { _ in
                         let n = SoulStore.cachedMetadata.name
-                        soulName = n.isEmpty ? "Minis" : n
+                        soulName = n.isEmpty ? "LeoPhoneAgent" : n
                     }
             }
             .buttonStyle(.plain)
@@ -2184,7 +2184,7 @@ struct AIChatView: View {
                     || next?.title != titlePillSession?.title
                     || next?.category != titlePillSession?.category {
                     // Direct replace — animating the toolbar title makes the
-                    // old "Minis" string slide before the real title swaps
+                    // old "LeoPhoneAgent" string slide before the real title swaps
                     // in, which looks broken. SwiftUI's default crossfade
                     // for non-animated text changes is what we want.
                     titlePillSession = next
@@ -2583,7 +2583,7 @@ struct AIChatView: View {
     // MARK: - Drag & Drop Import
 
     /// Handle items dropped onto the chat from outside the app (Files, Photos, Safari, etc.).
-    /// Handle a minis:// or http(s):// URL tap forwarded from a cell-level
+    /// Handle a leophoneagent:// or http(s):// URL tap forwarded from a cell-level
     /// view. Routes deep links and opens the appropriate file preview sheet
     /// (state lives on AIChatView so sheet animations play correctly).
     /// Route a tap on a markdown-embedded image into a paged gallery covering
@@ -2677,7 +2677,7 @@ struct AIChatView: View {
         imageGallery = GalleryPresentation(items: items, startIndex: startIndex)
     }
 
-    /// Load a markdown image source (already canonicalized to minis:// or
+    /// Load a markdown image source (already canonicalized to leophoneagent:// or
     /// http(s)://) off the main thread. Caches in the shared
     /// `NativeMediaImageCache` using a fingerprint-derived key so
     /// in-place rewrites of local files are picked up on the next render.
@@ -2688,7 +2688,7 @@ struct AIChatView: View {
         }
         guard let url = URL(string: source) else { return nil }
         let img: UIImage?
-        if url.scheme == "minis" {
+        if url.scheme == "leophoneagent" {
             guard let fileURL = resolveMinisFileURLCached(url: url),
                   let data = try? Data(contentsOf: fileURL) else { return nil }
             img = downsampleImageData(data, maxPixelSize: 2048)
@@ -2705,9 +2705,9 @@ struct AIChatView: View {
             withAnimation { safariURL = url }
             return .handled
         }
-        guard url.scheme == "minis" else { return .systemAction }
+        guard url.scheme == "leophoneagent" else { return .systemAction }
 
-        // Terminal deep link: minis://open_terminal?init_command=...
+        // Terminal deep link: leophoneagent://open_terminal?init_command=...
         if url.host == "open_terminal" {
             let comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
             let initCmd = comps?.queryItems?.first(where: { $0.name == "init_command" })?.value
@@ -2716,12 +2716,12 @@ struct AIChatView: View {
             dl.showTerminal = true
             return .handled
         }
-        // View deep links: minis://views/alarm
+        // View deep links: leophoneagent://views/alarm
         if url.host == "views" && url.path == "/alarm" {
             DeepLinkCoordinator.shared.showAlarmList = true
             return .handled
         }
-        // Any minis://settings/<path> goes through DeepLinkRouter so all
+        // Any leophoneagent://settings/<path> goes through DeepLinkRouter so all
         // supported settings sub-paths (logs, providers, model-groups,
         // usage, skills, memory, storage, mounts, shared-folders,
         // appearance, background, about, permissions, environments,

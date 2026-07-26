@@ -1,6 +1,6 @@
 //
 //  CurrentRoot.m
-//  Minis — adapted from iSH app/CurrentRoot.m
+//  LeoPhoneAgent — adapted from iSH app/CurrentRoot.m
 //
 //  Applies rootfs overlay patches from RootfsPatch.bundle on boot.
 //

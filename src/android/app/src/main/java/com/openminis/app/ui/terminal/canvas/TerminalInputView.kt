@@ -1,4 +1,4 @@
-package com.openminis.app.ui.terminal.canvas
+package com.leoyuan.leophoneagent.ui.terminal.canvas
 
 import android.content.Context
 import android.text.InputType

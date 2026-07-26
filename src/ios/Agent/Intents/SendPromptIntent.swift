@@ -3,14 +3,14 @@ import Foundation
 import UniformTypeIdentifiers
 import UserNotifications
 
-/// Sends a prompt to the Minis AI agent and returns immediately with structured session info.
+/// Sends a prompt to the LeoPhoneAgent AI agent and returns immediately with structured session info.
 /// The agent continues running in the background — use Get Session Status to poll for completion.
 struct SendPromptIntent: AppIntent {
     static var title: LocalizedStringResource = "Send Prompt"
-    static var description = IntentDescription("Sends a prompt to the Minis AI agent. Returns session info immediately while the task runs in the background.")
+    static var description = IntentDescription("Sends a prompt to the LeoPhoneAgent AI agent. Returns session info immediately while the task runs in the background.")
     static var openAppWhenRun = false
 
-    @Parameter(title: "Prompt", requestValueDialog: "What would you like to ask Minis?")
+    @Parameter(title: "Prompt", requestValueDialog: "What would you like to ask LeoPhoneAgent?")
     var prompt: String
 
     @Parameter(title: "Attachments", description: "Images, videos, or files to attach to the prompt. Accepts output from previous Shortcuts actions (e.g. filtered photos or documents).",
@@ -153,7 +153,7 @@ struct SendPromptIntent: AppIntent {
         let promptPreview = String(prompt.prefix(50))
         ShortcutNotification.post(
             id: "shortcut-start-\(sid)",
-            title: "Minis Task Started",
+            title: "LeoPhoneAgent Task Started",
             body: "\(modelName): \(promptPreview)\(prompt.count > 50 ? "…" : "")",
             sessionId: sid
         )
@@ -171,7 +171,7 @@ struct SendPromptIntent: AppIntent {
 
             ShortcutNotification.post(
                 id: "shortcut-done-\(sid)",
-                title: "Minis Task Completed",
+                title: "LeoPhoneAgent Task Completed",
                 body: "\(modelName): \(String(responseText.prefix(200)))",
                 sessionId: sid
             )
@@ -203,7 +203,7 @@ struct SendPromptIntent: AppIntent {
 
             ShortcutNotification.post(
                 id: "shortcut-done-\(capturedSid)",
-                title: "Minis Task Completed",
+                title: "LeoPhoneAgent Task Completed",
                 body: "\(capturedModelName): \(summary)",
                 sessionId: capturedSid
             )

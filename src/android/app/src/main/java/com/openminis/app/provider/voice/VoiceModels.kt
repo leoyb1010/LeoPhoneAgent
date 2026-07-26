@@ -1,6 +1,6 @@
-package com.openminis.app.provider.voice
+package com.leoyuan.leophoneagent.provider.voice
 
-import com.openminis.app.data.model.LLMModel
+import com.leoyuan.leophoneagent.data.model.LLMModel
 import org.json.JSONObject
 
 /**

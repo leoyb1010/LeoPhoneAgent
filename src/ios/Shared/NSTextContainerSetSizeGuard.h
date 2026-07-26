@@ -1,6 +1,6 @@
 //
 //  NSTextContainerSetSizeGuard.h
-//  Minis
+//  LeoPhoneAgent
 //
 //  Reentrancy guard for -[NSTextContainer setSize:].
 //

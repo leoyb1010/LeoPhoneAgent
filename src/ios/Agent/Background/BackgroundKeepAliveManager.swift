@@ -214,7 +214,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
 
     /// [T-bg-keepalive-debounce] Pending debounced stop of silent audio. When
     /// the app receives a transient `foreground` signal (e.g. a call ending →
-    /// Minis briefly foregrounds → immediately backgrounds again), stopping the
+    /// LeoPhoneAgent briefly foregrounds → immediately backgrounds again), stopping the
     /// keep-alive audio synchronously releases the audio session right before
     /// we go back to background, and iOS then kills the process. While sessions
     /// are active we instead DELAY the stop; if a `background` signal arrives
@@ -735,7 +735,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             evaluateSilentAudio(caller: "reevaluate-deactivate")
             // THEN soft-finish the Live Activity: flip to a completed state
             // (checkmark + last message) and leave it on screen; it's dismissed
-            // when the user taps it and Minis foregrounds.
+            // when the user taps it and LeoPhoneAgent foregrounds.
             Task { await AgentLiveActivityManager.shared.finishActivity() }
         }
     }

@@ -1,4 +1,4 @@
-package com.openminis.app.ui.terminal
+package com.leoyuan.leophoneagent.ui.terminal
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString

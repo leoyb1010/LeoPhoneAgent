@@ -1,4 +1,4 @@
-package com.openminis.app.crash
+package com.leoyuan.leophoneagent.crash
 
 import android.util.Log
 import java.io.File

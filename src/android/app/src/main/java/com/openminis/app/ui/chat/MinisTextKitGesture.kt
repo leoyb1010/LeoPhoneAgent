@@ -1,4 +1,4 @@
-package com.openminis.app.ui.chat
+package com.leoyuan.leophoneagent.ui.chat
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -627,7 +627,7 @@ data class SelectionToolbarActions(
     val onAddToInput: ((String) -> Unit)? = null,
     /**
      * [T-android-selection-readaloud] Speak the currently-selected plain text
-     * through Minis TTS. Null hides the button. Mirrors iOS's "Read Aloud /
+     * through LeoPhoneAgent TTS. Null hides the button. Mirrors iOS's "Read Aloud /
      * Read Selection" selection-menu action.
      */
     val onReadAloud: ((String) -> Unit)? = null,
@@ -775,13 +775,13 @@ fun MinisSelectionToolbarHost(
                 fun preview(text: String): String =
                     if (text.length > 40) text.take(37) + "…" else text
 
-                val labelCopy = androidx.compose.ui.res.stringResource(com.openminis.app.R.string.selection_copy)
-                val labelAddToInput = androidx.compose.ui.res.stringResource(com.openminis.app.R.string.selection_add_to_chat_input)
-                val labelCopyMarkdown = androidx.compose.ui.res.stringResource(com.openminis.app.R.string.selection_copy_markdown)
-                val labelCopyRichText = androidx.compose.ui.res.stringResource(com.openminis.app.R.string.selection_copy_rich_text)
-                val labelReadAloud = androidx.compose.ui.res.stringResource(com.openminis.app.R.string.selection_read_aloud)
-                val toastCopiedAsMarkdown = androidx.compose.ui.res.stringResource(com.openminis.app.R.string.selection_copied_as_markdown_toast)
-                val toastCopiedAsRichText = androidx.compose.ui.res.stringResource(com.openminis.app.R.string.selection_copied_as_rich_text_toast)
+                val labelCopy = androidx.compose.ui.res.stringResource(com.leoyuan.leophoneagent.R.string.selection_copy)
+                val labelAddToInput = androidx.compose.ui.res.stringResource(com.leoyuan.leophoneagent.R.string.selection_add_to_chat_input)
+                val labelCopyMarkdown = androidx.compose.ui.res.stringResource(com.leoyuan.leophoneagent.R.string.selection_copy_markdown)
+                val labelCopyRichText = androidx.compose.ui.res.stringResource(com.leoyuan.leophoneagent.R.string.selection_copy_rich_text)
+                val labelReadAloud = androidx.compose.ui.res.stringResource(com.leoyuan.leophoneagent.R.string.selection_read_aloud)
+                val toastCopiedAsMarkdown = androidx.compose.ui.res.stringResource(com.leoyuan.leophoneagent.R.string.selection_copied_as_markdown_toast)
+                val toastCopiedAsRichText = androidx.compose.ui.res.stringResource(com.leoyuan.leophoneagent.R.string.selection_copied_as_rich_text_toast)
                 MinisToolbarButton(label = labelCopy) {
                     val text = controller.selectedPlainText()
                     if (text.isNotEmpty()) {
@@ -789,7 +789,7 @@ fun MinisSelectionToolbarHost(
                         haptics.performHapticFeedback(
                             androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress
                         )
-                        toast(context.getString(com.openminis.app.R.string.selection_copied_toast, preview(text)))
+                        toast(context.getString(com.leoyuan.leophoneagent.R.string.selection_copied_toast, preview(text)))
                     }
                     controller.clearSelection()
                 }
@@ -803,7 +803,7 @@ fun MinisSelectionToolbarHost(
                 }
                 // [T-android-selection-readaloud] Speak ONLY the selected
                 // substring (controller.selectedPlainText(), not the message's
-                // markdown source) through Minis TTS.
+                // markdown source) through LeoPhoneAgent TTS.
                 if (actions?.onReadAloud != null) {
                     MinisToolbarDivider()
                     MinisToolbarButton(label = labelReadAloud) {

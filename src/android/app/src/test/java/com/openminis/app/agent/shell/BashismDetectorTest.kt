@@ -1,4 +1,4 @@
-package com.openminis.app.agent.shell
+package com.leoyuan.leophoneagent.agent.shell
 
 import org.json.JSONObject
 import org.junit.Assert.assertEquals

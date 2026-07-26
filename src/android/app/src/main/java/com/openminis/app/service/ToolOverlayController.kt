@@ -1,4 +1,4 @@
-package com.openminis.app.service
+package com.leoyuan.leophoneagent.service
 
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
@@ -28,8 +28,8 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import com.openminis.app.MinisApp
-import com.openminis.app.R
+import com.leoyuan.leophoneagent.MinisApp
+import com.leoyuan.leophoneagent.R
 import kotlin.math.abs
 
 /**
@@ -37,11 +37,11 @@ import kotlin.math.abs
  *
  * Adds a small draggable capsule via [WindowManager] using
  * TYPE_APPLICATION_OVERLAY (requires SYSTEM_ALERT_WINDOW). The capsule
- * shows the Minis launcher logo, the running tool's label, and a short
+ * shows the LeoPhoneAgent launcher logo, the running tool's label, and a short
  * status — same data the FGS notification reads
  * (`SessionActivityTracker.currentToolName` / `currentToolStatus`).
  *
- * T-bg-overlay-polish: the per-tool icon was replaced with the Minis
+ * T-bg-overlay-polish: the per-tool icon was replaced with the LeoPhoneAgent
  * launcher icon clipped to a circle, a thin stroke ring rotates around
  * the logo while a tool is running, and a small success/error glyph
  * sits next to the tool label once a tool finishes.
@@ -49,12 +49,12 @@ import kotlin.math.abs
  * Owned by [AgentForegroundService]; created on service start, destroyed
  * on service stop. Visibility is driven by the service's collector:
  *
- *   - Minis foreground OR no tool running OR user toggle OFF OR no perm → hidden
+ *   - LeoPhoneAgent foreground OR no tool running OR user toggle OFF OR no perm → hidden
  *   - otherwise → shown, content updated on each tool-status change
  *
- * Position persists in [com.openminis.app.data.repository.BackgroundSettingsRepository]
+ * Position persists in [com.leoyuan.leophoneagent.data.repository.BackgroundSettingsRepository]
  * across process restarts; first run defaults to the bottom-left corner
- * (10 dp from each edge). Tap dismisses to bring Minis back to the
+ * (10 dp from each edge). Tap dismisses to bring LeoPhoneAgent back to the
  * foreground; drag moves the capsule.
  */
 class ToolOverlayController(private val context: Context) {
@@ -122,7 +122,7 @@ class ToolOverlayController(private val context: Context) {
     private var layoutParams: WindowManager.LayoutParams? = null
     // [T-android-overlay-reply-status-34599] Session ID associated with
     // the current overlay capsule. The whole-capsule tap builds a
-    // `minis://session/<id>` deep-link to land back in the right chat;
+    // `leophoneagent://session/<id>` deep-link to land back in the right chat;
     // null falls through to "just bring MainActivity forward" so we
     // never strand the user when no session id was published.
     private var pendingSessionId: String? = null
@@ -456,7 +456,7 @@ class ToolOverlayController(private val context: Context) {
         // when the model didn't supply a title.
         // [T-android-overlay-no-idle] After a tool completes, SessionActivityTracker
         // resets currentToolStatus to "Idle" and toolName to null — flowing that
-        // through verbatim would render a noisy "Minis / Idle" capsule that
+        // through verbatim would render a noisy "LeoPhoneAgent / Idle" capsule that
         // tells the user nothing. When not running and we have neither a
         // toolTitle nor a real toolName, hide both the label and the status
         // row so only the reply excerpt (if any) plus glyph remain.
@@ -646,16 +646,16 @@ class ToolOverlayController(private val context: Context) {
             val sid = pendingSessionId
             val launchIntent = Intent(
                 context,
-                Class.forName("com.openminis.app.MainActivity"),
+                Class.forName("com.leoyuan.leophoneagent.MainActivity"),
             ).apply {
                 // [T-android-overlay-reply-status-34599] When we have a
                 // tracked session, route the tap through the existing
-                // `minis://session/<id>` deep-link so MainActivity's
+                // `leophoneagent://session/<id>` deep-link so MainActivity's
                 // DeepLinkHandler navigates to that chat. When sid is
                 // null (e.g. completion observed before any session was
                 // pushed), fall back to plain "bring to front".
                 if (!sid.isNullOrBlank()) {
-                    data = Uri.parse("minis://session/$sid")
+                    data = Uri.parse("leophoneagent://session/$sid")
                 }
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                     Intent.FLAG_ACTIVITY_SINGLE_TOP or
@@ -746,11 +746,11 @@ class ToolOverlayController(private val context: Context) {
 
     /**
      * Mirrors [AgentForegroundService.toolDisplayLabel] but trims the
-     * "Minis is using " prefix — the overlay capsule is tight, so we just
+     * "LeoPhoneAgent is using " prefix — the overlay capsule is tight, so we just
      * show the tool kind ("Shell", "Browser", …).
      */
     private fun toolDisplayLabel(toolName: String?): String = when (toolName) {
-        null -> "Minis"
+        null -> "LeoPhoneAgent"
         "shell_execute" -> "Shell"
         "file_read" -> "File"
         "file_write" -> "Editor"

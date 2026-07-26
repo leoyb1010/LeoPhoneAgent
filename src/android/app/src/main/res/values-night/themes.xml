@@ -10,7 +10,7 @@
      dark `background`, status / nav bars stay translucent so the
      edge-to-edge theming in MainActivity continues to draw behind them. -->
 <resources>
-    <style name="Theme.Minis" parent="android:Theme.Material.NoActionBar">
+    <style name="Theme.LeoPhoneAgent" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@android:color/black</item>
         <item name="android:colorBackground">@android:color/black</item>
     </style>

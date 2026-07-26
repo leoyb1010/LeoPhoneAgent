@@ -1,4 +1,4 @@
-package com.openminis.app.scheduled
+package com.leoyuan.leophoneagent.scheduled
 
 import org.json.JSONArray
 import org.json.JSONObject

@@ -1,4 +1,4 @@
-package com.openminis.app.sandbox
+package com.leoyuan.leophoneagent.sandbox
 
 /**
  * Strips ANSI escape sequences and handles CR-based line overwrites

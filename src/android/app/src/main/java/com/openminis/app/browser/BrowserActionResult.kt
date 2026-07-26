@@ -1,4 +1,4 @@
-package com.openminis.app.browser
+package com.leoyuan.leophoneagent.browser
 
 /**
  * Result of a browser action execution, mirroring iOS BrowserActionResult.
@@ -18,7 +18,7 @@ data class BrowserActionResult(
     val pageURL: String? = null,
     /**
      * [T-android-browser-result-tab-id] The tab id this action actually ran on.
-     * Stamped by [com.openminis.app.browser.BrowserTabPool] at the point of
+     * Stamped by [com.leoyuan.leophoneagent.browser.BrowserTabPool] at the point of
      * dispatch using the acquired tab's id (the VERIFIED target), NOT the global
      * selectedTabId — which the fan-out branch overwrites when it spawns a fresh
      * tab for a concurrent navigate. Without this, the agent had to guess tab_id

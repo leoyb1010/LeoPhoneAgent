@@ -1,4 +1,4 @@
-package com.openminis.app.speech.correction
+package com.leoyuan.leophoneagent.speech.correction
 
 import android.util.Log
 import kotlinx.coroutines.Dispatchers

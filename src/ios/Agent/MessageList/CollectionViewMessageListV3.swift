@@ -154,7 +154,7 @@ struct CollectionViewMessageListV3: UIViewControllerRepresentable {
 
 // MARK: - V3 Bridged Cell Views (no GeometryReader)
 
-/// Header: "✦ Minis" label at the top of each assistant turn.
+/// Header: "✦ LeoPhoneAgent" label at the top of each assistant turn.
 /// Name comes from SOUL.md (user-editable in Soul Settings); the
 /// sparkles glyph is fixed — custom emoji is no longer supported,
 /// matching the Soul Settings UI.
@@ -174,7 +174,7 @@ private struct BridgedAssistantHeaderV3: View {
                         endPoint: .bottomTrailing
                     )
                 )
-            Text(soulMeta.name.isEmpty ? "Minis" : soulMeta.name)
+            Text(soulMeta.name.isEmpty ? "LeoPhoneAgent" : soulMeta.name)
                 .font(.body.weight(.semibold))
                 .foregroundStyle(ChatColors.primaryText)
         }
@@ -1186,7 +1186,7 @@ extension CollectionViewMessageListV3 {
                 ? { [weak vm] in vm?.readReplyFromStart(message) }
                 : nil
             // [T-selection-menu-minis-tts] "Read Selection" from the text
-            // selection menu — speaks the selected snippet via the Minis TTS
+            // selection menu — speaks the selected snippet via the LeoPhoneAgent TTS
             // stack (sanitizer + provider voices + fail-over).
             bridge.onSpeakText = { [weak vm] text in vm?.speakText(text) }
             bridge.onCopyScreenshot = { [weak self, weak vm] in
@@ -2081,7 +2081,7 @@ extension CollectionViewMessageListV3 {
 
                     switch item {
                     case .assistantHeader:
-                        // Header is always a fixed "sparkles Minis" label row (measured: 28pt)
+                        // Header is always a fixed "sparkles LeoPhoneAgent" label row (measured: 28pt)
                         layout.setEstimatedHeight(28, at: i)
 
                     case .assistantFooter:

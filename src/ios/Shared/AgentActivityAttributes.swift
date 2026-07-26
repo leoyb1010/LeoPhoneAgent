@@ -41,7 +41,7 @@ struct AgentActivityAttributes: ActivityAttributes {
         /// True when ALL tasks have finished and the Live Activity is in its
         /// "completed" resting state: it stops the carousel, shows a checkmark +
         /// each session's last message, and lingers (instead of ending instantly)
-        /// until the user taps it and Minis decides whether to dismiss it.
+        /// until the user taps it and LeoPhoneAgent decides whether to dismiss it.
         /// [T-ios-live-activity-soft-finish]
         var allCompleted: Bool = false
         /// [T-ios-live-activity-audio-toggle] True while the global TTS/audio

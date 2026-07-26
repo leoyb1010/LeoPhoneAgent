@@ -1,4 +1,4 @@
-package com.openminis.app.terminal
+package com.leoyuan.leophoneagent.terminal
 
 /**
  * Parses the OSC 1337 `MinisOpenURL` escape sequence emitted by the rootfs
@@ -10,7 +10,7 @@ package com.openminis.app.terminal
  *
  * This parser strips the marker from the displayed shell output and returns
  * the captured URLs so the host can present the in-app preview (WebView for
- * http(s)/about, file preview for minis://).
+ * http(s)/about, file preview for leophoneagent://).
  *
  * Mirrors iOS `MinisURLMarker` in `AIChatViewModel.swift`.
  */

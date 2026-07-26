@@ -1,4 +1,4 @@
-package com.openminis.app.network
+package com.leoyuan.leophoneagent.network
 
 import android.content.Context
 import android.net.ConnectivityManager
@@ -6,7 +6,7 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.util.Log
-import com.openminis.app.sandbox.RootfsManager
+import com.leoyuan.leophoneagent.sandbox.RootfsManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

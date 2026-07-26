@@ -1,12 +1,12 @@
-package com.openminis.app.provider
+package com.leoyuan.leophoneagent.provider
 
-import com.openminis.app.data.model.AgentToolDefinition
-import com.openminis.app.data.model.LLMError
-import com.openminis.app.data.model.LLMMessage
-import com.openminis.app.data.model.LLMModel
-import com.openminis.app.data.model.LLMResponse
-import com.openminis.app.data.model.LLMStreamChunk
-import com.openminis.app.data.model.ThinkingLevel
+import com.leoyuan.leophoneagent.data.model.AgentToolDefinition
+import com.leoyuan.leophoneagent.data.model.LLMError
+import com.leoyuan.leophoneagent.data.model.LLMMessage
+import com.leoyuan.leophoneagent.data.model.LLMModel
+import com.leoyuan.leophoneagent.data.model.LLMResponse
+import com.leoyuan.leophoneagent.data.model.LLMStreamChunk
+import com.leoyuan.leophoneagent.data.model.ThinkingLevel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 

@@ -1,7 +1,7 @@
-package com.openminis.app.debug
+package com.leoyuan.leophoneagent.debug
 
 import android.os.Build
-import com.openminis.app.BuildConfig
+import com.leoyuan.leophoneagent.BuildConfig
 import org.json.JSONArray
 import org.json.JSONObject
 

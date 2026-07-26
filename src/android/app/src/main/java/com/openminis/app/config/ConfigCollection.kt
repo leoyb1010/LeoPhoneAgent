@@ -1,4 +1,4 @@
-package com.openminis.app.config
+package com.leoyuan.leophoneagent.config
 
 /**
  * A dynamically-keyed group of fields, e.g. one ProviderInstance per id,

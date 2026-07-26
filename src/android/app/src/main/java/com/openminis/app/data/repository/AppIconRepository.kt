@@ -1,4 +1,4 @@
-package com.openminis.app.data.repository
+package com.leoyuan.leophoneagent.data.repository
 
 import android.content.ComponentName
 import android.content.Context
@@ -29,7 +29,7 @@ object AppIconRepository {
     private const val TAG = "AppIconRepository"
     private const val PREFS = "app_icon_prefs"
     private const val KEY_SELECTED_ID = "selected_icon_id"
-    private const val PACKAGE_NAME = "com.openminis.app"
+    private const val PACKAGE_NAME = "com.leoyuan.leophoneagent"
 
     enum class Variant(val id: String, val aliasClass: String) {
         Auto("auto", "$PACKAGE_NAME.MainActivityIconAuto"),

@@ -308,7 +308,7 @@ struct OpenImageGalleryAction {
 ///
 /// Payload keys:
 ///   - `messageId: UUID` — the assistant message that owns the tapped image
-///   - `sourceURL: String` — the minis:// (or http) URL inside the markdown
+///   - `sourceURL: String` — the leophoneagent:// (or http) URL inside the markdown
 ///     `![](...)` that was tapped; used to pick the starting page
 enum MarkdownImageTapRouter {
     static let tappedNotification = Notification.Name("MarkdownImageTappedNotification")

@@ -1,4 +1,4 @@
-package com.openminis.app.sandbox
+package com.leoyuan.leophoneagent.sandbox
 
 import android.content.Context
 import android.net.ConnectivityManager
@@ -8,8 +8,8 @@ import android.os.Environment
 import android.os.storage.StorageManager
 import android.provider.DocumentsContract
 import android.util.Log
-import com.openminis.app.data.FileMentionIndex
-import com.openminis.app.data.MountedFoldersStore
+import com.leoyuan.leophoneagent.data.FileMentionIndex
+import com.leoyuan.leophoneagent.data.MountedFoldersStore
 import java.io.File
 import java.util.TimeZone
 import kotlin.math.abs
@@ -69,8 +69,8 @@ object PRootKernel {
         // config files (pip.conf, .npmrc, repositories) and would otherwise
         // revert user-chosen mirrors on every boot. Mirrors iOS ordering in
         // ISHTerminalView.startShell().
-        com.openminis.app.ui.sandbox.MirrorSpeedTestViewModel.applyAllActiveMirrors(context)
-        com.openminis.app.ui.sandbox.MirrorSpeedTestViewModel.autoDetectOnceIfNeeded(context)
+        com.leoyuan.leophoneagent.ui.sandbox.MirrorSpeedTestViewModel.applyAllActiveMirrors(context)
+        com.leoyuan.leophoneagent.ui.sandbox.MirrorSpeedTestViewModel.autoDetectOnceIfNeeded(context)
 
         // Refresh DNS from system (mirrors iOS ISHKernel.configureDns)
         rootfsManager.refreshDns()
@@ -183,7 +183,7 @@ object PRootKernel {
     }
 
     /**
-     * Register the global (session-independent) Minis bind mounts so direct
+     * Register the global (session-independent) LeoPhoneAgent bind mounts so direct
      * file I/O tools (file_read, file_edit) can resolve
      * `/var/minis/{memory,skills,shared}/...` without needing PRoot to be
      * booted or any shell to have started. Safe to call repeatedly.
@@ -191,7 +191,7 @@ object PRootKernel {
     fun registerGlobalBindMounts(context: Context) {
         val globalBase = File(context.filesDir, "minis-global")
         // [T-mcp-integration-android] mcp-servers is global (like memory/skills):
-        // binding it here makes the in-PRoot minis-mcp-cli read/write the SAME
+        // binding it here makes the in-PRoot leophoneagent-mcp-cli read/write the SAME
         // servers.json the Android Settings UI does (host: minis-global/mcp-servers).
         listOf("memory", "skills", "shared", "mcp-servers").forEach { subdir ->
             val hostDir = File(globalBase, subdir).also { it.mkdirs() }

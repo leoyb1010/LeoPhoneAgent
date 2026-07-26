@@ -1,9 +1,9 @@
-package com.openminis.app.offload
+package com.leoyuan.leophoneagent.offload
 
 import android.app.Application
 import android.content.Context
 import android.os.Build
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.logging.AppLogger
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * State machine:
  *   NOT_INSTALLED      No Shizuku-protocol manager app on device.
  *   NOT_RUNNING        Manager installed but binder not bound.
- *   NEED_PERMISSION    Binder up but Minis not authorized.
+ *   NEED_PERMISSION    Binder up but LeoPhoneAgent not authorized.
  *   READY              Binder up + permission held — calls work.
  */
 object ShizukuManager {

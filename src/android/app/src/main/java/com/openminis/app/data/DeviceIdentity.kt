@@ -1,4 +1,4 @@
-package com.openminis.app.data
+package com.leoyuan.leophoneagent.data
 
 import android.content.Context
 import android.os.Build
@@ -55,5 +55,5 @@ object DeviceIdentity {
     // T-android-keystore-aead-fail: self-healing wrapper handles
     // master-key invalidation on Samsung One UI / Android 16.
     private fun encryptedPrefs(context: Context) =
-        com.openminis.app.util.EncryptedPrefsFactory.safeCreate(context, PREFS_NAME)
+        com.leoyuan.leophoneagent.util.EncryptedPrefsFactory.safeCreate(context, PREFS_NAME)
 }

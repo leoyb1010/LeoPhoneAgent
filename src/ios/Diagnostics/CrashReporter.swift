@@ -487,7 +487,7 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
         let dateStr = df.string(from: crashDate)
 
         var report = """
-        === Minis Crash Report ===
+        === LeoPhoneAgent Crash Report ===
         Date:    \(dateStr)
         Type:    \(type)
         Build:   \(displayBuild)

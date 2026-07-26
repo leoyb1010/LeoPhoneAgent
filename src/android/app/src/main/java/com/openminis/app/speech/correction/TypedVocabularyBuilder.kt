@@ -1,8 +1,8 @@
-package com.openminis.app.speech.correction
+package com.leoyuan.leophoneagent.speech.correction
 
 import android.content.Context
 import android.util.Log
-import com.openminis.app.data.db.ChatDao
+import com.leoyuan.leophoneagent.data.db.ChatDao
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock

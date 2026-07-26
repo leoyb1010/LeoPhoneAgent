@@ -1,4 +1,4 @@
-package com.openminis.app.speech
+package com.leoyuan.leophoneagent.speech
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

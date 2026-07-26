@@ -1,4 +1,4 @@
-package com.openminis.app.shared
+package com.leoyuan.leophoneagent.shared
 
 import android.content.Context
 
@@ -57,7 +57,7 @@ class TextSegmenter private constructor(context: Context) {
      * Chinese-only by nature — the tags come from the Chinese dictionary. For
      * non-Chinese text (or when Jieba is unavailable) this returns an EMPTY
      * list rather than falling back to the system segmenter with null tags:
-     * callers ([com.openminis.app.speech.VocabularyFilter]) treat empty as
+     * callers ([com.leoyuan.leophoneagent.speech.VocabularyFilter]) treat empty as
      * "no POS signal" and fall back to plain [segment] themselves, which keeps
      * the "did we get real tags?" question answerable.
      */

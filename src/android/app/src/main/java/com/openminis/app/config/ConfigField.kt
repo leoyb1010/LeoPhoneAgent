@@ -1,8 +1,8 @@
-package com.openminis.app.config
+package com.leoyuan.leophoneagent.config
 
 /**
- * One configurable setting. Concrete kinds: [com.openminis.app.config.fields.PrefsBoolField]
- * etc. for SharedPreferences-backed scalars; [com.openminis.app.config.fields.ClosureField]
+ * One configurable setting. Concrete kinds: [com.leoyuan.leophoneagent.config.fields.PrefsBoolField]
+ * etc. for SharedPreferences-backed scalars; [com.leoyuan.leophoneagent.config.fields.ClosureField]
  * when the storage backend is something more bespoke (a repository, a DB row, an
  * in-process singleton). Mirrors iOS `ConfigField` (Shared/Config/ConfigField.swift).
  */

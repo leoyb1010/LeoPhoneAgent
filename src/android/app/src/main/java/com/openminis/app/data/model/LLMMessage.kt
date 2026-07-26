@@ -1,4 +1,4 @@
-package com.openminis.app.data.model
+package com.leoyuan.leophoneagent.data.model
 
 data class LLMMessage(
     val role: Role,

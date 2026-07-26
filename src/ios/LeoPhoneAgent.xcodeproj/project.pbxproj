@@ -473,7 +473,7 @@
 			containerPortal = E51000060 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = E51000040;
-			remoteInfo = Minis;
+			remoteInfo = LeoPhoneAgent;
 		};
 		E5E000081 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -650,7 +650,7 @@
 		BB1000110F700000000000AA /* ContextPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextPolicy.swift; sourceTree = "<group>"; };
 		D7656F4130247E4002A3AC0C /* VoiceTextSanitizer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoiceTextSanitizer.swift; sourceTree = "<group>"; };
 		DE154CF628D8699BD99CF9CB /* AudioSessionCoordinator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AudioSessionCoordinator.swift; sourceTree = "<group>"; };
-		E51000010 /* Minis.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Minis.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E51000010 /* LeoPhoneAgent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LeoPhoneAgent.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E51000011 /* MinisApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MinisApp.swift; sourceTree = "<group>"; };
 		E51000012 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		E51000013 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -772,7 +772,7 @@
 		E5E000015 /* ShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ShareExtension.entitlements; sourceTree = "<group>"; };
 		E5E000016 /* PendingShare.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingShare.swift; sourceTree = "<group>"; };
 		E5E000017 /* SharedContainerStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedContainerStore.swift; sourceTree = "<group>"; };
-		E5E000018 /* Minis.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Minis.entitlements; sourceTree = "<group>"; };
+		E5E000018 /* LeoPhoneAgent.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = LeoPhoneAgent.entitlements; sourceTree = "<group>"; };
 		E5E000019 /* ShareCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareCoordinator.swift; sourceTree = "<group>"; };
 		E5E00001A /* MainInterface.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = MainInterface.storyboard; sourceTree = "<group>"; };
 		E5E0000A2 /* ExternalFileImporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalFileImporter.swift; sourceTree = "<group>"; };
@@ -1260,7 +1260,7 @@
 		E51000030 = {
 			isa = PBXGroup;
 			children = (
-				E51000031 /* Minis */,
+				E51000031 /* LeoPhoneAgent */,
 				E5E000031 /* Shared */,
 				E5E000030 /* ShareExtension */,
 				E5H000030 /* AgentWidget */,
@@ -1273,12 +1273,12 @@
 			);
 			sourceTree = "<group>";
 		};
-		E51000031 /* Minis */ = {
+		E51000031 /* LeoPhoneAgent */ = {
 			isa = PBXGroup;
 			children = (
 				E51000011 /* MinisApp.swift */,
 				E5QA0102 /* AppDelegate.swift */,
-				E5E000018 /* Minis.entitlements */,
+				E5E000018 /* LeoPhoneAgent.entitlements */,
 				E5PV00002 /* PrivacyInfo.xcprivacy */,
 				E5LC00002 /* Localizable.xcstrings */,
 				E5IP00010 /* InfoPlist.strings */,
@@ -1303,13 +1303,13 @@
 				AA71B0212F44BEB200A28A5E /* Launch Screen.storyboard */,
 				AA26BD002F2E5F0A00AECF2D /* MinisApp-Bridging-Header.h */,
 			);
-			name = Minis;
+			name = LeoPhoneAgent;
 			sourceTree = "<group>";
 		};
 		E51000032 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				E51000010 /* Minis.app */,
+				E51000010 /* LeoPhoneAgent.app */,
 				E5E000010 /* MinisShare.appex */,
 				E5H000010 /* AgentWidgetExtension.appex */,
 				E5FP00010 /* MinisFileProvider.appex */,
@@ -2162,9 +2162,9 @@
 			productReference = BB1000010F700000000000AA /* MinisTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		E51000040 /* Minis */ = {
+		E51000040 /* LeoPhoneAgent */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = E51000050 /* Build configuration list for PBXNativeTarget "Minis" */;
+			buildConfigurationList = E51000050 /* Build configuration list for PBXNativeTarget "LeoPhoneAgent" */;
 			buildPhases = (
 				AC0000200 /* Generate Provider Customization */,
 				E54000AD0 /* Generate Debug Skill */,
@@ -2185,7 +2185,7 @@
 			fileSystemSynchronizedGroups = (
 				AA0838CB2F3CA8A900049557 /* Terminal */,
 			);
-			name = Minis;
+			name = LeoPhoneAgent;
 			packageProductDependencies = (
 				E52000021 /* SwiftAnthropic */,
 				E5M000021 /* cmark-gfm */,
@@ -2193,8 +2193,8 @@
 				E5X000021 /* SwiftMath */,
 				C42120806C66A2C804F89620 /* RealTimeCutVADLibrary */,
 			);
-			productName = Minis;
-			productReference = E51000010 /* Minis.app */;
+			productName = LeoPhoneAgent;
+			productReference = E51000010 /* LeoPhoneAgent.app */;
 			productType = "com.apple.product-type.application";
 		};
 		E5E000040 /* MinisShare */ = {
@@ -2273,7 +2273,7 @@
 					};
 				};
 			};
-			buildConfigurationList = E51000061 /* Build configuration list for PBXProject "Minis" */;
+			buildConfigurationList = E51000061 /* Build configuration list for PBXProject "LeoPhoneAgent" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -2299,7 +2299,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				E51000040 /* Minis */,
+				E51000040 /* LeoPhoneAgent */,
 				E5E000040 /* MinisShare */,
 				E5H000040 /* AgentWidgetExtension */,
 				E5FP00040 /* MinisFileProvider */,
@@ -2869,7 +2869,7 @@
 /* Begin PBXTargetDependency section */
 		AA8A56922F6FBB7A00A3E54E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = E51000040 /* Minis */;
+			target = E51000040 /* LeoPhoneAgent */;
 			targetProxy = AA8A56912F6FBB7A00A3E54E /* PBXContainerItemProxy */;
 		};
 		E5E000080 /* PBXTargetDependency */ = {
@@ -2921,8 +2921,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
-				DEVELOPMENT_TEAM = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 54UB8X9C5F;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"DEBUG=1",
@@ -2931,13 +2931,13 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.openminis.MinisUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.UITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = Minis;
+				TEST_TARGET_NAME = LeoPhoneAgent;
 			};
 			name = Debug;
 		};
@@ -2945,19 +2945,19 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
-				DEVELOPMENT_TEAM = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 54UB8X9C5F;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.openminis.MinisUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.UITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = Minis;
+				TEST_TARGET_NAME = LeoPhoneAgent;
 			};
 			name = Release;
 		};
@@ -2966,8 +2966,8 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
-				DEVELOPMENT_TEAM = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 54UB8X9C5F;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
 					"DEBUG=1",
@@ -2983,14 +2983,14 @@
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.openminis.MinisTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.Tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_OBJC_BRIDGING_HEADER = "MinisApp-Bridging-Header.h";
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Minis.app/Minis";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/LeoPhoneAgent.app/LeoPhoneAgent";
 			};
 			name = Debug;
 		};
@@ -2999,8 +2999,8 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
-				DEVELOPMENT_TEAM = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 54UB8X9C5F;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				HEADER_SEARCH_PATHS = (
@@ -3012,14 +3012,14 @@
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.openminis.MinisTests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.Tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_OBJC_BRIDGING_HEADER = "MinisApp-Bridging-Header.h";
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Minis.app/Minis";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/LeoPhoneAgent.app/LeoPhoneAgent";
 			};
 			name = Release;
 		};
@@ -3158,11 +3158,11 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
-				CODE_SIGN_ENTITLEMENTS = Minis.entitlements;
+				CODE_SIGN_ENTITLEMENTS = LeoPhoneAgent.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Preview Content\"";
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 54UB8X9C5F;
 				ENABLE_PREVIEWS = YES;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(SRCROOT)/../../build/frameworks",
@@ -3177,6 +3177,7 @@
 					"$(SRCROOT)/Vendor/cppjieba/include",
 				);
 				INFOPLIST_FILE = "$(SRCROOT)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = LeoPhoneAgent;
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "VM requires network access for SLIRP networking";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -3189,14 +3190,14 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(SRCROOT)/../../deps/libs";
-				MARKETING_VERSION = 1.11;
+				MARKETING_VERSION = 1.0;
 				OTHER_LDFLAGS = (
 					"-lish_emu",
 					"-lish",
 					"-lfakefs",
 				);
 				OTHER_SWIFT_FLAGS = "";
-				PRODUCT_BUNDLE_IDENTIFIER = com.openminis.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/MinisApp-Bridging-Header.h";
@@ -3212,11 +3213,11 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
-				CODE_SIGN_ENTITLEMENTS = Minis.entitlements;
+				CODE_SIGN_ENTITLEMENTS = LeoPhoneAgent.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Preview Content\"";
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 54UB8X9C5F;
 				ENABLE_PREVIEWS = YES;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(SRCROOT)/../../build/frameworks",
@@ -3231,6 +3232,7 @@
 					"$(SRCROOT)/Vendor/cppjieba/include",
 				);
 				INFOPLIST_FILE = "$(SRCROOT)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = LeoPhoneAgent;
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "VM requires network access for SLIRP networking";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -3243,14 +3245,14 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(SRCROOT)/../../deps/libs";
-				MARKETING_VERSION = 1.11;
+				MARKETING_VERSION = 1.0;
 				OTHER_LDFLAGS = (
 					"-lish_emu",
 					"-lish",
 					"-lfakefs",
 				);
 				OTHER_SWIFT_FLAGS = "";
-				PRODUCT_BUNDLE_IDENTIFIER = com.openminis.app;
+				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/MinisApp-Bridging-Header.h";
@@ -3264,11 +3266,11 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
-				DEVELOPMENT_TEAM = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 54UB8X9C5F;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Share to Minis";
+				INFOPLIST_KEY_CFBundleDisplayName = "Share to LeoPhoneAgent";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -3277,7 +3279,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.openminis.app.ShareExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.ShareExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -3291,11 +3293,11 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
-				DEVELOPMENT_TEAM = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 54UB8X9C5F;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Share to Minis";
+				INFOPLIST_KEY_CFBundleDisplayName = "Share to LeoPhoneAgent";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -3304,7 +3306,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.openminis.app.ShareExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.ShareExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -3318,11 +3320,11 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FileProvider/FileProvider.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
-				DEVELOPMENT_TEAM = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 54UB8X9C5F;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = FileProvider/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Minis Files";
+				INFOPLIST_KEY_CFBundleDisplayName = "LeoPhoneAgent Files";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -3331,7 +3333,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.openminis.app.FileProvider;
+				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.FileProvider;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -3345,11 +3347,11 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FileProvider/FileProvider.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
-				DEVELOPMENT_TEAM = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 54UB8X9C5F;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = FileProvider/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Minis Files";
+				INFOPLIST_KEY_CFBundleDisplayName = "LeoPhoneAgent Files";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -3358,7 +3360,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.openminis.app.FileProvider;
+				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.FileProvider;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -3372,8 +3374,8 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = AgentWidget/AgentWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
-				DEVELOPMENT_TEAM = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 54UB8X9C5F;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AgentWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Agent Activity";
@@ -3385,7 +3387,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.openminis.app.AgentWidget;
+				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.AgentWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -3399,8 +3401,8 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = AgentWidget/AgentWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
-				DEVELOPMENT_TEAM = "";
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 54UB8X9C5F;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AgentWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Agent Activity";
@@ -3412,7 +3414,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.openminis.app.AgentWidget;
+				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.AgentWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -3442,7 +3444,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		E51000050 /* Build configuration list for PBXNativeTarget "Minis" */ = {
+		E51000050 /* Build configuration list for PBXNativeTarget "LeoPhoneAgent" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				E51000072 /* Debug */,
@@ -3451,7 +3453,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		E51000061 /* Build configuration list for PBXProject "Minis" */ = {
+		E51000061 /* Build configuration list for PBXProject "LeoPhoneAgent" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				E51000070 /* Debug */,

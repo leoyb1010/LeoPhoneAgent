@@ -52,7 +52,7 @@ static void minis_NSTextContainer_setSize(id self, SEL _cmd, CGSize newSize) {
     }
 
     // Sanitise obviously poisoned sizes that SwiftUI's measure path
-    // occasionally leaks through (observed in Minis-2026-05-22-225827.ips
+    // occasionally leaks through (observed in LeoPhoneAgent-2026-05-22-225827.ips
     // ViewGraphGeometryObservers crash logs: `408 x 1.79e308` from
     // Double.greatestFiniteMagnitude, and `-16 x 0` from a ViewGraph
     // arithmetic underflow). NSTextContainer reacts to setSize: by

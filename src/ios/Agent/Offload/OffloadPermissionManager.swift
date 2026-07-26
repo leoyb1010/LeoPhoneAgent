@@ -207,7 +207,7 @@ final class OffloadPermissionManager: ObservableObject {
 
         case .notAllowed:
             logger.info("Permission denied (Not Allowed): \(command)")
-            return .denied("Permission denied: the user has disabled '\(command)'. To enable it, go to Settings > Permissions or tap: [Open Permissions](minis://settings/permissions)")
+            return .denied("Permission denied: the user has disabled '\(command)'. To enable it, go to Settings > Permissions or tap: [Open Permissions](leophoneagent://settings/permissions)")
 
         case .askOnce:
             // Check session grant
@@ -248,9 +248,9 @@ final class OffloadPermissionManager: ObservableObject {
                 logger.info("Permission denied (Ask Once): \(command)")
                 if sessionGrants[sessionId]?.contains(command) == true {
                     // Was granted via timeout race — treat as denied
-                    return .denied("Permission denied: authorization for '\(command)' timed out. To change permissions: [Open Permissions](minis://settings/permissions)")
+                    return .denied("Permission denied: authorization for '\(command)' timed out. To change permissions: [Open Permissions](leophoneagent://settings/permissions)")
                 }
-                return .denied("Permission denied: the user declined '\(command)' for this session. To change permissions: [Open Permissions](minis://settings/permissions)")
+                return .denied("Permission denied: the user declined '\(command)' for this session. To change permissions: [Open Permissions](leophoneagent://settings/permissions)")
             }
         }
     }

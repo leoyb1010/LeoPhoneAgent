@@ -1,4 +1,4 @@
-package com.openminis.app.service
+package com.leoyuan.leophoneagent.service
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -15,8 +15,8 @@ import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.openminis.app.MinisApp
-import com.openminis.app.R
+import com.leoyuan.leophoneagent.MinisApp
+import com.leoyuan.leophoneagent.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -53,7 +53,7 @@ class AgentForegroundService : Service() {
         // a public SDK constant; value verified by decompiling the on-device
         // framework.jar (const-string "android.requestPromotedOngoing").
         private const val EXTRA_REQUEST_PROMOTED_ONGOING = "android.requestPromotedOngoing"
-        private const val ACTION_STOP = "com.openminis.app.STOP_AGENT_SERVICE"
+        private const val ACTION_STOP = "com.leoyuan.leophoneagent.STOP_AGENT_SERVICE"
 
         /**
          * Starts or updates the foreground service with current status.
@@ -133,7 +133,7 @@ class AgentForegroundService : Service() {
         // log, which is exactly the "detection logic recursively
         // crashing" pattern. Skip the overlay observer and let
         // onStartCommand satisfy the FG-deadline + stopSelf.
-        if (com.openminis.app.crash.CrashFrequencyDetector.isSafeMode()) {
+        if (com.leoyuan.leophoneagent.crash.CrashFrequencyDetector.isSafeMode()) {
             Log.w(TAG, "safe-mode ON — skipping overlay/wake-lock bring-up")
             createNotificationChannel()
             return
@@ -151,10 +151,10 @@ class AgentForegroundService : Service() {
         // with a stub notification, then unwind. The crash share dialog
         // owns the UX from here; running a background service in this
         // state would re-trip the lateinit access that brought us down.
-        if (com.openminis.app.crash.CrashFrequencyDetector.isSafeMode()) {
+        if (com.leoyuan.leophoneagent.crash.CrashFrequencyDetector.isSafeMode()) {
             try {
                 val stub = androidx.core.app.NotificationCompat.Builder(this, CHANNEL_ID)
-                    .setContentTitle("Minis")
+                    .setContentTitle("LeoPhoneAgent")
                     .setSmallIcon(android.R.drawable.stat_sys_warning)
                     .setOngoing(false)
                     .build()
@@ -667,7 +667,7 @@ class AgentForegroundService : Service() {
         val seconds = elapsedSeconds % 60
         val timeString = String.format("%d:%02d", minutes, seconds)
 
-        val mainIntent = Intent(this, Class.forName("com.openminis.app.MainActivity")).apply {
+        val mainIntent = Intent(this, Class.forName("com.leoyuan.leophoneagent.MainActivity")).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
         val pendingIntent = PendingIntent.getActivity(
@@ -692,7 +692,7 @@ class AgentForegroundService : Service() {
         )
 
         // T-bg-overlay phase 1: enrich the ongoing notification.
-        // Title:   "Minis is using <Tool>"  (or session-count summary when idle/between turns)
+        // Title:   "LeoPhoneAgent is using <Tool>"  (or session-count summary when idle/between turns)
         // Text:    one-line "<sessionLabel> · <elapsed>" so the always-visible row stays compact
         // BigText: full status string from SessionActivityTracker.currentToolStatus when expanded
         // Progress: indeterminate while a tool is in flight (isToolRunning), hidden otherwise
@@ -869,15 +869,15 @@ class AgentForegroundService : Service() {
      * so the user still gets a hint about what's running.
      */
     private fun toolDisplayLabel(toolName: String): String = when (toolName) {
-        "shell_execute" -> "Minis is using Shell"
-        "file_read" -> "Minis is reading File"
-        "file_write" -> "Minis is using Editor"
-        "file_edit" -> "Minis is editing File"
-        "browser_use" -> "Minis is using Browser"
-        "read_image" -> "Minis is reading Image"
-        "memory_write", "memory_get" -> "Minis is using Memory"
-        "web_search" -> "Minis is using Search"
-        else -> "Minis is using $toolName"
+        "shell_execute" -> "LeoPhoneAgent is using Shell"
+        "file_read" -> "LeoPhoneAgent is reading File"
+        "file_write" -> "LeoPhoneAgent is using Editor"
+        "file_edit" -> "LeoPhoneAgent is editing File"
+        "browser_use" -> "LeoPhoneAgent is using Browser"
+        "read_image" -> "LeoPhoneAgent is reading Image"
+        "memory_write", "memory_get" -> "LeoPhoneAgent is using Memory"
+        "web_search" -> "LeoPhoneAgent is using Search"
+        else -> "LeoPhoneAgent is using $toolName"
     }
 
     /**

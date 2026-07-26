@@ -19,7 +19,7 @@
 //    - com.apple.developer.nfc.readersession.felica.systemcodes
 //      (FeliCa system-code whitelist for `NFCPollingISO18092`.)
 //
-//  Entitlement file (Minis.entitlements) declares:
+//  Entitlement file (LeoPhoneAgent.entitlements) declares:
 //    - com.apple.developer.nfc.readersession.formats = [TAG, NDEF, PACE]
 //      TAG  → NFCTagReaderSession (raw tag access: MIFARE, ISO 7816, ISO 15693, FeliCa)
 //      NDEF → NFCNDEFReaderSession (high-level NDEF scan/write)

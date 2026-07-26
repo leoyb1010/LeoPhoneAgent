@@ -1,4 +1,4 @@
-package com.openminis.app.ui.navigation
+package com.leoyuan.leophoneagent.ui.navigation
 
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.CubicBezierEasing
@@ -15,10 +15,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import com.openminis.app.deeplink.DeepLinkAction
-import com.openminis.app.deeplink.DeepLinkCoordinator
-import com.openminis.app.ui.settings.KEY_LAUNCH_SESSION
-import com.openminis.app.ui.settings.getAppearancePrefs
+import com.leoyuan.leophoneagent.deeplink.DeepLinkAction
+import com.leoyuan.leophoneagent.deeplink.DeepLinkCoordinator
+import com.leoyuan.leophoneagent.ui.settings.KEY_LAUNCH_SESSION
+import com.leoyuan.leophoneagent.ui.settings.getAppearancePrefs
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.compose.ui.window.DialogProperties
@@ -27,56 +27,56 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.dialog
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.openminis.app.data.repository.ChatRepository
-import com.openminis.app.data.repository.ProviderRepository
-import com.openminis.app.ui.chat.ChatScreen
-import com.openminis.app.ui.sessions.SessionListScreen
-import com.openminis.app.ui.settings.AboutScreen
-import com.openminis.app.ui.settings.AddAgentLoopGroupsScreen
-import com.openminis.app.ui.settings.AddAgentLoopModelsScreen
-import com.openminis.app.ui.settings.AddCustomModelScreen
-import com.openminis.app.ui.settings.BackgroundSettingsScreen
-import com.openminis.app.ui.settings.AddModelsToGroupScreen
-import com.openminis.app.ui.settings.ShadowVoiceDetailScreen
-import com.openminis.app.ui.settings.AddProviderScreen
-import com.openminis.app.ui.settings.ModelEntryDetailScreen
-import com.openminis.app.ui.settings.ModelGroupDetailScreen
-import com.openminis.app.ui.settings.ModelGroupsScreen
-import com.openminis.app.ui.settings.ProviderDetailScreen
-import com.openminis.app.ui.settings.ProviderListScreen
-import com.openminis.app.ui.sandbox.FileBrowserScreen
-import com.openminis.app.ui.sandbox.FileBrowserViewModel
-import com.openminis.app.ui.sandbox.FileItem
-import com.openminis.app.ui.sandbox.FilePreviewScreen
-import com.openminis.app.ui.sandbox.RootfsManagementScreen
-import com.openminis.app.ui.settings.EnvironmentVariablesScreen
-import com.openminis.app.ui.settings.AppearanceScreen
-import com.openminis.app.ui.settings.SettingsScreen
-import com.openminis.app.ui.settings.SystemPermissionsScreen
-import com.openminis.app.ui.settings.SessionStorageDetailScreen
-import com.openminis.app.ui.settings.SkillDetailScreen
-import com.openminis.app.ui.settings.StorageManagementScreen
-import com.openminis.app.ui.settings.SkillFileViewerScreen
-import com.openminis.app.ui.settings.UsageStatsScreen
-import com.openminis.app.ui.settings.MinisSkillsBrowserScreen
-import com.openminis.app.ui.settings.MountDetailScreen
-import com.openminis.app.ui.settings.MountedFoldersScreen
-import com.openminis.app.ui.settings.SharedFolderDetailScreen
-import com.openminis.app.ui.settings.SharedFoldersScreen
-import com.openminis.app.ui.settings.SkillsManagementScreen
-import com.openminis.app.data.repository.EnvVarRepository
-import com.openminis.app.data.repository.MemoryRepository
-import com.openminis.app.data.repository.SkillRepository
-import com.openminis.app.ui.settings.LogDetailScreen
-import com.openminis.app.ui.settings.LogManagementScreen
-import com.openminis.app.ui.settings.MemoryFileEditScreen
-import com.openminis.app.ui.settings.MemoryManagementScreen
-import com.openminis.app.ui.settings.OffloadPermissionScreen
-import com.openminis.app.ui.settings.ShizukuPermissionScreen
-import com.openminis.app.sandbox.RootfsManager
-import com.openminis.app.sandbox.TerminalSession
-import com.openminis.app.ui.terminal.TerminalScreen
-import com.openminis.app.ui.onboarding.OnboardingModelSelectionScreen
+import com.leoyuan.leophoneagent.data.repository.ChatRepository
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.ui.chat.ChatScreen
+import com.leoyuan.leophoneagent.ui.sessions.SessionListScreen
+import com.leoyuan.leophoneagent.ui.settings.AboutScreen
+import com.leoyuan.leophoneagent.ui.settings.AddAgentLoopGroupsScreen
+import com.leoyuan.leophoneagent.ui.settings.AddAgentLoopModelsScreen
+import com.leoyuan.leophoneagent.ui.settings.AddCustomModelScreen
+import com.leoyuan.leophoneagent.ui.settings.BackgroundSettingsScreen
+import com.leoyuan.leophoneagent.ui.settings.AddModelsToGroupScreen
+import com.leoyuan.leophoneagent.ui.settings.ShadowVoiceDetailScreen
+import com.leoyuan.leophoneagent.ui.settings.AddProviderScreen
+import com.leoyuan.leophoneagent.ui.settings.ModelEntryDetailScreen
+import com.leoyuan.leophoneagent.ui.settings.ModelGroupDetailScreen
+import com.leoyuan.leophoneagent.ui.settings.ModelGroupsScreen
+import com.leoyuan.leophoneagent.ui.settings.ProviderDetailScreen
+import com.leoyuan.leophoneagent.ui.settings.ProviderListScreen
+import com.leoyuan.leophoneagent.ui.sandbox.FileBrowserScreen
+import com.leoyuan.leophoneagent.ui.sandbox.FileBrowserViewModel
+import com.leoyuan.leophoneagent.ui.sandbox.FileItem
+import com.leoyuan.leophoneagent.ui.sandbox.FilePreviewScreen
+import com.leoyuan.leophoneagent.ui.sandbox.RootfsManagementScreen
+import com.leoyuan.leophoneagent.ui.settings.EnvironmentVariablesScreen
+import com.leoyuan.leophoneagent.ui.settings.AppearanceScreen
+import com.leoyuan.leophoneagent.ui.settings.SettingsScreen
+import com.leoyuan.leophoneagent.ui.settings.SystemPermissionsScreen
+import com.leoyuan.leophoneagent.ui.settings.SessionStorageDetailScreen
+import com.leoyuan.leophoneagent.ui.settings.SkillDetailScreen
+import com.leoyuan.leophoneagent.ui.settings.StorageManagementScreen
+import com.leoyuan.leophoneagent.ui.settings.SkillFileViewerScreen
+import com.leoyuan.leophoneagent.ui.settings.UsageStatsScreen
+import com.leoyuan.leophoneagent.ui.settings.MinisSkillsBrowserScreen
+import com.leoyuan.leophoneagent.ui.settings.MountDetailScreen
+import com.leoyuan.leophoneagent.ui.settings.MountedFoldersScreen
+import com.leoyuan.leophoneagent.ui.settings.SharedFolderDetailScreen
+import com.leoyuan.leophoneagent.ui.settings.SharedFoldersScreen
+import com.leoyuan.leophoneagent.ui.settings.SkillsManagementScreen
+import com.leoyuan.leophoneagent.data.repository.EnvVarRepository
+import com.leoyuan.leophoneagent.data.repository.MemoryRepository
+import com.leoyuan.leophoneagent.data.repository.SkillRepository
+import com.leoyuan.leophoneagent.ui.settings.LogDetailScreen
+import com.leoyuan.leophoneagent.ui.settings.LogManagementScreen
+import com.leoyuan.leophoneagent.ui.settings.MemoryFileEditScreen
+import com.leoyuan.leophoneagent.ui.settings.MemoryManagementScreen
+import com.leoyuan.leophoneagent.ui.settings.OffloadPermissionScreen
+import com.leoyuan.leophoneagent.ui.settings.ShizukuPermissionScreen
+import com.leoyuan.leophoneagent.sandbox.RootfsManager
+import com.leoyuan.leophoneagent.sandbox.TerminalSession
+import com.leoyuan.leophoneagent.ui.terminal.TerminalScreen
+import com.leoyuan.leophoneagent.ui.onboarding.OnboardingModelSelectionScreen
 
 // T342: Material 3 motion easing curves. Compose-Material3 (1.3.x) ships
 // `MotionScheme` only in 1.4-alpha; mirror the spec values directly so we
@@ -213,7 +213,7 @@ fun AppNavigation(
     providerRepository: ProviderRepository,
     envVarRepository: EnvVarRepository? = null,
     skillRepository: SkillRepository? = null,
-    mcpRepository: com.openminis.app.data.repository.MCPRepository? = null,
+    mcpRepository: com.leoyuan.leophoneagent.data.repository.MCPRepository? = null,
     memoryRepository: MemoryRepository? = null,
     navController: NavHostController = rememberNavController(),
     initialDeepLink: DeepLinkAction? = null,
@@ -227,7 +227,7 @@ fun AppNavigation(
     // saw the change because PRootKernel.mountedFoldersStore pointed at
     // the application-scoped singleton in MinisApp.
     val mountedFoldersStore = remember {
-        (context.applicationContext as com.openminis.app.MinisApp).mountedFoldersStore
+        (context.applicationContext as com.leoyuan.leophoneagent.MinisApp).mountedFoldersStore
     }
 
     // Handle initial deep link after composition
@@ -305,7 +305,7 @@ fun AppNavigation(
         val hasDeepLink = initialDeepLink != null && initialDeepLink !is DeepLinkAction.Unknown
         if (hasDeepLink) return@LaunchedEffect
         val hasPendingShare =
-            com.openminis.app.share.ShareCoordinator.bufferVersion.value > 0
+            com.leoyuan.leophoneagent.share.ShareCoordinator.bufferVersion.value > 0
         val rawMode = getAppearancePrefs(context).getInt(KEY_LAUNCH_SESSION, 0)
         // Hang-detector circuit breaker: if the previous launches racked up
         // ≥3 main-thread hangs, force mode = 3 (home) so we don't reopen
@@ -330,9 +330,9 @@ fun AppNavigation(
         // moment the user has ANY non-crash_or_stall cycle (clean_exit /
         // silent_kill / first_launch) — see LaunchCycleBeacon.lastRestartCount.
         val mode = if (
-            com.openminis.app.diagnostics.HangDetector.shouldForceHomeOnLaunch(context) ||
-            com.openminis.app.crash.CrashFrequencyDetector.shouldForceHomeOnLaunch(context) ||
-            com.openminis.app.diagnostics.LaunchCycleBeacon.shouldForceHomeOnLaunch()
+            com.leoyuan.leophoneagent.diagnostics.HangDetector.shouldForceHomeOnLaunch(context) ||
+            com.leoyuan.leophoneagent.crash.CrashFrequencyDetector.shouldForceHomeOnLaunch(context) ||
+            com.leoyuan.leophoneagent.diagnostics.LaunchCycleBeacon.shouldForceHomeOnLaunch()
         ) 3 else rawMode
         val autoThresholdMs = 15L * 60 * 1000
         val target: String? = when {
@@ -377,7 +377,7 @@ fun AppNavigation(
     // fresh chat so ChatScreen's existing LaunchedEffect(shareBufferVersion)
     // can drain it. The drain itself is idempotent: consumeBuffer is one-shot,
     // so a ChatScreen already in the backstack won't double-inject.
-    val shareBufferVersion by com.openminis.app.share.ShareCoordinator.bufferVersion.collectAsState()
+    val shareBufferVersion by com.leoyuan.leophoneagent.share.ShareCoordinator.bufferVersion.collectAsState()
     LaunchedEffect(shareBufferVersion) {
         if (shareBufferVersion == 0) return@LaunchedEffect
         val current = navController.currentDestination?.route ?: return@LaunchedEffect
@@ -389,7 +389,7 @@ fun AppNavigation(
     }
 
     // Pinned-shortcut cold start: when launched via
-     // `minis://session/<id>/<resource-path>`, set the pending HTML
+     // `leophoneagent://session/<id>/<resource-path>`, set the pending HTML
      // preview synchronously and start NavHost directly at the matching
      // chat so ChatScreen's LaunchedEffect consumes the pending state on
      // first composition — no sessions-list flash, no launch-session
@@ -612,9 +612,9 @@ fun AppNavigation(
                     val rootfs = RootfsManager.getInstance(ctx.applicationContext)
                     val hostPath = java.io.File(rootfs.rootfsDir, "var/minis/$folderId")
                     val label = when (folderId) {
-                        "shared" -> ctx.getString(com.openminis.app.R.string.shared_folder_name_shared)
-                        "skills" -> ctx.getString(com.openminis.app.R.string.shared_folder_name_skills)
-                        "memory" -> ctx.getString(com.openminis.app.R.string.shared_folder_name_memory)
+                        "shared" -> ctx.getString(com.leoyuan.leophoneagent.R.string.shared_folder_name_shared)
+                        "skills" -> ctx.getString(com.leoyuan.leophoneagent.R.string.shared_folder_name_skills)
+                        "memory" -> ctx.getString(com.leoyuan.leophoneagent.R.string.shared_folder_name_memory)
                         else -> folderId
                     }
                     FilePreviewHolder.fileBrowserViewModel = FileBrowserViewModel(
@@ -1091,7 +1091,7 @@ fun AppNavigation(
         // [T-mcp-integration-android] MCP Integrations management screen.
         composable(Routes.MCP) {
             if (mcpRepository != null) {
-                com.openminis.app.ui.settings.MCPIntegrationsScreen(
+                com.leoyuan.leophoneagent.ui.settings.MCPIntegrationsScreen(
                     mcpRepository = mcpRepository,
                     onBack = { navController.safePopBackStack() },
                     envVarRepository = envVarRepository,
@@ -1101,7 +1101,7 @@ fun AppNavigation(
 
         // [T-soul-md] SOUL.md editor.
         composable(Routes.SOUL) {
-            com.openminis.app.ui.settings.SoulSettingsScreen(
+            com.leoyuan.leophoneagent.ui.settings.SoulSettingsScreen(
                 onBack = { navController.safePopBackStack() },
             )
         }
@@ -1202,7 +1202,7 @@ fun AppNavigation(
 
         // [T-android-scheduled-tasks-design] Scheduled tasks list + editor.
         composable(Routes.SCHEDULED_TASKS) {
-            com.openminis.app.ui.scheduled.ScheduledTasksScreen(
+            com.leoyuan.leophoneagent.ui.scheduled.ScheduledTasksScreen(
                 onBack = { navController.safePopBackStack() },
                 onEditTask = { taskId ->
                     navController.safeNavigate(Routes.scheduledTaskEdit(taskId))
@@ -1221,7 +1221,7 @@ fun AppNavigation(
             arguments = listOf(navArgument("taskId") { type = NavType.StringType }),
         ) { backStackEntry ->
             val taskId = backStackEntry.arguments?.getString("taskId") ?: return@composable
-            com.openminis.app.ui.scheduled.ScheduledTaskRunsScreen(
+            com.leoyuan.leophoneagent.ui.scheduled.ScheduledTaskRunsScreen(
                 taskId = taskId,
                 onBack = { navController.safePopBackStack() },
                 onOpenSession = { sessionId ->
@@ -1240,7 +1240,7 @@ fun AppNavigation(
             ),
         ) { backStackEntry ->
             val taskId = backStackEntry.arguments?.getString("taskId")
-            com.openminis.app.ui.scheduled.ScheduledTaskEditScreen(
+            com.leoyuan.leophoneagent.ui.scheduled.ScheduledTaskEditScreen(
                 taskId = taskId,
                 onBack = { navController.safePopBackStack() },
                 onOpenSession = { sessionId ->

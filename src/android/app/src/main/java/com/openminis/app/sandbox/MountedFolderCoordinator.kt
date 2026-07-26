@@ -1,6 +1,6 @@
-package com.openminis.app.sandbox
+package com.leoyuan.leophoneagent.sandbox
 
-import com.openminis.app.data.MountedFoldersStore
+import com.leoyuan.leophoneagent.data.MountedFoldersStore
 
 /**
  * Bridges the user-facing [MountedFoldersStore] to the parts of the app

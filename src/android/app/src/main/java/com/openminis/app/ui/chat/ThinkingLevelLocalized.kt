@@ -1,8 +1,8 @@
-package com.openminis.app.ui.chat
+package com.leoyuan.leophoneagent.ui.chat
 
 import android.content.Context
-import com.openminis.app.R
-import com.openminis.app.data.model.ThinkingLevel
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.data.model.ThinkingLevel
 
 /**
  * Localized display name for [ThinkingLevel]. The data-layer

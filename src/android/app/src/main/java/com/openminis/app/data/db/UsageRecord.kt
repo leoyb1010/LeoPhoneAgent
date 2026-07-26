@@ -1,4 +1,4 @@
-package com.openminis.app.data.db
+package com.leoyuan.leophoneagent.data.db
 
 /** Raw usage record from joined messages + sessions query. */
 data class UsageRecord(

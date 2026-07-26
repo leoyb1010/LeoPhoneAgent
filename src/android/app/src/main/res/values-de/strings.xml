@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Minis</string>
+    <string name="app_name">LeoPhoneAgent</string>
     <string name="new_chat">Neuer Chat</string>
     <string name="settings">Einstellungen</string>
     <string name="providers">KI-Anbieter</string>
@@ -73,7 +73,7 @@
     <string name="search_no_results">Keine Treffer für \"%1$s\"</string>
     <string name="stop_tool">Tool stoppen</string>
     <string name="mic_permission_title">Mikrofon-Berechtigung erforderlich</string>
-    <string name="mic_permission_message">Spracheingabe benötigt die Mikrofon-Berechtigung. Tippe auf Einstellungen öffnen, um sie für Minis zu erlauben.</string>
+    <string name="mic_permission_message">Spracheingabe benötigt die Mikrofon-Berechtigung. Tippe auf Einstellungen öffnen, um sie für LeoPhoneAgent zu erlauben.</string>
     <string name="mic_permission_open_settings">Einstellungen öffnen</string>
     <string name="mic_permission_cancel">Abbrechen</string>
     <string name="bg_section_header">Hintergrund &amp; Benachrichtigungen</string>
@@ -81,7 +81,7 @@
     <string name="bg_section_footer">Lang laufende Agent-Aufgaben brauchen die Erlaubnis, die CPU bei ausgeschaltetem Bildschirm wach zu halten. Ohne diese Einstellungen kann das System die Inferenz nach wenigen Minuten im Hintergrund pausieren.</string>
     <string name="bg_service_channel_name">Agent-Status</string>
     <string name="bg_service_channel_description">Zeigt den Status laufender Agent-Sitzungen an.</string>
-    <string name="bg_service_notification_title">Minis Agent aktiv</string>
+    <string name="bg_service_notification_title">LeoPhoneAgent Agent aktiv</string>
     <string name="bg_service_notification_text">%1$s | %2$s | %3$s</string>
     <string name="bg_service_stop_action">Stopp</string>
     <plurals name="bg_service_sessions">
@@ -92,11 +92,11 @@
     <string name="battery_opt_section_footer">Wenn ausgenommen, schickt Android die App während einer Aufgabe nicht in den Schlaf. Wird bei jeder Rückkehr zu diesem Bildschirm erneut geprüft.</string>
     <string name="battery_opt_row_title">Hintergrundarbeit erlauben</string>
     <string name="battery_opt_already_exempt">Bereits erlaubt</string>
-    <string name="battery_opt_request_subtitle">Tippe, damit Minis ununterbrochen laufen darf</string>
+    <string name="battery_opt_request_subtitle">Tippe, damit LeoPhoneAgent ununterbrochen laufen darf</string>
     <string name="rom_autostart_section_title">Autostart-Berechtigung</string>
-    <string name="rom_autostart_section_footer">Manche Android-Skins (%1$s) verlangen zusätzlich zu den Standardsystemeinstellungen eine Autostart-Berechtigung. Ohne sie kann Minis innerhalb weniger Minuten nach dem Wechsel in den Hintergrund beendet werden.</string>
+    <string name="rom_autostart_section_footer">Manche Android-Skins (%1$s) verlangen zusätzlich zu den Standardsystemeinstellungen eine Autostart-Berechtigung. Ohne sie kann LeoPhoneAgent innerhalb weniger Minuten nach dem Wechsel in den Hintergrund beendet werden.</string>
     <string name="rom_autostart_row_title">Autostart-Einstellungen öffnen</string>
-    <string name="rom_autostart_row_subtitle">Minis auf %1$s aktivieren</string>
+    <string name="rom_autostart_row_subtitle">LeoPhoneAgent auf %1$s aktivieren</string>
     <string name="browser_settings_ua_not_set">Nicht festgelegt</string>
     <!-- T135 — Settings + About i18n keys -->
     <string name="settings_back">Zurück</string>
@@ -125,7 +125,7 @@
     <string name="settings_section_logs">Logs</string>
     <string name="settings_logs_subtitle">App-Logs ansehen und exportieren</string>
     <string name="settings_section_about">Über</string>
-    <string name="settings_about_minis">Über Minis</string>
+    <string name="settings_about_minis">Über LeoPhoneAgent</string>
     <string name="settings_about_subtitle">Version und Projekt-Info</string>
     <string name="settings_privacy_policy">Datenschutzrichtlinie</string>
     <string name="settings_feedback">Feedback</string>
@@ -133,7 +133,7 @@
     <string name="settings_feedback_telegram">Feedback (Telegram)</string>
     <string name="settings_feedback_email">Feedback (E-Mail)</string>
     <string name="about_title">Über</string>
-    <string name="about_minis_tagline">Minis ist dein vollständig lokaler, vollständig privater On-Device-Agent.</string>
+    <string name="about_minis_tagline">LeoPhoneAgent ist dein vollständig lokaler, vollständig privater On-Device-Agent.</string>
     <string name="about_links">Links</string>
     <string name="about_github_repository">GitHub-Repository</string>
     <string name="about_version_format">Version %1$s (%2$s)</string>
@@ -317,9 +317,9 @@
     <string name="skill_section_installed">Installiert</string>
     <string name="skill_section_footer">Skills erweitern den KI-Agenten um spezialisierte Anweisungen und Workflows. Bei Aktivierung werden sie in den System-Prompt geladen.</string>
     <string name="skill_empty_title">Keine Skills installiert</string>
-    <string name="skill_empty_action">Auf + tippen, um SKILL.md zu importieren oder Minis Skills zu durchsuchen.</string>
+    <string name="skill_empty_action">Auf + tippen, um SKILL.md zu importieren oder LeoPhoneAgent Skills zu durchsuchen.</string>
     <string name="skill_import_modal_title">Skill importieren</string>
-    <string name="skill_minis_skills_modal">Minis Skills</string>
+    <string name="skill_minis_skills_modal">LeoPhoneAgent Skills</string>
     <string name="skill_delete_confirm_title">%1$s löschen?</string>
     <string name="skill_delete_confirm_text">Skill und zugehörige Dateien werden dauerhaft entfernt.</string>
     <string name="skill_import_sheet_title">Skill importieren</string>
@@ -367,7 +367,7 @@
     <string name="skill_detail_source_file">Dateiimport</string>
     <string name="skill_detail_source_bundled">Integriert</string>
     <string name="skill_detail_source_session">In Sitzung erstellt</string>
-    <string name="skills_browser_title">Minis Skills</string>
+    <string name="skills_browser_title">LeoPhoneAgent Skills</string>
     <string name="skills_browser_import_button">Diesen importieren</string>
     <string name="skills_browser_hud_importing">Importiert…</string>
     <string name="skills_browser_error_not_folder">Wählen Sie zuerst einen Skill-Ordner</string>
@@ -383,8 +383,8 @@
     <string name="storage_overview_sessions">Sitzungsdateien</string>
     <string name="storage_section_sessions">Sitzungen</string>
     <string name="storage_no_sessions">Keine Sitzungen</string>
-    <string name="storage_section_minis_files">Minis-Dateien</string>
-    <string name="storage_no_minis_files">Keine Minis-Dateien</string>
+    <string name="storage_section_minis_files">LeoPhoneAgent-Dateien</string>
+    <string name="storage_no_minis_files">Keine LeoPhoneAgent-Dateien</string>
     <string name="storage_section_media">Mediendateien</string>
     <string name="storage_no_media_files">Keine Mediendateien</string>
     <string name="storage_clear_session_footer">Entfernt alle von dieser Sitzung erzeugten Dateien. Die Unterhaltung selbst bleibt erhalten.</string>
@@ -455,7 +455,7 @@
     <string name="common_close">Schließen</string>
     <string name="common_skip">Überspringen</string>
     <string name="common_next">Weiter</string>
-    <string name="onboarding_welcome_title">Willkommen bei Minis</string>
+    <string name="onboarding_welcome_title">Willkommen bei LeoPhoneAgent</string>
     <string name="onboarding_welcome_subtitle">Ihr KI-Agent mit Terminal-, Browser- und nativem Gerätezugriff.</string>
     <string name="onboarding_get_started">Loslegen</string>
     <string name="onboarding_provider_title">Anbieter hinzufügen</string>
@@ -552,7 +552,7 @@
     <string name="browser_nav_forward">Vorwärts</string>
     <string name="browser_stop">Stoppen</string>
     <string name="browser_reload">Neu laden</string>
-    <string name="browser_minis_browsing">Minis surft</string>
+    <string name="browser_minis_browsing">LeoPhoneAgent surft</string>
     <string name="chat_typing_indicator">%1$s denkt nach</string>
     <string name="chat_input_placeholder">Nachricht an %1$s (@ um Dateien zu erwähnen)</string>
     <string name="browser_takeover">Übernehmen</string>
@@ -585,7 +585,7 @@
     <string name="browser_history_results">Ergebnisse</string>
     <string name="browser_history_clear_dialog_title">Browserverlauf löschen?</string>
     <string name="browser_history_clear_dialog_message">Dadurch wird der gesamte Browserverlauf entfernt. Dies kann nicht rückgängig gemacht werden.</string>
-    <string name="terminal_title">Minis-Shell</string>
+    <string name="terminal_title">LeoPhoneAgent-Shell</string>
     <string name="terminal_clear">Löschen</string>
     <string name="terminal_show_keyboard">Anzeigen</string>
     <string name="terminal_hide_keyboard">Ausblenden</string>
@@ -752,8 +752,8 @@
     <string name="notif_config_confirm_channel_name">Konfigurationsfreigaben</string>
     <string name="notif_config_confirm_channel_description">Benachrichtigt, wenn eine Konfigurationsänderung auf Ihre Freigabe wartet, während die App im Hintergrund läuft.</string>
     <string name="notif_config_confirm_title">⚙️ Konfigurationsänderung wartet auf Freigabe</string>
-    <string name="notif_config_confirm_body_single">Eine Änderung erfordert Ihre Prüfung — öffnen Sie Minis zum Bestätigen oder Ablehnen.</string>
-    <string name="notif_config_confirm_body_multi">%d Änderungen erfordern Ihre Prüfung — öffnen Sie Minis zum Bestätigen oder Ablehnen.</string>
+    <string name="notif_config_confirm_body_single">Eine Änderung erfordert Ihre Prüfung — öffnen Sie LeoPhoneAgent zum Bestätigen oder Ablehnen.</string>
+    <string name="notif_config_confirm_body_multi">%d Änderungen erfordern Ihre Prüfung — öffnen Sie LeoPhoneAgent zum Bestätigen oder Ablehnen.</string>
     <string name="notif_task_failed_body">Aufgabe mit Fehler beendet. Tippen, um den Chat zu öffnen.</string>
 
     <!-- T182 agent loop section i18n -->
@@ -903,7 +903,7 @@
 
     <!-- Welcome / onboarding (T332) -->
     <!-- TODO translate -->
-    <string name="sessionlist_welcome_title">Willkommen bei Minis</string>
+    <string name="sessionlist_welcome_title">Willkommen bei LeoPhoneAgent</string>
     <string name="sessionlist_welcome_subtitle">Dein erster On-Device-Agent ist fast bereit.</string>
     <string name="sessionlist_welcome_step1_title">Anbieter hinzufügen</string>
     <string name="sessionlist_welcome_step1_subtitle">API-Schlüssel konfigurieren oder mit OAuth anmelden</string>
@@ -932,10 +932,10 @@
     <string name="update_error_open_releases">GitHub Releases öffnen</string>
     <!-- T-android-crash-freq-share -->
     <string name="crash_freq_dialog_title">Mehrere Abstürze erkannt</string>
-    <string name="crash_freq_dialog_message">Minis ist in der letzten Stunde mehrfach abgestürzt. Absturzprotokolle teilen, um das Problem zu beheben?</string>
+    <string name="crash_freq_dialog_message">LeoPhoneAgent ist in der letzten Stunde mehrfach abgestürzt. Absturzprotokolle teilen, um das Problem zu beheben?</string>
     <string name="crash_freq_dialog_share">Protokolle teilen</string>
     <string name="crash_freq_dialog_dismiss">Nicht jetzt</string>
-    <string name="crash_freq_email_subject">Minis-Absturzbericht %1$s</string>
+    <string name="crash_freq_email_subject">LeoPhoneAgent-Absturzbericht %1$s</string>
     <string name="crash_freq_share_chooser">Absturzprotokolle senden</string>
     <string name="overlay_completion_completed">Abgeschlossen</string>
     <string name="overlay_completion_failed">Fehlgeschlagen</string>
@@ -966,7 +966,7 @@
     <string name="mcp_add">MCP-Server hinzufügen</string>
     <string name="mcp_edit">MCP-Server bearbeiten</string>
     <string name="mcp_section_servers">Server</string>
-    <string name="mcp_section_footer">MCP-Server ermöglichen dem Agenten, externe Tools über minis-mcp-cli aufzurufen. Konfigurationen werden in /var/minis/mcp-servers/servers.json gespeichert (Claude-Desktop-kompatibel).</string>
+    <string name="mcp_section_footer">MCP-Server ermöglichen dem Agenten, externe Tools über leophoneagent-mcp-cli aufzurufen. Konfigurationen werden in /var/minis/mcp-servers/servers.json gespeichert (Claude-Desktop-kompatibel).</string>
     <string name="mcp_empty_title">Keine MCP-Server</string>
     <string name="mcp_empty_action">Füge mit der +-Schaltfläche einen Server hinzu.</string>
     <string name="mcp_transport_http">HTTP</string>
@@ -1034,7 +1034,7 @@
     <string name="voice_bare_link">Link</string>
     <!-- [T-android-voice-correction] Consent + correction UI -->
     <string name="voice_correction_consent_title">Sprachkorrekturen verbessern?</string>
-    <string name="voice_correction_consent_body">Minis kann deine Korrekturen an Transkripten (Original → Korrektur) und übernommene KI-Korrekturen in einer lokalen Datenbank auf dem Gerät speichern, um künftige Sprachkorrekturen zu verbessern. Es wird nichts hochgeladen. Du kannst dies jederzeit in den Einstellungen ändern oder die Daten löschen.</string>
+    <string name="voice_correction_consent_body">LeoPhoneAgent kann deine Korrekturen an Transkripten (Original → Korrektur) und übernommene KI-Korrekturen in einer lokalen Datenbank auf dem Gerät speichern, um künftige Sprachkorrekturen zu verbessern. Es wird nichts hochgeladen. Du kannst dies jederzeit in den Einstellungen ändern oder die Daten löschen.</string>
     <string name="voice_correction_consent_enable">Aktivieren</string>
     <string name="voice_correction_consent_not_now">Jetzt nicht</string>
     <string name="voice_correction_button_a11y">Transkript mit KI korrigieren</string>
@@ -1049,7 +1049,7 @@
     <string name="voice_provider_system">System</string>
     <string name="add_provider_subtitle_kimi">Kimi Coding Plan — mit Kimi-Konto anmelden</string>
     <string name="kimi_login_title">Mit Kimi Code anmelden</string>
-    <string name="kimi_login_instructions">Öffne die Bestätigungsseite und gib diesen Code ein, um Minis zu autorisieren:</string>
+    <string name="kimi_login_instructions">Öffne die Bestätigungsseite und gib diesen Code ein, um LeoPhoneAgent zu autorisieren:</string>
     <string name="kimi_login_copy_code">Code kopieren</string>
     <string name="kimi_login_open_verification">Bestätigungsseite öffnen</string>
     <string name="kimi_login_waiting">Warte auf Autorisierung…</string>

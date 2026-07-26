@@ -1,12 +1,12 @@
-package com.openminis.app.config.fields
+package com.leoyuan.leophoneagent.config.fields
 
 import android.content.SharedPreferences
-import com.openminis.app.config.ConfigAccess
-import com.openminis.app.config.ConfigError
-import com.openminis.app.config.ConfigField
-import com.openminis.app.config.ConfigRisk
-import com.openminis.app.config.ConfigSchema
-import com.openminis.app.config.ConfigValue
+import com.leoyuan.leophoneagent.config.ConfigAccess
+import com.leoyuan.leophoneagent.config.ConfigError
+import com.leoyuan.leophoneagent.config.ConfigField
+import com.leoyuan.leophoneagent.config.ConfigRisk
+import com.leoyuan.leophoneagent.config.ConfigSchema
+import com.leoyuan.leophoneagent.config.ConfigValue
 
 /**
  * Convenience wrappers for the most common backend (SharedPreferences).

@@ -3,7 +3,7 @@ import Foundation
 import UserNotifications
 
 /// Predefined tasks that Siri can invoke by name in a single utterance.
-/// e.g. "Minis analyze sleep" (or the same phrase pattern in the user's locale).
+/// e.g. "LeoPhoneAgent analyze sleep" (or the same phrase pattern in the user's locale).
 enum QuickTask: String, AppEnum {
     case analyzeSleep
     case healthReport
@@ -52,7 +52,7 @@ enum QuickTask: String, AppEnum {
 /// Runs a predefined quick task — enables single-utterance Siri invocation.
 struct QuickTaskIntent: AppIntent {
     static var title: LocalizedStringResource = "Quick Task"
-    static var description = IntentDescription("Runs a predefined Minis task like sleep analysis, weather check, or morning briefing.")
+    static var description = IntentDescription("Runs a predefined LeoPhoneAgent task like sleep analysis, weather check, or morning briefing.")
     static var openAppWhenRun = false
 
     @Parameter(title: "Task")
@@ -171,7 +171,7 @@ struct QuickTaskIntent: AppIntent {
         }
         ShortcutNotification.post(
             id: "shortcut-start-\(sid)",
-            title: "Minis: \(taskName)",
+            title: "LeoPhoneAgent: \(taskName)",
             body: "\(modelName) is working on it…",
             sessionId: sid
         )
@@ -189,7 +189,7 @@ struct QuickTaskIntent: AppIntent {
 
             ShortcutNotification.post(
                 id: "shortcut-done-\(sid)",
-                title: "Minis: \(taskName) Done",
+                title: "LeoPhoneAgent: \(taskName) Done",
                 body: "\(modelName): \(String(responseText.prefix(200)))",
                 sessionId: sid
             )
@@ -222,7 +222,7 @@ struct QuickTaskIntent: AppIntent {
 
             ShortcutNotification.post(
                 id: "shortcut-done-\(capturedSid)",
-                title: "Minis: \(capturedTaskName) Done",
+                title: "LeoPhoneAgent: \(capturedTaskName) Done",
                 body: "\(capturedModelName): \(summary)",
                 sessionId: capturedSid
             )

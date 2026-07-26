@@ -1,4 +1,4 @@
-package com.openminis.app.sandbox.offload
+package com.leoyuan.leophoneagent.sandbox.offload
 
 import android.Manifest
 import android.content.ContentUris
@@ -11,11 +11,11 @@ import android.os.Environment
 import android.provider.MediaStore
 import androidx.core.content.ContextCompat
 import androidx.exifinterface.media.ExifInterface
-import com.openminis.app.logging.AppLogger
-import com.openminis.app.offload.OffloadPermissionManager
-import com.openminis.app.sandbox.NativeOffloadHandler
-import com.openminis.app.sandbox.NativeOffloadRequest
-import com.openminis.app.sandbox.NativeOffloadResult
+import com.leoyuan.leophoneagent.logging.AppLogger
+import com.leoyuan.leophoneagent.offload.OffloadPermissionManager
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadHandler
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadRequest
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadResult
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
@@ -242,7 +242,7 @@ class PhotosOffloadHandler(private val context: Context) : NativeOffloadHandler 
                     OffloadPermissionManager.SettingsGateRequest(
                         id = "photos_media",
                         title = "Photos permission needed",
-                        message = "Minis needs media permission to read your photo library. Open Settings to allow it.",
+                        message = "LeoPhoneAgent needs media permission to read your photo library. Open Settings to allow it.",
                         settingsAction = android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                         requiresPackageUri = true,
                         positiveLabel = "Open Settings",
@@ -305,7 +305,7 @@ class PhotosOffloadHandler(private val context: Context) : NativeOffloadHandler 
                     OffloadPermissionManager.SettingsGateRequest(
                         id = "ACCESS_MEDIA_LOCATION",
                         title = "Photo location needed",
-                        message = "Minis needs photo-location permission to read GPS EXIF for the `near` query. Open Settings to allow it.",
+                        message = "LeoPhoneAgent needs photo-location permission to read GPS EXIF for the `near` query. Open Settings to allow it.",
                         settingsAction = android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                         requiresPackageUri = true,
                         positiveLabel = "Open Settings",

@@ -1,6 +1,6 @@
-package com.openminis.app.ui.terminal
+package com.leoyuan.leophoneagent.ui.terminal
 
-import com.openminis.app.R
+import com.leoyuan.leophoneagent.R
 import androidx.compose.ui.res.stringResource
 
 import androidx.compose.foundation.background
@@ -58,12 +58,12 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.openminis.app.sandbox.TerminalSession
-import com.openminis.app.terminal.MinisOpenUrlBroker
-import com.openminis.app.ui.terminal.canvas.TerminalNativeViewCompose
-import com.openminis.app.ui.terminal.canvas.TerminalInputView
-import com.openminis.app.ui.terminal.canvas.rememberTerminalInputController
-import com.openminis.app.ui.terminal.emulator.TerminalEmulator
+import com.leoyuan.leophoneagent.sandbox.TerminalSession
+import com.leoyuan.leophoneagent.terminal.MinisOpenUrlBroker
+import com.leoyuan.leophoneagent.ui.terminal.canvas.TerminalNativeViewCompose
+import com.leoyuan.leophoneagent.ui.terminal.canvas.TerminalInputView
+import com.leoyuan.leophoneagent.ui.terminal.canvas.rememberTerminalInputController
+import com.leoyuan.leophoneagent.ui.terminal.emulator.TerminalEmulator
 import kotlinx.coroutines.launch
 
 // iOS-matched palette
@@ -151,7 +151,7 @@ fun TerminalScreen(
     // OSC 1337 MinisOpenURL emitted by `/usr/local/bin/minis-open` is parsed
     // by TerminalEmulator and forwarded to MinisOpenUrlBroker. From the
     // standalone terminal we only route web schemes (http(s)/about) into an
-    // in-app WebView preview; minis://-style chat resources need ChatScreen's
+    // in-app WebView preview; leophoneagent://-style chat resources need ChatScreen's
     // resolver and aren't reachable here, so we still consume them to avoid
     // leaking a stale pendingUrl back to chat on next attach.
     var previewUrl by remember { mutableStateOf<String?>(null) }
@@ -280,7 +280,7 @@ fun TerminalScreen(
         }
 
         previewUrl?.let { url ->
-            com.openminis.app.ui.components.UrlPreviewSheet(
+            com.leoyuan.leophoneagent.ui.components.UrlPreviewSheet(
                 url = url,
                 onDismiss = { previewUrl = null },
             )

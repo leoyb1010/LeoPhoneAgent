@@ -11,7 +11,7 @@
 #include "kernel/native_offload.h"
 #include <unistd.h>
 
-#import "Minis-Swift.h"
+#import "LeoPhoneAgent-Swift.h"
 
 static NSString *const TOOL_NAME = @"minis-model-use";
 
@@ -46,7 +46,7 @@ static NSString *const HELP_TEXT =
      "  --prompt-file <path>           Read user-message text from file (plain text, not JSON).\n"
      "  --output <path>                Path to write output (default: stdout)\n"
      "  --system <text>                Custom system prompt. When omitted a short default is used\n"
-     "                                 that identifies the caller as Minis and states the task is a\n"
+     "                                 that identifies the caller as LeoPhoneAgent and states the task is a\n"
      "                                 sub-call from the in-app agent loop.\n"
      "  --system-file <path>           Read system prompt from file\n"
      "  --max-tokens <n>               Max output tokens (default: 4096)\n"
@@ -350,13 +350,13 @@ static int cmd_run(int argc, char **argv, int stdin_fd, int stdout_fd, int stder
     }
 
     // If caller didn't pass --system / --system-file, inject a short default
-    // identifying the caller as Minis. Some Responses-API providers (Codex
+    // identifying the caller as LeoPhoneAgent. Some Responses-API providers (Codex
     // proxies, etc.) reject requests without an instructions block, and even
     // when accepted a generic identity helps the sub-model orient itself when
     // invoked from the parent agent loop. Plain explicit empty `--system ""`
     // is preserved (no default).
     if (!systemPrompt) {
-        systemPrompt = @"You are Minis, an on-device AI assistant running on iOS. "
+        systemPrompt = @"You are LeoPhoneAgent, an on-device AI assistant running on iOS. "
                        @"You are being invoked as a sub-call from the parent agent loop "
                        @"to handle a focused task — answer the user's request directly and "
                        @"concisely, without restating the request or wrapping your answer in "

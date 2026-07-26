@@ -1,4 +1,4 @@
-package com.openminis.app.offload
+package com.leoyuan.leophoneagent.offload
 
 import android.app.AlarmManager
 import android.app.NotificationChannel
@@ -7,7 +7,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.logging.AppLogger
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Calendar
@@ -27,7 +27,7 @@ class AlarmOffloadManager(private val context: Context) {
         private const val PREFS_NAME = "minis_alarms_prefs"
         private const val KEY_ALARMS = "alarms_json"
         const val CHANNEL_ID = "minis_alarms"
-        private const val CHANNEL_NAME = "Minis Alarms & Timers"
+        private const val CHANNEL_NAME = "LeoPhoneAgent Alarms & Timers"
 
         const val EXTRA_ALARM_ID = "alarm_id"
         const val EXTRA_ALARM_LABEL = "alarm_label"
@@ -49,7 +49,7 @@ class AlarmOffloadManager(private val context: Context) {
                 CHANNEL_NAME,
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Alarms and timers scheduled by the Minis agent"
+                description = "Alarms and timers scheduled by the LeoPhoneAgent agent"
                 enableVibration(true)
             }
             notificationManager.createNotificationChannel(channel)

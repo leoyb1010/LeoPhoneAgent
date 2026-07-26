@@ -1,4 +1,4 @@
-package com.openminis.app.ui.settings
+package com.leoyuan.leophoneagent.ui.settings
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -30,9 +30,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
-import com.openminis.app.BuildConfig
-import com.openminis.app.R
-import com.openminis.app.ui.components.openExternalUrl
+import com.leoyuan.leophoneagent.BuildConfig
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.ui.components.openExternalUrl
 
 @Composable
 fun AboutScreen(onBack: () -> Unit) {

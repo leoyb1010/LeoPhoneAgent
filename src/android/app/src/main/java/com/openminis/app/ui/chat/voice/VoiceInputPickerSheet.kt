@@ -1,4 +1,4 @@
-package com.openminis.app.ui.chat.voice
+package com.leoyuan.leophoneagent.ui.chat.voice
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -40,16 +40,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.openminis.app.R
-import com.openminis.app.data.model.ModelEntry
-import com.openminis.app.data.model.SystemVoiceEntries
-import com.openminis.app.data.model.SystemVoiceIds
-import com.openminis.app.data.model.hasAudioInput
-import com.openminis.app.data.repository.ProviderRepository
-import com.openminis.app.ui.components.MinisTextButton
-import com.openminis.app.ui.components.QuickTestSheet
-import com.openminis.app.ui.components.modalityBadges
-import com.openminis.app.ui.components.providerDotColor
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.data.model.ModelEntry
+import com.leoyuan.leophoneagent.data.model.SystemVoiceEntries
+import com.leoyuan.leophoneagent.data.model.SystemVoiceIds
+import com.leoyuan.leophoneagent.data.model.hasAudioInput
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.ui.components.QuickTestSheet
+import com.leoyuan.leophoneagent.ui.components.modalityBadges
+import com.leoyuan.leophoneagent.ui.components.providerDotColor
 
 /**
  * [T-android-voice-panel] Single-select voice INPUT engine picker — Android

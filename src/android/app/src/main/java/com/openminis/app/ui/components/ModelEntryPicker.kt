@@ -1,4 +1,4 @@
-package com.openminis.app.ui.components
+package com.leoyuan.leophoneagent.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -34,17 +34,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import com.openminis.app.R
+import com.leoyuan.leophoneagent.R
 import androidx.compose.ui.unit.dp
 import androidx.annotation.StringRes
-import com.openminis.app.data.model.LLMModel
-import com.openminis.app.data.model.ModelEntry
-import com.openminis.app.data.model.ProviderInstance
-import com.openminis.app.data.model.ProviderType
-import com.openminis.app.data.model.SystemVoiceEntries
-import com.openminis.app.data.model.hasAudioInput
-import com.openminis.app.data.model.hasAudioOutput
-import com.openminis.app.data.model.normalizeModalities
+import com.leoyuan.leophoneagent.data.model.LLMModel
+import com.leoyuan.leophoneagent.data.model.ModelEntry
+import com.leoyuan.leophoneagent.data.model.ProviderInstance
+import com.leoyuan.leophoneagent.data.model.ProviderType
+import com.leoyuan.leophoneagent.data.model.SystemVoiceEntries
+import com.leoyuan.leophoneagent.data.model.hasAudioInput
+import com.leoyuan.leophoneagent.data.model.hasAudioOutput
+import com.leoyuan.leophoneagent.data.model.normalizeModalities
 
 /**
  * [T-android-provider-voice] First-class modality scoping for the shared

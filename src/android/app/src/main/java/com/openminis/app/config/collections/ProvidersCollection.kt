@@ -1,19 +1,19 @@
-package com.openminis.app.config.collections
+package com.leoyuan.leophoneagent.config.collections
 
-import com.openminis.app.config.ConfigCollection
-import com.openminis.app.config.ConfigError
-import com.openminis.app.config.ConfigField
-import com.openminis.app.config.ConfigRisk
-import com.openminis.app.config.ConfigSchema
-import com.openminis.app.config.ConfigValue
-import com.openminis.app.config.fields.ClosureField
-import com.openminis.app.config.fields.HiddenField
-import com.openminis.app.config.fields.ReadOnlyField
-import com.openminis.app.data.model.ProviderCredential
-import com.openminis.app.data.model.ProviderInstance
-import com.openminis.app.data.model.ProviderType
-import com.openminis.app.data.repository.EnvVarRepository
-import com.openminis.app.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.config.ConfigCollection
+import com.leoyuan.leophoneagent.config.ConfigError
+import com.leoyuan.leophoneagent.config.ConfigField
+import com.leoyuan.leophoneagent.config.ConfigRisk
+import com.leoyuan.leophoneagent.config.ConfigSchema
+import com.leoyuan.leophoneagent.config.ConfigValue
+import com.leoyuan.leophoneagent.config.fields.ClosureField
+import com.leoyuan.leophoneagent.config.fields.HiddenField
+import com.leoyuan.leophoneagent.config.fields.ReadOnlyField
+import com.leoyuan.leophoneagent.data.model.ProviderCredential
+import com.leoyuan.leophoneagent.data.model.ProviderInstance
+import com.leoyuan.leophoneagent.data.model.ProviderType
+import com.leoyuan.leophoneagent.data.repository.EnvVarRepository
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
 
 /**
  * Exposes `ProviderInstance` fields under `providers.<id>.…`. Mirrors
@@ -163,7 +163,7 @@ class ProvidersCollection(
         val resolved = envVars.getValue(key)
             ?: throw ConfigError.InvalidValue(
                 "$fieldName references env var \$\$$key, but no such env var exists. " +
-                    "Create it first via [Set $key](minis://settings/environments?create_key=$key&create_value=)."
+                    "Create it first via [Set $key](leophoneagent://settings/environments?create_key=$key&create_value=)."
             )
         if (resolved.isEmpty()) {
             throw ConfigError.InvalidValue("$fieldName references env var \$\$$key but its value is empty.")
@@ -314,7 +314,7 @@ class ProvidersCollection(
     /**
      * [T-android-minisconfig-custom-useragent] Per-provider User-Agent
      * override. Empty string clears the override and falls back to the
-     * branded default (Minis/<version> (Android <release>; <model>) — see
+     * branded default (LeoPhoneAgent/<version> (Android <release>; <model>) — see
      * MinisUserAgent.DEFAULT) at request build time. Cloned from
      * [customBaseURL] in shape; the underlying field on ProviderInstance
      * has been wired through ProviderFactory + applyUserAgentOverride

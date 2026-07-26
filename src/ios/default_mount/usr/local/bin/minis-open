@@ -7,8 +7,8 @@
 # host parses and routes to the appropriate built-in viewer:
 #
 #   * http:// https:// about:*                 → WKWebView link preview
-#   * /var/minis/<host>/<path>  (absolute)     → converted to minis://<host>/<path>
-#     minis://attachments/...  minis://workspace/...  minis://shared/... etc.
+#   * /var/minis/<host>/<path>  (absolute)     → converted to leophoneagent://<host>/<path>
+#     leophoneagent://attachments/...  leophoneagent://workspace/...  leophoneagent://shared/... etc.
 #                                              → routed by extension:
 #                                                 images → image viewer
 #                                                 markdown → markdown preview
@@ -37,15 +37,15 @@ emit() {
     case "$1" in
         http://*|https://*|about:*)
             emit_marker "$1"
-            printf 'Opened in Minis browser: %s\n' "$1"
+            printf 'Opened in LeoPhoneAgent browser: %s\n' "$1"
             ;;
-        minis://*)
-            # Already a minis:// URL — pass through.
+        leophoneagent://*)
+            # Already a leophoneagent:// URL — pass through.
             emit_marker "$1"
-            printf 'Opened in Minis preview: %s\n' "$1"
+            printf 'Opened in LeoPhoneAgent preview: %s\n' "$1"
             ;;
         /var/minis/*)
-            # Convert /var/minis/<host>/<path> → minis://<host>/<path>
+            # Convert /var/minis/<host>/<path> → leophoneagent://<host>/<path>
             # so the host can resolve it to the real APFS location and pick
             # the right in-app preview by extension.
             rel="${1#/var/minis/}"
@@ -53,8 +53,8 @@ emit() {
                 */*)
                     host="${rel%%/*}"
                     path="${rel#*/}"
-                    emit_marker "minis://$host/$path"
-                    printf 'Opened in Minis preview: minis://%s/%s\n' "$host" "$path"
+                    emit_marker "leophoneagent://$host/$path"
+                    printf 'Opened in LeoPhoneAgent preview: leophoneagent://%s/%s\n' "$host" "$path"
                     ;;
                 *)
                     # e.g. /var/minis/workspace with no trailing path — a bare
@@ -75,7 +75,7 @@ emit() {
 
 if [ $# -eq 0 ]; then
     echo "Usage: minis-open <url-or-path>" >&2
-    echo "  url-or-path: http(s):// URL, minis:// URL, or /var/minis/<host>/<path>" >&2
+    echo "  url-or-path: http(s):// URL, leophoneagent:// URL, or /var/minis/<host>/<path>" >&2
     exit 1
 fi
 

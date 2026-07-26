@@ -1,6 +1,6 @@
-package com.openminis.app.ui.sandbox
+package com.leoyuan.leophoneagent.ui.sandbox
 
-import com.openminis.app.R
+import com.leoyuan.leophoneagent.R
 
 import android.content.Context
 import android.content.SharedPreferences

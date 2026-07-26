@@ -1,14 +1,14 @@
-package com.openminis.app.config
+package com.leoyuan.leophoneagent.config
 
-import com.openminis.app.config.audit.ConfigAuditActor
-import com.openminis.app.config.audit.ConfigAuditEntry
-import com.openminis.app.config.audit.ConfigAuditLog
-import com.openminis.app.config.audit.ConfigAuditStatus
-import com.openminis.app.config.confirm.ConfigConfirmationGate
-import com.openminis.app.config.confirm.ConfirmOutcome
-import com.openminis.app.config.confirm.PendingConfigChange
-import com.openminis.app.config.confirm.PendingConfigChangeItem
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.config.audit.ConfigAuditActor
+import com.leoyuan.leophoneagent.config.audit.ConfigAuditEntry
+import com.leoyuan.leophoneagent.config.audit.ConfigAuditLog
+import com.leoyuan.leophoneagent.config.audit.ConfigAuditStatus
+import com.leoyuan.leophoneagent.config.confirm.ConfigConfirmationGate
+import com.leoyuan.leophoneagent.config.confirm.ConfirmOutcome
+import com.leoyuan.leophoneagent.config.confirm.PendingConfigChange
+import com.leoyuan.leophoneagent.config.confirm.PendingConfigChangeItem
+import com.leoyuan.leophoneagent.logging.AppLogger
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
@@ -24,7 +24,7 @@ import java.util.UUID
  * log). Mirrors iOS `ConfigOffloadBridge.swift`.
  *
  * Returns plain [JSONObject] envelopes so the handler just wraps them
- * in [com.openminis.app.sandbox.NativeOffloadResult]. The handler
+ * in [com.leoyuan.leophoneagent.sandbox.NativeOffloadResult]. The handler
  * thread is on a background pool, so write paths block via runBlocking
  * on the gate suspend — matching the iOS semaphore-on-detached-Task
  * pattern.
@@ -63,7 +63,7 @@ object ConfigBridge {
         put(
             "user_message",
             "I tried to change a setting but minis-config is currently disabled. " +
-                "You can enable it at [Settings → Permissions](minis://settings/permissions), " +
+                "You can enable it at [Settings → Permissions](leophoneagent://settings/permissions), " +
                 "then ask me again. Or change the setting yourself directly through the relevant Settings screen."
         )
     }
@@ -731,8 +731,8 @@ object ConfigBridge {
                         put("ok", true)
                         put("applied", applied)
                         put("audit_ids", auditIds)
-                        put("audit_url", "minis://settings/logs?tab=config-audit")
-                        put("user_message", "Settings updated. Review or revert at [Logs → Config Changes](minis://settings/logs?tab=config-audit).")
+                        put("audit_url", "leophoneagent://settings/logs?tab=config-audit")
+                        put("user_message", "Settings updated. Review or revert at [Logs → Config Changes](leophoneagent://settings/logs?tab=config-audit).")
                     }
                 }
             }

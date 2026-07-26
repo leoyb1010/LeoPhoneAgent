@@ -14,7 +14,7 @@
  * (Android's OverScroller would re-introduce that — out of scope for
  * part-2; users still get manual drag scrollback).
  */
-package com.openminis.app.ui.terminal.canvas
+package com.leoyuan.leophoneagent.ui.terminal.canvas
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -33,12 +33,12 @@ import android.view.View
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
-import com.openminis.app.ui.terminal.emulator.CursorShape
-import com.openminis.app.ui.terminal.emulator.TerminalCell
-import com.openminis.app.ui.terminal.emulator.TerminalEmulator
-import com.openminis.app.ui.terminal.emulator.TerminalPalette
-import com.openminis.app.ui.terminal.emulator.TextAttributes
-import com.openminis.app.ui.terminal.rememberJetBrainsMonoTypeface
+import com.leoyuan.leophoneagent.ui.terminal.emulator.CursorShape
+import com.leoyuan.leophoneagent.ui.terminal.emulator.TerminalCell
+import com.leoyuan.leophoneagent.ui.terminal.emulator.TerminalEmulator
+import com.leoyuan.leophoneagent.ui.terminal.emulator.TerminalPalette
+import com.leoyuan.leophoneagent.ui.terminal.emulator.TextAttributes
+import com.leoyuan.leophoneagent.ui.terminal.rememberJetBrainsMonoTypeface
 
 /**
  * Compose wrapper around [TerminalNativeView]. Drop-in replacement for
@@ -282,7 +282,7 @@ class TerminalNativeView @JvmOverloads constructor(
                             val text = em.getSelectedText(sel[0], sel[1], sel[2], sel[3])
                             if (text.isNotEmpty()) {
                                 val cb = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                cb.setPrimaryClip(ClipData.newPlainText("Minis Shell", text))
+                                cb.setPrimaryClip(ClipData.newPlainText("LeoPhoneAgent Shell", text))
                             }
                         }
                         mode.finish()

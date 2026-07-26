@@ -1,4 +1,4 @@
-package com.openminis.app.ui.terminal.emulator
+package com.leoyuan.leophoneagent.ui.terminal.emulator
 
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.State
@@ -388,7 +388,7 @@ class TerminalEmulator(cols: Int = 80, rows: Int = 24) {
         if (eq <= 0 || payload.substring(0, eq) != "MinisOpenURL") return
         val urlString = payload.substring(eq + 1)
         if (urlString.isEmpty()) return
-        com.openminis.app.terminal.MinisOpenUrlBroker.offer(urlString)
+        com.leoyuan.leophoneagent.terminal.MinisOpenUrlBroker.offer(urlString)
     }
 
     private fun switchBuffer(toAlternate: Boolean) {

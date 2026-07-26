@@ -1,14 +1,14 @@
-package com.openminis.app.sandbox.offload
+package com.leoyuan.leophoneagent.sandbox.offload
 
 import android.content.Context
 import android.os.Build
 import android.speech.tts.TextToSpeech
 import android.speech.tts.Voice
 import android.util.Log
-import com.openminis.app.sandbox.NativeOffloadHandler
-import com.openminis.app.sandbox.NativeOffloadRequest
-import com.openminis.app.sandbox.NativeOffloadResult
-import com.openminis.app.speech.TextToSpeechManager
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadHandler
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadRequest
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadResult
+import com.leoyuan.leophoneagent.speech.TextToSpeechManager
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Locale

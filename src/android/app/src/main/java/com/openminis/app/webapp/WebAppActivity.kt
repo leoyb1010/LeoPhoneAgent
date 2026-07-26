@@ -1,4 +1,4 @@
-package com.openminis.app.webapp
+package com.leoyuan.leophoneagent.webapp
 
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
@@ -65,10 +65,10 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.webkit.WebViewAssetLoader
-import com.openminis.app.MainActivity
-import com.openminis.app.MinisApp
-import com.openminis.app.R
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.MainActivity
+import com.leoyuan.leophoneagent.MinisApp
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.logging.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -102,7 +102,7 @@ class WebAppActivity : ComponentActivity() {
 
     // T-n01-andmenu-l10n: pre-Tiramisu locale override (see MainActivity).
     override fun attachBaseContext(newBase: android.content.Context) {
-        super.attachBaseContext(com.openminis.app.i18n.LocaleWrap.wrap(newBase))
+        super.attachBaseContext(com.leoyuan.leophoneagent.i18n.LocaleWrap.wrap(newBase))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -205,7 +205,7 @@ class WebAppActivity : ComponentActivity() {
 
     /**
      * T-pwa-3: replaces the prior toast-and-finish with an inline error
-     * screen offering an "Open in Minis" escape hatch.
+     * screen offering an "Open in LeoPhoneAgent" escape hatch.
      */
     @OptIn(ExperimentalMaterial3Api::class)
     private fun renderSourceMissing(sourceSessionId: String?) {
@@ -545,7 +545,7 @@ class WebAppActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_SHORTCUT_ID = "webapp_shortcut_id"
-        const val ACTION_OPEN_WEBAPP = "com.openminis.app.action.OPEN_WEBAPP"
+        const val ACTION_OPEN_WEBAPP = "com.leoyuan.leophoneagent.action.OPEN_WEBAPP"
         const val EXTRA_TARGET_SESSION_ID = "target_session_id"
         private const val ASSET_LOADER_HOST = "appassets.androidplatform.net"
         private const val AUTO_HIDE_MS = 4000L

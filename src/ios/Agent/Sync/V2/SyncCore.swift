@@ -251,7 +251,7 @@ final class SyncCore {
                 }
             }
         }
-        m.start(queue: DispatchQueue(label: "com.openminis.sync.pathMonitor"))
+        m.start(queue: DispatchQueue(label: "com.leoyuan.leophoneagent.sync.pathMonitor"))
         pathMonitor = m
     }
 

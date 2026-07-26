@@ -1,4 +1,4 @@
-package com.openminis.app.notification
+package com.leoyuan.leophoneagent.notification
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -9,11 +9,11 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import com.openminis.app.MainActivity
-import com.openminis.app.R
-import com.openminis.app.config.confirm.PendingConfigChange
-import com.openminis.app.data.repository.BackgroundSettingsRepository
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.MainActivity
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.config.confirm.PendingConfigChange
+import com.leoyuan.leophoneagent.data.repository.BackgroundSettingsRepository
+import com.leoyuan.leophoneagent.logging.AppLogger
 
 /**
  * [T-android-config-confirm-timeout] Posts a local notification when a

@@ -477,7 +477,7 @@ final class GeminiProvider: LLMProvider {
         } else {
             // Direct REST (api-key / manual-token) path sets no UA otherwise, so
             // URLSession would send its build-number default. Use the app default
-            // (Minis/<marketing>) instead. Never overrides the Cloud Code UA above.
+            // (LeoPhoneAgent/<marketing>) instead. Never overrides the Cloud Code UA above.
             request.setValue(MinisUserAgent.default, forHTTPHeaderField: "User-Agent")
         }
 

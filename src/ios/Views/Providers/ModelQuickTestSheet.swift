@@ -10,7 +10,7 @@ private let qtLog = AppLogger(category: "QuickTest")
 /// A model can have several modalities (e.g. text output + image generation +
 /// image input). We run up to the top-3 most distinctive applicable tests
 /// CONCURRENTLY and lay their results out side by side (stacked cards), each with
-/// its own running / success / failure state. All prompts are short + Minis-themed.
+/// its own running / success / failure state. All prompts are short + LeoPhoneAgent-themed.
 struct ModelQuickTestSheet: View {
     let entry: ModelEntry
     @Environment(\.dismiss) private var dismiss
@@ -200,7 +200,7 @@ final class TestSession: ObservableObject {
             let provider = try await LLMProviderFactory.makeProvider(for: entry)
             let messages = [LLMMessage(
                 role: .user,
-                content: "Hi! I'm setting you up in Minis. Say hello back in one short, friendly sentence.")]
+                content: "Hi! I'm setting you up in LeoPhoneAgent. Say hello back in one short, friendly sentence.")]
             let resp = try await provider.sendMessage(
                 messages: messages, systemPrompt: nil, maxTokens: 128, temperature: nil)
             let text = resp.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -212,7 +212,7 @@ final class TestSession: ObservableObject {
                 throw QuickTestError.unsupported(String(localized: "This model's provider doesn't support image generation via Quick Test."))
             }
             let resp = try await openAI.generateImage(
-                prompt: "A friendly cute mascot logo for an app called Minis, minimalist, centered, soft colors",
+                prompt: "A friendly cute mascot logo for an app called LeoPhoneAgent, minimalist, centered, soft colors",
                 n: 1, size: "1024x1024", quality: nil)
             guard let img = resp.mediaAttachments.first(where: { $0.type == .image }) else {
                 throw QuickTestError.noOutput(String(localized: "No image was returned."))
@@ -241,7 +241,7 @@ final class TestSession: ObservableObject {
                 throw QuickTestError.unsupported(String(localized: "This model can't be used for speech output."))
             }
             let req = VoiceOutputRequest(
-                input: "Hi! This is Minis testing text to speech.",
+                input: "Hi! This is LeoPhoneAgent testing text to speech.",
                 model: entry.model.id, voice: entry.model.id, speed: nil, responseFormat: .mp3)
             let data = try await voice.synthesize(req)
             guard !data.isEmpty else { throw QuickTestError.noOutput(String(localized: "No audio was returned.")) }
@@ -252,7 +252,7 @@ final class TestSession: ObservableObject {
                   let voice = VoiceProviderFactory.make(for: instance), voice.supportsVoiceInput else {
                 throw QuickTestError.unsupported(String(localized: "This model can't be used for transcription."))
             }
-            let spoken = "Hello from Minis, testing speech to text."
+            let spoken = "Hello from LeoPhoneAgent, testing speech to text."
             let wav = try await synthesizeTestWAV(spoken)
             let req = VoiceInputRequest(audioData: wav, model: entry.model.id, language: "en", responseFormat: .json, prompt: nil)
             let resp = try await voice.transcribe(req)

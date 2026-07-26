@@ -1,11 +1,11 @@
-package com.openminis.app.tools
+package com.leoyuan.leophoneagent.tools
 
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import com.openminis.app.data.model.AgentToolDefinition
-import com.openminis.app.data.model.AgentToolParam
-import com.openminis.app.sandbox.PRootKernel
+import com.leoyuan.leophoneagent.data.model.AgentToolDefinition
+import com.leoyuan.leophoneagent.data.model.AgentToolParam
+import com.leoyuan.leophoneagent.sandbox.PRootKernel
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 
@@ -17,7 +17,7 @@ object ReadImageTool {
         description = "Read an image file from the Linux filesystem and return it for visual analysis. Supports PNG, JPEG, GIF, WEBP, and other common image formats. Use this to inspect generated charts, downloaded images, screenshots, or any visual output. The image is returned directly for your analysis along with metadata (dimensions, file size).",
         parameters = mapOf(
             "tool_title" to AgentToolParam("string", "A concise 5-10 word summary of what this tool call does, shown to the user (e.g. 'View generated bar chart', 'Inspect downloaded screenshot'). Use the same language as the user."),
-            "path" to AgentToolParam("string", "Linux path (e.g. /var/minis/attachments/chart.png) or minis:// URL (e.g. minis://attachments/chart.png)"),
+            "path" to AgentToolParam("string", "Linux path (e.g. /var/minis/attachments/chart.png) or leophoneagent:// URL (e.g. leophoneagent://attachments/chart.png)"),
         ),
         required = listOf("tool_title", "path"),
         propertyOrdering = listOf("tool_title", "path"),
@@ -48,8 +48,8 @@ object ReadImageTool {
                 return ToolExecutionResult("Error: 'path' is required", false, toolTitle = toolTitle)
             }
 
-            val path = if (rawPath.startsWith("minis://")) {
-                "/var/minis/" + java.net.URLDecoder.decode(rawPath.removePrefix("minis://"), "UTF-8")
+            val path = if (rawPath.startsWith("leophoneagent://")) {
+                "/var/minis/" + java.net.URLDecoder.decode(rawPath.removePrefix("leophoneagent://"), "UTF-8")
             } else rawPath
 
             val file = (

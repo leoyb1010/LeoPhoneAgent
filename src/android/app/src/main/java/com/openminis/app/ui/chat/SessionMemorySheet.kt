@@ -1,4 +1,4 @@
-package com.openminis.app.ui.chat
+package com.leoyuan.leophoneagent.ui.chat
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -38,15 +38,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.content.Context
-import com.openminis.app.R
-import com.openminis.app.data.repository.MemoryRepository
-import com.openminis.app.ui.settings.SettingsSection
-import com.openminis.app.ui.settings.SettingsValueRow
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.data.repository.MemoryRepository
+import com.leoyuan.leophoneagent.ui.settings.SettingsSection
+import com.leoyuan.leophoneagent.ui.settings.SettingsValueRow
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import com.openminis.app.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
 
 /**
  * Bottom sheet showing memory state for the current session.
@@ -163,7 +163,7 @@ fun SessionMemorySheet(
                             // so refresh the cache manually to keep readers
                             // in sync after an in-sheet edit.
                             if (m.name == "SOUL.md") {
-                                com.openminis.app.agent.SoulStore.refreshCache(context)
+                                com.leoyuan.leophoneagent.agent.SoulStore.refreshCache(context)
                             }
                             mode = MemorySheetMode.AutoFile(m.name, editedContent, m.editable)
                             isEditing = false

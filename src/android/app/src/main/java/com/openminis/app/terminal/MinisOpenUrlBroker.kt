@@ -1,4 +1,4 @@
-package com.openminis.app.terminal
+package com.leoyuan.leophoneagent.terminal
 
 import android.net.Uri
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,8 +12,8 @@ import kotlinx.coroutines.flow.asStateFlow
  * existing link-tap handler, which in turn dispatches:
  *
  *   * `http(s)://` / `about:`  → `UrlPreviewSheet` via `LocalInAppBrowserLauncher`
- *   * `minis://<deep-link>`    → `DeepLinkHandler`
- *   * `minis://<host>/<path>`  → in-app file preview by extension
+ *   * `leophoneagent://<deep-link>`    → `DeepLinkHandler`
+ *   * `leophoneagent://<host>/<path>`  → in-app file preview by extension
  *
  * Whichever observer handles the URL calls [consume] so sibling observers
  * skip it. This mirrors iOS `MinisOpenURLBroker`.
@@ -55,7 +55,7 @@ object MinisOpenUrlBroker {
      */
     fun isSupportedScheme(scheme: String?): Boolean {
         val s = scheme?.lowercase() ?: return false
-        return s == "http" || s == "https" || s == "about" || s == "minis"
+        return s == "http" || s == "https" || s == "about" || s == "leophoneagent"
     }
 
     /**

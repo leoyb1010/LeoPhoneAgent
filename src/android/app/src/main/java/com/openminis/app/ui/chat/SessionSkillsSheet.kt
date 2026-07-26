@@ -1,4 +1,4 @@
-package com.openminis.app.ui.chat
+package com.leoyuan.leophoneagent.ui.chat
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,12 +30,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.openminis.app.R
-import com.openminis.app.data.repository.SkillRepository
-import com.openminis.app.ui.components.DialogTextField
-import com.openminis.app.ui.settings.SettingsSection
-import com.openminis.app.ui.settings.SkillRowItem
-import com.openminis.app.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.data.repository.SkillRepository
+import com.leoyuan.leophoneagent.ui.components.DialogTextField
+import com.leoyuan.leophoneagent.ui.settings.SettingsSection
+import com.leoyuan.leophoneagent.ui.settings.SkillRowItem
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
 
 /**
  * Bottom sheet showing all skills with per-session enable/disable toggles.

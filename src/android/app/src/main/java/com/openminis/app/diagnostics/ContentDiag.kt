@@ -1,4 +1,4 @@
-package com.openminis.app.diagnostics
+package com.leoyuan.leophoneagent.diagnostics
 
 import java.util.concurrent.atomic.AtomicReference
 

@@ -1,4 +1,4 @@
-package com.openminis.app.provider
+package com.leoyuan.leophoneagent.provider
 
 import org.json.JSONObject
 

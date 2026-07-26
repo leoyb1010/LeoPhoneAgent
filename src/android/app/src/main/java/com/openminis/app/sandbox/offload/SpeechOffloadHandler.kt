@@ -1,4 +1,4 @@
-package com.openminis.app.sandbox.offload
+package com.leoyuan.leophoneagent.sandbox.offload
 
 import android.Manifest
 import android.content.BroadcastReceiver
@@ -14,12 +14,12 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import androidx.core.content.ContextCompat
-import com.openminis.app.logging.AppLogger
-import com.openminis.app.offload.OffloadPermissionManager
-import com.openminis.app.sandbox.NativeOffloadHandler
-import com.openminis.app.sandbox.NativeOffloadRequest
-import com.openminis.app.sandbox.NativeOffloadResult
-import com.openminis.app.sandbox.PRootKernel
+import com.leoyuan.leophoneagent.logging.AppLogger
+import com.leoyuan.leophoneagent.offload.OffloadPermissionManager
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadHandler
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadRequest
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadResult
+import com.leoyuan.leophoneagent.sandbox.PRootKernel
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
@@ -265,7 +265,7 @@ class SpeechOffloadHandler(private val context: Context) : NativeOffloadHandler 
                     OffloadPermissionManager.SettingsGateRequest(
                         id = Manifest.permission.RECORD_AUDIO,
                         title = "Microphone permission needed",
-                        message = "Minis needs microphone permission to transcribe speech. Open Settings to allow it.",
+                        message = "LeoPhoneAgent needs microphone permission to transcribe speech. Open Settings to allow it.",
                         settingsAction = android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                         requiresPackageUri = true,
                         positiveLabel = "Open Settings",

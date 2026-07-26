@@ -1,4 +1,4 @@
-package com.openminis.app
+package com.leoyuan.leophoneagent
 
 import android.app.LocaleManager
 import android.content.Intent
@@ -25,29 +25,29 @@ import androidx.compose.runtime.setValue
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import com.openminis.app.offload.OffloadPermissionManager
+import com.leoyuan.leophoneagent.offload.OffloadPermissionManager
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
-import com.openminis.app.deeplink.DeepLinkAction
-import com.openminis.app.deeplink.DeepLinkCoordinator
-import com.openminis.app.deeplink.DeepLinkHandler
-import com.openminis.app.logging.AppLogger
-import com.openminis.app.service.SessionActivityTracker
-import com.openminis.app.ui.navigation.AppNavigation
-import com.openminis.app.ui.navigation.Routes
-import com.openminis.app.ui.navigation.safeNavigate
-import com.openminis.app.ui.settings.KEY_FONT_APP_BASE
-import com.openminis.app.ui.settings.KEY_KEEP_SCREEN_AWAKE
-import com.openminis.app.ui.settings.KEY_LANGUAGE
-import com.openminis.app.ui.settings.KEY_LAUNCH_SESSION
-import com.openminis.app.ui.settings.KEY_THEME_MODE
-import com.openminis.app.ui.settings.PREF_APPEARANCE
-import com.openminis.app.ui.settings.getAppearancePrefs
-import com.openminis.app.ui.settings.fontScaleForLevel
-import com.openminis.app.ui.settings.keepScreenAwakeEnabled
-import com.openminis.app.ui.theme.MinisTheme
+import com.leoyuan.leophoneagent.deeplink.DeepLinkAction
+import com.leoyuan.leophoneagent.deeplink.DeepLinkCoordinator
+import com.leoyuan.leophoneagent.deeplink.DeepLinkHandler
+import com.leoyuan.leophoneagent.logging.AppLogger
+import com.leoyuan.leophoneagent.service.SessionActivityTracker
+import com.leoyuan.leophoneagent.ui.navigation.AppNavigation
+import com.leoyuan.leophoneagent.ui.navigation.Routes
+import com.leoyuan.leophoneagent.ui.navigation.safeNavigate
+import com.leoyuan.leophoneagent.ui.settings.KEY_FONT_APP_BASE
+import com.leoyuan.leophoneagent.ui.settings.KEY_KEEP_SCREEN_AWAKE
+import com.leoyuan.leophoneagent.ui.settings.KEY_LANGUAGE
+import com.leoyuan.leophoneagent.ui.settings.KEY_LAUNCH_SESSION
+import com.leoyuan.leophoneagent.ui.settings.KEY_THEME_MODE
+import com.leoyuan.leophoneagent.ui.settings.PREF_APPEARANCE
+import com.leoyuan.leophoneagent.ui.settings.getAppearancePrefs
+import com.leoyuan.leophoneagent.ui.settings.fontScaleForLevel
+import com.leoyuan.leophoneagent.ui.settings.keepScreenAwakeEnabled
+import com.leoyuan.leophoneagent.ui.theme.MinisTheme
 
 private const val KEY_CURRENT_CHAT_SESSION_ID = "minis.current_chat_session_id"
 
@@ -74,7 +74,7 @@ class MainActivity : ComponentActivity() {
     /**
      * T293 / issue #10: tracks whether [onStart] has fired at least once, so
      * that the very first ON_START (the cold-start one — already covered by
-     * [com.openminis.app.ui.navigation.AppNavigation]'s LaunchedEffect that
+     * [com.leoyuan.leophoneagent.ui.navigation.AppNavigation]'s LaunchedEffect that
      * resolves [KEY_LAUNCH_SESSION]) is skipped here. Subsequent ON_STARTs
      * are background → foreground transitions, where the launch-session
      * preference must be honoured again so "New Chat on launch" actually
@@ -114,7 +114,7 @@ class MainActivity : ComponentActivity() {
     // ("Cut" / "Copy" / "Paste"). Override the base Configuration so the
     // framework picks the right locale on those devices. No-op on 13+.
     override fun attachBaseContext(newBase: android.content.Context) {
-        super.attachBaseContext(com.openminis.app.i18n.LocaleWrap.wrap(newBase))
+        super.attachBaseContext(com.leoyuan.leophoneagent.i18n.LocaleWrap.wrap(newBase))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -174,9 +174,9 @@ class MainActivity : ComponentActivity() {
         // Pop the share/dismiss dialog directly and finish() on close so
         // the user's next launch starts fresh. The dialog UI uses
         // AlertDialog (system-level) which doesn't touch MinisApp state.
-        if (com.openminis.app.crash.CrashFrequencyDetector.isSafeMode()) {
+        if (com.leoyuan.leophoneagent.crash.CrashFrequencyDetector.isSafeMode()) {
             android.util.Log.w("MainActivity", "safe-mode ON — showing crash share dialog and finishing")
-            com.openminis.app.crash.CrashFrequencyDetector.maybeShowOnActivity(
+            com.leoyuan.leophoneagent.crash.CrashFrequencyDetector.maybeShowOnActivity(
                 activity = this,
                 onClosed = { finish() },
                 saveLauncher = { zip, onSaveDone ->
@@ -216,7 +216,7 @@ class MainActivity : ComponentActivity() {
         // launch-mode dispatch entirely.
         restoredChatSessionId = savedInstanceState?.getString(KEY_CURRENT_CHAT_SESSION_ID)
             ?.takeUnless {
-                com.openminis.app.crash.CrashFrequencyDetector.shouldForceHomeOnLaunch(this)
+                com.leoyuan.leophoneagent.crash.CrashFrequencyDetector.shouldForceHomeOnLaunch(this)
             }
 
         permissionLauncher = registerForActivityResult(
@@ -305,7 +305,7 @@ class MainActivity : ComponentActivity() {
         // share_prefs. Process it now so ShareCoordinator's in-memory
         // buffer is populated before any ChatScreen composes.
         if (intent?.getBooleanExtra("shared_content", false) == true) {
-            com.openminis.app.share.ShareCoordinator.processPendingShare(this)
+            com.leoyuan.leophoneagent.share.ShareCoordinator.processPendingShare(this)
         }
 
         // Wire FLAG_KEEP_SCREEN_ON to (Appearance → Keep Screen Awake) AND
@@ -323,7 +323,7 @@ class MainActivity : ComponentActivity() {
 
         // Register for debug screenshot capture (debug builds only)
         if (BuildConfig.DEBUG) {
-            com.openminis.app.debug.DebugRPCHandler.currentActivity = java.lang.ref.WeakReference(this)
+            com.leoyuan.leophoneagent.debug.DebugRPCHandler.currentActivity = java.lang.ref.WeakReference(this)
         }
 
         val app = application as MinisApp
@@ -438,7 +438,7 @@ class MainActivity : ComponentActivity() {
                 // it works regardless of where the user is when the
                 // agent triggers a change. Mirrors iOS MinisApp.swift
                 // root-level `.sheet(item: gate.pending)`.
-                com.openminis.app.ui.settings.ConfigConfirmDialogHost()
+                com.leoyuan.leophoneagent.ui.settings.ConfigConfirmDialogHost()
             }
         }
     }
@@ -461,7 +461,7 @@ class MainActivity : ComponentActivity() {
     /**
      * T293 / issue #10: re-honour the "Launch Session" preference when the
      * app comes back to the foreground from the recents tray. Cold start
-     * is already covered by [com.openminis.app.ui.navigation.AppNavigation]
+     * is already covered by [com.leoyuan.leophoneagent.ui.navigation.AppNavigation]
      * resolving [KEY_LAUNCH_SESSION] in its `LaunchedEffect(Unit)` —
      * skipped here via [hasResumedFromBackground] so we don't double-fire
      * on the first start.
@@ -539,7 +539,7 @@ class MainActivity : ComponentActivity() {
         // MainActivity is already alive. Process the buffered share before
         // touching the deep-link path so the share coordinator sees it.
         if (intent.getBooleanExtra("shared_content", false)) {
-            com.openminis.app.share.ShareCoordinator.processPendingShare(this)
+            com.leoyuan.leophoneagent.share.ShareCoordinator.processPendingShare(this)
         }
         handleDeepLink(intent.data)
     }
@@ -605,7 +605,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
             is DeepLinkAction.OpenAlarmList -> {
-                // T297: minis://views/alarm now opens the system Clock app
+                // T297: leophoneagent://views/alarm now opens the system Clock app
                 // directly via AlarmClock.ACTION_SHOW_ALARMS — the in-app
                 // AlarmListScreen was a one-button passthrough that did the
                 // exact same thing. The android-alarm tool envelope still

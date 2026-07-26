@@ -1,8 +1,8 @@
-package com.openminis.app.provider
+package com.leoyuan.leophoneagent.provider
 
 import android.content.Context
 import android.util.Log
-import com.openminis.app.data.model.LLMModel
+import com.leoyuan.leophoneagent.data.model.LLMModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient

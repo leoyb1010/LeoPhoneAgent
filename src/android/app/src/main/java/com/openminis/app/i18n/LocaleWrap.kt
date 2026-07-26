@@ -1,11 +1,11 @@
-package com.openminis.app.i18n
+package com.leoyuan.leophoneagent.i18n
 
 import android.content.Context
 import android.content.res.Configuration
 import android.os.Build
 import android.os.LocaleList
-import com.openminis.app.ui.settings.KEY_LANGUAGE
-import com.openminis.app.ui.settings.PREF_APPEARANCE
+import com.leoyuan.leophoneagent.ui.settings.KEY_LANGUAGE
+import com.leoyuan.leophoneagent.ui.settings.PREF_APPEARANCE
 import java.util.Locale
 
 /**

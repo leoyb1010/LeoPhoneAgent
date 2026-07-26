@@ -1,7 +1,7 @@
-package com.openminis.app.ui.settings
+package com.leoyuan.leophoneagent.ui.settings
 
-import com.openminis.app.R
-import com.openminis.app.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
 
 import android.content.Context
 import android.text.format.Formatter
@@ -43,8 +43,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
-import com.openminis.app.data.db.ChatDao
-import com.openminis.app.data.db.ChatSessionEntity
+import com.leoyuan.leophoneagent.data.db.ChatDao
+import com.leoyuan.leophoneagent.data.db.ChatSessionEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext

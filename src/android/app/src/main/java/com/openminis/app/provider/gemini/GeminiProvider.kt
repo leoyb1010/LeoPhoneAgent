@@ -1,19 +1,19 @@
-package com.openminis.app.provider.gemini
+package com.leoyuan.leophoneagent.provider.gemini
 
 import android.util.Base64
-import com.openminis.app.data.model.AgentContentPart
-import com.openminis.app.data.model.AgentToolDefinition
-import com.openminis.app.data.model.LLMError
-import com.openminis.app.provider.applyUserAgentOverride
-import com.openminis.app.data.model.LLMMessage
-import com.openminis.app.data.model.LLMModel
-import com.openminis.app.data.model.LLMMediaAttachment
-import com.openminis.app.data.model.LLMResponse
-import com.openminis.app.data.model.LLMStreamChunk
-import com.openminis.app.data.model.LLMUsage
-import com.openminis.app.data.model.ThinkingLevel
-import com.openminis.app.provider.LLMProvider
-import com.openminis.app.provider.safeOptString
+import com.leoyuan.leophoneagent.data.model.AgentContentPart
+import com.leoyuan.leophoneagent.data.model.AgentToolDefinition
+import com.leoyuan.leophoneagent.data.model.LLMError
+import com.leoyuan.leophoneagent.provider.applyUserAgentOverride
+import com.leoyuan.leophoneagent.data.model.LLMMessage
+import com.leoyuan.leophoneagent.data.model.LLMModel
+import com.leoyuan.leophoneagent.data.model.LLMMediaAttachment
+import com.leoyuan.leophoneagent.data.model.LLMResponse
+import com.leoyuan.leophoneagent.data.model.LLMStreamChunk
+import com.leoyuan.leophoneagent.data.model.LLMUsage
+import com.leoyuan.leophoneagent.data.model.ThinkingLevel
+import com.leoyuan.leophoneagent.provider.LLMProvider
+import com.leoyuan.leophoneagent.provider.safeOptString
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.awaitClose
@@ -29,7 +29,7 @@ import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.util.concurrent.TimeUnit
-import com.openminis.app.provider.failOnSilentEmptyCompletion
+import com.leoyuan.leophoneagent.provider.failOnSilentEmptyCompletion
 
 class GeminiProvider(
     private val apiKey: String,
@@ -44,7 +44,7 @@ class GeminiProvider(
         .writeTimeout(30, TimeUnit.SECONDS)
         // [T-android-stale-conn-retry-hang] Shared pool — see NetworkMonitor.
         // Network-transition eviction must reach provider connections.
-        .connectionPool(com.openminis.app.network.NetworkMonitor.sharedLLMConnectionPool)
+        .connectionPool(com.leoyuan.leophoneagent.network.NetworkMonitor.sharedLLMConnectionPool)
         .build()
 
     override suspend fun sendMessageClamped(
@@ -62,7 +62,7 @@ class GeminiProvider(
             .url(url)
             .post(body.toString().toRequestBody("application/json".toMediaType()))
             // [T-android-default-ua] Brand the outbound UA so server logs
-            // can trace the request back to the Minis build. Gemini has no
+            // can trace the request back to the LeoPhoneAgent build. Gemini has no
             // SDK-specific UA requirement, so the helper's default kicks in.
             .applyUserAgentOverride(null)
             .build()
@@ -109,7 +109,7 @@ class GeminiProvider(
             .url(url)
             .post(body.toString().toRequestBody("application/json".toMediaType()))
             // [T-android-default-ua] same intent as the non-streaming
-            // branch above — brand outbound requests with Minis/<version>.
+            // branch above — brand outbound requests with LeoPhoneAgent/<version>.
             .applyUserAgentOverride(null)
             .build()
 

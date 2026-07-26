@@ -16,8 +16,8 @@
 #include <unistd.h>
 
 // Swift bridge — generated header
-#if __has_include("Minis-Swift.h")
-#import "Minis-Swift.h"
+#if __has_include("LeoPhoneAgent-Swift.h")
+#import "LeoPhoneAgent-Swift.h"
 #elif __has_include("MinisApp-Swift.h")
 #import "MinisApp-Swift.h"
 #endif
@@ -64,7 +64,7 @@ static NSString *const HELP_TEXT =
      "  apple-alarm cancel --all\n"
      "\n"
      "DEEP LINK:\n"
-     "  minis://views/alarm              Open the alarm management page in Minis\n";
+     "  leophoneagent://views/alarm              Open the alarm management page in LeoPhoneAgent\n";
 
 // ── Duration parsing ──
 
@@ -140,7 +140,7 @@ static dispatch_queue_t authQueue(void) {
     static dispatch_queue_t q = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        q = dispatch_queue_create("com.openminis.alarm.auth", DISPATCH_QUEUE_SERIAL);
+        q = dispatch_queue_create("com.leoyuan.leophoneagent.alarm.auth", DISPATCH_QUEUE_SERIAL);
     });
     return q;
 }
@@ -164,10 +164,10 @@ static BOOL ensureAuthorization(int stdout_fd, NSString *action, BOOL compact, B
     if (!authorized) {
         NSString *msg = authError
             ? [NSString stringWithFormat:@"AlarmKit authorization failed: %@. "
-                "To grant access, open Settings > Privacy & Security > Alarms and enable Minis.",
+                "To grant access, open Settings > Privacy & Security > Alarms and enable LeoPhoneAgent.",
                 authError.localizedDescription]
             : @"AlarmKit authorization denied. "
-               "To grant access, open Settings > Privacy & Security > Alarms and enable Minis.";
+               "To grant access, open Settings > Privacy & Security > Alarms and enable LeoPhoneAgent.";
         NSDictionary *err = noff_json_error(TOOL_NAME, action,
                                              NOFF_ERR_AUTHORIZATION_DENIED, msg);
         noff_emit_json(stdout_fd, err, compact, quiet);
@@ -239,8 +239,8 @@ static int cmd_set_alarmkit(int argc, char **argv, int stdout_fd,
         // Merge fire date into result
         NSMutableDictionary *data = [resultData mutableCopy];
         data[@"time"] = noff_format_date(fireDate);
-        data[@"view_url"] = @"minis://views/alarm";
-        data[@"hint"] = @"Alarm is now visible on the Minis home screen. Open minis://views/alarm to manage alarms.";
+        data[@"view_url"] = @"leophoneagent://views/alarm";
+        data[@"hint"] = @"Alarm is now visible on the LeoPhoneAgent home screen. Open leophoneagent://views/alarm to manage alarms.";
         noff_emit_json(stdout_fd, noff_json_envelope(TOOL_NAME, @"set", data), compact, quiet);
         return NOFF_EXIT_SUCCESS;
     }
@@ -309,8 +309,8 @@ static int cmd_timer_alarmkit(int argc, char **argv, int stdout_fd,
         // Merge computed fires_at
         NSMutableDictionary *data = [resultData mutableCopy];
         data[@"fires_at"] = noff_format_date([NSDate dateWithTimeIntervalSinceNow:duration]);
-        data[@"view_url"] = @"minis://views/alarm";
-        data[@"hint"] = @"Timer is now visible on the Minis home screen. Open minis://views/alarm to manage alarms.";
+        data[@"view_url"] = @"leophoneagent://views/alarm";
+        data[@"hint"] = @"Timer is now visible on the LeoPhoneAgent home screen. Open leophoneagent://views/alarm to manage alarms.";
         noff_emit_json(stdout_fd, noff_json_envelope(TOOL_NAME, @"timer", data), compact, quiet);
         return NOFF_EXIT_SUCCESS;
     }
@@ -354,7 +354,7 @@ static int cmd_list_alarmkit(int argc, char **argv, int stdout_fd,
             @"alarms": items,
             @"count": @(items.count),
             @"backend": @"alarmkit",
-            @"view_url": @"minis://views/alarm",
+            @"view_url": @"leophoneagent://views/alarm",
         };
         noff_emit_json(stdout_fd, noff_json_envelope(TOOL_NAME, @"list", data), compact, quiet);
         return NOFF_EXIT_SUCCESS;

@@ -1,4 +1,4 @@
-package com.openminis.app.ui.settings
+package com.leoyuan.leophoneagent.ui.settings
 
 import android.content.Intent
 import android.net.Uri
@@ -42,7 +42,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
-import com.openminis.app.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberSwipeToDismissBoxState
@@ -68,10 +68,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.openminis.app.R
-import com.openminis.app.data.MountedFoldersStore
-import com.openminis.app.data.SafMountHelper
-import com.openminis.app.ui.components.DialogTextField
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.data.MountedFoldersStore
+import com.leoyuan.leophoneagent.data.SafMountHelper
+import com.leoyuan.leophoneagent.ui.components.DialogTextField
 import kotlinx.coroutines.launch
 
 /**

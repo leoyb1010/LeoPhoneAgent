@@ -1,7 +1,7 @@
-package com.openminis.app.ui.preview
+package com.leoyuan.leophoneagent.ui.preview
 
 import androidx.compose.ui.res.stringResource
-import com.openminis.app.R
+import com.leoyuan.leophoneagent.R
 
 import android.annotation.SuppressLint
 import android.content.Intent
@@ -64,7 +64,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.logging.AppLogger
 
 /**
  * Immersive 90%-tall bottom sheet that hosts a [WebViewHolder] for a
@@ -212,7 +212,7 @@ fun WebPreviewBottomSheet(
                 // the original `if (pinSessionId != null && …)` guard.
                 onPinToHome = if (pinSessionId != null && holder.currentUrl.startsWith("file://") && WEBAPP_PIN_ENTRY_ENABLED) {
                     {
-                        com.openminis.app.ui.preview.WebPreviewShortcut.pin(
+                        com.leoyuan.leophoneagent.ui.preview.WebPreviewShortcut.pin(
                             context = context,
                             sessionId = pinSessionId,
                             url = holder.currentUrl,
@@ -338,7 +338,7 @@ internal fun WebPreviewToolbar(
                 description = stringResource(R.string.webpreview_more),
                 onClick = { menuOpen = true },
             )
-            com.openminis.app.ui.components.MinisMenu(
+            com.leoyuan.leophoneagent.ui.components.MinisMenu(
                 expanded = menuOpen,
                 onDismissRequest = { menuOpen = false },
             ) {

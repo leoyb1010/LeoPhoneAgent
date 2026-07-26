@@ -1,4 +1,4 @@
-package com.openminis.app.ui.chat
+package com.leoyuan.leophoneagent.ui.chat
 
 // [T-android-split-chat] Chat data models extracted verbatim from
 // ChatViewModel.kt: StreamingDelta, ChatMessage, QueuedPrompt,
@@ -14,11 +14,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.compose.foundation.lazy.LazyListState
-import com.openminis.app.agent.Level
-import com.openminis.app.agent.ToolLoopDetector
-import com.openminis.app.browser.BrowserActionInput
-import com.openminis.app.browser.BrowserTabPool
-import com.openminis.app.data.db.MessageEntity
+import com.leoyuan.leophoneagent.agent.Level
+import com.leoyuan.leophoneagent.agent.ToolLoopDetector
+import com.leoyuan.leophoneagent.browser.BrowserActionInput
+import com.leoyuan.leophoneagent.browser.BrowserTabPool
+import com.leoyuan.leophoneagent.data.db.MessageEntity
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Compress
 import androidx.compose.material.icons.filled.Delete
@@ -26,40 +26,40 @@ import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Extension
-import com.openminis.app.data.BPETokenizer
-import com.openminis.app.data.ContextOffload
-import com.openminis.app.data.ContextPolicy
-import com.openminis.app.logging.AppLogger
-import com.openminis.app.data.FileMentionIndex
-import com.openminis.app.data.db.CompactMarkerEntity
-import com.openminis.app.data.model.AgentContentPart
-import com.openminis.app.data.model.AgentToolDefinition
-import com.openminis.app.data.model.LLMMessage
-import com.openminis.app.data.model.LLMModel
-import com.openminis.app.data.model.LLMStreamChunk
-import com.openminis.app.data.model.LLMUsage
-import com.openminis.app.data.model.ModelGroup
-import com.openminis.app.data.model.ThinkingLevel
-import com.openminis.app.R
-import com.openminis.app.data.repository.ChatRepository
-import com.openminis.app.data.repository.MemoryRepository
-import com.openminis.app.data.repository.ProviderRepository
-import com.openminis.app.provider.ImageBudget
-import com.openminis.app.provider.LLMProvider
-import com.openminis.app.provider.ProviderFactory
-import com.openminis.app.sandbox.ExecutionCoordinator
-import com.openminis.app.terminal.MinisOpenUrlBroker
-import com.openminis.app.terminal.MinisUrlMarker
-import com.openminis.app.tools.AgentTools
-import com.openminis.app.tools.FileEditTool
-import com.openminis.app.tools.FileReadTool
-import com.openminis.app.tools.FileWriteTool
-import com.openminis.app.tools.MemoryTools
-import com.openminis.app.tools.ReadImageTool
-import com.openminis.app.tools.ToolExecutionResult
-import com.openminis.app.offload.OffloadPermissionManager
-import com.openminis.app.service.SessionActivityTracker
-import com.openminis.app.service.SessionConcurrencyManager
+import com.leoyuan.leophoneagent.data.BPETokenizer
+import com.leoyuan.leophoneagent.data.ContextOffload
+import com.leoyuan.leophoneagent.data.ContextPolicy
+import com.leoyuan.leophoneagent.logging.AppLogger
+import com.leoyuan.leophoneagent.data.FileMentionIndex
+import com.leoyuan.leophoneagent.data.db.CompactMarkerEntity
+import com.leoyuan.leophoneagent.data.model.AgentContentPart
+import com.leoyuan.leophoneagent.data.model.AgentToolDefinition
+import com.leoyuan.leophoneagent.data.model.LLMMessage
+import com.leoyuan.leophoneagent.data.model.LLMModel
+import com.leoyuan.leophoneagent.data.model.LLMStreamChunk
+import com.leoyuan.leophoneagent.data.model.LLMUsage
+import com.leoyuan.leophoneagent.data.model.ModelGroup
+import com.leoyuan.leophoneagent.data.model.ThinkingLevel
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.data.repository.ChatRepository
+import com.leoyuan.leophoneagent.data.repository.MemoryRepository
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.provider.ImageBudget
+import com.leoyuan.leophoneagent.provider.LLMProvider
+import com.leoyuan.leophoneagent.provider.ProviderFactory
+import com.leoyuan.leophoneagent.sandbox.ExecutionCoordinator
+import com.leoyuan.leophoneagent.terminal.MinisOpenUrlBroker
+import com.leoyuan.leophoneagent.terminal.MinisUrlMarker
+import com.leoyuan.leophoneagent.tools.AgentTools
+import com.leoyuan.leophoneagent.tools.FileEditTool
+import com.leoyuan.leophoneagent.tools.FileReadTool
+import com.leoyuan.leophoneagent.tools.FileWriteTool
+import com.leoyuan.leophoneagent.tools.MemoryTools
+import com.leoyuan.leophoneagent.tools.ReadImageTool
+import com.leoyuan.leophoneagent.tools.ToolExecutionResult
+import com.leoyuan.leophoneagent.offload.OffloadPermissionManager
+import com.leoyuan.leophoneagent.service.SessionActivityTracker
+import com.leoyuan.leophoneagent.service.SessionConcurrencyManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -126,7 +126,7 @@ data class ChatMessage(
     // analysis report for why we hide rather than silence). In-memory
     // only; assistant messages restored from DB get null and fall back
     // to the chat's current thinking level at render time.
-    val thinkingLevel: com.openminis.app.data.model.ThinkingLevel? = null,
+    val thinkingLevel: com.leoyuan.leophoneagent.data.model.ThinkingLevel? = null,
     val error: String? = null,
     // Queued user prompt awaiting injection into the running agent loop.
     // Mirrors iOS ChatMessage.isQueued / queuedPromptId.
@@ -245,7 +245,7 @@ data class SlashCommand(
      * configured MCP server (vs. a built-in command or a skill). Distinct from
      * [isSkill] so the picker can tag MCP rows with [mcp] + a wrench icon and
      * skills with ⚡. Tapping fills the composer with the server name; the
-     * actual discovery/call happens model-side via minis-mcp-cli.
+     * actual discovery/call happens model-side via leophoneagent-mcp-cli.
      */
     val isMcp: Boolean = false,
 )

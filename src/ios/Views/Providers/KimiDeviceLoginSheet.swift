@@ -77,7 +77,7 @@ struct KimiDeviceLoginSheet: View {
 
     @ViewBuilder
     private func awaitingBody(userCode: String, url: String) -> some View {
-        Text(String(localized: "1. Open the verification page\n2. Enter this code to authorize Minis"))
+        Text(String(localized: "1. Open the verification page\n2. Enter this code to authorize LeoPhoneAgent"))
             .font(.subheadline)
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)

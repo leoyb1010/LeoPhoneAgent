@@ -1,4 +1,4 @@
-package com.openminis.app.ui.terminal.emulator
+package com.leoyuan.leophoneagent.ui.terminal.emulator
 
 /** Actions emitted by the parser. */
 sealed class ParsedAction {

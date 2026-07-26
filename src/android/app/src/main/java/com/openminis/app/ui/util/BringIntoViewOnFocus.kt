@@ -1,4 +1,4 @@
-package com.openminis.app.ui.util
+package com.leoyuan.leophoneagent.ui.util
 
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester

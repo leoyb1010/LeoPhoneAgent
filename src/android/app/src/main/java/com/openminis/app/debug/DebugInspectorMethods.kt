@@ -1,4 +1,4 @@
-package com.openminis.app.debug
+package com.leoyuan.leophoneagent.debug
 
 import android.app.Activity
 import android.graphics.Color

@@ -1,9 +1,9 @@
-package com.openminis.app.scheduled
+package com.leoyuan.leophoneagent.scheduled
 
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.logging.AppLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

@@ -1,4 +1,4 @@
-package com.openminis.app.ui
+package com.leoyuan.leophoneagent.ui
 
 import coil.request.ImageRequest
 import coil.size.Precision
@@ -32,7 +32,7 @@ import coil.size.Precision
  * removes the OOM risk that a decode-then-downscale approach would keep.
  *
  * This is a DISPLAY-side guard only. It is unrelated to
- * [com.openminis.app.provider.ImageBudget], which caps bytes sent to LLM
+ * [com.leoyuan.leophoneagent.provider.ImageBudget], which caps bytes sent to LLM
  * providers on the network path.
  */
 object DisplayBitmapLimits {

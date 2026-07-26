@@ -1,4 +1,4 @@
-package com.openminis.app.speech
+package com.leoyuan.leophoneagent.speech
 
 /**
  * [T-android-voice-text-sanitizer] Cleans a text unit before it is handed to

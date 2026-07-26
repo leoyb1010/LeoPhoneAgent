@@ -1,7 +1,7 @@
-package com.openminis.app.scheduled
+package com.leoyuan.leophoneagent.scheduled
 
 import android.content.Context
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.logging.AppLogger
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -9,7 +9,7 @@ import org.json.JSONArray
 
 /**
  * [T-android-scheduled-tasks-design] SharedPreferences-backed JSON array of
- * [ScheduledTask] rows. Same pattern as [com.openminis.app.offload.AlarmOffloadManager]
+ * [ScheduledTask] rows. Same pattern as [com.leoyuan.leophoneagent.offload.AlarmOffloadManager]
  * — small dataset, low write frequency, no Room migration cost.
  */
 class ScheduledTaskStore(private val context: Context) {

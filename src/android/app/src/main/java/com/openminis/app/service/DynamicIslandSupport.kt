@@ -1,4 +1,4 @@
-package com.openminis.app.service
+package com.leoyuan.leophoneagent.service
 
 import android.app.NotificationManager
 import android.content.Context

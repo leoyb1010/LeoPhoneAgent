@@ -1,14 +1,14 @@
-package com.openminis.app.provider
+package com.leoyuan.leophoneagent.provider
 
 import android.content.Context
-import com.openminis.app.auth.OpenAIOAuthManager
-import com.openminis.app.data.model.LLMModel
-import com.openminis.app.data.model.ProviderCredential
-import com.openminis.app.data.model.ProviderInstance
-import com.openminis.app.data.model.ProviderType
-import com.openminis.app.provider.anthropic.AnthropicProvider
-import com.openminis.app.provider.gemini.GeminiProvider
-import com.openminis.app.provider.openai.OpenAIProvider
+import com.leoyuan.leophoneagent.auth.OpenAIOAuthManager
+import com.leoyuan.leophoneagent.data.model.LLMModel
+import com.leoyuan.leophoneagent.data.model.ProviderCredential
+import com.leoyuan.leophoneagent.data.model.ProviderInstance
+import com.leoyuan.leophoneagent.data.model.ProviderType
+import com.leoyuan.leophoneagent.provider.anthropic.AnthropicProvider
+import com.leoyuan.leophoneagent.provider.gemini.GeminiProvider
+import com.leoyuan.leophoneagent.provider.openai.OpenAIProvider
 
 object ProviderFactory {
     /**
@@ -54,7 +54,7 @@ object ProviderFactory {
                 // codex backend (which only accepts real ChatGPT session tokens).
                 val manualBearer = if (context != null &&
                     instance.credentialType == ProviderCredential.oauth) {
-                    com.openminis.app.auth.OAuthManager.forInstance(context, instance)?.loadManualBearerToken()
+                    com.leoyuan.leophoneagent.auth.OAuthManager.forInstance(context, instance)?.loadManualBearerToken()
                 } else null
 
                 if (instance.credentialType == ProviderCredential.oauth && manualBearer.isNullOrEmpty()
@@ -62,7 +62,7 @@ object ProviderFactory {
                     // Codex OAuth mode — Responses API with refresh-aware token provider
                     val oauthManager = OpenAIOAuthManager(context, instance.id)
                     OpenAIProvider(
-                        oauthTokenProvider = { oauthManager.validAccessToken() ?: throw com.openminis.app.data.model.LLMError.InvalidApiKey() },
+                        oauthTokenProvider = { oauthManager.validAccessToken() ?: throw com.leoyuan.leophoneagent.data.model.LLMError.InvalidApiKey() },
                         model = model,
                         codexAccountId = oauthManager.accountId,
                     )
@@ -99,7 +99,7 @@ object ProviderFactory {
                     basePath = "https://openrouter.ai/api/v1",
                     extraHeaders = mapOf(
                         "HTTP-Referer" to "https://github.com/OpenMinis/OpenMinis",
-                        "X-Title" to "Minis App",
+                        "X-Title" to "LeoPhoneAgent App",
                     ),
                 )
             }
@@ -114,15 +114,15 @@ object ProviderFactory {
                 val base = basePath ?: "https://api.x.ai/v1"
                 val manualBearer = if (context != null &&
                     instance.credentialType == ProviderCredential.oauth) {
-                    com.openminis.app.auth.OAuthManager.forInstance(context, instance)?.loadManualBearerToken()
+                    com.leoyuan.leophoneagent.auth.OAuthManager.forInstance(context, instance)?.loadManualBearerToken()
                 } else null
                 if (instance.credentialType == ProviderCredential.oauth && manualBearer.isNullOrEmpty()
                     && context != null) {
-                    val oauthManager = com.openminis.app.auth.XAIOAuthManager(context, instance.id)
+                    val oauthManager = com.leoyuan.leophoneagent.auth.XAIOAuthManager(context, instance.id)
                     OpenAIProvider.oauthOpenAICompat(
                         oauthTokenProvider = {
                             oauthManager.validAccessToken()
-                                ?: throw com.openminis.app.data.model.LLMError.InvalidApiKey()
+                                ?: throw com.leoyuan.leophoneagent.data.model.LLMError.InvalidApiKey()
                         },
                         model = model,
                         basePath = base,
@@ -141,14 +141,14 @@ object ProviderFactory {
                 // ⚠️ The `/v1` is load-bearing: /coding/chat/completions 404s;
                 // only /coding/v1/chat/completions works (verified live on iOS).
                 // Custom bases go through effectiveBaseURL's /v1-append logic.
-                val base = basePath ?: "${com.openminis.app.auth.KimiDeviceFlow.CODING_API_BASE}/v1"
+                val base = basePath ?: "${com.leoyuan.leophoneagent.auth.KimiDeviceFlow.CODING_API_BASE}/v1"
                 val manualBearer = if (context != null &&
                     instance.credentialType == ProviderCredential.oauth) {
-                    com.openminis.app.auth.OAuthManager.forInstance(context, instance)?.loadManualBearerToken()
+                    com.leoyuan.leophoneagent.auth.OAuthManager.forInstance(context, instance)?.loadManualBearerToken()
                 } else null
                 if (instance.credentialType == ProviderCredential.oauth && manualBearer.isNullOrEmpty()
                     && context != null) {
-                    val oauthManager = com.openminis.app.auth.KimiOAuthManager(context, instance.id)
+                    val oauthManager = com.leoyuan.leophoneagent.auth.KimiOAuthManager(context, instance.id)
                     // Same path as xAI OAuth: Bearer token provider +
                     // forceChatCompletions so the Codex Responses backend
                     // shaping never applies. No custom UA / extra headers —
@@ -156,7 +156,7 @@ object ProviderFactory {
                     OpenAIProvider.oauthOpenAICompat(
                         oauthTokenProvider = {
                             oauthManager.validAccessToken()
-                                ?: throw com.openminis.app.data.model.LLMError.InvalidApiKey()
+                                ?: throw com.leoyuan.leophoneagent.data.model.LLMError.InvalidApiKey()
                         },
                         model = model,
                         basePath = base,

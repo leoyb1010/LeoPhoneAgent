@@ -1,4 +1,4 @@
-package com.openminis.app.data.db
+package com.leoyuan.leophoneagent.data.db
 
 import android.content.Context
 import androidx.room.Database

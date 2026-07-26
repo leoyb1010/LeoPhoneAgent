@@ -350,7 +350,7 @@ private struct AgentBrowsingOverlay: View {
                     .opacity(breathing ? 1.0 : 0.3)
                     .shadow(color: Color.accentColor.opacity(breathing ? 0.8 : 0), radius: breathing ? 8 : 0)
 
-                Text("Minis is browsing")
+                Text("LeoPhoneAgent is browsing")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.white.opacity(0.9))
 

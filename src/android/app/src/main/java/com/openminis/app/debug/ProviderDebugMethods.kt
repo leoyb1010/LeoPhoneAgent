@@ -1,11 +1,11 @@
-package com.openminis.app.debug
+package com.leoyuan.leophoneagent.debug
 
 import android.content.Context
-import com.openminis.app.MinisApp
-import com.openminis.app.data.model.LLMModel
-import com.openminis.app.data.model.ProviderConfig
-import com.openminis.app.data.model.ProviderType
-import com.openminis.app.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.MinisApp
+import com.leoyuan.leophoneagent.data.model.LLMModel
+import com.leoyuan.leophoneagent.data.model.ProviderConfig
+import com.leoyuan.leophoneagent.data.model.ProviderType
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
 import org.json.JSONArray
 import org.json.JSONObject
 

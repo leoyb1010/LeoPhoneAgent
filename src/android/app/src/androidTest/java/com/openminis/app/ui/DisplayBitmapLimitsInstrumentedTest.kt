@@ -1,4 +1,4 @@
-package com.openminis.app.ui
+package com.leoyuan.leophoneagent.ui
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -8,7 +8,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import coil.ImageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
-import com.openminis.app.ui.DisplayBitmapLimits.limitDisplaySize
+import com.leoyuan.leophoneagent.ui.DisplayBitmapLimits.limitDisplaySize
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertTrue

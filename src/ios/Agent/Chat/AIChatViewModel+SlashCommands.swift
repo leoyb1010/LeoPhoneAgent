@@ -18,7 +18,7 @@ extension AIChatViewModel {
         /// True when this row comes from a configured MCP server. Like skill
         /// rows, MCP rows are a typing aid: tap fills the composer with
         /// "/<name>" — the actual discovery/invocation happens model-side via
-        /// minis-mcp-cli once the message is sent. Separate flag from isSkill so
+        /// leophoneagent-mcp-cli once the message is sent. Separate flag from isSkill so
         /// the picker can tag/icon them distinctly ([mcp] / wrench).
         let isMCP: Bool
 

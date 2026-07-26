@@ -1,14 +1,14 @@
-package com.openminis.app.sandbox.offload
+package com.leoyuan.leophoneagent.sandbox.offload
 
 import android.content.Context
-import com.openminis.app.logging.AppLogger
-import com.openminis.app.sandbox.NativeOffloadHandler
-import com.openminis.app.sandbox.NativeOffloadRequest
-import com.openminis.app.sandbox.NativeOffloadResult
-import com.openminis.app.scheduled.ScheduledRepeatMode
-import com.openminis.app.scheduled.ScheduledTargetMode
-import com.openminis.app.scheduled.ScheduledTask
-import com.openminis.app.scheduled.ScheduledTaskManager
+import com.leoyuan.leophoneagent.logging.AppLogger
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadHandler
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadRequest
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadResult
+import com.leoyuan.leophoneagent.scheduled.ScheduledRepeatMode
+import com.leoyuan.leophoneagent.scheduled.ScheduledTargetMode
+import com.leoyuan.leophoneagent.scheduled.ScheduledTask
+import com.leoyuan.leophoneagent.scheduled.ScheduledTaskManager
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
@@ -128,7 +128,7 @@ class ScheduledTaskOffloadHandler(private val context: Context) : NativeOffloadH
         // Fire immediately, off-schedule. Blocks until the agent loop finishes
         // (ScheduledAgentRunner waits internally). Mirrors the editor "Run now".
         val sessionId = runBlocking {
-            com.openminis.app.scheduled.ScheduledAgentRunner.run(context, task)
+            com.leoyuan.leophoneagent.scheduled.ScheduledAgentRunner.run(context, task)
         }
         val out = JSONObject()
             .put("id", id)

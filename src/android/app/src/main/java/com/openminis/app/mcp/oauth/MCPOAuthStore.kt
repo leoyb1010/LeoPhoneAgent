@@ -1,9 +1,9 @@
-package com.openminis.app.mcp.oauth
+package com.leoyuan.leophoneagent.mcp.oauth
 
 import android.content.Context
 import android.content.SharedPreferences
-import com.openminis.app.logging.AppLogger
-import com.openminis.app.util.EncryptedPrefsFactory
+import com.leoyuan.leophoneagent.logging.AppLogger
+import com.leoyuan.leophoneagent.util.EncryptedPrefsFactory
 import org.json.JSONObject
 
 /**

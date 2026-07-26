@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CFBundleDisplayName</key>
+	<string>LeoPhoneAgent</string>
+	<key>CFBundleName</key>
+	<string>LeoPhoneAgent</string>
 	<key>CFBundleLocalizations</key>
 	<array>
 		<string>en</string>
@@ -32,7 +36,7 @@
 	</array>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
-		<string>com.openminis.app.liveactivity-refresh</string>
+		<string>com.leoyuan.leophoneagent.liveactivity-refresh</string>
 	</array>
 	<key>UIBackgroundModes</key>
 	<array>
@@ -46,43 +50,43 @@
 	<key>NSSupportsLiveActivitiesFrequentUpdates</key>
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Minis uses your location to record where agent sessions are started for your session history.</string>
+	<string>LeoPhoneAgent uses your location to record where agent sessions are started for your session history.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Minis uses background location to keep agent tasks running when the app is in the background. Location data is only used to record session connection history.</string>
+	<string>LeoPhoneAgent uses background location to keep agent tasks running when the app is in the background. Location data is only used to record session connection history.</string>
 	<key>NSCalendarsUsageDescription</key>
-	<string>Minis uses calendar access so the AI agent can query your schedule, check availability, and create events on your behalf.</string>
+	<string>LeoPhoneAgent uses calendar access so the AI agent can query your schedule, check availability, and create events on your behalf.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>Minis uses calendar access so the AI agent can query your schedule, check availability, and create events on your behalf.</string>
+	<string>LeoPhoneAgent uses calendar access so the AI agent can query your schedule, check availability, and create events on your behalf.</string>
 	<key>NSRemindersUsageDescription</key>
-	<string>Minis uses reminders access so the AI agent can query and create reminders on your behalf.</string>
+	<string>LeoPhoneAgent uses reminders access so the AI agent can query and create reminders on your behalf.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
-	<string>Minis uses reminders access so the AI agent can query and create reminders on your behalf.</string>
+	<string>LeoPhoneAgent uses reminders access so the AI agent can query and create reminders on your behalf.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Minis needs camera access to take photos for AI conversations.</string>
+	<string>LeoPhoneAgent needs camera access to take photos for AI conversations.</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>Minis uses Face ID to protect locked chat sessions so only you can view their contents.</string>
+	<string>LeoPhoneAgent uses Face ID to protect locked chat sessions so only you can view their contents.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Minis needs photo library access to attach images to AI conversations.</string>
+	<string>LeoPhoneAgent needs photo library access to attach images to AI conversations.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Minis needs permission to save videos and images to your photo library.</string>
+	<string>LeoPhoneAgent needs permission to save videos and images to your photo library.</string>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Minis uses HealthKit access so the AI agent can read your health data such as steps, heart rate, sleep, and workouts on your behalf.</string>
+	<string>LeoPhoneAgent uses HealthKit access so the AI agent can read your health data such as steps, heart rate, sleep, and workouts on your behalf.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>Minis uses HealthKit write access so the AI agent can log health data such as steps, weight, and water intake on your behalf.</string>
+	<string>LeoPhoneAgent uses HealthKit write access so the AI agent can log health data such as steps, weight, and water intake on your behalf.</string>
 	<key>NSAppleMusicUsageDescription</key>
-	<string>Minis uses media library access so the AI agent can search your music library and control playback on your behalf.</string>
+	<string>LeoPhoneAgent uses media library access so the AI agent can search your music library and control playback on your behalf.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Minis needs microphone access for voice-to-text input in chat.</string>
+	<string>LeoPhoneAgent needs microphone access for voice-to-text input in chat.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Minis uses speech recognition to convert your voice into text messages.</string>
+	<string>LeoPhoneAgent uses speech recognition to convert your voice into text messages.</string>
 	<key>NSHomeKitUsageDescription</key>
-	<string>Minis uses HomeKit access so the AI agent can query and control your smart home accessories on your behalf.</string>
+	<string>LeoPhoneAgent uses HomeKit access so the AI agent can query and control your smart home accessories on your behalf.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Minis uses Bluetooth so the AI agent can scan for, connect to, and communicate with nearby BLE devices on your behalf.</string>
+	<string>LeoPhoneAgent uses Bluetooth so the AI agent can scan for, connect to, and communicate with nearby BLE devices on your behalf.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>Minis uses Bluetooth so the AI agent can scan for, connect to, and communicate with nearby BLE devices on your behalf.</string>
+	<string>LeoPhoneAgent uses Bluetooth so the AI agent can scan for, connect to, and communicate with nearby BLE devices on your behalf.</string>
 	<key>NFCReaderUsageDescription</key>
-	<string>Minis uses NFC so the AI agent can read and write NFC tags on your behalf.</string>
+	<string>LeoPhoneAgent uses NFC so the AI agent can read and write NFC tags on your behalf.</string>
 	<key>com.apple.developer.nfc.readersession.iso7816.select-identifiers</key>
 	<array>
 		<string>D2760000850100</string>
@@ -191,7 +195,7 @@
 		<string>86A7</string>
 	</array>
 	<key>NSAlarmKitUsageDescription</key>
-	<string>Minis uses AlarmKit so the AI agent can set alarms and timers on your behalf.</string>
+	<string>LeoPhoneAgent uses AlarmKit so the AI agent can set alarms and timers on your behalf.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>CFBundleIcons</key>
@@ -303,15 +307,15 @@
 			<string>Claude OAuth Callback</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.openminis.app</string>
+				<string>com.leoyuan.leophoneagent</string>
 			</array>
 		</dict>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>Minis Share</string>
+			<string>LeoPhoneAgent Share</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>minis</string>
+				<string>leophoneagent</string>
 			</array>
 		</dict>
 		<dict>
@@ -319,12 +323,12 @@
 			<string>MCP OAuth Callback</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>minis-mcp</string>
+				<string>leophoneagent-mcp</string>
 			</array>
 		</dict>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Minis uses local network access for the debug server and to let the AI agent communicate with locally-hosted services.</string>
+	<string>LeoPhoneAgent uses local network access for the debug server and to let the AI agent communicate with locally-hosted services.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

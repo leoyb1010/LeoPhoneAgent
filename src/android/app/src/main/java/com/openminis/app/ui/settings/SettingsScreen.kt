@@ -1,4 +1,4 @@
-package com.openminis.app.ui.settings
+package com.leoyuan.leophoneagent.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -64,9 +64,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
-import com.openminis.app.BuildConfig
-import com.openminis.app.R
-import com.openminis.app.ui.components.openExternalUrl
+import com.leoyuan.leophoneagent.BuildConfig
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.ui.components.openExternalUrl
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -411,7 +411,7 @@ private fun buildBugReportUrl(): String {
         |-------|-------|
         | Platform | Android |
         | OS Version | Android $osVersion (API $sdkInt) |
-        | Minis Version | $versionName (build $versionCode) |
+        | LeoPhoneAgent Version | $versionName (build $versionCode) |
         | Device Model | $manufacturer $model |
 
         ## 🔁 Steps to Reproduce
@@ -463,7 +463,7 @@ private fun buildFeedbackMailto(): String {
 
         Screenshot (optional): Please attach a screenshot if relevant.
     """.trimIndent()
-    val subject = java.net.URLEncoder.encode("Minis Feedback", "UTF-8")
+    val subject = java.net.URLEncoder.encode("LeoPhoneAgent Feedback", "UTF-8")
     val encodedBody = java.net.URLEncoder.encode(body, "UTF-8")
     return "mailto:dev@openminis.app?subject=$subject&body=$encodedBody"
 }

@@ -1,11 +1,11 @@
-package com.openminis.app.offload
+package com.leoyuan.leophoneagent.offload
 
 import android.content.ComponentName
 import android.content.Context
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.logging.AppLogger
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit

@@ -125,7 +125,7 @@ struct MinisApp: App {
         Bundle.setLanguage(lang.isEmpty ? nil : lang)
         // [T-ios-soul-name-sidebar-stale] Pre-load cachedMetadata synchronously so
         // ContentView's `@State soulName` gets the real SOUL.md name on its very
-        // first render instead of the `.default` stub ("Minis"). Without this the
+        // first render instead of the `.default` stub ("LeoPhoneAgent"). Without this the
         // @State initializer (evaluated at ContentView instantiation, before any
         // .onAppear refresh) locks the sidebar title to the default even when the
         // user set a custom name. refreshCache() only reads the tiny SOUL.md file.
@@ -214,7 +214,7 @@ struct MinisApp: App {
                 }
                 // Fullscreen immersive WebView for HTML web-app shortcuts.
                 // Driven by `.openWebAppDeepLink` (posted by DeepLinkRouter
-                // for `minis://open?session=…&path=…`). Mounted at the
+                // for `leophoneagent://open?session=…&path=…`). Mounted at the
                 // WindowGroup root so it covers the chat list / draft / any
                 // other foreground state.
                 // [T-ios-remove-open-webapp-shortcut-intent] The
@@ -517,8 +517,8 @@ struct MinisApp: App {
     // MARK: - FileProvider
 
     private static let fileProviderDomain = NSFileProviderDomain(
-        identifier: NSFileProviderDomainIdentifier("com.openminis.app.files"),
-        displayName: "Minis"
+        identifier: NSFileProviderDomainIdentifier("com.leoyuan.leophoneagent.files"),
+        displayName: "LeoPhoneAgent"
     )
 
     /// Bumped when we need to force-rebuild the FileProvider domain on next launch
@@ -673,7 +673,7 @@ struct MinisApp: App {
             }
 
             // Remove any stale domains with different identifiers, then add ours.
-            let stale = domains.filter { $0.identifier.rawValue.contains("com.openminis") }
+            let stale = domains.filter { $0.identifier.rawValue.contains("com.leoyuan.leophoneagent") }
             let group = DispatchGroup()
             for d in stale {
                 group.enter()
@@ -855,7 +855,7 @@ struct MinisApp: App {
     private static func migrateSharedDirToAppGroup() {
         let fm = FileManager.default
         let library = fm.urls(for: .libraryDirectory, in: .userDomainMask).first!
-        let container = fm.containerURL(forSecurityApplicationGroupIdentifier: "group.com.openminis.app")!
+        let container = fm.containerURL(forSecurityApplicationGroupIdentifier: "group.com.leoyuan.leophoneagent")!
 
         let migrations: [(source: URL, dest: URL, label: String)] = [
             // Legacy Library/MinisChat/shared → new shared
@@ -896,7 +896,7 @@ struct MinisApp: App {
     /// targets logged during MOUNT setup.
     private static func logFPSyncTracePaths() {
         let fm = FileManager.default
-        let groupID = "group.com.openminis.app"
+        let groupID = "group.com.leoyuan.leophoneagent"
         let containerURL = fm.containerURL(forSecurityApplicationGroupIdentifier: groupID)
         let containerPath = containerURL?.path ?? "<nil>"
         let resolvedContainer = containerURL?.resolvingSymlinksInPath().path ?? "<nil>"
@@ -935,7 +935,7 @@ struct MinisApp: App {
     // (`presentWebAppDeepLink`) is the remaining WebApp presentation path.
 
     /// Resolves a transient `WebAppShortcut` reconstructed from a
-    /// `minis://open?session=…&path=…` deep link (openminis.app launcher
+    /// `leophoneagent://open?session=…&path=…` deep link (openminis.app launcher
     /// round-trip) and presents the immersive WebView. Does not touch
     /// ChatStore — the launcher URL is fully self-describing.
     @MainActor

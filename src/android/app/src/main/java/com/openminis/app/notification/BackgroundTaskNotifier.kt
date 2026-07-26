@@ -1,4 +1,4 @@
-package com.openminis.app.notification
+package com.leoyuan.leophoneagent.notification
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -10,10 +10,10 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import com.openminis.app.R
-import com.openminis.app.data.repository.BackgroundSettingsRepository
-import com.openminis.app.data.repository.ChatRepository
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.data.repository.BackgroundSettingsRepository
+import com.leoyuan.leophoneagent.data.repository.ChatRepository
+import com.leoyuan.leophoneagent.logging.AppLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -24,7 +24,7 @@ import kotlinx.coroutines.launch
  * session finishes while the app is backgrounded. Mirrors iOS
  * `BackgroundKeepAliveManager.postBackgroundTaskNotification` (L274).
  *
- * Trigger contract: this class is hooked into [com.openminis.app.service.SessionActivityTracker]
+ * Trigger contract: this class is hooked into [com.leoyuan.leophoneagent.service.SessionActivityTracker]
  * so a session transitioning from active → inactive (i.e. its agent
  * loop completed) deterministically reaches `notifyTaskCompleted`. The
  * tracker itself is the single source of truth for "is this session
@@ -38,7 +38,7 @@ import kotlinx.coroutines.launch
  * - Skip silently if the app is currently in foreground — the user is
  *   already looking at the chat, no need to interrupt.
  * - Tap on the notification deep-links into the originating chat via
- *   `minis://session/<sessionId>` (existing
+ *   `leophoneagent://session/<sessionId>` (existing
  *   `DeepLinkHandler.OpenSession` path).
  *
  * On Android the absence of `responseSummary` from the spec is
@@ -60,7 +60,7 @@ class BackgroundTaskNotifier(
     }
 
     /**
-     * Called by [com.openminis.app.service.SessionActivityTracker] when a
+     * Called by [com.leoyuan.leophoneagent.service.SessionActivityTracker] when a
      * session finishes (active → inactive transition). Looks up the
      * session title via [chatRepository] and posts the notification, off
      * the main thread. No-ops silently if the user has disabled
@@ -99,7 +99,7 @@ class BackgroundTaskNotifier(
             return
         }
 
-        val deepLink = Uri.parse("minis://session/$sessionId")
+        val deepLink = Uri.parse("leophoneagent://session/$sessionId")
         val launchIntent = Intent(Intent.ACTION_VIEW, deepLink).apply {
             // FLAG_ACTIVITY_NEW_TASK because we're posting from a
             // background scope without an Activity context.

@@ -1,4 +1,4 @@
-package com.openminis.app.ui.browser
+package com.leoyuan.leophoneagent.ui.browser
 
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -6,7 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.core.net.toUri
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.logging.AppLogger
 
 /**
  * Centralized router for non-http(s) URL schemes that show up inside our

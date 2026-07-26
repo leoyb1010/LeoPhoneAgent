@@ -1,4 +1,4 @@
-package com.openminis.app.ui.settings
+package com.leoyuan.leophoneagent.ui.settings
 
 import android.app.Activity
 import android.content.Intent
@@ -55,9 +55,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import com.openminis.app.MinisApp
-import com.openminis.app.R
-import com.openminis.app.power.PowerOptimizationManager
+import com.leoyuan.leophoneagent.MinisApp
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.power.PowerOptimizationManager
 
 /**
  * T50 settings screen — surfaces the two pieces of background-keep-alive
@@ -107,7 +107,7 @@ fun BackgroundSettingsScreen(onBack: () -> Unit) {
     // without an app restart.
     var dynamicIslandCapable by remember {
         mutableStateOf(
-            com.openminis.app.service.DynamicIslandSupport.isDynamicIslandCapable(context),
+            com.leoyuan.leophoneagent.service.DynamicIslandSupport.isDynamicIslandCapable(context),
         )
     }
 
@@ -121,7 +121,7 @@ fun BackgroundSettingsScreen(onBack: () -> Unit) {
                     Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
                         Settings.canDrawOverlays(context)
                 dynamicIslandCapable =
-                    com.openminis.app.service.DynamicIslandSupport.isDynamicIslandCapable(context)
+                    com.leoyuan.leophoneagent.service.DynamicIslandSupport.isDynamicIslandCapable(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)

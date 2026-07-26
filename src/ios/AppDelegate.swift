@@ -108,7 +108,7 @@ final class SceneDelegate: NSObject, UIWindowSceneDelegate {
         }
         // [T-ios-ipad-airdrop-provider-json-no-import] Cold-launch URL
         // delivery. When the app is NOT already running and the user AirDrops
-        // (or "Open in Minis") a file, the file:// URL arrives here in
+        // (or "Open in LeoPhoneAgent") a file, the file:// URL arrives here in
         // `connectionOptions.urlContexts` — NOT via SwiftUI `.onOpenURL`.
         // Providing this custom UIWindowSceneDelegate suppresses SwiftUI's
         // automatic URL-context bridging, so without forwarding these the
@@ -133,7 +133,7 @@ final class SceneDelegate: NSObject, UIWindowSceneDelegate {
     }
 
     // [T-ios-ipad-airdrop-provider-json-no-import] Warm URL delivery. When the
-    // app is ALREADY running, AirDrop / "Open in Minis" delivers the file URL
+    // app is ALREADY running, AirDrop / "Open in LeoPhoneAgent" delivers the file URL
     // here. A custom scene delegate must implement this or the URL is dropped
     // (SwiftUI's `.onOpenURL` no longer auto-receives it). Same pipeline as the
     // cold-launch path above and as MinisApp's `.onOpenURL`.

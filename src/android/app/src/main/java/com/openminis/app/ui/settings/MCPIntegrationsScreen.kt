@@ -1,4 +1,4 @@
-package com.openminis.app.ui.settings
+package com.leoyuan.leophoneagent.ui.settings
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -50,10 +50,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import com.openminis.app.R
-import com.openminis.app.data.repository.MCPRepository
-import com.openminis.app.ui.components.DialogTextField
-import com.openminis.app.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.data.repository.MCPRepository
+import com.leoyuan.leophoneagent.ui.components.DialogTextField
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
 
 /**
  * MCP Integrations management screen. Mirrors [SkillsManagementScreen]:
@@ -69,12 +69,12 @@ fun MCPIntegrationsScreen(
     // [T-mcp-env-var-picker-android] App env vars, for the STDIO env field's
     // "insert app var" picker ($$VAR references resolve at runtime in PRoot).
     // Null when the caller hasn't wired it — the picker affordance hides.
-    envVarRepository: com.openminis.app.data.repository.EnvVarRepository? = null,
+    envVarRepository: com.leoyuan.leophoneagent.data.repository.EnvVarRepository? = null,
 ) {
     val servers by mcpRepository.servers.collectAsState()
 
     // [T-android-mcp-list-reload-on-appear] MCPRepository reads servers.json
-    // only in init() (app launch). A server the agent writes via minis-mcp-cli
+    // only in init() (app launch). A server the agent writes via leophoneagent-mcp-cli
     // AFTER launch isn't reflected in the `servers` StateFlow until restart.
     // Re-read the file each time the screen appears (mirrors the Skills screen's
     // reloadFromDisk on entry) so CLI-added servers show without an app restart.
@@ -213,7 +213,7 @@ fun MCPIntegrationsScreen(
 @Composable
 private fun MCPAddSheet(
     mcpRepository: MCPRepository,
-    envVarRepository: com.openminis.app.data.repository.EnvVarRepository?,
+    envVarRepository: com.leoyuan.leophoneagent.data.repository.EnvVarRepository?,
     editServer: MCPRepository.MCPServerConfig?,
     onDismiss: () -> Unit,
     onRequestDelete: () -> Unit,
@@ -275,7 +275,7 @@ private fun MCPAddSheet(
 @Composable
 private fun MCPFormTab(
     mcpRepository: MCPRepository,
-    envVarRepository: com.openminis.app.data.repository.EnvVarRepository?,
+    envVarRepository: com.leoyuan.leophoneagent.data.repository.EnvVarRepository?,
     editServer: MCPRepository.MCPServerConfig?,
     onDone: () -> Unit,
     onRequestDelete: () -> Unit,
@@ -286,7 +286,7 @@ private fun MCPFormTab(
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
     // [T-mcp-env-var-picker-android] App env var keys for the STDIO env picker.
     val appEnvEntries by (envVarRepository?.entries
-        ?.collectAsState() ?: remember { mutableStateOf(emptyList<com.openminis.app.data.repository.EnvVarRepository.EnvVarEntry>()) })
+        ?.collectAsState() ?: remember { mutableStateOf(emptyList<com.leoyuan.leophoneagent.data.repository.EnvVarRepository.EnvVarEntry>()) })
     val appEnvKeys = remember(appEnvEntries) { appEnvEntries.map { it.key } }
     var showEnvVarPicker by remember { mutableStateOf(false) }
     // [T-mcp-http-headers-env-picker-android] Same $$VAR picker offered on the
@@ -323,7 +323,7 @@ private fun MCPFormTab(
     var oauthClientSecret by remember {
         mutableStateOf(
             editServer?.id?.let {
-                com.openminis.app.mcp.oauth.MCPOAuthStore.clientSecret(context, it)
+                com.leoyuan.leophoneagent.mcp.oauth.MCPOAuthStore.clientSecret(context, it)
             } ?: "",
         )
     }
@@ -333,14 +333,14 @@ private fun MCPFormTab(
     var oauthAuthorized by remember {
         mutableStateOf(
             editServer?.id?.let {
-                com.openminis.app.mcp.oauth.MCPOAuthStore.isAuthorized(context, it)
+                com.leoyuan.leophoneagent.mcp.oauth.MCPOAuthStore.isAuthorized(context, it)
             } ?: false,
         )
     }
     var oauthBusy by remember { mutableStateOf(false) }
 
-    fun currentOAuthConfig(): com.openminis.app.mcp.oauth.MCPOAuthConfig? {
-        val cfg = com.openminis.app.mcp.oauth.MCPOAuthConfig(
+    fun currentOAuthConfig(): com.leoyuan.leophoneagent.mcp.oauth.MCPOAuthConfig? {
+        val cfg = com.leoyuan.leophoneagent.mcp.oauth.MCPOAuthConfig(
             clientId = oauthClientId.trim(),
             authorizationEndpoint = oauthAuthEndpoint.trim(),
             tokenEndpoint = oauthTokenEndpoint.trim(),
@@ -502,7 +502,7 @@ private fun MCPFormTab(
                             onClick = {
                                 val sid = name.trim()
                                 if (sid.isNotEmpty()) {
-                                    com.openminis.app.mcp.oauth.MCPOAuthStore.signOut(context, sid)
+                                    com.leoyuan.leophoneagent.mcp.oauth.MCPOAuthStore.signOut(context, sid)
                                     oauthAuthorized = false
                                 }
                             },
@@ -530,16 +530,16 @@ private fun MCPFormTab(
                                     errorText = null
                                     // Persist the secret so the token exchange can
                                     // read it; harmless if the flow is cancelled.
-                                    com.openminis.app.mcp.oauth.MCPOAuthStore.setClientSecret(
+                                    com.leoyuan.leophoneagent.mcp.oauth.MCPOAuthStore.setClientSecret(
                                         context, sid, oauthClientSecret.trim().ifBlank { null },
                                     )
                                     oauthBusy = true
                                     oauthScope.launch {
-                                        val result = com.openminis.app.mcp.oauth.MCPOAuthController(context)
+                                        val result = com.leoyuan.leophoneagent.mcp.oauth.MCPOAuthController(context)
                                             .authorize(sid, url.trim(), cfg)
                                         oauthBusy = false
                                         when (result) {
-                                            is com.openminis.app.mcp.oauth.MCPOAuthController.Result.Success -> {
+                                            is com.leoyuan.leophoneagent.mcp.oauth.MCPOAuthController.Result.Success -> {
                                                 oauthAuthorized = true
                                                 android.widget.Toast.makeText(
                                                     context,
@@ -547,8 +547,8 @@ private fun MCPFormTab(
                                                     android.widget.Toast.LENGTH_SHORT,
                                                 ).show()
                                             }
-                                            is com.openminis.app.mcp.oauth.MCPOAuthController.Result.Cancelled -> {}
-                                            is com.openminis.app.mcp.oauth.MCPOAuthController.Result.Failed -> {
+                                            is com.leoyuan.leophoneagent.mcp.oauth.MCPOAuthController.Result.Cancelled -> {}
+                                            is com.leoyuan.leophoneagent.mcp.oauth.MCPOAuthController.Result.Failed -> {
                                                 errorText = result.message
                                             }
                                         }
@@ -725,7 +725,7 @@ private fun MCPFormTab(
                 // store (keyed by server id) — it never goes into servers.json.
                 // Cleared when the OAuth section is emptied.
                 if (isUrlTransport) {
-                    com.openminis.app.mcp.oauth.MCPOAuthStore.setClientSecret(
+                    com.leoyuan.leophoneagent.mcp.oauth.MCPOAuthStore.setClientSecret(
                         context, server.id,
                         if (server.oauth != null) oauthClientSecret.trim().ifBlank { null } else null,
                     )

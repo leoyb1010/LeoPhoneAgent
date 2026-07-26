@@ -1,14 +1,14 @@
-package com.openminis.app.scheduled
+package com.leoyuan.leophoneagent.scheduled
 
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.core.app.NotificationCompat
-import com.openminis.app.MinisApp
-import com.openminis.app.debug.HeadlessChatRunner
-import com.openminis.app.logging.AppLogger
-import com.openminis.app.service.AgentForegroundService
+import com.leoyuan.leophoneagent.MinisApp
+import com.leoyuan.leophoneagent.debug.HeadlessChatRunner
+import com.leoyuan.leophoneagent.logging.AppLogger
+import com.leoyuan.leophoneagent.service.AgentForegroundService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -215,7 +215,7 @@ object ScheduledAgentRunner {
                         return null
                     }
                 val title = task.label.ifBlank { "Scheduled task" }
-                val memoryOn = com.openminis.app.data.MemoryGlobalPrefs.isGlobalEnabled(app)
+                val memoryOn = com.leoyuan.leophoneagent.data.MemoryGlobalPrefs.isGlobalEnabled(app)
                 val session = app.chatRepository.createSession(
                     modelId = seedModelId,
                     title = title,
@@ -259,7 +259,7 @@ object ScheduledAgentRunner {
         sessionId: String,
         preview: String,
     ) {
-        val deepLink = Uri.parse("minis://session/$sessionId")
+        val deepLink = Uri.parse("leophoneagent://session/$sessionId")
         val openIntent = Intent(Intent.ACTION_VIEW, deepLink).apply {
             setPackage(context.packageName)
         }
@@ -270,7 +270,7 @@ object ScheduledAgentRunner {
             openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val title = "Minis: ${task.label.ifBlank { "Scheduled task" }}"
+        val title = "LeoPhoneAgent: ${task.label.ifBlank { "Scheduled task" }}"
         val notification = NotificationCompat.Builder(context, ScheduledTaskManager.CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_recent_history)
             .setContentTitle(title)

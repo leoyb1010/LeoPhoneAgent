@@ -1,4 +1,4 @@
-package com.openminis.app.config
+package com.leoyuan.leophoneagent.config
 
 /**
  * Failure modes a [ConfigField] operation may surface. Matches iOS

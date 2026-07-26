@@ -1,4 +1,4 @@
-package com.openminis.app.ui.chat
+package com.leoyuan.leophoneagent.ui.chat
 
 // [T-android-split-chat] Flat-chat-item data model + flatten/merge transforms
 // extracted verbatim from ChatScreen.kt: FlatChatItem (sealed), mergeStreamingOverlay,
@@ -134,13 +134,13 @@ import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import com.openminis.app.BuildConfig
-import com.openminis.app.R
-import com.openminis.app.data.FileMentionIndex
-import com.openminis.app.logging.AppLogger
-import com.openminis.app.ui.components.MinisAlertDialog
-import com.openminis.app.ui.components.MinisMenu
-import com.openminis.app.ui.components.MinisMenuDivider
+import com.leoyuan.leophoneagent.BuildConfig
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.data.FileMentionIndex
+import com.leoyuan.leophoneagent.logging.AppLogger
+import com.leoyuan.leophoneagent.ui.components.MinisAlertDialog
+import com.leoyuan.leophoneagent.ui.components.MinisMenu
+import com.leoyuan.leophoneagent.ui.components.MinisMenuDivider
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -250,26 +250,26 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.openminis.app.offload.OffloadPermissionManager
+import com.leoyuan.leophoneagent.offload.OffloadPermissionManager
 import com.mikepenz.markdown.compose.components.markdownComponents
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
 import com.mikepenz.markdown.m3.markdownTypography
 import org.intellij.markdown.ast.ASTNode
 import org.intellij.markdown.ast.getTextInNode
-import com.openminis.app.data.model.LLMModel
-import com.openminis.app.data.model.ModelEntry
-import com.openminis.app.data.model.ModelGroup
-import com.openminis.app.data.model.ProviderConfig
-import com.openminis.app.data.model.ProviderType
-import com.openminis.app.data.model.RoutingStrategy
-import com.openminis.app.data.model.ThinkingLevel
-import com.openminis.app.data.repository.ChatRepository
-import com.openminis.app.data.repository.MemoryRepository
-import com.openminis.app.data.repository.ProviderRepository
-import com.openminis.app.ui.browser.BrowserSheet
-import com.openminis.app.ui.theme.ChatColors
-import com.openminis.app.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.data.model.LLMModel
+import com.leoyuan.leophoneagent.data.model.ModelEntry
+import com.leoyuan.leophoneagent.data.model.ModelGroup
+import com.leoyuan.leophoneagent.data.model.ProviderConfig
+import com.leoyuan.leophoneagent.data.model.ProviderType
+import com.leoyuan.leophoneagent.data.model.RoutingStrategy
+import com.leoyuan.leophoneagent.data.model.ThinkingLevel
+import com.leoyuan.leophoneagent.data.repository.ChatRepository
+import com.leoyuan.leophoneagent.data.repository.MemoryRepository
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.ui.browser.BrowserSheet
+import com.leoyuan.leophoneagent.ui.theme.ChatColors
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
 
 internal sealed class FlatChatItem {
     abstract val key: String
@@ -408,7 +408,7 @@ internal sealed class FlatChatItem {
         // T300: thinking level captured at the message's creation. Null
         // for assistant messages restored from DB (legacy / pre-T300) —
         // the renderer falls back to the chat's current level.
-        val messageThinkingLevel: com.openminis.app.data.model.ThinkingLevel? = null,
+        val messageThinkingLevel: com.leoyuan.leophoneagent.data.model.ThinkingLevel? = null,
         // [T-android-thinking-auto-collapse] True when this thinking block
         // is the LAST block of any kind in the message (including text /
         // tool_use), not merely the last thinking block. Drives the
@@ -571,7 +571,7 @@ internal fun buildFlatChatItems(
         // progress lines localizes the heavy batch. Only fires on the
         // full-build path (sessionId != null), never per streaming token.
         if (sessionId != null && idx > 0 && idx % 100 == 0) {
-            com.openminis.app.diagnostics.PerfLongCtx.step(
+            com.leoyuan.leophoneagent.diagnostics.PerfLongCtx.step(
                 sessionId,
                 "buildFlatChatItems.progress",
                 "msgIdx=$idx of=${messages.size} rowsSoFar=${out.size}",
@@ -587,7 +587,7 @@ internal fun buildFlatChatItems(
             continue
         }
         // System messages (slash-command notices, compact divider, etc.) render
-        // as horizontal-divider rows — no "Minis" attribution, no card. Skip
+        // as horizontal-divider rows — no "LeoPhoneAgent" attribution, no card. Skip
         // the assistant header so each info block stands on its own. Mirrors
         // iOS systemDividerRow / compactDividerRow.
         val isSystem = message.role == "system"
@@ -600,7 +600,7 @@ internal fun buildFlatChatItems(
         // T83: when Resume creates a fresh assistant bubble after the user
         // stopped a streaming turn, the previous (cancelled) assistant
         // message is right before this one in the list. Visually they should
-        // read as one continuous turn — suppress the duplicate "Minis"
+        // read as one continuous turn — suppress the duplicate "LeoPhoneAgent"
         // header. Skip system rows when looking back since they render as
         // dividers, not as separate speaker turns. iOS achieves this by
         // reusing the existing ChatMessage in runAgentLoop(resumingAt:);

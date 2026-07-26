@@ -1,13 +1,13 @@
-package com.openminis.app.debug
+package com.leoyuan.leophoneagent.debug
 
 import android.content.Context
 import androidx.lifecycle.ViewModelProvider
-import com.openminis.app.MinisApp
-import com.openminis.app.data.model.ThinkingLevel
-import com.openminis.app.ui.chat.ChatViewModel
-import com.openminis.app.ui.chat.ChatViewModelStore
-import com.openminis.app.ui.chat.InputAttachment
-import com.openminis.app.ui.chat.addAttachment
+import com.leoyuan.leophoneagent.MinisApp
+import com.leoyuan.leophoneagent.data.model.ThinkingLevel
+import com.leoyuan.leophoneagent.ui.chat.ChatViewModel
+import com.leoyuan.leophoneagent.ui.chat.ChatViewModelStore
+import com.leoyuan.leophoneagent.ui.chat.InputAttachment
+import com.leoyuan.leophoneagent.ui.chat.addAttachment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext

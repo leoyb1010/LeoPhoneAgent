@@ -1,4 +1,4 @@
-package com.openminis.app.ui.chat
+package com.leoyuan.leophoneagent.ui.chat
 
 // [T-android-split-chat] Tail composables extracted verbatim from ChatScreen.kt:
 // BorderedMarkdownTable, FallbackInfoBlock, CompactSummarySheet,
@@ -136,13 +136,13 @@ import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import com.openminis.app.BuildConfig
-import com.openminis.app.R
-import com.openminis.app.data.FileMentionIndex
-import com.openminis.app.logging.AppLogger
-import com.openminis.app.ui.components.MinisAlertDialog
-import com.openminis.app.ui.components.MinisMenu
-import com.openminis.app.ui.components.MinisMenuDivider
+import com.leoyuan.leophoneagent.BuildConfig
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.data.FileMentionIndex
+import com.leoyuan.leophoneagent.logging.AppLogger
+import com.leoyuan.leophoneagent.ui.components.MinisAlertDialog
+import com.leoyuan.leophoneagent.ui.components.MinisMenu
+import com.leoyuan.leophoneagent.ui.components.MinisMenuDivider
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -252,26 +252,26 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.openminis.app.offload.OffloadPermissionManager
+import com.leoyuan.leophoneagent.offload.OffloadPermissionManager
 import com.mikepenz.markdown.compose.components.markdownComponents
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
 import com.mikepenz.markdown.m3.markdownTypography
 import org.intellij.markdown.ast.ASTNode
 import org.intellij.markdown.ast.getTextInNode
-import com.openminis.app.data.model.LLMModel
-import com.openminis.app.data.model.ModelEntry
-import com.openminis.app.data.model.ModelGroup
-import com.openminis.app.data.model.ProviderConfig
-import com.openminis.app.data.model.ProviderType
-import com.openminis.app.data.model.RoutingStrategy
-import com.openminis.app.data.model.ThinkingLevel
-import com.openminis.app.data.repository.ChatRepository
-import com.openminis.app.data.repository.MemoryRepository
-import com.openminis.app.data.repository.ProviderRepository
-import com.openminis.app.ui.browser.BrowserSheet
-import com.openminis.app.ui.theme.ChatColors
-import com.openminis.app.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.data.model.LLMModel
+import com.leoyuan.leophoneagent.data.model.ModelEntry
+import com.leoyuan.leophoneagent.data.model.ModelGroup
+import com.leoyuan.leophoneagent.data.model.ProviderConfig
+import com.leoyuan.leophoneagent.data.model.ProviderType
+import com.leoyuan.leophoneagent.data.model.RoutingStrategy
+import com.leoyuan.leophoneagent.data.model.ThinkingLevel
+import com.leoyuan.leophoneagent.data.repository.ChatRepository
+import com.leoyuan.leophoneagent.data.repository.MemoryRepository
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.ui.browser.BrowserSheet
+import com.leoyuan.leophoneagent.ui.theme.ChatColors
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
 
 // ─── Bordered Markdown Table (iOS style: bordered cells with grid lines) ─────
 
@@ -842,7 +842,7 @@ private fun parseInlineMarkdown(
 //
 // Mirrors iOS `takeBrowserSnapshot()` timer (ToolLiveSheet.swift:1803-1825):
 // while a browser_use block is RUNNING/STREAMING, poll the active WebView at
-// a fixed interval so the Minis Computer sheet, detail sheet, and floating
+// a fixed interval so the LeoPhoneAgent Computer sheet, detail sheet, and floating
 // thumbnail can show the current page state — not just screenshots saved by
 // visualChangeActions (NAVIGATE/CLICK/SCROLL/HOVER/TYPE). Actions like
 // get_readable, get_text, execute_js, fetch never save an imageFilePath, so
@@ -850,7 +850,7 @@ private fun parseInlineMarkdown(
 
 // [T-android-split-chat] internal (was private) — referenced from ChatScreen.kt
 // after the move.
-internal val LocalBrowserTabPool = compositionLocalOf<com.openminis.app.browser.BrowserTabPool?> { null }
+internal val LocalBrowserTabPool = compositionLocalOf<com.leoyuan.leophoneagent.browser.BrowserTabPool?> { null }
 internal val LocalToolPreviewEnabled = compositionLocalOf { true }
 
 @Composable
@@ -909,7 +909,7 @@ internal fun ResumeBanner(onResume: () -> Unit) {
     // is itself an explicit user action, so it resumes in one tap. (Previously
     // the first tap only armed the warning and a second tap was required; that
     // extra confirm was friction on an already-explicit gesture.)
-    val showCrashWarning = com.openminis.app.diagnostics.LaunchCycleBeacon.lastCycleWasCrash
+    val showCrashWarning = com.leoyuan.leophoneagent.diagnostics.LaunchCycleBeacon.lastCycleWasCrash
     Row(
         modifier = Modifier
             .fillMaxWidth()

@@ -1,8 +1,8 @@
-package com.openminis.app.data
+package com.leoyuan.leophoneagent.data
 
-import com.openminis.app.data.model.ModelGroup
-import com.openminis.app.data.model.ModelOverrides
-import com.openminis.app.data.model.ThinkingLevel
+import com.leoyuan.leophoneagent.data.model.ModelGroup
+import com.leoyuan.leophoneagent.data.model.ModelOverrides
+import com.leoyuan.leophoneagent.data.model.ThinkingLevel
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull

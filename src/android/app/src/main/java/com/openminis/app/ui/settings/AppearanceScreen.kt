@@ -1,8 +1,8 @@
-package com.openminis.app.ui.settings
+package com.leoyuan.leophoneagent.ui.settings
 
-import com.openminis.app.R
-import com.openminis.app.data.repository.AppIconRepository
-import com.openminis.app.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.data.repository.AppIconRepository
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
 
 import android.content.Context
 import android.content.SharedPreferences

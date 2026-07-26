@@ -1,4 +1,4 @@
-package com.openminis.app.ui.preview
+package com.leoyuan.leophoneagent.ui.preview
 
 import android.content.Context
 import android.content.Intent
@@ -7,16 +7,16 @@ import android.net.Uri
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
-import com.openminis.app.MainActivity
-import com.openminis.app.R
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.MainActivity
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.logging.AppLogger
 
 /**
  * Helper that pins a `file:///var/minis/...` HTML preview as a launcher
  * shortcut. Clicking the shortcut from the home screen sends a
- * `minis://preview/html?path=...&title=...` deep link back to
- * [MainActivity], which [com.openminis.app.deeplink.DeepLinkHandler] parses
- * into [com.openminis.app.deeplink.DeepLinkAction.OpenHtmlPreview]; the
+ * `leophoneagent://preview/html?path=...&title=...` deep link back to
+ * [MainActivity], which [com.leoyuan.leophoneagent.deeplink.DeepLinkHandler] parses
+ * into [com.leoyuan.leophoneagent.deeplink.DeepLinkAction.OpenHtmlPreview]; the
  * chat layer then opens the fullscreen WebPreview.
  */
 object WebPreviewShortcut {
@@ -60,9 +60,9 @@ object WebPreviewShortcut {
         // from a different session gets its own shortcut.
         val shortcutId = "html_preview_${(sessionId + resourcePath).hashCode().toUInt().toString(16)}"
 
-        // minis://session/<sessionId>/<resource-path>?title=<title>
+        // leophoneagent://session/<sessionId>/<resource-path>?title=<title>
         val deepLink = Uri.Builder()
-            .scheme("minis")
+            .scheme("leophoneagent")
             .authority("session")
             .path("/$sessionId$resourcePath")
             .appendQueryParameter("title", title)

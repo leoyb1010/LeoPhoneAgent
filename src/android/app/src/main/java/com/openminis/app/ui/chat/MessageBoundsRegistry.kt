@@ -1,4 +1,4 @@
-package com.openminis.app.ui.chat
+package com.leoyuan.leophoneagent.ui.chat
 
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.geometry.Rect

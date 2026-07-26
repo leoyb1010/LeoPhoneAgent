@@ -1,4 +1,4 @@
-package com.openminis.app.ui.media
+package com.leoyuan.leophoneagent.ui.media
 
 import android.content.Intent
 import android.media.MediaPlayer

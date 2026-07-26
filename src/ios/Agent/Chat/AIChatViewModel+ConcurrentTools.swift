@@ -585,8 +585,8 @@ extension AIChatViewModel {
                 toolImageMimeType = "image/jpeg"
                 if pathArg.hasPrefix("/var/minis/") {
                     toolImageLinuxPath = pathArg
-                } else if pathArg.hasPrefix("minis://") {
-                    let tail = String(pathArg.dropFirst("minis://".count))
+                } else if pathArg.hasPrefix("leophoneagent://") {
+                    let tail = String(pathArg.dropFirst("leophoneagent://".count))
                     if !tail.isEmpty {
                         toolImageLinuxPath = "/var/minis/\(tail)"
                     }

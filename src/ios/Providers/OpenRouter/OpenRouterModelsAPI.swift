@@ -17,8 +17,8 @@ enum OpenRouterModelsAPI {
         var request = URLRequest(url: URL(string: URLBuilding.join(baseURL, "/models"))!)
         request.httpMethod = "GET"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("https://github.com/OpenMinis/OpenMinis", forHTTPHeaderField: "HTTP-Referer")
-        request.setValue("Minis App", forHTTPHeaderField: "X-Title")
+        request.setValue("https://github.com/leoyb1010/LeoPhoneAgent", forHTTPHeaderField: "HTTP-Referer")
+        request.setValue("LeoPhoneAgent App", forHTTPHeaderField: "X-Title")
         logger.info("Fetching OpenRouter models")
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -119,7 +119,7 @@ private enum OpenRouterModelsCache {
 
     private static var cacheDir: URL {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("com.openminis.app.openrouter-models-cache", isDirectory: true)
+            .appendingPathComponent("com.leoyuan.leophoneagent.openrouter-models-cache", isDirectory: true)
     }
 
     private static func cacheKey(for credential: String) -> String {

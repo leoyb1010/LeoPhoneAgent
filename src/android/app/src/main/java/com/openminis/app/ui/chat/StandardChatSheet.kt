@@ -1,4 +1,4 @@
-package com.openminis.app.ui.chat
+package com.leoyuan.leophoneagent.ui.chat
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -29,8 +29,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.openminis.app.R
-import com.openminis.app.ui.theme.ChatColors
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.ui.theme.ChatColors
 
 /**
  * Standardized half-screen modal sheet used by every popup launched from the

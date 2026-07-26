@@ -1,8 +1,8 @@
-package com.openminis.app.sandbox
+package com.leoyuan.leophoneagent.sandbox
 
 import android.content.Context
 import android.util.Log
-import com.openminis.app.data.repository.EnvVarRepository
+import com.leoyuan.leophoneagent.data.repository.EnvVarRepository
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
@@ -192,8 +192,8 @@ object ExecutionCoordinator {
         // [T-android-mcp-bind-mount] mcp-servers MUST be here, not only in
         // PRootKernel.registerGlobalBindMounts: PersistentShell builds PRoot's
         // `-b` argv from THIS map, so a subdir missing here is invisible to the
-        // shell that runs minis-mcp-cli — /var/minis/mcp-servers/servers.json
-        // then resolves to the empty rootfs placeholder and `minis-mcp-cli list`
+        // shell that runs leophoneagent-mcp-cli — /var/minis/mcp-servers/servers.json
+        // then resolves to the empty rootfs placeholder and `leophoneagent-mcp-cli list`
         // returns {"servers": [], "count": 0} even though the UI wrote the
         // server (the UI / debug.ls read via resolveHostPath, a separate map,
         // which is why they disagreed). Same trap as the external-mounts note

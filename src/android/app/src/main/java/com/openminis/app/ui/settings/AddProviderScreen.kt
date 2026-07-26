@@ -1,4 +1,4 @@
-package com.openminis.app.ui.settings
+package com.leoyuan.leophoneagent.ui.settings
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -68,18 +68,18 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
-import com.openminis.app.auth.OpenAIOAuthManager
-import com.openminis.app.auth.OpenRouterOAuthManager
-import com.openminis.app.data.model.ProviderCredential
-import com.openminis.app.data.model.ProviderInstance
-import com.openminis.app.data.model.ProviderType
-import com.openminis.app.data.repository.ProviderRepository
-import com.openminis.app.R
+import com.leoyuan.leophoneagent.auth.OpenAIOAuthManager
+import com.leoyuan.leophoneagent.auth.OpenRouterOAuthManager
+import com.leoyuan.leophoneagent.data.model.ProviderCredential
+import com.leoyuan.leophoneagent.data.model.ProviderInstance
+import com.leoyuan.leophoneagent.data.model.ProviderType
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.R
 import kotlinx.coroutines.launch
 import java.util.UUID
-import com.openminis.app.ui.components.MinisButton
-import com.openminis.app.ui.components.RowLabel
-import com.openminis.app.ui.components.SectionTextField
+import com.leoyuan.leophoneagent.ui.components.MinisButton
+import com.leoyuan.leophoneagent.ui.components.RowLabel
+import com.leoyuan.leophoneagent.ui.components.SectionTextField
 
 private enum class AddProviderStep {
     CHOOSE_TYPE,
@@ -100,7 +100,7 @@ fun AddProviderScreen(
     // Voice Chat Provider template row — preseeds type/base URL/label/appendV1
     // on the configure step (mirrors iOS applyVoiceTemplate).
     var selectedVoiceTemplate by remember {
-        mutableStateOf<com.openminis.app.data.model.VoiceProviderTemplate?>(null)
+        mutableStateOf<com.leoyuan.leophoneagent.data.model.VoiceProviderTemplate?>(null)
     }
 
     // Unified back handler: reuse each step's onBack so predictive-back gesture
@@ -224,7 +224,7 @@ private fun availableCredentials(type: ProviderType): List<ProviderCredential> {
 private fun ChooseProviderScreen(
     onBack: () -> Unit,
     onSelect: (ProviderType) -> Unit,
-    onSelectVoiceTemplate: (com.openminis.app.data.model.VoiceProviderTemplate) -> Unit = {},
+    onSelectVoiceTemplate: (com.leoyuan.leophoneagent.data.model.VoiceProviderTemplate) -> Unit = {},
 ) {
     SettingsScaffold(
         title = stringResource(R.string.provider_list_add_provider),
@@ -268,7 +268,7 @@ private fun ChooseProviderScreen(
         // [T-android-provider-voice] Voice Chat Providers — one row per voice
         // vendor template. Tapping prefills the underlying protocol + base URL
         // and jumps to configure (mirrors iOS voiceProviderSection).
-        val templates = com.openminis.app.data.model.VoiceProviderTemplate.all
+        val templates = com.leoyuan.leophoneagent.data.model.VoiceProviderTemplate.all
         val templateNotes = templates.mapNotNull { it.note }
         SettingsSection(
             header = stringResource(R.string.add_provider_voice_chat_providers),
@@ -278,11 +278,11 @@ private fun ChooseProviderScreen(
         ) {
             templates.forEachIndexed { index, template ->
                 val capabilityRes = when (template.capability) {
-                    com.openminis.app.data.model.VoiceProviderTemplate.Capability.TTS ->
+                    com.leoyuan.leophoneagent.data.model.VoiceProviderTemplate.Capability.TTS ->
                         R.string.add_provider_voice_capability_tts
-                    com.openminis.app.data.model.VoiceProviderTemplate.Capability.ASR ->
+                    com.leoyuan.leophoneagent.data.model.VoiceProviderTemplate.Capability.ASR ->
                         R.string.add_provider_voice_capability_asr
-                    com.openminis.app.data.model.VoiceProviderTemplate.Capability.BOTH ->
+                    com.leoyuan.leophoneagent.data.model.VoiceProviderTemplate.Capability.BOTH ->
                         R.string.add_provider_voice_capability_both
                 }
                 SettingsRow(
@@ -369,7 +369,7 @@ private fun ConfigureProviderScreen(
     providerType: ProviderType,
     credentialType: ProviderCredential,
     providerRepository: ProviderRepository,
-    voiceTemplate: com.openminis.app.data.model.VoiceProviderTemplate? = null,
+    voiceTemplate: com.leoyuan.leophoneagent.data.model.VoiceProviderTemplate? = null,
     onBack: () -> Unit,
     onSaved: () -> Unit,
 ) {
@@ -652,7 +652,7 @@ private fun ColumnScope.OAuthConfigSection(
     // coroutine's onDeviceCode callback and RENDERED below — the iOS lesson
     // was a write-only state nobody displayed ("button does nothing").
     var kimiDeviceAuth by remember {
-        mutableStateOf<com.openminis.app.auth.KimiDeviceFlow.DeviceAuthorization?>(null)
+        mutableStateOf<com.leoyuan.leophoneagent.auth.KimiDeviceFlow.DeviceAuthorization?>(null)
     }
     var kimiLoginJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
     kimiDeviceAuth?.let { auth ->
@@ -734,7 +734,7 @@ private fun ColumnScope.OAuthConfigSection(
                                         // state as soon as the code is issued;
                                         // login() keeps polling underneath and
                                         // returns once the user authorizes.
-                                        val key = com.openminis.app.auth.KimiOAuthManager.login(
+                                        val key = com.leoyuan.leophoneagent.auth.KimiOAuthManager.login(
                                             context, pendingInstanceId, providerRepository,
                                             onDeviceCode = { auth -> kimiDeviceAuth = auth },
                                         )
@@ -746,7 +746,7 @@ private fun ColumnScope.OAuthConfigSection(
                                         maskedToken = maskOAuthToken(key)
                                     }
                                     ProviderType.anthropic -> {
-                                        val key = com.openminis.app.auth.ClaudeOAuthManager.login(context, pendingInstanceId, providerRepository)
+                                        val key = com.leoyuan.leophoneagent.auth.ClaudeOAuthManager.login(context, pendingInstanceId, providerRepository)
                                         maskedToken = maskOAuthToken(key)
                                     }
                                     ProviderType.openAI -> {
@@ -754,7 +754,7 @@ private fun ColumnScope.OAuthConfigSection(
                                         maskedToken = maskOAuthToken(key)
                                     }
                                     ProviderType.xAI -> {
-                                        val key = com.openminis.app.auth.XAIOAuthManager.login(context, pendingInstanceId, providerRepository)
+                                        val key = com.leoyuan.leophoneagent.auth.XAIOAuthManager.login(context, pendingInstanceId, providerRepository)
                                         maskedToken = maskOAuthToken(key)
                                     }
                                     else -> {
@@ -776,7 +776,7 @@ private fun ColumnScope.OAuthConfigSection(
                                 // (4xx, token format) keep their raw
                                 // message so we don't lose diagnostic
                                 // signal.
-                                errorMessage = if (e is com.openminis.app.auth.OAuthNetworkUnreachableException) {
+                                errorMessage = if (e is com.leoyuan.leophoneagent.auth.OAuthNetworkUnreachableException) {
                                     context.getString(R.string.add_provider_oauth_network_unreachable)
                                 } else {
                                     e.message ?: "Authentication failed"

@@ -273,7 +273,7 @@ actor SessionFileChangeTracker {
 /// Install the iSH fakefs change handler that pumps events into the
 /// tracker actor. Call once at app launch after ISHKernel has booted.
 ///
-/// iSH stays agnostic about Minis sessions — this Swift bridge knows the
+/// iSH stays agnostic about LeoPhoneAgent sessions — this Swift bridge knows the
 /// per-session host directory layout (`<minisBaseURL>/<sid>/<subdir>/...`)
 /// and the bind-mount guest layout (`/var/minis/<subdir>/...`), and resolves
 /// either shape to a SessionFile recordId on the consumer (actor) side.

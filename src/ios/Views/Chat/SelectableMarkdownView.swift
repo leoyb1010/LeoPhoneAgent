@@ -8,15 +8,15 @@ import UIKit
 private let imgLogger = AppLogger(category: "MinisImage")
 private let attachLogger = AppLogger(category: "AttachDebug")
 
-// MARK: - minis:// URL encoding [T-minis-url-fullwidth-pipe-ios]
+// MARK: - leophoneagent:// URL encoding [T-minis-url-fullwidth-pipe-ios]
 
-/// Percent-encode the path of a `minis://` destination that contains raw,
+/// Percent-encode the path of a `leophoneagent://` destination that contains raw,
 /// unencoded bytes (e.g. a filename with U+FF5C `｜`, CJK, emoji the LLM emitted
-/// unencoded inside a minis:// link), returning a parseable URL (or nil if it
+/// unencoded inside a leophoneagent:// link), returning a parseable URL (or nil if it
 /// still can't be formed). Used by both the link path (SelectableMarkdownTheme)
 /// and the image path (ImageAttachment), so it lives at file scope.
 func encodeRawMinisURL(_ destination: String) -> URL? {
-    let prefix = "minis://"
+    let prefix = "leophoneagent://"
     guard destination.hasPrefix(prefix) else { return URL(string: destination) }
     let rest = String(destination.dropFirst(prefix.count))
     let encoded = rest.split(separator: "/", omittingEmptySubsequences: false)
@@ -385,7 +385,7 @@ fileprivate final class MarkdownNSRenderer {
     /// every TableAttachment was rebuilt and its `cachedLayout` reset to
     /// nil — forcing typesetter to run a full per-cell `boundingRect`
     /// pass on each `attachmentBounds` query. On a 6-table message that
-    /// was 27 s of main-thread typesetter pin (ips Minis-2026-05-14-094312).
+    /// was 27 s of main-thread typesetter pin (ips LeoPhoneAgent-2026-05-14-094312).
     /// Keying by contentHash lets re-rendered identical tables hit the
     /// previously-built attachment + its `cachedLayout`.
     var tableAttachmentCache: [Int: TableAttachment] = [:]
@@ -667,7 +667,7 @@ fileprivate final class MarkdownNSRenderer {
         // Bullet glyphs MUST be Unicode characters, NOT NSTextAttachments.
         // Build 13 reverted bullets to SF-symbol NSTextAttachments per
         // user request to restore visual size — within 90s of install the
-        // device hit a fresh 0x8BADF00D watchdog (ips Minis-2026-05-14-
+        // device hit a fresh 0x8BADF00D watchdog (ips LeoPhoneAgent-2026-05-14-
         // 163330). Main-thread frame #1: `NSConcreteTextStorage
         // attribute:atIndex:effectiveRange:` — fillLayoutHole scanning
         // attribute runs. A 6-item list produces 6 image-attachment runs;
@@ -1062,7 +1062,7 @@ fileprivate final class MarkdownNSRenderer {
     /// double percent-encoding when present.
     ///
     /// [T-ios-file-preview-stale-cache] file_write returns a singly-encoded
-    /// minis_url (e.g. `minis://workspace/GitHub%E7%83%AD….md`). When the model
+    /// minis_url (e.g. `leophoneagent://workspace/GitHub%E7%83%AD….md`). When the model
     /// embeds it in `[text](url)` and it passes through the markdown render
     /// pipeline, the literal `%` can get re-encoded to `%25`, yielding a
     /// double-encoded destination (`…%25E7…`). `URL(string:).path` then only
@@ -1074,14 +1074,14 @@ fileprivate final class MarkdownNSRenderer {
     /// resolver-side `subPathCandidates` tolerance stays as a backstop.
     private func normalizedLinkURL(from destination: String) -> URL? {
         let fallback = URL(string: destination)
-        // Only minis:// links are affected; everything else is untouched.
-        guard destination.hasPrefix("minis://") else {
+        // Only leophoneagent:// links are affected; everything else is untouched.
+        guard destination.hasPrefix("leophoneagent://") else {
             return fallback
         }
         // [T-minis-url-fullwidth-pipe-ios] URL(string:) returned nil — on iOS
         // Foundation this happens when the destination carries raw non-ASCII in
         // the path (e.g. a filename with U+FF5C `｜`, CJK, emoji that the LLM
-        // emitted unencoded inside a minis:// link). The link would otherwise be
+        // emitted unencoded inside a leophoneagent:// link). The link would otherwise be
         // dead (no .link attribute → not tappable). Percent-encode the path
         // portion segment-by-segment and retry. Idempotent: a segment that is
         // ALREADY validly encoded is left untouched, so an already-%EF%BD%9C URL
@@ -1099,7 +1099,7 @@ fileprivate final class MarkdownNSRenderer {
         // existence check (subPathCandidates) remains the final disambiguator.
         guard base.path.contains("%"),
               let once = destination.removingPercentEncoding,
-              once.hasPrefix("minis://"),
+              once.hasPrefix("leophoneagent://"),
               let fixed = URL(string: once) else {
             return base
         }
@@ -3319,7 +3319,7 @@ final class ImageAttachment: NSTextAttachment {
     /// The maxPixelSize used for the current loadedImage (0 = initial full load).
     private var downsampledAtPixelSize: CGFloat = 0
     private var isLoading = false
-    /// Set when a minis:// file was not found; allows retry on next render.
+    /// Set when a leophoneagent:// file was not found; allows retry on next render.
     private var fileNotFound = false
     /// Number of file-not-found retries remaining (prevents infinite polling).
     private var retriesRemaining = 15
@@ -3350,7 +3350,7 @@ final class ImageAttachment: NSTextAttachment {
     /// the active session's workspace directory. Paths that already carry
     /// a URL scheme (`http`, `https`, `minis`, `file`, …) are returned
     /// unchanged. Bare filenames and relative paths (e.g. `foo.png`,
-    /// `./foo.png`, `subdir/bar.jpg`) become `minis://workspace/<path>`
+    /// `./foo.png`, `subdir/bar.jpg`) become `leophoneagent://workspace/<path>`
     /// with non-ASCII segments percent-encoded so `URL(string:)` parses
     /// them cleanly.
     static func canonicalizeMarkdownImageSource(_ src: String) -> String {
@@ -3359,12 +3359,12 @@ final class ImageAttachment: NSTextAttachment {
             let maybeScheme = src[src.startIndex..<colon]
             // Only accept alphabetic-prefixed schemes (RFC 3986 § 3.1).
             if !maybeScheme.isEmpty && maybeScheme.allSatisfy({ $0.isLetter }) {
-                // [T-minis-url-fullwidth-pipe-ios] Exception: a minis:// source the
+                // [T-minis-url-fullwidth-pipe-ios] Exception: a leophoneagent:// source the
                 // model emitted with raw non-ASCII in the path (e.g. `｜`, CJK) that
                 // URL(string:) can't parse. Re-encode the path so the image resolves
                 // instead of bailing with a dead source. Idempotent for already-
                 // encoded URLs (encodeRawMinisURL decodes-then-encodes per segment).
-                if src.hasPrefix("minis://"), URL(string: src) == nil,
+                if src.hasPrefix("leophoneagent://"), URL(string: src) == nil,
                    let fixed = encodeRawMinisURL(src) {
                     return fixed.absoluteString
                 }
@@ -3381,7 +3381,7 @@ final class ImageAttachment: NSTextAttachment {
         let encoded = segments.map { seg -> String in
             String(seg).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String(seg)
         }.joined(separator: "/")
-        return "minis://workspace/\(encoded)"
+        return "leophoneagent://workspace/\(encoded)"
     }
 
     /// Drop the currently-loaded bitmap so the next `beginLoadingIfNeeded`
@@ -3541,7 +3541,7 @@ final class ImageAttachment: NSTextAttachment {
         }
         retriesRemaining -= 1
         isLoading = true
-        // Canonicalize scheme-less / relative sources to minis://workspace/…
+        // Canonicalize scheme-less / relative sources to leophoneagent://workspace/…
         // so the rest of the pipeline (cache key, resolve, fingerprint)
         // treats them uniformly. Agents writing plain markdown like
         // `![img](foo.png)` or `![img](subdir/foo.png)` land here.
@@ -3553,7 +3553,7 @@ final class ImageAttachment: NSTextAttachment {
         imgLogger.info("[MinisImage][Load] START src=\(canonicalSrc) scheme=\(parsedURL?.scheme ?? "nil") host=\(parsedURL?.host ?? "nil") path=\(parsedURL?.path ?? "nil") ext=\(parsedURL?.pathExtension ?? "nil") retriesRemaining=\(self.retriesRemaining)")
 
         // Fingerprint-keyed cache so an in-place rewrite of the same
-        // minis:// path produces a different key and falls through to
+        // leophoneagent:// path produces a different key and falls through to
         // a fresh decode.
         let fpKey = minisMediaCacheKey(for: canonicalSrc)
         if let cached = NativeMediaImageCache.shared.image(for: fpKey) {
@@ -3570,10 +3570,10 @@ final class ImageAttachment: NSTextAttachment {
         imgLogger.info("[MinisImage][Load] MEMORY CACHE MISS src=\(canonicalSrc) — will load from disk/network")
 
         let src = canonicalSrc
-        let isMinisURL = URL(string: src).map { $0.scheme == "minis" } ?? false
+        let isMinisURL = URL(string: src).map { $0.scheme == "leophoneagent" } ?? false
         // [T-ios-failed-image-refetch-storm] For remote (non-minis) URLs that
         // failed recently, don't re-dispatch a network fetch on every cell
-        // recycle — render the placeholder and bail. minis:// is exempt: those
+        // recycle — render the placeholder and bail. leophoneagent:// is exempt: those
         // are local files that may be written shortly after the markdown
         // references them, so the retriesRemaining-scheduled flow must stay.
         if !isMinisURL, NativeMediaImageCache.shared.isRecentlyFailed(src) {
@@ -3586,10 +3586,10 @@ final class ImageAttachment: NSTextAttachment {
         Task.detached(priority: .userInitiated) {
             var fileURL: URL?
             let img: UIImage?
-            if let url = URL(string: src), url.scheme == "minis" {
-                imgLogger.info("[MinisImage][Load] resolving minis:// URL src=\(src) host=\(url.host ?? "nil") path=\(url.path)")
+            if let url = URL(string: src), url.scheme == "leophoneagent" {
+                imgLogger.info("[MinisImage][Load] resolving leophoneagent:// URL src=\(src) host=\(url.host ?? "nil") path=\(url.path)")
                 if let resolved = resolveMinisFileURLForNativeText(url: url) {
-                    imgLogger.info("[MinisImage][Load] minis:// resolved to localPath=\(resolved.path)")
+                    imgLogger.info("[MinisImage][Load] leophoneagent:// resolved to localPath=\(resolved.path)")
                     fileURL = resolved
                     if let data = try? Data(contentsOf: resolved) {
                         imgLogger.info("[MinisImage][Load] read \(data.count) bytes from localPath=\(resolved.path)")
@@ -3652,7 +3652,7 @@ final class ImageAttachment: NSTextAttachment {
                 // [T-ios-failed-image-refetch-storm] Negative-cache remote
                 // failures so cell recycling during scroll doesn't re-fetch the
                 // same broken URL every recycle (the image-session decel storm).
-                // minis:// is exempt — its not-yet-written-file case is handled
+                // leophoneagent:// is exempt — its not-yet-written-file case is handled
                 // by the retriesRemaining-scheduled retry below.
                 if !isMinisURL { NativeMediaImageCache.shared.recordFailure(src) }
             }
@@ -3886,7 +3886,7 @@ final class VideoAttachment: NSTextAttachment {
         let src = source
         Task.detached(priority: .userInitiated) {
             var fileURL: URL?
-            if let url = URL(string: src), url.scheme == "minis" {
+            if let url = URL(string: src), url.scheme == "leophoneagent" {
                 fileURL = resolveMinisFileURLForNativeText(url: url)
             } else if let url = URL(string: src) {
                 fileURL = url
@@ -4094,7 +4094,7 @@ final class AudioAttachment: NSTextAttachment {
         } else {
             cleanSource = source
         }
-        if let url = URL(string: cleanSource), url.scheme == "minis" {
+        if let url = URL(string: cleanSource), url.scheme == "leophoneagent" {
             resolvedURL = resolveMinisFileURLForNativeText(url: url)
         } else if let url = URL(string: cleanSource) {
             resolvedURL = url
@@ -5122,13 +5122,13 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         onCopyScreenshot?()
     }
 
-    // MARK: - [T-selection-menu-minis-tts] Minis TTS menu actions
+    // MARK: - [T-selection-menu-minis-tts] LeoPhoneAgent TTS menu actions
 
-    /// Read the WHOLE reply from the start via the Minis TTS stack
+    /// Read the WHOLE reply from the start via the LeoPhoneAgent TTS stack
     /// (vm.readReplyFromStart). Plumbed from the cell bridge; nil while the
     /// reply is still streaming (would clash with live streaming TTS).
     var onReadAloud: (() -> Void)?
-    /// Speak an arbitrary text snippet via the Minis TTS stack (vm.speakText).
+    /// Speak an arbitrary text snippet via the LeoPhoneAgent TTS stack (vm.speakText).
     var onSpeakText: ((String) -> Void)?
 
     @objc func readReplyFromMenu(_ sender: Any?) {
@@ -5191,7 +5191,7 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
     override func buildMenu(with builder: UIMenuBuilder) {
         super.buildMenu(with: builder)
         // [T-selection-menu-minis-tts] Remove the SYSTEM speech menu ("Speak…"
-        // / "Spell") — it reads with the OS voice, bypassing the Minis TTS
+        // / "Spell") — it reads with the OS voice, bypassing the LeoPhoneAgent TTS
         // stack (provider voices, sanitizer, fail-over). Replaced below with
         // our own Read Selection / Read Reply entries.
         builder.remove(menu: .speech)
@@ -5213,7 +5213,7 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
                 action: #selector(copyScreenshotFromMenu(_:))
             ))
         }
-        // [T-selection-menu-minis-tts] Minis-owned read-aloud entries. "Read
+        // [T-selection-menu-minis-tts] LeoPhoneAgent-owned read-aloud entries. "Read
         // Selection" speaks just the selected range; "Read from Start" replays
         // the whole reply — both through the in-app TTS stack.
         // Matching speaker glyph family so the two read-aloud entries read as
@@ -5627,7 +5627,7 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
             } else if let table = attachment as? TableAttachment {
                 // Re-wire every render: the prior closure may have captured a
                 // since-deallocated coordinator (`[weak self] → nil`), in which
-                // case taps fell through to UIApplication.open and minis://
+                // case taps fell through to UIApplication.open and leophoneagent://
                 // links failed silently. Closure assignment is cheap.
                 table.onOpenURL = { [weak self] url in
                     if let coordinator = self?.delegate as? SelectableMarkdownView.Coordinator,
@@ -5881,7 +5881,7 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         // is identical, because UIKit doesn't equality-check size on
         // NSTextContainer. In the BoundsChangeFading path that's the
         // recursion seed for the watchdog hang seen in
-        // Minis-2026-05-13-084827.ips: every layout pass re-triggers a full
+        // LeoPhoneAgent-2026-05-13-084827.ips: every layout pass re-triggers a full
         // fillLayoutHole on tables, which calls back into attachmentBounds,
         // which re-enters typesetting.
         if textContainer.size.height < CGFloat.greatestFiniteMagnitude {
@@ -6372,9 +6372,9 @@ struct SelectableMarkdownView: UIViewRepresentable {
     var onTapBlank: ((CGPoint) -> Void)?
     /// Called when the user picks "Copy Screenshot" from the text selection menu.
     var onCopyScreenshot: (() -> Void)?
-    /// [T-selection-menu-minis-tts] "Read from Start" (whole reply) via Minis TTS.
+    /// [T-selection-menu-minis-tts] "Read from Start" (whole reply) via LeoPhoneAgent TTS.
     var onReadAloud: (() -> Void)?
-    /// [T-selection-menu-minis-tts] "Read Selection" (selected text) via Minis TTS.
+    /// [T-selection-menu-minis-tts] "Read Selection" (selected text) via LeoPhoneAgent TTS.
     var onSpeakText: ((String) -> Void)?
     @Environment(\.openURL) private var openURL
 
@@ -7157,7 +7157,7 @@ struct SelectableMarkdownView: UIViewRepresentable {
         // fixed-height attachments (tool capsules, code/shell blocks, images):
         // those blocks don't grow with character count, so the estimate came
         // out too short and the NEXT cell overlapped the tail of a finished
-        // message (user report, macOS, "Minis Feedback Review" — the shell
+        // message (user report, macOS, "LeoPhoneAgent Feedback Review" — the shell
         // preview + tool capsule covered the body text of the last message).
         // Gate it back off so every streaming sizeThatFits takes a real
         // measurement; the hang de4d3df6 fixed is the tradeoff to revisit with
@@ -7202,7 +7202,7 @@ struct SelectableMarkdownView: UIViewRepresentable {
         // `addSubview` / `setNeedsLayout` on the live textView during
         // SwiftUI's measurement pass, which causes SwiftUI to re-invoke
         // `sizeThatFits` recursively. The resulting watchdog hang is
-        // recorded in `Minis-2026-05-13-084827.ips` (depth=9 recursion at
+        // recorded in `LeoPhoneAgent-2026-05-13-084827.ips` (depth=9 recursion at
         // `LayoutEngineBox.sizeThatFits`). Measuring on a detached textView
         // keeps the live view's state stable until the subsequent
         // `updateUIView` runs.
@@ -7764,7 +7764,7 @@ struct SelectableMarkdownView: UIViewRepresentable {
         /// attributedText that hasn't been committed to the on-screen
         /// textView yet. Writing pending text into the live `uiView` from
         /// inside `sizeThatFits` is what caused the watchdog hang seen in
-        /// `Minis-2026-05-13-084827.ips`: it rebuilds attachment subviews
+        /// `LeoPhoneAgent-2026-05-13-084827.ips`: it rebuilds attachment subviews
         /// and calls `addSubview` → `setNeedsLayout` on the textView
         /// during SwiftUI's measurement pass, which then triggers SwiftUI
         /// to re-invoke `sizeThatFits` indefinitely.
@@ -7912,19 +7912,19 @@ struct SelectableMarkdownView: UIViewRepresentable {
     }
 }
 
-// MARK: - Minis URL Resolution (bridged from AIChatView)
+// MARK: - LeoPhoneAgent URL Resolution (bridged from AIChatView)
 
-/// Resolves a `minis://` URL to a local file URL.
+/// Resolves a `leophoneagent://` URL to a local file URL.
 /// Keeps resolution behavior aligned with AIChatView's minis resolver.
 private func resolveMinisFileURLForNativeText(url: URL) -> URL? {
-    guard url.scheme == "minis" else { return nil }
+    guard url.scheme == "leophoneagent" else { return nil }
     guard let host = url.host else {
         imgLogger.warning("[MinisImage][Resolve] no host in URL: \(url.absoluteString)")
         return nil
     }
     // Try the single-decoded subpath first; fall back to a double-decoded
     // variant when an inline-image link arrives double-encoded. This is the
-    // same tolerant resolution the other 4 minis:// resolvers already use; this
+    // same tolerant resolution the other 4 leophoneagent:// resolvers already use; this
     // one (the inline-markdown image resolver) was the remaining single-decode
     // holdout, so double-encoded non-ASCII inline image names still failed here.
     // [T-ios-file-preview-stale-cache, completing T-fix-double-encoding 2026-06-01]
@@ -7978,7 +7978,7 @@ private func resolveMinisFileURLForNativeText(url: URL) -> URL? {
     // This is the main image-render resolve path; the old "scan every session
     // and return the first same-named file" loop was the same P0 isolation
     // leak fixed in resolveMinisFileURL — session B rendering
-    // model-use-zimage-0.jpg would resolve to session A's image. minis:// is
+    // model-use-zimage-0.jpg would resolve to session A's image. leophoneagent:// is
     // session-scoped; not-found is the correct result for a cross-session ref.
     //
     // The rootfs `/var/minis/<host>` fallback is kept ONLY for the global,

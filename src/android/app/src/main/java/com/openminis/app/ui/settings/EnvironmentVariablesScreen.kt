@@ -1,8 +1,8 @@
-package com.openminis.app.ui.settings
+package com.leoyuan.leophoneagent.ui.settings
 
-import com.openminis.app.R
-import com.openminis.app.ui.components.DialogTextField
-import com.openminis.app.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.ui.components.DialogTextField
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -39,8 +39,8 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
-import com.openminis.app.data.repository.EnvVarRepository
-import com.openminis.app.deeplink.DeepLinkCoordinator
+import com.leoyuan.leophoneagent.data.repository.EnvVarRepository
+import com.leoyuan.leophoneagent.deeplink.DeepLinkCoordinator
 
 /**
  * Environment Variables \u2014 adopts the SettingsScaffold/SettingsSection
@@ -73,7 +73,7 @@ fun EnvironmentVariablesScreen(
         }
     }
 
-    val privacyEnabled by com.openminis.app.data.EnvVarPrivacyStore.enabled.collectAsState()
+    val privacyEnabled by com.leoyuan.leophoneagent.data.EnvVarPrivacyStore.enabled.collectAsState()
 
     SettingsScaffold(
         title = stringResource(R.string.env_var_title),
@@ -93,7 +93,7 @@ fun EnvironmentVariablesScreen(
             SettingsSwitchRow(
                 title = stringResource(R.string.env_var_privacy_toggle),
                 checked = privacyEnabled,
-                onCheckedChange = { com.openminis.app.data.EnvVarPrivacyStore.setEnabled(it) },
+                onCheckedChange = { com.leoyuan.leophoneagent.data.EnvVarPrivacyStore.setEnabled(it) },
                 showDivider = false,
             )
         }

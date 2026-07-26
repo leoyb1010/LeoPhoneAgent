@@ -321,7 +321,7 @@ struct MCPFormSheet: View {
             } header: {
                 Text("Startup timeout (seconds)")
             } footer: {
-                Text("How long to wait for this server's first initialize. Raise it for slow-starting servers (e.g. uvx). Leave blank for the default (60s). Minis setting, not part of the MCP protocol.")
+                Text("How long to wait for this server's first initialize. Raise it for slow-starting servers (e.g. uvx). Leave blank for the default (60s). LeoPhoneAgent setting, not part of the MCP protocol.")
             }
         }
     }
@@ -477,7 +477,7 @@ struct MCPFormSheet: View {
                 oauthScopes = oauth.scopes ?? ""
                 oauthRedirectURI = oauth.redirectURI ?? ""
                 // [T-mcp-cli-oauth-flags] Pull in a CLI-seeded secret before
-                // reading the Keychain, so `minis-mcp-cli add
+                // reading the Keychain, so `leophoneagent-mcp-cli add
                 // --oauth-client-secret` shows up pre-filled here.
                 MCPOAuthController.importPendingSecretIfAny(server: server.id)
                 oauthClientSecret = MCPOAuthController.clientSecret(server: server.id) ?? ""

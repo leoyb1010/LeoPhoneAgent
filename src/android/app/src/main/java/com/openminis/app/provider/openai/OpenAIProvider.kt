@@ -1,19 +1,19 @@
-package com.openminis.app.provider.openai
+package com.leoyuan.leophoneagent.provider.openai
 
 import android.util.Base64
-import com.openminis.app.data.model.AgentContentPart
-import com.openminis.app.data.model.AgentToolDefinition
-import com.openminis.app.data.model.LLMError
-import com.openminis.app.data.model.LLMMediaAttachment
-import com.openminis.app.data.model.LLMMessage
-import com.openminis.app.data.model.LLMModel
-import com.openminis.app.data.model.LLMResponse
-import com.openminis.app.data.model.LLMStreamChunk
-import com.openminis.app.data.model.LLMUsage
-import com.openminis.app.data.model.ThinkingLevel
-import com.openminis.app.provider.LLMProvider
-import com.openminis.app.provider.applyUserAgentOverride
-import com.openminis.app.provider.safeOptString
+import com.leoyuan.leophoneagent.data.model.AgentContentPart
+import com.leoyuan.leophoneagent.data.model.AgentToolDefinition
+import com.leoyuan.leophoneagent.data.model.LLMError
+import com.leoyuan.leophoneagent.data.model.LLMMediaAttachment
+import com.leoyuan.leophoneagent.data.model.LLMMessage
+import com.leoyuan.leophoneagent.data.model.LLMModel
+import com.leoyuan.leophoneagent.data.model.LLMResponse
+import com.leoyuan.leophoneagent.data.model.LLMStreamChunk
+import com.leoyuan.leophoneagent.data.model.LLMUsage
+import com.leoyuan.leophoneagent.data.model.ThinkingLevel
+import com.leoyuan.leophoneagent.provider.LLMProvider
+import com.leoyuan.leophoneagent.provider.applyUserAgentOverride
+import com.leoyuan.leophoneagent.provider.safeOptString
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
@@ -45,7 +45,7 @@ import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.util.concurrent.TimeUnit
-import com.openminis.app.provider.failOnSilentEmptyCompletion
+import com.leoyuan.leophoneagent.provider.failOnSilentEmptyCompletion
 
 class OpenAIProvider private constructor(
     private val apiKey: String?,
@@ -359,7 +359,7 @@ class OpenAIProvider private constructor(
         // network-transition eviction reaches THIS client's connections —
         // a per-client pool was never evicted, and a dead h2 tunnel through
         // a local proxy got reused on every retry (silent infinite hang).
-        .connectionPool(com.openminis.app.network.NetworkMonitor.sharedLLMConnectionPool)
+        .connectionPool(com.leoyuan.leophoneagent.network.NetworkMonitor.sharedLLMConnectionPool)
         .eventListenerFactory { OkHttpNetTraceListener() }
         .build()
 
@@ -499,7 +499,7 @@ class OpenAIProvider private constructor(
             //
             // Special image-generation body — not Chat Completions, not the
             // normal Responses tool shape.
-            com.openminis.app.logging.AppLogger.info(
+            com.leoyuan.leophoneagent.logging.AppLogger.info(
                 "OpenAIProvider",
                 "[ModelUseRoute] gpt-image-2 → route=codex-backend " +
                     "url=chatgpt.com/backend-api/codex/responses isOAuth=$isOAuth " +
@@ -542,7 +542,7 @@ class OpenAIProvider private constructor(
                     }
                     found
                 } ?: false)
-            com.openminis.app.logging.AppLogger.info(
+            com.leoyuan.leophoneagent.logging.AppLogger.info(
                 "OpenAIProvider",
                 "[T321] → REQ url=${request.url} model=${model.id} stream=${body.optBoolean("stream", false)} " +
                     "headerKeys=${request.headers.names()} authPresent=$authPresent " +
@@ -568,7 +568,7 @@ class OpenAIProvider private constructor(
             delay(STREAM_TTFB_TIMEOUT_MS)
             if (!headersArrived.get()) {
                 ttfbTimedOut.set(true)
-                com.openminis.app.logging.AppLogger.warning(
+                com.leoyuan.leophoneagent.logging.AppLogger.warning(
                     "OpenAIProvider",
                     "[T-android-stale-conn-retry-hang] no response headers after ${STREAM_TTFB_TIMEOUT_MS / 1000}s — cancelling call (stale pooled connection?)",
                 )
@@ -594,7 +594,7 @@ class OpenAIProvider private constructor(
             val ct = rh["content-type"] ?: ""
             val rid = rh["x-request-id"] ?: rh["openai-request-id"] ?: ""
             val openAiHdrs = rh.names().filter { it.lowercase().startsWith("openai-") }
-            com.openminis.app.logging.AppLogger.info(
+            com.leoyuan.leophoneagent.logging.AppLogger.info(
                 "OpenAIProvider",
                 "[T321] ← RSP status=${response.code} content-type=$ct x-request-id=$rid " +
                     "headerKeys=${rh.names()} openAiHeaders=${openAiHdrs.associateWith { rh[it] ?: "" }}"
@@ -604,7 +604,7 @@ class OpenAIProvider private constructor(
             val errorBody = response.body?.string() ?: ""
             // T321: full error body — debug-only, but kept unconditional here
             // since non-2xx is rare and the body is critical for diagnosis.
-            com.openminis.app.logging.AppLogger.error(
+            com.leoyuan.leophoneagent.logging.AppLogger.error(
                 "OpenAIProvider",
                 "[T321] ← HTTP ${response.code} error body: $errorBody"
             )
@@ -612,9 +612,9 @@ class OpenAIProvider private constructor(
             // T302: skip the LLMRequestLog write entirely on release builds —
             // not just to avoid the (already-truncated) retention cost, but to
             // dodge constructing the Entry / headerMap copies that go with it.
-            if (com.openminis.app.BuildConfig.DEBUG) {
-                com.openminis.app.debug.LLMRequestLog.add(
-                    com.openminis.app.debug.LLMRequestLog.Entry(
+            if (com.leoyuan.leophoneagent.BuildConfig.DEBUG) {
+                com.leoyuan.leophoneagent.debug.LLMRequestLog.add(
+                    com.leoyuan.leophoneagent.debug.LLMRequestLog.Entry(
                         provider = "openai",
                         requestURL = request.url.toString(),
                         requestHeaders = headerMap,
@@ -627,9 +627,9 @@ class OpenAIProvider private constructor(
             }
             throw mapHttpError(response.code, errorBody)
         }
-        if (com.openminis.app.BuildConfig.DEBUG) {
-            com.openminis.app.debug.LLMRequestLog.add(
-                com.openminis.app.debug.LLMRequestLog.Entry(
+        if (com.leoyuan.leophoneagent.BuildConfig.DEBUG) {
+            com.leoyuan.leophoneagent.debug.LLMRequestLog.add(
+                com.leoyuan.leophoneagent.debug.LLMRequestLog.Entry(
                     provider = "openai",
                     requestURL = request.url.toString(),
                     requestHeaders = headerMap,
@@ -739,7 +739,7 @@ class OpenAIProvider private constructor(
                 }
 
                 val event = try { JSONObject(payload) } catch (e: Exception) {
-                    com.openminis.app.logging.AppLogger.warning(
+                    com.leoyuan.leophoneagent.logging.AppLogger.warning(
                         "OpenAIProvider",
                         "[T321] SSE JSON parse failed: ${e.message} payload=${payload.take(300)}"
                     )
@@ -761,7 +761,7 @@ class OpenAIProvider private constructor(
                         val tcLen = delta.optJSONArray("tool_calls")?.length() ?: 0
                         val role = delta.optString("role", "")
                         if (cLen + rcLen + rLen + tcLen > 0 || delta.has("role")) {
-                            com.openminis.app.logging.AppLogger.debug(
+                            com.leoyuan.leophoneagent.logging.AppLogger.debug(
                                 "OpenAIProvider",
                                 "[T321] SSE delta: contentLen=$cLen rcLen=$rcLen rLen=$rLen toolCalls=$tcLen role='$role'"
                             )
@@ -773,7 +773,7 @@ class OpenAIProvider private constructor(
                         // Responses API event-typed diagnostics
                         val dLen = ev.optString("delta", "").length
                         if (type.contains("delta") || type == "response.completed" || type == "response.output_item.added" || type == "response.output_item.done") {
-                            com.openminis.app.logging.AppLogger.debug(
+                            com.leoyuan.leophoneagent.logging.AppLogger.debug(
                                 "OpenAIProvider",
                                 "[T321] SSE responses type=$type deltaLen=$dLen"
                             )
@@ -798,7 +798,7 @@ class OpenAIProvider private constructor(
                             val delta = event.optString("delta", "")
                             if (delta.isNotEmpty()) {
                                 if (!sawReasoningDelta) {
-                                    com.openminis.app.logging.AppLogger.info(
+                                    com.leoyuan.leophoneagent.logging.AppLogger.info(
                                         "OpenAIProvider",
                                         "Responses API: first reasoning delta arrived (type=$type) — streaming Thinking content"
                                     )
@@ -842,7 +842,7 @@ class OpenAIProvider private constructor(
                                 // no real tool channel and provoking <tool_call>{...} text
                                 // hallucinations. Keep a warn so any future regression here
                                 // surfaces in the daily log instead of a silent failure.
-                                com.openminis.app.logging.AppLogger.warning(
+                                com.leoyuan.leophoneagent.logging.AppLogger.warning(
                                     "OpenAIProvider",
                                     "Responses API: function_call_arguments.delta for unknown item_id=$itemId — dropping"
                                 )
@@ -878,7 +878,7 @@ class OpenAIProvider private constructor(
                             val code = err?.optString("code")?.takeIf { it.isNotEmpty() } ?: "unknown"
                             val message = err?.optString("message")?.takeIf { it.isNotEmpty() }
                                 ?: "response.failed with no error detail"
-                            com.openminis.app.logging.AppLogger.error(
+                            com.leoyuan.leophoneagent.logging.AppLogger.error(
                                 "OpenAIProvider",
                                 "Responses API response.failed — code=$code message=$message"
                             )
@@ -899,7 +899,7 @@ class OpenAIProvider private constructor(
                                 ?.optJSONObject("incomplete_details")
                                 ?.optString("reason")?.takeIf { it.isNotEmpty() }
                                 ?: "unknown"
-                            com.openminis.app.logging.AppLogger.error(
+                            com.leoyuan.leophoneagent.logging.AppLogger.error(
                                 "OpenAIProvider",
                                 "Responses API response.incomplete — reason=$reason"
                             )
@@ -940,14 +940,14 @@ class OpenAIProvider private constructor(
                                 // 63a71146.
                                 val serviceTier = resp?.optString("service_tier", "")
                                     ?.takeIf { it.isNotEmpty() } ?: "n/a"
-                                com.openminis.app.logging.AppLogger.info(
+                                com.leoyuan.leophoneagent.logging.AppLogger.info(
                                     "OpenAIProvider",
                                     "[T321] Responses finish_reason=$finishReason status=$status service_tier=$serviceTier contentLen=$contentLen reasoningLen=$reasoningLen toolCallAccumulators=${responsesToolCalls.size}"
                                 )
                             }
                             resp?.optJSONObject("usage")?.let { usage ->
                                 sawUsageBlock = true
-                                com.openminis.app.logging.AppLogger.info(
+                                com.leoyuan.leophoneagent.logging.AppLogger.info(
                                     "OpenAIProvider",
                                     "[T321] Responses usage block: $usage"
                                 )
@@ -988,7 +988,7 @@ class OpenAIProvider private constructor(
                                 reasoningAccum.append(rc)
                                 if (!sawReasoningDelta) {
                                     sawReasoningDelta = true
-                                    com.openminis.app.logging.AppLogger.info(
+                                    com.leoyuan.leophoneagent.logging.AppLogger.info(
                                         "OpenAIProvider",
                                         "Chat Completions: first reasoning_content delta arrived on ${model.id} — streaming Thinking content"
                                     )
@@ -1052,7 +1052,7 @@ class OpenAIProvider private constructor(
                                 finishReason = it
                                 if (!sawFinishReason) {
                                     sawFinishReason = true
-                                    com.openminis.app.logging.AppLogger.info(
+                                    com.leoyuan.leophoneagent.logging.AppLogger.info(
                                         "OpenAIProvider",
                                         "[T321] finish_reason=$it contentLen=$contentLen reasoningLen=$reasoningLen toolCallEvents=$toolCallEventCount accumulators=${toolCallAccumulators.size}"
                                     )
@@ -1063,7 +1063,7 @@ class OpenAIProvider private constructor(
 
                     event.optJSONObject("usage")?.let { usage ->
                         sawUsageBlock = true
-                        com.openminis.app.logging.AppLogger.info(
+                        com.leoyuan.leophoneagent.logging.AppLogger.info(
                             "OpenAIProvider",
                             "[T321] usage block: $usage"
                         )
@@ -1101,7 +1101,7 @@ class OpenAIProvider private constructor(
                 if (acc.callId.isNotEmpty() && acc.name.isNotEmpty()) {
                     val args = try { JSONObject(acc.args.toString()) } catch (_: Exception) { JSONObject() }
                     val combined = combineResponsesAPIIds(acc.callId, itemId)
-                    com.openminis.app.logging.AppLogger.warning(
+                    com.leoyuan.leophoneagent.logging.AppLogger.warning(
                         "OpenAIProvider",
                         "Stream ended mid-tool-call id=$combined name=${acc.name} argsLen=${acc.args.length} — flushing as ToolCallComplete (T248)",
                     )
@@ -1114,14 +1114,14 @@ class OpenAIProvider private constructor(
             // finish_reason. The latter is the strongest signal of a server-
             // side truncation / connection-dropped scenario.
             if (!sawFinishReason) {
-                com.openminis.app.logging.AppLogger.warning(
+                com.leoyuan.leophoneagent.logging.AppLogger.warning(
                     "OpenAIProvider",
                     "[T321] stream ended WITHOUT finish_reason: events=$sseEventCount " +
                         "contentLen=$contentLen reasoningLen=$reasoningLen " +
                         "toolCallEvents=$toolCallEventCount sawUsage=$sawUsageBlock model=${model.id}"
                 )
             } else {
-                com.openminis.app.logging.AppLogger.info(
+                com.leoyuan.leophoneagent.logging.AppLogger.info(
                     "OpenAIProvider",
                     "[T321] stream complete: events=$sseEventCount contentLen=$contentLen " +
                         "reasoningLen=$reasoningLen toolCallEvents=$toolCallEventCount sawUsage=$sawUsageBlock"
@@ -1130,7 +1130,7 @@ class OpenAIProvider private constructor(
         } catch (e: Exception) {
             // T321: never silently swallow — log message + top-3 stack frames.
             val frames = e.stackTrace.take(3).joinToString(" | ") { "${it.className}.${it.methodName}:${it.lineNumber}" }
-            com.openminis.app.logging.AppLogger.error(
+            com.leoyuan.leophoneagent.logging.AppLogger.error(
                 "OpenAIProvider",
                 "[T321] stream parse exception: ${e.javaClass.simpleName}: ${e.message} @ $frames " +
                     "(events=$sseEventCount contentLen=$contentLen reasoningLen=$reasoningLen)"
@@ -1213,7 +1213,7 @@ class OpenAIProvider private constructor(
         for ((k, v) in extraHeaders) builder.header(k, v)
         for ((k, v) in headers) builder.header(k, v)
 
-        com.openminis.app.logging.AppLogger.info(
+        com.leoyuan.leophoneagent.logging.AppLogger.info(
             "OpenAIProvider",
             "[ModelUseRoute] route=raw-passthrough method=$verb url=$url " +
                 "bodyKeys=[${bodyObject?.keys()?.asSequence()?.sorted()?.joinToString(",") ?: ""}] " +
@@ -1314,7 +1314,7 @@ class OpenAIProvider private constructor(
             builder.applyUserAgentOverride(customUserAgent)
             val request = builder.build()
 
-            com.openminis.app.logging.AppLogger.info(
+            com.leoyuan.leophoneagent.logging.AppLogger.info(
                 "OpenAIProvider",
                 "[ModelUseRoute] → images/generations url=$url model=${model.id} n=$n " +
                     "size=$size quality=$quality respFormat=${if (triedWithoutFormat) "<none>" else "b64_json"}",
@@ -1329,7 +1329,7 @@ class OpenAIProvider private constructor(
             if (!triedWithoutFormat && statusCode == 400 &&
                 (responseBody.lowercase().contains("response_format") || responseBody.contains("b64_json"))
             ) {
-                com.openminis.app.logging.AppLogger.info(
+                com.leoyuan.leophoneagent.logging.AppLogger.info(
                     "OpenAIProvider",
                     "[ModelUseRoute] images/generations rejected b64_json — retrying without response_format",
                 )
@@ -1338,7 +1338,7 @@ class OpenAIProvider private constructor(
             }
 
             if (statusCode !in 200..299) {
-                com.openminis.app.logging.AppLogger.warning(
+                com.leoyuan.leophoneagent.logging.AppLogger.warning(
                     "OpenAIProvider",
                     "[ModelUseRoute] images/generations HTTP $statusCode body=${responseBody.take(300)}",
                 )
@@ -1386,7 +1386,7 @@ class OpenAIProvider private constructor(
                 val bytes = try {
                     Base64.decode(b64, Base64.DEFAULT)
                 } catch (e: IllegalArgumentException) {
-                    com.openminis.app.logging.AppLogger.warning(
+                    com.leoyuan.leophoneagent.logging.AppLogger.warning(
                         "OpenAIProvider",
                         "[ModelUseRoute] images/generations b64 decode failed: ${e.message}",
                     )
@@ -1408,7 +1408,7 @@ class OpenAIProvider private constructor(
                             attachments.add(LLMMediaAttachment(LLMMediaAttachment.MediaType.IMAGE, mime, dlBytes))
                         }
                     } catch (e: Exception) {
-                        com.openminis.app.logging.AppLogger.warning(
+                        com.leoyuan.leophoneagent.logging.AppLogger.warning(
                             "OpenAIProvider",
                             "[ModelUseRoute] failed to download image from $urlStr: ${e.message}",
                         )
@@ -1597,7 +1597,7 @@ class OpenAIProvider private constructor(
                                             if (supportsImages) {
                                                 // T-imgsize: backstop — re-encode oversize
                                                 // history image bytes before base64-inlining.
-                                                val safeBytes = com.openminis.app.provider.ImageBudget.compressUnderBudget(part.data)
+                                                val safeBytes = com.leoyuan.leophoneagent.provider.ImageBudget.compressUnderBudget(part.data)
                                                 val safeMime = if (safeBytes === part.data) part.mimeType else "image/jpeg"
                                                 val b64 = Base64.encodeToString(safeBytes, Base64.NO_WRAP)
                                                 contentArray.put(JSONObject().apply {
@@ -1658,7 +1658,7 @@ class OpenAIProvider private constructor(
                         for (part in imageParts) {
                             if (supportsImages) {
                                 // T-imgsize: provider-boundary backstop.
-                                val safeBytes = com.openminis.app.provider.ImageBudget.compressUnderBudget(part.data)
+                                val safeBytes = com.leoyuan.leophoneagent.provider.ImageBudget.compressUnderBudget(part.data)
                                 val safeMime = if (safeBytes === part.data) part.mimeType else "image/jpeg"
                                 val b64 = Base64.encodeToString(safeBytes, Base64.NO_WRAP)
                                 val imageUrl = JSONObject()
@@ -1833,7 +1833,7 @@ class OpenAIProvider private constructor(
             // [T-android-default-ua] `defaultUserAgent = null` — keep the
             // codex_cli_rs fingerprint set above when no per-provider
             // override is configured. We must NOT fall back to the branded
-            // Minis UA here: the ChatGPT OAuth backend validates the
+            // LeoPhoneAgent UA here: the ChatGPT OAuth backend validates the
             // client identity against this header.
             builder.applyUserAgentOverride(customUserAgent, defaultUserAgent = null)
             return builder.build()
@@ -1987,13 +1987,13 @@ class OpenAIProvider private constructor(
                     put("type", "enabled")
                     put("reasoning_effort", effort)
                 })
-                com.openminis.app.logging.AppLogger.info(
+                com.leoyuan.leophoneagent.logging.AppLogger.info(
                     "OpenAIProvider",
                     "DeepSeek V4 thinking enabled (level=${level.name} → effort=$effort) on $lid"
                 )
             } else {
                 body.put("thinking", JSONObject().put("type", "disabled"))
-                com.openminis.app.logging.AppLogger.info(
+                com.leoyuan.leophoneagent.logging.AppLogger.info(
                     "OpenAIProvider",
                     "DeepSeek V4 thinking disabled on $lid"
                 )
@@ -2475,7 +2475,7 @@ class OpenAIProvider private constructor(
         // through, so no isOAuth narrowing. Ineligible upstreams ignore the
         // field or silently downgrade (receipt visible via the
         // response.completed service_tier log).
-        if (com.openminis.app.data.FastModePrefs.isEnabled() &&
+        if (com.leoyuan.leophoneagent.data.FastModePrefs.isEnabled() &&
             model.id.contains("gpt", ignoreCase = true)
         ) {
             body.put("service_tier", "priority")
@@ -2569,7 +2569,7 @@ class OpenAIProvider private constructor(
                                     is AgentContentPart.ImageData -> {
                                         if (supportsImages) {
                                             // T-imgsize: backstop for Responses API path.
-                                            val safeBytes = com.openminis.app.provider.ImageBudget.compressUnderBudget(part.data)
+                                            val safeBytes = com.leoyuan.leophoneagent.provider.ImageBudget.compressUnderBudget(part.data)
                                             val safeMime = if (safeBytes === part.data) part.mimeType else "image/jpeg"
                                             val b64 = Base64.encodeToString(safeBytes, Base64.NO_WRAP)
                                             contentArray.put(JSONObject().apply {
@@ -2858,56 +2858,56 @@ private class OkHttpNetTraceListener : EventListener() {
     }
 
     override fun callStart(call: Call) {
-        com.openminis.app.logging.AppLogger.info(
+        com.leoyuan.leophoneagent.logging.AppLogger.info(
             tag,
             "[${callTag(call)}] +${ms()}ms callStart url=${call.request().url}"
         )
     }
 
     override fun proxySelectStart(call: Call, url: HttpUrl) {
-        com.openminis.app.logging.AppLogger.info(
+        com.leoyuan.leophoneagent.logging.AppLogger.info(
             tag,
             "[${callTag(call)}] +${ms()}ms proxySelectStart host=${url.host}"
         )
     }
 
     override fun proxySelectEnd(call: Call, url: HttpUrl, proxies: List<Proxy>) {
-        com.openminis.app.logging.AppLogger.info(
+        com.leoyuan.leophoneagent.logging.AppLogger.info(
             tag,
             "[${callTag(call)}] +${ms()}ms proxySelectEnd host=${url.host} chain=${proxies.joinToString(",") { it.toString() }}"
         )
     }
 
     override fun dnsStart(call: Call, domainName: String) {
-        com.openminis.app.logging.AppLogger.info(
+        com.leoyuan.leophoneagent.logging.AppLogger.info(
             tag,
             "[${callTag(call)}] +${ms()}ms dnsStart host=$domainName"
         )
     }
 
     override fun dnsEnd(call: Call, domainName: String, inetAddressList: List<InetAddress>) {
-        com.openminis.app.logging.AppLogger.info(
+        com.leoyuan.leophoneagent.logging.AppLogger.info(
             tag,
             "[${callTag(call)}] +${ms()}ms dnsEnd host=$domainName resolved=${inetAddressList.size} addrs=${inetAddressList.take(3).joinToString(",") { it.hostAddress ?: "?" }}"
         )
     }
 
     override fun connectStart(call: Call, inetSocketAddress: InetSocketAddress, proxy: Proxy) {
-        com.openminis.app.logging.AppLogger.info(
+        com.leoyuan.leophoneagent.logging.AppLogger.info(
             tag,
             "[${callTag(call)}] +${ms()}ms connectStart target=$inetSocketAddress proxy=$proxy"
         )
     }
 
     override fun secureConnectStart(call: Call) {
-        com.openminis.app.logging.AppLogger.info(
+        com.leoyuan.leophoneagent.logging.AppLogger.info(
             tag,
             "[${callTag(call)}] +${ms()}ms tlsStart"
         )
     }
 
     override fun secureConnectEnd(call: Call, handshake: Handshake?) {
-        com.openminis.app.logging.AppLogger.info(
+        com.leoyuan.leophoneagent.logging.AppLogger.info(
             tag,
             "[${callTag(call)}] +${ms()}ms tlsEnd version=${handshake?.tlsVersion} cipher=${handshake?.cipherSuite}"
         )
@@ -2919,7 +2919,7 @@ private class OkHttpNetTraceListener : EventListener() {
         proxy: Proxy,
         protocol: Protocol?,
     ) {
-        com.openminis.app.logging.AppLogger.info(
+        com.leoyuan.leophoneagent.logging.AppLogger.info(
             tag,
             "[${callTag(call)}] +${ms()}ms connectEnd target=$inetSocketAddress proxy=$proxy proto=$protocol"
         )
@@ -2932,7 +2932,7 @@ private class OkHttpNetTraceListener : EventListener() {
         protocol: Protocol?,
         ioe: IOException,
     ) {
-        com.openminis.app.logging.AppLogger.warning(
+        com.leoyuan.leophoneagent.logging.AppLogger.warning(
             tag,
             "[${callTag(call)}] +${ms()}ms connectFailed target=$inetSocketAddress proxy=$proxy proto=$protocol err=${ioe.javaClass.simpleName}:${ioe.message}"
         )
@@ -2940,7 +2940,7 @@ private class OkHttpNetTraceListener : EventListener() {
 
     override fun connectionAcquired(call: Call, connection: Connection) {
         val conn = System.identityHashCode(connection).toString(16)
-        com.openminis.app.logging.AppLogger.info(
+        com.leoyuan.leophoneagent.logging.AppLogger.info(
             tag,
             "[${callTag(call)}] +${ms()}ms connectionAcquired conn#$conn route=${connection.route()} proto=${connection.protocol()}"
         )
@@ -2948,70 +2948,70 @@ private class OkHttpNetTraceListener : EventListener() {
 
     override fun connectionReleased(call: Call, connection: Connection) {
         val conn = System.identityHashCode(connection).toString(16)
-        com.openminis.app.logging.AppLogger.info(
+        com.leoyuan.leophoneagent.logging.AppLogger.info(
             tag,
             "[${callTag(call)}] +${ms()}ms connectionReleased conn#$conn"
         )
     }
 
     override fun requestHeadersStart(call: Call) {
-        com.openminis.app.logging.AppLogger.info(
+        com.leoyuan.leophoneagent.logging.AppLogger.info(
             tag,
             "[${callTag(call)}] +${ms()}ms requestHeadersStart"
         )
     }
 
     override fun requestHeadersEnd(call: Call, request: Request) {
-        com.openminis.app.logging.AppLogger.info(
+        com.leoyuan.leophoneagent.logging.AppLogger.info(
             tag,
             "[${callTag(call)}] +${ms()}ms requestHeadersEnd"
         )
     }
 
     override fun requestBodyStart(call: Call) {
-        com.openminis.app.logging.AppLogger.info(
+        com.leoyuan.leophoneagent.logging.AppLogger.info(
             tag,
             "[${callTag(call)}] +${ms()}ms requestBodyStart"
         )
     }
 
     override fun requestBodyEnd(call: Call, byteCount: Long) {
-        com.openminis.app.logging.AppLogger.info(
+        com.leoyuan.leophoneagent.logging.AppLogger.info(
             tag,
             "[${callTag(call)}] +${ms()}ms requestBodyEnd bytes=$byteCount"
         )
     }
 
     override fun responseHeadersStart(call: Call) {
-        com.openminis.app.logging.AppLogger.info(
+        com.leoyuan.leophoneagent.logging.AppLogger.info(
             tag,
             "[${callTag(call)}] +${ms()}ms responseHeadersStart (server first byte)"
         )
     }
 
     override fun responseHeadersEnd(call: Call, response: Response) {
-        com.openminis.app.logging.AppLogger.info(
+        com.leoyuan.leophoneagent.logging.AppLogger.info(
             tag,
             "[${callTag(call)}] +${ms()}ms responseHeadersEnd status=${response.code} proto=${response.protocol}"
         )
     }
 
     override fun responseBodyStart(call: Call) {
-        com.openminis.app.logging.AppLogger.info(
+        com.leoyuan.leophoneagent.logging.AppLogger.info(
             tag,
             "[${callTag(call)}] +${ms()}ms responseBodyStart"
         )
     }
 
     override fun responseBodyEnd(call: Call, byteCount: Long) {
-        com.openminis.app.logging.AppLogger.info(
+        com.leoyuan.leophoneagent.logging.AppLogger.info(
             tag,
             "[${callTag(call)}] +${ms()}ms responseBodyEnd bytes=$byteCount"
         )
     }
 
     override fun callEnd(call: Call) {
-        com.openminis.app.logging.AppLogger.info(
+        com.leoyuan.leophoneagent.logging.AppLogger.info(
             tag,
             "[${callTag(call)}] +${ms()}ms callEnd"
         )
@@ -3021,14 +3021,14 @@ private class OkHttpNetTraceListener : EventListener() {
         // The most diagnostic of all: pairs the failure with whatever
         // milestone WAS reached before it. Read alongside the listener's
         // earlier lines to localize the stall.
-        com.openminis.app.logging.AppLogger.warning(
+        com.leoyuan.leophoneagent.logging.AppLogger.warning(
             tag,
             "[${callTag(call)}] +${ms()}ms callFailed err=${ioe.javaClass.simpleName}:${ioe.message}"
         )
     }
 
     override fun canceled(call: Call) {
-        com.openminis.app.logging.AppLogger.info(
+        com.leoyuan.leophoneagent.logging.AppLogger.info(
             tag,
             "[${callTag(call)}] +${ms()}ms canceled"
         )

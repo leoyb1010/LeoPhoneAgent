@@ -1,10 +1,10 @@
-package com.openminis.app.ui.chat
+package com.leoyuan.leophoneagent.ui.chat
 
 import android.content.Context
 import android.content.Intent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.res.stringResource
-import com.openminis.app.R
+import com.leoyuan.leophoneagent.R
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
@@ -101,9 +101,9 @@ import coil.compose.AsyncImagePainter
 import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
 import coil.request.ImageRequest
-import com.openminis.app.ui.DisplayBitmapLimits.limitDisplaySize
-import com.openminis.app.sandbox.PRootKernel
-import com.openminis.app.ui.theme.ChatColors
+import com.leoyuan.leophoneagent.ui.DisplayBitmapLimits.limitDisplaySize
+import com.leoyuan.leophoneagent.sandbox.PRootKernel
+import com.leoyuan.leophoneagent.ui.theme.ChatColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -197,7 +197,7 @@ private data class MdColors(
 @Composable
 @androidx.compose.runtime.ReadOnlyComposable
 private fun currentMdColors(): MdColors {
-    val c = com.openminis.app.ui.theme.LocalChatPalette.current
+    val c = com.leoyuan.leophoneagent.ui.theme.LocalChatPalette.current
     return MdColors(
         text = c.primaryText,
         codeText = c.codeBlockText,
@@ -441,7 +441,7 @@ private fun MdText(
                     // was correct for bidi-pure runs but regressed when an
                     // inline code span itself contains an internal space and
                     // sits inside CJK prose (e.g. prose like "put it next to
-                    // `Hermes Agent notes.md` and `Minis tutorial.md`"). The
+                    // `Hermes Agent notes.md` and `LeoPhoneAgent tutorial.md`"). The
                     // path returned for that range can include zero-width
                     // sub-paths at run boundaries; getBounds()'s union then
                     // expands left to a coordinate from a sibling run, which
@@ -897,7 +897,7 @@ private fun MarkdownBlockBody(
             }
             coroutineContext.ensureActive()
             parsed = computed
-            com.openminis.app.logging.AppLogger.info(
+            com.leoyuan.leophoneagent.logging.AppLogger.info(
                 "Perf",
                 "[Perf][ColdParse] step=coldParse.offmain chars=${rawText.length} " +
                     "blocks=${computed.size} parseMs=${(System.nanoTime() - tStartNs) / 1_000_000}",
@@ -1158,7 +1158,7 @@ private fun isBlockquoteLine(trimmed: String): Boolean {
  * references stay inline (Compose doesn't render inline bitmap attachments in
  * text here, but the `[alt]` link fallback is acceptable for images).
  *
- * Why: LLMs very commonly emit `"Here's the video: ![robot](minis://attachments/x.mp4)"`
+ * Why: LLMs very commonly emit `"Here's the video: ![robot](leophoneagent://attachments/x.mp4)"`
  * on a single line alongside explanatory text. Without this split, the line
  * becomes one Paragraph and the video markdown is rendered as just a blue
  * `[alt]` link — no preview card, no tap-to-play.
@@ -1819,7 +1819,7 @@ private fun RenderBlock(block: MdBlock) {
             val context = LocalContext.current
             val sessionId = LocalMarkdownSessionId.current
             // Resolve to a host File via the session-scoped resolver before
-            // handing off to Coil. AsyncImage(model = "minis://...") routes
+            // handing off to Coil. AsyncImage(model = "leophoneagent://...") routes
             // through MinisImageFetcher → PRootKernel.resolveHostPath, which
             // reads the *global* bindMounts map — last-writer-wins across
             // sessions. When another session booted its shell more recently,
@@ -2093,7 +2093,7 @@ private fun RenderMathDisplay(latex: String) {
  */
 @Composable
 private fun BrokenImagePlaceholder(alt: String?) {
-    val palette = com.openminis.app.ui.theme.LocalChatPalette.current
+    val palette = com.leoyuan.leophoneagent.ui.theme.LocalChatPalette.current
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -2127,7 +2127,7 @@ private fun BrokenImagePlaceholder(alt: String?) {
 // ─── Media helpers ──────────────────────────────────────────────────────────
 
 /**
- * Resolve a markdown media URL (`minis://attachments/foo.mp4`, file://, or
+ * Resolve a markdown media URL (`leophoneagent://attachments/foo.mp4`, file://, or
  * plain absolute path) to a host File.
  *
  * First tries `PRootKernel.resolveHostPath` (same as MinisImageFetcher). If
@@ -2141,13 +2141,13 @@ private fun BrokenImagePlaceholder(alt: String?) {
 internal fun resolveMdMediaFile(context: Context, url: String, sessionId: String? = null): File? {
     if (url.isBlank()) return null
     // Strip a real query (`?`), but NOT `#` — attachment filenames legitimately
-    // contain '#' (hashtags). `minis://` URLs don't carry fragments anyway,
+    // contain '#' (hashtags). `leophoneagent://` URLs don't carry fragments anyway,
     // and truncating here would hide the '.mp4' extension and the file's real
     // name from the resolver.
     val stripped = url.substringBefore('?')
     val primary: File? = when {
-        stripped.startsWith("minis://") -> {
-            val decoded = java.net.URLDecoder.decode(stripped.removePrefix("minis://"), "UTF-8")
+        stripped.startsWith("leophoneagent://") -> {
+            val decoded = java.net.URLDecoder.decode(stripped.removePrefix("leophoneagent://"), "UTF-8")
             val linuxPath = "/var/minis/$decoded"
             // Prefer the session-scoped resolver when the caller supplied a
             // sessionId: the global `bindMounts` map is overwritten every time
@@ -2171,11 +2171,11 @@ internal fun resolveMdMediaFile(context: Context, url: String, sessionId: String
     // draft session whose bind mount has already switched over, and the case
     // where `resolveHostPath`'s global bindMounts map points at a different
     // session than the one owning this message.
-    if (!stripped.startsWith("minis://")) {
+    if (!stripped.startsWith("leophoneagent://")) {
         android.util.Log.d("MdStream", "resolveMdMediaFile primary miss url=$url (non-minis scheme, no fallback)")
         return null
     }
-    val decoded = java.net.URLDecoder.decode(stripped.removePrefix("minis://"), "UTF-8")
+    val decoded = java.net.URLDecoder.decode(stripped.removePrefix("leophoneagent://"), "UTF-8")
     val basename = decoded.substringAfterLast('/')
     val subdir = decoded.substringBefore('/', missingDelimiterValue = "").takeIf { it.isNotEmpty() } ?: "attachments"
     val root = File(context.filesDir, "minis-sessions")
@@ -2261,7 +2261,7 @@ private fun RenderMdVideo(block: MdBlock.Video) {
     }
 
     if (showPlayer && file != null) {
-        com.openminis.app.ui.media.MinisFullscreenVideoPlayer(
+        com.leoyuan.leophoneagent.ui.media.MinisFullscreenVideoPlayer(
             file = file,
             onDismiss = { showPlayer = false },
         )
@@ -2752,7 +2752,7 @@ internal object StreamRenderProfiler {
         ticks++
         if (ticks < FLUSH_TICKS) return
         val n = ticks
-        com.openminis.app.logging.AppLogger.info(
+        com.leoyuan.leophoneagent.logging.AppLogger.info(
             "StreamRender",
             "[StreamRender] ticks=$n fragLen=$lastFragLen(max=$maxFragLen) " +
                 "parseMs avg=${"%.1f".format(parseMsSum / n)} max=${"%.1f".format(parseMsMax)}",
@@ -2951,7 +2951,7 @@ private object MarkdownParseCaches {
         } else {
             Thread.currentThread().name
         }
-        com.openminis.app.logging.AppLogger.info(
+        com.leoyuan.leophoneagent.logging.AppLogger.info(
             "JankDiag",
             "[JankDiag] slow markdown parse layer=$layer chars=$chars ms=$ms thread=$thread$extra",
         )

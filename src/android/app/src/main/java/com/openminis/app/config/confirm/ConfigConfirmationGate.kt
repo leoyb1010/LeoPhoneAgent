@@ -1,6 +1,6 @@
-package com.openminis.app.config.confirm
+package com.leoyuan.leophoneagent.config.confirm
 
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.logging.AppLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job

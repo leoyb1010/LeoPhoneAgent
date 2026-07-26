@@ -1,11 +1,11 @@
-package com.openminis.app.sandbox.offload
+package com.leoyuan.leophoneagent.sandbox.offload
 
 import android.content.Context
-import com.openminis.app.logging.AppLogger
-import com.openminis.app.offload.ShizukuManager
-import com.openminis.app.sandbox.NativeOffloadHandler
-import com.openminis.app.sandbox.NativeOffloadRequest
-import com.openminis.app.sandbox.NativeOffloadResult
+import com.leoyuan.leophoneagent.logging.AppLogger
+import com.leoyuan.leophoneagent.offload.ShizukuManager
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadHandler
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadRequest
+import com.leoyuan.leophoneagent.sandbox.NativeOffloadResult
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -76,7 +76,7 @@ class ShizukuOffloadHandler(private val context: Context) : NativeOffloadHandler
             ShizukuManager.State.NOT_RUNNING ->
                 return errEnvelope("SERVICE_NOT_RUNNING", "Shizuku service is not running. Start it via adb or root, then retry.", args)
             ShizukuManager.State.NEED_PERMISSION ->
-                return errEnvelope("PERMISSION_DENIED", "Minis is not authorized for Shizuku. Grant permission in Settings → Permissions → Shizuku.", args)
+                return errEnvelope("PERMISSION_DENIED", "LeoPhoneAgent is not authorized for Shizuku. Grant permission in Settings → Permissions → Shizuku.", args)
             ShizukuManager.State.READY -> { /* fall through */ }
         }
 

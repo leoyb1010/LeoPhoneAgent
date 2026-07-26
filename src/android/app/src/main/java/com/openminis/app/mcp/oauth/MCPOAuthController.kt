@@ -1,10 +1,10 @@
-package com.openminis.app.mcp.oauth
+package com.leoyuan.leophoneagent.mcp.oauth
 
 import android.content.Context
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabsIntent
-import com.openminis.app.auth.OAuthCallbackServer
-import com.openminis.app.logging.AppLogger
+import com.leoyuan.leophoneagent.auth.OAuthCallbackServer
+import com.leoyuan.leophoneagent.logging.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -26,7 +26,7 @@ import kotlin.coroutines.resume
  *
  * Phase 2 scope: authorize() runs the browser round-trip and token exchange and
  * stores the issued tokens in [MCPOAuthStore]. The in-guest transport bridge
- * (materializing refresh material for minis-mcp-cli) and autonomous refresh are
+ * (materializing refresh material for leophoneagent-mcp-cli) and autonomous refresh are
  * intentionally out of this phase.
  */
 class MCPOAuthController(private val context: Context) {

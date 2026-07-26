@@ -1,4 +1,4 @@
-package com.openminis.app.data.db
+package com.leoyuan.leophoneagent.data.db
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey

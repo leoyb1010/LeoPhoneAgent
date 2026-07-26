@@ -1,4 +1,4 @@
-package com.openminis.app.ui.chat
+package com.leoyuan.leophoneagent.ui.chat
 
 import androidx.compose.foundation.OverscrollEffect
 import androidx.compose.foundation.gestures.Orientation

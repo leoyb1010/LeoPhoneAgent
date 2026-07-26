@@ -1,4 +1,4 @@
-package com.openminis.app.ui.chat
+package com.leoyuan.leophoneagent.ui.chat
 
 // [T-android-split-chat] Assistant-message + tool-pill + thinking rendering
 // extracted verbatim from ChatScreen.kt: AssistantHeader, AssistantMessageView,
@@ -136,14 +136,14 @@ import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import com.openminis.app.BuildConfig
-import com.openminis.app.R
-import com.openminis.app.data.FileMentionIndex
-import com.openminis.app.logging.AppLogger
-import com.openminis.app.ui.components.MinisAlertDialog
-import com.openminis.app.ui.settings.autoExpandThinkingEnabled
-import com.openminis.app.ui.components.MinisMenu
-import com.openminis.app.ui.components.MinisMenuDivider
+import com.leoyuan.leophoneagent.BuildConfig
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.data.FileMentionIndex
+import com.leoyuan.leophoneagent.logging.AppLogger
+import com.leoyuan.leophoneagent.ui.components.MinisAlertDialog
+import com.leoyuan.leophoneagent.ui.settings.autoExpandThinkingEnabled
+import com.leoyuan.leophoneagent.ui.components.MinisMenu
+import com.leoyuan.leophoneagent.ui.components.MinisMenuDivider
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -254,26 +254,26 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.openminis.app.offload.OffloadPermissionManager
+import com.leoyuan.leophoneagent.offload.OffloadPermissionManager
 import com.mikepenz.markdown.compose.components.markdownComponents
 import com.mikepenz.markdown.m3.Markdown
 import com.mikepenz.markdown.m3.markdownColor
 import com.mikepenz.markdown.m3.markdownTypography
 import org.intellij.markdown.ast.ASTNode
 import org.intellij.markdown.ast.getTextInNode
-import com.openminis.app.data.model.LLMModel
-import com.openminis.app.data.model.ModelEntry
-import com.openminis.app.data.model.ModelGroup
-import com.openminis.app.data.model.ProviderConfig
-import com.openminis.app.data.model.ProviderType
-import com.openminis.app.data.model.RoutingStrategy
-import com.openminis.app.data.model.ThinkingLevel
-import com.openminis.app.data.repository.ChatRepository
-import com.openminis.app.data.repository.MemoryRepository
-import com.openminis.app.data.repository.ProviderRepository
-import com.openminis.app.ui.browser.BrowserSheet
-import com.openminis.app.ui.theme.ChatColors
-import com.openminis.app.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.data.model.LLMModel
+import com.leoyuan.leophoneagent.data.model.ModelEntry
+import com.leoyuan.leophoneagent.data.model.ModelGroup
+import com.leoyuan.leophoneagent.data.model.ProviderConfig
+import com.leoyuan.leophoneagent.data.model.ProviderType
+import com.leoyuan.leophoneagent.data.model.RoutingStrategy
+import com.leoyuan.leophoneagent.data.model.ThinkingLevel
+import com.leoyuan.leophoneagent.data.repository.ChatRepository
+import com.leoyuan.leophoneagent.data.repository.MemoryRepository
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.ui.browser.BrowserSheet
+import com.leoyuan.leophoneagent.ui.theme.ChatColors
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
 
 @Composable
 internal fun AssistantHeader() {
@@ -281,10 +281,10 @@ internal fun AssistantHeader() {
     // SOUL.md-driven `name`. The emoji-customization field was removed,
     // so we no longer branch on `SoulMetadata.emoji`; the icon stays the
     // canonical sparkle (iOS: sparkles SF Symbol + gradient). Only the
-    // `name` field is user-customizable — defaults to "Minis" when
+    // `name` field is user-customizable — defaults to "LeoPhoneAgent" when
     // SOUL.md is missing the field or set to the default value.
-    val soulMeta by com.openminis.app.agent.SoulStore.cachedMetadata.collectAsState()
-    val displayName = soulMeta.name.ifBlank { com.openminis.app.agent.SoulMetadata.DEFAULT.name }
+    val soulMeta by com.leoyuan.leophoneagent.agent.SoulStore.cachedMetadata.collectAsState()
+    val displayName = soulMeta.name.ifBlank { com.leoyuan.leophoneagent.agent.SoulMetadata.DEFAULT.name }
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -352,7 +352,7 @@ internal fun AssistantMessageView(message: ChatMessage, onRetry: (() -> Unit)? =
                     // gate stays here so any future re-introduction
                     // doesn't silently bring back the always-render bug.
                     val effectiveLevel = message.thinkingLevel
-                        ?: com.openminis.app.data.model.ThinkingLevel.MEDIUM
+                        ?: com.leoyuan.leophoneagent.data.model.ThinkingLevel.MEDIUM
                     if (effectiveLevel.isEnabled) {
                         // [T-android-thinking-auto-collapse] Stream signal
                         // requires THIS block to be the trailing block of
@@ -622,7 +622,7 @@ internal fun ToolCallPill(
     // top level multiply with the number of pills × recompose rate. Gate
     // behind BuildConfig.DEBUG so production builds skip the string-build
     // entirely, and the rest of release builds don't pay for it.
-    if (com.openminis.app.BuildConfig.DEBUG && false) {
+    if (com.leoyuan.leophoneagent.BuildConfig.DEBUG && false) {
         android.util.Log.d("ToolChain[UI]", "ToolCallPill render: id=${block.id} name=${block.toolName} title=${block.toolTitle} status=${block.toolStatus} contentLen=${block.content.length} argsLen=${block.toolArgs.length}")
     }
 

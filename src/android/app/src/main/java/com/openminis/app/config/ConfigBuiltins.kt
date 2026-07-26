@@ -1,25 +1,25 @@
-package com.openminis.app.config
+package com.leoyuan.leophoneagent.config
 
 import android.content.Context
-import com.openminis.app.config.collections.EnvVarsCollection
-import com.openminis.app.service.DynamicIslandSupport
-import com.openminis.app.config.collections.GroupsCollection
-import com.openminis.app.config.collections.ModelsCollection
-import com.openminis.app.config.collections.ProvidersCollection
-import com.openminis.app.config.fields.ClosureField
-import com.openminis.app.config.fields.PrefsBoolField
-import com.openminis.app.config.fields.PrefsDoubleField
-import com.openminis.app.config.fields.PrefsEnumField
-import com.openminis.app.config.fields.PrefsIntCodedEnumField
-import com.openminis.app.config.fields.PrefsIntField
-import com.openminis.app.config.fields.PrefsLongField
-import com.openminis.app.config.fields.PrefsStringField
-import com.openminis.app.config.fields.ReadOnlyField
-import com.openminis.app.data.repository.ChatRepository
-import com.openminis.app.data.repository.EnvVarRepository
-import com.openminis.app.data.repository.ProviderRepository
-import com.openminis.app.data.model.ThinkingLevel
-import com.openminis.app.ui.chat.ChatViewModelStore
+import com.leoyuan.leophoneagent.config.collections.EnvVarsCollection
+import com.leoyuan.leophoneagent.service.DynamicIslandSupport
+import com.leoyuan.leophoneagent.config.collections.GroupsCollection
+import com.leoyuan.leophoneagent.config.collections.ModelsCollection
+import com.leoyuan.leophoneagent.config.collections.ProvidersCollection
+import com.leoyuan.leophoneagent.config.fields.ClosureField
+import com.leoyuan.leophoneagent.config.fields.PrefsBoolField
+import com.leoyuan.leophoneagent.config.fields.PrefsDoubleField
+import com.leoyuan.leophoneagent.config.fields.PrefsEnumField
+import com.leoyuan.leophoneagent.config.fields.PrefsIntCodedEnumField
+import com.leoyuan.leophoneagent.config.fields.PrefsIntField
+import com.leoyuan.leophoneagent.config.fields.PrefsLongField
+import com.leoyuan.leophoneagent.config.fields.PrefsStringField
+import com.leoyuan.leophoneagent.config.fields.ReadOnlyField
+import com.leoyuan.leophoneagent.data.repository.ChatRepository
+import com.leoyuan.leophoneagent.data.repository.EnvVarRepository
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.data.model.ThinkingLevel
+import com.leoyuan.leophoneagent.ui.chat.ChatViewModelStore
 import kotlinx.coroutines.runBlocking
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -288,7 +288,7 @@ internal object ConfigBuiltins {
                 displayName = "Show chat title pill",
                 description = "Show a sticky title pill at the top of the chat while scrolling through history.",
                 prefs = prefs,
-                key = com.openminis.app.ui.settings.KEY_SHOW_CHAT_TITLE,
+                key = com.leoyuan.leophoneagent.ui.settings.KEY_SHOW_CHAT_TITLE,
                 defaultValue = true,
             )
         )
@@ -345,7 +345,7 @@ internal object ConfigBuiltins {
         // needed on Android — there is no analogue to iOS
         // FontSettings.messageBaseScale .Published cache).
         val appearancePrefs = context.getSharedPreferences(
-            com.openminis.app.ui.settings.PREF_APPEARANCE,
+            com.leoyuan.leophoneagent.ui.settings.PREF_APPEARANCE,
             Context.MODE_PRIVATE,
         )
         r.register(
@@ -354,7 +354,7 @@ internal object ConfigBuiltins {
                 displayName = "Tool preview",
                 description = "Show live preview during agent tool execution.",
                 prefs = appearancePrefs,
-                key = com.openminis.app.ui.settings.KEY_TOOL_PREVIEW,
+                key = com.leoyuan.leophoneagent.ui.settings.KEY_TOOL_PREVIEW,
                 defaultValue = true,
             )
         )
@@ -371,7 +371,7 @@ internal object ConfigBuiltins {
                 displayName = "Auto-focus input after reply",
                 description = "When ON, the keyboard pops up automatically after the model finishes a reply so the input is ready for a follow-up. Turn OFF if you prefer to read the response without an unexpected keyboard.",
                 prefs = appearancePrefs,
-                key = com.openminis.app.ui.settings.KEY_AUTO_FOCUS_AFTER_REPLY,
+                key = com.leoyuan.leophoneagent.ui.settings.KEY_AUTO_FOCUS_AFTER_REPLY,
                 defaultValue = true,
             )
         )
@@ -380,14 +380,14 @@ internal object ConfigBuiltins {
             displayName = "Input font size",
             description = "Font size for the chat composer text editor.",
             prefs = appearancePrefs,
-            key = com.openminis.app.ui.settings.KEY_FONT_CHAT_INPUT,
+            key = com.leoyuan.leophoneagent.ui.settings.KEY_FONT_CHAT_INPUT,
         ))
         r.register(fontScaleField(
             path = "chat.messageFontSize",
             displayName = "Message font size",
             description = "Base font size for assistant / user message bodies (markdown). Setting this invalidates rendered markdown caches.",
             prefs = appearancePrefs,
-            key = com.openminis.app.ui.settings.KEY_FONT_MESSAGE,
+            key = com.leoyuan.leophoneagent.ui.settings.KEY_FONT_MESSAGE,
         ))
     }
 
@@ -523,12 +523,12 @@ internal object ConfigBuiltins {
                 risk = ConfigRisk.NORMAL,
                 revertable = true,
                 reader = {
-                    ConfigValue.Bool(com.openminis.app.logging.AppLogger.isEnabled(context))
+                    ConfigValue.Bool(com.leoyuan.leophoneagent.logging.AppLogger.isEnabled(context))
                 },
                 writer = { v ->
                     val b = (v as? ConfigValue.Bool)?.value
                         ?: throw ConfigError.TypeMismatch("bool")
-                    com.openminis.app.logging.AppLogger.setEnabled(context, b)
+                    com.leoyuan.leophoneagent.logging.AppLogger.setEnabled(context, b)
                 },
             )
         )
@@ -592,7 +592,7 @@ internal object ConfigBuiltins {
                 valueSchema = ConfigSchema.Json,
                 reader = {
                     val cfg = providerRepo.config.value
-                    val providersById = HashMap<String, com.openminis.app.data.model.ProviderInstance>(cfg.instances.size)
+                    val providersById = HashMap<String, com.leoyuan.leophoneagent.data.model.ProviderInstance>(cfg.instances.size)
                     for (inst in cfg.instances) providersById[inst.id] = inst
                     ConfigValue.Arr(
                         cfg.modelEntries.map { entry ->
@@ -654,11 +654,11 @@ internal object ConfigBuiltins {
                 valueSchema = ConfigSchema.Bool,
                 risk = ConfigRisk.SENSITIVE,
                 revertable = true,
-                reader = { ConfigValue.Bool(com.openminis.app.data.EnvVarPrivacyStore.isEnabled) },
+                reader = { ConfigValue.Bool(com.leoyuan.leophoneagent.data.EnvVarPrivacyStore.isEnabled) },
                 writer = { v ->
                     val b = (v as? ConfigValue.Bool)?.value
                         ?: throw ConfigError.TypeMismatch("bool")
-                    com.openminis.app.data.EnvVarPrivacyStore.setEnabled(b)
+                    com.leoyuan.leophoneagent.data.EnvVarPrivacyStore.setEnabled(b)
                 },
             )
         )
@@ -674,10 +674,10 @@ internal object ConfigBuiltins {
                 reader = {
                     val cfg = providerRepo.config.value
                     val entriesById =
-                        HashMap<String, com.openminis.app.data.model.ModelEntry>(cfg.modelEntries.size)
+                        HashMap<String, com.leoyuan.leophoneagent.data.model.ModelEntry>(cfg.modelEntries.size)
                     for (e in cfg.modelEntries) entriesById[e.id] = e
                     val providersById =
-                        HashMap<String, com.openminis.app.data.model.ProviderInstance>(cfg.instances.size)
+                        HashMap<String, com.leoyuan.leophoneagent.data.model.ProviderInstance>(cfg.instances.size)
                     for (inst in cfg.instances) providersById[inst.id] = inst
                     ConfigValue.Arr(
                         cfg.modelGroups.map { g ->
@@ -799,7 +799,7 @@ internal object ConfigBuiltins {
                     // per skipped id leaves a trace without blocking the op.
                     val cleanIds = ids.filter { it in valid }
                     ids.filterNot { it in valid }.forEach { bad ->
-                        com.openminis.app.logging.AppLogger.warning(
+                        com.leoyuan.leophoneagent.logging.AppLogger.warning(
                             "MinisConfig", "skipped unknown agentLoopEntries id: $bad"
                         )
                     }
@@ -833,7 +833,7 @@ internal object ConfigBuiltins {
                     // group ids (same rationale as agentLoopEntries above).
                     val cleanIds = ids.filter { it in valid }
                     ids.filterNot { it in valid }.forEach { bad ->
-                        com.openminis.app.logging.AppLogger.warning(
+                        com.leoyuan.leophoneagent.logging.AppLogger.warning(
                             "MinisConfig", "skipped unknown agentLoopGroups id: $bad"
                         )
                     }
@@ -858,7 +858,7 @@ internal object ConfigBuiltins {
 
     private fun registerSoul(r: ConfigRegistry, context: Context) {
         // Length cap is language-aware now (Chinese ≤ 800 chars OR
-        // English ≤ 500 words); see [com.openminis.app.agent.SoulStore.isOverLimit].
+        // English ≤ 500 words); see [com.leoyuan.leophoneagent.agent.SoulStore.isOverLimit].
         // No schema-level maxLength — a fixed char count would be wrong
         // for either language. The writer below rejects over-limit with a
         // precise [ConfigError.InvalidValue].
@@ -867,21 +867,21 @@ internal object ConfigBuiltins {
         // UI don't race with minis-config writes. Parse falls back to
         // the canonical default content if the file was somehow deleted
         // between launches — same behavior as the Settings page.
-        fun loadCurrent(): com.openminis.app.agent.SoulFile =
-            com.openminis.app.agent.SoulStore.load(context)
-                ?: com.openminis.app.agent.SoulMDParser.parse(
-                    com.openminis.app.agent.SoulStore.DEFAULT_CONTENT
+        fun loadCurrent(): com.leoyuan.leophoneagent.agent.SoulFile =
+            com.leoyuan.leophoneagent.agent.SoulStore.load(context)
+                ?: com.leoyuan.leophoneagent.agent.SoulMDParser.parse(
+                    com.leoyuan.leophoneagent.agent.SoulStore.DEFAULT_CONTENT
                 )
 
-        fun saveCurrent(file: com.openminis.app.agent.SoulFile) {
-            com.openminis.app.agent.SoulStore.save(context, file)
+        fun saveCurrent(file: com.leoyuan.leophoneagent.agent.SoulFile) {
+            com.leoyuan.leophoneagent.agent.SoulStore.save(context, file)
         }
 
         r.register(
             ClosureField(
                 path = "soul.name",
                 displayName = "Soul name",
-                description = "The agent's name as shown in chat bubble headers and as the system-prompt identity. Trimmed; empty falls back to \"Minis\".",
+                description = "The agent's name as shown in chat bubble headers and as the system-prompt identity. Trimmed; empty falls back to \"LeoPhoneAgent\".",
                 valueSchema = ConfigSchema.Str(maxLength = 64),
                 risk = ConfigRisk.SENSITIVE,
                 revertable = true,
@@ -893,7 +893,7 @@ internal object ConfigBuiltins {
                     val raw = (v as? ConfigValue.Str)?.value
                         ?: throw ConfigError.TypeMismatch("string")
                     val name = raw.trim().ifBlank {
-                        com.openminis.app.agent.SoulMetadata.DEFAULT.name
+                        com.leoyuan.leophoneagent.agent.SoulMetadata.DEFAULT.name
                     }
                     val cur = loadCurrent()
                     saveCurrent(cur.copy(metadata = cur.metadata.copy(name = name)))
@@ -937,7 +937,7 @@ internal object ConfigBuiltins {
                     // key — parser already substitutes DEFAULT.lang in
                     // that case, so we just round-trip it.
                     ConfigValue.Str(cur.metadata.lang.ifBlank {
-                        com.openminis.app.agent.SoulMetadata.DEFAULT.lang
+                        com.leoyuan.leophoneagent.agent.SoulMetadata.DEFAULT.lang
                     })
                 },
                 writer = { v ->
@@ -954,7 +954,7 @@ internal object ConfigBuiltins {
             ClosureField(
                 path = "soul.body",
                 displayName = "Soul personality prompt",
-                description = "Personality / voice instructions injected as a block in the system prompt. Length cap is language-aware: Chinese ≤ ${com.openminis.app.agent.SoulStore.CHINESE_CHAR_LIMIT} chars OR English ≤ ${com.openminis.app.agent.SoulStore.ENGLISH_WORD_LIMIT} words (rule picked by the majority language). The writer also rejects prompt-injection patterns (\"ignore previous instructions\" etc.) — keep this to genuine character / tone guidance.",
+                description = "Personality / voice instructions injected as a block in the system prompt. Length cap is language-aware: Chinese ≤ ${com.leoyuan.leophoneagent.agent.SoulStore.CHINESE_CHAR_LIMIT} chars OR English ≤ ${com.leoyuan.leophoneagent.agent.SoulStore.ENGLISH_WORD_LIMIT} words (rule picked by the majority language). The writer also rejects prompt-injection patterns (\"ignore previous instructions\" etc.) — keep this to genuine character / tone guidance.",
                 // No schema maxLength because either character or word
                 // count is wrong for the *other* language. Both checks
                 // (length + injection) run in the writer below.
@@ -967,23 +967,23 @@ internal object ConfigBuiltins {
                 writer = { v ->
                     val raw = (v as? ConfigValue.Str)?.value
                         ?: throw ConfigError.TypeMismatch("string")
-                    if (com.openminis.app.agent.SystemPromptBuilder
+                    if (com.leoyuan.leophoneagent.agent.SystemPromptBuilder
                             .containsInjectionPattern(raw)
                     ) {
                         throw ConfigError.InvalidValue(
                             "Body contains a prompt-injection pattern (\"ignore/disregard/forget … previous/prior instructions\"). SOUL.md is for personality, not instructions to the model."
                         )
                     }
-                    val check = com.openminis.app.agent.SoulStore.isOverLimit(raw)
+                    val check = com.leoyuan.leophoneagent.agent.SoulStore.isOverLimit(raw)
                     when (check) {
-                        is com.openminis.app.agent.SoulBodyLimitCheck.Ok -> Unit
-                        is com.openminis.app.agent.SoulBodyLimitCheck.OverLimitChinese ->
+                        is com.leoyuan.leophoneagent.agent.SoulBodyLimitCheck.Ok -> Unit
+                        is com.leoyuan.leophoneagent.agent.SoulBodyLimitCheck.OverLimitChinese ->
                             throw ConfigError.InvalidValue(
-                                "Over limit: ${check.chars} Chinese chars exceeds cap of ${check.cap}. Either trim to ≤ ${check.cap} chars, or rewrite mostly in English to use the ≤ ${com.openminis.app.agent.SoulStore.ENGLISH_WORD_LIMIT}-word cap."
+                                "Over limit: ${check.chars} Chinese chars exceeds cap of ${check.cap}. Either trim to ≤ ${check.cap} chars, or rewrite mostly in English to use the ≤ ${com.leoyuan.leophoneagent.agent.SoulStore.ENGLISH_WORD_LIMIT}-word cap."
                             )
-                        is com.openminis.app.agent.SoulBodyLimitCheck.OverLimitEnglish ->
+                        is com.leoyuan.leophoneagent.agent.SoulBodyLimitCheck.OverLimitEnglish ->
                             throw ConfigError.InvalidValue(
-                                "Over limit: ${check.words} English words exceeds cap of ${check.cap}. Either trim to ≤ ${check.cap} words, or rewrite mostly in Chinese to use the ≤ ${com.openminis.app.agent.SoulStore.CHINESE_CHAR_LIMIT}-char cap."
+                                "Over limit: ${check.words} English words exceeds cap of ${check.cap}. Either trim to ≤ ${check.cap} words, or rewrite mostly in Chinese to use the ≤ ${com.leoyuan.leophoneagent.agent.SoulStore.CHINESE_CHAR_LIMIT}-char cap."
                             )
                     }
                     val cur = loadCurrent()

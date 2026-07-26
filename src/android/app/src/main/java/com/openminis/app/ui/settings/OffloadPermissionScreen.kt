@@ -1,4 +1,4 @@
-package com.openminis.app.ui.settings
+package com.leoyuan.leophoneagent.ui.settings
 
 import android.content.Context
 import android.content.Intent
@@ -26,13 +26,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import com.openminis.app.R
-import com.openminis.app.accessibility.MinisAccessibilityService
-import com.openminis.app.logging.AppLogger
-import com.openminis.app.offload.OffloadPermissionManager
-import com.openminis.app.offload.ShizukuManager
-import com.openminis.app.ui.components.MinisMenu
-import com.openminis.app.ui.components.MinisTextButton
+import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.accessibility.MinisAccessibilityService
+import com.leoyuan.leophoneagent.logging.AppLogger
+import com.leoyuan.leophoneagent.offload.OffloadPermissionManager
+import com.leoyuan.leophoneagent.offload.ShizukuManager
+import com.leoyuan.leophoneagent.ui.components.MinisMenu
+import com.leoyuan.leophoneagent.ui.components.MinisTextButton
 import kotlinx.coroutines.delay
 
 @Composable
@@ -53,7 +53,7 @@ fun OffloadPermissionScreen(
 
     var showResetConfirm by remember { mutableStateOf(false) }
 
-    val configEnabled by com.openminis.app.config.MinisConfigPermissionStore.enabled.collectAsState()
+    val configEnabled by com.leoyuan.leophoneagent.config.MinisConfigPermissionStore.enabled.collectAsState()
 
     val context = LocalContext.current
 
@@ -86,7 +86,7 @@ fun OffloadPermissionScreen(
                 title = stringResource(R.string.perm_allow_minis_config),
                 checked = configEnabled,
                 onCheckedChange = {
-                    com.openminis.app.config.MinisConfigPermissionStore.setEnabled(it)
+                    com.leoyuan.leophoneagent.config.MinisConfigPermissionStore.setEnabled(it)
                 },
                 showDivider = false,
             )
@@ -155,7 +155,7 @@ fun OffloadPermissionScreen(
             confirmButton = {
                 MinisTextButton(onClick = {
                     OffloadPermissionManager.resetAll()
-                    com.openminis.app.config.MinisConfigPermissionStore.setEnabled(true)
+                    com.leoyuan.leophoneagent.config.MinisConfigPermissionStore.setEnabled(true)
                     AppLogger.info("PermissionsScreen", "user confirmed Reset All — all tool permissions cleared, minis-config switch reset to default")
                     showResetConfirm = false
                 }) {

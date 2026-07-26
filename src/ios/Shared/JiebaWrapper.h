@@ -1,6 +1,6 @@
 //
 //  JiebaWrapper.h
-//  Minis
+//  LeoPhoneAgent
 //
 //  Thin ObjC wrapper around CppJieba (header-only C++), bridged to Swift. Lazily
 //  loads the ~5MB dictionary + HMM model from the bundle on first use

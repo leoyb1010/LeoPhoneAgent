@@ -27,7 +27,7 @@ nonisolated struct MinisAlarmMetadata: AlarmMetadata {}
     // recover the label the user/AI set at schedule time. We therefore persist
     // an id -> label map and look it up when listing. The store is kept in sync
     // on cancel / cancel-all so it doesn't grow unbounded. This is what makes
-    // the label visible in the Minis AlarmListView (AlarmRowView already renders
+    // the label visible in the LeoPhoneAgent AlarmListView (AlarmRowView already renders
     // `alarm.label` when non-empty).
     //
     // Backed by a tiny SQLite table (AlarmLabelStore) in the same MinisChat/

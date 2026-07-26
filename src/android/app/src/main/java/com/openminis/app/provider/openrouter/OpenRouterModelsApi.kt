@@ -1,11 +1,11 @@
-package com.openminis.app.provider.openrouter
+package com.leoyuan.leophoneagent.provider.openrouter
 
 import android.content.Context
-import com.openminis.app.data.model.LLMModel
-import com.openminis.app.data.model.normalizeModalities
-import com.openminis.app.provider.ModelsDevApi
-import com.openminis.app.provider.applyUserAgentOverride
-import com.openminis.app.provider.ProviderModelsCache
+import com.leoyuan.leophoneagent.data.model.LLMModel
+import com.leoyuan.leophoneagent.data.model.normalizeModalities
+import com.leoyuan.leophoneagent.provider.ModelsDevApi
+import com.leoyuan.leophoneagent.provider.applyUserAgentOverride
+import com.leoyuan.leophoneagent.provider.ProviderModelsCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -42,7 +42,7 @@ object OpenRouterModelsApi {
             .url("https://openrouter.ai/api/v1/models")
             .header("Authorization", "Bearer $apiKey")
             .header("HTTP-Referer", "https://github.com/OpenMinis/OpenMinis")
-            .header("X-Title", "Minis App")
+            .header("X-Title", "LeoPhoneAgent App")
             // [T-android-default-ua] brand outbound /api/v1/models request.
             .applyUserAgentOverride(null)
             .build()

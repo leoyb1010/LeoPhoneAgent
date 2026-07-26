@@ -7,7 +7,7 @@ final class NetworkMonitor {
     static let shared = NetworkMonitor()
 
     private let monitor = NWPathMonitor()
-    private let queue = DispatchQueue(label: "com.openminis.networkmonitor")
+    private let queue = DispatchQueue(label: "com.leoyuan.leophoneagent.networkmonitor")
     private let logger = AppLogger(category: "Network")
     private var lastInterfaceTypes: Set<NWInterface.InterfaceType> = []
     private var isStarted = false
