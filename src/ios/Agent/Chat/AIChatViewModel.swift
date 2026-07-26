@@ -2143,7 +2143,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             }
         }
 
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        LeoHaptics.impact(.light)
         autoRetryAttempt = 0
         autoRetryCountdown = 0
         canResume = false
@@ -3940,7 +3940,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     }
 
     private func playCompletionHaptic() {
-        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+        LeoHaptics.impact(.soft)
     }
 
     private func handleUserCancelledCleanup() {

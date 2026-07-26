@@ -70,19 +70,28 @@ enum LeoMotion {
 /// model and background execution remain deterministic and testable.
 @MainActor
 enum LeoHaptics {
+    static let enabledDefaultsKey = "leo.hapticsEnabled"
+
+    private static var isEnabled: Bool {
+        (UserDefaults.standard.object(forKey: enabledDefaultsKey) as? Bool) ?? true
+    }
+
     static func impact(_ style: UIImpactFeedbackGenerator.FeedbackStyle = .light) {
+        guard isEnabled else { return }
         let generator = UIImpactFeedbackGenerator(style: style)
         generator.prepare()
         generator.impactOccurred()
     }
 
     static func selection() {
+        guard isEnabled else { return }
         let generator = UISelectionFeedbackGenerator()
         generator.prepare()
         generator.selectionChanged()
     }
 
     static func notification(_ type: UINotificationFeedbackGenerator.FeedbackType) {
+        guard isEnabled else { return }
         let generator = UINotificationFeedbackGenerator()
         generator.prepare()
         generator.notificationOccurred(type)

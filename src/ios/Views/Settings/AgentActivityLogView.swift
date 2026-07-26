@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Human-readable execution history for the owner of this device.
 /// The underlying log intentionally contains metadata only.
@@ -361,6 +362,9 @@ struct AgentCurrentStatusCard: View {
             }
         }
         .animation(LeoMotion.standardEase(reduceMotion: reduceMotion), value: isVisible)
+        .onChange(of: phase) { newPhase in
+            announceImportantPhase(newPhase)
+        }
         .sheet(isPresented: $showTimeline) {
             NavigationStack {
                 AgentActivityLogView(
@@ -380,6 +384,18 @@ struct AgentCurrentStatusCard: View {
             }
             .presentationDetents([.medium, .large])
         }
+    }
+
+    private func announceImportantPhase(_ phase: AgentActivityPhase) {
+        guard UIAccessibility.isVoiceOverRunning else { return }
+        let message: String
+        switch phase {
+        case .waitingForPermission, .waitingForUser, .suspended, .completed, .failed, .cancelled:
+            message = "\(title). \(subtitle)"
+        case .idle, .preparing, .thinking, .usingTool:
+            return
+        }
+        UIAccessibility.post(notification: .announcement, argument: message)
     }
 
     private var recoveryAction: AgentRecoveryAction? {

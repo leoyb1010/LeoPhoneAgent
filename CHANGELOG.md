@@ -6,6 +6,15 @@
 
 ## 1.1.0 - 开发中
 
+### Build 21
+
+- LeoHaptics 成为全项目唯一触感入口，发送、完成、快捷动作、拖拽与恢复反馈统一受“外观 → 触感反馈”开关控制；不影响系统与键盘触感。
+- 首页搜索与 FAB、Composer 文本/语音切换、状态卡等关键过渡开始复用 LeoMotion，并在系统 Reduce Motion 开启时即时切换或只保留淡入淡出。
+- 首页同步旋转、聊天加载点、工具 Shimmer 与流式跳点、思考提示、浏览器下载脉冲及语音波纹均加入 Reduce Motion 静态降级；不再无条件常驻运动。
+- Composer 的附件、命令、发送和个人任务快捷动作补齐 VoiceOver 名称与操作提示；等待授权、等待用户、挂起、完成、失败及取消状态采用低频 VoiceOver 公告。
+- 新增 `IOSAccessibilityMotionAudit.sh`，阻止业务代码绕过 LeoHaptics，并要求所有重复动画文件包含 Reduce Motion 闸门。
+- 自动动效/触感审计、QuickTask smoke、MinisTests Bundle 编译和完整 iOS arm64 App 构建均成功；未安装到手机。
+
 ### Build 20
 
 - Quick Tasks 新增 Composer 固定区，默认选择前三个内置任务，用户可在设置中自由组合且最多固定三个；删除自定义任务会同步清理失效引用。

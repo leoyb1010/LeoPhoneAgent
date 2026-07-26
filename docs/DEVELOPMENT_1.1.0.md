@@ -15,7 +15,7 @@
 | 18 | CloudKit V2 / CKAsset | 已完成 | Artifact 分类默认关闭，本地数据不依赖云端 |
 | 19 | 个人任务模板与结构化输出 | 已完成 | 基于 1.0.12 QuickTask AppEntity 向前兼容扩展 |
 | 20 | Composer、首页与运行策略定制 | 已完成 | 独立偏好键 + 既有状态机，默认行为可回退 |
-| 21 | 动效、触感、Reduce Motion、无障碍 | 待开始 | 纯表现层 |
+| 21 | 动效、触感、Reduce Motion、无障碍 | 已完成 | 纯表现层 + 自动审计门 |
 | 22–23 | 全流程回归、迁移演练、真机审计、1.1.0 发布 | 待开始 | 发布候选标签 |
 
 ## Build 14 证据
@@ -117,6 +117,16 @@ xcrun swiftc -parse-as-library \
 - taste-skill / Apple HIG 检查：继续使用 List、Picker、Menu、原生 bordered control 和系统语义；快捷动作是实际操作入口，不引入装饰性卡片、渐变或常驻动画。
 - `QuickTaskTemplateSmoke: template lifecycle passed`；通用 iOS arm64 主 App `BUILD SUCCEEDED`。测试 Bundle 编译验证见本检查点提交前记录；未安装真机。
 - Simulator 的 `test-without-building` 已尝试，但 Xcode 停在 `waiting for workers to materialize` 的 runner 启动层，未进入任何 Test Case；该次运行不计为测试通过，逻辑证据采用独立 smoke + `MinisTests.xctest` 编译，完整模拟器回归留到 Build 22 重新执行。
+
+## Build 21 证据
+
+- `LeoHaptics` 读取统一的 `leo.hapticsEnabled` 偏好且默认开启；全仓原生 UIKit Feedback Generator 只允许出现在该门面中，原先 ViewModel 两处裸调用已迁移。
+- 外观设置提供触感开关；该开关只控制 LeoPhoneAgent 自己发起的动作反馈，不伪装成系统级总开关。
+- 所有包含 `repeatForever` 的 Swift 文件都具备 `accessibilityReduceMotion` 或 `UIAccessibility.isReduceMotionEnabled` 分支；同步旋转、加载、Shimmer、工具跳点、思考、浏览器和语音在减少动态效果时保持可读的静态状态。
+- Composer 保留 AnyView 和 0.28s 面板/380ms + 320ms 高度校正契约；只把文本/语音切换接入现值 LeoMotion token，没有调整耦合时长。
+- VoiceOver 对关键任务相位做低频公告，不播报每次 Token 或工具文本变化；Composer 图标按钮和个人任务准备动作均有语义名称与 Hint。
+- `scripts/IOSAccessibilityMotionAudit.sh` 成功：`centralized haptics and repeating-motion gates passed`。
+- `QuickTaskTemplateSmoke: template lifecycle passed`；`MinisTests.xctest` 编译成功；通用 iOS arm64 主 App `BUILD SUCCEEDED`；未安装真机。
 
 ## 回滚规则
 

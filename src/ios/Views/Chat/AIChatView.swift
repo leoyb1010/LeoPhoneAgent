@@ -212,6 +212,7 @@ struct AIChatView: View {
     @ObservedObject private var fontSettings = FontSettings.shared
     @ObservedObject private var deepLink = DeepLinkCoordinator.shared
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var inputFocused: Bool = false
     @State private var inputHasSelection: Bool = false
     @State private var inputIsScrollable: Bool = false
@@ -649,7 +650,7 @@ struct AIChatView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .animation(.spring(response: 0.3), value: forcePullToast)
+        .animation(LeoMotion.spring(reduceMotion: reduceMotion), value: forcePullToast)
         // [T-browser-download-ux-v2] Downloads panel opened from the floating
         // download button (mounted next to the scroll buttons, see
         // downloadFloatingButton). Completed rows jump to the file browser
@@ -2065,23 +2066,30 @@ struct AIChatView: View {
             .onChange(of: vm.fallbackTrigger) { _ in
                 // 3× pulse: fade in then out, repeated 3 times
                 fallbackPulseOpacity = 0
-                withAnimation(.easeInOut(duration: 0.35)) {
+                if reduceMotion {
+                    fallbackPulseOpacity = 1
+                    DispatchQueue.main.asyncAfter(deadline: .now() + LeoMotion.emphasis) {
+                        fallbackPulseOpacity = 0
+                    }
+                    return
+                }
+                withAnimation(.easeInOut(duration: LeoMotion.emphasis)) {
                     fallbackPulseOpacity = 1
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    withAnimation(.easeInOut(duration: 0.35)) { fallbackPulseOpacity = 0 }
+                DispatchQueue.main.asyncAfter(deadline: .now() + LeoMotion.emphasis) {
+                    withAnimation(.easeInOut(duration: LeoMotion.emphasis)) { fallbackPulseOpacity = 0 }
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-                    withAnimation(.easeInOut(duration: 0.35)) { fallbackPulseOpacity = 1 }
+                    withAnimation(.easeInOut(duration: LeoMotion.emphasis)) { fallbackPulseOpacity = 1 }
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.05) {
-                    withAnimation(.easeInOut(duration: 0.35)) { fallbackPulseOpacity = 0 }
+                    withAnimation(.easeInOut(duration: LeoMotion.emphasis)) { fallbackPulseOpacity = 0 }
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
-                    withAnimation(.easeInOut(duration: 0.35)) { fallbackPulseOpacity = 1 }
+                    withAnimation(.easeInOut(duration: LeoMotion.emphasis)) { fallbackPulseOpacity = 1 }
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.75) {
-                    withAnimation(.easeInOut(duration: 0.35)) { fallbackPulseOpacity = 0 }
+                    withAnimation(.easeInOut(duration: LeoMotion.emphasis)) { fallbackPulseOpacity = 0 }
                 }
             }
         }
@@ -2111,7 +2119,7 @@ struct AIChatView: View {
         // list row, so all three sites lock and unlock in lockstep.
         .blur(radius: titleIsVisuallyLocked ? 8 : 0)
         .allowsHitTesting(!titleIsVisuallyLocked)
-        .animation(.easeInOut(duration: 0.15), value: titleIsVisuallyLocked)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: titleIsVisuallyLocked)
     }
 
     @ViewBuilder
@@ -2889,10 +2897,12 @@ struct AIChatView: View {
             } label: {
                 icon
             }
+            .accessibilityLabel("Add attachment")
         } else {
             Button { showAttachmentMenu = true } label: {
                 icon
             }
+            .accessibilityLabel("Add attachment")
             .confirmationDialog("Add Attachment", isPresented: $showAttachmentMenu) {
                 Button { showCamera = true } label: { Label("Take Photo", systemImage: "camera") }
                 Button { showPhotoPicker = true } label: { Label("Choose Photos & Videos", systemImage: "photo.on.rectangle") }
@@ -2989,6 +2999,8 @@ struct AIChatView: View {
                 .clipShape(Circle())
                 .overlay(Circle().stroke(ChatColors.inputIconBorder, lineWidth: 0.5))
         }
+        .accessibilityLabel("Commands")
+        .accessibilityHint("Shows slash commands")
     }
 
     /// "Exit Edit Mode" capsule shown while editing a past message.
@@ -3031,7 +3043,7 @@ struct AIChatView: View {
                 // composer mirrors it, so clearing here would empty the input
                 // box and lose the dictated text on the way back to keyboard.
                 voiceVM.reset(clearTranscript: false)
-                withAnimation(.easeInOut(duration: 0.2)) { voiceInputActive = false }
+                withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { voiceInputActive = false }
             } else {
                 // Mark the composition as voice-assisted (committed to the
                 // "voice" input-mode preference only at send time). Switch the
@@ -3040,7 +3052,7 @@ struct AIChatView: View {
                 // Switching text→voice opens the panel expanded this one time;
                 // afterwards it resumes the remembered expand/compact state.
                 VoiceModePreference.shared.enteredFromText = true
-                withAnimation(.easeInOut(duration: 0.2)) { voiceInputActive = true }
+                withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { voiceInputActive = true }
             }
         }, isVoiceActive: voiceInputActive)
     }
@@ -3106,6 +3118,8 @@ struct AIChatView: View {
             }
             .disabled(!canSend)
             .keyboardShortcut(.return, modifiers: .command)
+            .accessibilityLabel("Send task")
+            .accessibilityHint("Long press to choose task continuity")
             .contextMenu {
                 Button {
                     performSend(runPolicy: .standard)
@@ -3250,6 +3264,7 @@ struct AIChatView: View {
     }
 
     private func prepareComposer(with task: QuickTaskDefinition) {
+        LeoHaptics.selection()
         let prepared = task.renderedPrompt()
         if vm.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             vm.inputText = prepared
@@ -5856,6 +5871,7 @@ struct LoadingDotsView: View {
     var dotSize: CGFloat = 10
     var color: Color = .accentColor
     @State private var animating = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: dotSize * 0.7) {
@@ -5863,17 +5879,20 @@ struct LoadingDotsView: View {
                 Circle()
                     .fill(color)
                     .frame(width: dotSize, height: dotSize)
-                    .scaleEffect(animating ? 1.0 : 0.55)
-                    .opacity(animating ? 0.95 : 0.3)
+                    .scaleEffect(reduceMotion ? 0.8 : (animating ? 1.0 : 0.55))
+                    .opacity(reduceMotion ? 0.7 : (animating ? 0.95 : 0.3))
                     .animation(
-                        .easeInOut(duration: 0.5)
+                        reduceMotion ? nil : .easeInOut(duration: 0.5)
                             .repeatForever(autoreverses: true)
                             .delay(Double(i) * 0.16),
                         value: animating
                     )
             }
         }
-        .onAppear { animating = true }
+        .onAppear { animating = !reduceMotion }
+        .onChange(of: reduceMotion) { reduced in animating = !reduced }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Loading")
     }
 }
 

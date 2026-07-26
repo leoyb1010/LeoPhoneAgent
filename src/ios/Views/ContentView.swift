@@ -140,6 +140,7 @@ struct ContentView: View {
     }
 
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject var shareCoordinator: ShareCoordinator
     @ObservedObject private var deepLink = DeepLinkCoordinator.shared
     /// Subscribe to the router so changes to its `@Published` fields are
@@ -366,7 +367,7 @@ struct ContentView: View {
                         .padding(.top, 8)
                 }
             }
-            .animation(.easeInOut(duration: 0.25), value: forceSyncToast)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: forceSyncToast)
             .onChange(of: wide) { newWide in
                 isWideLayout = newWide
             }
@@ -2299,7 +2300,7 @@ struct ContentView: View {
     }
 
     private func dismissSearch() {
-        withAnimation(.easeInOut(duration: 0.2)) { showSearchBar = false }
+        withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { showSearchBar = false }
         searchText = ""
         searchMatchedIds = nil
         searchMatchSnippets = [:]
@@ -2365,7 +2366,7 @@ struct ContentView: View {
     /// once the field exists in the view tree.
     private func focusSearch() {
         if !showSearchBar {
-            withAnimation(.easeInOut(duration: 0.2)) { showSearchBar = true }
+            withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { showSearchBar = true }
         }
         DispatchQueue.main.async { searchFocused = true }
     }
@@ -2465,7 +2466,7 @@ struct ContentView: View {
                         inverted: true
                     ) {
                         if !searchDidDrag {
-                            withAnimation(.easeInOut(duration: 0.2)) { showSearchBar = true }
+                            withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { showSearchBar = true }
                         }
                     } label: {
                         Circle()
@@ -3561,6 +3562,7 @@ private struct DraggableFAB<Label: View>: View {
     var inverted: Bool = false
     var onTap: () -> Void
     @ViewBuilder var label: () -> Label
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let fabSize: CGFloat = 56
     private let edgePadding: CGFloat = 16
@@ -3591,7 +3593,7 @@ private struct DraggableFAB<Label: View>: View {
                             // For inverted FAB: dropping on left means the *other* FAB goes right
                             let newFabOnLeft = inverted ? !droppedOnLeft : droppedOnLeft
                             let changed = fabOnLeft != newFabOnLeft
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                            withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.75)) {
                                 fabOnLeft = newFabOnLeft
                                 dragOffset = 0
                             }
@@ -4439,6 +4441,7 @@ private struct AppearanceSettingsView: View {
     /// block-mount time in ThinkingBlockView.
     @AppStorage("chat.autoExpandThinking") private var autoExpandThinking: Bool = true
     @AppStorage("leo.sessionListDensity") private var sessionListDensityRaw: Int = LeoSessionListDensity.standard.rawValue
+    @AppStorage(LeoHaptics.enabledDefaultsKey) private var hapticsEnabled: Bool = true
     @ObservedObject private var fontSettings = FontSettings.shared
 
     private let iconOptions: [AppIconOption] = [
@@ -4522,6 +4525,14 @@ private struct AppearanceSettingsView: View {
                 Text("Auto-Focus Input After Reply")
             } footer: {
                 Text("When on, the keyboard pops up automatically after the model finishes replying so the input is ready for a follow-up. On by default; turn off if you prefer to read the response without an unexpected keyboard.")
+            }
+
+            Section {
+                Toggle("Haptic Feedback", isOn: $hapticsEnabled)
+            } header: {
+                Text("Interaction")
+            } footer: {
+                Text("Controls LeoPhoneAgent action feedback. System alerts and keyboard haptics are unchanged.")
             }
 
             Section {

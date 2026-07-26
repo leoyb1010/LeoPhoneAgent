@@ -414,6 +414,10 @@ final class VoiceInputViewModel: ObservableObject {
     }
 
     private func startRippleAnimation() {
+        guard !UIAccessibility.isReduceMotionEnabled else {
+            rippleScale = [1, 1, 1]
+            return
+        }
         for i in 0..<3 {
             DispatchQueue.main.asyncAfter(deadline: .now() + Double(i) * 0.3) { [weak self] in
                 withAnimation(.easeOut(duration: 1.2).repeatForever(autoreverses: false)) {

@@ -478,9 +478,13 @@ struct BrowserDownloadFloatingButton: View {
 private struct DownloadPulseModifier: ViewModifier {
     let active: Bool
     @Binding var legacyPulse: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
-        if #available(iOS 17, *) {
+        if reduceMotion {
+            content
+                .opacity(1)
+        } else if #available(iOS 17, *) {
             content.symbolEffect(.pulse, options: .repeating, isActive: active)
         } else {
             content

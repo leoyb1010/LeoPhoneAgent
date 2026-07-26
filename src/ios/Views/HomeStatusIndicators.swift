@@ -12,13 +12,17 @@ import SwiftUI
 /// rotation speed until the view tree rebuilt.
 struct PulseRotateIcon: View {
     @State private var rotation: Double = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Image(systemName: "arrow.triangle.2.circlepath")
             .font(.system(size: 11, weight: .semibold))
             .foregroundStyle(.primary)
-            .rotationEffect(.degrees(rotation))
-            .task { await pulseLoop() }
+            .rotationEffect(.degrees(reduceMotion ? 0 : rotation))
+            .task(id: reduceMotion) {
+                guard !reduceMotion else { return }
+                await pulseLoop()
+            }
     }
 
     /// Reads SyncCore's currentSendDelay (5s sync sheet → 60s background)

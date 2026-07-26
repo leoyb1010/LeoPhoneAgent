@@ -137,6 +137,7 @@ struct AssistantBlockView: View {
 /// race during CATransaction flush (EXC_BAD_ACCESS at encode_colorspace).
 struct ShimmerOverlay: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var offsetX: CGFloat = -1.0
 
     private var peakOpacity: CGFloat {
@@ -178,12 +179,19 @@ struct ShimmerOverlay: View {
                 .frame(width: diag, height: geo.size.height)
                 .offset(x: offsetX * geo.size.width)
                 .onAppear {
+                    guard !reduceMotion else {
+                        offsetX = 0
+                        return
+                    }
                     withAnimation(
                         .linear(duration: 2.8)
                         .repeatForever(autoreverses: false)
                     ) {
                         offsetX = 1.0
                     }
+                }
+                .onChange(of: reduceMotion) { reduced in
+                    if reduced { offsetX = 0 }
                 }
         }
         .clipped()
@@ -205,6 +213,7 @@ struct ToolCapsuleView: View {
     /// [T-tool-bg-suspended-hint] Drives the background-suspension info alert.
     @State private var showBgHintAlert = false
     @ObservedObject private var keepAlive = BackgroundKeepAliveManager.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Show the yellow ⓘ hint only when this tool was flagged as background-
     /// suspended AND enhanced background isn't already effective (nothing to
@@ -327,11 +336,11 @@ struct ToolCapsuleView: View {
                             Text(".")
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundStyle(ChatColors.primaryText)
-                                .offset(y: dotsActive ? -2 : 1)
+                                .offset(y: reduceMotion ? 0 : (dotsActive ? -2 : 1))
                                 .animation(
-                                    .easeInOut(duration: 0.35)
+                                    reduceMotion ? nil : .easeInOut(duration: LeoMotion.emphasis)
                                         .repeatForever(autoreverses: true)
-                                        .delay(Double(i) * 0.12),
+                                        .delay(Double(i) * LeoMotion.quick),
                                     value: dotsActive
                                 )
                         }
@@ -374,7 +383,7 @@ struct ToolCapsuleView: View {
             .clipShape(Capsule())
             .overlay(
                 Group {
-                    if isActive {
+                    if isActive && !reduceMotion {
                         ShimmerOverlay()
                             .clipShape(Capsule())
                             .allowsHitTesting(false)
@@ -899,6 +908,7 @@ struct ThinkingBlockView: View {
 
 struct TypingIndicator: View {
     @State private var dotOffsets: [Bool] = [false, false, false]
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Live Soul name so the indicator reads "<custom name> is thinking…" when
     /// the user has renamed the assistant in Soul settings. Updates via
     /// `.soulMdChanged` Notification — same wiring used by `AssistantSoulName`.
@@ -917,7 +927,7 @@ struct TypingIndicator: View {
             Text("\(soulName) is thinking")
             ForEach(0..<3, id: \.self) { i in
                 Text(".")
-                    .offset(y: dotOffsets[i] ? -3 : 1)
+                    .offset(y: reduceMotion ? 0 : (dotOffsets[i] ? -3 : 1))
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .soulMdChanged)) { _ in
@@ -927,7 +937,10 @@ struct TypingIndicator: View {
         .font(.system(size: 15, weight: .medium))
         .foregroundStyle(ChatColors.tertiaryText)
         .padding(.top, 0)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(soulName) is thinking")
         .onAppear {
+            guard !reduceMotion else { return }
             for i in 0..<3 {
                 withAnimation(
                     .easeInOut(duration: 0.4)
@@ -937,6 +950,9 @@ struct TypingIndicator: View {
                     dotOffsets[i] = true
                 }
             }
+        }
+        .onChange(of: reduceMotion) { reduced in
+            if reduced { dotOffsets = [false, false, false] }
         }
     }
 }
