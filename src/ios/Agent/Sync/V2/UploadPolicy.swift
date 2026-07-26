@@ -18,6 +18,7 @@ enum UploadPolicy {
     enum Category: String, CaseIterable {
         case chatSessions          // Session, Message, CompactMarker
         case sessionFiles          // SessionFile (binary attachments)
+        case artifacts             // Artifact metadata + immutable versions
         case skills                // Skill (and SkillFile if any)
         case providers             // ProviderConfig
         case envVars               // EnvVar
@@ -30,6 +31,8 @@ enum UploadPolicy {
                 return ["Session", "SessionV2", "Message", "MessageV2", "CompactMarker", "CompactMarkerV2"]
             case .sessionFiles:
                 return ["SessionFile", "SessionFileV2"]
+            case .artifacts:
+                return ["ArtifactV2", "ArtifactVersionV2"]
             case .skills:
                 return ["Skill", "SkillV2"]
             case .providers:
@@ -48,6 +51,7 @@ enum UploadPolicy {
             switch self {
             case .chatSessions: return "Chat Sessions"
             case .sessionFiles: return "Session Files"
+            case .artifacts:    return "Artifacts"
             case .skills:       return "Skills"
             case .providers:    return "Providers"
             case .envVars:      return "Environments"
@@ -60,8 +64,9 @@ enum UploadPolicy {
     /// Defaults to true on first read (permissive).
     static func isEnabled(_ cat: Category) -> Bool {
         if UserDefaults.standard.object(forKey: cat.defaultsKey) == nil {
-            UserDefaults.standard.set(true, forKey: cat.defaultsKey)
-            return true
+            let initialValue = cat != .artifacts
+            UserDefaults.standard.set(initialValue, forKey: cat.defaultsKey)
+            return initialValue
         }
         return UserDefaults.standard.bool(forKey: cat.defaultsKey)
     }
@@ -95,6 +100,15 @@ enum UploadPolicy {
             return v > 0 ? v : (1 * 1024 * 1024)
         }
         set { UserDefaults.standard.set(newValue, forKey: maxFileSizeKey) }
+    }
+
+    static let maxArtifactSizeKey = "cloudSync.v2.upload.maxArtifactSize"
+    static var maxArtifactSizeBytes: Int {
+        get {
+            let value = UserDefaults.standard.integer(forKey: maxArtifactSizeKey)
+            return value > 0 ? value : (25 * 1_024 * 1_024)
+        }
+        set { UserDefaults.standard.set(newValue, forKey: maxArtifactSizeKey) }
     }
 
     /// Comma-joined string of category record-types currently enabled,

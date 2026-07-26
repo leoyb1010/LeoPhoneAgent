@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 private enum ArtifactSmokeFailure: Error {
     case assertion(String)
@@ -68,6 +69,47 @@ enum ArtifactRepositorySmoke {
         let allAfterPurge = try await repository.list(includeTrashed: true)
         try expect(allAfterPurge.count == 1, "purge selected metadata")
         try expect(!FileManager.default.fileExists(atPath: fileURL.deletingLastPathComponent().path), "purge files")
+
+        let remoteData = Data("remote-asset".utf8)
+        let remoteAssetURL = baseURL.appendingPathComponent("remote.tmp")
+        try remoteData.write(to: remoteAssetURL)
+        let remoteChecksum = SHA256.hash(data: remoteData).map { String(format: "%02x", $0) }.joined()
+        let remoteDate = Date()
+        let remoteArtifact = ArtifactRecord(
+            id: "artifact-remote",
+            sessionId: "session-smoke",
+            sourceMessageId: "message-remote",
+            sourcePath: "/var/minis/workspace/remote.txt",
+            title: "Remote",
+            kind: .document,
+            mimeType: "text/plain",
+            currentVersionId: "version-remote",
+            createdAt: remoteDate,
+            updatedAt: remoteDate,
+            trashedAt: nil
+        )
+        let remoteVersion = ArtifactVersion(
+            id: "version-remote",
+            artifactId: remoteArtifact.id,
+            versionNumber: 1,
+            originalFileName: "remote.txt",
+            relativePath: "",
+            byteCount: Int64(remoteData.count),
+            sha256: remoteChecksum,
+            createdAt: remoteDate
+        )
+        try await repository.mergeRemoteArtifact(remoteArtifact)
+        try await repository.mergeRemoteVersion(
+            remoteVersion,
+            sessionId: remoteArtifact.sessionId,
+            mimeType: remoteArtifact.mimeType,
+            assetURL: remoteAssetURL
+        )
+        let imported = try unwrap(try await repository.version(id: remoteVersion.id))
+        let importedURL = try await repository.fileURL(for: imported)
+        let importedData = try Data(contentsOf: importedURL)
+        try expect(importedData == remoteData, "remote CKAsset integrity")
+        try expect(FileManager.default.fileExists(atPath: remoteAssetURL.path), "remote source retained")
         print("ArtifactRepositorySmoke: lifecycle passed")
     }
 

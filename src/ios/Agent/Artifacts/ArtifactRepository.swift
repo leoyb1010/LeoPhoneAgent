@@ -86,7 +86,9 @@ actor ArtifactRepository {
             updatedAt: now,
             trashedAt: nil
         )
-        return try persistVersion(artifact: artifact, data: data, fileName: fileName, mimeType: mimeType, isNew: true)
+        let snapshot = try persistVersion(artifact: artifact, data: data, fileName: fileName, mimeType: mimeType, isNew: true)
+        notifyChange(artifactId: snapshot.artifact.id, versionIds: snapshot.currentVersion.map { [$0.id] } ?? [])
+        return snapshot
     }
 
     @discardableResult
@@ -103,7 +105,9 @@ actor ArtifactRepository {
             artifact.mimeType = mimeType
             artifact.kind = ArtifactKind.infer(mimeType: mimeType, fileName: fileName)
         }
-        return try persistVersion(artifact: artifact, data: data, fileName: fileName, mimeType: artifact.mimeType, isNew: false)
+        let snapshot = try persistVersion(artifact: artifact, data: data, fileName: fileName, mimeType: artifact.mimeType, isNew: false)
+        notifyChange(artifactId: snapshot.artifact.id, versionIds: snapshot.currentVersion.map { [$0.id] } ?? [])
+        return snapshot
     }
 
     func list(sessionId: String? = nil, includeTrashed: Bool = false) throws -> [ArtifactSnapshot] {
@@ -198,6 +202,14 @@ actor ArtifactRepository {
         return results
     }
 
+    func version(id: String) throws -> ArtifactVersion? {
+        let statement = try prepare("SELECT id, artifact_id, version_number, original_file_name, relative_path, byte_count, sha256, created_at FROM artifact_versions WHERE id = ?")
+        defer { sqlite3_finalize(statement) }
+        bindText(statement, 1, id)
+        guard sqlite3_step(statement) == SQLITE_ROW else { return nil }
+        return decodeVersion(statement, offset: 0)
+    }
+
     func fileURL(for version: ArtifactVersion) throws -> URL {
         let candidate = artifactsURL.appendingPathComponent(version.relativePath).standardizedFileURL
         let root = artifactsURL.standardizedFileURL.path + "/"
@@ -207,6 +219,7 @@ actor ArtifactRepository {
 
     func trash(id: String, at date: Date = Date()) throws {
         try updateTimestamp(sql: "UPDATE artifacts SET trashed_at = ?, updated_at = ? WHERE id = ?", id: id, date: date)
+        notifyChange(artifactId: id)
     }
 
     func restore(id: String, at date: Date = Date()) throws {
@@ -215,9 +228,19 @@ actor ArtifactRepository {
         sqlite3_bind_double(statement, 1, date.timeIntervalSince1970)
         bindText(statement, 2, id)
         try stepDone(statement)
+        notifyChange(artifactId: id)
     }
 
     func purge(id: String) throws {
+        try purge(id: id, emitChange: true)
+    }
+
+    func purgeFromRemote(id: String) throws {
+        try purge(id: id, emitChange: false)
+    }
+
+    private func purge(id: String, emitChange: Bool) throws {
+        let versionIds = try versions(artifactId: id).map(\.id)
         let directory = artifactsURL.appendingPathComponent(id, isDirectory: true).standardizedFileURL
         let root = artifactsURL.standardizedFileURL.path + "/"
         guard directory.path.hasPrefix(root) else { throw RepositoryError.unsafePath }
@@ -234,8 +257,129 @@ actor ArtifactRepository {
             }
             try execute("COMMIT")
             try? FileManager.default.removeItem(at: directory)
+            if emitChange {
+                notifyChange(artifactId: id, versionIds: versionIds, operation: .delete)
+            }
         } catch {
             _ = sqlite3_exec(db, "ROLLBACK", nil, nil, nil)
+            throw error
+        }
+    }
+
+    /// Applies metadata received from a trusted sync transport without
+    /// re-emitting a local dirty notification.
+    func mergeRemoteArtifact(_ remote: ArtifactRecord) throws {
+        guard isSafeIdentifier(remote.id) else { throw RepositoryError.unsafePath }
+        let mergedSourcePath: String?
+        if let sourcePath = remote.sourcePath,
+           let owner = try artifact(sessionId: remote.sessionId, sourcePath: sourcePath),
+           owner.id != remote.id {
+            // Concurrent devices can independently create an artifact from
+            // the same logical workspace path. Preserve both records and
+            // leave only the original owner path-addressable locally.
+            mergedSourcePath = nil
+        } else {
+            mergedSourcePath = remote.sourcePath
+        }
+        let statement = try prepare("""
+            INSERT INTO artifacts (id, session_id, source_message_id, source_path, title, kind, mime_type, current_version_id, created_at, updated_at, trashed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                session_id = excluded.session_id,
+                source_message_id = excluded.source_message_id,
+                source_path = excluded.source_path,
+                title = excluded.title,
+                kind = excluded.kind,
+                mime_type = excluded.mime_type,
+                current_version_id = excluded.current_version_id,
+                updated_at = excluded.updated_at,
+                trashed_at = excluded.trashed_at
+            WHERE excluded.updated_at >= artifacts.updated_at
+        """)
+        defer { sqlite3_finalize(statement) }
+        bindText(statement, 1, remote.id)
+        bindText(statement, 2, remote.sessionId)
+        bindOptionalText(statement, 3, remote.sourceMessageId)
+        bindOptionalText(statement, 4, mergedSourcePath)
+        bindText(statement, 5, normalizedTitle(remote.title))
+        bindText(statement, 6, remote.kind.rawValue)
+        bindText(statement, 7, remote.mimeType)
+        bindOptionalText(statement, 8, remote.currentVersionId)
+        sqlite3_bind_double(statement, 9, remote.createdAt.timeIntervalSince1970)
+        sqlite3_bind_double(statement, 10, remote.updatedAt.timeIntervalSince1970)
+        if let trashedAt = remote.trashedAt {
+            sqlite3_bind_double(statement, 11, trashedAt.timeIntervalSince1970)
+        } else {
+            sqlite3_bind_null(statement, 11)
+        }
+        try stepDone(statement)
+    }
+
+    /// Imports an immutable CKAsset copy. The transport-provided temporary
+    /// file is never retained and the original workspace path is not touched.
+    func mergeRemoteVersion(
+        _ remote: ArtifactVersion,
+        sessionId: String,
+        mimeType: String,
+        assetURL: URL
+    ) throws {
+        guard isSafeIdentifier(remote.id), isSafeIdentifier(remote.artifactId) else {
+            throw RepositoryError.unsafePath
+        }
+        if let existing = try version(id: remote.id), existing.sha256 == remote.sha256 { return }
+        let values = try assetURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+        guard values.isRegularFile == true else { throw RepositoryError.artifactNotFound }
+        guard (values.fileSize ?? 0) <= 100 * 1_024 * 1_024 else { throw RepositoryError.fileTooLarge }
+        let data = try Data(contentsOf: assetURL, options: .mappedIfSafe)
+        let checksum = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        guard checksum == remote.sha256, Int64(data.count) == remote.byteCount else {
+            throw RepositoryError.sql("Remote artifact integrity check failed.")
+        }
+
+        let currentMax = try versions(artifactId: remote.artifactId).first?.versionNumber ?? 0
+        let localNumber = max(remote.versionNumber, currentMax + 1)
+        let safeName = sanitizedFileName(remote.originalFileName)
+        let relativePath = "\(remote.artifactId)/v\(localNumber)-\(remote.id.prefix(8))-\(safeName)"
+        let finalURL = artifactsURL.appendingPathComponent(relativePath)
+        let stagedURL = stagingURL.appendingPathComponent(remote.id)
+        try data.write(to: stagedURL, options: .atomic)
+        try FileManager.default.createDirectory(at: finalURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+
+        try execute("BEGIN IMMEDIATE TRANSACTION")
+        do {
+            try FileManager.default.moveItem(at: stagedURL, to: finalURL)
+            let placeholder = try prepare("""
+                INSERT OR IGNORE INTO artifacts
+                    (id, session_id, title, kind, mime_type, current_version_id, created_at, updated_at, trashed_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)
+            """)
+            bindText(placeholder, 1, remote.artifactId)
+            bindText(placeholder, 2, sessionId)
+            bindText(placeholder, 3, normalizedTitle(remote.originalFileName))
+            bindText(placeholder, 4, ArtifactKind.infer(mimeType: mimeType, fileName: safeName).rawValue)
+            bindText(placeholder, 5, mimeType)
+            bindText(placeholder, 6, remote.id)
+            sqlite3_bind_double(placeholder, 7, remote.createdAt.timeIntervalSince1970)
+            sqlite3_bind_double(placeholder, 8, remote.createdAt.timeIntervalSince1970)
+            try stepDone(placeholder)
+            sqlite3_finalize(placeholder)
+
+            let insert = try prepare("INSERT INTO artifact_versions (id, artifact_id, version_number, original_file_name, relative_path, byte_count, sha256, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+            bindText(insert, 1, remote.id)
+            bindText(insert, 2, remote.artifactId)
+            sqlite3_bind_int64(insert, 3, Int64(localNumber))
+            bindText(insert, 4, safeName)
+            bindText(insert, 5, relativePath)
+            sqlite3_bind_int64(insert, 6, remote.byteCount)
+            bindText(insert, 7, remote.sha256)
+            sqlite3_bind_double(insert, 8, remote.createdAt.timeIntervalSince1970)
+            try stepDone(insert)
+            sqlite3_finalize(insert)
+            try execute("COMMIT")
+        } catch {
+            _ = sqlite3_exec(db, "ROLLBACK", nil, nil, nil)
+            try? FileManager.default.removeItem(at: stagedURL)
+            try? FileManager.default.removeItem(at: finalURL)
             throw error
         }
     }
@@ -416,5 +560,27 @@ actor ArtifactRepository {
     private func normalizedTitle(_ value: String) -> String {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return String((trimmed.isEmpty ? "Untitled Artifact" : trimmed).prefix(160))
+    }
+
+    private func isSafeIdentifier(_ value: String) -> Bool {
+        !value.isEmpty && value.count <= 128 && value.unicodeScalars.allSatisfy {
+            CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_")).contains($0)
+        }
+    }
+
+    private func notifyChange(
+        artifactId: String,
+        versionIds: [String] = [],
+        operation: ArtifactChangeOperation = .upsert
+    ) {
+        NotificationCenter.default.post(
+            name: .artifactRepositoryDidChange,
+            object: nil,
+            userInfo: [
+                "artifactId": artifactId,
+                "versionIds": versionIds,
+                "operation": operation.rawValue,
+            ]
+        )
     }
 }

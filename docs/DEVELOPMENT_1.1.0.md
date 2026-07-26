@@ -12,7 +12,7 @@
 | 15 | Artifact 本地模型与文件生命周期 | 已完成 | 尚未接入 UI/CloudKit，独立提交可整体回滚 |
 | 16 | Artifact Tray、Quick Look、分享 | 已完成 | UI 只调用 Build 15 Repository，可独立移除 |
 | 17 | Artifact 版本与聊天/任务/Files 统一引用 | 已完成 | 保留原始文件引用 |
-| 18 | CloudKit V2 / CKAsset | 待开始 | 默认关闭同步，先完成双读与回滚演练 |
+| 18 | CloudKit V2 / CKAsset | 已完成 | Artifact 分类默认关闭，本地数据不依赖云端 |
 | 19 | 个人任务模板与结构化输出 | 待开始 | 独立数据类型 |
 | 20 | Composer、首页与运行策略定制 | 待开始 | Feature Flag |
 | 21 | 动效、触感、Reduce Motion、无障碍 | 待开始 | 纯表现层 |
@@ -81,6 +81,18 @@ xcrun swiftc -parse-as-library \
 - `ChatStoreSchemaSmoke: 4/4 passed`；`ArtifactRepositorySmoke: lifecycle passed`。
 - Swift 6 `MinisTests.xctest` 编译及链接成功；通用 iOS arm64 主 App `BUILD SUCCEEDED`。
 - 本检查点仍不写入 CloudKit，不安装到真机。
+
+## Build 18 证据
+
+- 复用现有 `SyncCore` / `ICloudSharedZoneTransport`，新增 `ArtifactV2` 元数据记录与 `ArtifactVersionV2` CKAsset 记录，均进入 `minis-shared` 私有数据库固定 zone。
+- Syncable Registry、Hydrator、CloudKit zone 路由、近期查询、dirty queue 白名单和设置分类已形成完整闭环。
+- Artifact 分类首次读取默认为关闭；关闭时既不入 dirty queue，也不接收远端合并或 tombstone。
+- 显式开启时会标记所有现有 Artifact 元数据及未超过用户上限的版本；默认 CKAsset 版本上限 25 MB。
+- 入站 CKAsset 同时验证 `byteCount` 与 SHA-256，并原子落盘到 Artifact 受控目录；远端合并 API 不发出本地变更通知。
+- 永久删除对 Artifact 和版本发送 tombstone，并使用近期删除表防止 CloudKit 查询窗口内的旧记录复活；软删除只同步 `trashedAt`。
+- `ChatStoreSchemaSmoke: 4/4 passed`；`ArtifactRepositorySmoke: lifecycle passed`，后者包含远端资产完整性与受控副本验证。
+- Swift 6 `MinisTests.xctest` 编译及链接成功；通用 iOS arm64 主 App `BUILD SUCCEEDED`。
+- 本检查点未安装真机，未修改手机上的 1.0.12 Build 13，也未自动打开 Artifact 云同步。
 
 ## 回滚规则
 

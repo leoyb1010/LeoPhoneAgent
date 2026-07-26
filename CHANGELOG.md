@@ -6,6 +6,15 @@
 
 ## 1.1.0 - 开发中
 
+### Build 18
+
+- Artifact 接入现有 CloudKit V2 共享区：`ArtifactV2` 同步元数据和回收站状态，`ArtifactVersionV2` 以 CKAsset 同步不可变版本文件。
+- Artifact 云同步作为独立分类默认关闭，需在 iCloud Sync 设置中明确开启；开启时才分批标记现有成果。
+- 默认单个 Artifact 云版本上限为 25 MB，可选 1/5/25/100 MB；超限版本保留在本机，不进入 CKAsset 上传队列。
+- 下载的 CKAsset 必须同时通过文件大小和 SHA-256 校验，再原子复制到本机受控目录；CloudKit 临时文件不会被持有。
+- 远端合并不反向产生本地脏记录；回收站是可恢复状态，永久删除才为 Artifact 和其版本发送 tombstone，并阻止删除窗口期内的旧记录复活。
+- Artifact/Schema smoke 通过，测试 Bundle 编译链接成功，完整 iOS arm64 App 构建成功；没有安装到手机，也没有开启用户的 Artifact 云同步。
+
 ### Build 17
 
 - 任务通过 `file_write`、`file_edit` 或 shell 在会话 workspace 生成的用户成果，现在会自动进入该会话的 Artifact Tray。

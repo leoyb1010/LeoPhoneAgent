@@ -4218,7 +4218,8 @@ extension ChatStore {
         // their own session-level tombstone path (recordDeletedSessionTombstone).
         if operation == "delete",
            ["Skill", "EnvVarItem", "CompactMarker", "MCPServerItem",
-            "ProviderInstanceV3", "ProviderModelEntryV3", "ProviderModelGroupV3"].contains(recordType) {
+            "ProviderInstanceV3", "ProviderModelEntryV3", "ProviderModelGroupV3",
+            "ArtifactV2", "ArtifactVersionV2"].contains(recordType) {
             recordDeletedRecordTombstone(type: recordType, id: recordId)
         }
         // Trace priority=0 (user-driven) writes so we can follow a
@@ -4741,6 +4742,7 @@ extension ChatStore {
     /// can still drain).
     fileprivate static let v2SyncRecordTypes: [String] = [
         "SessionV2", "MessageV2", "CompactMarkerV2", "SessionFileV2",
+        "ArtifactV2", "ArtifactVersionV2",
         "SkillV2", "ProviderConfigV2", "EnvVarV2", "EnvVarItem",
         "SyncDeviceV2", "SoulV2",
         // File-backed singletons. Without these in the whitelist,

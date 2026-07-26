@@ -15,6 +15,7 @@ struct CloudSyncSettingsV2View: View {
     @State private var showDeviceNameEditor: Bool = false
     @State private var categoriesEnabled: [UploadPolicy.Category: Bool] = [:]
     @State private var maxFileSizeMB: Int = 1
+    @State private var maxArtifactSizeMB: Int = 25
     @State private var remoteDevices: [SyncDevice] = []
     @State private var statusText: String = ""
     // [T-ios-migration-timer-sessionlist-uaf-crash] 5s refresh cadence is driven by
@@ -82,7 +83,12 @@ struct CloudSyncSettingsV2View: View {
                             set: { newVal in
                                 UploadPolicy.setEnabled(cat, newVal)
                                 categoriesEnabled[cat] = newVal
-                                Task { await markDeviceDirty() }
+                                Task {
+                                    if cat == .artifacts && newVal {
+                                        await ChatStoreSyncHydrators.stageAllArtifacts()
+                                    }
+                                    await markDeviceDirty()
+                                }
                             }
                         )) {
                             HStack(spacing: 12) {
@@ -115,6 +121,27 @@ struct CloudSyncSettingsV2View: View {
                         .pickerStyle(.menu)
                         .onChange(of: maxFileSizeMB) { newValue in
                             UploadPolicy.maxFileSizeBytes = newValue == 0 ? 256 * 1024 : newValue * 1024 * 1024
+                        }
+                    }
+                    if categoriesEnabled[.artifacts] ?? false {
+                        Picker(selection: $maxArtifactSizeMB) {
+                            Text("1 MB").tag(1)
+                            Text("5 MB").tag(5)
+                            Text("25 MB").tag(25)
+                            Text("100 MB").tag(100)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "shippingbox.fill")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 28, height: 28)
+                                    .background(Color.purple, in: RoundedRectangle(cornerRadius: 7))
+                                Text("Max Artifact Version Size")
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .onChange(of: maxArtifactSizeMB) { newValue in
+                            UploadPolicy.maxArtifactSizeBytes = newValue * 1024 * 1024
                         }
                     }
                 } footer: {
@@ -220,6 +247,7 @@ struct CloudSyncSettingsV2View: View {
         }
         let bytes = UploadPolicy.maxFileSizeBytes
         maxFileSizeMB = bytes < 1024 * 1024 ? 0 : Int((Double(bytes) / (1024 * 1024)).rounded())
+        maxArtifactSizeMB = max(1, UploadPolicy.maxArtifactSizeBytes / (1024 * 1024))
         let me = DeviceIdentity.deviceId
         let all = await ChatStore.shared.listSyncDevices()
         remoteDevices = all.filter { $0.id != me }.sorted { $0.lastSeen > $1.lastSeen }
@@ -247,6 +275,7 @@ struct CloudSyncSettingsV2View: View {
         switch cat {
         case .chatSessions: return "bubble.left.and.bubble.right.fill"
         case .sessionFiles: return "doc.fill"
+        case .artifacts:    return "shippingbox.fill"
         case .skills:       return "puzzlepiece.fill"
         case .providers:    return "link"
         case .envVars:      return "rectangle.stack.fill"
@@ -258,6 +287,7 @@ struct CloudSyncSettingsV2View: View {
         switch cat {
         case .chatSessions: return .blue
         case .sessionFiles: return .indigo
+        case .artifacts:    return .purple
         case .skills:       return .orange
         case .providers:    return .teal
         case .envVars:      return .green

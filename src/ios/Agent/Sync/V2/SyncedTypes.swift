@@ -216,6 +216,97 @@ struct SyncedSessionFile: Syncable {
     }()
 }
 
+// MARK: - SyncedArtifact
+
+struct SyncedArtifact: Syncable {
+    var id: String
+    var sessionId: String
+    var sourceMessageId: String?
+    var sourcePath: String?
+    var title: String
+    var kind: String
+    var mimeType: String
+    var currentVersionId: String?
+    var createdAt: Date
+    var updatedAt: Date
+    var trashedAt: Date?
+
+    static let syncMetadata: SyncTypeMetadata<SyncedArtifact> = {
+        typealias F = FieldDescriptor<SyncedArtifact>
+        return SyncTypeMetadata<SyncedArtifact>(
+            recordType: "ArtifactV2",
+            idKeyPath: \SyncedArtifact.id,
+            scope: .perParent(parentType: "SessionV2", \SyncedArtifact.sessionId),
+            fields: [
+                F.string("artifactId", \SyncedArtifact.id),
+                F.string("sessionId", \SyncedArtifact.sessionId),
+                F.optionalString("sourceMessageId", \SyncedArtifact.sourceMessageId),
+                F.optionalString("sourcePath", \SyncedArtifact.sourcePath),
+                F.string("title", \SyncedArtifact.title),
+                F.string("kind", \SyncedArtifact.kind),
+                F.string("mimeType", \SyncedArtifact.mimeType),
+                F.optionalString("currentVersionId", \SyncedArtifact.currentVersionId),
+                F.date("createdAt", \SyncedArtifact.createdAt),
+                F.date("updatedAt", \SyncedArtifact.updatedAt),
+                F.optionalDate("trashedAt", \SyncedArtifact.trashedAt),
+            ],
+            conflictPolicy: .lastWriteWinsByField(\SyncedArtifact.updatedAt),
+            version: 1
+        )
+    }()
+
+    static func from(_ artifact: ArtifactRecord) -> SyncedArtifact {
+        SyncedArtifact(
+            id: artifact.id,
+            sessionId: artifact.sessionId,
+            sourceMessageId: artifact.sourceMessageId,
+            sourcePath: artifact.sourcePath,
+            title: artifact.title,
+            kind: artifact.kind.rawValue,
+            mimeType: artifact.mimeType,
+            currentVersionId: artifact.currentVersionId,
+            createdAt: artifact.createdAt,
+            updatedAt: artifact.updatedAt,
+            trashedAt: artifact.trashedAt
+        )
+    }
+}
+
+struct SyncedArtifactVersion: Syncable {
+    var id: String
+    var artifactId: String
+    var sessionId: String
+    var versionNumber: Int
+    var originalFileName: String
+    var byteCount: Int
+    var sha256: String
+    var createdAt: Date
+    var fileURL: URL
+    var mimeType: String?
+
+    static let syncMetadata: SyncTypeMetadata<SyncedArtifactVersion> = {
+        typealias F = FieldDescriptor<SyncedArtifactVersion>
+        return SyncTypeMetadata<SyncedArtifactVersion>(
+            recordType: "ArtifactVersionV2",
+            idKeyPath: \SyncedArtifactVersion.id,
+            scope: .perParent(parentType: "ArtifactV2", \SyncedArtifactVersion.artifactId),
+            fields: [
+                F.string("versionId", \SyncedArtifactVersion.id),
+                F.string("artifactId", \SyncedArtifactVersion.artifactId),
+                F.string("sessionId", \SyncedArtifactVersion.sessionId),
+                F.int("versionNumber", \SyncedArtifactVersion.versionNumber),
+                F.string("originalFileName", \SyncedArtifactVersion.originalFileName),
+                F.int("byteCount", \SyncedArtifactVersion.byteCount),
+                F.string("sha256", \SyncedArtifactVersion.sha256),
+                F.date("createdAt", \SyncedArtifactVersion.createdAt),
+                F.optionalString("mimeType", \SyncedArtifactVersion.mimeType),
+            ],
+            conflictPolicy: .lastWriteWinsByServerEtag,
+            version: 1
+        )
+    }()
+}
+
 // MARK: - SyncedSkill
 
 struct SyncedSkill: Syncable {
@@ -727,6 +818,8 @@ enum SyncedTypesBootstrap {
         r.register(SyncedMessage.self)
         r.register(SyncedCompactMarker.self)
         r.register(SyncedSessionFile.self)
+        r.register(SyncedArtifact.self)
+        r.register(SyncedArtifactVersion.self)
         r.register(SyncedSkill.self)
         r.register(SyncedProviderConfig.self)
         r.register(SyncedMCPServers.self)   // legacy whole-file, inbound only

@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import XCTest
 
 final class ArtifactRepositoryTests: XCTestCase {
@@ -100,5 +101,55 @@ final class ArtifactRepositoryTests: XCTestCase {
         XCTAssertEqual(second.currentVersion?.versionNumber, 2)
         let updatedVersions = try await repository.versions(artifactId: first.artifact.id)
         XCTAssertEqual(updatedVersions.count, 2)
+    }
+
+    func testRemoteAssetMergeVerifiesIntegrityAndKeepsManagedCopy() async throws {
+        let baseURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: baseURL) }
+        let repository = ArtifactRepository(baseURL: baseURL.appendingPathComponent("store", isDirectory: true))
+        let assetURL = baseURL.appendingPathComponent("download.tmp")
+        let data = Data("cloud artifact".utf8)
+        try FileManager.default.createDirectory(at: baseURL, withIntermediateDirectories: true)
+        try data.write(to: assetURL)
+        let checksum = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        let now = Date()
+        let artifact = ArtifactRecord(
+            id: "artifact-remote",
+            sessionId: "session-remote",
+            sourceMessageId: "message-remote",
+            sourcePath: "/var/minis/workspace/cloud.txt",
+            title: "Cloud",
+            kind: .document,
+            mimeType: "text/plain",
+            currentVersionId: "version-remote",
+            createdAt: now,
+            updatedAt: now,
+            trashedAt: nil
+        )
+        let version = ArtifactVersion(
+            id: "version-remote",
+            artifactId: artifact.id,
+            versionNumber: 1,
+            originalFileName: "cloud.txt",
+            relativePath: "",
+            byteCount: Int64(data.count),
+            sha256: checksum,
+            createdAt: now
+        )
+
+        try await repository.mergeRemoteArtifact(artifact)
+        try await repository.mergeRemoteVersion(
+            version,
+            sessionId: artifact.sessionId,
+            mimeType: artifact.mimeType,
+            assetURL: assetURL
+        )
+
+        let fetchedVersion = try await repository.version(id: version.id)
+        let storedVersion = try XCTUnwrap(fetchedVersion)
+        let managedURL = try await repository.fileURL(for: storedVersion)
+        XCTAssertEqual(try Data(contentsOf: managedURL), data)
+        XCTAssertNotEqual(managedURL, assetURL)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: assetURL.path))
     }
 }

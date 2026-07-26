@@ -16,6 +16,8 @@ private let logger = AppLogger(category: "SyncCore")
 @MainActor
 enum ChatStoreSyncHydrators {
 
+    private static var artifactChangeObserver: NSObjectProtocol?
+
     static func registerAll() async {
         let h = SyncCoreHydrators.shared
 
@@ -43,6 +45,17 @@ enum ChatStoreSyncHydrators {
             recordType: "SessionFileV2",
             builder: { id in await buildSessionFile(id: id) },
             merger: { record in await mergeSessionFile(record: record) }
+        )
+        h.register(
+            recordType: "ArtifactV2",
+            builder: { id in await buildArtifact(id: id) },
+            merger: { record in await mergeArtifact(record: record) },
+            deletionApplier: { id in await deleteArtifact(id: id) }
+        )
+        h.register(
+            recordType: "ArtifactVersionV2",
+            builder: { id in await buildArtifactVersion(id: id) },
+            merger: { record in await mergeArtifactVersion(record: record) }
         )
         h.register(
             recordType: "SkillV2",
@@ -144,7 +157,47 @@ enum ChatStoreSyncHydrators {
             merger: { record in await mergeMemoryDaily(record: record) }
         )
 
+        registerArtifactChangeObserverIfNeeded()
         logger.info("[SyncCore] ChatStoreSyncHydrators registered: \(SyncCoreHydrators.shared.registeredRecordTypes.count) types")
+    }
+
+    private static func registerArtifactChangeObserverIfNeeded() {
+        guard artifactChangeObserver == nil else { return }
+        artifactChangeObserver = NotificationCenter.default.addObserver(
+            forName: .artifactRepositoryDidChange,
+            object: nil,
+            queue: .main
+        ) { note in
+            guard let artifactId = note.userInfo?["artifactId"] as? String,
+                  let operation = note.userInfo?["operation"] as? String else { return }
+            let versionIds = note.userInfo?["versionIds"] as? [String] ?? []
+            Task { @MainActor in
+                await ChatStore.shared.markDirty(
+                    recordType: "ArtifactV2",
+                    recordId: artifactId,
+                    operation: operation
+                )
+                for versionId in versionIds {
+                    await ChatStore.shared.markDirty(
+                        recordType: "ArtifactVersionV2",
+                        recordId: versionId,
+                        operation: operation
+                    )
+                }
+            }
+        }
+    }
+
+    static func stageAllArtifacts() async {
+        guard UploadPolicy.isEnabled(.artifacts),
+              let snapshots = try? await ArtifactRepository.shared.list(includeTrashed: true) else { return }
+        for snapshot in snapshots {
+            await ChatStore.shared.markDirty(recordType: "ArtifactV2", recordId: snapshot.artifact.id)
+            let versions = (try? await ArtifactRepository.shared.versions(artifactId: snapshot.artifact.id)) ?? []
+            for version in versions where version.byteCount <= Int64(UploadPolicy.maxArtifactSizeBytes) {
+                await ChatStore.shared.markDirty(recordType: "ArtifactVersionV2", recordId: version.id)
+            }
+        }
     }
 
     // MARK: - Session
@@ -406,6 +459,127 @@ enum ChatStoreSyncHydrators {
         } catch {
             logger.error("[SyncCore] mergeSessionFile failed \(sessionId)/\(relativePath): \(error.localizedDescription)")
         }
+    }
+
+    // MARK: - Artifact
+
+    private static func buildArtifact(id: String) async -> PortableRecord? {
+        guard let artifact = try? await ArtifactRepository.shared.artifact(id: id) else { return nil }
+        return SyncableTypeRegistry.shared.metadata(for: "ArtifactV2")?.buildPortable(SyncedArtifact.from(artifact))
+    }
+
+    private static func mergeArtifact(record: PortableRecord) async {
+        guard let id = stringField(record, "artifactId"),
+              let sessionId = stringField(record, "sessionId") else { return }
+        let remoteUpdatedAt = dateField(record, "updatedAt") ?? record.updatedAt
+        if await ChatStore.shared.isRecentlyDeletedRecord(
+            type: "ArtifactV2",
+            id: id,
+            remoteUpdatedAt: remoteUpdatedAt
+        ) {
+            return
+        }
+        let remote = ArtifactRecord(
+            id: id,
+            sessionId: sessionId,
+            sourceMessageId: optionalStringField(record, "sourceMessageId"),
+            sourcePath: optionalStringField(record, "sourcePath"),
+            title: stringField(record, "title") ?? "Artifact",
+            kind: ArtifactKind(rawValue: stringField(record, "kind") ?? "") ?? .file,
+            mimeType: stringField(record, "mimeType") ?? "application/octet-stream",
+            currentVersionId: optionalStringField(record, "currentVersionId"),
+            createdAt: dateField(record, "createdAt") ?? record.updatedAt,
+            updatedAt: remoteUpdatedAt,
+            trashedAt: dateField(record, "trashedAt")
+        )
+        do {
+            try await ArtifactRepository.shared.mergeRemoteArtifact(remote)
+        } catch {
+            logger.warning("[SyncCore] ArtifactV2 merge skipped id=\(id.prefix(8)): \(error.localizedDescription)")
+        }
+    }
+
+    private static func buildArtifactVersion(id: String) async -> PortableRecord? {
+        guard let version = try? await ArtifactRepository.shared.version(id: id),
+              let artifact = try? await ArtifactRepository.shared.artifact(id: version.artifactId),
+              let fileURL = try? await ArtifactRepository.shared.fileURL(for: version),
+              FileManager.default.fileExists(atPath: fileURL.path),
+              version.byteCount <= Int64(UploadPolicy.maxArtifactSizeBytes) else { return nil }
+        let synced = SyncedArtifactVersion(
+            id: version.id,
+            artifactId: version.artifactId,
+            sessionId: artifact.sessionId,
+            versionNumber: version.versionNumber,
+            originalFileName: version.originalFileName,
+            byteCount: Int(version.byteCount),
+            sha256: version.sha256,
+            createdAt: version.createdAt,
+            fileURL: fileURL,
+            mimeType: artifact.mimeType
+        )
+        guard let base = SyncableTypeRegistry.shared.metadata(for: "ArtifactVersionV2")?.buildPortable(synced) else {
+            return nil
+        }
+        let asset = PortableAsset(
+            key: "asset",
+            fileURL: fileURL,
+            size: Int(version.byteCount),
+            mimeType: artifact.mimeType
+        )
+        return PortableRecord(
+            id: base.id,
+            fields: base.fields,
+            assets: ["asset": asset],
+            schemaVersion: base.schemaVersion,
+            minimumCompatibleVersion: base.minimumCompatibleVersion,
+            unknownFields: base.unknownFields,
+            updatedAt: base.updatedAt
+        )
+    }
+
+    private static func mergeArtifactVersion(record: PortableRecord) async {
+        guard let id = stringField(record, "versionId"),
+              let artifactId = stringField(record, "artifactId"),
+              let sessionId = stringField(record, "sessionId"),
+              let versionNumber = intField(record, "versionNumber"),
+              let originalFileName = stringField(record, "originalFileName"),
+              let byteCount = intField(record, "byteCount"),
+              let sha256 = stringField(record, "sha256"),
+              let asset = record.assets["asset"] else {
+            logger.warning("[SyncCore] ArtifactVersionV2 merge missing metadata or asset")
+            return
+        }
+        if await ChatStore.shared.isRecentlyDeletedRecord(
+            type: "ArtifactV2",
+            id: artifactId,
+            remoteUpdatedAt: dateField(record, "createdAt") ?? record.updatedAt
+        ) {
+            return
+        }
+        let remote = ArtifactVersion(
+            id: id,
+            artifactId: artifactId,
+            versionNumber: versionNumber,
+            originalFileName: originalFileName,
+            relativePath: "",
+            byteCount: Int64(byteCount),
+            sha256: sha256,
+            createdAt: dateField(record, "createdAt") ?? record.updatedAt
+        )
+        do {
+            try await ArtifactRepository.shared.mergeRemoteVersion(
+                remote,
+                sessionId: sessionId,
+                mimeType: optionalStringField(record, "mimeType") ?? "application/octet-stream",
+                assetURL: asset.fileURL
+            )
+        } catch {
+            logger.warning("[SyncCore] ArtifactVersionV2 merge skipped id=\(id.prefix(8)): \(error.localizedDescription)")
+        }
+    }
+
+    private static func deleteArtifact(id: String) async {
+        try? await ArtifactRepository.shared.purgeFromRemote(id: id)
     }
 
     // MARK: - Skill

@@ -1,5 +1,14 @@
 import Foundation
 
+extension Notification.Name {
+    static let artifactRepositoryDidChange = Notification.Name("com.leoyuan.leophoneagent.artifactRepositoryDidChange")
+}
+
+enum ArtifactChangeOperation: String, Sendable {
+    case upsert
+    case delete
+}
+
 enum ArtifactKind: String, Codable, CaseIterable, Sendable {
     case document
     case image
