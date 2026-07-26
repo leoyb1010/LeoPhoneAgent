@@ -39,7 +39,8 @@ struct QuickTaskIntent: AppIntent {
             definition: definition,
             files: files,
             model: model,
-            waitForResult: waitForResult
+            waitForResult: waitForResult,
+            inputValues: [:]
         )
     }
 
@@ -48,7 +49,8 @@ struct QuickTaskIntent: AppIntent {
         definition: QuickTaskDefinition,
         files: [IntentFile]?,
         model: ModelSelectionEntity?,
-        waitForResult: Bool
+        waitForResult: Bool,
+        inputValues: [String: String]
     ) async throws -> some IntentResult & ReturnsValue<SendPromptResult> & ProvidesDialog {
         BackgroundKeepAliveManager.shared.setup()
 
@@ -119,7 +121,8 @@ struct QuickTaskIntent: AppIntent {
             }
         }
 
-        vm.inputText = definition.prompt
+        let renderedPrompt = definition.renderedPrompt(inputValues: inputValues)
+        vm.inputText = renderedPrompt
         vm.send()
 
         let sid = vm.sessionId ?? "unknown"
@@ -172,8 +175,10 @@ struct QuickTaskIntent: AppIntent {
                 modelName: modelName,
                 status: "Completed",
                 isNewSession: true,
-                prompt: definition.prompt,
-                responseText: responseText
+                prompt: renderedPrompt,
+                responseText: responseText,
+                outputMode: definition.outputMode.rawValue,
+                artifactFileNames: await SendPromptResult.artifactNames(for: sid)
             )
             return .result(value: result, dialog: "\(responseText.prefix(500))")
         }
@@ -206,11 +211,13 @@ struct QuickTaskIntent: AppIntent {
             modelName: modelName,
             status: "Running",
             isNewSession: true,
-            prompt: definition.prompt
+            prompt: renderedPrompt,
+            outputMode: definition.outputMode.rawValue
         )
 
         return .result(value: result, dialog: "\(taskName) started with \(modelName).")
     }
+
 }
 
 /// Primary quick-task action from 1.0.12 onward. AppEntity identifiers remain
@@ -234,6 +241,9 @@ struct RunQuickTaskIntent: AppIntent {
     @Parameter(title: "Wait for Result", description: "When enabled, waits for the AI to finish and returns the full response for use in subsequent actions.", default: false)
     var waitForResult: Bool
 
+    @Parameter(title: "Template Inputs", description: "Optional values for {{slots}}, one name=value pair per line.")
+    var templateInputs: String?
+
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<SendPromptResult> & ProvidesDialog {
         let definition = QuickTaskStore.shared.definition(for: task.id)
@@ -249,7 +259,19 @@ struct RunQuickTaskIntent: AppIntent {
             definition: definition,
             files: files,
             model: model,
-            waitForResult: waitForResult
+            waitForResult: waitForResult,
+            inputValues: Self.parseTemplateInputs(templateInputs)
         )
+    }
+
+    private static func parseTemplateInputs(_ text: String?) -> [String: String] {
+        guard let text else { return [:] }
+        return text.split(whereSeparator: \.isNewline).reduce(into: [:]) { result, line in
+            let parts = line.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            guard parts.count == 2 else { return }
+            let key = parts[0].trimmingCharacters(in: .whitespacesAndNewlines)
+            let value = parts[1].trimmingCharacters(in: .whitespacesAndNewlines)
+            if !key.isEmpty { result[key] = value }
+        }
     }
 }

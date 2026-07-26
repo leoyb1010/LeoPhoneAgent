@@ -13,7 +13,7 @@
 | 16 | Artifact Tray、Quick Look、分享 | 已完成 | UI 只调用 Build 15 Repository，可独立移除 |
 | 17 | Artifact 版本与聊天/任务/Files 统一引用 | 已完成 | 保留原始文件引用 |
 | 18 | CloudKit V2 / CKAsset | 已完成 | Artifact 分类默认关闭，本地数据不依赖云端 |
-| 19 | 个人任务模板与结构化输出 | 待开始 | 独立数据类型 |
+| 19 | 个人任务模板与结构化输出 | 已完成 | 基于 1.0.12 QuickTask AppEntity 向前兼容扩展 |
 | 20 | Composer、首页与运行策略定制 | 待开始 | Feature Flag |
 | 21 | 动效、触感、Reduce Motion、无障碍 | 待开始 | 纯表现层 |
 | 22–23 | 全流程回归、迁移演练、真机审计、1.1.0 发布 | 待开始 | 发布候选标签 |
@@ -93,6 +93,18 @@ xcrun swiftc -parse-as-library \
 - `ChatStoreSchemaSmoke: 4/4 passed`；`ArtifactRepositorySmoke: lifecycle passed`，后者包含远端资产完整性与受控副本验证。
 - Swift 6 `MinisTests.xctest` 编译及链接成功；通用 iOS arm64 主 App `BUILD SUCCEEDED`。
 - 本检查点未安装真机，未修改手机上的 1.0.12 Build 13，也未自动打开 Artifact 云同步。
+
+## Build 19 证据
+
+- 不新建一套重复的模板数据库，而是向前扩展 1.0.12 已经稳定的 `QuickTaskDefinition` / `QuickTaskEntity` / `QuickTaskStore`。
+- 自定义 Codable 解码对旧 JSON 的缺失 `outputMode` 提供 `.automatic` 默认值，并保持八个内置标识与兼容 AppEnum 不变。
+- 输入槽位由 Prompt 内 `{{name}}` 标记派生，支持去重、渲染和未传值的明确占位提示，不保存无意义的重复字段。
+- 结果契约支持 automatic / conciseText / markdown / json / artifact，其中 artifact 要求 Agent 把最终结果保存到 workspace，由 Build 17 自动收录。
+- `RunQuickTaskIntent` 新增可选的模板输入，不改变旧 `QuickTaskIntent` 参数模型；`SendPromptResult` 向后兼容新增输出模式和会话 Artifact 文件名。
+- 设置页使用原生 Form、Picker、context menu 和系统分享，补齐自动识别输入、结果格式与 `.leotask.json` 导出；不改主导航。
+- taste-skill 检查结论：原生移动端以 Apple HIG 为主；界面保持现有 List/Form 密度，不加模板化卡片、渐变或装饰动画。
+- `QuickTaskTemplateSmoke: template lifecycle passed`，覆盖旧数据解码、槽位渲染、结构化输出契约与导出/导入身份隔离。
+- Swift 6 `MinisTests.xctest` 编译及链接成功；通用 iOS arm64 主 App `BUILD SUCCEEDED`；未安装真机。
 
 ## 回滚规则
 

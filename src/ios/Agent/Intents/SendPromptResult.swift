@@ -26,6 +26,12 @@ struct SendPromptResult: AppEntity {
     @Property(title: "Response")
     var responseText: String
 
+    @Property(title: "Output Mode")
+    var outputMode: String
+
+    @Property(title: "Artifact Files")
+    var artifactFileNames: [String]
+
     var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(
             title: "\(sessionId)",
@@ -33,7 +39,16 @@ struct SendPromptResult: AppEntity {
         )
     }
 
-    init(sessionId: String, modelName: String, status: String, isNewSession: Bool, prompt: String = "", responseText: String = "") {
+    init(
+        sessionId: String,
+        modelName: String,
+        status: String,
+        isNewSession: Bool,
+        prompt: String = "",
+        responseText: String = "",
+        outputMode: String = "automatic",
+        artifactFileNames: [String] = []
+    ) {
         self.id = sessionId
         self.sessionId = sessionId
         self.modelName = modelName
@@ -41,6 +56,13 @@ struct SendPromptResult: AppEntity {
         self.isNewSession = isNewSession
         self.prompt = prompt
         self.responseText = responseText
+        self.outputMode = outputMode
+        self.artifactFileNames = artifactFileNames
+    }
+
+    static func artifactNames(for sessionId: String) async -> [String] {
+        let snapshots = (try? await ArtifactRepository.shared.list(sessionId: sessionId)) ?? []
+        return snapshots.compactMap(\.currentVersion?.originalFileName)
     }
 }
 

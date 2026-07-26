@@ -182,7 +182,8 @@ struct SendPromptIntent: AppIntent {
                 status: "Completed",
                 isNewSession: isNewSession,
                 prompt: prompt,
-                responseText: responseText
+                responseText: responseText,
+                artifactFileNames: await SendPromptResult.artifactNames(for: sid)
             )
             return .result(value: result, dialog: "\(responseText.prefix(500))")
         }

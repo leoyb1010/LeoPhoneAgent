@@ -69,4 +69,50 @@ final class QuickTaskCatalogTests: XCTestCase {
         XCTAssertEqual(reloaded.tasks.count, 8)
         XCTAssertNotNil(reloaded.definition(for: "checkWeather"))
     }
+
+    func testLegacyDefinitionDecodesWithAutomaticOutputMode() throws {
+        let json = #"{"id":"custom.old","name":"Old","prompt":"Summarize this","symbolName":"bolt.fill","isBuiltIn":false,"sortOrder":0}"#
+        let decoded = try JSONDecoder().decode(QuickTaskDefinition.self, from: Data(json.utf8))
+
+        XCTAssertEqual(decoded.outputMode, .automatic)
+        XCTAssertTrue(decoded.inputSlotNames.isEmpty)
+    }
+
+    func testTemplateSlotsRenderAndStructuredRequirementIsAppended() {
+        let task = QuickTaskDefinition(
+            id: "custom.template",
+            name: "Research",
+            prompt: "Research {{topic}} for {{audience}}. Revisit {{topic}}.",
+            symbolName: "magnifyingglass",
+            isBuiltIn: false,
+            sortOrder: 0,
+            outputMode: .json
+        )
+
+        XCTAssertEqual(task.inputSlotNames, ["topic", "audience"])
+        let rendered = task.renderedPrompt(inputValues: ["topic": "Swift", "audience": "iOS developers"])
+        XCTAssertTrue(rendered.contains("Research Swift for iOS developers. Revisit Swift."))
+        XCTAssertTrue(rendered.contains("valid JSON object"))
+    }
+
+    @MainActor
+    func testExportAndImportCreatesIndependentCustomTemplate() throws {
+        let suiteName = "QuickTaskCatalogExportTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = QuickTaskStore(defaults: defaults)
+        let created = try XCTUnwrap(store.add(
+            name: "Artifact Brief",
+            prompt: "Create a report about {{topic}}",
+            outputMode: .artifact
+        ))
+        let data = try XCTUnwrap(store.exportData(id: created.id))
+        let imported = try XCTUnwrap(store.importData(data))
+
+        XCTAssertNotEqual(imported.id, created.id)
+        XCTAssertEqual(imported.outputMode, .artifact)
+        XCTAssertEqual(imported.inputSlotNames, ["topic"])
+        XCTAssertEqual(imported.sortOrder, store.tasks.count - 1)
+        XCTAssertEqual(store.tasks.filter { $0.name == "Artifact Brief" }.count, 2)
+    }
 }

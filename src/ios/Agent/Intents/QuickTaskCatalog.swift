@@ -37,6 +37,34 @@ extension Notification.Name {
     static let quickTaskCatalogDidChange = Notification.Name("leo.quickTaskCatalogDidChange")
 }
 
+enum QuickTaskOutputMode: String, Codable, CaseIterable, Hashable, Sendable {
+    case automatic
+    case conciseText
+    case markdown
+    case json
+    case artifact
+
+    var title: String {
+        switch self {
+        case .automatic: return "Automatic"
+        case .conciseText: return "Concise Text"
+        case .markdown: return "Markdown"
+        case .json: return "JSON"
+        case .artifact: return "Saved Artifact"
+        }
+    }
+
+    var promptInstruction: String? {
+        switch self {
+        case .automatic: return nil
+        case .conciseText: return "Return a concise plain-text result without decorative formatting."
+        case .markdown: return "Return a well-structured Markdown result with useful headings and lists."
+        case .json: return "Return one valid JSON object only, without Markdown fences or commentary."
+        case .artifact: return "Save the final result as a file in /var/minis/workspace/ and briefly name the created artifact."
+        }
+    }
+}
+
 struct QuickTaskDefinition: Codable, Identifiable, Hashable, Sendable {
     var id: String
     var name: String
@@ -44,6 +72,70 @@ struct QuickTaskDefinition: Codable, Identifiable, Hashable, Sendable {
     var symbolName: String
     var isBuiltIn: Bool
     var sortOrder: Int
+    var outputMode: QuickTaskOutputMode
+
+    init(
+        id: String,
+        name: String,
+        prompt: String,
+        symbolName: String,
+        isBuiltIn: Bool,
+        sortOrder: Int,
+        outputMode: QuickTaskOutputMode = .automatic
+    ) {
+        self.id = id
+        self.name = name
+        self.prompt = prompt
+        self.symbolName = symbolName
+        self.isBuiltIn = isBuiltIn
+        self.sortOrder = sortOrder
+        self.outputMode = outputMode
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, prompt, symbolName, isBuiltIn, sortOrder, outputMode
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        prompt = try container.decode(String.self, forKey: .prompt)
+        symbolName = try container.decode(String.self, forKey: .symbolName)
+        isBuiltIn = try container.decode(Bool.self, forKey: .isBuiltIn)
+        sortOrder = try container.decode(Int.self, forKey: .sortOrder)
+        outputMode = try container.decodeIfPresent(QuickTaskOutputMode.self, forKey: .outputMode) ?? .automatic
+    }
+
+    var inputSlotNames: [String] {
+        let pattern = #"\{\{\s*([A-Za-z][A-Za-z0-9_-]{0,31})\s*\}\}"#
+        guard let expression = try? NSRegularExpression(pattern: pattern) else { return [] }
+        let range = NSRange(prompt.startIndex..<prompt.endIndex, in: prompt)
+        var seen = Set<String>()
+        return expression.matches(in: prompt, range: range).compactMap { match in
+            guard let slotRange = Range(match.range(at: 1), in: prompt) else { return nil }
+            let name = String(prompt[slotRange])
+            return seen.insert(name).inserted ? name : nil
+        }
+    }
+
+    func renderedPrompt(inputValues: [String: String] = [:]) -> String {
+        var rendered = prompt
+        for name in inputSlotNames {
+            let markerPattern = #"\{\{\s*"# + NSRegularExpression.escapedPattern(for: name) + #"\s*\}\}"#
+            let value = inputValues[name]?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let replacement = value.flatMap { $0.isEmpty ? nil : $0 } ?? "[Input required: \(name)]"
+            rendered = rendered.replacingOccurrences(
+                of: markerPattern,
+                with: NSRegularExpression.escapedTemplate(for: replacement),
+                options: .regularExpression
+            )
+        }
+        if let instruction = outputMode.promptInstruction {
+            rendered += "\n\nOutput requirement: \(instruction)"
+        }
+        return rendered
+    }
 
     static let builtIns: [QuickTaskDefinition] = [
         .init(
@@ -143,7 +235,12 @@ final class QuickTaskStore: ObservableObject {
     }
 
     @discardableResult
-    func add(name: String, prompt: String, symbolName: String = "bolt.fill") -> QuickTaskDefinition? {
+    func add(
+        name: String,
+        prompt: String,
+        symbolName: String = "bolt.fill",
+        outputMode: QuickTaskOutputMode = .automatic
+    ) -> QuickTaskDefinition? {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty, !trimmedPrompt.isEmpty else { return nil }
@@ -154,7 +251,8 @@ final class QuickTaskStore: ObservableObject {
             prompt: trimmedPrompt,
             symbolName: symbolName,
             isBuiltIn: false,
-            sortOrder: tasks.count
+            sortOrder: tasks.count,
+            outputMode: outputMode
         )
         tasks.append(definition)
         persist()
@@ -201,6 +299,27 @@ final class QuickTaskStore: ObservableObject {
         tasks = QuickTaskDefinition.builtIns + customTasks
         resequence()
         persist()
+    }
+
+    func exportData(id: String) -> Data? {
+        guard let task = definition(for: id) else { return nil }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try? encoder.encode(task)
+    }
+
+    @discardableResult
+    func importData(_ data: Data) -> QuickTaskDefinition? {
+        guard var imported = try? JSONDecoder().decode(QuickTaskDefinition.self, from: data) else { return nil }
+        imported.id = "custom.\(UUID().uuidString.lowercased())"
+        imported.isBuiltIn = false
+        imported.sortOrder = tasks.count
+        let normalized = Self.normalized([imported]).first { $0.id == imported.id }
+        guard var normalized else { return nil }
+        normalized.sortOrder = tasks.count
+        tasks.append(normalized)
+        persist()
+        return normalized
     }
 
     static func normalized(_ decoded: [QuickTaskDefinition]) -> [QuickTaskDefinition] {

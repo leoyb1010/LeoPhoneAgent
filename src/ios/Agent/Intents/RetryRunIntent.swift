@@ -189,7 +189,8 @@ struct RetryRunIntent: AppIntent {
                 status: "Completed",
                 isNewSession: false,
                 prompt: targetMessage.content,
-                responseText: responseText
+                responseText: responseText,
+                artifactFileNames: await SendPromptResult.artifactNames(for: sid)
             )
             return .result(value: result, dialog: "\(responseText.prefix(500))")
         }

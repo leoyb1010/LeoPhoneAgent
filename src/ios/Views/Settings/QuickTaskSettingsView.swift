@@ -6,6 +6,8 @@ struct QuickTaskSettingsView: View {
     @State private var isAddingTask = false
     @State private var taskPendingDeletion: QuickTaskDefinition?
     @State private var showResetConfirmation = false
+    @State private var shareURL: URL?
+    @State private var exportError: String?
 
     var body: some View {
         List {
@@ -17,6 +19,13 @@ struct QuickTaskSettingsView: View {
                         QuickTaskRow(task: task)
                     }
                     .buttonStyle(.plain)
+                    .contextMenu {
+                        Button {
+                            export(task)
+                        } label: {
+                            Label("Export Template", systemImage: "square.and.arrow.up")
+                        }
+                    }
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         if !task.isBuiltIn {
                             Button(role: .destructive) {
@@ -97,6 +106,36 @@ struct QuickTaskSettingsView: View {
         } message: {
             Text("Your custom tasks will not be deleted.")
         }
+        .sheet(item: $shareURL) { url in
+            MinisShareSheet(url: url)
+        }
+        .alert("Unable to Export Template", isPresented: Binding(
+            get: { exportError != nil },
+            set: { if !$0 { exportError = nil } }
+        )) {
+            Button("OK", role: .cancel) { exportError = nil }
+        } message: {
+            Text(exportError ?? "")
+        }
+    }
+
+    private func export(_ task: QuickTaskDefinition) {
+        guard let data = store.exportData(id: task.id) else {
+            exportError = "The template could not be encoded."
+            return
+        }
+        let safeName = task.name
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+            .joined(separator: "-")
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent((safeName.isEmpty ? "LeoPhoneAgent-Template" : safeName) + ".leotask.json")
+        do {
+            try data.write(to: url, options: .atomic)
+            shareURL = url
+        } catch {
+            exportError = error.localizedDescription
+        }
     }
 }
 
@@ -120,6 +159,18 @@ private struct QuickTaskRow: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+                if task.outputMode != .automatic || !task.inputSlotNames.isEmpty {
+                    HStack(spacing: 8) {
+                        if !task.inputSlotNames.isEmpty {
+                            Label("\(task.inputSlotNames.count) inputs", systemImage: "text.cursor")
+                        }
+                        if task.outputMode != .automatic {
+                            Label(task.outputMode.title, systemImage: "arrowshape.turn.up.right.fill")
+                        }
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                }
             }
 
             Spacer(minLength: 8)
@@ -143,6 +194,7 @@ private struct QuickTaskEditorView: View {
     @State private var name: String
     @State private var prompt: String
     @State private var symbolName: String
+    @State private var outputMode: QuickTaskOutputMode
 
     private let mode: Mode
 
@@ -159,10 +211,12 @@ private struct QuickTaskEditorView: View {
             _name = State(initialValue: "")
             _prompt = State(initialValue: "")
             _symbolName = State(initialValue: "bolt.fill")
+            _outputMode = State(initialValue: .automatic)
         case .edit(let task):
             _name = State(initialValue: task.name)
             _prompt = State(initialValue: task.prompt)
             _symbolName = State(initialValue: task.symbolName)
+            _outputMode = State(initialValue: task.outputMode)
         }
     }
 
@@ -178,6 +232,27 @@ private struct QuickTaskEditorView: View {
                     .textInputAutocapitalization(.sentences)
                 TextField("What should LeoPhoneAgent do?", text: $prompt, axis: .vertical)
                     .lineLimit(4...10)
+            }
+
+            Section {
+                Picker("Result Format", selection: $outputMode) {
+                    ForEach(QuickTaskOutputMode.allCases, id: \.self) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                if !draftInputSlots.isEmpty {
+                    LabeledContent("Detected Inputs") {
+                        Text(draftInputSlots.joined(separator: ", "))
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.trailing)
+                    }
+                }
+            } header: {
+                Text("Template")
+            } footer: {
+                Text("Use placeholders such as {{topic}} in the prompt. In Shortcuts, provide values as topic=value, one per line.")
             }
 
             Section("Icon") {
@@ -223,14 +298,27 @@ private struct QuickTaskEditorView: View {
         return false
     }
 
+    private var draftInputSlots: [String] {
+        QuickTaskDefinition(
+            id: "draft",
+            name: name,
+            prompt: prompt,
+            symbolName: symbolName,
+            isBuiltIn: false,
+            sortOrder: 0,
+            outputMode: outputMode
+        ).inputSlotNames
+    }
+
     private func save() {
         switch mode {
         case .create:
-            _ = store.add(name: name, prompt: prompt, symbolName: symbolName)
+            _ = store.add(name: name, prompt: prompt, symbolName: symbolName, outputMode: outputMode)
         case .edit(var task):
             task.name = name
             task.prompt = prompt
             task.symbolName = symbolName
+            task.outputMode = outputMode
             store.update(task)
         }
         dismiss()

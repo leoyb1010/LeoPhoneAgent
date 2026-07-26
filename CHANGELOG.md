@@ -6,6 +6,16 @@
 
 ## 1.1.0 - 开发中
 
+### Build 19
+
+- 现有可编辑 Quick Tasks 升级为个人任务模板，保留 1.0.12 AppEntity 稳定标识和旧 AppEnum 兼容入口。
+- Prompt 支持 `{{topic}}` 形式的输入槽位，自动去重并在编辑器显示；Shortcuts 可使用每行 `name=value` 为槽位传值。
+- 每个模板可选自动、精简文本、Markdown、JSON 或保存 Artifact 五种结果约束，执行时作为明确输出契约追加到 Prompt。
+- 模板可导出为 `.leotask.json` 本地文件，导入时生成新的自定义标识，不覆盖原模板或破坏已有 Shortcuts。
+- `SendPromptResult` 新增输出模式和 Artifact 文件名数组；发送、追问、重试与快捷任务在等待完成时均返回会话产物，方便下一个 Shortcut Action 消费。
+- 旧 v1 存储 JSON 缺少新字段时自动使用 `automatic`，不会丢失现有自定义任务。
+- 模板独立 smoke runner 通过，测试 Bundle 编译链接成功，完整 iOS arm64 App 构建成功；未安装到手机。
+
 ### Build 18
 
 - Artifact 接入现有 CloudKit V2 共享区：`ArtifactV2` 同步元数据和回收站状态，`ArtifactVersionV2` 以 CKAsset 同步不可变版本文件。
