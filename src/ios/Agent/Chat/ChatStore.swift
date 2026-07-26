@@ -752,6 +752,18 @@ actor ChatStore {
             )
         """)
         exec("CREATE INDEX IF NOT EXISTS idx_webapp_shortcuts_created ON webapp_shortcuts(created_at DESC)")
+
+        // Build 14 data-safety gate. The contract is compiled into the hostless
+        // logic-test target as well as production, so legacy migration fixtures
+        // exercise the same repair and validation code used at app launch.
+        do {
+            let report = try ChatStoreSchemaContract.migrate(db)
+            if !report.addedColumns.isEmpty {
+                logger.info("ChatStore schema contract v\(report.currentVersion) repaired \(report.addedColumns.count) column(s)")
+            }
+        } catch {
+            logger.fault("ChatStore schema contract validation failed: \(String(describing: error))")
+        }
     }
 
     private func exec(_ sql: String) {

@@ -1,7 +1,19 @@
 # LeoPhoneAgent 更新记录
 
 版本号遵循 `主版本.次版本.补丁版本`。1.0 系列的每次常规更新依次递增为
-`1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。
+`1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
+开发期只递增内部 Build，完成全部验收后一次正式发布。
+
+## 1.1.0 - 开发中
+
+### Build 14
+
+- 新增由生产 ChatStore 启动路径直接调用的版本化 Schema Contract，为后续 Artifact 数据迁移建立安全门。
+- 核心会话、消息与压缩标记表支持事务式幂等修复，并记录独立 contract version。
+- 旧消息迁移会保留原行，补齐 `updated_at`，并从 `parts_json` 回填本地 `part_flags`。
+- 新增四组 XCTest 契约用例和可在 macOS 直接执行的 SQLite smoke runner。
+- 独立 smoke runner 4/4 通过，测试 Bundle 编译链接成功，完整 iOS arm64 App 构建成功。
+- iOS Simulator 测试 runner 仍卡在 `waiting for workers to materialize`，未将中断执行记为 XCTest 通过。
 
 ## 1.0.12 - 2026-07-26
 

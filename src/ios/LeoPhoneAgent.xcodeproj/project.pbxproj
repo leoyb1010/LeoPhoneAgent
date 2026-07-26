@@ -79,6 +79,8 @@
 		E53000001 /* AIChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E53000011 /* AIChatViewModel.swift */; };
 		E53000002 /* AIChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E53000012 /* AIChatView.swift */; };
 		E53000004 /* ChatStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E53000014 /* ChatStore.swift */; };
+		E5CSC0001 /* ChatStoreSchemaContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CSC0011 /* ChatStoreSchemaContract.swift */; };
+		E5CSC0002 /* ChatStoreSchemaContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CSC0011 /* ChatStoreSchemaContract.swift */; };
 		E53000005 /* UsageStatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E53000015 /* UsageStatsView.swift */; };
 		E53000006 /* CacheKeepAliveManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E53000016 /* CacheKeepAliveManager.swift */; };
 		E54000001 /* DebugServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E54000011 /* DebugServer.swift */; };
@@ -683,6 +685,7 @@
 		E53000011 /* AIChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIChatViewModel.swift; sourceTree = "<group>"; };
 		E53000012 /* AIChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIChatView.swift; sourceTree = "<group>"; };
 		E53000014 /* ChatStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatStore.swift; sourceTree = "<group>"; };
+		E5CSC0011 /* ChatStoreSchemaContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatStoreSchemaContract.swift; sourceTree = "<group>"; };
 		E53000015 /* UsageStatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageStatsView.swift; sourceTree = "<group>"; };
 		E53000016 /* CacheKeepAliveManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CacheKeepAliveManager.swift; sourceTree = "<group>"; };
 		E54000011 /* DebugServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugServer.swift; sourceTree = "<group>"; };
@@ -1889,6 +1892,7 @@
 				E5VMC0016 /* AIChatViewModel+BackgroundTask.swift */,
 				E5VMC0017 /* AIChatViewModel+ConcurrentTools.swift */,
 				E53000014 /* ChatStore.swift */,
+				E5CSC0011 /* ChatStoreSchemaContract.swift */,
 				BB1000110F700000000000AA /* ContextPolicy.swift */,
 				E5FMI0011 /* FileMentionIndex.swift */,
 			);
@@ -2466,6 +2470,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E5CSC0002 /* ChatStoreSchemaContract.swift in Sources */,
 				E5QTK0003 /* QuickTaskCatalog.swift in Sources */,
 				BB1000120F700000000000AA /* ContextPolicy.swift in Sources */,
 				E5LD00002 /* ToolLoopDetector.swift in Sources */,
@@ -2652,6 +2657,7 @@
 				E5F100002 /* LLMSessionRegistry.swift in Sources */,
 				E5F100003 /* MinisUserAgent.swift in Sources */,
 				E53000004 /* ChatStore.swift in Sources */,
+				E5CSC0001 /* ChatStoreSchemaContract.swift in Sources */,
 				E5FMI0001 /* FileMentionIndex.swift in Sources */,
 				E53000005 /* UsageStatsView.swift in Sources */,
 				E53000006 /* CacheKeepAliveManager.swift in Sources */,
@@ -2977,7 +2983,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -3001,7 +3007,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -3021,7 +3027,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -3052,7 +3058,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -3212,7 +3218,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = LeoPhoneAgent.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_ASSET_PATHS = "\"Preview Content\"";
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
@@ -3267,7 +3273,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = LeoPhoneAgent.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_ASSET_PATHS = "\"Preview Content\"";
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
@@ -3318,7 +3324,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
@@ -3345,7 +3351,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
@@ -3372,7 +3378,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FileProvider/FileProvider.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = FileProvider/Info.plist;
@@ -3399,7 +3405,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FileProvider/FileProvider.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = FileProvider/Info.plist;
@@ -3426,7 +3432,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = AgentWidget/AgentWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AgentWidget/Info.plist;
@@ -3453,7 +3459,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = AgentWidget/AgentWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AgentWidget/Info.plist;
