@@ -86,6 +86,7 @@ private struct PreviewContentSizeKey: PreferenceKey {
 
 struct ChatMessageRow: View {
     @ObservedObject var message: ChatMessage
+    @Environment(\.locale) private var locale
     /// Only the actively streaming message needs vm access (for typing indicator & stop button).
     let isActiveMessage: Bool
     var commandStartTime: Date?
@@ -582,27 +583,21 @@ struct ChatMessageRow: View {
     private func usageSummary(_ u: TokenUsage) -> String {
         var parts: [String] = []
         if u.latestContextTokens > 0 {
-            parts.append("ctx:\(formatTokenCount(u.latestContextTokens))")
+            parts.append("\(String(localized: "Context")):\(formatTokenCount(u.latestContextTokens))")
         }
-        parts.append("in:\(formatTokenCount(u.inputTokens))")
-        parts.append("out:\(formatTokenCount(u.outputTokens))")
+        parts.append("\(String(localized: "Input")):\(formatTokenCount(u.inputTokens))")
+        parts.append("\(String(localized: "Output")):\(formatTokenCount(u.outputTokens))")
         if u.cacheReadTokens > 0 {
-            parts.append("cache:\(formatTokenCount(u.cacheReadTokens))")
+            parts.append("\(String(localized: "Cache Read")):\(formatTokenCount(u.cacheReadTokens))")
         }
         if u.cacheCreationTokens > 0 {
-            parts.append("+cache:\(formatTokenCount(u.cacheCreationTokens))")
+            parts.append("\(String(localized: "Cache Write")):\(formatTokenCount(u.cacheCreationTokens))")
         }
         return parts.joined(separator: " ")
     }
 
     private func formatTokenCount(_ count: Int) -> String {
-        if count >= 1000 {
-            let k = Double(count) / 1000.0
-            return k.truncatingRemainder(dividingBy: 1) == 0
-                ? "\(Int(k))k"
-                : String(format: "%.1fk", k)
-        }
-        return "\(count)"
+        LeoTokenCountFormatter.compact(count, locale: locale)
     }
 
     @ViewBuilder
@@ -705,5 +700,3 @@ struct ChatMessageRow: View {
     }
 
 }
-
-

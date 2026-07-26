@@ -419,4 +419,3 @@ struct InputAttachment: Identifiable {
         )
     }
 }
-

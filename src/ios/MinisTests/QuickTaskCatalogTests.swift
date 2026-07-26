@@ -9,6 +9,26 @@ final class QuickTaskCatalogTests: XCTestCase {
         XCTAssertEqual(entityIDs.count, 8)
     }
 
+    func testCustomQuickTaskDisplayNameRemainsUserAuthored() {
+        let custom = QuickTaskDefinition(
+            id: "custom.localized-name",
+            name: "我的固定任务",
+            prompt: "Do the task",
+            symbolName: "bolt.fill",
+            isBuiltIn: false,
+            sortOrder: 0
+        )
+
+        XCTAssertEqual(custom.displayName, "我的固定任务")
+    }
+
+    func testTokenCountUsesSelectedChineseLocaleInsteadOfK() {
+        let value = LeoTokenCountFormatter.compact(12_345, locale: Locale(identifier: "zh-Hans"))
+
+        XCTAssertEqual(value, "1.2万")
+        XCTAssertFalse(value.localizedCaseInsensitiveContains("k"))
+    }
+
     @MainActor
     func testNormalizationPreservesEditsAndRestoresMissingBuiltIns() {
         var editedWeather = QuickTaskDefinition.builtIn(id: "checkWeather")!

@@ -337,6 +337,7 @@ private struct BridgedAssistantBlockV3: View {
 private struct BridgedAssistantFooterV3: View {
     @ObservedObject var message: ChatMessage
     @ObservedObject var bridge: CellStateBridgeV2
+    @Environment(\.locale) private var locale
     var maxWidth: CGFloat
 
     // showUsage and usageContentVisible are on bridge, toggled by double-tap on block cells.
@@ -554,15 +555,15 @@ private struct BridgedAssistantFooterV3: View {
 
     private func usageSummary(_ u: TokenUsage) -> String {
         var parts: [String] = []
-        if u.latestContextTokens > 0 { parts.append("ctx:\(fmtTok(u.latestContextTokens))") }
-        parts.append("in:\(fmtTok(u.inputTokens))")
-        parts.append("out:\(fmtTok(u.outputTokens))")
-        if u.cacheReadTokens > 0 { parts.append("cache:\(fmtTok(u.cacheReadTokens))") }
-        if u.cacheCreationTokens > 0 { parts.append("+cache:\(fmtTok(u.cacheCreationTokens))") }
+        if u.latestContextTokens > 0 { parts.append("\(String(localized: "Context")):\(fmtTok(u.latestContextTokens))") }
+        parts.append("\(String(localized: "Input")):\(fmtTok(u.inputTokens))")
+        parts.append("\(String(localized: "Output")):\(fmtTok(u.outputTokens))")
+        if u.cacheReadTokens > 0 { parts.append("\(String(localized: "Cache Read")):\(fmtTok(u.cacheReadTokens))") }
+        if u.cacheCreationTokens > 0 { parts.append("\(String(localized: "Cache Write")):\(fmtTok(u.cacheCreationTokens))") }
         return parts.joined(separator: " ")
     }
     private func fmtTok(_ c: Int) -> String {
-        c >= 1000 ? (c >= 10000 ? "\(c/1000)k" : String(format: "%.1fk", Double(c)/1000)) : "\(c)"
+        LeoTokenCountFormatter.compact(c, locale: locale)
     }
 }
 

@@ -2183,7 +2183,7 @@ struct ContentView: View {
                                 Button {
                                     openQuickTask(task)
                                 } label: {
-                                    Label(task.name, systemImage: task.symbolName)
+                                    Label(task.displayName, systemImage: task.symbolName)
                                         .font(.subheadline.weight(.medium))
                                         .lineLimit(1)
                                 }

@@ -2,6 +2,15 @@ import AppIntents
 import Combine
 import Foundation
 
+/// Locale-aware presentation for Token counts. The product term remains
+/// "Token" in labels; only the numeric abbreviation follows the selected
+/// app/system locale (for example, 12,345 -> 1.2万 in Simplified Chinese).
+enum LeoTokenCountFormatter {
+    static func compact(_ count: Int, locale: Locale) -> String {
+        count.formatted(.number.locale(locale).notation(.compactName))
+    }
+}
+
 /// Compatibility enum for shortcuts saved before 1.0.12.
 /// New shortcuts use `QuickTaskEntity`, but this type and its raw identifiers
 /// must remain stable for existing user automations.
@@ -73,6 +82,16 @@ struct QuickTaskDefinition: Codable, Identifiable, Hashable, Sendable {
     var isBuiltIn: Bool
     var sortOrder: Int
     var outputMode: QuickTaskOutputMode
+
+    /// Built-in names are stable persisted identifiers but should be presented
+    /// in the active UI language. A user-edited built-in or custom task keeps
+    /// the exact name the user entered.
+    var displayName: String {
+        guard isBuiltIn,
+              let original = Self.builtIn(id: id),
+              name == original.name else { return name }
+        return String(localized: String.LocalizationValue(name))
+    }
 
     init(
         id: String,

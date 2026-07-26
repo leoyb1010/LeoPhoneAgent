@@ -3248,7 +3248,7 @@ struct AIChatView: View {
                     Button {
                         prepareComposer(with: task)
                     } label: {
-                        Label(task.name, systemImage: task.symbolName)
+                        Label(task.displayName, systemImage: task.symbolName)
                             .font(.caption.weight(.medium))
                             .lineLimit(1)
                     }
@@ -3272,7 +3272,10 @@ struct AIChatView: View {
             vm.inputText += "\n\n" + prepared
         }
         inputFocused = true
-        UIAccessibility.post(notification: .announcement, argument: "\(task.name) prepared")
+        UIAccessibility.post(
+            notification: .announcement,
+            argument: String(format: String(localized: "%@ prepared"), task.displayName)
+        )
     }
 
     // MARK: - Input keyboard handlers (extracted to avoid inflating the
@@ -5692,6 +5695,7 @@ private struct SelectableTextView: UIViewRepresentable {
 private struct TokenUsageSheet: View {
     @ObservedObject var vm: AIChatViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
 
     var body: some View {
         NavigationStack {
@@ -5740,7 +5744,11 @@ private struct TokenUsageSheet: View {
 
                 Section("Speed") {
                     let speed = vm.sessionOutputTokensPerSecond
-                    StatRow(label: "Output Speed", value: speed > 0 ? String(format: "%.1f tok/s", speed) : "—", icon: "speedometer")
+                    StatRow(
+                        label: "Output Speed",
+                        value: speed > 0 ? String(format: String(localized: "%.1f Token/s"), speed) : "—",
+                        icon: "speedometer"
+                    )
                 }
 
                 Section("Agent Loop") {
@@ -5758,9 +5766,7 @@ private struct TokenUsageSheet: View {
     }
 
     private func formatted(_ n: Int) -> String {
-        if n >= 1_000_000 { return String(format: "%.1fM", Double(n) / 1_000_000) }
-        if n >= 1_000 { return String(format: "%.1fK", Double(n) / 1_000) }
-        return "\(n)"
+        LeoTokenCountFormatter.compact(n, locale: locale)
     }
 }
 

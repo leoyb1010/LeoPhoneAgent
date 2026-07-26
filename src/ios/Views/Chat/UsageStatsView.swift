@@ -136,6 +136,7 @@ class UsageStatsViewModel: ObservableObject {
 
 struct UsageStatsView: View {
     @StateObject private var vm = UsageStatsViewModel()
+    @Environment(\.locale) private var locale
 
     var body: some View {
         List {
@@ -213,16 +214,6 @@ struct UsageStatsView: View {
     }
 
     private func formatCount(_ count: Int) -> String {
-        if count >= 1_000_000 {
-            let m = Double(count) / 1_000_000.0
-            return String(format: "%.1fM", m)
-        }
-        if count >= 1000 {
-            let k = Double(count) / 1000.0
-            return k.truncatingRemainder(dividingBy: 1) == 0
-                ? "\(Int(k))k"
-                : String(format: "%.1fk", k)
-        }
-        return "\(count)"
+        LeoTokenCountFormatter.compact(count, locale: locale)
     }
 }

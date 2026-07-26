@@ -22,7 +22,7 @@ struct QuickTaskSettingsView: View {
                             Image(systemName: task.symbolName)
                                 .foregroundStyle(.tint)
                                 .frame(width: 24)
-                            Text(task.name)
+                            Text(task.displayName)
                             Spacer()
                             Button {
                                 store.setComposerPinned(false, id: task.id)
@@ -31,7 +31,12 @@ struct QuickTaskSettingsView: View {
                                     .foregroundStyle(.secondary)
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel("Remove \(task.name) from Composer")
+                            .accessibilityLabel(
+                                String(
+                                    format: String(localized: "Remove %@ from Composer"),
+                                    task.displayName
+                                )
+                            )
                         }
                     }
                 }
@@ -42,7 +47,7 @@ struct QuickTaskSettingsView: View {
                             toggleComposerPin(task)
                         } label: {
                             Label(
-                                task.name,
+                                task.displayName,
                                 systemImage: store.isPinnedToComposer(task.id) ? "checkmark.circle.fill" : task.symbolName
                             )
                         }
@@ -217,7 +222,7 @@ private struct QuickTaskRow: View {
                 .background(task.isBuiltIn ? Color.indigo : Color.blue, in: RoundedRectangle(cornerRadius: 8))
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(task.name)
+                Text(task.displayName)
                     .font(.body.weight(.medium))
                     .foregroundStyle(.primary)
                     .lineLimit(1)

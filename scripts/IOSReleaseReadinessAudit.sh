@@ -5,20 +5,23 @@ repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 project="$repo_root/src/ios/LeoPhoneAgent.xcodeproj/project.pbxproj"
 catalog="$repo_root/src/ios/Views/Settings/LeoReleaseNotesView.swift"
 app="$repo_root/src/ios/MinisApp.swift"
+expected_version=${1:-1.1.2}
+expected_build=${2:-25}
 
-version_count=$(rg -c 'MARKETING_VERSION = 1\.1\.0;' "$project")
-build_count=$(rg -c 'CURRENT_PROJECT_VERSION = 23;' "$project")
+escaped_version=$(printf '%s' "$expected_version" | sed 's/\./\\./g')
+version_count=$(rg -c "MARKETING_VERSION = ${escaped_version};" "$project")
+build_count=$(rg -c "CURRENT_PROJECT_VERSION = ${expected_build};" "$project")
 
 [ "$version_count" -eq 12 ] || {
-  echo "expected 12 target/config version entries for 1.1.0; found $version_count" >&2
+  echo "expected 12 target/config version entries for $expected_version; found $version_count" >&2
   exit 1
 }
 [ "$build_count" -eq 12 ] || {
-  echo "expected 12 target/config build entries for 23; found $build_count" >&2
+  echo "expected 12 target/config build entries for $expected_build; found $build_count" >&2
   exit 1
 }
 
-rg -q 'version: "1\.1\.0"' "$catalog"
+rg -q "version: \"${escaped_version}\"" "$catalog"
 rg -q 'releases\.first \{ \$0\.version == currentVersion \}' "$catalog"
 rg -q 'lastPresentedReleaseVersion != currentVersion' "$app"
 rg -q 'lastPresentedReleaseVersion = LeoReleaseCatalog\.currentVersion' "$app"
@@ -29,4 +32,4 @@ if rg -q 'com\.openminis|PRODUCT_BUNDLE_IDENTIFIER = .*minisapp' "$project"; the
   exit 1
 fi
 
-echo "IOSReleaseReadinessAudit: 1.1.0 (23), release prompt, and product identifiers passed"
+echo "IOSReleaseReadinessAudit: $expected_version ($expected_build), release prompt, and product identifiers passed"
