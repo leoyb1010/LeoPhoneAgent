@@ -5,6 +5,7 @@ import CoreLocation
 import Foundation
 import SwiftUI
 import UserNotifications
+import WidgetKit
 import os.log
 
 private let logger = AppLogger(category: "BackgroundKeepAlive")
@@ -121,9 +122,10 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     /// values in the config UI — different concept, hence the distinct
     /// `liveActivityPrivacyMode` key to avoid conflation.
     ///
-    /// Defaults to OFF so existing installs keep their current behavior.
+    /// Defaults to ON for privacy. Existing installs that explicitly chose a
+    /// value keep that choice because the persisted key still wins.
     @Published var liveActivityPrivacyMode: Bool =
-        UserDefaults.standard.bool(forKey: "liveActivityPrivacyMode") {
+        UserDefaults.standard.object(forKey: "liveActivityPrivacyMode") as? Bool ?? true {
         didSet { UserDefaults.standard.set(liveActivityPrivacyMode, forKey: "liveActivityPrivacyMode") }
     }
 
@@ -838,7 +840,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         content.sound = .default
         content.categoryIdentifier = Self.bgTaskCategoryId
         content.userInfo = ["sessionId": sessionId]
-        logger.info("[BackgroundNotification] posting notification title=\(content.title.debugDescription) bodyLength=\(content.body.count) sessionId=\(sessionId)")
+        logger.info("[BackgroundNotification] posting notification privacyMode=\(liveActivityPrivacyMode) titleLength=\(content.title.count) bodyLength=\(content.body.count) sessionId=\(sessionId)")
 
         // Increment app badge count
         let current = UIApplication.shared.applicationIconBadgeNumber
@@ -1351,6 +1353,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     }
 
     func updateLiveActivityIfNeeded(source: String = "?") {
+        refreshHomeScreenWidget(source: source)
         guard isActive else {
             let cnt = SessionActivityTracker.shared.activeSessions.count
             if cnt > 0 {
@@ -1374,6 +1377,60 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         let remainStr = bgRemaining > 99999 ? "unlimited" : String(format: "%.0fs", bgRemaining)
         logger.info("[LiveActivity][update] src=\(source) sessions=\(count) ids=[\(idList)] appState=\(appState) silentAudio=\(silentAudio) bgRemaining=\(remainStr)")
         AgentLiveActivityManager.shared.updateActivity(sessions: buildSessionSnapshots())
+    }
+
+    /// Writes a compact, privacy-aware snapshot to the shared app group. A
+    /// normal widget is intentionally event-driven; WidgetKit may coalesce
+    /// reloads, while the Live Activity remains the near-real-time surface.
+    func refreshHomeScreenWidget(
+        source: String,
+        terminalState: AgentWidgetSnapshot.State? = nil,
+        terminalSessionId: String = ""
+    ) {
+        let tracker = SessionActivityTracker.shared
+        let activeIds = tracker.activeSessions.sorted()
+        let privacy = liveActivityPrivacyMode
+        let selectedId = activeIds.first ?? terminalSessionId
+        let info = selectedId.isEmpty ? nil : tracker.sessionToolInfo[selectedId]
+        let phase = selectedId.isEmpty ? nil : tracker.sessionActivityPhases[selectedId]
+
+        let state: AgentWidgetSnapshot.State
+        if !activeIds.isEmpty {
+            state = phase == .suspended ? .suspended : .running
+        } else {
+            state = terminalState ?? .idle
+        }
+
+        let toolName = info?.toolName ?? ""
+        let displayName = toolName.isEmpty ? "" : AgentLiveActivityManager.displayName(forTool: toolName)
+        let status: String
+        if let toolStatus = info?.toolStatus, !toolStatus.isEmpty, !displayName.isEmpty {
+            status = "\(displayName): \(toolStatus)"
+        } else if !displayName.isEmpty {
+            status = displayName
+        } else {
+            status = state == .running ? "Working" : ""
+        }
+
+        let snapshot = AgentWidgetSnapshot(
+            updatedAt: .now,
+            state: state,
+            activeCount: activeIds.count,
+            sessionId: selectedId,
+            title: privacy ? "" : (info?.title ?? ""),
+            status: privacy ? "" : status,
+            toolIcon: privacy || toolName.isEmpty
+                ? "sparkles"
+                : AgentLiveActivityManager.sfSymbol(forTool: toolName),
+            loopIteration: privacy ? 0 : (info?.loopIteration ?? 0),
+            privacyMode: privacy
+        )
+        guard AgentWidgetSnapshotStore.save(snapshot) else {
+            logger.warning("[Widget] failed to save snapshot src=\(source)")
+            return
+        }
+        WidgetCenter.shared.reloadTimelines(ofKind: "LeoAgentStatusWidget")
+        logger.info("[Widget] refreshed src=\(source) state=\(state.rawValue) active=\(activeIds.count) privacy=\(privacy)")
     }
 
     /// [T-ios-live-activity-audio-toggle] Public accessor so the Live Activity
@@ -1401,7 +1458,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             } else {
                 statusText = "\(displayName) · \(toolStatus)"
             }
-            logger.info("[LiveActivity][snapshot] sid=\(sid.prefix(8)) toolName=\(toolName) icon=\(icon) status=\(statusText) title=\(title.prefix(20))")
+            logger.info("[LiveActivity][snapshot] sid=\(sid.prefix(8)) toolName=\(toolName) icon=\(icon) status=\(statusText) titleLength=\(title.count)")
             return LiveSessionSnapshot(
                 sessionId: sid,
                 title: title.isEmpty ? String(localized: "Agent Task") : title,

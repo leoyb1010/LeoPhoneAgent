@@ -4,7 +4,7 @@ private let deepLinkLog = AppLogger(category: "DeepLink")
 
 extension Notification.Name {
     /// Posted by `DeepLinkRouter` when `leophoneagent://open?session=…&path=…` lands
-    /// from the openminis.app launcher. `userInfo["shortcut"]` is a
+    /// from the LeoPhoneAgent launcher. `userInfo["shortcut"]` is a
     /// `WebAppShortcut` reconstructed from the deep-link params; not
     /// necessarily persisted. (Relocated here from the removed
     /// OpenWebAppIntent.swift — T-ios-remove-open-webapp-shortcut-intent.)
@@ -17,9 +17,10 @@ extension Notification.Name {
 ///
 /// Supported URLs (all aliases match the Android side):
 ///   leophoneagent://share
+///   leophoneagent://voice
 ///   leophoneagent://views/alarm
 ///   leophoneagent://open_terminal[?init_command=…]
-///   leophoneagent://open?session=<sid>&path=<scope-prefixed-path>  (openminis.app launcher round-trip)
+///   leophoneagent://open?session=<sid>&path=<scope-prefixed-path>  (LeoPhoneAgent launcher round-trip)
 ///   leophoneagent://session/<id>      (legacy singular alias)
 ///   leophoneagent://sessions/<id>     (canonical — matches minis-sessions-cli)
 ///   leophoneagent://settings
@@ -47,12 +48,15 @@ enum DeepLinkRouter {
     @MainActor
     static func handle(url: URL, shareCoordinator: ShareCoordinator) {
         guard url.scheme == "leophoneagent", let host = url.host else {
-            deepLinkLog.info("ignored — non-minis or missing host: \(url.absoluteString)")
+            deepLinkLog.info("ignored — unsupported scheme=\(url.scheme ?? "nil") hasHost=\(url.host != nil)")
             return
         }
         let coord = DeepLinkCoordinator.shared
 
         switch host {
+        case "voice":
+            QuickActionRouter.shared.startVoiceChat()
+
         case "share":
             // Funnel through ShareCoordinator so any leftover
             // fullScreenCover (gallery / WebApp / camera) is dismissed
@@ -81,7 +85,7 @@ enum DeepLinkRouter {
             // stack back to root before opening the target session.
             let id = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
             guard !id.isEmpty else {
-                deepLinkLog.info("\(host) URL missing id: \(url.absoluteString)")
+                deepLinkLog.info("\(host) URL missing id")
                 return
             }
             NotificationCenter.default.post(
@@ -94,7 +98,7 @@ enum DeepLinkRouter {
             handleSettings(url: url, coord: coord)
 
         default:
-            deepLinkLog.info("unknown host '\(host)': \(url.absoluteString)")
+            deepLinkLog.info("unknown host '\(host)'")
         }
     }
 
@@ -208,10 +212,10 @@ enum DeepLinkRouter {
         }
     }
 
-    // MARK: - openminis.app launcher round-trip
+    // MARK: - LeoPhoneAgent launcher round-trip
 
     /// Parses a `leophoneagent://open?session=…&path=…` URL fired by the
-    /// openminis.app launcher when the pinned home-screen tile is
+    /// LeoPhoneAgent launcher when the pinned home-screen tile is
     /// launched in standalone mode. The `path` query is scope-prefixed
     /// so we can recover `(scope, scopeContext, htmlPath)` without
     /// looking anything up:

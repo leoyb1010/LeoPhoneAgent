@@ -11,6 +11,7 @@
 #include "fs/path.h"
 #include <unistd.h>
 #include <sys/select.h>
+#include <errno.h>
 
 // ── Error code constants ──
 NSString *const NOFF_ERR_AUTHORIZATION_DENIED       = @"authorization_denied";
@@ -19,6 +20,31 @@ NSString *const NOFF_ERR_NOT_AVAILABLE              = @"not_available";
 NSString *const NOFF_ERR_INVALID_ARGS               = @"invalid_args";
 NSString *const NOFF_ERR_NO_DATA                    = @"no_data";
 NSString *const NOFF_ERR_INTERNAL_ERROR             = @"internal_error";
+
+// ── Cooperative cancellation ──
+
+BOOL noff_is_cancelled(void) {
+    return native_offload_handler_cancelled() ? YES : NO;
+}
+
+long noff_dispatch_semaphore_wait(dispatch_semaphore_t semaphore, dispatch_time_t timeout) {
+    const int64_t pollNanos = 100 * NSEC_PER_MSEC;
+    while (true) {
+        if (noff_is_cancelled()) return ECANCELED;
+
+        dispatch_time_t now = dispatch_time(DISPATCH_TIME_NOW, 0);
+        if (timeout != DISPATCH_TIME_FOREVER && now >= timeout) return ETIMEDOUT;
+
+        dispatch_time_t pollDeadline = dispatch_time(DISPATCH_TIME_NOW, pollNanos);
+        dispatch_time_t nextDeadline = timeout == DISPATCH_TIME_FOREVER
+            ? pollDeadline
+            : MIN(pollDeadline, timeout);
+        // Parenthesized spelling bypasses the function-like macro declared in
+        // NativeOffloadUtils.h so this wrapper reaches libdispatch itself.
+        long result = (dispatch_semaphore_wait)(semaphore, nextDeadline);
+        if (result == 0) return 0;
+    }
+}
 
 // ── Argument helpers ──
 

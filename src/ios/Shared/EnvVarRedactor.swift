@@ -69,9 +69,46 @@ enum EnvVarRedactor {
         return (masked + "\n\n" + systemReminder, hits)
     }
 
+    /// Redact text before it is written to the local/console diagnostic log.
+    /// Unlike tool-result redaction this never appends a system reminder: log
+    /// capture can receive thousands of chunks and a reminder per chunk would
+    /// create noise and storage pressure.
+    static func redactForLocalLog(_ output: String) -> String {
+        guard EnvVarPrivacyStore.isEnabled() else { return output }
+        return redact(output, against: valueCache.values()).0
+    }
+
+    /// Keychain/disk reads are too expensive for every 4 KB log chunk. Cache
+    /// values briefly; environment-variable edits are rare and a five-second
+    /// refresh bound keeps the logging hot path predictable under shell floods.
+    private final class ValueCache: @unchecked Sendable {
+        private let lock = NSLock()
+        private var cached: [String] = []
+        private var loadedAt = Date.distantPast
+
+        func values() -> [String] {
+            lock.lock()
+            if Date().timeIntervalSince(loadedAt) < 5 {
+                let result = cached
+                lock.unlock()
+                return result
+            }
+            lock.unlock()
+
+            let fresh = loadAllValues()
+            lock.lock()
+            cached = fresh
+            loadedAt = Date()
+            lock.unlock()
+            return fresh
+        }
+    }
+
+    private static let valueCache = ValueCache()
+
     /// Read every env-var value directly off disk + keychain. Mirrors
     /// `EnvVarStore.allAsDict()` but stays nonisolated.
-    private static func loadAllValues() -> [String] {
+    fileprivate static func loadAllValues() -> [String] {
         let libraryURL = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first!
         let fileURL = libraryURL.appendingPathComponent("MinisChat/env-vars.json")
         guard let data = try? Data(contentsOf: fileURL),

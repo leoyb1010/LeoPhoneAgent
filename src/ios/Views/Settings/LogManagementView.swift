@@ -58,8 +58,9 @@ struct LogManagementView: View {
     var body: some View {
         VStack(spacing: 0) {
             Picker("Tab", selection: $tab) {
-                Text("Logs").tag("logs")
-                Text("Config Changes").tag("config-audit")
+                Text("Files").tag("logs")
+                Text("Activity").tag("activity")
+                Text("Config").tag("config-audit")
             }
             .pickerStyle(.segmented)
             .padding(.horizontal)
@@ -67,6 +68,8 @@ struct LogManagementView: View {
 
             if tab == "config-audit" {
                 ConfigAuditView()
+            } else if tab == "activity" {
+                AgentActivityLogView()
             } else {
                 logsBody
             }
@@ -87,7 +90,7 @@ struct LogManagementView: View {
             Section {
                 Toggle("Enable Logging", isOn: $loggingManager.isEnabled)
             } footer: {
-                Text("When enabled, all console output is captured to daily log files.")
+                Text("When enabled, console and shell output is captured to daily files. Privacy Mode masks known environment-variable values, but logs can still contain file paths and task details. Review before sharing.")
             }
 
             Section("Log Files") {

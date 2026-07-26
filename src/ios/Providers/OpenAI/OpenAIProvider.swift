@@ -794,7 +794,8 @@ final class OpenAIProvider: LLMProvider {
     private func logOutgoingRequest(url: URL, headers: [String: String]?, body: [String: Any]) {
         var parts: [String] = []
         parts.append("📤 OpenAI Request")
-        parts.append("  url: \(url.absoluteString)")
+        parts.append("  host: \(url.host ?? "unknown")")
+        parts.append("  path: \(url.path)")
         parts.append("  model: \(body["model"] ?? "?")")
         parts.append("  stream: \(body["stream"] ?? "?")")
         // "Codex" only for the real ChatGPT/Codex backend (OAuth + official base
@@ -806,21 +807,17 @@ final class OpenAIProvider: LLMProvider {
             : isOAuth ? (isCodexBackend ? "OAuth (Codex)" : "OAuth") : "API Key"
         parts.append("  authMode: \(modeLabel)")
 
-        if let accountId = codexAccountId {
-            parts.append("  accountId: \(accountId)")
-        }
+        parts.append("  hasAccountId: \(codexAccountId != nil)")
 
-        // Headers (mask Authorization)
+        // Header values can carry account identifiers or custom credentials.
+        // Log names only; Copy Requests remains the explicit DEBUG diagnostic.
         if let headers {
-            for (key, val) in headers.sorted(by: { $0.key < $1.key }) {
-                let display = key == "Authorization" ? "Bearer ***" : val
-                parts.append("  header: \(key): \(display)")
-            }
+            parts.append("  headers: [\(headers.keys.sorted().joined(separator: ", "))]")
         }
 
+        parts.append("  bodyFields: [\(body.keys.sorted().joined(separator: ", "))]")
         if let instructions = body["instructions"] as? String {
-            let preview = String(instructions.prefix(200))
-            parts.append("  instructions: \"\(preview)\"" + (instructions.count > 200 ? "..." : ""))
+            parts.append("  instructionsLength: \(instructions.count)")
         }
 
         if let input = body["input"] as? [[String: Any]] {
@@ -834,17 +831,8 @@ final class OpenAIProvider: LLMProvider {
             parts.append("  tools: [\(names.joined(separator: ", "))]")
         }
 
-        // Full body as pretty JSON (for the debug logger preview only; the raw on-wire
-        // body is captured separately in streamRaw so debug.llmRequests reflects
-        // exactly what hit the network).
-        if let data = try? JSONSerialization.data(withJSONObject: body, options: [.prettyPrinted, .sortedKeys]),
-           let str = String(data: data, encoding: .utf8) {
-            let truncated = String(str.prefix(3000))
-            parts.append("  Full Body:")
-            parts.append(truncated)
-            if str.count > 3000 {
-                parts.append("  ... (\(str.count) chars total)")
-            }
+        if let data = try? JSONSerialization.data(withJSONObject: body, options: [.sortedKeys]) {
+            parts.append("  bodyBytes: \(data.count)")
         }
 
         logger.debug("\(parts.joined(separator: "\n"))")
@@ -1410,7 +1398,7 @@ final class OpenAIProvider: LLMProvider {
         request.httpBody = body
 
         #if DEBUG
-        logger.debug("📤 OpenAI /images/edits request: model=\(model.id) prompt=\(prompt.prefix(100)) images=\(images.count)")
+        logger.debug("📤 OpenAI /images/edits request: model=\(model.id) promptLength=\(prompt.count) images=\(images.count)")
         // multipart bodies are mostly binary; record a JSON summary instead so Copy
         // Requests still shows something useful (model, prompt, image count, sizes).
         let editSummary: [String: Any] = [

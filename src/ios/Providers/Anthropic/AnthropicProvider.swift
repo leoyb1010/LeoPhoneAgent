@@ -333,23 +333,13 @@ final class AnthropicProvider: LLMProvider {
         parts.append("  authMode: \(isClaudeCode ? "OAuth (Claude Code)" : "API Key")")
         parts.append("  messages: \(parameter.messages.count)")
 
-        // System prompt — encode to JSON then extract text previews
+        // System prompt metadata only. Never log its text.
         if let system = parameter.system {
             switch system {
             case .text(let text):
-                let preview = String(text.prefix(200))
-                parts.append("  system: .text(\"\(preview)\"" + (text.count > 200 ? "..." : "") + ")")
+                parts.append("  system: textChars=\(text.count)")
             case .list(let blocks):
                 parts.append("  system: .list [\(blocks.count) block(s)]")
-                if let data = try? JSONEncoder().encode(blocks),
-                   let arr = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
-                    for (i, dict) in arr.enumerated() {
-                        let text = (dict["text"] as? String) ?? ""
-                        let preview = String(text.prefix(200))
-                        let cached = dict["cache_control"] != nil ? " [cached]" : ""
-                        parts.append("    [\(i)] \"\(preview)\"" + (text.count > 200 ? "..." : "") + cached)
-                    }
-                }
             }
         } else {
             parts.append("  system: nil")
@@ -363,30 +353,15 @@ final class AnthropicProvider: LLMProvider {
             parts.append("  tools: [\(names.joined(separator: ", "))]")
         }
 
-        // Full request body as pretty JSON (for detailed debugging)
-        if let data = try? JSONEncoder().encode(parameter),
-           let json = try? JSONSerialization.jsonObject(with: data),
-           let pretty = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),
-           let str = String(data: pretty, encoding: .utf8) {
-            let truncated = String(str.prefix(3000))
-            parts.append("  Full Body:")
-            parts.append(truncated)
-            if str.count > 3000 {
-                parts.append("  ... (\(str.count) chars total)")
-            }
-        }
-
-        // Messages summary (last 3)
+        // Message shapes only. Text and tool payloads are private.
         let recent = parameter.messages.suffix(3)
         for msg in recent {
-            let contentPreview: String
             switch msg.content {
             case .text(let text):
-                contentPreview = String(text.prefix(100)) + (text.count > 100 ? "..." : "")
+                parts.append("  [\(msg.role)] textChars=\(text.count)")
             case .list(let objects):
-                contentPreview = "\(objects.count) content block(s)"
+                parts.append("  [\(msg.role)] contentBlocks=\(objects.count)")
             }
-            parts.append("  [\(msg.role)] \(contentPreview)")
         }
 
         logger.debug("\(parts.joined(separator: "\n"))")
@@ -403,11 +378,9 @@ final class AnthropicProvider: LLMProvider {
         for (i, block) in response.content.enumerated() {
             switch block {
             case .text(let text, _):
-                let preview = String(text.prefix(200))
-                parts.append("    [\(i)] text(\(text.count) chars): \"\(preview)\"" + (text.count > 200 ? "..." : ""))
+                parts.append("    [\(i)] textChars=\(text.count)")
             case .toolUse(let toolUse):
-                let inputStr = "\(toolUse.input)"
-                parts.append("    [\(i)] tool_use: \(toolUse.name) (id: \(toolUse.id)) input: \(String(inputStr.prefix(200)))")
+                parts.append("    [\(i)] tool_use=\(toolUse.name) hasID=\(!toolUse.id.isEmpty)")
             default:
                 parts.append("    [\(i)] \(block)")
             }
@@ -437,11 +410,9 @@ final class AnthropicProvider: LLMProvider {
         case .contentBlockDelta:
             if let delta = response.delta {
                 if let text = delta.text {
-                    let preview = String(text.prefix(80))
-                    parts.append("📥 Anthropic Stream: contentBlockDelta text(\(text.count) chars): \"\(preview)\"" + (text.count > 80 ? "..." : ""))
+                    parts.append("📥 Anthropic Stream: contentBlockDelta textChars=\(text.count)")
                 } else if let json = delta.partialJson {
-                    let preview = String(json.prefix(120))
-                    parts.append("📥 Anthropic Stream: contentBlockDelta partialJson(\(json.count) chars): \(preview)" + (json.count > 120 ? "..." : ""))
+                    parts.append("📥 Anthropic Stream: contentBlockDelta partialJSONChars=\(json.count)")
                 }
             }
         case .contentBlockStop:

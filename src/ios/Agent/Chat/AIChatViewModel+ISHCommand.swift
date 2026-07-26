@@ -18,7 +18,7 @@ extension AIChatViewModel {
     /// Returns clean stdout+stderr output without any TTY artifacts, plus the exit code.
     func executeCommand(_ command: String, timeout: TimeInterval? = nil, lineCallback: @escaping (String) -> Void) async throws -> CommandResult {
         let effectiveTimeout = timeout ?? defaultCommandTimeout
-        logger.info("Executing command via coordinator (timeout: \(Int(effectiveTimeout))s): \(command)")
+        logger.info("Executing command via coordinator timeout=\(Int(effectiveTimeout))s commandLength=\(command.count)")
 
         guard let sid = sessionId else {
             return CommandResult(output: "Error: no session", exitCode: -1)

@@ -76,7 +76,7 @@ final class SyncLogStore: ObservableObject {
     /// message content is never included. Safe for sharing with developers.
     func exportSanitizedReport() -> String {
         var lines: [String] = []
-        lines.append("=== MinisApp iCloud Sync Diagnostic Log ===")
+        lines.append("=== LeoPhoneAgent iCloud Sync Diagnostic Log ===")
         lines.append("Exported: \(ISO8601DateFormatter().string(from: Date()))")
         lines.append("Entries: \(entries.count)")
         lines.append("")
@@ -1295,7 +1295,7 @@ final class CloudSyncEngine: ObservableObject {
             let modelBinding = record["modelBinding"] as? String
             // remotePinnedAtRaw distinguishes "old device / field absent" (nil) from "explicitly unpinned" (0)
             let remotePinnedAtRaw = record["pinnedAt"] as? Date
-            logger.info("[iCloud] processRemoteRecord Session: id=\(session.id) title=\(session.title ?? "nil") deviceId=\(deviceId)")
+            logger.info("[iCloud] processRemoteRecord Session: id=\(session.id) hasTitle=\(session.title != nil) deviceId=\(deviceId)")
             // Merge into local sessions (last-write-wins by updated_at)
             await ChatStore.shared.mergeRemoteSession(session, fromDeviceId: deviceId, memoryEnabled: memoryEnabled, modelBinding: modelBinding, remotePinnedAtRaw: remotePinnedAtRaw)
             // Also keep in remote_sessions for browsing/reference

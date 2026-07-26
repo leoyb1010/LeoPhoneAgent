@@ -246,7 +246,7 @@ final class WebAppWebViewController: UIViewController, WKNavigationDelegate, WKU
         // leophoneagent://), tel:, mailto:, etc. The HTML stays sandboxed to its
         // own assets. A future enhancement could open external links in
         // SFSafariViewController on user confirmation.
-        webAppWebLogger.info("blocking external nav scheme=\(scheme) url=\(url.absoluteString.prefix(120))")
+        webAppWebLogger.info("blocking external nav scheme=\(scheme) host=\(url.host ?? "nil")")
         decisionHandler(.cancel)
     }
 

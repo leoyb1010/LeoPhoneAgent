@@ -1,6 +1,6 @@
 --- a/fftools/ffmpeg.c
 +++ b/fftools/ffmpeg.c
-@@ -180,6 +180,23 @@
+@@ -180,6 +180,34 @@
  static volatile int ffmpeg_exited = 0;
  static int64_t copy_ts_first_pts = AV_NOPTS_VALUE;
  
@@ -19,6 +19,17 @@
 +    print_report_last_time = -1;
 +    print_report_first     = 1;
 +    kbd_last_time          = 0;
++}
++
++void ffmpeg_request_cancel(void)
++{
++    // Mirror the state change performed by sigterm_handler without sending a
++    // process-wide signal. FFmpeg's transcode loop and AVIO interrupt callback
++    // both observe these flags and unwind through the normal cleanup path.
++    if (!received_sigterm) {
++        received_sigterm = SIGINT;
++        received_nb_signals++;
++    }
 +}
 +
  static void

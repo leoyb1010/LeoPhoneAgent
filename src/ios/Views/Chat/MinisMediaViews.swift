@@ -482,32 +482,32 @@ struct AsyncCacheURLImageTile: View {
 /// SwiftUI to drop the transition animation. To fix this, the actual sheet state and
 /// presentation lives on AIChatView (a stable NavigationStack root), and cell-level
 /// views forward URL taps up through this environment action.
-struct OpenMinisURLAction {
+struct LeoOpenURLAction {
     var handler: (URL) -> OpenURLAction.Result
     func callAsFunction(_ url: URL) -> OpenURLAction.Result { handler(url) }
 }
 
-private struct OpenMinisURLKey: EnvironmentKey {
-    static let defaultValue = OpenMinisURLAction { _ in .systemAction }
+private struct LeoOpenURLKey: EnvironmentKey {
+    static let defaultValue = LeoOpenURLAction { _ in .systemAction }
 }
 
 extension EnvironmentValues {
-    var openMinisURL: OpenMinisURLAction {
-        get { self[OpenMinisURLKey.self] }
-        set { self[OpenMinisURLKey.self] = newValue }
+    var leoOpenURL: LeoOpenURLAction {
+        get { self[LeoOpenURLKey.self] }
+        set { self[LeoOpenURLKey.self] = newValue }
     }
 }
 
 /// Thin modifier that overrides `\.openURL` for a subtree and forwards to the
-/// top-level `\.openMinisURL` action. Keeps cell-internal views from holding their
+/// top-level `\.leoOpenURL` action. Keeps cell-internal views from holding their
 /// own sheet @State (which would break presentation animations).
 struct MinisOpenURLHandler: ViewModifier {
-    @Environment(\.openMinisURL) private var openMinisURL
+    @Environment(\.leoOpenURL) private var leoOpenURL
 
     func body(content: Content) -> some View {
         content
             .environment(\.openURL, OpenURLAction { url in
-                openMinisURL(url)
+                leoOpenURL(url)
             })
     }
 }
@@ -1098,4 +1098,3 @@ struct MinisDocumentPreviewView: UIViewControllerRepresentable {
         }
     }
 }
-

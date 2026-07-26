@@ -31,15 +31,15 @@ private struct OffloadPermissionDialogContent: View {
             ScrollView {
                 VStack(spacing: 0) {
                     // Header
-                    VStack(spacing: 8) {
+                    VStack(spacing: LeoTheme.Spacing.xs) {
                         Image(systemName: "shield.lefthalf.filled")
-                            .font(.system(size: 36))
-                            .foregroundStyle(.orange)
+                            .font(.system(size: 28, weight: .semibold))
+                            .foregroundStyle(LeoTheme.ColorToken.warning)
 
-                        Text("Permission Request")
+                        Text("Allow \(request.displayLabel)?")
                             .font(.title3.bold())
 
-                        Text("The agent wants to use **\(request.commandName)**")
+                        Text("LeoPhoneAgent needs this device capability for the current task.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -49,12 +49,25 @@ private struct OffloadPermissionDialogContent: View {
 
                     // Description
                     if !request.description.isEmpty {
-                        Text(request.description)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 12)
+                        VStack(alignment: .leading, spacing: LeoTheme.Spacing.xs) {
+                            Label("What it can access", systemImage: "lock.open")
+                                .font(.footnote.weight(.semibold))
+                            Text(request.description)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+
+                            Label("Where data goes", systemImage: "arrow.up.forward.app")
+                                .font(.footnote.weight(.semibold))
+                                .padding(.top, LeoTheme.Spacing.xxs)
+                            Text("The device tool runs locally. Information needed to answer this task may be included in the request to your selected model provider.")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(LeoTheme.Spacing.sm)
+                        .background(LeoTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: LeoTheme.Radius.field, style: .continuous))
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 12)
                     }
 
                     // Arguments
@@ -91,6 +104,7 @@ private struct OffloadPermissionDialogContent: View {
             // ScrollView, so they stay tappable even with very long arg lists.
             VStack(spacing: 10) {
                 Button {
+                    LeoHaptics.notification(.success)
                     OffloadPermissionManager.shared.respond(to: request.id, allowed: true)
                 } label: {
                     Text("Allow in Session")
@@ -99,9 +113,10 @@ private struct OffloadPermissionDialogContent: View {
                         .padding(.vertical, 12)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.blue)
+                .tint(LeoTheme.ColorToken.accent)
 
                 Button {
+                    LeoHaptics.notification(.warning)
                     OffloadPermissionManager.shared.respond(to: request.id, allowed: false)
                 } label: {
                     Text("Deny in Session")
@@ -110,7 +125,7 @@ private struct OffloadPermissionDialogContent: View {
                         .padding(.vertical, 12)
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.red)
+                .tint(LeoTheme.ColorToken.destructive)
             }
             .padding(.horizontal, 20)
             .padding(.top, 12)
@@ -118,6 +133,10 @@ private struct OffloadPermissionDialogContent: View {
             .background(Color(.systemGroupedBackground))
         }
         .background(Color(.systemGroupedBackground))
+        .onAppear {
+            LeoHaptics.notification(.warning)
+        }
+        .accessibilityElement(children: .contain)
     }
 }
 

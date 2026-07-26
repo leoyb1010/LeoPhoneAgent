@@ -405,7 +405,7 @@ extension AIChatViewModel {
                         toolBlock.toolStartTime = Date()
                         messages[msgIdx].blocks.append(toolBlock)
                         #if DEBUG
-                        logger.debug("[TOOL:CREATED] \(name) id:\(tuId.prefix(20)) displayText=\"\(toolBlock.toolSummary ?? toolBlock.toolDescription)\" content=\"\"")
+                        logger.debug("[TOOL:CREATED] \(name) id:\(tuId.prefix(20))")
                         #endif
                         logger.info("[ToolLifecycle] RECEIVED toolId=\(tuId.prefix(20)) tool=\(name) sid=\(self.sessionId?.prefix(8) ?? "nil") appState=\(UIApplication.shared.applicationState == .active ? "fg" : "bg") suspended=\(self.streamingUIUpdatesSuspended) isProcessing=\(self.isProcessing)")
                         objectWillChange.send()
@@ -619,8 +619,7 @@ extension AIChatViewModel {
                     if let streamingBrowserURL, !streamingBrowserURL.isEmpty { blk.browserURL = streamingBrowserURL }
                     blk.toolStatus = .streaming(bytes: byteCount)
                     #if DEBUG
-                    let displayContent = preview ?? blk.content
-                    logger.debug("[TOOL:STREAMING] \(name) displayText=\"\(blk.toolSummary ?? blk.toolDescription)\" content=\"\(displayContent.prefix(120))\" bytes:\(byteCount)")
+                    logger.debug("[TOOL:STREAMING] \(name) bytes:\(byteCount)")
                     #endif
                     if !hadSummary && blk.toolSummary != nil {
                         objectWillChange.send()
@@ -732,7 +731,7 @@ extension AIChatViewModel {
                         let blk = messages[msgIdx].blocks[blockIdx]
                         speakDesc = blk.toolSummary ?? blk.toolDescription
                         #if DEBUG
-                        logger.debug("[TOOL:RUNNING] \(name) id:\(id.prefix(8)) displayText=\"\(speakDesc)\" content=\"\(blk.content.prefix(120))\"")
+                        logger.debug("[TOOL:RUNNING] \(name) id:\(id.prefix(8)) contentLength=\(blk.content.count)")
                         #endif
                     }
                     if !remainingTextForTool.isEmpty { self.speakQueued(remainingTextForTool) }

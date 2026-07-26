@@ -2222,7 +2222,7 @@ final class ProviderConfigStore: ObservableObject {
             logger.info("[ModelList] refreshModels (MANUAL): instance=\(instance.label) source=\(result.source) count=\(result.models.count)")
             for w in result.warnings { logger.warning("⚠️ \(w)") }
         } catch {
-            logger.error("[ModelList] refreshModels (MANUAL): instance=\(instance.label) FAILED — \(error)")
+            logger.error("[ModelList] refreshModels (MANUAL) FAILED type=\(String(describing: type(of: error)))")
         }
     }
 
@@ -2241,7 +2241,7 @@ final class ProviderConfigStore: ObservableObject {
             replaceEntries(for: instance.id, models: result.models, caller: "autoRefreshModels(daily)")
             logger.info("[ModelList] autoRefreshModels (DAILY): instance=\(instance.label) source=\(result.source) count=\(result.models.count)")
         } catch {
-            logger.error("[ModelList] autoRefreshModels (DAILY): instance=\(instance.label) FAILED — \(error)")
+            logger.error("[ModelList] autoRefreshModels (DAILY) FAILED type=\(String(describing: type(of: error)))")
         }
     }
 

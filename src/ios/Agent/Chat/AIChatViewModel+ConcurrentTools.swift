@@ -169,7 +169,7 @@ extension AIChatViewModel {
             )
             if !repairOutcome.repairs.isEmpty {
                 AppLogger(category: "ToolPreflight").warning(
-                    "[ToolRepair] REPAIRED tool=\(tu.name) id=\(tu.id) strategies=[\(repairOutcome.repairs.joined(separator: ", "))] beforeKeys=[\(tu.args.keys.sorted().joined(separator: ","))] afterKeys=[\(repairOutcome.args.keys.sorted().joined(separator: ","))] rawJoined=<<<\(rawJoined.prefix(500))>>>"
+                    "[ToolRepair] REPAIRED tool=\(tu.name) id=\(tu.id) strategies=[\(repairOutcome.repairs.joined(separator: ", "))] beforeKeys=[\(tu.args.keys.sorted().joined(separator: ","))] afterKeys=[\(repairOutcome.args.keys.sorted().joined(separator: ","))] rawBytes=\(rawJoined.utf8.count)"
                 )
                 toolArgs = repairOutcome.args
             }
@@ -179,7 +179,7 @@ extension AIChatViewModel {
         if let preflightError = Self.preflightValidateToolCall(name: tu.name, args: toolArgs, tools: tools) {
             let chunkRing = tu.inputChunkRing
             AppLogger(category: "ToolPreflight").warning(
-                "[ToolPreflight] BLOCKED tool=\(tu.name) id=\(tu.id) reason=\"\(preflightError)\" argsKeys=[\(tu.args.keys.sorted().joined(separator: ","))] chunkCount=\(chunkRing.count) lastChunk=<<<\(chunkRing.last?.prefix(500) ?? "")>>>"
+                "[ToolPreflight] BLOCKED tool=\(tu.name) id=\(tu.id) reason=\"\(preflightError)\" argsKeys=[\(tu.args.keys.sorted().joined(separator: ","))] chunkCount=\(chunkRing.count) lastChunkBytes=\(chunkRing.last?.utf8.count ?? 0)"
             )
             let uiMessage = String(localized: "Blocked invalid tool call")
             let modelMessage = "Error: Tool call rejected before execution. \(preflightError) The arguments your client sent were empty or missing required fields — re-issue the call with all required parameters filled in. Do not retry with the same empty arguments."
@@ -219,7 +219,7 @@ extension AIChatViewModel {
             let (command, timeout, delay) = parseToolInput(from: argsJson)
 
             if command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                ctLogger.warning("[ToolArgsProbe] shell_execute called with empty command — argsJson=<<<\(argsJson)>>>")
+                ctLogger.warning("[ToolArgsProbe] shell_execute called with empty command argsBytes=\(argsJson.utf8.count)")
                 toolOutput = "Error: Missing required 'command' parameter. Please call shell_execute again with a non-empty `command` field."
                 toolSuccess = false
                 if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
@@ -229,7 +229,7 @@ extension AIChatViewModel {
             }
 
             // Offload permission check.
-            ctLogger.info("[OffloadPerm] shell command: \(command)")
+            ctLogger.info("[OffloadPerm] shell commandLength=\(command.count)")
             if let offloadCmd = OffloadPermissionManager.extractOffloadCommand(from: command) {
                 ctLogger.info("[OffloadPerm] matched offload: \(offloadCmd), level: \(OffloadPermissionManager.shared.permissionLevel(for: offloadCmd).rawValue)")
                 let permResult = await OffloadPermissionManager.shared.checkPermission(
@@ -648,8 +648,10 @@ extension AIChatViewModel {
             toolSuccess = false
         }
 
-        // Tail cancel-detection: if Task got cancelled mid-execution.
-        if !cancelledHere && Task.isCancelled && self.userDidCancel {
+        // Tail cancel-detection covers user Stop, parent/system cancellation,
+        // and a per-tool stop button. Always synthesize a paired tool_result so
+        // the next provider request cannot fail with an orphaned tool_use.
+        if !cancelledHere && (Task.isCancelled || self.userDidCancel || commandCancelledByUser) {
             cancelledHere = true
             toolOutput += "\n<system-reminder>The user cancelled this operation. The returned result may be incomplete.</system-reminder>"
             if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {

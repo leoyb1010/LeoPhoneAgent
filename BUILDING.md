@@ -117,9 +117,10 @@ open src/ios/LeoPhoneAgent.xcodeproj
 ```
 
 Select the **LeoPhoneAgent** scheme and build. The 1.0 project is configured for
-team `54UB8X9C5F`; sign into that Apple developer account in Xcode → Settings →
-Accounts before requesting automatic provisioning. Change the team and bundle
-identifiers if you are building under another account.
+team `48H5Y3LNUK`. Automatic signing has been verified with the `leo yuan`
+developer account; sign into that team in Xcode → Settings → Accounts if the
+local session expires. Change the team and bundle identifiers if you are
+building under another account.
 
 From the command line:
 

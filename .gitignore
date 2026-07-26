@@ -106,6 +106,8 @@ xcshareddata/xcdebugger/
 
 # Build-time generated Swift (from ProviderCustomization.xcconfig); regenerated each build
 src/ios/Generated/
+# Local provider customization may contain private OAuth identifiers.
+src/ios/Configs/ProviderCustomization.xcconfig
 
 # Debug-only skill assets staged by scripts/gen_debug_skill_android.sh from
 # .claude/skills/debug-server/; regenerated on every debug build.

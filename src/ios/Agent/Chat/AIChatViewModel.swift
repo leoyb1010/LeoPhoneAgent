@@ -148,6 +148,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
     /// Cancellable for tracking `isProcessing` → `SessionActivityTracker`.
     private var activityTrackingCancellable: AnyCancellable?
+    private var activityPhaseCancellable: AnyCancellable?
     private var captureSuppressCancellable: AnyCancellable?
     private var mediaPreemptCancellable: AnyCancellable?
     private var voiceStateCancellable: AnyCancellable?
@@ -367,7 +368,28 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                         SessionActivityTracker.shared.setDraftAlias(draft: did, real: activeKey)
                     }
                 } else {
-                    SessionActivityTracker.shared.setInactive(activeKey, source: src)
+                    let finalActivityPhase: AgentActivityPhase
+                    let finalActivityReason: AgentActivityReason?
+                    if self.canResume {
+                        finalActivityPhase = .waitingForUser
+                        finalActivityReason = SessionActivityTracker.shared.sessionActivityReasons[activeKey]
+                            ?? .userInterruption
+                    } else if self.errorMessage != nil
+                                || self.messages.last(where: { $0.role == .assistant })?.error != nil {
+                        finalActivityPhase = .failed
+                        let failureText = self.errorMessage
+                            ?? self.messages.last(where: { $0.role == .assistant })?.error
+                        finalActivityReason = AgentActivityFailureClassifier.reason(for: failureText)
+                    } else {
+                        finalActivityPhase = .completed
+                        finalActivityReason = nil
+                    }
+                    SessionActivityTracker.shared.setInactive(
+                        activeKey,
+                        finalPhase: finalActivityPhase,
+                        reason: finalActivityReason,
+                        source: src
+                    )
                     // [T-ios-session-completed-badge-not-cleared] The loop just
                     // stopped. If it didn't stop in a resumable state, the session
                     // completed normally — clear any ⏸ that lingers. The canResume
@@ -408,6 +430,20 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                         }
                     }
                 }
+            }
+
+        activityPhaseCancellable = $isSuspended
+            .combineLatest($isProcessing)
+            .removeDuplicates { $0.0 == $1.0 && $0.1 == $1.1 }
+            .sink { [weak self] suspended, processing in
+                guard let self, processing else { return }
+                let key = self.sessionId ?? self.draftId
+                guard let key else { return }
+                SessionActivityTracker.shared.updateActivityPhase(
+                    key,
+                    phase: suspended ? .suspended : .preparing,
+                    reason: suspended ? .concurrencyLimit : nil
+                )
             }
 
         // When the mic starts capturing, immediately silence any in-progress
@@ -526,11 +562,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         didSet {
             if inputText.isEmpty && !oldValue.isEmpty {
                 voiceUsedInComposition = false
-                #if DEBUG
-                logger.info("🔑DRAFT [vm=\(self.vmInstanceId)] inputText CLEARED (was '\(String(oldValue.prefix(30)))') sessionId=\(self.sessionId ?? "nil") draftId=\(self.draftId ?? "nil") isProcessing=\(self.isProcessing)")
-                #else
                 logger.info("🔑DRAFT [vm=\(self.vmInstanceId)] inputText CLEARED (was \(oldValue.count)ch) sessionId=\(self.sessionId ?? "nil") draftId=\(self.draftId ?? "nil") isProcessing=\(self.isProcessing)")
-                #endif
             }
             updateSlashMenuState()
             updateMentionMenuState()
@@ -559,122 +591,85 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     @Published var isProcessing = false {
         didSet {
             _deinitSnapshot = "isProcessing=\(isProcessing) session=\(sessionId ?? "nil") draft=\(draftId ?? "nil")"
-            if isProcessing && !oldValue {
-                // Agent loop starting — defer iCloud sync sends until completion
-                Task { await ChatStore.shared.setSyncSendDeferred(true) }
-                // [T-ios-defer-icloud-sync-after-stop] A new turn supersedes any
-                // pending post-stop hold; clear it WITHOUT a catch-up sync (the
-                // new turn re-pauses sync via setSyncSendDeferred anyway).
-                if postStopSyncHoldUntil != nil {
-                    postStopSyncHoldUntil = nil
-                    postStopSyncHoldTimer?.invalidate()
-                    postStopSyncHoldTimer = nil
-                    logger.info("[SyncHold] CLEAR — new turn started, superseding post-stop hold")
-                }
-                // Begin watching for main-thread hangs while streaming is
-                // active. Captures a backtrace whenever the main runloop
-                // doesn't drain for >1s, plus a snapshot of streamed text
-                // around the stall, so we can confirm whether the 0x8BADF00D
-                // watchdog lands inside _fillLayoutHole, SwiftUI Layout, or
-                // elsewhere — and correlate with the content being rendered.
-                StreamingHangLogger.shared.acquire(reason: "isProcessing=true session=\(sessionId ?? "nil")")
-            } else if !isProcessing && oldValue {
-                // [T-ios-defer-icloud-sync-after-stop] Agent loop finished. Do
-                // NOT flush the deferred iCloud push or replay a pull reload now
-                // — that immediate sync is what overwrote the just-finished
-                // candidate. Instead enter the post-stop hold: both directions
-                // stay paused for the grace window, then a single catch-up sync
-                // runs on release (60s timer / leave session / background).
-                beginPostStopSyncHold()
-                StreamingHangLogger.shared.release(reason: "isProcessing=false session=\(sessionId ?? "nil")")
-                // [T-ios-ui-frozen-on-tool-while-loop-runs] Force one snapshot
-                // re-apply from the CURRENT in-memory messages at loop end.
-                //
-                // Why this is needed: during a multi-turn agent loop, tool blocks
-                // are appended to the EXISTING last-assistant ChatMessage. The
-                // messages ARRAY doesn't change, so the Coordinator's `$messages`
-                // sink never re-fires and the per-message block-count subscription
-                // can miss the appends — the new tool capsules are in the data
-                // model but never get cells. The loop-end full reload that should
-                // rebuild them goes through `reloadMessagesFromDB`, which is held
-                // by the post-stop SyncHold and then SKIP-LOADs (`hashSame=true`,
-                // because the DB baseline already advanced as the loop persisted),
-                // so it never repaints. Result: the UI froze on the last-rendered
-                // capsule for minutes while many turns ran un-rendered.
-                //
-                // `retrySnapshotReloadSignal` already does exactly the right thing
-                // — re-applies the diffable snapshot from `vm.messages` even when
-                // the array identity is unchanged (its original use: in-place
-                // block mutation on retry). It is a pure UI re-render from memory:
-                // it does NOT touch the DB / reload / SyncHold, so it can't
-                // overwrite unpersisted content. Idempotent (the snapshot diff is
-                // a no-op when nothing changed).
-                //
-                // CRITICAL guard — only fire when FOREGROUND and not UI-suspended:
-                // the Coordinator's applySnapshot does a synchronous
-                // `layoutIfNeeded()` (cell creation + self-sizing) on the main
-                // thread. For a large history that is heavy work; running it while
-                // backgrounded risks the 0x8BADF00D background-render watchdog
-                // SIGKILL that `streamingUIUpdatesSuspended` exists to prevent. If
-                // the loop ends while suspended/backgrounded, the Coordinator
-                // already has `hasPendingSnapshot=true` and the suspend-resume hook
-                // (T-ios-ui-blocks-lost-suspend-resume) flushes it on the next
-                // foreground transition — so we must NOT force-apply here. We only
-                // cover the foreground case (the actual freeze: block-count sub
-                // missed in-place appends with NO suspend involved). Also gated on
-                // `!transitionSuspended` so a session-switch outgoing VM doesn't
-                // poke a tearing-down view graph (same guard as the manual
-                // objectWillChange.send sites).
-                // [T-blockslost-defensive defect ③] The flag ASSIGNMENT is no
-                // longer wrapped in the `!transitionSuspended` gate: setting
-                // `needsSnapshotReloadOnResume` touches no view, so the gate —
-                // which exists to keep view-graph pokes out of the 0.4s
-                // session-switch animation window — was pure collateral here.
-                // A loop that ended inside that window previously left NO flag
-                // behind, so nothing ever replayed for it. The gate still
-                // protects the only view-touching action (the immediate
-                // signal send below), whose conditions are unchanged.
-                let inTransitionWindow = transitionSuspended
-                if !inTransitionWindow,
-                   !streamingUIUpdatesSuspended,
-                   UIApplication.shared.applicationState == .active,
-                   let sid = sessionId, Self.activeSessionId == sid {
-                    retrySnapshotReloadSignal.send()
-                } else {
-                    needsSnapshotReloadOnResume = true
-                    let totalBlocks = messages.reduce(0) { $0 + $1.blocks.count }
-                    let lastBlocks = messages.last?.blocks.count ?? 0
-                    let reason: String
-                    if streamingUIUpdatesSuspended {
-                        reason = "suspended"
-                    } else if UIApplication.shared.applicationState != .active {
-                        reason = "backgrounded"
-                    } else if let sid = sessionId, Self.activeSessionId != sid {
-                        reason = "no subscriber (active=\(Self.activeSessionId?.prefix(8) ?? "nil"))"
-                    } else {
-                        reason = "transition window"
-                    }
-                    logger.info("[BlocksLost] DEFERRED retrySnapshot — \(reason) at loop end. sid=\(sessionId?.prefix(8) ?? "nil") vm=\(vmInstanceId) transitionWindow=\(inTransitionWindow) totalBlocks=\(totalBlocks) lastMsgBlocks=\(lastBlocks) msgCount=\(messages.count)")
-                }
-                // [T-ios-detached-vm-loop-end] When an agent loop finishes on
-                // a VM that is NOT the currently-displayed one (user navigated
-                // away mid-loop), the final DB writes are invisible to the
-                // displayed VM. Post a notification so the active VM for this
-                // session reloads from DB and picks up the new data.
-                if let sid = sessionId, Self.activeSessionId != sid {
-                    logger.info("[BlocksLost] DETACHED loop end — posting reload for sid=\(sid.prefix(8)) (active=\(Self.activeSessionId?.prefix(8) ?? "nil"))")
-                    NotificationCenter.default.post(name: .sessionAgentLoopDidEnd, object: sid)
-                }
-                // Also drain any skill-filesystem rescan that the AI's
-                // shell tools may have queued during this turn. We hold
-                // the rescan off the hot path so it runs once at quiet
-                // time, not interleaved with every iSH write event.
-                if #available(iOS 17.0, *) {
-                    SkillFilesystemNotifier.shared.drainIfDirty(reason: "agent turn finished")
-                }
+            switch AgentProcessingTransition(previous: oldValue, current: isProcessing) {
+            case .started:
+                handleProcessingStarted()
+            case .stopped:
+                handleProcessingStopped()
+            case .unchanged:
+                break
             }
         }
     }
+
+    /// Ordered side effects for the legacy false → true edge. Kept behind a
+    /// dedicated boundary so phase-based consumers can migrate independently
+    /// without changing the proven start ordering.
+    private func handleProcessingStarted() {
+        // Agent loop starting — defer iCloud sync sends until completion
+        Task { await ChatStore.shared.setSyncSendDeferred(true) }
+        // [T-ios-defer-icloud-sync-after-stop] A new turn supersedes any
+        // pending post-stop hold; clear it WITHOUT a catch-up sync (the
+        // new turn re-pauses sync via setSyncSendDeferred anyway).
+        if postStopSyncHoldUntil != nil {
+            postStopSyncHoldUntil = nil
+            postStopSyncHoldTimer?.invalidate()
+            postStopSyncHoldTimer = nil
+            logger.info("[SyncHold] CLEAR — new turn started, superseding post-stop hold")
+        }
+        // Begin watching for main-thread hangs while streaming is active.
+        StreamingHangLogger.shared.acquire(reason: "isProcessing=true session=\(sessionId ?? "nil")")
+    }
+
+    /// Ordered side effects for the legacy true → false edge. The foreground
+    /// snapshot guard is intentionally preserved to avoid 0x8BADF00D when a
+    /// large view hierarchy is backgrounded or in a session transition.
+    private func handleProcessingStopped() {
+        // [T-ios-defer-icloud-sync-after-stop] Agent loop finished. Do NOT
+        // flush deferred iCloud work now; enter the grace hold first.
+        beginPostStopSyncHold()
+        StreamingHangLogger.shared.release(reason: "isProcessing=false session=\(sessionId ?? "nil")")
+
+        // [T-ios-ui-frozen-on-tool-while-loop-runs] Re-apply the in-memory
+        // snapshot at loop end when it is safe to touch the foreground UI.
+        // If backgrounded/suspended/transitioning, leave a durable in-memory
+        // flag for the existing foreground-resume hook instead.
+        let inTransitionWindow = transitionSuspended
+        if !inTransitionWindow,
+           !streamingUIUpdatesSuspended,
+           UIApplication.shared.applicationState == .active,
+           let sid = sessionId, Self.activeSessionId == sid {
+            retrySnapshotReloadSignal.send()
+        } else {
+            needsSnapshotReloadOnResume = true
+            let totalBlocks = messages.reduce(0) { $0 + $1.blocks.count }
+            let lastBlocks = messages.last?.blocks.count ?? 0
+            let reason: String
+            if streamingUIUpdatesSuspended {
+                reason = "suspended"
+            } else if UIApplication.shared.applicationState != .active {
+                reason = "backgrounded"
+            } else if let sid = sessionId, Self.activeSessionId != sid {
+                reason = "no subscriber (active=\(Self.activeSessionId?.prefix(8) ?? "nil"))"
+            } else {
+                reason = "transition window"
+            }
+            logger.info("[BlocksLost] DEFERRED retrySnapshot — \(reason) at loop end. sid=\(sessionId?.prefix(8) ?? "nil") vm=\(vmInstanceId) transitionWindow=\(inTransitionWindow) totalBlocks=\(totalBlocks) lastMsgBlocks=\(lastBlocks) msgCount=\(messages.count)")
+        }
+
+        // [T-ios-detached-vm-loop-end] Notify an active sibling VM that this
+        // off-screen session finished and its final DB writes are ready.
+        if let sid = sessionId, Self.activeSessionId != sid {
+            logger.info("[BlocksLost] DETACHED loop end — posting reload for sid=\(sid.prefix(8)) (active=\(Self.activeSessionId?.prefix(8) ?? "nil"))")
+            NotificationCenter.default.post(name: .sessionAgentLoopDidEnd, object: sid)
+        }
+
+        // Drain one deferred skill-filesystem rescan at quiet time.
+        if #available(iOS 17.0, *) {
+            SkillFilesystemNotifier.shared.drainIfDirty(reason: "agent turn finished")
+        }
+    }
+
     @Published var canResume = false {
         didSet {
             // [T-session-paused-badge-active-false-positive] Drive the session-
@@ -1977,6 +1972,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     var currentTask: Task<Void, Never>?
     var compactTask: Task<Void, Never>?
     var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
+    /// Stable key for an iOS 26 continued-processing request. It intentionally
+    /// survives draft-to-session ID migration for the duration of one run.
+    var continuedProcessingSessionKey: String?
     /// Tracks how many blocks on the current assistant message have been fully committed
     /// to agentHistory. Used by retry()/resume() to trim partial iteration content.
     var committedBlockCount: Int = 0
@@ -2059,11 +2057,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         let pendingAttachments = attachments
-        #if DEBUG
-        logger.info("🔑DRAFT [vm=\(self.vmInstanceId)] send() text=\(text.count)ch attachments=\(pendingAttachments.count) isProcessing=\(self.isProcessing) sessionId=\(self.sessionId ?? "nil") draftId=\(self.draftId ?? "nil") inputText='\(String(self.inputText.prefix(30)))'")
-        #else
         logger.info("🔑DRAFT [vm=\(self.vmInstanceId)] send() text=\(text.count)ch attachments=\(pendingAttachments.count) isProcessing=\(self.isProcessing) sessionId=\(self.sessionId ?? "nil") draftId=\(self.draftId ?? "nil")")
-        #endif
         guard !text.isEmpty || !pendingAttachments.isEmpty, !isProcessing else {
             logger.warning("🔑DRAFT [vm=\(self.vmInstanceId)] send() GUARD FAILED — text.isEmpty=\(text.isEmpty) attachments.isEmpty=\(pendingAttachments.isEmpty) isProcessing=\(self.isProcessing)")
             return
@@ -2464,10 +2458,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 self.handleUserCancelledCleanup()
             } catch {
                 let rawDesc = String(describing: error)
-                logger.error("Agent loop error: \(rawDesc)")
-                if let llmErr = error as? LLMError {
-                    logger.error("Agent loop LLMError detail: \(llmErr.errorDescription ?? "nil")")
-                }
+                let safeReason = AgentActivityFailureClassifier.reason(for: rawDesc)
+                logger.error("Agent loop error type=\(String(describing: type(of: error))) reason=\(safeReason.rawValue)")
                 if self.userDidCancel {
                     self.handleUserCancelledCleanup()
                 } else {
@@ -2642,10 +2634,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 self.handleUserCancelledCleanup()
             } catch {
                 let rawDesc = String(describing: error)
-                logger.error("Agent loop error (retry): \(rawDesc)")
-                if let llmErr = error as? LLMError {
-                    logger.error("Agent loop LLMError detail: \(llmErr.errorDescription ?? "nil")")
-                }
+                let safeReason = AgentActivityFailureClassifier.reason(for: rawDesc)
+                logger.error("Agent loop retry error type=\(String(describing: type(of: error))) reason=\(safeReason.rawValue)")
                 if self.userDidCancel {
                     self.handleUserCancelledCleanup()
                 } else {
@@ -2774,10 +2764,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 self.handleUserCancelledCleanup()
             } catch {
                 let rawDesc = String(describing: error)
-                logger.error("Agent loop error (resume): \(rawDesc)")
-                if let llmErr = error as? LLMError {
-                    logger.error("Agent loop LLMError detail: \(llmErr.errorDescription ?? "nil")")
-                }
+                let safeReason = AgentActivityFailureClassifier.reason(for: rawDesc)
+                logger.error("Agent loop resume error type=\(String(describing: type(of: error))) reason=\(safeReason.rawValue)")
                 if self.userDidCancel {
                     self.handleUserCancelledCleanup()
                 } else {
@@ -3085,10 +3073,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 self.handleUserCancelledCleanup()
             } catch {
                 let rawDesc = String(describing: error)
-                logger.error("Agent loop error (\(label)): \(rawDesc)")
-                if let llmErr = error as? LLMError {
-                    logger.error("Agent loop LLMError detail: \(llmErr.errorDescription ?? "nil")")
-                }
+                let safeReason = AgentActivityFailureClassifier.reason(for: rawDesc)
+                logger.error("Agent loop rerun error label=\(label) type=\(String(describing: type(of: error))) reason=\(safeReason.rawValue)")
                 if self.userDidCancel {
                     self.handleUserCancelledCleanup()
                 } else {
@@ -3431,7 +3417,18 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         logger.info("✏️ cancelEdit")
     }
 
-    func cancel() {
+    func cancel(queuePolicy: AgentQueueStopPolicy = .continueQueuedPrompts) {
+        if queuePolicy == .discardQueuedPrompts {
+            let queuedIds = Set(promptQueue.map(\.id))
+            if !queuedIds.isEmpty {
+                messages.removeAll { message in
+                    guard let queuedId = message.queuedPromptId else { return false }
+                    return queuedIds.contains(queuedId)
+                }
+                promptQueue.removeAll()
+            }
+            logger.info("⏹️ cancel(discard queue) — discarded \(queuedIds.count) queued prompt(s)")
+        }
         let lastBlocks = (messages.last?.role == .assistant) ? messages.last!.blocks.count : -1
         let lastRole = messages.last.map { $0.role == .assistant ? "assistant" : "user" } ?? "nil"
         logger.info("⏹️ cancel() START session=\(self.sessionId ?? "nil") isProcessing=\(self.isProcessing) lastRole=\(lastRole) lastBlocks=\(lastBlocks) currentTask=\(self.currentTask != nil)")
@@ -3505,10 +3502,17 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // If there are queued prompts remaining, spawn a new task to continue
         // processing them. The old task is cancelled (stops the current agent
         // loop) but the queue should keep draining.
-        if !promptQueue.isEmpty && !isCompacting {
+        if queuePolicy.shouldResumeQueue && !promptQueue.isEmpty && !isCompacting {
             logger.info("⏹️ cancel() — \(promptQueue.count) queued prompt(s) remain, restarting drain")
             resumeQueueAfterCancel()
         }
+    }
+
+    /// Stop the current run and discard every prompt waiting behind it.
+    /// Queued chat rows are removed as one atomic UI update before `cancel()`
+    /// runs, so its legacy auto-resume branch cannot restart execution.
+    func cancelAndClearQueue() {
+        cancel(queuePolicy: .discardQueuedPrompts)
     }
 
     /// Resume queue processing after the user stopped the current task.
@@ -3640,7 +3644,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 break
             } catch {
                 let rawDesc = String(describing: error)
-                logger.error("Agent loop (queued-drain) error: \(rawDesc)")
+                let safeReason = AgentActivityFailureClassifier.reason(for: rawDesc)
+                logger.error("Agent loop queued-drain error type=\(String(describing: type(of: error))) reason=\(safeReason.rawValue)")
                 if self.userDidCancel {
                     self.handleUserCancelledCleanup()
                 } else {
@@ -3658,9 +3663,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     // line 5124 placeholder is still in `messages`.
                     let lastRoleStr = self.messages.last.map { "\($0.role)" } ?? "nil"
                     let lastBlocks = self.messages.last?.blocks.count ?? -1
-                    let lastErr = self.messages.last?.error ?? "nil"
-                    let tail3 = self.messages.suffix(3).map { "\($0.role)(\($0.blocks.count)blk err=\($0.error ?? "nil"))" }.joined(separator: " > ")
-                    AppLogger(category: "StreamError").error("[StreamError] catch displayDesc=\"\(displayDesc.prefix(120))\" msgCount=\(self.messages.count) lastRole=\(lastRoleStr) lastBlocks=\(lastBlocks) lastErr=\(lastErr) tail=\(tail3)")
+                    let tailShape = self.messages.suffix(3).map { "\($0.role)(\($0.blocks.count)blk hasError=\($0.error != nil))" }.joined(separator: " > ")
+                    AppLogger(category: "StreamError").error("[StreamError] reason=\(safeReason.rawValue) msgCount=\(self.messages.count) lastRole=\(lastRoleStr) lastBlocks=\(lastBlocks) tailShape=\(tailShape)")
                     // [T-ios-retry-tool-blocks-invisible / T-stream-empty-banner-trace]
                     // Resolve the streaming assistant by the last ASSISTANT row,
                     // not messages.last. A queued .user message (enqueuePrompt
@@ -3859,7 +3863,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
     /// [T-ios-queued-candidate-not-onscreen] Snapshot the prompt queue
     /// (`promptQueue`, the pending queued sends) and the on-screen message array
-    /// (`messages`) — last 20 of each as compact summaries — to trace the
+    /// (`messages`) — last 20 of each as metadata-only summaries — to trace the
     /// "queued candidate executed but never rendered" bug. Grep `[QueueDiag]`.
     func dumpQueueSnapshot(_ tag: String) {
         // On-screen message array (last 20).
@@ -3877,18 +3881,14 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 }
             }()
             let queuedMark = m.isQueued ? " QUEUED(\(m.queuedPromptId?.uuidString.prefix(8) ?? "?"))" : ""
-            let text = m.content.isEmpty
-                ? (m.blocks.isEmpty ? "" : m.blocks.compactMap { $0.content.isEmpty ? nil : $0.content }.first ?? "")
-                : m.content
-            let preview = text.replacingOccurrences(of: "\n", with: "⏎").prefix(50)
-            msgLines.append("  msg[\(idx)] \(roleStr) blocks=\(m.blocks.count)\(queuedMark) id=\(m.id.uuidString.prefix(8)) \"\(preview)\"")
+            let contentLength = m.content.count + m.blocks.reduce(0) { $0 + $1.content.count }
+            msgLines.append("  msg[\(idx)] \(roleStr) blocks=\(m.blocks.count)\(queuedMark) id=\(m.id.uuidString.prefix(8)) contentLength=\(contentLength)")
         }
         // Prompt queue (last 20).
         let queueTail = promptQueue.suffix(20)
         var queueLines: [String] = []
         for p in queueTail {
-            let preview = p.text.replacingOccurrences(of: "\n", with: "⏎").prefix(50)
-            queueLines.append("  q[\(p.id.uuidString.prefix(8))] att=\(p.attachments.count) \"\(preview)\"")
+            queueLines.append("  q[\(p.id.uuidString.prefix(8))] att=\(p.attachments.count) textLength=\(p.text.count)")
         }
         logger.info("📋[QueueDiag] \(tag) — promptQueue=\(self.promptQueue.count) messages=\(self.messages.count) isProcessing=\(self.isProcessing)\nPROMPT-QUEUE (last \(queueTail.count)):\n\(queueLines.joined(separator: "\n"))\nMESSAGES (last \(msgTail.count)):\n\(msgLines.joined(separator: "\n"))")
     }
@@ -3935,8 +3935,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 }
             }()
             let committedMark = i < so ? "C" : "·"  // C = already committed to agentHistory
-            let preview = b.content.replacingOccurrences(of: "\n", with: "⏎").prefix(40)
-            logger.info("⏹️[StopDiag]   [\(committedMark)] block[\(i)] kind=\(kindStr) status=\(statusStr) len=\(b.content.count) tuId=\(b.toolUseId?.prefix(8) ?? "-") \"\(preview)\"")
+            logger.info("⏹️[StopDiag]   [\(committedMark)] block[\(i)] kind=\(kindStr) status=\(statusStr) len=\(b.content.count) tuId=\(b.toolUseId?.prefix(8) ?? "-")")
         }
     }
 
@@ -5682,10 +5681,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // stay at ~0 height indefinitely without this explicit nudge.
         if wasEmpty && !text.isEmpty,
            let message = messages.first(where: { $0.blocks.contains(where: { $0.id == block.id }) }) {
-            let prefix = String(text.prefix(30))
             let blockIdx = message.blocks.firstIndex(where: { $0.id == block.id }) ?? -1
             let prevBlockKind: String = blockIdx > 0 ? "\(message.blocks[blockIdx - 1].kind)" : "none"
-            logger.info("[TextDrift] empty→filled blockIdx=\(blockIdx) prevBlockKind=\(prevBlockKind) len=\(text.count) text=\"\(prefix)\"")
+            logger.info("[TextDrift] empty→filled blockIdx=\(blockIdx) prevBlockKind=\(prevBlockKind) len=\(text.count)")
             blockContentFilledSignal.send((messageId: message.id, blockId: block.id))
         }
     }
@@ -5827,4 +5825,3 @@ enum LLMProviderError: LocalizedError {
         }
     }
 }
-

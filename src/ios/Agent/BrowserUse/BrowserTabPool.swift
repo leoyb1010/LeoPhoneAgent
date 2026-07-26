@@ -251,6 +251,11 @@ final class BrowserTabPool: ObservableObject {
     private var tabSerialChains: [Int: (token: UInt64, task: Task<Void, Never>)] = [:]
     private var nextSerialToken: UInt64 = 0
 
+    /// One race box per browser action currently inside `manager.execute`.
+    /// This is separate from `Tab.inUse`, which intentionally remains true
+    /// during the post-action grace window.
+    private var activeActionRaces: [Int: RaceBox] = [:]
+
     /// Max time a browser_use call waits to acquire a tab id's serial slot, i.e.
     /// for the in-flight operation on that SAME tab to finish. This is the
     /// LOCK-WAIT timeout ONLY — it is deliberately separate from the per-action
@@ -318,6 +323,9 @@ final class BrowserTabPool: ObservableObject {
         tabs.contains { $0.manager.isLoading }
     }
 
+    /// True only while an agent browser action is actively awaited.
+    var hasActiveAgentAction: Bool { !activeActionRaces.isEmpty }
+
     /// Stop in-flight page loads on EVERY tab. A hung `navigate` awaits the
     /// manager's navigationContinuation, which `stopLoading()` resolves (WebKit
     /// fires didFailProvisionalNavigation/cancelled), so the awaited
@@ -333,6 +341,25 @@ final class BrowserTabPool: ObservableObject {
             stopped += 1
         }
         return stopped
+    }
+
+    /// Cancel every in-flight agent browser action, including non-navigation
+    /// work such as JavaScript, text extraction, screenshots and DOM polling.
+    /// Each race completes immediately with `CancellationError`; the normal
+    /// execute catch path then tears down the affected tab so a late WebKit
+    /// callback cannot mutate the live browsing surface.
+    @discardableResult
+    func cancelAllAgentActions() -> Int {
+        let races = Array(activeActionRaces.values)
+        guard !races.isEmpty else { return 0 }
+        for tab in tabs where activeActionRaces[tab.id] != nil {
+            tab.manager.stopLoading()
+        }
+        for race in races {
+            race.finish(.failure(CancellationError()))
+        }
+        logger.info("Cancelled \(races.count) in-flight browser action(s)")
+        return races.count
     }
 
     init() {
@@ -964,6 +991,9 @@ final class BrowserTabPool: ObservableObject {
                 r.text = "[Note] Reused existing tab \(targetId): it previously showed \(sw.oldURL) and has now been navigated to the new URL. Any earlier content on tab \(targetId) is gone; use tab_id \(targetId) to operate on THIS page.\n" + r.text
             }
             result = Self.stampTabId(r, targetId: targetId)
+        } catch is CancellationError {
+            cancelInFlightTab(id: targetId)
+            throw CancellationError()
         } catch is ActionDeadTimeout {
             // [T-browser-bg-stuck-diag] The action blew past actionDeadTimeout.
             // The tab is wedged and unrecoverable in place; drop it and open a
@@ -1076,6 +1106,12 @@ final class BrowserTabPool: ObservableObject {
         // loser. The wedged operation task is abandoned (it leaks until its
         // WebView is torn down by the tab rebuild, which is exactly what we do).
         let box = RaceBox()
+        activeActionRaces[targetId] = box
+        defer {
+            if activeActionRaces[targetId] === box {
+                activeActionRaces.removeValue(forKey: targetId)
+            }
+        }
         let opTask = Task {
             do { let r = try await operation(); box.finish(.success(r)) }
             catch { box.finish(.failure(error)) }
@@ -1088,10 +1124,30 @@ final class BrowserTabPool: ObservableObject {
         }
         timer.resume()
         box.onFinish = { timer.cancel(); opTask.cancel() }
-        let raced: BrowserActionResult = try await withCheckedThrowingContinuation { cont in
-            box.attach(cont)
+        let raced: BrowserActionResult = try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { cont in
+                box.attach(cont)
+            }
+        } onCancel: {
+            box.finish(.failure(CancellationError()))
         }
         return raced
+    }
+
+    /// Drop the surface used by a user-cancelled action. Preserve its URL so a
+    /// later browser request can restore context, but do not auto-open a new tab:
+    /// Stop should be quiet and should not create work the user did not request.
+    private func cancelInFlightTab(id: Int) {
+        guard let idx = tabs.firstIndex(where: { $0.id == id }) else { return }
+        let tab = tabs[idx]
+        let url = tab.manager.currentURL
+        if !url.isEmpty { savedURLs[id] = url }
+        tab.graceExpiryTask?.cancel()
+        tab.manager.stopLoading()
+        tabs.remove(at: idx)
+        if selectedTabId == id { selectedTabId = tabs.first?.id ?? 0 }
+        persistURLs()
+        logger.info("Cancelled browser action and released tab \(id) (urlPreserved=\(!url.isEmpty))")
     }
 
     /// Drop a wedged tab and open a fresh replacement. Returns the new tab id.
@@ -1200,7 +1256,7 @@ final class BrowserTabPool: ObservableObject {
                 if !url.isEmpty {
                     savedURLs[tab.id] = url
                 }
-                logger.info("Evicting idle tab \(tab.id) (idle \(String(format: "%.0f", idle))s, url=\(url.prefix(60)))")
+                logger.info("Evicting idle tab \(tab.id) (idle \(String(format: "%.0f", idle))s, hasURL=\(!url.isEmpty))")
                 evicted += 1
                 return true
             }
@@ -1234,7 +1290,7 @@ final class BrowserTabPool: ObservableObject {
             selectedTabId = tabs.first?.id ?? 0
         }
         persistURLs()
-        logger.info("Evicted tab \(id) at registry request (url=\(url.prefix(60)))")
+        logger.info("Evicted tab \(id) at registry request (hasURL=\(!url.isEmpty))")
     }
 
     /// Preempt an in-use tab on behalf of the registry. Saves the URL,
@@ -1258,7 +1314,7 @@ final class BrowserTabPool: ObservableObject {
             selectedTabId = tabs.first?.id ?? 0
         }
         persistURLs()
-        logger.info("Preempted in-use tab \(id) at registry request (url=\(url.prefix(60)))")
+        logger.info("Preempted in-use tab \(id) at registry request (hasURL=\(!url.isEmpty))")
     }
 
     /// Evict all non-inUse tabs in response to a memory warning. Returns
@@ -1411,7 +1467,7 @@ final class BrowserTabPool: ObservableObject {
     /// Restore a previously saved URL into a newly created tab.
     private func restoreSavedURL(for tabId: Int, manager: BrowserUseManager) {
         if let url = savedURLs.removeValue(forKey: tabId) {
-            logger.info("Restoring saved URL for tab \(tabId): \(url.prefix(60))")
+            logger.info("Restoring saved URL for tab \(tabId), urlLength=\(url.count)")
             manager.loadURL(url)
             persistURLs()
         }

@@ -305,6 +305,7 @@ struct BrowserSheetView: View {
 /// Globe icon with a spinning arc border when loading.
 private struct BrowserAddressBarIcon: View {
     let isLoading: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var spinning = false
 
     var body: some View {
@@ -318,9 +319,10 @@ private struct BrowserAddressBarIcon: View {
                     .trim(from: 0, to: 0.3)
                     .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
                     .frame(width: 22, height: 22)
-                    .rotationEffect(.degrees(spinning ? 360 : 0))
-                    .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: spinning)
-                    .onAppear { spinning = true }
+                    .rotationEffect(.degrees(reduceMotion ? 0 : (spinning ? 360 : 0)))
+                    .animation(reduceMotion ? nil : .linear(duration: 1).repeatForever(autoreverses: false), value: spinning)
+                    .onAppear { spinning = !reduceMotion }
+                    .onChange(of: reduceMotion) { reduced in spinning = !reduced }
                     .onDisappear { spinning = false }
                     .transition(.identity)
             }
@@ -335,6 +337,7 @@ private struct BrowserAddressBarIcon: View {
 /// Blocks all user interaction on the webview while providing a visual cue.
 private struct AgentBrowsingOverlay: View {
     var onTakeover: (() -> Void)?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var breathing = false
 
     var body: some View {
@@ -347,8 +350,8 @@ private struct AgentBrowsingOverlay: View {
                 Circle()
                     .fill(Color.accentColor)
                     .frame(width: 8, height: 8)
-                    .opacity(breathing ? 1.0 : 0.3)
-                    .shadow(color: Color.accentColor.opacity(breathing ? 0.8 : 0), radius: breathing ? 8 : 0)
+                    .opacity(reduceMotion ? 1.0 : (breathing ? 1.0 : 0.3))
+                    .shadow(color: Color.accentColor.opacity(reduceMotion ? 0 : (breathing ? 0.8 : 0)), radius: reduceMotion ? 0 : (breathing ? 8 : 0))
 
                 Text("LeoPhoneAgent is browsing")
                     .font(.system(size: 13, weight: .medium))
@@ -376,9 +379,13 @@ private struct AgentBrowsingOverlay: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle()) // capture all touches
         .onAppear {
+            guard !reduceMotion else { return }
             withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
                 breathing = true
             }
+        }
+        .onChange(of: reduceMotion) { reduced in
+            if reduced { breathing = false }
         }
     }
 }

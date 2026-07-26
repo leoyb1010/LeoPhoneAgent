@@ -34,16 +34,15 @@
 			</array>
 		</dict>
 	</array>
-	<key>BGTaskSchedulerPermittedIdentifiers</key>
-	<array>
-		<string>com.leoyuan.leophoneagent.liveactivity-refresh</string>
-	</array>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
-		<string>fetch</string>
 		<string>location</string>
-		<string>remote-notification</string>
+		<string>processing</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.leoyuan.leophoneagent.agent.*</string>
 	</array>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
@@ -66,7 +65,7 @@
 	<key>NSFaceIDUsageDescription</key>
 	<string>LeoPhoneAgent uses Face ID to protect locked chat sessions so only you can view their contents.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>LeoPhoneAgent needs photo library access to attach images to AI conversations.</string>
+	<string>LeoPhoneAgent allows the AI agent to find, attach, organize, and delete photos or videos when you explicitly request those actions.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>LeoPhoneAgent needs permission to save videos and images to your photo library.</string>
 	<key>NSHealthShareUsageDescription</key>

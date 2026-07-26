@@ -103,7 +103,7 @@ final class DebugJSONRPC: @unchecked Sendable {
     private static let responseMeta: [String: Any] = {
         let info = Bundle.main.infoDictionary ?? [:]
         return [
-            "app": "MinisApp",
+            "app": "LeoPhoneAgent",
             "version": info["CFBundleShortVersionString"] as? String ?? "?",
             "build": info["CFBundleVersion"] as? String ?? "?",
             "device": DeviceIdentity.deviceName,

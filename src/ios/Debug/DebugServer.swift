@@ -153,7 +153,7 @@ final class DebugServer: @unchecked Sendable {
         func schemaJSON() -> String {
             let info = Bundle.main.infoDictionary ?? [:]
             return """
-            {"app":"MinisApp","version":"\(info["CFBundleShortVersionString"] as? String ?? "?")",\
+            {"app":"LeoPhoneAgent","version":"\(info["CFBundleShortVersionString"] as? String ?? "?")",\
             "rpc":"jsonrpc-2.0","auth":"\(auth.authRequired ? "v1" : "off")",\
             "pair_path":"/pair","rpc_path":"/rpc","skill_path":"/skill"}
             """

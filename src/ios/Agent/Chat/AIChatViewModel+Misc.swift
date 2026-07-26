@@ -55,6 +55,14 @@ extension AIChatViewModel {
         }
     }
 
+    /// Explicit recovery path for the kernel failure overlay. A retry is only
+    /// accepted from the failed state so it cannot race an active boot.
+    func retryKernelBoot() {
+        guard case .failed = kernelStatus else { return }
+        kernelStatus = .notBooted
+        ensureKernelBooted()
+    }
+
     // MARK: - Prompt Queue
 
     /// Queue the current input text as a prompt to be injected into the running agent loop.
@@ -62,7 +70,7 @@ extension AIChatViewModel {
     func enqueuePrompt() {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !attachments.isEmpty, isProcessing else { return }
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        LeoHaptics.impact(.light)
         let pendingAttachments = attachments
         let prompt = QueuedPrompt(text: text, attachments: pendingAttachments)
         promptQueue.append(prompt)
@@ -75,10 +83,9 @@ extension AIChatViewModel {
         inputText = ""
         attachments = []
         logger.info("Enqueued prompt (\(text.count)ch, \(pendingAttachments.count) attachments), queue size=\(self.promptQueue.count)")
-        // [T-ios-queued-candidate-not-onscreen] Log the queued candidate text
-        // (prefix 100) + a queue/messages snapshot so we can later correlate a
-        // queued send against whether it ever rendered.
-        logger.info("📋[QueueDiag] ENQUEUE candidate id=\(prompt.id.uuidString.prefix(8)) text(prefix100)=\"\(text.prefix(100))\"")
+        // Privacy: keep only structural diagnostics. Prompt text must never be
+        // copied into the shareable on-disk log, including Debug builds.
+        logger.info("📋[QueueDiag] ENQUEUE candidate id=\(prompt.id.uuidString.prefix(8)) textLength=\(text.count) attachments=\(pendingAttachments.count)")
         dumpQueueSnapshot("after-enqueue")
     }
 

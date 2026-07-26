@@ -11,6 +11,13 @@
 #define NativeOffloadUtils_h
 
 #import <Foundation/Foundation.h>
+#include "kernel/native_offload.h"
+#include <stdbool.h>
+
+// Some iSH build configurations provide a generated copy of the kernel header
+// earlier on the include path. Repeat the declaration so this utility remains
+// source-compatible while the generated headers catch up.
+extern bool native_offload_handler_cancelled(void);
 
 // ── Error codes ──
 extern NSString *const NOFF_ERR_AUTHORIZATION_DENIED;
@@ -104,5 +111,20 @@ NSString *_Nullable noff_read_stdin(int stdin_fd);
 /// Execute a block, catching any ObjC NSException. Returns YES if no exception.
 /// Use from Swift to safely call UIKit methods that may throw NSInternalInconsistencyException.
 BOOL noff_try_objc(void (NS_NOESCAPE ^_Nonnull block)(void));
+
+// ── Cooperative cancellation ──
+
+/// Returns YES after the guest process running the current native handler has
+/// received a terminating signal.
+BOOL noff_is_cancelled(void);
+
+/// Drop-in cancellable semaphore wait. It polls the native-handler cancellation
+/// flag at 100 ms intervals while preserving the caller's original deadline.
+long noff_dispatch_semaphore_wait(dispatch_semaphore_t semaphore, dispatch_time_t timeout);
+
+// Every Objective-C offload imports this header, so existing framework waits
+// automatically gain cooperative cancellation without duplicating polling code.
+#define dispatch_semaphore_wait(semaphore, timeout) \
+    noff_dispatch_semaphore_wait((semaphore), (timeout))
 
 #endif /* NativeOffloadUtils_h */

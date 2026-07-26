@@ -104,7 +104,7 @@ final class GeminiOAuthManager: NSObject, ObservableObject {
             URLQueryItem(name: "code_challenge_method", value: "S256"),
         ]
         let authorizationURL = components.url!
-        logger.info("Authorization URL: \(authorizationURL.absoluteString)")
+        logger.info("Opening OAuth authorization page for \(authorizationURL.host ?? "provider")")
 
         // 3. Open in-app Safari
         presentSafariViewController(url: authorizationURL)
@@ -316,11 +316,7 @@ final class GeminiOAuthManager: NSObject, ObservableObject {
         logger.info("\(context) Response status: \(statusCode)")
 
         guard (200..<300).contains(statusCode) else {
-            #if DEBUG
-            logger.error("\(context) FAILED — status \(statusCode): \(responseBody.prefix(500))")
-            #else
             logger.error("\(context) FAILED — status \(statusCode)")
-            #endif
             // [T-oauth-refresh-race-classify] Embed the real HTTP status for
             // structured classification (not body substring matching).
             throw LLMError.providerError(message: "\(context) failed: " + OAuthRefreshErrorClassifier.makeErrorMessage(status: statusCode, body: responseBody))
@@ -402,20 +398,10 @@ final class GeminiOAuthManager: NSObject, ObservableObject {
         let (data, response) = try await URLSession.shared.data(for: request)
         let http = response as? HTTPURLResponse
         let statusCode = http?.statusCode ?? -1
-        let responseBody = String(data: data, encoding: .utf8) ?? ""
-
-        #if DEBUG
-        logger.info("loadCodeAssist response: \(statusCode) \(responseBody.prefix(500))")
-        #else
         logger.info("loadCodeAssist response: \(statusCode)")
-        #endif
 
         guard (200..<300).contains(statusCode) else {
-            #if DEBUG
-            logger.warning("loadCodeAssist failed \(statusCode): \(responseBody.prefix(300))")
-            #else
             logger.warning("loadCodeAssist failed \(statusCode)")
-            #endif
             return nil
         }
 
@@ -454,12 +440,7 @@ final class GeminiOAuthManager: NSObject, ObservableObject {
         logger.info("onboardUser response: \(statusCode)")
 
         guard (200..<300).contains(statusCode) else {
-            let body = String(data: data, encoding: .utf8) ?? ""
-            #if DEBUG
-            logger.warning("onboardUser failed \(statusCode): \(body.prefix(300))")
-            #else
-            logger.warning("onboardUser failed \(statusCode)")
-            #endif
+            logger.warning("onboardUser failed \(statusCode), responseBytes=\(data.count)")
             return nil
         }
 
@@ -539,12 +520,7 @@ final class GeminiOAuthManager: NSObject, ObservableObject {
         let statusCode = http?.statusCode ?? -1
 
         guard (200..<300).contains(statusCode) else {
-            let body = String(data: data, encoding: .utf8) ?? ""
-            #if DEBUG
-            logger.error("GCP projects API error \(statusCode): \(body.prefix(300))")
-            #else
-            logger.error("GCP projects API error \(statusCode)")
-            #endif
+            logger.error("GCP projects API error \(statusCode), responseBytes=\(data.count)")
             return nil
         }
 

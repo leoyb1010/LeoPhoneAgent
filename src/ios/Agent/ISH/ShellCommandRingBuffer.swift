@@ -3,7 +3,7 @@ import Foundation
 struct ShellCommandEntry {
     let index: Int
     let startedAt: Date
-    let command: String
+    let commandLength: Int
     let sessionId: String
     var exitCode: Int?
     var duration: TimeInterval?
@@ -33,11 +33,10 @@ actor ShellCommandRingBuffer {
     func didStart(command: String, sessionId: String) -> Int {
         let idx = counter
         counter += 1
-        let trimmed = command.count > 500 ? String(command.prefix(500)) : command
         let entry = ShellCommandEntry(
             index: idx,
             startedAt: Date(),
-            command: trimmed,
+            commandLength: command.count,
             sessionId: sessionId
         )
         entries.append(entry)

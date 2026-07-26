@@ -86,6 +86,7 @@ struct MinisApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @AppStorage("appearanceMode") private var appearanceMode: Int = 0
     @AppStorage("appLanguage") private var appLanguage: String = ""
+    @AppStorage("leo.releaseNotes.lastPresentedVersion") private var lastPresentedReleaseVersion: String = ""
     @StateObject private var shareCoordinator = ShareCoordinator.shared
     @ObservedObject private var fontSettings = FontSettings.shared
     @ObservedObject private var configConfirmGate = ConfigConfirmationGate.shared
@@ -95,6 +96,7 @@ struct MinisApp: App {
     /// immersive WebView (back-edge swipe / programmatic dismiss).
     @State private var pendingWebAppPresentation: WebAppPresentation?
     @State private var pendingURLWhileLocked: URL?
+    @State private var isPresentingReleaseNotes = false
 
     #if DEBUG
     let debugServer = DebugServer()
@@ -193,6 +195,13 @@ struct MinisApp: App {
                 )) { _ in
                     ConfigConfirmSheet(gate: configConfirmGate)
                 }
+                .sheet(isPresented: $isPresentingReleaseNotes) {
+                    LeoReleaseNotesView(mode: .latest) {
+                        lastPresentedReleaseVersion = LeoReleaseCatalog.currentVersion
+                        isPresentingReleaseNotes = false
+                    }
+                    .interactiveDismissDisabled()
+                }
                 .environmentObject(shareCoordinator)
                 .preferredColorScheme(
                     appearanceMode == 1 ? .light : appearanceMode == 2 ? .dark : nil
@@ -200,7 +209,7 @@ struct MinisApp: App {
                 .environment(\.locale, appLanguage.isEmpty ? .current : Locale(identifier: appLanguage))
                 .dynamicTypeSize(fontSettings.appBaseScale.dynamicTypeSize)
                 .onOpenURL { url in
-                    shareLog.info("[Share] onOpenURL: \(url.absoluteString)")
+                    shareLog.info("[Share] onOpenURL scheme=\(url.scheme ?? "nil") host=\(url.host ?? "nil")")
                     guard !SessionLockStore.shared.appIsLocked else {
                         shareLog.info("[Share] onOpenURL deferred — app is locked")
                         pendingURLWhileLocked = url
@@ -242,6 +251,11 @@ struct MinisApp: App {
                     // a different WebApp also benefits from this clear.
                     if pendingWebAppPresentation != nil {
                         pendingWebAppPresentation = nil
+                    }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .quickTaskCatalogDidChange)) { _ in
+                    if #available(iOS 17.0, *) {
+                        MinisShortcutsProvider.updateAppShortcutParameters()
                     }
                 }
                 .onAppear {
@@ -295,6 +309,7 @@ struct MinisApp: App {
                     // Activate security scopes for user-mounted external folders
                     // (e.g. Obsidian vault in iCloud Drive). Held for app lifetime.
                     MountedFoldersManager.shared.activateAll()
+                    presentReleaseNotesIfNeeded()
                     // Create /var/minis/mounts/<name> symlinks in the fakefs now
                     // that the rootfs exists and mounts are active.
                     AIChatViewModel.refreshMountedFolderSymlinks()
@@ -323,6 +338,13 @@ struct MinisApp: App {
         .onChange(of: scenePhase) { newPhase in
             handleScenePhaseChange(newPhase)
         }
+    }
+
+    private func presentReleaseNotesIfNeeded() {
+        let currentVersion = LeoReleaseCatalog.currentVersion
+        guard LeoReleaseCatalog.currentRelease != nil,
+              lastPresentedReleaseVersion != currentVersion else { return }
+        isPresentingReleaseNotes = true
     }
 
     // MARK: - Lifecycle Logging
@@ -379,13 +401,20 @@ struct MinisApp: App {
                 // restart. The persisted message tail is the durable source of
                 // truth — scan it on the actor, reconcile on the main actor.
                 let interruptedSessions = await ChatStore.shared.interruptedSessionIds()
+                // Durable run state covers the message-tail blind spot: if iOS
+                // killed the process while plain assistant text was streaming,
+                // the final message shape may not match any tool/Continue
+                // heuristic. AgentActivityLog converts such previous-process
+                // runs to waitingForUser exactly once when its singleton opens.
+                let persistedInterruptedSessions = AgentActivityLog.shared.resumableSessionIds()
                 // Exclude sessions that are actively streaming RIGHT NOW: a
                 // resumed/running session's DB tail still looks "interrupted"
                 // (mid-loop shape), but it is executing, not paused — flagging it
                 // would surface a ⏸ badge on a live, spinning session. Active ⇒
                 // never paused. (Mirrors the Android foreground reconcile.)
                 let activeNow = SessionActivityTracker.shared.activeSessions
-                SessionBadgeStore.shared.reconcileInterruptedSessions(interruptedSessions.subtracting(activeNow))
+                let allInterrupted = interruptedSessions.union(persistedInterruptedSessions)
+                SessionBadgeStore.shared.reconcileInterruptedSessions(allInterrupted.subtracting(activeNow))
                 ISHKernel.shared.refreshDns()
 
                 #if DEBUG
@@ -935,7 +964,7 @@ struct MinisApp: App {
     // (`presentWebAppDeepLink`) is the remaining WebApp presentation path.
 
     /// Resolves a transient `WebAppShortcut` reconstructed from a
-    /// `leophoneagent://open?session=…&path=…` deep link (openminis.app launcher
+    /// `leophoneagent://open?session=…&path=…` deep link (LeoPhoneAgent launcher
     /// round-trip) and presents the immersive WebView. Does not touch
     /// ChatStore — the launcher URL is fully self-describing.
     @MainActor

@@ -72,7 +72,7 @@ final class OpenRouterOAuthManager: NSObject, ObservableObject {
             URLQueryItem(name: "code_challenge_method", value: "S256"),
         ]
         let authorizationURL = components.url!
-        logger.info("Authorization URL: \(authorizationURL.absoluteString)")
+        logger.info("Opening OAuth authorization page for \(authorizationURL.host ?? "provider")")
 
         // 3. Open in-app Safari
         presentSafariViewController(url: authorizationURL)
@@ -141,16 +141,8 @@ final class OpenRouterOAuthManager: NSObject, ObservableObject {
         let responseBody = String(data: data, encoding: .utf8) ?? "<binary>"
 
         logger.info("Response status: \(statusCode)")
-        #if DEBUG
-        logger.info("Response body: \(responseBody.prefix(500))")
-        #endif
-
         guard (200..<300).contains(statusCode) else {
-            #if DEBUG
-            logger.error("Key exchange FAILED — status \(statusCode): \(responseBody)")
-            #else
             logger.error("Key exchange FAILED — status \(statusCode)")
-            #endif
             throw LLMError.providerError(message: "OpenRouter key exchange failed: \(responseBody)")
         }
 

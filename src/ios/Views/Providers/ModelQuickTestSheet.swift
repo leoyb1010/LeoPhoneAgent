@@ -191,13 +191,29 @@ final class TestSession: ObservableObject {
     // MARK: - Per-kind test
 
     /// Exposed as `performTestStatic` for the debug server Quick Test endpoint.
-    static func performTestStatic(_ kind: ModelQuickTestSheet.Kind, entry: ModelEntry) async throws -> TestRun.State {
-        try await performTest(kind, entry: entry)
+    static func performTestStatic(
+        _ kind: ModelQuickTestSheet.Kind,
+        entry: ModelEntry,
+        onboardingInstance: ProviderInstance? = nil
+    ) async throws -> TestRun.State {
+        try await performTest(kind, entry: entry, onboardingInstance: onboardingInstance)
     }
-    private static func performTest(_ kind: ModelQuickTestSheet.Kind, entry: ModelEntry) async throws -> TestRun.State {
+    private static func performTest(
+        _ kind: ModelQuickTestSheet.Kind,
+        entry: ModelEntry,
+        onboardingInstance: ProviderInstance? = nil
+    ) async throws -> TestRun.State {
         switch kind {
         case .text:
-            let provider = try await LLMProviderFactory.makeProvider(for: entry)
+            let provider: any LLMProvider
+            if let onboardingInstance {
+                provider = try await LLMProviderFactory.makeProvider(
+                    instance: onboardingInstance,
+                    model: entry.model
+                )
+            } else {
+                provider = try await LLMProviderFactory.makeProvider(for: entry)
+            }
             let messages = [LLMMessage(
                 role: .user,
                 content: "Hi! I'm setting you up in LeoPhoneAgent. Say hello back in one short, friendly sentence.")]
@@ -207,7 +223,15 @@ final class TestSession: ObservableObject {
             return .text(text.isEmpty ? String(localized: "(empty reply)") : text)
 
         case .imageGen:
-            let provider = try await LLMProviderFactory.makeProvider(for: entry)
+            let provider: any LLMProvider
+            if let onboardingInstance {
+                provider = try await LLMProviderFactory.makeProvider(
+                    instance: onboardingInstance,
+                    model: entry.model
+                )
+            } else {
+                provider = try await LLMProviderFactory.makeProvider(for: entry)
+            }
             guard let openAI = provider as? OpenAIProvider else {
                 throw QuickTestError.unsupported(String(localized: "This model's provider doesn't support image generation via Quick Test."))
             }
@@ -236,7 +260,7 @@ final class TestSession: ObservableObject {
                 guard !data.isEmpty else { throw QuickTestError.noOutput(String(localized: "No audio was returned.")) }
                 return .audio(data)
             }
-            guard let instance = ProviderConfigStore.shared.instance(for: entry.providerInstanceId),
+            guard let instance = onboardingInstance ?? ProviderConfigStore.shared.instance(for: entry.providerInstanceId),
                   let voice = VoiceProviderFactory.make(for: instance), voice.supportsVoiceOutput else {
                 throw QuickTestError.unsupported(String(localized: "This model can't be used for speech output."))
             }
@@ -248,7 +272,7 @@ final class TestSession: ObservableObject {
             return .audio(data)
 
         case .transcription:
-            guard let instance = ProviderConfigStore.shared.instance(for: entry.providerInstanceId),
+            guard let instance = onboardingInstance ?? ProviderConfigStore.shared.instance(for: entry.providerInstanceId),
                   let voice = VoiceProviderFactory.make(for: instance), voice.supportsVoiceInput else {
                 throw QuickTestError.unsupported(String(localized: "This model can't be used for transcription."))
             }

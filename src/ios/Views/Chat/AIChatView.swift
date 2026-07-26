@@ -65,26 +65,6 @@ private final class CachedViewModel: ObservableObject {
     }
 }
 
-// MARK: - Color Palette (clean light theme)
-
-enum ChatColors {
-    static let background = Color(UIColor.systemBackground)
-    static let secondaryBg = Color(UIColor.secondarySystemBackground)
-    static let inputIconBg = Color(UIColor.secondarySystemBackground)
-    static let inputIconBorder = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.35, alpha: 1) : UIColor(white: 0, alpha: 0) })
-    static let inputBg = Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 0.12, alpha: 1) : .white })
-    static let inputBorder = Color(UIColor.separator)
-    static let primaryText = Color(UIColor.label)
-    static let secondaryText = Color(UIColor.secondaryLabel)
-    static let tertiaryText = Color(UIColor.tertiaryLabel)
-    static let userBubble = Color(UIColor.tertiarySystemFill)
-    static let toolBg = Color(UIColor.tertiarySystemGroupedBackground)
-    static let toolBorder = Color(UIColor.separator).opacity(0.5)
-    static let accent = Color(UIColor.label)
-    static let sendButton = Color(UIColor.label)
-    static let sendButtonDisabled = Color(UIColor.quaternaryLabel)
-}
-
 // MARK: - System Resource Monitor
 
 class SystemResourceMonitor: ObservableObject {
@@ -772,7 +752,7 @@ struct AIChatView: View {
             Text(String(localized: "Messages above this point will be compacted into a summary. This cannot be undone."))
         }
         .offloadPermissionDialog()
-        .environment(\.openMinisURL, OpenMinisURLAction { url in
+        .environment(\.leoOpenURL, LeoOpenURLAction { url in
             handleMinisURLTap(url)
         })
         .environment(\.openImageGallery, OpenImageGalleryAction { presentation in
@@ -1482,7 +1462,7 @@ struct AIChatView: View {
         for (i, item) in pending.items.enumerated() {
             switch item.kind {
             case .inlineText:
-                minisLogger.info("[Share] item[\(i)] inlineText: \(String(item.value.prefix(100)))")
+                minisLogger.info("[Share] item[\(i)] inlineText length=\(item.value.count)")
                 if !vm.inputText.isEmpty { vm.inputText += "\n" }
                 let text = item.value
                 // Append a trailing space to URLs so the cursor doesn't stick to the link
@@ -1498,7 +1478,7 @@ struct AIChatView: View {
                 }
                 let fileURL = dir.appendingPathComponent(item.value)
                 let exists = FileManager.default.fileExists(atPath: fileURL.path)
-                minisLogger.info("[Share] item[\(i)] attachment: \(item.value) exists=\(exists) path=\(fileURL.path)")
+                minisLogger.info("[Share] item[\(i)] attachment exists=\(exists) extension=\(fileURL.pathExtension.lowercased())")
                 guard exists else { continue }
                 // [T-ios-json-open-provider-import-prompt] If this is a JSON
                 // Provider export, don't silently attach it — ask the user
@@ -1523,7 +1503,7 @@ struct AIChatView: View {
         // Clean up shared files after ingestion
         SharedContainerStore.cleanSharedFiles()
 
-        minisLogger.info("[Share] Injection complete. inputText='\(String(self.vm.inputText.prefix(100)))' attachments=\(self.vm.attachments.count)")
+        minisLogger.info("[Share] Injection complete textLength=\(self.vm.inputText.count) attachments=\(self.vm.attachments.count)")
 
         hasInjectedShareContent = true
 
@@ -2228,6 +2208,16 @@ struct AIChatView: View {
                         .foregroundStyle(.red)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 40)
+                    Button {
+                        LeoHaptics.impact(.medium)
+                        vm.retryKernelBoot()
+                    } label: {
+                        Label("Retry Local Environment", systemImage: "arrow.clockwise")
+                            .font(.subheadline.weight(.semibold))
+                            .padding(.horizontal, 16)
+                            .frame(minHeight: LeoTheme.TouchTarget.minimum)
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
             }
             .transition(.opacity)
@@ -2248,6 +2238,15 @@ struct AIChatView: View {
                 .foregroundStyle(.red)
                 .lineLimit(2)
             Spacer()
+            Button {
+                vm.retry()
+                vm.forceScrollToBottom.send()
+            } label: {
+                Label("Retry", systemImage: "arrow.clockwise")
+                    .labelStyle(.titleAndIcon)
+                    .font(.caption.weight(.semibold))
+            }
+            .buttonStyle(.borderless)
             Button { vm.errorMessage = nil } label: {
                 Image(systemName: "xmark")
                     .font(.caption)
@@ -2257,8 +2256,7 @@ struct AIChatView: View {
         .contentShape(Rectangle())
         .onLongPressGesture {
             UIPasteboard.general.string = error
-            let generator = UINotificationFeedbackGenerator()
-            generator.notificationOccurred(.success)
+            LeoHaptics.notification(.success)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
@@ -3043,11 +3041,48 @@ struct AIChatView: View {
                     .foregroundStyle(ChatColors.sendButton)
             }
             .keyboardShortcut(.return, modifiers: .command)
+            .contextMenu {
+                Button {
+                    vm.cancel()
+                } label: {
+                    Label("停止当前任务", systemImage: "stop.circle")
+                }
+                if !vm.promptQueue.isEmpty {
+                    Button(role: .destructive) {
+                        vm.cancelAndClearQueue()
+                    } label: {
+                        Label("停止全部并清空队列", systemImage: "trash")
+                    }
+                }
+            }
+            .accessibilityHint("轻点加入队列；长按可停止任务")
         } else if vm.isProcessing {
-            Button { vm.cancel() } label: {
-                Image(systemName: "stop.circle.fill")
-                    .font(.system(size: 34))
-                    .foregroundStyle(.red)
+            if vm.promptQueue.isEmpty {
+                Button { vm.cancel() } label: {
+                    Image(systemName: "stop.circle.fill")
+                        .font(.system(size: 34))
+                        .foregroundStyle(.red)
+                }
+                .accessibilityLabel("停止当前任务")
+            } else {
+                Menu {
+                    Button {
+                        vm.cancel()
+                    } label: {
+                        Label("停止当前任务并继续队列", systemImage: "stop.circle")
+                    }
+                    Button(role: .destructive) {
+                        vm.cancelAndClearQueue()
+                    } label: {
+                        Label("停止全部并清空队列", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "stop.circle.fill")
+                        .font(.system(size: 34))
+                        .foregroundStyle(.red)
+                }
+                .accessibilityLabel("停止选项")
+                .accessibilityHint("选择停止当前任务后继续队列，或停止全部并清空队列")
             }
         } else {
             Button { performSend() } label: {
@@ -3198,20 +3233,37 @@ struct AIChatView: View {
         vm.inputCaret = caret
     }
 
+    private var currentFailureReason: AgentActivityReason? {
+        guard !vm.isProcessing, !vm.canResume else { return nil }
+        let message = vm.errorMessage
+            ?? vm.messages.last(where: { $0.role == .assistant })?.error
+        guard let message, !message.isEmpty else { return nil }
+        return AgentActivityFailureClassifier.reason(for: message)
+    }
+
     private var inputBar: some View {
         VStack(spacing: 0) {
-            if vm.isSuspended {
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .tint(.yellow)
-                    Text("Waiting for other tasks to complete...")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
+            AgentCurrentStatusCard(
+                sessionId: vm.sessionId ?? sessionId ?? draftId,
+                isProcessing: vm.isProcessing,
+                isSuspended: vm.isSuspended,
+                canResume: vm.canResume,
+                failureReason: currentFailureReason,
+                onRetry: {
+                    vm.retry()
+                    vm.forceScrollToBottom.send()
+                },
+                onResume: {
+                    vm.resume()
+                    vm.forceScrollToBottom.send()
+                },
+                onReviewProvider: {
+                    DeepLinkCoordinator.shared.pendingSettingsTarget = .providers
+                },
+                onRetryKernel: {
+                    vm.retryKernelBoot()
                 }
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity)
-                .background(Color.yellow.opacity(0.08))
-            }
+            )
 
             VStack(spacing: 5) {
                 // Attachment preview chips — 3 per row
@@ -3489,7 +3541,7 @@ struct AIChatView: View {
                         // point so the cue and the release zone agree.
                         let arm = Self.kSendSwipeArmFraction
                         if newProgress >= arm && sendSwipeProgress < arm {
-                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            LeoHaptics.impact(.medium)
                         }
                         sendSwipeProgress = newProgress
                         sendSwipeLocation = value.location

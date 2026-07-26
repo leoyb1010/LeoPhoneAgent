@@ -520,7 +520,7 @@ private final class OAuthURLProtocol: URLProtocol, URLSessionDataDelegate {
         let mutable = (request as NSURLRequest).mutableCopy() as! NSMutableURLRequest
         URLProtocol.setProperty(true, forKey: "OAuthHandled", in: mutable)
 
-        logger.info("[URLProtocol] Intercepted: \(mutable.httpMethod ?? "?") \(mutable.url?.absoluteString ?? "?")")
+        logger.info("[URLProtocol] Intercepted method=\(mutable.httpMethod ?? "?") host=\(mutable.url?.host ?? "?") path=\(mutable.url?.path ?? "?")")
 
         // Look up the correct TokenBox for this request via the UUID header
         let oauthUUID = mutable.value(forHTTPHeaderField: "X-LeoPhoneAgent-OAuth-UUID") ?? ""
@@ -755,18 +755,15 @@ private final class OAuthURLProtocol: URLProtocol, URLSessionDataDelegate {
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         if let http = dataTask.response as? HTTPURLResponse {
             if http.statusCode >= 400 {
-                // Log and capture error response bodies for UI display
+                // Keep the body in the in-memory diagnostic slot for provider
+                // error mapping, but never echo it into automatic logs/traces.
                 if let body = String(data: data, encoding: .utf8) {
-                    #if DEBUG
-                    logger.error("[URLProtocol] Error body (\(http.statusCode)): \(body.prefix(500))")
-                    #else
-                    logger.error("[URLProtocol] Error body (\(http.statusCode))")
-                    #endif
+                    logger.error("[URLProtocol] Error response status=\(http.statusCode) bytes=\(data.count)")
                     LastAPIErrorBody.shared.set(body)
                     #if DEBUG
-                    AgentRequestTrace.shared.setHTTPResponse(status: http.statusCode, body: body)
-                    AgentRequestTrace.shared.step("urlprotocol.errorBody", detail: String(body.prefix(500)))
-                    AgentRequestTrace.shared.finish(error: "HTTP \(http.statusCode): \(body.prefix(200))")
+                    AgentRequestTrace.shared.setHTTPResponse(status: http.statusCode, body: nil)
+                    AgentRequestTrace.shared.step("urlprotocol.errorBody", detail: "bytes=\(data.count)")
+                    AgentRequestTrace.shared.finish(error: "HTTP \(http.statusCode)")
                     #endif
                 }
             }
@@ -774,9 +771,7 @@ private final class OAuthURLProtocol: URLProtocol, URLSessionDataDelegate {
             if let body = String(data: data, encoding: .utf8), !body.isEmpty {
                 LastAPIRequestBody.shared.appendResponseBody(body, on: captureToken)
                 if http.statusCode < 400 {
-                    let preview = String(body.prefix(300))
-                    let suffix = body.count > 300 ? "..." : ""
-                    logger.debug("[URLProtocol] Response data (\(data.count) bytes): \(preview)\(suffix)")
+                    logger.debug("[URLProtocol] Response data bytes=\(data.count)")
                 }
             }
             #endif

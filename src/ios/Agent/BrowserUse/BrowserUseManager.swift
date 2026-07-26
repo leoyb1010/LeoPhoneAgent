@@ -623,7 +623,8 @@ final class BrowserUseManager: NSObject, ObservableObject {
         // the concrete point where a navigate whose page pins the JS thread hangs
         // forever (the app is alive, so nothing else rescues it).
         let metaStart = CFAbsoluteTimeGetCurrent()
-        logger.info("[NavMeta] evalJS_start url=\(url.prefix(80))")
+        let logHost = URL(string: url)?.host ?? "local"
+        logger.info("[NavMeta] evalJS_start host=\(logHost)")
         var scrollX = 0, scrollY = 0, pageW = 0, pageH = 0
         do {
             if let js = try await evaluateJavaScriptBounded(
@@ -638,12 +639,12 @@ final class BrowserUseManager: NSObject, ObservableObject {
                 pageH = info["ph"] as? Int ?? 0
             }
             let ms = Int((CFAbsoluteTimeGetCurrent() - metaStart) * 1000)
-            logger.info("[NavMeta] evalJS_done elapsed=\(ms)ms url=\(url.prefix(80))")
+            logger.info("[NavMeta] evalJS_done elapsed=\(ms)ms host=\(logHost)")
         } catch is JSEvalTimeout {
             let ms = Int((CFAbsoluteTimeGetCurrent() - metaStart) * 1000)
-            logger.warning("[NavMeta] evalJS_TIMEOUT elapsed=\(ms)ms url=\(url.prefix(80)) — WebContent JS thread pinned; returning metadata without scroll/size. This is the backgrounded-hang chokepoint.")
+            logger.warning("[NavMeta] evalJS_TIMEOUT elapsed=\(ms)ms host=\(logHost) — WebContent JS thread pinned; returning metadata without scroll/size.")
         } catch {
-            logger.warning("[NavMeta] evalJS_error \(error.localizedDescription) url=\(url.prefix(80))")
+            logger.warning("[NavMeta] evalJS_error type=\(String(describing: Swift.type(of: error))) host=\(logHost)")
         }
 
         var lines: [String] = []
@@ -682,7 +683,8 @@ final class BrowserUseManager: NSObject, ObservableObject {
             return .error("Cannot navigate to \(scheme):// URLs. Only http://, https://, and leophoneagent:// are supported.")
         }
 
-        logger.info("[NavTiming] load_start url=\(url.absoluteString.prefix(100))")
+        let logHost = url.host ?? "local"
+        logger.info("[NavTiming] load_start host=\(logHost)")
 
         // Record the visit so this domain's cookie backup stays alive (keeps
         // it out of the 30-day retention sweep in CookieBackupStore).
@@ -711,13 +713,13 @@ final class BrowserUseManager: NSObject, ObservableObject {
                     // leaves the wait: this WARN = timed out (didFinish/didFail
                     // never came — network stall or the load never completed);
                     // absence of it = the delegate fired normally.
-                    logger.warning("[NavTiming] navigate_TIMEOUT after \(Int(Self.navigationTimeout))s — no didFinish/didFail; url=\(url.absoluteString.prefix(80))")
+                    logger.warning("[NavTiming] navigate_TIMEOUT after \(Int(Self.navigationTimeout))s — no didFinish/didFail; host=\(logHost)")
                 }
             }
         }
 
         let navDoneMs = Int((CFAbsoluteTimeGetCurrent() - navStart) * 1000)
-        logger.info("[NavTiming] wait_returned elapsed=\(navDoneMs)ms url=\(url.absoluteString.prefix(100))")
+        logger.info("[NavTiming] wait_returned elapsed=\(navDoneMs)ms host=\(logHost)")
 
         currentURL = webView.url?.absoluteString ?? normalized
         pageTitle = webView.title ?? ""
@@ -725,7 +727,7 @@ final class BrowserUseManager: NSObject, ObservableObject {
 
         let meta = await navigationMetadata()
         let totalMs = Int((CFAbsoluteTimeGetCurrent() - navStart) * 1000)
-        logger.info("[NavTiming] total elapsed=\(totalMs)ms url=\(url.absoluteString.prefix(100))")
+        logger.info("[NavTiming] total elapsed=\(totalMs)ms host=\(logHost)")
         return BrowserActionResult(text: meta)
     }
 
@@ -2403,16 +2405,16 @@ final class MinisURLSchemeHandler: NSObject, WKURLSchemeHandler {
 
     func webView(_ webView: WKWebView, start urlSchemeTask: any WKURLSchemeTask) {
         let url = urlSchemeTask.request.url!
-        logger.info("[MinisScheme] start \(url.absoluteString)")
+        logger.info("[MinisScheme] start host=\(url.host ?? "local") pathLength=\(url.path.count)")
 
         guard let fileURL = AIChatViewModel.resolveMinisURL(url) else {
-            logger.warning("[MinisScheme] not found: \(url.absoluteString)")
+            logger.warning("[MinisScheme] not found host=\(url.host ?? "local") pathLength=\(url.path.count)")
             urlSchemeTask.didFailWithError(URLError(.fileDoesNotExist))
             return
         }
 
         guard let data = try? Data(contentsOf: fileURL) else {
-            logger.warning("[MinisScheme] read failed: \(fileURL.path)")
+            logger.warning("[MinisScheme] read failed extension=\(fileURL.pathExtension)")
             urlSchemeTask.didFailWithError(URLError(.cannotOpenFile))
             return
         }
@@ -2427,7 +2429,7 @@ final class MinisURLSchemeHandler: NSObject, WKURLSchemeHandler {
         urlSchemeTask.didReceive(response)
         urlSchemeTask.didReceive(data)
         urlSchemeTask.didFinish()
-        logger.info("[MinisScheme] served \(url.absoluteString) → \(fileURL.lastPathComponent) (\(data.count) bytes, \(mimeType))")
+        logger.info("[MinisScheme] served host=\(url.host ?? "local") bytes=\(data.count) mime=\(mimeType)")
     }
 
     func webView(_ webView: WKWebView, stop urlSchemeTask: any WKURLSchemeTask) {

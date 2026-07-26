@@ -664,7 +664,7 @@ extension AIChatViewModel {
             statusMsg.isCompactLoading = false
             return
         } catch {
-            logger.error("[Compact] Summary generation failed: \(error)")
+            logger.error("[Compact] Summary generation failed type=\(String(describing: type(of: error)))")
             statusMsg.content = "Compaction failed: \(error.localizedDescription)"
             statusMsg.isCompactLoading = false
             return

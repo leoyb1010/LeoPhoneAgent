@@ -17,23 +17,30 @@ enum LLMProviderFactory {
         guard let instance = store.instance(for: entry.providerInstanceId) else {
             throw FactoryError.noInstance
         }
+        return try await makeProvider(instance: instance, model: entry.model)
+    }
+
+    /// Build a provider from an onboarding candidate that has credentials in
+    /// Keychain but has not been persisted to ProviderConfigStore yet. This
+    /// lets Add Provider make a real request before committing the instance.
+    static func makeProvider(instance: ProviderInstance, model: LLMModel) async throws -> any LLMProvider {
         switch instance.providerType {
         case .anthropic:
-            return makeAnthropicProvider(instance: instance, model: entry.model)
+            return makeAnthropicProvider(instance: instance, model: model)
         case .gemini:
-            return await makeGeminiProvider(instance: instance, model: entry.model)
+            return await makeGeminiProvider(instance: instance, model: model)
         case .openAI:
-            return makeOpenAIProvider(instance: instance, model: entry.model)
+            return makeOpenAIProvider(instance: instance, model: model)
         case .antigravity:
-            return await makeAntigravityProvider(instance: instance, model: entry.model)
+            return await makeAntigravityProvider(instance: instance, model: model)
         case .openRouter:
-            return makeOpenRouterProvider(instance: instance, model: entry.model)
+            return makeOpenRouterProvider(instance: instance, model: model)
         case .openAIResponses:
-            return makeOpenAIResponsesProvider(instance: instance, model: entry.model)
+            return makeOpenAIResponsesProvider(instance: instance, model: model)
         case .xAI:
-            return makeXAIProvider(instance: instance, model: entry.model)
+            return makeXAIProvider(instance: instance, model: model)
         case .kimiCode:
-            return makeKimiProvider(instance: instance, model: entry.model)
+            return makeKimiProvider(instance: instance, model: model)
         case .unsupported:
             throw FactoryError.voiceOnlyProvider
         }

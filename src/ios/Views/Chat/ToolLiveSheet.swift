@@ -174,7 +174,7 @@ fileprivate func attributedShellLine(_ text: String) -> AttributedString {
               let scheme = url.scheme?.lowercased(),
               scheme == "http" || scheme == "https" else { continue }
         // NSDataDetector fabricates http:// for bare domains like "github.com/foo",
-        // which matches path fragments in shell output (e.g. "/Users/.../github.com/OpenMinis/...").
+        // which also matches path fragments in shell output.
         // Require the matched substring itself to begin with an explicit http:// or https:// scheme.
         let matched = ns.substring(with: m.range)
         let lower = matched.lowercased()

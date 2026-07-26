@@ -150,7 +150,7 @@ final class SceneDelegate: NSObject, UIWindowSceneDelegate {
     private static func handleURLContexts(_ contexts: Set<UIOpenURLContext>, phase: String) {
         for context in contexts {
             let url = context.url
-            logger.info("[Share] scene \(phase) URL: \(url.absoluteString)")
+            logger.info("[Share] scene \(phase) URL scheme=\(url.scheme ?? "nil") host=\(url.host ?? "nil")")
             Task { @MainActor in
                 let coordinator = ShareCoordinator.shared
                 if ExternalFileImporter.canIngest(url) {

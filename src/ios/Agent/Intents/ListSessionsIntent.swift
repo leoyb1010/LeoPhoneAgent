@@ -1,28 +1,15 @@
 import AppIntents
 import Foundation
 
-/// Lists all chat sessions — useful for automation scripts that need a session ID.
+/// Lists chat sessions as entities so Shortcuts can pass a selected session
+/// directly into follow-up LeoPhoneAgent actions.
 struct ListSessionsIntent: AppIntent {
     static var title: LocalizedStringResource = "List Sessions"
     static var description = IntentDescription("Lists all LeoPhoneAgent chat sessions with their titles and IDs.")
     static var openAppWhenRun = false
 
-    func perform() async throws -> some IntentResult & ReturnsValue<String> {
+    func perform() async throws -> some IntentResult & ReturnsValue<[SessionEntity]> {
         let sessions = await ChatStore.shared.listSessions()
-
-        if sessions.isEmpty {
-            return .result(value: "No sessions found.")
-        }
-
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-
-        let lines = sessions.map { session -> String in
-            let title = session.title ?? "Untitled"
-            let age = formatter.localizedString(for: session.updatedAt, relativeTo: Date())
-            return "\(title) (\(age)) — \(session.id)"
-        }
-
-        return .result(value: lines.joined(separator: "\n"))
+        return .result(value: sessions.map(SessionEntity.init(from:)))
     }
 }

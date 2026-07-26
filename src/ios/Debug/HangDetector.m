@@ -263,7 +263,7 @@ static void runLoopObserverCallback(CFRunLoopObserverRef observer,
 #pragma mark - Monitor thread
 
 static void *monitorThreadMain(void *arg) {
-    pthread_setname_np("com.minis.hangdetector.monitor");
+    pthread_setname_np("com.leophoneagent.hang.monitor");
 
     // Monitor cadence: 1/4 of the threshold, clamped. 50ms is a sane default
     // for a 100ms threshold — gives ~2 samples worth of headroom without

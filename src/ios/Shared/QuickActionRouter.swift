@@ -48,9 +48,9 @@ final class QuickActionRouter: ObservableObject {
     // MARK: - Shortcut item types (also referenced from AppDelegate)
 
     enum ShortcutType {
-        static let newChat = "me.wsen.minis.newChat"
-        static let voiceChat = "me.wsen.minis.voiceChat"
-        static let cameraChat = "me.wsen.minis.cameraChat"
+        static let newChat = "com.leoyuan.leophoneagent.newChat"
+        static let voiceChat = "com.leoyuan.leophoneagent.voiceChat"
+        static let cameraChat = "com.leoyuan.leophoneagent.cameraChat"
     }
 
     /// Install the dynamic shortcut items on the running app. Idempotent —
@@ -109,6 +109,15 @@ final class QuickActionRouter: ObservableObject {
             logger.warning("unknown shortcut type: \(shortcutItem.type)")
             return false
         }
+    }
+
+    /// Shared foreground entry used by the Home Screen widget and deep links.
+    /// Recording starts in the app so iOS can present permissions and a clear
+    /// recording state instead of attempting microphone work in an extension.
+    func startVoiceChat() {
+        logger.info("startVoiceChat from deep link")
+        QuickActionWorkflow.shared.start(.startVoice)
+        postNewChat()
     }
 
     private func postNewChat() {

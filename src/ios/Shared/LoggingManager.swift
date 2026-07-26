@@ -187,8 +187,10 @@ final class LoggingManager: ObservableObject {
                 droppedChunks += 1
                 droppedBytes += bytesRead
                 pendingLock.unlock()
-                // Still tee to console so interactive output is preserved.
-                if teeFd != -1 {
+                // In Privacy Mode a dropped chunk cannot be safely redacted on
+                // this allocation-sensitive overflow path, so omit it from the
+                // console as well. When privacy is off, preserve legacy teeing.
+                if teeFd != -1 && !EnvVarPrivacyStore.isEnabled() {
                     chunk.withUnsafeBytes { ptr in
                         if let base = ptr.baseAddress { _ = Darwin.write(teeFd, base, bytesRead) }
                     }
@@ -218,15 +220,6 @@ final class LoggingManager: ObservableObject {
             pendingLock.unlock()
         }
 
-        // Tee back to the saved stdout so console output is preserved.
-        if teeFd != -1 {
-            data.withUnsafeBytes { ptr in
-                if let base = ptr.baseAddress {
-                    _ = Darwin.write(teeFd, base, data.count)
-                }
-            }
-        }
-
         // Check for date rollover
         rotateLogFileIfNeeded()
 
@@ -244,12 +237,21 @@ final class LoggingManager: ObservableObject {
         // safeWrite still wraps writeData: in ObjC @try/@catch so a closed pipe /
         // invalidated fd can't raise an NSException Swift can't catch.
         if let text = String(data: data, encoding: .utf8) {
+            let safeText = EnvVarRedactor.redactForLocalLog(text)
+            let safeData = Data(safeText.utf8)
+            if teeFd != -1 {
+                safeData.withUnsafeBytes { ptr in
+                    if let base = ptr.baseAddress {
+                        _ = Darwin.write(teeFd, base, safeData.count)
+                    }
+                }
+            }
             let timestamp = timeDateFormatter.string(from: capturedAt)
             let prefixBytes = Array("[\(timestamp)] ".utf8)
             var out = Data()
-            out.reserveCapacity(data.count + prefixBytes.count * 4 + 16)
-            let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
-                .dropLast(text.hasSuffix("\n") ? 1 : 0)
+            out.reserveCapacity(safeData.count + prefixBytes.count * 4 + 16)
+            let lines = safeText.split(separator: "\n", omittingEmptySubsequences: false)
+                .dropLast(safeText.hasSuffix("\n") ? 1 : 0)
             for line in lines {
                 out.append(contentsOf: prefixBytes)
                 out.append(contentsOf: line.utf8)
@@ -257,8 +259,19 @@ final class LoggingManager: ObservableObject {
             }
             if !out.isEmpty { _ = safeWrite(out) }
         } else {
-            // Binary data — write raw
-            _ = safeWrite(data)
+            if EnvVarPrivacyStore.isEnabled() {
+                let timestamp = timeDateFormatter.string(from: capturedAt)
+                _ = safeWrite(Data("[\(timestamp)] [LoggingManager] binary console chunk omitted in Privacy Mode\n".utf8))
+            } else {
+                if teeFd != -1 {
+                    data.withUnsafeBytes { ptr in
+                        if let base = ptr.baseAddress {
+                            _ = Darwin.write(teeFd, base, data.count)
+                        }
+                    }
+                }
+                _ = safeWrite(data)
+            }
         }
 
         // Periodically check file size (~every 4 MB of writes)

@@ -2,6 +2,219 @@ import ActivityKit
 import SwiftUI
 import WidgetKit
 
+// MARK: - Home Screen task status
+
+private struct AgentStatusEntry: TimelineEntry {
+    let date: Date
+    let snapshot: AgentWidgetSnapshot
+}
+
+private struct AgentStatusProvider: TimelineProvider {
+    func placeholder(in context: Context) -> AgentStatusEntry {
+        AgentStatusEntry(
+            date: .now,
+            snapshot: AgentWidgetSnapshot(
+                updatedAt: .now,
+                state: .running,
+                activeCount: 1,
+                sessionId: "preview",
+                title: "Agent task",
+                status: "Working",
+                toolIcon: "sparkles",
+                loopIteration: 2,
+                privacyMode: false
+            )
+        )
+    }
+
+    func getSnapshot(in context: Context, completion: @escaping (AgentStatusEntry) -> Void) {
+        completion(AgentStatusEntry(date: .now, snapshot: AgentWidgetSnapshotStore.load()))
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<AgentStatusEntry>) -> Void) {
+        let entry = AgentStatusEntry(date: .now, snapshot: AgentWidgetSnapshotStore.load())
+        completion(Timeline(entries: [entry], policy: .never))
+    }
+}
+
+struct AgentStatusWidget: Widget {
+    static let kind = "LeoAgentStatusWidget"
+
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: Self.kind, provider: AgentStatusProvider()) { entry in
+            AgentStatusWidgetContainer(entry: entry)
+        }
+        .configurationDisplayName("Leo Task Status")
+        .description("See active tasks and jump straight into voice input.")
+        .supportedFamilies([.systemSmall, .systemMedium])
+    }
+}
+
+private struct AgentStatusWidgetContainer: View {
+    let entry: AgentStatusEntry
+
+    @ViewBuilder
+    var body: some View {
+        if #available(iOSApplicationExtension 17.0, *) {
+            AgentStatusWidgetView(entry: entry)
+                .containerBackground(.fill.tertiary, for: .widget)
+                .widgetURL(entry.snapshot.destinationURL)
+        } else {
+            AgentStatusWidgetView(entry: entry)
+                .padding()
+                .background(Color(uiColor: .secondarySystemBackground))
+                .widgetURL(entry.snapshot.destinationURL)
+        }
+    }
+}
+
+private struct AgentStatusWidgetView: View {
+    @Environment(\.widgetFamily) private var family
+    let entry: AgentStatusEntry
+
+    var body: some View {
+        if family == .systemSmall {
+            smallView
+        } else {
+            mediumView
+        }
+    }
+
+    private var smallView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            header
+            Spacer(minLength: 2)
+            Image(systemName: entry.snapshot.state.symbol)
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(entry.snapshot.state.tint)
+            Text(entry.snapshot.primaryText)
+                .font(.headline)
+                .lineLimit(2)
+            Text(entry.snapshot.secondaryText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+    }
+
+    private var mediumView: some View {
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                header
+                Spacer(minLength: 2)
+                Label(entry.snapshot.primaryText, systemImage: entry.snapshot.state.symbol)
+                    .font(.headline)
+                    .foregroundStyle(entry.snapshot.state.tint)
+                    .lineLimit(1)
+                Text(entry.snapshot.secondaryText)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 8)
+            Link(destination: URL(string: "leophoneagent://voice")!) {
+                VStack(spacing: 6) {
+                    Image(systemName: "mic.fill")
+                        .font(.title3.weight(.semibold))
+                    Text("Voice")
+                        .font(.caption.weight(.semibold))
+                }
+                .foregroundStyle(.white)
+                .frame(width: 64, height: 64)
+                .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
+            .accessibilityLabel("Open voice input")
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "sparkles")
+                .foregroundStyle(Color.accentColor)
+            Text("LeoPhoneAgent")
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+            Spacer(minLength: 0)
+            if entry.snapshot.activeCount > 1 {
+                Text("\(entry.snapshot.activeCount)")
+                    .font(.caption.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+private extension AgentWidgetSnapshot {
+    var destinationURL: URL {
+        if !sessionId.isEmpty,
+           let encoded = sessionId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+           let url = URL(string: "leophoneagent://sessions/\(encoded)") {
+            return url
+        }
+        return URL(string: "leophoneagent://voice")!
+    }
+
+    var primaryText: String {
+        if privacyMode {
+            switch state {
+            case .idle: return "Ready"
+            case .running: return activeCount == 1 ? "1 task running" : "\(activeCount) tasks running"
+            case .suspended: return "Task paused"
+            case .completed: return "Task completed"
+            case .failed: return "Task needs attention"
+            }
+        }
+        return title.isEmpty ? state.fallbackTitle : title
+    }
+
+    var secondaryText: String {
+        if privacyMode { return state.privacyStatus }
+        if !status.isEmpty { return status }
+        return state.privacyStatus
+    }
+}
+
+private extension AgentWidgetSnapshot.State {
+    var symbol: String {
+        switch self {
+        case .idle: return "mic.fill"
+        case .running: return "sparkles"
+        case .suspended: return "pause.circle.fill"
+        case .completed: return "checkmark.circle.fill"
+        case .failed: return "exclamationmark.circle.fill"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .idle, .running: return .accentColor
+        case .suspended: return .orange
+        case .completed: return .green
+        case .failed: return .red
+        }
+    }
+
+    var fallbackTitle: String {
+        switch self {
+        case .idle: return "Ready"
+        case .running: return "Working"
+        case .suspended: return "Paused"
+        case .completed: return "Completed"
+        case .failed: return "Needs attention"
+        }
+    }
+
+    var privacyStatus: String {
+        switch self {
+        case .idle: return "Tap to speak"
+        case .running: return "Open for live progress"
+        case .suspended: return "Open to resume"
+        case .completed: return "Open result"
+        case .failed: return "Open recovery options"
+        }
+    }
+}
+
 @available(iOSApplicationExtension 16.2, *)
 struct AgentLiveActivityWidget: Widget {
     var body: some WidgetConfiguration {

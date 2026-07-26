@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import BackgroundTasks
 
 private let logger = AppLogger(category: "AIChatVM")
 
@@ -11,6 +12,28 @@ extension AIChatViewModel {
 
     func beginBackgroundProcessing() {
         guard backgroundTaskID == .invalid else { return }
+        let continuedKey = continuedProcessingSessionKey ?? sessionId ?? draftId ?? UUID().uuidString
+        continuedProcessingSessionKey = continuedKey
+        if #available(iOS 26.0, *) {
+            AgentContinuedProcessingManager.shared.begin(
+                sessionKey: continuedKey,
+                title: "LeoPhoneAgent task",
+                subtitle: "Preparing",
+                onExpiration: { [weak self] in
+                    guard let self else { return }
+                    logger.warning("[Background][Continued] system expiration session=\(continuedKey.prefix(8))")
+                    self.backgroundSuspended = true
+                    SessionActivityTracker.shared.updateActivityPhase(
+                        continuedKey,
+                        phase: .suspended,
+                        reason: .backgroundTimeExpired
+                    )
+                    BackgroundInterruptionTracker.shared.recordInterruption()
+                    self.stopCurrentCommand()
+                    self.endBackgroundProcessing()
+                }
+            )
+        }
         let remaining = UIApplication.shared.backgroundTimeRemaining
         let remainingStr = remaining > 99999 ? "unlimited" : String(format: "%.1fs", remaining)
         let sessions = SessionActivityTracker.shared.activeSessions.count
@@ -29,8 +52,12 @@ extension AIChatViewModel {
             // `delay:` tool waits (and any in-flight command) even though the
             // app was in no danger of termination. Instead, just re-arm a fresh
             // finite task to reset the clock and let the agent loop continue.
-            if BackgroundKeepAliveManager.shared.enhancedBackgroundEffective {
-                logger.info("[Background] Finite task expiring but silent-audio keep-alive is active — re-arming, NOT cancelling")
+            let continuedProcessingActive: Bool = {
+                guard #available(iOS 26.0, *) else { return false }
+                return AgentContinuedProcessingManager.shared.isActive(sessionKey: continuedKey)
+            }()
+            if BackgroundKeepAliveManager.shared.enhancedBackgroundEffective || continuedProcessingActive {
+                logger.info("[Background] Finite task expiring with an active background execution grant; re-arming")
                 // End only the expiring task id (no completion notification),
                 // then immediately request a new one. Order matters: capture the
                 // old id, invalidate, re-begin.
@@ -48,6 +75,13 @@ extension AIChatViewModel {
             // resume when foregrounded.
             logger.warning("[Background] Task expiring (no keep-alive) — suspending agent loop")
             self.backgroundSuspended = true
+            if let activityKey = self.sessionId ?? self.draftId {
+                SessionActivityTracker.shared.updateActivityPhase(
+                    activityKey,
+                    phase: .suspended,
+                    reason: .backgroundTimeExpired
+                )
+            }
             if !BackgroundKeepAliveManager.shared.enhancedBackgroundEffective {
                 BackgroundInterruptionTracker.shared.recordInterruption()
                 // [T-session-paused-badge-active-false-positive] The PAUSED badge
@@ -83,6 +117,15 @@ extension AIChatViewModel {
     }
 
     func endBackgroundProcessing() {
+        let continuedKey = continuedProcessingSessionKey ?? sessionId ?? draftId ?? ""
+        let completionHasError = messages.last?.error != nil || errorMessage != nil
+        if #available(iOS 26.0, *), !continuedKey.isEmpty {
+            AgentContinuedProcessingManager.shared.finish(
+                sessionKey: continuedKey,
+                success: !completionHasError && !backgroundSuspended
+            )
+        }
+        continuedProcessingSessionKey = nil
         // [T-ios-session-unread-badge / T-ios-unread-dot-reappears] Mark unread
         // when this session finished off-screen and produced NEW content. The
         // red dot means "this session finished and you haven't opened it yet".
@@ -123,7 +166,7 @@ extension AIChatViewModel {
         do {
             let sid = sessionId ?? ""
             let wasBackground = UIApplication.shared.applicationState != .active
-            let hasError = messages.last?.error != nil || errorMessage != nil
+            let hasError = completionHasError
             let responseSummary: String = {
                 let assistantTurns = agentHistory.filter { $0.role == .assistant }
                 logger.info("[BackgroundNotification] building responseSummary from agentHistory: totalMsgs=\(agentHistory.count) assistantTurns=\(assistantTurns.count) wasBackground=\(wasBackground) hasError=\(hasError)")
@@ -143,26 +186,25 @@ extension AIChatViewModel {
                 for (idx, msg) in assistantTurns.enumerated() {
                     let hasTools = hasToolUse(msg)
                     let txt = textFromTurn(msg)
-                    let preview = String(txt.prefix(20)).replacingOccurrences(of: "\n", with: "↵")
-                    logger.info("[BackgroundNotification] agentTurns[\(idx)] hasToolUse=\(hasTools) textLen=\(txt.count) textPreview=\(preview.debugDescription)")
+                    logger.info("[BackgroundNotification] agentTurns[\(idx)] hasToolUse=\(hasTools) textLen=\(txt.count)")
                 }
 
                 if let pure = assistantTurns.last(where: { !hasToolUse($0) }) {
                     let t = textFromTurn(pure)
                     if !t.isEmpty {
-                        logger.info("[BackgroundNotification] source=pure-text-turn(agentHistory) first20=\(String(t.prefix(20)).debugDescription)")
+                        logger.info("[BackgroundNotification] source=pure-text-turn(agentHistory) length=\(t.count)")
                         return String(t.prefix(200))
                     }
                 }
                 if let any = assistantTurns.last(where: { !textFromTurn($0).isEmpty }) {
                     let t = textFromTurn(any)
-                    logger.info("[BackgroundNotification] source=any-text-turn(agentHistory) first20=\(String(t.prefix(20)).debugDescription)")
+                    logger.info("[BackgroundNotification] source=any-text-turn(agentHistory) length=\(t.count)")
                     return String(t.prefix(200))
                 }
                 logger.info("[BackgroundNotification] source=fallback")
                 return "Task completed."
             }()
-            logger.info("[BackgroundNotification] responseSummary ready length=\(responseSummary.count) first20=\(String(responseSummary.prefix(20)).debugDescription) wasBackground=\(wasBackground)")
+            logger.info("[BackgroundNotification] responseSummary ready length=\(responseSummary.count) wasBackground=\(wasBackground)")
             let fallbackTitle = messages.first(where: { $0.role == .user })?.content.prefix(60).description ?? "Agent task"
             let bgTaskID = backgroundTaskID
             backgroundTaskID = .invalid
@@ -262,7 +304,6 @@ extension AIChatViewModel {
         case .info: toolName = "info"
         }
 
-        let desc = toolBlock.toolDescription
         let elapsed: String
         if let start = toolBlock.toolStartTime {
             elapsed = String(format: "%.1fs", Date().timeIntervalSince(start))
@@ -278,30 +319,21 @@ extension AIChatViewModel {
             statusStr = "running"
         case .success:
             statusStr = "success"
-        case .failed(let msg):
-            statusStr = "failed(\(msg.prefix(50)))"
+        case .failed:
+            statusStr = "failed"
         case .cancelled:
             statusStr = "cancelled"
         case .none:
             statusStr = "pending"
         }
 
-        let outputPreview: String
-        if !toolBlock.content.isEmpty {
-            let trimmed = toolBlock.content.suffix(80).replacingOccurrences(of: "\n", with: "↵")
-            outputPreview = " output=\"...\(trimmed)\""
-        } else {
-            outputPreview = ""
-        }
+        let outputInfo = toolBlock.content.isEmpty ? "" : " outputBytes=\(toolBlock.content.utf8.count)"
 
         // Browser-specific info
         var browserInfo = ""
         if case .browserTool = toolBlock.kind {
             if let bm = browserTabPool.activeManager {
-                let url = bm.currentURL
-                if !url.isEmpty {
-                    browserInfo = " url=\(url.prefix(60))"
-                }
+                browserInfo = " hasURL=\(!bm.currentURL.isEmpty)"
                 if bm.isLoading {
                     browserInfo += " loading=true"
                 }
@@ -315,10 +347,18 @@ extension AIChatViewModel {
             pidInfo = " pids=[\(pidList)]"
         }
 
-        let summary = "tool=\(toolName) status=\(statusStr) elapsed=\(elapsed)\(pidInfo) desc=\"\(desc.prefix(40))\"\(outputPreview)\(browserInfo)"
+        let summary = "tool=\(toolName) status=\(statusStr) elapsed=\(elapsed)\(pidInfo)\(outputInfo)\(browserInfo)"
         SessionActivityTracker.shared.currentToolStatus = "\(toolName): \(statusStr)"
         if let sid = self.sessionId {
             SessionActivityTracker.shared.updateToolInfo(sessionId: sid, toolName: toolName, toolStatus: statusStr)
+            if #available(iOS 26.0, *) {
+                let iteration = SessionActivityTracker.shared.sessionToolInfo[sid]?.loopIteration ?? 0
+                AgentContinuedProcessingManager.shared.update(
+                    sessionKey: continuedProcessingSessionKey ?? sid,
+                    subtitle: toolName.replacingOccurrences(of: "_", with: " ").capitalized,
+                    loopIteration: iteration
+                )
+            }
         }
         return summary
     }
@@ -337,6 +377,12 @@ extension AIChatViewModel {
         if UIApplication.shared.applicationState == .active {
             logger.info("[Background] App already active — resuming immediately")
             backgroundSuspended = false
+            if let activityKey = sessionId ?? draftId {
+                SessionActivityTracker.shared.updateActivityPhase(
+                    activityKey,
+                    phase: .preparing
+                )
+            }
             beginBackgroundProcessing()
             return
         }
@@ -366,6 +412,12 @@ extension AIChatViewModel {
                 }
             }
         }
+        if let activityKey = sessionId ?? draftId {
+            SessionActivityTracker.shared.updateActivityPhase(
+                activityKey,
+                phase: .preparing
+            )
+        }
     }
 
     /// Pauses the agent loop when the user activates browser takeover.
@@ -373,10 +425,23 @@ extension AIChatViewModel {
     func waitIfBrowserTakeover() async {
         guard browserTakeoverActive else { return }
         logger.info("[Takeover] Agent loop pausing for browser takeover")
+        if let activityKey = sessionId ?? draftId {
+            SessionActivityTracker.shared.updateActivityPhase(
+                activityKey,
+                phase: .waitingForUser,
+                reason: .browserTakeover
+            )
+        }
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             self.takeoverContinuation = continuation
         }
         logger.info("[Takeover] Agent loop resumed from browser takeover")
+        if let activityKey = sessionId ?? draftId {
+            SessionActivityTracker.shared.updateActivityPhase(
+                activityKey,
+                phase: .usingTool
+            )
+        }
 
         // Take a screenshot so the agent sees what the user did during takeover
         let screenshotInput = BrowserActionInput(
@@ -414,6 +479,13 @@ extension AIChatViewModel {
     /// Returns a fresh screenshot result after the user finishes, or nil on timeout.
     func waitForMidActionTakeover() async -> BrowserActionResult? {
         logger.info("[Takeover] Mid-action: pausing browser action for user takeover")
+        if let activityKey = sessionId ?? draftId {
+            SessionActivityTracker.shared.updateActivityPhase(
+                activityKey,
+                phase: .waitingForUser,
+                reason: .browserTakeover
+            )
+        }
 
         // Start 5-minute timeout
         let timeoutTask = Task {
@@ -441,6 +513,12 @@ extension AIChatViewModel {
         self.takeoverTimeoutTask = nil
 
         logger.info("[Takeover] Mid-action: resumed (timedOut=\(timedOut))")
+        if let activityKey = sessionId ?? draftId {
+            SessionActivityTracker.shared.updateActivityPhase(
+                activityKey,
+                phase: .usingTool
+            )
+        }
 
         // Take a fresh screenshot so the agent sees the user's changes
         let screenshotInput = BrowserActionInput(
@@ -483,7 +561,8 @@ extension AIChatViewModel {
         // here because runningCommandPids was empty. Bail only when NONE apply,
         // so random taps don't poison the flag for a future real invocation.
         let browserLoading = browserTabPool.hasLoadingTab
-        guard !runningCommandPids.isEmpty || toolDelayWaitActive || browserLoading else { return }
+        let browserActionActive = browserTabPool.hasActiveAgentAction
+        guard !runningCommandPids.isEmpty || toolDelayWaitActive || browserLoading || browserActionActive else { return }
         commandCancelledByUser = true
         // Stop any in-flight browser page loads. stopLoading() resolves the
         // manager's navigationContinuation, so the awaited browserTabPool
@@ -491,6 +570,10 @@ extension AIChatViewModel {
         if browserLoading {
             let n = browserTabPool.stopAllLoading()
             logger.info("⏹️ stopCurrentCommand — stopped \(n) loading browser tab(s)")
+        }
+        if browserActionActive {
+            let n = browserTabPool.cancelAllAgentActions()
+            logger.info("⏹️ stopCurrentCommand — cancelled \(n) browser action(s)")
         }
         // Stop ALL currently running shells — concurrent tool execution
         // can have many in flight at once and a stop tap should cancel
@@ -525,4 +608,123 @@ extension AIChatViewModel {
         }
     }
 
+}
+
+// MARK: - iOS 26 user-initiated continued processing
+
+/// Bridges an already-running Agent loop to iOS 26's system-supported
+/// continued-processing grant. The grant improves lock-screen continuity and
+/// reports system progress, but every expiration still flows through the
+/// existing suspend-and-resume path because iOS can revoke it under pressure.
+@available(iOS 26.0, *)
+@MainActor
+final class AgentContinuedProcessingManager {
+    static let shared = AgentContinuedProcessingManager()
+
+    private final class Run {
+        let sessionKey: String
+        let identifier: String
+        let expiration: () -> Void
+        var task: BGContinuedProcessingTask?
+        var lastProgress: Int64 = 1
+
+        init(sessionKey: String, identifier: String, expiration: @escaping () -> Void) {
+            self.sessionKey = sessionKey
+            self.identifier = identifier
+            self.expiration = expiration
+        }
+    }
+
+    private var runs: [String: Run] = [:]
+
+    private init() {}
+
+    func begin(
+        sessionKey: String,
+        title: String,
+        subtitle: String,
+        onExpiration: @escaping () -> Void
+    ) {
+        guard !sessionKey.isEmpty, runs[sessionKey] == nil else { return }
+        let identifier = "com.leoyuan.leophoneagent.agent.\(UUID().uuidString)"
+        let run = Run(sessionKey: sessionKey, identifier: identifier, expiration: onExpiration)
+        runs[sessionKey] = run
+
+        let registered = BGTaskScheduler.shared.register(
+            forTaskWithIdentifier: identifier,
+            using: nil
+        ) { [weak self] task in
+            guard let continuedTask = task as? BGContinuedProcessingTask else {
+                task.setTaskCompleted(success: false)
+                return
+            }
+            Task { @MainActor [weak self] in
+                self?.attach(continuedTask, identifier: identifier)
+            }
+        }
+        guard registered else {
+            runs.removeValue(forKey: sessionKey)
+            logger.warning("[Background][Continued] registration rejected")
+            return
+        }
+
+        let request = BGContinuedProcessingTaskRequest(
+            identifier: identifier,
+            title: title,
+            subtitle: subtitle
+        )
+        request.strategy = .queue
+        do {
+            try BGTaskScheduler.shared.submit(request)
+            logger.info("[Background][Continued] submitted session=\(sessionKey.prefix(8))")
+        } catch {
+            runs.removeValue(forKey: sessionKey)
+            logger.warning("[Background][Continued] submit failed code=\((error as NSError).code)")
+        }
+    }
+
+    func isActive(sessionKey: String) -> Bool {
+        // A queued request is not an execution grant yet. Only let the finite
+        // UIKit task re-arm after the scheduler has actually delivered a
+        // BGContinuedProcessingTask; otherwise normal expiration must suspend.
+        runs[sessionKey]?.task != nil
+    }
+
+    func update(sessionKey: String, subtitle: String, loopIteration: Int) {
+        guard let run = runs[sessionKey] else { return }
+        let measured = Int64(min(92, max(Int(run.lastProgress), 8 + (loopIteration * 8))))
+        run.lastProgress = measured
+        guard let task = run.task else { return }
+        task.progress.completedUnitCount = measured
+        task.updateTitle("LeoPhoneAgent task", subtitle: subtitle.isEmpty ? "Working" : subtitle)
+    }
+
+    func finish(sessionKey: String, success: Bool) {
+        guard let run = runs.removeValue(forKey: sessionKey) else { return }
+        BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: run.identifier)
+        if let task = run.task {
+            task.progress.completedUnitCount = success ? 100 : max(1, run.lastProgress)
+            task.setTaskCompleted(success: success)
+        }
+        logger.info("[Background][Continued] finished session=\(sessionKey.prefix(8)) success=\(success)")
+    }
+
+    private func attach(_ task: BGContinuedProcessingTask, identifier: String) {
+        guard let run = runs.values.first(where: { $0.identifier == identifier }) else {
+            task.setTaskCompleted(success: false)
+            return
+        }
+        run.task = task
+        task.progress.totalUnitCount = 100
+        task.progress.completedUnitCount = run.lastProgress
+        task.expirationHandler = { [weak self, weak run] in
+            Task { @MainActor in
+                guard let self, let run,
+                      self.runs.removeValue(forKey: run.sessionKey) != nil else { return }
+                run.task?.setTaskCompleted(success: false)
+                run.expiration()
+            }
+        }
+        logger.info("[Background][Continued] running session=\(run.sessionKey.prefix(8))")
+    }
 }

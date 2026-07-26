@@ -107,6 +107,95 @@ struct OffloadCommandInfo {
     let category: OffloadCommandCategory
     /// Only privacy-sensitive commands appear in Settings
     let showInSettings: Bool
+
+    var systemImage: String {
+        switch name {
+        case "apple-healthkit": return "heart.text.square"
+        case "apple-calendar": return "calendar"
+        case "apple-reminders": return "checklist"
+        case "apple-photos": return "photo.on.rectangle"
+        case "apple-location": return "location"
+        case "apple-homekit": return "house"
+        case "apple-clipboard": return "doc.on.clipboard"
+        case "apple-nfc": return "wave.3.right"
+        case "apple-bluetooth": return "antenna.radiowaves.left.and.right"
+        case "apple-speak": return "speaker.wave.2"
+        case "apple-speech": return "waveform"
+        case "apple-player", "apple-media": return "play.square.stack"
+        case "apple-device": return "iphone"
+        case "apple-notification": return "bell"
+        case "apple-alarm": return "alarm"
+        case "apple-open": return "arrow.up.forward.app"
+        case "apple-maps": return "map"
+        case "apple-weather": return "cloud.sun"
+        case "apple-nlp": return "text.magnifyingglass"
+        case "apple-vision": return "viewfinder"
+        default: return "puzzlepiece.extension"
+        }
+    }
+
+    var actions: [String] {
+        switch name {
+        case "apple-healthkit": return ["Read health metrics", "Log supported samples", "Summarize trends"]
+        case "apple-calendar": return ["List events", "Check availability", "Create or update events"]
+        case "apple-reminders": return ["List reminders", "Create tasks", "Complete or reschedule items"]
+        case "apple-photos": return ["Search and inspect media", "Import or export files", "Delete only after explicit request"]
+        case "apple-location": return ["Read current location", "Resolve coordinates", "Use location in an Agent task"]
+        case "apple-homekit": return ["List homes and accessories", "Read device state", "Control supported accessories"]
+        case "apple-clipboard": return ["Read clipboard on request", "Write text or images"]
+        case "apple-nfc": return ["Read NDEF or supported tags", "Write NDEF tags", "Inspect supported smart cards"]
+        case "apple-bluetooth": return ["Scan nearby devices", "Connect to BLE peripherals", "Exchange supported data"]
+        case "apple-speak": return ["Speak Agent responses with system voices"]
+        case "apple-speech": return ["Transcribe microphone or audio input"]
+        case "apple-player", "apple-media": return ["Inspect media", "Control supported playback", "Work with the media library"]
+        case "apple-device": return ["Read safe device metadata and system state"]
+        case "apple-notification": return ["Schedule local notifications", "Remove pending notifications"]
+        case "apple-alarm": return ["Create and manage supported alarms"]
+        case "apple-open": return ["Open approved URLs and system destinations"]
+        case "apple-maps": return ["Search places", "Build routes", "Open map results"]
+        case "apple-weather": return ["Read current conditions and forecasts"]
+        case "apple-nlp": return ["Detect language", "Tokenize and analyze text"]
+        case "apple-vision": return ["OCR images", "Read barcodes", "Classify visual content"]
+        default: return []
+        }
+    }
+
+    var examplePrompt: String {
+        switch name {
+        case "apple-healthkit": return "Summarize my step count for the last seven days."
+        case "apple-calendar": return "Find a free hour tomorrow afternoon and create a focus block."
+        case "apple-reminders": return "Create a reminder to review this project tomorrow at 9 AM."
+        case "apple-photos": return "Find the latest screenshots and export them to this workspace."
+        case "apple-location": return "What useful places are near my current location?"
+        case "apple-homekit": return "Show the current state of my living room accessories."
+        case "apple-clipboard": return "Summarize the text currently on my clipboard."
+        case "apple-nfc": return "Read this NFC tag and explain its records."
+        case "apple-bluetooth": return "List nearby Bluetooth devices I can connect to."
+        case "apple-speak": return "Read the final answer aloud."
+        case "apple-speech": return "Start voice input for a new task."
+        case "apple-player", "apple-media": return "Pause the current audio and show what is playing."
+        case "apple-device": return "Show storage and battery information available to the app."
+        case "apple-notification": return "Notify me in twenty minutes to check this task."
+        case "apple-alarm": return "Create an alarm for 7:30 tomorrow morning."
+        case "apple-open": return "Open the settings page for background tasks."
+        case "apple-maps": return "Plan a walking route to the nearest station."
+        case "apple-weather": return "Will it rain here this evening?"
+        case "apple-nlp": return "Detect the language and key names in this text."
+        case "apple-vision": return "Extract all text and QR codes from this image."
+        default: return ""
+        }
+    }
+
+    var dataDestination: String {
+        switch name {
+        case "apple-healthkit", "apple-calendar", "apple-reminders", "apple-photos",
+             "apple-location", "apple-homekit", "apple-clipboard", "apple-nfc",
+             "apple-bluetooth", "apple-speech", "apple-media", "apple-player":
+            return "Read on device. Results enter the current Agent conversation and are sent to its selected AI provider only when needed to answer the request."
+        default:
+            return "Processed on device. The selected AI provider receives only the tool result needed for the current task."
+        }
+    }
 }
 
 // MARK: - Manager
@@ -123,13 +212,15 @@ final class OffloadPermissionManager: ObservableObject {
 
     static let allCommands: [OffloadCommandInfo] = [
         // Privacy — user-configurable
-        .init(name: "apple-healthkit", displayLabel: "HealthKit", description: "Steps, heart rate, sleep, and other health records", category: .privacy, showInSettings: true),
+        .init(name: "apple-healthkit", displayLabel: "HealthKit", description: "Steps, heart rate, sleep, and other authorized health samples", category: .privacy, showInSettings: true),
         .init(name: "apple-calendar", displayLabel: "Calendar", description: "Events, schedules, and calendar details", category: .privacy, showInSettings: true),
         .init(name: "apple-reminders", displayLabel: "Reminders", description: "Tasks, due dates, and reminder lists", category: .privacy, showInSettings: true),
         .init(name: "apple-photos", displayLabel: "Photos", description: "Photos, videos, and album metadata", category: .privacy, showInSettings: true),
-        .init(name: "apple-location", displayLabel: "Location", description: "Current GPS coordinates and location history", category: .privacy, showInSettings: true),
+        .init(name: "apple-location", displayLabel: "Location", description: "Current location and coordinates when requested", category: .privacy, showInSettings: true),
         .init(name: "apple-homekit", displayLabel: "HomeKit", description: "Smart home devices, rooms, and scenes", category: .privacy, showInSettings: true),
         .init(name: "apple-clipboard", displayLabel: "Clipboard", description: "Text and images copied to the clipboard", category: .privacy, showInSettings: true),
+        .init(name: "apple-nfc", displayLabel: "NFC", description: "NFC tags, smart cards, and data written to nearby tags", category: .privacy, showInSettings: true),
+        .init(name: "apple-bluetooth", displayLabel: "Bluetooth", description: "Nearby Bluetooth devices and data exchanged with them", category: .privacy, showInSettings: true),
         // Media — no personal data, always bypass
         .init(name: "apple-speak", displayLabel: "Speak", description: "", category: .media, showInSettings: false),
         .init(name: "apple-speech", displayLabel: "Speech", description: "", category: .media, showInSettings: false),
@@ -219,6 +310,12 @@ final class OffloadPermissionManager: ObservableObject {
             let displayLabel = cmdInfo?.displayLabel ?? command
             let description = cmdInfo?.description ?? ""
 
+            SessionActivityTracker.shared.updateActivityPhase(
+                sessionId,
+                phase: .waitingForPermission,
+                reason: .permissionApproval
+            )
+
             let allowed = await withCheckedContinuation { continuation in
                 let request = PermissionRequest(
                     id: UUID().uuidString,
@@ -239,6 +336,13 @@ final class OffloadPermissionManager: ObservableObject {
                     }
                 }
             }
+
+            // The permission decision closes the wait regardless of outcome.
+            // The tool result itself will carry denial details when applicable.
+            SessionActivityTracker.shared.updateActivityPhase(
+                sessionId,
+                phase: .usingTool
+            )
 
             if allowed {
                 sessionGrants[sessionId, default: []].insert(command)

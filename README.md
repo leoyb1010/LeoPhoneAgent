@@ -1,6 +1,6 @@
 # LeoPhoneAgent
 
-[![Version](https://img.shields.io/badge/version-1.0-0A84FF.svg)](docs/LEOPHONEAGENT_1.0_BASELINE.md)
+[![Version](https://img.shields.io/badge/version-1.0.7-0A84FF.svg)](CHANGELOG.md)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Primary platform](https://img.shields.io/badge/primary-iOS-black.svg)](#ios-10-baseline)
 
@@ -9,8 +9,11 @@
 LeoPhoneAgent is an independent GPLv3 fork of
 [OpenMinis](https://github.com/OpenMinis/OpenMinis). It combines leading AI
 models with an on-device Alpine Linux sandbox, browser automation, skills,
-persistent memory and native iOS integrations. Version 1.0 establishes the
-new brand and a reproducible iOS baseline for our own product work.
+persistent memory and native iOS integrations. Version 1.0.7 adds a native Apple
+Capabilities center, read-only authorization probes, and real provider testing
+before save. Version 1.0.6 added a Home Screen
+task widget, a direct voice-input entry and iOS 26 continued processing for
+user-initiated long tasks, while preserving cooperative cancellation and recovery.
 
 > LeoPhoneAgent is not the OpenMinis App Store product and is not affiliated
 > with or endorsed by the OpenMinis maintainers. Upstream press quotes, store
@@ -24,10 +27,10 @@ new brand and a reproducible iOS baseline for our own product work.
 |---|---|
 | Bring your own model | Claude, OpenAI, Gemini and other providers through API keys or supported sign-in flows |
 | Real Linux shell | ARM64 iSH runtime with an Alpine 3.21 root filesystem |
-| Device tools | Calendar, Reminders, Contacts, Health, HomeKit, Bluetooth, Clipboard, media, alarms, location and more, subject to iOS permission and entitlement rules |
+| Device tools | Calendar, Reminders, Health, HomeKit, Photos, Bluetooth, Clipboard, media, alarms, location and more, subject to iOS permission and entitlement rules |
 | Browser automation | Embedded browser workflows and web interaction tools |
 | Skills and memory | On-demand skills, persistent sessions and workspace-scoped files |
-| Native extensions | Share extension, File Provider, Widget and App Intents / Shortcuts |
+| Native extensions | Share extension, File Provider, Live Activity and App Intents / Shortcuts |
 | Media processing | Device ARM64 FFmpeg 6.1.2 and LAME |
 
 Some integrations require user permission, an Apple entitlement, a provider
@@ -35,20 +38,22 @@ credential or a service-specific OAuth client. iOS does not permit unrestricted
 background execution or arbitrary system control; LeoPhoneAgent works within
 the platform sandbox and exposes supported operations through native bridges.
 
-## iOS 1.0 baseline
+## Current iOS release
 
 - Product and scheme: `LeoPhoneAgent`
-- Version/build: `1.0` (`1`)
+- Version/build: `1.0.7` (`8`)
 - Main bundle ID: `com.leoyuan.leophoneagent`
 - Deep-link schemes: `leophoneagent://` and `leophoneagent-mcp://`
-- Apple development team: `54UB8X9C5F`
-- Extensions: Share, File Provider and Agent Widget
-- Device build: verified with signing disabled on Xcode 26.6
+- Apple development team: `48H5Y3LNUK`
+- Extensions: Share, File Provider, Home Screen Widget and Live Activity
+- Device build: verified with automatic signing on Xcode 26.6
+- Provisioning: verified for team `48H5Y3LNUK` on a paired iPhone 17 Pro Max
 
-The remaining signed-build prerequisite is to sign into the matching Apple ID
-in Xcode so automatic signing can create development profiles for the new app
-and extension identifiers. See the exact command and capability inventory in
-[the 1.0 baseline](docs/LEOPHONEAGENT_1.0_BASELINE.md).
+The main app and its Share, File Provider and Widget extensions now build with
+the LeoPhoneAgent identifiers and automatically generated development profiles.
+See the exact command and capability inventory in
+[the 1.0 baseline](docs/LEOPHONEAGENT_1.0_BASELINE.md), and current changes in
+[the changelog](CHANGELOG.md).
 
 ## Build from source
 

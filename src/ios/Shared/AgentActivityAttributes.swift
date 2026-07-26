@@ -1,6 +1,63 @@
 import ActivityKit
 import Foundation
 
+/// A privacy-aware, app-group snapshot for the ordinary Home Screen widget.
+/// WidgetKit decides when to render this value; second-by-second progress stays
+/// in the Live Activity, which is the system surface intended for live state.
+struct AgentWidgetSnapshot: Codable, Hashable {
+    enum State: String, Codable {
+        case idle
+        case running
+        case suspended
+        case completed
+        case failed
+    }
+
+    var updatedAt: Date
+    var state: State
+    var activeCount: Int
+    var sessionId: String
+    var title: String
+    var status: String
+    var toolIcon: String
+    var loopIteration: Int
+    var privacyMode: Bool
+
+    static let idle = AgentWidgetSnapshot(
+        updatedAt: .distantPast,
+        state: .idle,
+        activeCount: 0,
+        sessionId: "",
+        title: "",
+        status: "",
+        toolIcon: "sparkles",
+        loopIteration: 0,
+        privacyMode: true
+    )
+}
+
+enum AgentWidgetSnapshotStore {
+    static let appGroupIdentifier = "group.com.leoyuan.leophoneagent"
+    static let storageKey = "leoAgentWidgetSnapshot.v1"
+
+    static func load() -> AgentWidgetSnapshot {
+        guard let defaults = UserDefaults(suiteName: appGroupIdentifier),
+              let data = defaults.data(forKey: storageKey),
+              let snapshot = try? JSONDecoder().decode(AgentWidgetSnapshot.self, from: data) else {
+            return .idle
+        }
+        return snapshot
+    }
+
+    @discardableResult
+    static func save(_ snapshot: AgentWidgetSnapshot) -> Bool {
+        guard let defaults = UserDefaults(suiteName: appGroupIdentifier),
+              let data = try? JSONEncoder().encode(snapshot) else { return false }
+        defaults.set(data, forKey: storageKey)
+        return true
+    }
+}
+
 struct LiveSessionSnapshot: Codable, Hashable {
     var sessionId: String
     var title: String

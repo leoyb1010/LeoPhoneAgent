@@ -517,6 +517,10 @@ int ffmpeg_main(int argc, char **argv);
 // so ffmpeg_main() can be safely called more than once.
 void ffmpeg_reset_statics(void);
 
+// Request that an in-process ffmpeg_main() invocation unwind through its
+// normal cleanup path without delivering a process-wide signal.
+void ffmpeg_request_cancel(void);
+
 #endif /* FFMPEG_FRAMEWORK_H */
 EOF
 

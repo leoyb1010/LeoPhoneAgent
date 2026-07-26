@@ -360,15 +360,11 @@ final class OpenAIAgentProvider: AgentProvider {
                             continuation.yield(.done(stopReason: reason))
                         }
                     }
-                    // Empty-stream diagnostic. The "no content, no stop reason"
-                    // detector higher up will throw transientError on this
-                    // outcome; before that fires, dump what actually came over
-                    // the wire so a third-party provider that ships raw JSON,
-                    // unusual delimiters, or a one-shot blob can be triaged
-                    // from logs without re-running the request.
+                    // Keep this diagnostic metadata-only. Raw SSE lines can
+                    // contain assistant text, tool arguments, or provider data.
                     if !diagYieldedAnyContent && !sawReasoningFieldEver {
-                        let preview = diagFirstLines.joined(separator: " | ")
-                        logger.warning("[OpenAIStream] empty stream diagnostic — totalLines=\(diagLineCount) dataLines=\(diagDataLineCount) firstLines=\(preview)")
+                        let sampledBytes = diagFirstLines.reduce(0) { $0 + $1.utf8.count }
+                        logger.warning("[OpenAIStream] empty stream diagnostic — totalLines=\(diagLineCount) dataLines=\(diagDataLineCount) sampledBytes=\(sampledBytes)")
                     }
                     continuation.finish()
                 } catch {
@@ -1899,8 +1895,7 @@ final class OpenAIAgentProvider: AgentProvider {
         // the only way to tell apart "no delta ever arrived" / "literal
         // `{}`" / "truncated mid-stream" / "schema mismatch (other keys
         // present, just no `command`)".
-        let hexPreview = rawJson.utf8.prefix(80).map { String(format: "%02x", $0) }.joined()
-        AppLogger(category: "ToolArgsProbe").warning("[ToolArgsProbe] EMPTY ARGS source=\(source) model=\(model) tool=\(toolName) id=\(toolId) bytes=\(utf8Bytes) trimmedEmpty=\(trimmedEmpty ? 1 : 0) literalEmptyObj=\(isLiteralEmptyObj ? 1 : 0) parseOk=\(parseOk ? 1 : 0) hex80=\(hexPreview) raw=<<<\(rawJson)>>>")
+        AppLogger(category: "ToolArgsProbe").warning("[ToolArgsProbe] EMPTY ARGS source=\(source) model=\(model) tool=\(toolName) id=\(toolId) bytes=\(utf8Bytes) trimmedEmpty=\(trimmedEmpty ? 1 : 0) literalEmptyObj=\(isLiteralEmptyObj ? 1 : 0) parseOk=\(parseOk ? 1 : 0)")
     }
 
     // MARK: - Responses API Dual ID Helpers

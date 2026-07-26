@@ -213,7 +213,7 @@ struct SessionStorageDetailView: View {
                         }
                     }
                 } else {
-                    Text("No minis files")
+                    Text("No LeoPhoneAgent files")
                         .foregroundStyle(.secondary)
                 }
             }

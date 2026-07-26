@@ -48,7 +48,7 @@ enum GeminiModelsAPI {
         request.setValue("Bearer \(oauthToken)", forHTTPHeaderField: "Authorization")
         logger.info("Fetching Gemini models (OAuth auth)")
         #if DEBUG
-        logger.debug("OAuth token prefix: \(String(oauthToken.prefix(20)))...")
+        logger.debug("OAuth token present: \(!oauthToken.isEmpty)")
         #endif
         do {
             let models = try await performFetch(request)
@@ -99,7 +99,7 @@ enum GeminiModelsAPI {
         guard (200..<300).contains(statusCode) else {
             logger.error("Gemini models API error — status \(statusCode)")
             #if DEBUG
-            logger.error("Response body: \(responseBody)")
+            logger.error("Models API failure status=\(statusCode) responseBytes=\(data.count)")
             #endif
             if statusCode == 401 || statusCode == 403 {
                 throw LLMError.invalidAPIKey(detail: "Gemini HTTP \(statusCode): \(String(responseBody.prefix(200)))")
@@ -111,7 +111,7 @@ enum GeminiModelsAPI {
         guard let modelsArray = json["models"] as? [[String: Any]] else {
             logger.error("Missing 'models' array in response. Keys: \(Array(json.keys).joined(separator: ", "))")
             #if DEBUG
-            logger.error("Response body: \(responseBody.prefix(500))")
+            logger.error("Models API response missing models array responseBytes=\(data.count)")
             #endif
             throw LLMError.decodingError(underlying: NSError(domain: "GeminiModelsAPI", code: -1,
                 userInfo: [NSLocalizedDescriptionKey: "Missing models array in response"]))

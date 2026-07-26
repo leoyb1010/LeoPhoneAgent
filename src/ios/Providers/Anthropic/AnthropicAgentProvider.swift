@@ -340,12 +340,10 @@ final class AnthropicAgentProvider: AgentProvider {
                                     // — distinguish never-received-delta vs literal "{}"
                                     // vs truncated JSON. See OpenAIAgentProvider.diagEmptyToolArgs
                                     // for the same probe used on the OpenAI path.
-                                    // Raw payload logged UNTRUNCATED — empty-args is rare.
                                     let utf8Bytes = finalJson.utf8.count
                                     let trimmed = finalJson.trimmingCharacters(in: .whitespacesAndNewlines)
                                     let parseOk = (try? JSONSerialization.jsonObject(with: Data(finalJson.utf8), options: [])) != nil
-                                    let hexPreview = finalJson.utf8.prefix(80).map { String(format: "%02x", $0) }.joined()
-                                    AppLogger(category: "ToolArgsProbe").warning("[ToolArgsProbe] EMPTY ARGS source=anthropic.contentBlockStop model=\(self.model.id) tool=\(toolName) id=\(toolId) bytes=\(utf8Bytes) chunks=\(currentToolJsonChunks.count) trimmedEmpty=\(trimmed.isEmpty ? 1 : 0) literalEmptyObj=\(trimmed == "{}" ? 1 : 0) parseOk=\(parseOk ? 1 : 0) hex80=\(hexPreview) raw=<<<\(finalJson)>>>")
+                                    AppLogger(category: "ToolArgsProbe").warning("[ToolArgsProbe] EMPTY ARGS source=anthropic.contentBlockStop model=\(self.model.id) tool=\(toolName) id=\(toolId) bytes=\(utf8Bytes) chunks=\(currentToolJsonChunks.count) trimmedEmpty=\(trimmed.isEmpty ? 1 : 0) literalEmptyObj=\(trimmed == "{}" ? 1 : 0) parseOk=\(parseOk ? 1 : 0)")
                                 }
                                 continuation.yield(.toolCallComplete(
                                     id: toolId, name: toolName, args: args, metadata: nil

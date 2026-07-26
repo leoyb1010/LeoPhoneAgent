@@ -96,7 +96,7 @@ final class CodexOAuthManager: NSObject, ObservableObject {
             URLQueryItem(name: "originator", value: "codex_cli_rs"),
         ]
         let authorizationURL = components.url!
-        logger.info("Authorization URL: \(authorizationURL.absoluteString)")
+        logger.info("Opening OAuth authorization page for \(authorizationURL.host ?? "provider")")
 
         // 3. Open in-app Safari
         presentSafariViewController(url: authorizationURL)
@@ -292,7 +292,7 @@ final class CodexOAuthManager: NSObject, ObservableObject {
 
         guard (200..<300).contains(statusCode) else {
             #if DEBUG
-            logger.error("\(context) FAILED — status \(statusCode): \(responseBody)")
+            logger.error("\(context) FAILED — status \(statusCode)")
             #else
             logger.error("\(context) FAILED — status \(statusCode)")
             #endif

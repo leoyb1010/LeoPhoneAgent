@@ -543,20 +543,29 @@ struct SpeechPlayerControl: View {
 /// so it keeps spinning across compact↔expand morphs (no onAppear restart needed).
 private struct RotatingArc: View {
     let diameter: CGFloat
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Arc length as a fraction of the full circle — 75° / 360° ≈ 0.208.
     private let arcFraction: CGFloat = 75.0 / 360.0
     /// Seconds per full revolution.
     private let period: Double = 0.9
 
+    @ViewBuilder
     var body: some View {
-        TimelineView(.animation) { context in
-            let t = context.date.timeIntervalSinceReferenceDate
-            let angle = Angle(degrees: (t / period).truncatingRemainder(dividingBy: 1) * 360)
+        if reduceMotion {
             Circle()
                 .trim(from: 0, to: arcFraction)
                 .stroke(Color.blue, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
                 .frame(width: diameter, height: diameter)
-                .rotationEffect(angle)
+        } else {
+            TimelineView(.animation) { context in
+                let t = context.date.timeIntervalSinceReferenceDate
+                let angle = Angle(degrees: (t / period).truncatingRemainder(dividingBy: 1) * 360)
+                Circle()
+                    .trim(from: 0, to: arcFraction)
+                    .stroke(Color.blue, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                    .frame(width: diameter, height: diameter)
+                    .rotationEffect(angle)
+            }
         }
     }
 }

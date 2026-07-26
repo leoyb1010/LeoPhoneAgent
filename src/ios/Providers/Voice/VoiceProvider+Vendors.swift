@@ -272,7 +272,7 @@ final class DoubaoVoiceProvider: VoiceProvider {
     override func parseVoiceInputResponse(_ data: Data,
                                           request: VoiceInputRequest) throws -> VoiceInputResponse {
         let rawPreview = String(data: data.prefix(500), encoding: .utf8) ?? "(binary)"
-        AppLogger(category: "DoubaoASR").info("raw response (\(data.count) bytes): \(rawPreview)")
+        AppLogger(category: "DoubaoASR").info("raw response bytes=\(data.count) previewLength=\(rawPreview.count)")
         guard
             let json   = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             let result = json["result"] as? [String: Any],

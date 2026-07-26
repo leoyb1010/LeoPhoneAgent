@@ -10,7 +10,7 @@ private let sheetLogger = AppLogger(category: "WebAppAddSheet")
 ///   1. Classify the host URL into `(scope, scopeContext, htmlPath)` and
 ///      persist a `WebAppShortcut` row so deep-link return can re-resolve
 ///      the file by id (or by session+path).
-///   2. Build an `https://openminis.app/launch.html?…` URL whose query
+///   2. Build a LeoPhoneAgent-owned GitHub Pages launcher URL whose query
 ///      encodes the scope-prefixed path + session + a category-driven
 ///      icon key, with the title in the fragment.
 ///   3. `UIApplication.shared.open(url)` hands the user off to Safari so
@@ -231,7 +231,7 @@ struct WebAppAddToHomeSheet: View {
 
         Task { @MainActor in
             await ChatStore.shared.saveWebAppShortcut(shortcut)
-            sheetLogger.info("saved shortcut id=\(id.prefix(8)) title=\(trimmedTitle) scope=\(cls.scope.rawValue) → opening \(url.absoluteString)")
+            sheetLogger.info("saved shortcut id=\(id.prefix(8)) titleLength=\(trimmedTitle.count) scope=\(cls.scope.rawValue) launcherHost=\(url.host ?? "nil")")
             UIApplication.shared.open(url, options: [:]) { ok in
                 sheetLogger.info("UIApplication.open completed ok=\(ok)")
                 opening = false
@@ -255,8 +255,8 @@ struct WebAppAddToHomeSheet: View {
                                   category: LauncherCategory) -> URL? {
         var components = URLComponents()
         components.scheme = "https"
-        components.host = "openminis.app"
-        components.path = "/launch.html"
+        components.host = "leoyb1010.github.io"
+        components.path = "/LeoPhoneAgent/launch.html"
 
         var items: [URLQueryItem] = [
             URLQueryItem(name: "icon", value: category.rawValue),
@@ -293,7 +293,7 @@ struct WebAppAddToHomeSheet: View {
 // MARK: - Launcher category
 
 /// The 16 home-screen-tile categories. Each one maps 1:1 to:
-///   - a PNG at openminis.app/icons/category/<rawValue>.png
+///   - the LeoPhoneAgent app icon served from our own repository
 ///   - the `(systemName, color)` pair shown in the iOS Category UI
 ///     (ContentView's session-category picker) so the sheet and the
 ///     home-screen tile feel like the same visual language.
@@ -384,7 +384,7 @@ private struct LauncherTilePreview: View {
             ZStack {
                 // Aurora-ish background — a lightweight on-device
                 // approximation; the actual home-screen tile uses the
-                // exact PNG from openminis.app.
+                // branded icon served by the LeoPhoneAgent launcher.
                 RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .fill(
                         LinearGradient(

@@ -670,11 +670,7 @@ final class GeminiProvider: LLMProvider {
             if bodyData.count > 4096 { break }
         }
         let body = String(data: bodyData, encoding: .utf8) ?? ""
-        #if DEBUG
-        logger.error("Gemini streaming API error \(http.statusCode): \(body.prefix(1000))")
-        #else
-        logger.error("Gemini streaming API error \(http.statusCode)")
-        #endif
+        logger.error("Gemini streaming API error \(http.statusCode), responseBytes=\(bodyData.count)")
 
         if http.statusCode == 401 || http.statusCode == 403 {
             throw LLMError.invalidAPIKey(detail: "Gemini HTTP \(http.statusCode): \(String(body.prefix(200)))")
@@ -708,11 +704,7 @@ final class GeminiProvider: LLMProvider {
             } else {
                 body = "HTTP \(http.statusCode)"
             }
-            #if DEBUG
-            logger.error("Gemini API error \(http.statusCode): \(body.prefix(500))")
-            #else
-            logger.error("Gemini API error \(http.statusCode)")
-            #endif
+            logger.error("Gemini API error \(http.statusCode), responseBytes=\(data?.count ?? 0)")
             let transientStatusCodes: Set<Int> = [500, 502, 503, 504, 529]
             if transientStatusCodes.contains(http.statusCode) {
                 throw LLMError.transientError(message: "Gemini API error \(http.statusCode): \(body.prefix(200))")
@@ -752,89 +744,35 @@ final class GeminiProvider: LLMProvider {
         logger.debug("\(parts.joined(separator: "\n"))")
     }
 
-    /// Log the full outgoing URLRequest (URL, headers, body as pretty JSON).
+    /// Log privacy-safe request metadata. Request bodies and header values may
+    /// contain prompts, files or credentials and never belong in disk logs.
     private func logFullRequest(_ request: URLRequest) {
         var parts: [String] = ["📤 Gemini HTTP Request"]
-        // Mask `key=` query parameter to avoid logging API keys
-        let urlDisplay: String = {
-            guard let url = request.url,
-                  var comps = URLComponents(url: url, resolvingAgainstBaseURL: false),
-                  let items = comps.queryItems,
-                  items.contains(where: { $0.name == "key" }) else {
-                return request.url?.absoluteString ?? "<nil>"
-            }
-            comps.queryItems = items.map {
-                $0.name == "key" ? URLQueryItem(name: "key", value: "***") : $0
-            }
-            return comps.url?.absoluteString ?? request.url?.absoluteString ?? "<nil>"
-        }()
-        parts.append("  URL: \(urlDisplay)")
+        parts.append("  host: \(request.url?.host ?? "unknown")")
+        parts.append("  path: \(request.url?.path ?? "")")
         parts.append("  Method: \(request.httpMethod ?? "?")")
-
-        // Headers (mask Authorization token)
-        if let headers = request.allHTTPHeaderFields {
-            parts.append("  Headers:")
-            for key in headers.keys.sorted() {
-                let value = headers[key] ?? ""
-                if key.lowercased() == "authorization" {
-                    parts.append("    \(key): Bearer ***")
-                } else {
-                    parts.append("    \(key): \(value)")
-                }
-            }
-        }
-
-        // Body as pretty JSON
-        if let body = request.httpBody {
-            parts.append("  Body (\(body.count) bytes):")
-            if let json = try? JSONSerialization.jsonObject(with: body),
-               let pretty = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),
-               let str = String(data: pretty, encoding: .utf8) {
-                LastAPIRequestBody.shared.set(str, provider: "Gemini")
-                let truncated = String(str.prefix(3000))
-                parts.append(truncated)
-                if str.count > 3000 {
-                    parts.append("  ... (\(str.count) chars total)")
-                }
-            } else if let str = String(data: body, encoding: .utf8) {
-                LastAPIRequestBody.shared.set(str, provider: "Gemini")
-                parts.append("  \(String(str.prefix(1000)))")
-            }
-        }
+        parts.append("  headerCount: \(request.allHTTPHeaderFields?.count ?? 0)")
+        parts.append("  bodyBytes: \(request.httpBody?.count ?? 0)")
 
         logger.debug("\(parts.joined(separator: "\n"))")
     }
 
-    /// Log an incoming SSE chunk (raw JSON + parsed events).
+    /// Log incoming event shape and sizes without response text or tool input.
     private func logStreamChunk(_ json: [String: Any], events: [GeminiStreamEvent]) {
         var parts: [String] = ["📥 Gemini SSE Chunk"]
-
-        // Compact JSON preview
-        if let data = try? JSONSerialization.data(withJSONObject: json, options: [.sortedKeys]),
-           let str = String(data: data, encoding: .utf8) {
-            let preview = String(str.prefix(500))
-            parts.append("  raw: \(preview)" + (str.count > 500 ? "..." : ""))
-        }
+        parts.append("  fieldCount: \(json.count)")
 
         // Parsed events
         for event in events {
             switch event {
             case .textDelta(let text):
-                let preview = String(text.prefix(100))
-                parts.append("  → textDelta(\(text.count) chars): \"\(preview)\"" + (text.count > 100 ? "..." : ""))
+                parts.append("  textDeltaChars: \(text.count)")
             case .functionCall(let name, let args, let thoughtSig):
-                let argsStr = (try? JSONSerialization.data(withJSONObject: args))
-                    .flatMap { String(data: $0, encoding: .utf8) } ?? "\(args)"
-                var line = "  → functionCall(\(name)): \(String(argsStr.prefix(200)))"
-                if let sig = thoughtSig {
-                    line += " [thoughtSig: \(sig.prefix(20))...]"
-                }
-                parts.append(line)
+                parts.append("  functionCall: \(name) argumentCount=\(args.count) hasThoughtSignature=\(thoughtSig != nil)")
             case .finishReason(let reason):
                 parts.append("  → finishReason: \(reason)")
             case .thinkingDelta(let text):
-                let preview = String(text.prefix(100))
-                parts.append("  → thinkingDelta(\(text.count) chars): \"\(preview)\"" + (text.count > 100 ? "..." : ""))
+                parts.append("  thinkingDeltaChars: \(text.count)")
             case .usage(let usage):
                 parts.append("  → usage: in=\(usage.inputTokens) out=\(usage.outputTokens)")
             case .done:
@@ -847,16 +785,7 @@ final class GeminiProvider: LLMProvider {
 
     /// Log a non-streaming (generateContent) response.
     private func logGenerateResponse(_ json: [String: Any]) {
-        var parts: [String] = ["📥 Gemini Response"]
-        if let data = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),
-           let str = String(data: data, encoding: .utf8) {
-            let truncated = String(str.prefix(2000))
-            parts.append(truncated)
-            if str.count > 2000 {
-                parts.append("... (\(str.count) chars total)")
-            }
-        }
-        logger.debug("\(parts.joined(separator: "\n"))")
+        logger.debug("📥 Gemini Response fieldCount=\(json.count)")
     }
     #endif
 }

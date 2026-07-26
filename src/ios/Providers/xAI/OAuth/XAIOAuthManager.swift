@@ -122,7 +122,7 @@ final class XAIOAuthManager: NSObject, ObservableObject {
             URLQueryItem(name: "referrer", value: "minis"),
         ]
         let authorizationURL = components.url!
-        logger.info("Authorization URL: \(authorizationURL.absoluteString)")
+        logger.info("Opening OAuth authorization page for \(authorizationURL.host ?? "provider")")
 
         // 3. Open in-app Safari.
         presentSafariViewController(url: authorizationURL)
@@ -345,7 +345,7 @@ final class XAIOAuthManager: NSObject, ObservableObject {
         }
         guard (200..<300).contains(statusCode) else {
             #if DEBUG
-            logger.error("\(context) FAILED — status \(statusCode): \(responseBody)")
+            logger.error("\(context) FAILED — status \(statusCode)")
             #else
             logger.error("\(context) FAILED — status \(statusCode)")
             #endif

@@ -5,6 +5,17 @@ import UniformTypeIdentifiers
 
 private let aiDataSharingConsentKey = "aiDataSharingConsentAccepted"
 
+private enum ProviderOnboardingValidationError: LocalizedError {
+    case noModels
+
+    var errorDescription: String? {
+        switch self {
+        case .noModels:
+            return String(localized: "The provider returned no model that can be tested.")
+        }
+    }
+}
+
 /// Full-screen consent view shown before the user can add their first AI provider.
 struct AIDataSharingConsentView: View {
     var onAccept: () -> Void
@@ -26,7 +37,7 @@ struct AIDataSharingConsentView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("We Do Not Collect Your Data")
                                 .font(.headline)
-                            Text("LeoPhoneAgent does not operate any server and does not collect, store, or process any of your personal data. All data stays on your device.")
+                            Text("LeoPhoneAgent does not operate an application server. Your data stays on your device unless you enable iCloud Sync, choose an AI provider, or invoke a device capability that communicates with another service.")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                             Text("However, when you add a third-party AI provider and use it for conversations, the following data may be sent directly from your device to that provider's servers:")
@@ -36,7 +47,7 @@ struct AIDataSharingConsentView: View {
                             VStack(alignment: .leading, spacing: 6) {
                                 dataItem("Your chat messages and conversation history")
                                 dataItem("Files, images, and documents you attach or share")
-                                dataItem("System information you authorize (calendar, health, contacts, etc.) when using agent features")
+                                dataItem("System information you authorize, such as calendar, health, location, photos, or nearby-device data")
                             }
                         }
                     }
@@ -69,16 +80,17 @@ struct AIDataSharingConsentView: View {
                                 .font(.headline)
 
                             VStack(alignment: .leading, spacing: 6) {
-                                dataItem("API keys and tokens are stored only in the iOS Keychain on your device and are never sent to us")
+                                dataItem("API keys and tokens are stored in the iOS Keychain; provider configuration may also sync through your iCloud account when iCloud Sync is enabled")
                                 dataItem("Data is sent only to the specific provider you choose for each conversation")
                                 dataItem("You can remove any provider and its credentials at any time from Settings")
-                                dataItem("No data is shared with LeoPhoneAgent or any other party beyond the provider you select")
+                                dataItem("Diagnostic logs can contain shell output and should be reviewed before export")
                             }
                         }
                     }
 
-                    Link("Read our full Privacy Policy", destination: URL(string: "https://openminis.github.io/privacy-policy.html")!)
+                    Text("You can review the same disclosure later in Settings > Privacy & Data.")
                         .font(.footnote)
+                        .foregroundStyle(.secondary)
 
                     Spacer(minLength: 80)
                 }
@@ -135,6 +147,12 @@ struct AIDataSharingConsentView: View {
 
 /// Flow to add a new provider instance: pick type → credential → enter key/OAuth → done.
 struct AddProviderView: View {
+    private enum PendingSaveKind {
+        case apiKey
+        case oauth
+        case manualOAuth
+    }
+
     @ObservedObject private var store = ProviderConfigStore.shared
     @Environment(\.dismiss) private var dismiss
 
@@ -174,6 +192,7 @@ struct AddProviderView: View {
     @State private var importMessage: String?
     @State private var showImportResult = false
     @State private var importSucceeded = false
+    @State private var pendingSaveKind: PendingSaveKind?
 
     /// Whether the data-sharing consent has been accepted (persisted in UserDefaults).
     private var consentAccepted: Bool {
@@ -516,6 +535,20 @@ struct AddProviderView: View {
                         .textSelection(.enabled)
                 }
             }
+
+            if let pendingSaveKind {
+                Section {
+                    Button("Add Without Successful Test") {
+                        switch pendingSaveKind {
+                        case .apiKey: saveApiKeyInstance()
+                        case .oauth: saveOAuthInstance()
+                        case .manualOAuth: saveManualOAuthInstance()
+                        }
+                    }
+                } footer: {
+                    Text("The real connection test failed. Save only if this endpoint blocks test requests or needs additional model configuration.")
+                }
+            }
         }
     }
 
@@ -540,7 +573,7 @@ struct AddProviderView: View {
                 } header: {
                     Text("API Key")
                 } footer: {
-                    Text("Your key is stored securely in the iOS Keychain and never leaves the device.")
+                    Text("Your key is stored in the iOS Keychain and used only to authenticate requests sent directly to this provider. Provider configuration can sync through your private iCloud account when iCloud Sync is enabled.")
                 }
 
             if selectedType != .antigravity {
@@ -563,7 +596,7 @@ struct AddProviderView: View {
 
             Section {
                 Button {
-                    saveApiKeyInstance()
+                    Task { await validateAndSaveAPIKeyInstance() }
                 } label: {
                     HStack {
                         Spacer()
@@ -571,7 +604,7 @@ struct AddProviderView: View {
                             ProgressView()
                                 .controlSize(.small)
                         } else {
-                            Text("Add Provider")
+                            Text("Test & Add Provider")
                                 .font(.body.weight(.semibold))
                         }
                         Spacer()
@@ -654,16 +687,21 @@ struct AddProviderView: View {
                     .font(.system(.body, design: .monospaced))
 
                 Button {
-                    saveManualOAuthInstance()
+                    Task { await validateAndSaveManualOAuthInstance() }
                 } label: {
                     HStack {
                         Spacer()
-                        Text("Add Provider")
-                            .font(.body.weight(.semibold))
+                        if isSaving {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Text("Test & Add Provider")
+                                .font(.body.weight(.semibold))
+                        }
                         Spacer()
                     }
                 }
-                .disabled(manualOAuthTokenInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(manualOAuthTokenInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving)
             } header: {
                 Text("Or Configure Manually")
             } footer: {
@@ -674,15 +712,21 @@ struct AddProviderView: View {
         if pendingOAuthDone {
             Section {
                 Button {
-                    saveOAuthInstance()
+                    Task { await validateAndSaveOAuthInstance() }
                 } label: {
                     HStack {
                         Spacer()
-                        Text("Save Provider")
-                            .font(.body.weight(.semibold))
+                        if isSaving {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Text("Test & Save Provider")
+                                .font(.body.weight(.semibold))
+                        }
                         Spacer()
                     }
                 }
+                .disabled(isSaving)
             }
         }
     }
@@ -730,6 +774,124 @@ struct AddProviderView: View {
     }
 
     // MARK: - Actions
+
+    private func makeAPIKeyCandidate() -> (instance: ProviderInstance, key: String)? {
+        guard let type = selectedType else { return nil }
+        let key = apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return nil }
+        let label = labelInput.trimmingCharacters(in: .whitespaces)
+        let base = customBaseURLInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        let effectiveType: ProviderType = (type == .openAI && useResponsesAPI) ? .openAIResponses : type
+        return (
+            ProviderInstance(
+                label: label.isEmpty ? defaultLabel(for: effectiveType) : label,
+                providerType: effectiveType,
+                credentialType: .apiKey,
+                customBaseURL: base.isEmpty ? nil : base,
+                appendV1Suffix: appendV1SuffixInput
+            ),
+            key
+        )
+    }
+
+    private func makeOAuthCandidate(manual: Bool) -> ProviderInstance? {
+        guard let type = selectedType else { return nil }
+        let label = labelInput.trimmingCharacters(in: .whitespaces)
+        let base = customBaseURLInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        return ProviderInstance(
+            id: pendingInstanceId,
+            label: label.isEmpty ? defaultLabel(for: type) : label,
+            providerType: type,
+            credentialType: .oauth,
+            customBaseURL: manual && !base.isEmpty ? base : nil,
+            appendV1Suffix: appendV1SuffixInput
+        )
+    }
+
+    @MainActor
+    private func validateAndSaveAPIKeyInstance() async {
+        guard let candidate = makeAPIKeyCandidate() else { return }
+        isSaving = true
+        errorMessage = nil
+        pendingSaveKind = nil
+        ProviderKeychainHelper.saveAPIKey(candidate.key, instanceId: candidate.instance.id)
+        do {
+            try await validateConnection(for: candidate.instance)
+            store.addInstance(candidate.instance)
+            dismiss()
+        } catch {
+            ProviderKeychainHelper.deleteAPIKey(instanceId: candidate.instance.id)
+            errorMessage = String(localized: "Connection test failed: \(error.localizedDescription)")
+            pendingSaveKind = .apiKey
+        }
+        isSaving = false
+    }
+
+    @MainActor
+    private func validateAndSaveOAuthInstance() async {
+        guard let instance = makeOAuthCandidate(manual: false) else { return }
+        isSaving = true
+        errorMessage = nil
+        pendingSaveKind = nil
+        do {
+            try await validateConnection(for: instance)
+            store.addInstance(instance)
+            dismiss()
+        } catch {
+            errorMessage = String(localized: "Connection test failed: \(error.localizedDescription)")
+            pendingSaveKind = .oauth
+        }
+        isSaving = false
+    }
+
+    @MainActor
+    private func validateAndSaveManualOAuthInstance() async {
+        guard let instance = makeOAuthCandidate(manual: true) else { return }
+        let token = manualOAuthTokenInput.components(separatedBy: .whitespacesAndNewlines).joined()
+        guard !token.isEmpty else { return }
+        isSaving = true
+        errorMessage = nil
+        pendingSaveKind = nil
+        ProviderKeychainHelper.saveOAuthString(token, instanceId: instance.id, account: "manual-oauth-token")
+        do {
+            try await validateConnection(for: instance)
+            store.addInstance(instance)
+            dismiss()
+        } catch {
+            ProviderKeychainHelper.deleteOAuthString(instanceId: instance.id, account: "manual-oauth-token")
+            errorMessage = String(localized: "Connection test failed: \(error.localizedDescription)")
+            pendingSaveKind = .manualOAuth
+        }
+        isSaving = false
+    }
+
+    @MainActor
+    private func validateConnection(for instance: ProviderInstance) async throws {
+        let voiceEntries = VoiceProviderTemplate.mockEntries(for: instance)
+        if let entry = voiceEntries.first {
+            let modalities = entry.model.modalityOverride ?? entry.model.capabilities.supportedModalities
+            let kind: ModelQuickTestSheet.Kind = modalities.contains(.audioOutput) ? .speechOut : .transcription
+            _ = try await TestSession.performTestStatic(
+                kind,
+                entry: entry,
+                onboardingInstance: instance
+            )
+            return
+        }
+
+        let result = try await ProviderConfigStore.fetchModelsWithFallback(instance, forceRefresh: true)
+        guard let model = result.models.first(where: {
+            ($0.modalityOverride ?? $0.capabilities.supportedModalities).contains(.textOutput)
+        }) ?? result.models.first else {
+            throw ProviderOnboardingValidationError.noModels
+        }
+        let entry = ModelEntry(providerInstanceId: instance.id, model: model)
+        _ = try await TestSession.performTestStatic(
+            .text,
+            entry: entry,
+            onboardingInstance: instance
+        )
+    }
 
     private func saveApiKeyInstance() {
         guard let type = selectedType else { return }
@@ -971,6 +1133,8 @@ struct AddProviderView: View {
             return String(localized: "Supports OpenAI official API and third-party services like OpenRouter, MiniMax, etc.")
         case (.openAIResponses, .apiKey):
             return String(localized: "Use an API key for a Responses API endpoint")
+        case (.kimiCode, .apiKey):
+            return String(localized: "Use a Kimi Coding API key.")
         case (_, .apiKey):
             return String(localized: "Use an API key from your \(type.displayName) account")
         case (.anthropic, .oauth):
@@ -989,8 +1153,6 @@ struct AddProviderView: View {
             return String(localized: "Sign in with your SuperGrok / X Premium+ subscription. xAI may restrict API access on some plans — if you hit HTTP 403, switch to an API key.")
         case (.kimiCode, .oauth):
             return String(localized: "Sign in with your Kimi Code / Coding Plan subscription.")
-        case (.kimiCode, .apiKey):
-            return String(localized: "Use a Kimi Coding API key.")
         case (.unsupported, _):
             return String(localized: "This provider isn't supported in this app version.")
         }
@@ -1043,4 +1205,3 @@ struct AddProviderView: View {
         }
     }
 }
-

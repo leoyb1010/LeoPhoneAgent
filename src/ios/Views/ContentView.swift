@@ -2063,7 +2063,7 @@ struct ContentView: View {
 
         shareLog.info("[Share] Loaded \(pending.items.count) items into buffer — launch flow unchanged")
         for (i, item) in pending.items.enumerated() {
-            shareLog.info("[Share]   item[\(i)] kind=\(item.kind.rawValue) value=\(String(item.value.prefix(100)))")
+            shareLog.info("[Share] item[\(i)] kind=\(item.kind.rawValue) valueLength=\(item.value.count)")
         }
 
         SharedContainerStore.clearPendingShare()
@@ -3536,7 +3536,7 @@ private struct DraggableFAB<Label: View>: View {
                                 dragOffset = 0
                             }
                             if changed {
-                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                                LeoHaptics.impact(.medium)
                             }
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                                 didDrag = false
@@ -4328,175 +4328,27 @@ struct SessionEditSheet: View {
 /// stacking animations on repeated onAppear calls.
 private struct SpinningRing: View {
     let color: Color
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    @ViewBuilder
     var body: some View {
-        TimelineView(.animation) { timeline in
-            let angle = timeline.date.timeIntervalSinceReferenceDate.remainder(dividingBy: 1.0) * 360
+        if reduceMotion {
             Circle()
                 .trim(from: 0, to: 0.3)
                 .stroke(color, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
-                .rotationEffect(.degrees(angle))
+        } else {
+            TimelineView(.animation) { timeline in
+                let angle = timeline.date.timeIntervalSinceReferenceDate.remainder(dividingBy: 1.0) * 360
+                Circle()
+                    .trim(from: 0, to: 0.3)
+                    .stroke(color, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+                    .rotationEffect(.degrees(angle))
+            }
         }
     }
 }
 
 // MARK: - Appearance Settings
-
-private struct AppIconOption: Identifiable {
-    let id: Int
-    let title: String
-    let subtitle: String
-    let iconName: String?  // nil = automatic (default asset catalog icon)
-    let imageName: String  // bundle image file name for preview
-}
-
-private struct LanguageOption: Identifiable {
-    let id: String   // language code, "" = system
-    let name: String  // native name
-    let flag: String
-}
-
-private let supportedLanguages: [LanguageOption] = [
-    LanguageOption(id: "",       name: "System", flag: ""),
-    LanguageOption(id: "en",     name: "English", flag: "🇺🇸"),
-    LanguageOption(id: "zh-Hans", name: "简体中文", flag: "🇨🇳"),
-    LanguageOption(id: "ja",     name: "日本語", flag: "🇯🇵"),
-    LanguageOption(id: "ko",     name: "한국어", flag: "🇰🇷"),
-    LanguageOption(id: "fr",     name: "Français", flag: "🇫🇷"),
-    LanguageOption(id: "de",     name: "Deutsch", flag: "🇩🇪"),
-    LanguageOption(id: "ru",     name: "Русский", flag: "🇷🇺"),
-]
-
-private struct FontScaleRow: View {
-    let label: String
-    @Binding var level: FontScaleLevel
-
-    private static let cases = FontScaleLevel.allCases
-    private let stepCount = FontScaleRow.cases.count  // 5
-
-    private var currentIndex: Int {
-        Self.cases.firstIndex(of: level) ?? 0
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            // `label` is a fixed English identifier ("Chat Input" etc.);
-            // wrap in LocalizedStringKey so SwiftUI looks it up in the
-            // String Catalog instead of rendering the verbatim English.
-            Text(LocalizedStringKey(label))
-            HStack(spacing: 12) {
-                Button {
-                    let idx = currentIndex - 1
-                    if idx >= 0 {
-                        level = Self.cases[idx]
-                    }
-                } label: {
-                    Text("A")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-
-                SteppedSlider(value: currentIndex, steps: stepCount) { newIndex in
-                    if newIndex >= 0, newIndex < Self.cases.count {
-                        let newLevel = Self.cases[newIndex]
-                        if newLevel != level { level = newLevel }
-                    }
-                }
-
-                Button {
-                    let idx = currentIndex + 1
-                    if idx < Self.cases.count {
-                        level = Self.cases[idx]
-                    }
-                } label: {
-                    Text("A")
-                        .font(.system(size: 22, weight: .medium))
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.vertical, 2)
-    }
-}
-
-/// A custom stepped slider that supports both drag and tap-to-snap.
-/// Uses local gesture state to avoid layout feedback loops from SwiftUI's Slider.
-private struct SteppedSlider: View {
-    let value: Int
-    let steps: Int
-    let onChanged: (Int) -> Void
-
-    private let trackHeight: CGFloat = 4
-    private let thumbSize: CGFloat = 22
-    private let tickSize: CGFloat = 6
-
-    @State private var dragValue: Int?
-
-    private var displayValue: Int { dragValue ?? value }
-
-    var body: some View {
-        GeometryReader { geo in
-            let totalW = geo.size.width
-            let midY = geo.size.height / 2
-            let maxStep = CGFloat(steps - 1)
-
-            ZStack(alignment: .leading) {
-                // Track background
-                Capsule()
-                    .fill(Color(.systemFill))
-                    .frame(height: trackHeight)
-                    .position(x: totalW / 2, y: midY)
-
-                // Filled portion
-                let fillW = maxStep > 0 ? totalW * CGFloat(displayValue) / maxStep : 0
-                Capsule()
-                    .fill(Color.accentColor)
-                    .frame(width: fillW, height: trackHeight)
-                    .position(x: fillW / 2, y: midY)
-
-                // Tick marks
-                ForEach(0..<steps, id: \.self) { i in
-                    let x = maxStep > 0 ? totalW * CGFloat(i) / maxStep : 0
-                    Circle()
-                        .fill(i <= displayValue ? Color.accentColor : Color(.systemFill))
-                        .frame(width: tickSize, height: tickSize)
-                        .position(x: x, y: midY)
-                }
-
-                // Thumb
-                let thumbX = maxStep > 0 ? totalW * CGFloat(displayValue) / maxStep : 0
-                Circle()
-                    .fill(.white)
-                    .shadow(color: .black.opacity(0.15), radius: 2, y: 1)
-                    .frame(width: thumbSize, height: thumbSize)
-                    .position(x: thumbX, y: midY)
-            }
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { drag in
-                        let step = stepFromX(drag.location.x, width: totalW)
-                        if step != dragValue { dragValue = step }
-                    }
-                    .onEnded { drag in
-                        let step = stepFromX(drag.location.x, width: totalW)
-                        dragValue = nil
-                        onChanged(step)
-                    }
-            )
-        }
-        .frame(height: thumbSize + 8)
-    }
-
-    private func stepFromX(_ x: CGFloat, width: CGFloat) -> Int {
-        guard width > 0, steps > 1 else { return 0 }
-        let fraction = x / width
-        let clamped = min(max(fraction, 0), 1)
-        return Int((clamped * CGFloat(steps - 1)).rounded())
-    }
-}
 
 private struct AppearanceSettingsView: View {
     @AppStorage("appearanceMode") private var appearanceMode: Int = 0
@@ -4851,6 +4703,19 @@ private struct SettingsSheet: View {
 
                 Section("Agent Runtime") {
                     NavigationLink {
+                        QuickTaskSettingsView()
+                    } label: {
+                        Label {
+                            Text("Quick Tasks")
+                        } icon: {
+                            Image(systemName: "bolt.fill")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.white)
+                                .frame(width: 21, height: 21)
+                                .background(.indigo, in: Circle())
+                        }
+                    }
+                    NavigationLink {
                         SkillsManagementView()
                     } label: {
                         Label {
@@ -5039,9 +4904,11 @@ private struct SettingsSheet: View {
                                 .background(.indigo, in: Circle())
                         }
                     }
-                    Link(destination: URL(string: "https://openminis.github.io/privacy-policy.html")!) {
+                    NavigationLink {
+                        LeoPrivacyView()
+                    } label: {
                         Label {
-                            Text("Privacy Policy")
+                            Text("Privacy & Data")
                         } icon: {
                             Image(systemName: "hand.raised")
                                 .font(.system(size: 9))
@@ -5332,82 +5199,4 @@ private struct SettingsSheet: View {
 
 #Preview {
     ContentView()
-}
-
-/// Rotate-and-pause animation for the "syncing" title indicator. Period
-/// scales with the active throttle so the user can tell at a glance how
-/// fast sync is going: full speed = quick pulses, background = slow.
-///
-/// Loop is driven by a `.task` whose Task is cancelled automatically when
-/// the view disappears. Earlier versions used `onAppear { tick() }` with
-/// a self-rescheduling `DispatchQueue.main.asyncAfter` chain, which never
-/// stopped the old chain — so each tab-switch back to home spawned a new
-/// chain on top of the previous one, doubling/quadrupling perceived
-/// rotation speed until the view tree rebuilt.
-private struct PulseRotateIcon: View {
-    @State private var rotation: Double = 0
-    var body: some View {
-        Image(systemName: "arrow.triangle.2.circlepath")
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(.primary)
-            .rotationEffect(.degrees(rotation))
-            .task { await pulseLoop() }
-    }
-    /// Reads SyncCore's currentSendDelay (5s sync sheet → 60s background)
-    /// and converts to an animation cadence: animation phase ≈ delay/4,
-    /// hold phase ≈ delay/4. Clamped so it never feels frozen or frantic.
-    private func currentPeriod() -> (anim: TimeInterval, hold: TimeInterval) {
-        let delay: TimeInterval
-        if #available(iOS 17.0, *) {
-            delay = SyncCore.shared.currentSendDelay
-        } else {
-            delay = 10
-        }
-        // 5s → 1.0s anim + 1.0s hold → ~2s period (active)
-        // 15s → 1.5s anim + 1.5s hold
-        // 30s → 2.0s anim + 2.0s hold
-        // 60s → 2.5s anim + 2.5s hold (slow)
-        let anim = max(0.8, min(2.5, delay / 12 + 0.5))
-        let hold = anim
-        return (anim, hold)
-    }
-    @MainActor
-    private func pulseLoop() async {
-        while !Task.isCancelled {
-            let (anim, hold) = currentPeriod()
-            withAnimation(.easeInOut(duration: anim)) {
-                rotation += 180
-            }
-            let total = UInt64((anim + hold) * 1_000_000_000)
-            try? await Task.sleep(nanoseconds: total)
-        }
-    }
-}
-
-/// Transient confirmation banner shown after a Force Sync runs against
-/// a multi-session selection. Floats at the top of the home view, fades
-/// in and out over ~4s. Mirrors the iOS system "Now playing" pill.
-private struct ForceSyncToastBanner: View {
-    let text: String
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "icloud.and.arrow.up")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white)
-            Text(text)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.white)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.accentColor.opacity(0.92))
-        )
-        .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
-        .padding(.horizontal, 16)
-        .frame(maxWidth: 480)
-    }
 }

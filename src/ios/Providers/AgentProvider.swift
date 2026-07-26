@@ -11,45 +11,6 @@ func sanitizeToolId(_ id: String) -> String {
     return String(id.unicodeScalars.map { allowed.contains($0) ? Character($0) : Character("-") })
 }
 
-// MARK: - Canonical Tool Definitions
-
-/// Canonical tool definition used by the agent loop — provider-agnostic.
-struct AgentToolDefinition {
-    let name: String
-    let description: String
-    let parameters: [String: AgentToolParam]
-    let required: [String]
-    /// Explicit property generation order. When provided, providers that support it
-    /// (e.g. Gemini) will instruct the model to emit parameters in this order.
-    let propertyOrdering: [String]?
-
-    init(name: String, description: String, parameters: [String: AgentToolParam], required: [String], propertyOrdering: [String]? = nil) {
-        self.name = name
-        self.description = description
-        self.parameters = parameters
-        self.required = required
-        self.propertyOrdering = propertyOrdering
-    }
-}
-
-struct AgentToolParam {
-    let type: AgentParamType
-    let description: String
-    let enumValues: [String]?
-
-    init(type: AgentParamType, description: String, enumValues: [String]? = nil) {
-        self.type = type
-        self.description = description
-        self.enumValues = enumValues
-    }
-}
-
-enum AgentParamType: String {
-    case string
-    case integer
-    case boolean
-}
-
 // MARK: - Agent Messages
 
 /// A single content part in agent messages — provider-agnostic.
@@ -217,4 +178,3 @@ extension AgentProvider {
         try await streamAgentMessage(messages: messages, systemPrompt: systemPrompt, tools: tools, maxTokens: maxTokens, thinkingLevel: .off)
     }
 }
-

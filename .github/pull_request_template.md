@@ -1,21 +1,14 @@
-<!--
-  Please read before submitting.
+## Summary
 
-  This repository does not accept pull requests. It is a mirror: development
-  happens in a private tree and is published here on each release, so there is
-  nowhere for a PR to land — it would be overwritten by the next sync.
+<!-- What changes, and why? -->
 
-  This is not about the quality of your work. If you open one anyway, we will
-  close it with a link to CONTRIBUTING.md.
+## iOS verification
 
-  What helps instead:
+- [ ] Built the LeoPhoneAgent scheme
+- [ ] Tested the affected flow on iPhone or documented why not
+- [ ] Checked light and dark appearance where relevant
+- [ ] Checked Dynamic Type and Reduce Motion where relevant
 
-    • Bugs and feature requests → open an issue
-      https://github.com/OpenMinis/OpenMinis/issues
+## Risk and rollback
 
-    • Use cases and workflows   → OpenMinis/AwesomeMinis  (accepts PRs)
-    • Skills                    → OpenMinis/MinisSkills   (accepts PRs)
-    • Questions and discussion  → the Telegram group, linked in the README
-
-  See CONTRIBUTING.md for the full picture.
--->
+<!-- Note data migrations, entitlements, permissions, sync behavior, or a safe rollback path. -->

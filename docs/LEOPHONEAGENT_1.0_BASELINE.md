@@ -18,7 +18,7 @@ LeoPhoneAgent-specific feature development begins.
 | Product / scheme | `LeoPhoneAgent` |
 | Marketing version | `1.0` |
 | Build number | `1` |
-| Development team | `54UB8X9C5F` |
+| Development team | `48H5Y3LNUK` |
 | Main bundle ID | `com.leoyuan.leophoneagent` |
 | Share extension | `com.leoyuan.leophoneagent.ShareExtension` |
 | File Provider | `com.leoyuan.leophoneagent.FileProvider` |
@@ -33,10 +33,9 @@ target names remain in 1.0 for upstream and stored-data compatibility. They are
 not public brand identifiers and should be migrated only with an explicit data
 and script compatibility plan.
 
-The iOS “Add to Home Screen” web-app flow still uses the upstream
-`openminis.app/launch.html` compatibility launcher in 1.0. Replace that endpoint
-with a LeoPhoneAgent-controlled HTTPS domain before a public distribution; iOS
-web clips need an HTTPS handoff page before returning through the custom scheme.
+The 1.0 upstream launcher limitation was removed in 1.0.1: the client now targets the
+LeoPhoneAgent-owned GitHub Pages path and the launcher source is maintained at
+`docs/launch.html`.
 
 ## Build verification
 
@@ -48,7 +47,8 @@ Verified locally on macOS with Xcode 26.6 (17F113):
 - Alpine Linux 3.21.0 aarch64 fakefs rootfs: passed
 - Xcode generic iOS device build with signing disabled: **passed**
 - Main app, Share, File Provider, Widget and App Intents metadata: **passed**
-- Signed automatic-provisioning build: pending Xcode account login
+- Signed automatic-provisioning build for paired iPhone 17 Pro Max: **passed**
+- Generated profile team and application identifier: `48H5Y3LNUK` / `48H5Y3LNUK.com.leoyuan.leophoneagent`: **verified**
 
 Unsigned verification command:
 
@@ -59,19 +59,17 @@ xcodebuild -project src/ios/LeoPhoneAgent.xcodeproj \
   CODE_SIGNING_ALLOWED=NO build
 ```
 
-After signing into the Apple ID that owns team `54UB8X9C5F` in Xcode →
-Settings → Accounts, create/register the App Group and iCloud container if the
-portal does not do so automatically, then run:
+Signed-device verification command:
 
 ```sh
 xcodebuild -project src/ios/LeoPhoneAgent.xcodeproj \
   -scheme LeoPhoneAgent -configuration Debug \
-  -destination 'generic/platform=iOS' \
-  -allowProvisioningUpdates DEVELOPMENT_TEAM=54UB8X9C5F build
+  -destination 'id=2A6E7C6F-45DD-5B4F-8D08-1BD1037D353B' \
+  -allowProvisioningUpdates DEVELOPMENT_TEAM=48H5Y3LNUK build
 ```
 
-The certificate is present locally, but a certificate alone cannot create new
-provisioning profiles; Xcode needs a valid logged-in developer account session.
+Xcode automatically created the required development profiles and signed the
+main app, Share extension, File Provider extension and Widget extension.
 
 ## Native-build path note
 

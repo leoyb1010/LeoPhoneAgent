@@ -102,7 +102,7 @@ final class ClaudeOAuthManager: NSObject, ObservableObject {
             URLQueryItem(name: "state", value: state),
         ]
         let authorizationURL = components.url!
-        logger.info("Authorization URL: \(authorizationURL.absoluteString)")
+        logger.info("Opening OAuth authorization page for \(authorizationURL.host ?? "provider")")
 
         // 3. Open in-app Safari
         presentSafariViewController(url: authorizationURL)
@@ -354,28 +354,14 @@ final class ClaudeOAuthManager: NSObject, ObservableObject {
         logger.info("\(context) POST \(self.tokenURL)")
         logger.info("\(context) Content-Type: application/json")
         logger.info("\(context) Body keys: \(body.keys.sorted().joined(separator: ", "))")
-        #if DEBUG
-        if let bodyStr = String(data: jsonData, encoding: .utf8) {
-            logger.debug("\(context) Body: \(bodyStr)")
-        }
-        #endif
-
         let (data, response) = try await URLSession.shared.data(for: request)
         let http = response as? HTTPURLResponse
         let statusCode = http?.statusCode ?? -1
         let responseBody = String(data: data, encoding: .utf8) ?? "<binary>"
 
         logger.info("\(context) Response status: \(statusCode)")
-        #if DEBUG
-        logger.info("\(context) Response body: \(responseBody.prefix(500))")
-        #endif
-
         guard (200..<300).contains(statusCode) else {
-            #if DEBUG
-            logger.error("\(context) FAILED — status \(statusCode): \(responseBody)")
-            #else
             logger.error("\(context) FAILED — status \(statusCode)")
-            #endif
             // [T-oauth-refresh-race-classify] Embed the real HTTP status so
             // isRefreshTokenInvalid classifies structurally, not by scraping
             // digits/substrings out of the body.

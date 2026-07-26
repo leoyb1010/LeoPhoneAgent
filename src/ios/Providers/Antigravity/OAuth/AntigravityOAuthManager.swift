@@ -115,7 +115,7 @@ final class AntigravityOAuthManager: NSObject, ObservableObject {
             URLQueryItem(name: "code_challenge_method", value: "S256"),
         ]
         let authorizationURL = components.url!
-        logger.info("Authorization URL: \(authorizationURL.absoluteString)")
+        logger.info("Opening OAuth authorization page for \(authorizationURL.host ?? "provider")")
 
         // 3. Open in-app Safari
         presentSafariViewController(url: authorizationURL)
@@ -297,7 +297,7 @@ final class AntigravityOAuthManager: NSObject, ObservableObject {
 
         guard (200..<300).contains(statusCode) else {
             #if DEBUG
-            logger.error("\(context) FAILED — status \(statusCode): \(responseBody.prefix(500))")
+            logger.error("\(context) FAILED — status \(statusCode)")
             #else
             logger.error("\(context) FAILED — status \(statusCode)")
             #endif
@@ -384,11 +384,7 @@ final class AntigravityOAuthManager: NSObject, ObservableObject {
         let statusCode = http?.statusCode ?? -1
         let responseBody = String(data: data, encoding: .utf8) ?? ""
 
-        #if DEBUG
-        logger.info("loadCodeAssist (\(baseURL)) response: \(statusCode) \(responseBody.prefix(500))")
-        #else
-        logger.info("loadCodeAssist (\(baseURL)) response: \(statusCode)")
-        #endif
+        logger.info("loadCodeAssist response: \(statusCode)")
 
         guard (200..<300).contains(statusCode) else { return nil }
 

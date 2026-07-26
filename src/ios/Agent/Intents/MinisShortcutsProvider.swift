@@ -30,7 +30,7 @@ struct MinisShortcutsProvider: AppShortcutsProvider {
             systemImageName: "sparkles"
         )
         AppShortcut(
-            intent: QuickTaskIntent(),
+            intent: RunQuickTaskIntent(),
             phrases: [
                 "Run a \(.applicationName) quick task",
                 "Use \(.applicationName) quick task",

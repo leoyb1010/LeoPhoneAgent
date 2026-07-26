@@ -1,6 +1,6 @@
 ---
 name: 🐛 Bug Report
-about: Report a bug or unexpected behavior in Minis
+about: Report a bug or unexpected behavior in LeoPhoneAgent
 title: "[Bug] "
 labels: ["bug", "triage"]
 ---
@@ -14,10 +14,10 @@ labels: ["bug", "triage"]
 
 | Field | Value |
 |-------|-------|
-| Platform / 平台 | <!-- iOS / Android --> |
-| OS Version / 系统版本 | <!-- e.g. iOS 18.4.1 / Android 15 --> |
-| Minis Version / 应用版本 | <!-- e.g. 1.2.3 (build 456) --> |
-| Device Model / 设备型号 | <!-- e.g. iPhone 16 Pro / Pixel 9 --> |
+| Platform / 平台 | iOS |
+| OS Version / 系统版本 | <!-- e.g. iOS 26.0 --> |
+| LeoPhoneAgent Version / 应用版本 | <!-- e.g. 1.0 (1) --> |
+| Device Model / 设备型号 | <!-- e.g. iPhone 17 Pro Max --> |
 
 ## 🔁 Steps to Reproduce / 重现步骤
 

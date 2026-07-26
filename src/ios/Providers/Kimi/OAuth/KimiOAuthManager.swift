@@ -87,7 +87,7 @@ final class KimiOAuthManager: ObservableObject {
             throw LLMError.invalidAPIKey(detail: "Kimi: OAuth client ID not configured — login unavailable")
         }
         let auth = try await requestDeviceAuthorization()
-        logger.info("Kimi device authorization OK — userCode=\(auth.userCode)")
+        logger.info("Kimi device authorization initialized — hasUserCode=\(!auth.userCode.isEmpty)")
         present(.init(userCode: auth.userCode, verificationURL: auth.openURL))
         let token = try await pollForToken(deviceCode: auth.deviceCode,
                                             interval: auth.interval,

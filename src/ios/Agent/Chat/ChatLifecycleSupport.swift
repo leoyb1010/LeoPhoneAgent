@@ -25,6 +25,16 @@ final class SessionActivityTracker: ObservableObject {
     /// double-inserting into `activeSessions`.
     @Published var draftAliases: [String: String] = [:]
     @Published var currentToolStatus: String = ""
+    /// Authoritative, presentation-ready phase for each live or resumable
+    /// session. Chat, Live Activity and future widgets should consume this
+    /// instead of independently inferring permission/takeover/background waits.
+    @Published private(set) var sessionActivityPhases: [String: AgentActivityPhase] = [:]
+    @Published private(set) var sessionActivityReasons: [String: AgentActivityReason] = [:]
+    /// Runtime-only correlation. Events themselves are persisted in the
+    /// device-local AgentActivityLog; no prompt or tool payload is retained.
+    private var activityRunIds: [String: String] = [:]
+    private var lastActivityPhases: [String: AgentActivityPhase] = [:]
+    private var lastActivityReasons: [String: AgentActivityReason] = [:]
 
     /// Per-session tool info for Live Activity carousel.
     struct SessionToolInfo {
@@ -64,6 +74,19 @@ final class SessionActivityTracker: ObservableObject {
         }
         sessionToolInfo[sessionId] = info
         guard nameChanged || statusChanged else { return }
+        if nameChanged, let runId = activityRunIds[sessionId] {
+            let phase = AgentToolPresentation.phase(for: toolName)
+            sessionActivityPhases[sessionId] = phase
+            AgentActivityLog.shared.append(AgentActivityEvent(
+                runId: runId,
+                sessionId: sessionId,
+                kind: .toolChanged,
+                phase: phase,
+                toolName: toolName
+            ))
+            lastActivityPhases[sessionId] = phase
+            lastActivityReasons.removeValue(forKey: sessionId)
+        }
         logger.info("[LiveActivity][toolInfo] sid=\(sessionId.prefix(8)) toolName=\(toolName) status=\(toolStatus) nameChanged=\(nameChanged)")
         if nameChanged {
             throttledUpdateWorkItem?.cancel()
@@ -95,6 +118,32 @@ final class SessionActivityTracker: ObservableObject {
         var info = sessionToolInfo[sessionId] ?? SessionToolInfo()
         info.loopIteration = iteration
         sessionToolInfo[sessionId] = info
+    }
+
+    func updateActivityPhase(
+        _ sessionId: String,
+        phase: AgentActivityPhase,
+        reason: AgentActivityReason? = nil
+    ) {
+        sessionActivityPhases[sessionId] = phase
+        if let reason {
+            sessionActivityReasons[sessionId] = reason
+        } else {
+            sessionActivityReasons.removeValue(forKey: sessionId)
+        }
+        guard let runId = activityRunIds[sessionId] else { return }
+        let isDuplicate = lastActivityPhases[sessionId] == phase
+            && lastActivityReasons[sessionId] == reason
+        guard !isDuplicate else { return }
+        AgentActivityLog.shared.append(AgentActivityEvent(
+            runId: runId,
+            sessionId: sessionId,
+            kind: .phaseChanged,
+            phase: phase,
+            reason: reason
+        ))
+        lastActivityPhases[sessionId] = phase
+        lastActivityReasons[sessionId] = reason
     }
 
     func updateSessionTitle(_ sessionId: String, title: String) {
@@ -135,13 +184,66 @@ final class SessionActivityTracker: ObservableObject {
         let wasPresent = activeSessions.contains(sessionId)
         activeSessions.insert(sessionId)
         syncMirror()
+        if !wasPresent {
+            if let runId = activityRunIds[sessionId] {
+                AgentActivityLog.shared.append(AgentActivityEvent(
+                    runId: runId,
+                    sessionId: sessionId,
+                    kind: .phaseChanged,
+                    phase: .preparing
+                ))
+            } else {
+                let runId = UUID().uuidString
+                activityRunIds[sessionId] = runId
+                AgentActivityLog.shared.append(AgentActivityEvent(
+                    runId: runId,
+                    sessionId: sessionId,
+                    kind: .runStarted,
+                    phase: .preparing
+                ))
+            }
+            lastActivityPhases[sessionId] = .preparing
+            lastActivityReasons.removeValue(forKey: sessionId)
+            sessionActivityPhases[sessionId] = .preparing
+            sessionActivityReasons.removeValue(forKey: sessionId)
+        }
         logger.info("🟢[Tracker] setActive(\(sessionId.prefix(8))) src=\(source) wasPresent=\(wasPresent) now count=\(activeSessions.count) ids=[\(activeSessions.map { $0.prefix(8) }.joined(separator: ","))]")
+        BackgroundKeepAliveManager.shared.refreshHomeScreenWidget(source: "trackerActive")
     }
 
-    func setInactive(_ sessionId: String, source: String = #function) {
+    func setInactive(
+        _ sessionId: String,
+        finalPhase: AgentActivityPhase = .cancelled,
+        reason: AgentActivityReason? = nil,
+        source: String = #function
+    ) {
         let wasPresent = activeSessions.contains(sessionId)
         activeSessions.remove(sessionId)
         sessionToolInfo.removeValue(forKey: sessionId)
+        if wasPresent, let runId = activityRunIds[sessionId] {
+            AgentActivityLog.shared.append(AgentActivityEvent(
+                runId: runId,
+                sessionId: sessionId,
+                kind: finalPhase.isTerminal ? .runFinished : .phaseChanged,
+                phase: finalPhase,
+                reason: reason
+            ))
+            lastActivityPhases[sessionId] = finalPhase
+            if finalPhase.isTerminal {
+                activityRunIds.removeValue(forKey: sessionId)
+                lastActivityPhases.removeValue(forKey: sessionId)
+                lastActivityReasons.removeValue(forKey: sessionId)
+                sessionActivityPhases.removeValue(forKey: sessionId)
+                sessionActivityReasons.removeValue(forKey: sessionId)
+            } else {
+                sessionActivityPhases[sessionId] = finalPhase
+                if let reason {
+                    sessionActivityReasons[sessionId] = reason
+                } else {
+                    sessionActivityReasons.removeValue(forKey: sessionId)
+                }
+            }
+        }
         // Drop any alias pointing at this session — if the real session is
         // no longer active, its draft alias should not linger either.
         let orphanedAliases = draftAliases.filter { $0.value == sessionId }.map { $0.key }
@@ -150,6 +252,11 @@ final class SessionActivityTracker: ObservableObject {
         }
         syncMirror()
         logger.info("🔴[Tracker] setInactive(\(sessionId.prefix(8))) src=\(source) wasPresent=\(wasPresent) now count=\(activeSessions.count) ids=[\(activeSessions.map { $0.prefix(8) }.joined(separator: ","))] clearedAliases=\(orphanedAliases.count)")
+        BackgroundKeepAliveManager.shared.refreshHomeScreenWidget(
+            source: "trackerInactive",
+            terminalState: finalPhase == .failed ? .failed : .completed,
+            terminalSessionId: sessionId
+        )
     }
 
     /// Register an alias from a draft ID to its newly-minted real session
@@ -157,6 +264,14 @@ final class SessionActivityTracker: ObservableObject {
     /// Removed automatically when the real session goes inactive.
     func setDraftAlias(draft draftId: String, real realId: String) {
         draftAliases[draftId] = realId
+        if let draftRunId = activityRunIds.removeValue(forKey: draftId) {
+            activityRunIds[realId] = draftRunId
+            lastActivityPhases[realId] = lastActivityPhases.removeValue(forKey: draftId)
+            lastActivityReasons[realId] = lastActivityReasons.removeValue(forKey: draftId)
+            sessionActivityPhases[realId] = sessionActivityPhases.removeValue(forKey: draftId)
+            sessionActivityReasons[realId] = sessionActivityReasons.removeValue(forKey: draftId)
+            AgentActivityLog.shared.reassign(runId: draftRunId, from: draftId, to: realId)
+        }
         syncMirror()
         logger.info("🔗[Tracker] setDraftAlias(\(draftId.prefix(8)) → \(realId.prefix(8)))")
     }
@@ -559,4 +674,3 @@ final class ViewModelCache {
     /// Set by MoveToSessionSheet, consumed by AIChatView on appear.
     static var pendingTransfer: PendingTransfer?
 }
-

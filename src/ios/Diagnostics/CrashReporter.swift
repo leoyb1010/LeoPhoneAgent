@@ -155,7 +155,7 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
             var d: [String: Any] = [
                 "index": entry.index,
                 "startedAt": timeFmt.string(from: entry.startedAt),
-                "command": entry.command,
+                "commandLength": entry.commandLength,
                 "sessionId": entry.sessionId
             ]
             if let code = entry.exitCode { d["exitCode"] = code }
@@ -171,8 +171,8 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
             [
                 "sessionId": tab.sessionId,
                 "tabId": tab.tabId,
-                "url": tab.url,
-                "title": tab.title,
+                "host": URL(string: tab.url)?.host ?? "local",
+                "titleLength": tab.title.count,
                 "isLoading": tab.isLoading,
                 "inUse": tab.inUse,
                 "lastActivityAgo": round(tab.lastActivityAgo * 10) / 10
@@ -365,7 +365,7 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
                         var d: [String: Any] = [
                             "index": entry.index,
                             "startedAt": timeFmt.string(from: entry.startedAt),
-                            "command": entry.command,
+                            "commandLength": entry.commandLength,
                             "sessionId": entry.sessionId
                         ]
                         if let code = entry.exitCode { d["exitCode"] = code }

@@ -15,8 +15,10 @@
 #include <unistd.h>
 #include <signal.h>
 #include <pthread.h>
+#include <stdatomic.h>
+#include <errno.h>
 #include <math.h>
-#include "kernel/native_offload.h"
+#import "NativeOffloadUtils.h"
 #include <FFmpeg/FFmpeg.h>
 
 // ── Thread-local stdio redirection (defined in fftools_stdio_redirect.c,
@@ -227,6 +229,7 @@ struct ffmpeg_thread_ctx {
     int out_fd;
     int err_fd;
     int ret;
+    atomic_bool finished;
 };
 
 static void *ffmpeg_thread_func(void *arg) {
@@ -237,13 +240,24 @@ static void *ffmpeg_thread_func(void *arg) {
     ctx->ret = ffmpeg_main(ctx->argc, ctx->argv);
     noff_stdout_fd = -1;
     noff_stderr_fd = -1;
+    atomic_store_explicit(&ctx->finished, true, memory_order_release);
     return NULL;
 }
 
 static int ffmpeg_handler(int argc, char **argv,
                           int stdin_fd, int stdout_fd, int stderr_fd) {
     // ── Serialize: only one ffmpeg_main() at a time ──
-    pthread_mutex_lock(&ffmpeg_mutex);
+    // A second FFmpeg request must not become an uninterruptible mutex wait.
+    int lockError;
+    while ((lockError = pthread_mutex_trylock(&ffmpeg_mutex)) != 0) {
+        if (lockError != EBUSY) {
+            dprintf(stderr_fd, "ffmpeg: unable to acquire execution lock\n");
+            return 1;
+        }
+        if (noff_is_cancelled()) return 130;
+        struct timespec pause = { .tv_sec = 0, .tv_nsec = 50 * NSEC_PER_MSEC };
+        nanosleep(&pause, NULL);
+    }
 
     // ── Reset all global state from previous invocation ──
     ffmpeg_reset_globals();
@@ -271,34 +285,15 @@ static int ffmpeg_handler(int argc, char **argv,
     // ── Rewrite argv for VideoToolbox compatibility ──
     argc = rewrite_argv_for_videotoolbox(argc, argv);
 
-    // ── Debug: log the full command ──
-    NSMutableString *cmdLog = [NSMutableString string];
-    for (int i = 0; i < argc; i++) {
-        const char *a = argv[i];
-        // Quote arguments that contain spaces or shell-special characters
-        bool needsQuote = false;
-        for (const char *c = a; *c; c++) {
-            if (*c == ' ' || *c == '\'' || *c == '"' || *c == '\\' ||
-                *c == '(' || *c == ')' || *c == '&' || *c == '|' ||
-                *c == ';' || *c == '*' || *c == '?') {
-                needsQuote = true;
-                break;
-            }
-        }
-        if (i > 0) [cmdLog appendString:@" "];
-        if (needsQuote) {
-            [cmdLog appendFormat:@"'%s'", a];
-        } else {
-            [cmdLog appendFormat:@"%s", a];
-        }
-    }
-    NSLog(@"[FFmpegOffload] %@", cmdLog);
+    // Do not log arguments: paths and media names can contain private data.
+    NSLog(@"[FFmpegOffload] starting (argumentCount=%d)", argc);
 
     // ── Run ffmpeg on a dedicated thread with 8 MB stack ──
     struct ffmpeg_thread_ctx ctx = {
         .argc = argc, .argv = argv,
         .out_fd = stdout_fd, .err_fd = stderr_fd,
-        .ret = 1
+        .ret = 1,
+        .finished = ATOMIC_VAR_INIT(false)
     };
 
     pthread_t thr;
@@ -310,14 +305,19 @@ static int ffmpeg_handler(int argc, char **argv,
     pthread_attr_destroy(&attr);
 
     if (err == 0) {
+        BOOL cancellationRequested = NO;
+        while (!atomic_load_explicit(&ctx.finished, memory_order_acquire)) {
+            if (!cancellationRequested && noff_is_cancelled()) {
+                cancellationRequested = YES;
+                ffmpeg_request_cancel();
+            }
+            struct timespec pause = { .tv_sec = 0, .tv_nsec = 50 * NSEC_PER_MSEC };
+            nanosleep(&pause, NULL);
+        }
         pthread_join(thr, NULL);
+        if (cancellationRequested) ctx.ret = 130;
     } else {
-        // Fallback: run on current thread — set thread-local fds here
-        noff_stdout_fd = stdout_fd;
-        noff_stderr_fd = stderr_fd;
-        ctx.ret = ffmpeg_main(argc, argv);
-        noff_stdout_fd = -1;
-        noff_stderr_fd = -1;
+        dprintf(stderr_fd, "ffmpeg: unable to create worker thread\n");
     }
 
     // ── Restore av_log callback ──

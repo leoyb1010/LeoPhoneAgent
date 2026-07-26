@@ -787,9 +787,11 @@ extension AIChatViewModel {
     /// (cached VM re-enter) so the detail page's canResume/banner always
     /// matches the list's .paused badge.
     private func recheckCanResumeFromHistory() {
-        guard let sessionId, !isProcessing, let lastEntry = agentHistory.last else { return }
-        let isInterrupted: Bool
-        if lastEntry.role == .user {
+        guard let sessionId, !isProcessing else { return }
+        let persistedRunState = AgentActivityLog.shared.latestRunState(sessionId: sessionId)
+        let hasPersistedInterruption = persistedRunState?.isResumable == true
+        let isInterruptedByHistory: Bool
+        if let lastEntry = agentHistory.last, lastEntry.role == .user {
             let allToolResults = !lastEntry.parts.isEmpty && lastEntry.parts.allSatisfy {
                 if case .toolResult = $0 { return true }; return false
             }
@@ -800,15 +802,16 @@ extension AIChatViewModel {
                 }
                 return false
             }()
-            isInterrupted = allToolResults || isContinueMessage
-        } else if lastEntry.role == .assistant {
+            isInterruptedByHistory = allToolResults || isContinueMessage
+        } else if let lastEntry = agentHistory.last, lastEntry.role == .assistant {
             let hasToolUse = lastEntry.parts.contains {
                 if case .toolUse = $0 { return true }; return false
             }
-            isInterrupted = hasToolUse
+            isInterruptedByHistory = hasToolUse
         } else {
-            isInterrupted = false
+            isInterruptedByHistory = false
         }
+        let isInterrupted = hasPersistedInterruption || isInterruptedByHistory
         if isInterrupted {
             // [T-ios-session-status-mismatch] Cross-check the tracker before
             // declaring "interrupted" — a live loop's DB tail looks identical
@@ -820,7 +823,8 @@ extension AIChatViewModel {
                 if let lastAssistant = messages.last, lastAssistant.role == .assistant {
                     self.committedBlockCount = lastAssistant.blocks.count
                 }
-                logger.info("[SessionLoad] \(sessionId.prefix(8)) — detected interrupted agent loop, canResume=true, committedBlocks=\(self.committedBlockCount)")
+                let source = hasPersistedInterruption ? "durable run state" : "message tail"
+                logger.info("[SessionLoad] \(sessionId.prefix(8)) — detected interrupted agent loop from \(source), canResume=true, committedBlocks=\(self.committedBlockCount)")
             }
         } else if canResume {
             // Tail no longer looks interrupted (e.g. a normal turn completed
@@ -977,9 +981,11 @@ extension AIChatViewModel {
         // cleared in the $isProcessing sink's inactive branch.
         if isProcessing {
             let src = "vm=\(vmInstanceId) ensureSession draft=\(draftId ?? "nil")→real"
-            SessionActivityTracker.shared.setActive(session.id, source: src)
             if let did = draftId {
                 SessionActivityTracker.shared.setDraftAlias(draft: did, real: session.id)
+            }
+            SessionActivityTracker.shared.setActive(session.id, source: src)
+            if let did = draftId {
                 SessionActivityTracker.shared.setInactive(did, source: src + " (migrate off draftId)")
             }
         }

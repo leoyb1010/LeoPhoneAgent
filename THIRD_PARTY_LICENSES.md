@@ -1,6 +1,6 @@
 # Third-Party Licenses
 
-OpenMinis bundles, links, or depends on the following third-party components. Versions reflect the current source tree; license types were verified against each project's repository (GitHub license metadata / LICENSE files).
+LeoPhoneAgent bundles, links, or depends on the following third-party components. Versions reflect the current source tree; license types were verified against each project's repository (GitHub license metadata / LICENSE files).
 
 ## Native C/C++ dependencies (`deps/`)
 
@@ -16,7 +16,7 @@ OpenMinis bundles, links, or depends on the following third-party components. Ve
 
 ## iOS — Swift Package Manager dependencies
 
-Direct packages declared in `src/ios/Minis.xcodeproj`:
+Direct packages declared in `src/ios/LeoPhoneAgent.xcodeproj`:
 
 | Package | Version | Repository | License |
 |---|---|---|---|

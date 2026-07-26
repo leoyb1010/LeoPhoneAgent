@@ -484,11 +484,7 @@ final class AntigravityProvider: LLMProvider {
             if bodyData.count > 4096 { break }
         }
         let body = String(data: bodyData, encoding: .utf8) ?? ""
-        #if DEBUG
-        logger.error("Antigravity streaming API error \(http.statusCode): \(body.prefix(1000))")
-        #else
-        logger.error("Antigravity streaming API error \(http.statusCode)")
-        #endif
+        logger.error("Antigravity streaming API error \(http.statusCode), responseBytes=\(bodyData.count)")
 
         if http.statusCode == 401 || http.statusCode == 403 {
             throw LLMError.invalidAPIKey(detail: "Antigravity HTTP \(http.statusCode): \(String(body.prefix(200)))")
@@ -521,11 +517,7 @@ final class AntigravityProvider: LLMProvider {
             } else {
                 body = "HTTP \(http.statusCode)"
             }
-            #if DEBUG
-            logger.error("Antigravity API error \(http.statusCode): \(body.prefix(500))")
-            #else
-            logger.error("Antigravity API error \(http.statusCode)")
-            #endif
+            logger.error("Antigravity API error \(http.statusCode), responseBytes=\(data?.count ?? 0)")
             let transientStatusCodes: Set<Int> = [500, 502, 503, 504, 529]
             if transientStatusCodes.contains(http.statusCode) {
                 throw LLMError.transientError(message: "Antigravity API error \(http.statusCode): \(body.prefix(200))")
@@ -549,29 +541,20 @@ final class AntigravityProvider: LLMProvider {
     #if DEBUG
     private func logFullRequest(_ request: URLRequest) {
         var parts: [String] = ["📤 Antigravity HTTP Request"]
-        parts.append("  URL: \(request.url?.absoluteString ?? "<nil>")")
+        parts.append("  Host: \(request.url?.host ?? "<nil>")")
+        parts.append("  Path: \(request.url?.path ?? "<nil>")")
         parts.append("  Method: \(request.httpMethod ?? "?")")
 
         if let headers = request.allHTTPHeaderFields {
-            parts.append("  Headers:")
-            for key in headers.keys.sorted() {
-                let value = headers[key] ?? ""
-                if key.lowercased() == "authorization" {
-                    parts.append("    \(key): Bearer ***")
-                } else {
-                    parts.append("    \(key): \(value)")
-                }
-            }
+            parts.append("  Headers: [\(headers.keys.sorted().joined(separator: ", "))]")
         }
 
         if let body = request.httpBody {
-            parts.append("  Body (\(body.count) bytes):")
+            parts.append("  Body: \(body.count) bytes")
             if let json = try? JSONSerialization.jsonObject(with: body),
                let pretty = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),
                let str = String(data: pretty, encoding: .utf8) {
                 LastAPIRequestBody.shared.set(str, provider: "Antigravity")
-                let truncated = String(str.prefix(3000))
-                parts.append(truncated)
             }
         }
 
@@ -579,12 +562,8 @@ final class AntigravityProvider: LLMProvider {
     }
 
     private func logResponse(_ json: [String: Any]) {
-        var parts: [String] = ["📥 Antigravity Response"]
-        if let data = try? JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys]),
-           let str = String(data: data, encoding: .utf8) {
-            parts.append(String(str.prefix(2000)))
-        }
-        logger.debug("\(parts.joined(separator: "\n"))")
+        let bytes = (try? JSONSerialization.data(withJSONObject: json, options: [.sortedKeys]).count) ?? 0
+        logger.debug("📥 Antigravity Response fields=\(json.count) bytes=\(bytes)")
     }
     #endif
 }

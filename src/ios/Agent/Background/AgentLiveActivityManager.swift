@@ -301,35 +301,11 @@ final class AgentLiveActivityManager {
     // MARK: - Tool icon mapping
 
     static func sfSymbol(forTool toolName: String) -> String {
-        switch toolName {
-        case "browser", "browser_use":          return "globe"
-        case "shell", "shell_execute":          return "terminal"
-        case "file_read":                       return "doc.text"
-        case "file_write":                      return "doc.text.fill"
-        case "file_edit":                       return "pencil.line"
-        case "read_image":                      return "photo"
-        case "memory":                          return "brain.head.profile"
-        case "text":                            return "bubble.left"
-        case "thinking":                        return "lightbulb.max"
-        case "code_interpret":                  return "chevron.left.forwardslash.chevron.right"
-        default:                                return "ellipsis.circle"
-        }
+        AgentToolPresentation.symbol(for: toolName)
     }
 
     static func displayName(forTool toolName: String) -> String {
-        switch toolName {
-        case "browser", "browser_use":          return "Browser"
-        case "shell", "shell_execute":          return "Shell"
-        case "file_read":                       return "Read File"
-        case "file_write":                      return "Write File"
-        case "file_edit":                       return "Edit File"
-        case "read_image":                      return "Read Image"
-        case "memory":                          return "Memory"
-        case "text":                            return "Responding"
-        case "thinking":                        return "Thinking"
-        case "code_interpret":                  return "Code"
-        default:                                return "Working"
-        }
+        AgentToolPresentation.displayName(for: toolName)
     }
 
     // MARK: - @available implementations

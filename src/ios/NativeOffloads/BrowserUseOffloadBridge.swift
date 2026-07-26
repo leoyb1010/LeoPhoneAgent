@@ -123,7 +123,7 @@ import Foundation
             return
         }
 
-        logger.info("[BridgeTiming] enter action=\(input.action.rawValue) tab_id=\(input.tabId.map(String.init) ?? "nil") url=\(input.url?.prefix(80) ?? "nil")")
+        logger.info("[BridgeTiming] enter action=\(input.action.rawValue) tab_id=\(input.tabId.map(String.init) ?? "nil") hasURL=\(input.url != nil)")
 
         // Resolve the owning session via the lock-protected snapshot BEFORE
         // hopping to MainActor. Awaiting the coordinator actor here used to
@@ -167,7 +167,7 @@ import Foundation
                 completion(encoded)
             } catch {
                 let totalMs = Int((CFAbsoluteTimeGetCurrent() - bridgeStart) * 1000)
-                logger.info("[BridgeTiming] error elapsed=\(totalMs)ms action=\(input.action.rawValue) error=\(error.localizedDescription.prefix(120))")
+                logger.info("[BridgeTiming] error elapsed=\(totalMs)ms action=\(input.action.rawValue) type=\(String(describing: type(of: error)))")
                 completion([
                     "text": "Error: \(error.localizedDescription)",
                     "success": false,

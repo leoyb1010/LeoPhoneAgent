@@ -64,7 +64,7 @@ enum AntigravityModelsAPI {
 
         guard (200..<300).contains(statusCode) else {
             #if DEBUG
-            logger.error("Antigravity models API error — status \(statusCode): \(responseBody.prefix(500))")
+            logger.error("Antigravity models API error — status \(statusCode) responseBytes=\(data.count)")
             #else
             logger.error("Antigravity models API error — status \(statusCode)")
             #endif

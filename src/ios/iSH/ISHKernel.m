@@ -818,7 +818,7 @@ static void handle_process_exit(struct task *task, int code) {
         task_start(current);
     });
 
-    NSLog(@"ISHKernel: Shell launch initiated: %@", command[0]);
+    NSLog(@"ISHKernel: Shell launch initiated (argc=%lu)", (unsigned long)command.count);
     return 0;
 }
 
@@ -922,7 +922,7 @@ static void handle_process_exit(struct task *task, int code) {
         NSString *commandWithNewline = [commandString stringByAppendingString:@"\n"];
         [self sendInputString:commandWithNewline];
 
-        NSLog(@"ISHKernel: Executing command and waiting: %@", commandString);
+        NSLog(@"ISHKernel: Executing command and waiting (length=%lu)", (unsigned long)commandString.length);
     });
 }
 
@@ -961,7 +961,7 @@ static void handle_process_exit(struct task *task, int code) {
 
             if (match) {
                 // Found a prompt - command is complete
-                NSLog(@"ISHKernel: Detected command completion (prompt pattern: %@)", pattern);
+                NSLog(@"ISHKernel: Detected command completion");
 
                 // Extract the output (everything before the prompt)
                 NSString *commandOutput = buffer;

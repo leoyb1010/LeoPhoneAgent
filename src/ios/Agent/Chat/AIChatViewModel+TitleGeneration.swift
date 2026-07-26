@@ -115,7 +115,7 @@ extension AIChatViewModel {
                 let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
                     .trimmingCharacters(in: CharacterSet(charactersIn: "\""))
                 guard !trimmed.isEmpty else {
-                    logger.error("[TitleGen] FAILED attempt \(attempt)/3 — reason=empty-response (model returned no usable title after trimming, raw: \"\(title.prefix(80))\")")
+                    logger.error("[TitleGen] FAILED attempt \(attempt)/3 — reason=empty-response rawLength=\(title.count)")
                     await Self.applyFallbackTitle(sessionId: sessionId, firstUserRaw: firstUserRaw, attempt: attempt)
                     await MainActor.run {
                         self?.titleGenAttempts = 3
@@ -129,7 +129,7 @@ extension AIChatViewModel {
                     self?.isTitleGenerating = false
                     SessionActivityTracker.shared.updateSessionTitle(sessionId, title: trimmed)
                 }
-                logger.info("[TitleGen] Attempt \(attempt): saved session title: \(trimmed), category: \(category ?? "nil")")
+                logger.info("[TitleGen] Attempt \(attempt): saved session titleLength=\(trimmed.count), hasCategory=\(category != nil)")
             } catch {
                 // Classify the failure so logs show WHY (request error / timeout /
                 // model-unavailable / parse failure all funnel here via thrown
@@ -158,7 +158,7 @@ extension AIChatViewModel {
     /// attempt / regenerate may have set one in the meantime).
     private static func applyFallbackTitle(sessionId: String, firstUserRaw: String, attempt: Int) async {
         if let session = await ChatStore.shared.getSession(sessionId), session.title != nil {
-            logger.info("[TitleGen] Fallback skipped — session already titled: \(session.title ?? "")")
+            logger.info("[TitleGen] Fallback skipped — session already titled, titleLength=\(session.title?.count ?? 0)")
             return
         }
         guard let fallback = fallbackTitle(fromFirstUserMessage: firstUserRaw) else {
@@ -166,7 +166,7 @@ extension AIChatViewModel {
             return
         }
         await ChatStore.shared.updateSessionTitle(sessionId, title: fallback, category: nil)
-        logger.info("[TitleGen] Applied fallback title from first user message: \"\(fallback)\" (attempt \(attempt))")
+        logger.info("[TitleGen] Applied fallback title from first user message, titleLength=\(fallback.count) (attempt \(attempt))")
     }
 
     /// Build a lightweight provider for the sub model and call it to generate a title and category.
@@ -330,7 +330,7 @@ extension AIChatViewModel {
             }
         }
 
-        logger.info("[TitleGen] Raw LLM response (\(responseText.count) chars): \(responseText)")
+        logger.info("[TitleGen] Raw LLM response length=\(responseText.count)")
         let stopStr: String
         switch stopReason {
         case .endTurn?:    stopStr = "endTurn"
@@ -368,11 +368,11 @@ extension AIChatViewModel {
            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            let title = json["title"] as? String, !title.isEmpty {
             let category = json["category"] as? String
-            logger.info("[TitleGen] Parsed JSON — title: \(title), category: \(category ?? "nil")")
+            logger.info("[TitleGen] Parsed JSON titleLength=\(title.count) hasCategory=\(category != nil)")
             return (title, category)
         }
 
-        logger.warning("[TitleGen] JSON parse failed for extracted: \(jsonString)")
+        logger.warning("[TitleGen] JSON parse failed extractedLength=\(jsonString.count)")
 
         // Regex fallback: extract title value from malformed JSON
         if let titleMatch = jsonString.range(of: #""title"\s*:\s*"([^"]+)""#, options: .regularExpression) {
@@ -381,7 +381,7 @@ extension AIChatViewModel {
             if let valueStart = matchStr.range(of: #":\s*""#, options: .regularExpression)?.upperBound,
                let valueEnd = matchStr.lastIndex(of: "\""), valueStart < valueEnd {
                 let title = String(matchStr[valueStart..<valueEnd])
-                logger.info("[TitleGen] Regex fallback — title: \(title)")
+                logger.info("[TitleGen] Regex fallback titleLength=\(title.count)")
                 return (title, nil)
             }
         }
@@ -391,11 +391,11 @@ extension AIChatViewModel {
             .trimmingCharacters(in: CharacterSet(charactersIn: "\"{}"))
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if !raw.isEmpty && raw.count < 60 && !raw.contains("{") && !raw.contains("}") {
-            logger.info("[TitleGen] Plain text fallback — title: \(raw)")
+            logger.info("[TitleGen] Plain text fallback accepted (length=\(raw.count))")
             return (raw, nil)
         }
 
-        logger.error("[TitleGen] All parsing strategies failed. Response was: \(responseText)")
+        logger.error("[TitleGen] All parsing strategies failed responseLength=\(responseText.count)")
         throw NSError(domain: "TitleGen", code: -2, userInfo: [NSLocalizedDescriptionKey: "Failed to parse title from response: \(responseText.prefix(200))"])
     }
 

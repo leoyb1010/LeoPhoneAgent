@@ -11,6 +11,7 @@ import UIKit
 
 struct InlineVoiceInputView: View {
     @ObservedObject var viewModel: VoiceInputViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Mirrors the recognized text into the composer's input binding.
     @Binding var inputText: String
     var onPasteImage: ((UIImage) -> Void)?
@@ -986,14 +987,21 @@ struct InlineVoiceInputView: View {
                     .shadow(color: .black.opacity(0.18), radius: expanded ? 7 : 5, y: expanded ? 3 : 2)
 
                 if viewModel.isTranscribing {
-                    TimelineView(.animation) { context in
-                        let t = context.date.timeIntervalSinceReferenceDate
-                        let angle = Angle(degrees: (t / 0.9).truncatingRemainder(dividingBy: 1) * 360)
+                    if reduceMotion {
                         Circle()
                             .trim(from: 0, to: 75.0 / 360.0)
                             .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                             .frame(width: micDiameter, height: micDiameter)
-                            .rotationEffect(angle)
+                    } else {
+                        TimelineView(.animation) { context in
+                            let t = context.date.timeIntervalSinceReferenceDate
+                            let angle = Angle(degrees: (t / 0.9).truncatingRemainder(dividingBy: 1) * 360)
+                            Circle()
+                                .trim(from: 0, to: 75.0 / 360.0)
+                                .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                                .frame(width: micDiameter, height: micDiameter)
+                                .rotationEffect(angle)
+                        }
                     }
                 }
 
