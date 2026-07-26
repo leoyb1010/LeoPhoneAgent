@@ -12,6 +12,19 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.1.0",
+            date: "2026-07-26",
+            title: "任务成果、个人模板与后台体验全面升级",
+            highlights: [
+                "任务生成的文档、图片、音视频、代码等成果会进入会话 Artifacts，可预览、分享、查看版本历史和恢复删除项。",
+                "Artifacts 可选择通过私有 CloudKit 同步；文件会校验大小与 SHA-256，默认关闭且支持单文件上限。",
+                "个人任务模板支持输入槽位、结构化输出、导入导出，并可固定最多三个到首页与聊天输入区。",
+                "新增标准与 Background Ready 运行策略，结合 Live Activity、通知及 iOS 26 Continued Processing 提升锁屏续跑体验。",
+                "首页密度、关键动效、触感和 VoiceOver 统一优化，完整遵循系统 Reduce Motion 与触感开关。",
+                "升级前已使用本机 1.0.12 数据完成真实迁移演练，并复核 LeoPhoneAgent 自有签名、包名、扩展与权限说明。"
+            ]
+        ),
+        LeoRelease(
             version: "1.0.12",
             date: "2026-07-26",
             title: "快捷任务现在可以自己定制",

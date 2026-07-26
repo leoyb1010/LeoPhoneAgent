@@ -1,12 +1,21 @@
 # LeoPhoneAgent iOS 升级计划
 
-状态：1.0.12 当前阶段收官版实施完成，后续独立阶段继续维护  
+状态：1.1.0（Build 23）阶段目标已完成、已安装真机，后续进入 1.1.x 稳定优化
 范围：仅 iOS  
 基线：LeoPhoneAgent 1.0，提交 `5940de5`  
 目标版本：1.1 到 1.4  
 使用场景：个人自用，不以 App Store 上架为前提
 
 ## 当前实施进度（2026-07-26）
+
+1.1.0 阶段已完成：
+
+- Build 14–18 完成版本化数据库迁移、本地 Artifact Tray、成果版本链、任务结果关联及可选 CloudKit CKAsset 同步。
+- Build 19–20 完成个人任务模板、输入槽位、结构化输出、模板导入导出、首页/Composer 固定任务、列表密度与 Background Ready 策略。
+- Build 21 完成 LeoHaptics、Reduce Motion、VoiceOver 与关键动效统一审计。
+- Build 22 使用 iPhone 上的 1.0.12 Build 13 真实数据库副本完成 v0 → v3 迁移、完整性、外键、行数保持与幂等验证；签名 Release 和三扩展验证通过。
+- Build 23 统一正式版本为 1.1.0（23），新增强制一次的本次更新说明与永久更新记录；正式 Archive 由 Team `48H5Y3LNUK` 签名，已覆盖安装到 iPhone 17 Pro Max 并成功启动。
+- 安装后设备回读 1.1.0（23），实际数据库为 v3，3 个会话和 16 条消息保持不变，主 App 与 Widget Extension 进程均已确认。
 
 已完成并进入 1.0.1：
 

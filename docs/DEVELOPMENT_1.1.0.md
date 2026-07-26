@@ -151,6 +151,16 @@ xcrun swiftc \
 /tmp/LeoPhoneAgentDeviceMigrationAudit /path/to/private-copy/minis.db
 ```
 
+## Build 23 / 1.1.0 发布证据
+
+- App、Tests、Share、File Provider 与 Widget 的 12 组版本配置统一为 `1.1.0 (23)`；`IOSReleaseReadinessAudit` 验证版本、更新提示与自有 Product Identifier 全部通过。
+- `LeoReleaseCatalog` 新增 1.1.0 更新说明；App 检测当前版本与上次确认版本不同后展示不可交互下滑关闭的“本次更新”，用户完成后记录版本；设置中的“更新记录”永久保留历史。
+- 使用全新 Derived Data 生成 `/tmp/LeoPhoneAgent-1.1.0.xcarchive`，`ARCHIVE SUCCEEDED`；Archive 回读 arm64、1.1.0（23）、Team `48H5Y3LNUK`、主包 `com.leoyuan.leophoneagent`。
+- 主 App 深度签名校验通过；AgentWidget、FileProvider、ShareExtension 三个扩展均为 1.1.0（23），Bundle ID 均为 `com.leoyuan.leophoneagent.*`，严格签名验证通过。
+- 最终 Archive 覆盖安装到在线 iPhone 17 Pro Max，设备回读 LeoPhoneAgent `1.1.0 (23)`，主 App 与 AgentWidgetExtension 进程均在运行。
+- 安装后再次仅读取设备数据库副本：Schema Contract `3 → 3`、完整性、外键、行数保持和二次幂等全部通过；3 个会话、16 条消息保持不变，临时副本已逐文件删除。
+- 手机只安装了最终 1.1.0 Build 23；Build 14–22 均为仓库内部检查点，没有逐版覆盖手机。
+
 ## 回滚规则
 
 1. 1.0.12 稳定基线不得改写或移动标签。
