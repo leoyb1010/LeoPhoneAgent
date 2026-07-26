@@ -47,6 +47,10 @@ enum QuickTaskTemplateSmoke {
         try expect(imported.id != created.id, "import identity isolation")
         try expect(imported.outputMode == .json, "output mode round-trip")
         try expect(imported.sortOrder == store.tasks.count - 1, "import remains at end of catalog")
+        try expect(store.composerTaskIDs.count == 3, "default composer shortcuts")
+        try expect(!store.setComposerPinned(true, id: imported.id), "composer shortcut limit")
+        try expect(store.setComposerPinned(false, id: "healthReport"), "composer shortcut unpin")
+        try expect(store.setComposerPinned(true, id: imported.id), "composer shortcut pin")
         print("QuickTaskTemplateSmoke: template lifecycle passed")
     }
 

@@ -8,18 +8,71 @@ struct QuickTaskSettingsView: View {
     @State private var showResetConfirmation = false
     @State private var shareURL: URL?
     @State private var exportError: String?
+    @State private var showComposerLimitAlert = false
 
     var body: some View {
         List {
+            Section {
+                if store.composerTasks.isEmpty {
+                    Text("No pinned actions")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(store.composerTasks) { task in
+                        HStack(spacing: 12) {
+                            Image(systemName: task.symbolName)
+                                .foregroundStyle(.tint)
+                                .frame(width: 24)
+                            Text(task.name)
+                            Spacer()
+                            Button {
+                                store.setComposerPinned(false, id: task.id)
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Remove \(task.name) from Composer")
+                        }
+                    }
+                }
+
+                Menu {
+                    ForEach(store.tasks) { task in
+                        Button {
+                            toggleComposerPin(task)
+                        } label: {
+                            Label(
+                                task.name,
+                                systemImage: store.isPinnedToComposer(task.id) ? "checkmark.circle.fill" : task.symbolName
+                            )
+                        }
+                    }
+                } label: {
+                    Label("Choose Quick Actions", systemImage: "slider.horizontal.3")
+                }
+            } header: {
+                Text("Composer Shortcuts")
+            } footer: {
+                Text("Pin up to three tasks above the chat input for one-tap prompt preparation.")
+            }
+
             Section {
                 ForEach(store.tasks) { task in
                     Button {
                         editingTask = task
                     } label: {
-                        QuickTaskRow(task: task)
+                        QuickTaskRow(task: task, isPinned: store.isPinnedToComposer(task.id))
                     }
                     .buttonStyle(.plain)
                     .contextMenu {
+                        Button {
+                            toggleComposerPin(task)
+                        } label: {
+                            Label(
+                                store.isPinnedToComposer(task.id) ? "Remove from Composer" : "Pin to Composer",
+                                systemImage: store.isPinnedToComposer(task.id) ? "pin.slash" : "pin"
+                            )
+                        }
                         Button {
                             export(task)
                         } label: {
@@ -117,6 +170,18 @@ struct QuickTaskSettingsView: View {
         } message: {
             Text(exportError ?? "")
         }
+        .alert("Composer Limit Reached", isPresented: $showComposerLimitAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Remove one of the three pinned actions before adding another.")
+        }
+    }
+
+    private func toggleComposerPin(_ task: QuickTaskDefinition) {
+        let pinned = store.isPinnedToComposer(task.id)
+        if !store.setComposerPinned(!pinned, id: task.id) {
+            showComposerLimitAlert = true
+        }
     }
 
     private func export(_ task: QuickTaskDefinition) {
@@ -141,6 +206,7 @@ struct QuickTaskSettingsView: View {
 
 private struct QuickTaskRow: View {
     let task: QuickTaskDefinition
+    let isPinned: Bool
 
     var body: some View {
         HStack(spacing: 12) {
@@ -174,6 +240,12 @@ private struct QuickTaskRow: View {
             }
 
             Spacer(minLength: 8)
+            if isPinned {
+                Image(systemName: "pin.fill")
+                    .font(.caption)
+                    .foregroundStyle(.tint)
+                    .accessibilityLabel("Pinned to Composer")
+            }
             Image(systemName: "chevron.right")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.tertiary)

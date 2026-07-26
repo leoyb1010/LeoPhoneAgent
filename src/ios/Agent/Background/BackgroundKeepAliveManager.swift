@@ -10,11 +10,36 @@ import os.log
 
 private let logger = AppLogger(category: "BackgroundKeepAlive")
 
+enum LeoRunPolicy: Int, CaseIterable, Sendable {
+    case standard
+    case backgroundReady
+
+    static let defaultsKey = "leo.defaultRunPolicy"
+
+    var title: String {
+        switch self {
+        case .standard: return "Standard"
+        case .backgroundReady: return "Background Ready"
+        }
+    }
+}
+
 // MARK: - Background Keep Alive Manager
 
 @MainActor
 final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     static let shared = BackgroundKeepAliveManager()
+
+    /// Applies only additive preparation for the next task. Standard respects
+    /// the user's current switches; Background Ready enables the existing
+    /// keep-alive, Live Activity and notification paths without requesting a
+    /// new permission or claiming that iOS guarantees indefinite execution.
+    func prepareForNewTask(policy: LeoRunPolicy) {
+        guard policy == .backgroundReady else { return }
+        enhancedBackgroundEnabled = true
+        liveActivityEnabled = true
+        backgroundNotificationsEnabled = true
+    }
 
     /// True when there are active sessions and enhanced background is enabled.
     /// Used by `waitIfBackgroundSuspended()` to skip suspension.

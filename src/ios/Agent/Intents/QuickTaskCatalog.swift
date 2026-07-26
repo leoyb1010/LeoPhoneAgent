@@ -214,20 +214,56 @@ final class QuickTaskStore: ObservableObject {
     static let shared = QuickTaskStore()
 
     static let storageKey = "leo.quickTasks.v1"
+    static let composerTaskIDsKey = "leo.quickTasks.composerTaskIDs.v1"
+    static let composerTaskLimit = 3
 
     @Published private(set) var tasks: [QuickTaskDefinition]
+    @Published private(set) var composerTaskIDs: [String]
 
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        let loadedTasks: [QuickTaskDefinition]
         if let data = defaults.data(forKey: Self.storageKey),
            let decoded = try? JSONDecoder().decode([QuickTaskDefinition].self, from: data) {
-            self.tasks = Self.normalized(decoded)
+            loadedTasks = Self.normalized(decoded)
         } else {
-            self.tasks = QuickTaskDefinition.builtIns
+            loadedTasks = QuickTaskDefinition.builtIns
+        }
+        self.tasks = loadedTasks
+        if let storedIDs = defaults.array(forKey: Self.composerTaskIDsKey) as? [String] {
+            self.composerTaskIDs = Self.normalizedComposerTaskIDs(storedIDs, tasks: loadedTasks)
+        } else {
+            self.composerTaskIDs = Array(loadedTasks.prefix(Self.composerTaskLimit).map(\.id))
         }
         persist(notifyShortcuts: false)
+        persistComposerTaskIDs()
+    }
+
+    var composerTasks: [QuickTaskDefinition] {
+        composerTaskIDs.compactMap { definition(for: $0) }
+    }
+
+    func isPinnedToComposer(_ id: String) -> Bool {
+        composerTaskIDs.contains(id)
+    }
+
+    /// Pins at most three stable task identifiers. Returns false only when a
+    /// fourth task was requested; unpinning and idempotent pinning always work.
+    @discardableResult
+    func setComposerPinned(_ pinned: Bool, id: String) -> Bool {
+        guard definition(for: id) != nil else { return false }
+        if pinned {
+            guard !composerTaskIDs.contains(id) else { return true }
+            guard composerTaskIDs.count < Self.composerTaskLimit else { return false }
+            composerTaskIDs.append(id)
+        } else {
+            composerTaskIDs.removeAll { $0 == id }
+        }
+        persistComposerTaskIDs()
+        NotificationCenter.default.post(name: .quickTaskCatalogDidChange, object: nil)
+        return true
     }
 
     func definition(for id: String) -> QuickTaskDefinition? {
@@ -276,8 +312,10 @@ final class QuickTaskStore: ObservableObject {
     func delete(id: String) {
         guard QuickTaskDefinition.builtIn(id: id) == nil else { return }
         tasks.removeAll { $0.id == id }
+        composerTaskIDs.removeAll { $0 == id }
         resequence()
         persist()
+        persistComposerTaskIDs()
     }
 
     func move(from source: IndexSet, to destination: Int) {
@@ -345,6 +383,17 @@ final class QuickTaskStore: ObservableObject {
         return result
     }
 
+    static func normalizedComposerTaskIDs(
+        _ ids: [String],
+        tasks: [QuickTaskDefinition]
+    ) -> [String] {
+        let validIDs = Set(tasks.map(\.id))
+        var seen = Set<String>()
+        return ids.filter { validIDs.contains($0) && seen.insert($0).inserted }
+            .prefix(Self.composerTaskLimit)
+            .map { $0 }
+    }
+
     private func resequence() {
         for index in tasks.indices {
             tasks[index].sortOrder = index
@@ -357,6 +406,10 @@ final class QuickTaskStore: ObservableObject {
         if notifyShortcuts {
             NotificationCenter.default.post(name: .quickTaskCatalogDidChange, object: nil)
         }
+    }
+
+    private func persistComposerTaskIDs() {
+        defaults.set(composerTaskIDs, forKey: Self.composerTaskIDsKey)
     }
 }
 

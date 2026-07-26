@@ -70,6 +70,36 @@ private func probeRowHeight(_ h: CGFloat, _ tag: String) {
 }
 #endif
 
+private enum LeoSessionListDensity: Int, CaseIterable {
+    case compact
+    case standard
+    case comfortable
+
+    var title: String {
+        switch self {
+        case .compact: return "Compact"
+        case .standard: return "Standard"
+        case .comfortable: return "Comfortable"
+        }
+    }
+
+    var verticalPadding: CGFloat {
+        switch self {
+        case .compact: return 8
+        case .standard: return 12
+        case .comfortable: return 16
+        }
+    }
+
+    var iconSize: CGFloat {
+        switch self {
+        case .compact: return 38
+        case .standard: return 44
+        case .comfortable: return 48
+        }
+    }
+}
+
 /// Sheets triggered from the toolbar menu, consolidated into a single `.sheet(item:)`.
 enum ToolSheet: String, Identifiable {
     case settings
@@ -2076,6 +2106,7 @@ struct ContentView: View {
     // MARK: - Empty State
 
     @StateObject private var providerStore = ProviderConfigStore.shared
+    @ObservedObject private var quickTaskStore = QuickTaskStore.shared
     @State private var showAddProvider = false
     @State private var showSelectModels = false
 
@@ -2140,6 +2171,30 @@ struct ContentView: View {
             }
             .padding(.horizontal, 8)
             .frame(maxWidth: 400)
+
+            if hasGroups, !quickTaskStore.composerTasks.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Start with a Quick Task")
+                        .font(.headline)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 10) {
+                            ForEach(quickTaskStore.composerTasks) { task in
+                                Button {
+                                    openQuickTask(task)
+                                } label: {
+                                    Label(task.name, systemImage: task.symbolName)
+                                        .font(.subheadline.weight(.medium))
+                                        .lineLimit(1)
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.large)
+                            }
+                        }
+                    }
+                }
+                .frame(maxWidth: 400, alignment: .leading)
+                .accessibilityElement(children: .contain)
+            }
             Spacer()
         }
         .frame(maxHeight: .infinity)
@@ -2154,6 +2209,11 @@ struct ContentView: View {
                 OnboardingModelSelectionView()
             }
         }
+    }
+
+    private func openQuickTask(_ task: QuickTaskDefinition) {
+        QuickActionWorkflow.shared.start(.prefillQuickTask(id: task.id))
+        QuickActionWorkflow.shared.markHome()
     }
 
     private func setupStep(
@@ -3739,6 +3799,7 @@ private struct SessionRow: View, Equatable {
     // the slider. The row's fonts use hardcoded `.system(size:)` which ignore
     // Dynamic Type, so we must explicitly multiply by the App Base scale.
     @ObservedObject private var fontSettings = FontSettings.shared
+    @AppStorage("leo.sessionListDensity") private var densityRaw: Int = LeoSessionListDensity.standard.rawValue
 
     init(session: ChatSession,
          isHighlighted: Bool = false,
@@ -3760,6 +3821,10 @@ private struct SessionRow: View, Equatable {
 
     private var isSuspended: Bool {
         isSuspendedOverride ?? concurrencyManager.isSuspended(session.id)
+    }
+
+    private var density: LeoSessionListDensity {
+        LeoSessionListDensity(rawValue: densityRaw) ?? .standard
     }
 
     /// True when the row should render the lock affordance — global
@@ -3803,16 +3868,16 @@ private struct SessionRow: View, Equatable {
         HStack(spacing: 8) {
             // Provider icon with optional spinning/suspended ring
             providerIcon
-                .frame(width: 44, height: 44)
+                .frame(width: density.iconSize, height: density.iconSize)
                 .background(iconBackgroundColor.opacity(isHighlighted ? 0.35 : 0.18))
                 .clipShape(Circle())
                 .overlay {
                     if isSuspended {
                         SuspendedRing(color: .yellow)
-                            .frame(width: 42, height: 42)
+                            .frame(width: density.iconSize - 2, height: density.iconSize - 2)
                     } else if isActive {
                         SpinningRing(color: iconBackgroundColor)
-                            .frame(width: 42, height: 42)
+                            .frame(width: density.iconSize - 2, height: density.iconSize - 2)
                     }
                 }
                 .overlay(alignment: .bottomTrailing) {
@@ -3914,7 +3979,7 @@ private struct SessionRow: View, Equatable {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, density.verticalPadding)
         .contentShape(Rectangle())
         #if DEBUG
         // TEMPORARY height probe — confirms List self-sizing jitter source.
@@ -4373,6 +4438,7 @@ private struct AppearanceSettingsView: View {
     /// streams. When false it stays collapsed until tapped. Read at
     /// block-mount time in ThinkingBlockView.
     @AppStorage("chat.autoExpandThinking") private var autoExpandThinking: Bool = true
+    @AppStorage("leo.sessionListDensity") private var sessionListDensityRaw: Int = LeoSessionListDensity.standard.rawValue
     @ObservedObject private var fontSettings = FontSettings.shared
 
     private let iconOptions: [AppIconOption] = [
@@ -4415,6 +4481,19 @@ private struct AppearanceSettingsView: View {
                 Text("Launch Session")
             } footer: {
                 Text("Choose what to show when the app starts. \"Auto\" opens a new chat if the last session is older than 15 minutes.")
+            }
+
+            Section {
+                Picker("Session List Density", selection: $sessionListDensityRaw) {
+                    ForEach(LeoSessionListDensity.allCases, id: \.rawValue) { density in
+                        Text(density.title).tag(density.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+            } header: {
+                Text("Home")
+            } footer: {
+                Text("Adjust session spacing without changing text size or accessibility settings.")
             }
 
             Section {

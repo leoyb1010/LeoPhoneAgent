@@ -115,4 +115,27 @@ final class QuickTaskCatalogTests: XCTestCase {
         XCTAssertEqual(imported.sortOrder, store.tasks.count - 1)
         XCTAssertEqual(store.tasks.filter { $0.name == "Artifact Brief" }.count, 2)
     }
+
+    @MainActor
+    func testComposerPinsAreStableLimitedAndPruned() throws {
+        let suiteName = "QuickTaskComposerPinsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = QuickTaskStore(defaults: defaults)
+
+        XCTAssertEqual(store.composerTaskIDs, ["analyzeSleep", "healthReport", "checkWeather"])
+        XCTAssertFalse(store.setComposerPinned(true, id: "morningBriefing"))
+        XCTAssertTrue(store.setComposerPinned(false, id: "healthReport"))
+        XCTAssertTrue(store.setComposerPinned(true, id: "morningBriefing"))
+        XCTAssertEqual(store.composerTaskIDs, ["analyzeSleep", "checkWeather", "morningBriefing"])
+
+        let custom = try XCTUnwrap(store.add(name: "Temporary", prompt: "Do the task"))
+        XCTAssertTrue(store.setComposerPinned(false, id: "analyzeSleep"))
+        XCTAssertTrue(store.setComposerPinned(true, id: custom.id))
+        store.delete(id: custom.id)
+        XCTAssertFalse(store.composerTaskIDs.contains(custom.id))
+
+        let reloaded = QuickTaskStore(defaults: defaults)
+        XCTAssertEqual(reloaded.composerTaskIDs, ["checkWeather", "morningBriefing"])
+    }
 }

@@ -6,6 +6,16 @@
 
 ## 1.1.0 - 开发中
 
+### Build 20
+
+- Quick Tasks 新增 Composer 固定区，默认选择前三个内置任务，用户可在设置中自由组合且最多固定三个；删除自定义任务会同步清理失效引用。
+- 聊天 Composer 使用原生横向快捷动作，在不改变稳定输入栏结构、AnyView 擦除和高度校正链路的前提下，一键准备模板 Prompt 与输出约束。
+- 首次空会话首页复用相同的个人快捷任务，点击后通过既有 Quick Action 状态机创建新会话并填入模板，避免延时跳转和重复投递。
+- 会话首页新增紧凑、标准、舒展三档密度，只调整列表间距与图标尺寸，不覆盖字号和系统无障碍设置。
+- 新任务运行策略支持 Standard 与 Background Ready；后者在发送时启用现有增强后台、Live Activity 和任务通知路径，且界面明确说明后台时长仍由 iOS 与当前 Keep-Alive 能力决定。
+- 发送按钮长按可对单次任务选择 Standard 或 Background Ready，不改变全局默认值。
+- Composer 固定项的默认值、三项上限、持久化、去重和删除清理已加入测试与 smoke runner；完整 iOS arm64 App 构建成功，未安装到手机。
+
 ### Build 19
 
 - 现有可编辑 Quick Tasks 升级为个人任务模板，保留 1.0.12 AppEntity 稳定标识和旧 AppEnum 兼容入口。

@@ -14,7 +14,7 @@
 | 17 | Artifact 版本与聊天/任务/Files 统一引用 | 已完成 | 保留原始文件引用 |
 | 18 | CloudKit V2 / CKAsset | 已完成 | Artifact 分类默认关闭，本地数据不依赖云端 |
 | 19 | 个人任务模板与结构化输出 | 已完成 | 基于 1.0.12 QuickTask AppEntity 向前兼容扩展 |
-| 20 | Composer、首页与运行策略定制 | 待开始 | Feature Flag |
+| 20 | Composer、首页与运行策略定制 | 已完成 | 独立偏好键 + 既有状态机，默认行为可回退 |
 | 21 | 动效、触感、Reduce Motion、无障碍 | 待开始 | 纯表现层 |
 | 22–23 | 全流程回归、迁移演练、真机审计、1.1.0 发布 | 待开始 | 发布候选标签 |
 
@@ -105,6 +105,18 @@ xcrun swiftc -parse-as-library \
 - taste-skill 检查结论：原生移动端以 Apple HIG 为主；界面保持现有 List/Form 密度，不加模板化卡片、渐变或装饰动画。
 - `QuickTaskTemplateSmoke: template lifecycle passed`，覆盖旧数据解码、槽位渲染、结构化输出契约与导出/导入身份隔离。
 - Swift 6 `MinisTests.xctest` 编译及链接成功；通用 iOS arm64 主 App `BUILD SUCCEEDED`；未安装真机。
+
+## Build 20 证据
+
+- `QuickTaskStore` 独立保存最多三个 Composer Task ID；首次使用默认前三项，加载时过滤不存在项、去重并截断，删除自定义任务同步清理固定引用。
+- Quick Tasks 设置页可查看、移除或选择 Composer 快捷动作；达到三项上限会明确提示，不静默替换用户已有选择。
+- Composer 只新增 AnyView 擦除的横向原生按钮行，不改 `inputBottomRow`、语音双实现、附件状态或 380/320ms 输入高度校正；模板点击只准备 Prompt，不自动消耗模型。
+- 空会话首页通过现有 `QuickActionWorkflow` 的 ensuringHome → pendingDispatch → chatReady 检查点打开草稿，并新增无 Cover 的 terminal-success 处理，避免模板被重试重复填入。
+- `LeoSessionListDensity` 只控制列表垂直留白和 Provider 图标尺寸；文字继续使用现有 FontSettings 与系统辅助功能。
+- `LeoRunPolicy.backgroundReady` 是发送前的增量准备：启用既有 Enhanced Background、Live Activity 与 Task Notifications，不请求新权限，也不承诺系统不挂起；长按发送可单次覆盖。
+- taste-skill / Apple HIG 检查：继续使用 List、Picker、Menu、原生 bordered control 和系统语义；快捷动作是实际操作入口，不引入装饰性卡片、渐变或常驻动画。
+- `QuickTaskTemplateSmoke: template lifecycle passed`；通用 iOS arm64 主 App `BUILD SUCCEEDED`。测试 Bundle 编译验证见本检查点提交前记录；未安装真机。
+- Simulator 的 `test-without-building` 已尝试，但 Xcode 停在 `waiting for workers to materialize` 的 runner 启动层，未进入任何 Test Case；该次运行不计为测试通过，逻辑证据采用独立 smoke + `MinisTests.xctest` 编译，完整模拟器回归留到 Build 22 重新执行。
 
 ## 回滚规则
 

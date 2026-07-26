@@ -208,6 +208,7 @@ struct AIChatView: View {
     @StateObject private var speechManager = SpeechRecognitionManager.shared
     @ObservedObject private var mentionIndex = FileMentionIndex.shared
     @ObservedObject private var configStore = ProviderConfigStore.shared
+    @ObservedObject private var quickTaskStore = QuickTaskStore.shared
     @ObservedObject private var fontSettings = FontSettings.shared
     @ObservedObject private var deepLink = DeepLinkCoordinator.shared
     @Environment(\.dismiss) private var dismiss
@@ -293,6 +294,7 @@ struct AIChatView: View {
     /// reflects enabled/muted in lockstep with the global voice-output capsule.
     @ObservedObject private var voiceOutput = VoiceOutputState.shared
     @AppStorage("cloudSync.v2.enabled") private var iCloudSyncEnabled: Bool = false
+    @AppStorage(LeoRunPolicy.defaultsKey) private var defaultRunPolicyRaw: Int = LeoRunPolicy.standard.rawValue
     /// [T-codex-fast-mode] Codex Fast Mode toggle ("..." menu, OpenAI OAuth
     /// only). Same key OpenAIProvider reads at request-build time; @AppStorage
     /// so the toolbar (menu checkmark + nav bolt badge) re-renders on flip.
@@ -1422,6 +1424,13 @@ struct AIChatView: View {
             inputFocused = false
             showCamera = true
             minisLogger.info("[QuickAction] openCamera — showCamera=true")
+        case .prefillQuickTask(let id):
+            if let task = quickTaskStore.definition(for: id) {
+                prepareComposer(with: task)
+            }
+            // This action has no cover. Reuse the workflow's terminal-success
+            // checkpoint so the retry timer cannot deliver the template twice.
+            QuickActionWorkflow.shared.markCoverPresented()
         }
     }
 
@@ -3097,6 +3106,18 @@ struct AIChatView: View {
             }
             .disabled(!canSend)
             .keyboardShortcut(.return, modifiers: .command)
+            .contextMenu {
+                Button {
+                    performSend(runPolicy: .standard)
+                } label: {
+                    Label("Send Standard", systemImage: "paperplane")
+                }
+                Button {
+                    performSend(runPolicy: .backgroundReady)
+                } label: {
+                    Label("Send Background Ready", systemImage: "moon.stars")
+                }
+            }
         }
     }
 
@@ -3203,6 +3224,42 @@ struct AIChatView: View {
         return AnyView(field)
     }
 
+    /// User-selected task templates rendered as a compact native control row.
+    /// AnyView keeps this optional branch out of the composer's already-deep
+    /// generic metadata chain (the same constraint as inputBottomRow).
+    private var composerQuickTaskStrip: AnyView {
+        let strip = ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(quickTaskStore.composerTasks) { task in
+                    Button {
+                        prepareComposer(with: task)
+                    } label: {
+                        Label(task.name, systemImage: task.symbolName)
+                            .font(.caption.weight(.medium))
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .accessibilityHint("Prepares this task in the message field")
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+        }
+        return AnyView(strip)
+    }
+
+    private func prepareComposer(with task: QuickTaskDefinition) {
+        let prepared = task.renderedPrompt()
+        if vm.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            vm.inputText = prepared
+        } else {
+            vm.inputText += "\n\n" + prepared
+        }
+        inputFocused = true
+        UIAccessibility.post(notification: .announcement, argument: "\(task.name) prepared")
+    }
+
     // MARK: - Input keyboard handlers (extracted to avoid inflating the
     // generic type of `inputBar` past what Swift can demangle at runtime).
 
@@ -3271,6 +3328,11 @@ struct AIChatView: View {
             )
 
             VStack(spacing: 5) {
+                if !voiceInputActive, vm.editingMessageIndex == nil,
+                   !quickTaskStore.composerTasks.isEmpty {
+                    composerQuickTaskStrip
+                }
+
                 // Attachment preview chips — 3 per row
                 if !vm.attachments.isEmpty || vm.loadingVideoCount > 0 {
                     ScrollView(.vertical, showsIndicators: true) {
@@ -4169,7 +4231,7 @@ struct AIChatView: View {
     }
 
     /// Dismiss keyboard (commit dictation/marked text) before sending.
-    private func performSend() {
+    private func performSend(runPolicy: LeoRunPolicy? = nil) {
         // Intercept slash commands — execute instead of sending to LLM
         if vm.tryExecuteInputAsSlashCommand() { return }
 
@@ -4193,6 +4255,8 @@ struct AIChatView: View {
         speechManager.recognizedText = ""
         lastRecognizedLength = 0
         hasInjectedShareContent = false
+        let policy = runPolicy ?? LeoRunPolicy(rawValue: defaultRunPolicyRaw) ?? .standard
+        BackgroundKeepAliveManager.shared.prepareForNewTask(policy: policy)
         // Send FIRST while inputText still holds the recognized text. Clearing the
         // voice transcript here (clearAndRearm) mirrors "" into inputText via the
         // onChange binding, so doing it before send() left send() with empty text

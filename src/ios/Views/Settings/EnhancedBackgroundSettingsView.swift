@@ -15,6 +15,7 @@ struct EnhancedBackgroundSettingsView: View {
     /// yellow border; because it reads the live toggle value the border clears
     /// reactively once the row reaches the expected state.
     @State private var focus: [String: Bool?] = [:]
+    @AppStorage(LeoRunPolicy.defaultsKey) private var runPolicyRaw: Int = LeoRunPolicy.standard.rawValue
 
     private func shouldFocus(_ key: String, current: Bool) -> Bool {
         DeepLinkCoordinator.shouldFocus(key, current: current, in: focus)
@@ -22,6 +23,19 @@ struct EnhancedBackgroundSettingsView: View {
 
     var body: some View {
         List {
+            Section {
+                Picker("Default Run Policy", selection: $runPolicyRaw) {
+                    ForEach(LeoRunPolicy.allCases, id: \.rawValue) { policy in
+                        Text(policy.title).tag(policy.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+            } header: {
+                Text("New Tasks")
+            } footer: {
+                Text("Background Ready enables Enhanced Background Execution, Live Activity, and task notifications when a task is sent. Actual background lifetime remains controlled by iOS and the Keep-Alive status below.")
+            }
+
             Section {
                 Toggle("Enhanced Background Execution", isOn: $keepAlive.enhancedBackgroundEnabled)
                     .focusHighlight(shouldFocus("enhancedBackgroundExecution", current: keepAlive.enhancedBackgroundEnabled))

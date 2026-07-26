@@ -30,6 +30,7 @@ private let logger = AppLogger(category: "QuickAction")
 enum ChatLaunchAction: Equatable {
     case startVoice
     case openCamera
+    case prefillQuickTask(id: String)
 }
 
 @MainActor
