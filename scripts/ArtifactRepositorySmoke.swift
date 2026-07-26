@@ -41,9 +41,32 @@ enum ArtifactRepositorySmoke {
         let currentData = try Data(contentsOf: fileURL)
         try expect(currentData == Data("second".utf8), "current version file")
 
+        let sourceURL = baseURL.appendingPathComponent("source.md")
+        try Data("captured-v1".utf8).write(to: sourceURL)
+        let captured = try await repository.capture(
+            fileURL: sourceURL,
+            sourcePath: "/var/minis/workspace/source.md",
+            sessionId: "session-smoke",
+            sourceMessageId: "message-smoke"
+        )
+        _ = try await repository.capture(
+            fileURL: sourceURL,
+            sourcePath: "/var/minis/workspace/source.md",
+            sessionId: "session-smoke"
+        )
+        let deduplicatedCount = try await repository.versions(artifactId: captured.artifact.id).count
+        try expect(deduplicatedCount == 1, "capture duplicate content")
+        try Data("captured-v2".utf8).write(to: sourceURL)
+        let recaptured = try await repository.capture(
+            fileURL: sourceURL,
+            sourcePath: "/var/minis/workspace/source.md",
+            sessionId: "session-smoke"
+        )
+        try expect(recaptured.currentVersion?.versionNumber == 2, "capture version update")
+
         try await repository.purge(id: first.artifact.id)
         let allAfterPurge = try await repository.list(includeTrashed: true)
-        try expect(allAfterPurge.isEmpty, "purge metadata")
+        try expect(allAfterPurge.count == 1, "purge selected metadata")
         try expect(!FileManager.default.fileExists(atPath: fileURL.deletingLastPathComponent().path), "purge files")
         print("ArtifactRepositorySmoke: lifecycle passed")
     }

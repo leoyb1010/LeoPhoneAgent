@@ -75,6 +75,7 @@ struct ArtifactTrayView: View {
     @StateObject private var viewModel: ArtifactTrayViewModel
     @State private var previewURL: URL?
     @State private var shareURL: URL?
+    @State private var versionHistory: ArtifactSnapshot?
     @State private var pendingPurge: ArtifactSnapshot?
     @State private var actionError: String?
 
@@ -118,6 +119,9 @@ struct ArtifactTrayView: View {
             }
             .sheet(item: $shareURL) { url in
                 MinisShareSheet(url: url)
+            }
+            .sheet(item: $versionHistory) { snapshot in
+                ArtifactVersionHistoryView(snapshot: snapshot)
             }
             .alert(String(localized: "Delete Permanently?"), isPresented: Binding(
                 get: { pendingPurge != nil },
@@ -198,6 +202,9 @@ struct ArtifactTrayView: View {
 
     @ViewBuilder
     private func actions(for snapshot: ArtifactSnapshot) -> some View {
+        Button { versionHistory = snapshot } label: {
+            Label(String(localized: "Version History"), systemImage: "clock.arrow.circlepath")
+        }
         if viewModel.showsTrash {
             Button {
                 Task { await viewModel.restore(snapshot) }
@@ -267,6 +274,150 @@ struct ArtifactTrayView: View {
         }
         .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct ArtifactVersionHistoryView: View {
+    @Environment(\.dismiss) private var dismiss
+    let snapshot: ArtifactSnapshot
+
+    @State private var versions: [ArtifactVersion] = []
+    @State private var isLoading = true
+    @State private var errorMessage: String?
+    @State private var previewURL: URL?
+    @State private var shareURL: URL?
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if isLoading {
+                    ProgressView(String(localized: "Loading Versions"))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let errorMessage {
+                    VStack(spacing: 12) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 34, weight: .regular))
+                            .foregroundStyle(.orange)
+                        Text(String(localized: "Versions Unavailable"))
+                            .font(.headline)
+                        Text(errorMessage)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(32)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    versionList
+                }
+            }
+            .navigationTitle(snapshot.artifact.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(String(localized: "Done")) { dismiss() }
+                }
+            }
+            .task { await load() }
+            .sheet(item: $previewURL) { url in
+                ArtifactQuickLookPreview(url: url).ignoresSafeArea()
+            }
+            .sheet(item: $shareURL) { url in
+                MinisShareSheet(url: url)
+            }
+        }
+    }
+
+    private var versionList: some View {
+        List {
+            if let sourcePath = snapshot.artifact.sourcePath {
+                Section {
+                    Label {
+                        Text(sourcePath)
+                            .font(.caption.monospaced())
+                            .textSelection(.enabled)
+                    } icon: {
+                        Image(systemName: "folder")
+                    }
+                } header: {
+                    Text(String(localized: "Source"))
+                } footer: {
+                    Text(String(localized: "The original workspace file remains unchanged when an artifact is deleted."))
+                }
+            }
+
+            Section {
+                ForEach(versions) { version in
+                    Button { open(version, sharing: false) } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "doc")
+                                .foregroundStyle(.secondary)
+                                .accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: 3) {
+                                HStack {
+                                    Text("Version \(version.versionNumber)")
+                                        .font(.body.weight(.medium))
+                                    if version.id == snapshot.artifact.currentVersionId {
+                                        Text(String(localized: "Current"))
+                                            .font(.caption2.weight(.semibold))
+                                            .foregroundStyle(.blue)
+                                    }
+                                }
+                                Text(version.createdAt, format: .dateTime.year().month().day().hour().minute())
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text(ByteCountFormatter.string(fromByteCount: version.byteCount, countStyle: .file))
+                                    .font(.caption2.monospacedDigit())
+                                    .foregroundStyle(.tertiary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                                .accessibilityHidden(true)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button { open(version, sharing: false) } label: {
+                            Label(String(localized: "Quick Look"), systemImage: "eye")
+                        }
+                        Button { open(version, sharing: true) } label: {
+                            Label(String(localized: "Share"), systemImage: "square.and.arrow.up")
+                        }
+                    }
+                    .accessibilityHint(String(localized: "Opens this version in Quick Look"))
+                }
+            } header: {
+                Text(String(localized: "Versions"))
+            }
+        }
+        .listStyle(.insetGrouped)
+    }
+
+    private func load() async {
+        do {
+            versions = try await ArtifactRepository.shared.versions(artifactId: snapshot.artifact.id)
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isLoading = false
+    }
+
+    private func open(_ version: ArtifactVersion, sharing: Bool) {
+        Task {
+            do {
+                let url = try await ArtifactRepository.shared.fileURL(for: version)
+                guard FileManager.default.fileExists(atPath: url.path) else {
+                    throw CocoaError(.fileNoSuchFile)
+                }
+                if sharing { shareURL = url } else { previewURL = url }
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
     }
 }
 

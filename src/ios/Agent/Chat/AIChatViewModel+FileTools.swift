@@ -143,6 +143,25 @@ extension AIChatViewModel {
         return await resolvePathForDirectRead(pathOrURL)
     }
 
+    /// Captures user-facing task output without changing or moving the workspace file.
+    /// Intermediate files elsewhere under /var/minis remain outside the artifact tray.
+    func captureWorkspaceArtifact(path: String, sourceMessageId: String?) async -> ArtifactSnapshot? {
+        guard path.hasPrefix("/var/minis/workspace/"),
+              let sessionId,
+              let fileURL = await resolvePathForDirectRead(path) else { return nil }
+        do {
+            return try await ArtifactRepository.shared.capture(
+                fileURL: fileURL,
+                sourcePath: path,
+                sessionId: sessionId,
+                sourceMessageId: sourceMessageId
+            )
+        } catch {
+            logger.warning("Artifact capture skipped for \(fileURL.lastPathComponent): \(error.localizedDescription)")
+            return nil
+        }
+    }
+
     /// Resolve a Linux path (e.g. /tmp/test.py) to the host URL under data/.
     /// Returns nil for invalid paths.
     func resolveHostPath(_ linuxPath: String) -> URL? {

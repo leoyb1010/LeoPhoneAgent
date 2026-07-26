@@ -11,7 +11,7 @@
 | 14 | ChatStore Schema Contract、迁移与恢复测试门禁 | 已完成 | 不新增用户数据类型，可直接回到 1.0.12 |
 | 15 | Artifact 本地模型与文件生命周期 | 已完成 | 尚未接入 UI/CloudKit，独立提交可整体回滚 |
 | 16 | Artifact Tray、Quick Look、分享 | 已完成 | UI 只调用 Build 15 Repository，可独立移除 |
-| 17 | Artifact 版本与聊天/任务/Files 统一引用 | 待开始 | 保留原始文件引用 |
+| 17 | Artifact 版本与聊天/任务/Files 统一引用 | 已完成 | 保留原始文件引用 |
 | 18 | CloudKit V2 / CKAsset | 待开始 | 默认关闭同步，先完成双读与回滚演练 |
 | 19 | 个人任务模板与结构化输出 | 待开始 | 独立数据类型 |
 | 20 | Composer、首页与运行策略定制 | 待开始 | Feature Flag |
@@ -71,6 +71,16 @@ xcrun swiftc -parse-as-library \
 - taste-skill 审查结论：原生移动端以 Apple HIG 为主，不引入网页式玻璃卡片或装饰动画。
 - `MinisTests.xctest` 编译及链接成功；通用 iOS arm64 主 App `BUILD SUCCEEDED`。
 - 本检查点不创建 Artifact，不改变聊天消息结构，不写入 CloudKit，不安装到真机。
+
+## Build 17 证据
+
+- Schema Contract 升级至 v3，为 Artifact 增加可空的 `source_path`，使用会话和源路径唯一索引维护同一成果的版本链。
+- 仅捕获 `/var/minis/workspace/` 中由成功工具调用生成或修改的普通文件；内部路径与超过 100 MB 的文件不自动收录。
+- 同路径、同 SHA-256 不生成重复版本；内容变化时追加不可变版本，并保留原始 Files 路径与来源消息 ID。
+- Tray 新增版本历史，任意版本均可 Quick Look 与分享；删除 Artifact 不删除原始 workspace 文件。
+- `ChatStoreSchemaSmoke: 4/4 passed`；`ArtifactRepositorySmoke: lifecycle passed`。
+- Swift 6 `MinisTests.xctest` 编译及链接成功；通用 iOS arm64 主 App `BUILD SUCCEEDED`。
+- 本检查点仍不写入 CloudKit，不安装到真机。
 
 ## 回滚规则
 

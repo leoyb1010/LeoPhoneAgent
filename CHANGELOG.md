@@ -6,6 +6,15 @@
 
 ## 1.1.0 - 开发中
 
+### Build 17
+
+- 任务通过 `file_write`、`file_edit` 或 shell 在会话 workspace 生成的用户成果，现在会自动进入该会话的 Artifact Tray。
+- Artifact 记录同时保留原始 Files 路径和来源聊天消息；移入回收站或永久删除 Artifact 不会改动原始 workspace 文件。
+- 同一会话、同一源路径使用 SHA-256 去重：内容未变时不重复创建，内容变化时追加不可变版本。
+- Artifact Tray 新增版本历史，可查看源路径、版本号、时间与大小，并对任意历史版本使用 Quick Look 或系统分享。
+- 自动收录仅针对 `/var/minis/workspace/` 中的用户成果，单文件上限 100 MB，不收录内部中间文件。
+- Schema Contract 升级至 v3；Schema 与 Artifact smoke 通过，测试 Bundle 编译链接成功，完整 iOS arm64 App 构建成功；未安装到手机。
+
 ### Build 16
 
 - 每个聊天的更多菜单新增 Artifacts 入口，按会话展示任务生成的本地成果。

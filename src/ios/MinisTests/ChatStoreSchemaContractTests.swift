@@ -47,6 +47,23 @@ final class ChatStoreSchemaContractTests: XCTestCase {
         XCTAssertEqual(ChatStoreSchemaContract.validate(db), [])
     }
 
+    func testVersionTwoArtifactSchemaGainsSourcePathWithoutLosingRows() throws {
+        let db = try openTemporaryDatabase()
+        defer { sqlite3_close(db) }
+        _ = try ChatStoreSchemaContract.migrate(db)
+        try execute(db, "DROP INDEX idx_artifacts_source_path")
+        try execute(db, "ALTER TABLE artifacts DROP COLUMN source_path")
+        try execute(db, "UPDATE chat_store_schema_meta SET contract_version = 2")
+        try execute(db, "INSERT INTO artifacts (id, session_id, title, kind, mime_type, created_at, updated_at) VALUES ('a1', 's1', 'Report', 'document', 'text/plain', 1, 1)")
+
+        let report = try ChatStoreSchemaContract.migrate(db)
+
+        XCTAssertEqual(report.previousVersion, 2)
+        XCTAssertTrue(report.addedColumns.contains("artifacts.source_path"))
+        XCTAssertEqual(try scalarInt(db, "SELECT COUNT(*) FROM artifacts WHERE id='a1'"), 1)
+        XCTAssertEqual(ChatStoreSchemaContract.validate(db), [])
+    }
+
     func testValidationReportsIncompleteSchemaBeforeMigration() throws {
         let db = try openTemporaryDatabase()
         defer { sqlite3_close(db) }

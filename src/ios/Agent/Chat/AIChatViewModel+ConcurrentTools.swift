@@ -389,6 +389,17 @@ extension AIChatViewModel {
                         toolOutput += "\n  \(url)"
                     }
                 }
+
+                let sourceMessageId = msgIdx < messages.count ? messages[msgIdx].id.uuidString : nil
+                var capturedCount = 0
+                for path in newOrModified.keys.sorted() {
+                    if await captureWorkspaceArtifact(path: path, sourceMessageId: sourceMessageId) != nil {
+                        capturedCount += 1
+                    }
+                }
+                if capturedCount > 0 {
+                    toolOutput += "\n  Captured \(capturedCount) artifact\(capturedCount == 1 ? "" : "s") in this chat."
+                }
             }
 
             let (redactedOut, redactHits) = EnvVarRedactor.redactIfEnabled(toolOutput)
@@ -631,6 +642,19 @@ extension AIChatViewModel {
         default:
             toolOutput = "Error: Unknown tool '\(tu.name)'"
             toolSuccess = false
+        }
+
+        if toolSuccess,
+           tu.name == "file_write" || tu.name == "file_edit",
+           let outputPath = toolArgs["path"] as? String {
+            let sourceMessageId = msgIdx < messages.count ? messages[msgIdx].id.uuidString : nil
+            if let snapshot = await captureWorkspaceArtifact(path: outputPath, sourceMessageId: sourceMessageId),
+               let version = snapshot.currentVersion {
+                toolOutput += "\nArtifact captured: \(snapshot.artifact.title) (version \(version.versionNumber))."
+                if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                    messages[msgIdx].blocks[blockIdx].content = toolOutput
+                }
+            }
         }
         } catch is CancellationError {
             let cancelContent = "<system-reminder>The user cancelled this operation. The returned result may be incomplete.</system-reminder>"

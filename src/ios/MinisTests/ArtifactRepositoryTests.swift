@@ -62,4 +62,43 @@ final class ArtifactRepositoryTests: XCTestCase {
         XCTAssertTrue(url.path.hasPrefix(baseURL.appendingPathComponent("artifacts").path + "/"))
         XCTAssertFalse(version.relativePath.contains(".."))
     }
+
+    func testCaptureTracksSourcePathVersionsAndSkipsDuplicateContent() async throws {
+        let baseURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: baseURL) }
+        try FileManager.default.createDirectory(at: baseURL, withIntermediateDirectories: true)
+        let sourceURL = baseURL.appendingPathComponent("report.md")
+        let repository = ArtifactRepository(baseURL: baseURL.appendingPathComponent("store", isDirectory: true))
+
+        try Data("first".utf8).write(to: sourceURL)
+        let first = try await repository.capture(
+            fileURL: sourceURL,
+            sourcePath: "/var/minis/workspace/report.md",
+            sessionId: "session-3",
+            sourceMessageId: "message-1"
+        )
+        XCTAssertEqual(first.artifact.sourcePath, "/var/minis/workspace/report.md")
+        XCTAssertEqual(first.artifact.sourceMessageId, "message-1")
+        XCTAssertEqual(first.currentVersion?.versionNumber, 1)
+
+        let duplicate = try await repository.capture(
+            fileURL: sourceURL,
+            sourcePath: "/var/minis/workspace/report.md",
+            sessionId: "session-3"
+        )
+        XCTAssertEqual(duplicate.artifact.id, first.artifact.id)
+        let duplicateVersions = try await repository.versions(artifactId: first.artifact.id)
+        XCTAssertEqual(duplicateVersions.count, 1)
+
+        try Data("second".utf8).write(to: sourceURL)
+        let second = try await repository.capture(
+            fileURL: sourceURL,
+            sourcePath: "/var/minis/workspace/report.md",
+            sessionId: "session-3"
+        )
+        XCTAssertEqual(second.artifact.id, first.artifact.id)
+        XCTAssertEqual(second.currentVersion?.versionNumber, 2)
+        let updatedVersions = try await repository.versions(artifactId: first.artifact.id)
+        XCTAssertEqual(updatedVersions.count, 2)
+    }
 }

@@ -9,7 +9,7 @@ import SQLite3
 /// version, and can prove that a database is safe before future Artifact tables
 /// are introduced.
 enum ChatStoreSchemaContract {
-    static let currentVersion = 2
+    static let currentVersion = 3
 
     struct Report: Equatable, Sendable {
         var previousVersion: Int
@@ -86,6 +86,7 @@ enum ChatStoreSchemaContract {
             Column(name: "id", definition: "TEXT PRIMARY KEY"),
             Column(name: "session_id", definition: "TEXT NOT NULL"),
             Column(name: "source_message_id", definition: "TEXT"),
+            Column(name: "source_path", definition: "TEXT"),
             Column(name: "title", definition: "TEXT NOT NULL DEFAULT ''"),
             Column(name: "kind", definition: "TEXT NOT NULL DEFAULT 'file'"),
             Column(name: "mime_type", definition: "TEXT NOT NULL DEFAULT 'application/octet-stream'"),
@@ -136,6 +137,7 @@ enum ChatStoreSchemaContract {
             try execute(db, "CREATE INDEX IF NOT EXISTS idx_compact_markers_session ON compact_markers(session_id, created_at)")
             try execute(db, "CREATE INDEX IF NOT EXISTS idx_compact_markers_first_kept ON compact_markers(session_id, first_kept_message_id)")
             try execute(db, "CREATE INDEX IF NOT EXISTS idx_artifacts_session_updated ON artifacts(session_id, trashed_at, updated_at DESC)")
+            try execute(db, "CREATE UNIQUE INDEX IF NOT EXISTS idx_artifacts_source_path ON artifacts(session_id, source_path) WHERE source_path IS NOT NULL")
             try execute(db, "CREATE UNIQUE INDEX IF NOT EXISTS idx_artifact_versions_number ON artifact_versions(artifact_id, version_number)")
 
             // Preserve legacy timestamps and derive the local preview flags.
@@ -238,6 +240,7 @@ enum ChatStoreSchemaContract {
                 id TEXT PRIMARY KEY,
                 session_id TEXT NOT NULL,
                 source_message_id TEXT,
+                source_path TEXT,
                 title TEXT NOT NULL,
                 kind TEXT NOT NULL,
                 mime_type TEXT NOT NULL,

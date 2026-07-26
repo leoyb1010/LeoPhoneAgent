@@ -20,6 +20,7 @@ actor ArtifactRepository {
     enum RepositoryError: Error, Equatable, CustomStringConvertible {
         case databaseUnavailable
         case artifactNotFound
+        case fileTooLarge
         case unsafePath
         case sql(String)
 
@@ -27,6 +28,7 @@ actor ArtifactRepository {
             switch self {
             case .databaseUnavailable: return "Artifact database is unavailable."
             case .artifactNotFound: return "Artifact was not found."
+            case .fileTooLarge: return "Artifact exceeds the 100 MB local capture limit."
             case .unsafePath: return "Artifact path is outside the managed directory."
             case .sql(let message): return "Artifact database error: \(message)"
             }
@@ -66,6 +68,7 @@ actor ArtifactRepository {
         mimeType: String,
         sessionId: String,
         sourceMessageId: String? = nil,
+        sourcePath: String? = nil,
         title: String? = nil
     ) throws -> ArtifactSnapshot {
         let artifactId = UUID().uuidString
@@ -74,6 +77,7 @@ actor ArtifactRepository {
             id: artifactId,
             sessionId: sessionId,
             sourceMessageId: sourceMessageId,
+            sourcePath: sourcePath,
             title: normalizedTitle(title ?? fileName),
             kind: ArtifactKind.infer(mimeType: mimeType, fileName: fileName),
             mimeType: mimeType,
@@ -108,7 +112,7 @@ actor ArtifactRepository {
         if !includeTrashed { clauses.append("a.trashed_at IS NULL") }
         let whereSQL = clauses.isEmpty ? "" : "WHERE " + clauses.joined(separator: " AND ")
         let sql = """
-            SELECT a.id, a.session_id, a.source_message_id, a.title, a.kind, a.mime_type,
+            SELECT a.id, a.session_id, a.source_message_id, a.source_path, a.title, a.kind, a.mime_type,
                    a.current_version_id, a.created_at, a.updated_at, a.trashed_at,
                    v.id, v.artifact_id, v.version_number, v.original_file_name,
                    v.relative_path, v.byte_count, v.sha256, v.created_at
@@ -128,11 +132,61 @@ actor ArtifactRepository {
     }
 
     func artifact(id: String) throws -> ArtifactRecord? {
-        let statement = try prepare("SELECT id, session_id, source_message_id, title, kind, mime_type, current_version_id, created_at, updated_at, trashed_at FROM artifacts WHERE id = ?")
+        let statement = try prepare("SELECT id, session_id, source_message_id, source_path, title, kind, mime_type, current_version_id, created_at, updated_at, trashed_at FROM artifacts WHERE id = ?")
         defer { sqlite3_finalize(statement) }
         bindText(statement, 1, id)
         guard sqlite3_step(statement) == SQLITE_ROW else { return nil }
         return decodeArtifact(statement, offset: 0)
+    }
+
+    func artifact(sessionId: String, sourcePath: String) throws -> ArtifactRecord? {
+        let statement = try prepare("SELECT id, session_id, source_message_id, source_path, title, kind, mime_type, current_version_id, created_at, updated_at, trashed_at FROM artifacts WHERE session_id = ? AND source_path = ? LIMIT 1")
+        defer { sqlite3_finalize(statement) }
+        bindText(statement, 1, sessionId)
+        bindText(statement, 2, sourcePath)
+        guard sqlite3_step(statement) == SQLITE_ROW else { return nil }
+        return decodeArtifact(statement, offset: 0)
+    }
+
+    @discardableResult
+    func capture(
+        fileURL: URL,
+        sourcePath: String,
+        sessionId: String,
+        sourceMessageId: String? = nil
+    ) throws -> ArtifactSnapshot {
+        let values = try fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+        guard values.isRegularFile == true else { throw RepositoryError.artifactNotFound }
+        guard (values.fileSize ?? 0) <= 100 * 1_024 * 1_024 else { throw RepositoryError.fileTooLarge }
+        let data = try Data(contentsOf: fileURL, options: .mappedIfSafe)
+        let fileName = fileURL.lastPathComponent
+        let mimeType = ArtifactKind.inferredMIMEType(fileName: fileName)
+        let checksum = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+
+        if let existing = try artifact(sessionId: sessionId, sourcePath: sourcePath) {
+            if let current = try versions(artifactId: existing.id).first,
+               current.sha256 == checksum {
+                if existing.isTrashed { try restore(id: existing.id) }
+                guard let refreshed = try artifact(id: existing.id) else { throw RepositoryError.artifactNotFound }
+                return ArtifactSnapshot(artifact: refreshed, currentVersion: current)
+            }
+            return try appendVersion(
+                artifactId: existing.id,
+                data: data,
+                fileName: fileName,
+                mimeType: mimeType
+            )
+        }
+
+        return try create(
+            data: data,
+            fileName: fileName,
+            mimeType: mimeType,
+            sessionId: sessionId,
+            sourceMessageId: sourceMessageId,
+            sourcePath: sourcePath,
+            title: fileURL.deletingPathExtension().lastPathComponent
+        )
     }
 
     func versions(artifactId: String) throws -> [ArtifactVersion] {
@@ -215,16 +269,17 @@ actor ArtifactRepository {
         do {
             try FileManager.default.moveItem(at: stagedURL, to: finalURL)
             if isNew {
-                let insert = try prepare("INSERT INTO artifacts (id, session_id, source_message_id, title, kind, mime_type, current_version_id, created_at, updated_at, trashed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)")
+                let insert = try prepare("INSERT INTO artifacts (id, session_id, source_message_id, source_path, title, kind, mime_type, current_version_id, created_at, updated_at, trashed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)")
                 bindText(insert, 1, artifact.id)
                 bindText(insert, 2, artifact.sessionId)
                 bindOptionalText(insert, 3, artifact.sourceMessageId)
-                bindText(insert, 4, artifact.title)
-                bindText(insert, 5, artifact.kind.rawValue)
-                bindText(insert, 6, mimeType)
-                bindText(insert, 7, versionId)
-                sqlite3_bind_double(insert, 8, artifact.createdAt.timeIntervalSince1970)
-                sqlite3_bind_double(insert, 9, artifact.updatedAt.timeIntervalSince1970)
+                bindOptionalText(insert, 4, artifact.sourcePath)
+                bindText(insert, 5, artifact.title)
+                bindText(insert, 6, artifact.kind.rawValue)
+                bindText(insert, 7, mimeType)
+                bindText(insert, 8, versionId)
+                sqlite3_bind_double(insert, 9, artifact.createdAt.timeIntervalSince1970)
+                sqlite3_bind_double(insert, 10, artifact.updatedAt.timeIntervalSince1970)
                 try stepDone(insert)
                 sqlite3_finalize(insert)
             }
@@ -278,7 +333,7 @@ actor ArtifactRepository {
     private func decodeSnapshot(_ statement: OpaquePointer?) -> ArtifactSnapshot {
         ArtifactSnapshot(
             artifact: decodeArtifact(statement, offset: 0),
-            currentVersion: sqlite3_column_type(statement, 10) == SQLITE_NULL ? nil : decodeVersion(statement, offset: 10)
+            currentVersion: sqlite3_column_type(statement, 11) == SQLITE_NULL ? nil : decodeVersion(statement, offset: 11)
         )
     }
 
@@ -287,13 +342,14 @@ actor ArtifactRepository {
             id: text(statement, offset),
             sessionId: text(statement, offset + 1),
             sourceMessageId: optionalText(statement, offset + 2),
-            title: text(statement, offset + 3),
-            kind: ArtifactKind(rawValue: text(statement, offset + 4)) ?? .file,
-            mimeType: text(statement, offset + 5),
-            currentVersionId: optionalText(statement, offset + 6),
-            createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, offset + 7)),
-            updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, offset + 8)),
-            trashedAt: sqlite3_column_type(statement, offset + 9) == SQLITE_NULL ? nil : Date(timeIntervalSince1970: sqlite3_column_double(statement, offset + 9))
+            sourcePath: optionalText(statement, offset + 3),
+            title: text(statement, offset + 4),
+            kind: ArtifactKind(rawValue: text(statement, offset + 5)) ?? .file,
+            mimeType: text(statement, offset + 6),
+            currentVersionId: optionalText(statement, offset + 7),
+            createdAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, offset + 8)),
+            updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, offset + 9)),
+            trashedAt: sqlite3_column_type(statement, offset + 10) == SQLITE_NULL ? nil : Date(timeIntervalSince1970: sqlite3_column_double(statement, offset + 10))
         )
     }
 
