@@ -6,6 +6,15 @@
 
 ## 1.1.0 - 开发中
 
+### Build 15
+
+- 新增设备本地 Artifact 数据模型，统一文档、图片、音频、视频、代码、压缩包与普通文件成果。
+- 每个成果支持不可变版本记录、当前版本指针、SHA-256 完整性摘要与安全的相对路径存储。
+- 文件先写入独立 staging 目录，再与 SQLite 事务协同提交；失败时清理临时文件并回滚数据库。
+- 新增软删除、恢复与永久清理生命周期，文件名和读取路径均进行越界防护。
+- Schema Contract 升级至 v2，并以幂等迁移创建 Artifact 表与索引；本阶段尚未开启 CloudKit 写入。
+- 本地生命周期 smoke runner、Schema runner 均通过，测试 Bundle 编译链接成功，完整 iOS arm64 App 构建成功。
+
 ### Build 14
 
 - 新增由生产 ChatStore 启动路径直接调用的版本化 Schema Contract，为后续 Artifact 数据迁移建立安全门。

@@ -25,7 +25,7 @@ enum ChatStoreSchemaSmoke {
         try withDatabase { db in
             let report = try ChatStoreSchemaContract.migrate(db)
             try expect(report.previousVersion == 0, "fresh previous version")
-            try expect(report.currentVersion == 1, "fresh current version")
+            try expect(report.currentVersion == ChatStoreSchemaContract.currentVersion, "fresh current version")
             try expect(ChatStoreSchemaContract.validate(db).isEmpty, "fresh validation")
         }
     }
@@ -51,7 +51,7 @@ enum ChatStoreSchemaSmoke {
         try withDatabase { db in
             _ = try ChatStoreSchemaContract.migrate(db)
             let second = try ChatStoreSchemaContract.migrate(db)
-            try expect(second.previousVersion == 1, "idempotent version")
+            try expect(second.previousVersion == ChatStoreSchemaContract.currentVersion, "idempotent version")
             try expect(second.addedColumns.isEmpty, "idempotent no-op")
         }
     }

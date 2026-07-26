@@ -9,7 +9,7 @@
 | Build | 范围 | 状态 | 回滚边界 |
 |---|---|---|---|
 | 14 | ChatStore Schema Contract、迁移与恢复测试门禁 | 已完成 | 不新增用户数据类型，可直接回到 1.0.12 |
-| 15 | Artifact 本地模型与文件生命周期 | 待开始 | 默认关闭写入，迁移独立事务 |
+| 15 | Artifact 本地模型与文件生命周期 | 已完成 | 尚未接入 UI/CloudKit，独立提交可整体回滚 |
 | 16 | Artifact Tray、Quick Look、分享 | 待开始 | UI 与数据模型分离 |
 | 17 | Artifact 版本与聊天/任务/Files 统一引用 | 待开始 | 保留原始文件引用 |
 | 18 | CloudKit V2 / CKAsset | 待开始 | 默认关闭同步，先完成双读与回滚演练 |
@@ -37,6 +37,29 @@ xcrun swiftc \
   -o /tmp/LeoPhoneAgentChatStoreSchemaSmoke \
   -lsqlite3
 /tmp/LeoPhoneAgentChatStoreSchemaSmoke
+```
+
+## Build 15 证据
+
+- Schema Contract 升级到 v2，事务式、幂等创建 `artifacts` 与 `artifact_versions`。
+- Artifact 文件使用受控根目录、安全文件名与标准化路径校验，避免目录穿越。
+- 新建和追加版本先进入 staging；数据库事务失败时回滚并清理未提交文件。
+- 覆盖新建、追加版本、版本顺序、SHA-256、软删除、恢复、永久清理与危险文件名。
+- `ArtifactRepositorySmoke: lifecycle passed`。
+- `ChatStoreSchemaSmoke: 4/4 passed`。
+- Swift 6 `MinisTests.xctest` 编译及链接成功；通用 iOS arm64 主 App `BUILD SUCCEEDED`。
+- 本检查点只建立本地能力，不接入 Artifact Tray，不向 CloudKit 写入，也不安装到真机。
+
+复现 Artifact runner：
+
+```sh
+xcrun swiftc -parse-as-library \
+  scripts/ArtifactRepositorySmoke.swift \
+  src/ios/Agent/Artifacts/ArtifactModels.swift \
+  src/ios/Agent/Artifacts/ArtifactRepository.swift \
+  src/ios/Agent/Chat/ChatStoreSchemaContract.swift \
+  -o /tmp/LeoPhoneAgentArtifactRepositorySmoke
+/tmp/LeoPhoneAgentArtifactRepositorySmoke
 ```
 
 ## 回滚规则

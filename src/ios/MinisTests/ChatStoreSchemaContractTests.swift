@@ -12,7 +12,7 @@ final class ChatStoreSchemaContractTests: XCTestCase {
         XCTAssertEqual(report.currentVersion, ChatStoreSchemaContract.currentVersion)
         XCTAssertTrue(report.addedColumns.contains("sessions.memory_enabled"))
         XCTAssertTrue(report.addedColumns.contains("messages.part_flags"))
-        XCTAssertEqual(ChatStoreSchemaContract.readContractVersion(db), 1)
+        XCTAssertEqual(ChatStoreSchemaContract.readContractVersion(db), ChatStoreSchemaContract.currentVersion)
         XCTAssertEqual(ChatStoreSchemaContract.validate(db), [])
     }
 

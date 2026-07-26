@@ -1,0 +1,59 @@
+import Foundation
+
+private enum ArtifactSmokeFailure: Error {
+    case assertion(String)
+}
+
+@main
+enum ArtifactRepositorySmoke {
+    static func main() async throws {
+        let baseURL = FileManager.default.temporaryDirectory.appendingPathComponent("LeoArtifactSmoke-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: baseURL) }
+        let repository = ArtifactRepository(baseURL: baseURL)
+
+        let first = try await repository.create(
+            data: Data("first".utf8),
+            fileName: "../../report.txt",
+            mimeType: "text/plain",
+            sessionId: "session-smoke"
+        )
+        try expect(first.currentVersion?.versionNumber == 1, "create v1")
+        try expect(first.currentVersion?.relativePath.contains("..") == false, "sanitize path")
+
+        let second = try await repository.appendVersion(
+            artifactId: first.artifact.id,
+            data: Data("second".utf8),
+            fileName: "report.txt"
+        )
+        try expect(second.currentVersion?.versionNumber == 2, "append v2")
+        let versionCount = try await repository.versions(artifactId: first.artifact.id).count
+        try expect(versionCount == 2, "version history")
+
+        try await repository.trash(id: first.artifact.id)
+        let visibleAfterTrash = try await repository.list()
+        let allAfterTrash = try await repository.list(includeTrashed: true)
+        try expect(visibleAfterTrash.isEmpty, "trash hides artifact")
+        try expect(allAfterTrash.count == 1, "trash retains artifact")
+
+        try await repository.restore(id: first.artifact.id)
+        let version = try unwrap(second.currentVersion)
+        let fileURL = try await repository.fileURL(for: version)
+        let currentData = try Data(contentsOf: fileURL)
+        try expect(currentData == Data("second".utf8), "current version file")
+
+        try await repository.purge(id: first.artifact.id)
+        let allAfterPurge = try await repository.list(includeTrashed: true)
+        try expect(allAfterPurge.isEmpty, "purge metadata")
+        try expect(!FileManager.default.fileExists(atPath: fileURL.deletingLastPathComponent().path), "purge files")
+        print("ArtifactRepositorySmoke: lifecycle passed")
+    }
+
+    private static func expect(_ condition: @autoclosure () -> Bool, _ message: String) throws {
+        guard condition() else { throw ArtifactSmokeFailure.assertion(message) }
+    }
+
+    private static func unwrap<T>(_ value: T?) throws -> T {
+        guard let value else { throw ArtifactSmokeFailure.assertion("missing value") }
+        return value
+    }
+}

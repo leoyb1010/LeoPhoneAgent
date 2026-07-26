@@ -9,7 +9,7 @@ import SQLite3
 /// version, and can prove that a database is safe before future Artifact tables
 /// are introduced.
 enum ChatStoreSchemaContract {
-    static let currentVersion = 1
+    static let currentVersion = 2
 
     struct Report: Equatable, Sendable {
         var previousVersion: Int
@@ -82,6 +82,28 @@ enum ChatStoreSchemaContract {
             Column(name: "last_compacted_message_id", definition: "TEXT"),
             Column(name: "version", definition: "INTEGER NOT NULL DEFAULT 1"),
         ],
+        "artifacts": [
+            Column(name: "id", definition: "TEXT PRIMARY KEY"),
+            Column(name: "session_id", definition: "TEXT NOT NULL"),
+            Column(name: "source_message_id", definition: "TEXT"),
+            Column(name: "title", definition: "TEXT NOT NULL DEFAULT ''"),
+            Column(name: "kind", definition: "TEXT NOT NULL DEFAULT 'file'"),
+            Column(name: "mime_type", definition: "TEXT NOT NULL DEFAULT 'application/octet-stream'"),
+            Column(name: "current_version_id", definition: "TEXT"),
+            Column(name: "created_at", definition: "REAL NOT NULL DEFAULT 0"),
+            Column(name: "updated_at", definition: "REAL NOT NULL DEFAULT 0"),
+            Column(name: "trashed_at", definition: "REAL"),
+        ],
+        "artifact_versions": [
+            Column(name: "id", definition: "TEXT PRIMARY KEY"),
+            Column(name: "artifact_id", definition: "TEXT NOT NULL"),
+            Column(name: "version_number", definition: "INTEGER NOT NULL DEFAULT 1"),
+            Column(name: "original_file_name", definition: "TEXT NOT NULL DEFAULT ''"),
+            Column(name: "relative_path", definition: "TEXT NOT NULL DEFAULT ''"),
+            Column(name: "byte_count", definition: "INTEGER NOT NULL DEFAULT 0"),
+            Column(name: "sha256", definition: "TEXT NOT NULL DEFAULT ''"),
+            Column(name: "created_at", definition: "REAL NOT NULL DEFAULT 0"),
+        ],
     ]
 
     @discardableResult
@@ -99,6 +121,7 @@ enum ChatStoreSchemaContract {
 
             let previousVersion = readContractVersion(db)
             try createCoreTables(db)
+            try createArtifactTables(db)
 
             var addedColumns: [String] = []
             for table in requiredColumns.keys.sorted() {
@@ -112,6 +135,8 @@ enum ChatStoreSchemaContract {
             try execute(db, "CREATE INDEX IF NOT EXISTS idx_msg_sess_role_sort ON messages(session_id, role, sort_order DESC)")
             try execute(db, "CREATE INDEX IF NOT EXISTS idx_compact_markers_session ON compact_markers(session_id, created_at)")
             try execute(db, "CREATE INDEX IF NOT EXISTS idx_compact_markers_first_kept ON compact_markers(session_id, first_kept_message_id)")
+            try execute(db, "CREATE INDEX IF NOT EXISTS idx_artifacts_session_updated ON artifacts(session_id, trashed_at, updated_at DESC)")
+            try execute(db, "CREATE UNIQUE INDEX IF NOT EXISTS idx_artifact_versions_number ON artifact_versions(artifact_id, version_number)")
 
             // Preserve legacy timestamps and derive the local preview flags.
             try execute(db, "UPDATE messages SET updated_at = created_at WHERE updated_at IS NULL")
@@ -203,6 +228,35 @@ enum ChatStoreSchemaContract {
                 compacted_count INTEGER NOT NULL,
                 created_at REAL NOT NULL,
                 ui_boundary_sort_order INTEGER
+            )
+        """)
+    }
+
+    private static func createArtifactTables(_ db: OpaquePointer) throws {
+        try execute(db, """
+            CREATE TABLE IF NOT EXISTS artifacts (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                source_message_id TEXT,
+                title TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                mime_type TEXT NOT NULL,
+                current_version_id TEXT,
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL,
+                trashed_at REAL
+            )
+        """)
+        try execute(db, """
+            CREATE TABLE IF NOT EXISTS artifact_versions (
+                id TEXT PRIMARY KEY,
+                artifact_id TEXT NOT NULL REFERENCES artifacts(id) ON DELETE CASCADE,
+                version_number INTEGER NOT NULL,
+                original_file_name TEXT NOT NULL,
+                relative_path TEXT NOT NULL,
+                byte_count INTEGER NOT NULL,
+                sha256 TEXT NOT NULL,
+                created_at REAL NOT NULL
             )
         """)
     }
