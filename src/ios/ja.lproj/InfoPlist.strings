@@ -17,4 +17,4 @@
 "NSSpeechRecognitionUsageDescription" = "LeoPhoneAgent は音声をテキストメッセージに変換するために音声認識を使用します。";
 "NSHomeKitUsageDescription" = "LeoPhoneAgent はAIエージェントがスマートホームアクセサリを操作・制御できるようにHomeKitへのアクセスを使用します。";
 "NSAlarmKitUsageDescription" = "LeoPhoneAgent はAIエージェントがアラームやタイマーを設定できるようにAlarmKitを使用します。";
-"NSLocalNetworkUsageDescription" = "仮想マシンはSLIRPネットワーキングのためにネットワークアクセスが必要です";
+"NSLocalNetworkUsageDescription" = "LeoPhoneAgent は、安全な Shell ワークスペースと接続先サービスのためにローカルネットワークを使用します。";

@@ -6,6 +6,15 @@
 
 ## 1.1.0 - 开发中
 
+### Build 22
+
+- 使用在线 iPhone 的 1.0.12 Build 13 私有数据库副本完成真实迁移演练；Schema v0 → v3、完整性、外键、行数保持与二次幂等检查均通过，设备原数据未改动，临时副本已删除。
+- 全量 Schema、Artifact、Quick Task、动效/触感 smoke 与审计再次通过；Tests Bundle 在 iOS 26.5 Simulator 成功编译签名，Xcode runner 未启动 Test Case 的中断不计为测试通过。
+- 面向用户的名称、包名、App Group、iCloud Container、URL Scheme 与签名均复核为 LeoPhoneAgent / `com.leoyuan.leophoneagent.*` / Team `48H5Y3LNUK`。
+- 本地网络权限提示改为 LeoPhoneAgent 自有且面向用户的安全 Shell/连接服务说明，移除 VM/SLIRP 工程措辞并同步 7 种语言。
+- iOS 26 Continued Processing 动态通配标识按 Apple 官方规则复核通过；连接真机目标的 Release 构建及主 App、Share、Files、Widget 扩展签名验证全部成功。
+- 内部 Build 统一升至 22；正式版本号仍保持 1.0.12，本检查点没有安装到手机。
+
 ### Build 21
 
 - LeoHaptics 成为全项目唯一触感入口，发送、完成、快捷动作、拖拽与恢复反馈统一受“外观 → 触感反馈”开关控制；不影响系统与键盘触感。

@@ -17,4 +17,4 @@
 "NSSpeechRecognitionUsageDescription" = "LeoPhoneAgent uses speech recognition to convert your voice into text messages.";
 "NSHomeKitUsageDescription" = "LeoPhoneAgent uses HomeKit access so the AI agent can query and control your smart home accessories on your behalf.";
 "NSAlarmKitUsageDescription" = "LeoPhoneAgent uses AlarmKit so the AI agent can set alarms and timers on your behalf.";
-"NSLocalNetworkUsageDescription" = "VM requires network access for SLIRP networking";
+"NSLocalNetworkUsageDescription" = "LeoPhoneAgent uses local network access for its secure shell workspace and services you connect to.";

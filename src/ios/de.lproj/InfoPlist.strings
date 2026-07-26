@@ -17,4 +17,4 @@
 "NSSpeechRecognitionUsageDescription" = "LeoPhoneAgent verwendet Spracherkennung, um Ihre Stimme in Textnachrichten umzuwandeln.";
 "NSHomeKitUsageDescription" = "LeoPhoneAgent greift auf HomeKit zu, damit der KI-Agent Ihre Smart-Home-Geräte in Ihrem Namen abfragen und steuern kann.";
 "NSAlarmKitUsageDescription" = "LeoPhoneAgent verwendet AlarmKit, damit der KI-Agent Wecker und Timer in Ihrem Namen stellen kann.";
-"NSLocalNetworkUsageDescription" = "Die virtuelle Maschine benötigt Netzwerkzugriff für SLIRP-Netzwerkverbindungen";
+"NSLocalNetworkUsageDescription" = "LeoPhoneAgent verwendet das lokale Netzwerk für den sicheren Shell-Arbeitsbereich und verbundene Dienste.";

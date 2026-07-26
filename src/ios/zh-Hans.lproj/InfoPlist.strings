@@ -17,4 +17,4 @@
 "NSSpeechRecognitionUsageDescription" = "LeoPhoneAgent 使用语音识别将您的语音转换为文字消息。";
 "NSHomeKitUsageDescription" = "LeoPhoneAgent 需要访问 HomeKit，以便 AI 智能体代您查询和控制智能家居设备。";
 "NSAlarmKitUsageDescription" = "LeoPhoneAgent 使用闹钟功能，以便 AI 智能体代您设置闹钟和计时器。";
-"NSLocalNetworkUsageDescription" = "虚拟机需要网络访问以进行 SLIRP 网络连接";
+"NSLocalNetworkUsageDescription" = "LeoPhoneAgent 使用本地网络连接安全 Shell 工作区以及你主动连接的服务。";

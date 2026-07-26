@@ -128,6 +128,29 @@ xcrun swiftc -parse-as-library \
 - `scripts/IOSAccessibilityMotionAudit.sh` 成功：`centralized haptics and repeating-motion gates passed`。
 - `QuickTaskTemplateSmoke: template lifecycle passed`；`MinisTests.xctest` 编译成功；通用 iOS arm64 主 App `BUILD SUCCEEDED`；未安装真机。
 
+## Build 22 证据
+
+- 从在线 iPhone 17 Pro Max 的 1.0.12 Build 13 App Data Container 仅读取 `minis.db`、WAL 与 SHM；所有检查均在隔离副本执行，设备数据库未改动。
+- `ChatStoreDeviceMigrationAudit` 对真实副本执行 Schema Contract v0 → v3、完整性、外键、持久行数与二次幂等检查，保留 3 个会话、16 条消息，全部通过；验证后临时数据库逐文件删除。
+- `ChatStoreSchemaSmoke: 4/4 passed`、`ArtifactRepositorySmoke: lifecycle passed`、`QuickTaskTemplateSmoke: template lifecycle passed`、`IOSAccessibilityMotionAudit: centralized haptics and repeating-motion gates passed`。
+- App 与 Tests、Share、File Provider、Widget 的 Build 统一为 22，正式版本仍保持 1.0.12；本检查点没有安装到手机。
+- 面向用户的 App 名称、URL Scheme、Bundle ID、App Group、iCloud Container 与权限说明均为 LeoPhoneAgent 自有标识；许可证、上游声明及 `/var/minis`、`minis-*`、内部历史类型作为法律与数据/脚本兼容项保留。
+- 修正构建设置覆盖的本地网络权限文案，移除 VM/SLIRP 工程口吻，改为 LeoPhoneAgent 安全 Shell 工作区和用户连接服务说明，并同步 7 种本地化。
+- Apple 官方确认 iOS 26 Continued Processing 支持 `Bundle ID + 语义前缀 + .*` 动态后缀；`com.leoyuan.leophoneagent.agent.*` 保持不变，避免破坏锁屏续跑。
+- 连接真机目标的 Release 构建和自动签名成功；主 App 与 Share、File Provider、Widget 三个扩展通过嵌入二进制验证，Team 为 `48H5Y3LNUK`，主包为 `com.leoyuan.leophoneagent`。
+- `MinisTests.xctest` 在 iOS 26.5 Simulator 编译、链接和本地签名成功；Xcode 测试调度器仍停在 `waiting for workers to materialize`，人工启动已开机 Simulator 后仍未进入 Test Case，因此该次只记为 runner 中断，不记为 XCTest 通过。
+
+复现真实数据库迁移审计（参数必须是从设备取出的私有副本，禁止直接指向设备或生产路径）：
+
+```sh
+xcrun swiftc \
+  src/ios/Agent/Chat/ChatStoreSchemaContract.swift \
+  scripts/ChatStoreDeviceMigrationAudit.swift \
+  -o /tmp/LeoPhoneAgentDeviceMigrationAudit \
+  -lsqlite3
+/tmp/LeoPhoneAgentDeviceMigrationAudit /path/to/private-copy/minis.db
+```
+
 ## 回滚规则
 
 1. 1.0.12 稳定基线不得改写或移动标签。
