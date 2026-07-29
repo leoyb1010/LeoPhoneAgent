@@ -70,6 +70,15 @@ struct AskMinisIntent: AppIntent {
             for await processing in vm.$isProcessing.values where !processing { break }
         }
 
+        // [T-widget-stop-eager-placeholder] Same check QuickTaskIntent has: a
+        // Stop tapped during session creation could only see the placeholder
+        // id, which has no view model — honour it here instead of starting the
+        // run the user just asked to stop.
+        if let placeholderSid, SessionActivityTracker.shared.takeEagerCancel(placeholderSid) {
+            vm.cancel(queuePolicy: .discardQueuedPrompts)
+            throw QuickTaskIntentError.cancelledBeforeStart
+        }
+
         vm.inputText = prompt
         vm.send()
 

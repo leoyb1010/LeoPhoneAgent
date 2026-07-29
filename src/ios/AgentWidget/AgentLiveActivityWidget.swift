@@ -271,21 +271,27 @@ private extension AgentWidgetSnapshot {
         return URL(string: "leophoneagent://voice")!
     }
 
+    // [T-widget-string-localized] These build Strings, not Text keys, so they
+    // resolve against the process bundle — LeoWidgetLanguage.string routes them
+    // through the app-chosen language instead of always the system one, and
+    // localizes what used to be raw English literals.
     var primaryText: String {
         if privacyMode {
             switch state {
-            case .idle: return "Ready"
-            case .running: return activeCount == 1 ? "1 task running" : "\(activeCount) tasks running"
-            case .suspended: return "Task paused"
-            case .completed: return "Task completed"
-            case .failed: return "Task needs attention"
+            case .idle: return LeoWidgetLanguage.string("Ready")
+            case .running: return activeCount == 1
+                ? LeoWidgetLanguage.string("1 task running")
+                : LeoWidgetLanguage.string("\(activeCount) tasks running")
+            case .suspended: return LeoWidgetLanguage.string("Task paused")
+            case .completed: return LeoWidgetLanguage.string("Task completed")
+            case .failed: return LeoWidgetLanguage.string("Task needs attention")
             }
         }
         return title.isEmpty ? state.fallbackTitle : title
     }
 
     var secondaryText: String {
-        if isPossiblyStale { return String(localized: "Status may be stale · Open the app") }
+        if isPossiblyStale { return LeoWidgetLanguage.string("Status may be stale · Open the app") }
         if privacyMode { return state.privacyStatus }
         if !status.isEmpty { return status }
         return state.privacyStatus
@@ -314,21 +320,21 @@ private extension AgentWidgetSnapshot.State {
 
     var fallbackTitle: String {
         switch self {
-        case .idle: return "Ready"
-        case .running: return "Working"
-        case .suspended: return "Paused"
-        case .completed: return "Completed"
-        case .failed: return "Needs attention"
+        case .idle: return LeoWidgetLanguage.string("Ready")
+        case .running: return LeoWidgetLanguage.string("Working")
+        case .suspended: return LeoWidgetLanguage.string("Paused")
+        case .completed: return LeoWidgetLanguage.string("Completed")
+        case .failed: return LeoWidgetLanguage.string("Needs attention")
         }
     }
 
     var privacyStatus: String {
         switch self {
-        case .idle: return "Tap to speak"
-        case .running: return "Open for live progress"
-        case .suspended: return "Open to resume"
-        case .completed: return "Open result"
-        case .failed: return "Open recovery options"
+        case .idle: return LeoWidgetLanguage.string("Tap to speak")
+        case .running: return LeoWidgetLanguage.string("Open for live progress")
+        case .suspended: return LeoWidgetLanguage.string("Open to resume")
+        case .completed: return LeoWidgetLanguage.string("Open result")
+        case .failed: return LeoWidgetLanguage.string("Open recovery options")
         }
     }
 }
@@ -337,13 +343,18 @@ private extension AgentWidgetSnapshot.State {
 struct AgentLiveActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: AgentActivityAttributes.self) { context in
+            // [T-widget-localization] The Live Activity renders in the same
+            // extension process as the widgets and is the MOST visible surface
+            // — it needs the same locale override the Home Screen widgets get.
             AgentLockScreenView(
                 attributes: context.attributes,
                 state: context.state
             )
+            .leoWidgetLocale()
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
+                  Group {
                     HStack(spacing: 3) {
                         Image(systemName: "sparkles")
                             .font(.caption2)
@@ -355,7 +366,10 @@ struct AgentLiveActivityWidget: Widget {
                     .background(.white.opacity(0.15), in: Capsule())
                     .padding(.leading, 8)
                 }
+                  .leoWidgetLocale()
+                }
                 DynamicIslandExpandedRegion(.trailing) {
+                  Group {
                     if context.state.allCompleted {
                         HStack(spacing: 3) {
                             Image(systemName: "checkmark.circle.fill")
@@ -388,7 +402,10 @@ struct AgentLiveActivityWidget: Widget {
                         .padding(.trailing, 8)
                     }
                 }
+                  .leoWidgetLocale()
+                }
                 DynamicIslandExpandedRegion(.bottom) {
+                  Group {
                     if let session = context.state.currentSession {
                         VStack(alignment: .leading, spacing: 5) {
                             HStack(spacing: 0) {
@@ -482,6 +499,8 @@ struct AgentLiveActivityWidget: Widget {
                         .padding(.trailing, 8)
                         .padding(.top, 4)
                     }
+                }
+                  .leoWidgetLocale()
                 }
             } compactLeading: {
                 HStack(spacing: 3) {
@@ -811,12 +830,20 @@ private struct QuickTasksEntry: TimelineEntry {
     let tasks: [WidgetQuickTaskItem]
 }
 
-private let quickTasksPlaceholder: [WidgetQuickTaskItem] = [
-    .init(id: "morningBriefing", name: String(localized: "Morning Briefing"), symbolName: "sunrise.fill"),
-    .init(id: "dailyNews", name: String(localized: "Today's Headlines"), symbolName: "newspaper.fill"),
-    .init(id: "clipboardAssistant", name: String(localized: "Clipboard Assistant"), symbolName: "doc.on.clipboard.fill"),
-    .init(id: "checkWeather", name: String(localized: "Check Weather"), symbolName: "cloud.sun.fill"),
-]
+// [T-widget-placeholder-freeze] Computed, not `let`: a top-level constant
+// resolved its localized names once per widget-extension process and never
+// again — the same frozen-language bug the app's capability list had.
+private var quickTasksPlaceholder: [WidgetQuickTaskItem] {
+    // A COMPUTED property, deliberately: `let` (or a stored `var` — both are
+    // initialized once per process) froze the localized names in whatever
+    // language the extension first rendered with.
+    [
+        .init(id: "morningBriefing", name: LeoWidgetLanguage.string("Morning Briefing"), symbolName: "sunrise.fill"),
+        .init(id: "dailyNews", name: LeoWidgetLanguage.string("Today's Headlines"), symbolName: "newspaper.fill"),
+        .init(id: "clipboardAssistant", name: LeoWidgetLanguage.string("Clipboard Assistant"), symbolName: "doc.on.clipboard.fill"),
+        .init(id: "checkWeather", name: LeoWidgetLanguage.string("Check Weather"), symbolName: "cloud.sun.fill"),
+    ]
+}
 
 private struct QuickTasksProvider: TimelineProvider {
     func placeholder(in context: Context) -> QuickTasksEntry {
@@ -906,7 +933,7 @@ private struct QuickTasksSmallView: View {
                 Text(first.name)
                     .font(.headline)
                     .lineLimit(2)
-                Text(first.lastRunState == .running ? String(localized: "Running in background…") : String(localized: "Tap to run"))
+                Text(first.lastRunState == .running ? LeoWidgetLanguage.string("Running in background…") : LeoWidgetLanguage.string("Tap to run"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
@@ -1030,9 +1057,9 @@ private struct RecentSessionsEntry: TimelineEntry {
 private struct RecentSessionsProvider: TimelineProvider {
     func placeholder(in context: Context) -> RecentSessionsEntry {
         RecentSessionsEntry(date: .now, sessions: [
-            .init(id: "a", title: String(localized: "Trip planning"), updatedAt: .now.addingTimeInterval(-600)),
-            .init(id: "b", title: String(localized: "Weekly health report"), updatedAt: .now.addingTimeInterval(-7200)),
-            .init(id: "c", title: String(localized: "Web page summary"), updatedAt: .now.addingTimeInterval(-86400)),
+            .init(id: "a", title: LeoWidgetLanguage.string("Trip planning"), updatedAt: .now.addingTimeInterval(-600)),
+            .init(id: "b", title: LeoWidgetLanguage.string("Weekly health report"), updatedAt: .now.addingTimeInterval(-7200)),
+            .init(id: "c", title: LeoWidgetLanguage.string("Web page summary"), updatedAt: .now.addingTimeInterval(-86400)),
         ])
     }
 
@@ -1145,9 +1172,9 @@ private struct BriefingProvider: TimelineProvider {
     private var sample: WidgetBriefing {
         WidgetBriefing(
             generatedAt: .now,
-            taskName: String(localized: "Morning Briefing"),
+            taskName: LeoWidgetLanguage.string("Morning Briefing"),
             sessionId: "preview",
-            summary: String(localized: "Partly cloudy clearing later, 18–26°C — good for going out.\nProduct review at 10:00.\nHeadline: a new on-device model was announced.")
+            summary: LeoWidgetLanguage.string("Partly cloudy clearing later, 18–26°C — good for going out.\nProduct review at 10:00.\nHeadline: a new on-device model was announced.")
         )
     }
 
@@ -1235,7 +1262,7 @@ private struct BriefingWidgetView: View {
         HStack(spacing: 6) {
             Image(systemName: "sunrise.fill")
                 .foregroundStyle(Color.accentColor)
-            Text(entry.briefing?.taskName ?? String(localized: "Daily Briefing"))
+            Text(entry.briefing?.taskName ?? LeoWidgetLanguage.string("Daily Briefing"))
                 .font(.caption.weight(.semibold))
                 .lineLimit(1)
             if let briefing = entry.briefing, !briefing.isFromToday {
@@ -1371,7 +1398,7 @@ private struct TodayWidgetView: View {
                 sparkline
                 HStack(spacing: 10) {
                     if entry.usage.cacheHitRate > 0 {
-                        Label(String(format: String(localized: "Cache %.0f%%"), entry.usage.cacheHitRate), systemImage: "bolt.fill")
+                        Label(String(format: LeoWidgetLanguage.string("Cache %.0f%%"), entry.usage.cacheHitRate), systemImage: "bolt.fill")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
@@ -1422,7 +1449,7 @@ private struct MemoryProvider: TimelineProvider {
         WidgetMemorySnapshot(
             updatedAt: .now,
             todayCount: 3,
-            latestEntry: String(localized: "Preference: weekly reports as bullet points, conclusion first."),
+            latestEntry: LeoWidgetLanguage.string("Preference: weekly reports as bullet points, conclusion first."),
             isRedacted: false
         )
     }
@@ -1481,7 +1508,7 @@ private struct MemoryWidgetView: View {
             HStack(spacing: 5) {
                 Image(systemName: "brain.head.profile")
                     .foregroundStyle(family == .accessoryRectangular ? Color.primary : Color.accentColor)
-                Text(entry.snapshot.todayCount > 0 ? String(localized: "Memories today \(entry.snapshot.todayCount)") : String(localized: "Memory"))
+                Text(entry.snapshot.todayCount > 0 ? LeoWidgetLanguage.string("Memories today \(entry.snapshot.todayCount)") : LeoWidgetLanguage.string("Memory"))
                     .font(.caption.weight(.semibold))
                 Spacer(minLength: 0)
             }
@@ -1600,7 +1627,7 @@ private struct ConsoleWidgetView: View {
     // Top-left: live status, plus the controls that matter while a task runs.
     private var statusPane: some View {
         VStack(alignment: .leading, spacing: 8) {
-            paneHeader(String(localized: "Status"), systemImage: "sparkles")
+            paneHeader(LeoWidgetLanguage.string("Status"), systemImage: "sparkles")
             HStack(alignment: .top, spacing: 8) {
                 Label(entry.status.primaryText, systemImage: entry.status.state.symbol)
                     .font(.title3.weight(.semibold))
@@ -1720,7 +1747,7 @@ private struct ConsoleWidgetView: View {
     // Bottom-left: recent sessions.
     private var sessionsPane: some View {
         VStack(alignment: .leading, spacing: 6) {
-            paneHeader(String(localized: "Recent Sessions"), systemImage: "bubble.left.fill")
+            paneHeader(LeoWidgetLanguage.string("Recent Sessions"), systemImage: "bubble.left.fill")
             if entry.sessions.isEmpty {
                 Text("No sessions yet.")
                     .font(.caption)
@@ -1782,10 +1809,10 @@ private struct ConsoleWidgetView: View {
             }
 
             HStack(alignment: .top, spacing: 14) {
-                metric(String(localized: "Tasks"), value: "\(entry.usage.todayTasks)")
+                metric(LeoWidgetLanguage.string("Tasks"), value: "\(entry.usage.todayTasks)")
                 metric("Token", value: compactTokens(entry.usage.todayTokens))
                 if entry.usage.cacheHitRate > 0 {
-                    metric(String(localized: "Cache"), value: String(format: "%.0f%%", entry.usage.cacheHitRate))
+                    metric(LeoWidgetLanguage.string("Cache"), value: String(format: "%.0f%%", entry.usage.cacheHitRate))
                 }
                 Spacer(minLength: 0)
             }
@@ -1878,7 +1905,7 @@ private struct ConsoleWidgetView: View {
         let taskId = briefingTask?.id ?? "morningBriefing"
         if #available(iOSApplicationExtension 17.0, *) {
             Button(intent: RunQuickTaskFromWidgetIntent(taskId: taskId)) {
-                Label(briefingTaskIsRunning ? String(localized: "Generating") : String(localized: "Generate"),
+                Label(briefingTaskIsRunning ? LeoWidgetLanguage.string("Generating") : LeoWidgetLanguage.string("Generate"),
                       systemImage: briefingTaskIsRunning ? "hourglass" : "arrow.clockwise")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(Color.accentColor)
@@ -1963,13 +1990,13 @@ private struct ArtifactsEntry: TimelineEntry {
 private struct ArtifactsProvider: TimelineProvider {
     private var sample: [WidgetArtifactItem] {
         [
-            .init(id: "a", title: String(localized: "weekly-report.md"), kind: "document", sessionId: "s",
+            .init(id: "a", title: LeoWidgetLanguage.string("weekly-report.md"), kind: "document", sessionId: "s",
                   updatedAt: .now.addingTimeInterval(-900), symbolName: "doc.text.fill"),
-            .init(id: "b", title: String(localized: "trend-chart.png"), kind: "image", sessionId: "s",
+            .init(id: "b", title: LeoWidgetLanguage.string("trend-chart.png"), kind: "image", sessionId: "s",
                   updatedAt: .now.addingTimeInterval(-3600), symbolName: "photo.fill"),
-            .init(id: "c", title: String(localized: "scraper.py"), kind: "code", sessionId: "s",
+            .init(id: "c", title: LeoWidgetLanguage.string("scraper.py"), kind: "code", sessionId: "s",
                   updatedAt: .now.addingTimeInterval(-7200), symbolName: "chevron.left.forwardslash.chevron.right"),
-            .init(id: "d", title: String(localized: "narration.m4a"), kind: "audio", sessionId: "s",
+            .init(id: "d", title: LeoWidgetLanguage.string("narration.m4a"), kind: "audio", sessionId: "s",
                   updatedAt: .now.addingTimeInterval(-86400), symbolName: "waveform"),
         ]
     }

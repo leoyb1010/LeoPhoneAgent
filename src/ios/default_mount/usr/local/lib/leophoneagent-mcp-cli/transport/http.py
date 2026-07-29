@@ -37,11 +37,33 @@ class MCPError(Exception):
 
 
 def expand_env(value):
-    """Replace $VAR / ${VAR} / $$VAR / $${VAR} with the environment value (empty
-    if unset)."""
+    """Replace $VAR / ${VAR} / $$VAR / $${VAR} with the environment value.
+
+    A MISSING variable raises instead of silently substituting "" — the empty
+    string used to flow into `?key=` and come back as a bare 401 the agent
+    could do nothing with, while the native client's error names the variable
+    and where to set it. Both paths now fail the same, actionable way."""
     if not isinstance(value, str):
         return value
-    return _ENV_RE.sub(lambda m: os.environ.get(m.group(1), ""), value)
+    missing = []
+
+    def _sub(m):
+        name = m.group(1)
+        got = os.environ.get(name)
+        if got is None:
+            missing.append(name)
+            return ""
+        return got
+
+    out = _ENV_RE.sub(_sub, value)
+    if missing:
+        raise MCPError(
+            "MISSING_ENV",
+            "config references undefined environment variable(s): %s. "
+            "Add them in the app under Settings > Environment Variables, or "
+            "replace $$NAME with a literal value." % ", ".join(sorted(set(missing)))
+        )
+    return out
 
 
 def _expand_headers(headers):

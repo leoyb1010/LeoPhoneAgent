@@ -5829,8 +5829,18 @@ extension AIChatViewModel {
     /// Shortcuts can surface it as a suggestion. Fire-and-forget; a donation
     /// failure must never affect sending.
     func donateSendPrompt() {
+        // [T-donation-scope] Only a send the user typed themselves teaches the
+        // system anything — intents/widgets/watch runs already ARE the system
+        // acting, and donating for them would train Siri suggestions on the
+        // wrong behaviour.
+        guard sessionSource != "shortcut" else { return }
         Task.detached(priority: .background) {
+            // [T-donation-param-trap] `prompt` is a required @Parameter;
+            // donating with it unset can trap inside AppIntents rather than
+            // throw. Give it a value — donations carry the ACTION, the
+            // parameter content is irrelevant to suggestion learning.
             let intent = SendPromptIntent()
+            intent.prompt = ""
             try? await intent.donate()
         }
     }

@@ -6861,7 +6861,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "添加"
+            "value": "新增"
           }
         }
       }
@@ -6913,7 +6913,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "添加 (%lld)"
+            "value": "新增 (%lld)"
           }
         }
       }
@@ -7324,7 +7324,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "添加文件"
+            "value": "新增檔案"
           }
         }
       }
@@ -7480,7 +7480,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "添加模型"
+            "value": "新增模型"
           }
         }
       }
@@ -10038,7 +10038,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "Anthropic / 兼容 API"
+            "value": "Anthropic / 相容 API"
           }
         }
       }
@@ -14856,7 +14856,7 @@
       }
     },
     "Calendar": {
-      "extractionState": "stale",
+      "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
@@ -16103,7 +16103,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "查看天氣"
+            "value": "檢視天氣"
           }
         }
       }
@@ -18053,7 +18053,7 @@
       }
     },
     "Clipboard": {
-      "extractionState": "stale",
+      "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
@@ -20192,7 +20192,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "上下文窗口"
+            "value": "上下文視窗"
           }
         }
       }
@@ -29902,7 +29902,7 @@
       }
     },
     "Events, schedules, and calendar details": {
-      "extractionState": "stale",
+      "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
@@ -31763,7 +31763,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "文件"
+            "value": "檔案"
           }
         }
       }
@@ -31867,7 +31867,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "文件信息"
+            "value": "檔案資訊"
           }
         }
       }
@@ -31971,7 +31971,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "文件"
+            "value": "檔案"
           }
         }
       }
@@ -32023,7 +32023,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "“文件”App"
+            "value": "“檔案”App"
           }
         }
       }
@@ -34843,7 +34843,7 @@
       }
     },
     "HealthKit": {
-      "extractionState": "stale",
+      "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
@@ -35570,7 +35570,7 @@
       }
     },
     "HomeKit": {
-      "extractionState": "stale",
+      "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
@@ -38295,7 +38295,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "信息"
+            "value": "資訊"
           }
         }
       }
@@ -39595,7 +39595,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "屏幕常亮"
+            "value": "螢幕常亮"
           }
         }
       }
@@ -40261,7 +40261,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "最新消息"
+            "value": "最新訊息"
           }
         }
       }
@@ -41552,7 +41552,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 文件"
+            "value": "LeoPhoneAgent 檔案"
           }
         }
       }
@@ -43718,7 +43718,7 @@
       }
     },
     "Location": {
-      "extractionState": "stale",
+      "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
@@ -45984,7 +45984,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "消息"
+            "value": "訊息"
           }
         }
       }
@@ -46196,7 +46196,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "消息文本"
+            "value": "訊息文字"
           }
         }
       }
@@ -47493,13 +47493,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "晨间简报"
+            "value": "早间简报"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "晨間簡報"
+            "value": "早間簡報"
           }
         }
       }
@@ -48530,7 +48530,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "原生集成"
+            "value": "原生整合"
           }
         }
       }
@@ -54078,7 +54078,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "OpenAI / 兼容 API"
+            "value": "OpenAI / 相容 API"
           }
         }
       }
@@ -54686,7 +54686,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "其他文件"
+            "value": "其他檔案"
           }
         }
       }
@@ -56980,7 +56980,7 @@
       }
     },
     "Photos": {
-      "extractionState": "stale",
+      "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
@@ -57033,7 +57033,7 @@
       }
     },
     "Photos, videos, and album metadata": {
-      "extractionState": "stale",
+      "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
@@ -61666,7 +61666,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "刷新"
+            "value": "重新整理"
           }
         }
       }
@@ -61810,7 +61810,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "刷新工具"
+            "value": "重新整理工具"
           }
         }
       }
@@ -62180,7 +62180,7 @@
       }
     },
     "Reminders": {
-      "extractionState": "stale",
+      "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
@@ -67121,7 +67121,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "保存"
+            "value": "儲存"
           }
         }
       }
@@ -67330,7 +67330,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "保存到文件"
+            "value": "儲存到檔案"
           }
         }
       }
@@ -67382,7 +67382,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "已保存"
+            "value": "已儲存"
           }
         }
       }
@@ -67434,7 +67434,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "已保存到照片"
+            "value": "已儲存到照片"
           }
         }
       }
@@ -67898,7 +67898,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "搜索模型"
+            "value": "搜尋模型"
           }
         }
       }
@@ -73089,7 +73089,7 @@
       }
     },
     "Smart home devices, rooms, and scenes": {
-      "extractionState": "stale",
+      "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
@@ -75453,7 +75453,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "支持"
+            "value": "支援"
           }
         }
       }
@@ -75609,7 +75609,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "支持 SKILL.md、.skill 和 .zip 文件。"
+            "value": "支援 SKILL.md、.skill 和 .zip 檔案。"
           }
         }
       }
@@ -77773,7 +77773,7 @@
       }
     },
     "Tasks, due dates, and reminder lists": {
-      "extractionState": "stale",
+      "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
@@ -78219,7 +78219,7 @@
       }
     },
     "Text and images copied to the clipboard": {
-      "extractionState": "stale",
+      "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
@@ -92271,7 +92271,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "停止全部并清空队列"
+            "value": "停止全部並清空佇列"
           }
         }
       }
@@ -92317,7 +92317,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "停止当前任务"
+            "value": "停止當前任務"
           }
         }
       }
@@ -92363,7 +92363,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "停止当前任务并继续队列"
+            "value": "停止當前任務並繼續佇列"
           }
         }
       }
@@ -92409,7 +92409,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "停止选项"
+            "value": "停止選項"
           }
         }
       }
@@ -92477,7 +92477,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "分析睡眠"
+            "value": "Analyze Sleep"
           }
         },
         "fr": {
@@ -92627,7 +92627,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "早间简报"
+            "value": "Morning Briefing"
           }
         },
         "fr": {
@@ -92679,7 +92679,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "智能家居"
+            "value": "Smart Home"
           }
         },
         "fr": {
@@ -92715,7 +92715,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "智能家居"
+            "value": "智慧家居"
           }
         }
       }
@@ -92761,7 +92761,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "更新记录"
+            "value": "更新記錄"
           }
         }
       }
@@ -92823,7 +92823,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "查看天气"
+            "value": "Check Weather"
           }
         },
         "fr": {
@@ -92875,7 +92875,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "查看日程"
+            "value": "Check Calendar"
           }
         },
         "fr": {
@@ -92911,7 +92911,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "查看日程"
+            "value": "檢視日程"
           }
         }
       }
@@ -93101,7 +93101,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "版本规则"
+            "value": "版本規則"
           }
         }
       }
@@ -93117,7 +93117,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "设置闹钟"
+            "value": "Set Alarm"
           }
         },
         "fr": {
@@ -93199,7 +93199,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "轻点加入队列；长按可停止任务"
+            "value": "輕點加入佇列；長按可停止任務"
           }
         }
       }
@@ -93245,7 +93245,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "选择停止当前任务后继续队列，或停止全部并清空队列"
+            "value": "選擇停止當前任務後繼續佇列，或停止全部並清空佇列"
           }
         }
       }
@@ -93261,7 +93261,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "搜索能力"
+            "value": "搜尋能力"
           }
         }
       }
@@ -93277,7 +93277,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "打开系统设置修改权限"
+            "value": "開啟系統設定修改許可權"
           }
         }
       }
@@ -93293,7 +93293,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "这里显示的是系统授权状态，不会触发授权弹窗。「未询问」表示该能力首次被 Agent 用到时才会向你请求。"
+            "value": "這裡顯示的是系統授權狀態，不會觸發授權彈窗。「未詢問」表示該能力首次被 Agent 用到時才會向你請求。"
           }
         }
       }
@@ -93309,7 +93309,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "个人数据与设备"
+            "value": "個人資料與裝置"
           }
         }
       }
@@ -93325,7 +93325,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "内容与媒体"
+            "value": "內容與媒體"
           }
         }
       }
@@ -93341,7 +93341,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "系统与工具"
+            "value": "系統與工具"
           }
         }
       }
@@ -93357,7 +93357,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "系统授权"
+            "value": "系統授權"
           }
         }
       }
@@ -93373,7 +93373,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "「系统授权」是 iOS 层面的许可；下面的「应用内闸门」是本应用额外加的一道，两者都通过才会执行。"
+            "value": "「系統授權」是 iOS 層面的許可；下面的「應用內閘門」是本應用額外加的一道，兩者都透過才會執行。"
           }
         }
       }
@@ -93389,7 +93389,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "应用内闸门"
+            "value": "應用內閘門"
           }
         }
       }
@@ -93405,7 +93405,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "执行前"
+            "value": "執行前"
           }
         }
       }
@@ -93421,7 +93421,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "直接执行"
+            "value": "直接執行"
           }
         }
       }
@@ -93437,7 +93437,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "每次询问"
+            "value": "每次詢問"
           }
         }
       }
@@ -93469,7 +93469,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "可执行的操作"
+            "value": "可執行的操作"
           }
         }
       }
@@ -93485,7 +93485,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "试一句"
+            "value": "試一句"
           }
         }
       }
@@ -93501,7 +93501,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "数据去向"
+            "value": "資料去向"
           }
         }
       }
@@ -93517,7 +93517,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "没有匹配「%@」的能力。"
+            "value": "沒有匹配「%@」的能力。"
           }
         }
       }
@@ -93533,7 +93533,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "未询问"
+            "value": "未詢問"
           }
         }
       }
@@ -93549,7 +93549,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "无法查询"
+            "value": "無法查詢"
           }
         }
       }
@@ -93581,7 +93581,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "仅可写入"
+            "value": "僅可寫入"
           }
         }
       }
@@ -93597,7 +93597,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "仅选定照片"
+            "value": "僅選定照片"
           }
         }
       }
@@ -93613,7 +93613,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "使用期间"
+            "value": "使用期間"
           }
         }
       }
@@ -93629,7 +93629,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "临时授权"
+            "value": "臨時授權"
           }
         }
       }
@@ -93645,7 +93645,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "未知状态"
+            "value": "未知狀態"
           }
         }
       }
@@ -93661,7 +93661,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "HomeKit 不提供状态查询，首次使用时询问"
+            "value": "HomeKit 不提供狀態查詢，首次使用時詢問"
           }
         }
       }
@@ -93677,7 +93677,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "iOS 在读取时按需询问"
+            "value": "iOS 在讀取時按需詢問"
           }
         }
       }
@@ -93693,7 +93693,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "首次使用时询问"
+            "value": "首次使用時詢問"
           }
         }
       }
@@ -93709,7 +93709,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "此设备不支持健康数据"
+            "value": "此裝置不支援健康資料"
           }
         }
       }
@@ -93725,7 +93725,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "无法解析健康数据类型"
+            "value": "無法解析健康資料型別"
           }
         }
       }
@@ -93741,7 +93741,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "可写入；读取权限 iOS 不允许查询"
+            "value": "可寫入；讀取許可權 iOS 不允許查詢"
           }
         }
       }
@@ -93757,7 +93757,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "写入被拒；读取权限 iOS 不允许查询"
+            "value": "寫入被拒；讀取許可權 iOS 不允許查詢"
           }
         }
       }
@@ -93773,7 +93773,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "硬件可用，使用时逐次授权"
+            "value": "硬體可用，使用時逐次授權"
           }
         }
       }
@@ -93789,7 +93789,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "此设备不支持 NFC"
+            "value": "此裝置不支援 NFC"
           }
         }
       }
@@ -93805,7 +93805,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "定时任务"
+            "value": "定時任務"
           }
         }
       }
@@ -93853,7 +93853,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "每周"
+            "value": "每週"
           }
         }
       }
@@ -93869,7 +93869,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "每小时"
+            "value": "每小時"
           }
         }
       }
@@ -93885,7 +93885,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "每小时整点"
+            "value": "每小時整點"
           }
         }
       }
@@ -93901,7 +93901,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "还没有计划任务。点右上角 + 新建一个，例如每天早上 8 点跑「早间简报」。"
+            "value": "還沒有計劃任務。點右上角 + 新建一個，例如每天早上 8 點跑「早間簡報」。"
           }
         }
       }
@@ -93917,7 +93917,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "iOS 不允许应用自行按时唤醒，所以到期任务会在下面两种时机执行：你打开应用时自动补跑，或由你设置的「快捷指令」个人自动化准时触发。超过 26 小时的过期任务会跳过，不会一次性补跑一堆。"
+            "value": "iOS 不允許應用自行按時喚醒，所以到期任務會在下面兩種時機執行：你開啟應用時自動補跑，或由你設定的「快捷指令」個人自動化準時觸發。超過 26 小時的過期任務會跳過，不會一次性補跑一堆。"
           }
         }
       }
@@ -93933,7 +93933,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "立即检查并运行到期任务"
+            "value": "立即檢查並執行到期任務"
           }
         }
       }
@@ -93949,7 +93949,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "现在没有到期的任务"
+            "value": "現在沒有到期的任務"
           }
         }
       }
@@ -93965,7 +93965,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "让它准时触发（推荐）"
+            "value": "讓它準時觸發（推薦）"
           }
         }
       }
@@ -93981,7 +93981,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "打开系统「快捷指令」App → 自动化 → 新建"
+            "value": "開啟系統「快捷指令」App → 自動化 → 新建"
           }
         }
       }
@@ -93997,7 +93997,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "选择「特定时间」，设成你想要的时刻（如每天 08:00）"
+            "value": "選擇「特定時間」，設成你想要的時刻（如每天 08:00）"
           }
         }
       }
@@ -94013,7 +94013,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "操作里搜索 LeoPhoneAgent 的「Run Due Scheduled Tasks」"
+            "value": "操作裡搜尋 LeoPhoneAgent 的「Run Due Scheduled Tasks」"
           }
         }
       }
@@ -94029,7 +94029,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "关闭「运行前询问」，保存"
+            "value": "關閉「執行前詢問」，儲存"
           }
         }
       }
@@ -94045,7 +94045,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "这样即使应用没打开，快捷指令也会在设定时刻叫醒它执行到期任务。不设置也能用，只是会等到你下次打开应用时才补跑。"
+            "value": "這樣即使應用沒開啟，快捷指令也會在設定時刻叫醒它執行到期任務。不設定也能用，只是會等到你下次開啟應用時才補跑。"
           }
         }
       }
@@ -94061,7 +94061,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "（任务已删除）"
+            "value": "（任務已刪除）"
           }
         }
       }
@@ -94077,7 +94077,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "运行哪个任务"
+            "value": "執行哪個任務"
           }
         }
       }
@@ -94093,7 +94093,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "快捷任务"
+            "value": "快捷任務"
           }
         }
       }
@@ -94109,7 +94109,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "什么时候"
+            "value": "什麼時候"
           }
         }
       }
@@ -94125,7 +94125,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "频率"
+            "value": "頻率"
           }
         }
       }
@@ -94141,7 +94141,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "时间"
+            "value": "時間"
           }
         }
       }
@@ -94173,7 +94173,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "新建计划"
+            "value": "新建計劃"
           }
         }
       }
@@ -94189,7 +94189,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "编辑计划"
+            "value": "編輯計劃"
           }
         }
       }
@@ -94205,7 +94205,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "会话检查器"
+            "value": "會話檢查器"
           }
         }
       }
@@ -94221,7 +94221,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "当前模型"
+            "value": "當前模型"
           }
         }
       }
@@ -94237,7 +94237,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "上下文窗口"
+            "value": "上下文視窗"
           }
         }
       }
@@ -94253,7 +94253,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "上下文占用"
+            "value": "上下文佔用"
           }
         }
       }
@@ -94269,7 +94269,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "还没有可统计的上下文用量——发送一条消息后显示。"
+            "value": "還沒有可統計的上下文用量——傳送一條訊息後顯示。"
           }
         }
       }
@@ -94285,7 +94285,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "接近上限时会自动压缩历史（保留摘要），这会让缓存失效并可能丢失早期细节。想保留完整细节可以开新会话。"
+            "value": "接近上限時會自動壓縮歷史（保留摘要），這會讓快取失效並可能丟失早期細節。想保留完整細節可以開新會話。"
           }
         }
       }
@@ -94301,7 +94301,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "本会话 Token"
+            "value": "本會話 Token"
           }
         }
       }
@@ -94317,7 +94317,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "缓存命中"
+            "value": "快取命中"
           }
         }
       }
@@ -94333,7 +94333,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "缓存写入"
+            "value": "快取寫入"
           }
         }
       }
@@ -94349,7 +94349,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "Agent 迭代轮数"
+            "value": "Agent 迭代輪數"
           }
         }
       }
@@ -94365,7 +94365,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "正在喂给这个会话的东西"
+            "value": "正在餵給這個會話的東西"
           }
         }
       }
@@ -94381,7 +94381,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "记忆注入"
+            "value": "記憶注入"
           }
         }
       }
@@ -94397,7 +94397,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "GLOBAL.md + 最近日志会进入提示词"
+            "value": "GLOBAL.md + 最近日誌會進入提示詞"
           }
         }
       }
@@ -94413,7 +94413,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "本会话不注入，也不写入"
+            "value": "本會話不注入，也不寫入"
           }
         }
       }
@@ -94429,7 +94429,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "MCP 服务器"
+            "value": "MCP 伺服器"
           }
         }
       }
@@ -94445,7 +94445,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld 个已启用"
+            "value": "%lld 個已啟用"
           }
         }
       }
@@ -94461,7 +94461,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "这些都会占用上下文。感觉模型「跑题」或上下文吃紧时，先看这里有没有不需要的技能或 MCP 在挂着。"
+            "value": "這些都會佔用上下文。感覺模型「跑題」或上下文吃緊時，先看這裡有沒有不需要的技能或 MCP 在掛著。"
           }
         }
       }
@@ -94477,7 +94477,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "全部任务"
+            "value": "全部任務"
           }
         }
       }
@@ -94493,7 +94493,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "搜索快捷任务"
+            "value": "搜尋快捷任務"
           }
         }
       }
@@ -94509,7 +94509,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "还没有快捷任务，点右上角新建一个。"
+            "value": "還沒有快捷任務，點右上角新建一個。"
           }
         }
       }
@@ -94525,7 +94525,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "没有匹配「%@」的任务。"
+            "value": "沒有匹配「%@」的任務。"
           }
         }
       }
@@ -94541,7 +94541,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "轻点任务把提示词填入输入框。左划可把常用任务固定到输入框上方（最多 %lld 个）。"
+            "value": "輕點任務把提示詞填入輸入框。左劃可把常用任務固定到輸入框上方（最多 %lld 個）。"
           }
         }
       }
@@ -94557,7 +94557,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "常驻"
+            "value": "常駐"
           }
         }
       }
@@ -94573,7 +94573,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "新建快捷任务"
+            "value": "新建快捷任務"
           }
         }
       }
@@ -94589,7 +94589,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "标为未读"
+            "value": "標為未讀"
           }
         }
       }
@@ -94605,7 +94605,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld 个会话等你查看"
+            "value": "%lld 個會話等你檢視"
           }
         }
       }
@@ -94621,7 +94621,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "最近产物"
+            "value": "最近產物"
           }
         }
       }
@@ -94637,7 +94637,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "还没有产物。让 Agent 生成文件后会显示在这里。"
+            "value": "還沒有產物。讓 Agent 生成檔案後會顯示在這裡。"
           }
         }
       }
@@ -94653,7 +94653,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "停止所有任务"
+            "value": "停止所有任務"
           }
         }
       }
@@ -94669,7 +94669,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "已启动 %lld 个任务"
+            "value": "已啟動 %lld 個任務"
           }
         }
       }
@@ -94701,7 +94701,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "闹钟"
+            "value": "鬧鐘"
           }
         }
       }
@@ -94717,7 +94717,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "蓝牙"
+            "value": "藍芽"
           }
         }
       }
@@ -94733,7 +94733,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "按需获取的当前位置与坐标"
+            "value": "按需獲取的當前位置與座標"
           }
         }
       }
@@ -94749,7 +94749,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "设备"
+            "value": "裝置"
           }
         }
       }
@@ -94765,7 +94765,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "地图"
+            "value": "地圖"
           }
         }
       }
@@ -94781,7 +94781,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "媒体"
+            "value": "媒體"
           }
         }
       }
@@ -94813,7 +94813,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "NFC 标签、智能卡，以及写入附近标签的数据"
+            "value": "NFC 標籤、智慧卡，以及寫入附近標籤的資料"
           }
         }
       }
@@ -94829,7 +94829,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "自然语言"
+            "value": "自然語言"
           }
         }
       }
@@ -94845,7 +94845,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "附近的蓝牙设备及与其交换的数据"
+            "value": "附近的藍芽裝置及與其交換的資料"
           }
         }
       }
@@ -94877,7 +94877,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "打开链接"
+            "value": "開啟連結"
           }
         }
       }
@@ -94909,7 +94909,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "朗读"
+            "value": "朗讀"
           }
         }
       }
@@ -94925,7 +94925,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "步数、心率、睡眠等已授权的健康数据"
+            "value": "步數、心率、睡眠等已授權的健康資料"
           }
         }
       }
@@ -94941,7 +94941,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "视觉识别"
+            "value": "視覺識別"
           }
         }
       }
@@ -94957,7 +94957,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "天气"
+            "value": "天氣"
           }
         }
       }
@@ -94973,7 +94973,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "总结我最近七天的步数。"
+            "value": "總結我最近七天的步數。"
           }
         }
       }
@@ -94989,7 +94989,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "在明天下午找一个空闲小时，建一个专注时段。"
+            "value": "在明天下午找一個空閒小時，建一個專注時段。"
           }
         }
       }
@@ -95005,7 +95005,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "创建一个明早 9 点复查这个项目的提醒。"
+            "value": "建立一個明早 9 點複查這個專案的提醒。"
           }
         }
       }
@@ -95021,7 +95021,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "找出最近的截图并导出到当前工作区。"
+            "value": "找出最近的截圖並匯出到當前工作區。"
           }
         }
       }
@@ -95037,7 +95037,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "我当前位置附近有哪些有用的地点？"
+            "value": "我當前位置附近有哪些有用的地點？"
           }
         }
       }
@@ -95053,7 +95053,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "显示客厅设备的当前状态。"
+            "value": "顯示客廳裝置的當前狀態。"
           }
         }
       }
@@ -95069,7 +95069,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "总结我剪贴板里的文字。"
+            "value": "總結我剪貼簿裡的文字。"
           }
         }
       }
@@ -95085,7 +95085,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "读取这个 NFC 标签并解释其中的记录。"
+            "value": "讀取這個 NFC 標籤並解釋其中的記錄。"
           }
         }
       }
@@ -95101,7 +95101,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "列出附近可连接的蓝牙设备。"
+            "value": "列出附近可連線的藍芽裝置。"
           }
         }
       }
@@ -95117,7 +95117,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "把最终答案朗读出来。"
+            "value": "把最終答案朗讀出來。"
           }
         }
       }
@@ -95133,7 +95133,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "开始语音输入一个新任务。"
+            "value": "開始語音輸入一個新任務。"
           }
         }
       }
@@ -95149,7 +95149,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "暂停当前音频并显示正在播放的内容。"
+            "value": "暫停當前音訊並顯示正在播放的內容。"
           }
         }
       }
@@ -95165,7 +95165,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "显示应用可获取的存储与电量信息。"
+            "value": "顯示應用可獲取的儲存與電量資訊。"
           }
         }
       }
@@ -95181,7 +95181,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "二十分钟后提醒我检查这个任务。"
+            "value": "二十分鐘後提醒我檢查這個任務。"
           }
         }
       }
@@ -95197,7 +95197,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "创建一个明早 7:30 的闹钟。"
+            "value": "建立一個明早 7:30 的鬧鐘。"
           }
         }
       }
@@ -95213,7 +95213,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "打开后台任务的设置页。"
+            "value": "開啟後臺任務的設定頁。"
           }
         }
       }
@@ -95229,7 +95229,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "规划一条到最近车站的步行路线。"
+            "value": "規劃一條到最近車站的步行路線。"
           }
         }
       }
@@ -95245,7 +95245,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "今晚这里会下雨吗？"
+            "value": "今晚這裡會下雨嗎？"
           }
         }
       }
@@ -95261,7 +95261,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "识别这段文字的语言和其中的关键名称。"
+            "value": "識別這段文字的語言和其中的關鍵名稱。"
           }
         }
       }
@@ -95277,7 +95277,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "提取这张图片里的所有文字和二维码。"
+            "value": "提取這張圖片裡的所有文字和二維碼。"
           }
         }
       }
@@ -95293,7 +95293,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "在设备本地读取。结果进入当前 Agent 会话，仅在回答需要时才发送给你选定的 AI 提供方。"
+            "value": "在裝置本地讀取。結果進入當前 Agent 會話，僅在回答需要時才傳送給你選定的 AI 提供方。"
           }
         }
       }
@@ -95309,7 +95309,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "在设备本地处理。选定的 AI 提供方只会收到当前任务所需的工具结果。"
+            "value": "在裝置本地處理。選定的 AI 提供方只會收到當前任務所需的工具結果。"
           }
         }
       }
@@ -95325,7 +95325,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "读取健康指标"
+            "value": "讀取健康指標"
           }
         }
       }
@@ -95341,7 +95341,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "写入支持的数据"
+            "value": "寫入支援的資料"
           }
         }
       }
@@ -95357,7 +95357,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "总结趋势"
+            "value": "總結趨勢"
           }
         }
       }
@@ -95389,7 +95389,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "查询空闲"
+            "value": "查詢空閒"
           }
         }
       }
@@ -95405,7 +95405,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "创建或修改日程"
+            "value": "建立或修改日程"
           }
         }
       }
@@ -95437,7 +95437,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "创建任务"
+            "value": "建立任務"
           }
         }
       }
@@ -95469,7 +95469,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "搜索与查看媒体"
+            "value": "搜尋與檢視媒體"
           }
         }
       }
@@ -95485,7 +95485,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "导入或导出文件"
+            "value": "匯入或匯出檔案"
           }
         }
       }
@@ -95501,7 +95501,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "仅在你明确要求时删除"
+            "value": "僅在你明確要求時刪除"
           }
         }
       }
@@ -95517,7 +95517,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "读取当前位置"
+            "value": "讀取當前位置"
           }
         }
       }
@@ -95533,7 +95533,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "解析坐标"
+            "value": "解析座標"
           }
         }
       }
@@ -95549,7 +95549,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "在任务中使用位置"
+            "value": "在任務中使用位置"
           }
         }
       }
@@ -95565,7 +95565,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "列出住宅与配件"
+            "value": "列出住宅與配件"
           }
         }
       }
@@ -95581,7 +95581,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "读取设备状态"
+            "value": "讀取裝置狀態"
           }
         }
       }
@@ -95597,7 +95597,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "控制支持的配件"
+            "value": "控制支援的配件"
           }
         }
       }
@@ -95613,7 +95613,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "按需读取剪贴板"
+            "value": "按需讀取剪貼簿"
           }
         }
       }
@@ -95629,7 +95629,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "写入文字或图片"
+            "value": "寫入文字或圖片"
           }
         }
       }
@@ -95645,7 +95645,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "读取 NDEF 或支持的标签"
+            "value": "讀取 NDEF 或支援的標籤"
           }
         }
       }
@@ -95661,7 +95661,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "写入 NDEF 标签"
+            "value": "寫入 NDEF 標籤"
           }
         }
       }
@@ -95677,7 +95677,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "查看支持的智能卡"
+            "value": "檢視支援的智慧卡"
           }
         }
       }
@@ -95693,7 +95693,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "扫描附近设备"
+            "value": "掃描附近裝置"
           }
         }
       }
@@ -95709,7 +95709,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "连接 BLE 外设"
+            "value": "連線 BLE 外設"
           }
         }
       }
@@ -95725,7 +95725,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "交换支持的数据"
+            "value": "交換支援的資料"
           }
         }
       }
@@ -95741,7 +95741,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "用系统语音朗读 Agent 回复"
+            "value": "用系統語音朗讀 Agent 回覆"
           }
         }
       }
@@ -95757,7 +95757,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "转写麦克风或音频输入"
+            "value": "轉寫麥克風或音訊輸入"
           }
         }
       }
@@ -95773,7 +95773,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "查看媒体"
+            "value": "檢視媒體"
           }
         }
       }
@@ -95789,7 +95789,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "控制支持的播放"
+            "value": "控制支援的播放"
           }
         }
       }
@@ -95805,7 +95805,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "操作媒体库"
+            "value": "操作媒體庫"
           }
         }
       }
@@ -96145,7 +96145,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "Agent 控制台"
+            "value": "Agent 控制檯"
           }
         }
       }
@@ -96179,7 +96179,7 @@
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "查看全文"
+            "value": "檢視全文"
           }
         }
       }
@@ -96946,6 +96946,24 @@
             "state": "translated",
             "value": "%lld 個工作階段等你查看"
           }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "1 session needs you"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld sessions need you"
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -97268,6 +97286,847 @@
           "stringUnit": {
             "state": "translated",
             "value": "清除用戶端"
+          }
+        }
+      }
+    },
+    "This app's bundled Google client secret was removed when it was open-sourced, so Gemini's \"Sign in with Google\" cannot finish authorization. Once you add your own client, the option appears among the authentication methods.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个应用内置的 Google 客户端密钥在开源时被移除了，所以 Gemini 的「用 Google 账号登录」无法完成授权。填入你自己的客户端后，登录选项会出现在认证方式里。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這個應用內建的 Google 客戶端金鑰在開源時被移除了，所以 Gemini 的「用 Google 賬號登入」無法完成授權。填入你自己的客戶端後，登入選項會出現在認證方式裡。"
+          }
+        }
+      }
+    },
+    "Stored in this device's Keychain — never synced, never uploaded. Gemini and Antigravity share this client. Leaving the secret empty means an iOS-type client.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存在本机钥匙串，不会同步、不会上传。Gemini 与 Antigravity 共用这一套客户端。留空密钥即按 iOS 客户端处理。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "儲存在本機鑰匙串，不會同步、不會上傳。Gemini 與 Antigravity 共用這一套客戶端。留空金鑰即按 iOS 客戶端處理。"
+          }
+        }
+      }
+    },
+    "Open Google Cloud Console and create or pick a project": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开 Google Cloud Console，新建或选择一个项目"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開啟 Google Cloud Console，新建或選擇一個專案"
+          }
+        }
+      }
+    },
+    "Enable the Generative Language API (or Cloud Code Assist)": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "启用 Generative Language API（或 Cloud Code Assist）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "啟用 Generative Language API（或 Cloud Code Assist）"
+          }
+        }
+      }
+    },
+    "APIs & Services → Credentials → Create credentials → OAuth client ID": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「API 和服务 → 凭据 → 创建凭据 → OAuth 客户端 ID」"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「API 和服務 → 憑據 → 建立憑據 → OAuth 客戶端 ID」"
+          }
+        }
+      }
+    },
+    "Choose application type \"iOS\" and enter bundle ID com.leoyuan.leophoneagent": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用类型选「iOS」，Bundle ID 填 com.leoyuan.leophoneagent"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "應用型別選「iOS」，Bundle ID 填 com.leoyuan.leophoneagent"
+          }
+        }
+      }
+    },
+    "Paste the client ID above and leave the secret empty": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把客户端 ID 填到上面，密钥留空即可"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把客戶端 ID 填到上面，金鑰留空即可"
+          }
+        }
+      }
+    },
+    "iOS is the correct client type for this app: Google issues no secret and instead proves identity with PKCE plus a reversed-client-ID callback, so there is nothing to bake into the binary.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS 类型是这个 App 的正确客户端类型：Google 不发放密钥，改用 PKCE + 反向客户端 ID 回调来证明身份，也就不存在「把密钥打进二进制」的问题。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS 型別是這個 App 的正確客戶端型別：Google 不發放金鑰，改用 PKCE + 反向客戶端 ID 回撥來證明身份，也就不存在「把金鑰打進二進位制」的問題。"
+          }
+        }
+      }
+    },
+    "If you already have a \"Desktop app\" client (for example one created by following Google's Gemini API OAuth guide), fill in both the ID and the secret and the loopback callback flow is used automatically.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "如果你已经有一个「桌面应用」类型的客户端（例如按 Google 官方 Gemini API OAuth 文档创建的），把 ID 和密钥都填上即可，会自动走本地回环回调的流程。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "如果你已經有一個「桌面應用」型別的客戶端（例如按 Google 官方 Gemini API OAuth 文件建立的），把 ID 和金鑰都填上即可，會自動走本地迴環回撥的流程。"
+          }
+        }
+      }
+    },
+    "Note: whether a self-created client gets the same free quota as the Gemini CLI depends on Google's own client checks and is not guaranteed. Fall back to an API key if sign-in fails.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "注意：用自建客户端能否拿到 Gemini CLI 那套免费额度，取决于 Google 侧对客户端身份的校验，不保证可用。失败时请继续使用 API Key。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "注意：用自建客戶端能否拿到 Gemini CLI 那套免費額度，取決於 Google 側對客戶端身份的校驗，不保證可用。失敗時請繼續使用 API Key。"
+          }
+        }
+      }
+    },
+    "Go back one screen and \"OAuth\" will be listed among Gemini's authentication methods.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "返回上一页后，Gemini 的认证方式里会出现「OAuth」选项。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "返回上一頁後，Gemini 的認證方式裡會出現「OAuth」選項。"
+          }
+        }
+      }
+    },
+    "今日热点": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Today's Headlines"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "今日热点"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "今日熱點"
+          }
+        }
+      }
+    },
+    "剪贴板速办": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clipboard Assistant"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "剪贴板速办"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "剪貼簿速辦"
+          }
+        }
+      }
+    },
+    "晚间回顾": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Evening Review"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "晚间回顾"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "晚間回顧"
+          }
+        }
+      }
+    },
+    "拍照识字": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Photo OCR"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拍照识字"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拍照識字"
+          }
+        }
+      }
+    },
+    "附近探索": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nearby Explorer"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "附近探索"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "附近探索"
+          }
+        }
+      }
+    },
+    "健康日报": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Daily Health Report"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "健康日报"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "健康日報"
+          }
+        }
+      }
+    },
+    "拍照描述": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Describe Photo"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拍照描述"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拍照描述"
+          }
+        }
+      }
+    },
+    "Ready": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "就绪"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "就緒"
+          }
+        }
+      }
+    },
+    "Working": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "运行中"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "執行中"
+          }
+        }
+      }
+    },
+    "Paused": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已暂停"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已暫停"
+          }
+        }
+      }
+    },
+    "Open for live progress": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开查看实时进度"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開啟檢視實時進度"
+          }
+        }
+      }
+    },
+    "Open to resume": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开以恢复"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開啟以恢復"
+          }
+        }
+      }
+    },
+    "Open result": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开查看结果"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開啟檢視結果"
+          }
+        }
+      }
+    },
+    "Open recovery options": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开处理"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開啟處理"
+          }
+        }
+      }
+    },
+    "Task paused": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "任务已暂停"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "任務已暫停"
+          }
+        }
+      }
+    },
+    "Task completed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "任务已完成"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "任務已完成"
+          }
+        }
+      }
+    },
+    "Task needs attention": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "任务需要处理"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "任務需要處理"
+          }
+        }
+      }
+    },
+    "1 task running": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 个任务运行中"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 個任務執行中"
+          }
+        }
+      }
+    },
+    "%lld tasks running": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个任务运行中"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 個任務執行中"
+          }
+        }
+      }
+    },
+    "session": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "个会话"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "個會話"
+          }
+        }
+      }
+    },
+    "sessions": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "个会话"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "個會話"
+          }
+        }
+      }
+    },
+    "Recommended MCP directory": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推荐 MCP 目录"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推薦 MCP 目錄"
+          }
+        }
+      }
+    },
+    "Browse recommended MCP servers": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "浏览推荐 MCP"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "瀏覽推薦 MCP"
+          }
+        }
+      }
+    },
+    "Hosted": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "官方托管"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "官方託管"
+          }
+        }
+      }
+    },
+    "Recommended MCP": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推荐 MCP"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推薦 MCP"
+          }
+        }
+      }
+    },
+    "Hosted entries prefill the add form. $$NAME in the URL is an environment-variable reference — create the variable under Settings → Environment Variables first; it is substituted at call time so the key never enters the synced config file. Other entries are stdio or platform services; tap to open their docs.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「官方托管」条目点击后会预填添加表单。URL 里的 $$NAME 是环境变量引用——先到 设置 → 环境变量 建好同名变量，调用时会自动替换，密钥不会写进会同步的配置文件。其余条目为 stdio 或平台接入型服务，点击查看接入文档。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「官方託管」條目點選後會預填新增表單。URL 裡的 $$NAME 是環境變數引用——先到 設定 → 環境變數 建好同名變數，呼叫時會自動替換，金鑰不會寫進會同步的配置檔案。其餘條目為 stdio 或平臺接入型服務，點選檢視接入文件。"
+          }
+        }
+      }
+    },
+    "Recommended skill directory": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推荐 Skill 目录"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推薦 Skill 目錄"
+          }
+        }
+      }
+    },
+    "Installable now": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可直接安装"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可直接安裝"
+          }
+        }
+      }
+    },
+    "Platform services (see docs)": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "平台接入型（查看文档）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "平臺接入型（檢視文件）"
+          }
+        }
+      }
+    },
+    "Skill marketplaces": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "技能市场"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "技能市場"
+          }
+        }
+      }
+    },
+    "Recommended Skills": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推荐 Skill"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推薦 Skill"
+          }
+        }
+      }
+    },
+    "Install": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安裝"
+          }
+        }
+      }
+    },
+    "Installs SKILL.md and its companion files from the official GitHub repo. Keys/accounts are configured in the skill's detail page after install.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从官方 GitHub 仓库安装 SKILL.md 及配套文件。技能的密钥/账号配置见安装后的技能详情。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "從官方 GitHub 倉庫安裝 SKILL.md 及配套檔案。技能的金鑰/賬號配置見安裝後的技能詳情。"
+          }
+        }
+      }
+    },
+    "These marketplaces use the same SKILL.md standard as this app (name/description front matter), so their skills install directly: find one you like, copy its SKILL.md URL, and paste it into Install from URL.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这些市场使用与本应用相同的 SKILL.md 标准（name/description 前置元数据），技能可直接安装：找到想要的技能后，复制它的 SKILL.md 链接，粘贴到「从 URL 安装」。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這些市場使用與本應用相同的 SKILL.md 標準（name/description 前置後設資料），技能可直接安裝：找到想要的技能後，複製它的 SKILL.md 連結，貼上到「從 URL 安裝」。"
+          }
+        }
+      }
+    },
+    "Installed as “%@” — enable or disable it in the Skills list.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已安装为「%@」，可在 Skills 列表中启用/停用。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已安裝為「%@」，可在 Skills 列表中啟用/停用。"
+          }
+        }
+      }
+    },
+    "Replace %@ with your own credential, or reference an environment variable with $$NAME, before saving.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存前请把 %@ 替换成你自己的密钥，或用 $$NAME 引用环境变量。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "儲存前請把 %@ 替換成你自己的金鑰，或用 $$NAME 引用環境變數。"
           }
         }
       }

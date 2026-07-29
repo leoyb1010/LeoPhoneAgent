@@ -1015,10 +1015,14 @@ final class BrowserUseManager: NSObject, ObservableObject {
             if let state = node["state"] as? String, !state.isEmpty { line += " [\(state)]" }
             if let selector = node["selector"] as? String, !selector.isEmpty { line += "  → \(selector)" }
             if let href = node["href"] as? String, !href.isEmpty { line += "  href=\(href)" }
-            if characters + line.count > maxCharacters { break }
-            characters += line.count + 1
+            // Truncate the LINE, not the whole remainder: a single oversized
+            // line (pathological name) used to leave rendered == 0.
+            let budget = maxCharacters - characters
+            if budget <= 0 { break }
+            let emitted = line.count > budget ? String(line.prefix(budget)) + "…" : line
+            characters += emitted.count + 1
             rendered += 1
-            body.append(line)
+            body.append(emitted)
         }
         lines.append(contentsOf: body)
 

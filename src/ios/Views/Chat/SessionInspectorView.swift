@@ -50,13 +50,16 @@ struct SessionInspectorView: View {
                                 Text("\(compact(stats.context)) / \(compact(contextWindow))")
                                     .font(.body.monospacedDigit())
                                     // [T-numeric-text-transition] These update
-                                    // live while a reply streams; without this
-                                    // every token makes the number hard-cut.
+                                    // live while a reply streams. numericText
+                                    // only rolls inside an animation
+                                    // transaction, hence the explicit binding.
                                     .contentTransition(.numericText())
+                                    .animation(.default, value: stats.context)
                                 Spacer()
                                 Text(String(format: "%.0f%%", contextFraction * 100))
                                     .font(.body.monospacedDigit().weight(.semibold))
                                     .contentTransition(.numericText())
+                                    .animation(.default, value: contextFraction)
                                     .foregroundStyle(contextTint)
                             }
                             ProgressView(value: contextFraction)

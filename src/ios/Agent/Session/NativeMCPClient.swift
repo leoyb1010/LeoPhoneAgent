@@ -181,8 +181,23 @@ actor NativeMCPClient {
         return out
     }
 
+    /// In-flight initializations, so two concurrent calls on this actor don't
+    /// both run the handshake across the suspension points and leak a session
+    /// on stateful servers. [T-native-mcp-reentrancy]
+    private var initInFlight: [String: Task<Void, Error>] = [:]
+
     private func initializeIfNeeded(_ config: MCPServerConfig) async throws {
         guard !initialized.contains(config.id) else { return }
+        if let running = initInFlight[config.id] {
+            return try await running.value
+        }
+        let task = Task { try await self.performInitialize(config) }
+        initInFlight[config.id] = task
+        defer { initInFlight[config.id] = nil }
+        try await task.value
+    }
+
+    private func performInitialize(_ config: MCPServerConfig) async throws {
         // Let a real failure out: swallowing it here only surfaced later as a
         // confusing second error on tools/list.
         _ = try await send(config, method: "initialize", params: [
@@ -193,15 +208,26 @@ actor NativeMCPClient {
         // Third leg of the handshake. Servers built on the official SDKs
         // reject every subsequent request with "Server not initialized"
         // without it; the in-guest transport has always sent it.
-        try? await sendNotification(config, method: "notifications/initialized")
-        initialized.insert(config.id)
+        // [T-native-mcp-init-honest] Only mark the server initialized when the
+        // notification was ACCEPTED — swallowing a 4xx here left `initialized`
+        // set while a strict server kept answering "not initialized" forever.
+        let accepted = await sendNotification(config, method: "notifications/initialized")
+        if accepted {
+            initialized.insert(config.id)
+        } else {
+            logger.warning("notifications/initialized not accepted by \(config.id) — will re-handshake on next call")
+        }
     }
 
     /// JSON-RPC notification: no `id`, no response body to parse. A compliant
-    /// server answers 202 with an empty body.
-    private func sendNotification(_ config: MCPServerConfig, method: String) async throws {
-        let resolved = try Self.resolve(config)
-        guard let url = URL(string: resolved.url) else { throw ClientError.badURL(resolved.url) }
+    /// server answers 202 (or 200) with an empty body. Returns whether the
+    /// server accepted it; network errors count as accepted so a flaky link
+    /// doesn't force an endless re-handshake loop.
+    @discardableResult
+    private func sendNotification(_ config: MCPServerConfig, method: String) async -> Bool {
+        guard let resolved = try? Self.resolve(config), let url = URL(string: resolved.url) else {
+            return false
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.timeoutInterval = 30
@@ -216,10 +242,15 @@ actor NativeMCPClient {
            let token = await MCPOAuthController.validAccessToken(server: config.id, oauth: oauth) {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
-        request.httpBody = try JSONSerialization.data(withJSONObject: [
+        guard let body = try? JSONSerialization.data(withJSONObject: [
             "jsonrpc": "2.0", "method": method, "params": [String: Any](),
-        ])
-        _ = try? await URLSession.shared.data(for: request)
+        ]) else { return false }
+        request.httpBody = body
+        guard let (_, response) = try? await URLSession.shared.data(for: request) else {
+            return true   // network hiccup — don't force a re-handshake loop
+        }
+        guard let http = response as? HTTPURLResponse else { return true }
+        return (200..<300).contains(http.statusCode)
     }
 
     private static var appVersion: String {
@@ -240,7 +271,10 @@ actor NativeMCPClient {
     ) async throws -> [String: Any] {
         let resolved = try Self.resolve(config)
         guard let url = URL(string: resolved.url) else {
-            throw ClientError.badURL(resolved.url)
+            // [T-secret-in-error] The RESOLVED url carries expanded credentials
+            // and this error text ends up in chat and the exportable log —
+            // report the configured (unexpanded) form instead.
+            throw ClientError.badURL(config.url ?? "")
         }
 
         var request = URLRequest(url: url)
@@ -277,6 +311,17 @@ actor NativeMCPClient {
         }
         if let session = http.value(forHTTPHeaderField: "Mcp-Session-Id"), !session.isEmpty {
             sessionIDs[config.id] = session
+        }
+        // [T-native-mcp-selfheal] A restarted server no longer knows our
+        // Mcp-Session-Id and answers 404 — clear the cached handshake and run
+        // it again once instead of failing for the rest of the app's life.
+        if http.statusCode == 404, !isRetryAfterAuthRefresh, sessionIDs[config.id] != nil {
+            logger.info("session rejected by \(config.id) — re-handshaking")
+            sessionIDs.removeValue(forKey: config.id)
+            initialized.remove(config.id)
+            try await initializeIfNeeded(config)
+            return try await send(config, method: method, params: params,
+                                  isInitialize: isInitialize, isRetryAfterAuthRefresh: true)
         }
         if http.statusCode == 401 || http.statusCode == 403 {
             let bodyText = String(data: data, encoding: .utf8) ?? ""

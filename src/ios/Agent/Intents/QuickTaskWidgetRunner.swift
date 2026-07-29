@@ -138,9 +138,16 @@ enum QuickTaskWidgetRunner {
             }
             if haveReply {
                 _ = await WidgetDataMirror.recordBriefing(taskName: name, sessionId: sessionId)
+                // Published — the obligation is met.
+                await MainActor.run { WidgetPendingBriefingStore.remove(sessionId: sessionId) }
             }
-            // Either way this observation is finished; nothing else will publish it.
-            await MainActor.run { WidgetPendingBriefingStore.remove(sessionId: sessionId) }
+            // [T-widget-briefing-pending] No reply seen: LEAVE the entry. This
+            // observer gives up after 15 minutes (or a 90s startup window), but
+            // the task itself may still be running — removing here was exactly
+            // the failure the persistent store exists to prevent, and made the
+            // briefings of every long run vanish. The tracker callback or the
+            // next foreground resolves it; entries that will never resolve are
+            // dropped by the 24h stale sweep.
             await WidgetDataMirror.refreshAll()
             logger.info("widget run settled id=\(taskId) session=\(sessionId.prefix(8)) active=\(becameActive) reply=\(haveReply)")
         }

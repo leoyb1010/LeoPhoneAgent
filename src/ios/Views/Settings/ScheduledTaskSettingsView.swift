@@ -221,10 +221,21 @@ private struct ScheduledTaskEditorView: View {
         let comps = Calendar.current.dateComponents([.hour, .minute], from: time)
         let minuteOfDay = (comps.hour ?? 8) * 60 + (comps.minute ?? 0)
         if var task = existing {
+            let scheduleChanged = task.cadence != cadence
+                || task.minuteOfDay != minuteOfDay
+                || task.weekday != weekday
             task.quickTaskId = quickTaskId
             task.cadence = cadence
             task.minuteOfDay = minuteOfDay
             task.weekday = weekday
+            // [T-schedule-fires-on-edit] Same protection the initialiser has:
+            // keeping the OLD lastRunSlot while the schedule moves earlier made
+            // "daily 10:00 → 08:00, edited at 09:00" fire immediately on the
+            // next reconcile. Claim the slot that has already passed under the
+            // NEW schedule; the next unclaimed one fires normally.
+            if scheduleChanged {
+                task.lastRunSlot = task.mostRecentDueSlot(now: Date())
+            }
             store.update(task)
         } else {
             store.add(ScheduledTask(

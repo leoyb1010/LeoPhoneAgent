@@ -1266,7 +1266,7 @@ Do not create extraneous files: README.md, INSTALLATION_GUIDE.md, CHANGELOG.md, 
         var reasons: [String: String] = [:]
 
         if totalCount <= Self.maxSkillMetadataCount {
-            selected = enabled.sorted { $0.updatedAt > $1.updatedAt }
+            selected = enabled.sorted { $0.updatedAt == $1.updatedAt ? $0.id < $1.id : $0.updatedAt > $1.updatedAt }
             for s in selected { reasons[s.id] = "all-fit" }
             hasMore = false
         } else {

@@ -33,7 +33,7 @@ enum SessionSpotlightIndexer {
     static func setEnabled(_ enabled: Bool) {
         UserDefaults.standard.set(enabled, forKey: enabledDefaultsKey)
         if enabled {
-            Task { await reindexAll() }
+            Task { await reindexAll(force: true) }
         } else {
             deleteAll()
         }
@@ -75,10 +75,22 @@ enum SessionSpotlightIndexer {
         CSSearchableIndex.default().deleteSearchableItems(withDomainIdentifiers: [domain]) { _ in }
     }
 
-    /// Full rebuild. Runs on foreground so renames, deletions on another device
-    /// and sessions created while indexing was off all converge.
-    static func reindexAll(limit: Int = 300) async {
+    private static let lastReindexKey = "leo.spotlightSessions.lastReindexAt"
+    private static let reindexInterval: TimeInterval = 6 * 3600
+
+    /// Full rebuild. Throttled: it deletes the whole domain before re-adding,
+    /// which leaves a zero-result window and burns CoreSpotlight work — doing
+    /// that on EVERY foreground was wasteful and two quick foregrounds could
+    /// interleave delete/add. Day-to-day freshness comes from the incremental
+    /// index/remove hooks on title change and deletion; the periodic rebuild
+    /// only reconciles cross-device renames/deletes.
+    static func reindexAll(limit: Int = 300, force: Bool = false) async {
         guard isEnabled else { return }
+        if !force {
+            let last = UserDefaults.standard.double(forKey: lastReindexKey)
+            guard Date().timeIntervalSince1970 - last > reindexInterval else { return }
+        }
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: lastReindexKey)
         let sessions = await ChatStore.shared.listSessions()
         let items = sessions.prefix(limit).map { session -> CSSearchableItem in
             let attributes = CSSearchableItemAttributeSet(contentType: .content)

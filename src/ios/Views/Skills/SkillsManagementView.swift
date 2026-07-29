@@ -136,7 +136,7 @@ struct SkillsManagementView: View {
                     Button {
                         showSkillCatalog = true
                     } label: {
-                        Label("推荐 Skill 目录", systemImage: "square.grid.2x2")
+                        Label(String(localized: "Recommended skill directory"), systemImage: "square.grid.2x2")
                     }
                     Button {
                         showImportSheet = true
@@ -1393,9 +1393,9 @@ private struct SkillCatalogSheet: View {
                         installableRow(entry)
                     }
                 } header: {
-                    Text("可直接安装")
+                    Text("Installable now")
                 } footer: {
-                    Text("从官方 GitHub 仓库安装 SKILL.md 及配套文件。技能的密钥/账号配置见安装后的技能详情。")
+                    Text("Installs SKILL.md and its companion files from the official GitHub repo. Keys/accounts are configured in the skill's detail page after install.")
                 }
 
                 Section {
@@ -1413,7 +1413,7 @@ private struct SkillCatalogSheet: View {
                         .buttonStyle(.plain)
                     }
                 } header: {
-                    Text("平台接入型（查看文档）")
+                    Text("Platform services (see docs)")
                 }
 
                 // [T-skill-marketplace] Index links, not a mirror — these
@@ -1444,12 +1444,12 @@ private struct SkillCatalogSheet: View {
                         .buttonStyle(.plain)
                     }
                 } header: {
-                    Text("技能市场")
+                    Text("Skill marketplaces")
                 } footer: {
-                    Text("这些库使用与本应用相同的 SKILL.md 标准（name / description 前置元数据），可直接安装。在市场里找到想要的技能后，复制它的 SKILL.md 链接，用「导入技能」粘贴即可。注意：市场里多数技能面向桌面编码场景，手机上未必适用。")
+                    Text("These marketplaces use the same SKILL.md standard as this app (name/description front matter), so their skills install directly: find one you like, copy its SKILL.md URL, and paste it into Install from URL.")
                 }
             }
-            .navigationTitle("推荐 Skill")
+            .navigationTitle(Text("Recommended Skills"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -1466,7 +1466,7 @@ private struct SkillCatalogSheet: View {
             row(entry, trailing: {
                 switch state {
                 case .idle:
-                    Button("安装") { install(entry) }
+                    Button(String(localized: "Install")) { install(entry) }
                         .buttonStyle(.glass)
                         .controlSize(.small)
                 case .installing:
@@ -1475,7 +1475,7 @@ private struct SkillCatalogSheet: View {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(Color.green)
                 case .failed:
-                    Button("重试") { install(entry) }
+                    Button(String(localized: "Retry")) { install(entry) }
                         .buttonStyle(.glass)
                         .controlSize(.small)
                         .tint(.orange)
@@ -1488,7 +1488,7 @@ private struct SkillCatalogSheet: View {
                     .lineLimit(3)
             }
             if case .installed(let name) = state {
-                Text("已安装为「\(name)」，可在 Skills 列表中启用/停用。")
+                Text("Installed as “\(name)” — enable or disable it in the Skills list.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

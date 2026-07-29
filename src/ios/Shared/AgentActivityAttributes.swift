@@ -75,6 +75,23 @@ enum LeoWidgetLanguage {
               let code = defaults.string(forKey: storageKey), !code.isEmpty else { return nil }
         return Locale(identifier: code)
     }
+
+    /// [T-widget-string-localized] `String(localized:)` resolves against the
+    /// process bundle's PREFERRED language (= the system language in a widget
+    /// extension) and ignores the SwiftUI environment locale — so every
+    /// String-building code path in the widget stayed in the system language
+    /// while `Text(key)` followed the app's override, producing a mixed-language
+    /// widget whenever the two differed. This resolves against the app-chosen
+    /// language's own .lproj, the same way the app's Bundle swizzle does.
+    static func string(_ key: String.LocalizationValue) -> String {
+        guard let defaults = UserDefaults(suiteName: AgentWidgetSnapshotStore.appGroupIdentifier),
+              let code = defaults.string(forKey: storageKey), !code.isEmpty,
+              let path = Bundle.main.path(forResource: code, ofType: "lproj"),
+              let bundle = Bundle(path: path) else {
+            return String(localized: key)
+        }
+        return String(localized: key, bundle: bundle)
+    }
 }
 
 /// [T-widget-artifacts] Recently produced artifacts, mirrored for the widget

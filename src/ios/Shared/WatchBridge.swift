@@ -55,6 +55,8 @@ final class WatchBridge: NSObject, ObservableObject {
 
     private var lastPushedSignature: String = ""
 
+    func resetDedupe() { lastPushedSignature = "" }
+
     func activate() {
         guard let session else {
             logger.info("WatchConnectivity unsupported on this device")
@@ -116,7 +118,14 @@ extension WatchBridge: WCSessionDelegate {
             return
         }
         logger.info("WCSession activated state=\(activationState.rawValue)")
-        Task { @MainActor in WatchBridge.shared.pushStatus() }
+        Task { @MainActor in
+            // [T-watch-signature-reset] A just-paired watch has an EMPTY
+            // application context; if the signature happened to match the last
+            // push to the previous watch, the dedupe skipped the send and the
+            // new watch stayed blank until the agent state next changed.
+            WatchBridge.shared.resetDedupe()
+            WatchBridge.shared.pushStatus()
+        }
     }
 
     #if os(iOS)
@@ -124,6 +133,7 @@ extension WatchBridge: WCSessionDelegate {
 
     nonisolated func sessionDidDeactivate(_ session: WCSession) {
         // Re-activate so a switched watch keeps working.
+        Task { @MainActor in WatchBridge.shared.resetDedupe() }
         session.activate()
     }
     #endif

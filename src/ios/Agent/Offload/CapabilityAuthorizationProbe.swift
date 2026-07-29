@@ -16,7 +16,6 @@
 //  show real state on a cold app with the kernel un-booted.
 //
 
-import AVFoundation
 import CoreBluetooth
 import CoreLocation
 import EventKit

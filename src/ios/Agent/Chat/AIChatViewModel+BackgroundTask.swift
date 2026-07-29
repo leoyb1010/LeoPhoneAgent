@@ -613,9 +613,11 @@ extension AIChatViewModel {
             case .thisSessionOnly:
                 if let sid {
                     Task { await ISHExecutionCoordinator.shared.stopCurrentCommand(sessionId: sid) }
-                } else {
-                    Task { await ISHExecutionCoordinator.shared.stopCurrentCommand() }
                 }
+                // No session id ⇒ nothing of OURS can be running (pids only
+                // exist under a real sid) — the old fallback killed every
+                // other session's shells instead, which is the exact opposite
+                // of "this session only".
             }
         }
         runningCommandPids.removeAll()

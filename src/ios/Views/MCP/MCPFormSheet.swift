@@ -88,7 +88,11 @@ struct MCPFormSheet: View {
     private static let unresolvedPlaceholders = ["YOUR_KEY", "YOUR_AK", "YOUR_API_KEY", "YOUR_TOKEN"]
 
     private var unresolvedPlaceholder: String? {
-        let haystack = url + " " + headers.map { $0.key + " " + $0.value }.joined(separator: " ")
+        // Case-insensitive, and the STDIO env values count too — `your_key` in
+        // an env var slipped past the original check.
+        let haystack = (url + " "
+            + headers.map { $0.key + " " + $0.value }.joined(separator: " ") + " "
+            + env.map { $0.key + " " + $0.value }.joined(separator: " ")).uppercased()
         return Self.unresolvedPlaceholders.first { haystack.contains($0) }
     }
 

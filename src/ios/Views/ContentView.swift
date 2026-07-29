@@ -388,7 +388,15 @@ struct ContentView: View {
             // alone would (wrongly) split a compact-class window that merely
             // happens to be wide.
             let wide = horizontalSizeClass == .regular && geo.size.width >= compactThreshold
-            Group {
+            // [T-conditional-onappear] ZStack, not Group: the lifecycle
+            // modifiers below hang off this container, and a bare conditional's
+            // structural identity follows its branch — a wide/compact flip
+            // could re-fire onAppear (clobbering isWideLayout BEFORE onChange
+            // ran migrateNavigationState, defeating the rotation state bridge)
+            // and fire onDisappear (unregistering a live window). The ZStack's
+            // identity is stable across branch switches, so onAppear runs once
+            // per window and onChange is the only writer afterwards.
+            ZStack {
                 if wide {
                     splitLayout
                 } else {
@@ -410,11 +418,20 @@ struct ContentView: View {
             .onAppear {
                 isWideLayout = wide
                 wireMenuActions()
-                WindowRegistry.shared.register(windowId)
+                WindowRegistry.shared.register(windowId, window: nil)
             }
             .onDisappear {
                 WindowRegistry.shared.unregister(windowId)
             }
+            // [T-windowregistry-staleness] Hand the registry this window's
+            // actual UIWindow: it is both the reliable liveness signal (weak
+            // ref nils out when the scene is destroyed, no callback needed)
+            // and the reliable focus signal (isKeyWindow / key notifications),
+            // neither of which scenePhase or onDisappear can provide under
+            // Stage Manager.
+            .background(WindowCaptureView { window in
+                WindowRegistry.shared.register(windowId, window: window)
+            })
         }
     }
 
@@ -2577,9 +2594,16 @@ struct ContentView: View {
             selectedSessionId = id
         } else {
             guard currentStackSessionId != id else { return }
-            navigationPath.removeLast(navigationPath.count)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            if navigationPath.isEmpty {
+                // Already at the root — the 300ms settle delay only exists to
+                // let a pop animation finish, and from the root it was pure
+                // dead time on every attention-bar tap and ⌘-digit press.
                 openSession(id)
+            } else {
+                navigationPath.removeLast(navigationPath.count)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    openSession(id)
+                }
             }
         }
     }
@@ -4696,9 +4720,13 @@ private struct AppearanceSettingsView: View {
                 Text("Override the system appearance for this app.")
             }
             .onChange(of: appearanceMode) { _ in
-                guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
-                windowScene.windows.forEach { window in
-                    window.overrideUserInterfaceStyle = appearanceMode == 1 ? .light : appearanceMode == 2 ? .dark : .unspecified
+                // [T-multiwindow-theme] Every window, not `.first` of an
+                // unordered Set — with two iPad windows only a random one used
+                // to change appearance.
+                for case let windowScene as UIWindowScene in UIApplication.shared.connectedScenes {
+                    for window in windowScene.windows {
+                        window.overrideUserInterfaceStyle = appearanceMode == 1 ? .light : appearanceMode == 2 ? .dark : .unspecified
+                    }
                 }
             }
 

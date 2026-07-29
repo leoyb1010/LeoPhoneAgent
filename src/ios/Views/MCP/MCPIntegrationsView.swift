@@ -94,7 +94,7 @@ struct MCPIntegrationsView: View {
                     Button {
                         showCatalog = true
                     } label: {
-                        Label("推荐 MCP 目录", systemImage: "square.grid.2x2")
+                        Label(String(localized: "Recommended MCP directory"), systemImage: "square.grid.2x2")
                     }
                     Button {
                         showAddForm = true
@@ -156,7 +156,7 @@ struct MCPIntegrationsView: View {
             Button {
                 showCatalog = true
             } label: {
-                Label("浏览推荐 MCP", systemImage: "square.grid.2x2")
+                Label(String(localized: "Browse recommended MCP servers"), systemImage: "square.grid.2x2")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 16)
@@ -226,10 +226,11 @@ private struct MCPCatalogEntry: Identifiable {
 
     static func hosted(
         id: String, title: String, subtitle: String, category: String,
-        url: String, note: String, setupHint: String, docsURL: String
+        url: String, headers: [String: String]? = nil, note: String, setupHint: String, docsURL: String
     ) -> MCPCatalogEntry {
         var config = MCPServerConfig(id: id, enabled: true)
         config.url = url
+        config.headers = headers
         config.note = note
         return MCPCatalogEntry(
             id: id, title: title, subtitle: subtitle,
@@ -269,7 +270,7 @@ private struct MCPCatalogEntry: Identifiable {
             subtitle: "地理编码、路径规划、POI 搜索、天气、距离测量",
             category: "地图与出行",
             url: "https://mcp.amap.com/mcp?key=$$AMAP_KEY",
-            note: "高德地图：地理编码、逆地理编码、POI 搜索、驾车/步行/公交路径规划、天气查询、距离测量。",
+            note: "Amap (Gaode) Maps: geocoding, reverse geocoding, POI search, driving/walking/transit routing, weather, distance.",
             setupHint: "需要一个高德开放平台「Web 服务」类型的 Key（lbs.amap.com 免费申请）。把它存成名为 AMAP_KEY 的环境变量（设置 → 环境变量），URL 里的 $$AMAP_KEY 会在调用时自动替换。",
             docsURL: "https://lbs.amap.com/api/mcp-server/summary"
         ),
@@ -279,7 +280,7 @@ private struct MCPCatalogEntry: Identifiable {
             subtitle: "地理编码、地点检索、路线规划、天气",
             category: "地图与出行",
             url: "https://mcp.map.baidu.com/mcp?ak=$$BAIDU_MAP_AK",
-            note: "百度地图：地理编码、地点检索、路线规划、天气查询。",
+            note: "Baidu Maps: geocoding, place search, route planning, weather.",
             setupHint: "需要百度地图开放平台的服务端 AK，并在控制台为该 AK 开通 MCP 服务。把它存成名为 BAIDU_MAP_AK 的环境变量。",
             docsURL: "https://github.com/baidu-maps/mcp/blob/main/README_zh.md"
         ),
@@ -289,7 +290,7 @@ private struct MCPCatalogEntry: Identifiable {
             subtitle: "地址解析、地点搜索、路线规划、IP 定位、天气",
             category: "地图与出行",
             url: "https://mcp.map.qq.com/mcp?key=$$TENCENT_MAP_KEY",
-            note: "腾讯位置服务：地址解析、地点搜索、路线规划、IP 定位、天气查询。",
+            note: "Tencent Maps: address resolution, place search, route planning, IP location, weather.",
             setupHint: "需要在 lbs.qq.com 创建并开通 WebService API 的 Key。把它存成名为 TENCENT_MAP_KEY 的环境变量。",
             docsURL: "https://lbs.qq.com/service/MCPServer/MCPServerGuide/userGuide"
         ),
@@ -298,8 +299,12 @@ private struct MCPCatalogEntry: Identifiable {
             title: "智谱联网搜索",
             subtitle: "聚合多引擎实时搜索，为大模型优化的结果格式",
             category: "搜索与资讯",
-            url: "https://open.bigmodel.cn/api/mcp/web_search_prime/mcp?Authorization=$$ZHIPU_API_KEY",
-            note: "智谱联网搜索：聚合多引擎实时搜索，返回为大模型优化过的结果格式。",
+            // [T-zhipu-auth-carrier] The streamable-HTTP endpoint authenticates
+            // with a Bearer REQUEST HEADER; `?Authorization=` in the query is
+            // the legacy /sse form and 401s here.
+            url: "https://open.bigmodel.cn/api/mcp/web_search_prime/mcp",
+            headers: ["Authorization": "Bearer $$ZHIPU_API_KEY"],
+            note: "Zhipu Web Search: aggregated real-time search across engines, results formatted for LLMs.",
             setupHint: "需要 open.bigmodel.cn 的 API Key。把它存成名为 ZHIPU_API_KEY 的环境变量。",
             docsURL: "https://docs.bigmodel.cn/cn/coding-plan/mcp/search-mcp-server"
         ),
@@ -393,7 +398,7 @@ private struct MCPCatalogSheet: View {
                                                 .font(.body)
                                                 .foregroundStyle(.primary)
                                             if entry.config != nil {
-                                                Text("官方托管")
+                                                Text("Hosted")
                                                     .font(.caption2.weight(.semibold))
                                                     .padding(.horizontal, 5)
                                                     .padding(.vertical, 1.5)
@@ -429,12 +434,12 @@ private struct MCPCatalogSheet: View {
                         // empty Section carrying only a footer renders as a
                         // broken-looking hollow box on iOS 26.
                         if category == categories.last {
-                            Text("「官方托管」条目点击后会预填添加表单。URL 里的 $$NAME 是环境变量占位符——先到 设置 → 环境变量 建好同名变量，调用时会自动替换，密钥不会写进会同步的配置文件。其余条目为 stdio 或平台接入型服务，点击查看接入文档。")
+                            Text("Hosted entries prefill the add form. $$NAME in the URL is an environment-variable reference — create the variable under Settings → Environment Variables first; it is substituted at call time so the key never enters the synced config file. Other entries are stdio or platform services; tap to open their docs.")
                         }
                     }
                 }
             }
-            .navigationTitle("推荐 MCP")
+            .navigationTitle(Text("Recommended MCP"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

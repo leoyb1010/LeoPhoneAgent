@@ -238,6 +238,13 @@ final class SceneDelegate: NSObject, UIWindowSceneDelegate {
               !sessionId.isEmpty else { return }
         logger.info("[Spotlight] open session \(sessionId.prefix(8)) phase=\(phase)")
         Task { @MainActor in
+            // [T-spotlight-cold-launch] Buffer BEFORE posting: on a cold launch
+            // ContentView's onReceive is not mounted yet and a bare post is
+            // simply lost — the app opened to the default session instead of
+            // the search result. Same pending store the notification-tap path
+            // uses; the launch .task consumes it once the UI is up, and a warm
+            // tap is handled by the post + markHandled inside the receiver.
+            NotificationNavigationStore.shared.setPending(sessionId)
             NotificationCenter.default.post(
                 name: .openSessionFromIntent, object: nil,
                 userInfo: ["sessionId": sessionId]

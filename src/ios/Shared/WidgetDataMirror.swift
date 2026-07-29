@@ -76,16 +76,17 @@ enum WidgetDataMirror {
         // the same pass the NEWEST one wins the single briefing slot. Iterating
         // a Dictionary left that to the hash seed.
         for entry in pending {
+            // Stale check FIRST: a session wedged in activeSessions by a bug
+            // used to dodge the sweep forever and hold one of the 10 slots.
+            if Date().timeIntervalSince(entry.addedAt) > 24 * 3600 {
+                logger.info("dropping stale pending briefing session=\(entry.sessionId.prefix(8))")
+                WidgetPendingBriefingStore.remove(sessionId: entry.sessionId)
+                continue
+            }
             // Never resolve a session that is still working — its final
             // message is not written yet.
             if SessionActivityTracker.shared.activeSessions.contains(entry.sessionId) { continue }
             if await recordBriefing(taskName: entry.taskName, sessionId: entry.sessionId) {
-                WidgetPendingBriefingStore.remove(sessionId: entry.sessionId)
-            } else if Date().timeIntervalSince(entry.addedAt) > 24 * 3600 {
-                // A day old and still no reply: the session was deleted, or the
-                // run died without producing text. Stop re-reading its messages
-                // on every foreground and stop holding one of the 10 slots.
-                logger.info("dropping stale pending briefing session=\(entry.sessionId.prefix(8))")
                 WidgetPendingBriefingStore.remove(sessionId: entry.sessionId)
             }
         }

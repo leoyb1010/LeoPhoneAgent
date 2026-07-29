@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import AuthenticationServices
 import SafariServices
 import CryptoKit
 import os.log
@@ -110,11 +111,19 @@ final class AntigravityOAuthManager: NSObject, ObservableObject {
         let state = generateState()
         let pkce = generatePKCE()
 
-        // 1. Start local HTTP server
-        let server = OAuthCallbackServer(port: callbackPort, callbackPath: "/oauth2callback")
-        self.callbackServer = server
-        try server.start()
-        logger.info("Callback server started on port \(self.callbackPort)")
+        // [T-antigravity-ios-client] An iOS-type client's reversed-scheme
+        // redirect can never reach a loopback HTTP server — the earlier build
+        // changed the redirect but kept the loopback receiver, so sign-in with
+        // the recommended client silently waited out the whole 300s timeout.
+        // ASWebAuthenticationSession claims the scheme itself (no Info.plist
+        // entry, no server), same as GeminiOAuthManager.
+        if !isIOSClient {
+            // 1. Start local HTTP server (desktop-type client only)
+            let server = OAuthCallbackServer(port: callbackPort, callbackPath: "/oauth2callback")
+            self.callbackServer = server
+            try server.start()
+            logger.info("Callback server started on port \(self.callbackPort)")
+        }
 
         // 2. Build authorization URL with PKCE (S256)
         var components = URLComponents(string: authURL)!
@@ -132,21 +141,31 @@ final class AntigravityOAuthManager: NSObject, ObservableObject {
         let authorizationURL = components.url!
         logger.info("Opening OAuth authorization page for \(authorizationURL.host ?? "provider")")
 
-        // 3. Open in-app Safari
-        presentSafariViewController(url: authorizationURL)
-
-        // 4. Wait for callback
-        let result = try await server.waitForCallback(timeout: 300)
-        logger.info("Callback received — code length: \(result.code.count)")
-
-        // 5. Validate state
-        guard result.state == state else {
-            logger.error("State mismatch!")
-            throw LLMError.providerError(message: "OAuth state mismatch")
+        // 3-5. Present and collect the authorization code.
+        let authCode: String
+        if isIOSClient {
+            guard let scheme = GoogleOAuthClientStore.iOSCallbackScheme else {
+                throw LLMError.providerError(message: String(localized:
+                    "Google 客户端 ID 格式不正确，应以 .apps.googleusercontent.com 结尾。"))
+            }
+            authCode = try await runWebAuthSession(
+                url: authorizationURL, callbackScheme: scheme, expectedState: state)
+        } else {
+            presentSafariViewController(url: authorizationURL)
+            guard let server = callbackServer else {
+                throw LLMError.providerError(message: "OAuth callback server unavailable")
+            }
+            let result = try await server.waitForCallback(timeout: 300)
+            logger.info("Callback received — code length: \(result.code.count)")
+            guard result.state == state else {
+                logger.error("State mismatch!")
+                throw LLMError.providerError(message: "OAuth state mismatch")
+            }
+            authCode = result.code
         }
 
         // 6. Exchange code for token (with PKCE verifier)
-        let token = try await exchangeCode(result.code, codeVerifier: pkce.verifier)
+        let token = try await exchangeCode(authCode, codeVerifier: pkce.verifier)
         ProviderKeychainHelper.saveOAuthToken(token, instanceId: instanceId)
 
         // 7. Fetch user email
@@ -488,6 +507,67 @@ final class AntigravityOAuthManager: NSObject, ObservableObject {
 
     // MARK: - In-App Safari
 
+    private var webAuthSession: ASWebAuthenticationSession?
+
+    /// [T-antigravity-ios-client] Authorization for an iOS-type client, same
+    /// implementation as GeminiOAuthManager.runWebAuthSession.
+    private func runWebAuthSession(
+        url: URL,
+        callbackScheme: String,
+        expectedState: String
+    ) async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in
+            var didResume = false
+            let session = ASWebAuthenticationSession(
+                url: url,
+                callbackURLScheme: callbackScheme
+            ) { callbackURL, error in
+                guard !didResume else { return }
+                didResume = true
+                if let error {
+                    let nsError = error as NSError
+                    if nsError.domain == ASWebAuthenticationSessionErrorDomain,
+                       nsError.code == ASWebAuthenticationSessionError.canceledLogin.rawValue {
+                        continuation.resume(throwing: LLMError.providerError(
+                            message: String(localized: "已取消 Google 登录。")))
+                    } else {
+                        continuation.resume(throwing: error)
+                    }
+                    return
+                }
+                guard let callbackURL,
+                      let components = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false) else {
+                    continuation.resume(throwing: LLMError.providerError(message: "OAuth callback was empty"))
+                    return
+                }
+                let items = components.queryItems ?? []
+                if let failure = items.first(where: { $0.name == "error" })?.value {
+                    continuation.resume(throwing: LLMError.providerError(
+                        message: "Google 拒绝了授权请求：\(failure)"))
+                    return
+                }
+                guard items.first(where: { $0.name == "state" })?.value == expectedState else {
+                    continuation.resume(throwing: LLMError.providerError(message: "OAuth state mismatch"))
+                    return
+                }
+                guard let code = items.first(where: { $0.name == "code" })?.value, !code.isEmpty else {
+                    continuation.resume(throwing: LLMError.providerError(message: "OAuth callback had no code"))
+                    return
+                }
+                continuation.resume(returning: code)
+            }
+            session.presentationContextProvider = self
+            session.prefersEphemeralWebBrowserSession = false
+            self.webAuthSession = session
+            if !session.start() {
+                guard !didResume else { return }
+                didResume = true
+                continuation.resume(throwing: LLMError.providerError(
+                    message: "Unable to present the sign-in sheet."))
+            }
+        }
+    }
+
     private func presentSafariViewController(url: URL) {
         guard let scene = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene }).activeFirst,
@@ -524,5 +604,13 @@ private extension Data {
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
+    }
+}
+
+extension AntigravityOAuthManager: ASWebAuthenticationPresentationContextProviding {
+    nonisolated func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        MainActor.assumeIsolated {
+            UIApplication.shared.leoActiveKeyWindow ?? ASPresentationAnchor()
+        }
     }
 }

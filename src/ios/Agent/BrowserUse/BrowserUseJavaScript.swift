@@ -540,7 +540,13 @@ enum BrowserUseJS {
                 }
                 if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') {
                     info.inputType = el.type || null;
-                    if (el.value) info.value = el.value.substring(0, 60);
+                    // [T-a11y-tree-secret-leak] Same rule as the a11y tree: a
+                // field's CONTENT is data the user typed, and for password /
+                // OTP fields it is a credential — never surface it.
+                var vt = (el.type || '').toLowerCase();
+                if (el.value && vt !== 'password' && (el.autocomplete || '') !== 'one-time-code') {
+                    info.value = el.value.substring(0, 60);
+                }
                     if (el.placeholder) info.placeholder = el.placeholder.substring(0, 60);
                 }
                 var role = el.getAttribute('role');
@@ -986,11 +992,12 @@ enum BrowserUseJS {
                     path.unshift(seg);
                     cur = parent;
                 }
-                if (path.length > 3 && path[0].charAt(0) === '#') {
-                    path = [path[0]].concat(path.slice(-2));
-                } else if (path.length > 2) {
-                    path = path.slice(-2);
-                }
+                // No truncation: chopping the middle out of a child chain
+                // either produced "#id > grandchild" (matches NOTHING — the
+                // dropped levels break the child combinator) or an unanchored
+                // tail that matches the FIRST lookalike in the document. The
+                // full nth-of-type path is unique, valid, and rarely more than
+                // ~8 segments deep.
                 return path.join(' > ');
             }
 
@@ -1025,7 +1032,9 @@ enum BrowserUseJS {
                     var node = { depth: depth, role: role, name: name, selector: selectorFor(el) };
                     var st = stateOf(el);
                     if (st.length) node.state = st.join(',');
-                    if (el.tagName.toLowerCase() === 'a' && el.href) node.href = el.href;
+                    // href was the one uncapped field; a data: URL could
+                    // single-handedly blow the whole output budget.
+                    if (el.tagName.toLowerCase() === 'a' && el.href) node.href = String(el.href).slice(0, 120);
                     out.push(node);
                 }
                 var kids = el.children || [];

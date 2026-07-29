@@ -216,10 +216,43 @@ final class MCPOAuthController: NSObject, ObservableObject {
         return stored.accessToken
     }
 
-    /// Standard refresh_token grant. Persists the new tokens and rewrites the
-    /// guest bridge file so the CLI path sees the same material.
+    /// [T-mcp-refresh-dedup] One refresh in flight per server. Concurrent
+    /// expiries used to each run their own refresh_token grant; providers that
+    /// ROTATE refresh tokens invalidate the old one on first use, so the
+    /// second grant failed and could wipe the fresh token — signing the user
+    /// out for no reason.
+    private actor RefreshCoordinator {
+        private var inFlight: [String: Task<StoredTokens?, Never>] = [:]
+
+        func run(server: String, work: @escaping @Sendable () async -> StoredTokens?) async -> StoredTokens? {
+            if let existing = inFlight[server] {
+                return await existing.value
+            }
+            let task = Task { await work() }
+            inFlight[server] = task
+            let result = await task.value
+            inFlight[server] = nil
+            return result
+        }
+    }
+
+    private static let refreshCoordinator = RefreshCoordinator()
+
+    /// Standard refresh_token grant, deduplicated per server. Persists the new
+    /// tokens and rewrites the guest bridge file so the CLI path sees the same
+    /// material.
     @discardableResult
     nonisolated static func refreshTokens(
+        server: String,
+        oauth: MCPOAuthConfig,
+        using current: StoredTokens? = nil
+    ) async -> StoredTokens? {
+        await refreshCoordinator.run(server: server) {
+            await performRefreshTokens(server: server, oauth: oauth, using: current)
+        }
+    }
+
+    nonisolated private static func performRefreshTokens(
         server: String,
         oauth: MCPOAuthConfig,
         using current: StoredTokens? = nil

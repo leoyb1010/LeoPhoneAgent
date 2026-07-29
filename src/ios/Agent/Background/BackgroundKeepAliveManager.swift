@@ -255,6 +255,9 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     /// we've retried for the current start attempt. Reset on success / when the
     /// budget is exhausted.
     private var silentAudioActivationRetries = 0
+    /// The scheduled activation retry, held so stop/success can cancel it —
+    /// a bare asyncAfter could not be cancelled and kept firing.
+    private var pendingActivationRetry: DispatchWorkItem?
 
     /// [T-widget-reload-budget] WidgetKit gives an app a finite number of
     /// timeline reloads per day and spends them fastest when the app is in the
@@ -1288,6 +1291,8 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             audioEngine = engine
             silentPlayerNode = player
             silentAudioActive = true
+            pendingActivationRetry?.cancel()
+            pendingActivationRetry = nil
             // Only a real success clears the retry budget. Resetting before the
             // attempt (as this used to) made `scheduleSilentAudioActivationRetry`
             // compute attempt #1 forever, so maxActivationRetries was
@@ -1329,8 +1334,10 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             return
         }
         let attempt = silentAudioActivationRetries
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.activationRetryDelay) { [weak self] in
+        pendingActivationRetry?.cancel()
+        let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
+            self.pendingActivationRetry = nil
             let stillWanted = self.isActive && self.backgroundSpeakEnabled
                 && self.appIsInBackground && self.silentAudioSuspendCount == 0
                 && !self.silentAudioActive
@@ -1342,6 +1349,8 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             logger.info("[BKA][Start] activation retry #\(attempt) — re-attempting")
             self.startSilentAudio(reason: "activationRetry#\(attempt)")
         }
+        pendingActivationRetry = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.activationRetryDelay, execute: work)
     }
 
     /// Called by SpeechFinishedDelegate when TTS completes, to restart silent audio if needed.
@@ -1402,6 +1411,14 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     func stopSilentAudio(reason: String = "direct") {
         // A direct stop supersedes any debounced one and aborts pending retries.
         cancelPendingSilentAudioStop(reason: "stopSilentAudio called")
+        // [T-bg-audio-retry-counter] Cancel the in-flight retry FIRST and only
+        // then clear the budget. The old order reset the counter while a retry
+        // was still scheduled (TTS calls stopSilentAudio constantly, and during
+        // the retry window silentAudioActive is false so this ran every time) —
+        // each retry then computed attempt #1 again, which re-opened the very
+        // infinite-retry loop the counter was added to close.
+        pendingActivationRetry?.cancel()
+        pendingActivationRetry = nil
         silentAudioActivationRetries = 0
         guard silentAudioActive else { return }
         let sessions = SessionActivityTracker.shared.activeSessions.count
@@ -1476,11 +1493,16 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         terminalSessionId: String = ""
     ) {
         let tracker = SessionActivityTracker.shared
+        // [T-widget-placeholder-count] intent-eager placeholder ids live for
+        // milliseconds around session creation; counting them made activeCount
+        // bounce 0→1→2→1 per shortcut launch, each step a "state change" that
+        // fired an immediate reload — burning the very budget the throttle
+        // protects.
         // [T-widget-session-pick] `sorted().first` picked whichever id happened
         // to sort first, which with several running sessions is unrelated to
         // the one whose tool info just changed — the widget showed session A's
         // name over session B's progress. Prefer the most recently updated.
-        let activeIds = tracker.activeSessions.sorted { lhs, rhs in
+        let activeIds = tracker.activeSessions.filter { !$0.hasPrefix("intent-eager:") }.sorted { lhs, rhs in
             let l = tracker.sessionToolInfo[lhs]?.lastToolChange ?? .distantPast
             let r = tracker.sessionToolInfo[rhs]?.lastToolChange ?? .distantPast
             return l == r ? lhs < rhs : l > r
@@ -1534,6 +1556,11 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         // (status + iPad console) per tick and exhausted the daily budget,
         // after which the widget stopped updating altogether — the opposite of
         // what the mid-run refresh was added for.
+        // [T-watch-out-of-widget-gate] The watch has its own payload-signature
+        // dedupe and its own system rate limit; sharing WidgetKit's budget gate
+        // made mid-run status text lag ~90s on the wrist for no reason.
+        WatchBridge.shared.pushStatus()
+
         let stateChanged = state != lastWidgetReloadState || activeIds.count != lastWidgetReloadActiveCount
         let elapsed = lastWidgetReloadAt.map { Date().timeIntervalSince($0) } ?? .greatestFiniteMagnitude
         guard stateChanged || elapsed >= Self.widgetReloadMinInterval else {
@@ -1547,9 +1574,6 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.status)
         // The iPad console renders the same status pane, so it has to follow.
         WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.iPadConsole)
-        // [T-watch-companion] The watch shows the same status; App Groups do
-        // not cross devices, so it has to be pushed over WatchConnectivity.
-        WatchBridge.shared.pushStatus()
         logger.info("[Widget] refreshed src=\(source) state=\(state.rawValue) active=\(activeIds.count) privacy=\(privacy)")
     }
 

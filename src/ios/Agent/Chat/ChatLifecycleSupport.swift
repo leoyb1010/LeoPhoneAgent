@@ -55,6 +55,9 @@ final class SessionActivityTracker: ObservableObject {
     /// silently doing nothing.
     private var eagerCancelRequests: Set<String> = []
 
+    /// [T-haptic-misfire] Debounce for the task-started haptic.
+    private var lastStartHapticAt: Date = .distantPast
+
     func requestEagerCancel(_ placeholderId: String) {
         guard placeholderId.hasPrefix("intent-eager:") else { return }
         eagerCancelRequests.insert(placeholderId)
@@ -222,7 +225,14 @@ final class SessionActivityTracker: ObservableObject {
         activeSessions.insert(sessionId)
         syncMirror()
         if !wasPresent {
-            if UIApplication.shared.applicationState == .active {
+            // [T-haptic-misfire] Skip placeholder ids (they precede the real
+            // session by milliseconds) and debounce: a new chat registers its
+            // DRAFT id and then its REAL id back to back, which used to buzz
+            // twice per send.
+            if UIApplication.shared.applicationState == .active,
+               !sessionId.hasPrefix("intent-eager:"),
+               Date().timeIntervalSince(lastStartHapticAt) > 2.0 {
+                lastStartHapticAt = Date()
                 LeoHaptics.agent(.taskStarted)
             }
             if let runId = activityRunIds[sessionId] {
@@ -296,7 +306,13 @@ final class SessionActivityTracker: ObservableObject {
         // or dying. Fire only on a real transition, and only when the app is in
         // the foreground — buzzing a pocket for a run the user never watched is
         // noise, and iOS suppresses it anyway.
-        if wasPresent, finalPhase.isTerminal, UIApplication.shared.applicationState == .active {
+        // [T-haptic-misfire] Only a genuine ending buzzes. `.cancelled` is the
+        // DEFAULT finalPhase, used by draft→real migration, intent placeholder
+        // cleanup and session deletion — with the old `isTerminal` condition a
+        // plain new-message send ended with a spurious "task completed" buzz.
+        if wasPresent, finalPhase == .completed || finalPhase == .failed,
+           !sessionId.hasPrefix("intent-eager:"),
+           UIApplication.shared.applicationState == .active {
             LeoHaptics.agent(finalPhase == .failed ? .taskFailed : .taskCompleted)
         }
         logger.info("🔴[Tracker] setInactive(\(sessionId.prefix(8))) src=\(source) wasPresent=\(wasPresent) now count=\(activeSessions.count) ids=[\(activeSessions.map { $0.prefix(8) }.joined(separator: ","))] clearedAliases=\(orphanedAliases.count)")
@@ -310,7 +326,15 @@ final class SessionActivityTracker: ObservableObject {
         // reliable point to publish the briefing card — unlike the runner's
         // in-process observer, this fires inside the agent loop's own
         // lifecycle rather than a detached Task that suspension can kill.
-        Task { await WidgetDataMirror.resolvePendingBriefings(reason: "sessionFinished") }
+        // Gated on a real ending: draft migration and placeholder cleanup also
+        // land here and used to trigger 2-3 redundant resolution passes per
+        // ordinary send.
+        if wasPresent, finalPhase.isTerminal {
+            Task { await WidgetDataMirror.resolvePendingBriefings(reason: "sessionFinished") }
+        }
+        // [T-widget-stop-eager-placeholder] A consumed or never-consumed cancel
+        // request for this id is moot once the id leaves the active set.
+        eagerCancelRequests.remove(sessionId)
     }
 
     /// Register an alias from a draft ID to its newly-minted real session
