@@ -114,6 +114,30 @@ actor RemoteSSHExecutor {
         }
     }
 
+    /// [T-remote-gateway] Cindy-style relay, automated: try the target
+    /// directly; if its TCP is unreachable but ANOTHER configured host is
+    /// reachable, run the command THERE wrapped in `ssh target`. One reachable
+    /// machine (e.g. the Studio over LAN) makes every machine on its tailnet
+    /// usable — no phone-side VPN required. Requires the gateway to hold ssh
+    /// keys for the target (set up 2026-07-29 for the user's three machines).
+    func runSmart(target: RemoteHost, allHosts: [RemoteHost], command: String, timeout: TimeInterval) async -> ExecResult {
+        if await Self.tcpProbe(host: target.host, port: target.port, timeout: 4) {
+            return await run(host: target, command: command, timeout: timeout)
+        }
+        for gateway in allHosts where gateway.id != target.id {
+            guard await Self.tcpProbe(host: gateway.host, port: gateway.port, timeout: 4) else { continue }
+            let relayed = "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=8 -p \(target.port) "
+                + "\(target.username)@\(target.host) \(RemoteShellQuoting.singleQuoted(command))"
+            let result = await run(host: gateway, command: relayed, timeout: timeout)
+            return ExecResult(
+                output: "[via \(gateway.name) — target not directly reachable from this device]\n" + result.output,
+                succeeded: result.succeeded)
+        }
+        return ExecResult(
+            output: "TCP \(target.host):\(target.port) unreachable, and no other configured host is reachable to relay through. Tip: while on the same Wi-Fi as one of your machines, add its LAN address (192.168.x) as a host — everything else is then reached through it automatically.",
+            succeeded: false)
+    }
+
     /// Settings-page connectivity test — layered so the result names WHICH
     /// layer failed: raw TCP reachability first (a VPN/Tailscale problem shows
     /// up here), then the full SSH + auth + exec path.

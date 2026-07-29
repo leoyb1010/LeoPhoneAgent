@@ -675,7 +675,8 @@ extension AIChatViewModel {
                     toolOutput = "Error: missing required parameter."
                     toolSuccess = false
                 } else {
-                    let result = await RemoteSSHExecutor.shared.run(host: host, command: command, timeout: timeout)
+                    let result = await RemoteSSHExecutor.shared.runSmart(
+                        target: host, allHosts: hosts, command: command, timeout: timeout)
                     toolOutput = result.output
                     toolSuccess = result.succeeded
                 }
