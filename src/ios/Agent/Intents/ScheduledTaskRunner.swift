@@ -9,6 +9,7 @@
 //
 
 import Foundation
+import UserNotifications
 import WidgetKit
 
 private let logger = AppLogger(category: "ScheduledTask")
@@ -79,12 +80,20 @@ enum ScheduledTaskRunner {
                     // result lands on the Home Screen the same way a manual
                     // one does.
                     WidgetPendingBriefingStore.add(
-                        sessionId: sessionId, taskName: definition.displayName)
+                        sessionId: sessionId, taskName: definition.displayName,
+                        origin: "scheduled")
                 }
                 logger.info("started scheduled task \(task.id) (\(definition.displayName)) slot=\(slot)")
             } catch {
                 store.markRun(id: task.id, slot: slot, succeeded: false)
                 logger.error("scheduled task \(task.id) failed to start: \(error.localizedDescription)")
+                // [T-scheduled-report] The other half of "scheduled work WITH
+                // reporting": a silent failure is indistinguishable from
+                // "never ran".
+                Self.notify(
+                    title: String(localized: "Scheduled task failed to start"),
+                    body: definition.displayName,
+                    sessionId: nil)
             }
         }
 
@@ -93,5 +102,29 @@ enum ScheduledTaskRunner {
             WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.iPadConsole)
         }
         return started
+    }
+}
+
+extension ScheduledTaskRunner {
+    static let notifyDefaultsKey = "leo.scheduledTasks.notifyOnComplete"
+
+    /// User decision 2026-07-29: default ON.
+    static var notifyEnabled: Bool {
+        (UserDefaults.standard.object(forKey: notifyDefaultsKey) as? Bool) ?? true
+    }
+
+    /// [T-scheduled-report] Local completion/failure notification. Tapping it
+    /// deep-links into the session via the existing sessionId routing in
+    /// ShortcutNotificationDelegate.
+    static func notify(title: String, body: String, sessionId: String?) {
+        guard notifyEnabled else { return }
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        if let sessionId { content.userInfo["sessionId"] = sessionId }
+        UNUserNotificationCenter.current().add(UNNotificationRequest(
+            identifier: "scheduled-report-\(UUID().uuidString)",
+            content: content, trigger: nil))
     }
 }

@@ -17,6 +17,8 @@ struct ScheduledTaskSettingsView: View {
     @State private var showCreate = false
     @State private var runNowMessage: String?
 
+    @AppStorage(ScheduledTaskRunner.notifyDefaultsKey) private var notifyOnComplete = true
+
     var body: some View {
         List {
             Section {
@@ -48,6 +50,9 @@ struct ScheduledTaskSettingsView: View {
                 Text("iOS does not let an app wake itself on a clock, so due tasks run at one of two moments: automatically when you open the app, or on time via a Shortcuts personal automation you set up. Tasks more than 26 hours overdue are skipped rather than all firing at once.")
             }
 
+            Section {
+                Toggle(String(localized: "Notify when a scheduled task finishes"), isOn: $notifyOnComplete)
+            }
             Section {
                 Button {
                     Task {

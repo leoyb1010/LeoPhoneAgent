@@ -639,6 +639,78 @@ extension AIChatViewModel {
             toolOutput = memResult.output
             toolSuccess = memResult.success
 
+        // [T-remote-exec] SSH remote execution (tools only registered when a
+        // host is configured — see ToolDefinitions).
+        case "remote_shell", "remote_agent":
+            let args = (try? JSONSerialization.jsonObject(with: Data(argsJson.utf8)) as? [String: Any]) ?? [:]
+            let hostName = (args["host"] as? String) ?? ""
+            let hosts = RemoteHostStore.configuredHosts()
+            // Exact name match; the single-host convenience only applies when
+            // the model passed NO name — a wrong name must fail loudly, not
+            // silently hit whatever machine happens to be configured.
+            if let host = hosts.first(where: { $0.name == hostName })
+                ?? (hostName.isEmpty && hosts.count == 1 ? hosts.first : nil) {
+                let command: String
+                let timeout: TimeInterval
+                if tu.name == "remote_shell" {
+                    command = (args["command"] as? String) ?? ""
+                    timeout = TimeInterval((args["timeout"] as? Int) ?? 120)
+                } else {
+                    let prompt = (args["prompt"] as? String) ?? ""
+                    let workdir = (args["workdir"] as? String) ?? ""
+                    timeout = TimeInterval((args["timeout"] as? Int) ?? 300)
+                    // Login shell so PATH picks up homebrew/npm installs of
+                    // `claude`. No cd for the default: quoting '~' would
+                    // suppress tilde expansion and fail every run — the login
+                    // shell already starts in $HOME.
+                    let inner: String
+                    if workdir.isEmpty || workdir == "~" {
+                        inner = "claude -p \(RemoteShellQuoting.singleQuoted(prompt)) --output-format text 2>&1"
+                    } else {
+                        inner = "cd \(RemoteShellQuoting.singleQuoted(workdir)) && claude -p \(RemoteShellQuoting.singleQuoted(prompt)) --output-format text 2>&1"
+                    }
+                    command = "zsh -lc " + RemoteShellQuoting.singleQuoted(inner)
+                }
+                if command.isEmpty || (tu.name == "remote_agent" && (args["prompt"] as? String)?.isEmpty != false) {
+                    toolOutput = "Error: missing required parameter."
+                    toolSuccess = false
+                } else {
+                    let result = await RemoteSSHExecutor.shared.run(host: host, command: command, timeout: timeout)
+                    toolOutput = result.output
+                    toolSuccess = result.succeeded
+                }
+            } else {
+                let names = hosts.map(\.name).joined(separator: ", ")
+                toolOutput = "Error: no configured host named '\(hostName)'. Configured hosts: \(names.isEmpty ? "(none)" : names)."
+                toolSuccess = false
+            }
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = toolOutput
+            }
+
+        // [T-orchestration] Lead/Worker control surface (registered only when
+        // the user enabled orchestration).
+        case "dispatch_subtask", "check_subtasks", "collect_subtask":
+            let args = (try? JSONSerialization.jsonObject(with: Data(argsJson.utf8)) as? [String: Any]) ?? [:]
+            switch tu.name {
+            case "dispatch_subtask":
+                let result = await WorkerPool.shared.dispatch(
+                    prompt: (args["prompt"] as? String) ?? "",
+                    label: (args["label"] as? String) ?? "")
+                toolOutput = result.output
+                toolSuccess = result.success
+            case "check_subtasks":
+                toolOutput = await WorkerPool.shared.status()
+                toolSuccess = true
+            default:
+                let result = await WorkerPool.shared.collect(workerId: (args["worker_id"] as? String) ?? "")
+                toolOutput = result.output
+                toolSuccess = result.success
+            }
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = toolOutput
+            }
+
         default:
             toolOutput = "Error: Unknown tool '\(tu.name)'"
             toolSuccess = false

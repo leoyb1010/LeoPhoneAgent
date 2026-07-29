@@ -1,4 +1,5 @@
 import Foundation
+import UserNotifications
 
 private let importLog = AppLogger(category: "Share")
 
@@ -31,6 +32,28 @@ enum ExternalFileImporter {
 
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+
+        // [T-skill-share] A .skillmd is a portable skill — install it instead
+        // of attaching it to a chat. Only this explicit extension short-circuits;
+        // plain .md files keep their existing attach behaviour.
+        if url.pathExtension.lowercased() == "skillmd",
+           let content = try? String(contentsOf: url, encoding: .utf8) {
+            Task { @MainActor in
+                do {
+                    let skill = try SkillStore.shared.importSkill(content: content, source: .file)
+                    importLog.info("[Share] installed shared skill '\(skill.name)'")
+                    let note = UNMutableNotificationContent()
+                    note.title = String(localized: "Skill installed")
+                    note.body = skill.name
+                    try? await UNUserNotificationCenter.current().add(
+                        UNNotificationRequest(identifier: "skill-import-\(UUID().uuidString)",
+                                              content: note, trigger: nil))
+                } catch {
+                    importLog.error("[Share] shared skill install failed: \(error.localizedDescription)")
+                }
+            }
+            return true
+        }
 
         let fm = FileManager.default
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)

@@ -4998,6 +4998,10 @@ private enum SettingsDestination: Hashable {
 }
 
 private struct SettingsSheet: View {
+    /// [T-orchestration] AppStorage (not a raw UserDefaults Binding) so the
+    /// toggle knob actually re-renders when flipped.
+    @AppStorage(WorkerPool.enabledKey) private var orchestrationEnabled = false
+
     @Binding var showTerminal: Bool
     @AppStorage("appearanceMode") private var appearanceMode: Int = 0
     @Environment(\.dismiss) private var dismiss
@@ -5080,6 +5084,34 @@ private struct SettingsSheet: View {
                                 .foregroundStyle(.white)
                                 .frame(width: 21, height: 21)
                                 .background(.cyan, in: Circle())
+                        }
+                    }
+                    // [T-remote-exec] Configure SSH hosts; the remote tools
+                    // only exist once a host does.
+                    NavigationLink {
+                        RemoteHostSettingsView()
+                    } label: {
+                        Label {
+                            Text("Remote Hosts")
+                        } icon: {
+                            Image(systemName: "server.rack")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.white)
+                                .frame(width: 21, height: 21)
+                                .background(.indigo, in: Circle())
+                        }
+                    }
+                    // [T-orchestration] Default OFF; enabling registers the
+                    // dispatch/check/collect tools for new turns.
+                    Toggle(isOn: $orchestrationEnabled) {
+                        Label {
+                            Text("Multi-agent orchestration")
+                        } icon: {
+                            Image(systemName: "person.3.sequence.fill")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.white)
+                                .frame(width: 21, height: 21)
+                                .background(.purple, in: Circle())
                         }
                     }
                     // [T-scheduled-tasks] Sits next to Quick Tasks because a

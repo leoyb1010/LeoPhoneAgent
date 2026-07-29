@@ -103,13 +103,14 @@ extension AIChatViewModel {
         if includeMemoryTools {
             tools.append(AgentToolDefinition(
                 name: "memory_write",
-                description: "Write a memory entry to today's daily log (YYYY-MM-DD.md). Memories persist across all sessions. Each entry is prepended with a timestamp. Save: user preferences, recurring patterns, key facts, project conventions, reusable knowledge. Avoid saving passwords, API keys, tokens, or secrets unless the user explicitly confirms after being warned. Keep entries concise and general-purpose. GLOBAL.md is read-only (user-maintained via Settings).",
+                description: "Write a memory entry to today's daily log (YYYY-MM-DD.md). Memories persist across all sessions. Each entry is prepended with a timestamp. Save: user preferences, recurring patterns, key facts, project conventions, reusable knowledge. When the USER CORRECTS your behaviour ('不要…', 'I told you…', 'next time do X instead'), set kind='correction' — corrections never expire and are always injected with top priority. Avoid saving passwords, API keys, tokens, or secrets unless the user explicitly confirms after being warned. Keep entries concise and general-purpose. GLOBAL.md is read-only (user-maintained via Settings).",
                 parameters: [
                     "tool_title": AgentToolParam(type: .string, description: "A concise 5-10 word summary of what this tool call does, shown to the user (e.g. 'Save user preference for Python', 'Note today's project context'). Use the same language as the user."),
-                    "content": AgentToolParam(type: .string, description: "The memory content to write. Use concise Markdown with a short heading (## Topic) and context about what was done/learned."),
+                    "content": AgentToolParam(type: .string, description: "The memory content to write. Use concise Markdown with a short heading (## Topic) and context about what was done/learned. For kind='correction', one plain sentence stating the rule."),
+                    "kind": AgentToolParam(type: .string, description: "Entry kind: 'note' (default, daily log) or 'correction' (permanent, highest-priority — use when the user corrects you).", enumValues: ["note", "correction"]),
                 ],
                 required: ["tool_title", "content"],
-                propertyOrdering: ["tool_title", "content"]
+                propertyOrdering: ["tool_title", "content", "kind"]
             ))
             tools.append(AgentToolDefinition(
                 name: "memory_get",
@@ -135,6 +136,74 @@ extension AIChatViewModel {
                 ],
                 required: ["tool_title", "path"],
                 propertyOrdering: ["tool_title", "path"]
+            ))
+        }
+
+        // [T-remote-exec] Remote tools exist ONLY when a host is configured —
+        // zero hosts means the tool list, prompt bytes and cache prefix are
+        // exactly what they were before this feature.
+        let remoteHosts = RemoteHostStore.configuredHosts()
+        if !remoteHosts.isEmpty {
+            let hostList = remoteHosts.map { "'\($0.name)'" }.joined(separator: ", ")
+            tools.append(AgentToolDefinition(
+                name: "remote_shell",
+                description: "Run a shell command on a remote computer over SSH. Use for heavy work the on-device sandbox is too slow for: big repos, compiles, long scripts, tools only installed there. Configured hosts: \(hostList). Non-interactive; output capped at 20000 chars; PATH may be minimal (use absolute paths or 'zsh -lc'). The remote process is NOT killed on timeout.",
+                parameters: [
+                    "tool_title": AgentToolParam(type: .string, description: "A concise 5-10 word summary shown to the user. Use the same language as the user."),
+                    "host": AgentToolParam(type: .string, description: "Name of the configured host to run on, e.g. \(hostList)."),
+                    "command": AgentToolParam(type: .string, description: "The shell command to execute remotely."),
+                    "timeout": AgentToolParam(type: .integer, description: "Seconds to wait before giving up (default 120, max 600)."),
+                ],
+                required: ["tool_title", "host", "command"],
+                propertyOrdering: ["tool_title", "host", "command", "timeout"]
+            ))
+            tools.append(AgentToolDefinition(
+                name: "remote_agent",
+                description: "Delegate a whole task to Claude Code running on a remote computer (it must have the 'claude' CLI installed and authenticated). Runs 'claude -p' non-interactively in the given directory and returns its final answer. Use for repo-scale coding tasks; prefer remote_shell for single commands. Configured hosts: \(hostList).",
+                parameters: [
+                    "tool_title": AgentToolParam(type: .string, description: "A concise 5-10 word summary shown to the user. Use the same language as the user."),
+                    "host": AgentToolParam(type: .string, description: "Name of the configured host, e.g. \(hostList)."),
+                    "prompt": AgentToolParam(type: .string, description: "The task for the remote Claude Code, fully self-contained."),
+                    "workdir": AgentToolParam(type: .string, description: "Absolute directory on the remote machine to run in (default: the user's home)."),
+                    "timeout": AgentToolParam(type: .integer, description: "Seconds to wait (default 300, max 600)."),
+                ],
+                required: ["tool_title", "host", "prompt"],
+                propertyOrdering: ["tool_title", "host", "prompt", "workdir", "timeout"]
+            ))
+        }
+
+        // [T-orchestration] Orchestration tools exist ONLY when the user has
+        // switched them on (Settings → Agent Runtime, default off).
+        if WorkerPool.isEnabled {
+            tools.append(AgentToolDefinition(
+                name: "dispatch_subtask",
+                description: "Spin up a parallel WORKER session to handle an independent subtask while you continue. The worker is a full ordinary session (visible in the sidebar) with its own context. Use ONLY for genuinely parallelisable work on complex tasks — never for simple requests. Max \(WorkerPool.maxConcurrent) running at once. The subtask prompt must be fully self-contained (workers cannot see this conversation).",
+                parameters: [
+                    "tool_title": AgentToolParam(type: .string, description: "A concise 5-10 word summary shown to the user. Use the same language as the user."),
+                    "prompt": AgentToolParam(type: .string, description: "Fully self-contained instructions for the worker."),
+                    "label": AgentToolParam(type: .string, description: "Short human-readable label, e.g. 'Research flight options'."),
+                ],
+                required: ["tool_title", "prompt", "label"],
+                propertyOrdering: ["tool_title", "prompt", "label"]
+            ))
+            tools.append(AgentToolDefinition(
+                name: "check_subtasks",
+                description: "Status of every dispatched worker: RUNNING / DONE (with a result preview) / COLLECTED. Poll this between your own steps rather than busy-waiting.",
+                parameters: [
+                    "tool_title": AgentToolParam(type: .string, description: "A concise 5-10 word summary shown to the user. Use the same language as the user."),
+                ],
+                required: ["tool_title"],
+                propertyOrdering: ["tool_title"]
+            ))
+            tools.append(AgentToolDefinition(
+                name: "collect_subtask",
+                description: "Fetch the full final answer of a DONE worker by its id (e.g. 'w1'). A worker's terminal state is final — collecting never re-runs it.",
+                parameters: [
+                    "tool_title": AgentToolParam(type: .string, description: "A concise 5-10 word summary shown to the user. Use the same language as the user."),
+                    "worker_id": AgentToolParam(type: .string, description: "The worker id from dispatch_subtask / check_subtasks."),
+                ],
+                required: ["tool_title", "worker_id"],
+                propertyOrdering: ["tool_title", "worker_id"]
             ))
         }
 

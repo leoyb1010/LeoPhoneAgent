@@ -2,38 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- [T-ipad-multiwindow] Opt into multiple scenes so iPad can run two
-	     windows side by side — the natural shape for an agent app, where one
-	     window watches a long task while the other starts something new.
-	     The app was already scene-based (AppDelegate.configurationForConnecting
-	     installs SceneDelegate); this only lifts the single-window cap.
-	     Shared state is already actor/singleton-owned (ChatStore,
-	     ViewModelCache, SessionActivityTracker), so a second window observes
-	     the same sessions rather than forking them. Per-window UI state
-	     (selection, draft session, navigation path) is @State on ContentView
-	     and is therefore correctly independent per window. -->
-	<key>UIApplicationSceneManifest</key>
-	<dict>
-		<key>UIApplicationSupportsMultipleScenes</key>
-		<true/>
-	</dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.leoyuan.leophoneagent.agent.*</string>
+	</array>
 	<key>CFBundleDisplayName</key>
 	<string>LeoPhoneAgent</string>
-	<key>CFBundleName</key>
-	<string>LeoPhoneAgent</string>
-	<key>CFBundleLocalizations</key>
-	<array>
-		<string>en</string>
-		<string>zh-Hans</string>
-		<string>zh-Hant</string>
-		<string>ja</string>
-		<string>ko</string>
-		<string>fr</string>
-		<string>de</string>
-		<string>ru</string>
-	</array>
-	<key>LSSupportsOpeningDocumentsInPlace</key>
-	<true/>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -48,59 +22,259 @@
 				<string>public.json</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>LeoPhoneAgent Skill</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.leoyuan.leophoneagent.skillmd</string>
+			</array>
+		</dict>
 	</array>
+	<key>CFBundleIcons</key>
+	<dict>
+		<key>CFBundleAlternateIcons</key>
+		<dict>
+			<key>AppIcon-Dark</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>AlternateIcons/AppIcon-Dark</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<false/>
+			</dict>
+			<key>AppIcon-LegacyDark</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>AlternateIcons/AppIcon-LegacyDark</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<false/>
+			</dict>
+			<key>AppIcon-LegacyLight</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>AlternateIcons/AppIcon-LegacyLight</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<false/>
+			</dict>
+			<key>AppIcon-Light</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>AlternateIcons/AppIcon-Light</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<false/>
+			</dict>
+		</dict>
+		<key>CFBundlePrimaryIcon</key>
+		<dict>
+			<key>CFBundleIconFiles</key>
+			<array>
+				<string>AppIcon-Light</string>
+			</array>
+			<key>UIPrerenderedIcon</key>
+			<false/>
+		</dict>
+	</dict>
+	<key>CFBundleIcons~ipad</key>
+	<dict>
+		<key>CFBundleAlternateIcons</key>
+		<dict>
+			<key>AppIcon-Dark</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>AlternateIcons/AppIcon-Dark</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<false/>
+			</dict>
+			<key>AppIcon-LegacyDark</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>AlternateIcons/AppIcon-LegacyDark</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<false/>
+			</dict>
+			<key>AppIcon-LegacyLight</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>AlternateIcons/AppIcon-LegacyLight</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<false/>
+			</dict>
+			<key>AppIcon-Light</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array>
+					<string>AlternateIcons/AppIcon-Light</string>
+				</array>
+				<key>UIPrerenderedIcon</key>
+				<false/>
+			</dict>
+		</dict>
+		<key>CFBundlePrimaryIcon</key>
+		<dict>
+			<key>CFBundleIconFiles</key>
+			<array>
+				<string>AppIcon-Light</string>
+			</array>
+			<key>UIPrerenderedIcon</key>
+			<false/>
+		</dict>
+	</dict>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>zh-Hans</string>
+		<string>zh-Hant</string>
+		<string>ja</string>
+		<string>ko</string>
+		<string>fr</string>
+		<string>de</string>
+		<string>ru</string>
+	</array>
+	<key>CFBundleName</key>
+	<string>LeoPhoneAgent</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>Claude OAuth Callback</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.leoyuan.leophoneagent</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>LeoPhoneAgent Share</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>leophoneagent</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>MCP OAuth Callback</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>leophoneagent-mcp</string>
+			</array>
+		</dict>
+	</array>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<key>NFCReaderUsageDescription</key>
+	<string>LeoPhoneAgent uses NFC so the AI agent can read and write NFC tags on your behalf.</string>
+	<key>NSAlarmKitUsageDescription</key>
+	<string>LeoPhoneAgent uses AlarmKit so the AI agent can set alarms and timers on your behalf.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+	<key>NSAppleMusicUsageDescription</key>
+	<string>LeoPhoneAgent uses media library access so the AI agent can search your music library and control playback on your behalf.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>LeoPhoneAgent uses Bluetooth so the AI agent can scan for, connect to, and communicate with nearby BLE devices on your behalf.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>LeoPhoneAgent uses Bluetooth so the AI agent can scan for, connect to, and communicate with nearby BLE devices on your behalf.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>LeoPhoneAgent uses calendar access so the AI agent can query your schedule, check availability, and create events on your behalf.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>LeoPhoneAgent uses calendar access so the AI agent can query your schedule, check availability, and create events on your behalf.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>LeoPhoneAgent needs camera access to take photos for AI conversations.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>LeoPhoneAgent uses Face ID to protect locked chat sessions so only you can view their contents.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>LeoPhoneAgent uses HealthKit access so the AI agent can read your health data such as steps, heart rate, sleep, and workouts on your behalf.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>LeoPhoneAgent uses HealthKit write access so the AI agent can log health data such as steps, weight, and water intake on your behalf.</string>
+	<key>NSHomeKitUsageDescription</key>
+	<string>LeoPhoneAgent uses HomeKit access so the AI agent can query and control your smart home accessories on your behalf.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>LeoPhoneAgent uses local network access for the debug server and to let the AI agent communicate with locally-hosted services.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>LeoPhoneAgent uses background location to keep agent tasks running when the app is in the background. Location data is only used to record session connection history.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>LeoPhoneAgent uses your location to record where agent sessions are started for your session history.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>LeoPhoneAgent needs microphone access for voice-to-text input in chat.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>LeoPhoneAgent needs permission to save videos and images to your photo library.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>LeoPhoneAgent allows the AI agent to find, attach, organize, and delete photos or videos when you explicitly request those actions.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>LeoPhoneAgent uses reminders access so the AI agent can query and create reminders on your behalf.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>LeoPhoneAgent uses reminders access so the AI agent can query and create reminders on your behalf.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>LeoPhoneAgent uses speech recognition to convert your voice into text messages.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>NSSupportsLiveActivitiesFrequentUpdates</key>
+	<true/>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<true/>
+	</dict>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
 		<string>location</string>
 		<string>processing</string>
 	</array>
-	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<key>UTExportedTypeDeclarations</key>
 	<array>
-		<string>com.leoyuan.leophoneagent.agent.*</string>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.plain-text</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>LeoPhoneAgent Skill</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.leoyuan.leophoneagent.skillmd</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>skillmd</string>
+				</array>
+			</dict>
+		</dict>
 	</array>
-	<key>NSSupportsLiveActivities</key>
-	<true/>
-	<key>NSSupportsLiveActivitiesFrequentUpdates</key>
-	<true/>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>LeoPhoneAgent uses your location to record where agent sessions are started for your session history.</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>LeoPhoneAgent uses background location to keep agent tasks running when the app is in the background. Location data is only used to record session connection history.</string>
-	<key>NSCalendarsUsageDescription</key>
-	<string>LeoPhoneAgent uses calendar access so the AI agent can query your schedule, check availability, and create events on your behalf.</string>
-	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>LeoPhoneAgent uses calendar access so the AI agent can query your schedule, check availability, and create events on your behalf.</string>
-	<key>NSRemindersUsageDescription</key>
-	<string>LeoPhoneAgent uses reminders access so the AI agent can query and create reminders on your behalf.</string>
-	<key>NSRemindersFullAccessUsageDescription</key>
-	<string>LeoPhoneAgent uses reminders access so the AI agent can query and create reminders on your behalf.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>LeoPhoneAgent needs camera access to take photos for AI conversations.</string>
-	<key>NSFaceIDUsageDescription</key>
-	<string>LeoPhoneAgent uses Face ID to protect locked chat sessions so only you can view their contents.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>LeoPhoneAgent allows the AI agent to find, attach, organize, and delete photos or videos when you explicitly request those actions.</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>LeoPhoneAgent needs permission to save videos and images to your photo library.</string>
-	<key>NSHealthShareUsageDescription</key>
-	<string>LeoPhoneAgent uses HealthKit access so the AI agent can read your health data such as steps, heart rate, sleep, and workouts on your behalf.</string>
-	<key>NSHealthUpdateUsageDescription</key>
-	<string>LeoPhoneAgent uses HealthKit write access so the AI agent can log health data such as steps, weight, and water intake on your behalf.</string>
-	<key>NSAppleMusicUsageDescription</key>
-	<string>LeoPhoneAgent uses media library access so the AI agent can search your music library and control playback on your behalf.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>LeoPhoneAgent needs microphone access for voice-to-text input in chat.</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>LeoPhoneAgent uses speech recognition to convert your voice into text messages.</string>
-	<key>NSHomeKitUsageDescription</key>
-	<string>LeoPhoneAgent uses HomeKit access so the AI agent can query and control your smart home accessories on your behalf.</string>
-	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>LeoPhoneAgent uses Bluetooth so the AI agent can scan for, connect to, and communicate with nearby BLE devices on your behalf.</string>
-	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>LeoPhoneAgent uses Bluetooth so the AI agent can scan for, connect to, and communicate with nearby BLE devices on your behalf.</string>
-	<key>NFCReaderUsageDescription</key>
-	<string>LeoPhoneAgent uses NFC so the AI agent can read and write NFC tags on your behalf.</string>
+	<key>com.apple.developer.nfc.readersession.felica.systemcodes</key>
+	<array>
+		<string>0003</string>
+		<string>FE00</string>
+		<string>8008</string>
+		<string>88B4</string>
+		<string>12FC</string>
+		<string>8005</string>
+		<string>90B7</string>
+		<string>927A</string>
+		<string>86A7</string>
+	</array>
 	<key>com.apple.developer.nfc.readersession.iso7816.select-identifiers</key>
 	<array>
 		<string>D2760000850100</string>
@@ -196,157 +370,5 @@
 		<string>A0000008580201</string>
 		<string>00000000000000</string>
 	</array>
-	<key>com.apple.developer.nfc.readersession.felica.systemcodes</key>
-	<array>
-		<string>0003</string>
-		<string>FE00</string>
-		<string>8008</string>
-		<string>88B4</string>
-		<string>12FC</string>
-		<string>8005</string>
-		<string>90B7</string>
-		<string>927A</string>
-		<string>86A7</string>
-	</array>
-	<key>NSAlarmKitUsageDescription</key>
-	<string>LeoPhoneAgent uses AlarmKit so the AI agent can set alarms and timers on your behalf.</string>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
-	<key>CFBundleIcons</key>
-	<dict>
-		<key>CFBundlePrimaryIcon</key>
-		<dict>
-			<key>CFBundleIconFiles</key>
-			<array>
-				<string>AppIcon-Light</string>
-			</array>
-			<key>UIPrerenderedIcon</key>
-			<false/>
-		</dict>
-		<key>CFBundleAlternateIcons</key>
-		<dict>
-			<key>AppIcon-Light</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>AlternateIcons/AppIcon-Light</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<false/>
-			</dict>
-			<key>AppIcon-Dark</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>AlternateIcons/AppIcon-Dark</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<false/>
-			</dict>
-			<key>AppIcon-LegacyLight</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>AlternateIcons/AppIcon-LegacyLight</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<false/>
-			</dict>
-			<key>AppIcon-LegacyDark</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>AlternateIcons/AppIcon-LegacyDark</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<false/>
-			</dict>
-		</dict>
-	</dict>
-	<key>CFBundleIcons~ipad</key>
-	<dict>
-		<key>CFBundlePrimaryIcon</key>
-		<dict>
-			<key>CFBundleIconFiles</key>
-			<array>
-				<string>AppIcon-Light</string>
-			</array>
-			<key>UIPrerenderedIcon</key>
-			<false/>
-		</dict>
-		<key>CFBundleAlternateIcons</key>
-		<dict>
-			<key>AppIcon-Light</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>AlternateIcons/AppIcon-Light</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<false/>
-			</dict>
-			<key>AppIcon-Dark</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>AlternateIcons/AppIcon-Dark</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<false/>
-			</dict>
-			<key>AppIcon-LegacyLight</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>AlternateIcons/AppIcon-LegacyLight</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<false/>
-			</dict>
-			<key>AppIcon-LegacyDark</key>
-			<dict>
-				<key>CFBundleIconFiles</key>
-				<array>
-					<string>AlternateIcons/AppIcon-LegacyDark</string>
-				</array>
-				<key>UIPrerenderedIcon</key>
-				<false/>
-			</dict>
-		</dict>
-	</dict>
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleURLName</key>
-			<string>Claude OAuth Callback</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>com.leoyuan.leophoneagent</string>
-			</array>
-		</dict>
-		<dict>
-			<key>CFBundleURLName</key>
-			<string>LeoPhoneAgent Share</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>leophoneagent</string>
-			</array>
-		</dict>
-		<dict>
-			<key>CFBundleURLName</key>
-			<string>MCP OAuth Callback</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>leophoneagent-mcp</string>
-			</array>
-		</dict>
-	</array>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>LeoPhoneAgent uses local network access for the debug server and to let the AI agent communicate with locally-hosted services.</string>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<true/>
-	</dict>
 </dict>
 </plist>

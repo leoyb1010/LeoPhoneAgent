@@ -1740,6 +1740,11 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             if let dailyFragment = Self.loadRecentDailyMemoryFragment() {
                 volatileTail += "\n\n" + dailyFragment
             }
+            // [T-correction-memory] Permanent corrections, never age-tiered.
+            // Empty store → nil → the prompt is byte-identical to before.
+            if let corrections = CorrectionStore.promptFragment() {
+                volatileTail += "\n\n" + corrections
+            }
         }
         // Authoritative memory-status footer (overrides any earlier
         // baseSystemPrompt mentions when memory is disabled).

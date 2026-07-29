@@ -97,6 +97,16 @@ struct SkillsManagementView: View {
                         .labelsHidden()
                     }
                 }
+                // [T-skill-share] Absorbed from Cindy's "teach once, share":
+                // AirDrop a skill to another device (or another person) as a
+                // .skillmd file; the receiver taps it and installs.
+                .contextMenu {
+                    if let url = Self.exportURL(for: skill) {
+                        ShareLink(item: url) {
+                            Label("Share skill", systemImage: "square.and.arrow.up")
+                        }
+                    }
+                }
             }
             .onDelete { offsets in
                 let ids = offsets.map { filteredSkills[$0].id }
@@ -1522,6 +1532,32 @@ private struct SkillCatalogSheet: View {
             } catch {
                 states[entry.id] = .failed(error.localizedDescription)
             }
+        }
+    }
+}
+
+
+extension SkillsManagementView {
+    /// Reconstructs a portable SKILL.md (frontmatter + body) and stages it in
+    /// tmp for the share sheet. `.skillmd` is our declared document type, so
+    /// AirDropping it to another LeoPhoneAgent install offers "Open with" →
+    /// direct install.
+    static func exportURL(for skill: Skill) -> URL? {
+        var front = "---\nname: \(skill.name)\n"
+        if !skill.description.isEmpty { front += "description: \(skill.description)\n" }
+        if !skill.version.isEmpty { front += "version: \(skill.version)\n" }
+        front += "---\n\n"
+        let content = front + skill.body
+        let safeName = String(skill.name.unicodeScalars.map {
+            CharacterSet.alphanumerics.contains($0) || $0 == " " || $0 == "-" || $0 == "_" ? Character($0) : "-"
+        }).trimmingCharacters(in: CharacterSet(charactersIn: "-. "))
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(safeName).skillmd")
+        do {
+            try content.data(using: .utf8)?.write(to: url)
+            return url
+        } catch {
+            return nil
         }
     }
 }

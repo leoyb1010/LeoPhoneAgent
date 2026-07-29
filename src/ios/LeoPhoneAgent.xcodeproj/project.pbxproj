@@ -22,6 +22,7 @@
 		77BB9741AB0EFC449FDBDFED /* VoiceWaveformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16FF3462D09402F14B610CD6 /* VoiceWaveformView.swift */; };
 		7A49962E84F115865D41B933 /* AudioSessionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE154CF628D8699BD99CF9CB /* AudioSessionCoordinator.swift */; };
 		891443CAA4679D09A6D32AE4 /* RealTimeCutVADLibrary in Frameworks */ = {isa = PBXBuildFile; productRef = C42120806C66A2C804F89620 /* RealTimeCutVADLibrary */; };
+		E5CTD0003 /* Citadel in Frameworks */ = {isa = PBXBuildFile; productRef = E5CTD0002 /* Citadel */; };
 		8B886DA8A270E8FB58A9A1FA /* SpeechPlayerControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A302B074A0BE0AFED8EC7E9 /* SpeechPlayerControl.swift */; };
 		A1B2C3D4E5F60718293A4B5C /* SystemVoiceCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5D /* SystemVoiceCatalog.swift */; };
 		AA0838A02F3B941A00049557 /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0838A12F3B941A00049557 /* AboutView.swift */; };
@@ -299,6 +300,11 @@
 		E5LCW0001 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = E5LC00002 /* Localizable.xcstrings */; };
 		E5AWS0001 /* ActiveWindowScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AWS0002 /* ActiveWindowScene.swift */; };
 		E5SPL0001 /* SessionSpotlightIndexer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SPL0002 /* SessionSpotlightIndexer.swift */; };
+		E5CST0001 /* CorrectionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CST0002 /* CorrectionStore.swift */; };
+		E5RHS0001 /* RemoteHostStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RHS0002 /* RemoteHostStore.swift */; };
+		E5RSE0001 /* RemoteSSHExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RSE0002 /* RemoteSSHExecutor.swift */; };
+		E5WPL0001 /* WorkerPool.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5WPL0002 /* WorkerPool.swift */; };
+		E5RHV0001 /* RemoteHostSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RHV0002 /* RemoteHostSettingsView.swift */; };
 		E5WRG0001 /* WindowRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5WRG0002 /* WindowRegistry.swift */; };
 		E5LD00001 /* ToolLoopDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LD00003 /* ToolLoopDetector.swift */; };
 		E5LD00002 /* ToolLoopDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LD00003 /* ToolLoopDetector.swift */; };
@@ -760,6 +766,11 @@
 		E5WBR011 /* WatchBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchBridge.swift; sourceTree = "<group>"; };
 		E5AWS0002 /* ActiveWindowScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActiveWindowScene.swift; sourceTree = "<group>"; };
 		E5SPL0002 /* SessionSpotlightIndexer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionSpotlightIndexer.swift; sourceTree = "<group>"; };
+		E5CST0002 /* CorrectionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CorrectionStore.swift; sourceTree = "<group>"; };
+		E5RHS0002 /* RemoteHostStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteHostStore.swift; sourceTree = "<group>"; };
+		E5RSE0002 /* RemoteSSHExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteSSHExecutor.swift; sourceTree = "<group>"; };
+		E5WPL0002 /* WorkerPool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkerPool.swift; sourceTree = "<group>"; };
+		E5RHV0002 /* RemoteHostSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteHostSettingsView.swift; sourceTree = "<group>"; };
 		E5WRG0002 /* WindowRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowRegistry.swift; sourceTree = "<group>"; };
 		E5BRM0011 /* BrowserResourceMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserResourceMonitor.swift; sourceTree = "<group>"; };
 		E5BSH0011 /* BashismDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BashismDetector.swift; sourceTree = "<group>"; };
@@ -1203,6 +1214,7 @@
 				E5M000002 /* cmark-gfm-extensions in Frameworks */,
 				E5S000005 /* CloudKit.framework in Frameworks */,
 				891443CAA4679D09A6D32AE4 /* RealTimeCutVADLibrary in Frameworks */,
+				E5CTD0003 /* Citadel in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2011,6 +2023,10 @@
 				E5S000013 /* SessionForkManager.swift */,
 				E5LOCK101 /* SessionLockStore.swift */,
 				E5N0000112F3B941A00049557 /* SkillStore.swift */,
+				E5CST0002 /* CorrectionStore.swift */,
+				E5RHS0002 /* RemoteHostStore.swift */,
+				E5RSE0002 /* RemoteSSHExecutor.swift */,
+				E5WPL0002 /* WorkerPool.swift */,
 				F1MCPSTORE /* MCPStore.swift */,
 				E5NMCP011 /* NativeMCPClient.swift */,
 				F1MCPOAUTH /* MCPOAuthController.swift */,
@@ -2146,6 +2162,7 @@
 				E5LEO0018 /* LeoReleaseNotesView.swift */,
 				E5QTK0012 /* QuickTaskSettingsView.swift */,
 				E5SCH014 /* ScheduledTaskSettingsView.swift */,
+				E5RHV0002 /* RemoteHostSettingsView.swift */,
 				E5CAP012 /* CapabilitiesView.swift */,
 				E5N0000142F3B941A00049557 /* MemoryManagementView.swift */,
 				E8A000013 /* OffloadPermissionSettingsView.swift */,
@@ -2307,6 +2324,7 @@
 				E5M000022 /* cmark-gfm-extensions */,
 				E5X000021 /* SwiftMath */,
 				C42120806C66A2C804F89620 /* RealTimeCutVADLibrary */,
+				E5CTD0002 /* Citadel */,
 			);
 			productName = LeoPhoneAgent;
 			productReference = E51000010 /* LeoPhoneAgent.app */;
@@ -2409,6 +2427,7 @@
 				E5M000020 /* XCRemoteSwiftPackageReference "swift-cmark" */,
 				E5X000020 /* XCRemoteSwiftPackageReference "SwiftMath" */,
 				B318C2F47DB3F301A17E49BE /* XCRemoteSwiftPackageReference "RealTimeCutVADLibrary" */,
+				E5CTD0001 /* XCRemoteSwiftPackageReference "Citadel" */,
 			);
 			productRefGroup = E51000032 /* Products */;
 			projectDirPath = "";
@@ -2722,6 +2741,11 @@
 				E5NMCP001 /* NativeMCPClient.swift in Sources */,
 				E5SCH002 /* ScheduledTaskRunner.swift in Sources */,
 				E5SPL0001 /* SessionSpotlightIndexer.swift in Sources */,
+				E5CST0001 /* CorrectionStore.swift in Sources */,
+				E5RHS0001 /* RemoteHostStore.swift in Sources */,
+				E5RSE0001 /* RemoteSSHExecutor.swift in Sources */,
+				E5WPL0001 /* WorkerPool.swift in Sources */,
+				E5RHV0001 /* RemoteHostSettingsView.swift in Sources */,
 				E5SCH003 /* RunDueScheduledTasksIntent.swift in Sources */,
 				E5SCH004 /* ScheduledTaskSettingsView.swift in Sources */,
 				E5CAP002 /* CapabilitiesView.swift in Sources */,
@@ -3077,7 +3101,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -3086,7 +3110,7 @@
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.2.1;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.UITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -3101,12 +3125,12 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.2.1;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.UITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -3121,7 +3145,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -3137,7 +3161,7 @@
 					"$(SRCROOT)/Vendor/cppjieba/include",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.2.1;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.Tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -3152,7 +3176,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -3164,7 +3188,7 @@
 					"$(SRCROOT)/Vendor/cppjieba/include",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.2.1;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.Tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -3312,7 +3336,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = LeoPhoneAgent.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_ASSET_PATHS = "\"Preview Content\"";
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
@@ -3342,7 +3366,7 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(SRCROOT)/../../deps/libs";
-				MARKETING_VERSION = 1.2.1;
+				MARKETING_VERSION = 1.3.0;
 				OTHER_LDFLAGS = (
 					"-lish_emu",
 					"-lish",
@@ -3367,7 +3391,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = LeoPhoneAgent.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_ASSET_PATHS = "\"Preview Content\"";
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
@@ -3397,7 +3421,7 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(SRCROOT)/../../deps/libs";
-				MARKETING_VERSION = 1.2.1;
+				MARKETING_VERSION = 1.3.0;
 				OTHER_LDFLAGS = (
 					"-lish_emu",
 					"-lish",
@@ -3418,7 +3442,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
@@ -3430,7 +3454,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.2.1;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.ShareExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -3445,7 +3469,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
@@ -3457,7 +3481,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.2.1;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.ShareExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -3472,7 +3496,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FileProvider/FileProvider.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = FileProvider/Info.plist;
@@ -3484,7 +3508,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.2.1;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.FileProvider;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -3499,7 +3523,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FileProvider/FileProvider.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = FileProvider/Info.plist;
@@ -3511,7 +3535,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.2.1;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.FileProvider;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -3526,7 +3550,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = AgentWidget/AgentWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AgentWidget/Info.plist;
@@ -3538,7 +3562,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.2.1;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.AgentWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -3553,7 +3577,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = AgentWidget/AgentWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 28;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AgentWidget/Info.plist;
@@ -3565,7 +3589,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.2.1;
+				MARKETING_VERSION = 1.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.AgentWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -3644,6 +3668,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		E5CTD0001 /* XCRemoteSwiftPackageReference "Citadel" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/orlandos-nl/Citadel.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.7.0;
+			};
+		};
 		B318C2F47DB3F301A17E49BE /* XCRemoteSwiftPackageReference "RealTimeCutVADLibrary" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/helloooideeeeea/RealTimeCutVADLibrary.git";
@@ -3679,6 +3711,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		E5CTD0002 /* Citadel */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E5CTD0001 /* XCRemoteSwiftPackageReference "Citadel" */;
+			productName = Citadel;
+		};
 		C42120806C66A2C804F89620 /* RealTimeCutVADLibrary */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = B318C2F47DB3F301A17E49BE /* XCRemoteSwiftPackageReference "RealTimeCutVADLibrary" */;

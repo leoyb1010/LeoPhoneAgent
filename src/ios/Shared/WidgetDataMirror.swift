@@ -88,6 +88,14 @@ enum WidgetDataMirror {
             if SessionActivityTracker.shared.activeSessions.contains(entry.sessionId) { continue }
             if await recordBriefing(taskName: entry.taskName, sessionId: entry.sessionId) {
                 WidgetPendingBriefingStore.remove(sessionId: entry.sessionId)
+                // [T-scheduled-report] Close the loop for scheduled runs: the
+                // user asked for this work in advance, tell them it landed.
+                if entry.origin == "scheduled" {
+                    ScheduledTaskRunner.notify(
+                        title: String(localized: "Scheduled task finished"),
+                        body: entry.taskName,
+                        sessionId: entry.sessionId)
+                }
             }
         }
     }

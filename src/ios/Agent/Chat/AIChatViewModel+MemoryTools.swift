@@ -82,6 +82,15 @@ extension AIChatViewModel {
             return FileToolResult(output: "Error: Missing required 'content' parameter", success: false)
         }
 
+        // [T-correction-memory] Corrections bypass the aging daily log — they
+        // go to their own permanent, top-priority store.
+        if (dict["kind"] as? String) == "correction" {
+            if CorrectionStore.append(content) {
+                return FileToolResult(output: "Correction recorded permanently. It will be injected into every future session with top priority.", success: true)
+            }
+            return FileToolResult(output: "Error: could not write the correction.", success: false)
+        }
+
         let fm = FileManager.default
         let persistDir = Self.minisMemoryPersistentDir
         try? fm.createDirectory(at: persistDir, withIntermediateDirectories: true)

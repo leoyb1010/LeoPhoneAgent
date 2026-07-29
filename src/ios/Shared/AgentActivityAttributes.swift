@@ -232,6 +232,10 @@ enum WidgetPendingBriefingStore {
         var sessionId: String
         var taskName: String
         var addedAt: Date
+        /// "scheduled" for ScheduledTaskRunner-launched runs (drives the
+        /// completion notification); nil/other for widget-launched. Optional →
+        /// old persisted entries decode unchanged.
+        var origin: String? = nil
     }
 
     /// [T-pending-briefing-order] Was `[String: String]` capped with
@@ -267,9 +271,9 @@ enum WidgetPendingBriefingStore {
         defaults.set(data, forKey: storageKey)
     }
 
-    static func add(sessionId: String, taskName: String) {
+    static func add(sessionId: String, taskName: String, origin: String? = nil) {
         var entries = loadEntries().filter { $0.sessionId != sessionId }
-        entries.append(Entry(sessionId: sessionId, taskName: taskName, addedAt: Date()))
+        entries.append(Entry(sessionId: sessionId, taskName: taskName, addedAt: Date(), origin: origin))
         // Bound the list — a run that never produces a reply must not pile up.
         // Dropping the OLDEST is now well-defined.
         if entries.count > 10 { entries = Array(entries.suffix(10)) }
