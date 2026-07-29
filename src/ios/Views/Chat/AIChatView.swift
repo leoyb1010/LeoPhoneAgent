@@ -272,6 +272,8 @@ struct AIChatView: View {
     @State private var showAttachmentMenu = false
     @State private var isDropTargeted = false
     @State private var showCamera = false
+    /// [T-composer-quicktask-picker] Full quick-task list sheet.
+    @State private var showQuickTaskPicker = false
     @State private var showPhotoPicker = false
     @State private var showDocumentPicker = false
     @State private var showMoveToSheet = false
@@ -317,6 +319,8 @@ struct AIChatView: View {
     @State private var showThinkingLevelSheet = false
     @State private var showSessionSkills = false
     @State private var showSessionMCPs = false
+    /// [T-session-inspector] Read-only diagnostics for this session.
+    @State private var showSessionInspector = false
     @State private var showSessionMemory = false
     @State private var showEnhancedCacheAlert = false
     @State private var showTokenUsage = false
@@ -912,6 +916,9 @@ struct AIChatView: View {
             SessionSkillsView(sessionId: vm.sessionId) {
                 await vm.ensureSessionReturningId()
             }
+        }
+        .sheet(isPresented: $showSessionInspector) {
+            SessionInspectorView(vm: vm)
         }
         .sheet(isPresented: $showSessionMCPs) {
             SessionMCPsView(sessionId: vm.sessionId) {
@@ -1595,6 +1602,7 @@ struct AIChatView: View {
             onArtifacts: { showArtifactTray = true },
             onSkills: { showSessionSkills = true },
             onMCPs: { showSessionMCPs = true },
+            onInspector: { showSessionInspector = true },
             onMemories: { showSessionMemory = true },
             setSpeakEnabled: { enabled in
                 cached.vm.speakEnabled = enabled
@@ -1740,19 +1748,15 @@ struct AIChatView: View {
         // the cap). This is a MITIGATION of the system snapshot behavior, not
         // a fix of it: the top-crop of the snapshot itself is UIKit-level and
         // out of SwiftUI's reach.
+        //
+        // [T-ios19-never-shipped] This was `if #available(iOS 19, *)` with the
+        // HStack-centred layout in the else branch. iOS 19 never shipped, so
+        // every current OS has been taking the plain-frame branch anyway — the
+        // else branch was unreachable dead code that only looked like a
+        // fallback. Keeping the branch that actually runs, unconditionally.
         let cap = max(120, UIScreen.main.bounds.width - 140)
-        if #available(iOS 19, *) {
-            titleView
-                .frame(maxWidth: cap)
-        } else {
-            HStack(spacing: 0) {
-                Spacer(minLength: 0)
-                titleView
-                    .frame(maxWidth: cap)
-                Spacer(minLength: 0)
-            }
-            .frame(maxWidth: .infinity)
-        }
+        titleView
+            .frame(maxWidth: cap)
     }
 
     /// [T-ios-navbar-toolbar-host] Everything the toolbar DISPLAYS (principal
@@ -2239,7 +2243,7 @@ struct AIChatView: View {
                             .padding(.horizontal, 16)
                             .frame(minHeight: LeoTheme.TouchTarget.minimum)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.glassProminent)
                 }
             }
             .transition(.opacity)
@@ -2588,7 +2592,7 @@ struct AIChatView: View {
                     Label("Fork to Continue", systemImage: "arrow.branch")
                         .font(.subheadline.weight(.medium))
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
                 .controlSize(.small)
             }
             .padding(.horizontal, 16)
@@ -3242,23 +3246,36 @@ struct AIChatView: View {
     /// AnyView keeps this optional branch out of the composer's already-deep
     /// generic metadata chain (the same constraint as inputBottomRow).
     private var composerQuickTaskStrip: AnyView {
-        let strip = ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(quickTaskStore.composerTasks) { task in
-                    Button {
-                        prepareComposer(with: task)
-                    } label: {
-                        Label(task.displayName, systemImage: task.symbolName)
-                            .font(.caption.weight(.medium))
-                            .lineLimit(1)
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .accessibilityHint("Prepares this task in the message field")
-                }
+        // [T-composer-quicktask-picker] A single entry point. The old strip
+        // showed the three composer-pinned tasks inline, which both crowded
+        // the composer and implied the catalog was only three items — the
+        // picker sheet already lists everything and can create new ones.
+        let strip = HStack {
+            Button {
+                showQuickTaskPicker = true
+            } label: {
+                Label("Quick Tasks", systemImage: "bolt.fill")
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 8)
+            .buttonStyle(.glass)
+            .controlSize(.small)
+            .accessibilityHint("Browse, run or create quick tasks")
+            // [T-ipad-pointer] Trackpad feedback; no-op on touch.
+            .hoverEffect(.lift)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
+        // Attach the sheet INSIDE the erased subtree. AIChatView.body has a
+        // documented history of blowing Swift's mangled-type decoder on cold
+        // launch when another large closure is added to the outer chain (see
+        // the camera fullScreenCover's comment); keeping this here costs the
+        // outer body nothing.
+        .sheet(isPresented: $showQuickTaskPicker) {
+            QuickTaskPickerSheet { task in
+                prepareComposer(with: task)
+            }
         }
         return AnyView(strip)
     }
@@ -3346,8 +3363,7 @@ struct AIChatView: View {
             )
 
             VStack(spacing: 5) {
-                if !voiceInputActive, vm.editingMessageIndex == nil,
-                   !quickTaskStore.composerTasks.isEmpty {
+                if !voiceInputActive, vm.editingMessageIndex == nil {
                     composerQuickTaskStrip
                 }
 
@@ -4395,14 +4411,14 @@ private struct ProviderImportSheet: View {
                     Text(String(localized: "Import as Provider"))
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
                 .controlSize(.large)
 
                 Button(action: { chose = true; onAttach() }) {
                     Text(String(localized: "Add as Chat Attachment"))
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.glass)
                 .controlSize(.large)
 
                 Button(role: .cancel, action: { chose = true; onCancel() }) {
@@ -4737,6 +4753,7 @@ private struct ChatTrailingMenu: View, Equatable {
     let onArtifacts: () -> Void
     let onSkills: () -> Void
     let onMCPs: () -> Void
+    let onInspector: () -> Void
     let onMemories: () -> Void
     let setSpeakEnabled: (Bool) -> Void
     let setEnhancedCache: (Bool) -> Void
@@ -4866,6 +4883,10 @@ private struct ChatTrailingMenu: View, Equatable {
 
             Divider()
 
+            Button { onInspector() } label: {
+                Label("Session Inspector", systemImage: "gauge.with.dots.needle.bottom.50percent")
+            }
+
             Button { onTokenUsage() } label: {
                 Label(String(localized: "Token Usage"), systemImage: "number")
             }
@@ -4922,6 +4943,7 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
     let onArtifacts: () -> Void
     let onSkills: () -> Void
     let onMCPs: () -> Void
+    let onInspector: () -> Void
     let onMemories: () -> Void
     let setSpeakEnabled: (Bool) -> Void
     let setEnhancedCache: (Bool) -> Void
@@ -5085,6 +5107,8 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
         }
 
         var tailGroup: [UIMenuElement] = [
+            UIAction(title: String(localized: "Session Inspector"),
+                     image: UIImage(systemName: "gauge.with.dots.needle.bottom.50percent")) { _ in coordinator.parent.onInspector() },
             UIAction(title: String(localized: "Token Usage"),
                      image: UIImage(systemName: "number")) { _ in coordinator.parent.onTokenUsage() },
         ]
@@ -5094,7 +5118,7 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
             completion([
                 UIAction(title: "Copy Requests (\(n))",
                          image: UIImage(systemName: "arrow.up.doc")) { _ in coordinator.parent.onCopyRequests() },
-                UIAction(title: "Copy Session Data",
+                UIAction(title: String(localized: "Copy Session Data"),
                          image: UIImage(systemName: "tray.and.arrow.up")) { _ in coordinator.parent.onCopySessionData() },
             ])
         })

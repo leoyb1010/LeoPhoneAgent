@@ -1,3 +1,4 @@
+import AppIntents
 import AVFoundation
 import Combine
 import CryptoKit
@@ -1682,15 +1683,69 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     private var _cachedTimeString: String = ""
     private var _cachedTimeDate: Date = .distantPast
     private var approximateTimeString: String {
+        // [T-cache-prefix-stability] Floor to the wall-clock hour instead of
+        // caching "now + 3600s" per instance: the old scheme let two live
+        // ViewModels disagree on the hour string for up to an hour, so their
+        // system prompts could never share a server-side cache prefix.
         let now = Date()
-        if now.timeIntervalSince(_cachedTimeDate) > 3600 {
+        let hourStart = Calendar.current.dateInterval(of: .hour, for: now)?.start ?? now
+        if hourStart != _cachedTimeDate {
             let fmt = DateFormatter()
             fmt.dateFormat = "yyyy-MM-dd HH:00"
             fmt.timeZone = .current
-            _cachedTimeString = fmt.string(from: now)
-            _cachedTimeDate = now
+            _cachedTimeString = fmt.string(from: hourStart)
+            _cachedTimeDate = hourStart
         }
         return _cachedTimeString
+    }
+
+    /// [T-cache-prefix-stability] Single source of truth for the per-request
+    /// system prompt. Layout:
+    ///   stable prefix  — baseSystemPrompt + capability/behavior fragments
+    ///                    + skills + MCP (changes only on config edits)
+    ///   cache boundary — SystemPromptCacheBoundary.marker
+    ///   volatile tail  — clock/languages + GLOBAL.md + daily memory logs
+    ///                    + memory-status footer (may change every turn)
+    /// Used by the initial assembly, applyFallbackSwitch, and every in-call
+    /// group-fallback rebuild — the older hand-rolled rebuilds dropped
+    /// skills/MCP/memory when switching entries mid-stream.
+    func composeUserSystemPrompt(for model: LLMModel) -> String {
+        var stable = baseSystemPrompt
+        if let capFragment = model.capabilityPromptFragment {
+            stable += "\n\n" + capFragment
+        }
+        if let behaviorFragment = model.agentBehaviorPromptFragment {
+            stable += "\n\n" + behaviorFragment
+        }
+        if let sid = sessionId,
+           let skillFragment = SkillStore.shared.skillPromptFragment(for: sid) {
+            stable += "\n\n" + skillFragment
+        }
+        if let sid = sessionId,
+           let mcpFragment = MCPStore.shared.systemPromptSnippet(for: sid) {
+            stable += "\n\n" + mcpFragment
+        }
+
+        var volatileTail = "Current time (approximate): \(approximateTimeString) (\(TimeZone.current.identifier)). "
+            + "Device languages: \((UserDefaults.standard.object(forKey: "AppleLanguages") as? [String] ?? Locale.preferredLanguages).joined(separator: ", "))."
+        // [T-memory-toggle-gates-injection-and-tools-ios] Memory injection
+        // (GLOBAL.md + recent daily logs) is gated by the per-session
+        // memoryEnabled toggle. SOUL.md (identity / persona) is rendered by
+        // SystemPromptBuilder.identitySection() inside baseSystemPrompt and
+        // is NOT affected by this toggle.
+        if memoryEnabled {
+            if let memoryFragment = Self.loadGlobalMemoryFragment() {
+                volatileTail += "\n\n" + memoryFragment
+            }
+            if let dailyFragment = Self.loadRecentDailyMemoryFragment() {
+                volatileTail += "\n\n" + dailyFragment
+            }
+        }
+        // Authoritative memory-status footer (overrides any earlier
+        // baseSystemPrompt mentions when memory is disabled).
+        volatileTail += memoryStatusFragment
+
+        return stable + SystemPromptCacheBoundary.marker + volatileTail
     }
 
     private var baseSystemPrompt: String {
@@ -1732,8 +1787,10 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             + "Starts with a desktop Safari user agent. Use screenshot to see the page.\n"
             + "- memory_write: Save a memory entry to today's daily log (YYYY-MM-DD.md). Use proactively to note user preferences, project patterns, and important context.\n"
             + "- memory_get: Recall memories with keyword search. Check memory at the start of new topics to leverage past knowledge.\n\n"
-            + "Current time (approximate): \(approximateTimeString) (\(TimeZone.current.identifier)). "
-            + "Device languages: \((UserDefaults.standard.object(forKey: "AppleLanguages") as? [String] ?? Locale.preferredLanguages).joined(separator: ", ")).\n\n"
+            // [T-cache-prefix-stability] The "Current time" line used to sit
+            // right here, invalidating the ~130 static lines below every time
+            // the hour rolled over. It now lives in the volatile tail that
+            // composeUserSystemPrompt appends after the cache boundary.
             + "Shared directory /var/minis/ (bidirectional read/write between shell and app):\n"
             + "  /var/minis/attachments/ — Media files (images, audio, video). Display inline with ![desc](leophoneagent://attachments/filename).\n"
             + "  /var/minis/workspace/   — Working files (scripts, data, configs). Link with [name](leophoneagent://workspace/filename).\n"
@@ -2062,6 +2119,13 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             logger.warning("🔑DRAFT [vm=\(self.vmInstanceId)] send() GUARD FAILED — text.isEmpty=\(text.isEmpty) attachments.isEmpty=\(pendingAttachments.isEmpty) isProcessing=\(self.isProcessing)")
             return
         }
+
+        // [T-intent-donation] Tell the system this happened. Without any
+        // donations Siri and the Shortcuts "Suggestions" section can never
+        // learn the user's habits, so an app used dozens of times a day was
+        // giving the system nothing to work with. Donating the *entity*, not
+        // the message: no prompt text ever leaves the app this way.
+        donateSendPrompt()
 
         // Don't stop TTS here — let the previous reply finish playing. The stream
         // handler will clear the queue on the FIRST textDelta of the new reply, so
@@ -4265,48 +4329,13 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         }
         let tools = makeAgentTools()
 
-        var userSystemPrompt = baseSystemPrompt
         let activeModel = ProviderConfigStore.shared.entry(for: entry.id)?.model ?? selectedModel
-        if let capFragment = activeModel.capabilityPromptFragment {
-            userSystemPrompt += "\n\n" + capFragment
-        }
-        if let behaviorFragment = activeModel.agentBehaviorPromptFragment {
-            userSystemPrompt += "\n\n" + behaviorFragment
-        }
-
-        // Inject enabled skill metadata into system prompt
-        if let sid = sessionId,
-           let skillFragment = SkillStore.shared.skillPromptFragment(for: sid) {
-            userSystemPrompt += "\n\n" + skillFragment
-        }
-
-        // [T-mcp-integration-ios] Inject Top-20 enabled MCP server metadata.
-        if let sid = sessionId,
-           let mcpFragment = MCPStore.shared.systemPromptSnippet(for: sid) {
-            userSystemPrompt += "\n\n" + mcpFragment
-        }
-
-        // [T-memory-toggle-gates-injection-and-tools-ios] Memory injection
-        // (GLOBAL.md + recent daily logs) is gated by the per-session
-        // memoryEnabled toggle. SOUL.md (identity / persona) is rendered
-        // by SystemPromptBuilder.identitySection() above and is NOT
-        // affected by this toggle.
         // [T-memory-enabled-new-session-bug DIAG] vm.memoryEnabled is the
         // value the injection actually keys off. Trace it against the
         // session so a repro shows whether loadSession seeded it from the
         // global default.
         AppLogger(category: "MemDiag").info("[MemDiag] inject-decision sid=\(self.sessionId?.prefix(8) ?? "nil") vm.memoryEnabled=\(self.memoryEnabled)")
-        if memoryEnabled {
-            if let memoryFragment = Self.loadGlobalMemoryFragment() {
-                userSystemPrompt += "\n\n" + memoryFragment
-            }
-            if let dailyFragment = Self.loadRecentDailyMemoryFragment() {
-                userSystemPrompt += "\n\n" + dailyFragment
-            }
-        }
-        // Authoritative memory-status footer (overrides any earlier
-        // baseSystemPrompt mentions when memory is disabled).
-        userSystemPrompt += memoryStatusFragment
+        var userSystemPrompt = composeUserSystemPrompt(for: activeModel)
 
         let promptBuildMs = (CFAbsoluteTimeGetCurrent() - loopSetupStart) * 1000
         logger.info("⏱️ [runAgentLoop] prompt build elapsed=\(String(format: "%.1f", promptBuildMs))ms history=\(self.agentHistory.count)")
@@ -4615,7 +4644,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             let stream = try await streamWithGroupFallback(
                 provider: provider,
                 messages: contextHistory,
-                baseSystemPrompt: baseSystemPrompt,
                 systemPrompt: userSystemPrompt,
                 tools: tools,
                 model: activeModel,
@@ -4635,35 +4663,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 }
                 logger.info("🔀AGENT_LOOP provider updated after fallback: \(prevEntryId ?? "nil") → \(newEntryId)")
                 provider = await makeAgentProvider(for: newEntry)
-                userSystemPrompt = baseSystemPrompt
-                if let capFragment = newEntry.model.capabilityPromptFragment {
-                    userSystemPrompt += "\n\n" + capFragment
-                }
-                if let behaviorFragment = newEntry.model.agentBehaviorPromptFragment {
-                    userSystemPrompt += "\n\n" + behaviorFragment
-                }
-                if let sid = sessionId,
-                   let skillFragment = SkillStore.shared.skillPromptFragment(for: sid) {
-                    userSystemPrompt += "\n\n" + skillFragment
-                }
-                // [T-mcp-integration-ios] Inject Top-20 enabled MCP metadata.
-                if let sid = sessionId,
-                   let mcpFragment = MCPStore.shared.systemPromptSnippet(for: sid) {
-                    userSystemPrompt += "\n\n" + mcpFragment
-                }
-                // [T-memory-toggle-gates-injection-and-tools-ios] Mirror
-                // the gate from the first injection site — fallback to a
-                // new provider must respect the per-session memoryEnabled
-                // toggle the same way the initial system prompt did.
-                if memoryEnabled {
-                    if let memoryFragment = Self.loadGlobalMemoryFragment() {
-                        userSystemPrompt += "\n\n" + memoryFragment
-                    }
-                    if let dailyFragment = Self.loadRecentDailyMemoryFragment() {
-                        userSystemPrompt += "\n\n" + dailyFragment
-                    }
-                }
-                userSystemPrompt += memoryStatusFragment
+                userSystemPrompt = composeUserSystemPrompt(for: newEntry.model)
                 fallbackTrigger += 1
                 if !fallbackReasons.isEmpty {
                     // Resync the assistant message index by its stable id before
@@ -4822,7 +4822,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     streamResult = try await streamWithGroupFallbackUntilContent(
                         provider: provider,
                         messages: applyRequestImageBudget(effectiveAgentHistory()),
-                        baseSystemPrompt: baseSystemPrompt,
                         systemPrompt: userSystemPrompt,
                         tools: tools,
                         model: activeModel,
@@ -4896,7 +4895,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                         streamResult = try await streamWithGroupFallbackUntilContent(
                             provider: provider,
                             messages: applyRequestImageBudget(effectiveAgentHistory()),
-                            baseSystemPrompt: baseSystemPrompt,
                             systemPrompt: userSystemPrompt,
                             tools: tools,
                             model: activeModel,
@@ -5822,6 +5820,18 @@ enum LLMProviderError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .noCredentials: return "No API credentials available"
+        }
+    }
+}
+
+extension AIChatViewModel {
+    /// [T-intent-donation] Donate the "send a prompt" interaction so Siri /
+    /// Shortcuts can surface it as a suggestion. Fire-and-forget; a donation
+    /// failure must never affect sending.
+    func donateSendPrompt() {
+        Task.detached(priority: .background) {
+            let intent = SendPromptIntent()
+            try? await intent.donate()
         }
     }
 }

@@ -57,6 +57,18 @@ enum DeepLinkRouter {
         case "voice":
             QuickActionRouter.shared.startVoiceChat()
 
+        // [T-widget-quick-tasks] Home Screen widget entries.
+        case "new", "new_chat":
+            QuickActionRouter.shared.startNewChat()
+
+        case "quick-task", "quick_task":
+            let id = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            guard !id.isEmpty else {
+                deepLinkLog.info("quick-task URL missing id")
+                return
+            }
+            QuickActionRouter.shared.startQuickTask(id: id)
+
         case "share":
             // Funnel through ShareCoordinator so any leftover
             // fullScreenCover (gallery / WebApp / camera) is dismissed

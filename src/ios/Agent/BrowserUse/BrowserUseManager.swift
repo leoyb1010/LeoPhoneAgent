@@ -287,6 +287,8 @@ final class BrowserUseManager: NSObject, ObservableObject {
             return .error("set_viewport must be routed through BrowserTabPool")
         case .getBackbone:
             return try await getBackbone(maxDepth: input.maxDepth)
+        case .getAccessibilityTree:
+            return try await getAccessibilityTree(maxNodes: input.maxDepth)
         case .fetch:
             return try await fetch(url: input.url)
         case .newTab, .closeTab, .listTabs:
@@ -961,6 +963,73 @@ final class BrowserUseManager: NSObject, ObservableObject {
     }
 
     // MARK: - Get Readable
+
+    /// [T-browser-a11y-tree] Structural + interactive view of the page, in the
+    /// same shape assistive technology consumes. Cheaper than a screenshot and
+    /// more actionable than get_text, because every node reports a selector.
+    /// `maxNodes` reuses the existing `max_depth` parameter slot so no new
+    /// tool-schema field is needed.
+    private func getAccessibilityTree(maxNodes: Int?) async throws -> BrowserActionResult {
+        let cap = min(max(maxNodes ?? 200, 20), 600)
+        let js = BrowserUseJS.getAccessibilityTree(maxNodes: cap)
+        do {
+            let raw = try await webView.evaluateJavaScript(js)
+            if let str = raw as? String,
+               let data = str.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                if let error = json["error"] as? String {
+                    return .error(error)
+                }
+                return BrowserActionResult(text: Self.formatAccessibilityTree(json))
+            }
+            return BrowserActionResult(text: String(describing: raw ?? "null"))
+        } catch {
+            return .error("JavaScript error: \(error.localizedDescription)")
+        }
+    }
+
+    /// [T-a11y-tree-format] The a11y payload used to fall through to
+    /// `formatJSONResult`'s generic branch, which rendered `nodes` with
+    /// `String(describing:)` — NSArray's plist debug syntax, unordered keys,
+    /// no indentation and, crucially, no length cap. At the 600-node ceiling
+    /// that put 50–100KB of noise into the context, for a tool whose entire
+    /// selling point is being cheaper than a screenshot. Render the tree the
+    /// way the tool description promises, and bound it.
+    static func formatAccessibilityTree(_ json: [String: Any]) -> String {
+        let maxCharacters = 12000
+        var lines: [String] = []
+        if let title = json["title"] as? String, !title.isEmpty { lines.append("title: \(title)") }
+        if let url = json["url"] as? String, !url.isEmpty { lines.append("url: \(url)") }
+
+        let nodes = (json["nodes"] as? [[String: Any]]) ?? []
+        lines.append("nodes: \(nodes.count)")
+
+        var body: [String] = []
+        var characters = 0
+        var rendered = 0
+        for node in nodes {
+            let depth = max(0, min(12, node["depth"] as? Int ?? 0))
+            let role = node["role"] as? String ?? "?"
+            var line = String(repeating: "  ", count: depth) + role
+            if let name = node["name"] as? String, !name.isEmpty { line += " \"\(name)\"" }
+            if let state = node["state"] as? String, !state.isEmpty { line += " [\(state)]" }
+            if let selector = node["selector"] as? String, !selector.isEmpty { line += "  → \(selector)" }
+            if let href = node["href"] as? String, !href.isEmpty { line += "  href=\(href)" }
+            if characters + line.count > maxCharacters { break }
+            characters += line.count + 1
+            rendered += 1
+            body.append(line)
+        }
+        lines.append(contentsOf: body)
+
+        if rendered < nodes.count {
+            lines.append("… \(nodes.count - rendered) more node(s) omitted (output limit). "
+                         + "Narrow the page or lower max_depth.")
+        } else if (json["truncated"] as? Bool) == true {
+            lines.append("… tree truncated at the node cap; raise max_depth only if needed.")
+        }
+        return lines.joined(separator: "\n")
+    }
 
     private func getReadable() async throws -> BrowserActionResult {
         let js = BrowserUseJS.getReadable()
@@ -2033,9 +2102,11 @@ final class BrowserUseManager: NSObject, ObservableObject {
         }
         // getPageInfo / generic
         else {
-            // Fallback: format each key-value pair
+            // Fallback: format each key-value pair. Capped — an unrecognised
+            // shape carrying a large array must never dump unbounded
+            // `String(describing:)` output into the model's context.
             for (key, value) in json.sorted(by: { $0.key < $1.key }) {
-                lines.append("  \(key): \(value)")
+                lines.append("  \(key): \(String(describing: value).prefix(2000))")
             }
         }
 

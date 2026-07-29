@@ -75,7 +75,7 @@ static NSString *const HELP_TEXT =
 }
 @end
 
-static CLLocation *get_location_sync(int argc, char **argv) {
+static CLLocation *get_location_sync(int argc, char **argv, NSError **outError) {
     NSString *latStr = noff_find_arg(argc, argv, "--lat");
     NSString *lngStr = noff_find_arg(argc, argv, "--lng");
 
@@ -114,6 +114,11 @@ static CLLocation *get_location_sync(int argc, char **argv) {
 
     dispatch_semaphore_wait(delegate.semaphore,
                             dispatch_time(DISPATCH_TIME_NOW, 15 * NSEC_PER_SEC));
+    // Surface the specific failure (denied permission / CL error / timeout)
+    // instead of collapsing everything into one generic message.
+    if (!delegate.location && outError) {
+        *outError = delegate.error;
+    }
     return delegate.location;
 }
 
@@ -147,11 +152,16 @@ static int weather_handler(int argc, char **argv,
     }
 
     // Get location
-    CLLocation *loc = get_location_sync(argc, argv);
+    NSError *locError = nil;
+    CLLocation *loc = get_location_sync(argc, argv, &locError);
     if (!loc) {
+        NSString *msg = locError.localizedDescription.length > 0
+            ? [NSString stringWithFormat:@"Could not determine location: %@ You can also pass --lat/--lng explicitly.",
+               locError.localizedDescription]
+            : @"Could not determine location (timed out). Use --lat/--lng or enable location services.";
         NSDictionary *err = noff_json_error(TOOL_NAME, subcmd,
                                              NOFF_ERR_NOT_AVAILABLE,
-                                             @"Could not determine location. Use --lat/--lng or enable location services.");
+                                             msg);
         noff_emit_json(stdout_fd, err, compact, quiet);
         return NOFF_EXIT_NOT_AVAILABLE;
     }

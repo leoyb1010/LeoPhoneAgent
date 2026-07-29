@@ -855,4 +855,196 @@ enum BrowserUseJS {
         })()
         """
     }
+
+    /// [T-browser-a11y-tree] Accessibility-tree view of the page.
+    ///
+    /// Screenshots cost image tokens and `get_text` throws away structure and
+    /// interactivity. The a11y tree is what assistive tech consumes: every
+    /// node that matters carries a role, an accessible name and its
+    /// interaction state, and nothing else. It is deterministic (no vision
+    /// model), typically an order of magnitude cheaper than a screenshot, and
+    /// directly actionable because each node reports a selector.
+    static func getAccessibilityTree(maxNodes: Int) -> String {
+        """
+        (function() {
+            var MAX = \(maxNodes);
+            // Ceiling on elements VISITED, independent of how many are kept.
+            var MAX_VISITS = 20000;
+            var visited = 0;
+            var out = [];
+            var truncated = false;
+
+            function visible(el) {
+                if (!el || !el.getBoundingClientRect) return false;
+                if (el.getAttribute && el.getAttribute('aria-hidden') === 'true') return false;
+                if (el.hidden) return false;
+                var s = window.getComputedStyle(el);
+                if (!s || s.display === 'none' || s.visibility === 'hidden' || parseFloat(s.opacity) === 0) return false;
+                var r = el.getBoundingClientRect();
+                return r.width > 1 && r.height > 1;
+            }
+
+            // Prefer the platform's own notion of role, then fall back to the
+            // tag semantics assistive tech would infer.
+            function roleOf(el) {
+                var explicit = el.getAttribute && el.getAttribute('role');
+                if (explicit) return explicit;
+                var tag = el.tagName.toLowerCase();
+                var map = {
+                    a: el.hasAttribute('href') ? 'link' : 'generic',
+                    button: 'button', h1: 'heading', h2: 'heading', h3: 'heading',
+                    h4: 'heading', h5: 'heading', h6: 'heading',
+                    img: 'image', nav: 'navigation', main: 'main', form: 'form',
+                    table: 'table', ul: 'list', ol: 'list', li: 'listitem',
+                    select: 'combobox', textarea: 'textbox', label: 'label',
+                    header: 'banner', footer: 'contentinfo', article: 'article',
+                    section: 'region', dialog: 'dialog', summary: 'button'
+                };
+                if (tag === 'input') {
+                    var t = (el.getAttribute('type') || 'text').toLowerCase();
+                    if (t === 'checkbox') return 'checkbox';
+                    if (t === 'radio') return 'radio';
+                    if (t === 'submit' || t === 'button') return 'button';
+                    if (t === 'search') return 'searchbox';
+                    return 'textbox';
+                }
+                return map[tag] || null;
+            }
+
+            // Accessible-name computation, simplified to the sources that
+            // actually carry meaning on real pages.
+            function nameOf(el) {
+                var n = el.getAttribute && (el.getAttribute('aria-label') || el.getAttribute('alt') || el.getAttribute('title'));
+                if (!n) {
+                    var labelledBy = el.getAttribute && el.getAttribute('aria-labelledby');
+                    if (labelledBy) {
+                        // Per spec this is a space-separated ID LIST; passing the
+                        // whole string to getElementById returned null whenever
+                        // more than one id was referenced.
+                        var parts = labelledBy.trim().split(/\\s+/);
+                        var acc = [];
+                        for (var li = 0; li < parts.length; li++) {
+                            var ref = document.getElementById(parts[li]);
+                            if (ref) acc.push(ref.innerText || '');
+                        }
+                        if (acc.length) n = acc.join(' ');
+                    }
+                }
+                if (!n && el.tagName.toLowerCase() === 'input') {
+                    // [T-a11y-tree-secret-leak] Only the placeholder. Falling
+                    // back to el.value put whatever the user had typed into the
+                    // model's context — a filled password field with no
+                    // placeholder literally sent the plaintext password, and
+                    // the same applied to ID numbers, phone numbers and OTPs.
+                    // A field's CONTENT is never its accessible name anyway.
+                    n = el.getAttribute('placeholder') || '';
+                }
+                if (!n) {
+                    // Own text only — otherwise every ancestor repeats its subtree.
+                    var own = '';
+                    for (var i = 0; i < el.childNodes.length; i++) {
+                        var c = el.childNodes[i];
+                        if (c.nodeType === 3) own += c.nodeValue;
+                    }
+                    n = own;
+                }
+                n = (n || '').replace(/\\s+/g, ' ').trim();
+                return n.length > 120 ? n.slice(0, 120) + '…' : n;
+            }
+
+            // [T-a11y-tree-selector] The first version returned things like
+            // 'div.flex.items-center', which (a) matches dozens of elements so
+            // querySelector clicked the wrong one, and (b) is outright INVALID
+            // CSS for Tailwind/CSS-Modules class names containing '/' or ':'
+            // ("div.w-1/2"), making click/type throw. Same for numeric or
+            // ':'-containing ids from React. This mirrors the shortSelector
+            // used by find_elements: an id anchor plus nth-of-type steps, with
+            // every identifier escaped.
+            function cssEscape(v) {
+                if (window.CSS && CSS.escape) return CSS.escape(v);
+                return String(v).replace(/([^a-zA-Z0-9_-])/g, '\\\\$1');
+            }
+            function selectorFor(el) {
+                if (el.id) return '#' + cssEscape(el.id);
+                var path = [];
+                var cur = el;
+                while (cur && cur !== document.body && cur !== document.documentElement) {
+                    if (cur.id) { path.unshift('#' + cssEscape(cur.id)); break; }
+                    var seg = cur.tagName.toLowerCase();
+                    var parent = cur.parentElement;
+                    if (parent) {
+                        var siblings = parent.children;
+                        var sameTag = 0, idx = 0;
+                        for (var si = 0; si < siblings.length; si++) {
+                            if (siblings[si].tagName === cur.tagName) {
+                                sameTag++;
+                                if (siblings[si] === cur) idx = sameTag;
+                            }
+                        }
+                        if (sameTag > 1) seg += ':nth-of-type(' + idx + ')';
+                    }
+                    path.unshift(seg);
+                    cur = parent;
+                }
+                if (path.length > 3 && path[0].charAt(0) === '#') {
+                    path = [path[0]].concat(path.slice(-2));
+                } else if (path.length > 2) {
+                    path = path.slice(-2);
+                }
+                return path.join(' > ');
+            }
+
+            function stateOf(el) {
+                var st = [];
+                if (el.disabled) st.push('disabled');
+                if (el.checked) st.push('checked');
+                if (el.getAttribute) {
+                    if (el.getAttribute('aria-expanded') === 'true') st.push('expanded');
+                    if (el.getAttribute('aria-selected') === 'true') st.push('selected');
+                    if (el.getAttribute('aria-required') === 'true') st.push('required');
+                }
+                if (el === document.activeElement) st.push('focused');
+                return st;
+            }
+
+            function walk(el, depth) {
+                if (out.length >= MAX) { truncated = true; return; }
+                // [T-a11y-tree-layout-thrash] Only KEPT nodes counted toward
+                // MAX, so a huge DOM with sparse semantics (SPAs, infinite
+                // feeds) still called getComputedStyle + getBoundingClientRect
+                // on every single element — a forced synchronous layout each
+                // time. Bound the visit count too.
+                if (++visited > MAX_VISITS) { truncated = true; return; }
+                if (!visible(el)) return;
+                var role = roleOf(el);
+                var name = nameOf(el);
+                // Keep a node only if it carries semantics: a meaningful role,
+                // or a name on something the user can act on.
+                var keep = role && role !== 'generic' && (name || role === 'image' || role === 'textbox' || role === 'searchbox');
+                if (keep) {
+                    var node = { depth: depth, role: role, name: name, selector: selectorFor(el) };
+                    var st = stateOf(el);
+                    if (st.length) node.state = st.join(',');
+                    if (el.tagName.toLowerCase() === 'a' && el.href) node.href = el.href;
+                    out.push(node);
+                }
+                var kids = el.children || [];
+                for (var i = 0; i < kids.length; i++) walk(kids[i], keep ? depth + 1 : depth);
+            }
+
+            try {
+                walk(document.body, 0);
+                return JSON.stringify({
+                    url: location.href,
+                    title: document.title,
+                    node_count: out.length,
+                    truncated: truncated,
+                    nodes: out
+                });
+            } catch (e) {
+                return JSON.stringify({ error: String(e) });
+            }
+        })()
+        """
+    }
 }

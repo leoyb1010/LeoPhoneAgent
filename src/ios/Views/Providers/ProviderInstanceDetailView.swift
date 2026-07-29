@@ -475,7 +475,7 @@ struct ProviderInstanceDetailView: View {
                     .font(.caption.weight(.medium))
                 }
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.glass)
             .controlSize(.small)
         }
         .id(oauthRefreshTrigger)
@@ -659,7 +659,7 @@ struct ProviderInstanceDetailView: View {
                     }
                     .font(.caption.weight(.medium))
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.glass)
                 .controlSize(.small)
             } else {
                 Button("Set Manual Bearer Token") {
@@ -1313,7 +1313,7 @@ struct ModelEntryDetailSheet: View {
                                     showForceThinkingAlert = true
                                 }
                                 .font(.caption)
-                                .buttonStyle(.bordered)
+                                .buttonStyle(.glass)
                                 .controlSize(.mini)
                             }
                         }

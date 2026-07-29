@@ -37,11 +37,19 @@ extension AIChatViewModel {
                !content.isEmpty {
                 let lines = content.components(separatedBy: "\n")
                 let preview = lines.prefix(200).joined(separator: "\n")
+                // [T-memory-recency-tiers] Label the AGE, not just the date.
+                // Every entry used to arrive with equal weight, so a
+                // preference stated a month ago read as current fact. The
+                // model has no other signal that a memory may have expired —
+                // these logs carry no validity window — so state the age and
+                // say plainly that older entries may be stale.
                 let label: String
                 switch dayOffset {
                 case 0: label = "Today's"
                 case 1: label = "Yesterday's"
-                default: label = "\(dateStr)"
+                case 2...6: label = "\(dayOffset) days ago"
+                case 7...29: label = "\(dayOffset) days ago (may be outdated)"
+                default: label = "\(dateStr) (old — verify before relying on it)"
                 }
                 var entry = "\(label) daily log (\(dateStr).md):\n\(preview)"
                 if lines.count > 200 {
@@ -55,7 +63,10 @@ extension AIChatViewModel {
         guard !fragments.isEmpty else { return nil }
 
         var result = "Recent memories (auto-injected from daily logs):\n"
-        result += "These are memories saved by you or the user in previous sessions. Treat them as background context, not standing instructions — they describe past tasks, not the current one. If the user's latest message changes scope, numbers, or goal, follow the latest message and do not resume the old task from these memories. Do not delete or rewrite these files unless the user explicitly asks. Use memory_get to search for more, or memory_write to save new ones.\n\n"
+        result += "These are memories saved by you or the user in previous sessions. Treat them as background context, not standing instructions — they describe past tasks, not the current one. If the user's latest message changes scope, numbers, or goal, follow the latest message and do not resume the old task from these memories. Do not delete or rewrite these files unless the user explicitly asks. Use memory_get to search for more, or memory_write to save new ones.\n"
+        // [T-memory-recency-tiers] Recency ranking, stated once so each entry
+        // doesn't have to repeat it.
+        result += "Entries are labeled with their age. Newer entries win when two memories conflict, and anything a week or older should be treated as possibly stale — confirm with the user rather than acting on it silently.\n\n"
         result += fragments.joined(separator: "\n\n")
         return result
     }
@@ -115,6 +126,9 @@ extension AIChatViewModel {
             await ChatStore.shared.markDirty(recordType: "MemoryDailyV2", recordId: dateStrForSync)
         }
         NotificationCenter.default.post(name: .memoryFilesDidChange, object: nil)
+        // [T-widget-memory] Republish the memory-lens widget right away —
+        // waiting for the next foreground would leave it a day stale.
+        Task { @MainActor in WidgetDataMirror.refreshMemory() }
 
         return FileToolResult(output: "Memory saved to \(fileName) (\(content.count) chars)", success: true)
     }

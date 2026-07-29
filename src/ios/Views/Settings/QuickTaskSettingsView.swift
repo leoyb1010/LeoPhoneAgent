@@ -260,7 +260,9 @@ private struct QuickTaskRow: View {
     }
 }
 
-private struct QuickTaskEditorView: View {
+/// Also presented from the composer's quick-task picker, so it cannot be
+/// `private` to this file. [T-composer-quicktask-picker]
+struct QuickTaskEditorView: View {
     enum Mode {
         case create
         case edit(QuickTaskDefinition)

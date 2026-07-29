@@ -95,7 +95,6 @@ extension AIChatViewModel {
     func streamWithGroupFallback(
         provider initialProvider: any AgentProvider,
         messages: [AgentMessage],
-        baseSystemPrompt: String,
         systemPrompt initialSystemPrompt: String?,
         tools: [AgentToolDefinition],
         model: LLMModel,
@@ -210,15 +209,10 @@ extension AIChatViewModel {
                 triedEntries.insert(nextEntryId)
                 currentEntryId = nextEntryId
                 currentProvider = await makeAgentProvider(for: nextEntry)
-                // Rebuild system prompt for the new model's capabilities
-                var rebuiltPrompt = baseSystemPrompt
-                if let capFragment = nextEntry.model.capabilityPromptFragment {
-                    rebuiltPrompt += "\n\n" + capFragment
-                }
-                if let behaviorFragment = nextEntry.model.agentBehaviorPromptFragment {
-                    rebuiltPrompt += "\n\n" + behaviorFragment
-                }
-                currentSystemPrompt = rebuiltPrompt
+                // Rebuild the system prompt for the new model. Uses the shared
+                // composer so mid-stream fallback keeps skills/MCP/memory —
+                // the old inline rebuild silently dropped them.
+                currentSystemPrompt = composeUserSystemPrompt(for: nextEntry.model)
                 // continue loop — will try next entry immediately
             } catch {
                 // Check if group uses "always" fallback strategy — if so, treat all
@@ -264,14 +258,7 @@ extension AIChatViewModel {
                     triedEntries.insert(nextEntryId)
                     currentEntryId = nextEntryId
                     currentProvider = await makeAgentProvider(for: nextEntry)
-                    var rebuiltPrompt = baseSystemPrompt
-                    if let capFragment = nextEntry.model.capabilityPromptFragment {
-                        rebuiltPrompt += "\n\n" + capFragment
-                    }
-                    if let behaviorFragment = nextEntry.model.agentBehaviorPromptFragment {
-                        rebuiltPrompt += "\n\n" + behaviorFragment
-                    }
-                    currentSystemPrompt = rebuiltPrompt
+                    currentSystemPrompt = composeUserSystemPrompt(for: nextEntry.model)
                     continue
                 }
 
@@ -346,14 +333,7 @@ extension AIChatViewModel {
                     triedEntries.insert(nextEntryId)
                     currentEntryId = nextEntryId
                     currentProvider = await makeAgentProvider(for: nextEntry)
-                    var rebuiltPrompt = baseSystemPrompt
-                    if let capFragment = nextEntry.model.capabilityPromptFragment {
-                        rebuiltPrompt += "\n\n" + capFragment
-                    }
-                    if let behaviorFragment = nextEntry.model.agentBehaviorPromptFragment {
-                        rebuiltPrompt += "\n\n" + behaviorFragment
-                    }
-                    currentSystemPrompt = rebuiltPrompt
+                    currentSystemPrompt = composeUserSystemPrompt(for: nextEntry.model)
                     // continue loop — will try next entry
                 }
             }
@@ -370,7 +350,6 @@ extension AIChatViewModel {
     func streamWithGroupFallbackUntilContent(
         provider: any AgentProvider,
         messages: [AgentMessage],
-        baseSystemPrompt: String,
         systemPrompt: String?,
         tools: [AgentToolDefinition],
         model: LLMModel,
@@ -387,7 +366,6 @@ extension AIChatViewModel {
             let fbStream = try await streamWithGroupFallback(
                 provider: provider,
                 messages: messages,
-                baseSystemPrompt: baseSystemPrompt,
                 systemPrompt: systemPrompt,
                 tools: tools,
                 model: model,

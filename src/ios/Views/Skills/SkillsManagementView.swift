@@ -29,6 +29,8 @@ struct SkillsManagementView: View {
     @ObservedObject private var store = SkillStore.shared
     @State private var showImportSheet = false
     @State private var showSkillsBrowser = false
+    /// [T-skill-catalog] Built-in recommended skills directory.
+    @State private var showSkillCatalog = false
     @State private var searchQuery = ""
     @State private var forceSyncAllToast: String?
     /// Subscribed mirror of `SyncV2Bootstrap.isEnabled` so the
@@ -132,6 +134,11 @@ struct SkillsManagementView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button {
+                        showSkillCatalog = true
+                    } label: {
+                        Label("推荐 Skill 目录", systemImage: "square.grid.2x2")
+                    }
+                    Button {
                         showImportSheet = true
                     } label: {
                         Label(String(localized: "Import Skill"), systemImage: "square.and.arrow.down")
@@ -159,6 +166,9 @@ struct SkillsManagementView: View {
         }
         .sheet(isPresented: $showImportSheet) {
             ImportSkillSheet()
+        }
+        .sheet(isPresented: $showSkillCatalog, onDismiss: { store.reload() }) {
+            SkillCatalogSheet()
         }
         .fullScreenCover(isPresented: $showSkillsBrowser, onDismiss: {
             store.reload()
@@ -1199,4 +1209,319 @@ private struct ActivityView: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+// MARK: - Recommended skills catalog [T-skill-catalog]
+
+/// One entry in the built-in recommended skills directory. Entries with a
+/// `skillURL` point at a real SKILL.md on GitHub (verified 2026-07) and
+/// install through the existing `SkillStore.importFromGitHub` path, sibling
+/// files included. Entries without one are platform-gated services whose
+/// docs open in Safari instead.
+private struct SkillCatalogEntry: Identifiable {
+    let id: String
+    let title: String
+    let subtitle: String
+    let skillURL: String?
+    let docsURL: String
+
+    /// [T-skill-marketplace] Community skill indexes. Our SKILL.md parser
+    /// reads the same `name` / `description` / `version` YAML frontmatter as
+    /// the Agent Skills open standard (SkillStore.parseFrontmatter), so
+    /// skills published for Claude Code / Codex / Cursor install here
+    /// unchanged through the existing GitHub import path.
+    ///
+    /// Deliberately links to the INDEX rather than mirroring thousands of
+    /// entries: the lists change daily, and most of them assume a desktop
+    /// coding environment. The footer says so instead of pretending
+    /// everything is phone-appropriate.
+    struct Marketplace: Identifiable {
+        let id: String
+        let title: String
+        let subtitle: String
+        let url: String
+    }
+
+    static let marketplaces: [Marketplace] = [
+        Marketplace(
+            id: "voltagent",
+            title: "Awesome Agent Skills",
+            subtitle: "1497+ 个技能，含 Anthropic / Google / Vercel / Stripe / Cloudflare 官方出品",
+            url: "https://github.com/VoltAgent/awesome-agent-skills"
+        ),
+        Marketplace(
+            id: "travisvn",
+            title: "Awesome Claude Skills",
+            subtitle: "偏工作流与自动化的精选清单",
+            url: "https://github.com/travisvn/awesome-claude-skills"
+        ),
+        Marketplace(
+            id: "marketplace",
+            title: "Skill Marketplace",
+            subtitle: "首个专为 agent skills 建的开源市场，可按领域检索",
+            url: "https://github.com/dukelyuu/skills-marketplace"
+        ),
+        Marketplace(
+            id: "anthropic",
+            title: "Anthropic 官方技能库",
+            subtitle: "文档处理（docx / pdf / xlsx / pptx）等一等公民技能",
+            url: "https://github.com/anthropics/skills"
+        ),
+    ]
+
+    static let all: [SkillCatalogEntry] = [
+        // Phone-appropriate picks from the marketplaces above. These are
+        // vetted to not assume a desktop checkout or a long-lived daemon.
+        SkillCatalogEntry(
+            id: "anthropic-docx",
+            title: "Word 文档处理",
+            subtitle: "读写 .docx：生成报告、批注、查找替换（Anthropic 官方）",
+            skillURL: "https://github.com/anthropics/skills/blob/main/skills/docx/SKILL.md",
+            docsURL: "https://github.com/anthropics/skills"
+        ),
+        SkillCatalogEntry(
+            id: "anthropic-pdf",
+            title: "PDF 处理",
+            subtitle: "合并、拆分、提取文本与表格、填表单（Anthropic 官方）",
+            skillURL: "https://github.com/anthropics/skills/blob/main/skills/pdf/SKILL.md",
+            docsURL: "https://github.com/anthropics/skills"
+        ),
+        SkillCatalogEntry(
+            id: "anthropic-xlsx",
+            title: "表格处理",
+            subtitle: "读写 .xlsx / .csv：清洗、公式、图表（Anthropic 官方）",
+            skillURL: "https://github.com/anthropics/skills/blob/main/skills/xlsx/SKILL.md",
+            docsURL: "https://github.com/anthropics/skills"
+        ),
+        SkillCatalogEntry(
+            id: "anthropic-pptx",
+            title: "幻灯片处理",
+            subtitle: "生成与编辑 .pptx 演示文稿（Anthropic 官方）",
+            skillURL: "https://github.com/anthropics/skills/blob/main/skills/pptx/SKILL.md",
+            docsURL: "https://github.com/anthropics/skills"
+        ),
+        SkillCatalogEntry(
+            id: "anthropic-doc-coauthoring",
+            title: "文档协作写作",
+            subtitle: "与你一起起草、改写、评审长文档（Anthropic 官方）",
+            skillURL: "https://github.com/anthropics/skills/blob/main/skills/doc-coauthoring/SKILL.md",
+            docsURL: "https://github.com/anthropics/skills"
+        ),
+        SkillCatalogEntry(
+            id: "anthropic-skill-creator",
+            title: "技能创作器",
+            subtitle: "让 Agent 帮你写新的 SKILL.md（Anthropic 官方）",
+            skillURL: "https://github.com/anthropics/skills/blob/main/skills/skill-creator/SKILL.md",
+            docsURL: "https://github.com/anthropics/skills"
+        ),
+        SkillCatalogEntry(
+            id: "anthropic-mcp-builder",
+            title: "MCP 构建助手",
+            subtitle: "协助编写和调试 MCP 服务器（Anthropic 官方）",
+            skillURL: "https://github.com/anthropics/skills/blob/main/skills/mcp-builder/SKILL.md",
+            docsURL: "https://github.com/anthropics/skills"
+        ),
+        SkillCatalogEntry(
+            id: "wechatpay",
+            title: "微信支付",
+            subtitle: "AI 接入微信支付：下单、商品券发券/核销/查询、代码安全检查",
+            skillURL: "https://github.com/wechatpay-apiv3/wechatpay-skills/blob/main/wechatpay-payment-integration/SKILL.md",
+            docsURL: "https://github.com/wechatpay-apiv3/wechatpay-skills"
+        ),
+        SkillCatalogEntry(
+            id: "netease-music",
+            title: "网易云音乐助手",
+            subtitle: "搜索、播放、歌单管理、红心歌单偏好画像",
+            skillURL: "https://github.com/NetEase/skills/blob/master/netease-music-assistant/SKILL.md",
+            docsURL: "https://github.com/NetEase/skills"
+        ),
+        SkillCatalogEntry(
+            id: "mt-paotui",
+            title: "美团跑腿",
+            subtitle: "跑腿下单、地址簿匹配、订单预览",
+            skillURL: "https://github.com/meituan/MT-Paotui-For-Client/blob/main/SKILL.md",
+            docsURL: "https://github.com/meituan/MT-Paotui-For-Client"
+        ),
+        SkillCatalogEntry(
+            id: "luckin",
+            title: "瑞幸咖啡",
+            subtitle: "AI 点咖啡、查门店、搜商品、到店自取（开放平台接入）",
+            skillURL: nil,
+            docsURL: "https://open.lkcoffee.com"
+        ),
+        SkillCatalogEntry(
+            id: "weread",
+            title: "微信读书",
+            subtitle: "书架、阅读进度、笔记检索、书籍搜索（官方 Skill）",
+            skillURL: nil,
+            docsURL: "https://weread.qq.com/r/weread-skills"
+        ),
+        SkillCatalogEntry(
+            id: "meitu",
+            title: "美图",
+            subtitle: "图片编辑、文生图、AI 写真、背景替换（开放平台接入）",
+            skillURL: nil,
+            docsURL: "https://www.miraclevision.com/open-claw"
+        ),
+        SkillCatalogEntry(
+            id: "fliggy",
+            title: "飞猪",
+            subtitle: "机票/酒店/门票咨询、规划、预定（开放平台接入）",
+            skillURL: nil,
+            docsURL: "https://flyai.open.fliggy.com/"
+        ),
+    ]
+}
+
+private struct SkillCatalogSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    private enum InstallState: Equatable {
+        case idle
+        case installing
+        case installed(name: String)
+        case failed(String)
+    }
+
+    @State private var states: [String: InstallState] = [:]
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(SkillCatalogEntry.all.filter { $0.skillURL != nil }) { entry in
+                        installableRow(entry)
+                    }
+                } header: {
+                    Text("可直接安装")
+                } footer: {
+                    Text("从官方 GitHub 仓库安装 SKILL.md 及配套文件。技能的密钥/账号配置见安装后的技能详情。")
+                }
+
+                Section {
+                    ForEach(SkillCatalogEntry.all.filter { $0.skillURL == nil }) { entry in
+                        Button {
+                            if let url = URL(string: entry.docsURL) {
+                                UIApplication.shared.open(url)
+                            }
+                        } label: {
+                            row(entry, trailing: {
+                                Image(systemName: "arrow.up.right.square")
+                                    .foregroundStyle(Color.secondary)
+                            })
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } header: {
+                    Text("平台接入型（查看文档）")
+                }
+
+                // [T-skill-marketplace] Index links, not a mirror — these
+                // lists change daily and most entries assume a desktop
+                // coding environment.
+                Section {
+                    ForEach(SkillCatalogEntry.marketplaces) { market in
+                        Button {
+                            if let url = URL(string: market.url) {
+                                UIApplication.shared.open(url)
+                            }
+                        } label: {
+                            HStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(market.title)
+                                        .font(.body)
+                                        .foregroundStyle(.primary)
+                                    Text(market.subtitle)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+                                }
+                                Spacer(minLength: 8)
+                                Image(systemName: "arrow.up.right.square")
+                                    .foregroundStyle(Color.secondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } header: {
+                    Text("技能市场")
+                } footer: {
+                    Text("这些库使用与本应用相同的 SKILL.md 标准（name / description 前置元数据），可直接安装。在市场里找到想要的技能后，复制它的 SKILL.md 链接，用「导入技能」粘贴即可。注意：市场里多数技能面向桌面编码场景，手机上未必适用。")
+                }
+            }
+            .navigationTitle("推荐 Skill")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(String(localized: "Done")) { dismiss() }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func installableRow(_ entry: SkillCatalogEntry) -> some View {
+        let state = states[entry.id] ?? .idle
+        VStack(alignment: .leading, spacing: 6) {
+            row(entry, trailing: {
+                switch state {
+                case .idle:
+                    Button("安装") { install(entry) }
+                        .buttonStyle(.glass)
+                        .controlSize(.small)
+                case .installing:
+                    ProgressView()
+                case .installed:
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(Color.green)
+                case .failed:
+                    Button("重试") { install(entry) }
+                        .buttonStyle(.glass)
+                        .controlSize(.small)
+                        .tint(.orange)
+                }
+            })
+            if case .failed(let message) = state {
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .lineLimit(3)
+            }
+            if case .installed(let name) = state {
+                Text("已安装为「\(name)」，可在 Skills 列表中启用/停用。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func row(_ entry: SkillCatalogEntry, @ViewBuilder trailing: () -> some View) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(entry.title)
+                    .font(.body)
+                    .foregroundStyle(.primary)
+                Text(entry.subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 8)
+            trailing()
+        }
+    }
+
+    private func install(_ entry: SkillCatalogEntry) {
+        guard let skillURL = entry.skillURL else { return }
+        states[entry.id] = .installing
+        Task {
+            do {
+                let skill = try await SkillStore.shared.importFromGitHub(urlString: skillURL)
+                states[entry.id] = .installed(name: skill.name)
+            } catch {
+                states[entry.id] = .failed(error.localizedDescription)
+            }
+        }
+    }
 }

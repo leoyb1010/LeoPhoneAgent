@@ -108,7 +108,8 @@ extension AIChatViewModel {
                     }
                 }
             }
-            self.stopCurrentCommand()
+            // Scope the kill to THIS session — see [T-bg-expiry-cross-session-kill].
+            self.stopCurrentCommand(scope: .thisSessionOnly)
             // Must end the background task to avoid termination.
             self.endBackgroundProcessing()
         }
@@ -550,7 +551,29 @@ extension AIChatViewModel {
         }
     }
 
-    func stopCurrentCommand() {
+    /// - Parameter scope: `.allSessions` (default) matches the user-facing
+    ///   stop button — one tap cancels every in-flight shell, including a
+    ///   concurrent tool batch. `.thisSessionOnly` is for the background
+    ///   expiry path: [T-bg-expiry-cross-session-kill] that path used to call
+    ///   the broad variant, so ONE session running out of background time
+    ///   killed the shells of every OTHER running session too, which reads as
+    ///   tasks being interrupted at random.
+    enum StopScope {
+        case allSessions
+        case thisSessionOnly
+    }
+
+    /// [T-bg-expiry-cross-session-kill] Default is `.thisSessionOnly`.
+    ///
+    /// Every caller of this method is a per-session action — a Stop tap in one
+    /// chat, one session's background expiry, one bubble's cancel button — and
+    /// a view model *is* a session. Defaulting to `.allSessions` meant tapping
+    /// Stop in chat A silently killed the shells of chats B and C, which is
+    /// the single biggest source of "my task got interrupted for no reason".
+    /// Concurrent tool batches are within one session, so the batch is still
+    /// cancelled whole. `.allSessions` remains for a deliberate stop-everything
+    /// caller, which today reaches each session through its own view model.
+    func stopCurrentCommand(scope: StopScope = .thisSessionOnly) {
         // A tool can be in several cancellable states:
         //   - one or more live iSH processes (runningCommandPids non-empty),
         //   - a pre-execution delay countdown (toolDelayWaitActive),
@@ -575,15 +598,25 @@ extension AIChatViewModel {
             let n = browserTabPool.cancelAllAgentActions()
             logger.info("⏹️ stopCurrentCommand — cancelled \(n) browser action(s)")
         }
-        // Stop ALL currently running shells — concurrent tool execution
-        // can have many in flight at once and a stop tap should cancel
-        // the entire batch. [T-concurrent-tools 2026-05-25]
+        // Stop the running shells — concurrent tool execution can have many in
+        // flight at once and a stop should cancel the whole batch, but only
+        // this session's. [T-concurrent-tools 2026-05-25]
         if !runningCommandPids.isEmpty {
-            // Coordinator's stopCurrentCommand() is already "kill every
-            // in-flight pid across every session", which matches what we
-            // want for concurrent tool execution: one stop tap = cancel
-            // every shell currently running.
-            Task { await ISHExecutionCoordinator.shared.stopCurrentCommand() }
+            // The coordinator's no-argument stopCurrentCommand() means "kill
+            // every in-flight pid across EVERY session"; the sessionId overload
+            // is scoped. Concurrent batches live inside one session, so the
+            // scoped call still cancels the entire batch.
+            let sid = sessionId
+            switch scope {
+            case .allSessions:
+                Task { await ISHExecutionCoordinator.shared.stopCurrentCommand() }
+            case .thisSessionOnly:
+                if let sid {
+                    Task { await ISHExecutionCoordinator.shared.stopCurrentCommand(sessionId: sid) }
+                } else {
+                    Task { await ISHExecutionCoordinator.shared.stopCurrentCommand() }
+                }
+            }
         }
         runningCommandPids.removeAll()
         commandStartTime = nil

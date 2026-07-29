@@ -112,7 +112,7 @@ private struct OffloadPermissionDialogContent: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
                 .tint(LeoTheme.ColorToken.accent)
 
                 Button {
@@ -124,7 +124,7 @@ private struct OffloadPermissionDialogContent: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
                 .tint(LeoTheme.ColorToken.destructive)
             }
             .padding(.horizontal, 20)

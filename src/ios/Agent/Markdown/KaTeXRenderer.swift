@@ -177,7 +177,7 @@ final class KaTeXRenderer: NSObject {
     /// (e.g. during app launch), retry after a short delay.
     private func attachToWindow(_ wv: WKWebView, retries: Int = 10) {
         if let windowScene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene }).first,
+            .compactMap({ $0 as? UIWindowScene }).activeFirst,
            let keyWindow = windowScene.windows.first(where: { $0.isKeyWindow }) ?? windowScene.windows.first {
             keyWindow.insertSubview(wv, at: 0)
             logger.info("WKWebView attached to window")

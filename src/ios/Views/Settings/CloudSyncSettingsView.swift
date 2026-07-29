@@ -490,7 +490,7 @@ struct RemoteDeviceSessionsView: View {
                                 Label("Fork", systemImage: "arrow.branch")
                                     .font(.caption)
                             }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.glass)
                             .controlSize(.small)
                         }
                     }
@@ -578,7 +578,7 @@ struct RemoteSkillsListView: View {
                                 Text("Copy to My Device")
                                     .font(.caption)
                             }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.glass)
                             .controlSize(.small)
                         }
                     }
@@ -637,7 +637,7 @@ struct RemoteMemoriesListView: View {
                                 Text("Copy to My Device")
                                     .font(.caption)
                             }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.glass)
                             .controlSize(.small)
                         }
                     }

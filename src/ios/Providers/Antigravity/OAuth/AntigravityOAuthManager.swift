@@ -16,13 +16,28 @@ final class AntigravityOAuthManager: NSObject, ObservableObject {
     private let authURL = "https://accounts.google.com/o/oauth2/v2/auth"
     private let tokenURL = "https://oauth2.googleapis.com/token"
     private let userInfoURL = "https://www.googleapis.com/oauth2/v1/userinfo"
-    private let clientID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
-    // Placeholder. Google OAuth requires a client secret alongside the
-    // client id; supply your own from Google Cloud Console to use this
-    // sign-in. API-key providers are unaffected.
-    private let clientSecret = "GOCSPX-xxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    // [T-google-oauth-byo-client] User-supplied client (Google Cloud Console)
+    // wins over upstream's stripped placeholders — see GoogleOAuthClientStore.
+    private var clientID: String {
+        GoogleOAuthClientStore.clientID.flatMap { $0.isEmpty ? nil : $0 }
+            ?? "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
+    }
+    private var clientSecret: String {
+        GoogleOAuthClientStore.clientSecret.flatMap { $0.isEmpty ? nil : $0 }
+            ?? "GOCSPX-xxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
     private let callbackPort: UInt16 = 8086
-    private var redirectURI: String { "http://localhost:\(callbackPort)/oauth2callback" }
+    /// [T-google-oauth-ios-client] An iOS-type Google client has no secret and
+    /// rejects a loopback redirect — it uses the reversed-client-id scheme.
+    /// Gemini's manager was taught this; this one was not, so with the
+    /// recommended iOS client it sent a placeholder secret to a redirect URI
+    /// the client does not own and failed twice over.
+    private var isIOSClient: Bool { GoogleOAuthClientStore.kind == .iOS }
+    private var redirectURI: String {
+        isIOSClient
+            ? (GoogleOAuthClientStore.iOSRedirectURI ?? "http://localhost:\(callbackPort)/oauth2callback")
+            : "http://localhost:\(callbackPort)/oauth2callback"
+    }
     private let scopes = "https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/cclog https://www.googleapis.com/auth/experimentsandconfigs"
 
     private let cliUserAgent = "antigravity/1.107.0 darwin/arm64"
@@ -245,24 +260,26 @@ final class AntigravityOAuthManager: NSObject, ObservableObject {
     // MARK: - Token Exchange
 
     private func exchangeCode(_ code: String, codeVerifier: String) async throws -> AntigravityTokenStorage {
-        let body: [String: String] = [
+        var body: [String: String] = [
             "grant_type": "authorization_code",
             "client_id": clientID,
-            "client_secret": clientSecret,
             "code": code,
             "redirect_uri": redirectURI,
             "code_verifier": codeVerifier,
         ]
+        // An iOS client is a public client: PKCE is the proof, and sending a
+        // secret (let alone the placeholder) makes Google reject the exchange.
+        if !isIOSClient { body["client_secret"] = clientSecret }
         return try await postTokenRequest(body: body, context: "Token exchange")
     }
 
     private func performRefresh(refreshToken: String) async throws -> AntigravityTokenStorage {
-        let body: [String: String] = [
+        var body: [String: String] = [
             "grant_type": "refresh_token",
             "client_id": clientID,
-            "client_secret": clientSecret,
             "refresh_token": refreshToken,
         ]
+        if !isIOSClient { body["client_secret"] = clientSecret }
 
         var storage = try await postTokenRequest(body: body, context: "Token refresh")
         if storage.refreshToken == nil {
@@ -473,7 +490,7 @@ final class AntigravityOAuthManager: NSObject, ObservableObject {
 
     private func presentSafariViewController(url: URL) {
         guard let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene }).first,
+            .compactMap({ $0 as? UIWindowScene }).activeFirst,
               let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else { return }
         var topVC = root
         while let presented = topVC.presentedViewController { topVC = presented }

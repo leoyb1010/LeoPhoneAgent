@@ -1,6 +1,7 @@
 import AppIntents
 import Combine
 import Foundation
+import WidgetKit
 
 /// Locale-aware presentation for Token counts. The product term remains
 /// "Token" in labels; only the numeric abbreviation follows the selected
@@ -158,68 +159,147 @@ struct QuickTaskDefinition: Codable, Identifiable, Hashable, Sendable {
 
     static let builtIns: [QuickTaskDefinition] = [
         .init(
-            id: "analyzeSleep",
-            name: "Analyze Sleep",
-            prompt: "Read my recent sleep data (apple-healthkit sleep), analyze sleep quality and generate a report",
-            symbolName: "bed.double.fill",
+            id: "morningBriefing",
+            name: "早间简报",
+            prompt: "给我做今天的早间简报：先查询天气（apple-weather），再查看今天的日程安排（apple-calendar），最后用浏览器搜索今天的重要新闻，汇总成一份简洁的中文简报。",
+            symbolName: "sunrise.fill",
             isBuiltIn: true,
             sortOrder: 0
         ),
         .init(
-            id: "healthReport",
-            name: "Health Report",
-            prompt: "Read my health data for today: steps (apple-healthkit steps --today), heart rate (apple-healthkit heart-rate --today), blood oxygen, and generate a daily health report",
-            symbolName: "heart.text.square.fill",
+            id: "dailyNews",
+            name: "今日热点",
+            prompt: "用浏览器搜索今天国内外的重要新闻和热点事件，筛选出最重要的 5-8 条，按「标题 + 一句话摘要」的格式输出一份中文热点简报。",
+            symbolName: "newspaper.fill",
             isBuiltIn: true,
             sortOrder: 1
         ),
         .init(
-            id: "checkWeather",
-            name: "Check Weather",
-            prompt: "Check today's weather (apple-weather) and give clothing and travel suggestions",
-            symbolName: "cloud.sun.fill",
+            id: "clipboardAssistant",
+            name: "剪贴板速办",
+            prompt: "读取我的剪贴板内容（apple-clipboard get），判断内容类型并处理：外文则翻译成中文；链接则用浏览器打开并总结要点；待办类内容则整理成清单并写入提醒事项（apple-reminders create）；其他内容给出简明摘要和建议。",
+            symbolName: "doc.on.clipboard.fill",
             isBuiltIn: true,
             sortOrder: 2
         ),
         .init(
-            id: "morningBriefing",
-            name: "Morning Briefing",
-            prompt: "Give me a morning briefing for today: first check the weather (apple-weather), then check today's calendar events (apple-calendar), finally search for important news today using the browser, and summarize into a briefing",
-            symbolName: "sunrise.fill",
+            id: "checkWeather",
+            name: "查看天气",
+            prompt: "查询今天的天气（apple-weather），用中文给出穿衣和出行建议。",
+            symbolName: "cloud.sun.fill",
             isBuiltIn: true,
             sortOrder: 3
         ),
         .init(
             id: "checkCalendar",
-            name: "Check Calendar",
-            prompt: "Check my schedule for today and tomorrow (apple-calendar)",
+            name: "查看日程",
+            prompt: "查看我今天和明天的日程安排（apple-calendar），用中文按时间顺序清晰列出，并提示可能的时间冲突。",
             symbolName: "calendar",
             isBuiltIn: true,
             sortOrder: 4
         ),
         .init(
-            id: "takePhoto",
-            name: "Take Photo",
-            prompt: "Take a photo using the device camera (apple-media camera) and describe what was captured",
-            symbolName: "camera.fill",
+            id: "eveningReview",
+            name: "晚间回顾",
+            prompt: "帮我做今日晚间回顾：查看今天剩余和明天的日程（apple-calendar），检查未完成的提醒事项（apple-reminders list），查询明天的天气（apple-weather），最后汇总成一份简洁的中文晚间总结，并给出明天的准备建议。",
+            symbolName: "moon.stars.fill",
             isBuiltIn: true,
             sortOrder: 5
         ),
         .init(
-            id: "setAlarm",
-            name: "Set Alarm",
-            prompt: "Set an alarm to remind me in 5 minutes",
-            symbolName: "alarm.fill",
+            id: "photoOCR",
+            name: "拍照识字",
+            prompt: "调用相机拍一张照片（apple-media camera），用 OCR 识别照片中的文字（apple-vision ocr），输出识别出的完整文字；如果是外文，同时给出中文翻译。",
+            symbolName: "text.viewfinder",
             isBuiltIn: true,
             sortOrder: 6
         ),
         .init(
-            id: "controlHome",
-            name: "Control Home",
-            prompt: "List the status of my HomeKit smart home devices (apple-homekit list)",
-            symbolName: "house.fill",
+            id: "nearbyExplore",
+            name: "附近探索",
+            prompt: "获取我的当前位置（apple-location current），搜索附近值得去的餐厅、咖啡店或景点（apple-maps search），用中文推荐 3-5 个，说明各自的特色和大致距离。",
+            symbolName: "location.magnifyingglass",
             isBuiltIn: true,
             sortOrder: 7
+        ),
+        .init(
+            id: "analyzeSleep",
+            name: "分析睡眠",
+            prompt: "读取我最近的睡眠数据（apple-healthkit sleep），分析睡眠质量并生成一份中文睡眠报告，给出改善建议。",
+            symbolName: "bed.double.fill",
+            isBuiltIn: true,
+            sortOrder: 8
+        ),
+        .init(
+            id: "healthReport",
+            name: "健康日报",
+            prompt: "读取我今天的健康数据：步数（apple-healthkit steps --today）、心率（apple-healthkit heart-rate --today）、血氧等，生成一份中文的今日健康日报。",
+            symbolName: "heart.text.square.fill",
+            isBuiltIn: true,
+            sortOrder: 9
+        ),
+        .init(
+            id: "takePhoto",
+            name: "拍照描述",
+            prompt: "用设备相机拍一张照片（apple-media camera），并用中文描述拍到的内容。",
+            symbolName: "camera.fill",
+            isBuiltIn: true,
+            sortOrder: 10
+        ),
+        .init(
+            id: "setAlarm",
+            name: "设置闹钟",
+            prompt: "设置一个 5 分钟后提醒我的闹钟。",
+            symbolName: "alarm.fill",
+            isBuiltIn: true,
+            sortOrder: 11
+        ),
+        .init(
+            id: "controlHome",
+            name: "智能家居",
+            prompt: "列出我的 HomeKit 智能家居设备状态（apple-homekit list），用中文汇总当前家里各设备的情况。",
+            symbolName: "house.fill",
+            isBuiltIn: true,
+            sortOrder: 12
+        ),
+    ]
+
+    /// Pre-1.1.3 built-in defaults (English). A persisted built-in whose
+    /// name/prompt still equals the old default was never edited by the user,
+    /// so it is silently upgraded to the current Chinese default in
+    /// `QuickTaskStore.normalized`. User-edited copies are left untouched.
+    static let legacyBuiltInDefaults: [String: (name: String, prompt: String)] = [
+        "analyzeSleep": (
+            "Analyze Sleep",
+            "Read my recent sleep data (apple-healthkit sleep), analyze sleep quality and generate a report"
+        ),
+        "healthReport": (
+            "Health Report",
+            "Read my health data for today: steps (apple-healthkit steps --today), heart rate (apple-healthkit heart-rate --today), blood oxygen, and generate a daily health report"
+        ),
+        "checkWeather": (
+            "Check Weather",
+            "Check today's weather (apple-weather) and give clothing and travel suggestions"
+        ),
+        "morningBriefing": (
+            "Morning Briefing",
+            "Give me a morning briefing for today: first check the weather (apple-weather), then check today's calendar events (apple-calendar), finally search for important news today using the browser, and summarize into a briefing"
+        ),
+        "checkCalendar": (
+            "Check Calendar",
+            "Check my schedule for today and tomorrow (apple-calendar)"
+        ),
+        "takePhoto": (
+            "Take Photo",
+            "Take a photo using the device camera (apple-media camera) and describe what was captured"
+        ),
+        "setAlarm": (
+            "Set Alarm",
+            "Set an alarm to remind me in 5 minutes"
+        ),
+        "controlHome": (
+            "Control Home",
+            "List the status of my HomeKit smart home devices (apple-homekit list)"
         ),
     ]
 
@@ -391,6 +471,16 @@ final class QuickTaskStore: ObservableObject {
                   !item.prompt.isEmpty,
                   seen.insert(item.id).inserted else { continue }
             item.isBuiltIn = QuickTaskDefinition.builtIn(id: item.id) != nil
+            // Silently upgrade persisted built-ins that still carry the
+            // pre-1.1.3 English defaults to the current Chinese defaults.
+            // A name/prompt the user edited no longer matches the legacy
+            // default and is left untouched.
+            if item.isBuiltIn,
+               let current = QuickTaskDefinition.builtIn(id: item.id),
+               let legacy = QuickTaskDefinition.legacyBuiltInDefaults[item.id] {
+                if item.name == legacy.name { item.name = current.name }
+                if item.prompt == legacy.prompt { item.prompt = current.prompt }
+            }
             result.append(item)
         }
 
@@ -425,10 +515,42 @@ final class QuickTaskStore: ObservableObject {
         if notifyShortcuts {
             NotificationCenter.default.post(name: .quickTaskCatalogDidChange, object: nil)
         }
+        syncWidgetSnapshot()
     }
 
     private func persistComposerTaskIDs() {
         defaults.set(composerTaskIDs, forKey: Self.composerTaskIDsKey)
+        syncWidgetSnapshot()
+    }
+
+    /// [T-widget-quick-tasks] Mirror the catalog into the App Group for the
+    /// Home Screen quick-task widget: composer-pinned tasks first, then the
+    /// rest in list order, capped at 8. QuickTaskStore itself persists to
+    /// UserDefaults.standard, which the widget process cannot read.
+    private func syncWidgetSnapshot() {
+        // [T-widget-runstate-wipe] Carry the existing run state across. This
+        // rebuilds the whole table from the catalog, and the initialiser
+        // defaults lastRunState to .idle — so before this merge, renaming or
+        // reordering ANY quick task (and every cold launch, via
+        // QuickTaskStore.init) erased the ⏳/✅ badges of tasks that were
+        // running or had just finished.
+        let previous = Dictionary(
+            WidgetQuickTasksStore.load().map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let pinned = composerTasks
+        let pinnedIDs = Set(pinned.map(\.id))
+        let ordered = pinned + tasks.filter { !pinnedIDs.contains($0.id) }
+        let items = ordered.prefix(8).map { task -> WidgetQuickTaskItem in
+            var item = WidgetQuickTaskItem(id: task.id, name: task.displayName, symbolName: task.symbolName)
+            if let old = previous[task.id] {
+                item.lastRunState = old.lastRunState
+                item.lastRunAt = old.lastRunAt
+            }
+            return item
+        }
+        WidgetQuickTasksStore.save(Array(items))
+        WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.quickTasks)
     }
 }
 

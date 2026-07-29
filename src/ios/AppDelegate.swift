@@ -16,6 +16,7 @@
 //
 
 import CoreLocation
+import CoreSpotlight
 import UIKit
 
 private let logger = AppLogger(category: "AppDelegate")
@@ -45,6 +46,90 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         Task { @MainActor in
             QuickActionRouter.registerShortcutItems()
         }
+
+        // [T-bg-keepalive-default-on] Both `enhancedBackgroundExecution` and
+        // `backgroundSpeakEnabled` read through UserDefaults.bool(forKey:),
+        // which is false when the key is absent — so a fresh install had NO
+        // keep-alive and every backgrounded run died when the finite
+        // background task expired. That is wrong for an agent whose whole
+        // point is running long tasks, and it silently broke widget-launched
+        // runs (those start with the app in the background). Opt in once;
+        // the marker means a user who later turns it off stays off.
+        // Written SYNCHRONOUSLY: a widget-launched AppIntent can reach
+        // armEagerlyForShortcut on the same main-actor hop, and an async
+        // Task here would have it read the old `false` and skip keep-alive
+        // on exactly the first run this is meant to protect.
+        //
+        // [T-keepalive-optin-upgrade-path] The marker key is itself new, so on
+        // an EXISTING install it is also absent — the first run of this build
+        // would force keep-alive (background audio + a location session) back
+        // on for someone who had deliberately turned it off. Only opt in when
+        // neither switch has ever been written, which is what actually
+        // distinguishes "fresh install" from "user made a choice".
+        let keepAliveOptInKey = "bg.keepAliveDefaultOptIn.v1"
+        let hasExistingChoice = UserDefaults.standard.object(forKey: "enhancedBackgroundExecution") != nil
+            || UserDefaults.standard.object(forKey: "backgroundSpeakEnabled") != nil
+        if !UserDefaults.standard.bool(forKey: keepAliveOptInKey) {
+            UserDefaults.standard.set(true, forKey: keepAliveOptInKey)
+            if hasExistingChoice {
+                logger.info("[KeepAlive] first-run opt-in skipped — user already has a setting")
+            } else {
+                UserDefaults.standard.set(true, forKey: "enhancedBackgroundExecution")
+                UserDefaults.standard.set(true, forKey: "backgroundSpeakEnabled")
+                logger.info("[KeepAlive] enabled by first-run opt-in")
+            }
+        }
+
+        // [T-watch-companion] Inert unless a watch app is installed.
+        WatchBridge.shared.activate()
+
+        // [T-widget-run-in-place] Teach the shared widget intent how to reach
+        // the agent loop. The intent type is compiled into the widget target
+        // too, where this handler is never installed — harmless, because the
+        // system performs LiveActivityIntent in the app's process.
+        WidgetIntentBridge.shared.runQuickTaskHandler = { taskId in
+            await QuickTaskWidgetRunner.run(taskId: taskId)
+        }
+        // [T-widget-stop] Console "stop" button. Cancels the real underlying
+        // work for every running session — a cached ViewModel always exists
+        // for a processing session (ViewModelCache never evicts those).
+        WidgetIntentBridge.shared.stopAllTasksHandler = {
+            await MainActor.run {
+                var stopped = 0
+                for sessionId in SessionActivityTracker.shared.activeSessions {
+                    if let vm = ViewModelCache.shared.get(for: sessionId) {
+                        vm.cancel(queuePolicy: .discardQueuedPrompts)
+                        stopped += 1
+                    } else {
+                        // [T-widget-stop-eager-placeholder] An intent registers
+                        // a synthetic "intent-eager:<uuid>" id with the tracker
+                        // BEFORE its session (and view model) exist, so the app
+                        // is kept alive while the session is being created.
+                        // Those ids have no view model and were skipped in
+                        // silence: Stop looked like it worked while the task
+                        // went on to start anyway. Mark them cancelled so the
+                        // intent aborts as soon as it has something to cancel.
+                        SessionActivityTracker.shared.requestEagerCancel(sessionId)
+                    }
+                }
+                logger.info("[Widget] stop-all cancelled \(stopped) session(s)")
+            }
+        }
+        // [T-control-center] Control Center buttons land here after the
+        // system has already foregrounded the app (openAppWhenRun = true).
+        WidgetIntentBridge.shared.controlDestinationHandler = { destination in
+            await MainActor.run {
+                switch destination {
+                case .newChat:
+                    QuickActionRouter.shared.startNewChat()
+                case .voice:
+                    QuickActionRouter.shared.startVoiceChat()
+                case .camera:
+                    QuickActionWorkflow.shared.start(.openCamera)
+                    QuickActionRouter.shared.startNewChat()
+                }
+            }
+        }
         logger.info("didFinishLaunching (scene-based; shortcut routing happens in SceneDelegate)")
         // In a scene-based SwiftUI app, `launchOptions[.shortcutItem]`
         // is NOT populated for cold-launch shortcuts — the item is
@@ -69,6 +154,22 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         config.delegateClass = SceneDelegate.self
         return config
     }
+
+    /// [T-willterminate-dead-code] This was defined on `SceneDelegate`, but
+    /// `applicationWillTerminate` is a `UIApplicationDelegate` method — UIKit
+    /// only ever sends it to the APP delegate, so the crash-reporter flush and
+    /// the `[T-ios-bgactivitysession-leak]` location-indicator teardown never
+    /// actually ran on termination.
+    func applicationWillTerminate(_ application: UIApplication) {
+        CrashReporter.shared.onWillTerminate()
+        // [T-ios-bgactivitysession-leak] Retract the background location session
+        // + Live Activity on a clean exit so the system location indicator
+        // doesn't stay pinned to the Dynamic Island after the app is gone.
+        MainActor.assumeIsolated {
+            BackgroundKeepAliveManager.shared.prepareForTermination()
+        }
+    }
+
 }
 
 /// Receives Home Screen Quick Action events in a scene-based SwiftUI
@@ -118,6 +219,30 @@ final class SceneDelegate: NSObject, UIWindowSceneDelegate {
         if !connectionOptions.urlContexts.isEmpty {
             Self.handleURLContexts(connectionOptions.urlContexts, phase: "willConnectTo")
         }
+        // [T-spotlight-sessions] Cold-launch tap on a Spotlight result.
+        for activity in connectionOptions.userActivities {
+            Self.handleUserActivity(activity, phase: "willConnectTo")
+        }
+    }
+
+    /// Warm tap on a Spotlight result.
+    func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
+        Self.handleUserActivity(userActivity, phase: "continue")
+    }
+
+    /// A Spotlight item's unique identifier IS the session id, so this reuses
+    /// the existing open-session route rather than inventing a second one.
+    private static func handleUserActivity(_ activity: NSUserActivity, phase: String) {
+        guard activity.activityType == CSSearchableItemActionType,
+              let sessionId = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
+              !sessionId.isEmpty else { return }
+        logger.info("[Spotlight] open session \(sessionId.prefix(8)) phase=\(phase)")
+        Task { @MainActor in
+            NotificationCenter.default.post(
+                name: .openSessionFromIntent, object: nil,
+                userInfo: ["sessionId": sessionId]
+            )
+        }
     }
 
     func windowScene(
@@ -162,13 +287,4 @@ final class SceneDelegate: NSObject, UIWindowSceneDelegate {
         }
     }
 
-    func applicationWillTerminate(_ application: UIApplication) {
-        CrashReporter.shared.onWillTerminate()
-        // [T-ios-bgactivitysession-leak] Retract the background location session
-        // + Live Activity on a clean exit so the system location indicator
-        // doesn't stay pinned to the Dynamic Island after the app is gone.
-        MainActor.assumeIsolated {
-            BackgroundKeepAliveManager.shared.prepareForTermination()
-        }
-    }
 }

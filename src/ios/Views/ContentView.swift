@@ -1,4 +1,5 @@
 import SwiftUI
+import WidgetKit
 
 private let shareLog = AppLogger(category: "Share")
 private let draftLog = AppLogger(category: "DraftSession")
@@ -161,6 +162,10 @@ struct ContentView: View {
     // the row whose running state changed.
     @ObservedObject private var sidebarActivityTracker = SessionActivityTracker.shared
     @ObservedObject private var sidebarConcurrencyManager = SessionConcurrencyManager.shared
+    /// [T-session-attention-bar] The bar reads badge queues, so it has to
+    /// observe them — SessionRow observes this store for its own badges, but
+    /// the aggregate lives on ContentView and needs its own subscription.
+    @ObservedObject private var badgeStore = SessionBadgeStore.shared
     @State private var sessions: [ChatSession] = []
     /// [T-ios-session-list-equatable-jank] id → ChatSession lookup backing the
     /// sidebar rows. Held in @State (not a per-body-eval computed `[String:
@@ -316,14 +321,26 @@ struct ContentView: View {
     @State private var searchMatchSnippets: [String: String] = [:]
     @State private var searchTask: Task<Void, Never>?
 
-    /// Width threshold below which the layout collapses to single-column (iPhone-style).
+    /// Width floor below which the layout collapses to single-column, even
+    /// when the size class says "regular" (narrow iPad multitasking slices).
     private let compactThreshold: CGFloat = 700
-    /// Whether the device is an iPad (iPhones always use stack layout regardless of width).
+    /// Whether the device is an iPad. Retained for the handful of genuinely
+    /// device-specific behaviours (draft-session proxying, Live Activity
+    /// gating); the LAYOUT decision keys off the size class instead — see
+    /// `body`.
     private let isIPad = UIDevice.current.userInterfaceIdiom == .pad
+    /// [T-ipad-sizeclass-layout] Standard adaptive signal for two-column
+    /// layout. Replaces the old `isIPad && width >= 700` rule, which locked
+    /// iPhone into single-column even on a 956pt landscape Pro Max.
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     /// Whether the current window is wide enough for two-column layout.
     @State private var isWideLayout = false
     /// Navigation path for stack (compact) layout.
     @State private var navigationPath = NavigationPath()
+    /// [T-multiwindow-notification-fanout] Identity of THIS window, used to
+    /// decide whether it should act on app-wide notifications. See
+    /// WindowRegistry.
+    @State private var windowId = UUID()
     /// Tracks the session ID currently visible on the compact navigation stack.
     @State private var currentStackSessionId: String?
     /// The real session ID after a draft session is persisted (iPad only).
@@ -350,9 +367,27 @@ struct ContentView: View {
     /// matches the one `openSession` will use after the pop commits.
     @State private var pendingNewChatTargetId: String? = nil
 
+    // [T-ios26-typecheck-split] `body` used to be one ~590-line expression:
+    // the root layout plus every sheet, notification handler and lifecycle
+    // hook in a single modifier chain. Raising the deployment target to iOS 26
+    // brought a pile of new SwiftUI overloads into scope unconditionally and
+    // the solver stopped being able to type-check it at all. Splitting the run
+    // into three separately-checked pieces fixes that; behaviour is unchanged
+    // because the pieces are applied in exactly the original order. Keep them
+    // as functions on this type (not a ViewModifier) so every @State/@Environment
+    // reference below still resolves the same way.
     var body: some View {
+        withLifecycleHandlers(withEventHandlers(rootLayout))
+    }
+
+    private var rootLayout: some View {
         GeometryReader { geo in
-            let wide = isIPad && geo.size.width >= compactThreshold
+            // [T-ipad-sizeclass-layout] Regular width AND a real minimum
+            // width. The size class alone would accept some multitasking
+            // slices that are too narrow for two usable columns; the floor
+            // alone would (wrongly) split a compact-class window that merely
+            // happens to be wide.
+            let wide = horizontalSizeClass == .regular && geo.size.width >= compactThreshold
             Group {
                 if wide {
                     splitLayout
@@ -369,555 +404,598 @@ struct ContentView: View {
             }
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: forceSyncToast)
             .onChange(of: wide) { newWide in
+                migrateNavigationState(toWide: newWide)
                 isWideLayout = newWide
             }
             .onAppear {
                 isWideLayout = wide
                 wireMenuActions()
+                WindowRegistry.shared.register(windowId)
+            }
+            .onDisappear {
+                WindowRegistry.shared.unregister(windowId)
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .newChatRequested)) { _ in
-            handleNewChatRequest()
-        }
-        // Cold-launch belt-and-braces: a Home Screen Quick Action that
-        // fires before `.onReceive(.newChatRequested)` is attached
-        // (WindowGroup still mounting) would otherwise be lost. The
-        // router bumps `newChatTrigger` whenever it handles a shortcut.
-        //
-        // `quickActionRouter` is an `@ObservedObject`, so SwiftUI re-runs
-        // body on every bump and `onChange` actually fires. The
-        // `consumedQuickActionTrigger` state below tracks the last value
-        // we've already routed — on cold launch the router might bump to
-        // 1 (or higher, if the user invokes shortcuts multiple times
-        // before the WindowGroup mounts) BEFORE our `.onAppear` runs;
-        // we therefore also check the initial value on appear and route
-        // any unconsumed bumps then.
-        .onChange(of: quickActionRouter.newChatTrigger) { newValue in
-            guard newValue != consumedQuickActionTrigger else { return }
-            consumedQuickActionTrigger = newValue
-            handleNewChatRequest()
-        }
-        .onReceive(QuickActionWorkflow.shared.$state) { newState in
-            // Workflow advanced to pendingDispatch (either same-runloop
-            // because we were already home, or after markHome fired
-            // from a navigation change). Open the new session now.
-            if case .pendingDispatch = newState {
-                openSessionForPendingQuickAction()
+    }
+
+    private func withEventHandlers<V: View>(_ content: V) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .newChatRequested)) { _ in
+                guard WindowRegistry.shared.isPrimary(windowId) else { return }
+                handleNewChatRequest()
             }
-        }
-        .onAppear {
-            if quickActionRouter.newChatTrigger != consumedQuickActionTrigger {
-                consumedQuickActionTrigger = quickActionRouter.newChatTrigger
-                // Defer one runloop so the NavigationStack body has a
-                // chance to attach `$navigationPath` before we append to
-                // it — otherwise the append on a freshly-mounted stack
-                // can be lost.
-                DispatchQueue.main.async {
-                    handleNewChatRequest()
+            // [T-widget-recent-sessions] Mirror the visible session list into the
+            // App Group for the Home Screen "最近会话" widget — the chat database
+            // itself is not reachable from the widget process.
+            .onChange(of: sessions) { newValue in
+                // One mirror write + widget reload per change, not one per open
+                // window. [T-multiwindow-notification-fanout]
+                guard WindowRegistry.shared.isPrimary(windowId) else { return }
+                // [T-widget-privacy-recent-sessions] Session titles are written
+                // by the model from the conversation itself, so they are exactly
+                // as sensitive as the briefing / memory / status mirrors — all of
+                // which redact under Privacy Mode. This one did not.
+                let redact = BackgroundKeepAliveManager.shared.liveActivityPrivacyMode
+                let items = newValue.prefix(8).map { session in
+                    WidgetRecentSessionItem(
+                        id: session.id,
+                        title: redact
+                            ? String(localized: "Conversation")
+                            : (session.title?.isEmpty == false ? session.title! : String(localized: "New Chat")),
+                        updatedAt: session.updatedAt
+                    )
                 }
+                WidgetRecentSessionsStore.save(Array(items))
+                WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.recentSessions)
             }
-            // The Appearance language picker wrote "pendingSettingsReopen"
-            // right before changing appLanguage, which forced the root
-            // `.id(appLanguage)` rebuild that just dropped + re-mounted us.
-            // Reopen the Settings sheet so the user lands back where they
-            // were instead of stranded on the chat list. SettingsSheet's
-            // own onAppear pushes the saved destination onto its navPath.
-            if UserDefaults.standard.string(forKey: "pendingSettingsReopen") != nil {
-                DispatchQueue.main.async {
-                    activeToolSheet = .settings
+            // Cold-launch belt-and-braces: a Home Screen Quick Action that
+            // fires before `.onReceive(.newChatRequested)` is attached
+            // (WindowGroup still mounting) would otherwise be lost. The
+            // router bumps `newChatTrigger` whenever it handles a shortcut.
+            //
+            // `quickActionRouter` is an `@ObservedObject`, so SwiftUI re-runs
+            // body on every bump and `onChange` actually fires. The
+            // `consumedQuickActionTrigger` state below tracks the last value
+            // we've already routed — on cold launch the router might bump to
+            // 1 (or higher, if the user invokes shortcuts multiple times
+            // before the WindowGroup mounts) BEFORE our `.onAppear` runs;
+            // we therefore also check the initial value on appear and route
+            // any unconsumed bumps then.
+            .onChange(of: quickActionRouter.newChatTrigger) { newValue in
+                guard newValue != consumedQuickActionTrigger else { return }
+                consumedQuickActionTrigger = newValue
+                handleNewChatRequest()
+            }
+            .onReceive(QuickActionWorkflow.shared.$state) { newState in
+                // Workflow advanced to pendingDispatch (either same-runloop
+                // because we were already home, or after markHome fired
+                // from a navigation change). Open the new session now.
+                if case .pendingDispatch = newState {
+                    openSessionForPendingQuickAction()
                 }
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .sessionDidCreate)) { note in
-            guard isWideLayout, let newId = note.object as? String else { return }
-            let noteDraftId = (note.userInfo as? [String: String])?["draftId"]
-            draftLog.info("🔑DRAFT sessionDidCreate realId=\(newId) noteDraftId=\(noteDraftId ?? "nil") selId=\(selectedSessionId ?? "nil") curReal=\(newSessionRealId ?? "nil") curDraft=\(activeDraftId ?? "nil")")
-            // Verify this notification came from the currently active draft.
-            // A late notification from a previous (now-destroyed) draft must be ignored.
-            guard let selId = selectedSessionId, Self.isNewSessionId(selId),
-                  noteDraftId == selId else {
-                draftLog.info("🔑DRAFT sessionDidCreate IGNORED (draftId mismatch or not a draft)")
-                // [T-ios-state-publish-offmain-crash] ChatStore (an actor) posts
-                // .sessionDidCreate/.sessionDidUpdate from its background
-                // executor; NotificationCenter delivers synchronously on that
-                // thread, so this onReceive closure can run off-main. A bare
-                // Task{} started here inherits the (background) execution context,
-                // so `sessions =` (a @State write) lands off-main → "Publishing
-                // changes from background threads" + AttributeGraph corruption of
-                // the [ChatSession]/[String:ChatSession] state it deep-compares,
-                // crashing in ChatSession.== / deinit during flushTransactions.
-                // This onReceive can be delivered off-main, so hop explicitly —
-                // refreshSessionList's @State writes must land on the main thread.
-                Task { @MainActor in
-                    refreshSessionList()
-                }
-                return
-            }
-            newSessionRealId = newId
-            activeDraftId = selId
-            draftLog.info("🔑DRAFT sessionDidCreate ACCEPTED newSessionRealId=\(newId) activeDraftId=\(selId)")
-            // [T-ios-state-publish-offmain-crash] force main-thread @State write
-            Task { @MainActor in
-                refreshSessionList()
-            }
-        }
-        .onReceive(
-            // Throttle (not debounce): session-list updates are infrequent (one
-            // per agent tool round, seconds apart), but a long multi-tool task
-            // emits a steady stream of them. `.debounce` was reset by every new
-            // event, so during a continuously-running task the list NEVER
-            // refreshed until the task fully stopped — the row stayed on its
-            // stale preview ("No messages yet") the whole time. `.throttle`
-            // fires the first event right away and then at most once per second,
-            // so the preview keeps up with each tool round without thrashing
-            // `listSessions`.
-            NotificationCenter.default.publisher(for: .sessionDidUpdate)
-                .throttle(for: .seconds(1), scheduler: RunLoop.main, latest: true)
-        ) { _ in
-            // [T-ios-state-publish-offmain-crash] force main-thread @State write
-            Task { @MainActor in
-                refreshSessionList()
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .moveInputToSession)) { note in
-            guard let targetId = (note.userInfo as? [String: String])?["targetId"] else { return }
-            // Skip navigation if the target session is already visible
-            if isWideLayout {
-                guard selectedSessionId != targetId && newSessionRealId != targetId else { return }
-                // Wide layout replaces selection — no stack to worry about
-                openSession(targetId)
-            } else {
-                guard currentStackSessionId != targetId else { return }
-                // Pop current session off the navigation stack first, then push the target
-                navigationPath.removeLast(navigationPath.count)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    openSession(targetId)
-                }
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .openSessionFromIntent)) { note in
-            guard let sessionId = (note.userInfo as? [String: String])?["sessionId"] else { return }
-            // [T-notification-tap-vs-launch-session] Warm path owns this
-            // navigation: drop the cold-launch buffer copy and stamp the
-            // handling time so an in-flight launch `.task` (the post can land
-            // during its `await listSessions()`) doesn't clobber the target
-            // session with the Launch Session default afterwards.
-            NotificationNavigationStore.shared.markHandled()
-            // Skip navigation if the target session is already visible
-            if isWideLayout {
-                guard selectedSessionId != sessionId && newSessionRealId != sessionId else { return }
-                openSession(sessionId)
-            } else {
-                guard currentStackSessionId != sessionId else { return }
-                // Pop entire stack back to root first, then push the target session
-                navigationPath.removeLast(navigationPath.count)
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    openSession(sessionId)
-                }
-            }
-        }
-        .fullScreenCover(isPresented: $showTerminal) {
-            NavigationStack {
-                ISHTerminalView(showCloseButton: true)
-            }
-        }
-        .sheet(isPresented: $showAlarmList, onDismiss: { fetchAlarmsIfNeeded() }) {
-            AlarmListView()
-        }
-        .sheet(item: $activeToolSheet) { sheet in
-            switch sheet {
-            case .settings:
-                SettingsSheet(showTerminal: $showTerminal)
-            case .rootfsManagement:
-                NavigationStack {
-                    RootfsManagementView()
-                        .toolbar {
-                            ToolbarItem(placement: .topBarTrailing) {
-                                Button("Done") { activeToolSheet = nil }
-                            }
-                        }
-                }
-            case .browser:
-                BrowserSheetView(pool: browserPool)
-            case .browserManagement:
-                NavigationStack {
-                    BrowserManagementView(pool: browserPool)
-                }
-            case .syncMigrationDetail:
-                NavigationStack {
-                    SyncMigrationDetailView()
-                        .toolbar {
-                            ToolbarItem(placement: .topBarTrailing) {
-                                Button("Done") { activeToolSheet = nil }
-                            }
-                        }
-                }
-            }
-        }
-        .sheet(item: $sessionToDelete) { session in
-            DeleteConfirmSheet(info: $singleDeleteInfo, isLoading: false) {
-                print("[DELETE] onDelete called for session: \(session.id)")
-                deleteSession(session)
-                sessionToDelete = nil
-                singleDeleteInfo = nil
             }
             .onAppear {
-                print("[DELETE] Sheet appeared. singleDeleteInfo is \(singleDeleteInfo == nil ? "nil" : "non-nil, sessionCount=\(singleDeleteInfo!.sessionCount)")")
+                if quickActionRouter.newChatTrigger != consumedQuickActionTrigger {
+                    consumedQuickActionTrigger = quickActionRouter.newChatTrigger
+                    // Defer one runloop so the NavigationStack body has a
+                    // chance to attach `$navigationPath` before we append to
+                    // it — otherwise the append on a freshly-mounted stack
+                    // can be lost.
+                    DispatchQueue.main.async {
+                        handleNewChatRequest()
+                    }
+                }
+                // The Appearance language picker wrote "pendingSettingsReopen"
+                // right before changing appLanguage, which forced the root
+                // `.id(appLanguage)` rebuild that just dropped + re-mounted us.
+                // Reopen the Settings sheet so the user lands back where they
+                // were instead of stranded on the chat list. SettingsSheet's
+                // own onAppear pushes the saved destination onto its navPath.
+                if UserDefaults.standard.string(forKey: "pendingSettingsReopen") != nil {
+                    DispatchQueue.main.async {
+                        activeToolSheet = .settings
+                    }
+                }
             }
-            .presentationDetents([.medium])
-        }
-        .sheet(item: $sessionToEdit) { session in
-            SessionEditSheet(session: session) { newTitle, newCategory in
-                // [T-ios-state-publish-offmain-crash] @MainActor so the @State
-                // write after the actor-hop await stays on the main thread.
+            .onReceive(NotificationCenter.default.publisher(for: .sessionDidCreate)) { note in
+                guard isWideLayout, let newId = note.object as? String else { return }
+                let noteDraftId = (note.userInfo as? [String: String])?["draftId"]
+                draftLog.info("🔑DRAFT sessionDidCreate realId=\(newId) noteDraftId=\(noteDraftId ?? "nil") selId=\(selectedSessionId ?? "nil") curReal=\(newSessionRealId ?? "nil") curDraft=\(activeDraftId ?? "nil")")
+                // Verify this notification came from the currently active draft.
+                // A late notification from a previous (now-destroyed) draft must be ignored.
+                guard let selId = selectedSessionId, Self.isNewSessionId(selId),
+                      noteDraftId == selId else {
+                    draftLog.info("🔑DRAFT sessionDidCreate IGNORED (draftId mismatch or not a draft)")
+                    // [T-ios-state-publish-offmain-crash] ChatStore (an actor) posts
+                    // .sessionDidCreate/.sessionDidUpdate from its background
+                    // executor; NotificationCenter delivers synchronously on that
+                    // thread, so this onReceive closure can run off-main. A bare
+                    // Task{} started here inherits the (background) execution context,
+                    // so `sessions =` (a @State write) lands off-main → "Publishing
+                    // changes from background threads" + AttributeGraph corruption of
+                    // the [ChatSession]/[String:ChatSession] state it deep-compares,
+                    // crashing in ChatSession.== / deinit during flushTransactions.
+                    // This onReceive can be delivered off-main, so hop explicitly —
+                    // refreshSessionList's @State writes must land on the main thread.
+                    Task { @MainActor in
+                        refreshSessionList()
+                    }
+                    return
+                }
+                newSessionRealId = newId
+                activeDraftId = selId
+                draftLog.info("🔑DRAFT sessionDidCreate ACCEPTED newSessionRealId=\(newId) activeDraftId=\(selId)")
+                // [T-ios-state-publish-offmain-crash] force main-thread @State write
                 Task { @MainActor in
-                    await ChatStore.shared.updateSessionTitle(session.id, title: newTitle, category: newCategory)
                     refreshSessionList()
                 }
-                sessionToEdit = nil
             }
-            .presentationDetents([.medium])
-        }
-        .sheet(isPresented: $showDeleteConfirm, onDismiss: {
-            if deleteInfo == nil {
-                // Deletion was performed — reset selection mode after sheet is fully dismissed
-                isSelecting = false
-                selectedIds.removeAll()
-            }
-        }) {
-            DeleteConfirmSheet(info: $deleteInfo, isLoading: isComputingDelete) {
-                deleteSelectedSessions()
-                showDeleteConfirm = false
-            }
-            .presentationDetents([.medium])
-        }
-        .sheet(isPresented: $showExportPreview) {
-            ExportPreviewSheet(fileURL: exportFileURL, summary: exportSummary)
-        }
-        .overlay {
-            if isExporting {
-                ZStack {
-                    Color.black.opacity(0.3).ignoresSafeArea()
-                    VStack(spacing: 12) {
-                        ProgressView()
-                            .controlSize(.large)
-                        if let p = exportProgress, p.total > 0 {
-                            Text(String(localized: "Exporting… \(p.done) / \(p.total)"))
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Text(String(localized: "Exporting…"))
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(24)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+            .onReceive(
+                // Throttle (not debounce): session-list updates are infrequent (one
+                // per agent tool round, seconds apart), but a long multi-tool task
+                // emits a steady stream of them. `.debounce` was reset by every new
+                // event, so during a continuously-running task the list NEVER
+                // refreshed until the task fully stopped — the row stayed on its
+                // stale preview ("No messages yet") the whole time. `.throttle`
+                // fires the first event right away and then at most once per second,
+                // so the preview keeps up with each tool round without thrashing
+                // `listSessions`.
+                NotificationCenter.default.publisher(for: .sessionDidUpdate)
+                    .throttle(for: .seconds(1), scheduler: RunLoop.main, latest: true)
+            ) { _ in
+                // [T-ios-state-publish-offmain-crash] force main-thread @State write
+                Task { @MainActor in
+                    refreshSessionList()
                 }
-                .transition(.opacity)
-                .animation(.easeInOut(duration: 0.2), value: isExporting)
             }
-        }
-        .task {
-            sessions = await ChatStore.shared.listSessions()
-            let shareAlreadyHandled = shareCoordinator.bufferVersion > 0
-            // A Home Screen Quick Action that fired during launch will
-            // open the right session itself via `quickActionRouter.newChatTrigger`.
-            // Skip the Launch Session logic so we don't open a second,
-            // conflicting session (the "last session" / "new chat"
-            // launchScreen branch races the shortcut and the user ends
-            // up watching one view replaced by the other).
-            // Two signals indicate a quick-action launch is in flight:
-            //   1. Router bumped newChatTrigger but ContentView hasn't
-            //      consumed it yet (race: .task runs before .onAppear).
-            //   2. QuickActionWorkflow is past .idle — router already
-            //      called start(), workflow owns the next session to
-            //      open. Even if (1) flipped because .onAppear already
-            //      ran and consumed the trigger, the workflow is still
-            //      mid-flight and the launch session would clobber it.
-            let workflowActive: Bool = {
-                if case .idle = QuickActionWorkflow.shared.state { return false }
-                return true
-            }()
-            let quickActionPending = quickActionRouter.newChatTrigger != consumedQuickActionTrigger || workflowActive
-            shareLog.info("[Share] .task: hasPendingShare=\(shareCoordinator.hasPendingShare) launchScreen=\(launchScreen) sessions=\(sessions.count) bufferVersion=\(shareCoordinator.bufferVersion) shareAlreadyHandled=\(shareAlreadyHandled) quickActionPending=\(quickActionPending) workflowActive=\(workflowActive)")
-
-            // [T-notification-tap-vs-launch-session] A notification tap's
-            // explicit target session outranks every launch-screen default.
-            // Cold launch: didReceive fired before our .onReceive subscriber
-            // existed, so the post was lost — the buffered copy is the only
-            // surviving signal. Consume it and navigate. Warm-ish overlap: the
-            // post arrived while this .task was awaiting listSessions() and
-            // .onReceive already navigated — handledRecently suppresses the
-            // launch-screen default so it can't clobber that navigation.
-            if let notificationTarget = NotificationNavigationStore.shared.takePending() {
-                shareLog.info("[Share] .task: notification tap target=\(notificationTarget.prefix(8)) — overriding launchScreen logic")
-                var tx = Transaction()
-                tx.disablesAnimations = true
-                withTransaction(tx) { openSession(notificationTarget) }
-            } else if NotificationNavigationStore.shared.handledRecently {
-                shareLog.info("[Share] .task: notification navigation just handled — skipping launchScreen logic")
-            } else if quickActionPending {
-                shareLog.info("[Share] .task: quick action pending — deferring launchScreen logic to QuickActionRouter")
-            } else if shareAlreadyHandled {
-                // onChange(hasPendingShare) already processed the share and
-                // opened a new session before .task ran. Skip normal launch
-                // screen logic so we don't clobber it with a different session.
-                shareLog.info("[Share] .task: share already handled by onChange — skipping launchScreen logic")
-            } else if shareCoordinator.hasPendingShare {
-                // onChange hasn't fired yet (e.g. onOpenURL arrived during await).
-                // Process share here and open a new session for it.
-                shareLog.info("[Share] .task: processing pending share")
-                processPendingShare()
-                shareLog.info("[Share] .task: buffer stored, bufferVersion=\(shareCoordinator.bufferVersion) buffer=\(shareCoordinator.pendingShareBuffer != nil)")
-                var tx = Transaction()
-                tx.disablesAnimations = true
-                withTransaction(tx) { openSession(Self.makeNewSessionId()) }
-            } else {
-                // No share — normal launch screen behavior
-                switch launchScreen {
-                case 1:
-                    if let latest = sessions.first {
-                        var tx = Transaction()
-                        tx.disablesAnimations = true
-                        withTransaction(tx) { openSession(latest.id) }
+            .onReceive(NotificationCenter.default.publisher(for: .moveInputToSession)) { note in
+                guard WindowRegistry.shared.isPrimary(windowId) else { return }
+                guard let targetId = (note.userInfo as? [String: String])?["targetId"] else { return }
+                // Skip navigation if the target session is already visible
+                if isWideLayout {
+                    guard selectedSessionId != targetId && newSessionRealId != targetId else { return }
+                    // Wide layout replaces selection — no stack to worry about
+                    openSession(targetId)
+                } else {
+                    guard currentStackSessionId != targetId else { return }
+                    // Pop current session off the navigation stack first, then push the target
+                    navigationPath.removeLast(navigationPath.count)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        openSession(targetId)
                     }
-                case 2:
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .openSessionFromIntent)) { note in
+                guard WindowRegistry.shared.isPrimary(windowId) else { return }
+                guard let sessionId = (note.userInfo as? [String: String])?["sessionId"] else { return }
+                // [T-notification-tap-vs-launch-session] Warm path owns this
+                // navigation: drop the cold-launch buffer copy and stamp the
+                // handling time so an in-flight launch `.task` (the post can land
+                // during its `await listSessions()`) doesn't clobber the target
+                // session with the Launch Session default afterwards.
+                NotificationNavigationStore.shared.markHandled()
+                // Skip navigation if the target session is already visible
+                if isWideLayout {
+                    guard selectedSessionId != sessionId && newSessionRealId != sessionId else { return }
+                    openSession(sessionId)
+                } else {
+                    guard currentStackSessionId != sessionId else { return }
+                    // Pop entire stack back to root first, then push the target session
+                    navigationPath.removeLast(navigationPath.count)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        openSession(sessionId)
+                    }
+                }
+            }
+            .fullScreenCover(isPresented: $showTerminal) {
+                NavigationStack {
+                    ISHTerminalView(showCloseButton: true)
+                }
+            }
+            .sheet(isPresented: $showAlarmList, onDismiss: { fetchAlarmsIfNeeded() }) {
+                AlarmListView()
+            }
+            .sheet(item: $activeToolSheet) { sheet in
+                switch sheet {
+                case .settings:
+                    SettingsSheet(showTerminal: $showTerminal)
+                case .rootfsManagement:
+                    NavigationStack {
+                        RootfsManagementView()
+                            .toolbar {
+                                ToolbarItem(placement: .topBarTrailing) {
+                                    Button("Done") { activeToolSheet = nil }
+                                }
+                            }
+                    }
+                case .browser:
+                    BrowserSheetView(pool: browserPool)
+                case .browserManagement:
+                    NavigationStack {
+                        BrowserManagementView(pool: browserPool)
+                    }
+                case .syncMigrationDetail:
+                    NavigationStack {
+                        SyncMigrationDetailView()
+                            .toolbar {
+                                ToolbarItem(placement: .topBarTrailing) {
+                                    Button("Done") { activeToolSheet = nil }
+                                }
+                            }
+                    }
+                }
+            }
+            .sheet(item: $sessionToDelete) { session in
+                DeleteConfirmSheet(info: $singleDeleteInfo, isLoading: false) {
+                    print("[DELETE] onDelete called for session: \(session.id)")
+                    deleteSession(session)
+                    sessionToDelete = nil
+                    singleDeleteInfo = nil
+                }
+                .onAppear {
+                    print("[DELETE] Sheet appeared. singleDeleteInfo is \(singleDeleteInfo == nil ? "nil" : "non-nil, sessionCount=\(singleDeleteInfo!.sessionCount)")")
+                }
+                .presentationDetents([.medium])
+            }
+            .sheet(item: $sessionToEdit) { session in
+                SessionEditSheet(session: session) { newTitle, newCategory in
+                    // [T-ios-state-publish-offmain-crash] @MainActor so the @State
+                    // write after the actor-hop await stays on the main thread.
+                    Task { @MainActor in
+                        await ChatStore.shared.updateSessionTitle(session.id, title: newTitle, category: newCategory)
+                        refreshSessionList()
+                    }
+                    sessionToEdit = nil
+                }
+                .presentationDetents([.medium])
+            }
+            .sheet(isPresented: $showDeleteConfirm, onDismiss: {
+                if deleteInfo == nil {
+                    // Deletion was performed — reset selection mode after sheet is fully dismissed
+                    isSelecting = false
+                    selectedIds.removeAll()
+                }
+            }) {
+                DeleteConfirmSheet(info: $deleteInfo, isLoading: isComputingDelete) {
+                    deleteSelectedSessions()
+                    showDeleteConfirm = false
+                }
+                .presentationDetents([.medium])
+            }
+            .sheet(isPresented: $showExportPreview) {
+                ExportPreviewSheet(fileURL: exportFileURL, summary: exportSummary)
+            }
+            .overlay {
+                if isExporting {
+                    ZStack {
+                        Color.black.opacity(0.3).ignoresSafeArea()
+                        VStack(spacing: 12) {
+                            ProgressView()
+                                .controlSize(.large)
+                            if let p = exportProgress, p.total > 0 {
+                                Text(String(localized: "Exporting… \(p.done) / \(p.total)"))
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Text(String(localized: "Exporting…"))
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(24)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    }
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.2), value: isExporting)
+                }
+            }
+    }
+
+    private func withLifecycleHandlers<V: View>(_ content: V) -> some View {
+        content
+            .task {
+                sessions = await ChatStore.shared.listSessions()
+                let shareAlreadyHandled = shareCoordinator.bufferVersion > 0
+                // A Home Screen Quick Action that fired during launch will
+                // open the right session itself via `quickActionRouter.newChatTrigger`.
+                // Skip the Launch Session logic so we don't open a second,
+                // conflicting session (the "last session" / "new chat"
+                // launchScreen branch races the shortcut and the user ends
+                // up watching one view replaced by the other).
+                // Two signals indicate a quick-action launch is in flight:
+                //   1. Router bumped newChatTrigger but ContentView hasn't
+                //      consumed it yet (race: .task runs before .onAppear).
+                //   2. QuickActionWorkflow is past .idle — router already
+                //      called start(), workflow owns the next session to
+                //      open. Even if (1) flipped because .onAppear already
+                //      ran and consumed the trigger, the workflow is still
+                //      mid-flight and the launch session would clobber it.
+                let workflowActive: Bool = {
+                    if case .idle = QuickActionWorkflow.shared.state { return false }
+                    return true
+                }()
+                let quickActionPending = quickActionRouter.newChatTrigger != consumedQuickActionTrigger || workflowActive
+                shareLog.info("[Share] .task: hasPendingShare=\(shareCoordinator.hasPendingShare) launchScreen=\(launchScreen) sessions=\(sessions.count) bufferVersion=\(shareCoordinator.bufferVersion) shareAlreadyHandled=\(shareAlreadyHandled) quickActionPending=\(quickActionPending) workflowActive=\(workflowActive)")
+
+                // [T-notification-tap-vs-launch-session] A notification tap's
+                // explicit target session outranks every launch-screen default.
+                // Cold launch: didReceive fired before our .onReceive subscriber
+                // existed, so the post was lost — the buffered copy is the only
+                // surviving signal. Consume it and navigate. Warm-ish overlap: the
+                // post arrived while this .task was awaiting listSessions() and
+                // .onReceive already navigated — handledRecently suppresses the
+                // launch-screen default so it can't clobber that navigation.
+                if let notificationTarget = NotificationNavigationStore.shared.takePending() {
+                    shareLog.info("[Share] .task: notification tap target=\(notificationTarget.prefix(8)) — overriding launchScreen logic")
+                    var tx = Transaction()
+                    tx.disablesAnimations = true
+                    withTransaction(tx) { openSession(notificationTarget) }
+                } else if NotificationNavigationStore.shared.handledRecently {
+                    shareLog.info("[Share] .task: notification navigation just handled — skipping launchScreen logic")
+                } else if quickActionPending {
+                    shareLog.info("[Share] .task: quick action pending — deferring launchScreen logic to QuickActionRouter")
+                } else if shareAlreadyHandled {
+                    // onChange(hasPendingShare) already processed the share and
+                    // opened a new session before .task ran. Skip normal launch
+                    // screen logic so we don't clobber it with a different session.
+                    shareLog.info("[Share] .task: share already handled by onChange — skipping launchScreen logic")
+                } else if shareCoordinator.hasPendingShare {
+                    // onChange hasn't fired yet (e.g. onOpenURL arrived during await).
+                    // Process share here and open a new session for it.
+                    shareLog.info("[Share] .task: processing pending share")
+                    processPendingShare()
+                    shareLog.info("[Share] .task: buffer stored, bufferVersion=\(shareCoordinator.bufferVersion) buffer=\(shareCoordinator.pendingShareBuffer != nil)")
                     var tx = Transaction()
                     tx.disablesAnimations = true
                     withTransaction(tx) { openSession(Self.makeNewSessionId()) }
-                case 3:
-                    break
-                default:
-                    if !sessions.isEmpty,
-                       let latest = sessions.first,
-                       Date().timeIntervalSince(latest.updatedAt) > 15 * 60 {
+                } else {
+                    // No share — normal launch screen behavior
+                    switch launchScreen {
+                    case 1:
+                        if let latest = sessions.first {
+                            var tx = Transaction()
+                            tx.disablesAnimations = true
+                            withTransaction(tx) { openSession(latest.id) }
+                        }
+                    case 2:
                         var tx = Transaction()
                         tx.disablesAnimations = true
                         withTransaction(tx) { openSession(Self.makeNewSessionId()) }
-                    } else if isWideLayout, let latest = sessions.first {
-                        var tx = Transaction()
-                        tx.disablesAnimations = true
-                        withTransaction(tx) { openSession(latest.id) }
+                    case 3:
+                        break
+                    default:
+                        if !sessions.isEmpty,
+                           let latest = sessions.first,
+                           Date().timeIntervalSince(latest.updatedAt) > 15 * 60 {
+                            var tx = Transaction()
+                            tx.disablesAnimations = true
+                            withTransaction(tx) { openSession(Self.makeNewSessionId()) }
+                        } else if isWideLayout, let latest = sessions.first {
+                            var tx = Transaction()
+                            tx.disablesAnimations = true
+                            withTransaction(tx) { openSession(latest.id) }
+                        }
                     }
                 }
+                didInitialLoad = true
+                fetchAlarmsIfNeeded()
+                await refreshRemoteDeviceSessions()
             }
-            didInitialLoad = true
-            fetchAlarmsIfNeeded()
-            await refreshRemoteDeviceSessions()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .cloudSyncDidFetchChanges)) { _ in
-            // [T-ios-state-publish-offmain-crash] cloud-sync fetch fires off-main;
-            // force the @State write onto the main thread.
-            Task { @MainActor in
-                refreshSessionList()
-            }
-        }
-        // [T-ios-session-list-equatable-jank] Keep the id→session lookup cache
-        // in sync with `sessions`. Rebuilding here (on actual list mutation)
-        // instead of per body-eval is what removes the per-frame Dictionary.==
-        // / ChatSession.== diff from the scroll transaction.
-        .onChange(of: sessions) { _ in
-            rebuildSessionsByIdCache()
-        }
-        .onChange(of: selectedSessionId) { newValue in
-            // [T-ios-session-switch-attributegraph-race] Hosting-view race
-            // mitigation: when the user switches between two sessions while
-            // both vms are mid-stream, the outgoing AIChatView's UIHostingView
-            // subgraph is being torn down at the same instant the new
-            // session's hosting views are mounting. A concurrent mutation on
-            // the outgoing vm (any @Published delta, scroll signal, etc.)
-            // races with `AG::Subgraph::NodeCache::~NodeCache` on the same
-            // AsyncRenderer thread → EXC_BAD_ACCESS (build-48 crash
-            // LeoPhoneAgent-2026-06-01-134710.ips). Suspend the outgoing vm here,
-            // then schedule a resume on a short delay so when the user comes
-            // back to that session everything catches up. Run before the
-            // redirect/tracking-clear logic so we always pin the right id.
-            // [T-ios-session-coldload-listsessions-block] Were we leaving a real
-            // (persisted, non-new) session? Only then can its list-row preview
-            // have drifted and need a navigation-time refresh. Captured before
-            // previousSelectedSessionId is overwritten below.
-            let hadOutgoingRealSession: Bool = {
-                guard let outgoing = previousSelectedSessionId, outgoing != newValue else { return false }
-                return !Self.isNewSessionId(outgoing)
-            }()
-            if let outgoingId = previousSelectedSessionId, outgoingId != newValue {
-                if let outgoingVm = ViewModelCache.shared.get(for: outgoingId) {
-                    outgoingVm.setSuspendedForTransition(true)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak outgoingVm] in
-                        outgoingVm?.setSuspendedForTransition(false)
-                    }
+            .onReceive(NotificationCenter.default.publisher(for: .cloudSyncDidFetchChanges)) { _ in
+                // [T-ios-state-publish-offmain-crash] cloud-sync fetch fires off-main;
+                // force the @State write onto the main thread.
+                Task { @MainActor in
+                    refreshSessionList()
                 }
             }
-            previousSelectedSessionId = newValue
-            if let sid = newValue {
-                SessionBadgeStore.shared.remove(.unread, for: sid)
-                AIChatViewModel.activeSessionId = sid
-            } else {
-                AIChatViewModel.activeSessionId = nil
+            // [T-ios-session-list-equatable-jank] Keep the id→session lookup cache
+            // in sync with `sessions`. Rebuilding here (on actual list mutation)
+            // instead of per body-eval is what removes the per-frame Dictionary.==
+            // / ChatSession.== diff from the scroll transaction.
+            .onChange(of: sessions) { _ in
+                rebuildSessionsByIdCache()
             }
-            draftLog.info("🔑DRAFT onChange(selectedSessionId) newValue=\(newValue ?? "nil") realId=\(newSessionRealId ?? "nil") draftId=\(activeDraftId ?? "nil")")
-            // If user taps the real session row that was created from a draft,
-            // redirect back to the draft ID to preserve the AIChatView instance.
-            if let realId = newSessionRealId, newValue == realId,
-               let draftId = activeDraftId {
-                draftLog.info("🔑DRAFT onChange REDIRECT to draftId=\(draftId)")
-                selectedSessionId = draftId
-                return
-            }
-            // Clear new-session tracking when navigating to a different session
-            if !Self.isNewSessionId(newValue) {
-                draftLog.info("🔑DRAFT onChange CLEAR tracking (non-draft)")
-                newSessionRealId = nil
-                activeDraftId = nil
-            }
-            // iPad: detail cleared (newValue == nil) — if a quick-action
-            // workflow is ensuring-home, advance it now.
-            if newValue == nil, case .ensuringHome = QuickActionWorkflow.shared.state {
-                QuickActionWorkflow.shared.markHome()
-            }
-            // [T-ios-search-focus-sticky] iPad split: selecting a session (or
-            // new chat) with an empty search drops the sticky search bar.
-            if newValue != nil {
-                dismissSearchIfEmptyOnNavigate()
-            }
-            // [T-ios-session-coldload-listsessions-block] Only refresh the list
-            // when LEAVING a real session — that outgoing session's preview may
-            // have changed while the user was inside it. Entering never changes
-            // existing rows. Even so, this listSessions() is a ~1.4s full scan
-            // on a large DB and, on the serialized ChatStore actor, is
-            // non-preemptible — if it starts before the incoming session's
-            // loadSession() reaches its 2nd actor hop (getMemoryEnabled →
-            // loadMessages), that hop waits the whole scan out and the spinner
-            // hangs ~1.5s. So DELAY the outgoing-preview refresh well past the
-            // incoming load (which completes in ~50-150ms) instead of racing it
-            // onto the actor. Content changes are already covered by
-            // .sessionDidUpdate / .sessionDidCreate / .cloudSyncDidFetchChanges
-            // / pin / delete / edit, so this delayed refresh is belt-and-braces.
-            if hadOutgoingRealSession {
-                scheduleOutgoingPreviewRefresh()
-            }
-        }
-        .onChange(of: navigationPath) { _ in
-            // [T-ios-search-focus-sticky] iPhone stack: pushing into a session
-            // (or new chat) with an empty search drops the sticky search bar.
-            // Only on push (path non-empty) — popping back must NOT clear an
-            // active search the user is returning to.
-            if !navigationPath.isEmpty {
-                dismissSearchIfEmptyOnNavigate()
-            }
-            if navigationPath.isEmpty {
-                currentStackSessionId = nil
-                AIChatViewModel.activeSessionId = nil
-                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                // If a quick-action workflow asked us to ensure-home,
-                // we're there now — let it advance to pendingDispatch.
-                if case .ensuringHome = QuickActionWorkflow.shared.state {
+            .onChange(of: selectedSessionId) { newValue in
+                // [T-ios-session-switch-attributegraph-race] Hosting-view race
+                // mitigation: when the user switches between two sessions while
+                // both vms are mid-stream, the outgoing AIChatView's UIHostingView
+                // subgraph is being torn down at the same instant the new
+                // session's hosting views are mounting. A concurrent mutation on
+                // the outgoing vm (any @Published delta, scroll signal, etc.)
+                // races with `AG::Subgraph::NodeCache::~NodeCache` on the same
+                // AsyncRenderer thread → EXC_BAD_ACCESS (build-48 crash
+                // LeoPhoneAgent-2026-06-01-134710.ips). Suspend the outgoing vm here,
+                // then schedule a resume on a short delay so when the user comes
+                // back to that session everything catches up. Run before the
+                // redirect/tracking-clear logic so we always pin the right id.
+                // [T-ios-session-coldload-listsessions-block] Were we leaving a real
+                // (persisted, non-new) session? Only then can its list-row preview
+                // have drifted and need a navigation-time refresh. Captured before
+                // previousSelectedSessionId is overwritten below.
+                let hadOutgoingRealSession: Bool = {
+                    guard let outgoing = previousSelectedSessionId, outgoing != newValue else { return false }
+                    return !Self.isNewSessionId(outgoing)
+                }()
+                if let outgoingId = previousSelectedSessionId, outgoingId != newValue {
+                    if let outgoingVm = ViewModelCache.shared.get(for: outgoingId) {
+                        outgoingVm.setSuspendedForTransition(true)
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak outgoingVm] in
+                            outgoingVm?.setSuspendedForTransition(false)
+                        }
+                    }
+                }
+                previousSelectedSessionId = newValue
+                if let sid = newValue {
+                    SessionBadgeStore.shared.remove(.unread, for: sid)
+                    AIChatViewModel.activeSessionId = sid
+                } else {
+                    AIChatViewModel.activeSessionId = nil
+                }
+                draftLog.info("🔑DRAFT onChange(selectedSessionId) newValue=\(newValue ?? "nil") realId=\(newSessionRealId ?? "nil") draftId=\(activeDraftId ?? "nil")")
+                // If user taps the real session row that was created from a draft,
+                // redirect back to the draft ID to preserve the AIChatView instance.
+                if let realId = newSessionRealId, newValue == realId,
+                   let draftId = activeDraftId {
+                    draftLog.info("🔑DRAFT onChange REDIRECT to draftId=\(draftId)")
+                    selectedSessionId = draftId
+                    return
+                }
+                // Clear new-session tracking when navigating to a different session
+                if !Self.isNewSessionId(newValue) {
+                    draftLog.info("🔑DRAFT onChange CLEAR tracking (non-draft)")
+                    newSessionRealId = nil
+                    activeDraftId = nil
+                }
+                // iPad: detail cleared (newValue == nil) — if a quick-action
+                // workflow is ensuring-home, advance it now.
+                if newValue == nil, case .ensuringHome = QuickActionWorkflow.shared.state {
                     QuickActionWorkflow.shared.markHome()
                 }
+                // [T-ios-search-focus-sticky] iPad split: selecting a session (or
+                // new chat) with an empty search drops the sticky search bar.
+                if newValue != nil {
+                    dismissSearchIfEmptyOnNavigate()
+                }
+                // [T-ios-session-coldload-listsessions-block] Only refresh the list
+                // when LEAVING a real session — that outgoing session's preview may
+                // have changed while the user was inside it. Entering never changes
+                // existing rows. Even so, this listSessions() is a ~1.4s full scan
+                // on a large DB and, on the serialized ChatStore actor, is
+                // non-preemptible — if it starts before the incoming session's
+                // loadSession() reaches its 2nd actor hop (getMemoryEnabled →
+                // loadMessages), that hop waits the whole scan out and the spinner
+                // hangs ~1.5s. So DELAY the outgoing-preview refresh well past the
+                // incoming load (which completes in ~50-150ms) instead of racing it
+                // onto the actor. Content changes are already covered by
+                // .sessionDidUpdate / .sessionDidCreate / .cloudSyncDidFetchChanges
+                // / pin / delete / edit, so this delayed refresh is belt-and-braces.
+                if hadOutgoingRealSession {
+                    scheduleOutgoingPreviewRefresh()
+                }
             }
-            // [T-ios-session-coldload-listsessions-block] Only refresh when
-            // popping back to home (path emptied) — that's when a preview that
-            // changed inside the session the user just left needs to show. On
-            // PUSH (entering a session, the cold-open hot path) this scan only
-            // head-of-line-blocked loadSession on the ChatStore actor. Delayed
-            // so it never races the incoming load's actor hops.
-            if navigationPath.isEmpty {
-                scheduleOutgoingPreviewRefresh()
-            }
-            fetchAlarmsIfNeeded()
-        }
-        .onChange(of: shareCoordinator.hasPendingShare) { hasPending in
-            if hasPending {
-                processPendingShare()
-                // If currently on home screen, navigate to new session for the share
+            .onChange(of: navigationPath) { _ in
+                // [T-ios-search-focus-sticky] iPhone stack: pushing into a session
+                // (or new chat) with an empty search drops the sticky search bar.
+                // Only on push (path non-empty) — popping back must NOT clear an
+                // active search the user is returning to.
+                if !navigationPath.isEmpty {
+                    dismissSearchIfEmptyOnNavigate()
+                }
                 if navigationPath.isEmpty {
-                    shareLog.info("[Share] onChange: Home screen — opening new session for share")
-                    var tx = Transaction()
-                    tx.disablesAnimations = true
-                    withTransaction(tx) { openSession(Self.makeNewSessionId()) }
+                    currentStackSessionId = nil
+                    AIChatViewModel.activeSessionId = nil
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    // If a quick-action workflow asked us to ensure-home,
+                    // we're there now — let it advance to pendingDispatch.
+                    if case .ensuringHome = QuickActionWorkflow.shared.state {
+                        QuickActionWorkflow.shared.markHome()
+                    }
+                }
+                // [T-ios-session-coldload-listsessions-block] Only refresh when
+                // popping back to home (path emptied) — that's when a preview that
+                // changed inside the session the user just left needs to show. On
+                // PUSH (entering a session, the cold-open hot path) this scan only
+                // head-of-line-blocked loadSession on the ChatStore actor. Delayed
+                // so it never races the incoming load's actor hops.
+                if navigationPath.isEmpty {
+                    scheduleOutgoingPreviewRefresh()
+                }
+                fetchAlarmsIfNeeded()
+            }
+            .onChange(of: shareCoordinator.hasPendingShare) { hasPending in
+                if hasPending {
+                    processPendingShare()
+                    // If currently on home screen, navigate to new session for the share
+                    if navigationPath.isEmpty {
+                        shareLog.info("[Share] onChange: Home screen — opening new session for share")
+                        var tx = Transaction()
+                        tx.disablesAnimations = true
+                        withTransaction(tx) { openSession(Self.makeNewSessionId()) }
+                    }
                 }
             }
-        }
-        .onChange(of: deepLink.showEnvironmentVariables) { show in
-            if show {
-                activeToolSheet = .settings
+            .onChange(of: deepLink.showEnvironmentVariables) { show in
+                if show {
+                    activeToolSheet = .settings
+                }
             }
-        }
-        .onChange(of: deepLink.showPermissions) { show in
-            if show {
-                activeToolSheet = .settings
+            .onChange(of: deepLink.showPermissions) { show in
+                if show {
+                    activeToolSheet = .settings
+                }
             }
-        }
-        .onChange(of: deepLink.showAlarmList) { show in
-            if show {
-                showAlarmList = true
-                deepLink.showAlarmList = false
+            .onChange(of: deepLink.showAlarmList) { show in
+                if show {
+                    showAlarmList = true
+                    deepLink.showAlarmList = false
+                }
             }
-        }
-        // Open the SettingsSheet whenever a deep link sets a settings
-        // target. SettingsSheet itself reads `deepLink.pendingSettingsTarget`
-        // in onAppear/onChange to push the right destination, then clears it.
-        .onChange(of: deepLink.pendingSettingsTarget) { target in
-            guard target != nil else { return }
-            if activeToolSheet != .settings {
-                activeToolSheet = .settings
+            // Open the SettingsSheet whenever a deep link sets a settings
+            // target. SettingsSheet itself reads `deepLink.pendingSettingsTarget`
+            // in onAppear/onChange to push the right destination, then clears it.
+            .onChange(of: deepLink.pendingSettingsTarget) { target in
+                guard target != nil else { return }
+                if activeToolSheet != .settings {
+                    activeToolSheet = .settings
+                }
             }
-        }
-        .onChange(of: deepLink.pendingRootfsManagement) { pending in
-            if pending {
-                activeToolSheet = .rootfsManagement
-                deepLink.pendingRootfsManagement = false
+            .onChange(of: deepLink.pendingRootfsManagement) { pending in
+                if pending {
+                    activeToolSheet = .rootfsManagement
+                    deepLink.pendingRootfsManagement = false
+                }
             }
-        }
-        .onChange(of: deepLink.pendingSessionId) { sid in
-            guard let sid, !sid.isEmpty else { return }
-            // Switch to the requested session if it exists in the loaded
-            // list. If not loaded yet (cold launch with deep link), set
-            // it now — the session-load path will pick it up once the
-            // list refresh completes.
-            selectedSessionId = sid
-            deepLink.pendingSessionId = nil
-        }
-        .onChange(of: scenePhase) { phase in
-            // [T-ios-scenephase-active-sigkill] Defer ALL .active work off the
-            // synchronous callback. Writing @Published (SyncCore.isAppInBackground)
-            // here triggers objectWillChange → SwiftUI view invalidation in the
-            // same runloop tick as the foreground view-graph re-evaluation → SIGTRAP.
-            if phase == .active {
-                Task { @MainActor in
-                    await Task.yield()
-                    // Guard against rapid bg→fg→bg: if scenePhase already
-                    // changed back, skip the stale .active work.
-                    guard scenePhase == .active else { return }
-                    fetchAlarmsIfNeeded()
+            .onChange(of: deepLink.pendingSessionId) { sid in
+                guard let sid, !sid.isEmpty else { return }
+                // Switch to the requested session if it exists in the loaded
+                // list. If not loaded yet (cold launch with deep link), set
+                // it now — the session-load path will pick it up once the
+                // list refresh completes.
+                selectedSessionId = sid
+                deepLink.pendingSessionId = nil
+            }
+            .onChange(of: scenePhase) { phase in
+                // Re-claim app-wide notifications for whichever window the user
+                // just brought forward. [T-multiwindow-notification-fanout]
+                if phase == .active { WindowRegistry.shared.markActive(windowId) }
+                // [T-ios-scenephase-active-sigkill] Defer ALL .active work off the
+                // synchronous callback. Writing @Published (SyncCore.isAppInBackground)
+                // here triggers objectWillChange → SwiftUI view invalidation in the
+                // same runloop tick as the foreground view-graph re-evaluation → SIGTRAP.
+                if phase == .active {
+                    Task { @MainActor in
+                        await Task.yield()
+                        // Guard against rapid bg→fg→bg: if scenePhase already
+                        // changed back, skip the stale .active work.
+                        guard scenePhase == .active else { return }
+                        fetchAlarmsIfNeeded()
+                        if #available(iOS 17.0, *) {
+                            SyncCore.shared.isAppInBackground = false
+                        }
+                        #if DEBUG
+                        UIApplication.shared.isIdleTimerDisabled = keepScreenAwake
+                        #endif
+                        // [T-home-fab-keyboard-inset] Defense-in-depth behind the
+                        // structural .ignoresSafeArea immunity on the session lists:
+                        // on foreground return with the HOME screen actually showing
+                        // (no pushed chat on compact, no selected session on split —
+                        // a split chat column may legitimately hold composer focus)
+                        // and the inline search bar not focused, no responder is
+                        // legitimate. Resign whatever UIKit resurrected during the
+                        // background snapshot pass so its stale keyboard inset can't
+                        // inflate the window's bottom safe area.
+                        if !searchFocused, navigationPath.isEmpty, selectedSessionId == nil {
+                            UIApplication.shared.sendAction(
+                                #selector(UIResponder.resignFirstResponder),
+                                to: nil, from: nil, for: nil)
+                        }
+                    }
+                } else {
                     if #available(iOS 17.0, *) {
-                        SyncCore.shared.isAppInBackground = false
+                        SyncCore.shared.isAppInBackground = (phase != .active)
                     }
-                    #if DEBUG
-                    UIApplication.shared.isIdleTimerDisabled = keepScreenAwake
-                    #endif
-                    // [T-home-fab-keyboard-inset] Defense-in-depth behind the
-                    // structural .ignoresSafeArea immunity on the session lists:
-                    // on foreground return with the HOME screen actually showing
-                    // (no pushed chat on compact, no selected session on split —
-                    // a split chat column may legitimately hold composer focus)
-                    // and the inline search bar not focused, no responder is
-                    // legitimate. Resign whatever UIKit resurrected during the
-                    // background snapshot pass so its stale keyboard inset can't
-                    // inflate the window's bottom safe area.
-                    if !searchFocused, navigationPath.isEmpty, selectedSessionId == nil {
-                        UIApplication.shared.sendAction(
-                            #selector(UIResponder.resignFirstResponder),
-                            to: nil, from: nil, for: nil)
-                    }
-                }
-            } else {
-                if #available(iOS 17.0, *) {
-                    SyncCore.shared.isAppInBackground = (phase != .active)
                 }
             }
-        }
     }
 
     // MARK: - Split Layout (iPad / wide window)
@@ -1152,15 +1230,39 @@ struct ContentView: View {
                 splitList
             }
         }
+        // [T-session-attention-bar] Aggregate what needs the user, above the
+        // list. Individual rows already carry badges, but with several
+        // long-running tasks the badges are scattered down a scrolling list —
+        // this answers "is anything waiting on me?" without hunting.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            attentionBar
+        }
         // Hardware ⌘F → focus search, available while the session list is on
         // screen (iPad/Mac keyboards). A zero-opacity button carries the
         // shortcut without affecting layout; it lives in the list's view tree so
         // the command only fires when the list is visible, not inside a chat.
         .background {
-            Button(action: focusSearch) { EmptyView() }
-                .keyboardShortcut("f", modifiers: .command)
-                .opacity(0)
-                .accessibilityHidden(true)
+            // [T-ipad-keyboard] Hardware-keyboard commands for the session
+            // list. All carried by zero-opacity buttons in the list's own
+            // view tree, so they only fire while the list is on screen.
+            ZStack {
+                Button(action: focusSearch) { EmptyView() }
+                    .keyboardShortcut("f", modifiers: .command)
+                // [T-cmd-n-double-binding] ⌘N is owned by MinisApp's
+                // `CommandGroup(replacing: .newItem)`, which posts
+                // `.newChatRequested` — already observed above. A second
+                // binding here made one keystroke take two paths into
+                // handleNewChatRequest() and could create two draft sessions.
+                Button { activeToolSheet = .settings } label: { EmptyView() }
+                    .keyboardShortcut(",", modifiers: .command)
+                // ⌘1…⌘9 jump to the Nth visible session.
+                ForEach(1...9, id: \.self) { index in
+                    Button { selectSession(at: index - 1) } label: { EmptyView() }
+                        .keyboardShortcut(KeyEquivalent(Character("\(index)")), modifiers: .command)
+                }
+            }
+            .opacity(0)
+            .accessibilityHidden(true)
         }
         // [T-ios-migration-timer-toolbar-uaf-crash / T-ios-migration-timer-sessionlist-uaf-crash]
         // Own the migration-subtitle refresh driver here, on the stable sidebar list
@@ -2187,7 +2289,7 @@ struct ContentView: View {
                                         .font(.subheadline.weight(.medium))
                                         .lineLimit(1)
                                 }
-                                .buttonStyle(.bordered)
+                                .buttonStyle(.glass)
                                 .controlSize(.large)
                             }
                         }
@@ -2364,11 +2466,122 @@ struct ContentView: View {
     /// hardware ⌘F shortcut while the session list is on screen. Focusing inside
     /// the reveal animation is unreliable, so set focus on the next runloop tick
     /// once the field exists in the view tree.
+    /// [T-session-attention-bar] Sessions carrying an actionable badge.
+    /// `.unread` = finished (or user-flagged) and not yet reviewed;
+    /// `.paused` = interrupted and awaiting a resume.
+    private var attentionSessions: [ChatSession] {
+        displaySessions.filter { session in
+            guard let states = badgeStore.badgeStates[session.id] else { return false }
+            return states.contains(.unread) || states.contains(.paused)
+        }
+    }
+
+    @ViewBuilder
+    private var attentionBar: some View {
+        let pending = attentionSessions
+        if !pending.isEmpty {
+            Button {
+                // Jump to the oldest one — working a backlog front-to-back is
+                // the behaviour people expect from an inbox.
+                if let target = pending.last {
+                    jumpToSession(target.id)
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "tray.full.fill")
+                        .font(.caption)
+                        .foregroundStyle(.white)
+                        .frame(width: 22, height: 22)
+                        .background(Color.orange, in: Circle())
+                    Text("\(pending.count) sessions need you")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.primary)
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 9)
+                // [T-liquid-glass-adoption] Was `.background(.bar)` — a
+                // pre-Liquid-Glass material that reads as flat next to the
+                // system chrome it sits under on iOS 26+.
+                .leoGlassSurface(cornerRadius: 0)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .hoverEffect(.highlight)
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
     private func focusSearch() {
         if !showSearchBar {
             withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { showSearchBar = true }
         }
         DispatchQueue.main.async { searchFocused = true }
+    }
+
+    /// [T-ipad-keyboard] ⌘1…⌘9 — open the Nth session currently shown.
+    ///
+    /// [T-cmd-digit-wrong-row] This used to index `displaySessions`, the raw
+    /// list. The sidebar actually renders `groupedSessionIDs(displaySessions)`,
+    /// which re-buckets into Pinned / Today / Yesterday / … and re-sorts the
+    /// pinned group — so with any pin or any two date buckets (i.e. almost
+    /// always) ⌘3 opened a different chat than the third row on screen.
+    /// Flatten the same grouping the list renders.
+    private func selectSession(at index: Int) {
+        let visibleIDs = groupedSessionIDs(displaySessions).flatMap(\.ids)
+        guard index >= 0, index < visibleIDs.count else { return }
+        jumpToSession(visibleIDs[index])
+    }
+
+    /// [T-rotation-layout-state-bridge] Carry the open session across a layout
+    /// switch.
+    ///
+    /// The wide/compact decision is a size-class + width test, so an iPhone Pro
+    /// Max flips between them just by rotating. The two layouts keep their
+    /// "what is open" state in different places — `selectedSessionId` for the
+    /// split view, `navigationPath` for the stack — and nothing used to move it
+    /// across. Rotating with a chat open dumped the user back to the session
+    /// list, and a brand-new draft (whose placeholder row only exists in the
+    /// wide layout) became unreachable along with anything typed into it.
+    private func migrateNavigationState(toWide newWide: Bool) {
+        guard newWide != isWideLayout else { return }
+        if newWide {
+            // stack → split: adopt whatever the stack had pushed.
+            if let open = currentStackSessionId {
+                selectedSessionId = open
+                navigationPath.removeLast(navigationPath.count)
+            }
+        } else {
+            // split → stack: push the selected session (a draft resolves to its
+            // real id once persisted, which is what the stack can actually show).
+            let open = newSessionRealId ?? selectedSessionId
+            selectedSessionId = nil
+            if let open, !open.isEmpty {
+                navigationPath = NavigationPath([open])
+            }
+        }
+    }
+
+    /// Navigate this window to `id`.
+    ///
+    /// [T-multiwindow-notification-fanout] Deliberately a direct call, not a
+    /// `.openSessionFromIntent` post: that notification is global, so on iPad
+    /// with two windows open a tap here also navigated the OTHER window (and
+    /// paid a needless 300 ms hop). Intent/deep-link entry points still use the
+    /// notification — they have no window context; in-window UI must not.
+    private func jumpToSession(_ id: String) {
+        if isWideLayout {
+            selectedSessionId = id
+        } else {
+            guard currentStackSessionId != id else { return }
+            navigationPath.removeLast(navigationPath.count)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                openSession(id)
+            }
+        }
     }
 
     // MARK: - FAB Row (New Chat + Search)
@@ -3291,7 +3504,7 @@ private struct DeleteConfirmSheet: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.glassProminent)
                         .tint(.red)
 
                         Button {
@@ -3301,7 +3514,7 @@ private struct DeleteConfirmSheet: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.glass)
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 12)
@@ -3639,6 +3852,17 @@ private struct SessionContextMenu: View, Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.key == rhs.key }
 
     var body: some View {
+        // [T-session-unread-manual] "I've seen this but I'm not done with it."
+        // The unread dot already existed, but only the app could set it (on
+        // background completion). Letting the user set it turns the session
+        // list into a lightweight to-do list, which is how people actually
+        // work through several long-running agent tasks.
+        Button {
+            SessionBadgeStore.shared.pushFront(.unread, for: key.sid)
+            LeoHaptics.selection()
+        } label: {
+            Label("Mark as unread", systemImage: "circle.badge.exclamationmark")
+        }
         Button {
             actions.send(.togglePin(key.sid))
         } label: {
@@ -3983,6 +4207,9 @@ private struct SessionRow: View, Equatable {
         .padding(.horizontal, 16)
         .padding(.vertical, density.verticalPadding)
         .contentShape(Rectangle())
+        // [T-ipad-pointer] Trackpad/mouse feedback on iPad and Catalyst.
+        // No-op on touch-only devices.
+        .hoverEffect(.highlight)
         #if DEBUG
         // TEMPORARY height probe — confirms List self-sizing jitter source.
         // PreferenceKey fires on every real layout (incl. the self-size
@@ -4221,6 +4448,8 @@ private struct RemoteSessionRow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .contentShape(Rectangle())
+        // [T-ipad-pointer] See the sibling row above.
+        .hoverEffect(.highlight)
     }
 
     private var categoryIcon: (systemName: String, color: Color) {
@@ -4647,6 +4876,10 @@ private struct AppearanceSettingsView: View {
                         UserDefaults.standard.set("appearance", forKey: "pendingSettingsReopen")
                         appLanguage = lang.id
                         Bundle.setLanguage(lang.id.isEmpty ? nil : lang.id)
+                        // [T-widget-localization] Widgets live in another
+                        // process; hand them the new language and rebuild.
+                        LeoWidgetLanguage.save(lang.id)
+                        WidgetCenter.shared.reloadAllTimelines()
                     } label: {
                         HStack(spacing: 12) {
                             if !lang.flag.isEmpty {
@@ -4803,6 +5036,37 @@ private struct SettingsSheet: View {
                                 .foregroundStyle(.white)
                                 .frame(width: 21, height: 21)
                                 .background(.indigo, in: Circle())
+                        }
+                    }
+                    // [T-capabilities-center] Answers "what can it do, and is
+                    // it allowed to" in one place — previously the answer was
+                    // spread across Permissions, Info.plist and the docs.
+                    NavigationLink {
+                        CapabilitiesView()
+                    } label: {
+                        Label {
+                            Text("Capabilities")
+                        } icon: {
+                            Image(systemName: "square.grid.2x2.fill")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.white)
+                                .frame(width: 21, height: 21)
+                                .background(.cyan, in: Circle())
+                        }
+                    }
+                    // [T-scheduled-tasks] Sits next to Quick Tasks because a
+                    // schedule is just "a quick task, but recurring".
+                    NavigationLink {
+                        ScheduledTaskSettingsView()
+                    } label: {
+                        Label {
+                            Text("Scheduled Tasks")
+                        } icon: {
+                            Image(systemName: "clock.badge.checkmark")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.white)
+                                .frame(width: 21, height: 21)
+                                .background(.orange, in: Circle())
                         }
                     }
                     NavigationLink {
@@ -5007,6 +5271,10 @@ private struct SettingsSheet: View {
                                 .background(.teal, in: Circle())
                         }
                     }
+                    // [T-local-feedback] Feedback is recorded locally
+                    // (Settings → Logs, `feedback-*` files) instead of the
+                    // upstream Telegram group — this fork has no external
+                    // feedback channel.
                     Button {
                         showFeedbackDialog = true
                     } label: {
@@ -5021,17 +5289,8 @@ private struct SettingsSheet: View {
                         }
                     }
                     .foregroundStyle(.primary)
-                    .confirmationDialog("Feedback", isPresented: $showFeedbackDialog, titleVisibility: .visible) {
-                        Button("Report a Bug (GitHub)") {
-                            if let url = Self.makeBugReportURL() { UIApplication.shared.open(url) }
-                        }
-                        Button("Feedback (Telegram)") {
-                            if let url = URL(string: "https://t.me/+2NzhOJuzRyI1YmM1") { UIApplication.shared.open(url) }
-                        }
-                        Button("Feedback (Email)") {
-                            if let url = Self.makeFeedbackEmailURL() { UIApplication.shared.open(url) }
-                        }
-                        Button("Cancel", role: .cancel) {}
+                    .sheet(isPresented: $showFeedbackDialog) {
+                        FeedbackComposerSheet()
                     }
                 }
 
@@ -5284,6 +5543,118 @@ private struct SettingsSheet: View {
             }
         }
         return id.isEmpty ? UIDevice.current.model : id
+    }
+}
+
+// MARK: - Local Feedback Composer
+
+/// [T-local-feedback] Records a problem/idea locally as a `feedback-*` file
+/// in the Logs directory (LoggingManager.saveFeedbackRecord). Records appear
+/// in Settings → Logs where they can be read, shared, or deleted alongside
+/// diagnostic logs — no external service involved. GitHub issue creation is
+/// kept as an optional secondary action (the repo is our own).
+private struct FeedbackComposerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    /// [T-feedback-localization] rawValue is the ON-DISK field written into the
+    /// feedback record, so it must stay a stable, language-independent token —
+    /// localizing it later would silently change the saved file format. The
+    /// user-facing name is `label`.
+    private enum Kind: String, CaseIterable, Identifiable {
+        case problem
+        case idea
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .problem: return String(localized: "Problem")
+            case .idea: return String(localized: "Idea")
+            }
+        }
+    }
+
+    @State private var kind: Kind = .problem
+    @State private var title = ""
+    @State private var detail = ""
+    @State private var includeDiagnostics = true
+    @State private var savedURL: URL?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                if let savedURL {
+                    Section {
+                        Label {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Saved")
+                                Text(savedURL.lastPathComponent)
+                                    .font(.footnote.monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                        }
+                        Text("You can view, share or delete this record in Settings → Logs.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Section {
+                        Picker("Type", selection: $kind) {
+                            ForEach(Kind.allCases) { k in
+                                Text(k.label).tag(k)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        TextField("One-line summary", text: $title)
+                        TextField("What happened, and what did you expect?", text: $detail, axis: .vertical)
+                            .lineLimit(5...12)
+                    } header: {
+                        Text("Feedback (saved locally)")
+                    } footer: {
+                        Text("Records stay in this device's Logs folder and are never uploaded anywhere.")
+                    }
+
+                    Section {
+                        Toggle("Attach environment snapshot (version, OS, device)", isOn: $includeDiagnostics)
+                    }
+
+                    Section {
+                        Button {
+                            if let url = SettingsSheet.makeBugReportURL() {
+                                UIApplication.shared.open(url)
+                            }
+                        } label: {
+                            Label("File a GitHub issue (optional)", systemImage: "arrow.up.right.square")
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Feedback")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(savedURL == nil ? String(localized: "Cancel") : String(localized: "Done")) { dismiss() }
+                }
+                if savedURL == nil {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(String(localized: "Save")) {
+                            let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+                            let trimmedDetail = detail.trimmingCharacters(in: .whitespacesAndNewlines)
+                            savedURL = LoggingManager.shared.saveFeedbackRecord(
+                                kind: kind.rawValue,
+                                title: trimmedTitle.isEmpty ? String(localized: "Untitled feedback") : trimmedTitle,
+                                detail: trimmedDetail.isEmpty ? String(localized: "(no details given)") : trimmedDetail,
+                                includeDiagnostics: includeDiagnostics
+                            )
+                        }
+                        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                  && detail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 }
 

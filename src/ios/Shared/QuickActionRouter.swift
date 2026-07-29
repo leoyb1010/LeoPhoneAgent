@@ -121,6 +121,23 @@ final class QuickActionRouter: ObservableObject {
         postNewChat()
     }
 
+    /// [T-widget-quick-tasks] `leophoneagent://new` — plain new chat from a
+    /// Home Screen widget. Mirrors the newChat Home Screen shortcut path.
+    func startNewChat() {
+        logger.info("startNewChat from deep link")
+        QuickActionWorkflow.shared.reset(reason: "newChat deep link — no follow-up action")
+        postNewChat()
+    }
+
+    /// [T-widget-quick-tasks] `leophoneagent://quick-task/<id>` — open a new
+    /// chat with the quick task's prompt prefilled (same workflow the
+    /// voice/camera shortcuts use).
+    func startQuickTask(id: String) {
+        logger.info("startQuickTask from deep link id=\(id)")
+        QuickActionWorkflow.shared.start(.prefillQuickTask(id: id))
+        postNewChat()
+    }
+
     private func postNewChat() {
         // Bump the @Published counter — ContentView's `.onChange(of:
         // newChatTrigger)` + `.onAppear` belt-and-braces drives the

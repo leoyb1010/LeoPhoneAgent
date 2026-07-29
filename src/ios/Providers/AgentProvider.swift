@@ -162,8 +162,19 @@ extension AgentProvider {
         thinkingLevel: ThinkingLevel
     ) async throws -> AsyncThrowingStream<AgentStreamEvent, Error> {
         let clamped = min(thinkingLevel, model.catalogMaxThinkingLevel)
+        // [T-cache-prefix-stability] Anthropic providers split the prompt on
+        // the cache-boundary marker inside resolveSystemPrompt; no other
+        // provider understands the marker, so it must never reach their
+        // request bodies. Group fallback can hand an Anthropic-assembled
+        // prompt to any provider, which makes this the one safe choke point.
+        let resolvedSystem: String?
+        if self is AnthropicAgentProvider {
+            resolvedSystem = systemPrompt
+        } else {
+            resolvedSystem = systemPrompt.map(SystemPromptCacheBoundary.strip)
+        }
         return try await streamAgentMessageClamped(
-            messages: messages, systemPrompt: systemPrompt,
+            messages: messages, systemPrompt: resolvedSystem,
             tools: tools, maxTokens: maxTokens, thinkingLevel: clamped
         )
     }

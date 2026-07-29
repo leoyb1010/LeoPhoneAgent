@@ -124,7 +124,7 @@ struct ConfigAuditView: View {
                     }
                     .font(.caption)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.glass)
                 .controlSize(.small)
                 .disabled(revertingId == entry.id)
                 .padding(.top, 2)

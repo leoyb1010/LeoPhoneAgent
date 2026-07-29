@@ -668,6 +668,28 @@ final class MCPStore: ObservableObject {
     /// sessionId gives the coordinator a mount context; the static mount layer
     /// it initializes includes /var/minis/mcp-servers.
     func refreshTools(server: String) async throws -> [MCPToolInfo] {
+        // [T-native-mcp] HTTP-family servers are served in-process. That path
+        // needs neither a booted kernel nor python3/httpx inside Alpine, so
+        // remote MCP works on a cold app — which is the common case for the
+        // hosted servers in the built-in directory. stdio servers still need
+        // a local process, so they fall through to the CLI below.
+        if let config = servers.first(where: { $0.id == server }),
+           NativeMCPClient.canHandle(config) {
+            do {
+                await NativeMCPClient.shared.reset(server: server)
+                let tools = try await NativeMCPClient.shared.listTools(server: config)
+                return tools.map { MCPToolInfo(name: $0.name, description: $0.description) }
+            } catch {
+                // Don't strand the user on a native-path failure when the
+                // guest CLI could still do it — but only if the kernel is up.
+                AppLogger(category: "MCPStore")
+                    .warning("native MCP listTools failed for \(server): \(error.localizedDescription)")
+                guard ISHKernel.shared.isBooted else {
+                    throw ToolsRefreshError.cliFailed(error.localizedDescription)
+                }
+            }
+        }
+
         guard ISHKernel.shared.isBooted else { throw ToolsRefreshError.kernelNotBooted }
         // Shell-quote the name defensively (names are also file keys, but a
         // space or quote must not break the command line).

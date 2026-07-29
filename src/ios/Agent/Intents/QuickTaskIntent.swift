@@ -1,6 +1,21 @@
 import AppIntents
 import Foundation
+
 import UserNotifications
+
+/// [T-widget-stop-eager-placeholder] Raised when the user stopped everything
+/// while this intent was still creating its session, so there was nothing for
+/// the stop sweep to cancel yet.
+enum QuickTaskIntentError: LocalizedError {
+    case cancelledBeforeStart
+
+    var errorDescription: String? {
+        switch self {
+        case .cancelledBeforeStart:
+            return String(localized: "Stopped before the task started.")
+        }
+    }
+}
 
 /// Legacy action retained so shortcuts created before 1.0.12 keep their stored
 /// AppEnum parameter and continue running.
@@ -119,6 +134,15 @@ struct QuickTaskIntent: AppIntent {
                 let name = SendPromptIntent.resolvedFileName(for: file)
                 vm.addDataAttachment(data: file.data, fileName: name)
             }
+        }
+
+        // [T-widget-stop-eager-placeholder] A Stop tapped while this session was
+        // still being created could only see the placeholder id, which has no
+        // view model — so it did nothing and the run started anyway, right
+        // after the user asked for it to stop. Honour that request here.
+        if SessionActivityTracker.shared.takeEagerCancel(placeholderSid) {
+            vm.cancel(queuePolicy: .discardQueuedPrompts)
+            throw QuickTaskIntentError.cancelledBeforeStart
         }
 
         let renderedPrompt = definition.renderedPrompt(inputValues: inputValues)

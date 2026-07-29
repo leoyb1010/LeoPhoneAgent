@@ -17,6 +17,8 @@ enum BrowserAction: String, CaseIterable {
     case setUserAgent = "set_user_agent"
     case setViewport = "set_viewport"
     case getBackbone = "get_backbone"
+    /// [T-browser-a11y-tree] Deterministic, token-cheap page representation.
+    case getAccessibilityTree = "get_accessibility_tree"
     case fetch
     case newTab = "new_tab"
     case closeTab = "close_tab"

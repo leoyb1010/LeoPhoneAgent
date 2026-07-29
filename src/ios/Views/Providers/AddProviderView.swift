@@ -106,7 +106,7 @@ struct AIDataSharingConsentView: View {
                             .font(.body.weight(.semibold))
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.glassProminent)
                     .controlSize(.large)
 
                     Button("Cancel", role: .cancel) {
@@ -501,6 +501,37 @@ struct AddProviderView: View {
                 }
             } header: {
                 Text("Authentication")
+            }
+
+            // [T-google-oauth-byo-client] Google sign-in needs an OAuth client
+            // the fork does not ship. Offer the setup entry point right where
+            // the user would otherwise wonder why there is no OAuth option.
+            if selectedType == .gemini {
+                Section {
+                    NavigationLink {
+                        GoogleOAuthClientSetupView()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: GoogleOAuthClientStore.isConfigured
+                                  ? "checkmark.seal.fill" : "person.badge.key")
+                                .font(.body)
+                                .frame(width: 28)
+                                .foregroundStyle(GoogleOAuthClientStore.isConfigured ? .green : Color(UIColor.label))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Google sign-in setup")
+                                    .font(.body.weight(.medium))
+                                    .foregroundStyle(Color(UIColor.label))
+                                Text(GoogleOAuthClientStore.isConfigured
+                                     ? String(localized: "Configured — pick OAuth above to sign in")
+                                     : String(localized: "Add your own Google OAuth client to sign in with an account"))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                } footer: {
+                    Text("Gemini's OAuth (Cloud Code Assist) support is complete, but the Google client secret was removed when this project was open-sourced. Create your own OAuth client in Google Cloud Console — an \"iOS\" type client needs no secret and is recommended.")
+                }
             }
 
             // "Responses API" is now integrated as API Format picker in Step 3
@@ -1120,7 +1151,14 @@ struct AddProviderView: View {
         switch type {
         case .antigravity:
             return [.oauth]
-        case .openAIResponses, .gemini:
+        case .gemini:
+            // [T-google-oauth-byo-client] OAuth is fully implemented (Cloud
+            // Code Assist) but needs a real Google OAuth client, which
+            // upstream stripped. Offer it only once the user has supplied
+            // one — surfacing it unconditionally would just hand them an
+            // `invalid_client` error from Google.
+            return GoogleOAuthClientStore.isConfigured ? [.apiKey, .oauth] : [.apiKey]
+        case .openAIResponses:
             return [.apiKey]
         default:
             return [.apiKey, .oauth]

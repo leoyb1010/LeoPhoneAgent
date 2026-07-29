@@ -16,10 +16,12 @@ class LogManagementViewModel: ObservableObject {
     @Published var logFiles: [LogFile] = []
     @Published var totalSize: Int64 = 0
 
-    /// Running + other logs (non-crash). Shown in the "Log Files" section.
-    var runningFiles: [LogFile] { logFiles.filter { $0.type != "crash" } }
+    /// Running + other logs (non-crash, non-feedback). Shown in the "Log Files" section.
+    var runningFiles: [LogFile] { logFiles.filter { $0.type != "crash" && $0.type != "feedback" } }
     /// Crash reports (crash-*.log). Shown in a separate section only if non-empty.
     var crashFiles: [LogFile] { logFiles.filter { $0.type == "crash" } }
+    /// [T-local-feedback] User feedback records (feedback-*.log).
+    var feedbackFiles: [LogFile] { logFiles.filter { $0.type == "feedback" } }
 
     private let formatter: ByteCountFormatter = {
         let f = ByteCountFormatter()
@@ -118,6 +120,35 @@ struct LogManagementView: View {
                         }
                         vm.load()
                     }
+                }
+            }
+
+            if !vm.feedbackFiles.isEmpty {
+                Section {
+                    ForEach(vm.feedbackFiles) { file in
+                        NavigationLink {
+                            LogDetailView(url: file.url, name: file.name)
+                        } label: {
+                            HStack {
+                                Label(file.name, systemImage: "bubble.left.and.bubble.right")
+                                    .lineLimit(1)
+                                Spacer()
+                                Text(vm.format(file.size))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .onDelete { indexSet in
+                        let files = vm.feedbackFiles
+                        for index in indexSet {
+                            LoggingManager.shared.deleteLog(at: files[index].url)
+                        }
+                        vm.load()
+                    }
+                } header: {
+                    Text("问题反馈记录")
+                } footer: {
+                    Text("通过 设置 → About → Feedback 创建，长期保留，不参与日志自动清理。")
                 }
             }
 

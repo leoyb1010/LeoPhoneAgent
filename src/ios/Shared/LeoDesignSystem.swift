@@ -64,12 +64,86 @@ enum LeoMotion {
     static func spring(reduceMotion: Bool, dampingFraction: Double = 0.82) -> Animation? {
         reduceMotion ? nil : .spring(response: springResponse, dampingFraction: dampingFraction)
     }
+
+    /// [T-modern-motion-curves] `.snappy` for a control responding to a direct
+    /// tap: same family as the system's own controls, so app motion and system
+    /// motion stop disagreeing. Drop-in for the `.easeInOut(duration: 0.2)`
+    /// this app used everywhere.
+    static func snappy(reduceMotion: Bool) -> Animation? {
+        reduceMotion ? nil : .snappy(duration: standard)
+    }
+
+    /// `.smooth` for content settling into place (list reflow, panel resize) —
+    /// no overshoot, which matters when text is reflowing under the animation.
+    static func smooth(reduceMotion: Bool, duration: Double = panel) -> Animation? {
+        reduceMotion ? nil : .smooth(duration: duration)
+    }
+}
+
+/// [T-liquid-glass-adoption] Liquid Glass surfaces.
+///
+/// The app had been paying the *cost* of Liquid Glass for a while — hard-coded
+/// nav-bar band heights, iOS 26 spacing compensations, a pile of "why is this
+/// clipped" comments — without using a single `glassEffect`, so it got the
+/// layout churn and none of the look. Every custom surface was hand-drawn with
+/// `Capsule()` / `RoundedRectangle` + `.plain` button style, which the system
+/// pass cannot restyle.
+///
+/// These wrappers keep the adoption in one place: call sites say what a surface
+/// *is*, not how it is drawn, so the visual language can move again later
+/// without touching them.
+enum LeoGlass {
+    /// Corner radius for a floating control (chips, pills, small action buttons).
+    static let controlRadius: CGFloat = 14
+}
+
+extension View {
+    /// A floating panel: toolbars, inline banners, the composer's accessory row.
+    func leoGlassSurface(cornerRadius: CGFloat = LeoTheme.Radius.surface) -> some View {
+        glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+    }
+
+    /// A pill-shaped floating control.
+    func leoGlassCapsule() -> some View {
+        glassEffect(.regular, in: .capsule)
+    }
+
+    /// An interactive glass surface that reacts to touch. Use for things the
+    /// user taps directly rather than static chrome.
+    func leoGlassInteractive(cornerRadius: CGFloat = LeoGlass.controlRadius) -> some View {
+        glassEffect(.regular.interactive(), in: .rect(cornerRadius: cornerRadius))
+    }
 }
 
 /// Single entry point for user-action feedback. Keep calls in View/UI code so
 /// model and background execution remain deterministic and testable.
 @MainActor
 enum LeoHaptics {
+    /// [T-haptic-semantics] The agent's own state changes, as a small vocabulary
+    /// the whole app shares.
+    ///
+    /// Before this there were five bare `UIFeedbackGenerator` calls scattered
+    /// around and no notion of "a task finished" versus "a task needs you" — so
+    /// the most useful moments in a background-agent app, the ones the user
+    /// feels without looking, produced nothing at all.
+    enum AgentEvent {
+        case taskStarted
+        case taskCompleted
+        case taskFailed
+        /// The run stopped and cannot continue without the user (permission
+        /// prompt, confirmation, browser takeover).
+        case needsAttention
+    }
+
+    static func agent(_ event: AgentEvent) {
+        switch event {
+        case .taskStarted: impact(.light)
+        case .taskCompleted: notification(.success)
+        case .taskFailed: notification(.error)
+        case .needsAttention: notification(.warning)
+        }
+    }
+
     static let enabledDefaultsKey = "leo.hapticsEnabled"
 
     private static var isEnabled: Bool {

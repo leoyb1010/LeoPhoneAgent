@@ -83,7 +83,15 @@ struct CollectionViewMessageListV3: UIViewControllerRepresentable {
         // heights now accurate the +16 breathing room becomes pure
         // dead space — observed as ~100pt gap between the last bubble
         // and the composer top. Restored to the historical +8.
-        let bottomPad: CGFloat = inputBarHeight + floatingBarHeight + 8
+        // [T-tool-preview-occludes-last-line] The floating tool preview's
+        // 100×65 thumbnail sits .bottomLeading on the 38pt status bar, so its
+        // top rises ~27pt above the measured bar height and two stacked
+        // shadows bleed ~10pt further up. The historical +8 margin is eaten
+        // entirely and the last message line is occluded. Reserve one extra
+        // text line while the bar is present (floatingBarHeight > 0); keep
+        // the historical +8 otherwise so we don't reintroduce the dead space
+        // removed in [ClipFix 2026-05-16].
+        let bottomPad: CGFloat = inputBarHeight + floatingBarHeight + (floatingBarHeight > 0 ? 52 : 8)
         let baseChanged = abs(coord.baseBottomInset - bottomPad) > 0.5
         if baseChanged {
             let cv = vc.collectionView!
@@ -3091,7 +3099,9 @@ extension CollectionViewMessageListV3 {
             if #available(iOS 26, *) { return 0 } else { return 8 }
         }
 
-        /// Base contentInset.bottom = inputBarHeight + floatingBarHeight + 8.
+        /// Base contentInset.bottom = inputBarHeight + floatingBarHeight
+        /// + (52 when the floating tool bar is present, else 8) — see
+        /// [T-tool-preview-occludes-last-line] at the computation site.
         /// Set by updateUIViewController; the actual cv.contentInset.bottom
         /// equals this plus the current sub-viewport compensation (if any).
         /// `applySubViewportCompensation` is the only place that writes

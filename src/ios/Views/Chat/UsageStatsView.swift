@@ -157,9 +157,20 @@ struct UsageStatsView: View {
                     if vm.grandTotalCacheCreation > 0 {
                         LabeledContent("Cache Creation", value: formatCount(vm.grandTotalCacheCreation))
                     }
-                    if grandTotalAllInput > 0 && vm.grandTotalCacheRead > 0 {
-                        let grandHitRate = Double(vm.grandTotalCacheRead) / Double(grandTotalAllInput) * 100
-                        LabeledContent("Cache Hit Rate", value: String(format: "%.1f%%", grandHitRate))
+                    if vm.grandTotalCacheRead > 0 {
+                        // Only models that actually report cache usage go into
+                        // the denominator. Providers without prompt-cache
+                        // metrics (OpenAI/Gemini/...) only ever add plain
+                        // input tokens, which silently diluted this rate and
+                        // made caching look broken when it wasn't.
+                        let cacheCapableInput = vm.providers
+                            .flatMap(\.models)
+                            .filter { $0.cacheReadTokens > 0 || $0.cacheCreationTokens > 0 }
+                            .reduce(0) { $0 + $1.inputTokens + $1.cacheReadTokens + $1.cacheCreationTokens }
+                        if cacheCapableInput > 0 {
+                            let grandHitRate = Double(vm.grandTotalCacheRead) / Double(cacheCapableInput) * 100
+                            LabeledContent("Cache Hit Rate (cache-capable models)", value: String(format: "%.1f%%", grandHitRate))
+                        }
                     }
                 }
 

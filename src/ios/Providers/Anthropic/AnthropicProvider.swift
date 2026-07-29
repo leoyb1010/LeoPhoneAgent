@@ -187,22 +187,37 @@ final class AnthropicProvider: LLMProvider {
     /// For Claude Code OAuth, uses array format with the required prefix as a separate text block.
     /// This ensures Anthropic's server-side check sees the exact Claude Code prompt as the first block.
     func resolveSystemPrompt(_ userPrompt: String?) -> MessageParameter.System? {
+        // [T-cache-prefix-stability] The assembled prompt may carry a
+        // cache-boundary marker separating the byte-stable prefix from the
+        // volatile tail (clock, memory logs). The stable block carries the
+        // cache_control breakpoint; the tail is emitted WITHOUT one so its
+        // churn never invalidates the cached tools+system prefix.
         if isClaudeCode {
-            // OAuth (Claude Code): two blocks — base system prompt + user system prompt with cache
+            // OAuth (Claude Code): required Claude Code prompt first, then the
+            // cached stable block, then the uncached volatile tail.
             let base = MessageParameter.Cache(text: Self.claudeCodeSystemPrompt, cacheControl: nil)
             guard let extra = userPrompt, !extra.isEmpty else {
                 return .list([base])
             }
-            let userBlock = MessageParameter.Cache(text: extra,
-                cacheControl: .init(type: .ephemeral))
-            return .list([base, userBlock])
+            let (stable, volatileTail) = SystemPromptCacheBoundary.split(extra)
+            var blocks = [base, MessageParameter.Cache(text: stable,
+                cacheControl: .init(type: .ephemeral))]
+            if let volatileTail {
+                blocks.append(MessageParameter.Cache(text: volatileTail, cacheControl: nil))
+            }
+            return .list(blocks)
         }
-        // API key (including Anthropic-compatible proxies): single block with cache_control
-        // so prompt caching works on all Anthropic-compatible endpoints
+        // API key (including Anthropic-compatible proxies): cached stable block
+        // plus uncached volatile tail, so prompt caching works on all
+        // Anthropic-compatible endpoints.
         guard let prompt = userPrompt, !prompt.isEmpty else { return nil }
-        let block = MessageParameter.Cache(text: prompt,
-            cacheControl: .init(type: .ephemeral))
-        return .list([block])
+        let (stable, volatileTail) = SystemPromptCacheBoundary.split(prompt)
+        var blocks = [MessageParameter.Cache(text: stable,
+            cacheControl: .init(type: .ephemeral))]
+        if let volatileTail {
+            blocks.append(MessageParameter.Cache(text: volatileTail, cacheControl: nil))
+        }
+        return .list(blocks)
     }
 
     func sendMessage(

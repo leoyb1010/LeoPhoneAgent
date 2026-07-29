@@ -1693,6 +1693,17 @@ actor ChatStore {
         sqlite3_finalize(stmt)
         markDirty(recordType: "Session", recordId: id)
         NotificationCenter.default.post(name: .sessionDidUpdate, object: id)
+        // [T-spotlight-sessions] A session is only findable once it has a real
+        // title, and the title is generated after the first exchange — so this
+        // is the moment to index it.
+        let indexedTitle = title
+        Task { @MainActor in
+            if let session = await ChatStore.shared.getSession(id) {
+                SessionSpotlightIndexer.index(session: session)
+            } else {
+                _ = indexedTitle
+            }
+        }
     }
 
     /// Toggle pin state for a session. Returns the new pinned state.
@@ -1794,6 +1805,9 @@ actor ChatStore {
         // 30-day TTL on launch (ids are UUIDs, so it never blocks a real
         // future session).
         recordDeletedSessionTombstone(id)
+        // [T-spotlight-sessions] Drop it from system search too, or the result
+        // survives the session and opens an empty chat.
+        Task { @MainActor in SessionSpotlightIndexer.remove(sessionId: id) }
     }
 
     /// Hard-delete a session and its children locally without queuing any

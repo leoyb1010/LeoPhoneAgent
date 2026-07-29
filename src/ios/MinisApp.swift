@@ -125,6 +125,10 @@ struct MinisApp: App {
         Bundle.enableLanguageOverride()
         let lang = UserDefaults.standard.string(forKey: "appLanguage") ?? ""
         Bundle.setLanguage(lang.isEmpty ? nil : lang)
+        // [T-widget-localization] The widget extension is a separate process
+        // and never sees the swizzle above; mirror the choice into the App
+        // Group so widget views can apply it as a locale.
+        LeoWidgetLanguage.save(lang)
         // [T-ios-soul-name-sidebar-stale] Pre-load cachedMetadata synchronously so
         // ContentView's `@State soulName` gets the real SOUL.md name on its very
         // first render instead of the `.default` stub ("LeoPhoneAgent"). Without this the
@@ -439,6 +443,25 @@ struct MinisApp: App {
 
                 if #available(iOS 17.0, *) {
                     SkillFilesystemNotifier.shared.drainIfDirtyAsync(reason: "scenePhase active")
+                }
+
+                // [T-widget-mirror] Keep the usage / memory widgets current.
+                // Cheap (one SQL scan + one small file read) and only on
+                // foreground, so it never competes with the agent loop.
+                Task {
+                    // Catch-up: publishes any briefing whose session finished
+                    // while we were suspended (the observer would have died).
+                    await WidgetDataMirror.resolvePendingBriefings(reason: "foreground")
+                    await WidgetDataMirror.refreshAll()
+                    // [T-scheduled-tasks] Reconcile the schedule. This is the
+                    // fallback path when no Shortcuts automation is set up —
+                    // a due task runs when the user next opens the app rather
+                    // than being silently lost.
+                    await ScheduledTaskRunner.runDueTasks(reason: "foreground")
+                    // [T-spotlight-sessions] Converge the search index:
+                    // sessions renamed or deleted on another device, and any
+                    // created while indexing was off.
+                    await SessionSpotlightIndexer.reindexAll()
                 }
 
                 Self.signalFileProvider()

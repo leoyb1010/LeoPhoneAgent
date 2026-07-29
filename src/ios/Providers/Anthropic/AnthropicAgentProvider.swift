@@ -822,7 +822,10 @@ final class AnthropicAgentProvider: AgentProvider {
     /// that the next iteration can cache-hit (it becomes the new N-3, still within
     /// the 20-block lookback window). Breakpoint 4 caches the tail.
     private func messagesWithCacheBreakpoints(_ messages: [MessageParameter.Message]) -> [MessageParameter.Message] {
-        guard messages.count >= 3 else { return messages }
+        // [T-cache-prefix-stability] Was `>= 3`, which left the first two
+        // turns of every session without message breakpoints; short sessions
+        // never cached their conversation prefix at all.
+        guard !messages.isEmpty else { return messages }
 
         var result = messages
         let cacheControl = MessageParameter.CacheControl(type: .ephemeral)

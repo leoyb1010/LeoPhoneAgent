@@ -17,6 +17,12 @@ struct MCPFormSheet: View {
     /// nil = add mode; non-nil = edit the existing server (id locked).
     let server: MCPServerConfig?
 
+    /// [T-mcp-catalog] Optional template from the recommended-servers catalog.
+    /// Fills the form like edit mode but keeps add-mode semantics: the name
+    /// stays editable and Save creates a new server. Ignored when `server`
+    /// is non-nil.
+    var prefill: MCPServerConfig? = nil
+
     private enum Transport: String, CaseIterable, Identifiable {
         case http = "HTTP"
         case sse = "SSE"
@@ -75,8 +81,20 @@ struct MCPFormSheet: View {
 
     private var isEditing: Bool { server != nil }
 
+    /// [T-mcp-placeholder-guard] Literal placeholders that mean "the user has
+    /// not filled this in yet". Saving one produced a server that was enabled,
+    /// injected into every system prompt, and answered 401 with a message that
+    /// said nothing about the real cause.
+    private static let unresolvedPlaceholders = ["YOUR_KEY", "YOUR_AK", "YOUR_API_KEY", "YOUR_TOKEN"]
+
+    private var unresolvedPlaceholder: String? {
+        let haystack = url + " " + headers.map { $0.key + " " + $0.value }.joined(separator: " ")
+        return Self.unresolvedPlaceholders.first { haystack.contains($0) }
+    }
+
     private var canSave: Bool {
         guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
+        guard unresolvedPlaceholder == nil else { return false }
         switch transport {
         case .http, .sse: return !url.trimmingCharacters(in: .whitespaces).isEmpty
         case .stdio: return !command.trimmingCharacters(in: .whitespaces).isEmpty
@@ -144,7 +162,7 @@ struct MCPFormSheet: View {
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
                 .controlSize(.large)
                 .disabled(!canSave)
                 .padding(.horizontal)
@@ -183,6 +201,19 @@ struct MCPFormSheet: View {
                     // URL references join with no separator (a URL is a base +
                     // token segment); header/env values join with a space.
                     envReferenceMenu(into: $url, separator: "")
+                }
+                // [T-mcp-placeholder-guard] Explain why Save is disabled. A
+                // catalog entry arrives with a $$NAME reference; a URL copied
+                // from vendor docs often still says YOUR_KEY, and saving that
+                // produced an enabled server that failed with a bare 401.
+                if let placeholder = unresolvedPlaceholder {
+                    Label {
+                        Text("Replace \(placeholder) with your own credential, or reference an environment variable with $$NAME, before saving.")
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.orange)
                 }
             }
             Section(String(localized: "Custom Headers")) {
@@ -260,7 +291,7 @@ struct MCPFormSheet: View {
                         }
                     }
                     .disabled(isAuthorizing || !canSave || oauthClientId.trimmingCharacters(in: .whitespaces).isEmpty)
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.glassProminent)
                     .controlSize(.small)
                 }
                 if let oauthError {
@@ -455,7 +486,10 @@ struct MCPFormSheet: View {
     }
 
     private func populate() {
-        guard let server, name.isEmpty, url.isEmpty, command.isEmpty else { return }
+        guard name.isEmpty, url.isEmpty, command.isEmpty else { return }
+        // [T-mcp-catalog] Catalog prefill: same field mapping as edit mode,
+        // but `server` stays nil so isEditing remains false.
+        guard let server = server ?? prefill else { return }
         name = server.id
         note = server.note ?? ""
         if server.isSTDIO {

@@ -150,7 +150,7 @@ struct SyncMigrationDetailView: View {
                                         .font(.caption2.weight(.semibold))
                                         .frame(width: 16, height: 16)
                                 }
-                                .buttonStyle(.borderedProminent)
+                                .buttonStyle(.glassProminent)
                                 .clipShape(Circle())
                             } else {
                                 Button {
@@ -160,7 +160,7 @@ struct SyncMigrationDetailView: View {
                                         .font(.caption2.weight(.semibold))
                                         .frame(width: 16, height: 16)
                                 }
-                                .buttonStyle(.bordered)
+                                .buttonStyle(.glass)
                                 .clipShape(Circle())
                             }
                         }

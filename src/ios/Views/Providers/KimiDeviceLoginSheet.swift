@@ -57,7 +57,7 @@ struct KimiDeviceLoginSheet: View {
                         .foregroundStyle(.secondary)
                         .padding(.horizontal)
                     Button(String(localized: "Try Again")) { start() }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.glassProminent)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -105,7 +105,7 @@ struct KimiDeviceLoginSheet: View {
         } label: {
             Label(String(localized: "Open verification page"), systemImage: "safari")
         }
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(.glassProminent)
 
         HStack(spacing: 6) {
             ProgressView().controlSize(.small)
@@ -155,7 +155,7 @@ struct KimiDeviceLoginSheet: View {
     /// top-most VC (which is this sheet) so it stacks over the login sheet.
     private func presentSafari(_ url: URL) {
         guard let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene }).first,
+            .compactMap({ $0 as? UIWindowScene }).activeFirst,
               let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else { return }
         var topVC = root
         while let presented = topVC.presentedViewController { topVC = presented }

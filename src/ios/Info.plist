@@ -2,6 +2,21 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- [T-ipad-multiwindow] Opt into multiple scenes so iPad can run two
+	     windows side by side — the natural shape for an agent app, where one
+	     window watches a long task while the other starts something new.
+	     The app was already scene-based (AppDelegate.configurationForConnecting
+	     installs SceneDelegate); this only lifts the single-window cap.
+	     Shared state is already actor/singleton-owned (ChatStore,
+	     ViewModelCache, SessionActivityTracker), so a second window observes
+	     the same sessions rather than forking them. Per-window UI state
+	     (selection, draft session, navigation path) is @State on ContentView
+	     and is therefore correctly independent per window. -->
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<true/>
+	</dict>
 	<key>CFBundleDisplayName</key>
 	<string>LeoPhoneAgent</string>
 	<key>CFBundleName</key>

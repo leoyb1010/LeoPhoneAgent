@@ -419,7 +419,7 @@ private class PlayerSession {
 
     private static func topViewController() -> UIViewController? {
         guard let windowScene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene }).first,
+            .compactMap({ $0 as? UIWindowScene }).activeFirst,
               let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController else {
             return nil
         }

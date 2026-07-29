@@ -270,7 +270,7 @@ struct ArtifactTrayView: View {
             Button(String(localized: "Try Again")) {
                 Task { await viewModel.load() }
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.glassProminent)
         }
         .padding(32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

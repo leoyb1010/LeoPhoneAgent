@@ -255,6 +255,17 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     /// we've retried for the current start attempt. Reset on success / when the
     /// budget is exhausted.
     private var silentAudioActivationRetries = 0
+
+    /// [T-widget-reload-budget] WidgetKit gives an app a finite number of
+    /// timeline reloads per day and spends them fastest when the app is in the
+    /// background — exactly when a long agent run is happening. This throttles
+    /// the reload (not the snapshot write, which is cheap and always current):
+    /// a state transition reloads immediately, a same-state progress tick at
+    /// most once per `widgetReloadMinInterval`.
+    private var lastWidgetReloadAt: Date?
+    private var lastWidgetReloadState: AgentWidgetSnapshot.State?
+    private var lastWidgetReloadActiveCount: Int = -1
+    private static let widgetReloadMinInterval: TimeInterval = 90
     private static let maxActivationRetries = 3
     private static let activationRetryDelay: TimeInterval = 0.5
 
@@ -350,6 +361,23 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         guard !didSetup else { return }
         didSetup = true
         logger.info("[BackgroundKeepAlive] Setup: enabled=\(self.enhancedBackgroundEnabled), locationTracking=\(self.locationTrackingEnabled)")
+
+        // [T-bg-launched-into-background] `appIsInBackground` was only ever
+        // set by didEnterBackgroundNotification, which is delivered on a
+        // foreground→background transition and NEVER to a process the system
+        // launched straight into the background (widget AppIntent, Shortcuts).
+        // Every keep-alive leg ANDs on this flag, so those runs silently got
+        // no silent audio, no location session, and no arming timer — while
+        // armEagerlyForShortcut still logged armed=true, making the failure
+        // invisible. Seed it from the real process state instead, and kick
+        // the evaluations that the missing notification would have driven.
+        let launchedInBackground = UIApplication.shared.applicationState == .background
+        if launchedInBackground {
+            appIsInBackground = true
+            logger.info("[BKA][Lifecycle] setup() observed background launch — seeding appIsInBackground=true")
+            scheduleBackgroundLocationArming()
+            evaluateSilentAudio(caller: "setup.launchedInBackground")
+        }
 
         if #available(iOS 17.0, *) {
             let probe = CLBackgroundActivitySession()
@@ -1229,7 +1257,6 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             AudioSessionCoordinator.shared.begin(.backgroundKeepAlive)
         }
         logger.info("[BKA][Start] begin(.backgroundKeepAlive) — acquiring engine")
-        silentAudioActivationRetries = 0
 
         let engine = AVAudioEngine()
         let player = AVAudioPlayerNode()
@@ -1241,6 +1268,11 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         guard let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1),
               let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else {
             logger.error("[BackgroundKeepAlive] Failed to create silent audio buffer")
+            // [T-bg-audio-intent-leak] stopSilentAudio() bails on
+            // `guard silentAudioActive`, which is still false here — so the
+            // coordinator intent declared above has to be released on this
+            // path explicitly or it pins the .mixWithOthers profile forever.
+            releaseKeepAliveAudioIntent()
             return
         }
         buffer.frameLength = frameCount
@@ -1256,10 +1288,30 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             audioEngine = engine
             silentPlayerNode = player
             silentAudioActive = true
+            // Only a real success clears the retry budget. Resetting before the
+            // attempt (as this used to) made `scheduleSilentAudioActivationRetry`
+            // compute attempt #1 forever, so maxActivationRetries was
+            // unreachable and a persistently failing engine retried every 0.5s
+            // without end. [T-bg-audio-retry-counter]
+            silentAudioActivationRetries = 0
             startAudioUpdateTimer()
             logger.info("[BKA][Start] engine running — silent audio keep-alive ACTIVE")
         } catch {
             logger.error("[BKA][Start] engine.start() FAILED: \(error.localizedDescription)")
+            // [T-bg-audio-start-retry-deadcode] scheduleSilentAudioActivationRetry
+            // was written for exactly this case but had no call site, so a
+            // transient start failure (another app briefly holding the session
+            // during launch) permanently disabled keep-alive for that run.
+            releaseKeepAliveAudioIntent()
+            scheduleSilentAudioActivationRetry()
+        }
+    }
+
+    /// Release the `.backgroundKeepAlive` intent taken at the top of
+    /// `startSilentAudio` when the engine never actually came up.
+    private func releaseKeepAliveAudioIntent() {
+        MainActor.assumeIsolated {
+            AudioSessionCoordinator.shared.end(.backgroundKeepAlive)
         }
     }
 
@@ -1332,7 +1384,18 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         }
         logger.info("[ShortcutDiag] eagerKeepAlive caller=\(caller) decision=STARTED session=\(sessionId.prefix(8))")
         SessionActivityTracker.shared.setActive(sessionId, source: "\(caller).eager")
-        evaluateSilentAudio(caller: "\(caller).eager")
+        // [T-eager-arm-noop] This used to call `evaluateSilentAudio` right here
+        // and the doc above claimed the engine spun up "immediately". It cannot:
+        // `setActive` only publishes, and the subscriber chain has
+        // `.receive(on: DispatchQueue.main)`, so `isActive` is still false at
+        // this point and the evaluation was always a no-op. The engine really
+        // starts on the next main-queue hop — fine in the common case, but it
+        // is the hop that gets lost if the intent is suspended immediately.
+        // Ask again on that next hop so the intent's own first `await` is not
+        // the only thing that can trigger it.
+        DispatchQueue.main.async { [weak self] in
+            self?.evaluateSilentAudio(caller: "\(caller).eagerDeferred")
+        }
         return (true, nil)
     }
 
@@ -1413,7 +1476,15 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         terminalSessionId: String = ""
     ) {
         let tracker = SessionActivityTracker.shared
-        let activeIds = tracker.activeSessions.sorted()
+        // [T-widget-session-pick] `sorted().first` picked whichever id happened
+        // to sort first, which with several running sessions is unrelated to
+        // the one whose tool info just changed — the widget showed session A's
+        // name over session B's progress. Prefer the most recently updated.
+        let activeIds = tracker.activeSessions.sorted { lhs, rhs in
+            let l = tracker.sessionToolInfo[lhs]?.lastToolChange ?? .distantPast
+            let r = tracker.sessionToolInfo[rhs]?.lastToolChange ?? .distantPast
+            return l == r ? lhs < rhs : l > r
+        }
         let privacy = liveActivityPrivacyMode
         let selectedId = activeIds.first ?? terminalSessionId
         let info = selectedId.isEmpty ? nil : tracker.sessionToolInfo[selectedId]
@@ -1454,7 +1525,31 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             logger.warning("[Widget] failed to save snapshot src=\(source)")
             return
         }
-        WidgetCenter.shared.reloadTimelines(ofKind: "LeoAgentStatusWidget")
+
+        // [T-widget-reload-budget] The snapshot above is always fresh — the
+        // widget picks it up on its own next timeline refresh regardless. What
+        // is rationed here is asking WidgetKit to rebuild NOW. This is reached
+        // from updateLiveActivityIfNeeded, which the keep-alive timers call
+        // every 5–10s during a run; unthrottled that burned two reloads
+        // (status + iPad console) per tick and exhausted the daily budget,
+        // after which the widget stopped updating altogether — the opposite of
+        // what the mid-run refresh was added for.
+        let stateChanged = state != lastWidgetReloadState || activeIds.count != lastWidgetReloadActiveCount
+        let elapsed = lastWidgetReloadAt.map { Date().timeIntervalSince($0) } ?? .greatestFiniteMagnitude
+        guard stateChanged || elapsed >= Self.widgetReloadMinInterval else {
+            logger.info("[Widget] snapshot saved, reload throttled src=\(source) elapsed=\(String(format: "%.0f", elapsed))s")
+            return
+        }
+        lastWidgetReloadAt = Date()
+        lastWidgetReloadState = state
+        lastWidgetReloadActiveCount = activeIds.count
+
+        WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.status)
+        // The iPad console renders the same status pane, so it has to follow.
+        WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.iPadConsole)
+        // [T-watch-companion] The watch shows the same status; App Groups do
+        // not cross devices, so it has to be pushed over WatchConnectivity.
+        WatchBridge.shared.pushStatus()
         logger.info("[Widget] refreshed src=\(source) state=\(state.rawValue) active=\(activeIds.count) privacy=\(privacy)")
     }
 

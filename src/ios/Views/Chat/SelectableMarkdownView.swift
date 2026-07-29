@@ -7729,12 +7729,17 @@ struct SelectableMarkdownView: UIViewRepresentable {
             // treats a single tap on it as an IMAGE text-item and pops the
             // system "拷贝图像/存入相机胶卷" preview. Suppress that here by
             // returning a no-op action; the real table interaction lives on the
-            // overlaid TableScrollView, which still scrolls/selects. iOS 19+
-            // changed the system behavior, so leave its default untouched.
-            if #available(iOS 19, *) {
-                // iOS 19+: default behavior, no change.
-            } else if case .textAttachment(let attachment) = textItem.content,
-                      attachment is TableAttachment {
+            // overlaid TableScrollView, which still scrolls/selects.
+            //
+            // [T-ios19-never-shipped] This used to be gated on
+            // `#available(iOS 19, *)` as a bet that a future release would fix
+            // the system behavior. iOS 19 was never released — Apple went from
+            // 18 to 26 — so on every current OS the guard evaluated true and
+            // silently disabled the suppression. Apply it unconditionally;
+            // if a future OS does change, this can be re-gated on a version
+            // that actually exists.
+            if case .textAttachment(let attachment) = textItem.content,
+               attachment is TableAttachment {
                 return UIAction { _ in }
             }
             return defaultAction
@@ -7758,11 +7763,13 @@ struct SelectableMarkdownView: UIViewRepresentable {
                 // preview. Offer a real "Copy Table" menu (tab-separated text,
                 // same payload as the TableScrollView copyTable path) instead of
                 // the empty menu, and a nil preview so no image sheet appears.
-                // iOS 19+ behavior is unchanged (falls through to the logic
-                // below).
-                if #available(iOS 19, *) {
-                    // iOS 19+: no special-casing, use the logic below.
-                } else if let tableAttach = attachment as? TableAttachment {
+                //
+                // [T-ios19-never-shipped] Was gated on `#available(iOS 19, *)`,
+                // a version that never shipped, so on iOS 26/27 this branch was
+                // skipped and a table fell through to the ImageAttachment guard
+                // below — which returns an EMPTY menu. Net effect: "Copy Table"
+                // silently disappeared on current OSes. Unconditional now.
+                if let tableAttach = attachment as? TableAttachment {
                     let copyTableAction = UIAction(
                         title: String(localized: "Copy Table"),
                         image: UIImage(systemName: "tablecells")

@@ -366,7 +366,7 @@ final class CodexOAuthManager: NSObject, ObservableObject {
 
     private func presentSafariViewController(url: URL) {
         guard let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene }).first,
+            .compactMap({ $0 as? UIWindowScene }).activeFirst,
               let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else { return }
         var topVC = root
         while let presented = topVC.presentedViewController { topVC = presented }

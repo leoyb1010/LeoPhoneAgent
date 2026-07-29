@@ -177,9 +177,32 @@ class RootfsManager {
 
     /// Overlay default configuration files from the bundle onto the rootfs.
     /// Runs on every boot so app updates with new defaults take effect.
+    /// Removes guest paths that earlier builds created and current builds no
+    /// longer touch. Idempotent and cheap: a `fileExists` check per entry.
+    private func removeRenamedLegacyPaths() {
+        let legacy = ["/usr/local/lib/minis-mcp-cli"]
+        let fm = FileManager.default
+        for path in legacy {
+            let hostURL = dataPath.appendingPathComponent(path)
+            guard fm.fileExists(atPath: hostURL.path) else { continue }
+            removeFakefsPath(path)
+            try? fm.removeItem(at: hostURL)
+            logger.info("[DefaultMount] removed legacy path \(path)")
+        }
+    }
+
     func applyDefaultMountOverlay() {
         let totalStart = CFAbsoluteTimeGetCurrent()
         logger.info("[DefaultMount] applyDefaultMountOverlay() called")
+
+        // [T-mcp-cli-rename-leftovers] The in-guest MCP CLI used to live at
+        // /usr/local/lib/minis-mcp-cli. This overlay only ever WRITES, so after
+        // the rename the old tree stayed on disk forever — and the old build
+        // had registered those files 0444 and their directory 0555 in the
+        // fakefs meta db, so `rm -rf` inside the guest fails with EACCES as
+        // well. Neither side could clean it up. Do it once, host-side, where
+        // guest permissions do not apply.
+        removeRenamedLegacyPaths()
 
         guard let overlayURL = Bundle.main.url(forResource: "default_mount", withExtension: nil) else {
             logger.info("[DefaultMount] No default_mount found in bundle")

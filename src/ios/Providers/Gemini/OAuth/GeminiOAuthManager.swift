@@ -1,3 +1,4 @@
+import AuthenticationServices
 import Foundation
 import UIKit
 import SafariServices
@@ -16,14 +17,36 @@ final class GeminiOAuthManager: NSObject, ObservableObject {
     private let authURL = "https://accounts.google.com/o/oauth2/v2/auth"
     private let tokenURL = "https://oauth2.googleapis.com/token"
     private let userInfoURL = "https://www.googleapis.com/oauth2/v1/userinfo"
-    private let clientID = "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com"
-    // Placeholder. Google OAuth requires a client secret alongside the
-    // client id; supply your own from Google Cloud Console to use this
-    // sign-in. API-key providers are unaffected.
-    private let clientSecret = "GOCSPX-xxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    // [T-google-oauth-byo-client] The bundled values are upstream's stripped
+    // placeholders; a user-supplied client from Google Cloud Console takes
+    // precedence and is what actually makes this flow work.
+    private var clientID: String {
+        GoogleOAuthClientStore.clientID.flatMap { $0.isEmpty ? nil : $0 }
+            ?? "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com"
+    }
+    private var clientSecret: String {
+        GoogleOAuthClientStore.clientSecret.flatMap { $0.isEmpty ? nil : $0 }
+            ?? "GOCSPX-xxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
     private let callbackPort: UInt16 = 8085
     private var redirectURI: String { "http://localhost:\(callbackPort)/oauth2callback" }
-    private let scopes = "https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile"
+    // [T-google-oauth-byo-client] `generative-language.retriever` comes from
+    // Google's own Gemini API OAuth guide. Without it the fallback path
+    // (generativelanguage.googleapis.com, used whenever Cloud Code Assist
+    // project discovery fails) is unauthorized and 403s — GeminiModelsAPI
+    // already documents that symptom. Cloud Code Assist ignores the extra
+    // scope, so adding it costs nothing and rescues the fallback.
+    private let scopes = "https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/generative-language.retriever https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile"
+
+    /// Loopback redirect (desktop clients) vs reversed-client-id custom
+    /// scheme (iOS clients).
+    private var effectiveRedirectURI: String {
+        if GoogleOAuthClientStore.kind == .iOS,
+           let iosRedirect = GoogleOAuthClientStore.iOSRedirectURI {
+            return iosRedirect
+        }
+        return redirectURI
+    }
 
     private let cliUserAgent = "GeminiCLI/0.30.0 (darwin; arm64)"
     private let setupClientMetadata: [String: String] = [
@@ -83,19 +106,24 @@ final class GeminiOAuthManager: NSObject, ObservableObject {
 
         let state = generateState()
         let pkce = generatePKCE()
+        let isIOSClient = GoogleOAuthClientStore.kind == .iOS
 
-        // 1. Start local HTTP server
-        let server = OAuthCallbackServer(port: callbackPort, callbackPath: "/oauth2callback")
-        self.callbackServer = server
-        try server.start()
-        logger.info("Callback server started on port \(self.callbackPort)")
+        // 1. Start local HTTP server — desktop clients only. An iOS client
+        //    redirects to its reversed-client-id scheme, which
+        //    ASWebAuthenticationSession intercepts directly.
+        if !isIOSClient {
+            let server = OAuthCallbackServer(port: callbackPort, callbackPath: "/oauth2callback")
+            self.callbackServer = server
+            try server.start()
+            logger.info("Callback server started on port \(self.callbackPort)")
+        }
 
         // 2. Build authorization URL with PKCE (S256)
         var components = URLComponents(string: authURL)!
         components.queryItems = [
             URLQueryItem(name: "response_type", value: "code"),
             URLQueryItem(name: "client_id", value: clientID),
-            URLQueryItem(name: "redirect_uri", value: redirectURI),
+            URLQueryItem(name: "redirect_uri", value: effectiveRedirectURI),
             URLQueryItem(name: "scope", value: scopes),
             URLQueryItem(name: "state", value: state),
             URLQueryItem(name: "access_type", value: "offline"),
@@ -104,23 +132,33 @@ final class GeminiOAuthManager: NSObject, ObservableObject {
             URLQueryItem(name: "code_challenge_method", value: "S256"),
         ]
         let authorizationURL = components.url!
-        logger.info("Opening OAuth authorization page for \(authorizationURL.host ?? "provider")")
+        logger.info("Opening OAuth authorization page for \(authorizationURL.host ?? "provider") clientKind=\(isIOSClient ? "iOS" : "desktop")")
 
-        // 3. Open in-app Safari
-        presentSafariViewController(url: authorizationURL)
-
-        // 4. Wait for callback
-        let result = try await server.waitForCallback(timeout: 300)
-        logger.info("Callback received — code length: \(result.code.count)")
-
-        // 5. Validate state
-        guard result.state == state else {
-            logger.error("State mismatch!")
-            throw LLMError.providerError(message: "OAuth state mismatch")
+        // 3-5. Present and collect the code.
+        let authCode: String
+        if isIOSClient {
+            guard let scheme = GoogleOAuthClientStore.iOSCallbackScheme else {
+                throw LLMError.providerError(message: String(localized:
+                    "Google 客户端 ID 格式不正确，应以 .apps.googleusercontent.com 结尾。"))
+            }
+            authCode = try await runWebAuthSession(
+                url: authorizationURL, callbackScheme: scheme, expectedState: state)
+        } else {
+            presentSafariViewController(url: authorizationURL)
+            guard let server = callbackServer else {
+                throw LLMError.providerError(message: "OAuth callback server unavailable")
+            }
+            let result = try await server.waitForCallback(timeout: 300)
+            logger.info("Callback received — code length: \(result.code.count)")
+            guard result.state == state else {
+                logger.error("State mismatch!")
+                throw LLMError.providerError(message: "OAuth state mismatch")
+            }
+            authCode = result.code
         }
 
         // 6. Exchange code for token (with PKCE verifier)
-        let token = try await exchangeCode(result.code, codeVerifier: pkce.verifier)
+        let token = try await exchangeCode(authCode, codeVerifier: pkce.verifier)
         ProviderKeychainHelper.saveOAuthToken(token, instanceId: instanceId)
 
         // 7. Fetch user email
@@ -260,28 +298,97 @@ final class GeminiOAuthManager: NSObject, ObservableObject {
         return (verifier, challenge)
     }
 
+    // MARK: - iOS-client auth session [T-google-oauth-byo-client]
+
+    private var webAuthSession: ASWebAuthenticationSession?
+
+    /// Runs the authorization step for an iOS-type OAuth client. The custom
+    /// scheme is claimed by ASWebAuthenticationSession itself, so nothing has
+    /// to be declared in Info.plist and no loopback server is needed.
+    private func runWebAuthSession(
+        url: URL,
+        callbackScheme: String,
+        expectedState: String
+    ) async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in
+            var didResume = false
+            let session = ASWebAuthenticationSession(
+                url: url,
+                callbackURLScheme: callbackScheme
+            ) { callbackURL, error in
+                guard !didResume else { return }
+                didResume = true
+                if let error {
+                    let nsError = error as NSError
+                    if nsError.domain == ASWebAuthenticationSessionErrorDomain,
+                       nsError.code == ASWebAuthenticationSessionError.canceledLogin.rawValue {
+                        continuation.resume(throwing: LLMError.providerError(
+                            message: String(localized: "已取消 Google 登录。")))
+                    } else {
+                        continuation.resume(throwing: error)
+                    }
+                    return
+                }
+                guard let callbackURL,
+                      let components = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false) else {
+                    continuation.resume(throwing: LLMError.providerError(message: "OAuth callback was empty"))
+                    return
+                }
+                let items = components.queryItems ?? []
+                if let failure = items.first(where: { $0.name == "error" })?.value {
+                    continuation.resume(throwing: LLMError.providerError(
+                        message: "Google 拒绝了授权请求：\(failure)"))
+                    return
+                }
+                guard items.first(where: { $0.name == "state" })?.value == expectedState else {
+                    continuation.resume(throwing: LLMError.providerError(message: "OAuth state mismatch"))
+                    return
+                }
+                guard let code = items.first(where: { $0.name == "code" })?.value, !code.isEmpty else {
+                    continuation.resume(throwing: LLMError.providerError(message: "OAuth callback had no code"))
+                    return
+                }
+                continuation.resume(returning: code)
+            }
+            session.presentationContextProvider = self
+            session.prefersEphemeralWebBrowserSession = false
+            self.webAuthSession = session
+            if !session.start() {
+                didResume = true
+                continuation.resume(throwing: LLMError.providerError(
+                    message: String(localized: "无法打开 Google 登录页面。")))
+            }
+        }
+    }
+
     // MARK: - Token Exchange
 
     private func exchangeCode(_ code: String, codeVerifier: String) async throws -> GeminiTokenStorage {
-        let body: [String: String] = [
+        var body: [String: String] = [
             "grant_type": "authorization_code",
             "client_id": clientID,
-            "client_secret": clientSecret,
             "code": code,
-            "redirect_uri": redirectURI,
+            "redirect_uri": effectiveRedirectURI,
             "code_verifier": codeVerifier,
         ]
+        // iOS-type clients have no secret — sending one is an error, and PKCE
+        // is what proves the exchange instead.
+        if GoogleOAuthClientStore.kind == .desktop {
+            body["client_secret"] = clientSecret
+        }
 
         return try await postTokenRequest(body: body, context: "Token exchange")
     }
 
     private func performRefresh(refreshToken: String) async throws -> GeminiTokenStorage {
-        let body: [String: String] = [
+        var body: [String: String] = [
             "grant_type": "refresh_token",
             "client_id": clientID,
-            "client_secret": clientSecret,
             "refresh_token": refreshToken,
         ]
+        if GoogleOAuthClientStore.kind == .desktop {
+            body["client_secret"] = clientSecret
+        }
 
         var storage = try await postTokenRequest(body: body, context: "Token refresh")
         // Google doesn't always return a new refresh token on refresh
@@ -317,6 +424,13 @@ final class GeminiOAuthManager: NSObject, ObservableObject {
 
         guard (200..<300).contains(statusCode) else {
             logger.error("\(context) FAILED — status \(statusCode)")
+            // [T-google-oauth-byo-client] `invalid_client` is the one failure
+            // a user can actually fix, and Google's raw JSON says nothing
+            // about how. Name the cause instead.
+            if responseBody.contains("invalid_client") {
+                throw LLMError.providerError(message: String(localized:
+                    "Google rejected the OAuth client (invalid_client). Add your own Google Cloud OAuth client under Add Provider → Google sign-in setup. An \"iOS\" application type (bundle ID com.leoyuan.leophoneagent, no secret) is recommended; a \"Desktop app\" client with its secret also works."))
+            }
             // [T-oauth-refresh-race-classify] Embed the real HTTP status for
             // structured classification (not body substring matching).
             throw LLMError.providerError(message: "\(context) failed: " + OAuthRefreshErrorClassifier.makeErrorMessage(status: statusCode, body: responseBody))
@@ -533,7 +647,7 @@ final class GeminiOAuthManager: NSObject, ObservableObject {
 
     private func presentSafariViewController(url: URL) {
         guard let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene }).first,
+            .compactMap({ $0 as? UIWindowScene }).activeFirst,
               let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else { return }
         var topVC = root
         while let presented = topVC.presentedViewController { topVC = presented }
@@ -567,5 +681,16 @@ private extension Data {
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
+    }
+}
+
+// MARK: - ASWebAuthenticationSession presentation [T-google-oauth-byo-client]
+
+extension GeminiOAuthManager: ASWebAuthenticationPresentationContextProviding {
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first { $0.isKeyWindow } ?? ASPresentationAnchor()
     }
 }

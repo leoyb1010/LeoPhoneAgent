@@ -129,6 +129,8 @@
 		E5AT00003 /* AudioTogglePlaybackIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AT00011 /* AudioTogglePlaybackIntent.swift */; };
 		E5AT00004 /* AudioTogglePlaybackIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AT00011 /* AudioTogglePlaybackIntent.swift */; };
 		E5BADGE001 /* SessionBadgeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BADGE011 /* SessionBadgeStore.swift */; };
+		E5WMIR001 /* WidgetDataMirror.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5WMIR011 /* WidgetDataMirror.swift */; };
+		E5WBR001 /* WatchBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5WBR011 /* WatchBridge.swift */; };
 		E5BRM0001 /* BrowserResourceMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BRM0011 /* BrowserResourceMonitor.swift */; };
 		E5BSH0001 /* BashismDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BSH0011 /* BashismDetector.swift */; };
 		E5BSH0002 /* BashismReminder.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5BSH0012 /* BashismReminder.swift */; };
@@ -171,6 +173,8 @@
 		E5D00005 /* ProviderConfigStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D00015 /* ProviderConfigStore.swift */; };
 		E5D00006 /* ModelGroupRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D00016 /* ModelGroupRouter.swift */; };
 		E5D00007 /* ProviderMigration.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D00017 /* ProviderMigration.swift */; };
+		E5GOC001 /* GoogleOAuthClientStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GOC011 /* GoogleOAuthClientStore.swift */; };
+		E5GOC002 /* GoogleOAuthClientSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GOC012 /* GoogleOAuthClientSetupView.swift */; };
 		E5D00008 /* ModelsDevAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D00018 /* ModelsDevAPI.swift */; };
 		E5D00009 /* URLBuilding.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D00019 /* URLBuilding.swift */; };
 		E5D00020 /* ProviderInstancesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D00030 /* ProviderInstancesView.swift */; };
@@ -206,6 +210,8 @@
 		E5F200003 /* AssistantBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F200013 /* AssistantBlockView.swift */; };
 		E5F200004 /* ChatMessageViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F200014 /* ChatMessageViews.swift */; };
 		E5F200005 /* ChatInputBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F200015 /* ChatInputBar.swift */; };
+		E5QTP0001 /* QuickTaskPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5QTP0011 /* QuickTaskPickerSheet.swift */; };
+		E5SINS001 /* SessionInspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SINS011 /* SessionInspectorView.swift */; };
 		E5F200006 /* ModelSelectionEntity.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F200016 /* ModelSelectionEntity.swift */; };
 		E5F2000FA /* TextFadeAnimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F2000FB /* TextFadeAnimator.swift */; };
 		E5F2009A1 /* EquatableContextMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F2009B1 /* EquatableContextMenu.swift */; };
@@ -290,6 +296,10 @@
 		E5L200SS2 /* SessionsOffload.m in Sources */ = {isa = PBXBuildFile; fileRef = E5L200SS1 /* SessionsOffload.m */; };
 		E5L200SS4 /* SessionsOffloadBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5L200SS3 /* SessionsOffloadBridge.swift */; };
 		E5LC00001 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = E5LC00002 /* Localizable.xcstrings */; };
+		E5LCW0001 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = E5LC00002 /* Localizable.xcstrings */; };
+		E5AWS0001 /* ActiveWindowScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AWS0002 /* ActiveWindowScene.swift */; };
+		E5SPL0001 /* SessionSpotlightIndexer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SPL0002 /* SessionSpotlightIndexer.swift */; };
+		E5WRG0001 /* WindowRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5WRG0002 /* WindowRegistry.swift */; };
 		E5LD00001 /* ToolLoopDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LD00003 /* ToolLoopDetector.swift */; };
 		E5LD00002 /* ToolLoopDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LD00003 /* ToolLoopDetector.swift */; };
 		E5LOCK001 /* SessionLockStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LOCK101 /* SessionLockStore.swift */; };
@@ -345,6 +355,13 @@
 		E5QA0003 /* QuickActionWorkflow.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5QA0103 /* QuickActionWorkflow.swift */; };
 		E5QT00001 /* ModelQuickTestSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5QT00011 /* ModelQuickTestSheet.swift */; };
 		E5QTK0001 /* QuickTaskCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5QTK0011 /* QuickTaskCatalog.swift */; };
+		E5QTW0001 /* QuickTaskWidgetRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5QTW0011 /* QuickTaskWidgetRunner.swift */; };
+		E5SCH001 /* ScheduledTaskStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SCH011 /* ScheduledTaskStore.swift */; };
+		E5NMCP001 /* NativeMCPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5NMCP011 /* NativeMCPClient.swift */; };
+		E5SCH002 /* ScheduledTaskRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SCH012 /* ScheduledTaskRunner.swift */; };
+		E5SCH003 /* RunDueScheduledTasksIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SCH013 /* RunDueScheduledTasksIntent.swift */; };
+		E5SCH004 /* ScheduledTaskSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SCH014 /* ScheduledTaskSettingsView.swift */; };
+		E5CAP002 /* CapabilitiesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CAP012 /* CapabilitiesView.swift */; };
 		E5QTK0002 /* QuickTaskSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5QTK0012 /* QuickTaskSettingsView.swift */; };
 		E5QTK0003 /* QuickTaskCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5QTK0011 /* QuickTaskCatalog.swift */; };
 		E5R000001 /* ICloudBackupManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5R000011 /* ICloudBackupManager.swift */; };
@@ -460,6 +477,7 @@
 		E7A000001 /* OpenRouterModelsAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A000011 /* OpenRouterModelsAPI.swift */; };
 		E7A000002 /* OpenRouterOAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A000012 /* OpenRouterOAuthManager.swift */; };
 		E8A000001 /* OffloadPermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8A000011 /* OffloadPermissionManager.swift */; };
+		E5CAP001 /* CapabilityAuthorizationProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CAP011 /* CapabilityAuthorizationProbe.swift */; };
 		E8A000002 /* OffloadPermissionDialog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8A000012 /* OffloadPermissionDialog.swift */; };
 		E8A000003 /* OffloadPermissionSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8A000013 /* OffloadPermissionSettingsView.swift */; };
 		EAB000051 /* SyncMigrationDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAB000050 /* SyncMigrationDetailView.swift */; };
@@ -738,6 +756,11 @@
 		E5A000011 /* default_mount */ = {isa = PBXFileReference; lastKnownFileType = folder; path = default_mount; sourceTree = "<group>"; };
 		E5AT00011 /* AudioTogglePlaybackIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioTogglePlaybackIntent.swift; sourceTree = "<group>"; };
 		E5BADGE011 /* SessionBadgeStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionBadgeStore.swift; sourceTree = "<group>"; };
+		E5WMIR011 /* WidgetDataMirror.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetDataMirror.swift; sourceTree = "<group>"; };
+		E5WBR011 /* WatchBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchBridge.swift; sourceTree = "<group>"; };
+		E5AWS0002 /* ActiveWindowScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActiveWindowScene.swift; sourceTree = "<group>"; };
+		E5SPL0002 /* SessionSpotlightIndexer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionSpotlightIndexer.swift; sourceTree = "<group>"; };
+		E5WRG0002 /* WindowRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowRegistry.swift; sourceTree = "<group>"; };
 		E5BRM0011 /* BrowserResourceMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserResourceMonitor.swift; sourceTree = "<group>"; };
 		E5BSH0011 /* BashismDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BashismDetector.swift; sourceTree = "<group>"; };
 		E5BSH0012 /* BashismReminder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BashismReminder.swift; sourceTree = "<group>"; };
@@ -780,6 +803,8 @@
 		E5D00015 /* ProviderConfigStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderConfigStore.swift; sourceTree = "<group>"; };
 		E5D00016 /* ModelGroupRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelGroupRouter.swift; sourceTree = "<group>"; };
 		E5D00017 /* ProviderMigration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderMigration.swift; sourceTree = "<group>"; };
+		E5GOC011 /* GoogleOAuthClientStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleOAuthClientStore.swift; sourceTree = "<group>"; };
+		E5GOC012 /* GoogleOAuthClientSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleOAuthClientSetupView.swift; sourceTree = "<group>"; };
 		E5D00018 /* ModelsDevAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelsDevAPI.swift; sourceTree = "<group>"; };
 		E5D00019 /* URLBuilding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = URLBuilding.swift; sourceTree = "<group>"; };
 		E5D00030 /* ProviderInstancesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProviderInstancesView.swift; sourceTree = "<group>"; };
@@ -816,6 +841,8 @@
 		E5F200013 /* AssistantBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistantBlockView.swift; sourceTree = "<group>"; };
 		E5F200014 /* ChatMessageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatMessageViews.swift; sourceTree = "<group>"; };
 		E5F200015 /* ChatInputBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatInputBar.swift; sourceTree = "<group>"; };
+		E5QTP0011 /* QuickTaskPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickTaskPickerSheet.swift; sourceTree = "<group>"; };
+		E5SINS011 /* SessionInspectorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionInspectorView.swift; sourceTree = "<group>"; };
 		E5F200016 /* ModelSelectionEntity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelSelectionEntity.swift; sourceTree = "<group>"; };
 		E5F2000FB /* TextFadeAnimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFadeAnimator.swift; sourceTree = "<group>"; };
 		E5F2009B1 /* EquatableContextMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EquatableContextMenu.swift; sourceTree = "<group>"; };
@@ -983,6 +1010,13 @@
 		E5QA0103 /* QuickActionWorkflow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickActionWorkflow.swift; sourceTree = "<group>"; };
 		E5QT00011 /* ModelQuickTestSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelQuickTestSheet.swift; sourceTree = "<group>"; };
 		E5QTK0011 /* QuickTaskCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickTaskCatalog.swift; sourceTree = "<group>"; };
+		E5QTW0011 /* QuickTaskWidgetRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickTaskWidgetRunner.swift; sourceTree = "<group>"; };
+		E5SCH011 /* ScheduledTaskStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledTaskStore.swift; sourceTree = "<group>"; };
+		E5NMCP011 /* NativeMCPClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeMCPClient.swift; sourceTree = "<group>"; };
+		E5SCH012 /* ScheduledTaskRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledTaskRunner.swift; sourceTree = "<group>"; };
+		E5SCH013 /* RunDueScheduledTasksIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunDueScheduledTasksIntent.swift; sourceTree = "<group>"; };
+		E5SCH014 /* ScheduledTaskSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledTaskSettingsView.swift; sourceTree = "<group>"; };
+		E5CAP012 /* CapabilitiesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapabilitiesView.swift; sourceTree = "<group>"; };
 		E5QTK0012 /* QuickTaskSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickTaskSettingsView.swift; sourceTree = "<group>"; };
 		E5R000011 /* ICloudBackupManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ICloudBackupManager.swift; sourceTree = "<group>"; };
 		E5R000012 /* ICloudBackupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ICloudBackupView.swift; sourceTree = "<group>"; };
@@ -1079,6 +1113,7 @@
 		E7A000011 /* OpenRouterModelsAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterModelsAPI.swift; sourceTree = "<group>"; };
 		E7A000012 /* OpenRouterOAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterOAuthManager.swift; sourceTree = "<group>"; };
 		E8A000011 /* OffloadPermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OffloadPermissionManager.swift; sourceTree = "<group>"; };
+		E5CAP011 /* CapabilityAuthorizationProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapabilityAuthorizationProbe.swift; sourceTree = "<group>"; };
 		E8A000012 /* OffloadPermissionDialog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OffloadPermissionDialog.swift; sourceTree = "<group>"; };
 		E8A000013 /* OffloadPermissionSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OffloadPermissionSettingsView.swift; sourceTree = "<group>"; };
 		E8AB343B6D865C37CC5E9EDB /* VoiceInputPanel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoiceInputPanel.swift; sourceTree = "<group>"; };
@@ -1386,6 +1421,7 @@
 				E5D00199 /* ProviderConfigDB.swift */,
 				E5D00016 /* ModelGroupRouter.swift */,
 				E5D00017 /* ProviderMigration.swift */,
+				E5GOC011 /* GoogleOAuthClientStore.swift */,
 				E5D00018 /* ModelsDevAPI.swift */,
 				E5D00019 /* URLBuilding.swift */,
 				E52000031 /* Anthropic */,
@@ -1677,6 +1713,10 @@
 				E5J000031 /* NSTextContainerSetSizeGuard.m */,
 				E5J000011 /* LoggingManager.swift */,
 				E5BADGE011 /* SessionBadgeStore.swift */,
+				E5WMIR011 /* WidgetDataMirror.swift */,
+				E5WBR011 /* WatchBridge.swift */,
+				E5AWS0002 /* ActiveWindowScene.swift */,
+				E5WRG0002 /* WindowRegistry.swift */,
 				E5F100011 /* NetworkMonitor.swift */,
 				E5F100012 /* LLMSessionRegistry.swift */,
 				E5F100013 /* MinisUserAgent.swift */,
@@ -1798,6 +1838,11 @@
 				E5T000017 /* GetSessionStatusIntent.swift */,
 				E5T000018 /* QuickTaskIntent.swift */,
 				E5QTK0011 /* QuickTaskCatalog.swift */,
+				E5QTW0011 /* QuickTaskWidgetRunner.swift */,
+				E5SCH011 /* ScheduledTaskStore.swift */,
+				E5SCH012 /* ScheduledTaskRunner.swift */,
+				E5SPL0002 /* SessionSpotlightIndexer.swift */,
+				E5SCH013 /* RunDueScheduledTasksIntent.swift */,
 				E5T000019 /* FollowUpSessionIntent.swift */,
 				E5SD00019 /* ShortcutRunTracker.swift */,
 				E5T00001A /* RetryRunIntent.swift */,
@@ -1967,6 +2012,7 @@
 				E5LOCK101 /* SessionLockStore.swift */,
 				E5N0000112F3B941A00049557 /* SkillStore.swift */,
 				F1MCPSTORE /* MCPStore.swift */,
+				E5NMCP011 /* NativeMCPClient.swift */,
 				F1MCPOAUTH /* MCPOAuthController.swift */,
 				E5SOUL101 /* SoulStore.swift */,
 			);
@@ -1987,6 +2033,7 @@
 			isa = PBXGroup;
 			children = (
 				E8A000011 /* OffloadPermissionManager.swift */,
+				E5CAP011 /* CapabilityAuthorizationProbe.swift */,
 			);
 			path = Offload;
 			sourceTree = "<group>";
@@ -2062,6 +2109,8 @@
 				E5F200014 /* ChatMessageViews.swift */,
 				E5F2009B1 /* EquatableContextMenu.swift */,
 				E5F200015 /* ChatInputBar.swift */,
+				E5QTP0011 /* QuickTaskPickerSheet.swift */,
+				E5SINS011 /* SessionInspectorView.swift */,
 				E5F2000FB /* TextFadeAnimator.swift */,
 				E5I000012 /* AudioWaveformView.swift */,
 				E5M000017 /* MarkdownRenderView.swift */,
@@ -2096,6 +2145,8 @@
 				E5LEO0016 /* AgentActivityLogView.swift */,
 				E5LEO0018 /* LeoReleaseNotesView.swift */,
 				E5QTK0012 /* QuickTaskSettingsView.swift */,
+				E5SCH014 /* ScheduledTaskSettingsView.swift */,
+				E5CAP012 /* CapabilitiesView.swift */,
 				E5N0000142F3B941A00049557 /* MemoryManagementView.swift */,
 				E8A000013 /* OffloadPermissionSettingsView.swift */,
 				AA0838CD2F3B941A00049557 /* StorageManagementView.swift */,
@@ -2116,6 +2167,7 @@
 			isa = PBXGroup;
 			children = (
 				E5D00032 /* AddProviderView.swift */,
+				E5GOC012 /* GoogleOAuthClientSetupView.swift */,
 				E5KIMIUI2 /* KimiDeviceLoginSheet.swift */,
 				E5D00038 /* AgentLoopModelsView.swift */,
 				E5D00034 /* ModelGroupDetailView.swift */,
@@ -2437,6 +2489,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E5LCW0001 /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2624,6 +2677,8 @@
 				E5F200004 /* ChatMessageViews.swift in Sources */,
 				E5F2009A1 /* EquatableContextMenu.swift in Sources */,
 				E5F200005 /* ChatInputBar.swift in Sources */,
+				E5QTP0001 /* QuickTaskPickerSheet.swift in Sources */,
+				E5SINS001 /* SessionInspectorView.swift in Sources */,
 				E5F2000FA /* TextFadeAnimator.swift in Sources */,
 				F1M00012 /* AudioPlayback.swift in Sources */,
 				F1M00014 /* VideoPlayer.swift in Sources */,
@@ -2662,6 +2717,14 @@
 				E5T000007 /* GetSessionStatusIntent.swift in Sources */,
 				E5T000008 /* QuickTaskIntent.swift in Sources */,
 				E5QTK0001 /* QuickTaskCatalog.swift in Sources */,
+				E5QTW0001 /* QuickTaskWidgetRunner.swift in Sources */,
+				E5SCH001 /* ScheduledTaskStore.swift in Sources */,
+				E5NMCP001 /* NativeMCPClient.swift in Sources */,
+				E5SCH002 /* ScheduledTaskRunner.swift in Sources */,
+				E5SPL0001 /* SessionSpotlightIndexer.swift in Sources */,
+				E5SCH003 /* RunDueScheduledTasksIntent.swift in Sources */,
+				E5SCH004 /* ScheduledTaskSettingsView.swift in Sources */,
+				E5CAP002 /* CapabilitiesView.swift in Sources */,
 				E5QTK0002 /* QuickTaskSettingsView.swift in Sources */,
 				E5T000009 /* FollowUpSessionIntent.swift in Sources */,
 				E5SD00009 /* ShortcutRunTracker.swift in Sources */,
@@ -2781,6 +2844,8 @@
 				E5D00099 /* ProviderConfigDB.swift in Sources */,
 				E5D00006 /* ModelGroupRouter.swift in Sources */,
 				E5D00007 /* ProviderMigration.swift in Sources */,
+				E5GOC001 /* GoogleOAuthClientStore.swift in Sources */,
+				E5GOC002 /* GoogleOAuthClientSetupView.swift in Sources */,
 				E5D00008 /* ModelsDevAPI.swift in Sources */,
 				E5D00009 /* URLBuilding.swift in Sources */,
 				E5D00020 /* ProviderInstancesView.swift in Sources */,
@@ -2808,6 +2873,10 @@
 				E5I000002 /* AudioWaveformView.swift in Sources */,
 				E5J000001 /* LoggingManager.swift in Sources */,
 				E5BADGE001 /* SessionBadgeStore.swift in Sources */,
+				E5WMIR001 /* WidgetDataMirror.swift in Sources */,
+				E5WBR001 /* WatchBridge.swift in Sources */,
+				E5AWS0001 /* ActiveWindowScene.swift in Sources */,
+				E5WRG0001 /* WindowRegistry.swift in Sources */,
 				E5J000002 /* LogManagementView.swift in Sources */,
 				E5J000003 /* ConfigAuditView.swift in Sources */,
 				E5LEO0006 /* AgentActivityLogView.swift in Sources */,
@@ -2892,6 +2961,7 @@
 				E5W00000D /* ChatStoreSyncHydrators.swift in Sources */,
 				E5W00003A /* SessionFileChangeTracker.swift in Sources */,
 				E8A000001 /* OffloadPermissionManager.swift in Sources */,
+				E5CAP001 /* CapabilityAuthorizationProbe.swift in Sources */,
 				E8A000002 /* OffloadPermissionDialog.swift in Sources */,
 				E8A000003 /* OffloadPermissionSettingsView.swift in Sources */,
 				52535805A60BA4B26902EAFA /* VoiceInputModels.swift in Sources */,
@@ -3007,7 +3077,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 25;
+				CURRENT_PROJECT_VERSION = 26;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -3015,8 +3085,8 @@
 					"$(inherited)",
 				);
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.1.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.UITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -3031,12 +3101,12 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 25;
+				CURRENT_PROJECT_VERSION = 26;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.1.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.UITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -3051,7 +3121,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 25;
+				CURRENT_PROJECT_VERSION = 26;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -3066,8 +3136,8 @@
 					"$(SRCROOT)/../../deps/frameworks/FFmpeg.framework/Headers",
 					"$(SRCROOT)/Vendor/cppjieba/include",
 				);
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.1.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.Tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -3082,7 +3152,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 25;
+				CURRENT_PROJECT_VERSION = 26;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -3093,8 +3163,8 @@
 					"$(SRCROOT)/../../deps/frameworks/FFmpeg.framework/Headers",
 					"$(SRCROOT)/Vendor/cppjieba/include",
 				);
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
-				MARKETING_VERSION = 1.1.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.Tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -3160,7 +3230,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -3223,7 +3293,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -3242,7 +3312,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = LeoPhoneAgent.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 25;
+				CURRENT_PROJECT_VERSION = 26;
 				DEVELOPMENT_ASSET_PATHS = "\"Preview Content\"";
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
@@ -3266,13 +3336,13 @@
 				INFOPLIST_KEY_UILaunchStoryboardName = "Launch Screen";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(SRCROOT)/../../deps/libs";
-				MARKETING_VERSION = 1.1.2;
+				MARKETING_VERSION = 1.2.0;
 				OTHER_LDFLAGS = (
 					"-lish_emu",
 					"-lish",
@@ -3297,7 +3367,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = LeoPhoneAgent.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 25;
+				CURRENT_PROJECT_VERSION = 26;
 				DEVELOPMENT_ASSET_PATHS = "\"Preview Content\"";
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
@@ -3321,13 +3391,13 @@
 				INFOPLIST_KEY_UILaunchStoryboardName = "Launch Screen";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(SRCROOT)/../../deps/libs";
-				MARKETING_VERSION = 1.1.2;
+				MARKETING_VERSION = 1.2.0;
 				OTHER_LDFLAGS = (
 					"-lish_emu",
 					"-lish",
@@ -3348,19 +3418,19 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 25;
+				CURRENT_PROJECT_VERSION = 26;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Share to LeoPhoneAgent";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.2;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.ShareExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -3375,19 +3445,19 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 25;
+				CURRENT_PROJECT_VERSION = 26;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Share to LeoPhoneAgent";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.2;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.ShareExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -3402,19 +3472,19 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FileProvider/FileProvider.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 25;
+				CURRENT_PROJECT_VERSION = 26;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = FileProvider/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "LeoPhoneAgent Files";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.2;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.FileProvider;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -3429,19 +3499,19 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FileProvider/FileProvider.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 25;
+				CURRENT_PROJECT_VERSION = 26;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = FileProvider/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "LeoPhoneAgent Files";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.2;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.FileProvider;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -3456,19 +3526,19 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = AgentWidget/AgentWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 25;
+				CURRENT_PROJECT_VERSION = 26;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AgentWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Agent Activity";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.2;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.AgentWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -3483,19 +3553,19 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = AgentWidget/AgentWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 25;
+				CURRENT_PROJECT_VERSION = 26;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AgentWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Agent Activity";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 16.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.1.2;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.AgentWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;

@@ -167,6 +167,36 @@ enum ToolBlockStatus: Equatable {
     case cancelled
 }
 
+/// [T-cache-prefix-stability] Marks where the assembled system prompt stops
+/// being byte-stable between requests. Everything before the marker (base
+/// prompt, capability/behavior fragments, skills, MCP) only changes on real
+/// configuration edits; everything after it can change every turn (hourly
+/// clock, GLOBAL.md, daily memory logs). Anthropic providers split on the
+/// marker and emit the volatile tail as a separate system block WITHOUT
+/// cache_control, so tail churn no longer invalidates the cached
+/// tools+system prefix. Every other provider strips the marker in the
+/// AgentProvider protocol extension before the prompt leaves the app.
+enum SystemPromptCacheBoundary {
+    static let marker = "\n\n<<<leo:cache-boundary>>>\n\n"
+
+    /// (stable prefix, volatile tail). A prompt without the marker is
+    /// returned unchanged as the stable part.
+    static func split(_ prompt: String) -> (stable: String, volatileTail: String?) {
+        guard let range = prompt.range(of: marker) else { return (prompt, nil) }
+        let stable = String(prompt[..<range.lowerBound])
+        // [T-cache-marker-in-user-content] Only the FIRST marker is the
+        // boundary. GLOBAL.md and the daily memory files are user- and
+        // agent-writable and end up in the tail, so a literal marker in that
+        // content would otherwise be forwarded verbatim to the provider.
+        let tail = strip(String(prompt[range.upperBound...]))
+        return (stable, tail.isEmpty ? nil : tail)
+    }
+
+    static func strip(_ prompt: String) -> String {
+        prompt.replacingOccurrences(of: marker, with: "\n\n")
+    }
+}
+
 /// A single block within an assistant turn.
 final class AssistantBlock: Identifiable, ObservableObject {
     let id = UUID()

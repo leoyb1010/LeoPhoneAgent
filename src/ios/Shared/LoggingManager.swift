@@ -390,6 +390,9 @@ final class LoggingManager: ObservableObject {
         ) else { return }
         var removed: [String] = []
         for url in files where url.pathExtension == "log" {
+            // User feedback records are deliberate documents, not rolling
+            // diagnostics — exempt them from retention pruning.
+            if url.lastPathComponent.hasPrefix("feedback-") { continue }
             // Unknown date (unparseable name AND unreadable attrs) → keep.
             let date = logDate(of: url) ?? .distantFuture
             if date < cutoff {
@@ -403,6 +406,62 @@ final class LoggingManager: ObservableObject {
         }
         if !removed.isEmpty {
             NSLog("[LoggingManager] pruned \(removed.count) log file(s) older than \(logRetentionDays)d: \(removed.joined(separator: ","))")
+        }
+    }
+
+    // MARK: - Local Feedback Records
+
+    /// [T-local-feedback] Saves a user-authored feedback/problem record as
+    /// `feedback-YYYYMMDD-HHmmss.log` (markdown body) in the shared Logs
+    /// directory. It automatically appears in Settings → Logs (type
+    /// "feedback"), is shareable through the existing export UI, and is
+    /// exempt from retention pruning. Returns the file URL on success.
+    @discardableResult
+    func saveFeedbackRecord(
+        kind: String,
+        title: String,
+        detail: String,
+        includeDiagnostics: Bool
+    ) -> URL? {
+        let df = DateFormatter()
+        df.locale = Locale(identifier: "en_US_POSIX")
+        df.timeZone = .current
+        df.dateFormat = "yyyyMMdd-HHmmss"
+        let stamp = df.string(from: Date())
+        let url = logDirectory.appendingPathComponent("feedback-\(stamp).log")
+
+        let displayFormatter = DateFormatter()
+        displayFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        displayFormatter.timeZone = .current
+
+        var body = "# [\(kind)] \(title)\n\n"
+        body += "- 记录时间: \(displayFormatter.string(from: Date()))\n\n"
+        body += "## 描述\n\n\(detail)\n"
+
+        if includeDiagnostics {
+            let bundle = Bundle.main
+            let version = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+            let build = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+            var sysinfo = utsname()
+            uname(&sysinfo)
+            let machine = withUnsafePointer(to: &sysinfo.machine) {
+                $0.withMemoryRebound(to: CChar.self, capacity: 1) { String(validatingUTF8: $0) ?? "unknown" }
+            }
+            let memoryMB = Int(ProcessInfo.processInfo.physicalMemory / 1024 / 1024)
+            body += "\n## 环境快照\n\n"
+            body += "- App: LeoPhoneAgent \(version) (\(build))\n"
+            body += "- 系统: \(ProcessInfo.processInfo.operatingSystemVersionString)\n"
+            body += "- 设备: \(machine), 内存 \(memoryMB) MB\n"
+            body += "- 语言: \((UserDefaults.standard.object(forKey: "AppleLanguages") as? [String])?.first ?? Locale.preferredLanguages.first ?? "?")\n"
+            body += "- 日志采集开关: \(isEnabled ? "开" : "关")\n"
+        }
+
+        do {
+            try body.write(to: url, atomically: true, encoding: .utf8)
+            return url
+        } catch {
+            NSLog("[LoggingManager] saveFeedbackRecord failed: \(error.localizedDescription)")
+            return nil
         }
     }
 
@@ -457,6 +516,8 @@ final class LoggingManager: ObservableObject {
                     type = "running"
                 } else if name.hasPrefix("crash-") {
                     type = "crash"
+                } else if name.hasPrefix("feedback-") {
+                    type = "feedback"
                 } else {
                     type = "other"
                 }

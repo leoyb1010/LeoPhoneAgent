@@ -48,6 +48,24 @@ final class SessionActivityTracker: ObservableObject {
     }
     @Published var sessionToolInfo: [String: SessionToolInfo] = [:]
 
+    /// [T-widget-stop-eager-placeholder] Placeholder ids ("intent-eager:<uuid>")
+    /// that a stop request arrived for before their real session — and view
+    /// model — existed. An intent checks this right after it has a session so a
+    /// Stop tapped during session creation actually stops the run instead of
+    /// silently doing nothing.
+    private var eagerCancelRequests: Set<String> = []
+
+    func requestEagerCancel(_ placeholderId: String) {
+        guard placeholderId.hasPrefix("intent-eager:") else { return }
+        eagerCancelRequests.insert(placeholderId)
+        logger.info("⏹️ eager-cancel requested for \(placeholderId.prefix(24))")
+    }
+
+    /// Consumes the request — returns true exactly once per placeholder.
+    func takeEagerCancel(_ placeholderId: String) -> Bool {
+        eagerCancelRequests.remove(placeholderId) != nil
+    }
+
     /// The SF Symbol for the most-recently-invoked tool across all active
     /// sessions (the session whose `toolName` changed last). Drives the
     /// Dynamic Island minimal icon's "latest tool" frame. Nil when no active
@@ -62,6 +80,22 @@ final class SessionActivityTracker: ObservableObject {
     private var lastLiveActivityPush: Date = .distantPast
     private static let liveActivityThrottleInterval: TimeInterval = 5.0
     private var throttledUpdateWorkItem: DispatchWorkItem?
+
+    /// [T-widget-midrun-refresh] The Home Screen widget used to refresh only
+    /// on setActive / setInactive, so everything between "started" and
+    /// "finished" was a frozen snapshot — the tool name and status never
+    /// moved. WidgetKit budgets reloads far more tightly than ActivityKit,
+    /// so mid-run refreshes get their own, much slower throttle instead of
+    /// riding the 5s Live Activity cadence.
+    private var lastWidgetMidRunPush: Date = .distantPast
+    private static let widgetMidRunThrottleInterval: TimeInterval = 30.0
+
+    private func refreshWidgetMidRun() {
+        let now = Date()
+        guard now.timeIntervalSince(lastWidgetMidRunPush) >= Self.widgetMidRunThrottleInterval else { return }
+        lastWidgetMidRunPush = now
+        BackgroundKeepAliveManager.shared.refreshHomeScreenWidget(source: "toolProgress")
+    }
 
     func updateToolInfo(sessionId: String, toolName: String, toolStatus: String) {
         var info = sessionToolInfo[sessionId] ?? SessionToolInfo()
@@ -88,6 +122,9 @@ final class SessionActivityTracker: ObservableObject {
             lastActivityReasons.removeValue(forKey: sessionId)
         }
         logger.info("[LiveActivity][toolInfo] sid=\(sessionId.prefix(8)) toolName=\(toolName) status=\(toolStatus) nameChanged=\(nameChanged)")
+        // Keep the Home Screen / iPad console roughly current while the task
+        // runs, on its own slow throttle.
+        refreshWidgetMidRun()
         if nameChanged {
             throttledUpdateWorkItem?.cancel()
             throttledUpdateWorkItem = nil
@@ -185,6 +222,9 @@ final class SessionActivityTracker: ObservableObject {
         activeSessions.insert(sessionId)
         syncMirror()
         if !wasPresent {
+            if UIApplication.shared.applicationState == .active {
+                LeoHaptics.agent(.taskStarted)
+            }
             if let runId = activityRunIds[sessionId] {
                 AgentActivityLog.shared.append(AgentActivityEvent(
                     runId: runId,
@@ -251,12 +291,26 @@ final class SessionActivityTracker: ObservableObject {
             draftAliases.removeValue(forKey: draftKey)
         }
         syncMirror()
+        // [T-haptic-semantics] A background agent's most useful moments are the
+        // ones you don't have to look at the screen for: a long task landing,
+        // or dying. Fire only on a real transition, and only when the app is in
+        // the foreground — buzzing a pocket for a run the user never watched is
+        // noise, and iOS suppresses it anyway.
+        if wasPresent, finalPhase.isTerminal, UIApplication.shared.applicationState == .active {
+            LeoHaptics.agent(finalPhase == .failed ? .taskFailed : .taskCompleted)
+        }
         logger.info("🔴[Tracker] setInactive(\(sessionId.prefix(8))) src=\(source) wasPresent=\(wasPresent) now count=\(activeSessions.count) ids=[\(activeSessions.map { $0.prefix(8) }.joined(separator: ","))] clearedAliases=\(orphanedAliases.count)")
         BackgroundKeepAliveManager.shared.refreshHomeScreenWidget(
             source: "trackerInactive",
             terminalState: finalPhase == .failed ? .failed : .completed,
             terminalSessionId: sessionId
         )
+        // [T-widget-briefing-pending] A widget-launched run just ended; its
+        // final assistant message is on disk now. This is the earliest
+        // reliable point to publish the briefing card — unlike the runner's
+        // in-process observer, this fires inside the agent loop's own
+        // lifecycle rather than a detached Task that suspension can kill.
+        Task { await WidgetDataMirror.resolvePendingBriefings(reason: "sessionFinished") }
     }
 
     /// Register an alias from a draft ID to its newly-minted real session

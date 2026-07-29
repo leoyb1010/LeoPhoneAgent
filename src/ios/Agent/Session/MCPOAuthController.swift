@@ -190,6 +190,95 @@ final class MCPOAuthController: NSObject, ObservableObject {
         tokens(server: server) != nil
     }
 
+    // MARK: - Native-path token access [T-native-mcp-oauth]
+
+    /// An access token fit to put on an outgoing request, refreshed first when
+    /// it has expired or is about to. Callable off the main actor because the
+    /// native MCP client is an `actor` and must not hop per request.
+    ///
+    /// This mirrors what the in-guest transport already does
+    /// (`transport/http.py`): attach Bearer, refresh via the refresh_token
+    /// grant on expiry, and leave re-authorization to the user when refresh
+    /// is impossible. Without it the native path simply sent no credential at
+    /// all and every OAuth server answered 401.
+    nonisolated static func validAccessToken(server: String, oauth: MCPOAuthConfig) async -> String? {
+        guard let data = keychainGet(account: "\(server)#tokens"),
+              let stored = try? JSONDecoder().decode(StoredTokens.self, from: data) else { return nil }
+        let now = Date().timeIntervalSince1970
+        // expiresAt == 0 means the provider never told us a lifetime; trust the
+        // token until the server itself rejects it.
+        if stored.expiresAt == 0 || stored.expiresAt > now + 60 { return stored.accessToken }
+        if let refreshed = await refreshTokens(server: server, oauth: oauth, using: stored) {
+            return refreshed.accessToken
+        }
+        // Refresh impossible or failed — send the stale token anyway so the
+        // server's own 401 body reaches the user instead of a silent no-auth.
+        return stored.accessToken
+    }
+
+    /// Standard refresh_token grant. Persists the new tokens and rewrites the
+    /// guest bridge file so the CLI path sees the same material.
+    @discardableResult
+    nonisolated static func refreshTokens(
+        server: String,
+        oauth: MCPOAuthConfig,
+        using current: StoredTokens? = nil
+    ) async -> StoredTokens? {
+        let existing = current ?? keychainGet(account: "\(server)#tokens")
+            .flatMap { try? JSONDecoder().decode(StoredTokens.self, from: $0) }
+        guard let existing,
+              let refreshToken = existing.refreshToken, !refreshToken.isEmpty,
+              let endpoint = URL(string: oauth.tokenEndpoint) else { return nil }
+
+        var form: [String: String] = [
+            "grant_type": "refresh_token",
+            "refresh_token": refreshToken,
+            "client_id": oauth.clientId,
+        ]
+        if let secret = keychainGet(account: "\(server)#secret")
+            .flatMap({ String(data: $0, encoding: .utf8) }), !secret.isEmpty {
+            form["client_secret"] = secret
+        }
+        if let resource = await MainActor.run(body: { resourceURI(server: server) }) {
+            form["resource"] = resource
+        }
+
+        var req = URLRequest(url: endpoint)
+        req.httpMethod = "POST"
+        req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        req.httpBody = form.map { "\($0.key)=\(formEncode($0.value))" }
+            .joined(separator: "&").data(using: .utf8)
+
+        guard let (data, resp) = try? await URLSession.shared.data(for: req),
+              let http = resp as? HTTPURLResponse, http.statusCode < 400,
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let access = obj["access_token"] as? String else {
+            AppLogger(category: "MCPOAuth").error("[Refresh] '\(server)' refresh_token grant failed")
+            return nil
+        }
+        let expiresIn = (obj["expires_in"] as? NSNumber)?.doubleValue ?? 0
+        let updated = StoredTokens(
+            accessToken: access,
+            // Providers that rotate refresh tokens send a new one; those that
+            // don't expect the original to keep working.
+            refreshToken: (obj["refresh_token"] as? String) ?? refreshToken,
+            expiresAt: expiresIn > 0 ? Date().timeIntervalSince1970 + expiresIn : 0
+        )
+        if let encoded = try? JSONEncoder().encode(updated) {
+            keychainSet(encoded, account: "\(server)#tokens")
+        }
+        await MainActor.run { materializeBridge(server: server, oauth: oauth, tokens: updated) }
+        AppLogger(category: "MCPOAuth").info("[Refresh] '\(server)' OK (expiresIn=\(Int(expiresIn))s)")
+        return updated
+    }
+
+    /// [T-mcp-oauth-deeplink] The same tappable link the guest transport emits,
+    /// so a native-path auth failure is exactly as actionable as a CLI one.
+    nonisolated static func authorizeDeepLink(server: String) -> String {
+        let encoded = server.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? server
+        return "[Authorize](leophoneagent://settings/mcp-servers/\(encoded))"
+    }
+
     /// Sign out: drop Keychain tokens + the guest bridge file. Client secret is
     /// kept (it's configuration, not a session).
     static func signOut(server: String) {
@@ -449,7 +538,7 @@ final class MCPOAuthController: NSObject, ObservableObject {
     /// currently presented (the MCP form sheet). Mirrors ClaudeOAuthManager.
     private func presentSafari(url: URL) {
         guard let scene = UIApplication.shared.connectedScenes
-            .compactMap({ $0 as? UIWindowScene }).first,
+            .compactMap({ $0 as? UIWindowScene }).activeFirst,
               let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController else { return }
         var topVC = root
         while let presented = topVC.presentedViewController { topVC = presented }
@@ -473,7 +562,7 @@ final class MCPOAuthController: NSObject, ObservableObject {
         return String((0..<length).compactMap { _ in chars.randomElement() })
     }
 
-    private static func formEncode(_ s: String) -> String {
+    nonisolated private static func formEncode(_ s: String) -> String {
         var allowed = CharacterSet.alphanumerics
         allowed.insert(charactersIn: "-._~")
         return s.addingPercentEncoding(withAllowedCharacters: allowed) ?? s
@@ -494,9 +583,7 @@ extension MCPOAuthController: SFSafariViewControllerDelegate {
 extension MCPOAuthController: ASWebAuthenticationPresentationContextProviding {
     nonisolated func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         MainActor.assumeIsolated {
-            UIApplication.shared.connectedScenes
-                .compactMap { ($0 as? UIWindowScene)?.keyWindow }
-                .first ?? ASPresentationAnchor()
+            UIApplication.shared.leoActiveKeyWindow ?? ASPresentationAnchor()
         }
     }
 }

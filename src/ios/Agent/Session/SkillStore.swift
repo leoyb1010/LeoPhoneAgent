@@ -1297,9 +1297,16 @@ Do not create extraneous files: README.md, INSTALLATION_GUIDE.md, CHANGELOG.md, 
             // Priority 3: By usage frequency (fill remaining slots, most-used first)
             if picked.count < Self.maxSkillMetadataCount {
                 let remaining = Self.maxSkillMetadataCount - picked.count
+                // [T-cache-prefix-stability] Tie-break on id. `useCount` is
+                // bumped the moment the agent reads a SKILL.md, so with more
+                // than `maxSkillMetadataCount` skills enabled the SELECTED SET
+                // could change between two prompt builds in the same turn —
+                // changing the "stable" prefix bytes and missing the cache the
+                // ordering fix was added to protect. A deterministic secondary
+                // key makes equal-usage skills pick the same way every time.
                 let byUsage = enabled
                     .filter { !seen.contains($0.id) }
-                    .sorted { $0.useCount > $1.useCount }
+                    .sorted { $0.useCount == $1.useCount ? $0.id < $1.id : $0.useCount > $1.useCount }
                 for s in byUsage.prefix(remaining) {
                     if seen.insert(s.id).inserted {
                         picked.append(s)
@@ -1329,8 +1336,13 @@ Do not create extraneous files: README.md, INSTALLATION_GUIDE.md, CHANGELOG.md, 
         // Cap each description to avoid bloating the system prompt.
         let maxDescLength = 200
 
+        // [T-cache-prefix-stability] Selection above may rank by updatedAt /
+        // useCount, but the RENDERED order must be byte-stable between
+        // requests — useCount drifts on every skill use and reordered XML
+        // invalidates the cached system-prompt prefix. Emit in stable id
+        // order regardless of how the picks were chosen.
         var xml = "<available_skills>\n"
-        for skill in selected {
+        for skill in selected.sorted(by: { $0.id < $1.id }) {
             let escapedName = skill.name.xmlEscaped
             var desc = skill.description
             if desc.count > maxDescLength {

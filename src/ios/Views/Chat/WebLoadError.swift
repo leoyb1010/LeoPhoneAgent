@@ -124,7 +124,7 @@ struct WebLoadErrorOverlay: View {
                 Label(String(localized: "Try Again"), systemImage: "arrow.clockwise")
                     .font(.subheadline.weight(.medium))
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.glassProminent)
             .controlSize(.regular)
             .padding(.top, 2)
         }
