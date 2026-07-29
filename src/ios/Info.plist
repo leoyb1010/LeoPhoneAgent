@@ -211,7 +211,7 @@
 	<key>NSHomeKitUsageDescription</key>
 	<string>LeoPhoneAgent uses HomeKit access so the AI agent can query and control your smart home accessories on your behalf.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>LeoPhoneAgent uses local network access for the debug server and to let the AI agent communicate with locally-hosted services.</string>
+	<string>LeoPhoneAgent connects to computers on your local network over SSH (Remote Hosts) so the agent can run heavy tasks there.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>LeoPhoneAgent uses background location to keep agent tasks running when the app is in the background. Location data is only used to record session connection history.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

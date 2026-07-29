@@ -122,7 +122,9 @@ actor RemoteSSHExecutor {
         guard tcp else {
             var message = "TCP \(host.host):\(host.port) UNREACHABLE — this is a network problem, not SSH."
             if host.host.hasPrefix("100.") {
-                message += " 100.x is a Tailscale address: the Tailscale VPN on THIS device must be connected to the SAME tailnet (check that this device shows as online in `tailscale status` on another machine)."
+                message += " 100.x is a Tailscale address: a third-party Tailscale client connected only inside its own app does NOT route other apps' traffic — it must run in system VPN/TUN mode (iOS Settings → VPN shows Connected), or use the machine's LAN IP (192.168.x) instead while on the same Wi-Fi."
+            } else if host.host.hasPrefix("192.168.") || host.host.hasPrefix("10.") {
+                message += " For LAN addresses iOS asks for Local Network permission on first use — if no prompt appeared, check Settings → Privacy & Security → Local Network → LeoPhoneAgent."
             }
             return ExecResult(output: message, succeeded: false)
         }
