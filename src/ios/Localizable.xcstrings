@@ -98674,6 +98674,91 @@
           }
         }
       }
+    },
+    "Password (optional — leave empty for key auth)": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密码（可选——留空则用密钥认证）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密碼（可選——留空則用金鑰認證）"
+          }
+        }
+      }
+    },
+    "Key authentication (recommended)": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密钥认证（推荐）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "金鑰認證（推薦）"
+          }
+        }
+      }
+    },
+    "Copy public key": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制公钥"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "複製公鑰"
+          }
+        }
+      }
+    },
+    "Generate device key": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成设备密钥"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成裝置金鑰"
+          }
+        }
+      }
+    },
+    "Generate once, then on the computer run:  echo '<public key>' >> ~/.ssh/authorized_keys — after that no password is needed. If the address starts with 100.x (Tailscale), the Tailscale app on this device must be connected.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成一次即可，然后在电脑上执行：echo '<公钥>' >> ~/.ssh/authorized_keys ——之后无需密码。如果地址是 100.x 开头（Tailscale），本设备上的 Tailscale 必须处于连接状态。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成一次即可，然後在電腦上執行：echo '<公鑰>' >> ~/.ssh/authorized_keys ——之後無需密碼。如果地址是 100.x 開頭（Tailscale），本裝置上的 Tailscale 必須處於連線狀態。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

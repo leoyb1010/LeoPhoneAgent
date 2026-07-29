@@ -59,6 +59,7 @@ private struct RemoteHostEditSheet: View {
     @State private var testing = false
     @State private var failShake = 0
     @State private var okSweep = 0
+    @State private var keyRefresh = 0
 
     /// [T-draft-id-stability] Fixed once — `draft` used to mint a NEW UUID on
     /// every access, so Test wrote the password under one id and Save stored
@@ -85,8 +86,9 @@ private struct RemoteHostEditSheet: View {
     }
 
     private var canSave: Bool {
+        // Password is optional: key-based hosts authenticate with the device
+        // key generated below.
         !draft.name.isEmpty && !draft.host.isEmpty && !draft.username.isEmpty
-            && (host != nil || !password.isEmpty)
     }
 
     var body: some View {
@@ -103,19 +105,42 @@ private struct RemoteHostEditSheet: View {
                         .autocorrectionDisabled().textInputAutocapitalization(.never)
                 }
                 Section {
-                    SecureField(host == nil
-                        ? String(localized: "Password")
-                        : String(localized: "Password (leave empty to keep current)"), text: $password)
+                    SecureField(String(localized: "Password (optional — leave empty for key auth)"), text: $password)
                 } footer: {
                     Text("Stored in the local Keychain only — never synced, never logged. On a Mac, enable System Settings → Sharing → Remote Login first.")
                 }
+                Section {
+                    if let pubkey = RemoteHostStore.devicePublicKeyLine() {
+                        Text(pubkey)
+                            .font(.caption2.monospaced())
+                            .lineLimit(3)
+                            .textSelection(.enabled)
+                        Button {
+                            UIPasteboard.general.string = pubkey
+                        } label: {
+                            Label("Copy public key", systemImage: "doc.on.doc")
+                        }
+                    } else {
+                        Button {
+                            _ = RemoteHostStore.ensureDeviceKey()
+                            keyRefresh += 1
+                        } label: {
+                            Label("Generate device key", systemImage: "key.fill")
+                        }
+                    }
+                } header: {
+                    Text("Key authentication (recommended)")
+                } footer: {
+                    Text("Generate once, then on the computer run:  echo '<public key>' >> ~/.ssh/authorized_keys — after that no password is needed. If the address starts with 100.x (Tailscale), the Tailscale app on this device must be connected.")
+                }
+                .id(keyRefresh)
                 Section {
                     Button {
                         runTest()
                     } label: {
                         if testing { ProgressView() } else { Label("Test connection", systemImage: "bolt.horizontal") }
                     }
-                    .disabled(!canSave && password.isEmpty)
+                    .disabled(!canSave)
                     if let testResult {
                         Text(testResult)
                             .font(.caption.monospaced())

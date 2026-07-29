@@ -35,9 +35,16 @@ actor RemoteSSHExecutor {
     /// Runs one command on `host`. Never throws credentials or the resolved
     /// command into the error text.
     func run(host: RemoteHost, command: String, timeout: TimeInterval) async -> ExecResult {
-        guard let password = RemoteHostStore.password(hostId: host.id), !password.isEmpty else {
+        // [T-ssh-key-auth] Password when stored, else the device Ed25519 key —
+        // key-only hosts (the recommended setup) no longer require a password.
+        let auth: SSHAuthenticationMethod
+        if let password = RemoteHostStore.password(hostId: host.id), !password.isEmpty {
+            auth = .passwordBased(username: host.username, password: password)
+        } else if let key = RemoteHostStore.devicePrivateKey() {
+            auth = .ed25519(username: host.username, privateKey: key)
+        } else {
             return ExecResult(
-                output: "No password stored for host '\(host.name)'. Open Settings → Remote Hosts and re-enter it.",
+                output: "No credential for host '\(host.name)': store a password, or generate the device key in Settings → Remote Hosts and add its public key to the host's ~/.ssh/authorized_keys.",
                 succeeded: false)
         }
         let clampedTimeout = min(max(timeout, 5), 600)
@@ -46,7 +53,7 @@ actor RemoteSSHExecutor {
             let client = try await SSHClient.connect(
                 host: host.host,
                 port: host.port,
-                authenticationMethod: .passwordBased(username: host.username, password: password),
+                authenticationMethod: auth,
                 // [T-ssh-tofu-followup] Accept-any host key is a KNOWN
                 // limitation (personal LAN tool, password never echoed).
                 // Trust-on-first-use pinning is the planned follow-up before
@@ -98,9 +105,11 @@ actor RemoteSSHExecutor {
         } catch {
             // Deliberately generic: no host password, no expanded command.
             logger.error("remote exec failed host=\(host.name): \(error.localizedDescription)")
-            return ExecResult(
-                output: "SSH to '\(host.name)' (\(host.username)@\(host.host):\(host.port)) failed: \(error.localizedDescription)",
-                succeeded: false)
+            var message = "SSH to '\(host.name)' (\(host.username)@\(host.host):\(host.port)) failed: \(error.localizedDescription)"
+            if host.host.hasPrefix("100.") {
+                message += "\nThis looks like a Tailscale address — make sure the Tailscale app on THIS device is connected (it shows offline peers as unreachable)."
+            }
+            return ExecResult(output: message, succeeded: false)
         }
     }
 

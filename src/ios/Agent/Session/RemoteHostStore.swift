@@ -15,6 +15,7 @@
 //  registered, so prompts, cache prefixes and behaviour are unchanged.
 //
 
+import CryptoKit
 import Foundation
 import Security
 
@@ -115,5 +116,62 @@ final class RemoteHostStore: ObservableObject {
             kSecAttrAccount as String: hostId,
         ]
         SecItemDelete(query as CFDictionary)
+    }
+}
+
+// MARK: - Device SSH key (Ed25519)
+
+/// [T-ssh-key-auth] One Ed25519 identity per device, generated on demand and
+/// held only in the local Keychain. The public key is what the user appends
+/// to a host's ~/.ssh/authorized_keys — this is the path for machines that
+/// (correctly) have password auth disabled.
+extension RemoteHostStore {
+    nonisolated static let deviceKeyAccount = "device-ssh-ed25519"
+
+    nonisolated static func devicePrivateKey() -> Curve25519.Signing.PrivateKey? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecAttrAccount as String: deviceKeyAccount,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var result: AnyObject?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let data = result as? Data else { return nil }
+        return try? Curve25519.Signing.PrivateKey(rawRepresentation: data)
+    }
+
+    @discardableResult
+    nonisolated static func ensureDeviceKey() -> Curve25519.Signing.PrivateKey {
+        if let existing = devicePrivateKey() { return existing }
+        let key = Curve25519.Signing.PrivateKey()
+        let match: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecAttrAccount as String: deviceKeyAccount,
+        ]
+        let attrs: [String: Any] = [
+            kSecValueData as String: key.rawRepresentation,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
+        ]
+        var add = match
+        add.merge(attrs) { _, new in new }
+        SecItemAdd(add as CFDictionary, nil)
+        return key
+    }
+
+    /// "ssh-ed25519 AAAA… leophoneagent" — the standard authorized_keys line.
+    nonisolated static func devicePublicKeyLine() -> String? {
+        guard let key = devicePrivateKey() else { return nil }
+        let raw = key.publicKey.rawRepresentation
+        var blob = Data()
+        func sshString(_ d: Data) {
+            var len = UInt32(d.count).bigEndian
+            blob.append(Data(bytes: &len, count: 4)); blob.append(d)
+        }
+        sshString(Data("ssh-ed25519".utf8))
+        sshString(raw)
+        return "ssh-ed25519 \(blob.base64EncodedString()) leophoneagent"
     }
 }
