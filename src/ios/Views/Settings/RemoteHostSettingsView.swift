@@ -199,7 +199,12 @@ private struct RemoteHostEditSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "Cancel")) { dismiss() }
+                    Button(String(localized: "Cancel")) {
+                        // A pre-save Test stored the typed password under the
+                        // draft id; cancelling must not strand it in Keychain.
+                        if !model.isEditing { RemoteHostStore.deletePassword(hostId: model.draftId) }
+                        dismiss()
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(String(localized: "Save")) {

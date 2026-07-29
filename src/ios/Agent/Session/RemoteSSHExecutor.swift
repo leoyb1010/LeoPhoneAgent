@@ -35,11 +35,13 @@ actor RemoteSSHExecutor {
 
     /// Runs one command on `host`. Never throws credentials or the resolved
     /// command into the error text.
-    func run(host: RemoteHost, command: String, timeout: TimeInterval) async -> ExecResult {
+    func run(host: RemoteHost, command: String, timeout: TimeInterval, isKeyRetry: Bool = false) async -> ExecResult {
         // [T-ssh-key-auth] Password when stored, else the device Ed25519 key —
         // key-only hosts (the recommended setup) no longer require a password.
         let auth: SSHAuthenticationMethod
+        var usedPassword = false
         if let password = RemoteHostStore.password(hostId: host.id), !password.isEmpty {
+            usedPassword = true
             auth = .passwordBased(username: host.username, password: password)
         } else if let key = RemoteHostStore.devicePrivateKey() {
             auth = .ed25519(username: host.username, privateKey: key)
@@ -104,6 +106,13 @@ actor RemoteSSHExecutor {
                 output: "Remote command timed out after \(Int(clampedTimeout))s on '\(host.name)'. The connection is being torn down; the remote process may still be running.",
                 succeeded: false)
         } catch {
+            // [T-ssh-auth-fallback] A stale stored password must not permanently
+            // shadow working key auth: retry once with the device key.
+            if usedPassword, RemoteHostStore.devicePrivateKey() != nil, !isKeyRetry {
+                logger.info("password auth failed for \(host.name) — retrying with device key")
+                RemoteHostStore.deletePassword(hostId: host.id)
+                return await run(host: host, command: command, timeout: timeout, isKeyRetry: true)
+            }
             // Deliberately generic: no host password, no expanded command.
             logger.error("remote exec failed host=\(host.name): \(error.localizedDescription)")
             var message = "SSH to '\(host.name)' (\(host.username)@\(host.host):\(host.port)) failed: \(error.localizedDescription)"
@@ -124,14 +133,23 @@ actor RemoteSSHExecutor {
         if await Self.tcpProbe(host: target.host, port: target.port, timeout: 4) {
             return await run(host: target, command: command, timeout: timeout)
         }
+        var lastRelayFailure: String?
         for gateway in allHosts where gateway.id != target.id {
             guard await Self.tcpProbe(host: gateway.host, port: gateway.port, timeout: 4) else { continue }
             let relayed = "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=8 -p \(target.port) "
                 + "\(target.username)@\(target.host) \(RemoteShellQuoting.singleQuoted(command))"
             let result = await run(host: gateway, command: relayed, timeout: timeout)
-            return ExecResult(
-                output: "[via \(gateway.name) — target not directly reachable from this device]\n" + result.output,
-                succeeded: result.succeeded)
+            if result.succeeded {
+                return ExecResult(
+                    output: "[via \(gateway.name) — target not directly reachable from this device]\n" + result.output,
+                    succeeded: true)
+            }
+            // This gateway can't reach the target (no key / route) — try the
+            // next reachable one instead of giving up on the first.
+            lastRelayFailure = "[via \(gateway.name)] " + result.output
+        }
+        if let lastRelayFailure {
+            return ExecResult(output: lastRelayFailure, succeeded: false)
         }
         return ExecResult(
             output: "TCP \(target.host):\(target.port) unreachable, and no other configured host is reachable to relay through. Tip: while on the same Wi-Fi as one of your machines, add its LAN address (192.168.x) as a host — everything else is then reached through it automatically.",
@@ -174,6 +192,7 @@ actor RemoteSSHExecutor {
                 continuation.resume(returning: ok)
             }
             connection.stateUpdateHandler = { state in
+                if case .waiting = state { finish(false); return }
                 switch state {
                 case .ready: finish(true)
                 case .failed, .cancelled: finish(false)

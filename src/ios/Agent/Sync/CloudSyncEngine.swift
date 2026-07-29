@@ -664,6 +664,16 @@ final class CloudSyncEngine: ObservableObject {
             }
             if !didAttemptRejectionRecovery {
                 didAttemptRejectionRecovery = true
+        // [T-ck15-brake] Full re-push marks EVERY local row dirty — on a big
+        // library that's a self-inflicted upload storm. Auto-recover only for
+        // small libraries; otherwise surface the error and leave the manual
+        // Force Full Sync button in charge.
+        let dirtyBefore = await ChatStore.shared.countDirtyRecords().total
+        if dirtyBefore > 2000 {
+            syncStatus = .error(String(localized: "iCloud rejected the request (code 15). Automatic recovery is skipped for large pending queues — use Force Full Sync in Sync Settings if this persists."))
+            logger.warning("[CloudSync] code-15 auto-recovery skipped: \(dirtyBefore) dirty rows")
+            return
+        }
                 logger.warning("[CloudSync] CKError 15 (serverRejectedRequest) on \(phase) — auto-resetting sync state and retrying once")
                 syncStatus = .error(String(localized: "iCloud rejected the sync state (error 15) — rebuilding automatically…"))
                 await forceFullSync()
@@ -1644,14 +1654,12 @@ final class CloudSyncEngine: ObservableObject {
              .resultsTruncated,
              .changeTokenExpired,
              .partialFailure,
-             .internalError,
-             // [T-icloud-ckerror15] serverRejectedRequest: after an OS upgrade
-             // (26.5 → 27 beta) the engine's persisted state can be stale and
-             // CloudKit rejects every request with code 15. Dropping the dirty
-             // marks would strand those rows forever; keep them — the state
-             // reset below is what actually clears the condition.
-             .serverRejectedRequest:
+             .internalError:
             return true
+        // [T-ck15-brake] serverRejectedRequest is deliberately NOT transient:
+        // requeueing a rejected request verbatim is the retry storm the
+        // one-shot recovery below exists to replace. The dirty marks are kept
+        // (rows re-send after the state reset), only the blind retry stops.
         default:
             return false
         }

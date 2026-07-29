@@ -157,7 +157,14 @@ extension RemoteHostStore {
         ]
         var add = match
         add.merge(attrs) { _, new in new }
-        SecItemAdd(add as CFDictionary, nil)
+        var status = SecItemAdd(add as CFDictionary, nil)
+        if status == errSecDuplicateItem {
+            status = SecItemUpdate(match as CFDictionary, attrs as CFDictionary)
+        }
+        if status != errSecSuccess {
+            // Surface instead of silently minting a new identity every call.
+            AppLogger(category: "RemoteHost").error("device key store failed: \(status)")
+        }
         return key
     }
 
