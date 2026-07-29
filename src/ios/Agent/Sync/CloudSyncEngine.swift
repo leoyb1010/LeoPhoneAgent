@@ -637,6 +637,29 @@ final class CloudSyncEngine: ObservableObject {
         }
     }
 
+
+    /// [T-icloud-ckerror15] One automatic recovery per launch for CKError 15
+    /// (serverRejectedRequest). The dominant cause on this app is stale
+    /// CKSyncEngine state after an OS upgrade or bulk reinstall — the fix is
+    /// exactly what forceFullSync does (drop state serialization + etags and
+    /// re-bootstrap). Guarded so a genuinely-rejecting server can't loop us.
+    private var didAttemptRejectionRecovery = false
+
+    private func handleSyncFailure(_ error: Error, phase: String) async {
+        if let ck = error as? CKError, ck.code == .serverRejectedRequest {
+            if !didAttemptRejectionRecovery {
+                didAttemptRejectionRecovery = true
+                logger.warning("[CloudSync] CKError 15 (serverRejectedRequest) on \(phase) — auto-resetting sync state and retrying once")
+                syncStatus = .error(String(localized: "iCloud rejected the sync state (error 15) — rebuilding automatically…"))
+                await forceFullSync()
+                return
+            }
+            syncStatus = .error(String(localized: "iCloud keeps rejecting requests (error 15). Check iCloud status in system Settings, then use Force Full Sync. This can also be a temporary iCloud/beta-OS issue."))
+            return
+        }
+        syncStatus = .error(error.localizedDescription)
+    }
+
     func triggerFetch() async {
         guard let engine = syncEngine else { return }
         syncStatus = .syncing
@@ -650,7 +673,7 @@ final class CloudSyncEngine: ObservableObject {
             lastSyncDate = Date()
         } catch {
             logger.error("[CloudSync] Fetch error: \(error)")
-            syncStatus = .error(error.localizedDescription)
+            await handleSyncFailure(error, phase: "fetch")
         }
     }
 
@@ -675,7 +698,7 @@ final class CloudSyncEngine: ObservableObject {
             lastSyncDate = Date()
         } catch {
             logger.error("[CloudSync] Send error: \(error)")
-            syncStatus = .error(error.localizedDescription)
+            await handleSyncFailure(error, phase: "send")
         }
         let s3 = CFAbsoluteTimeGetCurrent()
         logger.info("[CloudSync] triggerSend: cleanStale=\(String(format: "%.0f", (s1-s0)*1000))ms refresh=\(String(format: "%.0f", (s2-s1)*1000))ms sendChanges=\(String(format: "%.0f", (s3-s2)*1000))ms")
@@ -1593,7 +1616,13 @@ final class CloudSyncEngine: ObservableObject {
              .resultsTruncated,
              .changeTokenExpired,
              .partialFailure,
-             .internalError:
+             .internalError,
+             // [T-icloud-ckerror15] serverRejectedRequest: after an OS upgrade
+             // (26.5 → 27 beta) the engine's persisted state can be stale and
+             // CloudKit rejects every request with code 15. Dropping the dirty
+             // marks would strand those rows forever; keep them — the state
+             // reset below is what actually clears the condition.
+             .serverRejectedRequest:
             return true
         default:
             return false

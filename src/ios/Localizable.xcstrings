@@ -98487,6 +98487,40 @@
           }
         }
       }
+    },
+    "iCloud rejected the sync state (error 15) — rebuilding automatically…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud 拒绝了同步状态（错误 15），正在自动重建…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud 拒絕了同步狀態（錯誤 15），正在自動重建…"
+          }
+        }
+      }
+    },
+    "iCloud keeps rejecting requests (error 15). Check iCloud status in system Settings, then use Force Full Sync. This can also be a temporary iCloud/beta-OS issue.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud 持续拒绝请求（错误 15）。请检查系统设置中的 iCloud 状态，然后使用「强制完整同步」。也可能是 iCloud 服务或测试版系统的临时问题。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud 持續拒絕請求（錯誤 15）。請檢查系統設定中的 iCloud 狀態，然後使用「強制完整同步」。也可能是 iCloud 服務或測試版系統的臨時問題。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
