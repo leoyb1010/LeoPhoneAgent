@@ -14,6 +14,21 @@ enum MigrationStatus: String, Codable {
 
 /// Per-phase state machine. Each phase persists its checkpoint so a crash
 /// in the middle restarts at the last completed boundary.
+/// [T-icloud-ckerror15] Unwraps a CKError into the SERVER's own reason —
+/// "CKErrorDomain error 15" tells the user nothing; the userInfo usually
+/// names the actual rejection ("invalid record type…", quota, schema…).
+func migrationDescribeCKError(_ error: Error) -> String {
+    guard let ck = error as? CKError else { return error.localizedDescription }
+    var parts = ["CKError \(ck.code.rawValue)"]
+    if let server = ck.userInfo["ServerErrorDescription"] as? String { parts.append(server) }
+    if let partial = ck.partialErrorsByItemID?.values.first as? CKError {
+        parts.append("first item: CKError \(partial.code.rawValue)")
+        if let ps = partial.userInfo["ServerErrorDescription"] as? String { parts.append(ps) }
+    }
+    if parts.count == 1 { parts.append(ck.localizedDescription) }
+    return parts.joined(separator: " — ")
+}
+
 enum MigrationPhase: String, Codable {
     case detect            // 0: just decided to migrate
     case v1FullFetch       // 1: fetch every device-* zone via v1 fetcher
@@ -464,8 +479,15 @@ final class MigrationEngine {
                 let backoff = TimeInterval(1 << state.phaseFailureCount) * 2
                 try? await Task.sleep(nanoseconds: UInt64(backoff * 1_000_000_000))
             } catch {
+                // [T-icloud-ckerror15] A rejecting server (code 15) won't be
+                // fixed by fast retries; the tight retry/refetch cycle itself
+                // was costing CPU and making the app feel sluggish. Give it a
+                // real pause.
+                if let ck = error as? CKError, ck.code == .serverRejectedRequest {
+                    try? await Task.sleep(nanoseconds: 60 * 1_000_000_000)
+                }
                 state.phaseFailureCount += 1
-                state.lastError = error.localizedDescription
+                state.lastError = migrationDescribeCKError(error)
                 state.lastUpdatedAt = Date()
                 logger.error("[SyncMigration] phase=\(state.phase.rawValue) ERROR: \(error.localizedDescription) attempt=\(state.phaseFailureCount)/\(self.maxConsecutiveFailures)")
                 if state.phaseFailureCount >= maxConsecutiveFailures {

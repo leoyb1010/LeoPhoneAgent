@@ -3363,6 +3363,20 @@ struct AIChatView: View {
             )
 
             VStack(spacing: 5) {
+                // [T-motion-effects] The chat's own "working" heartbeat: three
+                // breathing dots by the composer while a reply is in flight.
+                // Lives in the SwiftUI composer area, not the UIKit list.
+                if vm.isProcessing, !voiceInputActive {
+                    HStack(spacing: 6) {
+                        LeoTypingIndicator()
+                        Text("Working…")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 14)
+                    .transition(.opacity)
+                }
                 if !voiceInputActive, vm.editingMessageIndex == nil {
                     composerQuickTaskStrip
                 }

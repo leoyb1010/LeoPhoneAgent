@@ -54,6 +54,11 @@ struct AppLockOverlay: View {
             if ok {
                 withAnimation(.easeOut(duration: 0.25)) {
                     store.noteAppUnlock()
+                    // [T-unlock-blank-flash] The privacy screen belongs to the
+                    // app switcher, not to the moment after a successful
+                    // unlock — leaving it up rendered a bare background page
+                    // for the beat until the scene re-activated.
+                    store.showPrivacyScreen = false
                 }
             }
             isAuthenticating = false

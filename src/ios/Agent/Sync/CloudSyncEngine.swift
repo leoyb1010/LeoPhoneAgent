@@ -725,6 +725,9 @@ final class CloudSyncEngine: ObservableObject {
     /// then re-fetch everything from iCloud and re-upload all local content.
     /// Local data (sessions, messages, skills, files) is never deleted.
     func forceFullSync() async {
+        // A new attempt starts now — don't leave the previous failure text
+        // pinned under a live progress view.
+        syncStatus = .syncing
         let prior = await ChatStore.shared.countDirtyRecords()
         logger.info("[CloudSync] forceFullSync START priorDirty total=\(prior.total) byType=\(prior.byType)")
         // Start tallying uploads by type — the .sentRecordZoneChanges delegate

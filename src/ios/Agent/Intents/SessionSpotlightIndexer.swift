@@ -84,8 +84,12 @@ enum SessionSpotlightIndexer {
     /// interleave delete/add. Day-to-day freshness comes from the incremental
     /// index/remove hooks on title change and deletion; the periodic rebuild
     /// only reconciles cross-device renames/deletes.
-    static func reindexAll(limit: Int = 300, force: Bool = false) async {
-        guard isEnabled else { return }
+    nonisolated static func reindexAll(limit: Int = 300, force: Bool = false) async {
+        // [T-spotlight-mainthread] This enum is @MainActor for the tiny
+        // incremental hooks; the FULL rebuild builds 300 attribute sets and
+        // must never do that on the main thread — it was a visible foreground
+        // hitch. `nonisolated` + plain UserDefaults reads keep it off-main.
+        guard (UserDefaults.standard.object(forKey: enabledDefaultsKey) as? Bool) ?? true else { return }
         if !force {
             let last = UserDefaults.standard.double(forKey: lastReindexKey)
             guard Date().timeIntervalSince1970 - last > reindexInterval else { return }

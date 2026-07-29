@@ -323,7 +323,12 @@ struct ToolCapsuleView: View {
         HStack {
             HStack(spacing: 8) {
                 // Status indicator / icon
+                // [T-motion-effects] Pulse while the tool works; a single
+                // bounce when it settles. Transform-only, scoped to this
+                // 14pt icon — safe inside the hosted cell.
                 statusOrIcon
+                    .leoPulse(active: isActive)
+                    .symbolEffect(.bounce, value: isActive)
 
                 // Description text with bouncing dots during streaming
                 HStack(spacing: 0) {

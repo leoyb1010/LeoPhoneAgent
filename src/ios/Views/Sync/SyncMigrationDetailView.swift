@@ -973,8 +973,8 @@ struct SyncMigrationDetailView: View {
         next.pendingPushMigration = split.migrationCount
         if let s = await MigrationEngine.shared.progressSummary() {
             next.migration = MigrationVM(
-                phase: String(describing: s.phase),
-                status: s.status.rawValue,
+                phase: Self.localizedPhase(String(describing: s.phase)),
+                status: Self.localizedStatus(s.status.rawValue),
                 pushDone: s.pushDone,
                 pushTotal: s.pushTotal,
                 v1Deleted: s.v1Deleted,
@@ -1028,5 +1028,32 @@ private struct PauseSyncSheet: View {
         }
         .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
+    }
+}
+
+extension SyncMigrationDetailView {
+    /// [T-sync-ui-localization] Raw enum names ("v2InitialPush", "running")
+    /// were shown verbatim — meaningless outside English and cryptic in it.
+    static func localizedPhase(_ raw: String) -> String {
+        switch raw {
+        case "detect": return String(localized: "Preparing")
+        case "v1FullFetch": return String(localized: "Downloading legacy data")
+        case "v2ZonesCreate": return String(localized: "Creating new sync zones")
+        case "v2InitialPush": return String(localized: "Uploading records")
+        case "v1ZoneDelete": return String(localized: "Cleaning up legacy zone")
+        case "lock": return String(localized: "Finalizing")
+        case "completed": return String(localized: "Completed")
+        default: return raw
+        }
+    }
+
+    static func localizedStatus(_ raw: String) -> String {
+        switch raw {
+        case "running": return String(localized: "In progress")
+        case "failed": return String(localized: "Failed — will retry")
+        case "completed": return String(localized: "Completed")
+        case "idle", "pending": return String(localized: "Waiting")
+        default: return raw
+        }
     }
 }
