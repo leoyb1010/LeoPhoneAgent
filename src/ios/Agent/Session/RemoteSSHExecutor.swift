@@ -18,6 +18,7 @@
 
 import Foundation
 import Citadel
+import Network
 import NIOCore
 
 private let logger = AppLogger(category: "RemoteSSH")
@@ -113,9 +114,49 @@ actor RemoteSSHExecutor {
         }
     }
 
-    /// Settings-page connectivity test.
+    /// Settings-page connectivity test — layered so the result names WHICH
+    /// layer failed: raw TCP reachability first (a VPN/Tailscale problem shows
+    /// up here), then the full SSH + auth + exec path.
     func test(host: RemoteHost) async -> ExecResult {
-        await run(host: host, command: "echo LEO_OK && uname -a", timeout: 15)
+        let tcp = await Self.tcpProbe(host: host.host, port: host.port, timeout: 4)
+        guard tcp else {
+            var message = "TCP \(host.host):\(host.port) UNREACHABLE — this is a network problem, not SSH."
+            if host.host.hasPrefix("100.") {
+                message += " 100.x is a Tailscale address: the Tailscale VPN on THIS device must be connected to the SAME tailnet (check that this device shows as online in `tailscale status` on another machine)."
+            }
+            return ExecResult(output: message, succeeded: false)
+        }
+        let result = await run(host: host, command: "echo LEO_OK && uname -a", timeout: 15)
+        return ExecResult(output: "TCP \(host.host):\(host.port) reachable ✓\n" + result.output,
+                          succeeded: result.succeeded)
+    }
+
+    /// Plain TCP connect probe via Network.framework.
+    private static func tcpProbe(host: String, port: Int, timeout: TimeInterval) async -> Bool {
+        await withCheckedContinuation { continuation in
+            let connection = NWConnection(
+                host: NWEndpoint.Host(host),
+                port: NWEndpoint.Port(integerLiteral: UInt16(clamping: port)),
+                using: .tcp)
+            let lock = NSLock()
+            var finished = false
+            func finish(_ ok: Bool) {
+                lock.lock(); defer { lock.unlock() }
+                guard !finished else { return }
+                finished = true
+                connection.cancel()
+                continuation.resume(returning: ok)
+            }
+            connection.stateUpdateHandler = { state in
+                switch state {
+                case .ready: finish(true)
+                case .failed, .cancelled: finish(false)
+                default: break
+                }
+            }
+            connection.start(queue: .global(qos: .userInitiated))
+            DispatchQueue.global().asyncAfter(deadline: .now() + timeout) { finish(false) }
+        }
     }
 }
 

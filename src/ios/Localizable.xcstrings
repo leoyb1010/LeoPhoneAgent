@@ -98759,6 +98759,40 @@
           }
         }
       }
+    },
+    "iCloud keeps rejecting requests (error 15) — sync paused until next launch to keep the app responsive. Local changes are safe and will upload once iCloud recovers.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud 持续拒绝请求（错误 15）——为保持 App 流畅，同步已暂停到下次启动。本地更改是安全的，iCloud 恢复后会自动补传。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud 持續拒絕請求（錯誤 15）——為保持 App 流暢，同步已暫停到下次啟動。本地更改是安全的，iCloud 恢復後會自動補傳。"
+          }
+        }
+      }
+    },
+    "Zone delete failed: ": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "区域删除失败："
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "區域刪除失敗："
+          }
+        }
+      }
     }
   },
   "version": "1.0"

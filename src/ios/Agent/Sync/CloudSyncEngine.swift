@@ -644,9 +644,24 @@ final class CloudSyncEngine: ObservableObject {
     /// exactly what forceFullSync does (drop state serialization + etags and
     /// re-bootstrap). Guarded so a genuinely-rejecting server can't loop us.
     private var didAttemptRejectionRecovery = false
+    /// [T-icloud-rejection-storm] Consecutive code-15 failures. Making 15
+    /// retry-worthy fixed data loss but created a busy retry loop when the
+    /// server rejects EVERYTHING — constant sends were the reported app-wide
+    /// jank. After recovery has been tried and rejections persist, sync is
+    /// suspended for this launch (dirty marks intact, resumes next launch or
+    /// after a manual Force Full Sync).
+    private var consecutiveRejections = 0
+    private(set) var syncSuspendedThisLaunch = false
 
     private func handleSyncFailure(_ error: Error, phase: String) async {
         if let ck = error as? CKError, ck.code == .serverRejectedRequest {
+            consecutiveRejections += 1
+            if didAttemptRejectionRecovery, consecutiveRejections >= 3 {
+                syncSuspendedThisLaunch = true
+                syncStatus = .error(String(localized: "iCloud keeps rejecting requests (error 15) — sync paused until next launch to keep the app responsive. Local changes are safe and will upload once iCloud recovers."))
+                logger.error("[CloudSync] code-15 storm — suspending sync for this launch after \(self.consecutiveRejections) rejections")
+                return
+            }
             if !didAttemptRejectionRecovery {
                 didAttemptRejectionRecovery = true
                 logger.warning("[CloudSync] CKError 15 (serverRejectedRequest) on \(phase) — auto-resetting sync state and retrying once")
@@ -661,6 +676,7 @@ final class CloudSyncEngine: ObservableObject {
     }
 
     func triggerFetch() async {
+        guard !syncSuspendedThisLaunch else { return }
         guard let engine = syncEngine else { return }
         syncStatus = .syncing
         // Call engine.fetchChanges() in a detached task to avoid re-entering
@@ -671,6 +687,7 @@ final class CloudSyncEngine: ObservableObject {
             }.value
             syncStatus = .idle
             lastSyncDate = Date()
+            consecutiveRejections = 0
         } catch {
             logger.error("[CloudSync] Fetch error: \(error)")
             await handleSyncFailure(error, phase: "fetch")
@@ -678,6 +695,7 @@ final class CloudSyncEngine: ObservableObject {
     }
 
     func triggerSend() async {
+        guard !syncSuspendedThisLaunch else { return }
         guard let engine = syncEngine else { return }
         guard !isSending else {
             logger.debug("[CloudSync] triggerSend skipped — already sending")
@@ -696,6 +714,7 @@ final class CloudSyncEngine: ObservableObject {
             }.value
             syncStatus = .idle
             lastSyncDate = Date()
+            consecutiveRejections = 0
         } catch {
             logger.error("[CloudSync] Send error: \(error)")
             await handleSyncFailure(error, phase: "send")
@@ -726,7 +745,11 @@ final class CloudSyncEngine: ObservableObject {
     /// Local data (sessions, messages, skills, files) is never deleted.
     func forceFullSync() async {
         // A new attempt starts now — don't leave the previous failure text
-        // pinned under a live progress view.
+        // pinned under a live progress view. A manual full sync also lifts the
+        // rejection-storm suspension and resets its counters.
+        syncSuspendedThisLaunch = false
+        consecutiveRejections = 0
+        didAttemptRejectionRecovery = true
         syncStatus = .syncing
         let prior = await ChatStore.shared.countDirtyRecords()
         logger.info("[CloudSync] forceFullSync START priorDirty total=\(prior.total) byType=\(prior.byType)")
@@ -888,7 +911,9 @@ final class CloudSyncEngine: ObservableObject {
                     logger.warning("[CloudSync] Delete iCloud Data: deleted zone \(zone.zoneID.zoneName)")
                 } catch {
                     failedZones.append(zone.zoneID.zoneName)
-                    logger.error("[CloudSync] Delete iCloud Data: failed to delete zone \(zone.zoneID.zoneName): \(error)")
+                    let reason = (error as? CKError).map { "CKError \($0.code.rawValue) — \(($0.userInfo["ServerErrorDescription"] as? String) ?? $0.localizedDescription)" } ?? error.localizedDescription
+                    syncStatus = .error(String(localized: "Zone delete failed: ") + reason)
+                    logger.error("[CloudSync] Delete iCloud Data: failed to delete zone \(zone.zoneID.zoneName): \(reason)")
                 }
             }
         } catch {
