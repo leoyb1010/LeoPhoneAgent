@@ -41,7 +41,7 @@ struct QuickTaskPickerSheet: View {
                     }
                 } else {
                     Section {
-                        ForEach(filtered) { task in
+                        ForEach(Array(filtered.enumerated()), id: \.element.id) { rowIndex, task in
                             Button {
                                 onSelect(task)
                                 dismiss()
@@ -49,6 +49,7 @@ struct QuickTaskPickerSheet: View {
                                 row(task)
                             }
                             .buttonStyle(.plain)
+                            .leoStaggerEntrance(index: rowIndex)
                             .swipeActions(edge: .leading, allowsFullSwipe: false) {
                                 Button {
                                     togglePin(task)

@@ -410,7 +410,9 @@ struct ContentView: View {
                         .padding(.top, 8)
                 }
             }
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: forceSyncToast)
+            // [T-motion-effects] Toast Overshoot: a small spring overshoot on
+            // entry reads as "arrived", not "faded in".
+            .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.72), value: forceSyncToast)
             .onChange(of: wide) { newWide in
                 migrateNavigationState(toWide: newWide)
                 isWideLayout = newWide
@@ -2510,6 +2512,7 @@ struct ContentView: View {
                         .foregroundStyle(.white)
                         .frame(width: 22, height: 22)
                         .background(Color.orange, in: Circle())
+                        .leoPulse(active: true)
                     Text("\(pending.count) sessions need you")
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(.primary)
@@ -2534,7 +2537,9 @@ struct ContentView: View {
 
     private func focusSearch() {
         if !showSearchBar {
-            withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { showSearchBar = true }
+            // [T-motion-effects] Expanding Search: control responding to a
+            // direct tap uses the snappy family.
+            withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) { showSearchBar = true }
         }
         DispatchQueue.main.async { searchFocused = true }
     }

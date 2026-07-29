@@ -57,6 +57,8 @@ private struct RemoteHostEditSheet: View {
     @State private var password = ""
     @State private var testResult: String?
     @State private var testing = false
+    @State private var failShake = 0
+    @State private var okSweep = 0
 
     /// [T-draft-id-stability] Fixed once — `draft` used to mint a NEW UUID on
     /// every access, so Test wrote the password under one id and Save stored
@@ -118,6 +120,8 @@ private struct RemoteHostEditSheet: View {
                         Text(testResult)
                             .font(.caption.monospaced())
                             .foregroundStyle(testResult.contains("LEO_OK") ? .green : .red)
+                            .leoShake(trigger: failShake)
+                            .leoShineSweep(trigger: okSweep)
                     }
                 }
             }
@@ -150,6 +154,7 @@ private struct RemoteHostEditSheet: View {
             await MainActor.run {
                 testing = false
                 testResult = String(result.output.prefix(300))
+                if result.output.contains("LEO_OK") { okSweep += 1 } else { failShake += 1 }
             }
         }
     }
