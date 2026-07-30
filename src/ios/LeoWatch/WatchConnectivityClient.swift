@@ -105,6 +105,38 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
         }
     }
 
+    /// Product-voice path: raw audio to the phone, transcription + agent run
+    /// happen there. Envelope = one JSON header line + 0x0A + AAC bytes.
+    func askAudio(_ audio: Data, sessionId: String? = nil) {
+        guard let session, session.isReachable else {
+            lastActionMessage = "iPhone 不可达"
+            WKInterfaceDevice.current().play(.failure)
+            return
+        }
+        let requestId = UUID().uuidString
+        askState = .waiting(requestId: requestId, startedAt: Date())
+        var header: [String: Any] = ["kind": "askAudio", "requestId": requestId]
+        if let sessionId { header["sessionId"] = sessionId }
+        guard let headerData = try? JSONSerialization.data(withJSONObject: header) else { return }
+        var envelope = headerData
+        envelope.append(0x0A)
+        envelope.append(audio)
+        session.sendMessageData(envelope, replyHandler: nil, errorHandler: { error in
+            Task { @MainActor in
+                self.askState = .idle
+                self.lastActionMessage = "发送失败: \(error.localizedDescription)"
+                WKInterfaceDevice.current().play(.failure)
+            }
+        })
+        Task { [requestId] in
+            try? await Task.sleep(nanoseconds: 185_000_000_000)
+            if case .waiting(let id, _) = self.askState, id == requestId {
+                self.askState = .replied(text: "iPhone 未在时限内回复。任务可能仍在运行，可稍后在 iPhone 上查看。")
+                self.replyPulse += 1
+            }
+        }
+    }
+
     private func handleAskReply(requestId: String, text: String) {
         if case .waiting(let id, _) = askState, id != requestId { return }
         askState = .replied(text: text)

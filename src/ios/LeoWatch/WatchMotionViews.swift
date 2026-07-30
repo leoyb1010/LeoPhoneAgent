@@ -111,6 +111,24 @@ struct WorkingBars: View {
     }
 }
 
+// MARK: - Live level bars (recording — real metering, the honest Equalizer)
+
+struct LiveLevelBars: View {
+    let level: Double
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(0..<5, id: \.self) { index in
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(.red)
+                    .frame(width: 3, height: 5 + CGFloat(level) * CGFloat([18, 26, 32, 26, 18][index]))
+            }
+        }
+        .frame(height: 34)
+        .animation(.linear(duration: 0.08), value: level)
+    }
+}
+
 // MARK: - Hold-to-confirm (Countdown Ring fill + escalating haptics)
 
 struct HoldToConfirmButton<Label: View>: View {

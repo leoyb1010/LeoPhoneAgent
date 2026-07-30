@@ -24,6 +24,7 @@ import Foundation
 #if canImport(WatchConnectivity)
 import WatchConnectivity
 #endif
+import Speech
 
 private let logger = AppLogger(category: "WatchBridge")
 
@@ -51,6 +52,7 @@ enum WatchPayloadKey {
     static let kindRunQuickTask = "runQuickTask"
     static let kindStopAll = "stopAll"
     static let kindAsk = "ask"                // watch → phone: run a prompt
+    static let kindAskAudio = "askAudio"      // watch → phone: raw audio to transcribe
     static let kindAskReply = "askReply"      // phone → watch: final answer
     static let kindTranscript = "transcript"  // watch → phone (replyHandler)
     static let kindStopSession = "stopSession"
@@ -179,6 +181,35 @@ extension WatchBridge: WCSessionDelegate {
     /// Watch asked us to run a quick task. Route it through the same runner
     /// the widget button uses so badges, briefing capture and keep-alive all
     /// behave identically no matter which surface started the run.
+    /// [T-watch-native-voice] Audio envelope from the wrist: JSON header line
+    /// + 0x0A + AAC. Transcribed with the SAME system speech stack the app's
+    /// voice mode uses, then handed to the ordinary ask runner.
+    nonisolated func session(_ session: WCSession, didReceiveMessageData messageData: Data) {
+        guard let newline = messageData.firstIndex(of: 0x0A),
+              let header = try? JSONSerialization.jsonObject(with: messageData[..<newline]) as? [String: Any],
+              (header["kind"] as? String) == WatchPayloadKey.kindAskAudio else { return }
+        let requestId = (header[WatchPayloadKey.requestId] as? String) ?? UUID().uuidString
+        let sessionId = header[WatchPayloadKey.sessionId] as? String
+        let audio = Data(messageData[messageData.index(after: newline)...])
+        Task { @MainActor in
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("watch-ask-\(requestId).m4a")
+            do {
+                try audio.write(to: url)
+                let text = try await WatchBridge.transcribe(url: url)
+                try? FileManager.default.removeItem(at: url)
+                guard !text.isEmpty else {
+                    WatchBridge.shared.sendAskReply(requestId: requestId, text: "没有听清，请再说一次。")
+                    return
+                }
+                await WatchAskRunner.run(requestId: requestId, prompt: text, sessionId: sessionId)
+            } catch {
+                try? FileManager.default.removeItem(at: url)
+                WatchBridge.shared.sendAskReply(requestId: requestId, text: "语音识别失败：\(error.localizedDescription)")
+            }
+        }
+    }
+
     nonisolated func session(
         _ session: WCSession,
         didReceiveMessage message: [String: Any],
@@ -275,6 +306,41 @@ final class WatchBridge {
 }
 
 #endif
+
+// MARK: - Watch audio transcription
+
+extension WatchBridge {
+    /// File-based recognition through the same system engine the app's voice
+    /// features use. Speech permission is the app's existing one.
+    static func transcribe(url: URL) async throws -> String {
+        let status = await withCheckedContinuation { continuation in
+            SFSpeechRecognizer.requestAuthorization { continuation.resume(returning: $0) }
+        }
+        guard status == .authorized else {
+            throw NSError(domain: "WatchAsk", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "语音识别未授权，请在 iPhone 上授权后重试。"])
+        }
+        guard let recognizer = SFSpeechRecognizer(), recognizer.isAvailable else {
+            throw NSError(domain: "WatchAsk", code: 2, userInfo: [
+                NSLocalizedDescriptionKey: "语音识别当前不可用。"])
+        }
+        let request = SFSpeechURLRecognitionRequest(url: url)
+        request.shouldReportPartialResults = false
+        return try await withCheckedThrowingContinuation { continuation in
+            var finished = false
+            recognizer.recognitionTask(with: request) { result, error in
+                guard !finished else { return }
+                if let error {
+                    finished = true
+                    continuation.resume(throwing: error)
+                } else if let result, result.isFinal {
+                    finished = true
+                    continuation.resume(returning: result.bestTranscription.formattedString)
+                }
+            }
+        }
+    }
+}
 
 // MARK: - Watch text sanitizer
 

@@ -28,6 +28,7 @@ struct WatchRootView: View {
 
 private struct HomePage: View {
     @EnvironmentObject private var client: WatchConnectivityClient
+    @StateObject private var recorder = WatchVoiceRecorder.shared
     @State private var pulseTrigger = 0
     @State private var showReply = false
 
@@ -43,9 +44,11 @@ private struct HomePage: View {
                 RadarPulseOnce(trigger: pulseTrigger)
                     .frame(width: 92, height: 92)
                 Button {
-                    startAsk()
+                    toggleVoice()
                 } label: {
-                    if case .waiting = client.askState {
+                    if recorder.isRecording {
+                        LiveLevelBars(level: recorder.level)
+                    } else if case .waiting = client.askState {
                         WorkingBars()
                     } else {
                         Image(systemName: "mic.fill")
@@ -81,20 +84,34 @@ private struct HomePage: View {
     }
 
     private var statusLine: String {
+        if recorder.isRecording { return "说完再点一下发送" }
         if case .waiting = client.askState { return "Leo 正在处理…" }
         if isStale { return "数据可能过期 · 打开 iPhone 同步" }
         switch client.state {
         case "running": return client.status.isEmpty ? "任务运行中" : client.status
         case "failed": return "上个任务失败"
-        default: return "双击手势或点麦克风提问"
+        default: return "点一下开始说话"
         }
     }
 
-    private func startAsk() {
+    /// [T-watch-native-voice] One tap records with the product's own pipeline;
+    /// second tap sends. System dictation remains only as the fallback when
+    /// mic permission is denied.
+    private func toggleVoice() {
+        if recorder.isRecording {
+            if let audio = recorder.stop() {
+                client.askAudio(audio)
+            }
+            return
+        }
         pulseTrigger += 1
-        // [T-watch-one-tap-voice] nil suggestions = watchOS skips the input
-        // chooser and drops STRAIGHT into dictation: tap → speak → done.
-        // The suggestion list added a whole extra screen per ask.
+        Task {
+            let started = await recorder.start()
+            if !started { dictationFallback() }
+        }
+    }
+
+    private func dictationFallback() {
         WKExtension.shared().visibleInterfaceController?.presentTextInputController(
             withSuggestions: nil,
             allowedInputMode: .plain
@@ -103,6 +120,8 @@ private struct HomePage: View {
             Task { @MainActor in WatchConnectivityClient.shared.ask(text) }
         }
     }
+
+    private func startAsk() { toggleVoice() }
 }
 
 private struct ReplySheet: View {
