@@ -39,8 +39,12 @@ enum WatchPayloadKey {
     static let quickTasks = "quickTasks"      // [[id, name, symbol]]
     static let taskId = "taskId"
 
+    static let briefingTask = "briefingTask"
+    static let briefingText = "briefingText"
+
     static let kindStatus = "status"
     static let kindRunQuickTask = "runQuickTask"
+    static let kindStopAll = "stopAll"
 }
 
 #if canImport(WatchConnectivity)
@@ -85,6 +89,8 @@ final class WatchBridge: NSObject, ObservableObject {
             WatchPayloadKey.title: snapshot.title,
             WatchPayloadKey.status: snapshot.status,
             WatchPayloadKey.activeCount: snapshot.activeCount,
+            WatchPayloadKey.briefingTask: WidgetBriefingStore.load()?.taskName ?? "",
+            WatchPayloadKey.briefingText: String((WidgetBriefingStore.load()?.summary ?? "").prefix(300)),
             WatchPayloadKey.updatedAt: snapshot.updatedAt.timeIntervalSince1970,
             WatchPayloadKey.quickTasks: tasks,
         ]
@@ -146,6 +152,15 @@ extension WatchBridge: WCSessionDelegate {
         didReceiveMessage message: [String: Any],
         replyHandler: @escaping ([String: Any]) -> Void
     ) {
+        if (message[WatchPayloadKey.kind] as? String) == WatchPayloadKey.kindStopAll {
+            Task { @MainActor in
+                await WidgetIntentBridge.shared.stopAllTasks()
+                WatchBridge.shared.resetDedupe()
+                WatchBridge.shared.pushStatus()
+            }
+            replyHandler(["ok": true])
+            return
+        }
         guard (message[WatchPayloadKey.kind] as? String) == WatchPayloadKey.kindRunQuickTask,
               let taskId = message[WatchPayloadKey.taskId] as? String else {
             replyHandler(["ok": false])

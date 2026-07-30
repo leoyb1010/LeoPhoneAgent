@@ -27,6 +27,8 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
     @Published private(set) var updatedAt: Date = .distantPast
     @Published private(set) var quickTasks: [WatchQuickTask] = []
     @Published private(set) var lastActionMessage: String?
+    @Published private(set) var briefingTask: String = ""
+    @Published private(set) var briefingText: String = ""
 
     private var session: WCSession? {
         WCSession.isSupported() ? WCSession.default : nil
@@ -41,6 +43,18 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
 
     /// Ask the phone to run a quick task. The phone owns the agent loop; the
     /// watch never tries to run one itself.
+    func stopAll() {
+        guard let session, session.isReachable else {
+            lastActionMessage = "iPhone 不可达"
+            return
+        }
+        session.sendMessage(["kind": "stopAll"], replyHandler: { _ in
+            Task { @MainActor in self.lastActionMessage = "已发送停止指令" }
+        }, errorHandler: { error in
+            Task { @MainActor in self.lastActionMessage = "失败: \(error.localizedDescription)" }
+        })
+    }
+
     func runQuickTask(_ task: WatchQuickTask) {
         guard let session, session.isReachable else {
             lastActionMessage = "iPhone 未连接"
@@ -69,6 +83,8 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
         title = (context["title"] as? String) ?? ""
         status = (context["status"] as? String) ?? ""
         activeCount = (context["activeCount"] as? Int) ?? 0
+        briefingTask = (context["briefingTask"] as? String) ?? ""
+        briefingText = (context["briefingText"] as? String) ?? ""
         if let ts = context["updatedAt"] as? TimeInterval {
             updatedAt = Date(timeIntervalSince1970: ts)
         }
