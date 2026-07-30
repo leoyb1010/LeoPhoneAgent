@@ -92,8 +92,11 @@ private struct HomePage: View {
 
     private func startAsk() {
         pulseTrigger += 1
+        // [T-watch-one-tap-voice] nil suggestions = watchOS skips the input
+        // chooser and drops STRAIGHT into dictation: tap → speak → done.
+        // The suggestion list added a whole extra screen per ask.
         WKExtension.shared().visibleInterfaceController?.presentTextInputController(
-            withSuggestions: ["今天日程", "查下天气", "早间简报"],
+            withSuggestions: nil,
             allowedInputMode: .plain
         ) { results in
             guard let text = results?.first as? String, !text.isEmpty else { return }
