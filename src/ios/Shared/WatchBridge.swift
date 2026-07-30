@@ -41,10 +41,21 @@ enum WatchPayloadKey {
 
     static let briefingTask = "briefingTask"
     static let briefingText = "briefingText"
+    static let sessions = "sessions"          // [[id, title, state, unread]]
+    static let scheduled = "scheduled"        // [[id, name, timeText, enabled]]
+    static let requestId = "requestId"
+    static let text = "text"
+    static let sessionId = "sessionId"
 
     static let kindStatus = "status"
     static let kindRunQuickTask = "runQuickTask"
     static let kindStopAll = "stopAll"
+    static let kindAsk = "ask"                // watch → phone: run a prompt
+    static let kindAskReply = "askReply"      // phone → watch: final answer
+    static let kindTranscript = "transcript"  // watch → phone (replyHandler)
+    static let kindStopSession = "stopSession"
+    static let kindScheduledRun = "scheduledRun"
+    static let kindScheduledToggle = "scheduledToggle"
 }
 
 #if canImport(WatchConnectivity)
@@ -60,6 +71,23 @@ final class WatchBridge: NSObject, ObservableObject {
     private var lastPushedSignature: String = ""
 
     func resetDedupe() { lastPushedSignature = "" }
+
+    /// Last ask answer, folded into the application context as a fallback for
+    /// when the live message can't be delivered (watch briefly unreachable).
+    private var pendingAskReply: (id: String, text: String)?
+
+    func sendAskReply(requestId: String, text: String) {
+        pendingAskReply = (requestId, text)
+        if let session, session.isReachable {
+            session.sendMessage([
+                WatchPayloadKey.kind: WatchPayloadKey.kindAskReply,
+                WatchPayloadKey.requestId: requestId,
+                WatchPayloadKey.text: text,
+            ], replyHandler: nil, errorHandler: { _ in })
+        }
+        resetDedupe()
+        pushStatus()
+    }
 
     func activate() {
         guard let session else {
@@ -91,6 +119,10 @@ final class WatchBridge: NSObject, ObservableObject {
             WatchPayloadKey.activeCount: snapshot.activeCount,
             WatchPayloadKey.briefingTask: WidgetBriefingStore.load()?.taskName ?? "",
             WatchPayloadKey.briefingText: String((WidgetBriefingStore.load()?.summary ?? "").prefix(300)),
+            WatchPayloadKey.sessions: Self.sessionsPayload(),
+            WatchPayloadKey.scheduled: Self.scheduledPayload(),
+            "askReplyId": pendingAskReply?.id ?? "",
+            "askReplyText": pendingAskReply?.text ?? "",
             WatchPayloadKey.updatedAt: snapshot.updatedAt.timeIntervalSince1970,
             WatchPayloadKey.quickTasks: tasks,
         ]
@@ -152,7 +184,56 @@ extension WatchBridge: WCSessionDelegate {
         didReceiveMessage message: [String: Any],
         replyHandler: @escaping ([String: Any]) -> Void
     ) {
-        if (message[WatchPayloadKey.kind] as? String) == WatchPayloadKey.kindStopAll {
+        let kind = message[WatchPayloadKey.kind] as? String
+        if kind == WatchPayloadKey.kindAsk {
+            let requestId = (message[WatchPayloadKey.requestId] as? String) ?? UUID().uuidString
+            let text = (message[WatchPayloadKey.text] as? String) ?? ""
+            let sessionId = message[WatchPayloadKey.sessionId] as? String
+            replyHandler(["ok": !text.isEmpty])
+            guard !text.isEmpty else { return }
+            Task { @MainActor in
+                await WatchAskRunner.run(requestId: requestId, prompt: text, sessionId: sessionId)
+            }
+            return
+        }
+        if kind == WatchPayloadKey.kindTranscript {
+            let sessionId = (message[WatchPayloadKey.sessionId] as? String) ?? ""
+            Task { @MainActor in
+                let lines = await WatchAskRunner.transcript(sessionId: sessionId)
+                replyHandler([WatchPayloadKey.text: lines])
+            }
+            return
+        }
+        if kind == WatchPayloadKey.kindStopSession {
+            let sessionId = (message[WatchPayloadKey.sessionId] as? String) ?? ""
+            Task { @MainActor in
+                ViewModelCache.shared.get(for: sessionId)?.cancel(queuePolicy: .discardQueuedPrompts)
+                WatchBridge.shared.resetDedupe()
+                WatchBridge.shared.pushStatus()
+            }
+            replyHandler(["ok": true])
+            return
+        }
+        if kind == WatchPayloadKey.kindScheduledRun || kind == WatchPayloadKey.kindScheduledToggle {
+            let id = (message[WatchPayloadKey.sessionId] as? String) ?? ""
+            let isRun = (kind == WatchPayloadKey.kindScheduledRun)
+            Task { @MainActor in
+                if isRun {
+                    if let task = ScheduledTaskStore.shared.tasks.first(where: { $0.id == id }) {
+                        _ = await QuickTaskWidgetRunner.run(taskId: task.quickTaskId)
+                    }
+                } else {
+                    if let task = ScheduledTaskStore.shared.tasks.first(where: { $0.id == id }) {
+                        ScheduledTaskStore.shared.setEnabled(!task.isEnabled, id: id)
+                    }
+                }
+                WatchBridge.shared.resetDedupe()
+                WatchBridge.shared.pushStatus()
+            }
+            replyHandler(["ok": true])
+            return
+        }
+        if kind == WatchPayloadKey.kindStopAll {
             Task { @MainActor in
                 await WidgetIntentBridge.shared.stopAllTasks()
                 WatchBridge.shared.resetDedupe()
@@ -194,3 +275,92 @@ final class WatchBridge {
 }
 
 #endif
+
+// MARK: - Watch payload builders
+
+extension WatchBridge {
+    /// Top sessions for the wrist: id, title, state, unread. Small and cold —
+    /// rides the same deduped application context as everything else.
+    @MainActor static func sessionsPayload() -> [[String]] {
+        let items = WidgetRecentSessionsStore.load().prefix(5)
+        return items.map { item in
+            let running = SessionActivityTracker.shared.activeSessions.contains(item.id)
+            let unread = SessionBadgeStore.shared.badgeStates[item.id]?.contains(.unread) ?? false
+            return [item.id, item.title, running ? "running" : "idle", unread ? "1" : "0"]
+        }
+    }
+
+    @MainActor static func scheduledPayload() -> [[String]] {
+        ScheduledTaskStore.shared.tasks.prefix(6).map { task in
+            let name = QuickTaskStore.shared.definition(for: task.quickTaskId)?.displayName ?? task.quickTaskId
+            return [task.id, name, "\(task.cadence.title) \(task.timeText)", task.isEnabled ? "1" : "0"]
+        }
+    }
+}
+
+/// [T-watch-ask] Runs a wrist-dictated prompt through the ordinary agent
+/// loop (new session, or follow-up into an existing one) and delivers the
+/// final assistant text back to the watch.
+@MainActor
+enum WatchAskRunner {
+    static func run(requestId: String, prompt: String, sessionId: String?) async {
+        let previousActive = AIChatViewModel.activeSessionId
+        let vm: AIChatViewModel
+        if let sessionId, !sessionId.isEmpty {
+            vm = ViewModelCache.shared.getOrCreate(for: sessionId).0
+        } else {
+            vm = ViewModelCache.shared.createDraft()
+        }
+        vm.sessionSource = "watch"
+        await vm.ensureSessionReturningId()
+        AIChatViewModel.activeSessionId = previousActive
+        guard let sid = vm.sessionId else {
+            deliver(requestId: requestId, text: "无法创建会话。")
+            return
+        }
+        vm.inputText = prompt
+        vm.send()
+        // Wait for the run to settle (same observation pattern as the widget
+        // runner): give it up to 3 minutes, then report whatever exists.
+        for _ in 0..<360 {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            if !SessionActivityTracker.shared.activeSessions.contains(sid),
+               !SessionActivityTracker.shared.isActive(sid) { break }
+        }
+        let reply = await lastAssistantText(sessionId: sid, limit: 2000)
+        deliver(requestId: requestId,
+                text: reply.isEmpty ? "任务已执行，但没有产生文本回复。可在 iPhone 上查看会话。" : reply)
+        WatchBridge.shared.resetDedupe()
+        WatchBridge.shared.pushStatus()
+    }
+
+    static func transcript(sessionId: String) async -> String {
+        let messages = await ChatStore.shared.loadMessages(sessionId: sessionId)
+        let recent = messages.suffix(6)
+        var lines: [String] = []
+        for message in recent {
+            let text = message.parts.compactMap { part -> String? in
+                if case .text(let value) = part { return value }
+                return nil
+            }.joined(separator: " ")
+            guard !text.isEmpty else { continue }
+            let speaker = message.role == .user ? "你" : "Leo"
+            lines.append("\(speaker): \(String(text.prefix(400)))")
+        }
+        return lines.isEmpty ? "（此会话暂无文本内容）" : lines.joined(separator: "\n\n")
+    }
+
+    private static func lastAssistantText(sessionId: String, limit: Int) async -> String {
+        let messages = await ChatStore.shared.loadMessages(sessionId: sessionId)
+        guard let last = messages.last(where: { $0.role == .assistant }) else { return "" }
+        let text = last.parts.compactMap { part -> String? in
+            if case .text(let value) = part { return value }
+            return nil
+        }.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        return String(text.prefix(limit))
+    }
+
+    private static func deliver(requestId: String, text: String) {
+        WatchBridge.shared.sendAskReply(requestId: requestId, text: text)
+    }
+}
