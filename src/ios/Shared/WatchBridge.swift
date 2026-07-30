@@ -118,7 +118,7 @@ final class WatchBridge: NSObject, ObservableObject {
             WatchPayloadKey.status: snapshot.status,
             WatchPayloadKey.activeCount: snapshot.activeCount,
             WatchPayloadKey.briefingTask: WidgetBriefingStore.load()?.taskName ?? "",
-            WatchPayloadKey.briefingText: String((WidgetBriefingStore.load()?.summary ?? "").prefix(300)),
+            WatchPayloadKey.briefingText: String(WatchTextSanitizer.plain(WidgetBriefingStore.load()?.summary ?? "").prefix(300)),
             WatchPayloadKey.sessions: Self.sessionsPayload(),
             WatchPayloadKey.scheduled: Self.scheduledPayload(),
             "askReplyId": pendingAskReply?.id ?? "",
@@ -276,6 +276,51 @@ final class WatchBridge {
 
 #endif
 
+// MARK: - Watch text sanitizer
+
+/// [T-watch-plaintext] The wrist gets PLAIN text. Agent replies are Markdown;
+/// a 45mm screen showing raw `##`/`**`/`[](…)` reads as garbage. One flatten
+/// pass on the phone serves every watch surface (ask replies, transcripts,
+/// briefing) so the watch app stays a dumb renderer.
+enum WatchTextSanitizer {
+    static func plain(_ input: String) -> String {
+        var text = input
+        // Fenced code: drop the fence lines, keep the content.
+        text = text.replacingOccurrences(of: "```[a-zA-Z0-9]*\\n?", with: "", options: .regularExpression)
+        // Images/links → their label.
+        text = text.replacingOccurrences(of: "!?\\[([^\\]]*)\\]\\([^)]*\\)", with: "$1", options: .regularExpression)
+        // Bold / italic / inline code markers.
+        for marker in ["**", "__", "`"] {
+            text = text.replacingOccurrences(of: marker, with: "")
+        }
+        var lines: [String] = []
+        for rawLine in text.split(separator: "\n", omittingEmptySubsequences: false) {
+            var line = String(rawLine)
+            // Headings and blockquotes.
+            line = line.replacingOccurrences(of: "^\\s*#{1,6}\\s*", with: "", options: .regularExpression)
+            line = line.replacingOccurrences(of: "^\\s*>\\s?", with: "", options: .regularExpression)
+            // Horizontal rules / table separator rows vanish.
+            if line.range(of: "^\\s*[-=*_]{3,}\\s*$", options: .regularExpression) != nil { continue }
+            if line.range(of: "^\\s*\\|?[\\s:|-]+\\|?\\s*$", options: .regularExpression) != nil, line.contains("-") { continue }
+            // Bullets → middle dot; keep numbered lists as-is.
+            line = line.replacingOccurrences(of: "^(\\s*)[-*+]\\s+", with: "$1· ", options: .regularExpression)
+            // Table pipes → two spaces.
+            if line.contains("|") {
+                line = line.replacingOccurrences(of: "|", with: "  ")
+                    .trimmingCharacters(in: .whitespaces)
+            }
+            lines.append(line)
+        }
+        var out = lines.joined(separator: "\n")
+        // Deterministic collapse — regex replacement templates treat \n as a
+        // literal 'n', which would have glued lines together.
+        while out.contains("\n\n\n") {
+            out = out.replacingOccurrences(of: "\n\n\n", with: "\n\n")
+        }
+        return out.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
 // MARK: - Watch payload builders
 
 extension WatchBridge {
@@ -345,7 +390,7 @@ enum WatchAskRunner {
             }.joined(separator: " ")
             guard !text.isEmpty else { continue }
             let speaker = message.role == .user ? "你" : "Leo"
-            lines.append("\(speaker): \(String(text.prefix(400)))")
+            lines.append("\(speaker): \(String(WatchTextSanitizer.plain(text).prefix(400)))")
         }
         return lines.isEmpty ? "（此会话暂无文本内容）" : lines.joined(separator: "\n\n")
     }
@@ -361,6 +406,6 @@ enum WatchAskRunner {
     }
 
     private static func deliver(requestId: String, text: String) {
-        WatchBridge.shared.sendAskReply(requestId: requestId, text: text)
+        WatchBridge.shared.sendAskReply(requestId: requestId, text: WatchTextSanitizer.plain(text))
     }
 }
