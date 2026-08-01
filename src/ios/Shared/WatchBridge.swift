@@ -79,6 +79,9 @@ final class WatchBridge: NSObject, ObservableObject {
     private var pendingAskReply: (id: String, text: String)?
 
     func sendAskReply(requestId: String, text: String) {
+        // [T-automation-watch-isolation] Automation runs reuse this delivery
+        // path but their answers belong to notifications, not the wrist.
+        guard !requestId.hasPrefix("automation-") else { return }
         pendingAskReply = (requestId, text)
         if let session, session.isReachable {
             session.sendMessage([

@@ -159,7 +159,7 @@ actor ArtifactRepository {
         sessionId: String,
         sourceMessageId: String? = nil
     ) throws -> ArtifactSnapshot {
-        defer { NotificationCenter.default.post(name: .artifactsDidChange, object: nil) }
+        defer { Task { @MainActor in NotificationCenter.default.post(name: .artifactsDidChange, object: nil) } }
         let values = try fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
         guard values.isRegularFile == true else { throw RepositoryError.artifactNotFound }
         guard (values.fileSize ?? 0) <= 100 * 1_024 * 1_024 else { throw RepositoryError.fileTooLarge }

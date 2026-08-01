@@ -138,7 +138,10 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
     }
 
     private func handleAskReply(requestId: String, text: String) {
-        if case .waiting(let id, _) = askState, id != requestId { return }
+        // Only accept the reply we are actually waiting for — the old check
+        // let ANY reply through when idle (phone-side automations buzzed the
+        // wrist with answers nobody asked for here).
+        guard case .waiting(let id, _) = askState, id == requestId else { return }
         askState = .replied(text: text)
         replyPulse += 1
         WKInterfaceDevice.current().play(.success)

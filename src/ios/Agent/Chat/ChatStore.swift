@@ -2517,7 +2517,7 @@ actor ChatStore {
     func deleteSessionMedia(_ sessionId: String) {
         let fm = FileManager.default
 
-        for subdir in ["browser", "attachments", "images"] {
+        for subdir in ["browser", "attachments", "images", "generated"] {
             let dirURL = minisBaseURL.appendingPathComponent("\(sessionId)/\(subdir)")
             if fm.fileExists(atPath: dirURL.path) {
                 try? fm.removeItem(at: dirURL)

@@ -82,6 +82,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
 
         // [T-watch-companion] Inert unless a watch app is installed.
         WatchBridge.shared.activate()
+        // [T-automation-engine] Region wakes relaunch the app in the
+        // BACKGROUND — the monitor delegate must exist before iOS delivers
+        // the event, not when the settings page happens to appear.
+        AutomationEngine.shared.reloadMonitoring()
 
         // [T-widget-run-in-place] Teach the shared widget intent how to reach
         // the agent loop. The intent type is compiled into the widget target

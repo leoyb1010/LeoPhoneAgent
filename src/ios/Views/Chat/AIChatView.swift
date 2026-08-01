@@ -6040,6 +6040,9 @@ struct DownloadLocateTarget: Identifiable {
 extension AIChatView {
     func refreshArtifactCount() {
         guard let sid = vm.sessionId else { artifactCount = 0; return }
-        artifactCount = (try? ArtifactRepository.shared.list(sessionId: sid).count) ?? 0
+        // Actor hop + back to main for the @State write.
+        Task { @MainActor in
+            artifactCount = (try? await ArtifactRepository.shared.list(sessionId: sid))?.count ?? 0
+        }
     }
 }

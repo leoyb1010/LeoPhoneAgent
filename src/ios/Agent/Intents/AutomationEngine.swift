@@ -96,6 +96,7 @@ final class AutomationStore: ObservableObject {
         rules[index].score += up ? 1 : -1
         if rules[index].score <= -3 {
             rules[index].isEnabled = false
+            AutomationEngine.shared.reloadMonitoring()
             ScheduledTaskRunner.notify(
                 title: String(localized: "Automation paused"),
                 body: rules[index].name, sessionId: nil)
@@ -125,8 +126,24 @@ final class AutomationEngine: NSObject, CLLocationManagerDelegate {
         return manager
     }()
     private let eventStore = EKEventStore()
-    /// beforeEvent dedupe: event identifiers already fired this launch.
-    private var firedEventIds: Set<String> = []
+
+    override init() {
+        super.init()
+        // Enabled up front: reading batteryState in the same tick it's
+        // enabled returns .unknown.
+        UIDevice.current.isBatteryMonitoringEnabled = true
+    }
+    /// beforeEvent dedupe, persisted so a relaunch inside the window doesn't
+    /// re-fire the same event. [id: firedAt], pruned at 24h.
+    private var firedEventIds: [String: Date] {
+        get {
+            (UserDefaults.standard.dictionary(forKey: "leo.automations.firedEvents") as? [String: Date]) ?? [:]
+        }
+        set {
+            let pruned = newValue.filter { Date().timeIntervalSince($0.value) < 24 * 3600 }
+            UserDefaults.standard.set(pruned, forKey: "leo.automations.firedEvents")
+        }
+    }
 
     /// Call at launch + whenever rules change: (re)register region monitors.
     func reloadMonitoring() {
@@ -156,9 +173,13 @@ final class AutomationEngine: NSObject, CLLocationManagerDelegate {
             default: break
             }
         }
-        if needsAuth, locationManager.authorizationStatus == .authorizedWhenInUse {
-            // Region wakes in background require Always; ask once, honestly.
-            locationManager.requestAlwaysAuthorization()
+        if needsAuth {
+            switch locationManager.authorizationStatus {
+            case .notDetermined, .authorizedWhenInUse:
+                // Region wakes in background require Always; ask honestly.
+                locationManager.requestAlwaysAuthorization()
+            default: break
+            }
         }
         logger.info("monitoring \(self.locationManager.monitoredRegions.count) regions, \(rules.count) rules total")
     }
@@ -174,13 +195,12 @@ final class AutomationEngine: NSObject, CLLocationManagerDelegate {
                 let window = eventStore.predicateForEvents(
                     withStart: now, end: now.addingTimeInterval(TimeInterval(minutes * 60)), calendars: nil)
                 for event in eventStore.events(matching: window)
-                where !event.isAllDay && !firedEventIds.contains(event.eventIdentifier ?? "") {
-                    firedEventIds.insert(event.eventIdentifier ?? "")
+                where !event.isAllDay && firedEventIds[(event.eventIdentifier ?? "") + event.startDate.description] == nil {
+                    firedEventIds[(event.eventIdentifier ?? "") + event.startDate.description] = Date()
                     await fire(rule, context: String(localized: "Upcoming event: \(event.title ?? "")"))
                     break
                 }
             case .nightCharging:
-                UIDevice.current.isBatteryMonitoringEnabled = true
                 let charging = UIDevice.current.batteryState == .charging || UIDevice.current.batteryState == .full
                 let hour = Calendar.current.component(.hour, from: now)
                 if charging, hour >= 22 || hour < 6 {
@@ -189,6 +209,12 @@ final class AutomationEngine: NSObject, CLLocationManagerDelegate {
             default: break
             }
         }
+    }
+
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        // First grant arrives asynchronously — re-register the monitors that
+        // silently failed before authorization existed.
+        Task { @MainActor in self.reloadMonitoring() }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
@@ -211,6 +237,10 @@ final class AutomationEngine: NSObject, CLLocationManagerDelegate {
 
     private func fire(_ rule: AutomationRule, context: String?) async {
         AutomationStore.shared.markFired(id: rule.id)
+        // [T-automation-keepalive] A region wake grants seconds; every other
+        // background entry point arms the keep-alive first — so do we.
+        _ = BackgroundKeepAliveManager.shared.armEagerlyForShortcut(
+            sessionId: "intent-eager:automation-\(rule.id)", caller: "automation")
         logger.info("firing rule \(rule.name)")
         if let quickTaskId = rule.quickTaskId {
             _ = await QuickTaskWidgetRunner.run(taskId: quickTaskId)
