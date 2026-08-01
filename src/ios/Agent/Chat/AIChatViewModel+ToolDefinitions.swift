@@ -172,6 +172,27 @@ extension AIChatViewModel {
             ))
         }
 
+        // [T-image-gen] Thin wrapper over the EXISTING minis-model-use image
+        // pipeline (Codex-subscription OAuth routing, Images API, endpoint
+        // auto-probe all live there). Registered when any enabled
+        // OpenAI-family instance exists — key or subscription.
+        let hasImageProvider = ProviderConfigStore.shared.instances.contains {
+            $0.isEnabled && ($0.providerType == .openAI || $0.providerType == .openRouter)
+        }
+        if hasImageProvider {
+            tools.append(AgentToolDefinition(
+                name: "generate_image",
+                description: "Generate an image from a text prompt with gpt-image-2 (rides the user's OpenAI subscription or API key automatically). The image is saved to /var/minis/workspace/, appears INLINE in the chat automatically and lands in the artifact tray — do not additionally read_image it. Costs real money/quota: one call per user request, no unrequested retries. Requires the sandbox kernel (same as shell).",
+                parameters: [
+                    "tool_title": AgentToolParam(type: .string, description: "A concise 5-10 word summary shown to the user. Use the same language as the user."),
+                    "prompt": AgentToolParam(type: .string, description: "The image description, in English for best results. Include style, composition, lighting."),
+                    "size": AgentToolParam(type: .string, description: "Image size.", enumValues: ["1024x1024", "1536x1024", "1024x1536"]),
+                ],
+                required: ["tool_title", "prompt"],
+                propertyOrdering: ["tool_title", "prompt", "size"]
+            ))
+        }
+
         // [T-orchestration] Orchestration tools exist ONLY when the user has
         // switched them on (Settings → Agent Runtime, default off).
         if WorkerPool.isEnabled {

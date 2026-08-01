@@ -699,6 +699,50 @@ extension AIChatViewModel {
                 messages[msgIdx].blocks[blockIdx].content = toolOutput
             }
 
+        case "generate_image":
+            let args = (try? JSONSerialization.jsonObject(with: Data(argsJson.utf8)) as? [String: Any]) ?? [:]
+            let prompt = (args["prompt"] as? String) ?? ""
+            if prompt.isEmpty {
+                toolOutput = "Error: missing prompt."
+                toolSuccess = false
+            } else if let sid = sessionId {
+                // [T-image-gen] Ride the existing minis-model-use pipeline —
+                // it owns Codex-subscription routing, the Images API and
+                // endpoint probing. We add: fixed workspace output, artifact
+                // capture and inline display.
+                let fileName = "gen-\(Int(Date().timeIntervalSince1970)).png"
+                let linuxPath = "/var/minis/workspace/\(fileName)"
+                let quotedPrompt = "'" + prompt.replacingOccurrences(of: "'", with: "'\\''") + "'"
+                do {
+                    let cli = "minis-model-use run --model gpt-image-2 --prompt \(quotedPrompt) --output \(linuxPath)"
+                    let result = try await ISHExecutionCoordinator.shared.execute(
+                        sessionId: sid, command: cli, timeout: 300,
+                        lineCallback: { _ in }, pidCallback: { _ in })
+                    if let hostURL = await resolvePathForDirectRead(linuxPath),
+                       FileManager.default.fileExists(atPath: hostURL.path) {
+                        let sourceMessageId = msgIdx < messages.count ? messages[msgIdx].id.uuidString : nil
+                        _ = await captureWorkspaceArtifact(path: linuxPath, sourceMessageId: sourceMessageId)
+                        if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                            messages[msgIdx].blocks[blockIdx].imageFilePath = hostURL.path
+                        }
+                        toolOutput = "Image generated → \(linuxPath) (shown inline; also in the artifact tray)."
+                        toolSuccess = true
+                    } else {
+                        toolOutput = "Image generation did not produce a file. CLI said: \(String(result.output.suffix(400)))"
+                        toolSuccess = false
+                    }
+                } catch {
+                    toolOutput = "Image generation failed: \(error.localizedDescription)"
+                    toolSuccess = false
+                }
+            } else {
+                toolOutput = "Error: no session for image generation."
+                toolSuccess = false
+            }
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = toolOutput
+            }
+
         // [T-orchestration] Lead/Worker control surface (registered only when
         // the user enabled orchestration).
         case "dispatch_subtask", "check_subtasks", "collect_subtask":
