@@ -400,6 +400,16 @@ extension AIChatViewModel {
                 if capturedCount > 0 {
                     toolOutput += "\n  Captured \(capturedCount) artifact\(capturedCount == 1 ? "" : "s") in this chat."
                 }
+                // [T-generated-image-visibility] A written image shows up IN
+                // the conversation bubble immediately — same imageFilePath
+                // mechanism the browser screenshots use. No read_image round
+                // trip, no "saved somewhere, trust me".
+                if let imagePath = newOrModified.keys.sorted().first(where: {
+                    Self.inlineImageExtensions.contains(($0 as NSString).pathExtension.lowercased())
+                }), let hostURL = await resolvePathForDirectRead(imagePath),
+                   msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                    messages[msgIdx].blocks[blockIdx].imageFilePath = hostURL.path
+                }
             }
 
             let (redactedOut, redactHits) = EnvVarRedactor.redactIfEnabled(toolOutput)

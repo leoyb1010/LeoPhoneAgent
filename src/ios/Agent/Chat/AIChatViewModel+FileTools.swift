@@ -145,8 +145,16 @@ extension AIChatViewModel {
 
     /// Captures user-facing task output without changing or moving the workspace file.
     /// Intermediate files elsewhere under /var/minis remain outside the artifact tray.
+    static let inlineImageExtensions: Set<String> = ["png", "jpg", "jpeg", "gif", "webp", "heic", "bmp"]
+
     func captureWorkspaceArtifact(path: String, sourceMessageId: String?) async -> ArtifactSnapshot? {
-        guard path.hasPrefix("/var/minis/workspace/"),
+        // [T-generated-image-visibility] Images are user-facing output no
+        // matter WHERE the model chose to write them — "已生成，请保存" with an
+        // invisible file was the exact complaint. Non-image files keep the
+        // workspace-only rule so build junk stays out of the tray.
+        let ext = (path as NSString).pathExtension.lowercased()
+        let isImage = Self.inlineImageExtensions.contains(ext)
+        guard path.hasPrefix("/var/minis/workspace/") || isImage,
               let sessionId,
               let fileURL = await resolvePathForDirectRead(path) else { return nil }
         do {
