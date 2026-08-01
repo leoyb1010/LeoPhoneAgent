@@ -869,8 +869,36 @@ extension AIChatViewModel {
             } else {
                 snapshot = ToolSnapshot(type: .text, text: toolOutput, mediaRef: nil, duration: toolDuration)
             }
+        case "generate_image":
+            // [T-delivery-persist] Same persistence browser shots get: without
+            // a media snapshot the inline image vanished on session reload.
+            if let imagePath = (msgIdx < messages.count && blockIdx < messages[msgIdx].blocks.count)
+                ? messages[msgIdx].blocks[blockIdx].imageFilePath : nil,
+               let imageData = try? Data(contentsOf: URL(fileURLWithPath: imagePath)),
+               let sid = sessionId {
+                let ref = await ChatStore.shared.saveMedia(
+                    data: imageData, mimeType: "image/png", sessionId: sid,
+                    originalFileName: URL(fileURLWithPath: imagePath).lastPathComponent,
+                    subdir: "generated", linuxPath: nil
+                )
+                snapshot = ToolSnapshot(type: .image, text: nil, mediaRef: ref, duration: toolDuration)
+            } else {
+                snapshot = ToolSnapshot(type: .text, text: toolOutput, mediaRef: nil, duration: toolDuration)
+            }
         case "file_write", "file_edit":
-            if let path = toolArgs["path"] as? String,
+            // [T-delivery-persist] A written IMAGE snapshots as media (reload
+            // keeps it inline); text files keep the preview snapshot.
+            if let imagePath = (msgIdx < messages.count && blockIdx < messages[msgIdx].blocks.count)
+                ? messages[msgIdx].blocks[blockIdx].imageFilePath : nil,
+               let imageData = try? Data(contentsOf: URL(fileURLWithPath: imagePath)),
+               let sid = sessionId {
+                let ref = await ChatStore.shared.saveMedia(
+                    data: imageData, mimeType: Self.detectImageMime(imageData), sessionId: sid,
+                    originalFileName: URL(fileURLWithPath: imagePath).lastPathComponent,
+                    subdir: "generated", linuxPath: nil
+                )
+                snapshot = ToolSnapshot(type: .image, text: nil, mediaRef: ref, duration: toolDuration)
+            } else if let path = toolArgs["path"] as? String,
                let hostURL = await resolvePathForDirectRead(path),
                let fileContent = try? String(contentsOf: hostURL, encoding: .utf8) {
                 let lines = fileContent.components(separatedBy: "\n")
@@ -880,7 +908,21 @@ extension AIChatViewModel {
                 snapshot = ToolSnapshot(type: .text, text: toolOutput, mediaRef: nil, duration: toolDuration)
             }
         default:
-            snapshot = ToolSnapshot(type: .text, text: toolOutput, mediaRef: nil, duration: toolDuration)
+            // [T-delivery-persist] Shell-generated images (b44 inline attach)
+            // persist as media like every other image-bearing block.
+            if let imagePath = (msgIdx < messages.count && blockIdx < messages[msgIdx].blocks.count)
+                ? messages[msgIdx].blocks[blockIdx].imageFilePath : nil,
+               let imageData = try? Data(contentsOf: URL(fileURLWithPath: imagePath)),
+               let sid = sessionId {
+                let ref = await ChatStore.shared.saveMedia(
+                    data: imageData, mimeType: Self.detectImageMime(imageData), sessionId: sid,
+                    originalFileName: URL(fileURLWithPath: imagePath).lastPathComponent,
+                    subdir: "generated", linuxPath: nil
+                )
+                snapshot = ToolSnapshot(type: .image, text: nil, mediaRef: ref, duration: toolDuration)
+            } else {
+                snapshot = ToolSnapshot(type: .text, text: toolOutput, mediaRef: nil, duration: toolDuration)
+            }
         }
 
         let snapshotResolver = await ChatStore.shared.mediaFileURLResolver()

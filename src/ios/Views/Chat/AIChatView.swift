@@ -257,6 +257,8 @@ struct AIChatView: View {
     @State private var floatingBarHeight: CGFloat = 0
     @State private var showFileBrowser = false
     @State private var showArtifactTray = false
+    /// [T-delivery-tray] Live artifact count for the permanent toolbar badge.
+    @State private var artifactCount = 0
     // [T-browser-download-ux-v2] Downloads panel + "Show in Files" locate target.
     @State private var showDownloadsPanel = false
     @State private var locateDownloadTarget: DownloadLocateTarget?
@@ -612,7 +614,29 @@ struct AIChatView: View {
             ChatToolbarHost(key: chatToolbarKey, title: {
                 chatNavPrincipalContent
             }, trailing: {
-                trailingMenu
+                HStack(spacing: 2) {
+                    // [T-delivery-tray] Artifacts get a permanent toolbar
+                    // entry with a live count — they were buried four taps
+                    // deep in the overflow menu, which is exactly why
+                    // "where did my file go" kept happening.
+                    if artifactCount > 0 {
+                        Button {
+                            showArtifactTray = true
+                        } label: {
+                            Image(systemName: "tray.full")
+                                .overlay(alignment: .topTrailing) {
+                                    Text("\(min(artifactCount, 99))")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 3).padding(.vertical, 1)
+                                        .background(.teal, in: Capsule())
+                                        .offset(x: 8, y: -6)
+                                }
+                        }
+                        .accessibilityLabel(Text("Artifacts"))
+                    }
+                    trailingMenu
+                }
             })
             .equatable()
         )
@@ -884,6 +908,10 @@ struct AIChatView: View {
                 let base = RootfsManager.shared.dataPath
                 FileBrowserView(rootPath: base, initialPath: base.appendingPathComponent("var/minis"), rootLabel: "/")
             }
+        }
+        .task(id: vm.sessionId) { refreshArtifactCount() }
+        .onReceive(NotificationCenter.default.publisher(for: .artifactsDidChange)) { _ in
+            refreshArtifactCount()
         }
         .sheet(isPresented: $showArtifactTray) {
             ArtifactTrayView(sessionId: vm.sessionId)
@@ -6007,4 +6035,11 @@ func voiceCorrectionContext(from messages: [ChatMessage]) -> ConversationContext
 struct DownloadLocateTarget: Identifiable {
     let filename: String
     var id: String { filename }
+}
+
+extension AIChatView {
+    func refreshArtifactCount() {
+        guard let sid = vm.sessionId else { artifactCount = 0; return }
+        artifactCount = (try? ArtifactRepository.shared.list(sessionId: sid).count) ?? 0
+    }
 }

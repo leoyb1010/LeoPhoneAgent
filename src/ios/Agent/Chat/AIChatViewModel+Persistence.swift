@@ -902,6 +902,11 @@ extension AIChatViewModel {
             switch block.kind {
             case .shellTool(let cmd):
                 block.content = tr.output
+                // [T-delivery-persist] Shell-generated images now snapshot as
+                // media; restore them inline on reload like browser shots.
+                if let ref = tr.mediaRef {
+                    block.imageFilePath = mediaResolver(ref).path
+                }
             case .browserTool, .readImageTool:
                 block.content = tr.output
                 if let ref = tr.mediaRef {
@@ -909,6 +914,9 @@ extension AIChatViewModel {
                 }
             default:
                 block.content = tr.output
+                if let ref = tr.mediaRef {
+                    block.imageFilePath = mediaResolver(ref).path
+                }
             }
             // Prefer the explicit persisted status (distinguishes cancelled from failed);
             // fall back to the success bool for rows written before the status field existed.

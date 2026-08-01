@@ -1762,6 +1762,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // is preserved inside SystemPromptBuilder.identityTemplate so we
         // don't regress model behavior that depended on it.
         SystemPromptBuilder.identitySection()
+            + "DELIVERY RULE: never tell the user a file/image/document was generated unless a tool result in THIS conversation confirmed its path. Images must be made visible (file_write and generate_image show them inline automatically; for shell-generated images call read_image). If you cannot show or link an artifact, say so plainly instead of claiming success.\n\n"
             + "You should proactively use shell commands to accomplish the user's tasks — installing packages (apk add), "
             + "writing and running scripts, managing files, networking, and any other operations a Linux terminal can perform.\n\n"
             + "Available tools:\n"
