@@ -5119,6 +5119,21 @@ private struct SettingsSheet: View {
                                 .background(.purple, in: Circle())
                         }
                     }
+                    // [T-automation-engine] Proactive rules: location /
+                    // calendar / charging triggers.
+                    NavigationLink {
+                        AutomationSettingsView()
+                    } label: {
+                        Label {
+                            Text("Automations")
+                        } icon: {
+                            Image(systemName: "bolt.badge.clock")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.white)
+                                .frame(width: 21, height: 21)
+                                .background(.orange, in: Circle())
+                        }
+                    }
                     // [T-scheduled-tasks] Sits next to Quick Tasks because a
                     // schedule is just "a quick task, but recurring".
                     NavigationLink {

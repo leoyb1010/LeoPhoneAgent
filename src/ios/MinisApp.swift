@@ -458,6 +458,7 @@ struct MinisApp: App {
                     // a due task runs when the user next opens the app rather
                     // than being silently lost.
                     await ScheduledTaskRunner.runDueTasks(reason: "foreground")
+                await AutomationEngine.shared.reconcile()
                     // [T-spotlight-sessions] Converge the search index:
                     // sessions renamed or deleted on another device, and any
                     // created while indexing was off.
