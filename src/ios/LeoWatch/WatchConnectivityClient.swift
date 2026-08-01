@@ -170,6 +170,10 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
         sendSimple(["kind": "scheduledToggle", "sessionId": id], success: "已切换")
     }
 
+    func noteTooShort() {
+        lastActionMessage = "太短了，请再说一次"
+    }
+
     func stopAll() {
         sendSimple(["kind": "stopAll"], success: "已发送停止指令")
     }

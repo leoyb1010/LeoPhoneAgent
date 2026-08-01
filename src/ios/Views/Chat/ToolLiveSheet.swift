@@ -753,6 +753,16 @@ struct ToolLiveSheet: View {
                 } else {
                     browserTextResultContent(block.content)
                 }
+            // [T-inline-image-render] Generated images (file_write / shell /
+            // generate_image) carry imageFilePath on ordinary tool blocks —
+            // without this arm the whole "image shows inline" promise was
+            // dead code: only browser/read-image kinds ever drew it.
+            case _ where block.imageFilePath != nil:
+                if let img = block.imageFilePath.flatMap({ UIImage(contentsOfFile: $0) }) {
+                    browserResultContent(image: img, text: block.content)
+                } else {
+                    textContent
+                }
             case .readImageTool:
                 if let img = block.imageFilePath.flatMap({ UIImage(contentsOfFile: $0) }) {
                     browserResultContent(image: img, text: block.content)

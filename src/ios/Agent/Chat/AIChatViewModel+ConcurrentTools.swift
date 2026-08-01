@@ -458,6 +458,21 @@ extension AIChatViewModel {
                 await MainActor.run { SkillStore.shared.reload() }
             }
 
+                    // [T-inline-image-render] Same visibility rules as the shell
+            // branch: written images are captured + shown inline.
+            if toolSuccess {
+                let argsFW = (try? JSONSerialization.jsonObject(with: Data(argsJson.utf8)) as? [String: Any]) ?? [:]
+                if let writtenPath = argsFW["path"] as? String,
+                   Self.inlineImageExtensions.contains((writtenPath as NSString).pathExtension.lowercased()) {
+                    let sourceMessageId = msgIdx < messages.count ? messages[msgIdx].id.uuidString : nil
+                    _ = await captureWorkspaceArtifact(path: writtenPath, sourceMessageId: sourceMessageId)
+                    if let hostURL = await resolvePathForDirectRead(writtenPath),
+                       msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                        messages[msgIdx].blocks[blockIdx].imageFilePath = hostURL.path
+                    }
+                }
+            }
+
         case "file_edit":
             let fileResult: FileToolResult
             do {

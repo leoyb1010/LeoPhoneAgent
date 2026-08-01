@@ -433,10 +433,15 @@ enum WatchAskRunner {
         vm.send()
         // Wait for the run to settle (same observation pattern as the widget
         // runner): give it up to 3 minutes, then report whatever exists.
-        for _ in 0..<360 {
+        // Startup grace: the send registers as active a beat later — breaking
+        // on the FIRST idle tick returned the PREVIOUS turn's text.
+        var sawActive = false
+        for tick in 0..<360 {
             try? await Task.sleep(nanoseconds: 500_000_000)
-            if !SessionActivityTracker.shared.activeSessions.contains(sid),
-               !SessionActivityTracker.shared.isActive(sid) { break }
+            let active = SessionActivityTracker.shared.activeSessions.contains(sid)
+                || SessionActivityTracker.shared.isActive(sid)
+            if active { sawActive = true; continue }
+            if sawActive || tick >= 30 { break }   // ended, or never started within 15s
         }
         let reply = await lastAssistantText(sessionId: sid, limit: 2000)
         deliver(requestId: requestId,

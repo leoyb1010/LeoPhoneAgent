@@ -20,6 +20,9 @@ final class WatchVoiceRecorder: NSObject, ObservableObject {
     /// 0…1 smoothed input level for the live bars.
     @Published private(set) var level: Double = 0
     @Published private(set) var permissionDenied = false
+    /// Invoked when the 30s cap fires — routes the audio through the same
+    /// send path a manual stop uses (it used to be silently discarded).
+    var onAutoStop: ((Data) -> Void)?
 
     private var recorder: AVAudioRecorder?
     private var meterTimer: Timer?
@@ -63,7 +66,9 @@ final class WatchVoiceRecorder: NSObject, ObservableObject {
             }
             autoStopTask = Task { [weak self] in
                 try? await Task.sleep(nanoseconds: UInt64((self?.maxSeconds ?? 30) * 1_000_000_000))
-                if let self, self.isRecording { _ = self.stop() }
+                if let self, self.isRecording, let data = self.stop() {
+                    self.onAutoStop?(data)
+                }
             }
             return true
         } catch {

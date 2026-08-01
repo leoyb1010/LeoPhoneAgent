@@ -39,9 +39,21 @@ struct AssistantBlockView: View {
             )
             .padding(.vertical, 2)
         case .shellTool:
-            ToolCapsuleView(block: block, icon: "terminal", accentColor: .green,
-                            commandStartTime: commandStartTime, onStop: onStop, browserPool: browserPool,
-                            toolSnapshots: toolSnapshots, detailBlock: $detailBlock)
+            VStack(alignment: .leading, spacing: 6) {
+                ToolCapsuleView(block: block, icon: "terminal", accentColor: .green,
+                                commandStartTime: commandStartTime, onStop: onStop, browserPool: browserPool,
+                                toolSnapshots: toolSnapshots, detailBlock: $detailBlock)
+                // [T-inline-image-render] A generated image is user-facing
+                // output — show it right in the flow, not behind a tap.
+                if let path = block.imageFilePath, let img = UIImage(contentsOfFile: path) {
+                    Image(uiImage: img)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: 260, maxHeight: 220)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .onTapGesture { detailBlock = block }
+                }
+            }
         case .fileReadTool:
             ToolCapsuleView(block: block, icon: "doc.text", accentColor: .cyan,
                             commandStartTime: commandStartTime, onStop: onStop,

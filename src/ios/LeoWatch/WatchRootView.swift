@@ -101,9 +101,13 @@ private struct HomePage: View {
         if recorder.isRecording {
             if let audio = recorder.stop() {
                 client.askAudio(audio)
+            } else {
+                WKInterfaceDevice.current().play(.failure)
+                client.noteTooShort()
             }
             return
         }
+        recorder.onAutoStop = { data in Task { @MainActor in client.askAudio(data) } }
         pulseTrigger += 1
         Task {
             let started = await recorder.start()

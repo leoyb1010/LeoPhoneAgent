@@ -144,8 +144,12 @@ actor RemoteSSHExecutor {
                     output: "[via \(gateway.name) — target not directly reachable from this device]\n" + result.output,
                     succeeded: true)
             }
-            // This gateway can't reach the target (no key / route) — try the
-            // next reachable one instead of giving up on the first.
+            // Only ssh-level failure (exit 255: no route/no key) may try the
+            // next gateway. Any OTHER failure means the command ALREADY RAN on
+            // the target — retrying elsewhere would execute side effects twice.
+            if !result.output.contains("[exit code 255]") {
+                return ExecResult(output: "[via \(gateway.name)] " + result.output, succeeded: false)
+            }
             lastRelayFailure = "[via \(gateway.name)] " + result.output
         }
         if let lastRelayFailure {
