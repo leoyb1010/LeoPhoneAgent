@@ -699,6 +699,14 @@ extension AIChatViewModel {
                 if command.isEmpty || (tu.name == "remote_agent" && (args["prompt"] as? String)?.isEmpty != false) {
                     toolOutput = "Error: missing required parameter."
                     toolSuccess = false
+                } else if tu.name == "remote_shell",
+                          Self.isDangerousRemoteCommand(command),
+                          (args["confirmed"] as? Bool) != true {
+                    // [T-remote-approval] Destructive work on a REAL computer
+                    // needs an explicit user yes, relayed via confirmed=true.
+                    let hit = Self.dangerousRemotePattern(command) ?? ""
+                    toolOutput = "BLOCKED: command matches destructive pattern [" + hit + "]. Ask the user to approve it explicitly, then retry with confirmed=true."
+                    toolSuccess = false
                 } else {
                     let result = await RemoteSSHExecutor.shared.runSmart(
                         target: host, allHosts: hosts, command: command, timeout: timeout)
@@ -1022,5 +1030,24 @@ extension AIChatViewModel {
             snapshotItem: snapshotItem,
             cancelled: cancelledHere
         )
+    }
+}
+
+extension AIChatViewModel {
+    /// [T-remote-approval] Patterns that must not run on a real machine
+    /// without an explicit user yes in this conversation.
+    static let dangerousRemotePatterns: [String] = [
+        "rm -rf", "rm -fr", "sudo ", "mkfs", "dd if=", "> /dev/",
+        "git push --force", "git push -f", "chmod -r 777", "shutdown",
+        "reboot", "diskutil erase", "killall ", "launchctl unload",
+    ]
+
+    static func dangerousRemotePattern(_ command: String) -> String? {
+        let lowered = command.lowercased()
+        return dangerousRemotePatterns.first { lowered.contains($0) }
+    }
+
+    static func isDangerousRemoteCommand(_ command: String) -> Bool {
+        dangerousRemotePattern(command) != nil
     }
 }

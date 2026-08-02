@@ -153,9 +153,10 @@ extension AIChatViewModel {
                     "host": AgentToolParam(type: .string, description: "Name of the configured host to run on, e.g. \(hostList)."),
                     "command": AgentToolParam(type: .string, description: "The shell command to execute remotely."),
                     "timeout": AgentToolParam(type: .integer, description: "Seconds to wait before giving up (default 120, max 600)."),
+                    "confirmed": AgentToolParam(type: .boolean, description: "Required true for destructive commands (rm -rf, sudo, dd, mkfs, force-push...). Set ONLY after the user explicitly approved THIS command in this conversation."),
                 ],
                 required: ["tool_title", "host", "command"],
-                propertyOrdering: ["tool_title", "host", "command", "timeout"]
+                propertyOrdering: ["tool_title", "host", "command", "timeout", "confirmed"]
             ))
             tools.append(AgentToolDefinition(
                 name: "remote_agent",

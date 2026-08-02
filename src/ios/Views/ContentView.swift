@@ -5119,6 +5119,20 @@ private struct SettingsSheet: View {
                                 .background(.purple, in: Circle())
                         }
                     }
+                    // [T-agent-timeline] What did Leo do today, one screen.
+                    NavigationLink {
+                        AgentTimelineView()
+                    } label: {
+                        Label {
+                            Text("Agent Timeline")
+                        } icon: {
+                            Image(systemName: "list.bullet.rectangle.portrait")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.white)
+                                .frame(width: 21, height: 21)
+                                .background(.mint, in: Circle())
+                        }
+                    }
                     // [T-automation-engine] Proactive rules: location /
                     // calendar / charging triggers.
                     NavigationLink {

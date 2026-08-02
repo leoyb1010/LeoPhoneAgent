@@ -306,6 +306,7 @@
 		E5WPL0001 /* WorkerPool.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5WPL0002 /* WorkerPool.swift */; };
 		E5RHV0001 /* RemoteHostSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RHV0002 /* RemoteHostSettingsView.swift */; };
 		E5AUV0001 /* AutomationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AUV0002 /* AutomationSettingsView.swift */; };
+		E5ATL0001 /* AgentTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ATL0002 /* AgentTimelineView.swift */; };
 		E5WRG0001 /* WindowRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5WRG0002 /* WindowRegistry.swift */; };
 		E5MFX0001 /* LeoMotionEffects.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MFX0002 /* LeoMotionEffects.swift */; };
 		E5WA00101 /* LeoWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5WA00201 /* LeoWatchApp.swift */; };
@@ -790,6 +791,7 @@
 		E5WPL0002 /* WorkerPool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkerPool.swift; sourceTree = "<group>"; };
 		E5RHV0002 /* RemoteHostSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteHostSettingsView.swift; sourceTree = "<group>"; };
 		E5AUV0002 /* AutomationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationSettingsView.swift; sourceTree = "<group>"; };
+		E5ATL0002 /* AgentTimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentTimelineView.swift; sourceTree = "<group>"; };
 		E5WRG0002 /* WindowRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowRegistry.swift; sourceTree = "<group>"; };
 		E5MFX0002 /* LeoMotionEffects.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeoMotionEffects.swift; sourceTree = "<group>"; };
 		E5WA00201 /* LeoWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LeoWatchApp.swift; sourceTree = "<group>"; };
@@ -2197,6 +2199,7 @@
 				E5SCH014 /* ScheduledTaskSettingsView.swift */,
 				E5RHV0002 /* RemoteHostSettingsView.swift */,
 				E5AUV0002 /* AutomationSettingsView.swift */,
+				E5ATL0002 /* AgentTimelineView.swift */,
 				E5CAP012 /* CapabilitiesView.swift */,
 				E5N0000142F3B941A00049557 /* MemoryManagementView.swift */,
 				E8A000013 /* OffloadPermissionSettingsView.swift */,
@@ -2855,6 +2858,7 @@
 				E5WPL0001 /* WorkerPool.swift in Sources */,
 				E5RHV0001 /* RemoteHostSettingsView.swift in Sources */,
 				E5AUV0001 /* AutomationSettingsView.swift in Sources */,
+				E5ATL0001 /* AgentTimelineView.swift in Sources */,
 				E5SCH003 /* RunDueScheduledTasksIntent.swift in Sources */,
 				E5SCH004 /* ScheduledTaskSettingsView.swift in Sources */,
 				E5CAP002 /* CapabilitiesView.swift in Sources */,
