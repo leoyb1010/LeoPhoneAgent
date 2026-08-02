@@ -1631,6 +1631,7 @@ struct AIChatView: View {
             onSkills: { showSessionSkills = true },
             onMCPs: { showSessionMCPs = true },
             onInspector: { showSessionInspector = true },
+            onDistillSkill: { distillCurrentSessionToSkill() },
             onMemories: { showSessionMemory = true },
             setSpeakEnabled: { enabled in
                 cached.vm.speakEnabled = enabled
@@ -4796,6 +4797,7 @@ private struct ChatTrailingMenu: View, Equatable {
     let onSkills: () -> Void
     let onMCPs: () -> Void
     let onInspector: () -> Void
+    let onDistillSkill: () -> Void
     let onMemories: () -> Void
     let setSpeakEnabled: (Bool) -> Void
     let setEnhancedCache: (Bool) -> Void
@@ -4928,6 +4930,9 @@ private struct ChatTrailingMenu: View, Equatable {
             Button { onInspector() } label: {
                 Label("Session Inspector", systemImage: "gauge.with.dots.needle.bottom.50percent")
             }
+            Button { onDistillSkill() } label: {
+                Label("Save as Skill", systemImage: "book.and.wrench")
+            }
 
             Button { onTokenUsage() } label: {
                 Label(String(localized: "Token Usage"), systemImage: "number")
@@ -4986,6 +4991,7 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
     let onSkills: () -> Void
     let onMCPs: () -> Void
     let onInspector: () -> Void
+    let onDistillSkill: () -> Void
     let onMemories: () -> Void
     let setSpeakEnabled: (Bool) -> Void
     let setEnhancedCache: (Bool) -> Void
@@ -5149,6 +5155,8 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
         }
 
         var tailGroup: [UIMenuElement] = [
+            UIAction(title: String(localized: "Save as Skill"),
+                     image: UIImage(systemName: "book.and.wrench")) { _ in coordinator.parent.onDistillSkill() },
             UIAction(title: String(localized: "Session Inspector"),
                      image: UIImage(systemName: "gauge.with.dots.needle.bottom.50percent")) { _ in coordinator.parent.onInspector() },
             UIAction(title: String(localized: "Token Usage"),
@@ -6044,5 +6052,21 @@ extension AIChatView {
         Task { @MainActor in
             artifactCount = (try? await ArtifactRepository.shared.list(sessionId: sid))?.count ?? 0
         }
+    }
+}
+
+extension AIChatView {
+    /// [T-skill-evolve] "Teach once": ask the agent to distill THIS session
+    /// into a reusable SKILL.md draft, written where the skills importer can
+    /// pick it up. Runs through the ordinary loop — visible, correctable.
+    func distillCurrentSessionToSkill() {
+        vm.inputText = """
+        把本会话到目前为止的工作流程提炼成一个可复用技能：
+        1. 起一个短横线小写的技能名（英文）；
+        2. 写出符合规范的 SKILL.md（YAML frontmatter: name/description/version 0.1.0，正文含步骤、注意事项、参数化占位符，去除本次会话的隐私细节）；
+        3. 用 file_write 写入 /var/minis/workspace/skill-drafts/<技能名>/SKILL.md；
+        4. 最后给我一句话总结这个技能做什么，并提醒我可在技能页从该文件安装。
+        """
+        vm.send()
     }
 }
