@@ -99,7 +99,7 @@ final class AutomationStore: ObservableObject {
             AutomationEngine.shared.reloadMonitoring()
             ScheduledTaskRunner.notify(
                 title: String(localized: "Automation paused"),
-                body: rules[index].name, sessionId: nil)
+                body: rules[index].name, sessionId: nil, gated: false)
         }
         persist()
     }
@@ -246,7 +246,7 @@ final class AutomationEngine: NSObject, CLLocationManagerDelegate {
             _ = await QuickTaskWidgetRunner.run(taskId: quickTaskId)
             ScheduledTaskRunner.notify(
                 title: String(localized: "Automation started"),
-                body: rule.name, sessionId: nil)
+                body: rule.name, sessionId: nil, gated: false)
         } else if let prompt = rule.prompt, !prompt.isEmpty {
             let fullPrompt = context.map { "\($0)\n\n\(prompt)" } ?? prompt
             await WatchAskRunner.run(
@@ -254,7 +254,7 @@ final class AutomationEngine: NSObject, CLLocationManagerDelegate {
                 prompt: fullPrompt, sessionId: nil)
             ScheduledTaskRunner.notify(
                 title: String(localized: "Automation finished"),
-                body: rule.name, sessionId: nil)
+                body: rule.name, sessionId: nil, gated: false)
         }
     }
 }

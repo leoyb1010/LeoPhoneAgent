@@ -53,7 +53,7 @@ enum ScheduledTaskRunner {
                 // Mark the slot consumed so we don't retry forever, and
                 // disable it so the UI can show why nothing happens.
                 logger.error("scheduled task \(task.id) references missing quick task \(task.quickTaskId) — disabling")
-                store.markRun(id: task.id, slot: slot, succeeded: false)
+                store.markRun(id: task.id, slot: slot)
                 store.setEnabled(false, id: task.id)
                 continue
             }
@@ -63,7 +63,7 @@ enum ScheduledTaskRunner {
             // again on next launch. [T-schedule-lastrun-flag] Claim it as
             // "not yet succeeded" and upgrade below — writing `true` up front
             // meant the flag only ever said true and told the user nothing.
-            store.markRun(id: task.id, slot: slot, succeeded: false)
+            store.markRun(id: task.id, slot: slot)
 
             do {
                 let result = try await QuickTaskIntent.execute(
@@ -74,7 +74,7 @@ enum ScheduledTaskRunner {
                     inputValues: [:]
                 )
                 started += 1
-                store.markRun(id: task.id, slot: slot, succeeded: true)
+                store.markRun(id: task.id, slot: slot)
                 if let sessionId = result.value?.sessionId, !sessionId.isEmpty {
                     // Reuse the widget briefing pipeline so a scheduled run's
                     // result lands on the Home Screen the same way a manual
@@ -85,7 +85,7 @@ enum ScheduledTaskRunner {
                 }
                 logger.info("started scheduled task \(task.id) (\(definition.displayName)) slot=\(slot)")
             } catch {
-                store.markRun(id: task.id, slot: slot, succeeded: false)
+                store.markRun(id: task.id, slot: slot)
                 logger.error("scheduled task \(task.id) failed to start: \(error.localizedDescription)")
                 // [T-scheduled-report] The other half of "scheduled work WITH
                 // reporting": a silent failure is indistinguishable from
@@ -116,8 +116,11 @@ extension ScheduledTaskRunner {
     /// [T-scheduled-report] Local completion/failure notification. Tapping it
     /// deep-links into the session via the existing sessionId routing in
     /// ShortcutNotificationDelegate.
-    static func notify(title: String, body: String, sessionId: String?) {
-        guard notifyEnabled else { return }
+    /// `gated`=true respects the scheduled-task notification toggle; pass
+    /// false for channels with their own semantics (automations, installs) —
+    /// the toggle used to silently swallow those too. [T-notify-gate]
+    static func notify(title: String, body: String, sessionId: String?, gated: Bool = true) {
+        if gated { guard notifyEnabled else { return } }
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body

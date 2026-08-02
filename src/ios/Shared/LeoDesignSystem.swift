@@ -93,8 +93,6 @@ enum LeoMotion {
 /// *is*, not how it is drawn, so the visual language can move again later
 /// without touching them.
 enum LeoGlass {
-    /// Corner radius for a floating control (chips, pills, small action buttons).
-    static let controlRadius: CGFloat = 14
 }
 
 extension View {
@@ -103,16 +101,8 @@ extension View {
         glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
     }
 
-    /// A pill-shaped floating control.
-    func leoGlassCapsule() -> some View {
-        glassEffect(.regular, in: .capsule)
-    }
 
     /// An interactive glass surface that reacts to touch. Use for things the
-    /// user taps directly rather than static chrome.
-    func leoGlassInteractive(cornerRadius: CGFloat = LeoGlass.controlRadius) -> some View {
-        glassEffect(.regular.interactive(), in: .rect(cornerRadius: cornerRadius))
-    }
 }
 
 /// Single entry point for user-action feedback. Keep calls in View/UI code so
@@ -132,7 +122,6 @@ enum LeoHaptics {
         case taskFailed
         /// The run stopped and cannot continue without the user (permission
         /// prompt, confirmation, browser takeover).
-        case needsAttention
     }
 
     static func agent(_ event: AgentEvent) {
@@ -140,7 +129,6 @@ enum LeoHaptics {
         case .taskStarted: impact(.light)
         case .taskCompleted: notification(.success)
         case .taskFailed: notification(.error)
-        case .needsAttention: notification(.warning)
         }
     }
 

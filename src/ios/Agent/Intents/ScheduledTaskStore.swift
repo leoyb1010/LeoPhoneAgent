@@ -53,7 +53,6 @@ struct ScheduledTask: Codable, Identifiable, Hashable {
     /// Start of the slot we last ran, so a slot fires at most once.
     var lastRunSlot: Date?
     var lastRunAt: Date?
-    var lastRunSucceeded: Bool?
 
     init(
         id: String = UUID().uuidString.lowercased(),
@@ -187,11 +186,10 @@ final class ScheduledTaskStore: ObservableObject {
         persist()
     }
 
-    func markRun(id: String, slot: Date, succeeded: Bool) {
+    func markRun(id: String, slot: Date) {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { return }
         tasks[index].lastRunSlot = slot
         tasks[index].lastRunAt = Date()
-        tasks[index].lastRunSucceeded = succeeded
         persist()
     }
 

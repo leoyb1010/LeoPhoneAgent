@@ -14,23 +14,6 @@
 
 import SwiftUI
 
-// MARK: - Squish press (Kinetics: Squish Button / Push Button / Liquid Glass Press)
-
-/// Universal tactile press: scale-down with a snappy return.
-struct LeoSquishButtonStyle: ButtonStyle {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.94 : 1)
-            .animation(LeoMotion.snappy(reduceMotion: reduceMotion), value: configuration.isPressed)
-    }
-}
-
-extension ButtonStyle where Self == LeoSquishButtonStyle {
-    static var leoSquish: LeoSquishButtonStyle { LeoSquishButtonStyle() }
-}
-
 // MARK: - Pulse (Kinetics: Pulse Badge / Status Pill)
 
 /// Soft attention pulse while `active`; freezes when inactive or Reduce Motion.
@@ -96,27 +79,6 @@ private struct LeoStaggerModifier: ViewModifier {
                 withAnimation(LeoMotion.smooth(reduceMotion: reduceMotion, duration: 0.28)?.delay(delay) ?? .default) {
                     shown = true
                 }
-            }
-    }
-}
-
-// MARK: - Breathing (Kinetics: Breathing Orb / Float Bob)
-
-private struct LeoBreathingModifier: ViewModifier {
-    let active: Bool
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var inhale = false
-
-    func body(content: Content) -> some View {
-        content
-            .scaleEffect(active && inhale && !reduceMotion ? 1.06 : 1)
-            .onChange(of: active) { isOn in
-                guard isOn, !reduceMotion else { inhale = false; return }
-                withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { inhale = true }
-            }
-            .onAppear {
-                guard active, !reduceMotion else { return }
-                withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { inhale = true }
             }
     }
 }
@@ -187,8 +149,6 @@ extension View {
     func leoShake(trigger: Int) -> some View { modifier(LeoShakeModifier(trigger: trigger)) }
     /// Staggered first appearance for short lists (index capped at 8).
     func leoStaggerEntrance(index: Int) -> some View { modifier(LeoStaggerModifier(index: index)) }
-    /// Idle breathing while `active` (voice orb, live surfaces).
-    func leoBreathing(active: Bool) -> some View { modifier(LeoBreathingModifier(active: active)) }
     /// One highlight sweep per `trigger` bump (card refreshed, content landed).
     func leoShineSweep(trigger: Int) -> some View { modifier(LeoShineModifier(trigger: trigger)) }
 }

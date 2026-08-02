@@ -99,6 +99,10 @@ actor NativeMCPClient {
         }
     }
 
+    /// [T-native-mcp-calltool-未接线] Deliberately kept despite zero callers:
+    /// this is the intended kernel-cold tools/call path once agent dispatch
+    /// is migrated off the in-guest CLI. Flagged by the dead-code audit
+    /// 2026-07-30; wire or delete by the MCP 2026-07-28 spec upgrade batch.
     func callTool(
         server config: MCPServerConfig,
         tool: String,

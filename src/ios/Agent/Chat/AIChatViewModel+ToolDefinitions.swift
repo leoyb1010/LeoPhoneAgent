@@ -197,10 +197,9 @@ extension AIChatViewModel {
                 parameters: [
                     "tool_title": AgentToolParam(type: .string, description: "A concise 5-10 word summary shown to the user. Use the same language as the user."),
                     "prompt": AgentToolParam(type: .string, description: "The image description, in English for best results. Include style, composition, lighting."),
-                    "size": AgentToolParam(type: .string, description: "Image size.", enumValues: ["1024x1024", "1536x1024", "1024x1536"]),
                 ],
                 required: ["tool_title", "prompt"],
-                propertyOrdering: ["tool_title", "prompt", "size"]
+                propertyOrdering: ["tool_title", "prompt"]
             ))
         }
 

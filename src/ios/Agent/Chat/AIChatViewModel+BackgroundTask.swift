@@ -559,7 +559,6 @@ extension AIChatViewModel {
     ///   killed the shells of every OTHER running session too, which reads as
     ///   tasks being interrupted at random.
     enum StopScope {
-        case allSessions
         case thisSessionOnly
     }
 
@@ -608,8 +607,6 @@ extension AIChatViewModel {
             // scoped call still cancels the entire batch.
             let sid = sessionId
             switch scope {
-            case .allSessions:
-                Task { await ISHExecutionCoordinator.shared.stopCurrentCommand() }
             case .thisSessionOnly:
                 if let sid {
                     Task { await ISHExecutionCoordinator.shared.stopCurrentCommand(sessionId: sid) }

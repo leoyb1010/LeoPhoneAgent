@@ -52,14 +52,6 @@ enum CorrectionStore {
         return text.split(separator: "\n").map(String.init).filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
     }
 
-    static func delete(at index: Int) {
-        var entries = load()
-        guard entries.indices.contains(index) else { return }
-        entries.remove(at: index)
-        let body = entries.isEmpty ? "" : entries.joined(separator: "\n") + "\n"
-        try? body.data(using: .utf8)?.write(to: fileURL)
-        NotificationCenter.default.post(name: .memoryFilesDidChange, object: nil)
-    }
 
     /// The prompt fragment, or nil when there is nothing to say.
     static func promptFragment() -> String? {
