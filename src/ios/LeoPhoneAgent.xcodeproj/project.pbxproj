@@ -65,6 +65,7 @@
 		C0B1AF9A75C90C3C178A8804 /* VoiceTextSanitizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7656F4130247E4002A3AC0C /* VoiceTextSanitizer.swift */; };
 		E51000001 /* MinisApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E51000011 /* MinisApp.swift */; };
 		E51000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E51000012 /* ContentView.swift */; };
+		E5CPV0001 /* CommandPaletteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CPV0002 /* CommandPaletteView.swift */; };
 		E5C800001 /* AppearanceSettingsSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C800011 /* AppearanceSettingsSupport.swift */; };
 		E5C800002 /* HomeStatusIndicators.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5C800012 /* HomeStatusIndicators.swift */; };
 		E51000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E51000013 /* Assets.xcassets */; };
@@ -720,6 +721,7 @@
 		E51000010 /* LeoPhoneAgent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LeoPhoneAgent.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E51000011 /* MinisApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MinisApp.swift; sourceTree = "<group>"; };
 		E51000012 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		E5CPV0002 /* CommandPaletteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandPaletteView.swift; sourceTree = "<group>"; };
 		E5C800011 /* AppearanceSettingsSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppearanceSettingsSupport.swift; sourceTree = "<group>"; };
 		E5C800012 /* HomeStatusIndicators.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeStatusIndicators.swift; sourceTree = "<group>"; };
 		E51000013 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -1683,6 +1685,7 @@
 			isa = PBXGroup;
 			children = (
 				E51000012 /* ContentView.swift */,
+				E5CPV0002 /* CommandPaletteView.swift */,
 				E5C800012 /* HomeStatusIndicators.swift */,
 				F1V00014 /* Alarms */,
 				F1V00015 /* Backup */,
@@ -2719,6 +2722,7 @@
 				BB1000100F700000000000AA /* ContextPolicy.swift in Sources */,
 				AADDA9E12F6ECCF400B66649 /* ThumbnailCache.swift in Sources */,
 				E51000002 /* ContentView.swift in Sources */,
+				E5CPV0001 /* CommandPaletteView.swift in Sources */,
 				E5C800001 /* AppearanceSettingsSupport.swift in Sources */,
 				E5C800002 /* HomeStatusIndicators.swift in Sources */,
 				AA26CCBA2F31080100AECF2D /* ISHKernel.m in Sources */,

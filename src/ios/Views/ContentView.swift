@@ -337,6 +337,8 @@ struct ContentView: View {
     @State private var isWideLayout = false
     /// Navigation path for stack (compact) layout.
     @State private var navigationPath = NavigationPath()
+    /// [T-cmdk] ⌘K command palette.
+    @State private var showCommandPalette = false
     /// [T-multiwindow-notification-fanout] Identity of THIS window, used to
     /// decide whether it should act on app-wide notifications. See
     /// WindowRegistry.
@@ -606,7 +608,19 @@ struct ContentView: View {
                     }
                 }
             }
-            .fullScreenCover(isPresented: $showTerminal) {
+            .sheet(isPresented: $showCommandPalette) {
+            CommandPaletteView(
+                openSession: { sid in jumpToSession(sid) },
+                runQuickTask: { tid in Task { await QuickTaskWidgetRunner.run(taskId: tid) } },
+                openSurface: { key in
+                    // Palette surfaces live in Settings; open the settings
+                    // sheet (deep-link to the page: follow-up).
+                    activeToolSheet = .settings
+                    _ = key
+                }
+            )
+        }
+        .fullScreenCover(isPresented: $showTerminal) {
                 NavigationStack {
                     ISHTerminalView(showCloseButton: true)
                 }
@@ -1267,6 +1281,9 @@ struct ContentView: View {
             ZStack {
                 Button(action: focusSearch) { EmptyView() }
                     .keyboardShortcut("f", modifiers: .command)
+                // [T-cmdk] Command palette: fuzzy jump anywhere.
+                Button(action: { showCommandPalette = true }) { EmptyView() }
+                    .keyboardShortcut("k", modifiers: .command)
                 // [T-cmd-n-double-binding] ⌘N is owned by MinisApp's
                 // `CommandGroup(replacing: .newItem)`, which posts
                 // `.newChatRequested` — already observed above. A second
