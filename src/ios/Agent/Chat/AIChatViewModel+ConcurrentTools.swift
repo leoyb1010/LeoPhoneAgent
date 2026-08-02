@@ -766,7 +766,8 @@ extension AIChatViewModel {
             case "dispatch_subtask":
                 let result = await WorkerPool.shared.dispatch(
                     prompt: (args["prompt"] as? String) ?? "",
-                    label: (args["label"] as? String) ?? "")
+                    label: (args["label"] as? String) ?? "",
+                    host: args["host"] as? String)
                 toolOutput = result.output
                 toolSuccess = result.success
             case "check_subtasks":

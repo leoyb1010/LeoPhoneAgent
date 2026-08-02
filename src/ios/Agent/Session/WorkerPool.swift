@@ -57,7 +57,7 @@ final class WorkerPool {
 
     /// Create a Worker session and send it the subtask. Returns a status line
     /// for the Lead's tool result.
-    func dispatch(prompt: String, label: String) async -> (output: String, success: Bool) {
+    func dispatch(prompt: String, label: String, host: String? = nil) async -> (output: String, success: Bool) {
         guard runningCount() < Self.maxConcurrent else {
             return ("Dispatch refused: \(Self.maxConcurrent) workers already running. Collect or wait for one to finish first.", false)
         }
@@ -79,7 +79,14 @@ final class WorkerPool {
         workers.append(Worker(id: workerId, sessionId: sessionId, label: cleanLabel, startedAt: Date()))
         // Name the session so the sidebar shows what this worker is doing.
         await ChatStore.shared.updateSessionTitle(sessionId, title: "🤖 \(cleanLabel)")
-        vm.inputText = prompt
+        // [T-fleet] Host pinning is prompt-level routing: the worker is a full
+        // agent with the remote tools registered — telling it WHERE to run is
+        // both sufficient and honest about the mechanism.
+        var finalPrompt = prompt
+        if let host, !host.isEmpty {
+            finalPrompt = "Run ALL shell work for this task on the remote host '\(host)' via remote_shell (fall back to local only if the host is unreachable and say so).\n\n" + prompt
+        }
+        vm.inputText = finalPrompt
         vm.send()
         logger.info("dispatched \(workerId) session=\(sessionId.prefix(8)) label=\(cleanLabel)")
         return ("Dispatched worker \(workerId) (\"\(cleanLabel)\") in session \(sessionId.prefix(8)). It runs in parallel; use check_subtasks to monitor and collect_subtask when done.", true)

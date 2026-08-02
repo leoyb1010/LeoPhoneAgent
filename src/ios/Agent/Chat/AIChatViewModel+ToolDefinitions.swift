@@ -203,9 +203,10 @@ extension AIChatViewModel {
                     "tool_title": AgentToolParam(type: .string, description: "A concise 5-10 word summary shown to the user. Use the same language as the user."),
                     "prompt": AgentToolParam(type: .string, description: "Fully self-contained instructions for the worker."),
                     "label": AgentToolParam(type: .string, description: "Short human-readable label, e.g. 'Research flight options'."),
+                    "host": AgentToolParam(type: .string, description: "Optional configured remote host name — the worker will run its shell work THERE (fleet mode). Omit for on-device."),
                 ],
                 required: ["tool_title", "prompt", "label"],
-                propertyOrdering: ["tool_title", "prompt", "label"]
+                propertyOrdering: ["tool_title", "prompt", "label", "host"]
             ))
             tools.append(AgentToolDefinition(
                 name: "check_subtasks",

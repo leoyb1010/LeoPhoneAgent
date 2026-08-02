@@ -29,6 +29,8 @@ private struct HostSheetItem: Identifiable {
 struct RemoteHostSettingsView: View {
     @ObservedObject private var store = RemoteHostStore.shared
     @State private var sheetItem: HostSheetItem?
+    /// [T-fleet] hostId → reachable, probed on appear.
+    @State private var reachability: [String: Bool] = [:]
 
     var body: some View {
         List {
@@ -38,7 +40,14 @@ struct RemoteHostSettingsView: View {
                         sheetItem = .edit(host)
                     } label: {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(host.name).font(.body.weight(.medium)).foregroundStyle(.primary)
+                            HStack(spacing: 6) {
+                                Circle()
+                                    .fill(reachability[host.id] == true ? Color.green
+                                          : reachability[host.id] == false ? Color.red : Color.gray)
+                                    .frame(width: 8, height: 8)
+                                    .leoPulse(active: reachability[host.id] == true)
+                                Text(host.name).font(.body.weight(.medium)).foregroundStyle(.primary)
+                            }
                             Text("\(host.username)@\(host.host):\(String(host.port))")
                                 .font(.caption.monospaced()).foregroundStyle(.secondary)
                         }
@@ -58,6 +67,12 @@ struct RemoteHostSettingsView: View {
             }
         }
         .navigationTitle(Text("Remote Hosts"))
+        .task {
+            for host in store.hosts {
+                let ok = await RemoteSSHExecutor.probe(host: host)
+                reachability[host.id] = ok
+            }
+        }
         .sheet(item: $sheetItem) { item in
             RemoteHostEditSheet(sheetId: item.id, host: item.host)
         }

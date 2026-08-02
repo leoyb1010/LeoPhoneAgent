@@ -180,6 +180,11 @@ actor RemoteSSHExecutor {
     }
 
     /// Plain TCP connect probe via Network.framework.
+    /// Public reachability probe for the fleet view.
+    nonisolated static func probe(host: RemoteHost) async -> Bool {
+        await tcpProbe(host: host.host, port: host.port, timeout: 4)
+    }
+
     private static func tcpProbe(host: String, port: Int, timeout: TimeInterval) async -> Bool {
         await withCheckedContinuation { continuation in
             let connection = NWConnection(
