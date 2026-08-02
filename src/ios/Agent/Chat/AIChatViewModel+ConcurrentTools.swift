@@ -656,6 +656,30 @@ extension AIChatViewModel {
             toolOutput = memResult.output
             toolSuccess = memResult.success
 
+        case "recall":
+            let argsRecall = (try? JSONSerialization.jsonObject(with: Data(argsJson.utf8)) as? [String: Any]) ?? [:]
+            let recallQuery = (argsRecall["query"] as? String) ?? ""
+            if recallQuery.isEmpty {
+                toolOutput = "Error: missing query."
+                toolSuccess = false
+            } else {
+                let (hits, semantic) = await MemoryRecallIndex.shared.query(recallQuery)
+                if hits.isEmpty {
+                    toolOutput = "No matching memories found."
+                    toolSuccess = true
+                } else {
+                    var lines = [semantic ? "Semantic matches:" : "Keyword matches (embedding assets unavailable on this device):"]
+                    for hit in hits {
+                        lines.append("[" + hit.source + "] " + hit.text)
+                    }
+                    toolOutput = lines.joined(separator: "\n\n")
+                    toolSuccess = true
+                }
+            }
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = toolOutput
+            }
+
         case "memory_get":
             let memResult = executeMemoryGet(from: argsJson)
             if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {

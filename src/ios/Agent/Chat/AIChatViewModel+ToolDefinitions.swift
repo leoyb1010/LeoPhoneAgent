@@ -123,6 +123,16 @@ extension AIChatViewModel {
                 required: ["tool_title"],
                 propertyOrdering: ["tool_title", "scope", "keywords"]
             ))
+            tools.append(AgentToolDefinition(
+                name: "recall",
+                description: "Semantic search over the user's own memory (GLOBAL.md, daily logs, corrections) using on-device embeddings — ask in natural language ('how did I configure Tailscale last month?'). Prefer this over memory_get when the exact keyword is unknown. Returns the most relevant memory chunks with their sources.",
+                parameters: [
+                    "tool_title": AgentToolParam(type: .string, description: "A concise 5-10 word summary shown to the user. Use the same language as the user."),
+                    "query": AgentToolParam(type: .string, description: "Natural-language question about past knowledge, preferences or events."),
+                ],
+                required: ["tool_title", "query"],
+                propertyOrdering: ["tool_title", "query"]
+            ))
         }
 
         // Only include read_image when the model supports image input

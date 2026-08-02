@@ -304,6 +304,7 @@
 		E5RHS0001 /* RemoteHostStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RHS0002 /* RemoteHostStore.swift */; };
 		E5RSE0001 /* RemoteSSHExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RSE0002 /* RemoteSSHExecutor.swift */; };
 		E5WPL0001 /* WorkerPool.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5WPL0002 /* WorkerPool.swift */; };
+		E5MRC0001 /* MemoryRecall.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MRC0002 /* MemoryRecall.swift */; };
 		E5RHV0001 /* RemoteHostSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RHV0002 /* RemoteHostSettingsView.swift */; };
 		E5AUV0001 /* AutomationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AUV0002 /* AutomationSettingsView.swift */; };
 		E5ATL0001 /* AgentTimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ATL0002 /* AgentTimelineView.swift */; };
@@ -789,6 +790,7 @@
 		E5RHS0002 /* RemoteHostStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteHostStore.swift; sourceTree = "<group>"; };
 		E5RSE0002 /* RemoteSSHExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteSSHExecutor.swift; sourceTree = "<group>"; };
 		E5WPL0002 /* WorkerPool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkerPool.swift; sourceTree = "<group>"; };
+		E5MRC0002 /* MemoryRecall.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemoryRecall.swift; sourceTree = "<group>"; };
 		E5RHV0002 /* RemoteHostSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteHostSettingsView.swift; sourceTree = "<group>"; };
 		E5AUV0002 /* AutomationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationSettingsView.swift; sourceTree = "<group>"; };
 		E5ATL0002 /* AgentTimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentTimelineView.swift; sourceTree = "<group>"; };
@@ -2062,6 +2064,7 @@
 				E5RHS0002 /* RemoteHostStore.swift */,
 				E5RSE0002 /* RemoteSSHExecutor.swift */,
 				E5WPL0002 /* WorkerPool.swift */,
+				E5MRC0002 /* MemoryRecall.swift */,
 				F1MCPSTORE /* MCPStore.swift */,
 				E5NMCP011 /* NativeMCPClient.swift */,
 				F1MCPOAUTH /* MCPOAuthController.swift */,
@@ -2856,6 +2859,7 @@
 				E5RHS0001 /* RemoteHostStore.swift in Sources */,
 				E5RSE0001 /* RemoteSSHExecutor.swift in Sources */,
 				E5WPL0001 /* WorkerPool.swift in Sources */,
+				E5MRC0001 /* MemoryRecall.swift in Sources */,
 				E5RHV0001 /* RemoteHostSettingsView.swift in Sources */,
 				E5AUV0001 /* AutomationSettingsView.swift in Sources */,
 				E5ATL0001 /* AgentTimelineView.swift in Sources */,
