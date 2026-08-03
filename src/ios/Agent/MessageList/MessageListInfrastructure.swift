@@ -1008,6 +1008,8 @@ final class CellStateBridgeV2: ObservableObject {
     @Published var onQuote: ((String) -> Void)?
     /// [T-smart-copy] Save extracted reply content (code/CSV) into the artifact tray.
     @Published var onSaveArtifact: ((_ fileName: String, _ contents: String) -> Void)?
+    /// [T-share-card] Render this reply as a share-card image and present the share sheet.
+    @Published var onShareCard: (() -> Void)?
     /// True while this reply is still streaming — disables "Read from Start".
     @Published var isStreaming: Bool = false
     @Published var browserPool: BrowserTabPool?

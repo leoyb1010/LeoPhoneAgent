@@ -913,6 +913,10 @@ struct AIChatView: View {
         .onReceive(NotificationCenter.default.publisher(for: .artifactsDidChange)) { _ in
             refreshArtifactCount()
         }
+        // [T-session-export] Export/share-card flows hand a file URL here.
+        .onReceive(NotificationCenter.default.publisher(for: .chatShareFileRequested)) { note in
+            if let url = note.object as? URL { shareFile = url }
+        }
         .sheet(isPresented: $showArtifactTray) {
             ArtifactTrayView(sessionId: vm.sessionId)
         }
@@ -1628,6 +1632,8 @@ struct AIChatView: View {
             onOpenBrowser: { showBrowserSheet = true },
             onBrowseFiles: { showFileBrowser = true },
             onArtifacts: { showArtifactTray = true },
+            onExportMarkdown: { vm.exportSession(format: .markdown) },
+            onExportPDF: { vm.exportSession(format: .pdf) },
             onSkills: { showSessionSkills = true },
             onMCPs: { showSessionMCPs = true },
             onInspector: { showSessionInspector = true },
@@ -4988,6 +4994,9 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
     let onOpenBrowser: () -> Void
     let onBrowseFiles: () -> Void
     let onArtifacts: () -> Void
+    // [T-session-export] Whole-conversation export (Batch C).
+    let onExportMarkdown: () -> Void
+    let onExportPDF: () -> Void
     let onSkills: () -> Void
     let onMCPs: () -> Void
     let onInspector: () -> Void
@@ -5072,6 +5081,16 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
         groups.append(UIMenu(options: .displayInline, children: [
             UIAction(title: String(localized: "New Chat"),
                      image: UIImage(systemName: "square.and.pencil")) { _ in coordinator.parent.onNewChat() },
+        ]))
+
+        // [T-session-export] Whole-conversation export; disabled while empty.
+        groups.append(UIMenu(options: .displayInline, children: [
+            UIAction(title: String(localized: "Export as Markdown"),
+                     image: UIImage(systemName: "arrow.down.doc"),
+                     attributes: key.messagesEmpty ? [.disabled] : []) { _ in coordinator.parent.onExportMarkdown() },
+            UIAction(title: String(localized: "Export as PDF"),
+                     image: UIImage(systemName: "doc.richtext"),
+                     attributes: key.messagesEmpty ? [.disabled] : []) { _ in coordinator.parent.onExportPDF() },
         ]))
 
         // [T-chat-menu-compact-entry] Compact sits ABOVE Clear Chat in its own

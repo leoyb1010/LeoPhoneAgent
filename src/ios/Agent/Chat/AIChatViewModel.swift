@@ -1372,6 +1372,26 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         }
     }
 
+    /// [T-share-card] Reply -> designed image card -> share sheet.
+    /// Question = the user message immediately before this reply.
+    func shareReplyCard(_ message: ChatMessage) {
+        let answerMarkdown = message.blocks
+            .filter { if case .text = $0.kind { return true }; return false }
+            .map(\.content)
+            .joined(separator: "\n\n")
+        let answer = WatchTextSanitizer.plain(answerMarkdown)
+        guard !answer.isEmpty else { return }
+        var question: String?
+        if let index = messages.firstIndex(where: { $0.id == message.id }) {
+            question = messages[..<index].last(where: { $0.role == .user })?.content
+        }
+        guard let url = ReplyShareCardRenderer.renderToFile(question: question, answer: answer) else {
+            LeoHaptics.notification(.error)
+            return
+        }
+        NotificationCenter.default.post(name: .chatShareFileRequested, object: url)
+    }
+
     /// [T-reply-toolbar] Quote a reply excerpt into the composer as a
     /// markdown blockquote, ready for a follow-up question.
     func quoteIntoComposer(_ text: String) {

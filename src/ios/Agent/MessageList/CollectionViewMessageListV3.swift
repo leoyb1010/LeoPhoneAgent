@@ -439,10 +439,18 @@ private struct ReplyActionBarV3: View {
                 .accessibilityLabel(Text("Read aloud"))
             }
 
-            // Markdown here, not plainReply -- the sanitizer costs ~30ms per
-            // 100KB and body re-runs on every footer render. Taps (copy/quote)
-            // pay it lazily; ShareLink demands its item up front.
-            ShareLink(item: markdownReply) {
+            Menu {
+                if bridge.onShareCard != nil {
+                    Button {
+                        bridge.onShareCard?()
+                    } label: { Label(String(localized: "Share as Card"), systemImage: "photo.artframe") }
+                }
+                // Markdown here, not plainReply -- the sanitizer costs ~30ms
+                // per 100KB and Menu labels can be built during body passes.
+                ShareLink(item: markdownReply) {
+                    Label(String(localized: "Share as Text"), systemImage: "doc.plaintext")
+                }
+            } label: {
                 Image(systemName: "square.and.arrow.up")
             }
             .accessibilityLabel(Text("Share"))
@@ -558,6 +566,22 @@ private struct BridgedAssistantFooterV3: View {
 
     /// [T-reply-toolbar] Visible actions on every COMPLETED reply -- copying
     /// used to require knowing the secret blank-area long-press.
+    /// [T-tldr-experiment] First-sentence extract for very long replies.
+    /// Default-off setting; only the first 300 chars are ever sanitized, so
+    /// this stays out of the perf budget.
+    private var tldrLine: String? {
+        guard UserDefaults.standard.bool(forKey: "leo.tldrEnabled") else { return nil }
+        guard let first = message.blocks.first(where: { block in
+            if case .text = block.kind { return block.content.count > 2800 }
+            return false
+        }) else { return nil }
+        let head = WatchTextSanitizer.plain(String(first.content.prefix(300)))
+        let sentence = head.split(whereSeparator: { "。.!！?？\n".contains($0) }).first.map(String.init) ?? head
+        let line = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !line.isEmpty else { return nil }
+        return String(line.prefix(60))
+    }
+
     private var showActionBar: Bool {
         // Needs actual text — a tool-only reply has nothing to copy or quote.
         let hasText = message.blocks.contains { block in
@@ -599,6 +623,18 @@ private struct BridgedAssistantFooterV3: View {
             }
 
             if showActionBar {
+                if let tldr = tldrLine {
+                    HStack(spacing: 6) {
+                        Text("TL;DR")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Color.accentColor)
+                        Text(tldr)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    .padding(.top, 2)
+                }
                 ReplyActionBarV3(message: message, bridge: bridge)
             }
         }
@@ -1429,6 +1465,12 @@ extension CollectionViewMessageListV3 {
                 : nil
             bridge.onSaveArtifact = (message.role == .assistant)
                 ? { [weak vm] name, text in vm?.saveReplyArtifact(fileName: name, text: text) }
+                : nil
+            bridge.onShareCard = (message.role == .assistant)
+                ? { [weak vm, weak message] in
+                    guard let message else { return }
+                    vm?.shareReplyCard(message)
+                }
                 : nil
             bridge.onCopyScreenshot = { [weak self, weak vm] in
                 guard let self, let vm else { return }

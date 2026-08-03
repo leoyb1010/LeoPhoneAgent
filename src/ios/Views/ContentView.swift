@@ -4719,6 +4719,9 @@ private struct AppearanceSettingsView: View {
     @AppStorage(LeoHaptics.enabledDefaultsKey) private var hapticsEnabled: Bool = true
     /// [T-reply-toolbar] Payload of the one-tap copy button under replies.
     @AppStorage("leo.copyFormat") private var copyFormat: String = "plain"
+    /// [T-tldr-experiment] One-line summary above very long replies. OFF by
+    /// default -- graduate only if it proves non-intrusive.
+    @AppStorage("leo.tldrEnabled") private var tldrEnabled: Bool = false
     @ObservedObject private var fontSettings = FontSettings.shared
 
     private let iconOptions: [AppIconOption] = [
@@ -4802,6 +4805,14 @@ private struct AppearanceSettingsView: View {
                 Text("Copy Format")
             } footer: {
                 Text("What the one-tap copy button under a reply puts on the clipboard. The long-press menu always offers both.")
+            }
+
+            Section {
+                Toggle(String(localized: "Long Reply Summary"), isOn: $tldrEnabled)
+            } header: {
+                Text("Long Reply Summary")
+            } footer: {
+                Text("Experimental: show a one-line TL;DR above very long replies.")
             }
 
             Section {
