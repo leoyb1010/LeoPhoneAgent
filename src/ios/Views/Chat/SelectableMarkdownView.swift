@@ -5032,7 +5032,7 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         NotificationCenter.default.post(
             name: .chatInputAppendRequested,
             object: nil,
-            userInfo: ["text": quoted]
+            userInfo: ["text": quoted, "preserveFormatting": true]
         )
         resignFirstResponder()
     }

@@ -610,7 +610,14 @@ struct ChatInputAppendListener: ViewModifier {
     func body(content: Content) -> some View {
         content.onReceive(NotificationCenter.default.publisher(for: .chatInputAppendRequested)) { note in
             guard let text = note.userInfo?["text"] as? String else { return }
-            vm.appendToInputText(text)
+            // [T-quote-followup] Blockquote payloads must keep their line
+            // structure -- the whitespace-collapsing append would glue the
+            // follow-up question onto the last "> " line.
+            if note.userInfo?["preserveFormatting"] as? Bool == true {
+                vm.appendToInputTextPreservingFormat(text)
+            } else {
+                vm.appendToInputText(text)
+            }
             // Focus the composer + pop the keyboard so the user can
             // immediately continue typing after a long-press → Add to Chat
             // Input. Independent of the post-reply auto-pop Settings

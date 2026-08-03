@@ -1355,7 +1355,10 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// [T-smart-copy] Persist extracted reply content (a code block, a CSV
     /// table) into the artifact tray so it survives the conversation.
     func saveReplyArtifact(fileName: String, text: String) {
-        guard let sessionId, !text.isEmpty else { return }
+        guard let sessionId, !text.isEmpty else {
+            LeoHaptics.notification(.error)
+            return
+        }
         guard let data = text.data(using: .utf8) else { return }
         Task {
             do {
@@ -3467,6 +3470,19 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// Wired up to the `chatInputAppendRequested` notification posted by the
     /// long-press selection menu's "Add to Chat Input" action across markdown
     /// bubbles, table cells, etc.
+    /// [T-quote-followup] Append keeping line structure intact (blockquotes).
+    /// The plain `appendToInputText` collapses whitespace, which would park
+    /// the cursor inside the quote's last line.
+    func appendToInputTextPreservingFormat(_ snippet: String) {
+        guard !snippet.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        if inputText.isEmpty {
+            inputText = snippet
+        } else {
+            let base = inputText.hasSuffix("\n") ? inputText : inputText + "\n"
+            inputText = base + snippet
+        }
+    }
+
     func appendToInputText(_ snippet: String) {
         let trimmed = snippet.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }

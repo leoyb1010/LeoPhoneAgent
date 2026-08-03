@@ -351,21 +351,20 @@ private struct ReplyActionBarV3: View {
     @ObservedObject var bridge: CellStateBridgeV2
     @State private var copied = false
 
-    private var markdownReply: String {
-        message.blocks
-            .filter { if case .text = $0.kind { return true }; return false }
-            .map(\.content)
-            .joined(separator: "\n\n")
-    }
+    /// [T-smart-copy-memo] All parses (markdown join, tables, code blocks,
+    /// lone-block detection) come from the per-message memo -- Menu content
+    /// builders run on EVERY body pass, so nothing here may parse per render.
+    private var memo: ReplyContentMemo.Entry { ReplyContentMemo.shared.entry(for: message) }
 
-    private var plainReply: String { WatchTextSanitizer.plain(markdownReply) }
+    private var markdownReply: String { memo.markdown }
+
+    /// Sanitizer is ~30ms/100KB: tap-time only, never in body.
+    private var plainReply: String { WatchTextSanitizer.plain(memo.markdown) }
 
     private var defaultCopyPayload: String {
         // [T-smart-copy] A reply that IS one code block means "give me the
         // code" -- copy it bare, no fences, regardless of format setting.
-        if let lone = ReplyContentExtractor.loneCodeBlock(in: markdownReply) {
-            return lone.code
-        }
+        if let lone = memo.lone { return lone.code }
         return UserDefaults.standard.string(forKey: "leo.copyFormat") == "markdown"
             ? markdownReply : plainReply
     }
@@ -386,17 +385,34 @@ private struct ReplyActionBarV3: View {
         return formatter
     }()
 
+    /// Disambiguate repeated menu rows ("Save as File 2") when a reply has
+    /// multiple tables/code blocks; single occurrences keep the clean title.
+    private func menuTitle(_ key: String.LocalizationValue, index: Int, total: Int) -> String {
+        let base = String(localized: key)
+        return total > 1 ? "\(base) \(index + 1)" : base
+    }
+
     /// [T-clipboard-to-mac] Base64 the payload so no shell quoting can break;
-    /// pbcopy on the far end. Capped at 256 KB -- it's a clipboard, not rsync.
+    /// pbcopy on the far end. Cap is on UTF-8 BYTES (128 KB -> ~171 KB base64,
+    /// inside OpenSSH's 256 KiB exec-packet and ARG_MAX) -- a Character cap
+    /// let CJK/emoji balloon past both. pipefail so a decode failure can't
+    /// "succeed" by clearing the Mac clipboard with empty pbcopy input.
     private func sendToHostClipboard(host: RemoteHost) {
-        let payload = String(plainReply.prefix(256 * 1024))
+        let byteCap = 128 * 1024
+        var payload = plainReply
+        if payload.utf8.count > byteCap {
+            while payload.utf8.count > byteCap {
+                let overshoot = max(1, (payload.utf8.count - byteCap) / 4)
+                payload = String(payload.prefix(payload.count - overshoot))
+            }
+            LeoHaptics.notification(.warning)
+        }
         guard let b64 = payload.data(using: .utf8)?.base64EncodedString() else { return }
-        let hostName = host.name
         Task {
             let result = await RemoteSSHExecutor.shared.runSmart(
                 target: host,
                 allHosts: RemoteHostStore.shared.hosts,
-                command: "printf '%s' '\(b64)' | base64 -D | pbcopy",
+                command: "set -o pipefail; printf '%s' '\(b64)' | base64 -D | pbcopy",
                 timeout: 15)
             await MainActor.run {
                 if result.succeeded {
@@ -467,41 +483,36 @@ private struct ReplyActionBarV3: View {
                         bridge.onCopyScreenshot?()
                     } label: { Label(String(localized: "Copy Screenshot"), systemImage: "camera.viewfinder") }
                 }
-                // [T-smart-copy] Content-shaped actions. Cheap contains() guards
-                // keep scroll-time renders free of parsing; the full parse runs
-                // only when the menu content is actually built.
-                if markdownReply.contains("|") {
-                    let tables = ReplyContentExtractor.tablesAsCSV(in: markdownReply).prefix(5)
-                    if !tables.isEmpty {
-                        Section {
-                            ForEach(Array(tables.enumerated()), id: \.offset) { index, csv in
+                // [T-smart-copy] Content-shaped actions, memo-backed (no
+                // parsing here -- Menu builders run every render pass).
+                let tables = memo.tables.prefix(5)
+                if !tables.isEmpty {
+                    Section {
+                        ForEach(Array(tables.enumerated()), id: \.offset) { index, csv in
+                            Button {
+                                UIPasteboard.general.string = csv
+                                LeoHaptics.impact(.light)
+                            } label: {
+                                Label(menuTitle("Copy as CSV", index: index, total: tables.count), systemImage: "tablecells")
+                            }
+                            if bridge.onSaveArtifact != nil {
                                 Button {
-                                    UIPasteboard.general.string = csv
-                                    LeoHaptics.impact(.light)
+                                    bridge.onSaveArtifact?(csvFileName(index: index), csv)
                                 } label: {
-                                    Label(String(localized: "Copy as CSV"), systemImage: "tablecells")
-                                }
-                                if bridge.onSaveArtifact != nil {
-                                    Button {
-                                        bridge.onSaveArtifact?(csvFileName(index: index), csv)
-                                    } label: {
-                                        Label(String(localized: "Export Table as CSV"), systemImage: "square.and.arrow.down")
-                                    }
+                                    Label(menuTitle("Export Table as CSV", index: index, total: tables.count), systemImage: "square.and.arrow.down")
                                 }
                             }
                         }
                     }
                 }
-                if markdownReply.contains("```") || markdownReply.contains("~~~"), bridge.onSaveArtifact != nil {
-                    let codes = ReplyContentExtractor.codeBlocks(in: markdownReply).prefix(5)
-                    if !codes.isEmpty {
-                        Section {
-                            ForEach(Array(codes.enumerated()), id: \.offset) { index, block in
-                                Button {
-                                    bridge.onSaveArtifact?(codeFileName(index: index, ext: block.fileExtension), block.code)
-                                } label: {
-                                    Label(String(localized: "Save as File"), systemImage: "doc.badge.arrow.up")
-                                }
+                let codes = memo.codes.prefix(5)
+                if !codes.isEmpty, bridge.onSaveArtifact != nil {
+                    Section {
+                        ForEach(Array(codes.enumerated()), id: \.offset) { index, block in
+                            Button {
+                                bridge.onSaveArtifact?(codeFileName(index: index, ext: block.fileExtension), block.code)
+                            } label: {
+                                Label(menuTitle("Save as File", index: index, total: codes.count), systemImage: "doc.badge.arrow.up")
                             }
                         }
                     }

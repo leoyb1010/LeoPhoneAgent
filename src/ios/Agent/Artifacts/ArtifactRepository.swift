@@ -71,6 +71,10 @@ actor ArtifactRepository {
         sourcePath: String? = nil,
         title: String? = nil
     ) throws -> ArtifactSnapshot {
+        // [T-smart-copy] capture() posts this for the tray badge; direct
+        // create()/appendVersion() paths (Save as File, session export) must
+        // signal it too or the badge goes stale until the next capture.
+        defer { Task { @MainActor in NotificationCenter.default.post(name: .artifactsDidChange, object: nil) } }
         let artifactId = UUID().uuidString
         let now = Date()
         let artifact = ArtifactRecord(
@@ -98,6 +102,7 @@ actor ArtifactRepository {
         fileName: String,
         mimeType: String? = nil
     ) throws -> ArtifactSnapshot {
+        defer { Task { @MainActor in NotificationCenter.default.post(name: .artifactsDidChange, object: nil) } }
         guard var artifact = try artifact(id: artifactId) else { throw RepositoryError.artifactNotFound }
         artifact.updatedAt = Date()
         artifact.trashedAt = nil

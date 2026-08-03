@@ -83,10 +83,17 @@ enum ReplyContentExtractor {
         let trimmed = markdown.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") else { return nil }
         let marker = String(trimmed.prefix(3))
-        guard trimmed.hasSuffix(marker) else { return nil }
+        // Strict shape check: the ONLY fence lines are the very first and the
+        // very last line. An odd dangling opener elsewhere (```a```prose```)
+        // would otherwise make smart copy silently drop the prose.
+        let lines = trimmed.split(separator: "\n", omittingEmptySubsequences: false)
+        let fenceLineIndices = lines.indices.filter {
+            lines[$0].trimmingCharacters(in: .whitespaces).hasPrefix(marker)
+        }
+        guard fenceLineIndices == [lines.startIndex, lines.index(before: lines.endIndex)],
+              lines.count >= 2,
+              lines.last?.trimmingCharacters(in: .whitespaces) == marker else { return nil }
         let blocks = codeBlocks(in: trimmed)
-        // Exactly one fence and nothing outside it (prefix+suffix check above
-        // plus a single parsed block is sufficient for LLM-shaped output).
         return blocks.count == 1 ? blocks[0] : nil
     }
 
@@ -112,8 +119,21 @@ enum ReplyContentExtractor {
             currentRows = []
         }
 
+        var insideFence = false
+        var fenceMarker = ""
         for line in markdown.split(separator: "\n", omittingEmptySubsequences: false) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
+            // Fence-aware: pipe-shaped lines inside code blocks are code, not
+            // tables (a `grep | sort |` pipeline made a very silly CSV).
+            if !insideFence, trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
+                insideFence = true
+                fenceMarker = String(trimmed.prefix(3))
+                flush()
+                continue
+            } else if insideFence {
+                if trimmed == fenceMarker || trimmed.hasPrefix(fenceMarker + " ") { insideFence = false }
+                continue
+            }
             guard trimmed.hasPrefix("|"), trimmed.hasSuffix("|"), trimmed.count > 2 else {
                 flush()
                 continue
@@ -122,16 +142,58 @@ enum ReplyContentExtractor {
             let inner = trimmed.dropFirst().dropLast()
             let isSeparator = inner.allSatisfy { "-:| ".contains($0) }
             if isSeparator { continue }
+            // Escaped pipes must survive the split: sentinel, split, restore.
+            let sentinel = "\u{0001}"
             let cells = inner
+                .replacingOccurrences(of: "\\|", with: sentinel)
                 .split(separator: "|", omittingEmptySubsequences: false)
                 .map { cell in
                     cell.trimmingCharacters(in: .whitespaces)
-                        // Unescape the markdown table pipe escape.
-                        .replacingOccurrences(of: "\\|", with: "|")
+                        .replacingOccurrences(of: sentinel, with: "|")
                 }
             currentRows.append(cells)
         }
         flush()
         return tables
+    }
+}
+
+/// [T-smart-copy-memo] SwiftUI `Menu`'s content builder is NON-escaping and
+/// runs on every body evaluation — not on menu presentation. The action bar
+/// therefore reads parses through this per-message memo: one parse per
+/// content change, O(1) on every subsequent render.
+@MainActor
+final class ReplyContentMemo {
+    static let shared = ReplyContentMemo()
+
+    struct Entry {
+        let textLength: Int
+        let markdown: String
+        let tables: [String]
+        let codes: [ReplyContentExtractor.CodeBlock]
+        let lone: ReplyContentExtractor.CodeBlock?
+    }
+
+    private var store: [UUID: Entry] = [:]
+
+    func entry(for message: ChatMessage) -> Entry {
+        let textBlocks = message.blocks.compactMap { block -> String? in
+            if case .text = block.kind { return block.content }
+            return nil
+        }
+        let length = textBlocks.reduce(0) { $0 + $1.count }
+        if let cached = store[message.id], cached.textLength == length { return cached }
+        let markdown = textBlocks.joined(separator: "\n\n")
+        let hasFence = markdown.contains("```") || markdown.contains("~~~")
+        let entry = Entry(
+            textLength: length,
+            markdown: markdown,
+            tables: markdown.contains("|") ? ReplyContentExtractor.tablesAsCSV(in: markdown) : [],
+            codes: hasFence ? ReplyContentExtractor.codeBlocks(in: markdown) : [],
+            lone: hasFence ? ReplyContentExtractor.loneCodeBlock(in: markdown) : nil)
+        // Blunt but sufficient eviction: the bar only renders on-screen cells.
+        if store.count > 60 { store.removeAll() }
+        store[message.id] = entry
+        return entry
     }
 }
