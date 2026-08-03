@@ -1352,6 +1352,26 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         syncSpeechStateToGlobal()
     }
 
+    /// [T-smart-copy] Persist extracted reply content (a code block, a CSV
+    /// table) into the artifact tray so it survives the conversation.
+    func saveReplyArtifact(fileName: String, text: String) {
+        guard let sessionId, !text.isEmpty else { return }
+        guard let data = text.data(using: .utf8) else { return }
+        Task {
+            do {
+                _ = try await ArtifactRepository.shared.create(
+                    data: data,
+                    fileName: fileName,
+                    mimeType: ArtifactKind.inferredMIMEType(fileName: fileName),
+                    sessionId: sessionId,
+                    title: fileName)
+                await MainActor.run { LeoHaptics.notification(.success) }
+            } catch {
+                await MainActor.run { LeoHaptics.notification(.error) }
+            }
+        }
+    }
+
     /// [T-reply-toolbar] Quote a reply excerpt into the composer as a
     /// markdown blockquote, ready for a follow-up question.
     func quoteIntoComposer(_ text: String) {

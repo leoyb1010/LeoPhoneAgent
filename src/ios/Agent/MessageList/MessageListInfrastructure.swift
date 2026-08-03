@@ -1006,6 +1006,8 @@ final class CellStateBridgeV2: ObservableObject {
     @Published var onSpeakText: ((String) -> Void)?
     /// [T-reply-toolbar] Quote this reply's plain text into the composer.
     @Published var onQuote: ((String) -> Void)?
+    /// [T-smart-copy] Save extracted reply content (code/CSV) into the artifact tray.
+    @Published var onSaveArtifact: ((_ fileName: String, _ contents: String) -> Void)?
     /// True while this reply is still streaming — disables "Read from Start".
     @Published var isStreaming: Bool = false
     @Published var browserPool: BrowserTabPool?

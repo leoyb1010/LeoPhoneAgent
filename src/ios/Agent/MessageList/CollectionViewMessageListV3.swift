@@ -361,8 +361,51 @@ private struct ReplyActionBarV3: View {
     private var plainReply: String { WatchTextSanitizer.plain(markdownReply) }
 
     private var defaultCopyPayload: String {
-        UserDefaults.standard.string(forKey: "leo.copyFormat") == "markdown"
+        // [T-smart-copy] A reply that IS one code block means "give me the
+        // code" -- copy it bare, no fences, regardless of format setting.
+        if let lone = ReplyContentExtractor.loneCodeBlock(in: markdownReply) {
+            return lone.code
+        }
+        return UserDefaults.standard.string(forKey: "leo.copyFormat") == "markdown"
             ? markdownReply : plainReply
+    }
+
+    private func codeFileName(index: Int, ext: String) -> String {
+        let stamp = Self.fileStamp.string(from: Date())
+        return index == 0 ? "code-\(stamp).\(ext)" : "code-\(stamp)-\(index + 1).\(ext)"
+    }
+
+    private func csvFileName(index: Int) -> String {
+        let stamp = Self.fileStamp.string(from: Date())
+        return index == 0 ? "table-\(stamp).csv" : "table-\(stamp)-\(index + 1).csv"
+    }
+
+    private static let fileStamp: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMdd-HHmmss"
+        return formatter
+    }()
+
+    /// [T-clipboard-to-mac] Base64 the payload so no shell quoting can break;
+    /// pbcopy on the far end. Capped at 256 KB -- it's a clipboard, not rsync.
+    private func sendToHostClipboard(host: RemoteHost) {
+        let payload = String(plainReply.prefix(256 * 1024))
+        guard let b64 = payload.data(using: .utf8)?.base64EncodedString() else { return }
+        let hostName = host.name
+        Task {
+            let result = await RemoteSSHExecutor.shared.runSmart(
+                target: host,
+                allHosts: RemoteHostStore.shared.hosts,
+                command: "printf '%s' '\(b64)' | base64 -D | pbcopy",
+                timeout: 15)
+            await MainActor.run {
+                if result.succeeded {
+                    LeoHaptics.notification(.success)
+                } else {
+                    LeoHaptics.notification(.error)
+                }
+            }
+        }
     }
 
     var body: some View {
@@ -415,6 +458,59 @@ private struct ReplyActionBarV3: View {
                     Button {
                         bridge.onCopyScreenshot?()
                     } label: { Label(String(localized: "Copy Screenshot"), systemImage: "camera.viewfinder") }
+                }
+                // [T-smart-copy] Content-shaped actions. Cheap contains() guards
+                // keep scroll-time renders free of parsing; the full parse runs
+                // only when the menu content is actually built.
+                if markdownReply.contains("|") {
+                    let tables = ReplyContentExtractor.tablesAsCSV(in: markdownReply).prefix(5)
+                    if !tables.isEmpty {
+                        Section {
+                            ForEach(Array(tables.enumerated()), id: \.offset) { index, csv in
+                                Button {
+                                    UIPasteboard.general.string = csv
+                                    LeoHaptics.impact(.light)
+                                } label: {
+                                    Label(String(localized: "Copy as CSV"), systemImage: "tablecells")
+                                }
+                                if bridge.onSaveArtifact != nil {
+                                    Button {
+                                        bridge.onSaveArtifact?(csvFileName(index: index), csv)
+                                    } label: {
+                                        Label(String(localized: "Export Table as CSV"), systemImage: "square.and.arrow.down")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if markdownReply.contains("```") || markdownReply.contains("~~~"), bridge.onSaveArtifact != nil {
+                    let codes = ReplyContentExtractor.codeBlocks(in: markdownReply).prefix(5)
+                    if !codes.isEmpty {
+                        Section {
+                            ForEach(Array(codes.enumerated()), id: \.offset) { index, block in
+                                Button {
+                                    bridge.onSaveArtifact?(codeFileName(index: index, ext: block.fileExtension), block.code)
+                                } label: {
+                                    Label(String(localized: "Save as File"), systemImage: "doc.badge.arrow.up")
+                                }
+                            }
+                        }
+                    }
+                }
+                // [T-clipboard-to-mac] The SSH channel already exists -- one
+                // pbcopy away from "seen on the phone, pasted on the Mac".
+                let hosts = RemoteHostStore.shared.hosts
+                if !hosts.isEmpty {
+                    Section {
+                        ForEach(hosts) { host in
+                            Button {
+                                sendToHostClipboard(host: host)
+                            } label: {
+                                Label(String(localized: "Copy to \(host.name)"), systemImage: "macbook.and.iphone")
+                            }
+                        }
+                    }
                 }
             } label: {
                 Image(systemName: "ellipsis")
@@ -1330,6 +1426,9 @@ extension CollectionViewMessageListV3 {
             bridge.onSpeakText = { [weak vm] text in vm?.speakText(text) }
             bridge.onQuote = (message.role == .assistant)
                 ? { [weak vm] text in vm?.quoteIntoComposer(text) }
+                : nil
+            bridge.onSaveArtifact = (message.role == .assistant)
+                ? { [weak vm] name, text in vm?.saveReplyArtifact(fileName: name, text: text) }
                 : nil
             bridge.onCopyScreenshot = { [weak self, weak vm] in
                 guard let self, let vm else { return }
