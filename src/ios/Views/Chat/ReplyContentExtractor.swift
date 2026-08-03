@@ -181,7 +181,8 @@ final class ReplyContentMemo {
             if case .text = block.kind { return block.content }
             return nil
         }
-        let length = textBlocks.reduce(0) { $0 + $1.count }
+        // utf8.count is O(1) on native strings; Character count walks graphemes.
+        let length = textBlocks.reduce(0) { $0 + $1.utf8.count }
         if let cached = store[message.id], cached.textLength == length { return cached }
         let markdown = textBlocks.joined(separator: "\n\n")
         let hasFence = markdown.contains("```") || markdown.contains("~~~")

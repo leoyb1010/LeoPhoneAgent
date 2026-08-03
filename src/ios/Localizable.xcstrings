@@ -99525,57 +99525,6 @@
         }
       }
     },
-    "Saved to Artifacts": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已存入产物托盘"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已存入產物托盤"
-          }
-        }
-      }
-    },
-    "Sent to %@ clipboard": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已发送到 %@ 剪贴板"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已傳送到 %@ 剪貼簿"
-          }
-        }
-      }
-    },
-    "Could not reach %@": {
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "无法连接 %@"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "無法連線 %@"
-          }
-        }
-      }
-    },
     "Export as Markdown": {
       "extractionState": "manual",
       "localizations": {
@@ -99708,6 +99657,23 @@
           "stringUnit": {
             "state": "translated",
             "value": "助手"
+          }
+        }
+      }
+    },
+    "Copy as CSV": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制为 CSV"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "複製為 CSV"
           }
         }
       }

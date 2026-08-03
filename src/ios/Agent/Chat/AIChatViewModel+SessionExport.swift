@@ -26,30 +26,35 @@ extension AIChatViewModel {
     /// Build the export, register it as an artifact, then ask the view to
     /// present the share sheet. Fire-and-forget from a menu action.
     func exportSession(format: SessionExportFormat) {
+        // Transcript assembly touches main-actor state -- cheap (measured
+        // ~16ms/200 messages). The sanitizer + CoreText pagination are NOT
+        // cheap on pathological input (a 500KB single-line blob measured
+        // 8-74s) -- so everything after this line runs off-main.
         let markdown = sessionExportMarkdown()
         guard !markdown.isEmpty else { return }
         let stamp = Self.exportStamp.string(from: Date())
-        let fileName: String
-        let data: Data?
-        switch format {
-        case .markdown:
-            fileName = "session-\(stamp).md"
-            data = markdown.data(using: .utf8)
-        case .pdf:
-            fileName = "session-\(stamp).pdf"
-            data = Self.pdfData(from: WatchTextSanitizer.plain(markdown))
-        }
-        guard let data else { return }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-        do {
-            try data.write(to: url)
-        } catch {
-            LeoHaptics.notification(.error)
-            return
-        }
-        // Into the tray so the export survives the share sheet, then share.
-        if let sessionId {
-            Task {
+        let sessionId = self.sessionId
+        Task.detached(priority: .userInitiated) {
+            let fileName: String
+            let data: Data?
+            switch format {
+            case .markdown:
+                fileName = "session-\(stamp).md"
+                data = markdown.data(using: .utf8)
+            case .pdf:
+                fileName = "session-\(stamp).pdf"
+                data = Self.pdfData(from: WatchTextSanitizer.plain(markdown))
+            }
+            guard let data else { return }
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+            do {
+                try data.write(to: url)
+            } catch {
+                await MainActor.run { LeoHaptics.notification(.error) }
+                return
+            }
+            // Into the tray so the export survives the share sheet, then share.
+            if let sessionId {
                 _ = try? await ArtifactRepository.shared.create(
                     data: data,
                     fileName: fileName,
@@ -57,12 +62,15 @@ extension AIChatViewModel {
                     sessionId: sessionId,
                     title: fileName)
             }
+            await MainActor.run {
+                NotificationCenter.default.post(name: .chatShareFileRequested, object: url)
+            }
         }
-        NotificationCenter.default.post(name: .chatShareFileRequested, object: url)
     }
 
     private static let exportStamp: DateFormatter = {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyyMMdd-HHmmss"
         return formatter
     }()
@@ -125,12 +133,30 @@ extension AIChatViewModel {
 
     /// A4 pagination of plain text via CoreText — good enough for a readable
     /// transcript PDF without a web view round-trip.
-    private static func pdfData(from text: String) -> Data? {
+    nonisolated private static func pdfData(from text: String) -> Data? {
         let pageRect = CGRect(x: 0, y: 0, width: 595, height: 842)
         let inset: CGFloat = 40
         let textRect = pageRect.insetBy(dx: inset, dy: inset)
+        // CTFramesetterCreateFrame re-typesets every paragraph that touches a
+        // page, so ONE giant paragraph (minified JSON, base64 dump) is
+        // quadratic -- measured 8s for a 500KB single line, 74s for emoji
+        // soup. Hard-wrapping long lines restores linear behaviour.
+        let wrapped = text
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .flatMap { line -> [Substring] in
+                guard line.count > 4000 else { return [line] }
+                var pieces: [Substring] = []
+                var start = line.startIndex
+                while start < line.endIndex {
+                    let end = line.index(start, offsetBy: 4000, limitedBy: line.endIndex) ?? line.endIndex
+                    pieces.append(line[start..<end])
+                    start = end
+                }
+                return pieces
+            }
+            .joined(separator: "\n")
         let attributed = NSAttributedString(
-            string: text,
+            string: wrapped,
             attributes: [
                 .font: UIFont.systemFont(ofSize: 11),
                 .foregroundColor: UIColor.black,

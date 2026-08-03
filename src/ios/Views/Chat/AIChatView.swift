@@ -4778,6 +4778,9 @@ private struct ChatToolbarHost<Title: View, Trailing: View>: View, Equatable {
 /// the native Menu — and its native appearance — should be stable. Item set
 /// mirrors the UIKit buildMenu exactly (incl. Compact Messages + the divider
 /// between Clear Chat and the iCloud actions from T-chat-menu-compact-entry).
+// NOTE [T-session-export]: this dormant SwiftUI fallback intentionally does
+// NOT mirror the UIKit menu's Export as Markdown/PDF entries -- add them if
+// this struct is ever swapped back in.
 private struct ChatTrailingMenu: View, Equatable {
     let messagesEmpty: Bool
     let hasSession: Bool

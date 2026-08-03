@@ -402,8 +402,12 @@ private struct ReplyActionBarV3: View {
         var payload = plainReply
         if payload.utf8.count > byteCap {
             while payload.utf8.count > byteCap {
-                let overshoot = max(1, (payload.utf8.count - byteCap) / 4)
-                payload = String(payload.prefix(payload.count - overshoot))
+                // Use the string's ACTUAL bytes-per-Character average (ZWJ
+                // emoji run to 25B; a /4 guess either under-shrinks or wipes
+                // the payload to empty) and clamp so prefix() can never trap.
+                let avgBytes = max(1, payload.utf8.count / max(1, payload.count))
+                let overshoot = max(1, (payload.utf8.count - byteCap) / avgBytes)
+                payload = String(payload.prefix(max(0, payload.count - overshoot)))
             }
             LeoHaptics.notification(.warning)
         }
@@ -549,6 +553,9 @@ private struct BridgedAssistantFooterV3: View {
     @ObservedObject var message: ChatMessage
     @ObservedObject var bridge: CellStateBridgeV2
     @Environment(\.locale) private var locale
+    /// [T-tldr-experiment] @AppStorage so a settings flip re-renders live
+    /// footers (a raw UserDefaults read was invisible to SwiftUI).
+    @AppStorage("leo.tldrEnabled") private var tldrEnabled: Bool = false
     var maxWidth: CGFloat
 
     // showUsage and usageContentVisible are on bridge, toggled by double-tap on block cells.
@@ -581,7 +588,7 @@ private struct BridgedAssistantFooterV3: View {
     /// Default-off setting; only the first 300 chars are ever sanitized, so
     /// this stays out of the perf budget.
     private var tldrLine: String? {
-        guard UserDefaults.standard.bool(forKey: "leo.tldrEnabled") else { return nil }
+        guard tldrEnabled else { return nil }
         guard let first = message.blocks.first(where: { block in
             if case .text = block.kind { return block.content.count > 2800 }
             return false
