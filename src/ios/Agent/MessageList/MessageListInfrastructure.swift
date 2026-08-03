@@ -1004,6 +1004,8 @@ final class CellStateBridgeV2: ObservableObject {
     /// [T-selection-menu-minis-tts] Speak an arbitrary text snippet (the
     /// selection-menu "Read Selection" action) via the LeoPhoneAgent TTS stack.
     @Published var onSpeakText: ((String) -> Void)?
+    /// [T-reply-toolbar] Quote this reply's plain text into the composer.
+    @Published var onQuote: ((String) -> Void)?
     /// True while this reply is still streaming — disables "Read from Start".
     @Published var isStreaming: Bool = false
     @Published var browserPool: BrowserTabPool?

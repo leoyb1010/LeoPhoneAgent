@@ -1355,6 +1355,21 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// Speak text aloud if speakEnabled is on. Interrupts any current speech.
     /// When Background Speak is enabled, configures audio session for .playback
     /// so TTS continues in the background and keeps the process alive.
+    /// [T-reply-toolbar] Quote a reply excerpt into the composer as a
+    /// markdown blockquote, ready for a follow-up question.
+    func quoteIntoComposer(_ text: String) {
+        let snippet = String(text.prefix(600))
+        let quoted = snippet
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { "> " + $0 }
+            .joined(separator: "\n")
+        if inputText.isEmpty {
+            inputText = quoted + "\n\n"
+        } else {
+            inputText += "\n" + quoted + "\n\n"
+        }
+    }
+
     func speakText(_ rawText: String) {
         // Strip emoji / non-speakable glyphs before TTS.
         let text = VoiceTextSanitizer.sanitize(rawText)

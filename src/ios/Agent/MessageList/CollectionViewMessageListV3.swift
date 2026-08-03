@@ -255,12 +255,14 @@ private struct BridgedAssistantBlockV3: View {
             Color.clear.frame(width: 0, height: 0)
                 .contextMenu {
                     Button {
+                        // [T-fake-copyall] Was byte-identical to Copy Markdown;
+                        // now genuinely plain text via the shared flattener.
                         let text = message.blocks
                             .filter { if case .text = $0.kind { return true }; return false }
                             .map(\.content).joined(separator: "\n\n")
-                        UIPasteboard.general.string = text
+                        UIPasteboard.general.string = WatchTextSanitizer.plain(text)
                     } label: {
-                        Label(String(localized: "Copy All"), systemImage: "doc.on.doc")
+                        Label(String(localized: "Copy Text"), systemImage: "doc.plaintext")
                     }
                     Button {
                         let text = message.blocks
@@ -342,6 +344,89 @@ private struct BridgedAssistantBlockV3: View {
 /// Footer: typing indicator, error, resume banner, token usage.
 /// V3: No GeometryReader. Sheet moved to zero-size overlay to prevent
 /// inflated self-sizing from sheet-capable view modifiers.
+/// [T-reply-toolbar] The visible action row under a finished reply.
+/// Static content, no loops -- safe for the self-sizing cell.
+private struct ReplyActionBarV3: View {
+    @ObservedObject var message: ChatMessage
+    @ObservedObject var bridge: CellStateBridgeV2
+    @State private var copied = false
+
+    private var markdownReply: String {
+        message.blocks
+            .filter { if case .text = $0.kind { return true }; return false }
+            .map(\.content)
+            .joined(separator: "\n\n")
+    }
+
+    private var plainReply: String { WatchTextSanitizer.plain(markdownReply) }
+
+    private var defaultCopyPayload: String {
+        UserDefaults.standard.string(forKey: "leo.copyFormat") == "markdown"
+            ? markdownReply : plainReply
+    }
+
+    var body: some View {
+        HStack(spacing: 18) {
+            Button {
+                UIPasteboard.general.string = defaultCopyPayload
+                LeoHaptics.impact(.light)
+                copied = true
+                Task { try? await Task.sleep(nanoseconds: 1_200_000_000); copied = false }
+            } label: {
+                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    .contentTransition(.symbolEffect(.replace))
+            }
+            .accessibilityLabel(Text("Copy reply"))
+
+            if bridge.onQuote != nil {
+                Button {
+                    bridge.onQuote?(plainReply)
+                } label: {
+                    Image(systemName: "quote.opening")
+                }
+                .accessibilityLabel(Text("Quote"))
+            }
+
+            if bridge.onReadAloud != nil {
+                Button {
+                    bridge.onReadAloud?()
+                } label: {
+                    Image(systemName: "speaker.wave.2")
+                }
+                .accessibilityLabel(Text("Read aloud"))
+            }
+
+            ShareLink(item: plainReply) {
+                Image(systemName: "square.and.arrow.up")
+            }
+            .accessibilityLabel(Text("Share"))
+
+            Menu {
+                Button {
+                    UIPasteboard.general.string = plainReply
+                } label: { Label("Copy Text", systemImage: "doc.plaintext") }
+                Button {
+                    UIPasteboard.general.string = markdownReply
+                } label: { Label("Copy Markdown", systemImage: "text.quote") }
+                if bridge.onCopyScreenshot != nil {
+                    Button {
+                        bridge.onCopyScreenshot?()
+                    } label: { Label(String(localized: "Copy Screenshot"), systemImage: "camera.viewfinder") }
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+            }
+            .accessibilityLabel(Text("More actions"))
+
+            Spacer()
+        }
+        .font(.system(size: 14))
+        .foregroundStyle(.secondary)
+        .buttonStyle(.plain)
+        .padding(.top, 2)
+    }
+}
+
 private struct BridgedAssistantFooterV3: View {
     @ObservedObject var message: ChatMessage
     @ObservedObject var bridge: CellStateBridgeV2
@@ -369,7 +454,18 @@ private struct BridgedAssistantFooterV3: View {
         let showError = message.error != nil
         let showResume = bridge.canResume && message.error == nil
         let showUsageRow = message.streamInterruptCount > 0 || bridge.showUsage
-        return showTyping || showError || showResume || showUsageRow
+        return showTyping || showError || showResume || showUsageRow || showActionBar
+    }
+
+    /// [T-reply-toolbar] Visible actions on every COMPLETED reply -- copying
+    /// used to require knowing the secret blank-area long-press.
+    private var showActionBar: Bool {
+        // Needs actual text — a tool-only reply has nothing to copy or quote.
+        let hasText = message.blocks.contains { block in
+            if case .text = block.kind { return !block.content.isEmpty }
+            return false
+        }
+        return !bridge.isActiveMessage && hasText && message.error == nil
     }
 
     var body: some View {
@@ -401,6 +497,10 @@ private struct BridgedAssistantFooterV3: View {
                     }
                     Spacer()
                 }
+            }
+
+            if showActionBar {
+                ReplyActionBarV3(message: message, bridge: bridge)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1198,6 +1298,9 @@ extension CollectionViewMessageListV3 {
             // selection menu — speaks the selected snippet via the LeoPhoneAgent TTS
             // stack (sanitizer + provider voices + fail-over).
             bridge.onSpeakText = { [weak vm] text in vm?.speakText(text) }
+            bridge.onQuote = (message.role == .assistant)
+                ? { [weak vm] text in vm?.quoteIntoComposer(text) }
+                : nil
             bridge.onCopyScreenshot = { [weak self, weak vm] in
                 guard let self, let vm else { return }
                 let msgs = vm.messages

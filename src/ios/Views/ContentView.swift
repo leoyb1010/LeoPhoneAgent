@@ -4717,6 +4717,8 @@ private struct AppearanceSettingsView: View {
     @AppStorage("chat.autoExpandThinking") private var autoExpandThinking: Bool = true
     @AppStorage("leo.sessionListDensity") private var sessionListDensityRaw: Int = LeoSessionListDensity.standard.rawValue
     @AppStorage(LeoHaptics.enabledDefaultsKey) private var hapticsEnabled: Bool = true
+    /// [T-reply-toolbar] Payload of the one-tap copy button under replies.
+    @AppStorage("leo.copyFormat") private var copyFormat: String = "plain"
     @ObservedObject private var fontSettings = FontSettings.shared
 
     private let iconOptions: [AppIconOption] = [
@@ -4788,6 +4790,18 @@ private struct AppearanceSettingsView: View {
                 Text("Return Key")
             } footer: {
                 Text("Choose whether the Return key in the chat input inserts a newline or sends the message. Hardware Shift+Return always inserts a newline.")
+            }
+
+            Section {
+                Picker(String(localized: "Copy Format"), selection: $copyFormat) {
+                    Text(String(localized: "Plain Text")).tag("plain")
+                    Text(String(localized: "Markdown")).tag("markdown")
+                }
+                .pickerStyle(.segmented)
+            } header: {
+                Text("Copy Format")
+            } footer: {
+                Text("What the one-tap copy button under a reply puts on the clipboard. The long-press menu always offers both.")
             }
 
             Section {

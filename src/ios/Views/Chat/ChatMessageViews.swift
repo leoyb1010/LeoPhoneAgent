@@ -499,9 +499,10 @@ struct ChatMessageRow: View {
                         isActive: isActiveMessage
                     )) {
                         Button {
-                            UIPasteboard.general.string = fullReplyText
+                            // [T-fake-copyall] Was identical to Copy Markdown; now truly plain.
+                            UIPasteboard.general.string = WatchTextSanitizer.plain(fullReplyText)
                         } label: {
-                            Label("Copy All", systemImage: "doc.on.doc")
+                            Label("Copy Text", systemImage: "doc.plaintext")
                         }
                         Button {
                             UIPasteboard.general.string = fullReplyText
