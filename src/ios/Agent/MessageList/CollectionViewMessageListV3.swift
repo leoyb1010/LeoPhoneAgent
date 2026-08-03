@@ -396,7 +396,10 @@ private struct ReplyActionBarV3: View {
                 .accessibilityLabel(Text("Read aloud"))
             }
 
-            ShareLink(item: plainReply) {
+            // Markdown here, not plainReply -- the sanitizer costs ~30ms per
+            // 100KB and body re-runs on every footer render. Taps (copy/quote)
+            // pay it lazily; ShareLink demands its item up front.
+            ShareLink(item: markdownReply) {
                 Image(systemName: "square.and.arrow.up")
             }
             .accessibilityLabel(Text("Share"))
@@ -517,12 +520,14 @@ private struct BridgedAssistantFooterV3: View {
             Color.clear.frame(width: 0, height: 0)
                 .contextMenu {
                     Button {
+                        // [T-fake-copyall] Real plain text (was identical to
+                        // Copy Markdown).
                         let text = message.blocks
                             .filter { if case .text = $0.kind { return true }; return false }
                             .map(\.content).joined(separator: "\n\n")
-                        UIPasteboard.general.string = text
+                        UIPasteboard.general.string = WatchTextSanitizer.plain(text)
                     } label: {
-                        Label(String(localized: "Copy All"), systemImage: "doc.on.doc")
+                        Label(String(localized: "Copy Text"), systemImage: "doc.plaintext")
                     }
                     Button {
                         let text = message.blocks
@@ -1263,11 +1268,36 @@ extension CollectionViewMessageListV3 {
 
         // MARK: - Bridge Updates
 
+        /// [T-reply-toolbar] Drop cached heights for one message's footer and
+        /// reconfigure it (same pattern as blockContentFilledSignal).
+        private func invalidateFooterHeight(messageId: UUID) {
+            guard let ds = dataSource else { return }
+            let item = MessageListItem.assistantFooter(messageId)
+            var snapshot = ds.snapshot()
+            guard let idx = snapshot.itemIdentifiers.firstIndex(of: item) else { return }
+            if let cv = viewController?.collectionView,
+               let cell = cv.cellForItem(at: IndexPath(item: idx, section: 0)) as? SelfSizingCell {
+                cell.clearCachedHeight()
+            }
+            viewController?.messageListLayout?.invalidateHeight(at: idx)
+            snapshot.reconfigureItems([item])
+            ds.apply(snapshot, animatingDifferences: false)
+        }
+
         private func updateBridge(_ bridge: CellStateBridgeV2, message: ChatMessage, in messages: [ChatMessage]) {
             guard let vm else { return }
             let isLast = message.id == messages.last?.id
             let isActive = isLast && vm.isProcessing
 
+            // [T-reply-toolbar] Stream end grows the footer in place (the
+            // action bar appears), but SelfSizingCell's width-keyed cache can
+            // return the stale pre-bar height for in-place content changes --
+            // the documented [T-thinking-collapse-blank] mechanism. Invalidate
+            // the footer item on the active->idle flip so the bar isn't
+            // clipped until an unrelated reconfigure.
+            if bridge.isActiveMessage && !isActive {
+                invalidateFooterHeight(messageId: message.id)
+            }
             bridge.isActiveMessage = isActive
             bridge.commandStartTime = vm.commandStartTime
             bridge.onStop = isActive ? { [weak self] in self?.onStop?() } : nil
@@ -2131,7 +2161,15 @@ extension CollectionViewMessageListV3 {
                     // double-tap), the toggle triggers a snapshot refresh
                     // which re-evaluates this condition.
                     let isLastAssistant = (message.id == messages.last(where: { $0.role == .assistant })?.id)
+                    // [T-reply-toolbar] Any reply with visible text needs a
+                    // footer now: it hosts the persistent action bar, not just
+                    // the transient typing/error/usage rows.
+                    let hasTextForActionBar = message.blocks.contains { block in
+                        if case .text = block.kind { return !block.content.isEmpty }
+                        return false
+                    }
                     let needsFooter = isLastAssistant
+                        || hasTextForActionBar
                         || message.error != nil
                         || message.streamInterruptCount > 0
                         || (cellBridges[message.id]?.showUsage == true)

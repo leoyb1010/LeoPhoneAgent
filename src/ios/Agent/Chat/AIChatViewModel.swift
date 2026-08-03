@@ -1352,9 +1352,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         syncSpeechStateToGlobal()
     }
 
-    /// Speak text aloud if speakEnabled is on. Interrupts any current speech.
-    /// When Background Speak is enabled, configures audio session for .playback
-    /// so TTS continues in the background and keeps the process alive.
     /// [T-reply-toolbar] Quote a reply excerpt into the composer as a
     /// markdown blockquote, ready for a follow-up question.
     func quoteIntoComposer(_ text: String) {
@@ -1370,6 +1367,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         }
     }
 
+    /// Speak text aloud if speakEnabled is on. Interrupts any current speech.
+    /// When Background Speak is enabled, configures audio session for .playback
+    /// so TTS continues in the background and keeps the process alive.
     func speakText(_ rawText: String) {
         // Strip emoji / non-speakable glyphs before TTS.
         let text = VoiceTextSanitizer.sanitize(rawText)

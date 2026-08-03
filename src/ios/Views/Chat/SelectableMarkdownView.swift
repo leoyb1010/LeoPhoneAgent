@@ -4992,7 +4992,8 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
             || action == #selector(copyScreenshotFromMenu(_:)) {
             return true
         }
-        if action == #selector(addSelectionToChatInput(_:)) {
+        if action == #selector(addSelectionToChatInput(_:))
+            || action == #selector(quoteSelectionFromMenu(_:)) {
             return selectedRange.length > 0
         }
         return super.canPerformAction(action, withSender: sender)
@@ -5013,6 +5014,26 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
         )
         // Drop the selection / dismiss the edit menu so the user sees the
         // result land in the input. Mirrors the system Copy behaviour.
+        resignFirstResponder()
+    }
+
+    /// [T-quote-followup] Selection -> blockquote in the composer. Unlike
+    /// Add to Chat Input (raw append), this formats the selection as a
+    /// markdown quote so the follow-up question reads as question-about-this.
+    @objc func quoteSelectionFromMenu(_ sender: Any?) {
+        guard selectedRange.length > 0 else { return }
+        let snippet = plainTextWithTables(in: selectedRange)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !snippet.isEmpty else { return }
+        let quoted = snippet
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { "> " + $0 }
+            .joined(separator: "\n") + "\n\n"
+        NotificationCenter.default.post(
+            name: .chatInputAppendRequested,
+            object: nil,
+            userInfo: ["text": quoted]
+        )
         resignFirstResponder()
     }
 
@@ -5165,6 +5186,13 @@ final class SelectableMarkdownTextView: UITextView, UIGestureRecognizerDelegate 
                     title: String(localized: "Add to Chat Input"),
                     image: UIImage(systemName: "text.insert"),
                     action: #selector(addSelectionToChatInput(_:))
+                ),
+                // [T-quote-followup] Quote-and-ask: precise follow-up on a slice
+                // of a long reply.
+                UICommand(
+                    title: String(localized: "Quote & Ask"),
+                    image: UIImage(systemName: "quote.opening"),
+                    action: #selector(quoteSelectionFromMenu(_:))
                 )
             ])
             builder.insertSibling(addToInput, afterMenu: .standardEdit)

@@ -217,6 +217,7 @@
 		E5F200006 /* ModelSelectionEntity.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F200016 /* ModelSelectionEntity.swift */; };
 		E5F2000FA /* TextFadeAnimator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F2000FB /* TextFadeAnimator.swift */; };
 		E5F2009A1 /* EquatableContextMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F2009B1 /* EquatableContextMenu.swift */; };
+		E5RCE0001 /* ReplyContentExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RCE0002 /* ReplyContentExtractor.swift */; };
 		E5FMI0001 /* FileMentionIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5FMI0011 /* FileMentionIndex.swift */; };
 		E5FP00001 /* FileProviderExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5FP00011 /* FileProviderExtension.swift */; };
 		E5FP00002 /* FileProviderEnumerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5FP00012 /* FileProviderEnumerator.swift */; };
@@ -891,6 +892,7 @@
 		E5F200016 /* ModelSelectionEntity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelSelectionEntity.swift; sourceTree = "<group>"; };
 		E5F2000FB /* TextFadeAnimator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextFadeAnimator.swift; sourceTree = "<group>"; };
 		E5F2009B1 /* EquatableContextMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EquatableContextMenu.swift; sourceTree = "<group>"; };
+		E5RCE0002 /* ReplyContentExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplyContentExtractor.swift; sourceTree = "<group>"; };
 		E5FMI0011 /* FileMentionIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileMentionIndex.swift; sourceTree = "<group>"; };
 		E5FP00010 /* MinisFileProvider.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MinisFileProvider.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		E5FP00011 /* FileProviderExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileProviderExtension.swift; sourceTree = "<group>"; };
@@ -2165,6 +2167,7 @@
 				E5F200013 /* AssistantBlockView.swift */,
 				E5F200014 /* ChatMessageViews.swift */,
 				E5F2009B1 /* EquatableContextMenu.swift */,
+		E5RCE0002 /* ReplyContentExtractor.swift */,
 				E5F200015 /* ChatInputBar.swift */,
 				E5QTP0011 /* QuickTaskPickerSheet.swift */,
 				E5SINS011 /* SessionInspectorView.swift */,
@@ -2812,6 +2815,7 @@
 				E5F200003 /* AssistantBlockView.swift in Sources */,
 				E5F200004 /* ChatMessageViews.swift in Sources */,
 				E5F2009A1 /* EquatableContextMenu.swift in Sources */,
+		E5RCE0001 /* ReplyContentExtractor.swift in Sources */,
 				E5F200005 /* ChatInputBar.swift in Sources */,
 				E5QTP0001 /* QuickTaskPickerSheet.swift in Sources */,
 				E5SINS001 /* SessionInspectorView.swift in Sources */,

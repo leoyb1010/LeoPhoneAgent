@@ -125,7 +125,7 @@ struct ChatMessageRow: View {
     /// Lifted out of ToolCapsuleView so ForEach item changes don't reset it.
     @State private var detailBlock: AssistantBlock?
 
-    /// All text block contents joined, for "Copy All".
+    /// All text block contents joined — raw markdown; "Copy Text" flattens it.
     private var fullReplyText: String {
         message.blocks
             .filter { if case .text = $0.kind { return true }; return false }
