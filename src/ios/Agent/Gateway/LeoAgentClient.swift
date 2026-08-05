@@ -169,7 +169,7 @@ enum GatewayError: LocalizedError {
 actor LeoAgentClient {
     private let baseURL: URL
     private let apiKey: String
-    private let session: URLSession
+    let session: URLSession
 
     init(baseURL: URL, apiKey: String) {
         self.baseURL = baseURL
@@ -186,7 +186,7 @@ actor LeoAgentClient {
 
     // MARK: Request plumbing
 
-    private func request(_ path: String, method: String = "GET", body: Data? = nil) throws -> URLRequest {
+    func request(_ path: String, method: String = "GET", body: Data? = nil) throws -> URLRequest {
         guard let url = URL(string: path, relativeTo: baseURL) else { throw GatewayError.badURL }
         var req = URLRequest(url: url)
         req.httpMethod = method
@@ -226,6 +226,18 @@ actor LeoAgentClient {
             throw GatewayError.malformedResponse(String(data: data.prefix(200), encoding: .utf8) ?? "")
         }
         return obj
+    }
+
+    /// Shared JSON helpers so feature extensions do not each re-implement
+    /// request building, status validation and decoding.
+    func getJSON(_ path: String) async throws -> [String: Any] {
+        try Self.json(try await send(try request(path)))
+    }
+
+    func postJSON(_ path: String, body: [String: Any]) async throws -> [String: Any] {
+        let data = try JSONSerialization.data(withJSONObject: body)
+        let raw = try await send(try request(path, method: "POST", body: data))
+        return (try? Self.json(raw)) ?? [:]
     }
 
     // MARK: Probes

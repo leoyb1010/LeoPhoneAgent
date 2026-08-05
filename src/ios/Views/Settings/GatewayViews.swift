@@ -339,7 +339,7 @@ struct GatewayConsoleView: View {
     }
 }
 
-private struct GatewayItemView: View {
+struct GatewayItemView: View {
     let item: GatewayTranscriptItem
 
     var body: some View {
@@ -481,6 +481,11 @@ struct GatewayEntryView: View {
                     } label: {
                         Label(host.name, systemImage: "desktopcomputer")
                     }
+                    NavigationLink {
+                        HarnessLauncherView(host: host, client: client)
+                    } label: {
+                        Label("Coding session on \(host.name)", systemImage: "terminal")
+                    }
                 } else {
                     Label {
                         VStack(alignment: .leading, spacing: 2) {
@@ -495,5 +500,175 @@ struct GatewayEntryView: View {
         }
         .navigationTitle(Text("Mac"))
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+// MARK: - Harness (coding CLIs on the Mac)
+
+/// Pick a coding CLI and a directory, then drive it from the phone.
+///
+/// The picker only lists what the Mac actually has installed — the server
+/// reports what it can locate, so there is never a choice that fails on use.
+struct HarnessLauncherView: View {
+    let host: GatewayHost
+    let client: LeoAgentClient
+
+    @State private var kinds: [HarnessKind] = []
+    @State private var selected: HarnessKind?
+    @State private var cwd = "~"
+    @State private var prompt = ""
+    @State private var loadError: String?
+    @State private var isLoading = true
+
+    var body: some View {
+        List {
+            Section {
+                if isLoading {
+                    HStack { ProgressView(); Text("Checking what's installed…").foregroundStyle(.secondary) }
+                } else if kinds.isEmpty {
+                    Text("No coding CLI found on \(host.name).")
+                        .font(.system(size: 14)).foregroundStyle(.secondary)
+                } else {
+                    ForEach(kinds) { kind in
+                        Button {
+                            selected = kind
+                        } label: {
+                            HStack {
+                                Image(systemName: "terminal")
+                                Text(kind.name)
+                                Spacer()
+                                if selected?.key == kind.key {
+                                    Image(systemName: "checkmark").foregroundStyle(.tint)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                if let loadError {
+                    Text(loadError).font(.system(size: 13)).foregroundStyle(.red)
+                }
+            } header: {
+                Text("Coding CLI")
+            } footer: {
+                Text("These run on \(host.name), in the directory you choose. You can steer and approve them from here or from your watch.")
+            }
+
+            Section {
+                TextField("~/projects/my-app", text: $cwd)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .font(.system(size: 14, design: .monospaced))
+            } header: {
+                Text("Working Directory")
+            }
+
+            Section {
+                TextField("What should it do?", text: $prompt, axis: .vertical)
+                    .lineLimit(2...6)
+            } header: {
+                Text("First Instruction")
+            }
+
+            Section {
+                if let selected {
+                    NavigationLink {
+                        HarnessConsoleView(
+                            driver: HarnessSessionDriver(client: client, harness: selected, cwd: cwd),
+                            firstPrompt: prompt)
+                    } label: {
+                        Label("Start Session", systemImage: "play.circle")
+                    }
+                    .disabled(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+        .navigationTitle(Text("Coding Session"))
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            do {
+                kinds = try await client.harnessKinds()
+                selected = kinds.first
+            } catch {
+                loadError = error.localizedDescription
+            }
+            isLoading = false
+        }
+    }
+}
+
+/// Live view of one coding CLI working on the Mac.
+struct HarnessConsoleView: View {
+    @StateObject var driver: HarnessSessionDriver
+    let firstPrompt: String
+    @State private var input = ""
+    @State private var started = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 12) {
+                        ForEach(driver.items) { item in
+                            GatewayItemView(item: item).id(item.id)
+                        }
+                        if driver.isRunning && driver.pendingApproval == nil {
+                            HStack(spacing: 8) {
+                                LeoTypingIndicator()
+                                Text(driver.status)
+                                    .font(.system(size: 12, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .padding(16)
+                }
+                .onChange(of: driver.items.count) { _ in
+                    guard let last = driver.items.last else { return }
+                    withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                }
+            }
+
+            if let approval = driver.pendingApproval {
+                GatewayApprovalCard(approval: approval) { choice in
+                    driver.respond(to: approval, choice: choice)
+                }
+            }
+
+            HStack(spacing: 10) {
+                TextField("Steer it…", text: $input, axis: .vertical)
+                    .lineLimit(1...4)
+                    .textFieldStyle(.plain)
+                    .padding(.horizontal, 12).padding(.vertical, 9)
+                    .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 18))
+                Button {
+                    let text = input; input = ""
+                    driver.steer(text)
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill").font(.system(size: 28))
+                }
+                .disabled(input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            .background(.bar)
+        }
+        .navigationTitle(Text(driver.harness.name))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                if driver.isRunning {
+                    Button { driver.stop() } label: {
+                        Image(systemName: "stop.circle.fill").foregroundStyle(.red)
+                    }
+                }
+            }
+        }
+        .onAppear {
+            // Start once; coming back to this view resumes the stream at the
+            // last seq instead of launching a second session.
+            if !started { started = true; driver.start(prompt: firstPrompt) }
+            else { driver.resumeIfNeeded() }
+        }
+        .onDisappear { driver.detach() }
     }
 }
