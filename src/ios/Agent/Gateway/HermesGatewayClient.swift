@@ -61,7 +61,10 @@ struct GatewayApprovalRequest: Sendable, Identifiable {
     /// Server-computed valid choices, e.g. ["once","session","always","deny"].
     let choices: [String]
     let command: String?
+    /// Always nil today: the gateway's approval payload carries no tool name.
+    /// Kept so the UI has a slot when one appears.
     let tool: String?
+    /// The gateway's own explanation, from `description`.
     let reason: String?
     /// Everything the gateway sent, for fields this build does not model yet.
     let extras: [String: String]
@@ -334,6 +337,9 @@ actor HermesGatewayClient {
                 // comments (`:` keep-alives) and blanks are skipped.
                 guard line.hasPrefix("data:") else { continue }
                 let raw = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
+                // This gateway ends a stream with an SSE comment (": stream
+                // closed"), which the `data:` guard above already skips; the
+                // [DONE] check is only tolerance for OpenAI-shaped proxies.
                 guard !raw.isEmpty, raw != "[DONE]" else { continue }
                 guard let data = raw.data(using: .utf8),
                       let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
@@ -369,7 +375,7 @@ extension GatewayEvent {
                                   isError: obj["error"] as? Bool ?? false)
         case "approval.request":
             var extras: [String: String] = [:]
-            let modelled: Set<String> = ["event", "run_id", "timestamp", "choices", "command", "tool", "reason"]
+            let modelled: Set<String> = ["event", "run_id", "timestamp", "choices", "command", "description"]
             for (key, value) in obj where !modelled.contains(key) {
                 extras[key] = String(describing: value)
             }
@@ -378,7 +384,7 @@ extension GatewayEvent {
                 choices: obj["choices"] as? [String] ?? ["once", "deny"],
                 command: obj["command"] as? String,
                 tool: obj["tool"] as? String,
-                reason: obj["reason"] as? String,
+                reason: obj["description"] as? String,
                 extras: extras))
         case "approval.responded":
             return .approvalResponded(choice: obj["choice"] as? String)

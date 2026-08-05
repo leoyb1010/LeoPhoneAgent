@@ -381,6 +381,8 @@
 		E5SCH002 /* ScheduledTaskRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SCH012 /* ScheduledTaskRunner.swift */; };
 		E5AUT0001 /* AutomationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AUT0002 /* AutomationEngine.swift */; };
 		E5GWC0001 /* HermesGatewayClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWC0002 /* HermesGatewayClient.swift */; };
+		E5GWD0001 /* GatewayRunDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWD0002 /* GatewayRunDriver.swift */; };
+		E5GWH0001 /* GatewayHostStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWH0002 /* GatewayHostStore.swift */; };
 		E5SCH003 /* RunDueScheduledTasksIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SCH013 /* RunDueScheduledTasksIntent.swift */; };
 		E5SCH004 /* ScheduledTaskSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SCH014 /* ScheduledTaskSettingsView.swift */; };
 		E5CAP002 /* CapabilitiesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CAP012 /* CapabilitiesView.swift */; };
@@ -1066,6 +1068,8 @@
 		E5SCH012 /* ScheduledTaskRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledTaskRunner.swift; sourceTree = "<group>"; };
 		E5AUT0002 /* AutomationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationEngine.swift; sourceTree = "<group>"; };
 		E5GWC0002 /* HermesGatewayClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/HermesGatewayClient.swift; sourceTree = SOURCE_ROOT; };
+		E5GWD0002 /* GatewayRunDriver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/GatewayRunDriver.swift; sourceTree = SOURCE_ROOT; };
+		E5GWH0002 /* GatewayHostStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/GatewayHostStore.swift; sourceTree = SOURCE_ROOT; };
 		E5SCH013 /* RunDueScheduledTasksIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunDueScheduledTasksIntent.swift; sourceTree = "<group>"; };
 		E5SCH014 /* ScheduledTaskSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledTaskSettingsView.swift; sourceTree = "<group>"; };
 		E5CAP012 /* CapabilitiesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapabilitiesView.swift; sourceTree = "<group>"; };
@@ -1902,6 +1906,8 @@
 				E5SCH012 /* ScheduledTaskRunner.swift */,
 				E5AUT0002 /* AutomationEngine.swift */,
 				E5GWC0002 /* HermesGatewayClient.swift */,
+				E5GWD0002 /* GatewayRunDriver.swift */,
+				E5GWH0002 /* GatewayHostStore.swift */,
 				E5SPL0002 /* SessionSpotlightIndexer.swift */,
 				E5SCH013 /* RunDueScheduledTasksIntent.swift */,
 				E5T000019 /* FollowUpSessionIntent.swift */,
@@ -2874,6 +2880,8 @@
 				E5SCH002 /* ScheduledTaskRunner.swift in Sources */,
 				E5AUT0001 /* AutomationEngine.swift in Sources */,
 				E5GWC0001 /* HermesGatewayClient.swift in Sources */,
+				E5GWD0001 /* GatewayRunDriver.swift in Sources */,
+				E5GWH0001 /* GatewayHostStore.swift in Sources */,
 				E5SPL0001 /* SessionSpotlightIndexer.swift in Sources */,
 				E5CST0001 /* CorrectionStore.swift in Sources */,
 				E5RHS0001 /* RemoteHostStore.swift in Sources */,
