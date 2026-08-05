@@ -65,7 +65,7 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
     @Published var askState: WatchAskState = .idle
     /// [T-leogateway] A remote gateway run is blocked waiting for a yes/no.
     /// The wrist is the fastest place to unblock it. Nil when nothing pends.
-    @Published private(set) var pendingApproval: WatchApproval?
+    @Published var pendingApproval: WatchApproval?
     /// Bumps when a reply lands, for the settle-in animation.
     @Published private(set) var replyPulse = 0
 
@@ -197,9 +197,16 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
     /// Answer a pending gateway approval from the wrist.
     func answerApproval(choice: String) {
         guard let approval = pendingApproval else { return }
+        // Reachability FIRST. Clearing the card and playing a success haptic
+        // before knowing the phone can hear us tells the user "handled" while
+        // the Mac stays blocked — the worst possible lie for this control.
+        guard let session, session.isReachable else {
+            WKInterfaceDevice.current().play(.failure)
+            lastActionMessage = "iPhone 不可达,请在手机上处理"
+            return
+        }
         pendingApproval = nil
         WKInterfaceDevice.current().play(choice == "deny" ? .failure : .success)
-        guard let session, session.isReachable else { return }
         session.sendMessage([
             "kind": "approvalReply",
             "requestId": approval.runId,

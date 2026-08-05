@@ -23,10 +23,10 @@ struct WatchRootView: View {
         .tabViewStyle(.verticalPage)
         // [T-leogateway] An approval outranks whatever page you were on:
         // a Mac is sitting blocked until this is answered.
-        .sheet(item: Binding(
-            get: { client.pendingApproval },
-            set: { _ in }
-        )) { approval in
+        // Writable binding: watchOS sheets are swipe-dismissible, and a no-op
+        // setter would leave pendingApproval set with the card gone — the
+        // approval would then be unanswerable from the wrist forever.
+        .sheet(item: $client.pendingApproval) { approval in
             WatchApprovalSheet(approval: approval) { choice in
                 client.answerApproval(choice: choice)
             }

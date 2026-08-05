@@ -57,6 +57,14 @@ enum GatewayEvent: Sendable {
 /// `_redact_approval_command` before the payload reaches this transport), so
 /// credentials in a flagged command never cross the wire.
 struct GatewayApprovalRequest: Sendable, Identifiable {
+    /// Identity of THIS approval, not of the run.
+    ///
+    /// A run can ask several times, and every request carries the same
+    /// `run_id` — the gateway payload has no approval id of its own. Keying on
+    /// run_id let a second request silently inherit the first one's card
+    /// (SwiftUI reuses a sheet whose Identifiable id is unchanged), so a user
+    /// could approve a command they never saw. Minted locally, per request.
+    let approvalId: String
     let runId: String
     /// Server-computed valid choices, e.g. ["once","session","always","deny"].
     let choices: [String]
@@ -69,7 +77,7 @@ struct GatewayApprovalRequest: Sendable, Identifiable {
     /// Everything the gateway sent, for fields this build does not model yet.
     let extras: [String: String]
 
-    var id: String { runId }
+    var id: String { approvalId }
 
     /// The gateway shrinks the choice set itself (a "smart denied" command
     /// only ever offers once/deny), so the UI must render what it was given
@@ -94,10 +102,14 @@ struct GatewayRunStatus: Sendable {
     let sessionId: String?
     let model: String?
 
-    /// Observed values: started · running · waiting_for_approval · completed.
+    /// Gateway enum: queued · running · waiting_for_approval · stopping ·
+    /// cancelled · failed · completed.
     var isTerminal: Bool {
-        ["completed", "failed", "cancelled", "error"].contains(status)
+        ["completed", "failed", "cancelled"].contains(status)
     }
+    /// A terminal run that did not succeed — recovery must not report these
+    /// as a normal completion.
+    var isFailure: Bool { status == "failed" || status == "cancelled" }
     var isWaitingForApproval: Bool { status == "waiting_for_approval" }
 }
 
@@ -372,7 +384,11 @@ extension GatewayEvent {
         case "tool.completed":
             return .toolCompleted(tool: obj["tool"] as? String ?? "tool",
                                   duration: obj["duration"] as? Double,
-                                  isError: obj["error"] as? Bool ?? false)
+                                  // `error` is a Bool today, but a field with
+                                  // that name may carry a message instead; a
+                                  // non-empty string is still a failure.
+                                  isError: (obj["error"] as? Bool)
+                                      ?? !((obj["error"] as? String)?.isEmpty ?? true))
         case "approval.request":
             var extras: [String: String] = [:]
             let modelled: Set<String> = ["event", "run_id", "timestamp", "choices", "command", "description"]
@@ -380,6 +396,7 @@ extension GatewayEvent {
                 extras[key] = String(describing: value)
             }
             return .approvalRequest(GatewayApprovalRequest(
+                approvalId: UUID().uuidString,
                 runId: obj["run_id"] as? String ?? "",
                 choices: obj["choices"] as? [String] ?? ["once", "deny"],
                 command: obj["command"] as? String,

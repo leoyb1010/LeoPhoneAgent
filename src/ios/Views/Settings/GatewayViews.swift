@@ -143,9 +143,15 @@ private struct GatewayHostEditor: View {
     @State private var testResult: String?
     @State private var isTesting = false
 
+    /// https only. The access key rides an Authorization header on every
+    /// request, and this app sets NSAllowsArbitraryLoads, so a stray `http://`
+    /// would put that key in cleartext on whatever Wi-Fi the user is on —
+    /// with no platform-level backstop to catch it.
     private var canSave: Bool {
-        !draft.name.trimmingCharacters(in: .whitespaces).isEmpty
-            && URL(string: draft.baseURL.trimmingCharacters(in: .whitespaces))?.host != nil
+        guard !draft.name.trimmingCharacters(in: .whitespaces).isEmpty,
+              let url = URL(string: draft.baseURL.trimmingCharacters(in: .whitespaces)),
+              url.host != nil else { return false }
+        return url.scheme?.lowercased() == "https"
     }
 
     var body: some View {
@@ -163,7 +169,7 @@ private struct GatewayHostEditor: View {
                 } footer: {
                     // The single most likely setup mistake, called out where
                     // it happens rather than left to fail as a TLS error.
-                    Text("Use the machine's tailnet hostname, not its IP — the certificate is selected by hostname and an IP address will fail to connect.")
+                    Text("Must be https, and must use the machine's tailnet hostname rather than its IP — the certificate is selected by hostname, and an IP address will fail to connect.")
                 }
 
                 Section {
@@ -273,6 +279,7 @@ struct GatewayConsoleView: View {
             }
         }
         .animation(LeoMotion.smooth(reduceMotion: false), value: driver.pendingApproval?.runId)
+        .onAppear { driver.reattachIfNeeded() }
         .onDisappear { driver.cancelLocalStream() }
     }
 

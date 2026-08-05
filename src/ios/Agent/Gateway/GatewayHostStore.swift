@@ -41,6 +41,10 @@ final class GatewayHostStore: ObservableObject {
     nonisolated private static let keychainService = "com.leoyuan.leophoneagent.gateway"
 
     @Published private(set) var hosts: [GatewayHost]
+    /// Built clients live here, not in a view body: `client(for:)` does a
+    /// synchronous Keychain read and spins up a URLSession, and SwiftUI would
+    /// re-run both on every redraw of the host list.
+    private var clients: [String: HermesGatewayClient] = [:]
 
     init() {
         if let data = UserDefaults.standard.data(forKey: Self.storageKey),
@@ -64,11 +68,13 @@ final class GatewayHostStore: ObservableObject {
         } else {
             hosts.append(host)
         }
+        clients.removeValue(forKey: host.id)   // address or key may have changed
         persist()
     }
 
     func delete(id: String) {
         hosts.removeAll { $0.id == id }
+        clients.removeValue(forKey: id)
         Self.deleteKey(hostId: id)
         persist()
     }
@@ -86,8 +92,14 @@ final class GatewayHostStore: ObservableObject {
 
     /// Build a client for a host, or nil when its key is missing.
     func client(for host: GatewayHost) -> HermesGatewayClient? {
-        guard let url = host.url, let key = Self.accessKey(hostId: host.id), !key.isEmpty else { return nil }
-        return HermesGatewayClient(baseURL: url, apiKey: key)
+        if let cached = clients[host.id] { return cached }
+        // Second line of defence behind the editor's validation: hand-edited
+        // UserDefaults or an older record must not get a cleartext client.
+        guard let url = host.url, url.scheme?.lowercased() == "https",
+              let key = Self.accessKey(hostId: host.id), !key.isEmpty else { return nil }
+        let built = HermesGatewayClient(baseURL: url, apiKey: key)
+        clients[host.id] = built
+        return built
     }
 
     // MARK: - Keychain (local only, never synchronized)

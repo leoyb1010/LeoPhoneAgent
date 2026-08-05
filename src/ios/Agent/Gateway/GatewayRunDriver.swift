@@ -48,6 +48,10 @@ final class GatewayRunDriver: ObservableObject {
     private let hostId: String
     private var runId: String?
     private var streamTask: Task<Void, Never>?
+    /// Runs whose approval this client already answered. Without it the 3s
+    /// poll re-synthesises a card in the window before the gateway's status
+    /// flips, and a second answer gets a 400 the user cannot interpret.
+    private var answeredApprovalRuns: Set<String> = []
 
     /// How many times to re-open a dropped stream before giving up. The run
     /// keeps going on the Mac regardless; this only bounds client-side retry.
@@ -71,6 +75,10 @@ final class GatewayRunDriver: ObservableObject {
         reconnectCount = 0
         isRunning = true
         status = "submitting"
+        // Drop the previous run's identity before the new id exists, so the
+        // Stop button in this window cannot target the last run.
+        streamTask?.cancel()
+        runId = nil
 
         streamTask = Task { [weak self] in
             guard let self else { return }
@@ -93,26 +101,59 @@ final class GatewayRunDriver: ObservableObject {
     func stop() {
         guard let runId else { return }
         Task { [client] in
-            try? await client.stopRun(runId: runId)
+            do {
+                try await client.stopRun(runId: runId)
+            } catch {
+                // A 404 here means the run already finished — not worth
+                // alarming the user, but any other failure must surface or
+                // they will keep tapping a button that does nothing.
+                await MainActor.run { self.lastError = error.localizedDescription }
+            }
         }
     }
 
+    /// Called when the console leaves the screen. The run keeps going on the
+    /// Mac; we merely stop following it. isRunning MUST be reset or the view
+    /// comes back with a dead composer (send() guards on it) and a spinner
+    /// that never stops.
     func cancelLocalStream() {
         streamTask?.cancel()
         streamTask = nil
+        if isRunning {
+            isRunning = false
+            status = "detached"
+        }
+    }
+
+    /// Re-attach to a run we walked away from.
+    func reattachIfNeeded() {
+        guard !isRunning, let runId, status == "detached" else { return }
+        isRunning = true
+        streamTask = Task { [weak self] in
+            await self?.pollUntilSettled(runId: runId)
+        }
     }
 
     /// Answer a pending approval with one of the choices the gateway offered.
     func respond(to approval: GatewayApprovalRequest, choice: String) {
         guard approval.choices.contains(choice) else { return }
-        WatchBridge.shared.clearApprovalRequest(runId: approval.runId)
+        WatchBridge.shared.clearApprovalRequest(approvalId: approval.approvalId)
         pendingApproval = nil
         status = "running"
-        Task { [client] in
+        answeredApprovalRuns.insert(approval.runId)
+        Task { [weak self, client] in
             do {
                 try await client.respondToApproval(runId: approval.runId, choice: choice)
             } catch {
-                await MainActor.run { self.lastError = error.localizedDescription }
+                // Put the card back. Optimistically clearing it and then
+                // failing leaves the Mac blocked with no way to answer again.
+                await MainActor.run {
+                    guard let self else { return }
+                    self.answeredApprovalRuns.remove(approval.runId)
+                    self.pendingApproval = approval
+                    self.status = "waiting_for_approval"
+                    self.lastError = error.localizedDescription
+                }
             }
         }
     }
@@ -174,8 +215,9 @@ final class GatewayRunDriver: ObservableObject {
                 // set the gateway can produce, so offering exactly those two is
                 // safe; anything richer would be guessing on the user's behalf.
                 await MainActor.run {
-                    if self.pendingApproval == nil {
+                    if self.pendingApproval == nil, !self.answeredApprovalRuns.contains(runId) {
                         self.pendingApproval = GatewayApprovalRequest(
+                            approvalId: UUID().uuidString,
                             runId: runId,
                             choices: ["once", "deny"],
                             command: nil,
@@ -235,7 +277,9 @@ final class GatewayRunDriver: ObservableObject {
             pushApprovalToWatch(approval)
 
         case .approvalResponded(let choice):
-            if let runId { WatchBridge.shared.clearApprovalRequest(runId: runId) }
+            if let pending = pendingApproval {
+                WatchBridge.shared.clearApprovalRequest(approvalId: pending.approvalId)
+            }
             pendingApproval = nil
             status = "running"
             if let choice {
@@ -293,7 +337,16 @@ final class GatewayRunDriver: ObservableObject {
         usage = snapshot.usage
         status = snapshot.status
         isRunning = false
-        if reconnectCount > 0 {
+        pendingApproval = nil
+        // A recovered run that FAILED must not be reported as a success just
+        // because we got its status back.
+        if snapshot.isFailure {
+            items.append(GatewayTranscriptItem(
+                kind: .failure,
+                text: snapshot.status == "cancelled"
+                    ? String(localized: "Run stopped.")
+                    : String(localized: "The run failed.")))
+        } else if reconnectCount > 0 {
             note(String(localized: "Reconnected and recovered the result."))
         }
     }
@@ -303,12 +356,13 @@ final class GatewayRunDriver: ObservableObject {
     /// The handler is re-armed on every request so a stale closure from an
     /// earlier run can never resolve the current one.
     private func pushApprovalToWatch(_ approval: GatewayApprovalRequest) {
-        WatchBridge.shared.onApprovalReply = { [weak self] runId, choice in
-            guard let self, let pending = self.pendingApproval, pending.runId == runId else { return }
+        WatchBridge.shared.registerApprovalHandler(approvalId: approval.approvalId) { [weak self] choice in
+            guard let self, let pending = self.pendingApproval,
+                  pending.approvalId == approval.approvalId else { return }
             self.respond(to: pending, choice: choice)
         }
         WatchBridge.shared.sendApprovalRequest(
-            runId: approval.runId,
+            approvalId: approval.approvalId,
             command: approval.command,
             reason: approval.reason,
             choices: approval.choices)
