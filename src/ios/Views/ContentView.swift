@@ -5148,6 +5148,21 @@ private struct SettingsSheet: View {
                                 .background(.indigo, in: Circle())
                         }
                     }
+                    // [T-leogateway] A Hermes agent on the user's own Mac:
+                    // a second, always-on body this phone can drive.
+                    NavigationLink {
+                        GatewaySettingsView()
+                    } label: {
+                        Label {
+                            Text("Gateways")
+                        } icon: {
+                            Image(systemName: "desktopcomputer")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.white)
+                                .frame(width: 21, height: 21)
+                                .background(.teal, in: Circle())
+                        }
+                    }
                     // [T-orchestration] Default OFF; enabling registers the
                     // dispatch/check/collect tools for new turns.
                     Toggle(isOn: $orchestrationEnabled) {

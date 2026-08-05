@@ -99677,6 +99677,533 @@
           }
         }
       }
+    },
+    "Gateways": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "网关"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "閘道器"
+          }
+        }
+      }
+    },
+    "Gateway": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "网关"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "閘道器"
+          }
+        }
+      }
+    },
+    "Add Gateway": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加网关"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新增閘道器"
+          }
+        }
+      }
+    },
+    "Edit Gateway": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "编辑网关"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "編輯閘道器"
+          }
+        }
+      }
+    },
+    "No gateway yet. Add the Mac that runs your Hermes agent.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有网关。添加运行 Hermes 代理的那台 Mac。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "還沒有閘道器。新增執行 Hermes 代理的那臺 Mac。"
+          }
+        }
+      }
+    },
+    "A gateway is a Hermes agent running on your own Mac. It keeps working while your phone is asleep, and this app can watch, approve and stop its work from anywhere on your tailnet.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "网关是跑在你自己 Mac 上的 Hermes 代理。手机休眠时它照常干活,而这个 App 可以在 tailnet 的任何地方观察、审批、停止它。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "閘道器是跑在你自己 Mac 上的 Hermes 代理。手機休眠時它照常幹活,而這個 App 可以在 tailnet 的任何地方觀察、審批、停止它。"
+          }
+        }
+      }
+    },
+    "Address": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "地址"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "地址"
+          }
+        }
+      }
+    },
+    "Use the machine's tailnet hostname, not its IP — the certificate is selected by hostname and an IP address will fail to connect.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请填这台机器的 tailnet 主机名,不要填 IP——证书是按主机名选择的,用 IP 会连不上。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請填這臺機器的 tailnet 主機名,不要填 IP——證書是按主機名選擇的,用 IP 會連不上。"
+          }
+        }
+      }
+    },
+    "Access Key": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "访问密钥"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "訪問金鑰"
+          }
+        }
+      }
+    },
+    "From API_SERVER_KEY in ~/.hermes/.env on the gateway. Stored in this device's Keychain only — it is never synced to iCloud.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取自网关上 ~/.hermes/.env 里的 API_SERVER_KEY。只存在本机钥匙串,绝不同步到 iCloud。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取自閘道器上 ~/.hermes/.env 裡的 API_SERVER_KEY。只存在本機鑰匙串,絕不同步到 iCloud。"
+          }
+        }
+      }
+    },
+    "Test Connection": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "测试连接"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "測試連線"
+          }
+        }
+      }
+    },
+    "Could not reach the gateway. Check the address and that Tailscale is connected.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连不上网关。检查地址,以及 Tailscale 是否已连接。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "連不上閘道器。檢查地址,以及 Tailscale 是否已連線。"
+          }
+        }
+      }
+    },
+    "Gateway is reachable. Add the access key to finish.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "网关可达。填入访问密钥即可完成。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "閘道器可達。填入訪問金鑰即可完成。"
+          }
+        }
+      }
+    },
+    "Ask the gateway…": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "让网关做点什么…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "讓閘道器做點什麼…"
+          }
+        }
+      }
+    },
+    "Approval needed": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要审批"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要審批"
+          }
+        }
+      }
+    },
+    "Allow Once": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "允许一次"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "允許一次"
+          }
+        }
+      }
+    },
+    "Allow This Session": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本次会话允许"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本次會話允許"
+          }
+        }
+      }
+    },
+    "Always Allow": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "始终允许"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "始終允許"
+          }
+        }
+      }
+    },
+    "Deny": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拒绝"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拒絕"
+          }
+        }
+      }
+    },
+    "Add a gateway in Settings to run tasks on your Mac from here.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在设置里添加网关,就能从这里让 Mac 干活。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在設定裡新增閘道器,就能從這裡讓 Mac 幹活。"
+          }
+        }
+      }
+    },
+    "Access key missing": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缺少访问密钥"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缺少訪問金鑰"
+          }
+        }
+      }
+    },
+    "No gateway host is configured.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未配置网关主机。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未配置閘道器主機。"
+          }
+        }
+      }
+    },
+    "The gateway address is not a valid URL.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "网关地址不是有效的 URL。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "閘道器地址不是有效的 URL。"
+          }
+        }
+      }
+    },
+    "The gateway rejected the access key.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "网关拒绝了该访问密钥。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "閘道器拒絕了該訪問金鑰。"
+          }
+        }
+      }
+    },
+    "Lost contact with the gateway.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "与网关失去联系。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "與閘道器失去聯絡。"
+          }
+        }
+      }
+    },
+    "Stream dropped — following the run by status instead.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "事件流中断——改为按状态跟进这次运行。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "事件流中斷——改為按狀態跟進這次執行。"
+          }
+        }
+      }
+    },
+    "Details were lost when the connection dropped.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连接中断时详情已丢失。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "連線中斷時詳情已丟失。"
+          }
+        }
+      }
+    },
+    "Reconnected and recovered the result.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已重连并取回结果。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已重連並取回結果。"
+          }
+        }
+      }
+    },
+    "Still running on the gateway; reopen to follow along.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仍在网关上运行;重新打开可继续跟进。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仍在閘道器上執行;重新開啟可繼續跟進。"
+          }
+        }
+      }
+    },
+    "Run stopped.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "运行已停止。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "執行已停止。"
+          }
+        }
+      }
+    },
+    "The run failed.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "运行失败。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "執行失敗。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

@@ -56,6 +56,12 @@ enum WatchPayloadKey {
     static let kindAskReply = "askReply"      // phone → watch: final answer
     static let kindTranscript = "transcript"  // watch → phone (replyHandler)
     static let kindStopSession = "stopSession"
+    // [T-leogateway] Remote-gateway approvals. The wrist is the fastest place
+    // to unblock a Mac that is waiting on a yes/no.
+    static let kindApprovalRequest = "approvalRequest"   // phone → watch
+    static let kindApprovalReply = "approvalReply"       // watch → phone
+    static let choices = "choices"
+    static let choice = "choice"
     static let kindScheduledRun = "scheduledRun"
     static let kindScheduledToggle = "scheduledToggle"
 }
@@ -77,6 +83,36 @@ final class WatchBridge: NSObject, ObservableObject {
     /// Last ask answer, folded into the application context as a fallback for
     /// when the live message can't be delivered (watch briefly unreachable).
     private var pendingAskReply: (id: String, text: String)?
+
+    /// Set by whoever is driving a gateway run, so a wrist answer can reach it.
+    /// Nil when no remote run is waiting — the watch then simply never sees a card.
+    var onApprovalReply: ((String, String) -> Void)?
+
+    /// Push a pending remote approval to the wrist.
+    ///
+    /// sendMessage only (no applicationContext fallback): an approval is
+    /// worthless once stale, and the phone-side card remains the source of
+    /// truth if the watch is unreachable.
+    func sendApprovalRequest(runId: String, command: String?, reason: String?, choices: [String]) {
+        guard let session, session.isReachable else { return }
+        session.sendMessage([
+            WatchPayloadKey.kind: WatchPayloadKey.kindApprovalRequest,
+            WatchPayloadKey.requestId: runId,
+            WatchPayloadKey.text: WatchTextSanitizer.plain(command ?? reason ?? ""),
+            WatchPayloadKey.choices: choices,
+        ], replyHandler: nil, errorHandler: { _ in })
+    }
+
+    /// Tell the wrist the card is gone (answered on the phone, or timed out).
+    func clearApprovalRequest(runId: String) {
+        guard let session, session.isReachable else { return }
+        session.sendMessage([
+            WatchPayloadKey.kind: WatchPayloadKey.kindApprovalRequest,
+            WatchPayloadKey.requestId: runId,
+            WatchPayloadKey.text: "",
+            WatchPayloadKey.choices: [String](),
+        ], replyHandler: nil, errorHandler: { _ in })
+    }
 
     func sendAskReply(requestId: String, text: String) {
         // [T-automation-watch-isolation] Automation runs reuse this delivery
@@ -235,6 +271,16 @@ extension WatchBridge: WCSessionDelegate {
             Task { @MainActor in
                 let lines = await WatchAskRunner.transcript(sessionId: sessionId)
                 replyHandler([WatchPayloadKey.text: lines])
+            }
+            return
+        }
+        if kind == WatchPayloadKey.kindApprovalReply {
+            let runId = (message[WatchPayloadKey.requestId] as? String) ?? ""
+            let choice = (message[WatchPayloadKey.choice] as? String) ?? ""
+            replyHandler(["ok": !runId.isEmpty && !choice.isEmpty])
+            guard !runId.isEmpty, !choice.isEmpty else { return }
+            Task { @MainActor in
+                WatchBridge.shared.onApprovalReply?(runId, choice)
             }
             return
         }

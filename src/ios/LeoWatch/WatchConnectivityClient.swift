@@ -37,6 +37,16 @@ enum WatchAskState: Equatable {
     case replied(text: String)
 }
 
+/// [T-leogateway] A remote gateway approval mirrored to the wrist.
+struct WatchApproval: Identifiable, Equatable {
+    let runId: String
+    let detail: String
+    /// Rendered verbatim — the gateway narrows this set for risky commands,
+    /// so a hardcoded button row would offer permissions it will reject.
+    let choices: [String]
+    var id: String { runId }
+}
+
 @MainActor
 final class WatchConnectivityClient: NSObject, ObservableObject {
     static let shared = WatchConnectivityClient()
@@ -53,6 +63,9 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
     @Published private(set) var sessions: [WatchSessionItem] = []
     @Published private(set) var scheduled: [WatchScheduledItem] = []
     @Published var askState: WatchAskState = .idle
+    /// [T-leogateway] A remote gateway run is blocked waiting for a yes/no.
+    /// The wrist is the fastest place to unblock it. Nil when nothing pends.
+    @Published private(set) var pendingApproval: WatchApproval?
     /// Bumps when a reply lands, for the settle-in animation.
     @Published private(set) var replyPulse = 0
 
@@ -181,6 +194,19 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
         sendSimple(["kind": "stopAll"], success: "已发送停止指令")
     }
 
+    /// Answer a pending gateway approval from the wrist.
+    func answerApproval(choice: String) {
+        guard let approval = pendingApproval else { return }
+        pendingApproval = nil
+        WKInterfaceDevice.current().play(choice == "deny" ? .failure : .success)
+        guard let session, session.isReachable else { return }
+        session.sendMessage([
+            "kind": "approvalReply",
+            "requestId": approval.runId,
+            "choice": choice,
+        ], replyHandler: nil, errorHandler: { _ in })
+    }
+
     private func sendSimple(_ payload: [String: Any], success: String) {
         guard let session, session.isReachable else {
             lastActionMessage = "iPhone 不可达"
@@ -254,6 +280,20 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
     }
 
     fileprivate func applyMessage(_ message: [String: Any]) {
+        if (message["kind"] as? String) == "approvalRequest" {
+            let runId = (message["requestId"] as? String) ?? ""
+            let choices = (message["choices"] as? [String]) ?? []
+            let detail = (message["text"] as? String) ?? ""
+            // Empty choices = the phone answered it; withdraw the card rather
+            // than leaving a dead prompt on the wrist.
+            if runId.isEmpty || choices.isEmpty {
+                if pendingApproval?.runId == runId || runId.isEmpty { pendingApproval = nil }
+            } else {
+                pendingApproval = WatchApproval(runId: runId, detail: detail, choices: choices)
+                WKInterfaceDevice.current().play(.notification)
+            }
+            return
+        }
         if (message["kind"] as? String) == "askReply" {
             let id = (message["requestId"] as? String) ?? ""
             let text = (message["text"] as? String) ?? ""

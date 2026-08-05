@@ -21,6 +21,59 @@ struct WatchRootView: View {
             SchedulePage()
         }
         .tabViewStyle(.verticalPage)
+        // [T-leogateway] An approval outranks whatever page you were on:
+        // a Mac is sitting blocked until this is answered.
+        .sheet(item: Binding(
+            get: { client.pendingApproval },
+            set: { _ in }
+        )) { approval in
+            WatchApprovalSheet(approval: approval) { choice in
+                client.answerApproval(choice: choice)
+            }
+        }
+    }
+}
+
+/// Wrist-sized approval card. Choices come from the gateway, one button per
+/// row so a 45mm screen never truncates a label into ambiguity.
+private struct WatchApprovalSheet: View {
+    let approval: WatchApproval
+    let onChoose: (String) -> Void
+
+    private func label(for choice: String) -> String {
+        switch choice {
+        case "once": return "允许一次"
+        case "session": return "本次会话允许"
+        case "always": return "始终允许"
+        case "deny": return "拒绝"
+        default: return choice
+        }
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 6) {
+                    Image(systemName: "hand.raised.fill").foregroundStyle(.orange)
+                    Text("需要审批").font(.headline)
+                }
+                if !approval.detail.isEmpty {
+                    Text(approval.detail)
+                        .font(.system(size: 13, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(6)
+                }
+                ForEach(approval.choices, id: \.self) { choice in
+                    Button {
+                        onChoose(choice)
+                    } label: {
+                        Text(label(for: choice)).frame(maxWidth: .infinity)
+                    }
+                    .tint(choice == "deny" ? .red : .accentColor)
+                }
+            }
+            .padding(.horizontal, 4)
+        }
     }
 }
 

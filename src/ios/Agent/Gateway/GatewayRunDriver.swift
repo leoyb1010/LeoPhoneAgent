@@ -105,6 +105,7 @@ final class GatewayRunDriver: ObservableObject {
     /// Answer a pending approval with one of the choices the gateway offered.
     func respond(to approval: GatewayApprovalRequest, choice: String) {
         guard approval.choices.contains(choice) else { return }
+        WatchBridge.shared.clearApprovalRequest(runId: approval.runId)
         pendingApproval = nil
         status = "running"
         Task { [client] in
@@ -182,6 +183,7 @@ final class GatewayRunDriver: ObservableObject {
                             reason: String(localized: "Details were lost when the connection dropped."),
                             extras: [:])
                         self.status = snapshot.status
+                        if let pending = self.pendingApproval { self.pushApprovalToWatch(pending) }
                     }
                 }
             } else {
@@ -230,8 +232,10 @@ final class GatewayRunDriver: ObservableObject {
         case .approvalRequest(let approval):
             pendingApproval = approval
             status = "waiting_for_approval"
+            pushApprovalToWatch(approval)
 
         case .approvalResponded(let choice):
+            if let runId { WatchBridge.shared.clearApprovalRequest(runId: runId) }
             pendingApproval = nil
             status = "running"
             if let choice {
@@ -292,6 +296,22 @@ final class GatewayRunDriver: ObservableObject {
         if reconnectCount > 0 {
             note(String(localized: "Reconnected and recovered the result."))
         }
+    }
+
+    /// Mirror an approval to the wrist and accept an answer from there.
+    ///
+    /// The handler is re-armed on every request so a stale closure from an
+    /// earlier run can never resolve the current one.
+    private func pushApprovalToWatch(_ approval: GatewayApprovalRequest) {
+        WatchBridge.shared.onApprovalReply = { [weak self] runId, choice in
+            guard let self, let pending = self.pendingApproval, pending.runId == runId else { return }
+            self.respond(to: pending, choice: choice)
+        }
+        WatchBridge.shared.sendApprovalRequest(
+            runId: approval.runId,
+            command: approval.command,
+            reason: approval.reason,
+            choices: approval.choices)
     }
 
     private func note(_ text: String) {
