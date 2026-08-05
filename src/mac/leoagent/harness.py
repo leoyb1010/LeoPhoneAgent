@@ -1,4 +1,4 @@
-"""LeoGateway harness manager — drive external coding CLIs as live sessions.
+"""LeoAgent harness manager — drive external coding CLIs as live sessions.
 
 This is ours, not Hermes'. Hermes is an excellent agent engine but it has no
 notion of *hosting another agent*: ask it to use Claude Code and the best it
@@ -520,7 +520,7 @@ class HarnessManager:
     """All harness sessions on this machine."""
 
     def __init__(self, home: Optional[Path] = None):
-        self.home = home or Path.home() / ".leogateway"
+        self.home = home or Path.home() / ".leoagent"
         self.sessions_dir = self.home / "harness-sessions"
         self.sessions_dir.mkdir(parents=True, exist_ok=True)
         self.sessions: Dict[str, HarnessSession] = {}

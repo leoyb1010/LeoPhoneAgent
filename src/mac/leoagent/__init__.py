@@ -1,4 +1,4 @@
-"""LeoGateway — the Mac half of LeoPhoneAgent.
+"""LeoAgent — the Mac half of LeoPhoneAgent.
 
 Hermes is vendored as the general agent engine, the same relationship this
 product already has with iSH on the phone: we did not rewrite the engine, we

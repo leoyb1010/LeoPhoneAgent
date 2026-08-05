@@ -1,15 +1,16 @@
 //
-//  HermesGatewayClient.swift
+//  LeoAgentClient.swift
 //  MinisApp
 //
 //  [T-leogateway] The phone's arm into a desktop-class agent.
 //
-//  A LeoGateway host is a Hermes Agent gateway (github.com/NousResearch/
-//  hermes-agent) running on the user's own Mac, reachable over Tailscale.
-//  It runs a full agent of its own — 40+ tools, skills, MCP, sub-agents —
-//  and keeps working when the phone is asleep. This client speaks its
-//  OpenAI-compatible api_server surface so a remote run can be driven,
-//  watched, approved and stopped from the phone.
+//  LeoAgent is the Mac half of this product: a full agent of its own that
+//  keeps working while the phone is asleep. This client drives it — start a
+//  run, watch it stream, approve what it asks, stop it.
+//
+//  The Mac side vendors a third-party agent engine the way the iOS side
+//  vendors iSH: the engine keeps its own internal names, and nothing about it
+//  reaches the product surface. Everything named here is ours.
 //
 //  Protocol facts below were captured from a LIVE gateway (Hermes v0.20.0,
 //  2026-08-05), not inferred from docs — see Desktop/LeoGateway_协议真相.
@@ -142,19 +143,19 @@ enum GatewayError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notConfigured:
-            return String(localized: "No gateway host is configured.")
+            return String(localized: "No Mac is connected.")
         case .badURL:
-            return String(localized: "The gateway address is not a valid URL.")
+            return String(localized: "That Mac address is not a valid URL.")
         case .unauthorized:
             // Deliberately no key echo — this string reaches logs and UI.
-            return String(localized: "The gateway rejected the access key.")
+            return String(localized: "LeoAgent rejected the access key.")
         case .http(let status, let message):
             if let message, !message.isEmpty {
-                return String(localized: "Gateway error \(status): \(message)")
+                return String(localized: "LeoAgent error \(status): \(message)")
             }
-            return String(localized: "Gateway error \(status)")
+            return String(localized: "LeoAgent error \(status)")
         case .malformedResponse(let detail):
-            return String(localized: "Unexpected gateway response: \(detail)")
+            return String(localized: "Unexpected response from LeoAgent: \(detail)")
         }
     }
 }
@@ -165,7 +166,7 @@ enum GatewayError: LocalizedError {
 ///
 /// An actor so a session driver and a background health probe can share one
 /// instance without racing on URLSession configuration.
-actor HermesGatewayClient {
+actor LeoAgentClient {
     private let baseURL: URL
     private let apiKey: String
     private let session: URLSession
@@ -407,7 +408,7 @@ extension GatewayEvent {
             return .approvalResponded(choice: obj["choice"] as? String)
         case "run.completed":
             return .runCompleted(output: obj["output"] as? String,
-                                 usage: HermesGatewayClient.parseUsage(obj["usage"]))
+                                 usage: LeoAgentClient.parseUsage(obj["usage"]))
         case "run.failed":
             return .runFailed(message: (obj["error"] as? String) ?? (obj["message"] as? String))
         case "run.cancelled":
@@ -420,7 +421,7 @@ extension GatewayEvent {
     }
 }
 
-extension HermesGatewayClient {
+extension LeoAgentClient {
     /// Shared with `GatewayEvent.parse`, which has no actor context.
     nonisolated static func parseUsage(_ any: Any?) -> GatewayUsage? {
         guard let dict = any as? [String: Any] else { return nil }

@@ -44,7 +44,7 @@ final class GatewayRunDriver: ObservableObject {
     /// say so honestly rather than pretending nothing happened.
     @Published private(set) var reconnectCount = 0
 
-    private let client: HermesGatewayClient
+    private let client: LeoAgentClient
     private let hostId: String
     private var runId: String?
     private var streamTask: Task<Void, Never>?
@@ -57,7 +57,7 @@ final class GatewayRunDriver: ObservableObject {
     /// keeps going on the Mac regardless; this only bounds client-side retry.
     private let maxReconnects = 6
 
-    init(client: HermesGatewayClient, hostId: String) {
+    init(client: LeoAgentClient, hostId: String) {
         self.client = client
         self.hostId = hostId
     }
@@ -196,7 +196,7 @@ final class GatewayRunDriver: ObservableObject {
             guard let snapshot = try? await client.runStatus(runId: runId) else {
                 attempt += 1
                 if attempt > maxReconnects {
-                    await MainActor.run { self.fail(String(localized: "Lost contact with the gateway.")) }
+                    await MainActor.run { self.fail(String(localized: "Lost contact with that Mac.")) }
                     return
                 }
                 try? await Task.sleep(nanoseconds: Self.backoff(attempt))

@@ -1,4 +1,4 @@
-"""LeoGateway HTTP server — our own control surface on the Mac.
+"""LeoAgent HTTP server — our own control surface on the Mac.
 
 Deliberately small. Hermes remains the general agent engine; this process owns
 the thing Hermes has no concept of: hosting *other* coding agents (Claude Code,
@@ -38,12 +38,12 @@ DEFAULT_PORT = 8646
 
 def _unauthorized() -> web.Response:
     return web.json_response(
-        {"error": {"message": "Invalid gateway key", "code": "leogateway_auth_failed"}},
+        {"error": {"message": "Invalid gateway key", "code": "leoagent_auth_failed"}},
         status=401,
     )
 
 
-class LeoGatewayServer:
+class LeoAgentServer:
     def __init__(self, key: str, home: Optional[Path] = None):
         self.key = key
         self.manager = HarnessManager(home=home)
@@ -60,14 +60,14 @@ class LeoGatewayServer:
     # -- handlers ----------------------------------------------------------
 
     async def health(self, request: web.Request) -> web.Response:
-        return web.json_response({"status": "ok", "platform": "leogateway", "version": VERSION})
+        return web.json_response({"status": "ok", "platform": "leoagent", "version": VERSION})
 
     async def capabilities(self, request: web.Request) -> web.Response:
         if not self._authorized(request):
             return _unauthorized()
         return web.json_response({
-            "object": "leogateway.capabilities",
-            "platform": "leogateway",
+            "object": "leoagent.capabilities",
+            "platform": "leoagent",
             "version": VERSION,
             "features": {
                 "harness_sessions": True,
@@ -198,23 +198,23 @@ class LeoGatewayServer:
 
 
 def main(argv: Optional[list] = None) -> int:
-    parser = argparse.ArgumentParser(prog="leogateway", description="LeoGateway harness server")
-    parser.add_argument("--host", default=os.getenv("LEOGATEWAY_HOST", DEFAULT_HOST))
-    parser.add_argument("--port", type=int, default=int(os.getenv("LEOGATEWAY_PORT", DEFAULT_PORT)))
-    parser.add_argument("--home", default=os.getenv("LEOGATEWAY_HOME"))
+    parser = argparse.ArgumentParser(prog="leoagent", description="LeoAgent harness server")
+    parser.add_argument("--host", default=os.getenv("LEOAGENT_HOST", DEFAULT_HOST))
+    parser.add_argument("--port", type=int, default=int(os.getenv("LEOAGENT_PORT", DEFAULT_PORT)))
+    parser.add_argument("--home", default=os.getenv("LEOAGENT_HOME"))
     args = parser.parse_args(argv)
 
-    key = os.getenv("LEOGATEWAY_KEY", "").strip()
+    key = os.getenv("LEOAGENT_KEY", "").strip()
     if len(key) < 16:
         # Refusing to start is the right failure: a permissive default here
         # would expose every coding agent on this Mac to anyone who can reach
         # the port. Same stance the Hermes api_server takes with its own key.
-        print("LEOGATEWAY_KEY is required and must be at least 16 characters.", flush=True)
+        print("LEOAGENT_KEY is required and must be at least 16 characters.", flush=True)
         return 2
 
     home = Path(args.home).expanduser() if args.home else None
-    server = LeoGatewayServer(key=key, home=home)
-    print(f"LeoGateway {VERSION} listening on http://{args.host}:{args.port}", flush=True)
+    server = LeoAgentServer(key=key, home=home)
+    print(f"LeoAgent {VERSION} listening on http://{args.host}:{args.port}", flush=True)
     web.run_app(server.build_app(), host=args.host, port=args.port, print=None)
     return 0
 

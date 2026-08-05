@@ -23,7 +23,7 @@ struct GatewaySettingsView: View {
         List {
             Section {
                 if store.hosts.isEmpty {
-                    Text("No gateway yet. Add the Mac that runs your Hermes agent.")
+                    Text("No Mac connected yet. Add the Mac that runs LeoAgent.")
                         .font(.system(size: 14))
                         .foregroundStyle(.secondary)
                 } else {
@@ -40,20 +40,20 @@ struct GatewaySettingsView: View {
                     }
                 }
             } header: {
-                Text("Gateways")
+                Text("Macs")
             } footer: {
-                Text("A gateway is a Hermes agent running on your own Mac. It keeps working while your phone is asleep, and this app can watch, approve and stop its work from anywhere on your tailnet.")
+                Text("LeoAgent is the Mac half of this product. It keeps working while your phone is asleep, and from here you can watch it, approve what it asks, and stop it — from anywhere on your tailnet.")
             }
 
             Section {
                 Button {
                     editing = GatewayHostDraft()
                 } label: {
-                    Label("Add Gateway", systemImage: "plus.circle")
+                    Label("Add Mac", systemImage: "plus.circle")
                 }
             }
         }
-        .navigationTitle(Text("Gateways"))
+        .navigationTitle(Text("Macs"))
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $editing) { draft in
             GatewayHostEditor(draft: draft) { saved in
@@ -173,13 +173,13 @@ private struct GatewayHostEditor: View {
                 }
 
                 Section {
-                    SecureField("API_SERVER_KEY", text: $draft.accessKey)
+                    SecureField("Access key", text: $draft.accessKey)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 } header: {
                     Text("Access Key")
                 } footer: {
-                    Text("From API_SERVER_KEY in ~/.hermes/.env on the gateway. Stored in this device's Keychain only — it is never synced to iCloud.")
+                    Text("Shown by `leoagent key` on the Mac. Stored in this device's Keychain only — it is never synced to iCloud.")
                 }
 
                 Section {
@@ -198,7 +198,7 @@ private struct GatewayHostEditor: View {
                     }
                 }
             }
-            .navigationTitle(Text(draft.isNew ? "Add Gateway" : "Edit Gateway"))
+            .navigationTitle(Text(draft.isNew ? "Add Mac" : "Edit Mac"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -221,16 +221,16 @@ private struct GatewayHostEditor: View {
         defer { isTesting = false }
         let host = draft.makeHost()
         guard await GatewayHostStore.probe(host) else {
-            testResult = String(localized: "Could not reach the gateway. Check the address and that Tailscale is connected.")
+            testResult = String(localized: "Could not reach that Mac. Check the address and that Tailscale is connected.")
             return
         }
         // Reachable — now check whether the key is accepted, which is a
         // separate failure the user fixes differently.
         guard let url = host.url, !draft.accessKey.isEmpty else {
-            testResult = String(localized: "Gateway is reachable. Add the access key to finish.")
+            testResult = String(localized: "Mac is reachable. Add the access key to finish.")
             return
         }
-        let client = HermesGatewayClient(baseURL: url, apiKey: draft.accessKey)
+        let client = LeoAgentClient(baseURL: url, apiKey: draft.accessKey)
         do {
             let caps = try await client.capabilities()
             testResult = String(localized: "Connected to \(caps.platform). Approvals: \(caps.has("approval_events") ? "supported" : "unavailable").")
@@ -248,7 +248,7 @@ struct GatewayConsoleView: View {
     @State private var input = ""
     @FocusState private var inputFocused: Bool
 
-    init(host: GatewayHost, client: HermesGatewayClient) {
+    init(host: GatewayHost, client: LeoAgentClient) {
         self.host = host
         _driver = StateObject(wrappedValue: GatewayRunDriver(client: client, hostId: host.id))
     }
@@ -316,7 +316,7 @@ struct GatewayConsoleView: View {
 
     private var composer: some View {
         HStack(spacing: 10) {
-            TextField("Ask the gateway…", text: $input, axis: .vertical)
+            TextField("Ask your Mac…", text: $input, axis: .vertical)
                 .lineLimit(1...5)
                 .focused($inputFocused)
                 .textFieldStyle(.plain)
@@ -469,7 +469,7 @@ struct GatewayEntryView: View {
         List {
             if store.activeHosts.isEmpty {
                 Section {
-                    Text("Add a gateway in Settings to run tasks on your Mac from here.")
+                    Text("Connect your Mac in Settings to run tasks on it from here.")
                         .font(.system(size: 14))
                         .foregroundStyle(.secondary)
                 }
@@ -493,7 +493,7 @@ struct GatewayEntryView: View {
                 }
             }
         }
-        .navigationTitle(Text("Gateway"))
+        .navigationTitle(Text("Mac"))
         .navigationBarTitleDisplayMode(.inline)
     }
 }

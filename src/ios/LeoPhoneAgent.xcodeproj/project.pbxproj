@@ -380,7 +380,7 @@
 		E5NMCP001 /* NativeMCPClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5NMCP011 /* NativeMCPClient.swift */; };
 		E5SCH002 /* ScheduledTaskRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SCH012 /* ScheduledTaskRunner.swift */; };
 		E5AUT0001 /* AutomationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AUT0002 /* AutomationEngine.swift */; };
-		E5GWC0001 /* HermesGatewayClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWC0002 /* HermesGatewayClient.swift */; };
+		E5GWC0001 /* LeoAgentClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWC0002 /* LeoAgentClient.swift */; };
 		E5GWV0001 /* GatewayViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWV0002 /* GatewayViews.swift */; };
 		E5GWD0001 /* GatewayRunDriver.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWD0002 /* GatewayRunDriver.swift */; };
 		E5GWH0001 /* GatewayHostStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWH0002 /* GatewayHostStore.swift */; };
@@ -1068,7 +1068,7 @@
 		E5NMCP011 /* NativeMCPClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeMCPClient.swift; sourceTree = "<group>"; };
 		E5SCH012 /* ScheduledTaskRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduledTaskRunner.swift; sourceTree = "<group>"; };
 		E5AUT0002 /* AutomationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationEngine.swift; sourceTree = "<group>"; };
-		E5GWC0002 /* HermesGatewayClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/HermesGatewayClient.swift; sourceTree = SOURCE_ROOT; };
+		E5GWC0002 /* LeoAgentClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/LeoAgentClient.swift; sourceTree = SOURCE_ROOT; };
 		E5GWV0002 /* GatewayViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Settings/GatewayViews.swift; sourceTree = SOURCE_ROOT; };
 		E5GWD0002 /* GatewayRunDriver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/GatewayRunDriver.swift; sourceTree = SOURCE_ROOT; };
 		E5GWH0002 /* GatewayHostStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Agent/Gateway/GatewayHostStore.swift; sourceTree = SOURCE_ROOT; };
@@ -1907,7 +1907,7 @@
 				E5SCH011 /* ScheduledTaskStore.swift */,
 				E5SCH012 /* ScheduledTaskRunner.swift */,
 				E5AUT0002 /* AutomationEngine.swift */,
-				E5GWC0002 /* HermesGatewayClient.swift */,
+				E5GWC0002 /* LeoAgentClient.swift */,
 				E5GWV0002 /* GatewayViews.swift */,
 				E5GWD0002 /* GatewayRunDriver.swift */,
 				E5GWH0002 /* GatewayHostStore.swift */,
@@ -2882,7 +2882,7 @@
 				E5NMCP001 /* NativeMCPClient.swift in Sources */,
 				E5SCH002 /* ScheduledTaskRunner.swift in Sources */,
 				E5AUT0001 /* AutomationEngine.swift in Sources */,
-				E5GWC0001 /* HermesGatewayClient.swift in Sources */,
+				E5GWC0001 /* LeoAgentClient.swift in Sources */,
 				E5GWV0001 /* GatewayViews.swift in Sources */,
 				E5GWD0001 /* GatewayRunDriver.swift in Sources */,
 				E5GWH0001 /* GatewayHostStore.swift in Sources */,

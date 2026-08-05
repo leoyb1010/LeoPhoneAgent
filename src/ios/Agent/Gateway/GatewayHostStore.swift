@@ -44,7 +44,7 @@ final class GatewayHostStore: ObservableObject {
     /// Built clients live here, not in a view body: `client(for:)` does a
     /// synchronous Keychain read and spins up a URLSession, and SwiftUI would
     /// re-run both on every redraw of the host list.
-    private var clients: [String: HermesGatewayClient] = [:]
+    private var clients: [String: LeoAgentClient] = [:]
 
     init() {
         if let data = UserDefaults.standard.data(forKey: Self.storageKey),
@@ -91,13 +91,13 @@ final class GatewayHostStore: ObservableObject {
     }
 
     /// Build a client for a host, or nil when its key is missing.
-    func client(for host: GatewayHost) -> HermesGatewayClient? {
+    func client(for host: GatewayHost) -> LeoAgentClient? {
         if let cached = clients[host.id] { return cached }
         // Second line of defence behind the editor's validation: hand-edited
         // UserDefaults or an older record must not get a cleartext client.
         guard let url = host.url, url.scheme?.lowercased() == "https",
               let key = Self.accessKey(hostId: host.id), !key.isEmpty else { return nil }
-        let built = HermesGatewayClient(baseURL: url, apiKey: key)
+        let built = LeoAgentClient(baseURL: url, apiKey: key)
         clients[host.id] = built
         return built
     }
