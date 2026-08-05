@@ -318,8 +318,13 @@ class HarnessSession:
     process: Optional[asyncio.subprocess.Process] = None
     seq: int = 0
     status: str = "starting"
-    pending_approval: Optional[Dict[str, Any]] = None
+    # Keyed by approval id, not a single slot: a CLI can raise a second
+    # approval before the first is answered (parallel tool_use, parallel
+    # exec_approval), and a single slot silently answers the wrong one while
+    # the first waits forever. Same defect class already fixed on the phone.
+    pending_approvals: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     _subscribers: List[asyncio.Queue] = field(default_factory=list)
+    _tasks: List[asyncio.Task] = field(default_factory=list)
     _approval_waiters: Dict[str, asyncio.Future] = field(default_factory=dict)
 
     # -- event fan-out -----------------------------------------------------
@@ -337,15 +342,26 @@ class HarnessSession:
         event["session_id"] = self.session_id
         event["timestamp"] = time.time()
 
+        # 0600 before the first write: the log carries raw CLI stdout/stderr,
+        # which can contain tokens the CLI happened to print.
+        if not self.log_path.exists():
+            self.log_path.touch(mode=0o600)
         with self.log_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(event, ensure_ascii=False) + "\n")
 
         if event.get("event") == EVENT_APPROVAL_REQUEST:
-            self.pending_approval = event
+            # Mint an id when the CLI gave none, so every request is
+            # addressable even for dialects that omit request_id.
+            approval_id = str(event.get("request_id") or f"ap_{uuid.uuid4().hex}")
+            event["approval_id"] = approval_id
+            self.pending_approvals[approval_id] = event
             self.status = "waiting_for_approval"
         elif event.get("event") == EVENT_APPROVAL_RESPONDED:
-            self.pending_approval = None
-            self.status = "running"
+            answered = event.get("approval_id")
+            if answered:
+                self.pending_approvals.pop(answered, None)
+            if not self.pending_approvals:
+                self.status = "running"
 
         for queue in list(self._subscribers):
             try:
@@ -375,14 +391,27 @@ class HarnessSession:
         return events
 
     async def subscribe(self, after_seq: int = 0) -> AsyncIterator[Dict[str, Any]]:
-        """Replay-then-follow: the caller gets a gap-free stream."""
-        for event in self.replay(after_seq):
-            yield event
+        """Replay-then-follow, with no gap at the seam.
+
+        The queue is attached BEFORE the log is read. Doing it the other way
+        round loses anything produced while the replay was being written out:
+        such an event is already in the log (too late for this replay) but not
+        yet in any queue — permanently invisible to this connection, which is
+        exactly the guarantee this class exists to provide. Live events that
+        the replay also covered are dropped by seq.
+        """
         queue: asyncio.Queue = asyncio.Queue(maxsize=512)
         self._subscribers.append(queue)
+        highest = after_seq
         try:
+            for event in self.replay(after_seq):
+                highest = max(highest, event.get("seq", 0))
+                yield event
             while True:
                 event = await queue.get()
+                if event.get("seq", 0) <= highest:
+                    continue  # already delivered by the replay above
+                highest = event.get("seq", highest)
                 yield event
                 if event.get("event") in (EVENT_RUN_COMPLETED, EVENT_RUN_FAILED, EVENT_RUN_CANCELLED):
                     if self.status in ("completed", "failed", "cancelled"):
@@ -406,8 +435,12 @@ class HarnessSession:
             env=env,
         )
         self.status = "running"
-        asyncio.create_task(self._pump_stdout())
-        asyncio.create_task(self._pump_stderr())
+        # Hold strong references: an un-referenced Task can be garbage
+        # collected mid-flight, which would stop the reader silently.
+        self._tasks = [
+            asyncio.create_task(self._pump_stdout()),
+            asyncio.create_task(self._pump_stderr()),
+        ]
 
     async def _pump_stdout(self) -> None:
         assert self.process and self.process.stdout
@@ -433,7 +466,16 @@ class HarnessSession:
                 # warning; surface it rather than hiding it.
                 self._emit({"event": "harness.stdout", "text": line})
                 continue
-            for event in translate(obj):
+            try:
+                translated = translate(obj)
+            except Exception as exc:
+                # A malformed frame must never kill the reader: if this loop
+                # dies, nobody drains the child's stdout, its pipe fills at
+                # ~64KB and the CLI blocks forever on write() — the session
+                # hangs with status still "running" and no further events.
+                translated = [{"event": "harness.translate_error",
+                               "text": f"{type(exc).__name__}: {exc}", "raw": line[:500]}]
+            for event in translated:
                 self._emit(event)
 
         code = await self.process.wait() if self.process else -1
@@ -476,9 +518,15 @@ class HarnessSession:
         self.process.stdin.write((json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8"))
         await self.process.stdin.drain()
 
-    async def respond_to_approval(self, choice: str) -> None:
-        """Answer the pending approval in the CLI's own dialect."""
-        pending = self.pending_approval
+    async def respond_to_approval(self, choice: str, approval_id: Optional[str] = None) -> None:
+        """Answer one specific pending approval in the CLI's own dialect."""
+        if approval_id:
+            pending = self.pending_approvals.get(approval_id)
+        elif len(self.pending_approvals) == 1:
+            # Unambiguous: exactly one outstanding request.
+            approval_id, pending = next(iter(self.pending_approvals.items()))
+        else:
+            pending = None
         if not pending or not self.process or not self.process.stdin:
             return
         request_id = pending.get("request_id")
@@ -503,7 +551,7 @@ class HarnessSession:
 
         self.process.stdin.write((json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8"))
         await self.process.stdin.drain()
-        self._emit({"event": EVENT_APPROVAL_RESPONDED, "choice": choice})
+        self._emit({"event": EVENT_APPROVAL_RESPONDED, "choice": choice, "approval_id": approval_id})
 
     async def stop(self) -> None:
         if not self.process:
@@ -513,6 +561,16 @@ class HarnessSession:
             self.process.terminate()
         except ProcessLookupError:
             pass
+        else:
+            # A CLI with cleanup logic may ignore SIGTERM; without this the
+            # status says "cancelled" while the process runs on forever.
+            try:
+                await asyncio.wait_for(self.process.wait(), timeout=5)
+            except asyncio.TimeoutError:
+                try:
+                    self.process.kill()
+                except ProcessLookupError:
+                    pass
         self._emit({"event": EVENT_RUN_CANCELLED})
 
 
@@ -522,7 +580,11 @@ class HarnessManager:
     def __init__(self, home: Optional[Path] = None):
         self.home = home or Path.home() / ".leoagent"
         self.sessions_dir = self.home / "harness-sessions"
-        self.sessions_dir.mkdir(parents=True, exist_ok=True)
+        self.sessions_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        try:
+            self.sessions_dir.chmod(0o700)   # tighten a pre-existing directory
+        except OSError:
+            pass
         self.sessions: Dict[str, HarnessSession] = {}
 
     async def create(self, harness: str, cwd: str, prompt: Optional[str] = None) -> HarnessSession:
@@ -560,7 +622,12 @@ class HarnessManager:
                 "cwd": s.cwd,
                 "status": s.status,
                 "seq": s.seq,
-                "waiting_for_approval": s.pending_approval is not None,
+                "waiting_for_approval": bool(s.pending_approvals),
+                "pending_approvals": [
+                    {"approval_id": k, "command": v.get("command", ""),
+                     "choices": v.get("choices", [])}
+                    for k, v in s.pending_approvals.items()
+                ],
             }
             for s in self.sessions.values()
         ]

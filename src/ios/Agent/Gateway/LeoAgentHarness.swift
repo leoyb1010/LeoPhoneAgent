@@ -167,7 +167,8 @@ final class HarnessSessionDriver: ObservableObject {
     private var sessionId: String?
     private var lastSeq = 0
     private var streamTask: Task<Void, Never>?
-    private var answered = false
+    /// Kept so a session abandoned before it existed can be re-created.
+    private var firstPrompt: String?
 
     init(client: LeoAgentClient, harness: HarnessKind, cwd: String) {
         self.client = client
@@ -177,6 +178,7 @@ final class HarnessSessionDriver: ObservableObject {
 
     func start(prompt: String) {
         guard sessionId == nil, !isRunning else { return }
+        firstPrompt = prompt
         isRunning = true
         status = "starting"
         streamTask = Task { [weak self] in
@@ -187,7 +189,10 @@ final class HarnessSessionDriver: ObservableObject {
                 await MainActor.run { self.sessionId = id; self.status = "running" }
                 await self.follow(sessionId: id)
             } catch {
-                await MainActor.run { self.fail(error.localizedDescription) }
+                await MainActor.run {
+                    self.fail(error.localizedDescription)
+                    self.status = "pending"   // recoverable: nothing was created
+                }
             }
         }
     }
@@ -224,6 +229,9 @@ final class HarnessSessionDriver: ObservableObject {
                     self.pendingApproval = approval
                     self.status = "waiting_for_approval"
                     self.lastError = error.localizedDescription
+                    // Re-arm the wrist too: restoring only the phone card would
+                    // leave the watch button silently dead on a retry.
+                    self.armWatch(for: approval)
                 }
             }
         }
@@ -232,19 +240,31 @@ final class HarnessSessionDriver: ObservableObject {
     func detach() {
         streamTask?.cancel()
         streamTask = nil
-        if isRunning { isRunning = false; status = "detached" }
+        guard isRunning else { return }
+        isRunning = false
+        // Leaving before the session id came back would otherwise strand this
+        // driver at detached/nil forever, with no Start button on this screen
+        // to recover from. "pending" lets resume re-issue the create instead.
+        status = (sessionId == nil) ? "pending" : "detached"
     }
 
     func resumeIfNeeded() {
-        guard !isRunning, let sessionId, status == "detached" else { return }
-        isRunning = true
-        streamTask = Task { [weak self] in await self?.follow(sessionId: sessionId) }
+        guard !isRunning else { return }
+        if let sessionId, status == "detached" {
+            isRunning = true
+            status = "running"
+            streamTask = Task { [weak self] in await self?.follow(sessionId: sessionId) }
+        } else if sessionId == nil, status == "pending", let prompt = firstPrompt {
+            status = "idle"
+            start(prompt: prompt)
+        }
     }
 
     // MARK: Stream
 
     private func follow(sessionId: String) async {
         var attempt = 0
+        var seenAtAttemptStart = lastSeq
         while !Task.isCancelled {
             var ended = false
             do {
@@ -261,6 +281,11 @@ final class HarnessSessionDriver: ObservableObject {
             }
             if ended || Task.isCancelled { return }
 
+            // Reset once a reconnect actually delivered something: the budget
+            // is for CONSECUTIVE failures, not for a long healthy session that
+            // happened to blip seven times over an hour.
+            if lastSeq > seenAtAttemptStart { attempt = 0 }
+            seenAtAttemptStart = lastSeq
             attempt += 1
             if attempt > 6 {
                 await MainActor.run {
@@ -305,14 +330,7 @@ final class HarnessSessionDriver: ObservableObject {
         case .approvalRequest(let approval):
             pendingApproval = approval
             status = "waiting_for_approval"
-            WatchBridge.shared.registerApprovalHandler(approvalId: approval.approvalId) { [weak self] choice in
-                guard let self, let pending = self.pendingApproval,
-                      pending.approvalId == approval.approvalId else { return }
-                self.respond(to: pending, choice: choice)
-            }
-            WatchBridge.shared.sendApprovalRequest(
-                approvalId: approval.approvalId,
-                command: approval.command, reason: approval.reason, choices: approval.choices)
+            armWatch(for: approval)
         case .approvalResponded:
             pendingApproval = nil
             status = "running"
@@ -336,6 +354,18 @@ final class HarnessSessionDriver: ObservableObject {
             let detail = payload["raw"] ?? payload["text"] ?? ""
             note("\(name) \(String(describing: detail).prefix(160))")
         }
+    }
+
+    /// Mirror an approval to the wrist and accept an answer from there.
+    private func armWatch(for approval: GatewayApprovalRequest) {
+        WatchBridge.shared.registerApprovalHandler(approvalId: approval.approvalId) { [weak self] choice in
+            guard let self, let pending = self.pendingApproval,
+                  pending.approvalId == approval.approvalId else { return }
+            self.respond(to: pending, choice: choice)
+        }
+        WatchBridge.shared.sendApprovalRequest(
+            approvalId: approval.approvalId,
+            command: approval.command, reason: approval.reason, choices: approval.choices)
     }
 
     private func note(_ text: String) {

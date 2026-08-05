@@ -76,7 +76,7 @@ private struct MenuContent: View {
             Divider()
 
             Button("打开控制台") { openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) }
-            Button(model.isUp ? "重启守护进程" : "启动守护进程") { model.restartDaemon() }
+            Button(model.isUp ? "重启守护进程" : "启动守护进程") { Task { await model.restartDaemon() } }
             Button("刷新") { Task { await model.refresh() } }
             Divider()
             Button("退出 LeoAgent") { NSApp.terminate(nil) }

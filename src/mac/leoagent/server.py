@@ -54,8 +54,13 @@ class LeoAgentServer:
         header = request.headers.get("Authorization", "")
         if not header.startswith("Bearer "):
             return False
-        # Constant time: a timing oracle on a bearer token is cheap to avoid.
-        return hmac.compare_digest(header[7:].strip(), self.key)
+        try:
+            # Constant time: a timing oracle on a bearer token is cheap to avoid.
+            # compare_digest raises on non-ASCII, which must read as "denied"
+            # rather than escaping as a 500.
+            return hmac.compare_digest(header[7:].strip(), self.key)
+        except (TypeError, ValueError):
+            return False
 
     # -- handlers ----------------------------------------------------------
 
@@ -161,17 +166,24 @@ class LeoAgentServer:
         except Exception:
             return web.json_response({"error": {"message": "Invalid JSON"}}, status=400)
         choice = str(body.get("choice") or "").lower()
-        pending = session.pending_approval
+        approval_id = body.get("approval_id")
+        if approval_id:
+            pending = session.pending_approvals.get(str(approval_id))
+        elif len(session.pending_approvals) == 1:
+            approval_id, pending = next(iter(session.pending_approvals.items()))
+        else:
+            pending = None
         if pending is None:
-            return web.json_response({"error": {"message": "No pending approval"}}, status=409)
+            return web.json_response(
+                {"error": {"message": "No such pending approval"}}, status=409)
         allowed = pending.get("choices") or ["once", "deny"]
         if choice not in allowed:
             return web.json_response(
                 {"error": {"message": f"Invalid choice; expected one of: {', '.join(allowed)}"}},
                 status=400,
             )
-        await session.respond_to_approval(choice)
-        return web.json_response({"ok": True, "choice": choice})
+        await session.respond_to_approval(choice, approval_id=str(approval_id) if approval_id else None)
+        return web.json_response({"ok": True, "choice": choice, "approval_id": approval_id})
 
     async def stop(self, request: web.Request) -> web.Response:
         if not self._authorized(request):

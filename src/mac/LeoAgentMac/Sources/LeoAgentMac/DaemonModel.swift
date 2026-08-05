@@ -55,6 +55,12 @@ final class DaemonModel: ObservableObject {
     func startPolling() async {
         guard !polling else { return }
         polling = true
+        // defer, not a trailing assignment: this loop exits by cancellation
+        // (closing the menu popover or the window cancels its .task), and
+        // without resetting the flag the very first close would wedge the
+        // guard above forever — every panel would then show state frozen at
+        // the last refresh, with no error and no way back short of relaunching.
+        defer { polling = false }
         while !Task.isCancelled {
             await refresh()
             try? await Task.sleep(nanoseconds: 4_000_000_000)
@@ -122,7 +128,10 @@ final class DaemonModel: ObservableObject {
 
     /// Bounce the launchd job. `kickstart -k` restarts a running job and starts
     /// a stopped one, so one command covers both buttons.
-    func restartDaemon() {
+    /// async so the launchctl round-trip never blocks the main thread: this
+    /// type is @MainActor, and a launchd bounce that hangs would freeze the
+    /// menu bar itself.
+    func restartDaemon() async {
         let uid = getuid()
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/bin/launchctl")
@@ -131,7 +140,7 @@ final class DaemonModel: ObservableObject {
         task.standardError = pipe
         do {
             try task.run()
-            task.waitUntilExit()
+            await Task.detached { task.waitUntilExit() }.value
             if task.terminationStatus != 0 {
                 let err = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
                 lastError = "launchctl 失败 (\(task.terminationStatus)) \(err.prefix(120))"
@@ -141,6 +150,7 @@ final class DaemonModel: ObservableObject {
         } catch {
             lastError = error.localizedDescription
         }
-        Task { try? await Task.sleep(nanoseconds: 2_000_000_000); await refresh() }
+        try? await Task.sleep(nanoseconds: 2_000_000_000)
+        await refresh()
     }
 }
