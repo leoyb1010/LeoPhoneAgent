@@ -202,6 +202,8 @@
 	<string>LeoPhoneAgent uses calendar access so the AI agent can query your schedule, check availability, and create events on your behalf.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>LeoPhoneAgent needs camera access to take photos for AI conversations.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>LeoPhoneAgent uses contacts access so the AI agent can look up, create, or update contacts you explicitly ask it to manage.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>LeoPhoneAgent uses Face ID to protect locked chat sessions so only you can view their contents.</string>
 	<key>NSHealthShareUsageDescription</key>
@@ -216,6 +218,8 @@
 	<string>LeoPhoneAgent uses background location to keep agent tasks running when the app is in the background. Location data is only used to record session connection history.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>LeoPhoneAgent uses your location to record where agent sessions are started for your session history.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>LeoPhoneAgent uses motion data so the AI agent can report your live step count and activity when you ask.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>LeoPhoneAgent needs microphone access for voice-to-text input in chat.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

@@ -106,18 +106,73 @@ final class SpeechRecognitionManager: ObservableObject {
     private let audioEngine = AVAudioEngine()
     private let logger = AppLogger(category: "Speech")
 
+    /// Set true the first time the user explicitly picks a language in the
+    /// picker. Auto-resolved defaults never set it, so migrations can tell a
+    /// deliberate zh-TW choice apart from a polluted auto-pick.
+    private static let userChoseLocaleKey = "SpeechRecognitionLocaleUserChosen"
+    private static let localeMigrationKey = "SpeechRecognitionLocaleMigration190"
+
+    /// [T-speech-default-locale-deterministic] `supportedLocales()` is a Set —
+    /// the old `first { $0.language == system language }` picked among
+    /// zh-CN / zh-HK / zh-TW in hash order on Simplified-Chinese phones.
+    /// User-visible: dictation randomly came back as Cantonese and/or
+    /// Traditional characters. Resolve deterministically instead:
+    /// exact language-REGION match → script-appropriate Mandarin for zh
+    /// (Hans → zh-CN, Hant → zh-TW) → alphabetically-first same-language
+    /// locale (stable across launches) → en-US.
+    private static func deterministicSystemDefault(from supported: Set<Locale>) -> Locale {
+        let current = Locale.current
+        let lang = current.language.languageCode?.identifier ?? "en"
+        if let region = current.region?.identifier,
+           let exact = supported.first(where: { $0.identifier == "\(lang)-\(region)" }) {
+            return exact
+        }
+        if lang == "zh" {
+            let mandarin = (current.language.script?.identifier == "Hant") ? "zh-TW" : "zh-CN"
+            if let match = supported.first(where: { $0.identifier == mandarin }) {
+                return match
+            }
+        }
+        if let candidate = supported
+            .filter({ $0.language.languageCode?.identifier == lang })
+            .sorted(by: { $0.identifier < $1.identifier })
+            .first {
+            return candidate
+        }
+        return Locale(identifier: "en-US")
+    }
+
     private init() {
         let allSupported = SFSpeechRecognizer.supportedLocales()
+        let defaults = UserDefaults.standard
+
+        // [T-speech-locale-migration-190] One-time repair for builds ≤57:
+        // the nondeterministic pick above could get PERSISTED (any assignment
+        // to `locale` writes savedLocaleKey), freezing Cantonese/Traditional
+        // as the "chosen" language without the user ever touching the picker.
+        // If the user never explicitly chose a language and a non-Mandarin-
+        // Simplified Chinese variant is saved on a zh-Hans system, drop it so
+        // the deterministic resolver below takes over.
+        if !defaults.bool(forKey: Self.localeMigrationKey) {
+            defaults.set(true, forKey: Self.localeMigrationKey)
+            if !defaults.bool(forKey: Self.userChoseLocaleKey),
+               let savedId = defaults.string(forKey: Self.savedLocaleKey),
+               savedId != "zh-CN",
+               savedId.hasPrefix("zh") || savedId.hasPrefix("yue") || savedId.hasPrefix("wuu"),
+               Locale.current.language.languageCode?.identifier == "zh",
+               Locale.current.language.script?.identifier != "Hant" {
+                defaults.removeObject(forKey: Self.savedLocaleKey)
+                AppLogger(category: "Speech").info("[LocaleMigration] dropped auto-picked '\(savedId)'; re-resolving deterministically")
+            }
+        }
 
         // Restore previously selected locale, or fall back to system language
         let resolvedLocale: Locale
-        if let savedId = UserDefaults.standard.string(forKey: Self.savedLocaleKey),
+        if let savedId = defaults.string(forKey: Self.savedLocaleKey),
            allSupported.contains(where: { $0.identifier == savedId }) {
             resolvedLocale = Locale(identifier: savedId)
         } else {
-            let systemLangCode = Locale.current.language.languageCode?.identifier ?? "en"
-            resolvedLocale = allSupported.first { $0.language.languageCode?.identifier == systemLangCode }
-                ?? Locale(identifier: "en-US")
+            resolvedLocale = Self.deterministicSystemDefault(from: allSupported)
         }
 
         self.locale = resolvedLocale
@@ -151,6 +206,8 @@ final class SpeechRecognitionManager: ObservableObject {
         let wasRecording = state == .recording
         if wasRecording { stopRecording() }
         locale = newLocale
+        // Explicit picker choice — migrations must never override it.
+        UserDefaults.standard.set(true, forKey: Self.userChoseLocaleKey)
         logger.info("Language set to \(self.locale.identifier)")
         // Defer restart until the sheet is fully dismissed,
         // otherwise AVAudioSession conflicts with the sheet transition.

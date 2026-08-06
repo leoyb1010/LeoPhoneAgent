@@ -157,6 +157,11 @@ struct OffloadCommandInfo {
         case "apple-weather": return "cloud.sun"
         case "apple-nlp": return "text.magnifyingglass"
         case "apple-vision": return "viewfinder"
+        case "apple-contacts": return "person.crop.circle"
+        case "apple-files": return "folder"
+        case "apple-camera": return "camera"
+        case "apple-motion": return "figure.walk"
+        case "apple-shortcuts": return "square.on.square"
         default: return "puzzlepiece.extension"
         }
     }
@@ -183,6 +188,11 @@ struct OffloadCommandInfo {
         case "apple-weather": return [String(localized: "Read current conditions and forecasts")]
         case "apple-nlp": return [String(localized: "Detect language"), String(localized: "Tokenize and analyze text")]
         case "apple-vision": return [String(localized: "OCR images"), String(localized: "Read barcodes"), String(localized: "Classify visual content")]
+        case "apple-contacts": return [String(localized: "Search contacts"), String(localized: "Read contact details"), String(localized: "Create or update only with confirmation")]
+        case "apple-files": return [String(localized: "List granted folders"), String(localized: "Ask you to pick a folder or file"), String(localized: "Re-authorize stale grants")]
+        case "apple-camera": return [String(localized: "Open the camera for you to shoot"), String(localized: "Scan barcodes and QR codes"), String(localized: "Scan multi-page documents")]
+        case "apple-motion": return [String(localized: "Read live step counts"), String(localized: "Summarize walking/driving activity")]
+        case "apple-shortcuts": return [String(localized: "Run a shortcut by name"), String(localized: "Keep a registry of your shortcuts")]
         default: return []
         }
     }
@@ -209,6 +219,11 @@ struct OffloadCommandInfo {
         case "apple-weather": return String(localized: "Will it rain here this evening?")
         case "apple-nlp": return String(localized: "Detect the language and key names in this text.")
         case "apple-vision": return String(localized: "Extract all text and QR codes from this image.")
+        case "apple-contacts": return String(localized: "Find Zhang Wei's phone number in my contacts.")
+        case "apple-files": return String(localized: "Ask me for a folder and organize the documents inside.")
+        case "apple-camera": return String(localized: "Scan this receipt and extract the total.")
+        case "apple-motion": return String(localized: "How many steps have I taken today?")
+        case "apple-shortcuts": return String(localized: "Run my Good Morning shortcut.")
         default: return ""
         }
     }
@@ -217,7 +232,8 @@ struct OffloadCommandInfo {
         switch name {
         case "apple-healthkit", "apple-calendar", "apple-reminders", "apple-photos",
              "apple-location", "apple-homekit", "apple-clipboard", "apple-nfc",
-             "apple-bluetooth", "apple-speech", "apple-media", "apple-player":
+             "apple-bluetooth", "apple-speech", "apple-media", "apple-player",
+             "apple-contacts", "apple-files", "apple-camera", "apple-motion":
             return String(localized: "Read on device. Results enter the current Agent conversation and are sent to its selected AI provider only when needed to answer the request.")
         default:
             return String(localized: "Processed on device. The selected AI provider receives only the tool result needed for the current task.")
@@ -249,6 +265,11 @@ final class OffloadPermissionManager: ObservableObject {
         .init(name: "apple-clipboard", displayLabel: "Clipboard", description: "Text and images copied to the clipboard", category: .privacy, showInSettings: true),
         .init(name: "apple-nfc", displayLabel: "NFC", description: "NFC tags, smart cards, and data written to nearby tags", category: .privacy, showInSettings: true),
         .init(name: "apple-bluetooth", displayLabel: "Bluetooth", description: "Nearby Bluetooth devices and data exchanged with them", category: .privacy, showInSettings: true),
+        .init(name: "apple-contacts", displayLabel: "Contacts", description: "Contact names, phone numbers, emails, and groups", category: .privacy, showInSettings: true),
+        .init(name: "apple-files", displayLabel: "Files", description: "Folders and files you grant through the system picker", category: .privacy, showInSettings: true),
+        .init(name: "apple-camera", displayLabel: "Camera", description: "Photos, barcodes, and documents you capture in the camera UI", category: .privacy, showInSettings: true),
+        .init(name: "apple-motion", displayLabel: "Motion", description: "Step counts and motion activity from the last 7 days", category: .privacy, showInSettings: true),
+        .init(name: "apple-shortcuts", displayLabel: "Shortcuts", description: "Runs shortcuts you created in the Shortcuts app", category: .privacy, showInSettings: true),
         // Media — no personal data, always bypass
         .init(name: "apple-speak", displayLabel: "Speak", description: "", category: .media, showInSettings: false),
         .init(name: "apple-speech", displayLabel: "Speech", description: "", category: .media, showInSettings: false),

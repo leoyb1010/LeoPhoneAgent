@@ -16,8 +16,11 @@
 //  show real state on a cold app with the kernel un-booted.
 //
 
+import AVFoundation
+import Contacts
 import CoreBluetooth
 import CoreLocation
+import CoreMotion
 import EventKit
 import Foundation
 import HealthKit
@@ -90,10 +93,15 @@ final class CapabilityAuthorizationProbe: ObservableObject {
         next["apple-bluetooth"] = Self.bluetooth()
         next["apple-healthkit"] = healthKit()
         next["apple-nfc"] = Self.nfc()
+        next["apple-contacts"] = Self.contacts()
+        next["apple-camera"] = Self.camera()
+        next["apple-motion"] = Self.motion()
         // No status API exists for these; say so rather than implying "off".
         next["apple-homekit"] = .unknown(String(localized: "HomeKit exposes no status API; asked on first use"))
         next["apple-clipboard"] = .unknown(String(localized: "iOS asks on demand when reading"))
         next["apple-alarm"] = .unknown(String(localized: "Asked on first use"))
+        next["apple-files"] = .unknown(String(localized: "Per-folder grants via the system picker"))
+        next["apple-shortcuts"] = .unknown(String(localized: "Runs through the Shortcuts app"))
 
         // [T-capability-probe-flicker] Carry the async-filled notification row
         // across. `refresh()` runs on every onAppear (list AND every detail
@@ -123,6 +131,34 @@ final class CapabilityAuthorizationProbe: ObservableObject {
     }
 
     // MARK: - Per-framework probes (status only — never `request`)
+
+    private static func contacts() -> Status {
+        switch CNContactStore.authorizationStatus(for: .contacts) {
+        case .authorized: return .authorized
+        case .limited: return .limited(String(localized: "Selected contacts only"))
+        case .denied, .restricted: return .denied
+        case .notDetermined: return .notDetermined
+        @unknown default: return .unknown(String(localized: "Unknown state"))
+        }
+    }
+
+    private static func camera() -> Status {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized: return .authorized
+        case .denied, .restricted: return .denied
+        case .notDetermined: return .notDetermined
+        @unknown default: return .unknown(String(localized: "Unknown state"))
+        }
+    }
+
+    private static func motion() -> Status {
+        switch CMPedometer.authorizationStatus() {
+        case .authorized: return .authorized
+        case .denied, .restricted: return .denied
+        case .notDetermined: return .notDetermined
+        @unknown default: return .unknown(String(localized: "Unknown state"))
+        }
+    }
 
     private static func eventKit(_ type: EKEntityType) -> Status {
         switch EKEventStore.authorizationStatus(for: type) {

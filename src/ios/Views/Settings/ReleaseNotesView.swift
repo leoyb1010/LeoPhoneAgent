@@ -24,6 +24,19 @@ struct LeoReleaseNote: Identifiable {
 enum LeoReleaseNotes {
     static let all: [LeoReleaseNote] = [
         LeoReleaseNote(
+            version: "1.9.0",
+            date: "2026-08-06",
+            items: [
+                "📇 通讯录 apple-contacts:查找/详情/分组;增改删一律先确认再执行——「给张伟打电话」终于不用自己报号码",
+                "📁 文件 apple-files:Agent 可主动请你授权文件夹(系统选择器),挂进 /var/minis/mounts/ 供 shell 读写;失效授权可重新激活",
+                "📷 相机 apple-camera:拍照/扫码/扫文档三合一,全部由你亲手操作系统相机 UI,产物直通 apple-vision OCR",
+                "⚡️ 快捷指令 apple-shortcuts:按名字运行你的任意快捷指令(x-callback 自动跳回),打开备忘录、系统设置、第三方 App 动作的整个间接能力面",
+                "🚶 运动 apple-motion:实时步数/活动识别(走路/跑步/驾车),比 HealthKit 更即时",
+                "🔐 五个新能力全部进权限中心:可单独设为「每次询问」或「禁用」,授权状态一目了然",
+                "🎙 语音识别修复:根治「随机识别成粤语/输出繁体」——语言解析改为确定性规则(简体中文系统固定普通话 zh-CN),历史误选自动纠正;手动选过语言的不受影响",
+                "🧭 与上游 Minis 1.11(7-31 发布)逐项对齐核实:Siri「问问LeoPhoneAgent」、选中朗读、Kimi 登录、Codex Fast Mode、语音纠错上下文、Opus 5 内置、128K 输出——全部已在本产品中,无缺口",
+            ]),
+        LeoReleaseNote(
             version: "1.8.4",
             date: "2026-08-06",
             items: [

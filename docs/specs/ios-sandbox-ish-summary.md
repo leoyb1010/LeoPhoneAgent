@@ -113,6 +113,7 @@ Each agent session mounts its own persistent directories:
 |---|---|---|
 | `/var/minis/memory/` | `Library/MinisChat/minis/memory/` | Shared memory across sessions |
 | `/var/minis/skills/` | `Library/MinisChat/minis/skills/` | Stored skill definitions |
+| `/var/minis/mounts/<name>/` | User-granted folders (security-scoped bookmarks) | External folders granted via Settings or `apple-files request`; bind-mounted into the iSH kernel |
 
 ### 3.4 DNS Mount
 
@@ -144,52 +145,67 @@ Guest process calls execve("/usr/local/bin/apple-calendar", args)
         → JSON result returned via pipe
 ```
 
-### 4.2 Offload Handlers (22 total)
+### 4.2 Offload Handlers (32 total)
+
+> Command names below are the actual strings passed to `native_offload_add_handler`
+> (verify with `grep native_offload_add_handler src/ios/NativeOffloads/*.m`).
 
 #### Media & Audio
 
 | Handler | Guest Command | iOS Framework | Capabilities |
 |---|---|---|---|
 | FFmpegOffload | `ffmpeg` | FFmpeg.framework | Video/audio encode, transcode, network streams (HTTP/HLS/TLS) |
-| MediaOffload | `apple-media` | AVFoundation | Audio playback, recording |
+| MediaOffload | `apple-media` | MediaPlayer | Media library search, playback control |
 | SpeakOffload | `apple-speak` | AVSpeechSynthesizer | Text-to-speech |
 | SpeechOffload | `apple-speech` | SFSpeechRecognizer | Speech-to-text |
-| PlayerOffload | `apple-player` | AVFoundation | Advanced media playback |
+| PlayerOffload | `apple-player` | AVFoundation (+ Swift bridge) | Native audio/video player sessions (play/pause/seek/status) |
 
 #### Apple Services
 
 | Handler | Guest Command | iOS Framework | Capabilities |
 |---|---|---|---|
 | CalendarOffload | `apple-calendar` | EventKit | Read/write calendar events |
-| ContactsOffload | `apple-contacts` | Contacts | Contact management |
-| MapsOffload | `apple-maps` | MapKit | Maps, directions, location search |
-| PhotosOffload | `apple-photos` | Photos | Photo/video library access |
-| HealthKitOffload | `apple-health` | HealthKit | Health data read/write |
-| HomeKitOffload | `apple-home` | HomeKit | Home automation control |
+| RemindersOffload | `apple-reminders` | EventKit | Reminders query/create/complete/delete |
+| ContactsOffload | `apple-contacts` | Contacts | List/search/get/groups; create/update/delete gated by `--confirm` |
+| MapsOffload | `apple-maps` | MapKit | POI search, directions, ETA |
+| PhotosOffload | `apple-photos` | Photos | Photo/video library query, albums, import/export, delete |
+| HealthKitOffload | `apple-healthkit` | HealthKit | 100+ quantity/category types, read/write, batch |
+| HomeKitOffload | `apple-homekit` | HomeKit | Accessory state, characteristic writes, scenes |
+| WeatherOffload | `apple-weather` | WeatherKit (+ Swift bridge) | Current conditions and forecast |
+| ShortcutsOffload | `apple-shortcuts` | UIApplication (x-callback-url) | Run user Shortcuts by name with text input; local registry |
 
 #### System Access
 
 | Handler | Guest Command | iOS Framework | Capabilities |
 |---|---|---|---|
-| LocationOffload | `apple-location` | CoreLocation | GPS positioning |
+| LocationOffload | `apple-location` | CoreLocation | GPS positioning, forward/reverse geocoding |
 | DeviceOffload | `apple-device` | UIKit/various | Battery, model, system info |
 | ClipboardOffload | `apple-clipboard` | UIPasteboard | Copy/paste (text, images) |
-| WeatherOffload | `apple-weather` | WeatherKit | Local weather data |
 | NotificationOffload | `apple-notification` | UserNotifications | Schedule local notifications |
-| AlarmOffload | `apple-alarm` | EventKit (Reminders) | Alarms and reminders |
+| AlarmOffload | `apple-alarm` | AlarmKit (iOS 26+, Swift bridge) | Alarms and timers |
+| BluetoothOffload | `apple-bluetooth` | CoreBluetooth | BLE scan/connect/read/write/notify |
+| NFCOffload | `apple-nfc` | CoreNFC | NDEF/MIFARE/ISO7816/FeliCa/EMV read & write |
+| FilesOffload | `apple-files` | UIDocumentPicker + security-scoped bookmarks (Swift bridge) | List/grant/reauth/remove external folder mounts; file pick into offloads |
+| CameraOffload | `apple-camera` | AVFoundation/UIKit/VisionKit (Swift bridge) | User-operated photo capture, barcode scan (DataScanner), document scan (VNDocumentCamera) |
+| MotionOffload | `apple-motion` | CoreMotion | Live pedometer (7-day window), motion activity segments |
 
 #### Intelligence
 
 | Handler | Guest Command | iOS Framework | Capabilities |
 |---|---|---|---|
-| VisionOffload | `apple-vision` | Vision | Image recognition, OCR, text detection |
+| VisionOffload | `apple-vision` | Vision | OCR, barcode, classify, faces, similarity, overlap detection |
 | NLPOffload | `apple-nlp` | NaturalLanguage | Language detection, sentiment, tokenization |
 
-#### Utilities
+#### Utilities & App Control
 
 | Handler | Guest Command | iOS Framework | Capabilities |
 |---|---|---|---|
 | OpenOffload | `apple-open` | UIApplication | Open URLs, open in other apps |
+| BrowserUseOffload | `minis-browser-use` | WKWebView (Swift bridge) | In-app browser automation |
+| SessionsOffload | `minis-sessions-cli` | App internals (Swift bridge) | List/search/read/send chat sessions |
+| ModelUseOffload | `minis-model-use` | App internals (Swift bridge) | Invoke user-configured LLM models |
+| ConfigOffload | `minis-config` | App internals (Swift bridge) | Settings read/write with audit + rollback |
+| DebugOffload | `minis-debug` | OSLogStore | App runtime logs (`logs` in all builds; RPC subcommands DEBUG-only) |
 
 ### 4.3 Shared Utilities (`NativeOffloadUtils`)
 
