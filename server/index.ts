@@ -26,6 +26,7 @@ import notificationRoutes from './modules/notifications/notifications.routes.js'
 import userRoutes from './routes/user.js';
 import pluginsRoutes from './routes/plugins.js';
 import leocodeboxRoutes, { startHealthMonitor } from './modules/leocodebox/index.js';
+import leophoneRoutes, { startLeophoneRelayClient } from './modules/leophone/index.js';
 import { startDailyUsageSummary } from './modules/usage/index.js';
 import providerRoutes from './modules/providers/provider.routes.js';
 import agentProfilesRoutes from './modules/agent-profiles/agent-profiles.routes.js';
@@ -100,6 +101,12 @@ app.get('/health', (req, res) => {
         version: RUNNING_VERSION
     });
 });
+
+// LeoPhoneAgent harness 面(自带 Bearer 鉴权,与本机 UI token 隔离)。
+// 挂两处:/leophone 前缀给 tailscale serve/反代直连;根路径别名给中继透传
+// (/harness/*、/v1/*;/health 由上面的公共端点先命中,形状兼容)。
+app.use('/leophone', leophoneRoutes);
+app.use(leophoneRoutes);
 
 // Optional API key validation (if configured)
 app.use('/api', validateApiKey);
@@ -266,6 +273,8 @@ void browserUseService.repairAgentMcpRegistration().catch((error) => {
 // Background Leoapi health monitor — same gate as the /switch routes it serves.
 if (process.env.LEOCODEBOX_LOCAL_ONLY === '1') {
   startHealthMonitor();
+  // 出站注册到 LeoPhoneAgent 自营中继(配置存在时);手机经原路径直达本机。
+  startLeophoneRelayClient();
 }
 
 startDailyUsageSummary();
