@@ -48,8 +48,8 @@ Mac 上的编码 CLI(Claude Code / Codex / Grok),支持断线续传、远程审�
 src/ios/                iOS 主 app(Swift/SwiftUI)+ Share/FileProvider/Widget/Watch
 src/mac/leoagent/       Mac 常驻服务:server.py(harness 会话)、relay.py(中继)、
                         relay_client.py(出站注册)、harness.py(CLI 方言翻译)
-src/mac/LeoAgentDesktop/ Mac 桌面端:Cindy(Apache-2.0)深度改造,全量去牌、
-                        本地模式、舰队监控、设置重组+搜索(见其内 NOTICE)
+                        ※ harness 面已由 leocodebox 1.63+ 接管(协议同构);
+                        leoagent 保留作灰度回退,relay.py 继续服役
 src/mac/LeoAgentMac/    菜单栏状态 app(SwiftUI,轻量)
 src/android/            Android(保留,暂缓)
 deps/  docs/  scripts/  原生依赖构建、文档、工具
@@ -57,7 +57,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 版本/构建:`1.8.3 (56)`;Bundle ID `com.leoyuan.leophoneagent`
+- 版本/构建:`1.8.4 (57)`;Bundle ID `com.leoyuan.leophoneagent`
 - 主对话框直达 Mac:「指挥一台 Mac」选机 + 选 CLI 即开聊;发送在会话建立
   期间自动排队,永不吞点击
 - 会话接管:进入任意 Mac 先列进行中任务,一键接管(全量回放 + 实时跟随)
@@ -77,18 +77,21 @@ cd LeoPhoneAgent
 open src/ios/LeoPhoneAgent.xcodeproj
 ```
 
-Mac 常驻服务(每台受控 Mac):`src/mac/leoagent/` 由 launchd 拉起
-`server.py`;中继机额外跑 `relay.py` 并用 `tailscale funnel --set-path`
-暴露公网路径。桌面端见 `src/mac/LeoAgentDesktop/`(pnpm,
-`install-local.sh` 安装,内有构建注意事项)。
+Mac 端(每台受控 Mac):**leocodebox 1.63+**(独立仓
+[leoyb1010/leocodebox](https://github.com/leoyb1010/leocodebox))内置
+`leophone` 模块,直接说本仓的 harness 协议并出站注册中继——Mac 侧只需装
+leocodebox。旧版 `src/mac/leoagent/` 由 launchd 拉起 `server.py`,保留作
+灰度回退;中继机继续跑 `relay.py` 并用 `tailscale funnel --set-path`
+暴露公网路径。桌面端 LeoAgentDesktop 已停止开发并从仓库移除
+(历史见 git 记录,由 leocodebox 全面替代)。
 
 ## 来源与许可
 
 - 主仓库:GPLv3,fork 自 OpenMinis(基线
   [`9cf3a855`](https://github.com/OpenMinis/OpenMinis/commit/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd),
   保留 `upstream` remote;升级流程见 [UPSTREAM_SYNC.md](docs/UPSTREAM_SYNC.md))。
-- `src/mac/LeoAgentDesktop/`:基于 Cindy 开源桌面(Apache-2.0)改造,
-  基线与逐文件修改清单见该目录 `NOTICE`;未使用其商标。
+- 已移除的 `src/mac/LeoAgentDesktop/`(Cindy/Apache-2.0 改造)见 git 历史,
+  其 NOTICE 随历史保留;未使用其商标。
 - 第三方致谢与许可证文本:[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)。
 
 分发修改后的二进制须按各自许可证提供对应源码并保留声明。LeoPhoneAgent /

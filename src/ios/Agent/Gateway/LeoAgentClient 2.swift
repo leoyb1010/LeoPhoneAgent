@@ -127,13 +127,10 @@ struct GatewayCapabilities: Sendable {
     let platform: String
     let version: String?
     let features: [String: Bool]
-    /// 承载 harness 协议的宿主("leocodebox" = leocodebox 1.63+ 接管;nil =
-    /// 原版 leoagent Python 服务)。协议同构,仅用于展示与诊断。
-    let server: String?
 
     func has(_ feature: String) -> Bool { features[feature] == true }
 
-    static let unknown = GatewayCapabilities(platform: "", version: nil, features: [:], server: nil)
+    static let unknown = GatewayCapabilities(platform: "", version: nil, features: [:])
 }
 
 enum GatewayError: LocalizedError {
@@ -307,8 +304,7 @@ actor LeoAgentClient {
         return GatewayCapabilities(
             platform: obj["platform"] as? String ?? "",
             version: obj["version"] as? String,
-            features: features,
-            server: obj["server"] as? String)
+            features: features)
     }
 
     // MARK: Runs

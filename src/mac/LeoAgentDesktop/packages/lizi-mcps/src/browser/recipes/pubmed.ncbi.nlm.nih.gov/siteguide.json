@@ -1,7 +1,0 @@
-{
-  "site": "pubmed.ncbi.nlm.nih.gov",
-  "auth": "只读无需登录",
-  "entry": { "api": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmode=json&term={query}" },
-  "recipes": ["pubmed-search"],
-  "notes": "NCBI E-utilities esearch 公开接口（PubMed 检索走 eutils 域名）。返回 JSON {esearchresult:{count,idlist:[PMID,...],querytranslation,...}}。拿到 idlist 后可再用 esummary/efetch 取详情。无 key 时有速率限制。"
-}

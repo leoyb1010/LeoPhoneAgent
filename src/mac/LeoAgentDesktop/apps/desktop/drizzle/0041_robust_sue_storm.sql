@@ -1,1 +1,0 @@
-ALTER TABLE `schedules` ADD `fast_mode` integer DEFAULT false NOT NULL;

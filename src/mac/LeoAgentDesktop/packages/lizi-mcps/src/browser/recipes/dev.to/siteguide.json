@@ -1,7 +1,0 @@
-{
-  "site": "dev.to",
-  "auth": "只读无需登录",
-  "entry": { "api": "https://dev.to/api/articles?tag={tag}&per_page=20" },
-  "recipes": ["devto-articles"],
-  "notes": "公开 Articles 接口。返回 JSON 数组 [{title,url,description,published_at,tag_list,user:{name,username},positive_reactions_count,comments_count,...}]。per_page 控制条数。"
-}

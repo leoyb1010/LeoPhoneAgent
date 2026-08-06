@@ -24,14 +24,6 @@ struct LeoReleaseNote: Identifiable {
 enum LeoReleaseNotes {
     static let all: [LeoReleaseNote] = [
         LeoReleaseNote(
-            version: "1.8.4",
-            date: "2026-08-06",
-            items: [
-                "🖥 Mac 端合并进 leocodebox:编码会话由 leocodebox 1.63+ 直接承载,协议、地址、密钥全部不变,手机无感切换;「测试连接」会显示这台 Mac 由谁承载",
-                "🛰 手机会话自动享受 leocodebox 的 Leoapi 节点切换与故障转移(claude/codex)",
-                "🗄 桌面端 LeoAgentDesktop 停止开发,已从仓库移除;leoagent 服务保留为灰度回退",
-            ]),
-        LeoReleaseNote(
             version: "1.8.3",
             date: "2026-08-06",
             items: [

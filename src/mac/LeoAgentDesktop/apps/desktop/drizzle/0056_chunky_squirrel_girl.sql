@@ -1,1 +1,0 @@
-ALTER TABLE `session_goals` ADD `usage_reset_at` integer;

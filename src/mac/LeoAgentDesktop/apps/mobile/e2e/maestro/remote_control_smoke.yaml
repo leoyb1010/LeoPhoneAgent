@@ -1,4 +1,0 @@
-appId: ${APP_ID}
----
-- runFlow: login_mock.yaml
-- runFlow: device_list.yaml

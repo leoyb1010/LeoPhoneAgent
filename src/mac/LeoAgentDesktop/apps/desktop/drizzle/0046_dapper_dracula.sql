@@ -1,1 +1,0 @@
-ALTER TABLE `schedules` ADD `silent_when_idle` integer DEFAULT false NOT NULL;

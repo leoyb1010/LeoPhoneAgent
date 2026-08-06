@@ -69,7 +69,7 @@ struct GatewaySettingsView: View {
             } header: {
                 Text("我的 Mac")
             } footer: {
-                Text("Mac 端由 leoagent 服务或 leocodebox(1.63+,推荐)承载,协议一致、地址与密钥不变。手机休眠时它也在干活;在这里可以看它、审批它、随时叫停。")
+                Text("LeoAgent 的 Mac 端。手机休眠时它也在干活;在这里可以看它、审批它、随时叫停——只要在同一个 tailnet(同 WiFi 下自动直连)。")
             }
 
             if store.hosts.isEmpty {
@@ -414,10 +414,7 @@ private struct GatewayHostEditor: View {
         do {
             let caps = try await client.capabilities()
             if caps.platform == "leoagent" {
-                // 1.63+ 起 harness 由 leocodebox 接管(协议同构);标出承载方
-                // 便于灰度期分辨这台 Mac 切没切。
-                let hostedBy = caps.server == "leocodebox" ? "由 leocodebox 承载," : ""
-                testResult = "连接成功 ✓ \(hostedBy)密钥有效,审批\(caps.has("approval_events") ? "可用" : "不可用")。保存即可开始使用。"
+                testResult = "连接成功 ✓ 密钥有效,审批\(caps.has("approval_events") ? "可用" : "不可用")。保存即可开始使用。"
             } else {
                 testResult = "连接成功 ✓(\(caps.platform))。"
             }

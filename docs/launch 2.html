@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#f5f7fa">
+  <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/leoyb1010/LeoPhoneAgent/main/src/ios/Assets.xcassets/AppIcon.appiconset/Icon-1024.png">
+  <title>LeoPhoneAgent</title>
+  <style>
+    :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    body { min-height: 100vh; margin: 0; display: grid; place-items: center; background: #f5f7fa; color: #111827; }
+    main { width: min(82vw, 360px); text-align: center; }
+    img { width: 88px; height: 88px; border-radius: 20px; box-shadow: 0 12px 36px #0f172a24; }
+    h1 { margin: 20px 0 8px; font-size: 25px; }
+    p { margin: 0 0 24px; line-height: 1.55; color: #667085; }
+    button { width: 100%; min-height: 50px; border: 0; border-radius: 14px; background: #087ea4; color: white; font: inherit; font-weight: 650; }
+    @media (prefers-color-scheme: dark) { body { background: #0b0f14; color: #f8fafc; } p { color: #98a2b3; } }
+  </style>
+</head>
+<body>
+  <main>
+    <img alt="LeoPhoneAgent" src="https://raw.githubusercontent.com/leoyb1010/LeoPhoneAgent/main/src/ios/Assets.xcassets/AppIcon.appiconset/Icon-1024.png">
+    <h1 id="title">LeoPhoneAgent</h1>
+    <p id="hint">点击下方按钮在 LeoPhoneAgent 中打开。</p>
+    <button id="open" type="button">打开 LeoPhoneAgent</button>
+  </main>
+  <script>
+    const query = new URLSearchParams(location.search);
+    const title = decodeURIComponent(location.hash.slice(1) || "LeoPhoneAgent");
+    document.title = title;
+    document.querySelector("#title").textContent = title;
+    const deepLink = new URL("leophoneagent://open");
+    for (const key of ["session", "path"]) {
+      const value = query.get(key);
+      if (value) deepLink.searchParams.set(key, value);
+    }
+    const openApp = () => { location.href = deepLink.toString(); };
+    document.querySelector("#open").addEventListener("click", openApp);
+    if (window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true) {
+      openApp();
+    } else {
+      document.querySelector("#hint").textContent = "在 Safari 中点“分享”→“添加到主屏幕”，之后可直接打开。";
+    }
+  </script>
+</body>
+</html>

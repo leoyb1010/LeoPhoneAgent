@@ -1,1 +1,0 @@
-查询 Slack 连接与授权状态(绑定的 workspace / 用户 / 已授予的 scopes / 是否持有工具权限)。设备可能同时绑定多个 Slack workspace(multi-team):此时返回 multiTeam:true 与 bindings 列表(teamId / teamName / 绑定用户),其它 Slack 工具必须从中选一个 teamId 作为 team_id 传入。调用 Slack 工具报错时先用它判断是「未绑定」「需重新授权(NO_USER_TOKEN / TOKEN_EXPIRED)」「连接不在线」还是「未指明 workspace(AMBIGUOUS_TEAM)」,并按返回的 hint 指引;正常使用前不需要主动调它(单绑定场景直接调工具即可)。

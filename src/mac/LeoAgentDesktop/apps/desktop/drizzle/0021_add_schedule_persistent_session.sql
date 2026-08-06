@@ -1,1 +1,0 @@
-ALTER TABLE `schedules` ADD `persistent_session` integer DEFAULT false NOT NULL;

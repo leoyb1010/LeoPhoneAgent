@@ -1,1 +1,0 @@
-ALTER TABLE `schedule_runs` ADD `read_at` integer;

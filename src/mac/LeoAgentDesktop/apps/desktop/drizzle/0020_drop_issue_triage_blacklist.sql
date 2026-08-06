@@ -1,1 +1,0 @@
-DROP TABLE `issue_triage_blacklist`;
