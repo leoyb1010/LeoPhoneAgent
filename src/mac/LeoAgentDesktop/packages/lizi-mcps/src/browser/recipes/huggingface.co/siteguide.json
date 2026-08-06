@@ -1,0 +1,9 @@
+{
+  "site": "huggingface.co",
+  "auth": "只读无需登录",
+  "entry": {
+    "searchApi": "https://huggingface.co/api/models?search=&limit=20"
+  },
+  "recipes": ["hf-model-search"],
+  "notes": "搜索走公开 Hugging Face API(huggingface.co/api/models?search=&limit=20),返回顶层 JSON 数组 [{id,downloads,likes,pipeline_tag,library_name,createdAt,...}](无外层包裹对象);直接 navigate 到该 URL 再读 body 即拿到 JSON。id 即模型仓库名,页面地址为 https://huggingface.co/{id}。可加 sort=downloads&direction=-1 排序。"
+}

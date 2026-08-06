@@ -20,15 +20,26 @@ struct HarnessRow: Identifiable, Hashable {
     let waitingForApproval: Bool
 }
 
+struct HarnessKind: Identifiable, Hashable {
+    let id: String       // the key the server expects ("claude", "codex", …)
+    let name: String
+}
+
 @MainActor
 final class DaemonModel: ObservableObject {
     @Published private(set) var isUp = false
     @Published private(set) var engineUp = false
     @Published private(set) var version = "—"
-    @Published private(set) var harnessNames: [String] = []
+    @Published private(set) var harnessKinds: [HarnessKind] = []
     @Published private(set) var sessions: [HarnessRow] = []
     @Published private(set) var lastError: String?
     @Published var selected: String?
+
+    // One live store per session the user has opened; transcripts survive
+    // switching away and back.
+    private var stores: [String: SessionStore] = [:]
+
+    var harnessNames: [String] { harnessKinds.map(\.name) }
 
     private let daemonURL = URL(string: "http://127.0.0.1:8646")!
     private let engineURL = URL(string: "http://127.0.0.1:8642")!
@@ -79,7 +90,7 @@ final class DaemonModel: ObservableObject {
         version = daemonInfo?["version"] as? String ?? "—"
 
         guard isUp, let key = accessKey, !key.isEmpty else {
-            harnessNames = []
+            harnessKinds = []
             sessions = []
             if isUp { lastError = "找不到访问密钥 ~/.leoagent/key" }
             return
@@ -109,7 +120,53 @@ final class DaemonModel: ObservableObject {
     private func loadCapabilities(key: String) async {
         guard let obj = await authed("v1/capabilities", key: key) else { return }
         let rows = obj["harnesses"] as? [[String: Any]] ?? []
-        harnessNames = rows.compactMap { $0["name"] as? String }
+        harnessKinds = rows.compactMap { row in
+            guard let kindKey = row["key"] as? String else { return nil }
+            return HarnessKind(id: kindKey, name: row["name"] as? String ?? kindKey)
+        }
+    }
+
+    /// The live store for a session, created on first open.
+    func store(for row: HarnessRow) -> SessionStore? {
+        if let existing = stores[row.id] { return existing }
+        guard let key = accessKey, !key.isEmpty else { return nil }
+        let store = SessionStore(sessionId: row.id, harnessName: row.name,
+                                 cwd: row.cwd, status: row.status,
+                                 baseURL: daemonURL, key: key)
+        stores[row.id] = store
+        return store
+    }
+
+    /// Start a new harness session and select it.
+    func createSession(harness: String, cwd: String, prompt: String) async -> Bool {
+        guard let key = accessKey, !key.isEmpty else {
+            lastError = "找不到访问密钥 ~/.leoagent/key"
+            return false
+        }
+        var req = URLRequest(url: daemonURL.appendingPathComponent("harness/sessions"))
+        req.httpMethod = "POST"
+        req.timeoutInterval = 20
+        req.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var body: [String: Any] = ["harness": harness, "cwd": cwd]
+        if !prompt.isEmpty { body["prompt"] = prompt }
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        guard let (data, response) = try? await URLSession.shared.data(for: req),
+              let http = response as? HTTPURLResponse else {
+            lastError = "无法连接本机服务"
+            return false
+        }
+        let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        guard (200...299).contains(http.statusCode),
+              let sessionId = obj?["session_id"] as? String else {
+            lastError = (obj?["error"] as? [String: Any])?["message"] as? String
+                ?? "创建会话失败 (\(http.statusCode))"
+            return false
+        }
+        lastError = nil
+        await refresh()
+        selected = sessionId
+        return true
     }
 
     private func loadSessions(key: String) async {

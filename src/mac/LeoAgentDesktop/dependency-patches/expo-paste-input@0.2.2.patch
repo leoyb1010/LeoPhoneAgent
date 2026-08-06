@@ -1,0 +1,428 @@
+diff --git a/android/src/main/java/expo/modules/pasteinput/ExpoPasteInputView.kt b/android/src/main/java/expo/modules/pasteinput/ExpoPasteInputView.kt
+index 99b0fa68814e57404d4c7f97c7fb47ced5ca59f1..da433256c0690c7369953dd83d616e82707b739b 100644
+--- a/android/src/main/java/expo/modules/pasteinput/ExpoPasteInputView.kt
++++ b/android/src/main/java/expo/modules/pasteinput/ExpoPasteInputView.kt
+@@ -6,6 +6,8 @@ import android.graphics.Bitmap
+ import android.graphics.BitmapFactory
+ import android.net.Uri
+ import android.os.Build
++import android.os.Handler
++import android.os.Looper
+ import android.os.SystemClock
+ import android.view.View
+ import android.view.ViewGroup
+@@ -19,8 +21,21 @@ import expo.modules.kotlin.viewevent.EventDispatcher
+ import expo.modules.kotlin.views.ExpoView
+ import java.io.File
+ import java.io.FileOutputStream
++import java.util.concurrent.ExecutorService
++import java.util.concurrent.Executors
+ 
+ class ExpoPasteInputView(context: Context, appContext: AppContext) : ExpoView(context, appContext) {
++  companion object {
++    // Shared single-thread executor for decode/compress/disk-write of pasted
++    // media. Paste handlers run on the UI thread; doing BitmapFactory.decode +
++    // Bitmap.compress there blocks the frame for seconds on large screenshots.
++    // Shared (not per-view) so an in-flight paste survives view detach.
++    private val MEDIA_EXECUTOR: ExecutorService = Executors.newSingleThreadExecutor { runnable ->
++      Thread(runnable, "expo-paste-input-media").apply { isDaemon = true }
++    }
++    private val MAIN_HANDLER = Handler(Looper.getMainLooper())
++  }
++
+   private val onPaste by EventDispatcher()
+   private var textInputView: EditText? = null
+   private var isMonitoring: Boolean = false
+@@ -413,9 +428,44 @@ class ExpoPasteInputView(context: Context, appContext: AppContext) : ExpoView(co
+   }
+   
+   internal fun processMultipleImagePaste(imageUris: List<Uri>, gifUris: List<Uri> = emptyList()) {
+-    try {
++    val expectedCount = imageUris.size + gifUris.size
++    if (expectedCount <= 0) {
++      handleUnsupportedPaste()
++      return
++    }
++
++    // Emit the images-loading placeholder immediately on the UI thread, then
++    // move decode + compress + disk writes to the background executor — on
++    // large screenshots that pipeline takes seconds and used to freeze the
++    // frame until the "images" event finally fired.
++    onPaste(mapOf(
++      "type" to "images-loading",
++      "count" to expectedCount
++    ))
++
++    MEDIA_EXECUTOR.execute {
++      val filePaths = collectPastedMediaFiles(imageUris, gifUris)
++      MAIN_HANDLER.post {
++        if (filePaths.isEmpty()) {
++          // Placeholder already shown — resolve it as failed so JS retracts
++          // the pending cards (instead of the generic unsupported event).
++          onPaste(mapOf("type" to "images-load-failed"))
++        } else {
++          // Always use images format with array, even for single image
++          onPaste(mapOf(
++            "type" to "images",
++            "uris" to filePaths
++          ))
++        }
++      }
++    }
++  }
++
++  /** Runs on MEDIA_EXECUTOR: materialize pasted media into cache files. */
++  private fun collectPastedMediaFiles(imageUris: List<Uri>, gifUris: List<Uri>): List<String> {
++    return try {
+       val filePaths = mutableListOf<String>()
+-      
++
+       // Process GIFs first - copy them directly without decoding
+       for (gifUri in gifUris) {
+         val gifPath = copyGifFile(gifUri)
+@@ -423,19 +473,19 @@ class ExpoPasteInputView(context: Context, appContext: AppContext) : ExpoView(co
+           filePaths.add(gifPath)
+         }
+       }
+-      
++
+       // Process regular images - decode and compress
+       for (uri in imageUris) {
+         val inputStream = context.contentResolver.openInputStream(uri) ?: continue
+-        
++
+         // Use try-with-resources equivalent (use block) to ensure stream is closed
+         inputStream.use { stream ->
+           val bitmap = BitmapFactory.decodeStream(stream)
+-          
++
+           if (bitmap == null) {
+             return@use // Skip this image if we can't decode it
+           }
+-          
++
+           // Save to cache directory
+           val cacheDir = context.cacheDir
+           val usePng = bitmap.hasAlpha()
+@@ -443,7 +493,7 @@ class ExpoPasteInputView(context: Context, appContext: AppContext) : ExpoView(co
+           // Use UUID-like approach for better uniqueness: timestamp + counter
+           val fileName = "${System.currentTimeMillis()}_${filePaths.size}.$fileExtension"
+           val file = File(cacheDir, fileName)
+-          
++
+           FileOutputStream(file).use { outputStream ->
+             if (usePng) {
+               bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+@@ -452,24 +502,15 @@ class ExpoPasteInputView(context: Context, appContext: AppContext) : ExpoView(co
+             }
+             outputStream.flush()
+           }
+-          
++
+           val filePath = "file://${file.absolutePath}"
+           filePaths.add(filePath)
+         }
+       }
+-      
+-      if (filePaths.isEmpty()) {
+-        handleUnsupportedPaste()
+-        return
+-      }
+-      
+-      // Always use images format with array, even for single image
+-      onPaste(mapOf(
+-        "type" to "images",
+-        "uris" to filePaths
+-      ))
++
++      filePaths
+     } catch (e: Exception) {
+-      handleUnsupportedPaste()
++      emptyList()
+     }
+   }
+   
+diff --git a/build/TextInputWrapper.types.d.ts b/build/TextInputWrapper.types.d.ts
+index 4c430a252ef3e938622e6c56421ed283c6167913..4d5c561a5d117e7459cb0f83ca1c213c8ff123a2 100644
+--- a/build/TextInputWrapper.types.d.ts
++++ b/build/TextInputWrapper.types.d.ts
+@@ -5,6 +5,11 @@ export type PasteEventPayload = {
+ } | {
+     type: "images";
+     uris: string[];
++} | {
++    type: "images-loading";
++    count: number;
++} | {
++    type: "images-load-failed";
+ } | {
+     type: "unsupported";
+ };
+diff --git a/ios/ExpoPasteInputView.swift b/ios/ExpoPasteInputView.swift
+index 39b2302ed42bdd56db6084e333b9581e08c18689..c08b8ba08ebb9650d7a013ac7257dc58832f8c3d 100644
+--- a/ios/ExpoPasteInputView.swift
++++ b/ios/ExpoPasteInputView.swift
+@@ -252,77 +252,20 @@ class ExpoPasteInputView: ExpoView {
+           }
+           
+           let pasteboard = UIPasteboard.general
+-          
+-          // CRITICAL: Check for GIFs FIRST using explicit type queries
+-          // This gets raw data without triggering UIImage conversion
+-          var hasGIF = false
+-          for gifType in wrapper.gifTypes {
+-            if let gifData = pasteboard.data(forPasteboardType: gifType), !gifData.isEmpty {
+-              hasGIF = true
+-              break
+-            }
+-          }
+-          
+-          // Also check items for GIF data (but be careful not to trigger conversion)
+-          if !hasGIF {
+-            for item in pasteboard.items {
+-              for (key, _) in item {
+-                if wrapper.gifTypes.contains(key) || key.lowercased().contains("gif") {
+-                  hasGIF = true
+-                  break
+-                }
+-              }
+-              if hasGIF { break }
+-            }
+-          }
+-          
+-          // If we have a GIF, process it immediately without touching hasImages
+-          if hasGIF {
+-            DispatchQueue.main.async {
+-              wrapper.processPasteboardContent()
+-            }
+-            return // Don't call original paste for GIFs
+-          }
+-          
+-          // Check for other image data (but not GIFs, already handled)
+-          var hasImageData = false
+-          for item in pasteboard.items {
+-            for (key, value) in item {
+-              // Skip GIF-related keys
+-              if key.lowercased().contains("gif") {
+-                continue
+-              }
+-              
+-              // Check if this looks like image data
+-              let isImageKey = key.contains("image") || key.contains("png") || key.contains("jpeg") ||
+-                key.contains("jpg") || key.contains("tiff") || key.contains("heic") ||
+-                key.contains("heif") || key.contains("webp")
+-              
+-              if isImageKey && (value is Data || value is UIImage) {
+-                hasImageData = true
+-                break
+-              } else if value is UIImage {
+-                hasImageData = true
+-                break
+-              }
+-            }
+-            if hasImageData { break }
+-          }
+-          
+-          // If we found potential image data, process it
+-          if hasImageData {
+-            DispatchQueue.main.async {
+-              wrapper.processPasteboardContent()
+-            }
+-            return // Don't call original paste for images
+-          }
+-          
+-          // Fallback: check hasImages only if no image data found in items
+-          // This is safer as we've already checked for GIFs above
+-          if pasteboard.hasImages || wrapper.hasPasteboardData(forAnyTypeIn: wrapper.webpTypes, pasteboard: pasteboard) {
+-            DispatchQueue.main.async {
+-              wrapper.processPasteboardContent()
+-            }
++
++          // CRITICAL: type-only inspection on the main thread. Never call
++          // pasteboard.data(...) / pasteboard.items / pasteboard.image here —
++          // those materialize the payload synchronously, and with Universal
++          // Clipboard (copy on Mac, paste on iPhone) that means a network
++          // fetch blocking the UI thread for the whole transfer. Type lists
++          // are metadata and resolve without pulling the payload.
++          let perItemTypes: [[String]] = pasteboard.types(forItemSet: nil) ?? []
++          let imageItemCount = perItemTypes.filter { wrapper.typesLookLikeImage($0) }.count
++
++          if imageItemCount > 0 || pasteboard.hasImages {
++            // Emit the images-loading placeholder immediately, then read and
++            // persist the payload on the background media queue.
++            wrapper.beginPasteboardImageProcessing(expectedCount: max(imageItemCount, 1))
+             return // Don't call original paste for images
+           }
+           
+@@ -550,7 +493,12 @@ class ExpoPasteInputView: ExpoView {
+     emitImagesAsync(for: mediaPayloads)
+   }
+ 
++  // Called on the main thread with payloads already in memory (text-view
++  // attachments / adaptive glyphs). Emits the images-loading placeholder
++  // first so the JS side can show pending cards while encoding + disk writes
++  // happen on the background queue.
+   private func emitImagesAsync(for payloads: [MediaPayload]) {
++    emitImagesLoading(count: payloads.count)
+     mediaProcessingQueue.async { [weak self] in
+       guard let self else {
+         return
+@@ -564,7 +512,70 @@ class ExpoPasteInputView: ExpoView {
+         }
+ 
+         if uris.isEmpty {
+-          self.handleUnsupportedPaste()
++          // A placeholder was already emitted — resolve it as failed instead
++          // of the generic unsupported event so JS can retract the cards.
++          self.emitImagesLoadFailed()
++          return
++        }
++
++        self.emitImages(uris: uris)
++      }
++    }
++  }
++
++  /// Type-metadata-only image detection for one pasteboard item's type list.
++  /// Must stay data-free: called on the main thread before payload fetch.
++  fileprivate func typesLookLikeImage(_ types: [String]) -> Bool {
++    for type in types {
++      if gifTypes.contains(type) || webpTypes.contains(type) {
++        return true
++      }
++      let lower = type.lowercased()
++      if lower.contains("gif") || lower.contains("image") || lower.contains("png")
++        || lower.contains("jpeg") || lower.contains("jpg") || lower.contains("tiff")
++        || lower.contains("heic") || lower.contains("heif") || lower.contains("webp") {
++        return true
++      }
++    }
++    return false
++  }
++
++  /// Entry point for pasteboard image pastes: emit images-loading right away
++  /// (main thread), then move every payload-materializing pasteboard access —
++  /// which may block on a Universal Clipboard network transfer — plus the
++  /// re-encode + temp-file writes onto the background media queue.
++  fileprivate func beginPasteboardImageProcessing(expectedCount: Int) {
++    emitImagesLoading(count: expectedCount)
++    // Capture the pasteboard generation at paste time (changeCount is metadata,
++    // safe on the main thread). The serial media queue may hold this block
++    // behind an earlier large/Universal Clipboard paste; if the user copies
++    // something new meanwhile, reading UIPasteboard.general at execution time
++    // would attach the *newer* clipboard contents to this older paste intent.
++    // UIPasteboard keeps no history, so the original data is gone — resolve
++    // the placeholder as failed instead of mis-attaching the wrong image.
++    let capturedChangeCount = UIPasteboard.general.changeCount
++    mediaProcessingQueue.async { [weak self] in
++      guard let self else {
++        return
++      }
++
++      guard UIPasteboard.general.changeCount == capturedChangeCount else {
++        DispatchQueue.main.async { [weak self] in
++          self?.emitImagesLoadFailed()
++        }
++        return
++      }
++
++      let payloads = self.collectPasteboardMediaPayloads()
++      let uris = self.temporaryFileURIs(for: payloads)
++
++      DispatchQueue.main.async { [weak self] in
++        guard let self else {
++          return
++        }
++
++        if uris.isEmpty {
++          self.emitImagesLoadFailed()
+           return
+         }
+ 
+@@ -700,8 +711,11 @@ class ExpoPasteInputView: ExpoView {
+     return true
+   }
+   
+-  private func processPasteboardContent() {
+-    // This method is only called for image pastes
++  // Runs on the background media queue (see beginPasteboardImageProcessing).
++  // Every pasteboard access below may synchronously materialize payload data
++  // (including a Universal Clipboard network fetch) — that is exactly why it
++  // must never run on the main thread.
++  private func collectPasteboardMediaPayloads() -> [MediaPayload] {
+     let pasteboard = UIPasteboard.general
+     
+     let staticImageTypes = [
+@@ -832,15 +846,7 @@ class ExpoPasteInputView: ExpoView {
+       staticImagePayloads.append(.image(image))
+     }
+     
+-    let mediaPayloads = gifDataItems.map { MediaPayload.gif($0) } + staticImagePayloads
+-
+-    if mediaPayloads.isEmpty {
+-      // If we have neither GIFs nor images, treat as unsupported
+-      handleUnsupportedPaste()
+-      return
+-    }
+-
+-    emitImagesAsync(for: mediaPayloads)
++    return gifDataItems.map { MediaPayload.gif($0) } + staticImagePayloads
+   }
+   
+   /// Detects if the given data is a GIF by checking for GIF87a or GIF89a header
+@@ -922,6 +928,23 @@ class ExpoPasteInputView: ExpoView {
+     ])
+   }
+ 
++  /// Placeholder event: image paste detected, payload still being read /
++  /// encoded in the background. JS shows pending cards until "images" (or
++  /// "images-load-failed") resolves it.
++  private func emitImagesLoading(count: Int) {
++    onPaste([
++      "type": "images-loading",
++      "count": count
++    ])
++  }
++
++  /// Resolves a previously emitted images-loading placeholder as failed.
++  private func emitImagesLoadFailed() {
++    onPaste([
++      "type": "images-load-failed"
++    ])
++  }
++
+   private func temporaryFileURIs(for payloads: [MediaPayload]) -> [String] {
+     var uris: [String] = []
+ 
+@@ -1013,15 +1036,6 @@ class ExpoPasteInputView: ExpoView {
+     stopMonitoring()
+     stopObservingTextView()
+   }
+-
+-  private func hasPasteboardData(forAnyTypeIn types: Set<String>, pasteboard: UIPasteboard) -> Bool {
+-    for type in types {
+-      if let data = pasteboard.data(forPasteboardType: type), !data.isEmpty {
+-        return true
+-      }
+-    }
+-    return false
+-  }
+ }
+ 
+ extension UIImage {
+diff --git a/src/TextInputWrapper.types.ts b/src/TextInputWrapper.types.ts
+index a0e8b1b67e0a8db1ff825700f6e4c97037db89ef..39adc5e46bf26f71cbdf9f22658da5e2ec93066e 100644
+--- a/src/TextInputWrapper.types.ts
++++ b/src/TextInputWrapper.types.ts
+@@ -3,6 +3,11 @@ import type { ViewProps } from "react-native";
+ export type PasteEventPayload =
+   | { type: "text"; value: string }
+   | { type: "images"; uris: string[] }
++  // Emitted immediately when an image paste is detected (type metadata only);
++  // payload read/encode/disk-write continues in the background and resolves
++  // with "images" or "images-load-failed".
++  | { type: "images-loading"; count: number }
++  | { type: "images-load-failed" }
+   | { type: "unsupported" };
+ 
+ export interface TextInputWrapperViewProps extends ViewProps {

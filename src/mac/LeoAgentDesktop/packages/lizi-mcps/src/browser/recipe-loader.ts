@@ -1,0 +1,196 @@
+/**
+ * Site Recipe + SiteGuide registry.
+ *
+ * A *recipe* is a declarative, per-site flow (navigate → type → click → wait →
+ * extract) the agent can run with one call instead of blind full-page probing.
+ * A *siteguide* is compact per-site knowledge (entry URLs, key pages, available
+ * recipe ids) the agent can pull on demand.
+ *
+ * Both are bundled as JSON data via Vite `import.meta.glob('?raw')`. Parsing is
+ * split into a PURE `parseRecipes()` / `parseSiteGuides()` (zod-validated, unit
+ * testable with hand-written entries) and a thin `loadRecipes()` / `loadSiteGuides()`
+ * that only does the glob then delegates to the pure parser.
+ *
+ * Recipe steps reuse the existing browser action vocabulary; interactive steps
+ * (`click`/`type`/`select`) carry a stable CSS `selector` that the vendored
+ * `act` resolves directly — no hardcoded snapshot refs, so recipes survive
+ * across sessions.
+ */
+import { z } from 'zod';
+
+import { ExtractSpecSchema } from './extract.js';
+
+/** A single declarative step. `action` maps to a browser primitive (see runner). */
+export const RecipeStepSchema = z.object({
+  action: z.enum([
+    'navigate',
+    'click',
+    'type',
+    'select',
+    'wait',
+    'extract',
+    'evaluate',
+    'requests',
+    'responseBody',
+  ]),
+  url: z.string().optional(),
+  selector: z.string().optional(),
+  /** action=evaluate: a function-expression source run in page context via the
+   *  existing `act:evaluate` primitive (its return value lands at
+   *  `result.data.result`, store it with `as`). Async fns are awaited. The key
+   *  use is a same-origin, cookie-carrying `fetch` on login/anti-bot sites: the
+   *  page is already on the target domain, so `fetch(path, {credentials:'include'})`
+   *  sends the logged-in session cookies — unlike a blind navigate to a JSON URL,
+   *  which anti-bot serves SPA HTML. `{{vars}}` are interpolated into the source. */
+  fn: z.string().optional(),
+  value: z.string().optional(),
+  values: z.array(z.string()).optional(),
+  submit: z.boolean().optional(),
+  loadState: z.string().optional(),
+  textGone: z.string().optional(),
+  timeoutMs: z.number().int().positive().optional(),
+  filter: z.string().optional(),
+  maxChars: z.number().int().positive().optional(),
+  extract: ExtractSpecSchema.optional(),
+  /** Store this step's result `data` under `vars[as]` for later `{{as}}` / output use. */
+  as: z.string().optional(),
+  /** If true, a failed step is logged but does not abort the recipe. */
+  optional: z.boolean().optional(),
+});
+
+export const RecipeSchema = z.object({
+  id: z.string().min(1),
+  /** Host substrings this recipe applies to (advisory, surfaced via siteguide). */
+  match: z.array(z.string()).optional(),
+  description: z.string().optional(),
+  inputs: z.record(z.string(), z.object({ required: z.boolean().optional() })).optional(),
+  steps: z.array(RecipeStepSchema).min(1),
+  /** Output template, e.g. "{{results}}". A bare single-var ref returns that var verbatim. */
+  output: z.string().optional(),
+});
+
+export type Recipe = z.infer<typeof RecipeSchema>;
+export type RecipeStep = z.infer<typeof RecipeStepSchema>;
+
+/** SiteGuide is loose, agent-facing knowledge; we validate only the shape we rely on. */
+export const SiteGuideSchema = z
+  .object({
+    site: z.string(),
+    auth: z.string().optional(),
+    entry: z.record(z.string(), z.string()).optional(),
+    pages: z.array(z.unknown()).optional(),
+    recipes: z.array(z.string()).optional(),
+    notes: z.string().optional(),
+  })
+  .passthrough();
+
+export type SiteGuide = z.infer<typeof SiteGuideSchema>;
+
+/** PURE: validate raw `{ path → json string }` entries into an id→Recipe map. */
+export function parseRecipes(rawEntries: Record<string, string>): Map<string, Recipe> {
+  const map = new Map<string, Recipe>();
+  for (const [path, raw] of Object.entries(rawEntries)) {
+    let json: unknown;
+    try {
+      json = JSON.parse(raw);
+    } catch (err) {
+      throw new Error(`recipe ${path}: invalid JSON — ${err instanceof Error ? err.message : String(err)}`);
+    }
+    const parsed = RecipeSchema.safeParse(json);
+    if (!parsed.success) {
+      throw new Error(`recipe ${path}: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`);
+    }
+    if (map.has(parsed.data.id)) {
+      throw new Error(`duplicate recipe id "${parsed.data.id}" (${path})`);
+    }
+    map.set(parsed.data.id, parsed.data);
+  }
+  return map;
+}
+
+/** PURE: validate raw entries into a site→SiteGuide map. */
+export function parseSiteGuides(rawEntries: Record<string, string>): Map<string, SiteGuide> {
+  const map = new Map<string, SiteGuide>();
+  for (const [path, raw] of Object.entries(rawEntries)) {
+    let json: unknown;
+    try {
+      json = JSON.parse(raw);
+    } catch (err) {
+      throw new Error(`siteguide ${path}: invalid JSON — ${err instanceof Error ? err.message : String(err)}`);
+    }
+    const parsed = SiteGuideSchema.safeParse(json);
+    if (!parsed.success) {
+      throw new Error(`siteguide ${path}: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`);
+    }
+    map.set(parsed.data.site, parsed.data);
+  }
+  return map;
+}
+
+/**
+ * Where a merged entry came from:
+ *  - 'builtin'    — only in the bundled L1 catalog (ships with the app).
+ *  - 'user'       — only in the user's L2 layer (a new site they authored).
+ *  - 'overridden' — exists in both; the user's L2 version shadows L1.
+ * "Restore default" = delete the user's L2 file → the entry falls back to L1.
+ */
+export type Provenance = 'builtin' | 'user' | 'overridden';
+export interface MergedRecipe {
+  recipe: Recipe;
+  provenance: Provenance;
+}
+export interface MergedSiteGuide {
+  guide: SiteGuide;
+  provenance: Provenance;
+}
+
+/**
+ * PURE: merge bundled (L1) + user (L2) recipes by `id`. A user recipe with the
+ * same id as a builtin one REPLACES it wholesale (a recipe is one indivisible
+ * execution unit — never a field-level merge). rule 20: uncustomized sites keep
+ * tracking the shipped L1; customized ones keep the user's version.
+ */
+export function mergeRecipes(
+  builtin: Map<string, Recipe>,
+  user: Map<string, Recipe>,
+): Map<string, MergedRecipe> {
+  const out = new Map<string, MergedRecipe>();
+  for (const [id, recipe] of builtin) out.set(id, { recipe, provenance: 'builtin' });
+  for (const [id, recipe] of user) {
+    out.set(id, { recipe, provenance: out.has(id) ? 'overridden' : 'user' });
+  }
+  return out;
+}
+
+/** PURE: merge bundled (L1) + user (L2) site guides by `site` (same semantics). */
+export function mergeSiteGuides(
+  builtin: Map<string, SiteGuide>,
+  user: Map<string, SiteGuide>,
+): Map<string, MergedSiteGuide> {
+  const out = new Map<string, MergedSiteGuide>();
+  for (const [site, guide] of builtin) out.set(site, { guide, provenance: 'builtin' });
+  for (const [site, guide] of user) {
+    out.set(site, { guide, provenance: out.has(site) ? 'overridden' : 'user' });
+  }
+  return out;
+}
+
+/** Glob recipe JSON bundled at build time (Vite), then parse. */
+export function loadRecipes(): Map<string, Recipe> {
+  const mods = import.meta.glob('./recipes/*/recipe.json', {
+    query: '?raw',
+    import: 'default',
+    eager: true,
+  }) as Record<string, string>;
+  return parseRecipes(mods);
+}
+
+/** Glob siteguide JSON bundled at build time (Vite), then parse. */
+export function loadSiteGuides(): Map<string, SiteGuide> {
+  const mods = import.meta.glob('./recipes/*/siteguide.json', {
+    query: '?raw',
+    import: 'default',
+    eager: true,
+  }) as Record<string, string>;
+  return parseSiteGuides(mods);
+}

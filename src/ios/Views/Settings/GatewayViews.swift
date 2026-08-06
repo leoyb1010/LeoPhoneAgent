@@ -14,22 +14,49 @@ import SwiftUI
 
 // MARK: - Settings
 
+/// 正在编辑的草稿,进程级单例持有。
+///
+/// 这个表单的输入曾两次被吞:第一次是 draft 直接当 sheet item、父 List 重算
+/// 时被顶掉;第二次把草稿交给编辑器 @StateObject 仍不够——宿主视图本身会被
+/// 更上层(键盘出现、状态轮询)整个重建,视图内的一切 @State/@StateObject
+/// 连同弹窗一起蒸发。教训:**正在输入的内容不能属于任何视图**。草稿放这里,
+/// 视图重建一万次,sheet 会自动带着同一份草稿(文字原封不动)重新弹出。
+@MainActor
+final class GatewayEditorCoordinator: ObservableObject {
+    static let shared = GatewayEditorCoordinator()
+    @Published var draft: GatewayHostDraft?
+
+    func beginNew() { draft = GatewayHostDraft() }
+    func beginEdit(_ host: GatewayHost) { draft = GatewayHostDraft(host: host) }
+    func end() { draft = nil }
+}
+
+/// 我的三台 Mac,经自营中继(跑在常开的 cortex 上)从任何网络可达。
+/// 个人版:写死没有任何问题,新机器进舰队时加一行。
+private let FLEET_PRESETS: [(name: String, machine: String)] = [
+    ("MacBook Pro", "LeoyuandeMacBook-Pro-2"),
+    ("Mac mini · cortex", "LeodeMac-mini-2"),
+    ("Mac Studio", "LeoMac-Studio-2"),
+]
+private let RELAY_BASE = "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api/m/"
+
 struct GatewaySettingsView: View {
     @StateObject private var store = GatewayHostStore.shared
-    @State private var editing: GatewayHostDraft?
+    @ObservedObject private var editor = GatewayEditorCoordinator.shared
     @State private var reachable: [String: Bool] = [:]
+    @State private var showQuickSetup = false
 
     var body: some View {
         List {
             Section {
                 if store.hosts.isEmpty {
-                    Text("No Mac connected yet. Add the Mac that runs LeoAgent.")
+                    Text("还没有连接任何 Mac。添加一台跑着 LeoAgent 的 Mac。")
                         .font(.system(size: 14))
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(store.hosts) { host in
                         Button {
-                            editing = GatewayHostDraft(host: host)
+                            editor.beginEdit(host)
                         } label: {
                             GatewayHostRow(host: host, isReachable: reachable[host.id])
                         }
@@ -40,28 +67,66 @@ struct GatewaySettingsView: View {
                     }
                 }
             } header: {
-                Text("Macs")
+                Text("我的 Mac")
             } footer: {
-                Text("LeoAgent is the Mac half of this product. It keeps working while your phone is asleep, and from here you can watch it, approve what it asks, and stop it — from anywhere on your tailnet.")
+                Text("LeoAgent 的 Mac 端。手机休眠时它也在干活;在这里可以看它、审批它、随时叫停——只要在同一个 tailnet(同 WiFi 下自动直连)。")
+            }
+
+            if store.hosts.isEmpty {
+                Section {
+                    Button {
+                        showQuickSetup = true
+                    } label: {
+                        Label("一键添加我的三台 Mac", systemImage: "wand.and.stars")
+                    }
+                } footer: {
+                    Text("MacBook Pro、Mac mini(cortex)、Mac Studio 已内置,只需要粘贴一次密钥。")
+                }
             }
 
             Section {
                 Button {
-                    editing = GatewayHostDraft()
+                    editor.beginNew()
                 } label: {
-                    Label("Add Mac", systemImage: "plus.circle")
+                    Label("手动添加 Mac", systemImage: "plus.circle")
                 }
             }
         }
-        .navigationTitle(Text("Macs"))
+        .navigationTitle(Text("我的 Mac"))
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(item: $editing) { draft in
-            GatewayHostEditor(draft: draft) { saved in
-                store.upsert(saved)
-                editing = nil
+        .sheet(isPresented: $showQuickSetup) {
+            QuickFleetSetupSheet { key in
+                for preset in FLEET_PRESETS {
+                    let host = GatewayHost(
+                        id: preset.machine.lowercased(),
+                        name: preset.name,
+                        baseURL: "",
+                        harnessURL: RELAY_BASE + preset.machine)
+                    GatewayHostStore.saveAccessKey(key, hostId: host.id)
+                    store.upsert(host)
+                }
+                showQuickSetup = false
                 Task { await refresh() }
             } onCancel: {
-                editing = nil
+                showQuickSetup = false
+            }
+            .interactiveDismissDisabled()
+        }
+        .sheet(isPresented: Binding(
+            get: { editor.draft != nil },
+            set: { if !$0 { editor.end() } }
+        )) {
+            if let draft = editor.draft {
+                GatewayHostEditor(draft: draft) { saved in
+                    store.upsert(saved)
+                    editor.end()
+                    Task { await refresh() }
+                } onCancel: {
+                    editor.end()
+                }
+                // 只能通过「保存 / 取消」离开:下滑手势静默丢弃输入
+                // 和"自动消失"在用户眼里是同一种背叛。
+                .interactiveDismissDisabled()
             }
         }
         .task { await refresh() }
@@ -69,9 +134,72 @@ struct GatewaySettingsView: View {
 
     private func refresh() async {
         for host in store.hosts {
+            // 编辑期间不做后台探测:探测回写会触发整页重算。
+            if editor.draft != nil { return }
             let ok = await GatewayHostStore.probe(host)
             reachable[host.id] = ok
             if ok { store.markSeen(id: host.id) }
+        }
+    }
+}
+
+/// 一键添加:三台机器内置,只收一次密钥。
+private struct QuickFleetSetupSheet: View {
+    let onDone: (String) -> Void
+    let onCancel: () -> Void
+    @State private var key = ""
+    @State private var testing = false
+    @State private var result: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    ForEach(FLEET_PRESETS, id: \.machine) { preset in
+                        Label(preset.name, systemImage: "desktopcomputer")
+                    }
+                } header: {
+                    Text("将添加这三台 Mac")
+                } footer: {
+                    Text("它们经你自己的中继(跑在常开的 Mac mini 上)连接,手机蜂窝或任意 WiFi 都能连,不需要 VPN。")
+                }
+                Section {
+                    SecureField("粘贴密钥", text: $key)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } header: {
+                    Text("中继密钥(三台共用一把)")
+                } footer: {
+                    Text("在任意一台 Mac 终端运行:ssh leo@mac-mini-cortex \"cat ~/.leoagent/key\",或直接在 cortex 上 cat ~/.leoagent/key。\n\n⚠️ 如果手机上开着代理(Shadowrocket 等),请把 *.ts.net 设为直连,否则连接会被代理劫持而失败。")
+                }
+                Section {
+                    Button {
+                        testing = true
+                        Task {
+                            let probe = GatewayHost(id: "probe", name: "probe", baseURL: "",
+                                                    harnessURL: RELAY_BASE + FLEET_PRESETS[0].machine)
+                            let ok = await GatewayHostStore.probe(probe)
+                            result = ok ? "中继可达 ✓" :
+                                "连不上中继。若手机开着代理,把 *.ts.net 加直连或暂时关闭代理再试。"
+                            testing = false
+                        }
+                    } label: {
+                        HStack { Text("测试中继连通"); Spacer(); if testing { ProgressView() } }
+                    }
+                    if let result {
+                        Text(result).font(.system(size: 13)).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .navigationTitle(Text("一键添加"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("取消") { onCancel() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("添加三台") { onDone(key) }
+                        .disabled(key.trimmingCharacters(in: .whitespaces).count < 16)
+                }
+            }
         }
     }
 }
@@ -109,33 +237,53 @@ final class GatewayHostDraft: ObservableObject, Identifiable {
     let id: String
     @Published var name: String
     @Published var baseURL: String
+    @Published var harnessURL: String
     @Published var accessKey: String
     let isNew: Bool
+    // Carried through an edit untouched; rebuilding the host from the three
+    // visible fields silently reset these two.
+    private let isEnabled: Bool
+    private let lastSeenAt: Date?
 
     init() {
         id = UUID().uuidString.lowercased()
         name = ""
         baseURL = "https://"
+        harnessURL = ""
         accessKey = ""
         isNew = true
+        isEnabled = true
+        lastSeenAt = nil
     }
 
     init(host: GatewayHost) {
         id = host.id
         name = host.name
         baseURL = host.baseURL
+        harnessURL = host.harnessURL ?? ""
         accessKey = GatewayHostStore.accessKey(hostId: host.id) ?? ""
         isNew = false
+        isEnabled = host.isEnabled
+        lastSeenAt = host.lastSeenAt
     }
 
     func makeHost() -> GatewayHost {
-        GatewayHost(id: id,
-                    name: name.trimmingCharacters(in: .whitespaces),
-                    baseURL: baseURL.trimmingCharacters(in: .whitespaces))
+        let trimmedHarness = harnessURL.trimmingCharacters(in: .whitespaces)
+        var trimmedEngine = baseURL.trimmingCharacters(in: .whitespaces)
+        // 新建草稿的占位前缀没被填过 = 引擎留空。
+        if trimmedEngine == "https://" { trimmedEngine = "" }
+        return GatewayHost(id: id,
+                           name: name.trimmingCharacters(in: .whitespaces),
+                           baseURL: trimmedEngine,
+                           harnessURL: trimmedHarness.isEmpty ? nil : trimmedHarness,
+                           isEnabled: isEnabled,
+                           lastSeenAt: lastSeenAt)
     }
 }
 
 private struct GatewayHostEditor: View {
+    /// @ObservedObject 且对象由 GatewayEditorCoordinator 单例持有:本视图
+    /// 被重建多少次都只是重新绑定同一份草稿,输入中的文字动不了。
     @ObservedObject var draft: GatewayHostDraft
     let onSave: (GatewayHost) -> Void
     let onCancel: () -> Void
@@ -143,43 +291,67 @@ private struct GatewayHostEditor: View {
     @State private var testResult: String?
     @State private var isTesting = false
 
-    /// https only. The access key rides an Authorization header on every
-    /// request, and this app sets NSAllowsArbitraryLoads, so a stray `http://`
-    /// would put that key in cleartext on whatever Wi-Fi the user is on —
-    /// with no platform-level backstop to catch it.
+    /// 只收 https:访问密钥挂在每个请求的 Authorization 头上,而本 app 开了
+    /// NSAllowsArbitraryLoads,一个手滑的 http:// 就等于把密钥明文撒在当前
+    /// WiFi 上,系统层没有兜底。
     private var canSave: Bool {
-        guard !draft.name.trimmingCharacters(in: .whitespaces).isEmpty,
-              let url = URL(string: draft.baseURL.trimmingCharacters(in: .whitespaces)),
-              url.host != nil else { return false }
-        return url.scheme?.lowercased() == "https"
+        guard !draft.name.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
+        // 两个地址至少填一个;填了的必须是合法 https。
+        let engine = draft.baseURL.trimmingCharacters(in: .whitespaces)
+        let harness = draft.harnessURL.trimmingCharacters(in: .whitespaces)
+        let engineEmpty = engine.isEmpty || engine == "https://"
+        if engineEmpty && harness.isEmpty { return false }
+        if !engineEmpty {
+            guard let url = URL(string: engine), url.host != nil,
+                  url.scheme?.lowercased() == "https" else { return false }
+        }
+        if !harness.isEmpty {
+            guard let harnessURL = URL(string: harness), harnessURL.host != nil,
+                  harnessURL.scheme?.lowercased() == "https" else { return false }
+        }
+        return true
     }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Name", text: $draft.name)
+                    TextField("比如 MacBook / cortex", text: $draft.name)
                         .textInputAutocapitalization(.never)
-                    TextField("https://host.tailnet.ts.net:8645", text: $draft.baseURL)
+                } header: {
+                    Text("名称")
+                }
+
+                Section {
+                    TextField("https://…/leoagent-relay/relay/api/m/机器名", text: $draft.harnessURL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .font(.system(size: 14, design: .monospaced))
                 } header: {
-                    Text("Address")
+                    Text("编码会话地址")
                 } footer: {
-                    // The single most likely setup mistake, called out where
-                    // it happens rather than left to fail as a TLS error.
-                    Text("Must be https, and must use the machine's tailnet hostname rather than its IP — the certificate is selected by hostname, and an IP address will fail to connect.")
+                    Text("推荐用「一键添加」自动填好中继地址;手动填时必须 https。控制 Claude Code / Codex / Grok 走这个地址。")
                 }
 
                 Section {
-                    SecureField("Access key", text: $draft.accessKey)
+                    TextField("https://主机名.tail23de22.ts.net:8645(可留空)", text: $draft.baseURL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .font(.system(size: 14, design: .monospaced))
+                } header: {
+                    Text("引擎地址(端口 8645,可选)")
+                } footer: {
+                    Text("这台 Mac 上如果还跑着通用 Agent 引擎,填它的地址;只控编码 CLI 的话留空即可。")
+                }
+
+                Section {
+                    SecureField("粘贴密钥", text: $draft.accessKey)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 } header: {
-                    Text("Access Key")
+                    Text("访问密钥(必填)")
                 } footer: {
-                    Text("Shown by `leoagent key` on the Mac. Stored in this device's Keychain only — it is never synced to iCloud.")
+                    Text("就是那台 Mac 上 ~/.leoagent/key 文件的内容,每台 Mac 各不相同。在那台 Mac 的终端里运行 cat ~/.leoagent/key 复制过来。只存在本机钥匙串,不会同步 iCloud。")
                 }
 
                 Section {
@@ -187,7 +359,7 @@ private struct GatewayHostEditor: View {
                         Task { await test() }
                     } label: {
                         HStack {
-                            Text("Test Connection")
+                            Text("测试连接")
                             Spacer()
                             if isTesting { ProgressView() }
                         }
@@ -198,14 +370,14 @@ private struct GatewayHostEditor: View {
                     }
                 }
             }
-            .navigationTitle(Text(draft.isNew ? "Add Mac" : "Edit Mac"))
+            .navigationTitle(Text(draft.isNew ? "添加 Mac" : "编辑 Mac"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { onCancel() }
+                    Button("取消") { onCancel() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    Button("保存") {
                         let host = draft.makeHost()
                         GatewayHostStore.saveAccessKey(draft.accessKey, hostId: host.id)
                         onSave(host)
@@ -220,22 +392,34 @@ private struct GatewayHostEditor: View {
         isTesting = true
         defer { isTesting = false }
         let host = draft.makeHost()
-        guard await GatewayHostStore.probe(host) else {
-            testResult = String(localized: "Could not reach that Mac. Check the address and that Tailscale is connected.")
+        // 优先测编码会话地址(主用途);没填才测引擎地址。
+        let harnessProbe = host.harnessBase.map {
+            GatewayHost(id: host.id, name: host.name, baseURL: $0.absoluteString)
+        }
+        guard await GatewayHostStore.probe(harnessProbe ?? host) else {
+            testResult = "连不上这台 Mac。检查地址拼写,以及手机上的 Tailscale 是否已打开。"
             return
         }
-        // Reachable — now check whether the key is accepted, which is a
-        // separate failure the user fixes differently.
-        guard let url = host.url, !draft.accessKey.isEmpty else {
-            testResult = String(localized: "Mac is reachable. Add the access key to finish.")
+        guard !draft.accessKey.isEmpty else {
+            testResult = "Mac 可以连通。还差访问密钥:去那台 Mac 终端运行 cat ~/.leoagent/key,把结果粘贴进来。"
             return
         }
-        let client = LeoAgentClient(baseURL: url, apiKey: draft.accessKey)
+        let base = harnessProbe?.url ?? host.url
+        guard let url = base else {
+            testResult = "地址无效。"
+            return
+        }
+        let client = LeoAgentClient(baseURL: url, apiKey: draft.accessKey,
+                                    harnessBaseURL: host.harnessBase)
         do {
             let caps = try await client.capabilities()
-            testResult = String(localized: "Connected to \(caps.platform). Approvals: \(caps.has("approval_events") ? "supported" : "unavailable").")
+            if caps.platform == "leoagent" {
+                testResult = "连接成功 ✓ 密钥有效,审批\(caps.has("approval_events") ? "可用" : "不可用")。保存即可开始使用。"
+            } else {
+                testResult = "连接成功 ✓(\(caps.platform))。"
+            }
         } catch {
-            testResult = error.localizedDescription
+            testResult = "密钥被拒绝或服务异常:\(error.localizedDescription)"
         }
     }
 }
@@ -316,7 +500,7 @@ struct GatewayConsoleView: View {
 
     private var composer: some View {
         HStack(spacing: 10) {
-            TextField("Ask your Mac…", text: $input, axis: .vertical)
+            TextField("让这台 Mac 干点什么…", text: $input, axis: .vertical)
                 .lineLimit(1...5)
                 .focused($inputFocused)
                 .textFieldStyle(.plain)
@@ -469,28 +653,31 @@ struct GatewayEntryView: View {
         List {
             if store.activeHosts.isEmpty {
                 Section {
-                    Text("Connect your Mac in Settings to run tasks on it from here.")
+                    Text("先在「设置 → 我的 Mac」里添加一台 Mac,然后就能在这里驱动它干活。")
                         .font(.system(size: 14))
                         .foregroundStyle(.secondary)
                 }
             }
             ForEach(store.activeHosts) { host in
                 if let client = store.client(for: host) {
-                    NavigationLink {
-                        GatewayConsoleView(host: host, client: client)
-                    } label: {
-                        Label(host.name, systemImage: "desktopcomputer")
-                    }
+                    // 编码会话是主用途,放前面。
                     NavigationLink {
                         HarnessLauncherView(host: host, client: client)
                     } label: {
-                        Label("Coding session on \(host.name)", systemImage: "terminal")
+                        Label("在 \(host.name) 上跑编码任务", systemImage: "terminal")
+                    }
+                    if host.url != nil {
+                        NavigationLink {
+                            GatewayConsoleView(host: host, client: client)
+                        } label: {
+                            Label("\(host.name) 的引擎对话", systemImage: "desktopcomputer")
+                        }
                     }
                 } else {
                     Label {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(host.name)
-                            Text("Access key missing").font(.system(size: 12)).foregroundStyle(.secondary)
+                            Text("缺访问密钥,去「设置 → 我的 Mac」补上").font(.system(size: 12)).foregroundStyle(.secondary)
                         }
                     } icon: {
                         Image(systemName: "desktopcomputer.trianglebadge.exclamationmark")
@@ -498,7 +685,7 @@ struct GatewayEntryView: View {
                 }
             }
         }
-        .navigationTitle(Text("Mac"))
+        .navigationTitle(Text("Mac 控制台"))
         .navigationBarTitleDisplayMode(.inline)
     }
 }
@@ -519,14 +706,56 @@ struct HarnessLauncherView: View {
     @State private var prompt = ""
     @State private var loadError: String?
     @State private var isLoading = true
+    @State private var liveSessions: [HarnessSessionSummary] = []
 
     var body: some View {
         List {
+            // Mac 上进行中的会话:随时点进接管(回放 + 实时跟随)。
+            // 这是"第二具身体"的核心——桌面开的活,手机拿起来就能继续。
+            if !liveSessions.isEmpty {
+                Section {
+                    ForEach(liveSessions) { session in
+                        NavigationLink {
+                            HarnessConsoleView(
+                                driver: HarnessSessionDriver(
+                                    client: client,
+                                    harness: HarnessKind(key: session.harness, name: session.name),
+                                    cwd: session.cwd),
+                                firstPrompt: "",
+                                attachSessionId: session.id)
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: session.waitingForApproval
+                                    ? "hand.raised.fill" : "terminal")
+                                    .foregroundStyle(session.waitingForApproval ? .orange : .secondary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(session.name).font(.system(size: 15))
+                                    Text(session.cwd)
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1).truncationMode(.head)
+                                }
+                                Spacer()
+                                Text(sessionStatusLabel(session.status))
+                                    .font(.system(size: 11))
+                                    .foregroundStyle(session.waitingForApproval ? .orange : .secondary)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("进行中的会话")
+                } footer: {
+                    Text("这台 Mac 上正在跑的任务,点进去即可查看、审批、继续下指令。")
+                }
+            }
+
             Section {
                 if isLoading {
-                    HStack { ProgressView(); Text("Checking what's installed…").foregroundStyle(.secondary) }
+                    HStack { ProgressView(); Text("正在检测装了哪些 CLI…").foregroundStyle(.secondary) }
                 } else if kinds.isEmpty {
-                    Text("No coding CLI found on \(host.name).")
+                    // 引擎也回 /v1/capabilities,只是没有 harnesses 字段——
+                    // 这里为空通常是地址填成了引擎端口,不是真没装 CLI。
+                    Text("在 \(host.name) 上没找到可控的编码 CLI。若那台 Mac 的 LeoAgent 服务在跑,检查「编码会话地址」是否填了 8647 端口。")
                         .font(.system(size: 14)).foregroundStyle(.secondary)
                 } else {
                     ForEach(kinds) { kind in
@@ -549,25 +778,25 @@ struct HarnessLauncherView: View {
                     Text(loadError).font(.system(size: 13)).foregroundStyle(.red)
                 }
             } header: {
-                Text("Coding CLI")
+                Text("选一个编码 CLI")
             } footer: {
-                Text("These run on \(host.name), in the directory you choose. You can steer and approve them from here or from your watch.")
+                Text("它们跑在 \(host.name) 上你指定的目录里。可以在这里或手表上转向、审批、叫停。")
             }
 
             Section {
-                TextField("~/projects/my-app", text: $cwd)
+                TextField("~/项目目录,比如 ~/Documents/demo", text: $cwd)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .font(.system(size: 14, design: .monospaced))
             } header: {
-                Text("Working Directory")
+                Text("工作目录")
             }
 
             Section {
-                TextField("What should it do?", text: $prompt, axis: .vertical)
+                TextField("要它做什么?", text: $prompt, axis: .vertical)
                     .lineLimit(2...6)
             } header: {
-                Text("First Instruction")
+                Text("第一条指令")
             }
 
             Section {
@@ -577,13 +806,13 @@ struct HarnessLauncherView: View {
                             driver: HarnessSessionDriver(client: client, harness: selected, cwd: cwd),
                             firstPrompt: prompt)
                     } label: {
-                        Label("Start Session", systemImage: "play.circle")
+                        Label("开始干活", systemImage: "play.circle")
                     }
                     .disabled(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
         }
-        .navigationTitle(Text("Coding Session"))
+        .navigationTitle(Text("编码任务"))
         .navigationBarTitleDisplayMode(.inline)
         .task {
             do {
@@ -593,6 +822,28 @@ struct HarnessLauncherView: View {
                 loadError = error.localizedDescription
             }
             isLoading = false
+            // 进行中会话列表:失败不挡住新建流程,静默降级。
+            if let sessions = try? await client.harnessSessions() {
+                liveSessions = sessions.filter {
+                    !["orphaned", "completed", "failed", "cancelled"].contains($0.status)
+                }
+            }
+        }
+        .refreshable {
+            if let sessions = try? await client.harnessSessions() {
+                liveSessions = sessions.filter {
+                    !["orphaned", "completed", "failed", "cancelled"].contains($0.status)
+                }
+            }
+        }
+    }
+
+    private func sessionStatusLabel(_ status: String) -> String {
+        switch status {
+        case "running", "starting": return "运行中"
+        case "idle": return "待命"
+        case "waiting_for_approval": return "等审批"
+        default: return status
         }
     }
 }
@@ -601,6 +852,8 @@ struct HarnessLauncherView: View {
 struct HarnessConsoleView: View {
     @StateObject var driver: HarnessSessionDriver
     let firstPrompt: String
+    /// 非空 = 接管 Mac 上已存在的会话(回放 + 跟随),而不是新建。
+    var attachSessionId: String? = nil
     @State private var input = ""
     @State private var started = false
 
@@ -612,7 +865,11 @@ struct HarnessConsoleView: View {
                         ForEach(driver.items) { item in
                             GatewayItemView(item: item).id(item.id)
                         }
-                        if driver.isRunning && driver.pendingApproval == nil {
+                        // "idle" means the CLI finished a turn and is waiting
+                        // for the operator — a typing indicator there would
+                        // promise progress that is not happening.
+                        if driver.isRunning && driver.pendingApproval == nil
+                            && driver.status != "idle" {
                             HStack(spacing: 8) {
                                 LeoTypingIndicator()
                                 Text(driver.status)
@@ -635,15 +892,33 @@ struct HarnessConsoleView: View {
                 }
             }
 
+            // [T-composer-send-dead] 状态可见:连接中给进度,出错给原因。
+            // 以前 lastError 只存不显,失败对用户表现为"点了没反应"。
+            if driver.status == "starting" {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.mini)
+                    Text("正在连接 Mac…(发送会排队,连上即发)")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 14).padding(.vertical, 4)
+            } else if let err = driver.lastError, driver.status == "failed" || driver.status == "pending" {
+                Text(err)
+                    .font(.caption).foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 14).padding(.vertical, 4)
+            }
+
             HStack(spacing: 10) {
-                TextField("Steer it…", text: $input, axis: .vertical)
+                TextField("继续下指令…", text: $input, axis: .vertical)
                     .lineLimit(1...4)
                     .textFieldStyle(.plain)
                     .padding(.horizontal, 12).padding(.vertical, 9)
                     .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 18))
                 Button {
-                    let text = input; input = ""
-                    driver.steer(text)
+                    // Clear only after the driver accepted it; steering during
+                    // the starting window used to eat the text silently.
+                    if driver.steer(input) { input = "" }
                 } label: {
                     Image(systemName: "arrow.up.circle.fill").font(.system(size: 28))
                 }
@@ -666,9 +941,61 @@ struct HarnessConsoleView: View {
         .onAppear {
             // Start once; coming back to this view resumes the stream at the
             // last seq instead of launching a second session.
-            if !started { started = true; driver.start(prompt: firstPrompt) }
-            else { driver.resumeIfNeeded() }
+            if !started {
+                started = true
+                if let attachSessionId {
+                    driver.attach(existingSessionId: attachSessionId)
+                } else {
+                    driver.start(prompt: firstPrompt)
+                }
+            } else { driver.resumeIfNeeded() }
         }
         .onDisappear { driver.detach() }
+    }
+}
+
+// MARK: - [T-mac-composer] 对话框直达 Mac
+
+/// 对话框"指挥 Mac"选中的目标:哪台 Mac + 哪个 CLI。
+struct ComposerMacTarget: Identifiable {
+    static let clis: [(String, String)] = [
+        ("claude", "Claude Code"), ("codex", "Codex"), ("grok", "Grok"),
+    ]
+    let host: GatewayHost
+    let cliKey: String
+    let cliName: String
+    var id: String { host.id + cliKey }
+}
+
+/// 全屏 Mac 对话:复用控制台的 HarnessConsoleView,套一层导航 + 关闭按钮。
+struct ComposerMacChatCover: View {
+    let target: ComposerMacTarget
+    let onClose: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            if let client = GatewayHostStore.shared.client(for: target.host) {
+                HarnessConsoleView(
+                    driver: HarnessSessionDriver(
+                        client: client,
+                        harness: HarnessKind(key: target.cliKey, name: target.cliName),
+                        cwd: "~"),
+                    firstPrompt: "")
+                .navigationTitle("\(target.host.name) · \(target.cliName)")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("关闭", action: onClose)
+                    }
+                }
+            } else {
+                VStack(spacing: 12) {
+                    Text("缺少访问密钥").font(.headline)
+                    Text("去 设置 → 我的 Mac 里补上这台 Mac 的密钥。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                    Button("关闭", action: onClose)
+                }
+            }
+        }
     }
 }

@@ -1,0 +1,191 @@
+appId: ${APP_ID}
+---
+- runFlow: login_mock_no_clear.yaml
+- assertVisible:
+    id: "devices.list"
+# 设备 chip 现在位于 DeviceMenuModal 内,菜单关闭时未挂载;先点 devices.title 打开范围菜单。
+- tapOn:
+    id: "devices.title"
+- extendedWaitUntil:
+    visible:
+      id: "${XDT_MOBILE_E2E_HOST_DEVICE_CHIP_ID}"
+    timeout: 15000
+- longPressOn:
+    id: "${XDT_MOBILE_E2E_HOST_DEVICE_CHIP_ID}"
+- extendedWaitUntil:
+    visible:
+      id: "deviceDetail.screen"
+    timeout: 15000
+- tapOn:
+    id: "deviceDetail.searchToggleButton"
+- assertVisible:
+    id: "deviceDetail.searchInput"
+
+- tapOn:
+    id: "deviceDetail.searchInput"
+- eraseText
+- inputText: "Visual Idle"
+- extendedWaitUntil:
+    visible:
+      id: "deviceDetail.sessionRow"
+    timeout: 10000
+- tapOn:
+    id: "deviceDetail.sessionRow"
+- extendedWaitUntil:
+    visible:
+      id: "session.screen"
+    timeout: 5000
+    optional: true
+- runFlow:
+    when:
+      visible:
+        id: "deviceDetail.sessionRow"
+    commands:
+      - tapOn:
+          id: "deviceDetail.sessionRow"
+- extendedWaitUntil:
+    visible:
+      id: "session.screen"
+    timeout: 15000
+- extendedWaitUntil:
+    visible:
+      id: "session.messageList"
+    timeout: 15000
+- assertVisible:
+    id: "session.composer"
+- takeScreenshot:
+    path: visual-session-idle
+- tapOn:
+    id: "session.backButton"
+- extendedWaitUntil:
+    visible:
+      id: "deviceDetail.screen"
+    timeout: 15000
+
+- tapOn:
+    id: "deviceDetail.searchInput"
+- eraseText
+- inputText: "Visual Running"
+- extendedWaitUntil:
+    visible:
+      id: "deviceDetail.sessionRow"
+    timeout: 10000
+- tapOn:
+    id: "deviceDetail.sessionRow"
+- extendedWaitUntil:
+    visible:
+      id: "session.screen"
+    timeout: 5000
+    optional: true
+- runFlow:
+    when:
+      visible:
+        id: "deviceDetail.sessionRow"
+    commands:
+      - tapOn:
+          id: "deviceDetail.sessionRow"
+- extendedWaitUntil:
+    visible:
+      id: "session.screen"
+    timeout: 15000
+- extendedWaitUntil:
+    visible:
+      id: "session.messageList"
+    timeout: 15000
+- assertVisible:
+    text: "Visual Running Session"
+- takeScreenshot:
+    path: visual-session-running
+- tapOn:
+    id: "session.backButton"
+- extendedWaitUntil:
+    visible:
+      id: "deviceDetail.screen"
+    timeout: 15000
+
+- tapOn:
+    id: "deviceDetail.searchInput"
+- eraseText
+- inputText: "Visual Queue"
+- extendedWaitUntil:
+    visible:
+      id: "deviceDetail.sessionRow"
+    timeout: 10000
+- tapOn:
+    id: "deviceDetail.sessionRow"
+- extendedWaitUntil:
+    visible:
+      id: "session.screen"
+    timeout: 5000
+    optional: true
+- runFlow:
+    when:
+      visible:
+        id: "deviceDetail.sessionRow"
+    commands:
+      - tapOn:
+          id: "deviceDetail.sessionRow"
+- extendedWaitUntil:
+    visible:
+      id: "session.screen"
+    timeout: 15000
+- runFlow:
+    when:
+      visible: "同步失败"
+    commands:
+      - tapOn:
+          id: "connection.syncButton"
+# 排队消息 inline 在消息流末尾,无需打开面板。
+- extendedWaitUntil:
+    visible:
+      id: "queue.inline.section"
+    timeout: 15000
+- takeScreenshot:
+    path: visual-session-queue
+- tapOn:
+    id: "session.backButton"
+- extendedWaitUntil:
+    visible:
+      id: "deviceDetail.screen"
+    timeout: 15000
+
+- tapOn:
+    id: "deviceDetail.searchInput"
+- eraseText
+- inputText: "Visual Pending"
+- extendedWaitUntil:
+    visible:
+      id: "deviceDetail.sessionRow"
+    timeout: 10000
+- tapOn:
+    id: "deviceDetail.sessionRow"
+- extendedWaitUntil:
+    visible:
+      id: "session.screen"
+    timeout: 5000
+    optional: true
+- runFlow:
+    when:
+      visible:
+        id: "deviceDetail.sessionRow"
+    commands:
+      - tapOn:
+          id: "deviceDetail.sessionRow"
+- extendedWaitUntil:
+    visible:
+      id: "session.screen"
+    timeout: 15000
+- runFlow:
+    when:
+      visible: "同步失败"
+    commands:
+      - tapOn:
+          id: "connection.syncButton"
+- extendedWaitUntil:
+    visible:
+      id: "interaction.bottomSurface"
+    timeout: 15000
+- assertVisible:
+    id: "interaction.permission.card"
+- takeScreenshot:
+    path: visual-session-pending

@@ -1,0 +1,22 @@
+# Dependabot:只开 GitHub Actions 与根 npm 生态的每周巡检。
+# pnpm workspace 依赖统一由根 pnpm-lock.yaml 锁定,npm 生态指向仓库根即可。
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns:
+          - '*'
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-patch:
+        update-types:
+          - minor
+          - patch

@@ -1,0 +1,144 @@
+import crypto, { randomUUID } from "node:crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { assertAsyncDirectoryGuard, createAsyncDirectoryGuard } from "./directory-guard.js";
+import { withAsyncDirectoryGuards } from "./guarded-mutation.js";
+import { sanitizeUntrustedFileName } from "./filename.js";
+import { root } from "./root.js";
+import { assertSafePathPrefix } from "./safe-path-segment.js";
+import { resolveSecureTempRoot } from "./secure-temp-dir.js";
+import { registerTempPathForExit } from "./temp-cleanup.js";
+import { getFsSafeTestHooks } from "./test-hooks.js";
+import { serializePathWrite } from "./write-queue.js";
+function buildTempPath(dir, tempPrefix) {
+    const safePrefix = assertSafePathPrefix(tempPrefix ?? ".fs-safe-stream", {
+        label: "sibling temp prefix",
+    });
+    return path.join(dir, `${safePrefix}.${process.pid}.${randomUUID()}.tmp`);
+}
+async function syncFileBestEffort(filePath) {
+    const handle = await fs.open(filePath, "r+");
+    try {
+        await handle.sync();
+    }
+    catch (error) {
+        if (error.code !== "EPERM") {
+            throw error;
+        }
+    }
+    finally {
+        await handle.close();
+    }
+}
+async function syncDirectoryBestEffort(dirPath) {
+    let handle;
+    try {
+        handle = await fs.open(dirPath, "r");
+        await handle.sync();
+    }
+    catch {
+        // Best-effort on platforms/filesystems that do not support directory fsync.
+    }
+    finally {
+        await handle?.close().catch(() => undefined);
+    }
+}
+function assertFinalPathIsSibling(dir, filePath) {
+    const resolvedDir = path.resolve(dir);
+    const resolvedFile = path.resolve(filePath);
+    if (path.dirname(resolvedFile) !== resolvedDir) {
+        throw new Error("Final path must be in the sibling temp directory.");
+    }
+}
+export async function writeSiblingTempFile(options) {
+    const dir = path.resolve(options.dir);
+    await fs.mkdir(dir, { recursive: true, mode: options.dirMode ?? 0o700 });
+    if (options.chmodDir !== false) {
+        await fs.chmod(dir, options.dirMode ?? 0o700).catch(() => undefined);
+    }
+    const dirGuard = await createAsyncDirectoryGuard(dir);
+    const tempPath = buildTempPath(dir, options.tempPrefix);
+    const unregisterTempPath = registerTempPathForExit(tempPath);
+    let tempExists = false;
+    try {
+        tempExists = true;
+        const result = await options.writeTemp(tempPath);
+        if (options.mode !== undefined) {
+            await fs.chmod(tempPath, options.mode).catch(() => undefined);
+        }
+        if (options.syncTempFile) {
+            await syncFileBestEffort(tempPath);
+        }
+        const filePath = path.resolve(options.resolveFinalPath(result));
+        assertFinalPathIsSibling(dir, filePath);
+        await serializePathWrite(filePath, async () => {
+            await withAsyncDirectoryGuards([dirGuard], async () => {
+                await fs.rename(tempPath, filePath);
+            });
+            tempExists = false;
+            unregisterTempPath();
+            if (options.mode !== undefined) {
+                await fs.chmod(filePath, options.mode).catch(() => undefined);
+            }
+            if (options.syncParentDir) {
+                await syncDirectoryBestEffort(dir);
+            }
+        });
+        return { filePath, result };
+    }
+    finally {
+        if (tempExists) {
+            await fs.rm(tempPath, { force: true }).catch(() => undefined);
+        }
+        unregisterTempPath();
+    }
+}
+function buildSiblingTempPath(params) {
+    const id = crypto.randomUUID();
+    const safePrefix = assertSafePathPrefix(params.tempPrefix, {
+        label: "sibling temp prefix",
+    });
+    const safeTail = sanitizeUntrustedFileName(path.basename(params.targetPath), params.fallbackFileName);
+    return path.join(path.dirname(params.targetPath), `${safePrefix}${id}-${safeTail}.part`);
+}
+export async function writeViaSiblingTempPath(params) {
+    const rootDir = await fs
+        .realpath(path.resolve(params.rootDir))
+        .catch(() => path.resolve(params.rootDir));
+    const requestedTargetPath = path.resolve(params.targetPath);
+    const targetPath = await fs
+        .realpath(path.dirname(requestedTargetPath))
+        .then((realDir) => path.join(realDir, path.basename(requestedTargetPath)))
+        .catch(() => requestedTargetPath);
+    const relativeTargetPath = path.relative(rootDir, targetPath);
+    if (!relativeTargetPath ||
+        relativeTargetPath === ".." ||
+        relativeTargetPath.startsWith(`..${path.sep}`) ||
+        path.isAbsolute(relativeTargetPath)) {
+        throw new Error("Target path is outside the allowed root");
+    }
+    const rootGuard = await createAsyncDirectoryGuard(rootDir);
+    const tempDir = await fs.mkdtemp(path.join(resolveSecureTempRoot({
+        fallbackPrefix: "fs-safe-output",
+        unsafeFallbackLabel: "sibling temp output dir",
+        warn: () => undefined,
+    }), "fs-safe-output-"));
+    const tempPath = buildSiblingTempPath({
+        targetPath: path.join(tempDir, path.basename(targetPath)),
+        fallbackFileName: params.fallbackFileName ?? "output.bin",
+        tempPrefix: params.tempPrefix ?? ".fs-safe-output-",
+    });
+    const unregisterTempPath = registerTempPathForExit(tempDir, { recursive: true });
+    try {
+        await getFsSafeTestHooks()?.beforeSiblingTempWrite?.(tempPath);
+        await params.writeTemp(tempPath);
+        await assertAsyncDirectoryGuard(rootGuard);
+        const targetRoot = await root(rootDir);
+        await targetRoot.copyIn(relativeTargetPath, tempPath, { mkdir: false });
+        await assertAsyncDirectoryGuard(rootGuard);
+    }
+    finally {
+        await fs.rm(tempDir, { recursive: true, force: true }).catch(() => { });
+        unregisterTempPath();
+    }
+}

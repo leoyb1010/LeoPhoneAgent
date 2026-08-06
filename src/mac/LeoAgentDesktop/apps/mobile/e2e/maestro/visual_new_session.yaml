@@ -1,0 +1,21 @@
+appId: ${APP_ID}
+---
+- runFlow: login_mock_no_clear.yaml
+- assertVisible:
+    id: "devices.list"
+- tapOn:
+    id: "home.newChatButton"
+- extendedWaitUntil:
+    visible:
+      id: "newSession.composer"
+    timeout: 15000
+- assertVisible:
+    id: "newSession.deviceSelector"
+- assertVisible:
+    id: "newSession.workspaceSelector"
+- assertVisible:
+    id: "newSession.firstMessageInput"
+- assertVisible:
+    id: "newSession.modelIndicator"
+- takeScreenshot:
+    path: visual-new-session

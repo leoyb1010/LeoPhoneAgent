@@ -1,0 +1,61 @@
+appId: ${APP_ID}
+---
+- waitForAnimationToEnd:
+    timeout: 30000
+- tapOn:
+    text: "^允许$"
+    optional: true
+    label: "Clear lingering Chinese microphone permission dialog"
+- tapOn:
+    text: "^Allow$"
+    optional: true
+    label: "Clear lingering English microphone permission dialog"
+- runFlow:
+    when:
+      visible:
+        id: "session.screen"
+    commands:
+      - tapOn:
+          id: "session.backButton"
+      - extendedWaitUntil:
+          visible:
+            id: "devices.screen"
+          timeout: 10000
+- extendedWaitUntil:
+    visible:
+      id: "devices.screen"
+    timeout: 5000
+    optional: true
+    label: "Detect existing authenticated home"
+- runFlow:
+    when:
+      notVisible:
+        id: "devices.screen"
+    commands:
+      - extendedWaitUntil:
+          visible:
+            id: "login.screen"
+          timeout: 30000
+      - tapOn:
+          id: "login.debugButton"
+          retryTapIfNoChange: true
+      - runFlow:
+          when:
+            notVisible:
+              id: "login.devLoginButton"
+          commands:
+            - tapOn:
+                text: "打开开发调试"
+                retryTapIfNoChange: true
+      - extendedWaitUntil:
+          visible:
+            id: "login.devLoginButton"
+          timeout: 5000
+      - tapOn:
+          id: "login.devLoginButton"
+- extendedWaitUntil:
+    visible:
+      id: "devices.screen"
+    timeout: 15000
+- assertVisible:
+    id: "devices.title"

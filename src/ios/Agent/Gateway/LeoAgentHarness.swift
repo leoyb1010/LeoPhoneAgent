@@ -48,7 +48,7 @@ extension LeoAgentClient {
     /// The server only reports what it can locate on disk, so a CLI the user
     /// has not installed never appears as a choice that would fail on use.
     func harnessKinds() async throws -> [HarnessKind] {
-        let obj = try await getJSON("/v1/capabilities")
+        let obj = try await getJSON("/v1/capabilities", service: .harness)
         let rows = obj["harnesses"] as? [[String: Any]] ?? []
         return rows.compactMap { row in
             guard let key = row["key"] as? String else { return nil }
@@ -57,7 +57,7 @@ extension LeoAgentClient {
     }
 
     func harnessSessions() async throws -> [HarnessSessionSummary] {
-        let obj = try await getJSON("/harness/sessions")
+        let obj = try await getJSON("/harness/sessions", service: .harness)
         let rows = obj["sessions"] as? [[String: Any]] ?? []
         return rows.compactMap { row in
             guard let id = row["session_id"] as? String else { return nil }
@@ -77,7 +77,7 @@ extension LeoAgentClient {
     func createHarnessSession(harness: String, cwd: String, prompt: String?) async throws -> String {
         var payload: [String: Any] = ["harness": harness, "cwd": cwd]
         if let prompt, !prompt.isEmpty { payload["prompt"] = prompt }
-        let obj = try await postJSON("/harness/sessions", body: payload)
+        let obj = try await postJSON("/harness/sessions", body: payload, service: .harness)
         guard let id = obj["session_id"] as? String else {
             throw GatewayError.malformedResponse("missing session_id")
         }
@@ -85,15 +85,23 @@ extension LeoAgentClient {
     }
 
     func steerHarness(sessionId: String, text: String) async throws {
-        _ = try await postJSON("/harness/sessions/\(sessionId)/send", body: ["text": text])
+        _ = try await postJSON("/harness/sessions/\(sessionId)/send", body: ["text": text],
+                               service: .harness)
     }
 
-    func approveHarness(sessionId: String, choice: String) async throws {
-        _ = try await postJSON("/harness/sessions/\(sessionId)/approval", body: ["choice": choice])
+    /// `approvalId` is the server's own id for the request. Without it the
+    /// server can only fall back to "the one pending approval" — and 409s the
+    /// moment a CLI raises two at once.
+    func approveHarness(sessionId: String, choice: String, approvalId: String?) async throws {
+        var body: [String: Any] = ["choice": choice]
+        if let approvalId { body["approval_id"] = approvalId }
+        _ = try await postJSON("/harness/sessions/\(sessionId)/approval", body: body,
+                               service: .harness)
     }
 
     func stopHarness(sessionId: String) async throws {
-        _ = try await postJSON("/harness/sessions/\(sessionId)/stop", body: [:])
+        _ = try await postJSON("/harness/sessions/\(sessionId)/stop", body: [:],
+                               service: .harness)
     }
 
     // MARK: Resumable stream
@@ -117,7 +125,8 @@ extension LeoAgentClient {
         into continuation: AsyncThrowingStream<HarnessEvent, Error>.Continuation
     ) async {
         do {
-            var req = try request("/harness/sessions/\(sessionId)/events?after=\(after)")
+            var req = try request("/harness/sessions/\(sessionId)/events?after=\(after)",
+                                  service: .harness)
             req.setValue("text/event-stream", forHTTPHeaderField: "Accept")
             req.timeoutInterval = 3600
             let (bytes, response) = try await session.bytes(for: req)
@@ -157,9 +166,15 @@ final class HarnessSessionDriver: ObservableObject {
     @Published private(set) var items: [GatewayTranscriptItem] = []
     @Published private(set) var isRunning = false
     @Published private(set) var status = "idle"
-    @Published private(set) var pendingApproval: GatewayApprovalRequest?
+    /// A queue, not a slot: a CLI can raise a second approval before the
+    /// first is answered, and a single slot silently dropped the first one —
+    /// unanswerable from any surface, CLI blocked forever.
+    @Published private(set) var pendingApprovals: [GatewayApprovalRequest] = []
     @Published private(set) var lastError: String?
     @Published private(set) var resumeCount = 0
+
+    /// The one the UI shows; the rest wait their turn behind it.
+    var pendingApproval: GatewayApprovalRequest? { pendingApprovals.first }
 
     let harness: HarnessKind
     let cwd: String
@@ -176,6 +191,10 @@ final class HarnessSessionDriver: ObservableObject {
         self.cwd = cwd
     }
 
+    /// [T-composer-send-dead] 会话建立期间(经中继 1~3 秒)用户就开始发送。
+    /// 排队而不是拒绝:sessionId 一到就依序发出。点击永远有响应。
+    private var queuedSteers: [String] = []
+
     func start(prompt: String) {
         guard sessionId == nil, !isRunning else { return }
         firstPrompt = prompt
@@ -186,7 +205,11 @@ final class HarnessSessionDriver: ObservableObject {
             do {
                 let id = try await self.client.createHarnessSession(
                     harness: self.harness.key, cwd: self.cwd, prompt: prompt)
-                await MainActor.run { self.sessionId = id; self.status = "running" }
+                await MainActor.run {
+                    self.sessionId = id
+                    self.status = "running"
+                    self.flushQueuedSteers()
+                }
                 await self.follow(sessionId: id)
             } catch {
                 await MainActor.run {
@@ -197,14 +220,44 @@ final class HarnessSessionDriver: ObservableObject {
         }
     }
 
-    /// Send a follow-up into a session that is already going.
-    func steer(_ text: String) {
-        guard let sessionId, !text.isEmpty else { return }
+    private func flushQueuedSteers() {
+        guard let sessionId else { return }
+        let queued = queuedSteers
+        queuedSteers = []
+        guard !queued.isEmpty else { return }
+        Task { [client] in
+            for text in queued {
+                do { try await client.steerHarness(sessionId: sessionId, text: text) }
+                catch { await MainActor.run { self.lastError = error.localizedDescription } }
+            }
+        }
+    }
+
+    /// Send a follow-up. Never a dead tap: with no session yet the text is
+    /// queued (create in flight) or becomes the first prompt of a fresh
+    /// create (previous create failed). Returns false only for empty text.
+    @discardableResult
+    func steer(_ text: String) -> Bool {
+        guard !text.isEmpty else { return false }
+        guard let sessionId else {
+            items.append(GatewayTranscriptItem(kind: .notice, text: "→ " + text))
+            if status == "starting" {
+                queuedSteers.append(text)
+            } else {
+                // pending/idle:上次创建失败或从未创建——用这条文字当首条
+                // 消息重建。isRunning 已置位时 start() 会拒,先复位。
+                isRunning = false
+                start(prompt: text)
+            }
+            return true
+        }
         items.append(GatewayTranscriptItem(kind: .notice, text: "→ " + text))
+        if status == "idle" { status = "running" }
         Task { [client] in
             do { try await client.steerHarness(sessionId: sessionId, text: text) }
             catch { await MainActor.run { self.lastError = error.localizedDescription } }
         }
+        return true
     }
 
     func stop() {
@@ -218,15 +271,21 @@ final class HarnessSessionDriver: ObservableObject {
     func respond(to approval: GatewayApprovalRequest, choice: String) {
         guard let sessionId, approval.choices.contains(choice) else { return }
         WatchBridge.shared.clearApprovalRequest(approvalId: approval.approvalId)
-        pendingApproval = nil
-        status = "running"
+        pendingApprovals.removeAll { $0.approvalId == approval.approvalId }
+        status = pendingApprovals.isEmpty ? "running" : "waiting_for_approval"
+        if let next = pendingApprovals.first { armWatch(for: next) }
         Task { [weak self, client] in
             do {
-                try await client.approveHarness(sessionId: sessionId, choice: choice)
+                try await client.approveHarness(sessionId: sessionId, choice: choice,
+                                                approvalId: approval.approvalId)
             } catch {
                 await MainActor.run {
                     guard let self else { return }
-                    self.pendingApproval = approval
+                    // Server refused or never got it: the card comes back,
+                    // honestly, at the front of the queue.
+                    if !self.pendingApprovals.contains(where: { $0.approvalId == approval.approvalId }) {
+                        self.pendingApprovals.insert(approval, at: 0)
+                    }
                     self.status = "waiting_for_approval"
                     self.lastError = error.localizedDescription
                     // Re-arm the wrist too: restoring only the phone card would
@@ -260,6 +319,18 @@ final class HarnessSessionDriver: ObservableObject {
         }
     }
 
+    /// 接管 Mac 上已存在的会话:从 seq 0 全量回放再实时跟随。
+    /// 这正是可续传协议的意义——桌面上开的会话,手机随时拿起来继续。
+    func attach(existingSessionId: String) {
+        guard sessionId == nil, !isRunning else { return }
+        sessionId = existingSessionId
+        isRunning = true
+        status = "running"
+        streamTask = Task { [weak self] in
+            await self?.follow(sessionId: existingSessionId)
+        }
+    }
+
     // MARK: Stream
 
     private func follow(sessionId: String) async {
@@ -267,6 +338,7 @@ final class HarnessSessionDriver: ObservableObject {
         var seenAtAttemptStart = lastSeq
         while !Task.isCancelled {
             var ended = false
+            var cleanClose = false
             do {
                 for try await item in client.harnessEvents(sessionId: sessionId, after: lastSeq) {
                     if Task.isCancelled { return }
@@ -274,12 +346,23 @@ final class HarnessSessionDriver: ObservableObject {
                         self.lastSeq = max(self.lastSeq, item.seq)
                         self.apply(item.event)
                     }
-                    if item.event.isTerminal { ended = true }
+                    // run.completed / run.failed are TURN boundaries here — the
+                    // CLI stays alive and steerable. Only a cancel ends the
+                    // session from inside the stream.
+                    if case .runCancelled = item.event { ended = true }
                 }
+                cleanClose = true
             } catch {
                 await MainActor.run { self.lastError = error.localizedDescription }
             }
             if ended || Task.isCancelled { return }
+
+            if cleanClose {
+                // The server closes the stream deliberately when a session is
+                // finished or orphaned. Ask it which, rather than reconnecting
+                // into a replay loop or guessing.
+                if await reconcile(sessionId: sessionId) { return }
+            }
 
             // Reset once a reconnect actually delivered something: the budget
             // is for CONSECUTIVE failures, not for a long healthy session that
@@ -288,6 +371,9 @@ final class HarnessSessionDriver: ObservableObject {
             seenAtAttemptStart = lastSeq
             attempt += 1
             if attempt > 6 {
+                // Before claiming "still running", check: the session may have
+                // finished, failed or died while we were unreachable.
+                if await reconcile(sessionId: sessionId) { return }
                 await MainActor.run {
                     self.status = "detached"
                     self.isRunning = false
@@ -303,6 +389,31 @@ final class HarnessSessionDriver: ObservableObject {
             }
             try? await Task.sleep(nanoseconds: UInt64(min(30, 1 << attempt)) * 1_000_000_000)
         }
+    }
+
+    /// Ask the server what actually became of the session. Returns true when
+    /// the session is over (or gone) and following should stop.
+    private func reconcile(sessionId: String) async -> Bool {
+        guard let sessions = try? await client.harnessSessions() else { return false }
+        guard let summary = sessions.first(where: { $0.id == sessionId }) else {
+            await MainActor.run {
+                self.status = "completed"
+                self.isRunning = false
+                self.note(String(localized: "Session is gone from the Mac."))
+            }
+            return true
+        }
+        if ["completed", "failed", "cancelled", "orphaned"].contains(summary.status) {
+            await MainActor.run {
+                self.status = summary.status
+                self.isRunning = false
+                self.note(summary.status == "failed"
+                    ? String(localized: "The session failed on the Mac.")
+                    : String(localized: "Session ended."))
+            }
+            return true
+        }
+        return false
     }
 
     private func apply(_ event: GatewayEvent) {
@@ -328,26 +439,60 @@ final class HarnessSessionDriver: ObservableObject {
                 items[index].kind = .tool(name: tool, isRunning: false, isError: isError, duration: duration)
             }
         case .approvalRequest(let approval):
-            pendingApproval = approval
+            guard !pendingApprovals.contains(where: { $0.approvalId == approval.approvalId }) else { return }
+            pendingApprovals.append(approval)
             status = "waiting_for_approval"
-            armWatch(for: approval)
-        case .approvalResponded:
-            pendingApproval = nil
-            status = "running"
+            // The wrist shows one card at a time; arm it only for the front of
+            // the queue, and the next one when this front resolves.
+            if pendingApprovals.count == 1 { armWatch(for: approval) }
+        case .approvalResponded(_, let approvalId):
+            if let approvalId {
+                if let resolved = pendingApprovals.first(where: { $0.approvalId == approvalId }) {
+                    WatchBridge.shared.clearApprovalRequest(approvalId: resolved.approvalId)
+                }
+                pendingApprovals.removeAll { $0.approvalId == approvalId }
+            } else if let first = pendingApprovals.first {
+                WatchBridge.shared.clearApprovalRequest(approvalId: first.approvalId)
+                pendingApprovals.removeFirst()
+            }
+            if let next = pendingApprovals.first {
+                armWatch(for: next)
+            } else {
+                status = "running"
+            }
         case .runCompleted(let output, _):
             if let output, !output.isEmpty,
                !items.contains(where: { if case .assistantText = $0.kind { return $0.text == output }; return false }) {
                 items.append(GatewayTranscriptItem(kind: .assistantText, text: output))
             }
-            status = "completed"
-            isRunning = false
+            // Turn over, session alive: the CLI is waiting for the next
+            // instruction, and marking it dead here froze the console after
+            // the first exchange.
+            status = "idle"
         case .runFailed(let message):
-            fail(message ?? String(localized: "The session failed."))
+            // A failed TURN, not a dead session — surface it and stay
+            // steerable; a dead process ends via stream close + reconcile.
+            lastError = message
+            items.append(GatewayTranscriptItem(
+                kind: .failure,
+                text: message ?? String(localized: "The turn failed.")))
+            status = "idle"
         case .runCancelled:
             status = "cancelled"
             isRunning = false
             note(String(localized: "Session stopped."))
         case .unknown(let name, let payload):
+            if name == "user.message" {
+                // The durable log now carries the user half of the
+                // conversation; render it like the local echo, and skip the
+                // duplicate when this device just typed it.
+                let text = payload["text"] ?? ""
+                let echo = "→ " + text
+                if !text.isEmpty, items.last?.text != echo { note(echo) }
+                if status == "idle" { status = "running" }
+                return
+            }
+            if name == "session.created" { return }   // metadata, already shown by the launcher
             // Engine chatter (retries, init banners) shows up here. Surfacing
             // it is what made a broken CLI on the Mac diagnosable instead of
             // looking like a silent hang.
@@ -377,6 +522,6 @@ final class HarnessSessionDriver: ObservableObject {
         items.append(GatewayTranscriptItem(kind: .failure, text: message))
         status = "failed"
         isRunning = false
-        pendingApproval = nil
+        pendingApprovals = []
     }
 }

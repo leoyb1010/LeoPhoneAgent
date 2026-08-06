@@ -1,0 +1,12 @@
+{
+  "id": "hf-model-search",
+  "match": ["huggingface.co"],
+  "description": "用 Hugging Face 公开 API 搜索模型,返回 JSON 数组(模型 id/下载量/likes)。读接口而非扒页面。",
+  "inputs": { "query": { "required": true } },
+  "steps": [
+    { "action": "navigate", "url": "https://huggingface.co/api/models?search={{query|url}}&limit=20" },
+    { "action": "wait", "loadState": "load" },
+    { "action": "extract", "as": "json", "extract": { "fields": { "body": "body" } } }
+  ],
+  "output": "{{json}}"
+}

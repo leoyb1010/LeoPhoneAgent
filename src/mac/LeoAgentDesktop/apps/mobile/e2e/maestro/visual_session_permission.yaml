@@ -1,0 +1,37 @@
+appId: ${APP_ID}
+---
+- runFlow: login_mock_no_clear.yaml
+- assertVisible:
+    id: "devices.list"
+- extendedWaitUntil:
+    visible:
+      id: "home.sessionRowTitle.visual-pending"
+    timeout: 15000
+- tapOn:
+    id: "home.sessionRowTitle.visual-pending"
+- extendedWaitUntil:
+    visible:
+      id: "session.screen"
+    timeout: 15000
+- runFlow:
+    when:
+      visible: "同步失败"
+    commands:
+      - tapOn:
+          id: "connection.syncButton"
+- extendedWaitUntil:
+    visible:
+      id: "interaction.plan.card"
+    timeout: 15000
+- tapOn:
+    id: "interaction.plan.approveButton"
+- extendedWaitUntil:
+    visible:
+      id: "interaction.permission.card"
+    timeout: 10000
+- assertVisible:
+    id: "interaction.permission.decisionSummary"
+- assertVisible:
+    id: "interaction.permission.allowOnceButton"
+- takeScreenshot:
+    path: visual-session-permission

@@ -1,0 +1,68 @@
+LeoAgent Desktop
+Copyright 2026 Leo Yuan
+
+This product includes software developed by XD Inc. (the "Cindy" open-source
+client), licensed under the Apache License, Version 2.0. The full license text
+is in LICENSE.
+
+Origin and modifications
+------------------------
+This work is a derivative of the Cindy open-source client:
+
+  Upstream:  https://github.com/makecindy/cindy
+  Baseline:  fdb0f8adb92aade1e141ca95d02b7d8b83600132  (2026-08-06)
+
+  Upstream:  https://github.com/makecindy/cindy-protocol   (vendored at cindy-protocol/)
+  Baseline:  90e6f3188022f4b13545c186ea11c2f1426c66f9
+
+As required by Apache-2.0 section 4(b), the following files carry modifications
+by Leo Yuan, beginning 2026-08-06:
+
+  * packages/maker-shared/src/branding.ts
+      Display brand name changed to LeoAgent.
+
+  * packages/maker-shared/src/brandIdentity.ts
+      Identifier-layer identity replaced (executable name, bundle id / AUMID,
+      deep-link scheme, userData directory, CDN prefix, updater name, database
+      file prefix). Upstream legacy-compatibility anchors were cleared: they
+      exist to claim the upstream product's installed base, which this product
+      neither has nor should adopt.
+
+  * apps/desktop/src/main/clientEndpointsService.ts
+      Packaged builds now read the endpoint manifest bundled inside the
+      application instead of fetching it from a remote CDN at startup. The
+      strict parse and validation semantics are unchanged; only the source of
+      truth moved. This product is self-hosted and has no remote configuration
+      service.
+
+  * apps/desktop/forge.config.ts
+      Product identity literals; the bundled endpoint manifest added to
+      extraResource.
+
+  * apps/desktop/package.json, apps/desktop/scripts/ci/lib.mjs,
+    apps/desktop/scripts/smoke-packaged.mjs, scripts/restart-desktop-remote.mjs
+      Packaged-artifact name mirrors kept in sync with the identity above.
+
+  * apps/desktop/src/renderer/i18n/locales/{en,zh-CN,ja,ko}/common.json
+      User-visible product name in message values. Message keys are unchanged.
+
+  * apps/desktop/src/renderer/components/settings/AboutSection.tsx
+      Upstream community links removed.
+
+  * config/endpoint.json, config/endpoint.global.json,
+    apps/desktop/resources/endpoints/endpoint.json
+      Service endpoints no longer point at upstream-operated servers.
+
+  * apps/desktop/resources/icon.icns, icon.png, icon-dock.png,
+    icon-master-1024.png
+      Application icon replaced.
+
+Trademarks
+----------
+Apache-2.0 grants no trademark rights (section 6). "Cindy" and the upstream
+project's marks and logos are not used by this product. Names, icons, and
+identifiers here are this product's own.
+
+Third-party components distributed with this product retain their own copyright
+and license terms; their attribution notices are collected under
+docs/legal/notices/ and resources/THIRD-PARTY-NOTICES.txt.

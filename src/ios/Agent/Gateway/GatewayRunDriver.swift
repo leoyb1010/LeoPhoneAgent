@@ -276,7 +276,7 @@ final class GatewayRunDriver: ObservableObject {
             status = "waiting_for_approval"
             pushApprovalToWatch(approval)
 
-        case .approvalResponded(let choice):
+        case .approvalResponded(let choice, _):
             if let pending = pendingApproval {
                 WatchBridge.shared.clearApprovalRequest(approvalId: pending.approvalId)
             }

@@ -262,10 +262,31 @@ enum LLMProviderFactory {
             let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) ?? ""
             return applyCustomUserAgent(OpenAIProvider(apiKey: key, model: model, customBaseURL: customBase, appendV1Suffix: appendV1), instance: instance)
         case .oauth:
+            let iid = instance.id
+            // [T-grok-via-mac] 优先级:经由 Mac 借用(自动续期,最稳)>
+            // 手机端 OAuth(有 refresh)> 手动粘贴 token(静态,数小时过期
+            // ——正是"接入后过几小时就 401"的根源,仅作最后兜底)。
+            if GrokViaMacBroker.hostMarker(instanceId: iid) != nil {
+                let provider = OpenAIProvider(
+                    oauthTokenProvider: { try await GrokViaMacBroker.shared.token(instanceId: iid) },
+                    model: model
+                )
+                provider.customBaseURL = customBase
+                provider.appendV1Suffix = appendV1
+                return provider
+            }
+            if ProviderKeychainHelper.loadOAuthToken(instanceId: iid, as: XAITokenStorage.self) != nil {
+                let provider = OpenAIProvider(
+                    oauthTokenProvider: { try await XAIOAuthManager.shared.validAccessToken(instanceId: iid) },
+                    model: model
+                )
+                provider.customBaseURL = customBase
+                provider.appendV1Suffix = appendV1
+                return provider
+            }
             if let manualToken = ProviderKeychainHelper.loadOAuthString(instanceId: instance.id, account: "manual-oauth-token") {
                 return applyCustomUserAgent(OpenAIProvider(apiKey: manualToken, model: model, customBaseURL: customBase, appendV1Suffix: appendV1), instance: instance)
             }
-            let iid = instance.id
             let provider = OpenAIProvider(
                 oauthTokenProvider: { try await XAIOAuthManager.shared.validAccessToken(instanceId: iid) },
                 model: model

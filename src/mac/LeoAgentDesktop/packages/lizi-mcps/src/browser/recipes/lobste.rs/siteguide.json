@@ -1,0 +1,12 @@
+{
+  "site": "lobste.rs",
+  "auth": "只读无需登录",
+  "entry": {
+    "hottest": "https://lobste.rs/hottest.json",
+    "newest": "https://lobste.rs/newest.json",
+    "active": "https://lobste.rs/active.json",
+    "tag": "https://lobste.rs/t/{tag}.json"
+  },
+  "recipes": ["lobsters-feed"],
+  "notes": "lobste.rs 的稳定读接口是各 feed 的 .json:hottest/newest/active(navigate 到该 URL 再 extract body 即拿 JSON 数组)。每条故事含 {short_id,title,url,score,comment_count,comments_url,created_at,submitter_user,tags,...}。按 tag 读用 https://lobste.rs/t/{tag}.json。注意:没有可用的 search.json(返回搜索页 HTML / 易被限流),要搜关键词只能拉 feed 后本地过滤。"
+}

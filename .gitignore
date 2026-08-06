@@ -134,3 +134,16 @@ deps/lame-3.100/**/*.la
 deps/lame-3.100/**/*.lai
 deps/lame-3.100/**/.libs/
 deps/lame-3.100/**/.deps/
+
+# LeoAgentDesktop(vendored Cindy 分支)的依赖与构建产物
+src/mac/LeoAgentDesktop/node_modules/
+src/mac/LeoAgentDesktop/**/node_modules/
+src/mac/LeoAgentDesktop/apps/desktop/out/
+src/mac/LeoAgentDesktop/apps/desktop/.vite/
+src/mac/LeoAgentDesktop/release/
+
+# LeoAgentDesktop vendored CLI 二进制(可重新下载;GitHub 单文件上限 100MB)
+src/mac/LeoAgentDesktop/apps/*-bin/
+src/mac/LeoAgentDesktop/tools/*/updates/
+src/mac/leoagent/__pycache__/
+__pycache__/

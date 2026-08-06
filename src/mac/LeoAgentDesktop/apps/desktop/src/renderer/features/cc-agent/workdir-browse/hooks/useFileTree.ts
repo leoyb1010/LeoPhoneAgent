@@ -1,0 +1,472 @@
+/**
+ * useFileTree — workdir file tree state + main-process integration.
+ *
+ * Lazy expansion model:
+ *   - Tree is a Map<relPath, DirEntry[]> keyed by parent folder relative path.
+ *     '' (empty string) = workdir root. Sub-folders only get listed when
+ *     toggled open by the user.
+ *   - `expanded: Set<string>` tracks which folders are open (also keyed by
+ *     relPath; '' is always open implicitly).
+ *
+ * chokidar push events:
+ *   - 'add'/'unlink'/'change' on a file at relPath X → invalidate the dir
+ *     containing X by re-listing it (cheap, <12ms even for huge folders).
+ *   - 'addDir'/'unlinkDir' similarly.
+ *   - The watcher is started on first mount per (workdir, options), stopped
+ *     on last unmount (ref-counted).
+ *
+ * Selection (which file is open in the body view) is intentionally NOT here;
+ * it lives in caller (URL search param ?file= for doc mode, plugin state for
+ * RSB file-browser tabs).
+ *
+ * The hook is NOT generic — it's specifically tied to electronAPI.fileBrowser.*
+ * IPC. If we ever need a non-electron build this hook becomes the seam.
+ *
+ * ── 共享 store 设计(2026-07-01) ─────────────────────────────────────────────
+ * 早期 useFileTree 是 per-instance React state——同一 workdir 的多个 caller
+ * (doc 模式 sidebar / 多个 RSB file-browser tab)各自持一份 entries / expanded /
+ * loadingPaths,toggle 一个目录不会同步到其它 caller,反直觉。
+ *
+ * 现在改成模块级 store(stores Map<key, FileTreeStore>),按 `workdir + 配置`
+ * 分片。所有 useFileTree({workdir, ...}) 共享同一份 state——任何 caller
+ * toggle / collapseAll / refresh / expandToPath 都立刻反映到所有订阅者(useSyncExternalStore)。
+ *
+ * 生命周期:
+ *   - 首个挂载触发 init(initial listDir root + 恢复 expanded localStorage +
+ *     启动 chokidar watcher)
+ *   - refCount 归 0 时触发 cleanup(stopWatch + 从 stores Map 移除)
+ *   - 切 workdir / 卸载组件 → refCount-- → 视情况 cleanup
+ *
+ * watcher / IPC token 等"非 React state"挂在 FileTreeStore 自身,
+ * 不进 React state,避免 setState 触发不必要的订阅者重渲。
+ */
+
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
+
+import { createLogger } from '@/lib/logger';
+import {
+  fileBrowserApiFor,
+  isDeviceTooOldError,
+  onFileTreeEventFor,
+  startWatchFor,
+  stopWatchFor,
+} from '@/lib/fileBrowserTransport';
+import { loadExpandedSet, saveExpandedSet } from '../lib/expandedStore';
+
+const log = createLogger('useFileTree');
+
+export interface DirEntry {
+  name: string;
+  relPath: string;
+  type: 'file' | 'directory';
+  size: number;
+  mtimeMs: number;
+}
+
+interface UseFileTreeOptions {
+  workdir: string;
+  /**
+   * 非空 = SSH remote 会话:listDir 经 main 路由到远端 file-service;
+   * 本地 watcher 不启动(远端暂无 watch,P4 计划事件推回),树的时效性靠
+   * refresh() 手动/聚焦刷新兜底。
+   */
+  remoteHostId?: string | null;
+  /**
+   * 非空 = device-link 远程会话(被控设备):全部操作经隧道在被控端执行,
+   * watch 走 fs-watch topic 订阅。与 remoteHostId 互斥(嵌套时 deviceId 优先,
+   * SSH 二跳由被控端处理)。
+   */
+  deviceId?: string | null;
+  /** default true — Unity .meta files cut ~47% of typical entries */
+  hideMetaFiles?: boolean;
+  /**
+   * Doc mode: only doc/config text files (md/txt/json/yaml/...); only
+   * directories with at least one such descendant. Filtering happens in
+   * main; watcher events trigger refetch of the full ancestor chain (a
+   * new/deleted doc file can change which dirs appear at any depth above).
+   */
+  docMode?: boolean;
+}
+
+export interface UseFileTreeReturn {
+  /** Entries per folder, keyed by relPath ('' = root). */
+  entries: ReadonlyMap<string, readonly DirEntry[]>;
+  /** Set of expanded folder relPaths. '' (root) is always expanded implicitly. */
+  expanded: ReadonlySet<string>;
+  /** Folder paths still loading (after expand). */
+  loadingPaths: ReadonlySet<string>;
+  /** True until the root listDir() call returns the first time. */
+  initialLoading: boolean;
+  /** root 加载失败标记(device-too-old = 对方设备版本过旧);见 store 注释。 */
+  loadError: 'device-too-old' | 'load-failed' | null;
+
+  toggleFolder: (relPath: string) => void;
+  /** Collapse every folder back to root. Also clears persisted state. */
+  collapseAll: () => void;
+  refresh: () => Promise<void>;
+  /**
+   * 展开 relPath 的所有祖先目录(让该文件可见),触发未 cache 的目录 lazy fetch,
+   * 返回 Promise 等所有 listDir 完成。
+   *
+   * 用于"筛选文件 / 搜索 / 跳转"等需要把目标��件在树里露出来的场景 —— 上层调
+   * 完 expandToPath 再 scrollIntoView 那一行,visual 节奏稳。
+   *
+   * Root 文件(relPath 不含 '/')直接 no-op return —— 它已经在根级,无需展开。
+   */
+  expandToPath: (relPath: string) => Promise<void>;
+}
+
+const ROOT_KEY = '';
+
+/**
+ * 结构等价判定 —— name/type/relPath 完全相同(顺序也相同, listDir 是稳定排序),
+ * 只有 mtime/size 变化时返回 true。
+ *
+ * 用途:setEntries 前的去重。chokidar/parcel 对我们自己 writeFile 的原子 rename
+ * 也会推 change 事件 → 触发 fetchDir 拿到一组对象引用全新但内容结构没变的
+ * DirEntry[]。如果直接 setEntries(new Map)会让 flattenTree useMemo 重算 +
+ * 所有 FileTreeRow 重渲, 视觉上"刷一下"。
+ *
+ * 当前所有 entries 消费者(FileTreeView, WorkdirBrowseSidebar.findEntryByRelPath)
+ * 都不读 mtime/size, 所以跳过更新无功能影响。如果未来加了"按 mtime 排序"
+ * / "显示文件大小"之类的 UI, 这里要相应放宽比较。
+ */
+function entriesStructurallyEqual(
+  a: readonly DirEntry[],
+  b: readonly DirEntry[],
+): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i];
+    const y = b[i];
+    if (x.relPath !== y.relPath) return false;
+    if (x.name !== y.name) return false;
+    if (x.type !== y.type) return false;
+  }
+  return true;
+}
+
+/**
+ * 模块级共享 store。
+ *
+ * snapshot 字段是给 useSyncExternalStore 返回的稳定 readonly 视图(immutable
+ * 引用,变化时整体替换),React 据此判断是否触发重渲。其余字段是 store 自管的
+ * 非 React state(IPC token / watcher off / listener set / refCount)。
+ *
+ * 任何 mutation 必须 (a) new 一个新的 snapshot 对象 (b) 调 emit() 通知订阅者。
+ */
+interface FileTreeStore {
+  readonly key: string;
+  readonly workdir: string;
+  readonly remoteHostId: string | null;
+  readonly deviceId: string | null;
+  readonly hideMetaFiles: boolean;
+  readonly docMode: boolean;
+  snapshot: {
+    entries: ReadonlyMap<string, readonly DirEntry[]>;
+    expanded: ReadonlySet<string>;
+    loadingPaths: ReadonlySet<string>;
+    initialLoading: boolean;
+    /**
+     * root listDir 失败的稳定错误标记:'device-too-old' = 对方设备版本过旧
+     * (老被控端无 remote-op channel);'load-failed' = 其它失败。非 null 时
+     * FileBrowserBody 渲染错误占位而不是永远空树。
+     */
+    loadError: 'device-too-old' | 'load-failed' | null;
+  };
+  /** 同一 relPath 的并发 listDir,latest 赢:每次开 listDir 前 bump,resolve
+   *  时比对 —— 不一致就丢结果。 */
+  tokens: Map<string, number>;
+  /** chokidar listener 取消函数。首个挂载时挂、refCount 归 0 时调。 */
+  watcherOff: (() => void) | null;
+  /** ref count + listeners 用来驱动 lifecycle 和重渲订阅。 */
+  refCount: number;
+  listeners: Set<() => void>;
+}
+
+/** 全局 stores 表。key 由 storeKey() 算,同 (workdir, options) 共享同一份。 */
+const stores = new Map<string, FileTreeStore>();
+
+function storeKey(opts: Required<UseFileTreeOptions>): string {
+  const remote = opts.remoteHostId ? `::remote=${opts.remoteHostId}` : '';
+  const device = opts.deviceId ? `::device=${opts.deviceId}` : '';
+  return `${opts.workdir}::doc=${opts.docMode}::hideMeta=${opts.hideMetaFiles}${remote}${device}`;
+}
+
+function emit(store: FileTreeStore): void {
+  for (const l of store.listeners) l();
+}
+
+function getOrCreateStore(opts: Required<UseFileTreeOptions>): FileTreeStore {
+  const key = storeKey(opts);
+  const existing = stores.get(key);
+  if (existing) return existing;
+  const store: FileTreeStore = {
+    key,
+    workdir: opts.workdir,
+    remoteHostId: opts.remoteHostId,
+    deviceId: opts.deviceId,
+    hideMetaFiles: opts.hideMetaFiles,
+    docMode: opts.docMode,
+    snapshot: {
+      entries: new Map(),
+      expanded: new Set([ROOT_KEY]),
+      loadingPaths: new Set(),
+      initialLoading: true,
+      loadError: null,
+    },
+    tokens: new Map(),
+    watcherOff: null,
+    refCount: 0,
+    listeners: new Set(),
+  };
+  stores.set(key, store);
+  return store;
+}
+
+/** 把 fetchDir 抽成 store 方法 —— 所有订阅者(无论挂在哪个 hook 实例)共享同
+ *  一份 entries / loadingPaths 状态。 */
+async function fetchDir(store: FileTreeStore, relPath: string): Promise<void> {
+  const myToken = (store.tokens.get(relPath) ?? 0) + 1;
+  store.tokens.set(relPath, myToken);
+
+  // loadingPaths 设置
+  {
+    const nextLoading = new Set(store.snapshot.loadingPaths);
+    nextLoading.add(relPath);
+    store.snapshot = { ...store.snapshot, loadingPaths: nextLoading };
+    emit(store);
+  }
+
+  try {
+    const list = await fileBrowserApiFor(store.deviceId).listDir({
+      workdir: store.workdir,
+      remoteHostId: store.remoteHostId,
+      relPath,
+      hideMetaFiles: store.hideMetaFiles,
+      docMode: store.docMode,
+    });
+    if (store.tokens.get(relPath) !== myToken) return; // stale
+    if (store.snapshot.loadError) {
+      store.snapshot = { ...store.snapshot, loadError: null };
+    }
+    // 结构等价 → 跳过 setEntries,避免子组件无意义重渲(参见函数顶部注释)。
+    const prevList = store.snapshot.entries.get(relPath);
+    if (prevList && entriesStructurallyEqual(prevList, list)) return;
+    const nextEntries = new Map(store.snapshot.entries);
+    nextEntries.set(relPath, list);
+    store.snapshot = { ...store.snapshot, entries: nextEntries };
+    emit(store);
+  } catch (err) {
+    log.warn(`listDir failed for ${relPath}`, err);
+    // root 失败要可见:空树 + 无提示会被读成"项目是空的"。device-link 的
+    // 版本偏差(老被控端无 remote-op channel)单独标记,渲染升级提示。
+    if (relPath === ROOT_KEY) {
+      store.snapshot = {
+        ...store.snapshot,
+        loadError: isDeviceTooOldError(err) ? 'device-too-old' : 'load-failed',
+      };
+      emit(store);
+    }
+    // Keep prior state; user can refresh manually.
+  } finally {
+    if (store.tokens.get(relPath) === myToken) {
+      const nextLoading = new Set(store.snapshot.loadingPaths);
+      nextLoading.delete(relPath);
+      store.snapshot = { ...store.snapshot, loadingPaths: nextLoading };
+      emit(store);
+    }
+  }
+}
+
+/** 首次挂载触发:initial fetch + 恢复 localStorage expanded + 启动 watcher。
+ *  幂等:重复调用直接 no-op(refCount 已 >0)。 */
+async function initStore(store: FileTreeStore): Promise<void> {
+  // 恢复 localStorage 持久化的 expanded 集合(workdir 维度共享)。
+  const restored = loadExpandedSet(store.workdir);
+  const nextExpanded = new Set<string>([ROOT_KEY, ...restored]);
+  store.snapshot = { ...store.snapshot, expanded: nextExpanded };
+  emit(store);
+
+  // watcher 监听:per workdir 启停。共享 store 后只挂一次,所有订阅者共享。
+  // doc 模式 / 默认模式的差异在 onEvent handler 里按 store.docMode 分支处理。
+  // 三路同语义:本地 chokidar / SSH 远端 daemon fs.watch / device-link 被控端
+  // watch(fs-watch topic 订阅驱动)——事件 payload 完全同形,handler 无分支。
+  {
+    void startWatchFor(store.deviceId, {
+      workdir: store.workdir,
+      remoteHostId: store.remoteHostId,
+      hideMetaFiles: store.hideMetaFiles,
+    }).catch((err) => log.warn('startWatch failed', err));
+
+    store.watcherOff = onFileTreeEventFor(store.deviceId, (event) => {
+      if (event.workdir !== store.workdir) return;
+      const slashIdx = event.relPath.lastIndexOf('/');
+      const parent = slashIdx < 0 ? ROOT_KEY : event.relPath.slice(0, slashIdx);
+      const currentEntries = store.snapshot.entries;
+      if (store.docMode) {
+        // Doc mode wrinkle (见函数顶部大注释):一条 doc 文件 add/unlink 会改变整条
+        // 祖先链的可见性,需要 refetch 所有已 cache 的祖先。
+        let cursor: string | null = parent;
+        while (cursor !== null) {
+          if (currentEntries.has(cursor)) void fetchDir(store, cursor);
+          if (cursor === ROOT_KEY) break;
+          const idx = cursor.lastIndexOf('/');
+          cursor = idx < 0 ? ROOT_KEY : cursor.slice(0, idx);
+        }
+      } else if (currentEntries.has(parent)) {
+        void fetchDir(store, parent);
+      }
+    });
+  }
+
+  // Initial root fetch + 已 restore expanded 目录的并行 lazy fetch。每个 listDir
+  // <12ms,即使 50 个 restored 也能在 <1s 内 warm 完。
+  await Promise.all([
+    fetchDir(store, ROOT_KEY),
+    ...[...restored].map((p) => fetchDir(store, p)),
+  ]);
+  store.snapshot = { ...store.snapshot, initialLoading: false };
+  emit(store);
+}
+
+/** 最后一个订阅者离开:停 watcher、从 stores 表移除。store 对象被回收。 */
+function disposeStore(store: FileTreeStore): void {
+  if (store.watcherOff) {
+    store.watcherOff();
+    store.watcherOff = null;
+  }
+  void stopWatchFor(store.deviceId, {
+    workdir: store.workdir,
+    remoteHostId: store.remoteHostId,
+  }).catch(() => {});
+  stores.delete(store.key);
+}
+
+// ── Public actions (store-level,跟 UseFileTreeReturn 的同名方法对应) ────────
+
+function toggleFolder(store: FileTreeStore, relPath: string): void {
+  if (relPath === ROOT_KEY) return;
+  const prev = store.snapshot.expanded;
+  const next = new Set(prev);
+  if (next.has(relPath)) {
+    next.delete(relPath);
+  } else {
+    next.add(relPath);
+    if (!store.snapshot.entries.has(relPath)) {
+      void fetchDir(store, relPath);
+    }
+  }
+  saveExpandedSet(store.workdir, next);
+  store.snapshot = { ...store.snapshot, expanded: next };
+  emit(store);
+}
+
+function collapseAll(store: FileTreeStore): void {
+  const nextExpanded = new Set([ROOT_KEY]);
+  const prevEntries = store.snapshot.entries;
+  const nextEntries = new Map<string, readonly DirEntry[]>();
+  const rootEntries = prevEntries.get(ROOT_KEY);
+  if (rootEntries) nextEntries.set(ROOT_KEY, rootEntries);
+  saveExpandedSet(store.workdir, new Set());
+  store.snapshot = {
+    ...store.snapshot,
+    expanded: nextExpanded,
+    entries: nextEntries,
+  };
+  emit(store);
+}
+
+async function refresh(store: FileTreeStore): Promise<void> {
+  const targets = [...store.snapshot.entries.keys()];
+  await Promise.all(targets.map((p) => fetchDir(store, p)));
+}
+
+async function expandToPath(store: FileTreeStore, relPath: string): Promise<void> {
+  if (!relPath) return;
+  const parts = relPath.split('/');
+  if (parts.length < 2) return; // root 级文件
+  const ancestors: string[] = [];
+  for (let i = 1; i < parts.length; i++) {
+    ancestors.push(parts.slice(0, i).join('/'));
+  }
+  // 一次性写 expanded set
+  const nextExpanded = new Set(store.snapshot.expanded);
+  for (const a of ancestors) nextExpanded.add(a);
+  saveExpandedSet(store.workdir, nextExpanded);
+  store.snapshot = { ...store.snapshot, expanded: nextExpanded };
+  emit(store);
+  // 未 cache 的祖先并行 fetch
+  const toFetch = ancestors.filter((a) => !store.snapshot.entries.has(a));
+  await Promise.all(toFetch.map((a) => fetchDir(store, a)));
+}
+
+// ── Hook ────────────────────────────────────────────────────────────────────
+
+export function useFileTree({
+  workdir,
+  remoteHostId = null,
+  deviceId = null,
+  hideMetaFiles = true,
+  docMode = false,
+}: UseFileTreeOptions): UseFileTreeReturn {
+  // store 实例按 (workdir + options) 共享 —— 多个 hook 实例订阅同一份。
+  // memo 用 dep 化 options,确保 workdir 切换会换 store。
+  const store = useMemo(
+    () => getOrCreateStore({ workdir, remoteHostId, deviceId, hideMetaFiles, docMode }),
+    [workdir, remoteHostId, deviceId, hideMetaFiles, docMode],
+  );
+
+  // ref-count 生命周期:首挂触发 init(initial fetch + start watch),最后离开
+  // 触发 dispose(stop watch + 从 stores 表移除)。
+  useEffect(() => {
+    store.refCount += 1;
+    if (store.refCount === 1) {
+      void initStore(store);
+    }
+    return () => {
+      store.refCount -= 1;
+      if (store.refCount === 0) {
+        disposeStore(store);
+      }
+    };
+  }, [store]);
+
+  // 订阅 store snapshot 变化。useSyncExternalStore 保证多个订阅者 + concurrent
+  // mode 下 tearing-free。
+  const snapshot = useSyncExternalStore(
+    useCallback(
+      (cb) => {
+        store.listeners.add(cb);
+        return () => store.listeners.delete(cb);
+      },
+      [store],
+    ),
+    () => store.snapshot,
+    () => store.snapshot,
+  );
+
+  // 把 store-level actions wrap 成跟 store 绑死的稳定引用。
+  const toggleFolderCb = useCallback((relPath: string) => toggleFolder(store, relPath), [store]);
+  const collapseAllCb = useCallback(() => collapseAll(store), [store]);
+  const refreshCb = useCallback(() => refresh(store), [store]);
+  const expandToPathCb = useCallback(
+    (relPath: string) => expandToPath(store, relPath),
+    [store],
+  );
+
+  return useMemo(
+    () => ({
+      entries: snapshot.entries,
+      expanded: snapshot.expanded,
+      loadingPaths: snapshot.loadingPaths,
+      initialLoading: snapshot.initialLoading,
+      loadError: snapshot.loadError,
+      toggleFolder: toggleFolderCb,
+      collapseAll: collapseAllCb,
+      refresh: refreshCb,
+      expandToPath: expandToPathCb,
+    }),
+    [snapshot, toggleFolderCb, collapseAllCb, refreshCb, expandToPathCb],
+  );
+}

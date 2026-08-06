@@ -1,0 +1,4 @@
+{
+  "versionCode": 10,
+  "_comment": "自建 Android 线的整包 versionCode(单调递增整数)。冷更出整包(release-android-local.mjs)时脚本检测到 ≤ 线上基线会自动 +1 写回本文件(也可手动 bump,发布后记得 commit);APK 覆盖安装 + NPKG md5 去重都要求它比上一条已发布记录大。语义对齐 iOS 的 app.json ios.buildNumber。发布脚本读取后经 env XDT_ANDROID_VERSION_CODE 注入,app.config.js 只在自建分支消费该 env(不直接读本文件)。它只注入自建分支;版本字段在 self-host fingerprint 中由 fingerprint.config.cjs 的 ExpoConfigVersions skip 排除,所以 bump versionCode 只影响整包安装单调性,不会单独产生新的 OTA runtime;EAS(非自建)仍不受影响。"
+}

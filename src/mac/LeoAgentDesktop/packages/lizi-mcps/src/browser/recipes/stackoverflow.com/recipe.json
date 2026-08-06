@@ -1,0 +1,12 @@
+{
+  "id": "stackoverflow-search",
+  "match": ["stackoverflow.com", "api.stackexchange.com"],
+  "description": "用 Stack Exchange 公开 API 按相关度搜 Stack Overflow 问题,返回 JSON(标题/链接/分数)。读接口而非扒页面。",
+  "inputs": { "query": { "required": true } },
+  "steps": [
+    { "action": "navigate", "url": "https://api.stackexchange.com/2.3/search/advanced?order=desc&sort=relevance&q={{query|url}}&site=stackoverflow" },
+    { "action": "wait", "loadState": "load" },
+    { "action": "extract", "as": "json", "extract": { "fields": { "body": "body" } } }
+  ],
+  "output": "{{json}}"
+}

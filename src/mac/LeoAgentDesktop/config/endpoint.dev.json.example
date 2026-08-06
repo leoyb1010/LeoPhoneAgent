@@ -1,0 +1,20 @@
+{
+  "_note": "config/endpoint.dev.json 的模板(该文件 gitignored,不入仓)。使用 dev 区前把本文件复制为 config/endpoint.dev.json 再按需修改;默认端口约定与 scripts/shared/endpoint-local-file.mjs 一致。",
+  "schemaVersion": 1,
+  "authApiBaseUrl": "http://localhost:3344",
+  "deviceLinkApiBaseUrl": "http://localhost:3335",
+  "oauthBrokerApiBaseUrl": "http://localhost:3337",
+  "ossApiBaseUrl": "http://localhost:3340",
+  "heartbeatUrl": "http://localhost:3338",
+  "telegramHookWsUrl": "",
+  "slackHookWsUrl": "ws://localhost:3334",
+  "websiteUrl": "http://localhost:3000",
+  "modelAccessApiBaseUrl": "http://localhost:3339",
+  "voiceApiBaseUrl": "http://localhost:3342",
+  "githubApiBaseUrl": "http://localhost:3336",
+  "skillhubApiBaseUrl": "http://localhost:3341",
+  "pluginApiBaseUrl": "http://localhost:3343",
+  "cdnBaseUrl": "http://localhost:3345/cindy",
+  "mobileUpdateBaseUrl": "http://localhost:3346",
+  "review": "0.1.0"
+}

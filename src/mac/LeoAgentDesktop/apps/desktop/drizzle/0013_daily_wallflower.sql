@@ -1,0 +1,1 @@
+ALTER TABLE `schedules` ADD `manual` integer DEFAULT false NOT NULL;

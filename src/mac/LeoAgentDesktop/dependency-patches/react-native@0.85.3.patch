@@ -1,0 +1,82 @@
+diff --git a/ReactCommon/yoga/yoga/algorithm/CalculateLayout.cpp b/ReactCommon/yoga/yoga/algorithm/CalculateLayout.cpp
+index 690efff4ac7..d3fbc5c86a1 100644
+--- a/ReactCommon/yoga/yoga/algorithm/CalculateLayout.cpp
++++ b/ReactCommon/yoga/yoga/algorithm/CalculateLayout.cpp
+@@ -480,19 +480,23 @@ static void zeroOutLayoutRecursively(yoga::Node* const node) {
+   }
+ }
+ 
+-static void cleanupContentsNodesRecursively(yoga::Node* const node) {
++static void cleanupContentsNodesRecursively(
++    yoga::Node* const node,
++    bool didPerformLayout) {
+   if (node->hasContentsChildren()) [[unlikely]] {
+     node->cloneContentsChildrenIfNeeded();
+     for (auto child : node->getChildren()) {
+       if (child->style().display() == Display::Contents) {
+         child->getLayout() = {};
+         child->setLayoutDimension(0, Dimension::Width);
+         child->setLayoutDimension(0, Dimension::Height);
+-        child->setHasNewLayout(true);
++        if (didPerformLayout) {
++          child->setHasNewLayout(true);
++        }
+         child->setDirty(false);
+         child->cloneChildrenIfNeeded();
+ 
+-        cleanupContentsNodesRecursively(child);
++        cleanupContentsNodesRecursively(child, didPerformLayout);
+       }
+     }
+   }
+@@ -573,9 +573,11 @@ static void calculateLayoutImpl(
+   for (auto child : children) {
+     child->processDimensions();
+     if (child->style().display() == Display::None) {
+-      zeroOutLayoutRecursively(child);
+-      child->setHasNewLayout(true);
+-      child->setDirty(false);
++      if (performLayout) {
++        zeroOutLayoutRecursively(child);
++        child->setHasNewLayout(true);
++        child->setDirty(false);
++      }
+       continue;
+     }
+     if (performLayout) {
+@@ -1319,7 +1321,7 @@ static void calculateLayoutImpl(
+ 
+     // Clean and update all display: contents nodes with a direct path to the
+     // current node as they will not be traversed
+-    cleanupContentsNodesRecursively(node);
++    cleanupContentsNodesRecursively(node, performLayout);
+     return;
+   }
+ 
+@@ -1337,7 +1339,7 @@ static void calculateLayoutImpl(
+ 
+     // Clean and update all display: contents nodes with a direct path to the
+     // current node as they will not be traversed
+-    cleanupContentsNodesRecursively(node);
++    cleanupContentsNodesRecursively(node, performLayout);
+     return;
+   }
+ 
+@@ -1355,7 +1357,7 @@ static void calculateLayoutImpl(
+           ownerHeight)) {
+     // Clean and update all display: contents nodes with a direct path to the
+     // current node as they will not be traversed
+-    cleanupContentsNodesRecursively(node);
++    cleanupContentsNodesRecursively(node, /* didPerformLayout */ false);
+     return;
+   }
+ 
+@@ -1367,7 +1369,7 @@ static void calculateLayoutImpl(
+ 
+   // Clean and update all display: contents nodes with a direct path to the
+   // current node as they will not be traversed
+-  cleanupContentsNodesRecursively(node);
++  cleanupContentsNodesRecursively(node, performLayout);
+ 
+   // STEP 1: CALCULATE VALUES FOR REMAINDER OF ALGORITHM
+   const FlexDirection mainAxis =

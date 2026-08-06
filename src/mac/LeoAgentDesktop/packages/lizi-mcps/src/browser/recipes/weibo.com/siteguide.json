@@ -1,0 +1,11 @@
+{
+  "site": "weibo.com",
+  "auth": "需要登录态:微博 ajax 接口对未登录会话返回非 JSON 或 ok=false,请在持久浏览器登录 weibo.com 后使用",
+  "entry": {
+    "home": "https://weibo.com",
+    "hotBand": "https://weibo.com/ajax/statuses/hot_band",
+    "searchPage": "https://s.weibo.com/weibo?q=<keyword>"
+  },
+  "recipes": ["weibo-hot"],
+  "notes": "关键:不要直接 navigate 到 /ajax/statuses/hot_band——非同源/未登录访问会被喂 SPA HTML。正确姿势是先 navigate 到 https://weibo.com,再用 evaluate 步在页面内 fetch('/ajax/statuses/hot_band', {credentials:'include'}):同源 + 带 cookie。响应结构 {ok:1,data:{band_list:[{realpos,word,num,category,label_name}]}};热词详情可拼 https://s.weibo.com/weibo?q=%23<word>%23(井号包裹的话题搜索)。注意:搜索(s.weibo.com)和首页 feed(/ajax/feed/unreadfriendstimeline,需先取自身 uid)在上游是 DOM 抓取或需额外 uid 推导,稳定性差,本配方只收录干净的 hot_band 热搜读接口。务必使用持久浏览器(带登录态)。"
+}

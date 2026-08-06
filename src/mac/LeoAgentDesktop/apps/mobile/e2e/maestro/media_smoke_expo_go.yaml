@@ -1,0 +1,19 @@
+appId: ${APP_ID}
+---
+- runFlow: login_mock.yaml
+- runFlow: open_session_no_launch.yaml
+- extendedWaitUntil:
+    visible: "Mock image fixture"
+    timeout: 10000
+- tapOn:
+    id: "message.mediaPreviewButton"
+- extendedWaitUntil:
+    visible:
+      id: "message.imageLightbox"
+    timeout: 10000
+# 无关闭按钮:单击图片(元素中心)即关闭
+- tapOn:
+    id: "message.imageLightbox"
+- extendedWaitUntil:
+    visible: "Mock image fixture"
+    timeout: 10000

@@ -455,3 +455,66 @@ private extension Data {
             .replacingOccurrences(of: "=", with: "")
     }
 }
+
+// MARK: - [T-grok-via-mac] Grok 登录经由 Mac
+
+/// 手机不自己跑 xAI OAuth(回环端口回调链路在 iOS 上易碎),改为向 Mac 的
+/// /v1/grok/token 借短期 access token;refresh 链由 Mac 独占持有,快过期时
+/// Mac 先刷新再借出。手机端只缓存在内存,过期自动再借。
+final class GrokViaMacBroker: @unchecked Sendable {
+    static let shared = GrokViaMacBroker()
+    /// Keychain 标记账户:值为借用目标 hostId(空串 = 任意在线 Mac)。
+    static let markerAccount = "xai-via-mac"
+
+    private let lock = NSLock()
+    private var cache: [String: (token: String, expiry: Date)] = [:]
+
+    static func hostMarker(instanceId: String) -> String? {
+        ProviderKeychainHelper.loadOAuthString(instanceId: instanceId, account: markerAccount)
+    }
+
+    static func enable(instanceId: String, hostId: String) {
+        ProviderKeychainHelper.saveOAuthString(hostId, instanceId: instanceId, account: markerAccount)
+    }
+
+    static func disable(instanceId: String) {
+        ProviderKeychainHelper.deleteOAuthString(instanceId: instanceId, account: markerAccount)
+    }
+
+    func token(instanceId: String) async throws -> String {
+        lock.lock()
+        if let hit = cache[instanceId], hit.expiry.timeIntervalSinceNow > 300 {
+            let cached = hit.token
+            lock.unlock()
+            return cached
+        }
+        lock.unlock()
+
+        let hostId = Self.hostMarker(instanceId: instanceId)
+        let client: LeoAgentClient? = await MainActor.run {
+            let store = GatewayHostStore.shared
+            let host = store.hosts.first(where: { $0.id == hostId && $0.isEnabled })
+                ?? store.activeHosts.first
+            return host.flatMap { store.client(for: $0) }
+        }
+        guard let client else {
+            throw LLMError.providerError(message: "没有可用的 Mac:去 设置 → 我的 Mac 配置后再用 Grok")
+        }
+        let obj = try await client.getJSON("/v1/grok/token", service: .harness)
+        guard let token = obj["access_token"] as? String, !token.isEmpty else {
+            let msg = ((obj["error"] as? [String: Any])?["message"] as? String)
+                ?? "Mac 未返回 Grok 登录(在那台 Mac 终端运行 grok login)"
+            throw LLMError.providerError(message: msg)
+        }
+        var expiry = Date().addingTimeInterval(3600)
+        if let iso = obj["expires_at"] as? String {
+            let f1 = ISO8601DateFormatter()
+            f1.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            expiry = f1.date(from: iso) ?? ISO8601DateFormatter().date(from: iso) ?? expiry
+        }
+        lock.lock()
+        cache[instanceId] = (token, expiry)
+        lock.unlock()
+        return token
+    }
+}

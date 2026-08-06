@@ -1,0 +1,11 @@
+appId: ${APP_ID}
+---
+- assertVisible:
+    id: "session.screen"
+- tapOn:
+    id: "session.composerInput"
+- inputText: "Maestro remote ping"
+- tapOn:
+    id: "session.sendButton"
+- assertVisible:
+    id: "session.messageList"

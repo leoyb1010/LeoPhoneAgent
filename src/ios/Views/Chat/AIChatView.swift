@@ -209,6 +209,9 @@ struct AIChatView: View {
     @ObservedObject private var mentionIndex = FileMentionIndex.shared
     @ObservedObject private var configStore = ProviderConfigStore.shared
     @ObservedObject private var quickTaskStore = QuickTaskStore.shared
+    // [T-mac-composer] 对话框直达 Mac:Quick Tasks 旁的"指挥 Mac"按钮。
+    @ObservedObject private var gatewayStore = GatewayHostStore.shared
+    @State private var macChatTarget: ComposerMacTarget?
     @ObservedObject private var fontSettings = FontSettings.shared
     @ObservedObject private var deepLink = DeepLinkCoordinator.shared
     @Environment(\.dismiss) private var dismiss
@@ -3285,7 +3288,7 @@ struct AIChatView: View {
         // showed the three composer-pinned tasks inline, which both crowded
         // the composer and implied the catalog was only three items — the
         // picker sheet already lists everything and can create new ones.
-        let strip = HStack {
+        let strip = HStack(spacing: 8) {
             Button {
                 showQuickTaskPicker = true
             } label: {
@@ -3298,6 +3301,11 @@ struct AIChatView: View {
             .accessibilityHint("Browse, run or create quick tasks")
             // [T-ipad-pointer] Trackpad feedback; no-op on touch.
             .hoverEffect(.lift)
+            // [T-mac-composer] Quick Tasks 后面:选一台 Mac + 一个 CLI,
+            // 直接开聊。不去设置、不去控制台。
+            if !gatewayStore.activeHosts.isEmpty {
+                macCommandMenu
+            }
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 12)
@@ -3312,7 +3320,38 @@ struct AIChatView: View {
                 prepareComposer(with: task)
             }
         }
+        .fullScreenCover(item: $macChatTarget) { target in
+            ComposerMacChatCover(target: target) { macChatTarget = nil }
+        }
         return AnyView(strip)
+    }
+
+    /// [T-mac-composer] "指挥 Mac"菜单:一台 Mac 时直接列 3 个 CLI,
+    /// 多台时按 Mac 分子菜单。小表达式,避免撞类型检查预算。
+    private var macCommandMenu: some View {
+        Menu {
+            let hosts = gatewayStore.activeHosts
+            if hosts.count == 1, let host = hosts.first {
+                ForEach(ComposerMacTarget.clis, id: \.0) { cli in
+                    Button(cli.1) { macChatTarget = ComposerMacTarget(host: host, cliKey: cli.0, cliName: cli.1) }
+                }
+            } else {
+                ForEach(hosts) { host in
+                    Menu(host.name) {
+                        ForEach(ComposerMacTarget.clis, id: \.0) { cli in
+                            Button(cli.1) { macChatTarget = ComposerMacTarget(host: host, cliKey: cli.0, cliName: cli.1) }
+                        }
+                    }
+                }
+            }
+        } label: {
+            Label("指挥 Mac", systemImage: "desktopcomputer")
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+        }
+        .buttonStyle(.glass)
+        .controlSize(.small)
+        .hoverEffect(.lift)
     }
 
     private func prepareComposer(with task: QuickTaskDefinition) {

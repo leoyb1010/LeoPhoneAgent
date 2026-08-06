@@ -1,0 +1,1 @@
+调用 Slack 官方 MCP 的一个具体工具(名称与参数以 slack_list_tools 返回的清单为准),以绑定用户的身份执行——搜索、读历史读到的是该用户可见的内容,发消息以该用户名义发出。发消息 / 加 reaction 等写操作执行前把内容给用户确认。设备绑定了多个 Slack workspace 时必须传 team_id 指明身份(列表用 slack_status 查,缺省会被 server 以 AMBIGUOUS_TEAM 拒绝);只绑一个时可省略。结果超大会自动落盘会话工作目录并返回路径(out_file 可指定)。

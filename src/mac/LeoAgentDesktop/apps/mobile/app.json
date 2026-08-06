@@ -1,0 +1,145 @@
+{
+  "expo": {
+    "name": "Cindy",
+    "slug": "xdt-maker-mobile",
+    "scheme": "cindycn",
+    "version": "0.1.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "ios": {
+      "bundleIdentifier": "com.xd.cindycn",
+      "usesAppleSignIn": true,
+      "buildNumber": "2026072301",
+      "entitlements": {
+        "aps-environment": "production"
+      },
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIViewControllerBasedStatusBarAppearance": true,
+        "UISupportedInterfaceOrientations": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationPortraitUpsideDown",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ],
+        "UISupportedInterfaceOrientations~ipad": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationPortraitUpsideDown",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ]
+      },
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.xd.cindycn",
+      "adaptiveIcon": {
+        "backgroundColor": "#F70121",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": ["android.permission.MODIFY_AUDIO_SETTINGS"]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "./plugins/with-third-party-notices",
+      "./plugins/with-google-signin-modular-headers",
+      "./plugins/with-wechat-opensdk-modulemap",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "buildReactNativeFromSource": true
+          }
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#DF0C27",
+          "dark": {
+            "backgroundColor": "#DF0C27"
+          },
+          "android": {
+            "backgroundColor": "#DF0C27",
+            "image": "./assets/login/login-hero@2x.png",
+            "imageWidth": 128,
+            "dark": {
+              "backgroundColor": "#DF0C27",
+              "image": "./assets/login/login-hero@2x.png"
+            }
+          }
+        }
+      ],
+      "expo-router",
+      "expo-apple-authentication",
+      "expo-notifications",
+      "expo-secure-store",
+      "expo-web-browser",
+      [
+        "expo-font",
+        {
+          "ios": {
+            "fonts": [
+              "./assets/fonts/JetBrainsMono-Regular.ttf",
+              "./assets/fonts/JetBrainsMono-Medium.ttf"
+            ]
+          },
+          "android": {
+            "fonts": [
+              {
+                "fontFamily": "JetBrains Mono",
+                "fontDefinitions": [
+                  {
+                    "path": "./assets/fonts/JetBrainsMono-Regular.ttf",
+                    "weight": 400
+                  },
+                  {
+                    "path": "./assets/fonts/JetBrainsMono-Medium.ttf",
+                    "weight": 500
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "./plugins/with-foreground-only-audio",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Cindy needs microphone access for voice input in remote sessions.",
+          "recordAudioAndroid": true,
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Cindy needs photo library access to attach images to remote sessions.",
+          "cameraPermission": "Cindy needs camera access to attach photos to remote sessions.",
+          "microphonePermission": "Cindy needs microphone access for voice input in remote sessions."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Cindy needs photo library access to show recent photos and screenshots for quick attaching.",
+          "savePhotosPermission": false,
+          "isAccessMediaLocationEnabled": false
+        }
+      ]
+    ],
+    "extra": {
+      "router": {}
+    }
+  }
+}

@@ -1,0 +1,1 @@
+ALTER TABLE `sessions` ADD `used_project_context` integer DEFAULT false NOT NULL;

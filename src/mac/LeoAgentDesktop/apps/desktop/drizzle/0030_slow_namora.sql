@@ -1,0 +1,2 @@
+DROP INDEX IF EXISTS `uniq_orca_workflows_lead_session_id`;--> statement-breakpoint
+CREATE UNIQUE INDEX `uniq_orca_workflows_active_lead_session_id` ON `orca_workflows` (`lead_session_id`) WHERE "orca_workflows"."status" = 'active';

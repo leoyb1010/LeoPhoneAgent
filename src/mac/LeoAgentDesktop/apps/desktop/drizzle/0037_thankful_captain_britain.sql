@@ -1,0 +1,1 @@
+ALTER TABLE `schedules` ADD `workspace_kind` text DEFAULT 'project' NOT NULL;

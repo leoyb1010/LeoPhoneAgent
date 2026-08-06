@@ -18,6 +18,7 @@ struct ProviderInstanceDetailView: View {
     @State private var showExportShare = false
     @State private var showAddCustomModel = false
     @State private var oauthRefreshTrigger = false
+    @State private var grokViaMacResult: String?
     @State private var editingCustomBaseURL = ""
     @State private var editingCustomUserAgent = ""
     @State private var showManualTokenInput = false
@@ -477,6 +478,46 @@ struct ProviderInstanceDetailView: View {
             }
             .buttonStyle(.glass)
             .controlSize(.small)
+
+            // [T-grok-via-mac] xAI 专属:登录直接从 Mac 借(推荐)。手机端
+            // OAuth 依赖回环端口回调,iOS 上易碎;Mac 的 grok CLI 登录长期
+            // 有效且自动续期,借用后彻底免维护。
+            if instance.providerType == .xAI {
+                if GrokViaMacBroker.hostMarker(instanceId: instance.id) != nil {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                        Text("已经由 Mac 借用 Grok 登录(自动续期)").font(.caption)
+                        Spacer()
+                        Button("停用") {
+                            GrokViaMacBroker.disable(instanceId: instance.id)
+                            oauthRefreshTrigger.toggle()
+                        }
+                        .font(.caption).buttonStyle(.glass).controlSize(.small)
+                    }
+                } else {
+                    Button {
+                        Task {
+                            grokViaMacResult = "正在向 Mac 借用登录…"
+                            GrokViaMacBroker.enable(instanceId: instance.id, hostId: "")
+                            do {
+                                _ = try await GrokViaMacBroker.shared.token(instanceId: instance.id)
+                                grokViaMacResult = "✓ 借用成功,Grok 已就绪(自动续期)"
+                            } catch {
+                                GrokViaMacBroker.disable(instanceId: instance.id)
+                                grokViaMacResult = "借用失败:\(error.localizedDescription)"
+                            }
+                            oauthRefreshTrigger.toggle()
+                        }
+                    } label: {
+                        Label("从 Mac 借用 Grok 登录(推荐)", systemImage: "desktopcomputer")
+                            .font(.caption.weight(.medium))
+                    }
+                    .buttonStyle(.glass).controlSize(.small)
+                }
+                if let r = grokViaMacResult {
+                    Text(r).font(.caption2).foregroundStyle(.secondary)
+                }
+            }
         }
         .id(oauthRefreshTrigger)
     }

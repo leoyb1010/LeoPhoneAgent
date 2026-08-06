@@ -1,0 +1,5 @@
+appId: ${APP_ID}
+---
+- waitForAnimationToEnd:
+    timeout: 30000
+- runFlow: login_mock_no_clear.yaml

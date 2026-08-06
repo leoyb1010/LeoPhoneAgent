@@ -1,0 +1,1964 @@
+@import 'highlight.js/styles/github.css' layer(hljs-light);
+
+/* biome-ignore lint/suspicious/noUnknownAtRules: Tailwind directives are expanded by PostCSS. */
+@tailwind base;
+/* biome-ignore lint/suspicious/noUnknownAtRules: Tailwind directives are expanded by PostCSS. */
+@tailwind components;
+/* biome-ignore lint/suspicious/noUnknownAtRules: Tailwind directives are expanded by PostCSS. */
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --app-font-ui-default:
+      'Inter Variable', Inter, -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB',
+      'HarmonyOS Sans SC', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Noto Sans CJK SC',
+      'Source Han Sans SC', 'Segoe UI', Roboto, sans-serif;
+    /* 默认代码字体使用系统等宽字体(mac 上 SF Mono 不对网页暴露字体名,
+       实际命中 Menlo;Win 命中 Consolas)。JetBrains Mono 已降级为可选预设、不再是
+       默认。CJK 显式回退 PingFang/雅黑,保证代码块中英混排统一等宽。 */
+    --app-font-code-default:
+      ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, 'Liberation Mono',
+      'Courier New', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei',
+      'Noto Sans CJK SC', 'Source Han Sans SC', monospace;
+    /* 代码字号体系基础:本期已接入块级代码缩放、内联不缩放、紧凑栏 -1px 补偿。
+       Phase 2 会接 UI 字号(uiSize 已预留),并把下面手写转义的 compact 规则
+       收敛成统一 compact-delta 机制。 */
+    --app-code-font-size: 14px;
+    --app-ui-font-size: 14px;
+    --text-9: 9px;
+    --text-10: 10px;
+    --text-11: 11px;
+    --text-12: 12px;
+    --text-13: 13px;
+    --text-14: 14px;
+    --text-15: 15px;
+    --text-16: 16px;
+    --text-17: 17px;
+    --text-18: 18px;
+    --text-19: 19px;
+    --text-20: 20px;
+    --text-21: 21px;
+    --text-22: 22px;
+    --text-23: 23px;
+    --text-24: 24px;
+    --text-25: 25px;
+    --text-26: 26px;
+    --text-27: 27px;
+    --text-28: 28px;
+
+    /* Motion token(全局动效档位,规范见 DESIGN.md §14.4):新增过渡/动画一律
+       引用这些 token,不要再各处硬编码时长和 cubic-bezier。5 档交互时长 +
+       spinner 语义循环例外 + 3 条曲线,与三档圆角同一哲学。 */
+    --motion-instant: 80ms; /* hover 即时反馈、轻浮层退场 */
+    --motion-fast: 150ms; /* 颜色/透明度状态切换、轻浮层入场(§14.4 功能性过渡上限) */
+    --motion-base: 200ms; /* 尺寸变化:展开折叠、面板收展 */
+    --motion-enter: 250ms; /* 重浮层(弹窗)入场 */
+    --motion-exit: 150ms; /* 重浮层(弹窗)退场 */
+    --motion-spinner-cycle: 1000ms; /* 功能性 loading spinner 完整一圈(§14.4 窄例外) */
+    --motion-ease-out: cubic-bezier(0.16, 1, 0.3, 1); /* 入场/展开 */
+    --motion-ease-in: cubic-bezier(0.4, 0, 1, 1); /* 退场 */
+    --motion-ease-move: cubic-bezier(0.4, 0, 0.2, 1); /* 位置/尺寸插值 */
+
+    /* Claude 额度条的首帧 alias 与 ColorRegistry 一致：只复用已批准语义槽。 */
+    --quota-bar-fill: var(--text-secondary);
+    --quota-bar-warn: var(--warning-fg);
+    --quota-bar-crit: var(--error-flat);
+    --quota-bar-track: var(--surface-chip);
+  }
+
+  .dark {
+    --quota-bar-fill: var(--text-secondary);
+    --quota-bar-warn: var(--warning-fg);
+    --quota-bar-crit: var(--error-flat);
+    --quota-bar-track: var(--surface-chip);
+  }
+
+  body {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  /* 原生选区默认会在宿主失去焦点后变成深色,看起来像选中被取消。
+     选中范围仍然存在,这里固定提示色,让用户切到插件/webview 后仍能看见。 */
+  ::selection {
+    background: var(--text-selection-bg);
+  }
+
+  button,
+  [role='button'],
+  [role='menuitem'],
+  [role='option'],
+  .select-none,
+  .select-none * {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  input,
+  textarea,
+  [contenteditable='true'],
+  [contenteditable='true'] *,
+  .select-text,
+  .select-text * {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  /* Inline quote atoms live inside contenteditable, whose broad rule above
+     otherwise re-enables native text selection on every chip descendant. */
+  [contenteditable='true'] [data-composer-quote],
+  [contenteditable='true'] [data-composer-quote] * {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  input,
+  textarea,
+  [contenteditable='true'],
+  [role='textbox'] {
+    caret-color: var(--caret-accent);
+  }
+
+  /* 可拖拽 textarea 的原生 resize 角标(::-webkit-resizer)默认是不跟主题的
+     白色方块,dark 下呈反白 BUG(设置自定义提示词 / 创建自动化提示词等所有
+     resize-y 文本框)。置透明:保留拖拽功能,去掉视觉噪音,light/dark 通吃。 */
+  textarea::-webkit-resizer {
+    background: transparent;
+  }
+
+  /* F2: Global disable element drag — prevent image and element dragging */
+  *:not(input):not(textarea):not([contenteditable='true']) {
+    -webkit-user-drag: none;
+  }
+
+  /* F3: Global disable focus outline — Chromium default :focus-visible draws
+     a yellow/orange ring on buttons, options and menu items after Esc/click
+     transitions focus. Suppress it on non-input elements while inputs keep
+     their focus hint via --*-border-focus. */
+  *:focus,
+  *:focus-visible {
+    outline: none !important;
+  }
+  input:focus-visible,
+  textarea:focus-visible,
+  [contenteditable='true']:focus-visible {
+    outline: revert;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :root {
+      --splash-fade-duration: 0ms;
+      /* motion token 全档归零:float-in/out、fade-in 及一切引用这些 token 的
+         过渡/动画统一失效。必须走 token 归零而非 .animate-* 类选择器——
+         变体形态(如 data-[state=open]:animate-float-in)的 class token 带
+         前缀,裸类选择器匹配不到(review 反馈)。 */
+      --motion-instant: 0ms;
+      --motion-fast: 0ms;
+      --motion-base: 0ms;
+      --motion-enter: 0ms;
+      --motion-exit: 0ms;
+      --motion-spinner-cycle: 0ms;
+    }
+
+    [class*='animate-spinner'] {
+      animation: none !important;
+    }
+
+    .animate-confirm-overlay-in,
+    .animate-confirm-overlay-out,
+    .animate-confirm-content-in,
+    .animate-confirm-content-out {
+      animation-duration: 0ms !important;
+    }
+
+    * {
+      transition: none !important;
+    }
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  html,
+  body,
+  #root {
+    /* Desktop shell owns scrolling through internal panes; root scrollbars
+       shrink the viewport and make session switches jump horizontally. */
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    margin: 0;
+    /* CJK 字体放在 Segoe UI / Roboto 之前:Windows 上 Segoe UI 自带 《》 等
+       CJK 标点的窄字形,会跟相邻 CJK 字符 fallback 到 YaHei 的全角字形混在
+       同一行,出现"一个半角一个全角"。把 CJK 字体提前后,Inter 没覆盖的
+       CJK 标点直接落到 PingFang/YaHei,宽度统一。Latin 仍然走 Inter,无副作用。 */
+    font-family: var(--app-font-ui, var(--app-font-ui-default));
+    -webkit-font-smoothing: antialiased;
+  }
+
+  html[data-voice-input-overlay='true'],
+  html[data-voice-input-overlay='true'] body,
+  html[data-voice-input-overlay='true'] #root {
+    background: transparent;
+  }
+
+  [data-theme='cindy-light'][data-splash-active] .bg-content-area,
+  [data-theme='cindy-dark'][data-splash-active] .bg-content-area {
+    background: transparent;
+  }
+
+  html[data-computer-permission-overlay='true'],
+  html[data-computer-permission-overlay='true'] body,
+  html[data-computer-permission-overlay='true'] #root {
+    background: transparent;
+  }
+}
+
+/* 移动端下载卡：只有二维码本身，不加品牌描边、阴影与 3D 倾斜（曾经登记在
+   DESIGN.md §14.4 / §15.7 的旋转折射边已按用户要求撤除）。唯一动效是设备
+   列表刷新驱动的尺寸补间（132 ↔ 228）。 */
+.mobile-download-qr-card {
+  transition:
+    width var(--motion-base) var(--motion-ease-move),
+    height var(--motion-base) var(--motion-ease-move);
+}
+
+/* 按 <html lang> 切换 CJK 字体栈 —— 同一汉字在中/日/韩字体中字形不同
+   (康熙体 vs 新字体 vs 한국체)；不按 lang 区分会出现"日文界面里的汉字看起来像中文"。
+   useLocale.ts 在 setLocale 时把 lang 写到 <html>，:lang() 选择器自动接管。
+   覆盖 body 默认 sans 栈,并按 lang 覆盖代码 mono 栈的 CJK 段
+   (代码注释/字符串里也有汉字,需要用对应语种字形)；serif 已移除。 */
+html:lang(ja) {
+  --app-font-ui-default:
+    'Inter Variable', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Hiragino Sans',
+    'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', 'Yu Gothic', Meiryo, 'Noto Sans CJK JP',
+    'Source Han Sans JP', sans-serif;
+  --app-font-code-default:
+    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', 'Yu Gothic',
+    Meiryo, 'Noto Sans CJK JP', 'Source Han Sans JP', monospace;
+}
+
+html:lang(ko) {
+  --app-font-ui-default:
+    'Inter Variable', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Apple SD Gothic Neo', 'Malgun Gothic', 'Nanum Gothic', 'Noto Sans CJK KR',
+    'Source Han Sans KR', sans-serif;
+  --app-font-code-default:
+    ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Nanum Gothic', 'Noto Sans CJK KR',
+    'Source Han Sans KR', monospace;
+}
+
+/* doc 模式右栏 chat 流字号收紧:在常见 Tailwind 字号上整体下调 1px。
+   仅作用于挂了 .chat-rail-compact 的容器(WorkdirBrowseRoute doc-mode rail
+   的 CCAgentSessionView 外层),其他模式不受影响。
+   ChatInput 区域(data-chat-input-root)单独还原回默认字号,避免输入框
+   字号也跟着缩。 */
+.chat-rail-compact .text-xs {
+  font-size: 11px;
+}
+.chat-rail-compact .text-sm {
+  font-size: 13px;
+  line-height: 1.4;
+}
+.chat-rail-compact .text-base {
+  font-size: 15px;
+  line-height: 1.5;
+}
+.chat-rail-compact .text-lg {
+  font-size: 17px;
+  line-height: 1.5;
+}
+.chat-rail-compact .text-\[12px\] {
+  font-size: 11px;
+}
+.chat-rail-compact .text-\[13px\] {
+  font-size: 12px;
+}
+.chat-rail-compact .text-\[14px\] {
+  font-size: 13px;
+}
+.chat-rail-compact .text-\[15px\] {
+  font-size: 14px;
+}
+.chat-rail-compact .text-12 {
+  font-size: calc(var(--text-12) - 1px);
+}
+.chat-rail-compact .text-13 {
+  font-size: calc(var(--text-13) - 1px);
+}
+.chat-rail-compact .text-14 {
+  font-size: calc(var(--text-14) - 1px);
+}
+.chat-rail-compact .text-15 {
+  font-size: calc(var(--text-15) - 1px);
+}
+/* 代码块/围栏代码改用变量字号(var / calc(var - Npx))后,不再命中上面按字面
+   类名 -1px 的紧凑栏规则。这里按同样的 -1px 语义为变量字号补降级,保证默认
+   (未自定义,var=14px)用户在紧凑栏的代码字号 byte-for-byte 不变:
+     var           原 text-[14px]→13px,补 calc(var - 1px)
+     calc(var-1px) 原 text-[13px]→12px,补 calc(var - 2px)
+     calc(var-2px) 原 text-[12px]→11px,补 calc(var - 3px)
+   ⚠️ calc(var-1.5px)(原 text-[12.5px])不在原紧凑栏整数规则集(12/13/14/15)里、
+   原本就没被降级,故这里也【不补】,维持默认 12.5px 不变;别"顺手"给它加规则。 */
+.chat-rail-compact .text-\[length\:var\(--app-code-font-size\)\] {
+  font-size: calc(var(--app-code-font-size) - 1px);
+}
+.chat-rail-compact .text-\[length\:calc\(var\(--app-code-font-size\)_-_1px\)\] {
+  font-size: calc(var(--app-code-font-size) - 2px);
+}
+.chat-rail-compact .text-\[length\:calc\(var\(--app-code-font-size\)_-_2px\)\] {
+  font-size: calc(var(--app-code-font-size) - 3px);
+}
+
+.chat-rail-compact [data-chat-input-root] .text-xs {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+.chat-rail-compact [data-chat-input-root] .text-sm {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+.chat-rail-compact [data-chat-input-root] .text-base {
+  font-size: 1rem;
+  line-height: 1.5rem;
+}
+.chat-rail-compact [data-chat-input-root] .text-lg {
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+}
+.chat-rail-compact [data-chat-input-root] .text-\[12px\] {
+  font-size: 12px;
+}
+.chat-rail-compact [data-chat-input-root] .text-\[13px\] {
+  font-size: 13px;
+}
+.chat-rail-compact [data-chat-input-root] .text-\[14px\] {
+  font-size: 14px;
+}
+.chat-rail-compact [data-chat-input-root] .text-\[15px\] {
+  font-size: 15px;
+}
+
+/* Tiptap ChatInput — placeholder hook & chip alignment
+   (command-palette F2.5). The Placeholder extension injects
+   `p.is-editor-empty::before` with the placeholder text in a `data-*`
+   attribute; we style it to match the old textarea placeholder. */
+.ProseMirror > p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--chat-input-placeholder-subtle);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+[data-voice-draft-active='true'] .ProseMirror > p.is-editor-empty:first-child::before {
+  content: none;
+}
+.ProseMirror {
+  caret-color: var(--caret-accent);
+}
+.cm-editor .cm-content {
+  caret-color: var(--caret-accent) !important;
+}
+.cm-editor .cm-cursor,
+.cm-editor .cm-dropCursor {
+  border-left-color: var(--caret-accent) !important;
+}
+/* Structured composer lists keep markers and body text in the same layout
+   tree. Continuation lines therefore follow the list item content edge
+   without decoration-owned width measurements. */
+[data-chat-input-root] .ProseMirror :is(ul, ol) {
+  margin: 0;
+  --composer-list-padding: 1.5em;
+  --composer-list-marker-extra: 0em;
+  padding-inline-start: calc(
+    var(--composer-list-padding, 1.5em) + var(--composer-list-marker-extra, 0em)
+  );
+}
+/* The ideographic comma is a full-width glyph, unlike the period / closing
+   parenthesis in the other ordered markers. Keep its extra width separate
+   from the digit budget so multi-digit ordinals still compose correctly. */
+[data-chat-input-root] .ProseMirror ol[data-marker='、'] {
+  --composer-list-marker-extra: 0.7em;
+}
+[data-chat-input-root] .ProseMirror ol[data-marker-digits='2'] {
+  --composer-list-padding: 2.2em;
+}
+[data-chat-input-root] .ProseMirror ol[data-marker-digits='3'] {
+  --composer-list-padding: 2.8em;
+}
+[data-chat-input-root] .ProseMirror ol[data-marker-digits='4'] {
+  --composer-list-padding: 3.4em;
+}
+[data-chat-input-root] .ProseMirror ol[data-marker-digits='5'] {
+  --composer-list-padding: 4em;
+}
+[data-chat-input-root] .ProseMirror ol[data-marker-digits='6'] {
+  --composer-list-padding: 4.6em;
+}
+[data-chat-input-root] .ProseMirror ol[data-marker-digits='7'] {
+  --composer-list-padding: 5.2em;
+}
+[data-chat-input-root] .ProseMirror ol[data-marker-digits='8'] {
+  --composer-list-padding: 5.8em;
+}
+[data-chat-input-root] .ProseMirror ol[data-marker-digits='9'] {
+  --composer-list-padding: 6.4em;
+}
+[data-chat-input-root] .ProseMirror ul {
+  list-style-type: disc;
+}
+[data-chat-input-root] .ProseMirror ol {
+  list-style-type: decimal;
+}
+[data-chat-input-root] .ProseMirror ol[data-marker=')'] > li::marker {
+  content: counter(list-item) ') ';
+}
+[data-chat-input-root] .ProseMirror ol[data-marker='、'] > li::marker {
+  content: counter(list-item) '、';
+}
+[data-chat-input-root] .ProseMirror li {
+  padding-inline-start: 0.15em;
+  overflow-wrap: anywhere;
+}
+[data-chat-input-root] .ProseMirror li > p {
+  margin: 0;
+}
+
+/* composer 列表行缩进(ComposerListIndentDecoration):单行列表使用段落级
+   decoration,多行列表的无特殊标点行使用 inline-block 换行容器。padding-left
+   留出"基础缩进 + 前缀宽度",首行再用负 text-indent 把列表标记悬挂回基础
+   缩进位置;自动换行后的续行不吃负缩进,因此会与首行正文对齐。 */
+.ProseMirror .composer-list-block-indent {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  padding-left: calc(1em + var(--composer-list-hang, 1.25em));
+  text-indent: var(--composer-list-hang-negative, -1.25em);
+  overflow-wrap: anywhere;
+}
+.ProseMirror .composer-list-prefix-indent {
+  padding-left: 1em;
+}
+.ProseMirror .composer-list-fallback-container {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  padding-left: calc(1em + var(--composer-list-fallback-indent, 1.25em));
+  overflow-wrap: anywhere;
+}
+.ProseMirror .composer-list-fallback-prefix {
+  display: inline-block;
+  box-sizing: border-box;
+  width: var(--composer-list-fallback-indent, 1.25em);
+  margin-left: calc(0px - var(--composer-list-fallback-indent, 1.25em));
+  white-space: pre;
+  vertical-align: top;
+}
+.ProseMirror .composer-list-fallback-long-run-body {
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+.ProseMirror .composer-list-fallback-unindented {
+  display: inline-block;
+  box-sizing: border-box;
+  width: calc(100% + 1em + var(--composer-list-fallback-indent, 1.25em));
+  margin-left: calc(-1em - var(--composer-list-fallback-indent, 1.25em));
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.ProseMirror .composer-list-fallback-break {
+  /* Keep native <br> line boxes so consecutive hard breaks retain intentional
+     blank lines inside a paragraph-level list fallback. */
+  display: inline;
+}
+.ProseMirror .composer-list-line-indent {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 100%;
+  padding-left: calc(1em + var(--composer-list-hang, 1.25em));
+  text-indent: var(--composer-list-hang-negative, -1.25em);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+.ProseMirror .composer-list-tab-indent {
+  /* Keep the browser's tab advance aligned with the deterministic prefix-width
+     estimate. Do not measure and rewrite decoration DOM from a plugin view:
+     ProseMirror's DOMObserver may restore that style and enter an update loop. */
+  tab-size: 8ch;
+}
+/* The fallback unindented row must remain one inline-block; character-scoped
+   ProseMirror decorations would split it into several full-width fragments.
+   The local face covers the same ranges as CjkPunctDecoration, while the
+   bundled faces cover the punctuation glyphs HarmonyOS actually ships. The
+   ASCII range is punctuation-only, so Latin letters and digits continue
+   through the configured UI font. Keep the asset names aligned with the
+   exact-pinned font package. */
+@font-face {
+  font-family: 'Cindy CJK Punctuation Local';
+  src:
+    local('PingFang SC'),
+    local('Hiragino Sans GB'),
+    local('Microsoft YaHei UI'),
+    local('Microsoft YaHei'),
+    local('Noto Sans CJK SC'),
+    local('Source Han Sans SC');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  unicode-range:
+    U+0021-0022, U+0027-0029, U+002C, U+002E, U+003A-003B, U+003F, U+005B, U+005D, U+007B, U+007D,
+    U+3000-303F, U+FF00-FFEF;
+}
+@font-face {
+  font-family: 'Cindy CJK Punctuation Bundled';
+  src: url('../../../../../node_modules/harmonyos-sans-sc-webfont-splitted/dist/Regular_256855.woff2')
+    format('woff2');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  unicode-range: U+3001-3002, U+3008-3011, U+3014-3017;
+}
+@font-face {
+  font-family: 'Cindy CJK Punctuation Bundled';
+  src: url('../../../../../node_modules/harmonyos-sans-sc-webfont-splitted/dist/Regular_312071.woff2')
+    format('woff2');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  unicode-range:
+    U+3000, U+3003, U+3005-3007, U+3012-3013, U+3018-301B, U+301D-301E, U+3021-3029, U+303E;
+}
+@font-face {
+  font-family: 'Cindy CJK Punctuation Bundled';
+  src: url('../../../../../node_modules/harmonyos-sans-sc-webfont-splitted/dist/Regular_ac4458.woff2')
+    format('woff2');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  unicode-range:
+    U+FF01-FF03, U+FF05-FF0A, U+FF0C-FF1B, U+FF1F-FF3D, U+FF3F, U+FF41-FF5B, U+FF5D, U+FF5F-FF60,
+    U+FFE6;
+}
+@font-face {
+  font-family: 'Cindy CJK Punctuation Bundled';
+  src: url('../../../../../node_modules/harmonyos-sans-sc-webfont-splitted/dist/Regular_ea8896.woff2')
+    format('woff2');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  unicode-range:
+    U+0021-0022, U+0027-0029, U+002C, U+002E, U+003A-003B, U+003F, U+005B, U+005D, U+007B, U+007D,
+    U+FF04, U+FF0B, U+FF1C-FF1E, U+FF3E, U+FF40, U+FF5C, U+FF5E, U+FFE0-FFE5;
+}
+.ProseMirror .composer-list-cjk-punctuation-font {
+  font-family:
+    'Cindy CJK Punctuation Local', 'Cindy CJK Punctuation Bundled',
+    var(--app-font-ui, var(--app-font-ui-default));
+}
+.ProseMirror .composer-list-cjk-font {
+  font-family:
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Noto Sans CJK SC',
+    'Source Han Sans SC', 'HarmonyOS Sans SC', sans-serif;
+}
+/* 没有自然断点的长数字/字母串拆成 marker/body 两个相邻盒子。marker
+   始终留在正文首行,body 独占剩余宽度;overflow-wrap:anywhere 仅在正文
+   需要溢出时启用紧急断字,普通英文仍优先按空格换行。 */
+.ProseMirror .composer-list-long-run-marker {
+  display: inline-block;
+  box-sizing: border-box;
+  width: calc(1em + var(--composer-list-hang, 1.25em));
+  padding-left: 1em;
+  overflow: visible;
+  white-space: nowrap;
+  vertical-align: top;
+}
+.ProseMirror .composer-list-long-run-body {
+  display: inline-block;
+  box-sizing: border-box;
+  width: calc(100% - 1em - var(--composer-list-hang, 1.25em));
+  max-width: calc(100% - 1em - var(--composer-list-hang, 1.25em));
+  overflow-wrap: anywhere;
+  /* 该盒子只由 LONG_ALPHANUMERIC_BODY_RE 生成，正文没有自然断点；
+     因此可以安全地在串内断字，而不会影响普通英文句子的词边界。 */
+  word-break: break-all;
+  vertical-align: top;
+}
+.ProseMirror .voice-input-draft-replaced {
+  display: none;
+}
+/* Long-run body boxes can overlap a voice replacement in single-line rows.
+   The general multiline list path switches to the paragraph fallback while a
+   replacement is active, so its full-width row wrapper is never fragmented. */
+.ProseMirror .composer-list-long-run-body.voice-input-draft-replaced {
+  display: none;
+}
+.ProseMirror [data-voice-draft-inline] {
+  color: var(--chat-input-text);
+  opacity: 0.7;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  white-space: pre-wrap;
+}
+.ProseMirror [data-voice-draft-inline][data-voice-draft-source='stable'],
+.ProseMirror [data-voice-draft-inline][data-voice-draft-source='refinement'] {
+  opacity: 1;
+}
+/* Voice caret — replaces the native caret while dictation holds the composer
+   read-only. Listening keeps the mic outline static and animates only the
+   level bars inside the capsule; submitting/refining swaps to a spinner arc. */
+.ProseMirror [data-voice-caret] {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: -0.2em;
+  margin-left: 1px;
+  color: var(--chat-input-text);
+  pointer-events: none;
+  user-select: none;
+}
+.ProseMirror [data-voice-caret] svg {
+  display: block;
+  width: 1.1em;
+  height: 1.1em;
+  /* Clip any sub-pixel bleed to the icon box so a busy refine indicator can
+     never touch neighbouring wrapped text lines. */
+  overflow: hidden;
+}
+/* Spin only the inner arc around the viewBox centre, NOT the whole <svg>:
+   rotating the inline svg element sweeps a bounding box that overlaps adjacent
+   wrapped lines and makes Chromium repaint their text every frame (the
+   multi-line refine jitter). Rotating the path keeps the svg's paint box
+   fixed — the same containment the listening level-bars rely on. */
+.ProseMirror [data-voice-caret][data-voice-caret-state='processing'] [data-voice-spinner-arc] {
+  transform-box: view-box;
+  transform-origin: center;
+  animation: voice-caret-spin 0.9s linear infinite;
+}
+@keyframes voice-caret-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* Mic level bars — shared by every VoiceInputMicWaveIcon consumer (in-app
+   voice caret widget, dictation overlay title), hence not scoped to
+   .ProseMirror. The bars exist only inside that icon's svg. */
+[data-voice-mic-active='true'] [data-voice-mic-bar] {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: voice-mic-wave 1.1s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+/* bar 1 keeps the keyframe's default 0s delay */
+[data-voice-mic-active='true'] [data-voice-mic-bar='2'] {
+  animation-delay: 0.18s;
+}
+[data-voice-mic-active='true'] [data-voice-mic-bar='3'] {
+  animation-delay: 0.36s;
+}
+@keyframes voice-mic-wave {
+  0%,
+  100% {
+    transform: scaleY(0.4);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+.ProseMirror :is([data-mention-chip], [data-pasted-text-chip], [data-composer-quote]) {
+  /* Small vertical lift so every atomic chip aligns with the inline text
+     caret; the pills are a tad taller than 1em because of padding + border. */
+  position: relative;
+  top: -1px;
+}
+
+/* Keep the caret and surrounding prose a consistent, readable distance from
+   every composer pill. This is external spacing, independent of chip padding. */
+.ProseMirror :is(
+  [data-mention-chip],
+  [data-pasted-text-chip],
+  [data-composer-quote],
+  .ghost-cmd-pill,
+  .slash-cmd-pill,
+  .quick-start-pill
+) {
+  margin-inline: 4px;
+}
+
+/* The base layer disables native element dragging globally. Composer atoms
+   are the intentional exception: a drag commonly starts on the label/icon
+   child rather than the draggable wrapper itself, so every descendant must
+   opt back in or Chromium turns the gesture into text selection. */
+.ProseMirror :is([data-mention-chip], [data-pasted-text-chip], [data-composer-quote]),
+.ProseMirror :is([data-mention-chip], [data-pasted-text-chip], [data-composer-quote]) * {
+  -webkit-user-drag: element;
+}
+
+/* Slash 指令确认胶囊 — doc 里仍是普通 `/command` 文本。字号、字重和文字色
+   完全继承 composer 正文;仅用 surface/border/radius 表达“已命中命令”。 */
+.ProseMirror .slash-cmd-pill {
+  background: var(--surface-chip);
+  border: 1px solid var(--border-default);
+  border-radius: 9999px;
+  padding: 2px 8px 3px;
+  color: var(--chat-input-text);
+  font: inherit;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* 快速开始预填胶囊 — QuickStartPillMark。点击 New Maker 快速开始卡片后
+   预填文本以此 mark 包裹,渲染为与 ModelPromotionBadge 同色系的圆角
+   标签,区分「卡片预填」与「手动输入」。doc 里仍是普通 text + mark,
+   发送序列化只取 textContent,mark 不产生额外输出。
+   注意:快速开始文本是完整句子(用户需阅读/编辑),不能用 micro-label 字号
+   (DESIGN.md §3 限定 10-13px 仅用于辅助标签);此处 font: inherit 继承
+   composer 正文字号,仅用 background/color/radius 做视觉区分。 */
+.ProseMirror .quick-start-pill {
+  background: var(--accent-cta-bg);
+  border-radius: 9999px;
+  padding: 2px 8px 3px;
+  color: var(--accent-pure-cta-fg);
+  font: inherit;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* 意识指令确认胶囊 — GhostCommandDecoration。`$指令` 命中已唤醒意识时的
+   inline decoration:doc 里仍是可编辑纯文本,只在渲染层套胶囊。几何与
+   InlineReferenceChip 对齐:12/20px 字体行高、8×2px padding、6px 图文间距。 */
+.ProseMirror .ghost-cmd-pill {
+  background: var(--surface-chip);
+  border: 1px solid var(--border-default);
+  border-radius: 9999px;
+  padding: 2px 8px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 20px;
+  /* 窄输入区换行时两端都保留胶囊圆角/内边距 */
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+/* 触发符($/￥ 等)只做识别:胶囊态下渲染层隐藏,doc 里仍是真实字符 */
+.ProseMirror .ghost-cmd-sigil {
+  display: none;
+}
+/* 胶囊头部的意识标识:默认幽灵图标(lucide ghost,mask 走 currentColor
+   随主题),意识声明了头像时换成头像(data URL 经 decoration 白名单校验
+   后注入 --ghost-cmd-icon)。 */
+.ProseMirror .ghost-cmd-pill::before {
+  content: '';
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+  vertical-align: -2px;
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M9%2010h.01'/%3E%3Cpath%20d='M15%2010h.01'/%3E%3Cpath%20d='M12%202a8%208%200%200%200-8%208v12l3-3%202.5%202.5L12%2019l2.5%202.5L17%2019l3%203V10a8%208%200%200%200-8-8z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%20fill='none'%20stroke='black'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpath%20d='M9%2010h.01'/%3E%3Cpath%20d='M15%2010h.01'/%3E%3Cpath%20d='M12%202a8%208%200%200%200-8%208v12l3-3%202.5%202.5L12%2019l2.5%202.5L17%2019l3%203V10a8%208%200%200%200-8-8z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+.ProseMirror .ghost-cmd-pill[data-ghost-cmd-icon]::before {
+  background: var(--ghost-cmd-icon) center / cover no-repeat;
+  -webkit-mask: none;
+  mask: none;
+  border-radius: 999px;
+}
+/* 全角触发符(＄/￥)同时命中 CjkPunctDecoration 时,ProseMirror 会把重叠
+   区间切成相邻多个 span:接缝处去圆角/去边框拼回一颗胶囊,图标只画一次。 */
+.ProseMirror .ghost-cmd-pill:has(+ .ghost-cmd-pill) {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: 0;
+  margin-right: 0;
+  padding-right: 0;
+}
+.ProseMirror .ghost-cmd-pill + .ghost-cmd-pill {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: 0;
+  margin-left: 0;
+  padding-left: 0;
+}
+.ProseMirror .ghost-cmd-pill + .ghost-cmd-pill::before {
+  content: none;
+}
+
+/* F-FI-3: Scrollbar-hide utility for thumbnail strip */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+ * Resize-pane pointer transparency for embedded webviews (RSB Phase 6 收尾)。
+ *
+ * host 端 resize handle 拖动期间(MainLayout 监听 isDragging / isRightDragging
+ * 后 toggle body.resizing-pane),让 RSB 内置浏览器的 `<webview>` wrapper 透明
+ * 传 pointer 事件 —— Electron webview 是独立 webContents,guest 默认会"吞"掉
+ * host 的 pointermove,resize handler 全局 document listener 收不到 mousemove
+ * 会卡住(2026-07-01 用户实测:RSB 浏览器 tab 拖不动 resize handle)。
+ *
+ * pointer-events: none 让 host 的 pointer 事件穿过 webview wrapper 不命中,
+ * guest 也不收到,host 全局监听能正常拿到 → resize 顺畅。Resize 结束 body class
+ * 移除,用户立刻能继续跟 webview 交互。
+ */
+body.resizing-pane #browser-webview-pool,
+body.resizing-pane [data-pool-tab-id],
+body.resizing-pane [data-ghost-webview] {
+  pointer-events: none;
+}
+
+/* F-SDK-3: Running status bar — soft whole-line breathing.
+   The old clipping animation was perceived as a subtle fade, but forced
+   continuous Paint/Composite work in Electron. Opacity keeps it compositor-only. */
+.status-bar-shimmer {
+  color: var(--status-bar-accent);
+  animation: status-shimmer 1.5s ease-in-out infinite;
+  will-change: opacity;
+}
+
+/* F-SB-7: Session status indicator — breathing pulse.
+   Animation lives directly on the indicator element (no inherited custom
+   property, no driver container). This eliminates the cascade-style
+   invalidation that the @property+inherits:true pattern caused on every
+   sidebar descendant each frame. Indicators that mount together stay in
+   sync naturally; late-mounted ones may drift by a fraction of a cycle,
+   which is imperceptible at this opacity range. */
+@keyframes session-breathing {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.session-status-breathing {
+  animation: session-breathing 1.5s ease-in-out infinite;
+  will-change: opacity;
+}
+
+/* 折叠 rail(竖排 tile)及置顶卡片运行中的扫动进度条。置顶卡片固定为 52px 宽度(见
+   SessionCard showCardBar),rail 延续全宽;reduce-motion 停动画。 */
+.session-card-bar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 36%;
+  border-radius: 2px;
+  background: var(--text-tertiary);
+  animation: session-card-prog 1.5s ease-in-out infinite;
+}
+@keyframes session-card-prog {
+  0% {
+    transform: translateX(-115%);
+  }
+  100% {
+    transform: translateX(330%);
+  }
+}
+
+/* sidebar-card-mode: SessionCard 完成 settle——运行结束时卡片底色闪一下 hover 色
+   再归位(0.9s),作为低调的"完成"提示。运行中的活动感由标题左侧
+   SessionStatusIcon 呼吸 + 底部短扫动进度条表达。 */
+.session-card--settle {
+  animation: session-card-settle 0.9s ease;
+}
+@keyframes session-card-settle {
+  0% {
+    background-color: var(--surface-elevated);
+  }
+  35% {
+    background-color: hsl(var(--sidebar-item-hover));
+  }
+  100% {
+    background-color: var(--surface-elevated);
+  }
+}
+
+/* 需关注圆点——深色 + box-shadow 扩散脉冲（对照 redesign 稿 xdtsb-pulse） */
+/* 呼吸点(AttentionDot 的 breathing 形态)。
+   常驻循环动画按 DESIGN.md §14.4 只允许动 transform / opacity(compositor-only);
+   原实现动的是 box-shadow,每帧都要重绘,多张未读卡长期同屏时持续吃 CPU 与电量
+   (codex review)。改成一个 ::after 光环做 scale + opacity,视觉节奏不变:
+   6px 的点外扩到约 4px 光环(6→14px ≈ scale 2.33),同时淡出。
+   起始帧 opacity 为 0,所以 scale(1) 那一刻光环不可见,不会给点本身蒙一层底色。 */
+.session-card-dot {
+  position: relative;
+}
+.session-card-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: hsl(var(--foreground));
+  animation: session-card-pulse 2.1s infinite;
+  will-change: transform, opacity;
+  pointer-events: none;
+}
+@keyframes session-card-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0;
+  }
+  30% {
+    opacity: 0.32;
+  }
+  70% {
+    transform: scale(2.33);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.33);
+    opacity: 0;
+  }
+}
+
+/* 卡片列数切换(1↔2↔3)时新布局淡入,软化"硬跳"(对照 rail 收起的渐隐)。 */
+.card-col-fade {
+  animation: card-col-fade 0.2s ease;
+}
+@keyframes card-col-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-voice-mic-active='true'] [data-voice-mic-bar],
+  .status-bar-shimmer,
+  .status-bar-done,
+  .session-status-breathing,
+  .session-card-bar::before,
+  .session-card--settle,
+  .session-card-dot::after,
+  .session-running-dot,
+  .thinking-dot,
+  .card-col-fade {
+    animation: none !important;
+    will-change: auto;
+  }
+}
+
+/* 页面不可见时冻结常驻装饰动画(闸门见 lib/hiddenAnimationGate.ts)。
+   主窗 backgroundThrottling 在有 running turn 时被主动关闭以保住流式输出,
+   于是隐藏窗口里的 infinite 动画会继续推进并持续触发样式重算;实测 10 个动画
+   令样式重算 29.8/s,冻结后 5.7/s(-81%),renderer CPU 12.4% → 6.0%。
+
+   ⚠️ 新增任何 `animation: ... infinite` 时必须同步把它的元素加进本清单。
+   `hiddenAnimationGate.test.ts` 会扫描本文件所有 infinite 规则并逐条核对,漏了会直接
+   测试失败——不要改测试绕过,补选择器即可。清单按「真正挂动画的那个元素」(选择器的
+   最后一段)收敛,所以祖先条件不同、落点相同的规则只需一条。
+
+   只列 infinite 装饰动画。一次性动画(.status-bar-done / .session-card--settle /
+   .card-col-fade / ghost-bubble 进出场 / ghost-panel 展开收起)刻意不纳入:它们总时长
+   有限、省不到东西,却会在隐藏期被冻在中途帧,恢复可见时反而突兀。这也是这里用
+   allowlist 而不是「全局暂停 + 一次性例外」的原因——漏掉 infinite 只是少省一点 CPU,
+   漏掉一次性动画却会造成可见的视觉异常。
+
+   用 animation-play-state 而非 animation: none —— 后者会让元素跳回静止态
+   (opacity 回到 1),恢复可见的瞬间比冻结更显眼。冻结点落在动画自身的取值区间内,
+   恢复后接着播,用户不可察觉。
+
+   Tailwind 的 animate-spin / animate-pulse 用 [class*=] 匹配,以覆盖
+   motion-safe:animate-pulse 这类变体编译出的转义类名。任意值工具类
+   (animate-[spin_2.4s_linear_infinite] 之类,见 GhostSummonCard)不含 animate-spin
+   子串,靠 [class*='infinite'] 兜住:Tailwind 把 keyframes 简写原样编进类名,
+   循环动画必然带 infinite 字面量,而一次性的 animate-[xxx_200ms_ease-out] 不会。 */
+[data-app-hidden='true'] [data-voice-spinner-arc],
+[data-app-hidden='true'] [data-voice-mic-bar],
+[data-app-hidden='true'] .status-bar-shimmer,
+[data-app-hidden='true'] .session-status-breathing,
+[data-app-hidden='true'] .session-card-bar::before,
+[data-app-hidden='true'] .session-card-dot::after,
+[data-app-hidden='true'] .session-running-dot,
+[data-app-hidden='true'] .thinking-dot,
+[data-app-hidden='true'] .ghost-card-sweep,
+[data-app-hidden='true'] .ghost-bubble-face,
+[data-app-hidden='true'] .agent-island-mascot-character,
+[data-app-hidden='true'] .agent-island-mascot-keyboard,
+[data-app-hidden='true'] .agent-island-mascot-key,
+[data-app-hidden='true'] .agent-island-mascot-eyes,
+[data-app-hidden='true'] .agent-island-mascot-sparkle,
+[data-app-hidden='true'] [class*='animate-spinner'],
+[data-app-hidden='true'] [class*='animate-spin'],
+[data-app-hidden='true'] [class*='animate-pulse'],
+[data-app-hidden='true'] [class*='infinite'],
+/* drawio viewer(vendor/drawio/viewer-static.min.js)把循环动画以 inline style 直接写到
+   SVG 元素上(flowAnimation 的流动虚线、加载 spinner),类名既不含 animate-* 也不含
+   infinite,前面几条都够不着;它又是压缩过的第三方脚本,不归 globals.css / tsx 扫描管。
+   按容器整棵子树冻结 —— 容器形态是 <div class="mxgraph" data-mxgraph="{json}">,
+   见 DrawioPreview.tsx。 */
+[data-app-hidden='true'] [data-mxgraph],
+[data-app-hidden='true'] [data-mxgraph] * {
+  animation-play-state: paused !important;
+}
+
+/* Running indicator — three horizontal dots, scale-up wave from left to right.
+   Color uses currentColor so the parent span controls accent vs gray. */
+.session-running-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 1.5px;
+}
+.session-running-dot {
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background-color: currentColor;
+  animation: session-running-dot-wave 1.1s ease-in-out infinite;
+}
+.session-running-dot-1 {
+  animation-delay: 0s;
+}
+.session-running-dot-2 {
+  animation-delay: 0.18s;
+}
+.session-running-dot-3 {
+  animation-delay: 0.36s;
+}
+
+@keyframes session-running-dot-wave {
+  0%,
+  60%,
+  100% {
+    transform: scale(0.7);
+    opacity: 0.4;
+  }
+  30% {
+    transform: scale(1.35);
+    opacity: 1;
+  }
+}
+
+@keyframes status-shimmer {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* 意识卡片 running 扫光(卡槽③):主机盖在意识画布上的斜向光带。
+   transform-only(规则 7 compositor-only);仅 running 挂载,settle 即卸,
+   历史卡永远静止(净化器已剥意识自带动画,动感统一由主机供给)。 */
+@keyframes ghost-card-sweep {
+  0% {
+    transform: translateX(-160%) skewX(-12deg);
+  }
+  100% {
+    transform: translateX(420%) skewX(-12deg);
+  }
+}
+.ghost-card-sweep {
+  animation: ghost-card-sweep 2.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ghost-card-sweep {
+    animation: none;
+  }
+}
+
+/* 召唤法阵终态编舞(GhostSummonCard/SummonSeal,DESIGN.md §14.4 登记):
+   running 结束时两道弧在旋转中把缺口收拢至满圆(600ms 一次性 dasharray
+   过渡,一次性瞬态允许非合成器属性)→ 光晕从法阵荡开一圈 + ✓ 弹出
+   (✓ 复用 Done 语义的唯一批准 overshoot 曲线,同 status-done-pop)。
+   motion-reduce 下全部禁用,直接落终态帧。 */
+.summon-seal-arc {
+  transition: stroke-dasharray 600ms var(--motion-ease-out), opacity 600ms var(--motion-ease-out);
+}
+@keyframes summon-seal-halo {
+  0% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(1.65);
+    opacity: 0;
+  }
+}
+.summon-seal-halo {
+  animation: summon-seal-halo 0.9s var(--motion-ease-out) forwards;
+}
+@keyframes summon-seal-tick-pop {
+  0% {
+    transform: scale(0);
+  }
+  60% {
+    transform: scale(1.12);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.summon-seal-tick-pop {
+  animation: summon-seal-tick-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .summon-seal-arc {
+    transition: none;
+  }
+  .summon-seal-halo,
+  .summon-seal-tick-pop {
+    animation: none;
+  }
+  .summon-seal-halo {
+    opacity: 0;
+  }
+}
+
+/* Done: pop bounce, stays orange */
+.status-bar-done {
+  color: var(--status-bar-accent);
+  animation: status-done-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes status-done-pop {
+  0% {
+    transform: scale(0.85);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* F-MSG-2: Code highlight theme imports — moved to top of file (CSS @import must precede all other statements) */
+
+:root {
+  /* Light theme highlight.js styles are the default (imported globally at top of file) */
+  --model-budget-gradient: linear-gradient(
+    90deg,
+    #e11d48,
+    #ea580c,
+    #d97706,
+    #ca8a04,
+    #65a30d,
+    #16a34a,
+    #0d9488
+  );
+}
+
+.dark {
+  --model-budget-gradient: linear-gradient(
+    90deg,
+    #fb7185,
+    #fb923c,
+    #fbbf24,
+    #fde047,
+    #a3e635,
+    #4ade80,
+    #2dd4bf
+  );
+}
+
+/* github.css 把 .hljs background 硬编码为 #ffffff,会盖掉 <pre> 的
+ * --msg-code-block-bg;surface-elevated 非白的 light 主题(如 solarized-light
+ * 的 #eee8d5)会出现色块割裂。改 transparent 让 token 接管。
+ * .dark .hljs 显式设 background,特异性更高,不受影响。 */
+.hljs {
+  background: transparent;
+}
+
+/* Dark mode hljs override — full GitHub Dark palette, applied as a complete
+   replacement for the light github theme imported on line 1. Previously this
+   block was a hand-picked partial override which left several token classes
+   (e.g. .hljs-regexp, .hljs-attr, .hljs-name) inheriting light-theme colors
+   in dark mode and rendering nearly invisible on dark backgrounds.
+
+   Mirrors highlight.js/styles/github-dark.css 1:1, except `.hljs` background
+   uses --msg-code-block-bg (Card #2c2c2a per docs/design-rules/cindy-design-system.md §6) instead of
+   github-dark's default #0d1117 — so TextLightbox and message code blocks
+   sit on the design system surface. */
+.dark .hljs {
+  background: var(--msg-code-block-bg);
+  color: #c9d1d9;
+}
+.dark .hljs-doctag,
+.dark .hljs-keyword,
+.dark .hljs-meta .hljs-keyword,
+.dark .hljs-template-tag,
+.dark .hljs-template-variable,
+.dark .hljs-type,
+.dark .hljs-variable.language_ {
+  color: #ff7b72;
+}
+.dark .hljs-title,
+.dark .hljs-title.class_,
+.dark .hljs-title.class_.inherited__,
+.dark .hljs-title.function_ {
+  color: #d2a8ff;
+}
+.dark .hljs-attr,
+.dark .hljs-attribute,
+.dark .hljs-literal,
+.dark .hljs-meta,
+.dark .hljs-number,
+.dark .hljs-operator,
+.dark .hljs-variable,
+.dark .hljs-selector-attr,
+.dark .hljs-selector-class,
+.dark .hljs-selector-id {
+  color: #79c0ff;
+}
+.dark .hljs-regexp,
+.dark .hljs-string,
+.dark .hljs-meta .hljs-string {
+  color: #a5d6ff;
+}
+.dark .hljs-built_in,
+.dark .hljs-symbol {
+  color: #ffa657;
+}
+.dark .hljs-comment,
+.dark .hljs-code,
+.dark .hljs-formula {
+  color: #8b949e;
+}
+.dark .hljs-name,
+.dark .hljs-quote,
+.dark .hljs-selector-tag,
+.dark .hljs-selector-pseudo {
+  color: #7ee787;
+}
+.dark .hljs-subst {
+  color: #c9d1d9;
+}
+.dark .hljs-section {
+  color: #1f6feb;
+  font-weight: bold;
+}
+
+/* CINDY dark hljs 整改(D 裁决 2026-07-17,§15.4 双门槛):
+   github-dark .hljs-section #1f6feb × CINDY surface-elevated #312F2F = 2.87 <3:1(语法色门槛);
+   保持色相(蓝 H212 S84%),仅提亮度 L52%→53.5% → #2573ec × #312F2F = 3.00 ≥3:1。
+   -punctuation/-tag dark 无单独选择器,继承 .dark .hljs text #c9d1d9(× #312F2F=8.62 ≥3,无需整改)。 */
+[data-theme='cindy-dark'] .hljs-section {
+  color: #2573ec;
+}
+
+/* CINDY dark hljs -punctuation/-tag(D 裁决):github-dark "purposely ignored" 无显式色,
+   dark 继承 .dark .hljs text #c9d1d9(× #312F2F=8.62 ≥3 达标,无需提亮);
+   此处 [data-theme=cindy-dark] 显式覆盖 #c9d1d9 防御性(不依赖继承,满足 D 裁决"三项覆盖",
+   值同 text 不降对比度)。 */
+[data-theme='cindy-dark'] .hljs-punctuation,
+[data-theme='cindy-dark'] .hljs-tag {
+  color: #c9d1d9;
+}
+.dark .hljs-bullet {
+  color: #f2cc60;
+}
+.dark .hljs-emphasis {
+  color: #c9d1d9;
+  font-style: italic;
+}
+.dark .hljs-strong {
+  color: #c9d1d9;
+  font-weight: bold;
+}
+.dark .hljs-addition {
+  color: #aff5b4;
+  background-color: #033a16;
+}
+.dark .hljs-deletion {
+  color: #ffdcd7;
+  background-color: #67060c;
+}
+
+/* Diff full-row fill (2026-04-21) — highlight.js wraps each `+`/`-` line in
+ * an inline span, so the background only covers the line's text. We force
+ * `display: block` so the colored band stretches to the right edge of the
+ * code container, matching the GitHub-style diff render used by DiffView /
+ * MarkdownDiffBlock. Applies to both light (github.css) and dark themes. */
+.hljs-addition,
+.hljs-deletion {
+  display: block;
+}
+
+/* Solarized Light — 1:1 mirror highlight.js/styles/base16/solarized-light.css,
+ * 对 base08 red 做一处偏离:variable / name / template-variable / selector-tag
+ * 不再染 red,回退到默认 base05。依据 Schoonover 原作的 "red = errors" 语义
+ * (base16 派生版本扩散到标识符是社区改的),base08 仅保留给 hljs-deletion。
+ * 选择器 [data-theme="solarized-light"] 特异性高于通用 .hljs-*,不影响其他主题。 */
+[data-theme='solarized-light'] .hljs {
+  color: #586e75; /* base05 — Solarized default foreground */
+}
+[data-theme='solarized-light'] .hljs-comment {
+  color: #839496; /* base03 */
+}
+[data-theme='solarized-light'] .hljs-tag {
+  color: #657b83; /* base04 */
+}
+[data-theme='solarized-light'] .hljs-subst,
+[data-theme='solarized-light'] .hljs-punctuation,
+[data-theme='solarized-light'] .hljs-operator {
+  color: #586e75; /* base05 */
+}
+[data-theme='solarized-light'] .hljs-operator {
+  opacity: 0.7;
+}
+/* hljs-bullet (fenced ```markdown 块内部的 list marker) 并入 base09 橙组:
+ * base05 (H=195° 青调) 在 ivory 米黄底有互补色偏色 —— 同 solarized-light.ts
+ * 顶部注释为正文主动规避 base00/base01 的坑,且 marker 与 number / literal
+ * 同属"索引/标记"语义,base09 是 Solarized 16 色板里唯一的橙。 */
+[data-theme='solarized-light'] .hljs-bullet,
+[data-theme='solarized-light'] .hljs-symbol,
+[data-theme='solarized-light'] .hljs-number,
+[data-theme='solarized-light'] .hljs-link,
+[data-theme='solarized-light'] .hljs-attr,
+[data-theme='solarized-light'] .hljs-variable.constant_,
+[data-theme='solarized-light'] .hljs-literal {
+  color: #cb4b16; /* base09 orange */
+}
+[data-theme='solarized-light'] .hljs-title,
+[data-theme='solarized-light'] .hljs-class .hljs-title,
+[data-theme='solarized-light'] .hljs-title.class_ {
+  color: #b58900; /* base0A yellow */
+}
+[data-theme='solarized-light'] .hljs-strong {
+  color: #b58900;
+  font-weight: bold;
+}
+[data-theme='solarized-light'] .hljs-code,
+[data-theme='solarized-light'] .hljs-title.class_.inherited__,
+[data-theme='solarized-light'] .hljs-string {
+  color: #859900; /* base0B green — solarized-light 的 accent 同色 */
+}
+[data-theme='solarized-light'] .hljs-built_in,
+[data-theme='solarized-light'] .hljs-doctag,
+[data-theme='solarized-light'] .hljs-quote,
+[data-theme='solarized-light'] .hljs-keyword.hljs-atrule,
+[data-theme='solarized-light'] .hljs-regexp {
+  color: #2aa198; /* base0C cyan */
+}
+[data-theme='solarized-light'] .hljs-function .hljs-title,
+[data-theme='solarized-light'] .hljs-attribute,
+[data-theme='solarized-light'] .ruby .hljs-property,
+[data-theme='solarized-light'] .hljs-title.function_,
+[data-theme='solarized-light'] .hljs-section {
+  color: #268bd2; /* base0D blue */
+}
+[data-theme='solarized-light'] .hljs-type,
+[data-theme='solarized-light'] .hljs-template-tag,
+[data-theme='solarized-light'] .diff .hljs-meta,
+[data-theme='solarized-light'] .hljs-keyword {
+  color: #6c71c4; /* base0E violet */
+}
+[data-theme='solarized-light'] .hljs-emphasis {
+  color: #6c71c4;
+  font-style: italic;
+}
+[data-theme='solarized-light'] .hljs-meta,
+[data-theme='solarized-light'] .hljs-meta .hljs-keyword,
+[data-theme='solarized-light'] .hljs-meta .hljs-string {
+  color: #d33682; /* base0F magenta */
+}
+[data-theme='solarized-light'] .hljs-meta .hljs-keyword,
+[data-theme='solarized-light'] .hljs-meta-keyword {
+  font-weight: bold;
+}
+/* Diff bands — 把 GitHub Light 的 #f0fff4 / #ffeef0(冷绿/粉)换成 Solarized
+ * 调色板的 12% alpha 版,在米黄底上更协调。
+ * addition 走 base0B 绿(与 hljs-string 同源,"green = inserted" 语义);
+ * deletion 走 base08 红 —— 这是整套 Solarized Light 配色里唯一保留 base08
+ * 的位置,与本文件顶部 Schoonover 原作 "red = errors / deletion" 的取舍一致。 */
+[data-theme='solarized-light'] .hljs-addition {
+  color: #859900;
+  background-color: rgba(133, 153, 0, 0.12);
+}
+[data-theme='solarized-light'] .hljs-deletion {
+  color: #dc322f;
+  background-color: rgba(220, 50, 47, 0.12);
+}
+
+/* Scrollbar: 6px visible thumb with gap from edges and a hover color.
+   Gutter=12px (= sidebar 左 padding pl-3，让 scrollbar-gutter:stable 时左右视觉对称),
+   transparent border=3px each side → visible thumb=6px, gap=3px from edges
+   ---
+   Auto-show: thumb 默认透明,容器带 .is-scrolling 类时显形(由 lib/scrollbarAutoHide.ts
+   在滚动 / 鼠标悬停在右侧 scrollbar 带时加上,2s 无活动后移除)。
+   注:Chromium 对 ::-webkit-scrollbar-thumb 的 transition 实测不渲染中间帧(已知 quirk),
+   所以这里没有 fade 动画,显隐是瞬切。如果想要 fade,只能放弃 native scrollbar
+   走自定义 overlay 方案。 */
+::-webkit-scrollbar {
+  width: 12px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+/* 纵横滚动条交汇角件默认是不跟主题的白色方块(dark 下刺眼),置透明全皮肤通吃 */
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  background-clip: padding-box;
+  border: 3px solid transparent;
+  border-radius: 6px;
+}
+.is-scrolling::-webkit-scrollbar-thumb {
+  background-color: var(--msg-scrollbar);
+}
+.is-scrolling::-webkit-scrollbar-thumb:hover {
+  background-color: var(--msg-scrollbar-hover);
+}
+
+/* Diff 卡片(chat/DiffView + chat/MarkdownDiffBlock)的横向滚动条 —— 常显,
+   不参与 `.is-scrolling` 自动隐藏体系。
+   why: 纵向"还有内容"有视觉线索(卡片被容器切断),横向没有 —— 长行到卡片右缘
+   就没了,thumb 默认透明时用户根本不知道这里能横滚(2026-07-30 用户反馈)。
+   槽厚 12px 与全局纵向槽宽对齐,thumb 同样靠 3px 透明 border 收成可见 6px;
+   `:horizontal` 让规则只吃横向条,纵向条继续走 auto-hide。 */
+.diff-hscroll::-webkit-scrollbar:horizontal {
+  height: 12px;
+}
+.diff-hscroll::-webkit-scrollbar-thumb:horizontal {
+  background-color: var(--msg-scrollbar);
+}
+.diff-hscroll::-webkit-scrollbar-thumb:horizontal:hover {
+  background-color: var(--msg-scrollbar-hover);
+}
+
+/* F-QUEUE-DEFER · PendingQueuePanel — slim 4px scrollbar so the
+   `scrollbar-gutter: stable both-edges` reserved slot is small
+   (4px each side instead of 12px). Without this, the chip-bg rows
+   sit ~20px inside the card; with it, ~8px. */
+.pending-queue-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.pending-queue-scroll::-webkit-scrollbar-thumb {
+  background-color: var(--msg-scrollbar);
+  border: none;
+  border-radius: 9999px;
+}
+.pending-queue-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: var(--msg-scrollbar-hover);
+}
+
+/* Composer 形变面板(MorphPopover)内的下拉列表 — 8px 细滚动条。
+   配合列表容器的 -mr-2 + scrollbar-gutter:stable,滚动条整体挪进面板右侧
+   8px 内边距留白;行宽不再被 12px 全局滚动条挤窄,行高亮/对勾与搜索框、
+   vendor tab 右缘像素对齐(2026-07-22 用户反馈的右缘错位)。 */
+.morph-panel-list-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.morph-panel-list-scroll::-webkit-scrollbar-thumb {
+  background-color: var(--msg-scrollbar);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 9999px;
+}
+.morph-panel-list-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: var(--msg-scrollbar-hover);
+}
+
+/* workdir-browse FileTabsBar — 横向 scrollbar 完全隐藏。
+   尝试过几种 overlay 方案 (gutter / -top trick / items-end+padding) 都有
+   视觉副作用,最终决定不显示 scrollbar,横向滚动靠 wheel/trackpad 完成。
+   active tab 自动定位由 FileTabsBar 直接写 scrollLeft 完成 (32px peek 也在
+   JS 里),不依赖 CSS scroll-padding。 */
+.workdir-tabs-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Three small circles fade their opacity in sequence to suggest "model is
+   currently emitting thinking". Pure CSS, no JS, no shimmer mask — much
+   cheaper than the status-bar shimmer (no @property, no mask animation). */
+.thinking-dot {
+  display: inline-block;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  /* 与紧凑动作图标和元信息使用同一层级的灰色。 */
+  background-color: var(--msg-tool-card-chevron);
+  animation: thinking-dot-wave 1.2s ease-in-out infinite;
+}
+.thinking-dot-1 {
+  animation-delay: 0s;
+}
+.thinking-dot-2 {
+  animation-delay: 0.2s;
+}
+.thinking-dot-3 {
+  animation-delay: 0.4s;
+}
+
+@keyframes thinking-dot-wave {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+/* SkillhubDetailView — soft entry fade (cooperates with MainLayout FadeSwitcher).
+   FadeSwitcher 把外壳 0→1 渐入(220ms),用户仍能感觉到 detail 内部数据填入
+   那一帧的"硬切"。这里给 detail 容器再加一层 0.4→1 的快速 fade,叠在
+   FadeSwitcher 之上,组合后用户看到的是"逐渐浮现",不是突然就位。 */
+@keyframes detail-soft-in {
+  from {
+    opacity: 0.4;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Agent Island settings — compact mascot animation previews.
+   These are renderer-only previews for choosing a skin; the native helper keeps
+   its own AppKit/SwiftUI animation timing. */
+.agent-island-mascot-stage {
+  isolation: isolate;
+}
+
+.agent-island-mascot-character {
+  --agent-island-mascot-scale: 1;
+  transform-origin: 50% 62%;
+  transform: translate3d(0, 0, 0) scale(var(--agent-island-mascot-scale));
+  will-change: transform;
+}
+
+.agent-island-mascot-keyboard {
+  transform-origin: 50% 92%;
+  will-change: transform;
+}
+
+.agent-island-mascot-eyes {
+  transform-origin: center;
+  will-change: transform;
+}
+
+/* 键帽不设常驻 will-change:12 键 x 6 皮肤会造出 72 个常驻合成层,
+   而 opacity/transform keyframe 动画激活时 Chromium 会自动按需提层。 */
+
+.agent-island-mascot-sparkle {
+  position: absolute;
+  z-index: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background-color: var(--settings-section-sublabel);
+  opacity: 0;
+  transform: translate3d(0, 0, 0) scale(0.6);
+  will-change: opacity, transform;
+}
+
+.agent-island-mascot-sparkle:nth-child(1) {
+  left: 10px;
+  top: 9px;
+}
+
+.agent-island-mascot-sparkle:nth-child(2) {
+  right: 12px;
+  top: 11px;
+}
+
+.agent-island-mascot-sparkle:nth-child(3) {
+  right: 18px;
+  bottom: 11px;
+}
+
+.agent-island-mascot-stage[data-motion='idle'] .agent-island-mascot-character {
+  animation: agent-island-mascot-float 1.7s ease-in-out infinite;
+}
+
+.agent-island-mascot-stage[data-motion='working'] .agent-island-mascot-character {
+  animation: agent-island-mascot-type 520ms ease-in-out infinite;
+}
+
+.agent-island-mascot-stage[data-motion='working'] .agent-island-mascot-keyboard {
+  animation: agent-island-mascot-keyboard-tap 520ms ease-in-out infinite;
+}
+
+.agent-island-mascot-stage[data-motion='working'] .agent-island-mascot-key {
+  animation: agent-island-mascot-key-flash 720ms ease-in-out infinite;
+  animation-delay: var(--agent-island-key-delay);
+}
+
+.agent-island-mascot-stage[data-motion='waitingApproval'] .agent-island-mascot-character {
+  animation: agent-island-mascot-focus 1.15s ease-in-out infinite;
+}
+
+.agent-island-mascot-stage[data-motion='waitingApproval'] .agent-island-mascot-eyes {
+  animation: agent-island-mascot-eye-focus 1.15s ease-in-out infinite;
+}
+
+.agent-island-mascot-stage[data-motion='completed'] .agent-island-mascot-character {
+  animation: agent-island-mascot-hop 720ms cubic-bezier(0.2, 0.9, 0.2, 1) infinite;
+}
+
+.agent-island-mascot-stage[data-motion='completed'] .agent-island-mascot-sparkle {
+  animation: agent-island-mascot-sparkle 720ms ease-out infinite;
+  animation-delay: var(--agent-island-sparkle-delay);
+}
+
+@keyframes agent-island-mascot-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(var(--agent-island-mascot-scale));
+  }
+  50% {
+    transform: translate3d(0, -2px, 0) scale(var(--agent-island-mascot-scale));
+  }
+}
+
+@keyframes agent-island-mascot-type {
+  0%,
+  100% {
+    transform: translate3d(-1px, 0, 0) rotate(-1deg) scale(var(--agent-island-mascot-scale));
+  }
+  50% {
+    transform: translate3d(1px, 1px, 0) rotate(1deg) scale(var(--agent-island-mascot-scale));
+  }
+}
+
+@keyframes agent-island-mascot-keyboard-tap {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, 0.7px, 0);
+  }
+}
+
+@keyframes agent-island-mascot-key-flash {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: translate3d(0, 0, 0);
+  }
+  45% {
+    opacity: 1;
+    transform: translate3d(0, 0.35px, 0);
+  }
+}
+
+@keyframes agent-island-mascot-focus {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(-1deg) scale(var(--agent-island-mascot-scale));
+  }
+  50% {
+    transform: translate3d(0, -1px, 0) rotate(1deg) scale(var(--agent-island-mascot-scale));
+  }
+}
+
+@keyframes agent-island-mascot-eye-focus {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(0.58);
+  }
+}
+
+@keyframes agent-island-mascot-hop {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(var(--agent-island-mascot-scale));
+  }
+  35% {
+    transform: translate3d(0, -5px, 0) scale(var(--agent-island-mascot-scale));
+  }
+  65% {
+    transform: translate3d(0, 1px, 0) scale(var(--agent-island-mascot-scale));
+  }
+}
+
+@keyframes agent-island-mascot-sparkle {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 3px, 0) scale(0.45);
+  }
+  35% {
+    opacity: 0.55;
+    transform: translate3d(0, -1px, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, -5px, 0) scale(0.55);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-island-mascot-stage .agent-island-mascot-character,
+  .agent-island-mascot-stage .agent-island-mascot-keyboard,
+  .agent-island-mascot-stage .agent-island-mascot-key,
+  .agent-island-mascot-stage .agent-island-mascot-eyes,
+  .agent-island-mascot-stage .agent-island-mascot-sparkle {
+    animation: none !important;
+  }
+}
+
+/* FileBodyView Ctrl+F — local search highlight inside doc preview.
+   Two states:
+     .doc-search-mark              → normal match (淡黄底, text inherit)
+     .doc-search-mark[data-active] → currently focused match (中黄实底 + 1px 琥珀内描边)
+   Color spec follows the GitHub Primer attention family. */
+.doc-search-mark {
+  background-color: #fff8c5;       /* Primer attention-muted */
+  color: inherit;
+  /* font / line-height 显式继承 —— <mark> 是 phrasing element,Chromium UA
+     默认不改字号,但跨主题 / 跨 reset 时把字体属性钉在 inherit 最稳,避免
+     把 code block 里那段被高亮的字渲染得跟周围尺寸不一致。 */
+  font: inherit;
+  line-height: inherit;
+  padding: 2px 1px;
+  border-radius: 2px;
+}
+.doc-search-mark[data-active] {
+  background-color: #fae17d;
+  font-weight: 500;
+  /* 用 inset box-shadow 模拟外框 —— 比 outline 好在不会在盒子外多画
+     1px,高亮块严格等于行高,视觉上不会觉得"字变大了"。 */
+  box-shadow: inset 0 0 0 1px #d4a72c;
+}
+.dark .doc-search-mark {
+  background-color: #362d1b;       /* ≈ #bb8009 @ 15% on dark bg */
+}
+.dark .doc-search-mark[data-active] {
+  background-color: #9e6a03;
+  box-shadow: inset 0 0 0 1px #d4a72c;
+}
+
+/* CodeMirror search highlight (PlaintextEditor — code 模式 + plain 模式都
+   走 CodeMirror 后,所有文件类型的编辑/代码预览都用这套 decoration)。
+   Same tokens as .doc-search-mark above. .cm-doc-search-active is added to
+   the active match IN ADDITION TO .cm-doc-search-match — second selector
+   wins via source order, no specificity tricks needed. */
+.cm-doc-search-match {
+  background-color: #fff8c5;
+  border-radius: 2px;
+}
+.cm-doc-search-active {
+  background-color: #fae17d;
+  font-weight: 500;
+  /* outline 而不是 inset box-shadow:CodeMirror 的 .cm-line 自己用
+     box-shadow 画选区背景层,inset 会被它的层级压掉,outline 走的是
+     完全独立的绘制通道,稳定可见。1px 外描边在等宽字体里几乎不会让
+     字符看起来变大。 */
+  outline: 1px solid #d4a72c;
+}
+.dark .cm-doc-search-match {
+  background-color: #362d1b;
+}
+.dark .cm-doc-search-active {
+  background-color: #9e6a03;
+  outline: 1px solid #d4a72c;
+}
+
+@layer utilities {
+  .text-sidebar-item-active-foreground {
+    color: var(--sidebar-item-active-foreground);
+  }
+
+  html[data-platform='win32'] .cursor-not-allowed,
+  html[data-platform='win32'] .disabled\:cursor-not-allowed:disabled,
+  html[data-platform='win32'] .data-\[disabled\]\:cursor-not-allowed[data-disabled] {
+    cursor: var(--cursor-not-allowed, not-allowed);
+  }
+}
+
+/* KaTeX math in chat markdown (rehype-katex output).
+   - display 公式(.katex-display)可能超出气泡宽度,给横向滚动而不是溢出;
+     overflow-y hidden 防止某些字形基线计算触发的 1px 纵向滚动条。
+   - KaTeX 文字色走 currentColor,天然跟随主题,无需 token override。
+   - 不覆盖 KaTeX 默认字号(1.21em 相对正文),与主流公式排版一致。 */
+.msg-markdown .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 2px;
+  margin: 8px 0;
+}
+.msg-markdown .katex {
+  /* 长 inline 公式允许在气泡内换行退化为可断行,避免撑破布局。 */
+  white-space: normal;
+}
+.msg-markdown .katex-display .katex {
+  /* display 模式内部保持不换行,交给外层横向滚动。 */
+  white-space: nowrap;
+}
+
+/* Sidebar peek 抽屉滑入(useSidebarPeek / Sidebar.tsx peeking 态)。
+   用 keyframes 而非双 rAF 翻 transition:animation-name 从 none 变为有值即
+   触发一次播放,无首帧竞态;滑出走 peekClosing 态的 transition(见 Sidebar.tsx)。 */
+@keyframes sidebar-peek-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* 布局树引擎分割线(C1,LayoutRoot 渲染)——面板之间的 1px 缝由引擎统一画,
+   面板自己不再画侧边框(两块时代"各画一侧"的做法在 N 块布局下会漏缝)。
+   未来统一拖宽把手也落位在这条缝上。颜色走 token(规则 16)。
+   邻接面板折叠(data-pane-collapsed,如工具面板收起到 0 宽)或隐藏
+   (.hidden,如 maximize 时的主区)时,这条缝随之隐藏,不留孤线。 */
+.layout-divider-v {
+  width: 1px;
+  flex: 0 0 auto;
+  align-self: stretch;
+  background: var(--border-default);
+}
+.layout-divider-h {
+  height: 1px;
+  flex: 0 0 auto;
+  background: var(--border-default);
+}
+/* 隐线规则是**单侧**的 —— 面板收起/隐藏后它两侧的缝要"合并成一条",不能两条全藏
+   (否则收起中间面板后,剩下相邻两块之间反而没线了,2026-07-08 实测 bug):
+   - 折叠(0 宽)面板:藏它**前面**那条缝,保留后面那条作为合并后的缝;
+     经典布局(工具面板在最右)收起后窗口右缘因此不留孤线;
+   - 隐藏(display:none,如 maximize 时的主区)面板:藏它**后面**那条缝
+     (maximize 场景主区在前,如此正好不在接管面板左缘留线)。 */
+.layout-divider-v:has(+ [data-pane-collapsed]),
+.hidden + .layout-divider-v {
+  display: none;
+}
+
+/* E4D 毛玻璃(R1 audit,用户裁决透壁纸 2026-07-17):仅 CINDY family,窗口 vibrancy
+   透壁纸(main 设置)+ 应用内 backdrop-filter 互透。**仅侧栏 + 浮层 blur;主内容区
+   不透明(macOS 标准范式;用户勘误 2026-07-17:主区不透壁纸,content-area 回落
+   --content-area=--surface-hsl 不透明 #EDEDED/#2A2828)**。blur(50px 侧栏、6px 浮层)。
+   精确选择器(转义 Tailwind class .bg-\[var\(--panel-bg\)\] 等,避免 contains 过命中渐变/border)。其他 family 不命中,行为零变化。 */
+[data-theme='cindy-light'] body,
+[data-theme='cindy-dark'] body {
+  background: transparent;
+}
+/* CINDY 根容器让路(2026-07-18 真凶修复):MainLayout 根 div(h-screen bg-content-area)整窗
+   不透明垫底,把侧栏毛玻璃与窗外壁纸隔死——主区 <main> 自带 bg-content-area,根层职责冗余,
+   CINDY 下透明化;其他 family 不受影响。 */
+[data-theme='cindy-light'] .h-screen.bg-content-area,
+[data-theme='cindy-dark'] .h-screen.bg-content-area {
+  background: transparent;
+}
+/* 模式1 侧栏(light):半透底,壁纸模糊由原生 vibrancy sidebar 材质提供。
+   红渐变覆盖层已拆除(用户裁决 2026-07-18:Figma 该两块渐变矩形按装饰废稿处理,不实现);
+   CSS backdrop-filter 已撤(A/B 实证:blur 会把透明窗背衬黑箱)。 */
+/* 2026-07-21 用户裁决:模式1 玻璃只保留左侧栏(aside.bg-sidebar)。
+   .bg-\[var\(--panel-bg\)\] 已从本规则移除 —— 该 class 的消费者全是右侧工具面板族
+   (RSB TabBar/Body、Review、PanelChrome、Ghost 面板、独立窗顶带),被劫持成玻璃后
+   与左侧主区(不透明 content-area)底色打架;移除后回落 CINDY 的 --panel-bg
+   (#EDEDED/#2A2828),与主区同色,右侧面板整体与左边聊天区一致(模式2 口径)。 */
+[data-theme='cindy-light'] aside.bg-sidebar {
+  background: var(--surface-translucent-sidebar);
+}
+[data-theme='cindy-dark'] aside.bg-sidebar {
+  background: var(--surface-translucent-sidebar);
+  /* backdrop-filter 移除:CSS blur 采样不到窗外壁纸,且已知会把透明窗背衬渲染成黑;壁纸模糊由原生 vibrancy 材质提供 */
+}
+/* Sidebar peek 抽屉是 fixed overlay,它覆盖的是应用内容而不是窗外壁纸;这里需要
+   单独 blur 被覆盖的应用 UI,避免 hover 预览时正文直接透出来。常规展开态仍交给
+   原生 vibrancy,非 CINDY family 不命中。 */
+[data-theme='cindy-light'] aside.bg-sidebar[data-sidebar-peek-drawer],
+[data-theme='cindy-dark'] aside.bg-sidebar[data-sidebar-peek-drawer] {
+  background: var(--surface-translucent-sidebar);
+  backdrop-filter: blur(28px);
+  -webkit-backdrop-filter: blur(28px);
+}
+/* 模式2 主面板:用户勘误 2026-07-17 — 主内容区不透壁纸(macOS 标准范式),撤销 blur。
+   content-area 回落 --content-area(=var(--surface-hsl) 不透明 #EDEDED/#2A2828),无 blur。
+   surface-translucent-main token 保留注册但 CINDY override 改不透明等价值(见 cindy themes)。 */
+/* 模式3 浮层卡:blur 6px + surface-translucent-overlay(cmd-palette/popover 类) */
+[data-theme='cindy-light'] .bg-\[var\(--cmd-palette-bg\)\],
+[data-theme='cindy-dark'] .bg-\[var\(--cmd-palette-bg\)\] {
+  background: var(--surface-translucent-overlay);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* ── 插件面板悬浮球(GhostPanelBubbleLayer)────────────────────────────
+   动效按 engineering-conventions §7 红线:只动 transform/opacity、动画挂
+   HTML wrapper(不挂 SVG)、常驻循环仅 hover 期间播放、减弱动效时停用。
+   任何动画都不压在气泡按钮本体上 —— 按钮本体只管落位与 no-drag 命中区
+   (left/top 定位,app-region 挖洞按布局矩形算、不跟随 transform,见
+   GhostPanelBubbleLayer.tsx 文件头);圆圈与幽灵各自分层
+   (.ghost-bubble-circle / .ghost-bubble-face-jump)编排。
+   时序(2026-07-25 Lizi 定案"两段都要有戏"):
+   出现 = 面板收走 → 等 300ms → 圆圈渐显(160ms)→ 幽灵跳进来(240ms,回弹);
+   消失 = 幽灵跳走(160ms)→ 圆圈渐隐(120ms 延迟 + 140ms)→ 面板滑入。 */
+@keyframes ghost-bubble-circle-in {
+  from { transform: scale(0.85); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes ghost-bubble-circle-out {
+  to { transform: scale(0.9); opacity: 0; }
+}
+@keyframes ghost-bubble-ghost-in {
+  0% { transform: translateY(12px) scale(0.4); opacity: 0; }
+  65% { transform: translateY(-4px) scale(1.08); opacity: 1; }
+  100% { transform: none; opacity: 1; }
+}
+@keyframes ghost-bubble-ghost-out {
+  to { transform: translateY(-14px) scale(0.4); opacity: 0; }
+}
+@keyframes ghost-bubble-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+.ghost-bubble-enter .ghost-bubble-circle {
+  animation: ghost-bubble-circle-in 160ms ease-out 300ms backwards;
+}
+.ghost-bubble-enter .ghost-bubble-face-jump {
+  animation: ghost-bubble-ghost-in 240ms cubic-bezier(0.34, 1.4, 0.64, 1) 420ms backwards;
+}
+.ghost-bubble-exit .ghost-bubble-face-jump {
+  animation: ghost-bubble-ghost-out 160ms ease-in forwards;
+}
+.ghost-bubble-exit .ghost-bubble-circle {
+  animation: ghost-bubble-circle-out 140ms ease-in 120ms forwards;
+}
+.ghost-bubble:hover .ghost-bubble-face {
+  animation: ghost-bubble-bob 1.1s ease-in-out infinite;
+}
+/* 停靠面板出现/收起(气泡展开/合并/装入/启用出现,点最小化收起;启动首屏
+   豁免与提交时序都在 ghostPanels.tsx):外层壳宽度 0↔实宽 折叠展开。
+   这是 §7 compositor-only 的窄例外(同登录 handoff 的容器形变口径):
+   一次性、有状态含义;内容层定实宽被外壳裁切,webview 不逐帧重排。
+   keyframes 缺省端取元素实宽(inline style),不用变量传宽。 */
+@keyframes ghost-panel-expand { from { width: 0; } }
+@keyframes ghost-panel-collapse { to { width: 0; } }
+.ghost-panel-enter { animation: ghost-panel-expand 200ms ease-out; }
+/* exit 在 enter 之后声明:出现瞬间就点收起时,后者整段覆盖前者。 */
+.ghost-panel-exit { animation: ghost-panel-collapse 180ms ease-in forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .ghost-bubble-enter .ghost-bubble-circle,
+  .ghost-bubble-enter .ghost-bubble-face-jump,
+  .ghost-bubble-exit .ghost-bubble-circle,
+  .ghost-bubble-exit .ghost-bubble-face-jump,
+  .ghost-panel-enter,
+  .ghost-panel-exit,
+  .ghost-bubble:hover .ghost-bubble-face { animation: none; }
+}

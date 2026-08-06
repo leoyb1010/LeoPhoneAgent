@@ -1,0 +1,26 @@
+{
+  "name": "@cindy/embedding-client",
+  "version": "0.0.0",
+  "private": true,
+  "description": "OpenAI /v1/embeddings 兼容客户端 (XD Gateway), 零运行依赖",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./catalog": "./src/catalog.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit"
+  },
+  "author": {
+    "name": "XD Inc.",
+    "email": "feedback@cindy.app"
+  },
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@types/node": "*",
+    "typescript": "^5.7.0"
+  }
+}

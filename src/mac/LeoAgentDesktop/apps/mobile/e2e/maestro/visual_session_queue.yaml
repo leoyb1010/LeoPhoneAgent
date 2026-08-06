@@ -1,0 +1,28 @@
+appId: ${APP_ID}
+---
+- runFlow: login_mock_no_clear.yaml
+- assertVisible:
+    id: "devices.list"
+- extendedWaitUntil:
+    visible:
+      id: "home.sessionRowTitle.visual-queue"
+    timeout: 15000
+- tapOn:
+    id: "home.sessionRowTitle.visual-queue"
+- extendedWaitUntil:
+    visible:
+      id: "session.screen"
+    timeout: 15000
+- runFlow:
+    when:
+      visible: "同步失败"
+    commands:
+      - tapOn:
+          id: "connection.syncButton"
+# 排队消息 inline 在消息流末尾,无需打开面板。
+- extendedWaitUntil:
+    visible:
+      id: "queue.inline.section"
+    timeout: 15000
+- takeScreenshot:
+    path: visual-session-queue

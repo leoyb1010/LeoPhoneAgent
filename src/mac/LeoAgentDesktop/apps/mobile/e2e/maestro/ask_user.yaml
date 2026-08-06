@@ -1,0 +1,16 @@
+appId: ${APP_ID}
+---
+- assertVisible:
+    id: "session.screen"
+- assertVisible:
+    id: "interaction.bottomSurface"
+- extendedWaitUntil:
+    visible:
+      id: "interaction.ask.card"
+    timeout: 10000
+- assertVisible:
+    id: "interaction.ask.question"
+- assertVisible:
+    id: "interaction.ask.skipButton"
+- tapOn:
+    id: "interaction.ask.skipButton"

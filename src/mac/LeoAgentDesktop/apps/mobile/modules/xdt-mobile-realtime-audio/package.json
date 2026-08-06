@@ -1,0 +1,7 @@
+{
+  "name": "xdt-mobile-realtime-audio",
+  "version": "0.1.0",
+  "main": "src/index.ts",
+  "private": true,
+  "license": "Apache-2.0"
+}

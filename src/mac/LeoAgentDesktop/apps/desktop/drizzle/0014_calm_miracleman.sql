@@ -1,0 +1,1 @@
+ALTER TABLE `schedules` ADD `last_finished_at` integer;

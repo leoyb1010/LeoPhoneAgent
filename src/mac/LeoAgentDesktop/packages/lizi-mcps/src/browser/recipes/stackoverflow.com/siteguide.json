@@ -1,0 +1,9 @@
+{
+  "site": "stackoverflow.com",
+  "auth": "只读无需登录",
+  "entry": {
+    "searchApi": "https://api.stackexchange.com/2.3/search/advanced?order=desc&sort=relevance&q=&site=stackoverflow"
+  },
+  "recipes": ["stackoverflow-search"],
+  "notes": "搜索走公开 Stack Exchange API(api.stackexchange.com/2.3/search/advanced?order=desc&sort=relevance&q=&site=stackoverflow),返回 JSON {items:[{title,link,score,answer_count,is_answered,question_id,tags,...}],has_more,quota_remaining};直接 navigate 到该 URL 再读 body 即拿到 JSON。响应默认 gzip,浏览器自动解压。无 key 时配额较低(quota_remaining 字段可见),site 参数可换其它 Stack Exchange 站点。"
+}

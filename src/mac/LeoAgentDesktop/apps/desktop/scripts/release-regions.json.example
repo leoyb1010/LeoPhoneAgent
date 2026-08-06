@@ -1,0 +1,44 @@
+{
+    "cn": {
+        "oss": {
+            "cdnBaseUrl": "",
+            "bucket": "",
+            "prefix": "",
+            "ossRegion": ""
+        },
+        "macSigning": {
+            "appleId": "",
+            "teamId": "",
+            "signIdentity": "",
+            "appPasswordEnv": ""
+        }
+    },
+    "global": {
+        "oss": {
+            "cdnBaseUrl": "",
+            "bucket": "",
+            "prefix": "",
+            "ossRegion": ""
+        },
+        "macSigning": {
+            "appleId": "",
+            "teamId": "",
+            "signIdentity": "",
+            "appPasswordEnv": ""
+        }
+    },
+    "dev": {
+        "oss": {
+            "cdnBaseUrl": "",
+            "bucket": "",
+            "prefix": "",
+            "ossRegion": ""
+        },
+        "macSigning": {
+            "appleId": "",
+            "teamId": "",
+            "signIdentity": "",
+            "appPasswordEnv": ""
+        }
+    }
+}

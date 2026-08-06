@@ -223,6 +223,7 @@ struct ContentView: View {
     @State private var remoteDeviceSessions: [(device: SyncDevice, sessions: [ChatSession])] = []
     // showSettings consolidated into activeToolSheet (.settings)
     @State private var showTerminal = false
+    @State private var showWhatsNew = false
     @State private var showAlarmList = false
     @State private var hasAlarms = false
     @State private var activeToolSheet: ToolSheet?
@@ -623,6 +624,16 @@ struct ContentView: View {
         .fullScreenCover(isPresented: $showTerminal) {
                 NavigationStack {
                     ISHTerminalView(showCloseButton: true)
+                }
+            }
+            // [T-release-notes] 侧载 app 没有商店的"更新说明"面:版本变化后的
+            // 首次启动弹一张"本次更新"卡,历史在 设置 → 更新记录。
+            .sheet(isPresented: $showWhatsNew) {
+                WhatsNewSheet()
+            }
+            .task {
+                if LeoReleaseNotes.shouldShowWhatsNew() {
+                    showWhatsNew = true
                 }
             }
             .sheet(isPresented: $showAlarmList, onDismiss: { fetchAlarmsIfNeeded() }) {
@@ -1819,6 +1830,18 @@ struct ContentView: View {
                 }
             }
         }
+        // [T-settings-ia] Mac 控制台是主功能,不是设置项——一级入口常驻标题栏。
+        ToolbarItem(placement: .topBarTrailing) {
+            if !isSelecting {
+                NavigationLink {
+                    GatewayEntryView()
+                } label: {
+                    Image(systemName: "desktopcomputer")
+                        .font(.system(size: 15, weight: .medium))
+                }
+                .accessibilityLabel(Text("Mac 控制台"))
+            }
+        }
         ToolbarItem(placement: .topBarTrailing) {
             if isSelecting {
                 Button(selectedIds.count == sessions.count ? "Deselect All" : "Select All") {
@@ -2246,6 +2269,19 @@ struct ContentView: View {
 
     @StateObject private var providerStore = ProviderConfigStore.shared
     @ObservedObject private var quickTaskStore = QuickTaskStore.shared
+    @ObservedObject private var gatewayStore = GatewayHostStore.shared
+    @State private var macChatTarget: MacChatTarget?
+
+    struct MacChatTarget: Identifiable {
+        let host: GatewayHost
+        let cliKey: String
+        let cliName: String
+        var id: String { host.id + cliKey }
+    }
+
+    private func openMacChat(_ host: GatewayHost, _ key: String, _ name: String) {
+        macChatTarget = MacChatTarget(host: host, cliKey: key, cliName: name)
+    }
     @State private var showAddProvider = false
     @State private var showSelectModels = false
 
@@ -2334,10 +2370,62 @@ struct ContentView: View {
                 .frame(maxWidth: 400, alignment: .leading)
                 .accessibilityElement(children: .contain)
             }
+
+            // [T-mac-composer] 对话框直达 Mac:每台在线 Mac 一个按钮,弹出
+            // CLI 三选,选中直接开聊——不必去设置或控制台。这是"手机是主
+            // 控制面"的正确形态:主对话界面完成一切。
+            if !gatewayStore.activeHosts.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("指挥一台 Mac")
+                        .font(.headline)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 10) {
+                            ForEach(gatewayStore.activeHosts) { host in
+                                Menu {
+                                    Button("Claude Code") { openMacChat(host, "claude", "Claude Code") }
+                                    Button("Codex") { openMacChat(host, "codex", "Codex") }
+                                    Button("Grok") { openMacChat(host, "grok", "Grok") }
+                                } label: {
+                                    Label(host.name, systemImage: "desktopcomputer")
+                                        .font(.subheadline.weight(.medium))
+                                        .lineLimit(1)
+                                }
+                                .buttonStyle(.glass)
+                                .controlSize(.large)
+                            }
+                        }
+                    }
+                }
+                .frame(maxWidth: 400, alignment: .leading)
+            }
             Spacer()
         }
         .frame(maxHeight: .infinity)
         .padding(.horizontal, 32)
+        .fullScreenCover(item: $macChatTarget) { target in
+            NavigationStack {
+                if let client = gatewayStore.client(for: target.host) {
+                    HarnessConsoleView(
+                        driver: HarnessSessionDriver(
+                            client: client,
+                            harness: HarnessKind(key: target.cliKey, name: target.cliName),
+                            cwd: "~"),
+                        firstPrompt: "")
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("关闭") { macChatTarget = nil }
+                        }
+                    }
+                } else {
+                    VStack(spacing: 12) {
+                        Text("缺少访问密钥")
+                        Text("去 设置 → 我的 Mac 里补上这台 Mac 的密钥。")
+                            .font(.footnote).foregroundStyle(.secondary)
+                        Button("关闭") { macChatTarget = nil }
+                    }
+                }
+            }
+        }
         .sheet(isPresented: $showAddProvider) {
             NavigationStack {
                 AddProviderView()
@@ -4692,7 +4780,7 @@ private struct SpinningRing: View {
 
 // MARK: - Appearance Settings
 
-private struct AppearanceSettingsView: View {
+struct AppearanceSettingsView: View {
     @AppStorage("appearanceMode") private var appearanceMode: Int = 0
     @AppStorage("appIconMode") private var appIconMode: Int = 0
     @AppStorage("appLanguage") private var appLanguage: String = ""
@@ -5058,393 +5146,14 @@ private struct SettingsSheet: View {
 
     var body: some View {
         NavigationStack(path: $navPath) {
-            List {
-                Section {
-                    NavigationLink {
-                        ProviderInstancesView()
-                    } label: {
-                        if #available(iOS 26, *) {
-                            Label("Manage Providers", systemImage: "key.circle.fill")
-                        } else {
-                            Label("Manage Providers", systemImage: "lock.circle.fill")
-                        }
-                    }
-
-                    NavigationLink {
-                        ModelGroupsView()
-                    } label: {
-                        Label("Model Groups", systemImage: "gearshape.circle.fill")
-                    }
-
-                    NavigationLink {
-                        UsageStatsView()
-                    } label: {
-                        Label("Token Usage", systemImage: "chart.line.uptrend.xyaxis.circle.fill")
-                    }
-                } header: {
-                    Text("LLM Providers")
-                } footer: {
-                    Text("Configure which models the agent uses, manage API keys & OAuth for each provider, and create model groups for fallback or load balancing.")
-                }
-
-                Section("Appearance") {
-                    NavigationLink {
-                        AppearanceSettingsView()
-                    } label: {
-                        Label {
-                            Text("Appearance")
-                        } icon: {
-                            Image(systemName: "paintbrush.fill")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.white)
-                                .frame(width: 21, height: 21)
-                                .background(.indigo, in: Circle())
-                        }
-                    }
-                }
-
-                Section("Agent Runtime") {
-                    NavigationLink {
-                        QuickTaskSettingsView()
-                    } label: {
-                        Label {
-                            Text("Quick Tasks")
-                        } icon: {
-                            Image(systemName: "bolt.fill")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.white)
-                                .frame(width: 21, height: 21)
-                                .background(.indigo, in: Circle())
-                        }
-                    }
-                    // [T-capabilities-center] Answers "what can it do, and is
-                    // it allowed to" in one place — previously the answer was
-                    // spread across Permissions, Info.plist and the docs.
-                    NavigationLink {
-                        CapabilitiesView()
-                    } label: {
-                        Label {
-                            Text("Capabilities")
-                        } icon: {
-                            Image(systemName: "square.grid.2x2.fill")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.white)
-                                .frame(width: 21, height: 21)
-                                .background(.cyan, in: Circle())
-                        }
-                    }
-                    // [T-remote-exec] Configure SSH hosts; the remote tools
-                    // only exist once a host does.
-                    NavigationLink {
-                        RemoteHostSettingsView()
-                    } label: {
-                        Label {
-                            Text("Remote Hosts")
-                        } icon: {
-                            Image(systemName: "server.rack")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.white)
-                                .frame(width: 21, height: 21)
-                                .background(.indigo, in: Circle())
-                        }
-                    }
-                    // [T-leogateway] A Hermes agent on the user's own Mac:
-                    // a second, always-on body this phone can drive.
-                    NavigationLink {
-                        GatewaySettingsView()
-                    } label: {
-                        Label {
-                            Text("Gateways")
-                        } icon: {
-                            Image(systemName: "desktopcomputer")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.white)
-                                .frame(width: 21, height: 21)
-                                .background(.teal, in: Circle())
-                        }
-                    }
-                    // [T-orchestration] Default OFF; enabling registers the
-                    // dispatch/check/collect tools for new turns.
-                    Toggle(isOn: $orchestrationEnabled) {
-                        Label {
-                            Text("Multi-agent orchestration")
-                        } icon: {
-                            Image(systemName: "person.3.sequence.fill")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.white)
-                                .frame(width: 21, height: 21)
-                                .background(.purple, in: Circle())
-                        }
-                    }
-                    // [T-agent-timeline] What did Leo do today, one screen.
-                    NavigationLink {
-                        AgentTimelineView()
-                    } label: {
-                        Label {
-                            Text("Agent Timeline")
-                        } icon: {
-                            Image(systemName: "list.bullet.rectangle.portrait")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.white)
-                                .frame(width: 21, height: 21)
-                                .background(.mint, in: Circle())
-                        }
-                    }
-                    // [T-automation-engine] Proactive rules: location /
-                    // calendar / charging triggers.
-                    NavigationLink {
-                        AutomationSettingsView()
-                    } label: {
-                        Label {
-                            Text("Automations")
-                        } icon: {
-                            Image(systemName: "bolt.badge.clock")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.white)
-                                .frame(width: 21, height: 21)
-                                .background(.orange, in: Circle())
-                        }
-                    }
-                    // [T-scheduled-tasks] Sits next to Quick Tasks because a
-                    // schedule is just "a quick task, but recurring".
-                    NavigationLink {
-                        ScheduledTaskSettingsView()
-                    } label: {
-                        Label {
-                            Text("Scheduled Tasks")
-                        } icon: {
-                            Image(systemName: "clock.badge.checkmark")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.white)
-                                .frame(width: 21, height: 21)
-                                .background(.orange, in: Circle())
-                        }
-                    }
-                    NavigationLink {
-                        SkillsManagementView()
-                    } label: {
-                        Label {
-                            Text("Skills")
-                        } icon: {
-                            Image(systemName: "puzzlepiece.extension")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.white)
-                                .frame(width: 21, height: 21)
-                                .background(.blue, in: Circle())
-                        }
-                    }
-                    NavigationLink {
-                        SoulSettingsView()
-                    } label: {
-                        Label {
-                            Text("Soul")
-                        } icon: {
-                            Image(systemName: "sparkles")
-                                .font(.system(size: 11))
-                                .foregroundStyle(.white)
-                                .frame(width: 21, height: 21)
-                                .background(.pink, in: Circle())
-                        }
-                    }
-                    NavigationLink {
-                        MemoryManagementView()
-                    } label: {
-                        Label {
-                            Text("Memory")
-                        } icon: {
-                            Image(systemName: "brain.head.profile")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.white)
-                                .frame(width: 21, height: 21)
-                                .background(.purple, in: Circle())
-                        }
-                    }
-                    NavigationLink {
-                        MCPIntegrationsView()
-                    } label: {
-                        Label {
-                            Text("MCP Integrations")
-                        } icon: {
-                            Image(systemName: "square.stack.3d.up")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.white)
-                                .frame(width: 21, height: 21)
-                                .background(.teal, in: Circle())
-                        }
-                    }
-                    NavigationLink {
-                        EnvironmentVariablesView()
-                    } label: {
-                        Label {
-                            Text("Environment Variables")
-                        } icon: {
-                            Image(systemName: "terminal")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.white)
-                                .frame(width: 21, height: 21)
-                                .background(.green, in: Circle())
-                        }
-                    }
-                }
-
-                Section("Storage") {
-                    NavigationLink {
-                        StorageManagementView()
-                    } label: {
-                        Label {
-                            Text("Storage")
-                        } icon: {
-                            Image(systemName: "archivebox")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.white)
-                                .frame(width: 21, height: 21)
-                                .background(.blue, in: Circle())
-                        }
-                    }
-                    NavigationLink {
-                        SharedFoldersSettingsView()
-                    } label: {
-                        Label {
-                            Text("Shared Folders")
-                        } icon: {
-                            Image(systemName: "folder.fill.badge.person.crop")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.white)
-                                .frame(width: 21, height: 21)
-                                .background(.green, in: Circle())
-                        }
-                    }
-                    NavigationLink {
-                        MountedFoldersSettingsView()
-                    } label: {
-                        Label {
-                            Text("Mount External Folders")
-                        } icon: {
-                            Image(systemName: "externaldrive.badge.plus")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.white)
-                                .frame(width: 21, height: 21)
-                                .background(.orange, in: Circle())
-                        }
-                    }
-                    if #available(iOS 17.0, *) {
-                        NavigationLink {
-                            // v2 is the default sync engine; legacy v1
-                            // settings page is unreachable from here.
-                            CloudSyncSettingsV2View()
-                        } label: {
-                            Label {
-                                Text("iCloud Sync")
-                            } icon: {
-                                Image(systemName: "icloud")
-                                    .font(.system(size: 9))
-                                    .foregroundStyle(.white)
-                                    .frame(width: 21, height: 21)
-                                    .background(.cyan, in: Circle())
-                            }
-                        }
-                    }
-                }
-
-                Section("Permissions") {
-                    NavigationLink {
-                        OffloadPermissionSettingsView()
-                    } label: {
-                        Label {
-                            Text("Permissions")
-                        } icon: {
-                            Image(systemName: "lock.shield")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.white)
-                                .frame(width: 21, height: 21)
-                                .background(.red, in: Circle())
-                        }
-                    }
-                    if BiometricAuth.isAvailable {
-                        NavigationLink {
-                            FaceIDProtectionSettingsView()
-                        } label: {
-                            Label {
-                                Text("\(BiometricAuth.biometryDisplayName) Protection")
-                            } icon: {
-                                // Match SF Symbol to the device's actual sensor — Touch ID
-                                // devices showed a Face ID glyph here before.
-                                Image(systemName: BiometricAuth.biometryIconName)
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(.white)
-                                    .frame(width: 21, height: 21)
-                                    .background(.teal, in: Circle())
-                            }
-                        }
-                    }
-                }
-
-                Section("Logs") {
-                    NavigationLink {
-                        LogManagementView()
-                    } label: {
-                        Label {
-                            Text("Logs")
-                        } icon: {
-                            Image(systemName: "doc.text")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.white)
-                                .frame(width: 21, height: 21)
-                                .background(.gray, in: Circle())
-                        }
-                    }
-                }
-
-                Section("About") {
-                    NavigationLink {
-                        AboutView()
-                    } label: {
-                        Label {
-                            Text("About LeoPhoneAgent")
-                        } icon: {
-                            Image(systemName: "info")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.white)
-                                .frame(width: 21, height: 21)
-                                .background(.indigo, in: Circle())
-                        }
-                    }
-                    NavigationLink {
-                        LeoPrivacyView()
-                    } label: {
-                        Label {
-                            Text("Privacy & Data")
-                        } icon: {
-                            Image(systemName: "hand.raised")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.white)
-                                .frame(width: 21, height: 21)
-                                .background(.teal, in: Circle())
-                        }
-                    }
-                    // [T-local-feedback] Feedback is recorded locally
-                    // (Settings → Logs, `feedback-*` files) instead of the
-                    // upstream Telegram group — this fork has no external
-                    // feedback channel.
-                    Button {
-                        showFeedbackDialog = true
-                    } label: {
-                        Label {
-                            Text("Feedback")
-                        } icon: {
-                            Image(systemName: "bubble.left.and.bubble.right.fill")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.white)
-                                .frame(width: 21, height: 21)
-                                .background(.indigo, in: Circle())
-                        }
-                    }
-                    .foregroundStyle(.primary)
-                    .sheet(isPresented: $showFeedbackDialog) {
-                        FeedbackComposerSheet()
-                    }
-                }
-
+            // [T-settings-ia] 设置首页拆到 SettingsHomeView(5 组折叠 + 搜索)。
+            // 旧 400 行单体 List 三次折叠尝试都撞类型检查超时,数据驱动是正解。
+            SettingsHomeView(
+                orchestrationEnabled: $orchestrationEnabled,
+                onFeedback: { showFeedbackDialog = true }
+            )
+            .sheet(isPresented: $showFeedbackDialog) {
+                FeedbackComposerSheet()
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)

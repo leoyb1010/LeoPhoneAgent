@@ -1,0 +1,2 @@
+export declare function stringifyJsonDocument(value: unknown, replacer?: Parameters<typeof JSON.stringify>[1], space?: Parameters<typeof JSON.stringify>[2]): string;
+//# sourceMappingURL=json-stringify.d.ts.map

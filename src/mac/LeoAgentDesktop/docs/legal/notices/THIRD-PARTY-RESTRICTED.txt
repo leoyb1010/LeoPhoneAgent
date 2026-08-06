@@ -1,0 +1,35 @@
+==============================================================================
+RESTRICTED AND PROPRIETARY THIRD-PARTY COMPONENTS
+Cindy project distributions
+==============================================================================
+
+本文件单列不是开放源代码许可的第三方组件;它们不计入开源包数量。
+This file separately discloses components not distributed under open-source licenses.
+
+------------------------------------------------------------------------------
+Claude Code CLI@2.1.219
+Category: proprietary
+License: LicenseRef-Anthropic-Commercial-Terms
+Source: https://www.anthropic.com/legal/commercial-terms
+
+------------------------------------------------------------------------------
+WeChat OpenSDK for Android@6.8.38
+Category: restricted-review-required
+License: NOASSERTION
+Source: https://developers.weixin.qq.com/doc/oplatform/Mobile_App/Access_Guide/Android.html
+Compliance note: 上游 Maven SDK 未提供标准开源许可证；按 docs/legal/wechat-open-sdk-compliance.md 完成条款、隐私披露和用户同意复核。官方合规指南：https://developers.weixin.qq.com/doc/oplatform/Mobile_App/agreement/sdk.html
+
+------------------------------------------------------------------------------
+WeChat OpenSDK for iOS@2.0.5
+Category: restricted-review-required
+License: NOASSERTION
+Source: https://developers.weixin.qq.com/doc/oplatform/Mobile_App/Access_Guide/iOS.html
+Compliance note: 上游 CocoaPod 声明为 Copyright 且未提供标准开源许可证；按 docs/legal/wechat-open-sdk-compliance.md 完成条款、隐私披露和用户同意复核。官方合规指南：https://developers.weixin.qq.com/doc/oplatform/Mobile_App/agreement/sdk.html
+
+------------------------------------------------------------------------------
+@anthropic-ai/claude-agent-sdk@0.2.112
+Category: proprietary
+License: LicenseRef-Anthropic-Commercial-Terms
+Source: https://github.com/anthropics/claude-agent-sdk-typescript
+------------------------------------------------------------------------------
+© Anthropic PBC. All rights reserved. Use is subject to the Legal Agreements outlined here: https://code.claude.com/docs/en/legal-and-compliance.

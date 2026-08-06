@@ -1,0 +1,9 @@
+{
+  "site": "arxiv.org",
+  "auth": "只读无需登录",
+  "entry": {
+    "searchApi": "https://export.arxiv.org/api/query?search_query=all:&max_results=20&sortBy=relevance"
+  },
+  "recipes": ["arxiv-search"],
+  "notes": "搜索走公开 arXiv API(https://export.arxiv.org/api/query?search_query=all:&max_results=20&sortBy=relevance),返回 Atom XML(非 JSON):<feed> 下多个 <entry>,每个含 <title>/<summary>/<author><name>/<id>(论文链接)/<published>。直接 navigate 到该 URL 再 extract body 取整段 XML 文本,自行解析 entry。用 https(非 http,避免重定向),search_query 可用 all:/ti:/au:/abs: 等前缀,sortBy 可选 relevance/lastUpdatedDate/submittedDate。"
+}

@@ -1,0 +1,231 @@
+/*
+ * FileBrowserBody — 右栏嵌入式版的 CodeMirror padding / max-width override。
+ *
+ * 为什么需要这套 override:
+ * codemirrorGithubTheme.ts 给 doc 模式调好的 padding(code 主题 28×30、plain 主题
+ * 28×40、markdown 主题 34×72 + max-width 920px margin:auto)是按主区域宽度
+ * (900+px)设计的,放进 RSB 这种 280-500px 宽的嵌入栏会变成"内容只占中间一小条、
+ * 两边大块留白"。max-width 920 在窄栏里效果尤其明显:由 margin:auto 把剩余空间
+ * 全部转成左右等距留白,文件浏览体验差。
+ *
+ * 处理:在 `.rsb-fbody-compact` 容器下,把 cm-content padding 压到 12×14px、解除
+ * max-width / margin,行号 gutter 也按比例缩。doc 模式(workdir-browse)不挂这个
+ * 类,主题原值不受影响。
+ *
+ * specificity:CodeMirror EditorView.theme 注入的样式形如 `.ͼXX .cm-content`
+ * (0,2,0)。这里用 `.rsb-fbody-compact .cm-editor .cm-content` 是 (0,3,0),足够
+ * 覆盖且不需要 !important — 但实测 Vite dev 下 CodeMirror style 经常后注入到
+ * `<head>` 末尾,specificity 同级时位置后者赢,故仍然加 !important 保稳。
+ */
+
+.rsb-fbody-compact .cm-editor .cm-content {
+  /* padding 四向 top/right/bottom/left:
+     - 顶 20:首行透气
+     - 右 12:窄栏里只需要少量呼吸空间;之前 24 让文字和右侧 cm-scroller 滚动条
+       之间留 24px 大空白,视觉上滚动条像"漂浮在没文字的空区",2026-06-30 用户
+       反馈"滚动条都可以滚出屏幕了"实际是这条 padding 制造的错觉。
+     - 底 96:scroll 到底末行下方缓冲
+     - 左 16:文本到行号 gutter 的额外微调(gutter 自己也有 padding,见下方) */
+  padding: 20px 12px 96px 16px !important;
+  max-width: none !important;
+  margin: 0 !important;
+  /* base font 14px + line-height 1.6 —— 对齐 Codex 实测节奏(2026-06-30 用户:
+     "13px 太小,仔细对标 codex"):
+     - codex CSS:`--codex-chat-font-size: var(--vscode-chat-font-size, var(--vscode-font-size))`
+       → fallback 到 VSCode font-size,默认 13-14px;
+     - codex CSS:`--codex-chat-code-font-size: var(--vscode-chat-editor-font-size,
+       var(--vscode-editor-font-size, 14px))`
+       → VSCode editor.fontSize 默认 14px。
+     - 取实测 macOS Codex 视觉:**正文 14px,代码 13px(`code-font-size − 1px`)**。
+       - code 主题原 var(--app-code-font-size) 13-14px,本来就合适;
+       - plain 主题原 15px,窄栏偏大,压到 14;
+       - markdown 主题原 16px + heading 2.15em ⇒ H1 ~34px(窄栏视觉炸裂),压 base 到 14
+         + 下方 heading 系数从 2.15 / 1.62 / 1.28 紧到 1.35 / 1.18 / 1.08。
+     "真正视觉对标 Codex" 的天花板:CodeMirror 显示的永远是 markdown 源码(看得见
+     `# 标题` 的 `#` 字符),不是渲染后的 HTML。CSS 层能做到密度 / 字号 / 间距对齐
+     prose,做不到把源码标记隐藏成 HTML 渲染。要那样请走全屏 doc 模式之外的只读
+     HTML 路径(本次 CSS-only 路线不在范围)。 */
+  font-size: 14px !important;
+  line-height: 1.6 !important;
+}
+
+/* 行号容器是 `.cm-gutters`(复数 s),不是 `.cm-gutter.cm-lineNumbers`(那是单个
+   gutter 的 wrapper)。doc 主题给整个 gutters 一个 padding-left: 30px,RSB 窄栏
+   压到 12 透气但不浪费。 */
+.rsb-fbody-compact .cm-editor .cm-gutters {
+  padding-left: 12px !important;
+}
+
+/* 行号到代码内容的水平间距:doc 主题 `0 16px 0 0`,RSB 窄栏压到 5(2026-06-30 用户
+   反馈"行号和代码之间间隔太明显,再小一倍")。 */
+.rsb-fbody-compact .cm-editor .cm-lineNumbers .cm-gutterElement {
+  padding: 0 5px 0 0 !important;
+}
+
+/* 部分主题(markdown 编辑)用 .cm-line 接 padding,顺手也压一下。`.cm-line` 主题
+   原值 0,这里强制保 0(防止其它扩展再叠上)。 */
+.rsb-fbody-compact .cm-editor .cm-line {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* .cm-scroller / .cm-editor 自身如有 padding 也兜底归零,避免出现隐藏边距来源。 */
+.rsb-fbody-compact .cm-editor,
+.rsb-fbody-compact .cm-editor .cm-scroller {
+  padding: 0 !important;
+}
+
+/* ── Markdown prose 节奏对齐 Codex ───────────────────────────────────────────
+   doc 主题 markdown 给宽页设计:H1 2.15em / H2 1.62em / H3 1.28em + heading-line
+   paddingTop 0.72em paddingBottom 0.18em(参考 codemirrorGithubTheme.ts L335-344)。
+   窄栏对标 Codex prose,系数压紧 + 间距统一: */
+
+/* heading-line 是包住整行 heading 的 padding 容器,doc 主题给上下 0.72em / 0.18em。
+   窄栏视觉拥挤,统一压到上 0.5em / 下 0.15em + 加 margin-top 让 heading 跟前文有
+   prose 风格的呼吸感(typical typography:H1 margin-top 1.5em, H2 1.25em, H3 1em)。 */
+.rsb-fbody-compact .cm-editor .cm-md-heading-line {
+  padding: 0.5em 0 0.15em !important;
+}
+
+/* heading 字号系数:base 14px 时
+     H1 1.35em ≈ 19px
+     H2 1.18em ≈ 16.5px
+     H3 1.08em ≈ 15px
+   保留层级落差但整体收敛,接近 Codex assistant message markdown 的密度。 */
+.rsb-fbody-compact .cm-editor .cm-md-heading-1 {
+  font-size: 1.35em !important;
+  line-height: 1.3 !important;
+  font-weight: 600 !important;
+}
+.rsb-fbody-compact .cm-editor .cm-md-heading-2 {
+  font-size: 1.18em !important;
+  line-height: 1.32 !important;
+  font-weight: 600 !important;
+}
+.rsb-fbody-compact .cm-editor .cm-md-heading-3 {
+  font-size: 1.08em !important;
+  line-height: 1.36 !important;
+  font-weight: 600 !important;
+}
+
+/* quote / list / task line:doc 主题 paddingLeft 14 / 4,窄栏稍紧。 */
+.rsb-fbody-compact .cm-editor .cm-md-quote-line {
+  padding-left: 10px !important;
+}
+.rsb-fbody-compact .cm-editor .cm-md-list-line {
+  padding-left: 2px !important;
+}
+
+/* horizontal-rule:doc 主题给 padding 0.75em 0,窄栏稍紧。
+   ⚠️ 纵向留白必须用 padding,不能用 margin:CodeMirror height map 按
+   getBoundingClientRect 记账,margin 不在 rect 内,视觉排版会比内部记账高,
+   点击坐标反查系统性偏到下面的行("点上面选中下面",2026-07 实踩)。
+   box-sizing/background-clip 由主题的 .cm-md-horizontal-rule 规则提供
+   (content-box + 背景只画 1px 内容区),这里只收紧留白数值。 */
+.rsb-fbody-compact .cm-editor .cm-md-horizontal-rule {
+  margin: 0 !important;
+  padding: 0.6em 0 !important;
+}
+
+/* fence-line(```…``` 围栏内每一行)对齐 Codex 渲染节奏 + 模拟"代码块 card"视觉:
+   - 字号:正文字号 − 1px(codex CSS `var(--codex-chat-code-font-size) - 1px`)。
+     正文 13 → fence 12。
+   - 字体栈:Codex 用 `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+     "Liberation Mono", "Courier New", monospace`(SF Mono 紧凑型)。doc 主题用
+     JetBrains Mono(圆润宽体),窄栏里视觉违和,RSB scope 换 Codex 同款系统 mono。
+   - font-feature-settings/variation-settings: normal —— 关 ligatures(否则 `==`
+     `->` `=>` 会变成 ≡ → ⇒ 连字,看着"字怪")。Codex 也显式 normal。
+   - line-height 1.5 收紧让代码块密度匹配正文 prose 节奏。
+
+   "代码块 card" 视觉模拟:
+   CodeMirror 显示的是 markdown 源码(围栏 ``` 标记还在视野里),每行 fence 是独立
+   `<div class="cm-line cm-md-fence-line">`,无法形成整体圆角 card。但可以给每行加
+   底色 + 左右内边距,多行连起来视觉上看像一块灰条 — 这是 CSS 层的最大模拟极限。
+   真正的 card chrome(顶部语言标签 / 右上角复制按钮 / 圆角包围整块)= 必须切到
+   HTML 渲染才能做到,本次 CSS-only 路径不在范围内(详见上方 cm-content 大段注释)。 */
+.rsb-fbody-compact .cm-editor .cm-md-fence-line {
+  /* Codex 实测:代码字号 = 正文字号 − 1px(`var(--codex-chat-code-font-size) - 1px`)。
+     正文 14 → fence 13。 */
+  font-size: 13px !important;
+  line-height: 1.55 !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    'Liberation Mono', 'Courier New', monospace !important;
+  font-feature-settings: normal !important;
+  font-variation-settings: normal !important;
+  /* 整块灰底:对齐 chat MarkdownRenderer / Codex 的 msg-code-block-bg 颜色 token。
+     左右 padding 让代码内容跟"card 边缘"有呼吸感。 */
+  background-color: var(--msg-code-block-bg, rgba(127, 127, 127, 0.08)) !important;
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+}
+
+/* ── Fence 块卡片(整块) ─────────────────────────────────────────────────
+   行角色类由 markdownFenceLines.computeFenceLineRoles 标注:开栏行
+   .cm-md-fence-first、内容行 .cm-md-fence-body、收栏行 .cm-md-fence-last,
+   三类行都带 .cm-md-fence-line(上面的基础规则给整块灰底 + 等宽字体),
+   拼成一张连贯的圆角 card。不再需要旧的 :has()/相邻选择器模拟。
+
+   ⚠️ 卡片外的 0.6em 透明间隙不能用 margin(CM height map 不记 margin,会造成
+   点击坐标系统性下偏,2026-07 实踩)。改用透明 border 承载间隙:border 在
+   getBoundingClientRect 之内,会被正确记账;background-clip: padding-box 让灰底
+   不渗进透明 border 区,视觉上仍是"卡片外的空隙"。圆角用椭圆半径补偿:外圈
+   纵向半径 = 8px + border 宽,使灰底(padding box)的可见圆角保持 8px 正圆。 */
+.rsb-fbody-compact .cm-editor .cm-line.cm-md-fence-first {
+  padding-top: 10px !important;
+  border-top: 0.6em solid transparent;
+  background-clip: padding-box !important;
+  border-top-left-radius: 8px calc(8px + 0.6em);
+  border-top-right-radius: 8px calc(8px + 0.6em);
+}
+
+.rsb-fbody-compact .cm-editor .cm-line.cm-md-fence-last {
+  padding-bottom: 10px !important;
+  border-bottom: 0.6em solid transparent;
+  background-clip: padding-box !important;
+  border-bottom-left-radius: 8px calc(8px + 0.6em);
+  border-bottom-right-radius: 8px calc(8px + 0.6em);
+}
+
+/* 围栏标记行 ``` / ```bash 的淡化由主题层实现:.cm-md-fence-line 基础色是
+   muted,内容行 .cm-md-fence-body 反白回正文色 → 标记行自然退后。 */
+
+/* ── Markdown 表格 widget 列宽自适应(窄栏修复) ────────────────────────────
+   主 markdown table widget(markdownTableLivePreview.ts)给每个 `<col>` 按 markdown
+   源码字符数(sourceWidths)算百分比宽度,配 `table-layout: fixed` 严格分配。doc
+   模式宽栏(700+px)下这套算法 OK,但在 RSB 280-400px 窄栏里,超长描述列(如
+   `| Usage | The primary page background ...` 100+ 字符)按比例会吃掉 80% 宽度,
+   剩下的 Role/Light Mode/Dark Mode 几列每列实际可用宽度小于一个字符,叠加 widget
+   原样式里的 `word-break: break-word` / `overflow-wrap: anywhere`,渲染成"每个
+   字母独占一行"的竖排,完全不可读(2026-07-01 用户反馈)。
+   修复:RSB scope 单独把 table-layout 切到 auto + 清掉 col 的 inline width hint,
+   让浏览器按实际内容算列宽;短标签列自然保住"放下完整单词"的最小宽度,长描述列
+   wrap 到多行。内容仍超过栏宽时由 widget wrapper 横向滚动兜底(主 doc 模式宽栏
+   下视觉不变)。 */
+.rsb-fbody-compact .cm-editor .cm-md-table-widget {
+  overflow-x: auto;
+}
+.rsb-fbody-compact .cm-editor .cm-md-table-widget table {
+  table-layout: auto !important;
+  width: 100% !important;
+  /* 兜底:表格至少占满栏宽,不会因为内容短而缩成一小条。 */
+  min-width: 100% !important;
+}
+/* col 的 inline `style="width: xx%"` specificity 是 (1,0,0,0)(inline),CSS
+   规则需要 !important 才能盖过。auto 模式下浏览器只把 col 宽度当 hint,清掉
+   让它完全按内容算。 */
+.rsb-fbody-compact .cm-editor .cm-md-table-widget col {
+  width: auto !important;
+}
+
+/* ── 文件树 scroll 容器底部缓冲 ───────────────────────────────────────────────
+   FileTreeView 自己用 `py-2`(8px)在 scroll 容器内做 padding,doc 模式下父级
+   也给了底部留白,贴底不明显;RSB 嵌入式版父级直接到 RSB 底边,8px 不够,
+   最后一行会显得被切掉一半。直接子元素(即 FileTreeView 的根 div)的
+   padding-bottom 撑大,让 scroll 到底时最后一行底下有空气。
+   2026-06-30 用户要求"再大一倍",24 → 48。
+   selector 锚定 `.rsb-fbody-tree-scroll` 自身的子 div(= FileTreeView 根 div),
+   避免误伤兄弟节点 TreeHeader / SearchPanel(2026-06-30 用户截图实测:之前用
+   `.rsb-fbody-tree-pane > div` 会同时给标题栏加 48px,出现 80px 大空白)。 */
+.rsb-fbody-tree-scroll > div {
+  padding-bottom: 48px !important;
+}

@@ -1,0 +1,10 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "podspecPath": "./ios/XdtTapdb.podspec",
+    "modules": ["XdtTapdbModule"]
+  },
+  "android": {
+    "modules": ["com.xdtmaker.tapdb.XdtTapdbModule"]
+  }
+}

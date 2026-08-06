@@ -1,0 +1,61 @@
+appId: ${APP_ID}
+---
+- runFlow: login_mock_no_clear.yaml
+- assertVisible:
+    id: "devices.list"
+- extendedWaitUntil:
+    visible:
+      id: "home.sessionRowTitle.mock-session-1"
+    timeout: 15000
+- tapOn:
+    id: "home.sessionRowTitle.mock-session-1"
+- extendedWaitUntil:
+    visible:
+      id: "session.screen"
+    timeout: 15000
+- tapOn:
+    id: "session.filesButton"
+- extendedWaitUntil:
+    visible:
+      id: "files.screen"
+    timeout: 10000
+- assertVisible:
+    id: "files.locationBar"
+- assertVisible:
+    id: "files.directoryActions"
+- assertVisible:
+    id: "files.dirEntry.fixtures"
+- takeScreenshot:
+    path: visual-files
+- scrollUntilVisible:
+    element:
+      id: "files.fileEntry.about.txt"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    id: "files.fileEntry.about.txt"
+- scrollUntilVisible:
+    element:
+      id: "files.previewBlock"
+    direction: DOWN
+    timeout: 10000
+- assertVisible:
+    id: "files.previewBlock"
+- assertVisible:
+    id: "files.selectedPath"
+- assertVisible:
+    id: "files.previewActions"
+- extendedWaitUntil:
+    visible:
+      id: "files.loadPreviewButton"
+    timeout: 10000
+- tapOn:
+    id: "files.loadPreviewButton"
+- extendedWaitUntil:
+    visible:
+      id: "files.previewText"
+    timeout: 10000
+- assertVisible:
+    id: "files.previewText"
+- takeScreenshot:
+    path: visual-files-preview

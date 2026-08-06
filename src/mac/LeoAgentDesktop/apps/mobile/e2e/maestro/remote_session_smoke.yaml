@@ -1,0 +1,5 @@
+appId: ${APP_ID}
+---
+- runFlow: login_mock.yaml
+- runFlow: open_session_no_launch.yaml
+- runFlow: send_message.yaml

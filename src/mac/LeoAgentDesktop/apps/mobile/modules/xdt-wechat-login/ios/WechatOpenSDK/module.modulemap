@@ -1,0 +1,6 @@
+module WechatOpenSDK {
+  header "WXApi.h"
+  header "WXApiObject.h"
+  header "WechatAuthSDK.h"
+  export *
+}

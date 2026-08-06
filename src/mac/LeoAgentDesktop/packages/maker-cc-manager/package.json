@@ -1,0 +1,35 @@
+{
+  "name": "@cindy/maker-cc-manager",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Cindy cc-remote: NDJSON RPC daemon spawned on remote SSH machine. Wraps @anthropic-ai/claude-agent-sdk Query, exposes session/control RPC to local desktop client. Multi-session + detach/reattach + ring buffer / disk log. Zero Electron deps.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./protocol": "./src/protocol.ts",
+    "./codec": "./src/codec.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "bundle": "node build.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": {
+    "name": "XD Inc.",
+    "email": "feedback@cindy.app"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.2.112"
+  },
+  "devDependencies": {
+    "@types/node": "*",
+    "esbuild": "^0.28.1",
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.4"
+  }
+}

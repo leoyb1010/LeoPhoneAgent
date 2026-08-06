@@ -1,0 +1,1 @@
+ALTER TABLE `sessions` ADD `codex_history_has_product_prompt` integer;

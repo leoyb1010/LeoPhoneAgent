@@ -1,0 +1,22 @@
+appId: ${APP_ID}
+---
+- runFlow: login_mock_no_clear.yaml
+- assertVisible:
+    id: "devices.list"
+- extendedWaitUntil:
+    visible:
+      id: "home.sessionRowTitle.visual-revoked"
+    timeout: 15000
+- tapOn:
+    id: "home.sessionRowTitle.visual-revoked"
+- extendedWaitUntil:
+    visible:
+      id: "session.unsyncedState"
+    timeout: 20000
+- assertVisible:
+    id: "connection.banner"
+- extendedWaitUntil:
+    visible: "访问已撤销"
+    timeout: 10000
+- takeScreenshot:
+    path: visual-session-revoked

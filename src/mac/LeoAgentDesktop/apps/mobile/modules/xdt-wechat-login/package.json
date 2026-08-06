@@ -1,0 +1,17 @@
+{
+  "name": "xdt-wechat-login",
+  "version": "0.1.0",
+  "main": "src/index.ts",
+  "private": true,
+  "license": "Apache-2.0",
+  "expo": {
+    "plugin": "./plugin/index.js"
+  },
+  "peerDependencies": {
+    "expo": "*",
+    "expo-modules-core": "*"
+  },
+  "devDependencies": {
+    "@expo/config-plugins": "^56.0.0"
+  }
+}

@@ -1,0 +1,146 @@
+{
+  "title": "Settings",
+  "language": {
+    "title": "Language",
+    "hint": "Affects the app UI only. Agent replies follow the agent's own language settings.",
+    "options": {
+      "system": "Auto (follow system)",
+      "zh-CN": "简体中文",
+      "en": "English",
+      "ja": "日本語",
+      "ko": "한국어"
+    }
+  },
+  "version": {
+    "sectionTitle": "Version",
+    "currentLabel": "Current Version",
+    "bundleVersion": "App package {{version}}",
+    "otaVersion": "OTA version {{version}}",
+    "pairedDesktopVersion": "Matching desktop release {{version}}",
+    "devNoOta": "Development build; OTA updates unavailable",
+    "checkAction": "Check for Updates",
+    "testFlightCheckAction": "Check for Content Updates",
+    "checking": "Checking",
+    "updating": "Updating",
+    "checkingAccessibility": "Checking for updates",
+    "testFlightCheckingAccessibility": "Checking for content updates",
+    "testFlightUpdateManaged": "TestFlight manages test build updates",
+    "testFlightNoContentUpdate": "No content updates are available. Check TestFlight for new test builds.",
+    "testFlightContentUpdateUnavailable": "This build cannot check for content updates. Check TestFlight for new test builds.",
+    "bundleUpdateFound": "App package update available",
+    "upToDate": "Already up to date",
+    "bundleUpToDateNoOta": "App package is up to date; this version does not support OTA updates",
+    "downloadedRestarting": "Update downloaded, restarting",
+    "downloadedRestartRequired": "Update downloaded. Fully quit the app and reopen it to apply.",
+    "bundleCheckFailed": "Could not check for app package updates. Try again later.",
+    "checkFailedDetail": "Update check failed: {{detail}}",
+    "checkFailed": "Update check failed. Try again later."
+  },
+  "notifications": {
+    "sectionTitle": "Notifications",
+    "taskDone": "Task Completion Notifications",
+    "taskDoneHint": "Get a push on this phone when a task on your computer finishes, fails, or needs your reply. Completion and reply alerts include the latest response.",
+    "permissionDenied": "Notifications are turned off in system settings. Allow notifications in iOS Settings → Notifications → {{appName}}, then try again.",
+    "unregisterQueued": "Turned off. Could not unregister on the current network; it will finish automatically next time you're online."
+  },
+  "about": {
+    "sectionTitle": "About This Phone",
+    "deviceName": "Device Name",
+    "deviceNameDetail": "This name appears in the authorization list on your computer.",
+    "platform": "Platform",
+    "remoteControl": "Remote Control",
+    "remoteControlValue": "Managed on desktop",
+    "remoteControlDetail": "This phone acts only as a controller. Granting, revoking, and restoring control permissions is done in desktop settings.",
+    "editAccessibility": "Edit {{label}}"
+  },
+  "relay": {
+    "online": "Relay connected",
+    "connecting": "Connecting to Relay",
+    "stopped": "Relay not connected",
+    "lastSynced": "Last synced {{time}}",
+    "canSync": "Remote sessions can sync.",
+    "reconnectHint": "Remote sessions will resubscribe automatically when the network recovers.",
+    "resumeHint": "The connection resumes when you return to the app or sign in again."
+  },
+  "header": {
+    "notSignedIn": "Not signed in",
+    "thisPhone": "This phone"
+  },
+  "debug": {
+    "sectionTitle": "Debug / Developer",
+    "userId": "User ID",
+    "notSynced": "Not synced",
+    "deviceId": "Device ID",
+    "initializing": "Initializing",
+    "authServer": "Auth Server",
+    "authRegion": "Sign-in Region"
+  },
+  "updateInfo": {
+    "embedded": "With app package",
+    "embeddedFallback": "With app package (OTA not applied)",
+    "unknown": "Unknown",
+    "source": "Running Source",
+    "sourceEmbedded": "Embedded (with app package)",
+    "sourceEmergencyFallback": "Embedded (emergency launch; OTA not applied)",
+    "sourceOta": "OTA update",
+    "updateId": "Update ID",
+    "updatedAt": "Updated At",
+    "channel": "Channel",
+    "runtime": "Runtime",
+    "otaMarker": "OTA Marker",
+    "emergencyLaunch": "Emergency Launch",
+    "emergencyLaunchYes": "Yes (OTA cannot apply in this run)"
+  },
+  "legal": {
+    "sectionTitle": "Legal",
+    "privacyPolicy": "Privacy Policy",
+    "userAgreement": "User Agreement",
+    "view": "View",
+    "openPrivacyPolicy": "Open the privacy policy",
+    "openUserAgreement": "Open the user agreement",
+    "appFilingNumber": "App Filing Number",
+    "analytics": "Usage statistics",
+    "analyticsHint": "Helps us understand how often Cindy is launched and kept in use. Reports device and usage-environment information — such as your device model, OS version, app version, and a device identifier — plus, once signed in, your account ID; never conversations, files, or prompts.",
+    "analyticsSaveFailed": "Couldn't save this setting; it may revert after a restart.",
+    "analyticsReset": "Reset to default",
+    "analyticsResetAction": "Reset"
+  },
+  "account": {
+    "logoutHint": "Signing out only clears the sign-in state and local remote mirror on this phone. Sessions on your computer are not affected.",
+    "logout": "Sign Out",
+    "loggingOut": "Signing out",
+    "loggingOutAccessibility": "Signing out"
+  },
+  "copyRow": {
+    "action": "Copy",
+    "done": "Copied",
+    "accessibility": "Copy {{label}}"
+  },
+  "voiceDictionary": {
+    "sectionTitle": "Voice dictionary",
+    "label": "View dictionary",
+    "hint": "Your dictionary lives on your computers and syncs between them automatically. This is a read-only view — add or remove terms on a computer.",
+    "openAccessibility": "View voice dictionary",
+    "screenTitle": "Voice dictionary",
+    "entryCount": "{{count}} terms",
+    "aliasSeparator": ", ",
+    "aliases": "Often misheard as: {{aliases}}",
+    "refresh": "Refresh",
+    "refreshing": "Refreshing…",
+    "refreshAccessibility": "Refresh dictionary",
+    "readOnlyHint": "Read-only here — add or remove terms on a computer.",
+    "offlineHint": "None of your computers are online. Showing what was last synced to your phone.",
+    "noDesktops": "No computers yet. Sign in on a computer with the same account and your dictionary will show up here."
+  },
+  "deviceNameEditor": {
+    "screenTitle": "Device Name",
+    "placeholder": "Phone name",
+    "resetAccessibility": "Restore the default phone name",
+    "emptyError": "Device name cannot be empty.",
+    "deviceInitializing": "The device is still initializing. Try again later.",
+    "saving": "Saving…",
+    "saved": "Saved.",
+    "restoringDefault": "Restoring the default name…",
+    "restoredDefault": "Restored the default name."
+  }
+}

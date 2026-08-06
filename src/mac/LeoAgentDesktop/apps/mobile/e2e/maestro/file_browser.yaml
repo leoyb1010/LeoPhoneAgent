@@ -1,0 +1,71 @@
+appId: ${APP_ID}
+---
+- runFlow: login_mock.yaml
+- runFlow: open_session_no_launch.yaml
+- tapOn:
+    id: "session.filesButton"
+- extendedWaitUntil:
+    visible:
+      id: "files.screen"
+    timeout: 10000
+- assertVisible:
+    id: "files.pathInput"
+- assertVisible:
+    id: "files.locationBar"
+- assertVisible:
+    id: "files.currentPath"
+- assertVisible:
+    id: "files.directoryCount"
+- extendedWaitUntil:
+    visible:
+      id: "files.dirEntry.fixtures"
+    timeout: 10000
+- assertVisible:
+    id: "files.directoryActions"
+- assertVisible:
+    id: "files.workdirButton"
+- tapOn:
+    id: "files.copyCurrentPathButton"
+- assertVisible:
+    id: "files.currentPathCopyStatus"
+- scrollUntilVisible:
+    element:
+      id: "files.fileEntry.about.txt"
+    direction: DOWN
+    timeout: 10000
+- tapOn:
+    id: "files.fileEntry.about.txt"
+- scrollUntilVisible:
+    element:
+      id: "files.previewBlock"
+    direction: DOWN
+    timeout: 10000
+- assertVisible:
+    id: "files.previewBlock"
+- assertVisible:
+    id: "files.selectedPath"
+- assertVisible:
+    id: "files.previewActions"
+- assertVisible:
+    id: "files.copyPathButton"
+- tapOn:
+    id: "files.copyPathButton"
+- assertVisible:
+    id: "files.copyPathStatus"
+- scrollUntilVisible:
+    element:
+      id: "files.loadPreviewButton"
+    direction: DOWN
+    timeout: 10000
+- extendedWaitUntil:
+    visible:
+      id: "files.loadPreviewButton"
+    timeout: 10000
+- tapOn:
+    id: "files.loadPreviewButton"
+- extendedWaitUntil:
+    notVisible:
+      id: "files.loadPreviewButton"
+    timeout: 10000
+- assertVisible:
+    id: "files.previewText"

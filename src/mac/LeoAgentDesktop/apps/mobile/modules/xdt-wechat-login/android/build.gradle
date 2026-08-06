@@ -1,0 +1,20 @@
+apply plugin: 'com.android.library'
+apply plugin: 'org.jetbrains.kotlin.android'
+
+group = 'com.xdtmaker.wechatlogin'
+version = '0.1.0'
+
+def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useDefaultAndroidSdkVersions()
+
+android {
+  namespace "com.xdtmaker.wechatlogin"
+  defaultConfig { minSdkVersion 23 }
+}
+
+dependencies {
+  api 'com.tencent.mm.opensdk:wechat-sdk-android:6.8.38'
+}

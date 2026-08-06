@@ -1,0 +1,26 @@
+appId: ${APP_ID}
+---
+- extendedWaitUntil:
+    visible:
+      id: "devices.screen"
+    timeout: 10000
+- tapOn:
+    id: "connection.syncButton"
+    optional: true
+    label: "Sync devices when the connection row is visible"
+- extendedWaitUntil:
+    visible:
+      id: "home.projectSessionRow"
+    timeout: 15000
+- tapOn:
+    id: "home.projectSessionRow"
+- extendedWaitUntil:
+    visible:
+      id: "session.screen"
+    timeout: 15000
+- extendedWaitUntil:
+    visible:
+      id: "interaction.bottomSurface"
+    timeout: 15000
+- assertVisible:
+    id: "interaction.queuePreview.next"

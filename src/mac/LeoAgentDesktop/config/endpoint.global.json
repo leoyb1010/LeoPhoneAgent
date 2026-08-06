@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "authApiBaseUrl": "https://auth.leoagent.invalid",
+  "deviceLinkApiBaseUrl": "https://device-link.leoagent.invalid",
+  "oauthBrokerApiBaseUrl": "https://oauth-broker.leoagent.invalid",
+  "ossApiBaseUrl": "https://oss.leoagent.invalid",
+  "heartbeatUrl": "https://heartbeat.leoagent.invalid",
+  "telegramHookWsUrl": "wss://telegram-hook.leoagent.invalid",
+  "xHookWsUrl": "wss://x-hook.leoagent.invalid",
+  "slackHookWsUrl": "wss://slack-hook.leoagent.invalid",
+  "websiteUrl": "https://leoagent.invalid",
+  "modelAccessApiBaseUrl": "https://model-access.leoagent.invalid",
+  "voiceApiBaseUrl": "https://voice.leoagent.invalid",
+  "githubApiBaseUrl": "https://github.leoagent.invalid",
+  "skillhubApiBaseUrl": "https://xd-skillhub.leoagent.invalid",
+  "pluginApiBaseUrl": "https://plugin.leoagent.invalid",
+  "cdnBaseUrl": "https://hotfix.leoagent.invalid/leoagent",
+  "mobileUpdateBaseUrl": "https://mobile-update.leoagent.invalid",
+  "authDesktopCallbackUrl": "https://auth.leoagent.invalid/api/auth/desktop/callback",
+  "review": "0.1.0"
+}

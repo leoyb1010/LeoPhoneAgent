@@ -1,0 +1,39 @@
+appId: ${APP_ID}
+---
+- runFlow: login_mock_no_clear.yaml
+- assertVisible:
+    id: "devices.list"
+- extendedWaitUntil:
+    visible:
+      id: "home.sessionRowTitle.mock-session-1"
+    timeout: 15000
+- tapOn:
+    id: "home.sessionRowTitle.mock-session-1"
+- extendedWaitUntil:
+    visible:
+      id: "session.screen"
+    timeout: 15000
+- tapOn:
+    id: "session.controlsToggle"
+- extendedWaitUntil:
+    visible:
+      id: "session.menuSheet"
+    timeout: 10000
+- assertVisible:
+    id: "session.renameAction"
+- assertVisible:
+    id: "session.copyLinkAction"
+- assertVisible:
+    id: "session.pinButton"
+- assertVisible:
+    id: "session.archiveButton"
+- assertVisible:
+    id: "session.deleteButton"
+- takeScreenshot:
+    path: visual-session-controls-session
+- tapOn:
+    id: "session.renameAction"
+- assertVisible:
+    id: "session.renameInput"
+- takeScreenshot:
+    path: visual-session-controls-rename

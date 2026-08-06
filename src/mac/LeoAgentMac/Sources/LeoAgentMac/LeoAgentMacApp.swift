@@ -4,11 +4,11 @@
 //
 //  [T-leoagent-mac] The operator's console for the Mac half of the product.
 //
-//  Shape: menu-bar first. LeoAgent spends almost all of its life headless —
-//  launchd keeps the daemon alive whether or not anyone is logged in — so the
-//  app's job is not "be a chat window" but "tell me it's alive, tell me when
-//  it needs me, let me take over at the keyboard". The phone stays the primary
-//  control surface.
+//  Shape: a real desktop app — Dock icon, a console window that opens on
+//  launch and on reopen — plus a menu-bar extra for at-a-glance state. The
+//  daemon is the thing that runs headless; the app is where a human takes
+//  over at the keyboard, so hiding it behind a menu-bar-only icon read as
+//  "the app is broken" the first time anyone double-clicked it.
 //
 //  Native SwiftUI rather than Electron: this machine already runs the agent
 //  engine and a Python server, and a second Chromium would be the heaviest
@@ -24,6 +24,14 @@ struct LeoAgentMacApp: App {
     @StateObject private var model = DaemonModel()
 
     var body: some Scene {
+        // Declared first: the primary scene, presented at launch and again
+        // when the Dock icon or the app bundle is activated with no window.
+        Window("LeoAgent", id: "main") {
+            ConsoleView(model: model)
+                .frame(minWidth: 760, minHeight: 480)
+        }
+        .defaultSize(width: 980, height: 620)
+
         MenuBarExtra {
             MenuContent(model: model)
         } label: {
@@ -32,12 +40,6 @@ struct LeoAgentMacApp: App {
             Image(systemName: model.menuBarSymbol)
         }
         .menuBarExtraStyle(.window)
-
-        Window("LeoAgent", id: "main") {
-            ConsoleView(model: model)
-                .frame(minWidth: 720, minHeight: 460)
-        }
-        .defaultSize(width: 900, height: 560)
     }
 }
 
@@ -84,84 +86,5 @@ private struct MenuContent: View {
         .padding(12)
         .frame(width: 260)
         .task { await model.startPolling() }
-    }
-}
-
-// MARK: - Console
-
-private struct ConsoleView: View {
-    @ObservedObject var model: DaemonModel
-
-    var body: some View {
-        NavigationSplitView {
-            List(selection: Binding(get: { model.selected }, set: { model.selected = $0 })) {
-                Section("会话") {
-                    if model.sessions.isEmpty {
-                        Text("暂无编码会话").foregroundStyle(.secondary).font(.system(size: 12))
-                    }
-                    ForEach(model.sessions) { session in
-                        HStack(spacing: 8) {
-                            Image(systemName: session.waitingForApproval ? "hand.raised.fill" : "terminal")
-                                .foregroundStyle(session.waitingForApproval ? .orange : .secondary)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(session.name).font(.system(size: 13))
-                                Text(session.cwd)
-                                    .font(.system(size: 10, design: .monospaced))
-                                    .foregroundStyle(.secondary).lineLimit(1).truncationMode(.head)
-                            }
-                            Spacer()
-                            Text(session.status).font(.system(size: 10, design: .monospaced))
-                                .foregroundStyle(.tertiary)
-                        }
-                        .tag(session.id)
-                    }
-                }
-            }
-            .frame(minWidth: 240)
-        } detail: {
-            VStack(alignment: .leading, spacing: 14) {
-                // One pane of glass: both halves of the Mac side, so nobody
-                // has to remember there are two processes.
-                GroupBox("本机状态") {
-                    Grid(alignment: .leading, horizontalSpacing: 18, verticalSpacing: 6) {
-                        GridRow {
-                            Text("LeoAgent").foregroundStyle(.secondary)
-                            statusPill(model.isUp, model.isUp ? "运行中 :8646" : "未运行")
-                        }
-                        GridRow {
-                            Text("代理引擎").foregroundStyle(.secondary)
-                            statusPill(model.engineUp, model.engineUp ? "运行中 :8642" : "未运行")
-                        }
-                        GridRow {
-                            Text("可控 CLI").foregroundStyle(.secondary)
-                            Text(model.harnessNames.isEmpty ? "未检测到" : model.harnessNames.joined(separator: " · "))
-                        }
-                    }
-                    .font(.system(size: 12))
-                    .padding(6)
-                }
-
-                if let error = model.lastError {
-                    Text(error).font(.system(size: 12)).foregroundStyle(.red)
-                }
-
-                Text("手机端是主控制面。这里用来确认它活着、看它卡在哪、以及在键盘前直接接管。")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Spacer()
-            }
-            .padding(18)
-        }
-        .navigationTitle("LeoAgent")
-        .task { await model.startPolling() }
-    }
-
-    private func statusPill(_ ok: Bool, _ text: String) -> some View {
-        HStack(spacing: 5) {
-            Circle().fill(ok ? Color.green : Color.secondary).frame(width: 7, height: 7)
-            Text(text)
-        }
     }
 }

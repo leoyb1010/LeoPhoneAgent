@@ -21,6 +21,15 @@ extension AIChatViewModel {
                 subtitle: "Preparing",
                 onExpiration: { [weak self] in
                     guard let self else { return }
+                    // [T-bg-false-fail] 继续处理授权到期 ≠ 任务失败。静音
+                    // 保活生效时进程不会死,任务照常跑——这里必须什么都
+                    // 不做。之前无条件 stop + endBackgroundProcessing,系统
+                    // 横幅立刻报"任务失败",用户点回对话却看到任务还在
+                    // 继续(实际也确实在继续)。
+                    if BackgroundKeepAliveManager.shared.enhancedBackgroundEffective {
+                        logger.info("[Background][Continued] grant expired but keep-alive active — task continues untouched")
+                        return
+                    }
                     logger.warning("[Background][Continued] system expiration session=\(continuedKey.prefix(8))")
                     self.backgroundSuspended = true
                     SessionActivityTracker.shared.updateActivityPhase(
@@ -753,7 +762,11 @@ final class AgentContinuedProcessingManager {
             Task { @MainActor in
                 guard let self, let run,
                       self.runs.removeValue(forKey: run.sessionKey) != nil else { return }
-                run.task?.setTaskCompleted(success: false)
+                // [T-bg-false-fail] 授权到期时任务往往还活着(静音保活兜底)。
+                // success:false 会让系统横幅显示"任务失败"——只有真无保活、
+                // 工作确实要被挂起时才如实报失败。
+                let stillAlive = BackgroundKeepAliveManager.shared.enhancedBackgroundEffective
+                run.task?.setTaskCompleted(success: stillAlive)
                 run.expiration()
             }
         }

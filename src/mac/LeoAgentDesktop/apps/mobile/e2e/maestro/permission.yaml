@@ -1,0 +1,18 @@
+appId: ${APP_ID}
+---
+- assertVisible:
+    id: "session.screen"
+- assertVisible:
+    id: "interaction.bottomSurface"
+- extendedWaitUntil:
+    visible:
+      id: "interaction.permission.card"
+    timeout: 10000
+- assertVisible:
+    id: "interaction.permission.decisionSummary"
+- assertVisible:
+    id: "interaction.permission.denyButton"
+- assertVisible:
+    id: "interaction.permission.allowOnceButton"
+- tapOn:
+    id: "interaction.permission.allowOnceButton"

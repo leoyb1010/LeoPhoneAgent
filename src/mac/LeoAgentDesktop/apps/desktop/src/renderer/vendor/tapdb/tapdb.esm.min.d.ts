@@ -1,0 +1,76 @@
+declare namespace TapDBAPI {
+  function init(param: object): void;
+  function trackLink(dom: any, eventName: String, eventProperties: any): void;
+  function track(eventName: String): void;
+  function track(eventName: String, eventProperties: object): void;
+  function track(eventName: String, eventProperties: object, eventTime: any): void;
+  function track(eventName: String, eventProperties: object, eventTime: any, callback: any): void;
+  function initInstance(name: String, param: object): void;
+  function login(accountId: String): void;
+  function setPageProperty(obj: any): void;
+  function getPageProperty(): any;
+  function getPresetProperties(): PresetProperties;
+  function logout(): void;
+  function logout(isChangeId: boolean): void;
+  function userSet(userProperties: any, callback, any): void;
+  function userSet(userProperties: any): void;
+  function userSetOnce(userProperties: any, callback: any): void;
+  function userSetOnce(userProperties: any): void;
+  function userUnset(property: any, callback: any): void;
+  function userUnset(property: any): void;
+  function userAdd(userProperties: any, callback: any): void;
+  function userAdd(userProperties: any): void;
+  function userAppend(userProperties: any, callback: any): void;
+  function userAppend(userProperties: any): void;
+  function userUniqAppend(userProperties: any, callback: any): void;
+  function userUniqAppend(userProperties: any): void;
+  function flush(): void;
+  function userDel(callback: any): void;
+  function userDel(): void;
+  function trackUpdate(taEvent: any): void;
+  function trackOverwrite(taEvent: any): void;
+  function trackFirstEvent(taEvent: any): void;
+  function identify(id: any): void;
+  function getDistinctId(): String;
+  function getDeviceId(): String;
+  function setSuperProperties(superProperties: any): void;
+  function getSuperProperties(): any;
+  function clearSuperProperties(): void;
+  function unsetSuperProperty(propertyName: String): void;
+  function setDynamicSuperProperties(dynamicProperties: any): void;
+  function timeEvent(eventName: String): void;
+  function quick(type: String, properties: any): void;
+  function quick(type: String): void;
+  function enableTracking(enabled: boolean): void;
+  function optOutTracking(): void;
+  function optInTracking(): void;
+  function setTrackStatus(config: any): void;
+  function registerStaticProperties(properties: object): void;
+  function unregisterStaticProperty(propertyName: string): void;
+  function clearStaticProperties(): void;
+  function registerDynamicProperties(properties: object): void;
+  function trackEvent(eventName: string, eventProperties?: object): void;
+  function setUser(userId: string, properties?: any): void;
+  function clearUser(): void;
+  function setName(userName: string, callback?: any): void;
+  function deviceInitialize(deviceProperties: object, callback?: any): void;
+  function deviceUpdate(deviceProperties: object, callback?: any): void;
+  function deviceAdd(deviceProperties: object, callback?: any): void;
+  function userInitialize(userProperties: object, callback?: any): void;
+  function userUpdate(userProperties: object, callback?: any): void;
+  function userAdd(userProperties: object, callback?: any): void;
+  function trackLinkEvent(dom: DomSelect, eventName: String, eventProperties?: object): void;
+  function trackLinkClickEvent(dom: DomSelect, eventProperties?: object): void;
+  function pvEvent(eventProperties?: object): void;
+  function setPagePropertyEvent(eventProperties: object): void;
+  function getPagePropertyEvent(): object;
+}
+declare class PresetProperties {
+  toEventPresetProperties(): any;
+}
+declare class DomSelect {
+  tag?: string[];
+  class?: string[];
+  id?: string[];
+}
+export default TapDBAPI;

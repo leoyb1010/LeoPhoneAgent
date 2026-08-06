@@ -1,0 +1,70 @@
+appId: ${APP_ID}
+---
+- runFlow: login_mock_no_clear.yaml
+# 设备 chip 现在位于 DeviceMenuModal 内,菜单关闭时未挂载;先点 devices.title 打开范围菜单。
+- tapOn:
+    id: "devices.title"
+- extendedWaitUntil:
+    visible:
+      id: "${XDT_MOBILE_E2E_HOST_DEVICE_CHIP_ID}"
+    timeout: 15000
+- longPressOn:
+    id: "${XDT_MOBILE_E2E_HOST_DEVICE_CHIP_ID}"
+- extendedWaitUntil:
+    visible:
+      id: "deviceDetail.screen"
+    timeout: 15000
+- assertVisible:
+    id: "deviceDetail.toolbarActions"
+- tapOn:
+    id: "deviceDetail.filtersToggleButton"
+- assertVisible:
+    id: "deviceDetail.statusFilter.active"
+- assertVisible:
+    id: "deviceDetail.statusFilter.archived"
+- assertVisible:
+    id: "deviceDetail.statusFilter.all"
+- assertVisible:
+    id: "deviceDetail.groupMode.project"
+- assertVisible:
+    id: "deviceDetail.groupMode.date"
+- takeScreenshot:
+    path: visual-device-detail-filters
+- tapOn:
+    id: "deviceDetail.statusFilter.automation"
+- extendedWaitUntil:
+    visible:
+      id: "deviceDetail.automationGroupRow"
+    timeout: 10000
+- tapOn:
+    id: "deviceDetail.automationGroupRow"
+- assertVisible:
+    id: "deviceDetail.automationGroupChildren"
+- assertVisible:
+    id: "deviceDetail.automationGroupChild"
+- takeScreenshot:
+    path: visual-device-detail-automation-group
+- tapOn:
+    id: "deviceDetail.statusFilter.active"
+- extendedWaitUntil:
+    visible:
+      id: "deviceDetail.sessionRow"
+    timeout: 10000
+- longPressOn:
+    id: "deviceDetail.sessionRow"
+- assertVisible:
+    id: "deviceDetail.selectionBar"
+- assertVisible:
+    id: "deviceDetail.selectionHeaderActions"
+- assertVisible:
+    id: "deviceDetail.bulkPrimaryActions"
+- assertVisible:
+    id: "deviceDetail.bulkDangerActions"
+- tapOn:
+    id: "deviceDetail.bulkArchiveButton"
+- assertVisible:
+    id: "deviceDetail.bulkConfirmCard"
+- assertVisible:
+    id: "deviceDetail.bulkConfirmActions"
+- takeScreenshot:
+    path: visual-device-detail-selection

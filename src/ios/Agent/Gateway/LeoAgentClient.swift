@@ -35,7 +35,7 @@ enum GatewayEvent: Sendable {
     case toolStarted(tool: String, preview: String?)
     case toolCompleted(tool: String, duration: Double?, isError: Bool)
     case approvalRequest(GatewayApprovalRequest)
-    case approvalResponded(choice: String?)
+    case approvalResponded(choice: String?, approvalId: String?)
     case runCompleted(output: String?, usage: GatewayUsage?)
     case runFailed(message: String?)
     case runCancelled
@@ -135,6 +135,7 @@ struct GatewayCapabilities: Sendable {
 
 enum GatewayError: LocalizedError {
     case notConfigured
+    case harnessNotConfigured
     case badURL
     case unauthorized
     case http(status: Int, message: String?)
@@ -144,11 +145,16 @@ enum GatewayError: LocalizedError {
         switch self {
         case .notConfigured:
             return String(localized: "No Mac is connected.")
+        case .harnessNotConfigured:
+            // The engine and the harness service listen on different ports;
+            // pointing harness traffic at the engine used to 404 (or worse,
+            // read as "no CLI installed"). Now it is a named setup step.
+            return String(localized: "This Mac has no harness address set. Edit the Mac and fill in the LeoAgent service address (port 8647).")
         case .badURL:
             return String(localized: "That Mac address is not a valid URL.")
         case .unauthorized:
             // Deliberately no key echo — this string reaches logs and UI.
-            return String(localized: "LeoAgent rejected the access key.")
+            return String(localized: "密钥被拒绝。三台 Mac 与中继共用同一把钥匙:在 cortex 终端运行 cat ~/.leoagent/key,把结果重新粘贴到「设置 → 我的 Mac」。")
         case .http(let status, let message):
             if let message, !message.isEmpty {
                 return String(localized: "LeoAgent error \(status): \(message)")
@@ -162,17 +168,30 @@ enum GatewayError: LocalizedError {
 
 // MARK: - Client
 
+/// Which of the two Mac-side services a request targets. They are separate
+/// processes on separate ports: the vendored agent engine, and our own
+/// harness service. One base URL cannot serve both.
+enum GatewayService: Sendable {
+    case engine
+    case harness
+}
+
 /// Stateless HTTP/SSE client for one gateway host.
 ///
 /// An actor so a session driver and a background health probe can share one
 /// instance without racing on URLSession configuration.
 actor LeoAgentClient {
     private let baseURL: URL
+    /// Where the harness service lives (tailnet :8647 → local :8646). nil for
+    /// hosts configured before this existed; harness calls then fail with a
+    /// named, actionable error instead of hitting the engine port and 404ing.
+    private let harnessBaseURL: URL?
     private let apiKey: String
     let session: URLSession
 
-    init(baseURL: URL, apiKey: String) {
+    init(baseURL: URL, apiKey: String, harnessBaseURL: URL? = nil) {
         self.baseURL = baseURL
+        self.harnessBaseURL = harnessBaseURL
         self.apiKey = apiKey
         let config = URLSessionConfiguration.ephemeral
         // A run can think for minutes before its first token; the resource
@@ -186,8 +205,31 @@ actor LeoAgentClient {
 
     // MARK: Request plumbing
 
-    func request(_ path: String, method: String = "GET", body: Data? = nil) throws -> URLRequest {
-        guard let url = URL(string: path, relativeTo: baseURL) else { throw GatewayError.badURL }
+    func request(_ path: String, method: String = "GET", body: Data? = nil,
+                 service: GatewayService = .engine) throws -> URLRequest {
+        let base: URL
+        switch service {
+        case .engine:
+            base = baseURL
+        case .harness:
+            guard let harnessBaseURL else { throw GatewayError.harnessNotConfigured }
+            base = harnessBaseURL
+        }
+        // relay 模式的 base 自带路径前缀(…/leoagent-relay/relay/api/m/<机器名>)。
+        // `URL(string:relativeTo:)` 对以 "/" 开头的路径会整段替换,把前缀吞掉
+        // ——必须改为拼接。base 无路径时行为与原来完全一致。
+        let resolved: URL?
+        if base.path.isEmpty || base.path == "/" {
+            resolved = URL(string: path, relativeTo: base)
+        } else {
+            let split = path.split(separator: "?", maxSplits: 1)
+            let basePath = base.path.hasSuffix("/") ? String(base.path.dropLast()) : base.path
+            var parts = URLComponents(url: base, resolvingAgainstBaseURL: false)
+            parts?.path = basePath + String(split[0])
+            parts?.query = split.count > 1 ? String(split[1]) : nil
+            resolved = parts?.url
+        }
+        guard let url = resolved else { throw GatewayError.badURL }
         var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
@@ -230,13 +272,14 @@ actor LeoAgentClient {
 
     /// Shared JSON helpers so feature extensions do not each re-implement
     /// request building, status validation and decoding.
-    func getJSON(_ path: String) async throws -> [String: Any] {
-        try Self.json(try await send(try request(path)))
+    func getJSON(_ path: String, service: GatewayService = .engine) async throws -> [String: Any] {
+        try Self.json(try await send(try request(path, service: service)))
     }
 
-    func postJSON(_ path: String, body: [String: Any]) async throws -> [String: Any] {
+    func postJSON(_ path: String, body: [String: Any],
+                  service: GatewayService = .engine) async throws -> [String: Any] {
         let data = try JSONSerialization.data(withJSONObject: body)
-        let raw = try await send(try request(path, method: "POST", body: data))
+        let raw = try await send(try request(path, method: "POST", body: data, service: service))
         return (try? Self.json(raw)) ?? [:]
     }
 
@@ -404,12 +447,17 @@ extension GatewayEvent {
                                       ?? !((obj["error"] as? String)?.isEmpty ?? true))
         case "approval.request":
             var extras: [String: String] = [:]
-            let modelled: Set<String> = ["event", "run_id", "timestamp", "choices", "command", "description"]
+            let modelled: Set<String> = ["event", "run_id", "timestamp", "choices", "command",
+                                         "description", "approval_id", "seq", "session_id"]
             for (key, value) in obj where !modelled.contains(key) {
                 extras[key] = String(describing: value)
             }
             return .approvalRequest(GatewayApprovalRequest(
-                approvalId: UUID().uuidString,
+                // The harness mints a real per-approval id and expects it back;
+                // minting our own severed that correlation (and changed on
+                // every reconnect). The engine's payload has no id, so the
+                // local UUID remains its fallback.
+                approvalId: obj["approval_id"] as? String ?? UUID().uuidString,
                 runId: obj["run_id"] as? String ?? "",
                 choices: obj["choices"] as? [String] ?? ["once", "deny"],
                 command: obj["command"] as? String,
@@ -417,7 +465,8 @@ extension GatewayEvent {
                 reason: obj["description"] as? String,
                 extras: extras))
         case "approval.responded":
-            return .approvalResponded(choice: obj["choice"] as? String)
+            return .approvalResponded(choice: obj["choice"] as? String,
+                                      approvalId: obj["approval_id"] as? String)
         case "run.completed":
             return .runCompleted(output: obj["output"] as? String,
                                  usage: LeoAgentClient.parseUsage(obj["usage"]))

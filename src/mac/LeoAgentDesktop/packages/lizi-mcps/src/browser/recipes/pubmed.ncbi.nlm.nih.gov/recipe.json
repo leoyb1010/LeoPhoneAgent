@@ -1,0 +1,12 @@
+{
+  "id": "pubmed-search",
+  "match": ["pubmed.ncbi.nlm.nih.gov", "eutils.ncbi.nlm.nih.gov"],
+  "description": "用 NCBI E-utilities esearch 在 PubMed 按关键词搜文献，返回匹配的 PMID 列表 JSON。读接口而非扒 DOM。",
+  "inputs": { "query": { "required": true } },
+  "steps": [
+    { "action": "navigate", "url": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&retmode=json&term={{query|url}}" },
+    { "action": "wait", "loadState": "load" },
+    { "action": "extract", "as": "json", "extract": { "fields": { "body": "body" } } }
+  ],
+  "output": "{{json}}"
+}

@@ -1,0 +1,10 @@
+{
+  "site": "developer.mozilla.org",
+  "auth": "只读无需登录",
+  "entry": {
+    "home": "https://developer.mozilla.org/",
+    "searchApi": "https://developer.mozilla.org/api/v1/search?q="
+  },
+  "recipes": ["mdn-search"],
+  "notes": "搜索走 MDN 的公开 API(developer.mozilla.org/api/v1/search?q=),返回 JSON {documents:[{title,slug,summary,locale,score,...}],metadata:{total,page,...}};直接 navigate 到该 URL 再读 body 即拿到 JSON。slug 可拼成 https://developer.mozilla.org/<locale>/docs/<slug> 打开文档页。"
+}

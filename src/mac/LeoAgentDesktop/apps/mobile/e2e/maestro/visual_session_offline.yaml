@@ -1,0 +1,30 @@
+appId: ${APP_ID}
+---
+- runFlow: login_mock_no_clear.yaml
+- assertVisible:
+    id: "devices.list"
+- extendedWaitUntil:
+    visible:
+      id: "home.sessionRowTitle.visual-offline"
+    timeout: 15000
+- tapOn:
+    id: "home.sessionRowTitle.visual-offline"
+- extendedWaitUntil:
+    visible:
+      id: "session.composerInput"
+    timeout: 30000
+- assertVisible:
+    id: "connection.banner"
+- assertVisible:
+    id: "session.composerInput"
+- tapOn:
+    id: "session.composerInput"
+- eraseText
+- inputText: "Offline visual draft"
+- hideKeyboard
+- extendedWaitUntil:
+    visible:
+      id: "session.sendButton"
+    timeout: 5000
+- takeScreenshot:
+    path: visual-session-offline

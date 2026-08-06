@@ -1,0 +1,23 @@
+apply plugin: 'com.android.library'
+apply plugin: 'org.jetbrains.kotlin.android'
+
+group = 'com.xdtmaker.tapdb'
+version = '0.1.0'
+
+def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useDefaultAndroidSdkVersions()
+
+android {
+  namespace "com.xdtmaker.tapdb"
+
+  defaultConfig {
+    minSdkVersion 23
+  }
+}
+
+dependencies {
+  implementation "com.taptap.sdk:tap-core:4.10.5"
+}

@@ -1,0 +1,1 @@
+ALTER TABLE `sessions` ADD `extra_dirs` text DEFAULT '[]' NOT NULL;

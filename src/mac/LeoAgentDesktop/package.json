@@ -1,0 +1,135 @@
+{
+  "name": "cindy",
+  "private": true,
+  "description": "Cindy open-source client monorepo — desktop, mobile, and shared packages",
+  "license": "Apache-2.0",
+  "author": {
+    "name": "XD Inc.",
+    "email": "feedback@cindy.app"
+  },
+  "homepage": "https://cindy.app",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/makecindy/cindy.git"
+  },
+  "bugs": {
+    "url": "https://github.com/makecindy/cindy/issues"
+  },
+  "engines": {
+    "node": ">=22.12",
+    "pnpm": ">=10.7 <11"
+  },
+  "packageManager": "pnpm@10.33.2+sha512.a90faf6feeab71ad6c6e57f94e0fe1a12f5dcc22cd754db40ae9593eb6a3e0b6b12e3540218bb37ae083404b1f2ce6db2a4121e979829b4aff94b99f49da1cf8",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@parcel/watcher",
+      "better-sqlite3",
+      "electron",
+      "electron-winstaller",
+      "esbuild",
+      "node-pty",
+      "sharp"
+    ],
+    "supportedArchitectures": {
+      "os": [
+        "win32",
+        "darwin",
+        "linux"
+      ],
+      "cpu": [
+        "x64",
+        "arm64"
+      ],
+      "libc": [
+        "glibc"
+      ]
+    },
+    "overrides": {
+      "@electron/rebuild": "^4.0.3",
+      "protobufjs": "7.6.5",
+      "tar": "^7.5.21",
+      "brace-expansion@^5.0.0": "^5.0.8",
+      "@anthropic-ai/sdk": "0.91.1",
+      "js-yaml@^4.0.0": "^4.3.0",
+      "zod": "4.3.6",
+      "tmp": "^0.2.7",
+      "fast-uri": "^3.1.4",
+      "sharp": "^0.35.0",
+      "@esbuild-kit/core-utils>esbuild": "^0.25.0",
+      "builder-util-runtime": "^9.7.0"
+    },
+    "patchedDependencies": {
+      "harmonyos-sans-sc-webfont-splitted": "dependency-patches/harmonyos-sans-sc-webfont-splitted.patch",
+      "react-native@0.85.3": "dependency-patches/react-native@0.85.3.patch",
+      "react-native-uitextview@2.2.0": "dependency-patches/react-native-uitextview@2.2.0.patch",
+      "react-native-webview@13.16.1": "dependency-patches/react-native-webview@13.16.1.patch",
+      "expo-paste-input@0.2.2": "dependency-patches/expo-paste-input@0.2.2.patch"
+    },
+    "allowUnusedPatches": true
+  },
+  "scripts": {
+    "h": "node scripts/help.mjs",
+    "mobile:xcode": "node apps/mobile/scripts/open-ios-xcode.mjs",
+    "mobile:sim:rebuild": "node scripts/ensure-deps.mjs --workspace-only && node apps/mobile/scripts/sim-rebuild.mjs",
+    "mobile:sim:start": "node scripts/ensure-deps.mjs --workspace-only && node apps/mobile/scripts/sim-start.mjs",
+    "mobile:sim:whoami": "node scripts/ensure-deps.mjs --workspace-only && node apps/mobile/scripts/sim-whoami.mjs",
+    "mobile:release:check": "node apps/mobile/scripts/release-with-env.mjs check",
+    "mobile:release:prod": "node apps/mobile/scripts/release-with-env.mjs prod",
+    "mobile:build:ios": "node apps/mobile/scripts/build-ios.mjs",
+    "mobile:build:android": "node apps/mobile/scripts/build-android.mjs",
+    "ensure-deps": "node scripts/ensure-deps.mjs",
+    "sync:browser-runtime": "node scripts/browser-runtime/sync.mjs",
+    "repo:worktrees": "node scripts/repo-worktrees.mjs",
+    "update:claude": "node tools/claude/update.mjs",
+    "update:codex": "node tools/codex/update.mjs",
+    "update:ripgrep": "node tools/ripgrep/update.mjs",
+    "update:pi": "node tools/pi/update.mjs",
+    "update:vendors": "node tools/claude/update.mjs && node tools/codex/update.mjs && node tools/ripgrep/update.mjs && node tools/pi/update.mjs",
+    "install:claude": "node scripts/ensure-agent-binaries.mjs --kinds=claude",
+    "install:codex": "node scripts/ensure-agent-binaries.mjs --kinds=codex",
+    "install:ripgrep": "node scripts/ensure-agent-binaries.mjs --kinds=ripgrep",
+    "install:pi": "node scripts/ensure-agent-binaries.mjs --kinds=pi",
+    "install:agent-binaries": "node scripts/ensure-agent-binaries.mjs",
+    "postinstall": "node scripts/ensure-agent-binaries.mjs --best-effort && node scripts/fix-node-pty-perms.mjs && pnpm --filter @cindy/model-access-protocol build",
+    "dev:desktop": "node scripts/ensure-deps.mjs && node scripts/ensure-dev-runtime-assets.mjs && pnpm --filter desktop dev",
+    "dev:desktop:remote": "node scripts/ensure-deps.mjs && node scripts/ensure-dev-runtime-assets.mjs && pnpm --filter desktop dev:remote",
+    "restart:desktop:remote": "node scripts/desktop-restart-runner.mjs --wait-ready",
+    "restart:desktop:local": "node scripts/desktop-restart-runner.mjs --local --wait-ready",
+    "desktop:whoami": "node scripts/desktop-whoami.mjs",
+    "dev:desktop:inspect": "node scripts/ensure-deps.mjs && node scripts/ensure-dev-runtime-assets.mjs && pnpm --filter desktop dev:inspect",
+    "benchmark:voice-input": "node scripts/voice-input-benchmark.mjs",
+    "benchmark:browser": "node --import tsx scripts/browser-capability-benchmark.mjs",
+    "benchmark:desktop-workers": "node scripts/desktop-worker-benchmark.mjs",
+    "dev:embed:search": "node scripts/dev-embed-search.mjs",
+    "build": "node scripts/ensure-deps.mjs && pnpm --filter desktop build",
+    "release:package": "node scripts/ensure-deps.mjs && node apps/desktop/scripts/package-desktop.mjs",
+    "check:i18n": "node scripts/check-i18n.mjs",
+    "check:i18n-glossary": "node scripts/check-i18n-glossary.mjs",
+    "check:i18n-glossary:report": "node scripts/check-i18n-glossary.mjs --report",
+    "i18n:glossary-doc": "node scripts/generate-glossary-doc.mjs",
+    "check:brand-terminology": "node scripts/brand-terminology-guard.mjs",
+    "check:endpoints": "node scripts/check-endpoint-literals.mjs",
+    "check:dev-docs": "node --test scripts/__tests__/dev-docs-contract.test.mjs",
+    "check:dco": "node scripts/check-dco.mjs",
+    "check:submodule-forward": "node scripts/check-submodule-forward.mjs",
+    "dco:install-hook": "node scripts/install-dco-hook.mjs",
+    "licenses:generate": "node scripts/generate-third-party-notices.mjs",
+    "lint": "pnpm -r lint",
+    "format": "pnpm -r format",
+    "test:runner": "node --test scripts/__tests__/test-workspaces.test.mjs scripts/__tests__/desktop-worker-benchmark.test.mjs scripts/__tests__/dev-docs-contract.test.mjs scripts/__tests__/restart-desktop-remote.test.mjs scripts/__tests__/dev-migration-policy.test.mjs scripts/__tests__/ensure-deps.test.mjs scripts/__tests__/client-endpoint-build-env.test.mjs scripts/__tests__/desktop-dev-region.test.mjs scripts/__tests__/endpoint-consistency.test.mjs scripts/__tests__/endpoint-local-file.test.mjs scripts/__tests__/ensure-agent-binaries.test.mjs scripts/__tests__/ensure-android-platform-tools.test.mjs scripts/__tests__/fetch-with-timeout.test.mjs scripts/__tests__/agent-binary-cdn-fallback.test.mjs scripts/__tests__/ensure-binary-fallback.test.mjs scripts/__tests__/verify-sha256.test.mjs scripts/__tests__/pi-update-layout.test.mjs scripts/__tests__/migration-freeze.test.mjs scripts/__tests__/check-submodule-forward.test.mjs scripts/__tests__/third-party-notices.test.mjs scripts/__tests__/brand-identity-sync.test.mjs scripts/__tests__/check-dco.test.mjs scripts/__tests__/package-args.test.mjs scripts/__tests__/notarize-mac-app.test.mjs scripts/__tests__/glossary-rules.test.mjs",
+    "test:unit": "pnpm test:runner && node scripts/test-workspaces.mjs --tier unit",
+    "test:all": "pnpm test:runner && node scripts/test-workspaces.mjs --all",
+    "test:git-integration": "pnpm test:runner && node scripts/test-workspaces.mjs --tier git-integration",
+    "test:db": "pnpm test:runner && node scripts/test-workspaces.mjs --tier db",
+    "test:guard": "node scripts/test-workspaces.mjs --tier guard",
+    "ci:scheduler-guard": "node scripts/scheduler-ci-guard.mjs",
+    "pctx": "node packages/project-context/dist/cli.js",
+    "pctx:build": "pnpm --filter project-context build"
+  },
+  "dependencies": {
+    "gray-matter": "^4.0.3"
+  },
+  "devDependencies": {
+    "spdx-expression-parse": "3.0.1"
+  }
+}

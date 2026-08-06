@@ -1,0 +1,74 @@
+/**
+ * Faithful port of the self-contained error helpers from upstream
+ * `src/infra/errors.ts`. The only upstream coupling was `redactSensitiveText`,
+ * which we redirect to the local conservative redactor. No logger/config graph.
+ */
+import { redactSensitiveText } from './redact.js';
+
+export function extractErrorCode(err: unknown): string | undefined {
+  if (!err || typeof err !== 'object') return undefined;
+  const code = (err as { code?: unknown }).code;
+  if (typeof code === 'string') return code;
+  if (typeof code === 'number') return String(code);
+  return undefined;
+}
+
+export function collectErrorGraphCandidates(
+  err: unknown,
+  resolveNested?: (current: Record<string, unknown>) => Iterable<unknown>,
+): unknown[] {
+  const queue: unknown[] = [err];
+  const seen = new Set<unknown>();
+  const candidates: unknown[] = [];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (current == null || seen.has(current)) continue;
+    seen.add(current);
+    candidates.push(current);
+    if (!current || typeof current !== 'object' || !resolveNested) continue;
+    for (const nested of resolveNested(current as Record<string, unknown>)) {
+      if (nested != null && !seen.has(nested)) queue.push(nested);
+    }
+  }
+  return candidates;
+}
+
+export function formatErrorMessage(err: unknown): string {
+  let formatted: string;
+  if (err instanceof Error) {
+    formatted = err.message || err.name || 'Error';
+    let cause: unknown = err.cause;
+    const seen = new Set<unknown>([err]);
+    const seenMessages = new Set<string>([formatted]);
+    const appendCauseMessage = (message: string): void => {
+      if (!message || seenMessages.has(message)) return;
+      formatted += ` | ${message}`;
+      seenMessages.add(message);
+    };
+    while (cause && !seen.has(cause)) {
+      seen.add(cause);
+      if (cause instanceof Error) {
+        appendCauseMessage(cause.message);
+        const code = extractErrorCode(cause);
+        if (code) appendCauseMessage(code);
+        cause = cause.cause;
+      } else if (typeof cause === 'string') {
+        appendCauseMessage(cause);
+        break;
+      } else {
+        break;
+      }
+    }
+  } else if (typeof err === 'string') {
+    formatted = err;
+  } else if (typeof err === 'number' || typeof err === 'boolean' || typeof err === 'bigint') {
+    formatted = String(err);
+  } else {
+    try {
+      formatted = JSON.stringify(err);
+    } catch {
+      formatted = Object.prototype.toString.call(err);
+    }
+  }
+  return redactSensitiveText(formatted);
+}

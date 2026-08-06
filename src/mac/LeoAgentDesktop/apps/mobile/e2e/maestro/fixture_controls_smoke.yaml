@@ -1,0 +1,9 @@
+appId: ${APP_ID}
+---
+- runFlow: login_mock.yaml
+- runFlow: open_session_controls.yaml
+- runFlow: plan_review.yaml
+- runFlow: permission.yaml
+- runFlow: ask_user.yaml
+- runFlow: queue.yaml
+- runFlow: send_message.yaml

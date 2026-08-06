@@ -1,0 +1,37 @@
+{
+  "name": "@cindy/remote-file-service",
+  "version": "0.0.0",
+  "private": true,
+  "description": "xdt-maker remote file-service: NDJSON RPC daemon run on remote SSH machines over exec-channel stdio. Wraps @cindy/file-browser-core so remote sessions get the exact same file-browser semantics (ignore rules, binary detection, path safety) as local ones. Zero Electron deps.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./protocol": "./src/protocol.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "bundle": "node build.mjs",
+    "test": "vitest run",
+    "lint": "eslint src/"
+  },
+  "author": {
+    "name": "XD Inc.",
+    "email": "feedback@cindy.app"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@cindy/file-browser-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@types/node": "*",
+    "esbuild": "^0.28.1",
+    "eslint": "^9.0.0",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^3.2.4"
+  }
+}

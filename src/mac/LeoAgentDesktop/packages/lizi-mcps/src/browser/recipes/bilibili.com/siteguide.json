@@ -1,0 +1,11 @@
+{
+  "site": "bilibili.com",
+  "auth": "热门/排行榜公开内容无需登录即可读;登录态(持久浏览器登录 bilibili.com)可降低风控概率并拿到个性化数据",
+  "entry": {
+    "home": "https://www.bilibili.com",
+    "popular": "https://api.bilibili.com/x/web-interface/popular?pn=1&ps=<limit>",
+    "ranking": "https://api.bilibili.com/x/web-interface/ranking/v2?rid=0&type=all"
+  },
+  "recipes": ["bilibili-hot"],
+  "notes": "关键:不要直接 navigate 到 api.bilibili.com——非同源访问会被风控喂 SPA HTML/拦截。正确姿势是先 navigate 到 https://www.bilibili.com,再用 evaluate 步在页面内 fetch(api 全路径, {credentials:'include'}):同源 cookie 自动带上。bilibili-hot 走 /x/web-interface/popular?pn=1&ps=<limit>,响应 {data:{list:[{title,owner:{name},stat:{view,danmaku},bvid}]}}。另一个可直接复用的免签名读接口是排行榜 /x/web-interface/ranking/v2?rid=0&type=all(同样 data.list 结构,无需签名,需要时可照 bilibili-hot 套同样的 in-page fetch 模式做成 bilibili-ranking)。视频详情页 URL 用 https://www.bilibili.com/video/<bvid> 拼接。注意:搜索接口 /x/web-interface/wbi/search/type 需要 WBI 动态签名(w_rid + wts,从 nav 接口取 img_key/sub_key 计算),实现脆弱,本配方未收录;若需搜索请走页面交互。务必使用持久浏览器(带登录态)以稳定拿到 JSON。"
+}
