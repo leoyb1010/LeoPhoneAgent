@@ -38,7 +38,16 @@ struct MacHostEntity: AppEntity, Identifiable {
 }
 
 @available(iOS 16.0, *)
-struct MacHostQuery: EntityQuery {
+struct MacHostQuery: EntityStringQuery {
+    /// 口语名匹配:「Studio」「MacBook」这种叫法直接命中,不用全名。
+    @MainActor
+    func entities(matching string: String) async throws -> [MacHostEntity] {
+        let needle = string.lowercased().replacingOccurrences(of: " ", with: "")
+        return GatewayHostStore.shared.activeHosts
+            .filter { $0.name.lowercased().replacingOccurrences(of: " ", with: "").contains(needle) }
+            .map { MacHostEntity(id: $0.id, name: $0.name) }
+    }
+
     @MainActor
     func entities(for identifiers: [String]) async throws -> [MacHostEntity] {
         GatewayHostStore.shared.activeHosts

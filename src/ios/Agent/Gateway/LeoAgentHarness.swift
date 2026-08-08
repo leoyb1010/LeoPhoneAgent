@@ -460,7 +460,7 @@ final class HarnessSessionDriver: ObservableObject {
                 HarnessApprovalNotifier.post(hostId: client.hostId, hostName: client.hostName,
                                              sessionId: sid, approval: approval)
             }
-            HarnessLiveActivityBridge.shared.refreshIfBackground()
+            HarnessLiveActivityBridge.shared.refresh()
         case .approvalResponded(_, let approvalId):
             if let approvalId {
                 if let resolved = pendingApprovals.first(where: { $0.approvalId == approvalId }) {
@@ -482,7 +482,7 @@ final class HarnessSessionDriver: ObservableObject {
             } else {
                 status = "running"
             }
-            HarnessLiveActivityBridge.shared.refreshIfBackground()
+            HarnessLiveActivityBridge.shared.refresh()
         case .runCompleted(let output, _):
             if let output, !output.isEmpty,
                !items.contains(where: { if case .assistantText = $0.kind { return $0.text == output }; return false }) {

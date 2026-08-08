@@ -5,12 +5,15 @@
 //  [T-siri-fleet] Mac 任务上灵动岛/锁屏 Live Activity。
 //
 //  复用聊天任务的整套 Live Activity(AgentActivityAttributes +
-//  AgentLiveActivityManager + 现成 widget UI)——只是把 harness 会话
-//  合成为 LiveSessionSnapshot 喂进去。规则:
-//  - app 退到后台且有 driver 正在跟随 Mac 会话 → start;
-//  - 等审批时状态文案换成「等你审批:<命令>」(时效通知同时在响);
-//  - 回到前台或没有活跃 driver → end(只结束我们自己拉起的,聊天任务
-//    自己的 activity 由它原来的管理者负责——两边同时要,聊天优先)。
+//  AgentLiveActivityManager + 现成 widget UI)——把 harness 会话合成为
+//  LiveSessionSnapshot 喂进去。
+//
+//  生命周期(ActivityKit 铁律:活动只能在前台创建,更新随时可以):
+//  - driver 注册(此时必在前台)→ 立刻 start——锁屏/灵动岛马上有;
+//  - 状态变化(审批到达/解决、回合结束)→ update,后台也合法;
+//  - 没有活跃 driver → end。
+//  聊天任务的 activity 在跑时不抢——它的管理者持续 update,插队只会互相
+//  覆盖;聊天优先,Mac 任务等它结束后的下一次状态变化再上。
 //
 
 import Foundation
@@ -30,33 +33,27 @@ final class HarnessLiveActivityBridge {
     private var startedByBridge = false
 
     private init() {
-        let nc = NotificationCenter.default
-        nc.addObserver(forName: UIApplication.didEnterBackgroundNotification,
-                       object: nil, queue: .main) { [weak self] _ in
+        // 回到前台后补一次刷新:后台期间 end 掉聊天活动的话,Mac 任务
+        // 需要一个前台时机才能 start(后台 start 会被系统拒)。
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification,
+            object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.refresh() }
-        }
-        nc.addObserver(forName: UIApplication.willEnterForegroundNotification,
-                       object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.endIfOurs() }
         }
     }
 
     func register(driver: HarnessSessionDriver, hostName: String?) {
         entries[ObjectIdentifier(driver)] = Entry(driver: driver, hostName: hostName ?? "Mac")
+        refresh()
     }
 
     func unregister(driver: HarnessSessionDriver) {
         entries.removeValue(forKey: ObjectIdentifier(driver))
-        refreshIfBackground()
-    }
-
-    /// driver 状态变化(审批到达/解决、回合结束)时喊一声。前台是 no-op。
-    func refreshIfBackground() {
-        guard UIApplication.shared.applicationState != .active else { return }
         refresh()
     }
 
-    private func refresh() {
+    /// driver 状态变化时喊一声(update 在后台也合法,start 只在前台发生)。
+    func refresh() {
         entries = entries.filter { $0.value.driver != nil }
         let snapshots: [LiveSessionSnapshot] = entries.values.compactMap { entry in
             guard let d = entry.driver, d.isRunning, let sid = d.sessionId else { return nil }
@@ -81,23 +78,20 @@ final class HarnessLiveActivityBridge {
                 loopIteration: 0)
         }
         if snapshots.isEmpty {
-            endIfOurs()
+            if startedByBridge {
+                AgentLiveActivityManager.shared.endActivity()
+                startedByBridge = false
+            }
             return
         }
-        // 聊天任务的 activity 在跑就不抢——它的管理者会持续 update,
-        // 我们插进去只会互相覆盖。
-        if AgentLiveActivityManager.shared.hasLiveActivity && !startedByBridge { return }
         if startedByBridge {
             AgentLiveActivityManager.shared.updateActivity(sessions: snapshots)
-        } else {
+        } else if !AgentLiveActivityManager.shared.hasLiveActivity {
+            // start 仅前台合法;后台时跳过,didBecomeActive 会补。
+            guard UIApplication.shared.applicationState == .active else { return }
             AgentLiveActivityManager.shared.startActivity(sessions: snapshots)
             startedByBridge = true
         }
-    }
-
-    private func endIfOurs() {
-        guard startedByBridge else { return }
-        AgentLiveActivityManager.shared.endActivity()
-        startedByBridge = false
+        // 聊天 activity 在跑:什么都不做,让它先走。
     }
 }
