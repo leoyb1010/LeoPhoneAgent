@@ -283,7 +283,10 @@ enum ShortcutNotification {
             actions: [],
             intentIdentifiers: []
         )
-        center.setNotificationCategories([category])
+        center.getNotificationCategories { existing in
+            // [T-siri-approval-notify] set 是整体替换;并集注册,别抹掉其他类别的按钮。
+            center.setNotificationCategories(existing.union([category]))
+        }
 
         let content = UNMutableNotificationContent()
         content.title = title
@@ -369,7 +372,13 @@ final class ShortcutNotificationDelegate: NSObject, UNUserNotificationCenterDele
     /// notification on a killed app used to land on the Launch Session
     /// default instead of the tapped session).
     func register() {
-        UNUserNotificationCenter.current().delegate = self
+        let center = UNUserNotificationCenter.current()
+        center.delegate = self
+        // [T-siri-approval-notify] Mac 审批通知的「批准/拒绝」按钮类别。
+        // 启动即注册(并集式),按钮才会出现在锁屏与横幅上。
+        center.getNotificationCategories { existing in
+            center.setNotificationCategories(existing.union([HarnessApprovalNotifier.category]))
+        }
     }
 
     /// Called when user taps the notification (app in foreground or background).
@@ -378,6 +387,11 @@ final class ShortcutNotificationDelegate: NSObject, UNUserNotificationCenterDele
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
+        // [T-siri-approval-notify] Mac 审批通知的按钮:不开 app,直接经
+        // 中继送回决定。handle 返回 true 时它接管了 completionHandler。
+        if HarnessApprovalNotifier.handle(response: response, completion: completionHandler) {
+            return
+        }
         let userInfo = response.notification.request.content.userInfo
         if let sessionId = userInfo["sessionId"] as? String {
             DispatchQueue.main.async {

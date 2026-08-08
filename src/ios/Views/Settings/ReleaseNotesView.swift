@@ -24,6 +24,17 @@ struct LeoReleaseNote: Identifiable {
 enum LeoReleaseNotes {
     static let all: [LeoReleaseNote] = [
         LeoReleaseNote(
+            version: "1.9.1",
+            date: "2026-08-08",
+            items: [
+                "🗣 Siri 指挥 Mac:「嘿 Siri,用LeoPhoneAgent指挥Mac」一句话让任意一台 Mac 的 Claude Code/Codex/Grok 开工,不打开 app",
+                "📢 「LeoPhoneAgent汇报」:Siri 念出三台 Mac 进行中任务与待审批;「LeoPhoneAgent批准」一句话批掉最近的待审批",
+                "🔔 审批通知带按钮:app 在后台时,Mac 审批直达锁屏——「批准一次」(Face ID 把关)或「拒绝」,不用开 app;AirPods 可让 Siri 播报",
+                "🏝 Mac 任务上灵动岛:后台跟随的 Mac 会话显示实时状态,等审批时置顶提醒",
+                "🎛 新增「设置 → Siri 指挥中心」:全部语音指令一页看全,附 Action Button 绑定与自动化模板步骤",
+                "🛠 修复:多处通知类别互相覆盖导致按钮丢失的老问题",
+            ]),
+        LeoReleaseNote(
             version: "1.9.0",
             date: "2026-08-06",
             items: [

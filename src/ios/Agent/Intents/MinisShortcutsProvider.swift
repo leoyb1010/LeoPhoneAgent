@@ -79,13 +79,43 @@ struct MinisShortcutsProvider: AppShortcutsProvider {
         // @IntentParameterDependency causes an iOS 16 launch crash
         // (Swift metadata resolution). It remains available in Shortcuts
         // via the "All Actions" list.
+        // [T-siri-fleet] OpenSessionIntent 不再占 App Shortcut 名额(上限 10,
+        // 让给 Mac 舰队四件套;它在快捷指令 App 的动作列表里仍然可用)。
         AppShortcut(
-            intent: OpenSessionIntent(),
+            intent: CommandMacIntent(),
             phrases: [
-                "Open a \(.applicationName) session",
+                "Command a Mac with \(.applicationName)",
+                "Ask \(.applicationName) to command a Mac",
             ],
-            shortTitle: "Open Session",
-            systemImageName: "arrow.up.right.square"
+            shortTitle: "指挥一台 Mac",
+            systemImageName: "desktopcomputer"
+        )
+        AppShortcut(
+            intent: MacFleetStatusIntent(),
+            phrases: [
+                "\(.applicationName) fleet report",
+                "Ask \(.applicationName) for a report",
+                "Check \(.applicationName) Macs",
+            ],
+            shortTitle: "Mac 任务汇报",
+            systemImageName: "waveform.and.person.filled"
+        )
+        AppShortcut(
+            intent: ApprovePendingMacIntent(),
+            phrases: [
+                "Approve with \(.applicationName)",
+                "\(.applicationName) approve",
+            ],
+            shortTitle: "批准待审批",
+            systemImageName: "checkmark.seal.fill"
+        )
+        AppShortcut(
+            intent: StopMacTaskIntent(),
+            phrases: [
+                "Stop a Mac task with \(.applicationName)",
+            ],
+            shortTitle: "停止 Mac 任务",
+            systemImageName: "stop.circle.fill"
         )
         // [T-ios-remove-open-webapp-shortcut-intent] OpenWebAppIntent removed —
         // the Home-Screen WebApp tile path was replaced by another mechanism,

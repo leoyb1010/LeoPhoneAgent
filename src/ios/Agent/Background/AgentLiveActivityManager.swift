@@ -18,6 +18,9 @@ final class AgentLiveActivityManager {
     /// ("1 task completed · 2m 15s") without introducing separate time tracking.
     /// nil when no Live Activity run is in flight.
     var taskStartTime: Date? { startTime }
+
+    /// [T-siri-fleet] Mac 任务桥用:聊天任务的 activity 在跑时它不插队。
+    var hasLiveActivity: Bool { currentActivity != nil }
     private var carouselIndex: Int = 0
     private var updateCount: Int = 0
     /// Toggled on every Live Activity refresh to alternate the Dynamic Island

@@ -16,3 +16,13 @@
 "Follow up a ${applicationName} session" = "跟进${applicationName}会话";
 "Continue a ${applicationName} session" = "继续${applicationName}会话";
 "Open a ${applicationName} session" = "打开${applicationName}会话";
+
+/* [T-siri-fleet] Mac 舰队四件套 */
+"Command a Mac with ${applicationName}" = "用${applicationName}指挥Mac";
+"Ask ${applicationName} to command a Mac" = "让${applicationName}指挥一台Mac";
+"${applicationName} fleet report" = "${applicationName}汇报";
+"Ask ${applicationName} for a report" = "让${applicationName}汇报工作";
+"Check ${applicationName} Macs" = "查看${applicationName}的Mac";
+"Approve with ${applicationName}" = "${applicationName}批准";
+"${applicationName} approve" = "让${applicationName}批准";
+"Stop a Mac task with ${applicationName}" = "让${applicationName}停止Mac任务";

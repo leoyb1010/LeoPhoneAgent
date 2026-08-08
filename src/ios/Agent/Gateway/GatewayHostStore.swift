@@ -115,7 +115,8 @@ final class GatewayHostStore: ObservableObject {
         // 只控编码 CLI 的主机可以不配引擎地址;engine 调用会打到 harness 服务
         // 并返回明确错误,而不是让整台主机在 UI 里消失。
         guard let base = engine ?? harnessBase else { return nil }
-        let built = LeoAgentClient(baseURL: base, apiKey: key, harnessBaseURL: harnessBase)
+        let built = LeoAgentClient(baseURL: base, apiKey: key, harnessBaseURL: harnessBase,
+                                   hostId: host.id, hostName: host.name)
         clients[host.id] = built
         return built
     }

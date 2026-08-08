@@ -180,9 +180,12 @@ final class ConfigConfirmationGate: ObservableObject {
 
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
-        center.setNotificationCategories([
-            UNNotificationCategory(identifier: Self.notifyCategoryId, actions: [], intentIdentifiers: [])
-        ])
+        // [T-siri-approval-notify] set 是整体替换;并集注册,别抹掉其他类别的按钮。
+        let configCategory = UNNotificationCategory(
+            identifier: Self.notifyCategoryId, actions: [], intentIdentifiers: [])
+        center.getNotificationCategories { existing in
+            center.setNotificationCategories(existing.union([configCategory]))
+        }
 
         let content = UNMutableNotificationContent()
         content.title = "⚙️ Config change awaiting approval"

@@ -191,11 +191,18 @@ actor LeoAgentClient {
     private let harnessBaseURL: URL?
     private let apiKey: String
     let session: URLSession
+    /// [T-siri-fleet] 这个 client 属于哪台 Mac(GatewayHostStore 填)。
+    /// Siri 审批通知需要跨进程回溯到主机来重建 client,靠它寻址。
+    nonisolated let hostId: String?
+    nonisolated let hostName: String?
 
-    init(baseURL: URL, apiKey: String, harnessBaseURL: URL? = nil) {
+    init(baseURL: URL, apiKey: String, harnessBaseURL: URL? = nil,
+         hostId: String? = nil, hostName: String? = nil) {
         self.baseURL = baseURL
         self.harnessBaseURL = harnessBaseURL
         self.apiKey = apiKey
+        self.hostId = hostId
+        self.hostName = hostName
         let config = URLSessionConfiguration.ephemeral
         // A run can think for minutes before its first token; the resource
         // timeout must not guillotine a long remote task.

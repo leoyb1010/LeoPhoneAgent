@@ -245,7 +245,10 @@ enum ShortcutRunTracker {
             actions: [],
             intentIdentifiers: []
         )
-        center.setNotificationCategories([action])
+        center.getNotificationCategories { existing in
+            // [T-siri-approval-notify] set 是整体替换;并集注册,别抹掉其他类别的按钮。
+            center.setNotificationCategories(existing.union([action]))
+        }
 
         let content = UNMutableNotificationContent()
         content.title = title

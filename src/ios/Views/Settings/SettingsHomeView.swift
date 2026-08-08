@@ -60,6 +60,8 @@ struct SettingsHomeView: View {
                               icon: "desktopcomputer", color: .teal) { GatewaySettingsView() },
                 SettingsEntry("Mac 控制台", keywords: "控制台 console 编码 任务 遥控",
                               icon: "terminal.fill", color: .teal) { GatewayEntryView() },
+                SettingsEntry("Siri 指挥中心", keywords: "siri 语音 快捷指令 shortcuts 审批 action button 自动化",
+                              icon: "mic.fill", color: .purple) { SiriCommandCenterView() },
                 SettingsEntry("远程主机(SSH·备用)", keywords: "ssh remote host 备用",
                               icon: "server.rack", color: .gray) { RemoteHostSettingsView() },
             ]),

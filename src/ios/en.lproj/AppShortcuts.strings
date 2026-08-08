@@ -19,3 +19,13 @@
 "Follow up a ${applicationName} session" = "Follow up a ${applicationName} session";
 "Continue a ${applicationName} session" = "Continue a ${applicationName} session";
 "Open a ${applicationName} session" = "Open a ${applicationName} session";
+
+/* [T-siri-fleet] Mac fleet */
+"Command a Mac with ${applicationName}" = "Command a Mac with ${applicationName}";
+"Ask ${applicationName} to command a Mac" = "Ask ${applicationName} to command a Mac";
+"${applicationName} fleet report" = "${applicationName} fleet report";
+"Ask ${applicationName} for a report" = "Ask ${applicationName} for a report";
+"Check ${applicationName} Macs" = "Check ${applicationName} Macs";
+"Approve with ${applicationName}" = "Approve with ${applicationName}";
+"${applicationName} approve" = "${applicationName} approve";
+"Stop a Mac task with ${applicationName}" = "Stop a Mac task with ${applicationName}";

@@ -30,6 +30,9 @@ struct HarnessSessionSummary: Sendable, Identifiable, Hashable {
     let status: String
     let seq: Int
     let waitingForApproval: Bool
+    /// 队首待审批(Siri「批准」与通知按钮按它寻址);无待审批为 nil。
+    var pendingApprovalId: String? = nil
+    var pendingApprovalCommand: String? = nil
 }
 
 /// One event from a harness session. Same vocabulary as a gateway run, plus a
@@ -61,6 +64,7 @@ extension LeoAgentClient {
         let rows = obj["sessions"] as? [[String: Any]] ?? []
         return rows.compactMap { row in
             guard let id = row["session_id"] as? String else { return nil }
+            let pending = (row["pending_approvals"] as? [[String: Any]])?.first
             return HarnessSessionSummary(
                 id: id,
                 harness: row["harness"] as? String ?? "",
@@ -68,7 +72,9 @@ extension LeoAgentClient {
                 cwd: row["cwd"] as? String ?? "",
                 status: row["status"] as? String ?? "unknown",
                 seq: row["seq"] as? Int ?? 0,
-                waitingForApproval: row["waiting_for_approval"] as? Bool ?? false)
+                waitingForApproval: row["waiting_for_approval"] as? Bool ?? false,
+                pendingApprovalId: pending?["approval_id"] as? String,
+                pendingApprovalCommand: pending?["command"] as? String)
         }
     }
 
@@ -179,7 +185,7 @@ final class HarnessSessionDriver: ObservableObject {
     let harness: HarnessKind
     let cwd: String
     private let client: LeoAgentClient
-    private var sessionId: String?
+    private(set) var sessionId: String?
     private var lastSeq = 0
     private var streamTask: Task<Void, Never>?
     /// Kept so a session abandoned before it existed can be re-created.
@@ -209,6 +215,7 @@ final class HarnessSessionDriver: ObservableObject {
                     self.sessionId = id
                     self.status = "running"
                     self.flushQueuedSteers()
+                    HarnessLiveActivityBridge.shared.register(driver: self, hostName: self.client.hostName)
                 }
                 await self.follow(sessionId: id)
             } catch {
@@ -299,6 +306,7 @@ final class HarnessSessionDriver: ObservableObject {
     func detach() {
         streamTask?.cancel()
         streamTask = nil
+        HarnessLiveActivityBridge.shared.unregister(driver: self)
         guard isRunning else { return }
         isRunning = false
         // Leaving before the session id came back would otherwise strand this
@@ -326,6 +334,7 @@ final class HarnessSessionDriver: ObservableObject {
         sessionId = existingSessionId
         isRunning = true
         status = "running"
+        HarnessLiveActivityBridge.shared.register(driver: self, hostName: client.hostName)
         streamTask = Task { [weak self] in
             await self?.follow(sessionId: existingSessionId)
         }
@@ -445,14 +454,27 @@ final class HarnessSessionDriver: ObservableObject {
             // The wrist shows one card at a time; arm it only for the front of
             // the queue, and the next one when this front resolves.
             if pendingApprovals.count == 1 { armWatch(for: approval) }
+            // [T-siri-approval-notify] app 在后台时,审批必须走通知触达,
+            // 否则任务静默挂住直到用户想起来打开 app。
+            if let sid = sessionId {
+                HarnessApprovalNotifier.post(hostId: client.hostId, hostName: client.hostName,
+                                             sessionId: sid, approval: approval)
+            }
+            HarnessLiveActivityBridge.shared.refreshIfBackground()
         case .approvalResponded(_, let approvalId):
             if let approvalId {
                 if let resolved = pendingApprovals.first(where: { $0.approvalId == approvalId }) {
                     WatchBridge.shared.clearApprovalRequest(approvalId: resolved.approvalId)
                 }
                 pendingApprovals.removeAll { $0.approvalId == approvalId }
+                if let sid = sessionId {
+                    HarnessApprovalNotifier.clear(sessionId: sid, approvalId: approvalId)
+                }
             } else if let first = pendingApprovals.first {
                 WatchBridge.shared.clearApprovalRequest(approvalId: first.approvalId)
+                if let sid = sessionId {
+                    HarnessApprovalNotifier.clear(sessionId: sid, approvalId: first.approvalId)
+                }
                 pendingApprovals.removeFirst()
             }
             if let next = pendingApprovals.first {
@@ -460,6 +482,7 @@ final class HarnessSessionDriver: ObservableObject {
             } else {
                 status = "running"
             }
+            HarnessLiveActivityBridge.shared.refreshIfBackground()
         case .runCompleted(let output, _):
             if let output, !output.isEmpty,
                !items.contains(where: { if case .assistantText = $0.kind { return $0.text == output }; return false }) {
