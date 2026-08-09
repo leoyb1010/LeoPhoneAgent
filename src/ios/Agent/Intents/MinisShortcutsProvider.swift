@@ -21,6 +21,7 @@ struct MinisShortcutsProvider: AppShortcutsProvider {
         AppShortcut(
             intent: AskMinisIntent(),
             phrases: [
+                "Hey \(.applicationName)",
                 "Ask \(.applicationName)",
                 "Ask \(.applicationName) a question",
                 "Talk to \(.applicationName)",
@@ -86,6 +87,7 @@ struct MinisShortcutsProvider: AppShortcutsProvider {
             phrases: [
                 "Command a Mac with \(.applicationName)",
                 "Ask \(.applicationName) to command a Mac",
+                "\(.applicationName) get to work",
             ],
             shortTitle: "指挥一台 Mac",
             systemImageName: "desktopcomputer"
@@ -113,6 +115,7 @@ struct MinisShortcutsProvider: AppShortcutsProvider {
             intent: StopMacTaskIntent(),
             phrases: [
                 "Stop a Mac task with \(.applicationName)",
+                "\(.applicationName) stop",
             ],
             shortTitle: "停止 Mac 任务",
             systemImageName: "stop.circle.fill"

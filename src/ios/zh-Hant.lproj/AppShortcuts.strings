@@ -26,3 +26,8 @@
 "Approve with ${applicationName}" = "${applicationName}批准";
 "${applicationName} approve" = "讓${applicationName}批准";
 "Stop a Mac task with ${applicationName}" = "讓${applicationName}停止Mac任務";
+
+/* [T-siri-short] 短口語 */
+"Hey ${applicationName}" = "問${applicationName}";
+"${applicationName} get to work" = "讓${applicationName}幹活";
+"${applicationName} stop" = "${applicationName}停止任務";

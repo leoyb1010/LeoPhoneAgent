@@ -26,3 +26,8 @@
 "Approve with ${applicationName}" = "${applicationName}批准";
 "${applicationName} approve" = "让${applicationName}批准";
 "Stop a Mac task with ${applicationName}" = "让${applicationName}停止Mac任务";
+
+/* [T-siri-short] 短口语(配合别名 LPA:问LPA / 让LPA干活 / LPA停) */
+"Hey ${applicationName}" = "问${applicationName}";
+"${applicationName} get to work" = "让${applicationName}干活";
+"${applicationName} stop" = "${applicationName}停止任务";

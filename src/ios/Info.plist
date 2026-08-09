@@ -177,6 +177,15 @@
 			</array>
 		</dict>
 	</array>
+	<key>INAlternativeAppNames</key>
+	<array>
+		<dict>
+			<key>INAlternativeAppName</key>
+			<string>LPA</string>
+			<key>INAlternativeAppNamePronunciationHint</key>
+			<string>L P A</string>
+		</dict>
+	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
@@ -218,10 +227,10 @@
 	<string>LeoPhoneAgent uses background location to keep agent tasks running when the app is in the background. Location data is only used to record session connection history.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>LeoPhoneAgent uses your location to record where agent sessions are started for your session history.</string>
-	<key>NSMotionUsageDescription</key>
-	<string>LeoPhoneAgent uses motion data so the AI agent can report your live step count and activity when you ask.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>LeoPhoneAgent needs microphone access for voice-to-text input in chat.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>LeoPhoneAgent uses motion data so the AI agent can report your live step count and activity when you ask.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>LeoPhoneAgent needs permission to save videos and images to your photo library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

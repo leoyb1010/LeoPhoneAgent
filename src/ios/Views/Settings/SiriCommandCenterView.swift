@@ -15,18 +15,20 @@ struct SiriCommandCenterView: View {
         var id: String { say }
     }
 
+    // 别名 LPA 已注册(INAlternativeAppNames):短语里的 app 名说「LPA」
+    // 即可,全名 LeoPhoneAgent 同样有效。
     private let fleetPhrases: [Phrase] = [
-        Phrase(say: "用LeoPhoneAgent指挥Mac", does: "选一台 Mac + CLI,一句话开工(不打开 app)"),
-        Phrase(say: "LeoPhoneAgent汇报", does: "念出三台 Mac 进行中任务与待审批"),
-        Phrase(say: "LeoPhoneAgent批准", does: "批准最近一条等待审批的操作"),
-        Phrase(say: "让LeoPhoneAgent停止Mac任务", does: "停掉指定 Mac 上最近的任务"),
+        Phrase(say: "让LPA干活", does: "选一台 Mac + CLI,一句话开工(不打开 app)"),
+        Phrase(say: "LPA汇报", does: "念出三台 Mac 进行中任务与待审批"),
+        Phrase(say: "LPA批准", does: "批准最近一条等待审批的操作"),
+        Phrase(say: "LPA停止任务", does: "停掉指定 Mac 上最近的任务"),
     ]
 
     private let chatPhrases: [Phrase] = [
-        Phrase(say: "问问LeoPhoneAgent", does: "打开 app 进入对话"),
-        Phrase(say: "给LeoPhoneAgent发送提示", does: "后台跑一个任务,Siri 念结果"),
-        Phrase(say: "运行LeoPhoneAgent快捷任务", does: "执行你配置的快捷任务"),
-        Phrase(say: "查看LeoPhoneAgent任务", does: "播报会话状态"),
+        Phrase(say: "问LPA", does: "打开 app 进入对话"),
+        Phrase(say: "给LPA发送提示", does: "后台跑一个任务,Siri 念结果"),
+        Phrase(say: "运行LPA快捷任务", does: "执行你配置的快捷任务"),
+        Phrase(say: "查看LPA任务", does: "播报会话状态"),
     ]
 
     var body: some View {

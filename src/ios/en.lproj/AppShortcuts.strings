@@ -29,3 +29,8 @@
 "Approve with ${applicationName}" = "Approve with ${applicationName}";
 "${applicationName} approve" = "${applicationName} approve";
 "Stop a Mac task with ${applicationName}" = "Stop a Mac task with ${applicationName}";
+
+/* [T-siri-short] short spoken forms */
+"Hey ${applicationName}" = "Hey ${applicationName}";
+"${applicationName} get to work" = "${applicationName} get to work";
+"${applicationName} stop" = "${applicationName} stop";

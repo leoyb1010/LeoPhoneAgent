@@ -24,6 +24,13 @@ struct LeoReleaseNote: Identifiable {
 enum LeoReleaseNotes {
     static let all: [LeoReleaseNote] = [
         LeoReleaseNote(
+            version: "1.9.2",
+            date: "2026-08-08",
+            items: [
+                "🗣 Siri 短语大幅缩短:app 注册系统级别名「LPA」——「问LPA」「LPA汇报」「LPA批准」「让LPA干活」「LPA停止任务」,两三个字唤起",
+                "🎛 Siri 指挥中心同步更新为短语速查表",
+            ]),
+        LeoReleaseNote(
             version: "1.9.1",
             date: "2026-08-08",
             items: [
