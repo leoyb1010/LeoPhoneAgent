@@ -282,12 +282,20 @@ struct CollectionsView: View {
     /// 点击 = 回到内容原处。链接交给系统:装了对应 app(小红书/B站…)就
     /// 跳 app,没有才落浏览器;图片/文本没有"原处",走应用内预览。
     private func open(_ item: CollectedItem) {
-        guard item.kind == .link, let url = URL(string: item.value) else {
+        guard item.kind == .link else {
             previewItem = item
             return
         }
-        UIApplication.shared.open(url, options: [:]) { ok in
-            if !ok { Task { @MainActor in previewItem = item } }
+        Task { @MainActor in
+            let (resolved, openedApp) = await CollectionOpener.open(
+                item.value, cachedResolved: item.resolvedURL)
+            if let resolved {
+                var updated = item
+                updated.resolvedURL = resolved
+                CollectionStore.update(updated)
+                reload()
+            }
+            if !openedApp { previewItem = item }
         }
     }
 
@@ -322,9 +330,15 @@ struct CollectionsView: View {
         Task {
             for var item in pending.prefix(10) {
                 guard let url = URL(string: item.value) else { continue }
+                // [T-collections-deeplink] 顺手把短链解析掉,首次点击直达 app
+                if item.resolvedURL == nil, CollectionOpener.isShortLink(url) {
+                    let resolved = await CollectionOpener.resolve(url)
+                    if resolved != url { item.resolvedURL = resolved.absoluteString }
+                }
                 let provider = LPMetadataProvider()
                 provider.timeout = 12
-                let metadata = try? await provider.startFetchingMetadata(for: url)
+                let metaTarget = item.resolvedURL.flatMap(URL.init(string:)) ?? url
+                let metadata = try? await provider.startFetchingMetadata(for: metaTarget)
                 item.metadataFetched = true
                 if let metadata {
                     // 抓到的标题优先;抓不到时保留导入时从文案里截的标题

@@ -25,6 +25,9 @@ struct CollectedItem: Codable, Identifiable, Equatable {
     var kind: Kind
     /// link/text:内容本身;file:collections/files/ 里的文件名。
     var value: String
+    /// [T-collections-deeplink] 短链解析后的真实地址。有它就能私有 scheme
+    /// 直达 app,不必让浏览器先吃一次 302。老数据缺此键解码为 nil。
+    var resolvedURL: String?
     /// 链接标题(主 app 元数据抓取后回填;文本类为 nil)。
     var title: String?
     /// collections/thumbs/ 里的缩略图文件名。
@@ -43,6 +46,7 @@ struct CollectedItem: Codable, Identifiable, Equatable {
         self.id = UUID().uuidString
         self.kind = kind
         self.value = value
+        self.resolvedURL = nil
         self.title = nil
         self.thumbnailFile = nil
         self.sourceLabel = sourceLabel

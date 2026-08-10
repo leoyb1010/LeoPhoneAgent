@@ -188,6 +188,21 @@
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>xhsdiscover</string>
+		<string>bilibili</string>
+		<string>zhihu</string>
+		<string>sinaweibo</string>
+		<string>weibo</string>
+		<string>snssdk1128</string>
+		<string>youtube</string>
+		<string>twitter</string>
+		<string>taobao</string>
+		<string>tmall</string>
+		<string>wechat</string>
+		<string>weixin</string>
+	</array>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>NFCReaderUsageDescription</key>

@@ -24,6 +24,14 @@ struct LeoReleaseNote: Identifiable {
 enum LeoReleaseNotes {
     static let all: [LeoReleaseNote] = [
         LeoReleaseNote(
+            version: "1.10.2",
+            date: "2026-08-08",
+            items: [
+                "⚡️ 点收藏不再先闪浏览器:小红书分享的是短链(xhslink.com),旧路径要靠浏览器吃一次跳转才进 app。现在后台预先把短链解析成真实地址并缓存,再用各家私有协议(xhsdiscover://、bilibili://、zhihu:// 等)直达——一步进 app,零浏览器",
+                "🔗 支持直达:小红书、B站、知乎、微博、抖音、YouTube、X、淘宝;没装对应 app 才回落浏览器",
+                "🖼 链接标题封面改用解析后的真实地址抓取,短链条目也能有封面了",
+            ]),
+        LeoReleaseNote(
             version: "1.10.1",
             date: "2026-08-08",
             items: [
