@@ -10,6 +10,8 @@ import {
   GrokAcpDialect,
   PiRpcDialect,
 } from './harness-dialects.js';
+import { buildDigest, buildReceipt, isTerminal } from './harness-digest.service.js';
+import { listArtifacts, readArtifact } from './harness-artifacts.service.js';
 import { HarnessManager, HarnessSession } from './harness-session.service.js';
 import type { HarnessSpec } from './harness-specs.js';
 
@@ -287,4 +289,82 @@ test('manager rehydrate: previous-boot logs surface as orphaned sessions with ex
     () => assert.fail('send on orphaned session must reject'),
     (error: Error) => assert.match(error.message, /not running/),
   );
+});
+
+// --------------------------------------------------------------------------
+// [T-leophone-digest] 摘要 / 收据 / 产物
+// --------------------------------------------------------------------------
+
+test('digest: 把事件日志折叠成结构化摘要', () => {
+  const session = new HarnessSession({
+    sessionId: 'hs_dg1', spec: FAKE_SPEC, cwd: '/tmp', logPath: tempLog(),
+  });
+  session.emit({ event: 'session.created', harness: 'claude', name: 'Claude Code', cwd: '/tmp' });
+  session.emit({ event: 'user.message', text: '把测试跑一遍' });
+  session.emit({ event: 'tool.started', tool: 'Bash', preview: 'npm test src/app.ts', tool_use_id: 'tu1' });
+  session.emit({ event: 'tool.completed', tool: 'Bash', error: false, tool_use_id: 'tu1' });
+  session.emit({ event: 'message.delta', delta: '测试' });
+  session.emit({ event: 'message.delta', delta: '通过了' });
+  session.emit({ event: 'run.completed', output: '', usage: {} });
+
+  const digest = buildDigest(session);
+  assert.equal(digest.session_id, 'hs_dg1');
+  assert.deepEqual(digest.prompts, ['把测试跑一遍']);
+  assert.equal(digest.tools.length, 1);
+  assert.equal(digest.tools[0].ok, true);
+  assert.equal(digest.last_message, '测试通过了');
+  assert.equal(digest.error, null);
+  assert.equal(digest.counts.tool_errors, 0);
+  // 工具预览里的路径被提取为"动过的文件"
+  assert.ok(digest.files.includes('src/app.ts'));
+});
+
+test('digest: 审批的请求与应答成对折叠', () => {
+  const session = new HarnessSession({
+    sessionId: 'hs_dg2', spec: FAKE_SPEC, cwd: '/tmp', logPath: tempLog(),
+  });
+  session.emit({ event: 'approval.request', command: 'rm -rf build', description: '', choices: ['once', 'deny'], raw: {} });
+  const approvalId = String(session.replay(0).find((e) => e.event === 'approval.request')?.approval_id ?? '');
+  assert.ok(approvalId, 'approval_id 必须在 emit 时就铸好');
+  session.emit({ event: 'approval.responded', choice: 'once', approval_id: approvalId });
+
+  const digest = buildDigest(session);
+  assert.equal(digest.approvals.length, 1);
+  assert.equal(digest.approvals[0].resolved, true);
+  assert.equal(digest.approvals[0].choice, 'once');
+  assert.equal(digest.approvals[0].command, 'rm -rf build');
+});
+
+test('receipt: 只在终态签发,非终态不出半截收据', () => {
+  const session = new HarnessSession({
+    sessionId: 'hs_rc1', spec: FAKE_SPEC, cwd: '/tmp', logPath: tempLog(),
+  });
+  session.emit({ event: 'user.message', text: 'go' });
+  assert.equal(isTerminal(session.status), false);
+
+  session.emit({ event: 'run.failed', error: '构建失败' });
+  session.status = 'failed';
+  assert.equal(isTerminal(session.status), true);
+
+  const receipt = buildReceipt(session);
+  assert.equal(receipt.object, 'leoagent.receipt');
+  assert.equal(receipt.outcome, 'failed');
+  assert.equal(receipt.error, '构建失败');
+});
+
+test('artifacts: 只列 cwd 内真实存在的文件,越界一律拒绝', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'leophone-art-'));
+  fs.writeFileSync(path.join(dir, 'report.md'), '# hi');
+  const session = new HarnessSession({
+    sessionId: 'hs_ar1', spec: FAKE_SPEC, cwd: dir, logPath: tempLog(),
+  });
+  session.emit({ event: 'tool.started', tool: 'Write', preview: `写入 report.md 与 ../../etc/passwd`, tool_use_id: 'tu1' });
+
+  const list = listArtifacts(session);
+  assert.equal(list.length, 1, '只有 cwd 内真实存在的文件进清单');
+  assert.equal(list[0].name, 'report.md');
+
+  assert.ok(readArtifact(session, 'report.md'), 'cwd 内的产物可读');
+  assert.equal(readArtifact(session, '../../etc/passwd'), null, '路径穿越必须被拒');
+  assert.equal(readArtifact(session, '/etc/passwd'), null, '绝对路径必须被拒');
 });

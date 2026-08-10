@@ -616,5 +616,15 @@
     "currentRelease": "Current version",
     "viewRelease": "View full release",
     "noReleaseNotes": "No detailed release notes are available."
+  },
+  "settingsGroups": {
+    "agent": "エージェント",
+    "workspace": "ワークスペース",
+    "system": "システム"
+  },
+  "search": {
+    "placeholder": "設定を検索",
+    "noResults": "一致する設定がありません",
+    "clear": "クリア"
   }
 }

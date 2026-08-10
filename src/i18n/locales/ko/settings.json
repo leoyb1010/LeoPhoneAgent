@@ -616,5 +616,15 @@
     "currentRelease": "Current version",
     "viewRelease": "View full release",
     "noReleaseNotes": "No detailed release notes are available."
+  },
+  "settingsGroups": {
+    "agent": "에이전트",
+    "workspace": "작업 공간",
+    "system": "시스템"
+  },
+  "search": {
+    "placeholder": "설정 검색",
+    "noResults": "일치하는 설정 없음",
+    "clear": "지우기"
   }
 }

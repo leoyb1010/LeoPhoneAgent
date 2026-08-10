@@ -7,6 +7,7 @@ import { useProviderAuthStatus } from '../../provider-auth/hooks/useProviderAuth
 import {
   DEFAULT_CODE_EDITOR_SETTINGS,
   DEFAULT_CURSOR_PERMISSIONS,
+  KNOWN_SETTINGS_MAIN_TABS,
 } from '../constants/constants';
 import type {
   AgentProvider,
@@ -53,7 +54,8 @@ type NotificationPreferencesResponse = {
 
 type ActiveLoginProvider = AgentProvider | '';
 
-const KNOWN_MAIN_TABS: SettingsMainTab[] = ['agents', 'agentHub', 'mcp', 'skills', 'appearance', 'git', 'api', 'voice', 'tasks', 'browser', 'notifications', 'plugins', 'about'];
+// [T-settings-ia] 从唯一真源派生,不再手写第二份。
+const KNOWN_MAIN_TABS: SettingsMainTab[] = KNOWN_SETTINGS_MAIN_TABS;
 
 const normalizeMainTab = (tab: string): SettingsMainTab => {
   // Keep backwards compatibility with older callers that still pass "tools".

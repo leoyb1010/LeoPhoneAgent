@@ -616,5 +616,15 @@
     "currentRelease": "Current version",
     "viewRelease": "View full release",
     "noReleaseNotes": "No detailed release notes are available."
+  },
+  "settingsGroups": {
+    "agent": "Агент",
+    "workspace": "Рабочая область",
+    "system": "Система"
+  },
+  "search": {
+    "placeholder": "Поиск настроек",
+    "noResults": "Нет совпадений",
+    "clear": "Очистить"
   }
 }

@@ -96,7 +96,6 @@
     "voice": "語音",
     "tasks": "任務",
     "browser": "瀏覽器",
-    "computer": "電腦使用",
     "notifications": "通知",
     "plugins": "外掛",
     "about": "關於"
@@ -619,5 +618,15 @@
     "currentRelease": "Current version",
     "viewRelease": "View full release",
     "noReleaseNotes": "No detailed release notes are available."
+  },
+  "settingsGroups": {
+    "agent": "智慧體",
+    "workspace": "工作區",
+    "system": "系統"
+  },
+  "search": {
+    "placeholder": "搜尋設定",
+    "noResults": "沒有符合的設定項",
+    "clear": "清除"
   }
 }

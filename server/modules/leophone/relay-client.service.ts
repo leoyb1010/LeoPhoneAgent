@@ -5,7 +5,7 @@ import path from 'node:path';
 import WebSocket from 'ws';
 
 import { loadHarnessKey } from './harness-auth.js';
-import { LEOAGENT_HOME } from './harness-session.service.js';
+import { setHarnessEventSink, LEOAGENT_HOME } from './harness-session.service.js';
 
 // 中继客户端——leoagent(Python relay_client.py)的 TS 移植:出站 WebSocket
 // 挂上自营 relay,手机从任何网络找到这台 Mac。协议帧与 relay.py 对偶:
@@ -106,10 +106,70 @@ export class LeophoneRelayClient {
     }
   }
 
+  /**
+   * [T-leophone-push] 当前活动连接。事件外推要在任意时刻能拿到它,
+   * 而它原本是 runOnce 内的局部变量。
+   */
+  private activeWs: WebSocket | null = null;
+
+  /**
+   * [T-leophone-push] 断线期间攒下的事件。模块的全部承诺就是"不丢事件",
+   * 推不出去就直接丢会破了这条承诺;上限之外丢最旧的(新事件更有价值)。
+   */
+  private readonly outbox: Array<Record<string, unknown>> = [];
+  private static readonly OUTBOX_LIMIT = 200;
+
+  /**
+   * [T-leophone-push] 把一条 harness 事件推给中继。
+   *
+   * 与拉取式 SSE 互补:手机没连着时,SSE 通道根本不存在,事件只躺在
+   * 本机 NDJSON 里 —— 这正是"审批在手机上永远看不到"的成因。这里把
+   * 关键事件主动送到中继,由中继侧决定是否发推送。
+   *
+   * 只推关键事件:审批请求、终态、产物就绪。进度类(message.delta)
+   * 量大且无行动价值,不推。
+   */
+  pushEvent(event: Record<string, unknown>): void {
+    const frame = {
+      type: 'event',
+      machine: this.config.name,
+      event,
+    };
+    if (this.activeWs && this.activeWs.readyState === WebSocket.OPEN) {
+      try {
+        this.activeWs.send(JSON.stringify(frame));
+        return;
+      } catch {
+        // 落队列,等重连补发
+      }
+    }
+    this.outbox.push(frame);
+    while (this.outbox.length > LeophoneRelayClient.OUTBOX_LIMIT) this.outbox.shift();
+  }
+
+  /** 重连成功后补发断线期间攒下的事件,顺序保持不变。 */
+  private flushOutbox(ws: WebSocket): void {
+    if (this.outbox.length === 0) return;
+    const pending = this.outbox.splice(0, this.outbox.length);
+    for (const frame of pending) {
+      if (ws.readyState !== WebSocket.OPEN) {
+        this.outbox.push(frame);
+        continue;
+      }
+      try {
+        ws.send(JSON.stringify(frame));
+      } catch {
+        this.outbox.push(frame);
+      }
+    }
+    log(`flushed ${pending.length - this.outbox.length} queued event(s)`);
+  }
+
   /** 单次连接周期;runForever 负责退避重连。导出供测试直接驱动。 */
   runOnce(): Promise<void> {
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(this.config.wsUrl, { handshakeTimeout: 15_000 });
+      this.activeWs = ws;
       let lastPong = Date.now();
       let pingTimer: NodeJS.Timeout | null = null;
       let settled = false;
@@ -118,6 +178,7 @@ export class LeophoneRelayClient {
         if (settled) return;
         settled = true;
         if (pingTimer) clearInterval(pingTimer);
+        if (this.activeWs === ws) this.activeWs = null;
         for (const controller of this.streamAborts.values()) controller.abort();
         this.streamAborts.clear();
         try {
@@ -137,6 +198,7 @@ export class LeophoneRelayClient {
           info: { platform: 'leoagent', server: 'leocodebox' },
         }));
         log(`connected to relay as ${this.config.name}`);
+        this.flushOutbox(ws);
         lastPong = Date.now();
         pingTimer = setInterval(() => {
           if (Date.now() - lastPong > PONG_TIMEOUT_MS) {
@@ -256,6 +318,7 @@ export class LeophoneRelayClient {
 }
 
 let started = false;
+let clientInstance: LeophoneRelayClient | null = null;
 
 /**
  * 常驻本进程事件循环。失败只影响 relay 通路,不影响本机服务。
@@ -275,5 +338,16 @@ export function startLeophoneRelayClient(): void {
   }
   const localPort = Number.parseInt(process.env.SERVER_PORT || '', 10) || 3001;
   const client = new LeophoneRelayClient(config, localPort);
+  clientInstance = client;
+  // [T-leophone-push] 把 harness 事件接到中继通道上
+  setHarnessEventSink((event) => client.pushEvent(event));
   void client.runForever();
+}
+
+/**
+ * [T-leophone-push] 当前中继客户端(未配置中继时为 null)。
+ * harness 会话用它把关键事件外推出去。
+ */
+export function getLeophoneRelayClient(): LeophoneRelayClient | null {
+  return clientInstance;
 }

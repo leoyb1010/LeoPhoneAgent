@@ -34,3 +34,8 @@ node_modules/
 /.claude/settings.local.json
 /.claude/worktrees/
 /.claude/*.diff
+
+# [T-hygiene] 运行时产物,真实路径在 ~/.leocodebox/;仓库根这份是本地跑出来的
+database/
+# macOS Finder 复制残留(曾有两张 favicon/logo 被提交进来)
+* 2.*

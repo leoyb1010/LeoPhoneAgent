@@ -97,7 +97,6 @@
     "voice": "语音",
     "tasks": "任务",
     "browser": "浏览器",
-    "computer": "计算机使用",
     "notifications": "通知",
     "plugins": "插件",
     "about": "关于"
@@ -691,5 +690,15 @@
     "currentRelease": "当前版本",
     "viewRelease": "查看完整更新",
     "noReleaseNotes": "暂无详细更新说明。"
+  },
+  "settingsGroups": {
+    "agent": "智能体",
+    "workspace": "工作区",
+    "system": "系统"
+  },
+  "search": {
+    "placeholder": "搜索设置",
+    "noResults": "没有匹配的设置项",
+    "clear": "清除"
   }
 }

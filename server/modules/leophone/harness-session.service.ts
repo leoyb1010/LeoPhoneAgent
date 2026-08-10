@@ -40,6 +40,35 @@ export const LEOAGENT_HOME = (() => {
 })();
 
 const SESSIONS_DIR = path.join(LEOAGENT_HOME, 'harness-sessions');
+
+/**
+ * [T-leophone-push] 值得推给手机的事件。
+ *
+ * 只推"有行动价值"的:审批要人拍板,终态要人知道结果。
+ * message.delta 这类进度帧量大且无行动价值,推了只会烧配额、刷屏。
+ */
+const PUSHABLE_EVENTS = new Set([
+  'approval.request',
+  'run.completed',
+  'run.failed',
+  'run.cancelled',
+]);
+
+/**
+ * 外推回调。由 relay-client 在启动时注册 —— 用回调而不是直接 import,
+ * 是为了避开 session ↔ relay-client 的循环依赖(relay-client 要调
+ * session 的 HTTP 面,session 又要推给 relay-client)。
+ */
+type HarnessEventSink = (event: Record<string, unknown>) => void;
+let eventSink: HarnessEventSink | null = null;
+
+export function setHarnessEventSink(sink: HarnessEventSink | null): void {
+  eventSink = sink;
+}
+
+function pushHarnessEvent(event: Record<string, unknown>): void {
+  eventSink?.(event);
+}
 const MAX_LIVE_SESSIONS = 16;
 const LIVE_STATUSES = new Set(['starting', 'running', 'idle', 'waiting_for_approval']);
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled', 'orphaned']);
@@ -132,6 +161,17 @@ export class HarnessSession {
       fs.appendFileSync(this.logPath, `${JSON.stringify(enriched)}\n`);
     } catch {
       // ignore: durable log degraded, live stream continues
+    }
+
+    // [T-leophone-push] 关键事件外推给中继(手机没连着时的唯一触达路径)。
+    // 放在持久化之后:推出去的必须是已经落盘、带 seq 与 approval_id 的
+    // 富化帧,中继与手机才能按 seq 幂等合并。推送失败不影响本地流。
+    if (PUSHABLE_EVENTS.has(String(enriched.event))) {
+      try {
+        pushHarnessEvent(enriched);
+      } catch {
+        // 外推是尽力而为,绝不能影响会话本身
+      }
     }
 
     for (const sub of [...this.subscribers]) {

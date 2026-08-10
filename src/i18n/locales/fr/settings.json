@@ -674,5 +674,15 @@
     "currentRelease": "Current version",
     "viewRelease": "View full release",
     "noReleaseNotes": "No detailed release notes are available."
+  },
+  "settingsGroups": {
+    "agent": "Agent",
+    "workspace": "Espace de travail",
+    "system": "Système"
+  },
+  "search": {
+    "placeholder": "Rechercher",
+    "noResults": "Aucun réglage correspondant",
+    "clear": "Effacer"
   }
 }
