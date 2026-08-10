@@ -188,25 +188,6 @@ fileprivate func attributedShellLine(_ text: String) -> AttributedString {
     return AttributedString(mutable)
 }
 
-/// Wrapper that @ObservedObject's the ChatMessage so SwiftUI re-evaluates
-/// when blocks are added/changed.
-private struct FloatingToolPreviewContainer: View {
-    @ObservedObject var message: ChatMessage
-    var toolSnapshots: [ToolSnapshotItem] = []
-    var browserPool: BrowserTabPool?
-
-    private var toolBlocks: [AssistantBlock] {
-        message.blocks.filter { $0.toolStatus != nil }
-    }
-
-    var body: some View {
-        let tools = toolBlocks
-        if !tools.isEmpty {
-            FloatingToolBar(toolBlocks: tools, toolSnapshots: toolSnapshots, browserPool: browserPool)
-        }
-    }
-}
-
 /// The floating toolbar: collapsed shows thumbnail + status bar + snapshot chips, expanded opens a full-screen live sheet.
 struct FloatingToolBar: View {
     let toolBlocks: [AssistantBlock]

@@ -560,29 +560,6 @@ struct CameraPicker: UIViewControllerRepresentable {
     }
 }
 
-// MARK: - Code Block Copy Button
-
-private struct CodeBlockCopyButton: View {
-    let content: String
-    @State private var copied = false
-
-    var body: some View {
-        Button {
-            UIPasteboard.general.string = content
-            copied = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                copied = false
-            }
-        } label: {
-            Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(copied ? .green : .white.opacity(0.5))
-                .animation(.easeInOut(duration: 0.2), value: copied)
-        }
-        .buttonStyle(.plain)
-    }
-}
-
 struct UserAttachmentList: View {
     let attachments: [AttachmentMeta]
     @Environment(\.openURL) private var openURL

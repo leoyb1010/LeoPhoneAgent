@@ -94,7 +94,6 @@
 		E54000002 /* DebugViewInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = E54000012 /* DebugViewInspector.swift */; };
 		E54000003 /* DebugJSONRPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = E54000013 /* DebugJSONRPC.swift */; };
 		E54000004 /* AgentRequestTrace.swift in Sources */ = {isa = PBXBuildFile; fileRef = E54000014 /* AgentRequestTrace.swift */; };
-		E54000005 /* BrowserBenchTestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E54000015 /* BrowserBenchTestView.swift */; };
 		E54000006 /* AutoTouch.m in Sources */ = {isa = PBXBuildFile; fileRef = E54000017 /* AutoTouch.m */; };
 		E54000007 /* DebugMethodRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = E54000018 /* DebugMethodRegistry.swift */; };
 		E54000009 /* DebugRPCProviderChat.swift in Sources */ = {isa = PBXBuildFile; fileRef = E54000019 /* DebugRPCProviderChat.swift */; };
@@ -108,7 +107,6 @@
 		E5400009A /* DebugRPCMCP.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5400009B /* DebugRPCMCP.swift */; };
 		E54000AB1 /* DebugAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = E54000AB2 /* DebugAuth.swift */; };
 		E54100001 /* SessionDataSimulator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E54100011 /* SessionDataSimulator.swift */; };
-		E54200001 /* MessageListTestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E54200011 /* MessageListTestView.swift */; };
 		E54300001 /* travel-planning-session.json in Resources */ = {isa = PBXBuildFile; fileRef = E54300011 /* travel-planning-session.json */; };
 		E54300002 /* test-data-health.json in Resources */ = {isa = PBXBuildFile; fileRef = E54300012 /* test-data-health.json */; };
 		E55000001 /* ISHShellExecutor.m in Sources */ = {isa = PBXBuildFile; fileRef = E55000012 /* ISHShellExecutor.m */; };
@@ -389,6 +387,8 @@
 		E5AUT0001 /* AutomationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AUT0002 /* AutomationEngine.swift */; };
 		E5SET0001 /* SettingsHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SET0002 /* SettingsHomeView.swift */; };
 		E5REL0001 /* ReleaseNotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5REL0002 /* ReleaseNotesView.swift */; };
+		E5SLM0003 /* AppearanceSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SLM0004 /* AppearanceSettingsView.swift */; };
+		E5SLM0001 /* SettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SLM0002 /* SettingsSheet.swift */; };
 		E5SIR0007 /* SiriCommandCenterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SIR0008 /* SiriCommandCenterView.swift */; };
 		E5SIR0005 /* HarnessLiveActivityBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SIR0006 /* HarnessLiveActivityBridge.swift */; };
 		E5SIR0003 /* HarnessApprovalNotifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SIR0004 /* HarnessApprovalNotifier.swift */; };
@@ -767,7 +767,6 @@
 		E54000012 /* DebugViewInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugViewInspector.swift; sourceTree = "<group>"; };
 		E54000013 /* DebugJSONRPC.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugJSONRPC.swift; sourceTree = "<group>"; };
 		E54000014 /* AgentRequestTrace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentRequestTrace.swift; sourceTree = "<group>"; };
-		E54000015 /* BrowserBenchTestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowserBenchTestView.swift; sourceTree = "<group>"; };
 		E54000016 /* AutoTouch.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AutoTouch.h; sourceTree = "<group>"; };
 		E54000017 /* AutoTouch.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AutoTouch.m; sourceTree = "<group>"; };
 		E54000018 /* DebugMethodRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugMethodRegistry.swift; sourceTree = "<group>"; };
@@ -783,7 +782,6 @@
 		E5400009B /* DebugRPCMCP.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugRPCMCP.swift; sourceTree = "<group>"; };
 		E54000AB2 /* DebugAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugAuth.swift; sourceTree = "<group>"; };
 		E54100011 /* SessionDataSimulator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionDataSimulator.swift; sourceTree = "<group>"; };
-		E54200011 /* MessageListTestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageListTestView.swift; sourceTree = "<group>"; };
 		E54300011 /* travel-planning-session.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "travel-planning-session.json"; sourceTree = "<group>"; };
 		E54300012 /* test-data-health.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "test-data-health.json"; sourceTree = "<group>"; };
 		E55000011 /* ISHShellExecutor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ISHShellExecutor.h; sourceTree = "<group>"; };
@@ -1096,6 +1094,8 @@
 		E5AUT0002 /* AutomationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationEngine.swift; sourceTree = "<group>"; };
 		E5SET0002 /* SettingsHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Settings/SettingsHomeView.swift"; sourceTree = SOURCE_ROOT; };
 		E5REL0002 /* ReleaseNotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Settings/ReleaseNotesView.swift"; sourceTree = SOURCE_ROOT; };
+		E5SLM0004 /* AppearanceSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Settings/AppearanceSettingsView.swift"; sourceTree = SOURCE_ROOT; };
+		E5SLM0002 /* SettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Settings/SettingsSheet.swift"; sourceTree = SOURCE_ROOT; };
 		E5SIR0008 /* SiriCommandCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Settings/SiriCommandCenterView.swift"; sourceTree = SOURCE_ROOT; };
 		E5SIR0006 /* HarnessLiveActivityBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Gateway/HarnessLiveActivityBridge.swift"; sourceTree = SOURCE_ROOT; };
 		E5SIR0004 /* HarnessApprovalNotifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Gateway/HarnessApprovalNotifier.swift"; sourceTree = SOURCE_ROOT; };
@@ -1606,9 +1606,7 @@
 				E5400009B /* DebugRPCMCP.swift */,
 				E54000014 /* AgentRequestTrace.swift */,
 				E5VIC0011 /* VoiceInputCapture.swift */,
-				E54000015 /* BrowserBenchTestView.swift */,
 				E54100011 /* SessionDataSimulator.swift */,
-				E54200011 /* MessageListTestView.swift */,
 				E54000016 /* AutoTouch.h */,
 				E54000017 /* AutoTouch.m */,
 				E5400001B /* HangDetector.h */,
@@ -1673,13 +1671,13 @@
 		E5B000030 /* iSH */ = {
 			isa = PBXGroup;
 			children = (
-				AA0838CB2F3CA8A900049557 /* Terminal */,
 				AA26CCC02F31080100AECF2D /* ISHKernel.h */,
 				AA26CCBB2F31080100AECF2D /* ISHKernel.m */,
 				AA0838D42F3B941A00049557 /* CurrentRoot.h */,
 				AA0838D12F3B941A00049557 /* CurrentRoot.m */,
 				E55000011 /* ISHShellExecutor.h */,
 				E55000012 /* ISHShellExecutor.m */,
+				AA0838CB2F3CA8A900049557 /* Terminal */,
 				AA26CCBF2F31080100AECF2D /* RootfsManager.swift */,
 				AA26CCB62F31067900AECF2D /* alpine-rootfs.zip */,
 				AA0838D32F3B941A00049557 /* RootfsPatch.bundle */,
@@ -1954,6 +1952,8 @@
 				E5AUT0002 /* AutomationEngine.swift */,
 				E5SET0002 /* SettingsHomeView.swift */,
 				E5REL0002 /* ReleaseNotesView.swift */,
+				E5SLM0004 /* AppearanceSettingsView.swift */,
+				E5SLM0002 /* SettingsSheet.swift */,
 				E5SIR0008 /* SiriCommandCenterView.swift */,
 				E5SIR0006 /* HarnessLiveActivityBridge.swift */,
 				E5SIR0004 /* HarnessApprovalNotifier.swift */,
@@ -2906,7 +2906,6 @@
 				E5V300001 /* CollectionViewMessageListV3.swift in Sources */,
 				F1A00020 /* MessageListInfrastructure.swift in Sources */,
 				E54100001 /* SessionDataSimulator.swift in Sources */,
-				E54200001 /* MessageListTestView.swift in Sources */,
 				E5V100001 /* MessageListLayout.swift in Sources */,
 				E5T000001 /* SessionEntity.swift in Sources */,
 				E5T000002 /* ListSessionsIntent.swift in Sources */,
@@ -2936,6 +2935,8 @@
 				E5AUT0001 /* AutomationEngine.swift in Sources */,
 				E5SET0001 /* SettingsHomeView.swift in Sources */,
 				E5REL0001 /* ReleaseNotesView.swift in Sources */,
+				E5SLM0003 /* AppearanceSettingsView.swift in Sources */,
+				E5SLM0001 /* SettingsSheet.swift in Sources */,
 				E5SIR0007 /* SiriCommandCenterView.swift in Sources */,
 				E5SIR0005 /* HarnessLiveActivityBridge.swift in Sources */,
 				E5SIR0003 /* HarnessApprovalNotifier.swift in Sources */,
@@ -3046,7 +3047,6 @@
 				E5400009A /* DebugRPCMCP.swift in Sources */,
 				E54000004 /* AgentRequestTrace.swift in Sources */,
 				E5VIC0001 /* VoiceInputCapture.swift in Sources */,
-				E54000005 /* BrowserBenchTestView.swift in Sources */,
 				E54000006 /* AutoTouch.m in Sources */,
 				E5400000A /* HangDetector.m in Sources */,
 				E5400000C /* DebugRPCHangDetector.swift in Sources */,

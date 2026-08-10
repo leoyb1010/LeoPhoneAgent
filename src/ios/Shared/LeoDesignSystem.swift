@@ -80,21 +80,6 @@ enum LeoMotion {
     }
 }
 
-/// [T-liquid-glass-adoption] Liquid Glass surfaces.
-///
-/// The app had been paying the *cost* of Liquid Glass for a while — hard-coded
-/// nav-bar band heights, iOS 26 spacing compensations, a pile of "why is this
-/// clipped" comments — without using a single `glassEffect`, so it got the
-/// layout churn and none of the look. Every custom surface was hand-drawn with
-/// `Capsule()` / `RoundedRectangle` + `.plain` button style, which the system
-/// pass cannot restyle.
-///
-/// These wrappers keep the adoption in one place: call sites say what a surface
-/// *is*, not how it is drawn, so the visual language can move again later
-/// without touching them.
-enum LeoGlass {
-}
-
 extension View {
     /// A floating panel: toolbars, inline banners, the composer's accessory row.
     func leoGlassSurface(cornerRadius: CGFloat = LeoTheme.Radius.surface) -> some View {

@@ -1024,27 +1024,3 @@ struct ThinkingLevelSheetView: View {
         }
     }
 }
-
-// MARK: - Tool Copy Button
-
-private struct ToolCopyButton: View {
-    var accentColor: Color = .green
-    let content: () -> String
-    @State private var copied = false
-
-    var body: some View {
-        Button {
-            UIPasteboard.general.string = content()
-            copied = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                copied = false
-            }
-        } label: {
-            Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                .font(.system(size: 11))
-                .frame(width: 16, height: 16)
-                .foregroundStyle(copied ? accentColor : accentColor.opacity(0.4))
-        }
-        .animation(.easeInOut(duration: 0.15), value: copied)
-    }
-}

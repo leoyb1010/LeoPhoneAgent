@@ -50,8 +50,6 @@ src/mac/leoagent/       Mac 常驻服务:server.py(harness 会话)、relay.py(�
                         relay_client.py(出站注册)、harness.py(CLI 方言翻译)
                         ※ harness 面已由 leocodebox 1.63+ 接管(协议同构);
                         leoagent 保留作灰度回退,relay.py 继续服役
-src/mac/LeoAgentMac/    菜单栏状态 app(SwiftUI,轻量)
-src/android/            Android(保留,暂缓)
 deps/  docs/  scripts/  原生依赖构建、文档、工具
 ```
 
@@ -73,7 +71,7 @@ iOS(需 Xcode 26+,真机 ARM64):
 ```sh
 git clone --recurse-submodules https://github.com/leoyb1010/LeoPhoneAgent.git
 cd LeoPhoneAgent
-./deps/build_lame.sh && ./deps/build_ffmpeg.sh && ./deps/build_ish.sh && ./deps/prepare_alpine_rootfs.sh
+./deps/build_ffmpeg.sh && ./deps/build_ish.sh && ./deps/prepare_alpine_rootfs.sh
 open src/ios/LeoPhoneAgent.xcodeproj
 ```
 

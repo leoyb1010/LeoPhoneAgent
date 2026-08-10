@@ -1,0 +1,20 @@
+# 最小 CI:MinisTests 单测。守住"重复声明进编译目标"这类必炸问题
+# (2026-08 审计发现 5 个 ' 2.swift' 让测试 target 断编译逾两周无人知)。
+name: iOS Tests
+on:
+  push:
+    branches: [main]
+    paths: ['src/ios/**']
+  workflow_dispatch:
+jobs:
+  unit-tests:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run MinisTests
+        run: |
+          cd src/ios
+          xcodebuild test -project LeoPhoneAgent.xcodeproj -scheme LeoPhoneAgent \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -only-testing:MinisTests CODE_SIGNING_ALLOWED=NO 2>&1 | tail -30
