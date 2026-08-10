@@ -35,6 +35,7 @@ struct CollectionsView: View {
     @State private var fullTextMatches: [String] = []
     @State private var fullTextSnippets: [String: String] = [:]
     @State private var indexing = false
+    @State private var lastSyncedFingerprint = ""
     @AppStorage(CollectionStore.defaultActionKey, store: SharedContainerStore.sharedDefaults)
     private var defaultAction = "ask"
     @Environment(\.dismiss) private var dismiss
@@ -280,6 +281,22 @@ struct CollectionsView: View {
 
     private func reload() {
         items = CollectionStore.load()
+        syncToRelay()
+    }
+
+    /// [T-collections-fleet] 把收藏索引推给中继,Mac 端才看得到。
+    /// 去抖:同一批变更只传一次,内容没变不传。
+    private func syncToRelay() {
+        let snapshot = items
+        let fingerprint = snapshot.map(\.id).joined(separator: ",")
+        guard fingerprint != lastSyncedFingerprint else { return }
+        lastSyncedFingerprint = fingerprint
+        Task {
+            guard let client = GatewayHostStore.shared.activeHosts
+                .compactMap({ GatewayHostStore.shared.client(for: $0) })
+                .first(where: { $0.relayEventsURL != nil }) else { return }
+            await client.uploadCollections(snapshot)
+        }
     }
 
     /// 删除条目时把全文索引与系统搜索一并清掉——只删一半会留下

@@ -69,6 +69,16 @@ class Relay:
         # [T-live-mission] APNs 推送器。没配 ~/.leoagent/apns.json 就整体
         # 禁用,中继本体照常工作(降级而非报错)。
         self.apns = build_pusher()
+        # [T-collections-fleet] 手机上传的收藏索引(只读镜像)
+        self.collections: List[Dict[str, Any]] = []
+        self.collections_updated_at: float = 0.0
+        try:
+            with open(os.path.expanduser("~/.leoagent/collections.json")) as f:
+                saved = json.load(f)
+            self.collections = list(saved.get("items") or [])
+            self.collections_updated_at = float(saved.get("updated_at") or 0)
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            pass
 
     # -- auth ---------------------------------------------------------------
 
@@ -226,6 +236,42 @@ class Relay:
         except Exception as exc:  # noqa: BLE001
             print(f"[relay] apns push failed: {exc}", flush=True)
 
+    async def put_collections(self, request: web.Request) -> web.Response:
+        """[T-collections-fleet] 手机上传收藏索引,Mac 端据此查看。
+
+        收藏本体在手机上(附件、正文都在手机沙盒里),这里只存一份可读的
+        索引:标题、来源、摘要、标签、链接。Mac 上看得见、点得开原链接,
+        但不复制手机的私有文件——最小必要。
+        """
+        if not self._authorized(request):
+            return self._unauthorized()
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001
+            return web.json_response({"error": {"message": "invalid json"}}, status=400)
+        items = body.get("items")
+        if not isinstance(items, list):
+            return web.json_response({"error": {"message": "items must be a list"}}, status=400)
+        self.collections = items[:500]
+        self.collections_updated_at = time.time()
+        try:
+            path = os.path.expanduser("~/.leoagent/collections.json")
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w") as f:
+                json.dump({"items": self.collections,
+                           "updated_at": self.collections_updated_at}, f, ensure_ascii=False)
+        except OSError:
+            pass  # 落盘失败只丢重启后的持久性,内存里仍可读
+        return web.json_response({"ok": True, "count": len(self.collections)})
+
+    async def get_collections(self, request: web.Request) -> web.Response:
+        if not self._authorized(request):
+            return self._unauthorized()
+        return web.json_response({
+            "items": self.collections,
+            "updated_at": self.collections_updated_at,
+        })
+
     async def register_device(self, request: web.Request) -> web.Response:
         """手机登记推送 token。kind ∈ {device, push_to_start}。"""
         if not self._authorized(request):
@@ -379,6 +425,8 @@ class Relay:
         app.router.add_get("/relay/api/events", self.list_events)
         app.router.add_post("/relay/api/device", self.register_device)
         app.router.add_get("/relay/api/push-status", self.push_status)
+        app.router.add_put("/relay/api/collections", self.put_collections)
+        app.router.add_get("/relay/api/collections", self.get_collections)
         app.router.add_route("*", "/relay/api/m/{name}/{tail:.*}", self.forward)
         return app
 

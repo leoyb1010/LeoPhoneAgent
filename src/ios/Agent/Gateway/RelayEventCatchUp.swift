@@ -161,6 +161,38 @@ struct RelayEventPayload {
 }
 
 extension LeoAgentClient {
+    /// [T-collections-fleet] 把收藏索引上传到中继,好让 Mac 端能查。
+    ///
+    /// 只传"给人看的"字段:标题、链接、来源、摘要、标签、时间。附件与
+    /// 正文留在手机沙盒里不外传 —— Mac 上要的是"我收藏过什么",
+    /// 不是把手机的私有文件复制一份出去。
+    func uploadCollections(_ items: [CollectedItem]) async {
+        guard let eventsURL = relayEventsURL,
+              let url = URL(string: eventsURL.absoluteString
+                  .replacingOccurrences(of: "/events", with: "/collections")) else { return }
+        let payload: [String: Any] = [
+            "items": items.prefix(500).map { item in
+                [
+                    "id": item.id,
+                    "kind": item.kind.rawValue,
+                    "title": item.title ?? "",
+                    "url": item.kind == .link ? (item.resolvedURL ?? item.value) : "",
+                    "source": item.sourceLabel,
+                    "summary": item.summary ?? "",
+                    "tags": item.tags,
+                    "created_at": item.createdAt.timeIntervalSince1970,
+                ] as [String: Any]
+            },
+        ]
+        var req = URLRequest(url: url)
+        req.httpMethod = "PUT"
+        req.setValue("Bearer \(apiKeyForRelay)", forHTTPHeaderField: "Authorization")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try? JSONSerialization.data(withJSONObject: payload)
+        req.timeoutInterval = 25
+        _ = try? await session.data(for: req)
+    }
+
     /// 中继事件端点的绝对地址。
     ///
     /// 主机地址形如 `https://host/leoagent-relay/relay/api/m/<机器名>`,

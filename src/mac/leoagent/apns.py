@@ -26,10 +26,12 @@ try:
 except ImportError:  # pragma: no cover - 未装依赖时优雅降级
     jwt = None  # type: ignore
 
+# APNs 只接受 HTTP/2。aiohttp 只会 HTTP/1.1,真机实测直接被拒:
+# "Unexpected HTTP/1.x request: POST /3/device/…"。httpx 带 h2 才行。
 try:
-    import aiohttp
+    import httpx
 except ImportError:  # pragma: no cover
-    aiohttp = None  # type: ignore
+    httpx = None  # type: ignore
 
 
 APNS_HOSTS = {
@@ -72,7 +74,7 @@ class APNsPusher:
 
     @property
     def enabled(self) -> bool:
-        return self.config is not None and jwt is not None and aiohttp is not None
+        return self.config is not None and jwt is not None and httpx is not None
 
     def status(self) -> Dict[str, Any]:
         """给诊断用:为什么没启用,一眼看得出来。"""
@@ -80,6 +82,7 @@ class APNsPusher:
             "enabled": self.enabled,
             "has_config": self.config is not None,
             "has_pyjwt": jwt is not None,
+            "has_http2": httpx is not None,
             "devices": {k: len(v) for k, v in self._load_devices().items()},
         }
 
@@ -151,12 +154,11 @@ class APNsPusher:
 
     # -- 发送 ---------------------------------------------------------------
 
-    async def _post(self, session, host: str, path: str, headers: Dict[str, str],
+    async def _post(self, client, host: str, path: str, headers: Dict[str, str],
                     payload: Dict[str, Any]) -> Tuple[int, str]:
-        async with session.post(f"{host}{path}", headers=headers,
-                                data=json.dumps(payload).encode()) as resp:
-            body = await resp.text()
-            return resp.status, body
+        resp = await client.post(f"{host}{path}", headers=headers,
+                                 content=json.dumps(payload).encode())
+        return resp.status_code, resp.text
 
     async def send_alert(self, title: str, body: str, user_info: Dict[str, Any],
                          category: Optional[str] = None,
@@ -182,7 +184,8 @@ class APNsPusher:
         payload: Dict[str, Any] = {"aps": aps, **user_info}
 
         sent = 0
-        async with aiohttp.ClientSession() as session:
+        # http2=True 是硬要求,不是优化
+        async with httpx.AsyncClient(http2=True, timeout=20) as client:
             for token, meta in list(devices.items()):
                 host = APNS_HOSTS.get(meta.get("environment", "development"),
                                       APNS_HOSTS["development"])
@@ -193,13 +196,16 @@ class APNsPusher:
                     "apns-priority": "10",
                 }
                 try:
-                    status, text = await self._post(session, host, f"/3/device/{token}",
+                    status, text = await self._post(client, host, f"/3/device/{token}",
                                                     headers, payload)
                 except Exception as exc:  # noqa: BLE001
                     print(f"[apns] send failed: {exc}", flush=True)
                     continue
                 if status == 200:
                     sent += 1
+                    # 成功也留一行:排查时"没日志"与"没发生"分不清,
+                    # 这正是刚才把旧的失败记录误读成新失败的原因。
+                    print(f"[apns] sent → …{token[-8:]} ({meta.get('environment')})", flush=True)
                 elif status in (400, 410) and ("BadDeviceToken" in text or "Unregistered" in text):
                     # 设备重装/换机:摘掉,别留幽灵 token 每次都失败
                     self._forget("device", token)
