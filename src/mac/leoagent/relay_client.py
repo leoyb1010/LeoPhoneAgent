@@ -39,38 +39,46 @@ class RelayClient:
         # 这条外推是它唯一的触达路径,所以推不出去要留着补发,不能丢。
         self._ws: Optional[Any] = None
         self._outbox: List[Dict[str, Any]] = []
+        self._wake: Optional[asyncio.Event] = None
+        # [T-task-gc] 持有在飞的任务引用。asyncio 只保弱引用,不持有的
+        # 任务可能被 GC 中途回收——症状是请求偶发无响应且毫无日志。
+        self._tasks: set = set()
 
     OUTBOX_LIMIT = 200
 
     def push_event(self, event: Dict[str, Any]) -> None:
-        """把一条关键事件外推给中继。非阻塞,失败落队列等重连补发。"""
-        frame = {"type": "event", "machine": self.name, "event": event}
-        ws = self._ws
-        if ws is not None and not ws.closed:
-            try:
-                asyncio.get_running_loop().create_task(ws.send_json(frame))
-                return
-            except RuntimeError:
-                pass
-            except Exception:  # noqa: BLE001
-                pass
-        self._outbox.append(frame)
+        """把一条关键事件外推给中继。
+
+        同步、非阻塞:只入队并唤醒发送协程。不在这里直接 create_task 发送,
+        原因有二 —— 裸 create_task 的任务没人持引用,可能被 GC 中途回收
+        (事件就这么没了);而且任务内部发送失败无处回退,同样丢事件。
+        队列 + 专职发送协程同时解决顺序、引用与失败回退三件事。
+        """
+        self._outbox.append({"type": "event", "machine": self.name, "event": event})
         if len(self._outbox) > self.OUTBOX_LIMIT:
             del self._outbox[: len(self._outbox) - self.OUTBOX_LIMIT]
-
-    async def _flush_outbox(self, ws) -> None:
-        if not self._outbox:
-            return
-        pending = self._outbox[:]
-        self._outbox.clear()
-        for frame in pending:
+        wake = self._wake
+        if wake is not None and not wake.is_set():
             try:
-                await ws.send_json(frame)
-            except Exception:  # noqa: BLE001
-                self._outbox.append(frame)
-        sent = len(pending) - len(self._outbox)
-        if sent:
-            print(f"[relay-client] flushed {sent} queued event(s)", flush=True)
+                wake.set()
+            except RuntimeError:
+                pass  # 不在事件循环里,等下次连接时一并补发
+
+    async def _sender_loop(self, ws) -> None:
+        """专职发送协程:队列里有货就按序发出去,发不动就放回队首等重连。"""
+        assert self._wake is not None
+        while True:
+            await self._wake.wait()
+            self._wake.clear()
+            while self._outbox:
+                frame = self._outbox[0]
+                try:
+                    await ws.send_json(frame)
+                except asyncio.CancelledError:
+                    raise
+                except Exception:  # noqa: BLE001
+                    return  # 连接坏了:留在队列里,重连后继续
+                self._outbox.pop(0)
 
     async def run_forever(self) -> None:
         backoff = 1
@@ -95,23 +103,42 @@ class RelayClient:
                                     "info": {"platform": "leoagent"}})
                 print(f"[relay-client] connected to relay as {self.name}", flush=True)
                 self._ws = ws
-                await self._flush_outbox(ws)
-                async for msg in ws:
-                    if msg.type != aiohttp.WSMsgType.TEXT:
-                        continue
-                    try:
-                        frame = json.loads(msg.data)
-                    except json.JSONDecodeError:
-                        continue
-                    kind = frame.get("type")
-                    if kind == "http":
-                        asyncio.create_task(self._handle_http(session, ws, frame))
-                    elif kind == "stream_open":
-                        asyncio.create_task(self._handle_stream(session, ws, frame))
-                    elif kind == "stream_cancel":
-                        cancel = self._stream_cancels.get(str(frame.get("id")))
-                        if cancel is not None:
-                            cancel.set()
+                self._wake = asyncio.Event()
+                if self._outbox:
+                    # 断线期间攒下的先补发
+                    self._wake.set()
+                    print(f"[relay-client] {len(self._outbox)} queued event(s) to flush", flush=True)
+                sender = asyncio.create_task(self._sender_loop(ws))
+                try:
+                    await self._consume(ws, session)
+                finally:
+                    sender.cancel()
+                    self._wake = None
+                return
+
+    async def _consume(self, ws, session) -> None:
+        async for msg in ws:
+            if msg.type != aiohttp.WSMsgType.TEXT:
+                continue
+            try:
+                frame = json.loads(msg.data)
+            except json.JSONDecodeError:
+                continue
+            kind = frame.get("type")
+            if kind == "http":
+                self._spawn(self._handle_http(session, ws, frame))
+            elif kind == "stream_open":
+                self._spawn(self._handle_stream(session, ws, frame))
+            elif kind == "stream_cancel":
+                cancel = self._stream_cancels.get(str(frame.get("id")))
+                if cancel is not None:
+                    cancel.set()
+
+    def _spawn(self, coro) -> None:
+        """起一个后台任务并持住引用,完成后自动摘除。"""
+        task = asyncio.get_running_loop().create_task(coro)
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
 
     def _headers(self) -> Dict[str, str]:
         return {"Authorization": f"Bearer {self.local_key}"}
