@@ -52,14 +52,17 @@ struct MinisShortcutsProvider: AppShortcutsProvider {
             shortTitle: "Send Prompt",
             systemImageName: "message.fill"
         )
+        // [T-notes] 记笔记比"查会话状态"日常价值高得多 —— 后者在
+        // Mac 舰队汇报里已经有更好的版本。App Shortcut 上限 10,让位。
         AppShortcut(
-            intent: GetSessionStatusIntent(),
+            intent: QuickNoteIntent(),
             phrases: [
-                "Get \(.applicationName) session status",
-                "Check \(.applicationName) task",
+                "Take a note with \(.applicationName)",
+                "\(.applicationName) note this",
+                "\(.applicationName) remember this",
             ],
-            shortTitle: "Session Status",
-            systemImageName: "info.circle.fill"
+            shortTitle: "记一条笔记",
+            systemImageName: "square.and.pencil"
         )
         // [T-collections] 收藏比「列出会话」日常价值高得多——App Shortcut
         // 上限 10 已满,让出名额;ListSessionsIntent 在快捷指令动作列表里仍在。

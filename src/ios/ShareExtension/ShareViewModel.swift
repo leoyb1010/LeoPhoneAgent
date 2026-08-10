@@ -20,8 +20,17 @@ final class ShareViewModel {
         for extensionItem in extensionItems {
             guard let attachments = extensionItem.attachments else { continue }
 
+            // [T-excerpt] 从阅读器/浏览器里选中一段文字再分享时,系统同时给出
+            // 页面地址和选中的文字。原来的 if/else 只取地址、把文字丢了 ——
+            // 摘录就变成了"又收藏了一遍整篇文章"。两个都在就两个都收:
+            // 文字是内容,地址是出处。
             for provider in attachments {
-                if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
+                let hasURL = provider.hasItemConformingToTypeIdentifier(UTType.url.identifier)
+                let hasText = provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier)
+                if hasURL, hasText {
+                    await processText(provider)
+                    await processURL(provider)
+                } else if hasURL {
                     await processURL(provider)
                 } else if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
                     await processText(provider)

@@ -24,6 +24,15 @@ struct LeoReleaseNote: Identifiable {
 enum LeoReleaseNotes {
     static let all: [LeoReleaseNote] = [
         LeoReleaseNote(
+            version: "1.20.0",
+            date: "2026-08-10",
+            items: [
+                "📎 附件三条路,全用系统件:扫描纸质文档(自动找边、透视校正、去阴影)· 从相册导入 · 从文件导入",
+                "🔍 图片自动 OCR 进全文检索:拍一张会议白板或一页书,回头能靠里面的字搜到它。本机识别,中英混排,离线不花钱",
+                "🎙 对 Siri 说「让LPA记笔记」直接存进收藏库,不用打开 app——想法冒出来时人常常在走路、在开车,掏手机找 app 的十几秒足够把它弄丢",
+                "✂️ 阅读时选中一段文字分享进来,现在会同时留下文字和出处链接(以前只留链接,等于又收藏了一遍整篇)",
+            ]),
+        LeoReleaseNote(
             version: "1.19.0",
             date: "2026-08-10",
             items: [

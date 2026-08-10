@@ -18,6 +18,7 @@
 
 import LinkPresentation
 import SafariServices
+import PhotosUI
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
@@ -37,6 +38,12 @@ struct CollectionsView: View {
     @State private var annotationDraft = ""
     /// [T-notes] 显示归档的条目(默认收起)
     @State private var showArchived = false
+    // [T-attachments] 三条导入入口
+    @State private var showFileImporter = false
+    @State private var showScanner = false
+    @State private var photoSelection: [PhotosPickerItem] = []
+    @State private var importing = false
+    @State private var showPhotoPicker = false
     @State private var showImportSheet = false
     @State private var selection = Set<String>()
     @State private var editMode: EditMode = .inactive
@@ -117,6 +124,25 @@ struct CollectionsView: View {
         }
         .refreshable { reload() }
         .toolbar { toolbarContent }
+        // [T-attachments] 相册:PhotosPicker 走系统选择器,不必申请相册权限
+        .photosPicker(isPresented: $showPhotoPicker, selection: $photoSelection,
+                      maxSelectionCount: 9, matching: .images)
+        .onChange(of: photoSelection) { _, picked in
+            guard !picked.isEmpty else { return }
+            importPhotos(picked)
+        }
+        .fileImporter(isPresented: $showFileImporter,
+                      allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
+            if case .success(let urls) = result { importFiles(urls) }
+        }
+        .fullScreenCover(isPresented: $showScanner) {
+            DocumentScannerView { pages in
+                showScanner = false
+                guard !pages.isEmpty else { return }
+                importScans(pages)
+            }
+            .ignoresSafeArea()
+        }
         .sheet(item: $previewItem) { CollectionPreviewSheet(item: $0) }
         .sheet(item: $editingNote) { note in
             NavigationStack {
@@ -279,6 +305,17 @@ struct CollectionsView: View {
                         showImportSheet = true
                     } label: { Label("粘贴链接收藏", systemImage: "doc.on.clipboard") }
                     Divider()
+                    // [T-attachments] 附件三条路,全用系统件
+                    Button {
+                        showScanner = true
+                    } label: { Label("扫描纸质文档", systemImage: "doc.viewfinder") }
+                    Button {
+                        showPhotoPicker = true
+                    } label: { Label("从相册导入", systemImage: "photo.on.rectangle") }
+                    Button {
+                        showFileImporter = true
+                    } label: { Label("从文件导入", systemImage: "folder") }
+                    Divider()
                     Button {
                         withAnimation { showArchived.toggle() }
                     } label: {
@@ -377,6 +414,65 @@ struct CollectionsView: View {
     }
 
     // MARK: 行为
+
+    // MARK: - [T-attachments] 导入
+
+    private func importPhotos(_ picked: [PhotosPickerItem]) {
+        photoSelection = []
+        runImport(count: picked.count) {
+            var made: [CollectedItem] = []
+            for pick in picked {
+                guard let data = try? await pick.loadTransferable(type: Data.self),
+                      let image = UIImage(data: data) else { continue }
+                if let item = await AttachmentImporter.importImage(image, sourceLabel: "相册") {
+                    made.append(item)
+                }
+            }
+            return made
+        }
+    }
+
+    private func importFiles(_ urls: [URL]) {
+        runImport(count: urls.count) {
+            var made: [CollectedItem] = []
+            for url in urls {
+                if let item = await AttachmentImporter.importFile(at: url) { made.append(item) }
+            }
+            return made
+        }
+    }
+
+    private func importScans(_ pages: [UIImage]) {
+        runImport(count: pages.count) {
+            var made: [CollectedItem] = []
+            for page in pages {
+                if let item = await AttachmentImporter.importImage(page, sourceLabel: "扫描件") {
+                    made.append(item)
+                }
+            }
+            return made
+        }
+    }
+
+    /// 导入的公共外壳:防重入、进度提示、失败如实说。
+    private func runImport(count: Int, _ work: @escaping () async -> [CollectedItem]) {
+        guard !importing else { return }
+        importing = true
+        flash("正在导入 \(count) 项…")
+        Task {
+            let made = await work()
+            await MainActor.run {
+                importing = false
+                if made.isEmpty {
+                    flash("没能导入(格式不支持或读取失败)")
+                } else {
+                    CollectionStore.add(made)
+                    reload()
+                    flash("已导入 \(made.count) 项")
+                }
+            }
+        }
+    }
 
     /// [T-notes] 新建一条空笔记并直接进编辑器。
     private func newNote() {

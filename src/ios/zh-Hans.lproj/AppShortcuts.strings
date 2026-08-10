@@ -39,3 +39,8 @@
 /* [T-local-first] 明确点名 Mac 的说法 */
 "${applicationName} run this on a Mac" = "让${applicationName}在Mac上跑";
 "${applicationName} use my Mac" = "让${applicationName}用我的Mac";
+
+/* [T-notes] 记笔记 */
+"Take a note with ${applicationName}" = "让${applicationName}记笔记";
+"${applicationName} note this" = "${applicationName}记一条";
+"${applicationName} remember this" = "${applicationName}记住这个";
