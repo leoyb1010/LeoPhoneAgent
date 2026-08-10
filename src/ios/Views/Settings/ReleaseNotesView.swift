@@ -24,6 +24,15 @@ struct LeoReleaseNote: Identifiable {
 enum LeoReleaseNotes {
     static let all: [LeoReleaseNote] = [
         LeoReleaseNote(
+            version: "1.18.0",
+            date: "2026-08-10",
+            items: [
+                "📖 收藏改为应用内阅读:能定位到原 app 里那条内容就跳 app(小红书笔记、B站视频、知乎回答),其余一律在 app 内阅读器打开,带阅读模式——不再被甩去外部浏览器。公众号从来没有跳转方案,以前每次都被甩出去的就是它",
+                "🖼 链接预览改成通用管线:系统抓取器 → og / twitter / JSON-LD / 站点变量 / 正文首图 / 站点图标,层层兜底。任何链接都能抓到标题和封面,不再只有少数站有图",
+                "🎨 实在抓不到封面时,用来源色块 + 标题首字占位,一眼认得出是哪条,不再是一片灰",
+                "🚫 定位不到具体内容时不再把你丢到 app 首页自己找(以前 B站/抖音/知乎会这样),改为直接在阅读器里看",
+            ]),
+        LeoReleaseNote(
             version: "1.17.2",
             date: "2026-08-10",
             items: [

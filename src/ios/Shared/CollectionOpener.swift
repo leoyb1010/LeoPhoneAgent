@@ -8,13 +8,20 @@
 //  (xhslink.com/xxx),短链域名本身没有注册 Universal Link,必须先由
 //  浏览器吃一次 302 跳到 xiaohongshu.com,那个域名才触发 app 接管。
 //
-//  三级直达策略:
-//  1) 短链先在后台解析成真实地址(HEAD 跟随重定向),结果缓存进收藏条目,
-//     以后每次点都是零延迟;
-//  2) 真实地址映射到 app 私有 scheme(xhsdiscover:// 等)——命中就直接
-//     进 app,浏览器一帧都不闪;
-//  3) scheme 打不开(没装这个 app)才退回 https,让 Universal Link 或
-//     浏览器兜底。
+//  [T-reader] 打开策略只有两类去向,没有第三种:
+//
+//  A) 能直达原 app 里那条内容 → 跳 app(小红书笔记、B站视频、知乎回答…);
+//  B) 其余一律**应用内阅读器**(SFSafariViewController)。
+//
+//  以前的兜底是 UIApplication.open(https),那等于把人甩去外部 Safari ——
+//  公众号没有任何 deep-link 方案,于是**每次**都被甩出去;小红书短链解析
+//  失败时也掉进同一条路。现在没有"甩出去"这个选项了。
+//
+//  另一条重要修正:只在能定位到**具体内容**时才跳 app。以前拿不到 id 就
+//  返回 bilibili:// / snssdk1128:// 这类首页 scheme,用户被丢在 app 首页
+//  自己找 —— 那比应用内直接读还糟。现在这些情况一律走阅读器。
+//
+//  短链仍然后台解析并缓存(HEAD 跟随重定向),以后每次点都是零延迟。
 //
 
 import Foundation
@@ -80,7 +87,7 @@ enum CollectionOpener {
             if let vid = segments.first(where: { $0.hasPrefix("BV") || $0.hasPrefix("av") }) {
                 return URL(string: "bilibili://video/\(vid)")
             }
-            return URL(string: "bilibili://")
+            return nil   // 定位不到这条视频,不如在阅读器里直接看
         }
 
         // 知乎:/question/<id>、/answer/<id>、/p/<id>
@@ -94,7 +101,7 @@ enum CollectionOpener {
             if let idx = segments.firstIndex(of: "p"), idx + 1 < segments.count {
                 return URL(string: "zhihu://posts/\(segments[idx + 1])")
             }
-            return URL(string: "zhihu://")
+            return nil
         }
 
         if host.contains("weibo") {
@@ -102,7 +109,11 @@ enum CollectionOpener {
         }
 
         if host.contains("douyin") {
-            return URL(string: "snssdk1128://")
+            // 短链解析后形如 .../share/video/<id>,能定位才跳
+            if let idx = segments.firstIndex(of: "video"), idx + 1 < segments.count {
+                return URL(string: "snssdk1128://aweme/detail/\(segments[idx + 1])")
+            }
+            return nil
         }
 
         if host.contains("youtube") || host == "youtu.be" {
@@ -114,7 +125,7 @@ enum CollectionOpener {
             if let idx = segments.firstIndex(of: "status"), idx + 1 < segments.count {
                 return URL(string: "twitter://status?id=\(segments[idx + 1])")
             }
-            return URL(string: "twitter://")
+            return nil
         }
 
         if host.contains("taobao") || host.contains("tmall") {
@@ -124,12 +135,24 @@ enum CollectionOpener {
         return nil
     }
 
-    /// 打开一条收藏的原内容。返回解析后的真实地址(调用方可回写缓存),
-    /// 以及是否真的跳进了某个 app。
-    @discardableResult
+    /// 这条收藏该怎么打开。
+    enum Destination {
+        /// 已经跳进原 app 了,调用方不用做别的。
+        case openedApp
+        /// 在应用内阅读器里打开这个地址。
+        case readInApp(URL)
+        /// 地址根本解析不出来。
+        case unopenable
+    }
+
+    /// 决定去向并执行"跳 app"那一半。返回解析后的真实地址(调用方回写缓存)
+    /// 与最终去向。
+    ///
+    /// 注意这里**不再**有 `UIApplication.open(https)` 这条路 —— 那是把人
+    /// 甩去外部 Safari 的元凶。跳不了 app 就交给应用内阅读器。
     @MainActor
-    static func open(_ raw: String, cachedResolved: String?) async -> (resolved: String?, openedApp: Bool) {
-        guard let original = URL(string: raw) else { return (nil, false) }
+    static func plan(_ raw: String, cachedResolved: String?) async -> (resolved: String?, destination: Destination) {
+        guard let original = URL(string: raw) else { return (nil, .unopenable) }
 
         // 已缓存过真实地址就不再联网
         let target: URL
@@ -142,13 +165,17 @@ enum CollectionOpener {
             if resolved != original { newlyResolved = resolved.absoluteString }
         }
 
-        // 1) 私有 scheme 直达
+        // 能定位到原 app 里那条内容才跳
         if let scheme = appScheme(for: target), UIApplication.shared.canOpenURL(scheme) {
-            let ok = await UIApplication.shared.open(scheme)
-            if ok { return (newlyResolved, true) }
+            if await UIApplication.shared.open(scheme) {
+                return (newlyResolved, .openedApp)
+            }
         }
-        // 2) Universal Link:真实地址交给系统,装了对应 app 就直接进
-        let ok = await UIApplication.shared.open(target)
-        return (newlyResolved, ok)
+        // 其余一律应用内阅读器。http(s) 之外的(mailto: 等)才交给系统。
+        if let s = target.scheme?.lowercased(), s == "http" || s == "https" {
+            return (newlyResolved, .readInApp(target))
+        }
+        _ = await UIApplication.shared.open(target)
+        return (newlyResolved, .openedApp)
     }
 }

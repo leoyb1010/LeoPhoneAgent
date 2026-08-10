@@ -27,6 +27,9 @@ struct CollectionsView: View {
     @State private var query = ""
     @State private var filterSource: String? = nil
     @State private var previewItem: CollectedItem?
+    /// [T-reader] 应用内阅读器目标。跳不了原 app 的链接都在这里读,
+    /// 不再甩去外部 Safari。
+    @State private var readerTarget: ReaderTarget?
     @State private var showImportSheet = false
     @State private var selection = Set<String>()
     @State private var editMode: EditMode = .inactive
@@ -105,6 +108,10 @@ struct CollectionsView: View {
         .refreshable { reload() }
         .toolbar { toolbarContent }
         .sheet(item: $previewItem) { CollectionPreviewSheet(item: $0) }
+        .fullScreenCover(item: $readerTarget) { target in
+            LeoReaderView(url: target.url, preferReaderMode: target.preferReaderMode)
+                .ignoresSafeArea()
+        }
         .sheet(isPresented: $showImportSheet) {
             CollectionImportSheet { added in
                 reload()
@@ -367,15 +374,17 @@ struct CollectionsView: View {
         }
     }
 
-    /// 点击 = 回到内容原处。链接交给系统:装了对应 app(小红书/B站…)就
-    /// 跳 app,没有才落浏览器;图片/文本没有"原处",走应用内预览。
+    /// [T-reader] 点击 = 回到内容原处,去向只有两种:
+    /// 能定位到原 app 里那条内容就跳 app(小红书笔记、B站视频…);
+    /// 其余一律**应用内阅读器**。以前的第三种去向(甩去外部 Safari)
+    /// 已经取消 —— 公众号没有 deep-link 方案,每次都被甩出去的就是它。
     private func open(_ item: CollectedItem) {
         guard item.kind == .link else {
             previewItem = item
             return
         }
         Task { @MainActor in
-            let (resolved, openedApp) = await CollectionOpener.open(
+            let (resolved, destination) = await CollectionOpener.plan(
                 item.value, cachedResolved: item.resolvedURL)
             if let resolved {
                 var updated = item
@@ -383,7 +392,14 @@ struct CollectionsView: View {
                 CollectionStore.update(updated)
                 reload()
             }
-            if !openedApp { previewItem = item }
+            switch destination {
+            case .openedApp:
+                break
+            case .readInApp(let url):
+                readerTarget = ReaderTarget(url: url)
+            case .unopenable:
+                flash("这条链接打不开")
+            }
         }
     }
 
@@ -423,23 +439,20 @@ struct CollectionsView: View {
                     let resolved = await CollectionOpener.resolve(url)
                     if resolved != url { item.resolvedURL = resolved.absoluteString }
                 }
-                let provider = LPMetadataProvider()
-                provider.timeout = 12
+                // [T-preview] 通用抓取:系统抓取器 → HTML 多级兜底
+                // (og / twitter / JSON-LD / 站点变量 / 正文首图 / favicon)。
+                // 任何站都走这一条,不是给某几个站开的特例。
                 let metaTarget = item.resolvedURL.flatMap(URL.init(string:)) ?? url
-                let metadata = try? await provider.startFetchingMetadata(for: metaTarget)
+                let preview = await LinkPreviewFetcher.fetch(metaTarget)
                 item.metadataFetched = true
-                if let metadata {
-                    // 抓到的标题优先;抓不到时保留导入时从文案里截的标题
-                    if let fetched = metadata.title, !fetched.isEmpty { item.title = fetched }
-                    if let imageProvider = metadata.imageProvider,
-                       let image = try? await imageProvider.loadUIImage(),
-                       let thumbDir = CollectionStore.thumbsDirectory {
-                        let name = "thumb-\(item.id).jpg"
-                        let resized = image.leoResized(maxDimension: 480)
-                        if let data = resized.jpegData(compressionQuality: 0.8) {
-                            try? data.write(to: thumbDir.appendingPathComponent(name))
-                            item.thumbnailFile = name
-                        }
+                // 抓到的标题优先;抓不到时保留导入时从文案里截的标题
+                if let fetched = preview.title, !fetched.isEmpty { item.title = fetched }
+                if let image = preview.image, let thumbDir = CollectionStore.thumbsDirectory {
+                    let name = "thumb-\(item.id).jpg"
+                    let resized = image.leoResized(maxDimension: 480)
+                    if let data = resized.jpegData(compressionQuality: 0.8) {
+                        try? data.write(to: thumbDir.appendingPathComponent(name))
+                        item.thumbnailFile = name
                     }
                 }
                 // [T-local-brain] 顺手让本机模型给一句话摘要与标签。
@@ -563,11 +576,33 @@ private struct CollectionCard: View {
                   let image = UIImage(contentsOfFile: dir.appendingPathComponent(item.value).path) {
             Image(uiImage: image).resizable().scaledToFill()
         } else {
+            // [T-preview] 抓不到封面时不留白:用来源色 + 标题首字做占位,
+            // 一眼能认出是哪条(小图标的一片灰认不出任何东西)。
             ZStack {
-                Color.secondary.opacity(0.12)
-                Image(systemName: iconName).font(.system(size: 22)).foregroundStyle(.secondary)
+                placeholderColor.opacity(0.18)
+                if let ch = placeholderGlyph {
+                    Text(String(ch))
+                        .font(.system(size: 26, weight: .medium))
+                        .foregroundStyle(placeholderColor)
+                } else {
+                    Image(systemName: iconName).font(.system(size: 22))
+                        .foregroundStyle(placeholderColor)
+                }
             }
         }
+    }
+
+    /// 按来源取一个稳定的颜色 —— 同一个来源永远同色,列表里能形成识别。
+    private var placeholderColor: Color {
+        let palette: [Color] = [.blue, .purple, .pink, .orange, .green, .teal, .indigo, .brown]
+        let seed = abs(item.sourceLabel.hashValue)
+        return palette[seed % palette.count]
+    }
+
+    /// 标题首个有意义的字符。
+    private var placeholderGlyph: Character? {
+        let source = (item.title ?? item.sourceLabel).trimmingCharacters(in: .whitespacesAndNewlines)
+        return source.first { $0.isLetter || $0.isNumber }
     }
 
     private var iconName: String {
@@ -603,7 +638,9 @@ private struct CollectionPreviewSheet: View {
         switch item.kind {
         case .link:
             if let url = URL(string: item.value) {
-                LeoSafariView(url: url).ignoresSafeArea()
+                // 统一走 LeoReaderView:带阅读模式、关闭按钮与工具条折叠
+                LeoReaderView(url: url, preferReaderMode: ReaderTarget(url: url).preferReaderMode)
+                    .ignoresSafeArea()
             } else {
                 Text(item.value).padding()
             }
@@ -628,14 +665,6 @@ private struct CollectionPreviewSheet: View {
             }
         }
     }
-}
-
-private struct LeoSafariView: UIViewControllerRepresentable {
-    let url: URL
-    func makeUIViewController(context: Context) -> SFSafariViewController {
-        SFSafariViewController(url: url)
-    }
-    func updateUIViewController(_ vc: SFSafariViewController, context: Context) {}
 }
 
 // MARK: - 小工具
