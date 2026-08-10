@@ -173,7 +173,7 @@ function SidebarSessionItem({
 
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                {session.isPinned && <Pin className="h-3 w-3 flex-shrink-0 text-primary" aria-label="Pinned session" />}
+                {session.isPinned && <Pin className="h-3 w-3 flex-shrink-0 text-primary" aria-label={t('sessions.pinned', { defaultValue: '已置顶' })} />}
                 <div className="min-w-0 flex-1 truncate text-sm font-normal text-foreground">{sessionView.sessionName}</div>
                 {isProcessing ? (
                   <span className="ml-auto flex-shrink-0">
@@ -243,7 +243,7 @@ function SidebarSessionItem({
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                {session.isPinned && <Pin className="h-3 w-3 flex-shrink-0 text-primary" aria-label="Pinned session" />}
+                {session.isPinned && <Pin className="h-3 w-3 flex-shrink-0 text-primary" aria-label={t('sessions.pinned', { defaultValue: '已置顶' })} />}
                 <div className="min-w-0 flex-1 truncate text-sm font-normal text-foreground">{sessionView.sessionName}</div>
                 {isProcessing ? (
                   <span
@@ -350,7 +350,7 @@ function SidebarSessionItem({
                   href={`/api/providers/sessions/${encodeURIComponent(session.id)}/export?format=markdown`}
                   download
                   onClick={(event) => event.stopPropagation()}
-                  title="Export session as Markdown"
+                  title={t('sessions.exportMarkdown', { defaultValue: '导出为 Markdown' })}
                 >
                   <Download className="h-3 w-3" />
                 </a>
@@ -359,7 +359,7 @@ function SidebarSessionItem({
                   href={`/api/providers/sessions/${encodeURIComponent(session.id)}/export?format=json`}
                   download
                   onClick={(event) => event.stopPropagation()}
-                  title="Export session as JSON"
+                  title={t('sessions.exportJson', { defaultValue: '导出为 JSON' })}
                 >
                   <FileJson2 className="h-3 w-3" />
                 </a>

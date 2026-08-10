@@ -17,6 +17,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '1.65.1',
+    date: '2026-08-10',
+    items: [
+      '中文化清扫:侧栏导出、置顶等提示改为中文;把散落在代码里的 166 条中文文案归入语言包(此前它们只活在兜底值里,翻译文件是空的)',
+    ],
+  },
+  {
     version: '1.65.0',
     date: '2026-08-10',
     items: [

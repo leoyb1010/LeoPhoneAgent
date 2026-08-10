@@ -26,7 +26,8 @@
     "browser": "浏览器",
     "computer": "计算机",
     "audit": "会话审计",
-    "fleet": "舰队"
+    "fleet": "舰队",
+    "skills": "Skills"
   },
   "status": {
     "loading": "加载中...",
@@ -70,7 +71,9 @@
     "version": "版本",
     "select": "选择",
     "selectAll": "全选",
-    "deselectAll": "取消全选"
+    "deselectAll": "取消全选",
+    "cancel": "取消",
+    "save": "保存"
   },
   "time": {
     "justNow": "刚刚",
@@ -237,6 +240,19 @@
           "title": "智能体通知"
         }
       }
+    },
+    "desktop": {
+      "title": "Notify this desktop app",
+      "unsupported": "Desktop notifications are not supported on this system.",
+      "disable": "Disable desktop notifications",
+      "enable": "Enable desktop notifications",
+      "enabled": "Desktop notifications are enabled"
+    },
+    "sound": {
+      "title": "Sound",
+      "description": "Play a short tone when a chat run finishes.",
+      "enabled": "Enabled",
+      "test": "Test sound"
     }
   },
   "versionUpdate": {
@@ -386,7 +402,8 @@
     "handoffTo": "交接给 {{provider}}（可编辑后再发送）",
     "handoffHint": "会把最近对话拼成可编辑的接力前言,不会自动发送",
     "handoffPreparing": "正在整理最近对话…",
-    "handoffReturn": "回到交接来源"
+    "handoffReturn": "回到交接来源",
+    "doctor": "环境体检"
   },
   "dashboard": {
     "greetingNight": "夜深了",
@@ -451,6 +468,147 @@
     "actionDoctor": "运行 Doctor",
     "actionCheckUpdate": "检查更新",
     "actionBackup": "配置备份",
-    "actionRecycle": "回收站"
+    "actionRecycle": "回收站",
+    "kernelTitle": "自有内核",
+    "kernelRoot": "项目根目录,如 /Users/you/code/app",
+    "kernelPrompt": "问代码库一个问题,内核会读文件后作答(⌘↵ 运行)",
+    "kernelAllowWrite": "允许写文件",
+    "kernelAllowExec": "允许执行命令",
+    "kernelRunning": "运行中",
+    "kernelRun": "运行",
+    "kernelCapWarn": "已开启写/执行:内核会在根目录内修改文件或运行命令(有沙箱/超时,仍请在可回滚的目录使用)。",
+    "kernelSteps": "{{n}} 步",
+    "installFailed": "安装失败,请查看设置里的详细输出。",
+    "gatewayTitle": "Leoapi 网关",
+    "gatewayLive": "实时计量中 · 仅经网关的请求",
+    "gatewayNodes": "{{n}} 节点分流",
+    "gatewayFailover": "{{n}} 次容错",
+    "gatewayRequests": "请求",
+    "gatewayCost": "成本",
+    "gatewayCompaction": "上下文瘦身 · 降本",
+    "gatewaySaved": "已省 ~{{n}} 字符",
+    "gatewayOff": "开启后,当前 Leoapi 节点的 Claude 流量将经本机网关转发并按请求实时计量(可随时关闭,默认关)。"
+  },
+  "tooltips": {
+    "attentionRequiredIndicator": "Session needs attention"
+  },
+  "sessions": {
+    "pinned": "已置顶",
+    "exportMarkdown": "导出为 Markdown",
+    "exportJson": "导出为 JSON"
+  },
+  "actions": {
+    "close": "Close"
+  },
+  "search": {
+    "placeholder": "搜索设置",
+    "clear": "清除",
+    "noResults": "没有匹配的设置项"
+  },
+  "recovery": {
+    "restored": "已还原到原位置。",
+    "conflict": "原位置已存在同名内容,未覆盖。",
+    "recycleTitle": "回收站",
+    "recycleDesc": "被删除或覆盖的技能会在这里保留 30 天,可一键还原。",
+    "recycleEmpty": "回收站是空的——很好。",
+    "restore": "还原",
+    "backupsTitle": "配置备份",
+    "backupsDesc": "覆盖 CLI 配置(如 ~/.claude.json)前自动保留的上一版,存于 ~/.leocodebox/config-backups。",
+    "backupsEmpty": "暂无配置备份。",
+    "readOnly": "只读"
+  },
+  "messageTypes": {
+    "opencode": "OpenCode"
+  },
+  "input": {
+    "scrollToBottom": "Scroll to bottom",
+    "hintText": {
+      "updateQueued": "Enter to update queued message",
+      "queue": "Enter to queue your next message"
+    },
+    "queue": {
+      "update": "Update queued message",
+      "sendNext": "Queue next message",
+      "label": "Queued",
+      "willSend": "Will send when this finishes",
+      "edit": "Edit queued message",
+      "delete": "Delete queued message"
+    },
+    "clearInput": "Clear input"
+  },
+  "claudeStatus": {
+    "stop": "Stop"
+  },
+  "copyMessage": {
+    "copyAsMarkdown": "Copy as markdown",
+    "copyAsText": "Copy as text",
+    "markdownShort": "MD",
+    "textShort": "TXT",
+    "selectFormat": "Select copy format"
+  },
+  "missions": {
+    "discardConfirm": "该任务有未提交改动,确认丢弃并删除 worktree?",
+    "actions": {
+      "open": "打开会话",
+      "start": "开工",
+      "toReview": "送审",
+      "merge": "合并完成",
+      "complete": "完成",
+      "retry": "重试"
+    },
+    "mergeConflict": "合并存在冲突,请先在会话中解决:{{files}}",
+    "noProject": "请先在左侧选择一个项目。",
+    "title": "任务看板",
+    "titlePlaceholder": "任务标题",
+    "goalPlaceholder": "目标(发给智能体的任务描述)",
+    "addCard": "新建"
+  },
+  "terminalShortcuts": {
+    "paste": "Paste"
+  },
+  "agentHub": {
+    "editTitle": "编辑档案",
+    "newTitle": "新建智能体档案",
+    "emoji": "图标",
+    "name": "名称",
+    "namePlaceholder": "例如:代码审查员",
+    "provider": "CLI",
+    "model": "模型",
+    "effort": "努力度",
+    "permission": "权限模式",
+    "openingPrompt": "开场提示词(可选)",
+    "openingPromptPlaceholder": "启动时自动填入对话框的内容",
+    "notes": "备注(可选)",
+    "saving": "保存中…",
+    "title": "智能体档案",
+    "description": "保存常用的智能体设定,一键启动预配置的新对话。",
+    "import": "导入",
+    "export": "导出",
+    "new": "新建",
+    "emptyTitle": "还没有智能体档案",
+    "emptyHint": "创建一个档案来固定你常用的 CLI、模型、权限模式和开场提示词。",
+    "launch": "启动",
+    "edit": "编辑",
+    "duplicate": "复制",
+    "delete": "删除"
+  },
+  "mcpOverview": {
+    "title": "MCP 全景（跨 CLI）",
+    "description": "汇总各 Agent CLI 已装的 MCP 服务器,按名去重。点 CLI 标签即可在该 CLI 上安装/移除(实心=已装,虚线=可装)。",
+    "partialError": "部分 CLI 配置未能读取：",
+    "empty": "还没有检测到任何已安装的 MCP 服务器。",
+    "managed": "托管"
+  },
+  "mcpServers": {
+    "managed": {
+      "badge": "Managed",
+      "hint": "Managed automatically by leocodebox."
+    }
+  },
+  "providerSkills": {
+    "safetyHigh": "检测到高危内容,确认无误再安装",
+    "safetyWarn": "检测到可疑内容,请核对后再安装",
+    "installAnyway": "仍要安装",
+    "deleteSkill": "删除(可从回收站还原)"
   }
 }
