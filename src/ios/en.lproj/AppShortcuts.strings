@@ -38,3 +38,7 @@
 /* [T-collections] collect */
 "Collect with ${applicationName}" = "Collect with ${applicationName}";
 "${applicationName} collect this" = "${applicationName} collect this";
+
+/* [T-local-first] 明确点名 Mac 的说法 */
+"${applicationName} run this on a Mac" = "${applicationName} run this on a Mac";
+"${applicationName} use my Mac" = "${applicationName} use my Mac";

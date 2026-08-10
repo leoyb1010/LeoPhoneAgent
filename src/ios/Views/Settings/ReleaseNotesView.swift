@@ -24,6 +24,14 @@ struct LeoReleaseNote: Identifiable {
 enum LeoReleaseNotes {
     static let all: [LeoReleaseNote] = [
         LeoReleaseNote(
+            version: "1.16.0",
+            date: "2026-08-10",
+            items: [
+                "📋 Mac 会话不再藏得深:主界面会话列表顶部新增「Mac 上进行中」,正在跑的、等审批的直接列出来,点一下就进那段对话——以前要走 设置 → Mac 控制台 → 等扫描 CLI → 点进会话,四步",
+                "🎙 修正 Siri 派活的去向:「让LPA干活」现在在这台手机上跑(本机优先),不会再把随口一句简单任务甩到远端 Mac;要上 Mac 请明说「让LPA在Mac上跑」或「让LPA用我的Mac」",
+                "📖 Siri 指挥中心页标注了每句话到底在哪执行",
+            ]),
+        LeoReleaseNote(
             version: "1.15.1",
             date: "2026-08-10",
             items: [

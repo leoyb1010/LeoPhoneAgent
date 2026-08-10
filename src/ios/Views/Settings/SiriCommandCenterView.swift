@@ -18,7 +18,8 @@ struct SiriCommandCenterView: View {
     // 别名 LPA 已注册(INAlternativeAppNames):短语里的 app 名说「LPA」
     // 即可,全名 LeoPhoneAgent 同样有效。
     private let fleetPhrases: [Phrase] = [
-        Phrase(say: "让LPA干活", does: "选一台 Mac + CLI,一句话开工(不打开 app)"),
+        Phrase(say: "让LPA在Mac上跑", does: "选一台 Mac + CLI,一句话开工(不打开 app)"),
+        Phrase(say: "让LPA用我的Mac", does: "同上,另一种说法"),
         Phrase(say: "LPA汇报", does: "念出三台 Mac 进行中任务与待审批"),
         Phrase(say: "LPA批准", does: "批准最近一条等待审批的操作"),
         Phrase(say: "LPA停止任务", does: "停掉指定 Mac 上最近的任务"),
@@ -26,6 +27,7 @@ struct SiriCommandCenterView: View {
 
     private let chatPhrases: [Phrase] = [
         Phrase(say: "问LPA", does: "打开 app 进入对话"),
+        Phrase(say: "让LPA干活", does: "在这台手机上后台跑,不上 Mac"),
         Phrase(say: "给LPA发送提示", does: "后台跑一个任务,Siri 念结果"),
         Phrase(say: "运行LPA快捷任务", does: "执行你配置的快捷任务"),
         Phrase(say: "查看LPA任务", does: "播报会话状态"),
@@ -36,7 +38,7 @@ struct SiriCommandCenterView: View {
         List {
             Section {
                 Label {
-                    Text("以下每一句都可以直接对 Siri 说。前面加「嘿 Siri」,或长按侧键唤起后直接说。")
+                    Text("以下每一句都可以直接对 Siri 说。前面加「嘿 Siri」,或长按侧键唤起后直接说。\n\n默认在这台手机上做;只有明确说到「Mac」,任务才会派到远端机器。")
                         .font(.footnote).foregroundStyle(.secondary)
                 } icon: {
                     Image(systemName: "mic.badge.plus").foregroundStyle(.purple)

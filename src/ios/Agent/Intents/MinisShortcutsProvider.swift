@@ -40,11 +40,14 @@ struct MinisShortcutsProvider: AppShortcutsProvider {
             systemImageName: "bolt.fill"
         )
         AppShortcut(
+            // [T-local-first] 通用的"干活/办事"归这里:在手机本机后台跑,
+            // 不打开 app,结果由 Siri 念回来。要上 Mac 必须明说。
             intent: SendPromptIntent(),
             phrases: [
                 "Send a prompt to \(.applicationName)",
                 "Ask \(.applicationName) something",
                 "Start a \(.applicationName) task",
+                "\(.applicationName) get to work",
             ],
             shortTitle: "Send Prompt",
             systemImageName: "message.fill"
@@ -85,11 +88,17 @@ struct MinisShortcutsProvider: AppShortcutsProvider {
         // [T-siri-fleet] OpenSessionIntent 不再占 App Shortcut 名额(上限 10,
         // 让给 Mac 舰队四件套;它在快捷指令 App 的动作列表里仍然可用)。
         AppShortcut(
+            // [T-local-first] 只保留**明确点名 Mac** 的说法。
+            //
+            // 之前把"让LPA干活"这种通用说法也挂在这里,结果随口一句
+            // 简单任务就被派到远端 Mac 上跑——违反"本机优先、明确指令
+            // 才上 Mac"的预期。通用说法现在归 SendPromptIntent(本机后台)。
             intent: CommandMacIntent(),
             phrases: [
                 "Command a Mac with \(.applicationName)",
                 "Ask \(.applicationName) to command a Mac",
-                "\(.applicationName) get to work",
+                "\(.applicationName) run this on a Mac",
+                "\(.applicationName) use my Mac",
             ],
             shortTitle: "指挥一台 Mac",
             systemImageName: "desktopcomputer"

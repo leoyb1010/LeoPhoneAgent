@@ -1343,9 +1343,49 @@ struct ContentView: View {
         }
     }
 
+    /// [T-mac-in-main-list] 「Mac 上进行中」——点一下直接进那段对话。
+    ///
+    /// 以前要走 设置 → Mac 控制台 → 等扫描 CLI → 点进会话,四步。
+    /// 这是每天要看好几次的东西,不该埋那么深。没有在跑的就整节不出现。
+    @ViewBuilder
+    private var macLiveSection: some View {
+        if !isSelecting, !macLive.rows.isEmpty {
+            Section("Mac 上进行中") {
+                ForEach(macLive.rows) { row in
+                    Button {
+                        macAttachTarget = row
+                    } label: {
+                        HStack(spacing: 10) {
+                            Circle()
+                                .fill(row.isWaiting ? Color.orange : Color.green)
+                                .frame(width: 7, height: 7)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("\(row.hostName) · \(row.session.name)")
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundStyle(.primary)
+                                Text(row.isWaiting
+                                     ? (row.session.pendingApprovalCommand.map { "等你审批:" + String($0.prefix(40)) } ?? "等你审批")
+                                     : row.statusText)
+                                    .font(.caption)
+                                    .foregroundStyle(row.isWaiting ? .orange : .secondary)
+                                    .lineLimit(1)
+                            }
+                            Spacer(minLength: 0)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
     /// Plain List with NavigationLink for stack (iPhone) layout.
     private var stackList: some View {
         List {
+            macLiveSection
             // [T-ios-session-list-equatable-jank] id-list projection — see splitList.
             let groups = groupedSessionIDs(filteredSessions)
             ForEach(Array(groups.enumerated()), id: \.offset) { index, group in
@@ -2279,6 +2319,9 @@ struct ContentView: View {
     @StateObject private var providerStore = ProviderConfigStore.shared
     @ObservedObject private var quickTaskStore = QuickTaskStore.shared
     @ObservedObject private var gatewayStore = GatewayHostStore.shared
+    // [T-mac-in-main-list] Mac 上进行中的会话,直接摆主列表顶部
+    @ObservedObject private var macLive = MacLiveSessionsStore.shared
+    @State private var macAttachTarget: MacLiveSessionsStore.Row?
     @State private var macChatTarget: MacChatTarget?
 
     struct MacChatTarget: Identifiable {
@@ -2411,6 +2454,35 @@ struct ContentView: View {
         }
         .frame(maxHeight: .infinity)
         .padding(.horizontal, 32)
+        .fullScreenCover(item: $macAttachTarget) { row in
+            NavigationStack {
+                if let host = gatewayStore.activeHosts.first(where: { $0.id == row.hostId }),
+                   let client = gatewayStore.client(for: host) {
+                    HarnessConsoleView(
+                        driver: HarnessSessionDriver(
+                            client: client,
+                            harness: HarnessKind(key: row.session.harness, name: row.session.name),
+                            cwd: row.session.cwd),
+                        firstPrompt: "",
+                        attachSessionId: row.session.id)
+                    .navigationTitle("\(row.hostName) · \(row.session.name)")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("关闭") { macAttachTarget = nil }
+                        }
+                    }
+                } else {
+                    VStack(spacing: 10) {
+                        Text("缺少访问密钥")
+                        Button("关闭") { macAttachTarget = nil }
+                    }
+                }
+            }
+        }
+        .task {
+            MacLiveSessionsStore.shared.start()
+        }
         .fullScreenCover(item: $macChatTarget) { target in
             NavigationStack {
                 if let client = gatewayStore.client(for: target.host) {
