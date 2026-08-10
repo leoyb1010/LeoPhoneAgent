@@ -24,6 +24,13 @@ struct LeoReleaseNote: Identifiable {
 enum LeoReleaseNotes {
     static let all: [LeoReleaseNote] = [
         LeoReleaseNote(
+            version: "1.17.2",
+            date: "2026-08-10",
+            items: [
+                "🐛 修复「点 ☆ 没反应」:钉选其实已经存下了,但那一行的星星图标不重绘,看起来像没点动。根因是钉选状态存在系统偏好里,SwiftUI 感知不到它变化——上一版为此强制重建整个列表(于是跳回顶部),这一版改成让状态本身可观察,既会立刻变色也不跳顶",
+                "⭐️ 星星热区放大到 44×40,更好点",
+            ]),
+        LeoReleaseNote(
             version: "1.17.1",
             date: "2026-08-10",
             items: [

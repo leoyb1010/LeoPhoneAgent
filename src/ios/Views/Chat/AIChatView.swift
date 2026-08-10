@@ -211,6 +211,8 @@ struct AIChatView: View {
     @ObservedObject private var quickTaskStore = QuickTaskStore.shared
     // [T-mac-composer] 对话框直达 Mac:Quick Tasks 旁的"指挥 Mac"按钮。
     @ObservedObject private var gatewayStore = GatewayHostStore.shared
+    // 钉选变化后长按菜单要跟着变
+    @ObservedObject private var pinStore = ModelPinStore.shared
     @State private var macChatTarget: ComposerMacTarget?
     // [T-model-quickswitch] 输入条上的模型胶囊
     @State private var showQuickModelSwitch = false
@@ -3181,7 +3183,7 @@ struct AIChatView: View {
                 // 会话绑定确实会变(iOS 上"只此一条"需要另一套临时覆写,
                 // 那属于后续工作),所以文案照实说"改用 X 并发送"。
                 // [T-model-pin] 用钉选的常用,不用"最近使用"猜。
-                let quick = ModelSwitcher.pinnedEntries(store: ProviderConfigStore.shared).prefix(4)
+                let quick = ModelPinStore.shared.entries(store: ProviderConfigStore.shared).prefix(4)
                 if !quick.isEmpty {
                     Divider()
                     ForEach(Array(quick), id: \.compositeKey) { entry in
@@ -3428,7 +3430,7 @@ struct AIChatView: View {
     /// 长按胶囊弹出的常用列表。空的时候给一句话指路,不给一个空菜单。
     @ViewBuilder
     private var pinnedQuickMenu: some View {
-        let pinned = ModelSwitcher.pinnedEntries(store: ProviderConfigStore.shared)
+        let pinned = ModelPinStore.shared.entries(store: ProviderConfigStore.shared)
         let currentKey = ModelSwitcher.currentChoiceId(sessionId: vm.sessionId)
         if pinned.isEmpty {
             Button {

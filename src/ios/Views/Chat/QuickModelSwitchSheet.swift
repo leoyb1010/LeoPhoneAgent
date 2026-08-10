@@ -23,13 +23,12 @@ struct QuickModelSwitchSheet: View {
     let ensureSessionId: (() async -> String)?
 
     @StateObject private var store = ProviderConfigStore.shared
+    /// 钉选状态的可观察来源。直接读 ModelSwitcher.pinnedKeys 的话
+    /// SwiftUI 不知道它变了,点 ☆ 存储改了但那一行不重绘 = "点了没反应"。
+    @ObservedObject private var pins = ModelPinStore.shared
     @State private var query = ""
     @State private var showFullPicker = false
     @State private var failure: String?
-    /// 钉选存在 UserDefaults 里,不是 @Published;改动后靠这个 @State 触发
-    /// body 重算。**不要**拿它当 .id() —— 换身份会把整个 List 拆掉重建,
-    /// 滚到第 20 行点个 ☆ 就跳回顶部,连钉三个要重新滚三次。
-    @State private var pinTick = 0
     @Environment(\.dismiss) private var dismiss
 
     /// 打勾按身份比。同一个模型挂在两个供应商实例下时,按显示名比会
@@ -60,7 +59,7 @@ struct QuickModelSwitchSheet: View {
                 }
                 // 条件要跟实际渲染的行一致:用 pinnedKeys 会在"钉过但当前
                 // 不可用"时显示一个拖不动任何东西的编辑按钮。
-                if !ModelSwitcher.pinnedEntries(store: store).isEmpty {
+                if !pins.entries(store: store).isEmpty {
                     ToolbarItem(placement: .primaryAction) { EditButton() }
                 }
             }
@@ -85,7 +84,7 @@ struct QuickModelSwitchSheet: View {
 
     @ViewBuilder
     private var pinnedSection: some View {
-        let pinned = ModelSwitcher.pinnedEntries(store: store)
+        let pinned = pins.entries(store: store)
         Section {
             if pinned.isEmpty {
                 Label("点下面任意模型右边的 ☆,把常用的钉在这里",
@@ -99,9 +98,7 @@ struct QuickModelSwitchSheet: View {
                         subtitle: store.instances.first { $0.id == entry.providerInstanceId }?.label ?? "")
                 }
                 .onMove { source, dest in
-                    ModelSwitcher.movePinned(visibleKeys: pinned.map(\.compositeKey),
-                                             from: source, to: dest)
-                    pinTick += 1
+                    pins.move(visibleKeys: pinned.map(\.compositeKey), from: source, to: dest)
                 }
             }
         } header: {
@@ -117,9 +114,10 @@ struct QuickModelSwitchSheet: View {
 
     @ViewBuilder
     private var othersSection: some View {
+        // 依赖 pins.keys,钉选一变这里跟着重算(否则钉完的模型还赖在"其他"里)
         let others = ModelSwitcher.unpinnedChoices(store: store)
         if others.isEmpty {
-            if ModelSwitcher.pinnedEntries(store: store).isEmpty {
+            if pins.entries(store: store).isEmpty {
                 Section {
                     Text("还没有可用的模型——先到「模型供应商」里添加或启用一个。")
                         .font(.callout).foregroundStyle(.secondary)
@@ -165,7 +163,10 @@ struct QuickModelSwitchSheet: View {
     // MARK: - 行
 
     private func row(key: String, title: String, subtitle: String) -> some View {
-        HStack(spacing: 10) {
+        // isPinned 取自 @Published 的 pins.keys —— 它进入这个视图的值,
+        // 变化时 SwiftUI 才会真的重绘这一行。
+        let isPinned = pins.isPinned(key)
+        return HStack(spacing: 10) {
             Button {
                 commit(key)
             } label: {
@@ -185,24 +186,24 @@ struct QuickModelSwitchSheet: View {
                 }
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.borderless)
 
             // ☆ 独立热区:钉选不该顺带把模型切了
             Button {
-                if !ModelSwitcher.togglePin(key) {
+                LeoHaptics.selection()
+                if !pins.toggle(key) {
                     failure = "常用最多放 \(ModelSwitcher.maxPinned) 个,先取消一个再钉。"
                 }
-                LeoHaptics.selection()
-                pinTick += 1
             } label: {
-                Image(systemName: ModelSwitcher.isPinned(key) ? "star.fill" : "star")
-                    .font(.system(size: 15))
-                    .foregroundStyle(ModelSwitcher.isPinned(key) ? .yellow : .secondary)
-                    .frame(width: 40, height: 36)
+                Image(systemName: isPinned ? "star.fill" : "star")
+                    .font(.system(size: 16))
+                    .foregroundStyle(isPinned ? .yellow : .secondary)
+                    .frame(width: 44, height: 40)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(ModelSwitcher.isPinned(key) ? "取消常用" : "设为常用")
+            // .borderless 是 List 行内多按钮各自可点的规范写法
+            .buttonStyle(.borderless)
+            .accessibilityLabel(isPinned ? "取消常用" : "设为常用")
         }
     }
 
