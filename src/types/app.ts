@@ -26,7 +26,7 @@ export type ProviderModelsCacheInfo = {
   source: 'memory' | 'disk' | 'fresh';
 };
 
-export type AppTab = 'dashboard' | 'chat' | 'files' | 'shell' | 'git' | 'tasks' | 'browser' | 'audit' | 'missions' | `plugin:${string}`;
+export type AppTab = 'dashboard' | 'chat' | 'files' | 'shell' | 'git' | 'tasks' | 'browser' | 'audit' | 'missions' | 'fleet' | `plugin:${string}`;
 
 export interface ProjectSession {
   isPinned?: boolean;

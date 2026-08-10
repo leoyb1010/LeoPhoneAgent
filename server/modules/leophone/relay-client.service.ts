@@ -35,6 +35,10 @@ function log(message: string): void {
 }
 
 /** relay 地址与钥匙:环境变量优先,其次 ~/.leoagent/relay.json(与 leoagent 共用)。 */
+export function resolveRelayConfig(): RelayConfig | null {
+  return resolveConfig();
+}
+
 function resolveConfig(): RelayConfig | null {
   let url = (process.env.LEOAGENT_RELAY_URL || '').trim();
   let relayKey = (process.env.LEOAGENT_RELAY_KEY || '').trim();

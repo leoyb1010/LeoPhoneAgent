@@ -25,7 +25,8 @@
     "tasks": "Görevler",
     "browser": "Browser",
     "computer": "Bilgisayar",
-    "audit": "Session Audit"
+    "audit": "Session Audit",
+    "fleet": "Fleet"
   },
   "status": {
     "loading": "Yükleniyor...",

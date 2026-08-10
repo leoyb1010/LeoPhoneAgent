@@ -1,4 +1,4 @@
-import { MessageSquare, Terminal, Folder, GitBranch, ClipboardCheck, MonitorPlay, ShieldCheck, type LucideIcon } from 'lucide-react';
+import { MessageSquare, Terminal, Folder, GitBranch, ClipboardCheck, MonitorPlay, ShieldCheck, type LucideIcon, Server } from 'lucide-react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -52,6 +52,13 @@ const AUDIT_TAB: BuiltInTab = {
   icon: ShieldCheck,
 };
 
+const FLEET_TAB: BuiltInTab = {
+  kind: 'builtin',
+  id: 'fleet',
+  labelKey: 'tabs.fleet',
+  icon: Server,
+};
+
 const TASKS_TAB: BuiltInTab = {
   kind: 'builtin',
   id: 'tasks',
@@ -72,6 +79,7 @@ export default function MainContentTabSwitcher({
     ...BASE_TABS,
     ...(shouldShowBrowserTab ? [BROWSER_TAB] : []),
     AUDIT_TAB,
+    FLEET_TAB,
     ...(shouldShowTasksTab ? [TASKS_TAB] : []),
   ];
 

@@ -25,7 +25,8 @@
     "tasks": "Задачи",
     "browser": "Browser",
     "computer": "Компьютер",
-    "audit": "Session Audit"
+    "audit": "Session Audit",
+    "fleet": "Флот"
   },
   "status": {
     "loading": "Загрузка...",

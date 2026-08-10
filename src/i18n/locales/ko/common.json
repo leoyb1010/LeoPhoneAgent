@@ -25,7 +25,8 @@
     "tasks": "작업",
     "browser": "Browser",
     "computer": "Computer",
-    "audit": "Session Audit"
+    "audit": "Session Audit",
+    "fleet": "플릿"
   },
   "status": {
     "loading": "로딩 중...",

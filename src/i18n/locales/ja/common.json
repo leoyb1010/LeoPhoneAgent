@@ -25,7 +25,8 @@
     "tasks": "タスク",
     "browser": "Browser",
     "computer": "Computer",
-    "audit": "Session Audit"
+    "audit": "Session Audit",
+    "fleet": "フリート"
   },
   "status": {
     "loading": "読み込み中...",

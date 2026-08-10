@@ -25,7 +25,8 @@
     "tasks": "任務",
     "browser": "瀏覽器",
     "computer": "電腦",
-    "audit": "工作階段稽核"
+    "audit": "工作階段稽核",
+    "fleet": "艦隊"
   },
   "status": {
     "loading": "載入中...",

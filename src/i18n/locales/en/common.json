@@ -25,7 +25,8 @@
     "tasks": "Tasks",
     "browser": "Browser",
     "computer": "Computer",
-    "audit": "Session Audit"
+    "audit": "Session Audit",
+    "fleet": "Fleet"
   },
   "status": {
     "loading": "Loading...",

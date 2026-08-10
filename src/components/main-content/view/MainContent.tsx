@@ -11,6 +11,7 @@ import { apiClient } from '../../../utils/apiClient';
 import { useEditorSidebar } from '../../code-editor/hooks/useEditorSidebar';
 import type { AppTab, LLMProvider, Project } from '../../../types/app';
 import type { OpenMissionSession } from '../../missions/view/MissionsView';
+import FleetView from '../../fleet/view/FleetView';
 
 import MainContentHeader from './subcomponents/MainContentHeader';
 import MainContentStateView from './subcomponents/MainContentStateView';
@@ -309,6 +310,14 @@ function MainContent({
                 <React.Suspense fallback={panelFallback}>
                   <ConversationAuditPanel />
                 </React.Suspense>
+              </ErrorBoundary>
+            </div>
+          )}
+
+          {activeTab === 'fleet' && (
+            <div className="workspace-tab-panel h-full overflow-hidden" data-active="true">
+              <ErrorBoundary showDetails>
+                <FleetView />
               </ErrorBoundary>
             </div>
           )}
