@@ -24,6 +24,15 @@ struct LeoReleaseNote: Identifiable {
 enum LeoReleaseNotes {
     static let all: [LeoReleaseNote] = [
         LeoReleaseNote(
+            version: "1.12.0",
+            date: "2026-08-10",
+            items: [
+                "📡 Mac 主动上报:审批请求与任务终态现在由 Mac 主动推给中继,手机回到前台自动对账——切走期间 Mac 上要审批的任务不再静默挂着,回来就能看到并直接在通知上批",
+                "🔁 断线不丢:Mac 推不出去的事件会攒着,重连后按顺序补发;手机按序号幂等合并,不会重复打扰",
+                "🖥 Mac 端(leocodebox)同步升级:新增会话摘要、任务收据、产物下载三个接口,为「一张可核对的任务收据」打好地基",
+                "🎛 Mac 端设置页重做:13 项平铺改为三组折叠 + 搜索框,与手机端同一套信息架构",
+            ]),
+        LeoReleaseNote(
             version: "1.11.0",
             date: "2026-08-10",
             items: [
