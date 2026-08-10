@@ -24,6 +24,16 @@ struct LeoReleaseNote: Identifiable {
 enum LeoReleaseNotes {
     static let all: [LeoReleaseNote] = [
         LeoReleaseNote(
+            version: "1.19.0",
+            date: "2026-08-10",
+            items: [
+                "📝 收藏库变成知识库:可以直接写笔记了(右上角「写一条笔记」),支持 Markdown,原生编辑器零延迟。你的想法和你收藏的东西住在同一个库里",
+                "💬 任意收藏可加批注:读完一篇文章左滑写两句自己的想法,和原文放在一起,也能被搜到",
+                "📌 左滑置顶 / 右滑归档:归档是收起来不删,右上角菜单里「查看归档」随时回看",
+                "🕘 笔记自动留历史版本(最多 10 版),手滑清空了能找回来",
+                "✨ 笔记里可以让本机模型生成摘要和标签(离线,不出手机)",
+            ]),
+        LeoReleaseNote(
             version: "1.18.0",
             date: "2026-08-10",
             items: [

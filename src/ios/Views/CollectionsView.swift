@@ -30,6 +30,13 @@ struct CollectionsView: View {
     /// [T-reader] 应用内阅读器目标。跳不了原 app 的链接都在这里读,
     /// 不再甩去外部 Safari。
     @State private var readerTarget: ReaderTarget?
+    /// [T-notes] 正在编辑的笔记
+    @State private var editingNote: CollectedItem?
+    /// [T-notes] 正在写批注的条目
+    @State private var annotating: CollectedItem?
+    @State private var annotationDraft = ""
+    /// [T-notes] 显示归档的条目(默认收起)
+    @State private var showArchived = false
     @State private var showImportSheet = false
     @State private var selection = Set<String>()
     @State private var editMode: EditMode = .inactive
@@ -49,7 +56,8 @@ struct CollectionsView: View {
     }
 
     private var visible: [CollectedItem] {
-        var out = items
+        // [T-notes] 归档的默认不出现在主列表 —— 归档就是"收起来但不删"
+        var out = showArchived ? items.filter(\.archived) : items.filter { !$0.archived }
         if let filterSource { out = out.filter { $0.sourceLabel == filterSource } }
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
         if !q.isEmpty {
@@ -61,12 +69,14 @@ struct CollectionsView: View {
                     || $0.value.lowercased().contains(q)
                     || ($0.summary ?? "").lowercased().contains(q)
                     || $0.tags.joined().lowercased().contains(q)
+                    || ($0.annotation ?? "").lowercased().contains(q)
                     || fullTextHits.contains($0.id)
             }
         }
         return out.sorted { a, b in
             if a.pinned != b.pinned { return a.pinned }
-            return a.createdAt > b.createdAt
+            // 笔记会被反复编辑,按最后改动排;收藏类 updatedAt 等于创建时间
+            return a.updatedAt > b.updatedAt
         }
     }
 
@@ -108,6 +118,40 @@ struct CollectionsView: View {
         .refreshable { reload() }
         .toolbar { toolbarContent }
         .sheet(item: $previewItem) { CollectionPreviewSheet(item: $0) }
+        .sheet(item: $editingNote) { note in
+            NavigationStack {
+                NoteEditorView(item: note) { updated in
+                    CollectionStore.update(updated)
+                    reload()
+                }
+            }
+        }
+        .sheet(item: $annotating) { target in
+            NavigationStack {
+                Form {
+                    Section {
+                        TextField("写下你的想法…", text: $annotationDraft, axis: .vertical)
+                            .lineLimit(4...12)
+                    } header: {
+                        Text("批注")
+                    } footer: {
+                        Text(target.title ?? target.value)
+                            .lineLimit(2)
+                    }
+                }
+                .navigationTitle("批注")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("取消") { annotating = nil }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("保存") { saveAnnotation(for: target) }
+                    }
+                }
+            }
+            .presentationDetents([.medium])
+        }
         .fullScreenCover(item: $readerTarget) { target in
             LeoReaderView(url: target.url, preferReaderMode: target.preferReaderMode)
                 .ignoresSafeArea()
@@ -183,11 +227,39 @@ struct CollectionsView: View {
                 purge([item.id])
             } label: { Label("删除", systemImage: "trash") }
         }
+        .swipeActions(edge: .trailing) {
+            Button {
+                var updated = item
+                updated.archived.toggle()
+                updated.updatedAt = Date()
+                CollectionStore.update(updated)
+                reload()
+            } label: {
+                Label(item.archived ? "取消归档" : "归档",
+                      systemImage: item.archived ? "tray.and.arrow.up" : "archivebox")
+            }
+            .tint(.gray)
+        }
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             Button {
                 sendToAgent(item, prompt: nil)
             } label: { Label("发给 Agent", systemImage: "paperplane.fill") }
                 .tint(.indigo)
+            Button {
+                var updated = item
+                updated.pinned.toggle()
+                CollectionStore.update(updated)
+                reload()
+            } label: {
+                Label(item.pinned ? "取消置顶" : "置顶",
+                      systemImage: item.pinned ? "pin.slash" : "pin")
+            }
+            .tint(.orange)
+            Button {
+                annotationDraft = item.annotation ?? ""
+                annotating = item
+            } label: { Label("批注", systemImage: "text.bubble") }
+                .tint(.teal)
         }
     }
 
@@ -201,8 +273,18 @@ struct CollectionsView: View {
             } else {
                 Menu {
                     Button {
+                        newNote()
+                    } label: { Label("写一条笔记", systemImage: "square.and.pencil") }
+                    Button {
                         showImportSheet = true
                     } label: { Label("粘贴链接收藏", systemImage: "doc.on.clipboard") }
+                    Divider()
+                    Button {
+                        withAnimation { showArchived.toggle() }
+                    } label: {
+                        Label(showArchived ? "回到收藏" : "查看归档",
+                              systemImage: showArchived ? "tray.full" : "archivebox")
+                    }
                     Button {
                         withAnimation { editMode = .active }
                     } label: { Label("选择并删除", systemImage: "checkmark.circle") }
@@ -296,6 +378,31 @@ struct CollectionsView: View {
 
     // MARK: 行为
 
+    /// [T-notes] 新建一条空笔记并直接进编辑器。
+    private func newNote() {
+        let note = CollectedItem.newNote()
+        CollectionStore.add([note])
+        reload()
+        editingNote = note
+    }
+
+    /// 批注保存:进条目、也进全文索引(想法本身就该能搜到)。
+    private func saveAnnotation(for target: CollectedItem) {
+        var updated = target
+        let text = annotationDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.annotation = text.isEmpty ? nil : text
+        updated.updatedAt = Date()
+        CollectionStore.update(updated)
+        annotating = nil
+        reload()
+        Task {
+            await CollectionSearchIndex.shared.index(
+                itemId: updated.id,
+                title: updated.title ?? "",
+                body: [updated.value, text].joined(separator: "\n"))
+        }
+    }
+
     private func reload() {
         items = CollectionStore.load()
         syncToRelay()
@@ -379,6 +486,10 @@ struct CollectionsView: View {
     /// 其余一律**应用内阅读器**。以前的第三种去向(甩去外部 Safari)
     /// 已经取消 —— 公众号没有 deep-link 方案,每次都被甩出去的就是它。
     private func open(_ item: CollectedItem) {
+        if item.kind == .note {
+            editingNote = item
+            return
+        }
         guard item.kind == .link else {
             previewItem = item
             return
@@ -407,7 +518,7 @@ struct CollectionsView: View {
     private func sendToAgent(_ item: CollectedItem, prompt: String?) {
         var shareItems: [PendingShare.Item] = []
         switch item.kind {
-        case .link, .text:
+        case .link, .text, .note:
             shareItems.append(.init(kind: .inlineText, value: item.value))
         case .file:
             if let src = CollectionStore.filesDirectory?.appendingPathComponent(item.value),
@@ -610,6 +721,7 @@ private struct CollectionCard: View {
         case .link: return "link"
         case .text: return "text.alignleft"
         case .file: return "doc"
+        case .note: return "note.text"
         }
     }
 }
@@ -636,6 +748,14 @@ private struct CollectionPreviewSheet: View {
     @ViewBuilder
     private var content: some View {
         switch item.kind {
+        case .note:
+            // 笔记的完整编辑在 NoteEditorView;这里是只读预览
+            ScrollView {
+                Text(item.value)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+                    .padding()
+            }
         case .link:
             if let url = URL(string: item.value) {
                 // 统一走 LeoReaderView:带阅读模式、关闭按钮与工具条折叠

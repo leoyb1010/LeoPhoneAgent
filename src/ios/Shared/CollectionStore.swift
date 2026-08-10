@@ -19,6 +19,9 @@ import Foundation
 struct CollectedItem: Codable, Identifiable, Equatable {
     enum Kind: String, Codable {
         case link, text, file
+        /// [T-notes] 纯笔记:没有链接,正文另存在 notes/<id>.md。
+        /// 你的想法和你收藏的东西住在同一个库里。
+        case note
     }
 
     let id: String
@@ -42,6 +45,17 @@ struct CollectedItem: Codable, Identifiable, Equatable {
     /// 元数据抓取已尝试过(成败都算),避免每次进页重复抓。
     var metadataFetched: Bool
 
+    // ── [T-notes] 笔记能力 ─────────────────────────────────────
+    /// 正文文件名(notes/<id>.md)。**正文绝不进这个 JSON** —— 一篇几万字
+    /// 塞进来,每次读写整个收藏库都拖着它走,列表就卡了。
+    var bodyFile: String?
+    /// 我对这条收藏的批注。读完一篇文章写两句想法,和原文放在一起。
+    var annotation: String?
+    /// 归档:从主列表收起来,但不删。
+    var archived: Bool
+    /// 最后修改时间(笔记排序用;收藏类等于创建时间)。
+    var updatedAt: Date
+
     init(kind: Kind, value: String, sourceLabel: String) {
         self.id = UUID().uuidString
         self.kind = kind
@@ -55,6 +69,52 @@ struct CollectedItem: Codable, Identifiable, Equatable {
         self.pinned = false
         self.summary = nil
         self.metadataFetched = false
+        self.bodyFile = nil
+        self.annotation = nil
+        self.archived = false
+        self.updatedAt = Date()
+    }
+
+    /// 新建一条空笔记。
+    static func newNote(title: String = "") -> CollectedItem {
+        var item = CollectedItem(kind: .note, value: "", sourceLabel: "笔记")
+        item.title = title.isEmpty ? nil : title
+        item.bodyFile = "note-\(item.id).md"
+        item.metadataFetched = true    // 笔记没有网页元数据可抓
+        return item
+    }
+
+    // MARK: - 容错解码
+    //
+    // CollectionStore.load() 用的是 `try?`,解码一失败就返回空数组 ——
+    // 也就是**整个收藏库在用户眼里消失**。所以新增字段一律 decodeIfPresent
+    // 带默认值,老数据(没有 bodyFile/annotation/archived/updatedAt 这些键)
+    // 必须照样解得出来。这不是防御性编程,这是不许弄丢用户数据。
+
+    enum CodingKeys: String, CodingKey {
+        case id, kind, value, resolvedURL, title, thumbnailFile, sourceLabel
+        case createdAt, tags, pinned, summary, metadataFetched
+        case bodyFile, annotation, archived, updatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        kind = (try? c.decode(Kind.self, forKey: .kind)) ?? .text
+        value = (try? c.decode(String.self, forKey: .value)) ?? ""
+        resolvedURL = try c.decodeIfPresent(String.self, forKey: .resolvedURL)
+        title = try c.decodeIfPresent(String.self, forKey: .title)
+        thumbnailFile = try c.decodeIfPresent(String.self, forKey: .thumbnailFile)
+        sourceLabel = (try? c.decode(String.self, forKey: .sourceLabel)) ?? "收藏"
+        createdAt = (try? c.decode(Date.self, forKey: .createdAt)) ?? Date()
+        tags = (try? c.decode([String].self, forKey: .tags)) ?? []
+        pinned = (try? c.decode(Bool.self, forKey: .pinned)) ?? false
+        summary = try c.decodeIfPresent(String.self, forKey: .summary)
+        metadataFetched = (try? c.decode(Bool.self, forKey: .metadataFetched)) ?? false
+        bodyFile = try c.decodeIfPresent(String.self, forKey: .bodyFile)
+        annotation = try c.decodeIfPresent(String.self, forKey: .annotation)
+        archived = (try? c.decode(Bool.self, forKey: .archived)) ?? false
+        updatedAt = (try? c.decode(Date.self, forKey: .updatedAt)) ?? createdAt
     }
 }
 
@@ -77,6 +137,21 @@ enum CollectionStore {
         return dir
     }
 
+    /// [T-notes] 笔记正文。单文件一篇,不进 items.json。
+    static var notesDirectory: URL? {
+        guard let dir = directory?.appendingPathComponent("notes", isDirectory: true) else { return nil }
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    /// [T-notes] 版本快照。每次保存留一份,只保最近 10 版 ——
+    /// 几 KB 的文件复制换"手滑删了能找回来",不值得上 diff 系统。
+    static var versionsDirectory: URL? {
+        guard let dir = directory?.appendingPathComponent("versions", isDirectory: true) else { return nil }
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
     static var thumbsDirectory: URL? {
         guard let dir = directory?.appendingPathComponent("thumbs", isDirectory: true) else { return nil }
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -90,11 +165,17 @@ enum CollectionStore {
     // MARK: 读写
 
     static func load() -> [CollectedItem] {
-        guard let url = indexURL, let data = try? Data(contentsOf: url),
-              let items = try? JSONDecoder().decode([CollectedItem].self, from: data) else {
+        guard let url = indexURL, let data = try? Data(contentsOf: url) else { return [] }
+        do {
+            return try JSONDecoder().decode([CollectedItem].self, from: data)
+        } catch {
+            // 解码失败返回空 = 用户眼里"收藏全没了",而下一次 save 就会
+            // 把空数组写回去,真的没了。先把原文件备份出来再说。
+            if let backup = directory?.appendingPathComponent("items.corrupt.json") {
+                try? data.write(to: backup, options: .atomic)
+            }
             return []
         }
-        return items
     }
 
     static func save(_ items: [CollectedItem]) {
