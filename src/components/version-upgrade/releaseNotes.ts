@@ -17,6 +17,15 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '1.66.1',
+    date: '2026-08-10',
+    items: [
+      '手机收藏镜像认识「笔记」了:纯笔记条目带标识显示,不再是一行没有链接的孤零零文字',
+      '批注跟着显示:手机上给收藏写的想法,这里能看到,也能被搜索命中',
+      '手机上归档的条目这里同步收起 —— 两端看到的是同一个库',
+    ],
+  },
+  {
     version: '1.66.0',
     date: '2026-08-10',
     items: [

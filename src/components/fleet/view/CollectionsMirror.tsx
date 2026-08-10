@@ -19,6 +19,8 @@ type Item = {
   summary: string;
   tags: string[];
   created_at: number;
+  archived?: boolean;
+  annotation?: string;
 };
 
 export default function CollectionsMirror({ refreshTick = 0 }: { refreshTick?: number }) {
@@ -49,18 +51,20 @@ export default function CollectionsMirror({ refreshTick = 0 }: { refreshTick?: n
 
   if (!configured) return null;
 
+  // 手机上归档的条目这里也收起来 —— 两端看到的应该是同一个库
+  const active = items.filter((item) => !item.archived);
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
   const visible = terms.length
-    ? items.filter((item) => {
-        const hay = `${item.title} ${item.summary} ${item.source} ${item.tags.join(' ')}`.toLowerCase();
+    ? active.filter((item) => {
+        const hay = `${item.title} ${item.summary} ${item.source} ${item.tags.join(' ')} ${item.annotation ?? ''}`.toLowerCase();
         return terms.every((term) => hay.includes(term));
       })
-    : items;
+    : active;
 
   return (
     <section className="mt-6">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-sm font-medium text-foreground">手机收藏 · {items.length}</h2>
+        <h2 className="text-sm font-medium text-foreground">手机收藏 · {active.length}</h2>
         {updatedAt > 0 && (
           <span className="text-xs text-muted-foreground">
             {new Date(updatedAt * 1000).toLocaleString()}
@@ -102,10 +106,23 @@ export default function CollectionsMirror({ refreshTick = 0 }: { refreshTick?: n
                 {item.title || item.url}
               </a>
             ) : (
-              <p className="mt-1 text-sm text-foreground">{item.title || '(无标题)'}</p>
+              <p className="mt-1 text-sm text-foreground">
+                {item.kind === 'note' && (
+                  <span className="mr-1.5 rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                    笔记
+                  </span>
+                )}
+                {item.title || '(无标题)'}
+              </p>
             )}
             {item.summary && (
               <p className="mt-1 text-xs text-muted-foreground">{item.summary}</p>
+            )}
+            {item.annotation && (
+              <p className="mt-1 border-l-2 border-border pl-2 text-xs text-muted-foreground"
+                 style={{ borderRadius: 0 }}>
+                批注:{item.annotation}
+              </p>
             )}
             {item.tags.length > 0 && (
               <p className="mt-1 text-xs text-muted-foreground opacity-70">
