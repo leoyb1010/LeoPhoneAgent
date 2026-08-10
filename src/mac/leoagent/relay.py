@@ -69,6 +69,8 @@ class Relay:
         # [T-live-mission] APNs 推送器。没配 ~/.leoagent/apns.json 就整体
         # 禁用,中继本体照常工作(降级而非报错)。
         self.apns = build_pusher()
+        # 后台任务引用集(防 GC,见 _push_apns 调用处)
+        self._bg_tasks: set = set()
         # [T-collections-fleet] 手机上传的收藏索引(只读镜像)
         self.collections: List[Dict[str, Any]] = []
         self.collections_updated_at: float = 0.0
@@ -161,7 +163,13 @@ class Relay:
                 elif kind in ("stream_data", "stream_close"):
                     queue = machine.streams.get(str(frame.get("id")))
                     if queue is not None:
-                        queue.put_nowait(frame)
+                        try:
+                            queue.put_nowait(frame)
+                        except asyncio.QueueFull:
+                            # 手机端读得慢时丢这一帧。绝不能让 QueueFull
+                            # 冲出消息循环——那会注销整台 Mac 的中继连接,
+                            # 一条慢流拖死全部功能。
+                            pass
 
                 elif kind == "event":
                     # [T-leophone-push] Mac 主动上报的关键事件。手机不在线
@@ -202,8 +210,13 @@ class Relay:
         print(f"[relay] event {kind} from {machine_name}", flush=True)
         # [T-live-mission] 关键事件转 APNs:app 完全没运行时的唯一触达路径。
         if self.apns.enabled:
-            asyncio.get_running_loop().create_task(
+            # 持引用!事件循环只持任务弱引用,裸 create_task 的协程挂在
+            # APNs 网络 I/O 上时可能被 GC 中途回收——推送静默消失。
+            # relay_client.push_event 修过同一类 bug,这里不能复发。
+            task = asyncio.get_running_loop().create_task(
                 self._push_apns(machine_name, event))
+            self._bg_tasks.add(task)
+            task.add_done_callback(self._bg_tasks.discard)
 
     async def _push_apns(self, machine_name: str, event: Dict[str, Any]) -> None:
         kind = event.get("event")
@@ -255,11 +268,14 @@ class Relay:
         self.collections = items[:500]
         self.collections_updated_at = time.time()
         try:
+            # tmp+replace 原子写:O_TRUNC 原地写在崩溃时会留半截坏 JSON
             path = os.path.expanduser("~/.leoagent/collections.json")
-            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            tmp = path + ".tmp"
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
             with os.fdopen(fd, "w") as f:
                 json.dump({"items": self.collections,
                            "updated_at": self.collections_updated_at}, f, ensure_ascii=False)
+            os.replace(tmp, path)
         except OSError:
             pass  # 落盘失败只丢重启后的持久性,内存里仍可读
         return web.json_response({"ok": True, "count": len(self.collections)})

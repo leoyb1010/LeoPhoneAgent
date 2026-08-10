@@ -197,8 +197,15 @@ class RelayClient:
                 pass
 
 
+_BACKGROUND_TASKS: set = set()
+
+
 def start_in_background(relay_url: str, relay_key: str, local_port: int,
                         local_key: str) -> None:
     """在 server 的事件循环里常驻。失败只影响 relay 通路,不影响本机服务。"""
     client = RelayClient(relay_url, relay_key, local_port, local_key)
-    asyncio.get_event_loop().create_task(client.run_forever())
+    # 模块级持引用:这条任务是整个 Mac↔中继链路,被 GC 即静默死亡。
+    # 挂在 client 自己身上是循环引用,gc 照样能收;必须有外部根。
+    task = asyncio.create_task(client.run_forever())
+    _BACKGROUND_TASKS.add(task)
+    task.add_done_callback(_BACKGROUND_TASKS.discard)

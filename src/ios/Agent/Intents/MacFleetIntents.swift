@@ -169,7 +169,19 @@ struct CommandMacIntent: AppIntent {
         // [T-local-brain] Siri 里是口述进来的,常常是一段流水话。先让本机
         // 模型整理成"标题 + 要点"再下发,Mac 那头拿到的是清楚的任务。
         // 本机模型不可用就原样下发——不因为它缺席而少一个功能。
-        let structured = await LocalBrain.shared.structureTask(from: text)
+        // 4 秒竞速:Foundation Models 冷启动可能要好几秒,而 App Intent
+        // 总预算约 30 秒还要留给中继网络往返。整理超时就用原文,
+        // 绝不能因为"想把任务写漂亮"把任务本身弄丢。
+        let structured = await withTaskGroup(of: LocalBrain.StructuredTask?.self) { group -> LocalBrain.StructuredTask? in
+            group.addTask { await LocalBrain.shared.structureTask(from: text) }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
+        }
         let dispatch = structured.map { "\($0.title)\n\n\($0.detail)" } ?? text
         do {
             _ = try await client.createHarnessSession(harness: cli.rawValue, cwd: "~", prompt: dispatch)

@@ -458,9 +458,12 @@ extension AIChatViewModel {
             var sid = self.sessionId ?? ""
             if sid.isEmpty { sid = await self.ensureSessionReturningId() }
             guard !sid.isEmpty else { return }
-            await ModelSwitcher.apply(choiceId: target.id, sessionId: sid)
+            let ok = await ModelSwitcher.apply(choiceId: target.id, sessionId: sid)
             await MainActor.run {
-                self.appendSystemInfo("已切到 \(target.title)。", icon: "cpu")
+                // 切失败还报"已切到"= 假装成功;分组成员全停用时就会走到这里
+                self.appendSystemInfo(ok ? "已切到 \(target.title)。"
+                                         : "没能切到 \(target.title):当前不可用(供应商停用或分组无可用成员)。",
+                                      icon: "cpu")
             }
         }
         return true

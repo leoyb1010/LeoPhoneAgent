@@ -4426,8 +4426,11 @@ struct AIChatView: View {
             var sid = vm.sessionId ?? ""
             if sid.isEmpty { sid = await vm.ensureSessionReturningId() }
             guard !sid.isEmpty else { return }
-            await ModelSwitcher.apply(choiceId: choiceId, sessionId: sid)
-            await MainActor.run { performSend() }
+            let ok = await ModelSwitcher.apply(choiceId: choiceId, sessionId: sid)
+            await MainActor.run {
+                // 切失败就中止发送:用旧模型悄悄发出去比不发更糟
+                if ok { performSend() } else { vm.appendSystemInfo("模型当前不可用,已取消发送。", icon: "cpu") }
+            }
         }
     }
 

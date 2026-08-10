@@ -36,6 +36,7 @@ struct CollectionsView: View {
     @State private var fullTextSnippets: [String: String] = [:]
     @State private var indexing = false
     @State private var lastSyncedFingerprint = ""
+    @State private var searchTask: Task<Void, Never>?
     @AppStorage(CollectionStore.defaultActionKey, store: SharedContainerStore.sharedDefaults)
     private var defaultAction = "ask"
     @Environment(\.dismiss) private var dismiss
@@ -87,10 +88,19 @@ struct CollectionsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, prompt: "搜索收藏(含正文)")
         .onChange(of: query) { _, newValue in
-            let hits = CollectionSearchIndex.shared.search(newValue)
-            fullTextMatches = hits.map(\.itemId)
-            fullTextSnippets = Dictionary(hits.map { ($0.itemId, $0.snippet) },
-                                          uniquingKeysWith: { a, _ in a })
+            // 防抖 250ms 再查:FTS 查询别跟着每一次击键跑
+            searchTask?.cancel()
+            searchTask = Task {
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                guard !Task.isCancelled else { return }
+                let hits = await CollectionSearchIndex.shared.search(newValue)
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    fullTextMatches = hits.map(\.itemId)
+                    fullTextSnippets = Dictionary(hits.map { ($0.itemId, $0.snippet) },
+                                                  uniquingKeysWith: { a, _ in a })
+                }
+            }
         }
         .refreshable { reload() }
         .toolbar { toolbarContent }
@@ -285,17 +295,21 @@ struct CollectionsView: View {
     }
 
     /// [T-collections-fleet] 把收藏索引推给中继,Mac 端才看得到。
-    /// 去抖:同一批变更只传一次,内容没变不传。
+    /// 指纹含内容(不只 id):补完标题摘要后 id 集不变,但 Mac 端不能
+    /// 停留在贫化快照上。成功后才记账,失败下次自动重试。
     private func syncToRelay() {
         let snapshot = items
-        let fingerprint = snapshot.map(\.id).joined(separator: ",")
+        let fingerprint = snapshot.map {
+            "\($0.id)|\($0.title ?? "")|\($0.summary ?? "")|\($0.tags.joined())|\($0.pinned)"
+        }.joined(separator: "\n").hashValue.description
         guard fingerprint != lastSyncedFingerprint else { return }
-        lastSyncedFingerprint = fingerprint
         Task {
             guard let client = GatewayHostStore.shared.activeHosts
                 .compactMap({ GatewayHostStore.shared.client(for: $0) })
                 .first(where: { $0.relayEventsURL != nil }) else { return }
-            await client.uploadCollections(snapshot)
+            if await client.uploadCollections(snapshot) {
+                await MainActor.run { lastSyncedFingerprint = fingerprint }
+            }
         }
     }
 
@@ -303,38 +317,45 @@ struct CollectionsView: View {
     /// "搜得到但打不开"的幽灵。
     private func purge(_ ids: Set<String>) {
         CollectionStore.delete(ids: ids)
-        for id in ids { CollectionSearchIndex.shared.remove(itemId: id) }
-        CollectionSearchIndex.shared.unpublishFromSpotlight(ids: ids)
+        Task {
+            for id in ids { await CollectionSearchIndex.shared.remove(itemId: id) }
+            await CollectionSearchIndex.shared.unpublishFromSpotlight(ids: ids)
+        }
         reload()
     }
 
-    /// [T-collections-fulltext] 给还没有正文的链接抓一遍正文入索引。
-    /// 串行、每轮最多 3 条:WebView 很重,批量并发会把内存顶爆。
+    /// [T-collections-fulltext] 给还没有正文的链接抓正文入索引。
+    /// 串行循环直到清空(WebView 一次一个);抽取失败记尝试次数,
+    /// 3 次仍失败就放弃——否则付费墙/短文那几条会永远堵在队首,
+    /// 后面的条目一辈子进不了索引。
     private func indexMissingFullText() {
         guard !indexing else { return }
-        let indexed = CollectionSearchIndex.shared.indexedIds()
-        let todo = items.filter { $0.kind == .link && !indexed.contains($0.id) }.prefix(3)
-        guard !todo.isEmpty else {
-            CollectionSearchIndex.shared.publishToSpotlight(items)
-            return
-        }
         indexing = true
         Task {
+            defer { Task { @MainActor in indexing = false } }
+            let failKey = "collections.fulltext.attempts"
+            var attempts = (UserDefaults.standard.dictionary(forKey: failKey) as? [String: Int]) ?? [:]
+            let indexed = await CollectionSearchIndex.shared.indexedIds()
+            let todo = items.filter {
+                $0.kind == .link && !indexed.contains($0.id) && (attempts[$0.id] ?? 0) < 3
+            }
             for item in todo {
                 let target = item.resolvedURL.flatMap(URL.init(string:))
                     ?? URL(string: item.value)
-                guard let target else { continue }
+                guard let target else { attempts[item.id] = 3; continue }
                 if let article = await ArticleExtractor.shared.extract(url: target) {
-                    CollectionSearchIndex.shared.index(
+                    await CollectionSearchIndex.shared.index(
                         itemId: item.id,
                         title: article.title ?? item.title ?? "",
                         body: article.text)
+                    attempts.removeValue(forKey: item.id)
+                } else {
+                    attempts[item.id] = (attempts[item.id] ?? 0) + 1
                 }
             }
-            await MainActor.run {
-                indexing = false
-                CollectionSearchIndex.shared.publishToSpotlight(items)
-            }
+            UserDefaults.standard.set(attempts, forKey: failKey)
+            let snapshot = items
+            await CollectionSearchIndex.shared.publishToSpotlight(snapshot)
         }
     }
 

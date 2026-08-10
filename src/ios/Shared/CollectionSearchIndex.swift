@@ -25,14 +25,16 @@ import SQLite3
 // -1 转成析构函数指针 = "这份数据是临时的,SQLite 请自己拷贝"。
 private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: (@convention(c) (UnsafeMutableRawPointer?) -> Void).self)
 
-@MainActor
-final class CollectionSearchIndex {
+// actor 而非 @MainActor:sqlite3_step 是同步 C 调用,几十 MB 的 trigram
+// 索引一次查询可能几十毫秒——挂在主线程上就是输入卡顿。actor 把它挪去
+// 后台,调用方 await。
+actor CollectionSearchIndex {
     static let shared = CollectionSearchIndex()
 
     private var db: OpaquePointer?
     private var ready = false
 
-    private init() { open() }
+    init() { open() }
 
     private var dbPath: String? {
         CollectionStore.directory?.appendingPathComponent("fulltext.sqlite").path
@@ -41,6 +43,8 @@ final class CollectionSearchIndex {
     private func open() {
         guard let dbPath else { return }
         guard sqlite3_open(dbPath, &db) == SQLITE_OK else {
+            // SQLite 语义:open 失败也可能返回需要 close 的句柄
+            sqlite3_close(db)
             db = nil
             return
         }
@@ -102,16 +106,33 @@ final class CollectionSearchIndex {
         guard !q.isEmpty else { return [] }
         // FTS5 的 MATCH 语法对引号、星号敏感;整体当短语查,避免用户
         // 输入里的符号变成语法错误让搜索直接失败。
-        let phrase = "\"" + q.replacingOccurrences(of: "\"", with: "") + "\""
         var stmt: OpaquePointer?
-        let sql = """
-        SELECT item_id, snippet(docs, 2, '', '', '…', 12)
-        FROM docs WHERE docs MATCH ? ORDER BY rank LIMIT ?;
-        """
+        // trigram 分词要求查询 ≥3 字符;中文两字词(极常见)MATCH 恒零命中,
+        // 短查询退回 LIKE 扫描——慢一点,但"搜得到"比"快"要紧。
+        let sql: String
+        let bindValue: String
+        if q.count < 3 {
+            sql = """
+            SELECT item_id, substr(body, 1, 60)
+            FROM docs WHERE body LIKE ? OR title LIKE ? LIMIT ?;
+            """
+            bindValue = "%" + q + "%"
+        } else {
+            sql = """
+            SELECT item_id, snippet(docs, 2, '', '', '…', 12)
+            FROM docs WHERE docs MATCH ? ORDER BY rank LIMIT ?;
+            """
+            bindValue = "\"" + q.replacingOccurrences(of: "\"", with: "") + "\""
+        }
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
         defer { sqlite3_finalize(stmt) }
-        sqlite3_bind_text(stmt, 1, phrase, -1, SQLITE_TRANSIENT)
-        sqlite3_bind_int(stmt, 2, Int32(limit))
+        sqlite3_bind_text(stmt, 1, bindValue, -1, SQLITE_TRANSIENT)
+        if q.count < 3 {
+            sqlite3_bind_text(stmt, 2, bindValue, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_int(stmt, 3, Int32(limit))
+        } else {
+            sqlite3_bind_int(stmt, 2, Int32(limit))
+        }
 
         var hits: [Hit] = []
         while sqlite3_step(stmt) == SQLITE_ROW {

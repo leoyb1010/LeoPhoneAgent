@@ -39,6 +39,8 @@ final class MacLiveSessionsStore: ObservableObject {
             a.id == b.id && a.session.status == b.session.status
                 && a.session.seq == b.session.seq
                 && a.session.waitingForApproval == b.session.waitingForApproval
+                && a.session.name == b.session.name
+                && a.session.pendingApprovalCommand == b.session.pendingApprovalCommand
         }
     }
 
@@ -78,19 +80,29 @@ final class MacLiveSessionsStore: ObservableObject {
         refreshing = true
         defer { refreshing = false }
 
+        // 请求失败 ≠ 没有会话。网络抖动时保留该主机上一轮的行,
+        // 否则整节一闪一闪;只有确认成功且为空才移除。
         var collected: [Row] = []
-        await withTaskGroup(of: [Row].self) { group in
+        var failedHosts: Set<String> = []
+        await withTaskGroup(of: (String, [Row]?).self) { group in
             for host in hosts {
                 guard let client = GatewayHostStore.shared.client(for: host) else { continue }
                 group.addTask {
-                    guard let sessions = try? await client.harnessSessions() else { return [] }
-                    return sessions
+                    guard let sessions = try? await client.harnessSessions() else {
+                        return (host.id, nil)
+                    }
+                    let rows = sessions
                         .filter { ["starting", "running", "idle", "waiting_for_approval"].contains($0.status) }
                         .map { Row(hostId: host.id, hostName: host.name, session: $0) }
+                    return (host.id, rows)
                 }
             }
-            for await batch in group { collected.append(contentsOf: batch) }
+            for await (hostId, batch) in group {
+                if let batch { collected.append(contentsOf: batch) }
+                else { failedHosts.insert(hostId) }
+            }
         }
+        collected.append(contentsOf: rows.filter { failedHosts.contains($0.hostId) })
         // 等审批的排最前(要人拍板的最要紧),其余按 seq 新的在前
         collected.sort { a, b in
             if a.isWaiting != b.isWaiting { return a.isWaiting }

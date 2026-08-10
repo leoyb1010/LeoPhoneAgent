@@ -24,6 +24,16 @@ struct LeoReleaseNote: Identifiable {
 enum LeoReleaseNotes {
     static let all: [LeoReleaseNote] = [
         LeoReleaseNote(
+            version: "1.16.1",
+            date: "2026-08-10",
+            items: [
+                "🐛 重要修复:「Mac 上进行中」在 1.16.0 实际没生效(启动逻辑挂错了视图,只要有历史会话就不显示),现在真的出现在主列表顶部,iPad 分栏也有",
+                "🐛 网络抖动时「Mac 上进行中」不再整节闪没(请求失败保留上一轮,只有确认为空才移除)",
+                "🐛 /model 与「用 X 发送」在模型不可用时不再假装成功:前者明确报错,后者取消发送",
+                "🐛 收藏改进:启动即同步到 Mac(不再依赖打开收藏页);正文抓取失败 3 次自动跳过,不再堵住后面的条目;两字词也能搜正文;搜索防抖不再卡输入",
+                "🐛 Siri 派活的语音整理加 4 秒上限,本机模型慢时直接用原文,任务不会因此丢失",
+            ]),
+        LeoReleaseNote(
             version: "1.16.0",
             date: "2026-08-10",
             items: [

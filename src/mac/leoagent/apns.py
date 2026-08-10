@@ -30,6 +30,7 @@ except ImportError:  # pragma: no cover - 未装依赖时优雅降级
 # "Unexpected HTTP/1.x request: POST /3/device/…"。httpx 带 h2 才行。
 try:
     import httpx
+    import h2  # noqa: F401  http2=True 需要它;缺了 AsyncClient 构造时才炸
 except ImportError:  # pragma: no cover
     httpx = None  # type: ignore
 

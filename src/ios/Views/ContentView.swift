@@ -1274,6 +1274,48 @@ struct ContentView: View {
                 splitList
             }
         }
+        // [T-mac-in-main-list] 轮询启动与接管弹层必须挂在这个常驻容器上。
+        // 1.16.0 把它们挂在了 emptyState 的修饰链上——只要用户有历史会话,
+        // emptyState 不进视图树,.task 不跑、cover 不弹,整个功能是死的。
+        .task {
+            MacLiveSessionsStore.shared.start()
+            // [T-collections-fleet] 启动即同步收藏索引到中继。原来只挂在
+            // 收藏页 onAppear 上——用户不进收藏页,Mac 端就永远是空的
+            // (线上实测:装了两个版本,中继上 updated_at 一直是 0)。
+            let items = CollectionStore.load()
+            if !items.isEmpty,
+               let client = GatewayHostStore.shared.activeHosts
+                   .compactMap({ GatewayHostStore.shared.client(for: $0) })
+                   .first(where: { $0.relayEventsURL != nil }) {
+                await client.uploadCollections(items)
+            }
+        }
+        .fullScreenCover(item: $macAttachTarget) { row in
+            NavigationStack {
+                if let host = gatewayStore.activeHosts.first(where: { $0.id == row.hostId }),
+                   let client = gatewayStore.client(for: host) {
+                    HarnessConsoleView(
+                        driver: HarnessSessionDriver(
+                            client: client,
+                            harness: HarnessKind(key: row.session.harness, name: row.session.name),
+                            cwd: row.session.cwd),
+                        firstPrompt: "",
+                        attachSessionId: row.session.id)
+                    .navigationTitle("\(row.hostName) · \(row.session.name)")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("关闭") { macAttachTarget = nil }
+                        }
+                    }
+                } else {
+                    VStack(spacing: 10) {
+                        Text("缺少访问密钥")
+                        Button("关闭") { macAttachTarget = nil }
+                    }
+                }
+            }
+        }
         // [T-session-attention-bar] Aggregate what needs the user, above the
         // list. Individual rows already carry badges, but with several
         // long-running tasks the badges are scattered down a scrolling list —
@@ -1476,6 +1518,7 @@ struct ContentView: View {
     /// Selection-bound List for split (iPad) layout.
     private var splitList: some View {
         List(selection: $selectedSessionId) {
+            macLiveSection
             // [T-ios-session-list-equatable-jank] Diff a (label, ids) projection
             // so SwiftUI compares a [String] id list, not a [ChatSession] value
             // array. Rows resolve the model via displaySessionsById.
@@ -2454,35 +2497,6 @@ struct ContentView: View {
         }
         .frame(maxHeight: .infinity)
         .padding(.horizontal, 32)
-        .fullScreenCover(item: $macAttachTarget) { row in
-            NavigationStack {
-                if let host = gatewayStore.activeHosts.first(where: { $0.id == row.hostId }),
-                   let client = gatewayStore.client(for: host) {
-                    HarnessConsoleView(
-                        driver: HarnessSessionDriver(
-                            client: client,
-                            harness: HarnessKind(key: row.session.harness, name: row.session.name),
-                            cwd: row.session.cwd),
-                        firstPrompt: "",
-                        attachSessionId: row.session.id)
-                    .navigationTitle("\(row.hostName) · \(row.session.name)")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("关闭") { macAttachTarget = nil }
-                        }
-                    }
-                } else {
-                    VStack(spacing: 10) {
-                        Text("缺少访问密钥")
-                        Button("关闭") { macAttachTarget = nil }
-                    }
-                }
-            }
-        }
-        .task {
-            MacLiveSessionsStore.shared.start()
-        }
         .fullScreenCover(item: $macChatTarget) { target in
             NavigationStack {
                 if let client = gatewayStore.client(for: target.host) {

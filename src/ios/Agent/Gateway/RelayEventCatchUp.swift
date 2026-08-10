@@ -166,10 +166,13 @@ extension LeoAgentClient {
     /// 只传"给人看的"字段:标题、链接、来源、摘要、标签、时间。附件与
     /// 正文留在手机沙盒里不外传 —— Mac 上要的是"我收藏过什么",
     /// 不是把手机的私有文件复制一份出去。
-    func uploadCollections(_ items: [CollectedItem]) async {
+    @discardableResult
+    func uploadCollections(_ items: [CollectedItem]) async -> Bool {
+        // 按 relay 根拼,不做字符串替换:部署路径本身含 /events 时替换会碎
         guard let eventsURL = relayEventsURL,
-              let url = URL(string: eventsURL.absoluteString
-                  .replacingOccurrences(of: "/events", with: "/collections")) else { return }
+              let range = eventsURL.absoluteString.range(of: "/relay/api/"),
+              let url = URL(string: String(eventsURL.absoluteString[..<range.upperBound]) + "collections")
+        else { return false }
         let payload: [String: Any] = [
             "items": items.prefix(500).map { item in
                 [
@@ -190,7 +193,9 @@ extension LeoAgentClient {
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try? JSONSerialization.data(withJSONObject: payload)
         req.timeoutInterval = 25
-        _ = try? await session.data(for: req)
+        guard let (_, resp) = try? await session.data(for: req),
+              (resp as? HTTPURLResponse)?.statusCode == 200 else { return false }
+        return true
     }
 
     /// 中继事件端点的绝对地址。
