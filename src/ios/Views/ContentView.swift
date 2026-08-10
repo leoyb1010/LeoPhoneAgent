@@ -1919,7 +1919,7 @@ struct ContentView: View {
                 NavigationLink { CollectionsView() } label: {
                     Image(systemName: "star.square.on.square")
                 }
-                .accessibilityLabel(Text("收藏"))
+                .accessibilityLabel(Text("Leo藏宝阁"))
             }
         }
         // [T-settings-ia] Mac 控制台是主功能,不是设置项——一级入口常驻标题栏。

@@ -43,7 +43,13 @@ enum AttachmentImporter {
         if !text.isEmpty {
             let firstLine = text.split(separator: "\n").first.map(String.init) ?? ""
             if !firstLine.isEmpty { item.title = String(firstLine.prefix(60)) }
-            item.value = fileName          // value 仍是文件名,正文另存
+            // OCR 文字存进笔记正文文件:value 必须保持文件名(图片渲染
+            // 靠它),所以识别出的文字不能塞进 value —— 走 bodyFile,
+            // 这样点开能读全文,也能被检索命中。
+            let bodyFile = "ocr-\(item.id).md"
+            await NoteBodyStore.save(text, to: bodyFile)
+            item.bodyFile = bodyFile
+            item.summary = String(text.prefix(120))
             await CollectionSearchIndex.shared.index(
                 itemId: item.id, title: item.title ?? "", body: text)
         }
@@ -73,6 +79,10 @@ enum AttachmentImporter {
         if let image = UIImage(contentsOfFile: dest.path) {
             let text = await recognizeText(in: image)
             if !text.isEmpty {
+                let bodyFile = "ocr-\(item.id).md"
+                await NoteBodyStore.save(text, to: bodyFile)
+                item.bodyFile = bodyFile
+                item.summary = String(text.prefix(120))
                 await CollectionSearchIndex.shared.index(
                     itemId: item.id, title: item.title ?? "", body: text)
             }

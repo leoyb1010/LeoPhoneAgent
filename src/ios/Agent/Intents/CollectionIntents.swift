@@ -16,7 +16,7 @@ import Foundation
 
 @available(iOS 16.0, *)
 struct CollectLinkIntent: AppIntent {
-    static var title: LocalizedStringResource = "收藏到 LPA"
+    static var title: LocalizedStringResource = "收进藏宝阁"
     static var description = IntentDescription(
         "把一段文字或链接存进收藏。整段粘贴即可——会自动抽出其中的链接,前面的文案当标题。")
     static var openAppWhenRun = false
@@ -27,7 +27,7 @@ struct CollectLinkIntent: AppIntent {
     var content: String
 
     static var parameterSummary: some ParameterSummary {
-        Summary("收藏 \(\.$content) 到 LPA")
+        Summary("把 \(\.$content) 收进藏宝阁")
     }
 
     func perform() async throws -> some IntentResult & ProvidesDialog {

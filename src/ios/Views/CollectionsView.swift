@@ -104,7 +104,7 @@ struct CollectionsView: View {
             }
         }
         .environment(\.editMode, $editMode)
-        .navigationTitle(editMode.isEditing && !selection.isEmpty ? "已选 \(selection.count) 条" : "收藏")
+        .navigationTitle(editMode.isEditing && !selection.isEmpty ? "已选 \(selection.count) 条" : "Leo藏宝阁")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, prompt: "搜索收藏(含正文)")
         .onChange(of: query) { _, newValue in
@@ -334,6 +334,33 @@ struct CollectionsView: View {
                 } label: { Image(systemName: "ellipsis.circle") }
             }
         }
+        // [T-ia] 新增入口:点一下直接写笔记(进藏宝阁最常做的事),
+        // 长按才展开其他导入方式。一次点击拿到最常用的那个,不必先读菜单
+        // ——把"写笔记"埋在杂项 ⋯ 里,正是"点进来了还要再找"的根源。
+        ToolbarItem(placement: .topBarTrailing) {
+            if !editMode.isEditing {
+                Menu {
+                    Button {
+                        showImportSheet = true
+                    } label: { Label("粘贴链接", systemImage: "doc.on.clipboard") }
+                    Divider()
+                    Button {
+                        showScanner = true
+                    } label: { Label("扫描纸质文档", systemImage: "doc.viewfinder") }
+                    Button {
+                        showPhotoPicker = true
+                    } label: { Label("从相册导入", systemImage: "photo.on.rectangle") }
+                    Button {
+                        showFileImporter = true
+                    } label: { Label("从文件导入", systemImage: "folder") }
+                } label: {
+                    Image(systemName: "plus")
+                } primaryAction: {
+                    newNote()
+                }
+                .accessibilityLabel("写笔记;长按可选其他导入方式")
+            }
+        }
         ToolbarItem(placement: .bottomBar) {
             if editMode.isEditing {
                 Button(role: .destructive) {
@@ -379,9 +406,28 @@ struct CollectionsView: View {
         VStack(spacing: 10) {
             Image(systemName: "star.square.on.square")
                 .font(.system(size: 40)).foregroundStyle(.secondary)
-            Text("还没有收藏").font(.headline)
-            Text("两种进来的方式:\n① 在任意 app 点分享 → LeoPhoneAgent → 收藏\n② 只给「复制链接」的 app(如小红书):复制后回到这里,\n用上方剪贴板条或右上角「粘贴链接收藏」")
+            Text("藏宝阁还是空的").font(.headline)
+            Text("在任意 app 点分享 → LeoPhoneAgent,或者从这里开始:")
                 .font(.footnote).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            // 空状态给可点的按钮,而不是一段"你可以去哪里点"的说明
+            HStack(spacing: 10) {
+                Button {
+                    newNote()
+                } label: {
+                    Label("写笔记", systemImage: "square.and.pencil")
+                }
+                .buttonStyle(.borderedProminent)
+                Button {
+                    showImportSheet = true
+                } label: {
+                    Label("粘贴链接", systemImage: "doc.on.clipboard")
+                }
+                .buttonStyle(.bordered)
+            }
+            .padding(.top, 4)
+            Text("小红书这类只给「复制链接」的 app:复制后回到这里,\n顶部剪贴板条一点即存。")
+                .font(.caption).foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)

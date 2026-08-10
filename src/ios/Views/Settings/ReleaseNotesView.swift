@@ -24,6 +24,15 @@ struct LeoReleaseNote: Identifiable {
 enum LeoReleaseNotes {
     static let all: [LeoReleaseNote] = [
         LeoReleaseNote(
+            version: "1.20.1",
+            date: "2026-08-10",
+            items: [
+                "🏛 「收藏」改名为「Leo藏宝阁」——它已经不只是收藏,还装着你的笔记、批注和扫描件",
+                "✍️ 新增入口独立出来:右上角 + 点一下直接开始写笔记,长按才展开扫描/相册/文件/粘贴链接。以前这些全埋在 ⋯ 杂项菜单里,点进来了还要再找一次",
+                "🧹 ⋯ 菜单现在只管管理(多选删除、查看归档、分享默认动作),新增和管理分开",
+                "🪄 空状态给的是能点的按钮(写笔记 / 粘贴链接),不再是一段「你可以去哪里点」的说明文字",
+            ]),
+        LeoReleaseNote(
             version: "1.20.0",
             date: "2026-08-10",
             items: [

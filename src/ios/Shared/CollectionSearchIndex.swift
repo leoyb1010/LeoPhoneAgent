@@ -166,7 +166,7 @@ actor CollectionSearchIndex {
             attrs.title = item.title ?? item.value
             attrs.contentDescription = [item.summary, item.sourceLabel]
                 .compactMap { $0 }.joined(separator: " · ")
-            attrs.keywords = item.tags + [item.sourceLabel, "收藏"]
+            attrs.keywords = item.tags + [item.sourceLabel, "收藏", "藏宝阁"]
             attrs.contentCreationDate = item.createdAt
             return CSSearchableItem(uniqueIdentifier: "collection:\(item.id)",
                                     domainIdentifier: "com.leoyuan.leophoneagent.collections",

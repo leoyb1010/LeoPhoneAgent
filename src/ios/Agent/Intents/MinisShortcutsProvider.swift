@@ -72,7 +72,7 @@ struct MinisShortcutsProvider: AppShortcutsProvider {
                 "Collect with \(.applicationName)",
                 "\(.applicationName) collect this",
             ],
-            shortTitle: "收藏到 LPA",
+            shortTitle: "收进藏宝阁",
             systemImageName: "star.square.on.square"
         )
         AppShortcut(
