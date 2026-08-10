@@ -87,6 +87,22 @@ enum NoteBodyStore {
         let url: URL
     }
 
+    /// 版本列表 + 每版首行,全在后台队列跑完再回来。
+    /// 视图里直接调 versions()/readVersion() 会把目录扫描和整文件读
+    /// 压在主线程上。
+    static func versionsWithPreviews(of fileName: String) async -> ([Version], [String: String]) {
+        await withCheckedContinuation { cont in
+            queue.async {
+                let found = versions(of: fileName)
+                var previews: [String: String] = [:]
+                for version in found {
+                    previews[version.id] = String(readVersion(version).prefix(60))
+                }
+                cont.resume(returning: (found, previews))
+            }
+        }
+    }
+
     static func versions(of fileName: String) -> [Version] {
         versionURLs(of: fileName).compactMap { url in
             let attrs = try? FileManager.default.attributesOfItem(atPath: url.path)
@@ -121,7 +137,9 @@ enum NoteBodyStore {
             return
         }
         let stem = (fileName as NSString).deletingPathExtension
-        let stamp = Int(Date().timeIntervalSince1970)
+        // 毫秒:秒级时间戳在"去抖刚存完不到一秒就关闭编辑器"时会撞名,
+        // 后一次静默覆盖前一次,少一版历史。
+        let stamp = Int(Date().timeIntervalSince1970 * 1000)
         let dest = versionDir.appendingPathComponent("\(stem)@\(stamp).md")
         try? old.write(to: dest, options: .atomic)
 

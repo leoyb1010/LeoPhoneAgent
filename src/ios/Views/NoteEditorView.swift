@@ -25,6 +25,8 @@ struct NoteEditorView: View {
     @State private var title: String
     @State private var body_: String = ""
     @State private var loaded = false
+    /// 载入时的正文。用来判断这次打开有没有真的改过东西。
+    @State private var loadedBody = ""
     @State private var previewing = false
     @State private var showVersions = false
     @State private var saveTask: Task<Void, Never>?
@@ -118,6 +120,7 @@ struct NoteEditorView: View {
         .task {
             guard !loaded, let file = item.bodyFile else { loaded = true; return }
             body_ = await NoteBodyStore.load(file)
+            loadedBody = body_
             loaded = true
         }
         .onDisappear {
@@ -128,9 +131,18 @@ struct NoteEditorView: View {
             // 输入的内容 —— 那就是"写完退出,内容没了"。取值发生在视图还
             // 活着的这一刻,Task 里只碰局部常量,没有任何不确定性。
             saveTask?.cancel()
+            // 正文还没从磁盘读进来就退出的话,body_ 还是空串 —— 写回去
+            // 就是把整篇笔记清空。这个守卫原来在实例方法 persist 里,
+            // 重构成静态方法时漏掉了,而 onDisappear 直接调静态版绕过了它。
+            // 窗口不是理论上的:笔记正文和 OCR 共用一条串行队列,刚导入
+            // 一批照片时这次 load 排在多次写盘之后,是秒级的。
+            guard loaded else { return }
             let bodySnapshot = body_
             let titleSnapshot = title
             let target = item
+            // 只读打开(什么都没改)就不写盘:updatedAt 一动,这条笔记
+            // 就被顶到列表最前面 —— 点开看一眼不该改变它的位置。
+            guard bodySnapshot != loadedBody || titleSnapshot != (item.title ?? "") else { return }
             Task { await Self.persist(body: bodySnapshot, title: titleSnapshot,
                                       item: target, onSaved: onSaved) }
         }
@@ -166,7 +178,10 @@ struct NoteEditorView: View {
                                 onSaved: @escaping (CollectedItem) -> Void) async {
         guard let file = item.bodyFile else { return }
         await NoteBodyStore.save(body, to: file)
-        var updated = item
+        // 以库里的**最新版**为基底,而不是编辑器打开那一刻的快照。
+        // 否则:生成摘要 → 再敲一个字 → persist 用旧快照重建 → 摘要没了。
+        // 编辑器开着时在别处改的置顶/归档/批注同理会被回滚。
+        var updated = CollectionStore.load().first { $0.id == item.id } ?? item
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         updated.title = trimmedTitle.isEmpty ? nil : trimmedTitle
         updated.updatedAt = Date()
@@ -181,7 +196,7 @@ struct NoteEditorView: View {
         Task {
             guard let insight = await LocalBrain.shared.summarizeCollection(
                 title: title, text: body_) else { return }
-            var updated = item
+            var updated = CollectionStore.load().first { $0.id == item.id } ?? item
             updated.summary = insight.summary
             if !insight.tags.isEmpty { updated.tags = insight.tags }
             updated.updatedAt = Date()
@@ -231,11 +246,9 @@ private struct NoteVersionsView: View {
             }
         }
         .task {
-            let found = NoteBodyStore.versions(of: fileName)
-            var previews: [String: String] = [:]
-            for version in found {
-                previews[version.id] = String(NoteBodyStore.readVersion(version).prefix(60))
-            }
+            // .task 继承视图的 MainActor —— 扫目录 + 逐个读文件全在主线程。
+            // 挪进后台队列再回来。
+            let (found, previews) = await NoteBodyStore.versionsWithPreviews(of: fileName)
             versions = found
             snippets = previews
         }

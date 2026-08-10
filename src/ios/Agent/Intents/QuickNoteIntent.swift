@@ -40,14 +40,20 @@ struct QuickNoteIntent: AppIntent {
         // 加 4 秒竞速超时:Foundation Models 冷启动可能要好几秒,而
         // App Intent 的执行预算有限 —— 超时就原样存,绝不让"记一条"
         // 因为整理慢而整个失败。
+        // 用独立 Task 而不是把模型调用放进 group:withTaskGroup 的 body
+        // 返回后会**隐式等待所有剩余子任务**才真正返回,而 structureTask
+        // 内部没有取消检查点 —— 那样写超时只是个摆设,慢的时候照样等到底。
+        // 独立 Task 超时了就直接不要结果,perform 立刻返回。
+        let brain = Task { await LocalBrain.shared.structureTask(from: raw) }
         let structured = await withTaskGroup(of: LocalBrain.StructuredTask?.self) { group in
-            group.addTask { await LocalBrain.shared.structureTask(from: raw) }
+            group.addTask { await brain.value }
             group.addTask {
                 try? await Task.sleep(nanoseconds: 4_000_000_000)
                 return nil
             }
             let first = await group.next() ?? nil
             group.cancelAll()
+            brain.cancel()
             return first
         }
         var note = CollectedItem.newNote(title: structured?.title ?? "")
@@ -58,7 +64,6 @@ struct QuickNoteIntent: AppIntent {
             note.title = firstSentence.map { String($0.prefix(30)) }
         }
         note.value = String(body.prefix(200))
-        note.sourceLabel = "笔记"
 
         // 先落正文再入库:反过来的话 save 失败会在收藏里留下一条打不开的
         // 空笔记 —— 用户对着 Siri 说完话,得到的是个空壳。

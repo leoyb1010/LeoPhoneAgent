@@ -163,8 +163,24 @@ enum CollectionStore {
     }
 
     // MARK: 读写
+    //
+    // 每个改动都是"整份读出 → 改 → 整份写回"。没有同步的话,后台补抓
+    // 元数据的那条流水线(能跑一分多钟)和前台的编辑/导入/删除会互相
+    // 覆盖:后台拿着一份过期数组,改完写回去,把这期间用户的编辑整份
+    // 抹掉。所以读-改-写必须是一个不可分割的整体。
+    //
+    // 用串行队列而不是 actor:CollectionStore 被 ShareExtension 与主 app
+    // 共同编译,调用方遍布同步上下文(含 nonisolated 的视图方法),
+    // 改成 actor 要把所有调用点变成 async,牵动面太大。
 
-    static func load() -> [CollectedItem] {
+    private static let ioQueue = DispatchQueue(label: "leo.collections.io")
+
+    static func load() -> [CollectedItem] { ioQueue.sync { loadLocked() } }
+
+    static func save(_ items: [CollectedItem]) { ioQueue.sync { saveLocked(items) } }
+
+    /// 队列内部使用,自身不再加锁 —— 嵌套 sync 会死锁。
+    private static func loadLocked() -> [CollectedItem] {
         guard let url = indexURL, let data = try? Data(contentsOf: url) else { return [] }
         do {
             return try JSONDecoder().decode([CollectedItem].self, from: data)
@@ -178,37 +194,63 @@ enum CollectionStore {
         }
     }
 
-    static func save(_ items: [CollectedItem]) {
+    private static func saveLocked(_ items: [CollectedItem]) {
         guard let url = indexURL, let data = try? JSONEncoder().encode(items) else { return }
         try? data.write(to: url, options: .atomic)
     }
 
     static func add(_ new: [CollectedItem]) {
         guard !new.isEmpty else { return }
-        var items = load()
-        items.insert(contentsOf: new, at: 0)
-        save(items)
+        ioQueue.sync {
+            var items = loadLocked()
+            items.insert(contentsOf: new, at: 0)
+            saveLocked(items)
+        }
     }
 
     static func update(_ item: CollectedItem) {
-        var items = load()
-        guard let i = items.firstIndex(where: { $0.id == item.id }) else { return }
-        items[i] = item
-        save(items)
+        ioQueue.sync {
+            var items = loadLocked()
+            guard let i = items.firstIndex(where: { $0.id == item.id }) else { return }
+            items[i] = item
+            saveLocked(items)
+        }
     }
 
     static func delete(ids: Set<String>) {
-        var items = load()
-        for item in items where ids.contains(item.id) {
-            if item.kind == .file, let dir = filesDirectory {
-                try? FileManager.default.removeItem(at: dir.appendingPathComponent(item.value))
+        ioQueue.sync {
+            var items = loadLocked()
+            for item in items where ids.contains(item.id) {
+                if item.kind == .file, let dir = filesDirectory {
+                    try? FileManager.default.removeItem(at: dir.appendingPathComponent(item.value))
+                }
+                if let thumb = item.thumbnailFile, let dir = thumbsDirectory {
+                    try? FileManager.default.removeItem(at: dir.appendingPathComponent(thumb))
+                }
+                // 正文与版本快照一起清:只删索引会在容器里留下永远没人
+                // 认领的文件,用户只会看到容量一直涨却找不到原因。
+                //
+                // 直接写文件操作而不调 NoteBodyStore —— 这个文件被
+                // ShareExtension 一起编译,而 NoteBodyStore 只在主 app 里。
+                if let body = item.bodyFile { removeBodyAndVersions(body) }
             }
-            if let thumb = item.thumbnailFile, let dir = thumbsDirectory {
-                try? FileManager.default.removeItem(at: dir.appendingPathComponent(thumb))
-            }
+            items.removeAll { ids.contains($0.id) }
+            saveLocked(items)
         }
-        items.removeAll { ids.contains($0.id) }
-        save(items)
+    }
+
+    /// 删正文与它的全部版本快照。
+    private static func removeBodyAndVersions(_ fileName: String) {
+        if let dir = notesDirectory {
+            try? FileManager.default.removeItem(at: dir.appendingPathComponent(fileName))
+        }
+        guard let versionDir = versionsDirectory,
+              let all = try? FileManager.default.contentsOfDirectory(
+                at: versionDir, includingPropertiesForKeys: nil) else { return }
+        let stem = (fileName as NSString).deletingPathExtension
+        for url in all where url.lastPathComponent.hasPrefix(stem + "@") {
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 
     // MARK: 从分享物料收藏(扩展进程调用)

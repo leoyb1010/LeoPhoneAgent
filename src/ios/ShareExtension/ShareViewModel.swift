@@ -28,8 +28,16 @@ final class ShareViewModel {
                 let hasURL = provider.hasItemConformingToTypeIdentifier(UTType.url.identifier)
                 let hasText = provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier)
                 if hasURL, hasText {
+                    let before = pendingItems.count
                     await processText(provider)
                     await processURL(provider)
+                    // 只分享页面(没选文字)时,plain-text 表示往往**就是**
+                    // URL 本身 —— 那不是摘录,是同一条收藏两遍。
+                    if pendingItems.count == before + 2,
+                       pendingItems[before].value.trimmingCharacters(in: .whitespacesAndNewlines)
+                        == pendingItems[before + 1].value.trimmingCharacters(in: .whitespacesAndNewlines) {
+                        pendingItems.removeLast()
+                    }
                 } else if hasURL {
                     await processURL(provider)
                 } else if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {

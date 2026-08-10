@@ -92,13 +92,27 @@ struct CollectionsView: View {
             importRow
             if items.isEmpty {
                 emptyState
+            } else if visible.isEmpty {
+                // 判据必须是 visible 而不是 items:切到"查看归档"却没有
+                // 归档条目时,items 非空 → 不走 emptyState → 页面只剩几个
+                // 筛选胶囊和一片空白,没有任何解释。
+                Text(showArchived ? "归档里还没有东西。左滑任意条目可以归档。"
+                                  : "没有匹配的内容。")
+                    .font(.callout).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 28)
+                    .listRowSeparator(.hidden)
             } else {
                 if sources.count > 1 { sourceFilter }
                 ForEach(visible) { item in
                     row(item)
                 }
                 .onDelete { offsets in
-                    let ids = Set(offsets.map { visible[$0].id })
+                    // visible 是计算属性,搜索防抖会在 MainActor 上异步改
+                    // fullTextMatches;若恰好落在渲染与回调之间,数组会变短。
+                    let ids = Set(offsets.compactMap {
+                        visible.indices.contains($0) ? visible[$0].id : nil
+                    })
                     purge(ids)
                 }
             }
