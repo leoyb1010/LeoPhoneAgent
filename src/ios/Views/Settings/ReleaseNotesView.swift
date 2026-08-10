@@ -24,6 +24,13 @@ struct LeoReleaseNote: Identifiable {
 enum LeoReleaseNotes {
     static let all: [LeoReleaseNote] = [
         LeoReleaseNote(
+            version: "1.16.2",
+            date: "2026-08-10",
+            items: [
+                "🐛 模型快切面板不再「空面板」:之前「最近用过」只记录新入口的切换,老选择器换的模型从不进来——首次打开面板几乎什么都没有,看起来就是点了没反应。现在面板直接平铺全部可用模型(最多 30 个,可搜索),从完整选择器换模型也会记入「最近用过」",
+                "🐛 一个模型都没有时,面板会明确告诉你去「模型供应商」添加,而不是一片空白",
+            ]),
+        LeoReleaseNote(
             version: "1.16.1",
             date: "2026-08-10",
             items: [

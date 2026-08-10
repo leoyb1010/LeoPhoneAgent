@@ -43,6 +43,10 @@ struct QuickModelSwitchSheet: View {
                 } else {
                     recentSection
                     groupSection
+                    // 全部模型直接平铺(cap 30)。原来这里只有一行"全部模型…"
+                    // 入口——新用户/没用过快切的人打开面板是空的,看起来就是
+                    // "点了但没东西可选"。
+                    inlineAllSection
                     allSection
                 }
             }
@@ -93,6 +97,31 @@ struct QuickModelSwitchSheet: View {
                     choiceRow(id: "group:\(group.id)", title: group.name,
                               subtitle: "分组 · 自动路由", isGroup: true)
                 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var inlineAllSection: some View {
+        let recentKeys = Set(ModelSwitcher.recentEntries(store: store, limit: 4).map(\.compositeKey))
+        let choices = ModelSwitcher.allChoices(store: store)
+            .filter { $0.kind == .entry && !recentKeys.contains($0.id) }
+        if !choices.isEmpty {
+            Section("全部模型") {
+                ForEach(choices.prefix(30)) { choice in
+                    choiceRow(id: choice.id, title: choice.title,
+                              subtitle: choice.subtitle, isGroup: false)
+                }
+                if choices.count > 30 {
+                    Text("还有 \(choices.count - 30) 个,搜索或进完整列表查看")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        } else if ModelSwitcher.recentEntries(store: store, limit: 1).isEmpty,
+                  store.modelGroups.isEmpty {
+            Section {
+                Text("还没有可用的模型——先到「模型供应商」里添加或启用一个。")
+                    .font(.callout).foregroundStyle(.secondary)
             }
         }
     }

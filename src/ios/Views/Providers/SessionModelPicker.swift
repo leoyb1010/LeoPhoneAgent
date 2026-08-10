@@ -147,6 +147,7 @@ struct SessionModelPicker: View {
             if let entry = store.entry(for: resolvedEntryId) {
                 await ChatStore.shared.updateSessionModelId(sid, modelId: entry.model.id)
             }
+            ModelSwitcher.remember("group:\(group.id)")
             dismiss()
         }
     }
@@ -167,6 +168,7 @@ struct SessionModelPicker: View {
                 subModelSource: existing?.subModelSource
             )
             store.setBinding(binding, for: sid)
+            ModelSwitcher.remember(entry.compositeKey)
             if let group, let thinkLevel = group.defaultThinkingLevel {
                 var cfg = store.inferenceConfig(for: sid) ?? SessionInferenceConfig()
                 cfg.thinkingLevel = thinkLevel
