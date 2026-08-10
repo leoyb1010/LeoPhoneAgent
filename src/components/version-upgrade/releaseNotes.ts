@@ -17,6 +17,14 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '1.65.0',
+    date: '2026-08-10',
+    items: [
+      '手机收藏在 Mac 上可查:手机把收藏索引同步到中继,这里只读展示并可搜(附件与正文留在手机里,不复制出来)',
+      '舰队页整合:机器状态、待审批、手机收藏三块并列在同一页',
+    ],
+  },
+  {
     version: '1.64.0',
     date: '2026-08-10',
     items: [

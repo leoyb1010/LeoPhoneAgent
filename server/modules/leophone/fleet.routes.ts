@@ -189,4 +189,28 @@ router.post('/leophone/approvals/respond', async (req, res) => {
   }
 });
 
+/** [T-collections-fleet] 手机上传的收藏索引(只读镜像)。 */
+router.get('/leophone/collections', async (_req, res) => {
+  const target = relayTarget();
+  if (!target) {
+    res.json({ configured: false, items: [] });
+    return;
+  }
+  try {
+    const payload = (await relayFetch('/collections', target)) as {
+      items?: unknown[];
+      updated_at?: number;
+    };
+    res.json({
+      configured: true,
+      items: payload.items ?? [],
+      updatedAt: payload.updated_at ?? 0,
+    });
+  } catch (error) {
+    res.status(502).json({
+      error: { message: error instanceof Error ? error.message : 'relay unreachable' },
+    });
+  }
+});
+
 export default router;

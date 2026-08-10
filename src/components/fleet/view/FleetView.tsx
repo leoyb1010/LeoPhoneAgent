@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { apiClient } from '../../../utils/apiClient';
 
+import CollectionsMirror from './CollectionsMirror';
+
 /**
  * [T-fleet-mac] 舰队视图 + 审批中心。
  *
@@ -190,6 +192,8 @@ export default function FleetView() {
           ))}
         </div>
       </section>
+
+      <CollectionsMirror />
     </div>
   );
 }
