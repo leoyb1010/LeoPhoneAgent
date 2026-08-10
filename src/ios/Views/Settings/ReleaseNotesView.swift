@@ -24,6 +24,14 @@ struct LeoReleaseNote: Identifiable {
 enum LeoReleaseNotes {
     static let all: [LeoReleaseNote] = [
         LeoReleaseNote(
+            version: "1.15.0",
+            date: "2026-08-10",
+            items: [
+                "📚 收藏能搜正文了:收藏的链接会在后台抓取正文并建全文索引(中文用三字滑窗分词),搜索框现在同时搜标题、摘要、标签和正文——「上周存的那篇讲 X 的」这种找法开始成立",
+                "🔎 收藏进系统搜索:在 iPhone 主屏下拉搜索里能直接搜到收藏条目(只放标题/来源/摘要,正文不出 app)",
+                "🧹 删除收藏时全文索引与系统搜索同步清理,不留「搜得到但打不开」的幽灵",
+            ]),
+        LeoReleaseNote(
             version: "1.14.0",
             date: "2026-08-10",
             items: [

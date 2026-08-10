@@ -31,6 +31,10 @@ struct CollectionsView: View {
     @State private var selection = Set<String>()
     @State private var editMode: EditMode = .inactive
     @State private var toast: String?
+    /// [T-collections-fulltext] 当前查询在全文索引里的命中(条目 id)。
+    @State private var fullTextMatches: [String] = []
+    @State private var fullTextSnippets: [String: String] = [:]
+    @State private var indexing = false
     @AppStorage(CollectionStore.defaultActionKey, store: SharedContainerStore.sharedDefaults)
     private var defaultAction = "ask"
     @Environment(\.dismiss) private var dismiss
@@ -44,11 +48,15 @@ struct CollectionsView: View {
         if let filterSource { out = out.filter { $0.sourceLabel == filterSource } }
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
         if !q.isEmpty {
+            // [T-collections-fulltext] 元数据没命中,再问全文索引——
+            // "上周存的那篇讲 X 的" 靠的就是这一步。
+            let fullTextHits = Set(fullTextMatches)
             out = out.filter {
                 ($0.title ?? "").lowercased().contains(q)
                     || $0.value.lowercased().contains(q)
                     || ($0.summary ?? "").lowercased().contains(q)
                     || $0.tags.joined().lowercased().contains(q)
+                    || fullTextHits.contains($0.id)
             }
         }
         return out.sorted { a, b in
@@ -69,15 +77,20 @@ struct CollectionsView: View {
                 }
                 .onDelete { offsets in
                     let ids = Set(offsets.map { visible[$0].id })
-                    CollectionStore.delete(ids: ids)
-                    reload()
+                    purge(ids)
                 }
             }
         }
         .environment(\.editMode, $editMode)
         .navigationTitle(editMode.isEditing && !selection.isEmpty ? "已选 \(selection.count) 条" : "收藏")
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $query, prompt: "搜索收藏")
+        .searchable(text: $query, prompt: "搜索收藏(含正文)")
+        .onChange(of: query) { _, newValue in
+            let hits = CollectionSearchIndex.shared.search(newValue)
+            fullTextMatches = hits.map(\.itemId)
+            fullTextSnippets = Dictionary(hits.map { ($0.itemId, $0.snippet) },
+                                          uniquingKeysWith: { a, _ in a })
+        }
         .refreshable { reload() }
         .toolbar { toolbarContent }
         .sheet(item: $previewItem) { CollectionPreviewSheet(item: $0) }
@@ -101,6 +114,7 @@ struct CollectionsView: View {
         .onAppear {
             reload()
             fetchMissingMetadata()
+            indexMissingFullText()
         }
     }
 
@@ -143,14 +157,12 @@ struct CollectionsView: View {
             }
             Divider()
             Button(role: .destructive) {
-                CollectionStore.delete(ids: [item.id])
-                reload()
+                purge([item.id])
             } label: { Label("删除", systemImage: "trash") }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) {
-                CollectionStore.delete(ids: [item.id])
-                reload()
+                purge([item.id])
             } label: { Label("删除", systemImage: "trash") }
         }
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
@@ -188,9 +200,8 @@ struct CollectionsView: View {
         ToolbarItem(placement: .bottomBar) {
             if editMode.isEditing {
                 Button(role: .destructive) {
-                    CollectionStore.delete(ids: selection)
+                    purge(selection)
                     selection = []
-                    reload()
                 } label: {
                     Label("删除所选", systemImage: "trash")
                 }
@@ -269,6 +280,45 @@ struct CollectionsView: View {
 
     private func reload() {
         items = CollectionStore.load()
+    }
+
+    /// 删除条目时把全文索引与系统搜索一并清掉——只删一半会留下
+    /// "搜得到但打不开"的幽灵。
+    private func purge(_ ids: Set<String>) {
+        CollectionStore.delete(ids: ids)
+        for id in ids { CollectionSearchIndex.shared.remove(itemId: id) }
+        CollectionSearchIndex.shared.unpublishFromSpotlight(ids: ids)
+        reload()
+    }
+
+    /// [T-collections-fulltext] 给还没有正文的链接抓一遍正文入索引。
+    /// 串行、每轮最多 3 条:WebView 很重,批量并发会把内存顶爆。
+    private func indexMissingFullText() {
+        guard !indexing else { return }
+        let indexed = CollectionSearchIndex.shared.indexedIds()
+        let todo = items.filter { $0.kind == .link && !indexed.contains($0.id) }.prefix(3)
+        guard !todo.isEmpty else {
+            CollectionSearchIndex.shared.publishToSpotlight(items)
+            return
+        }
+        indexing = true
+        Task {
+            for item in todo {
+                let target = item.resolvedURL.flatMap(URL.init(string:))
+                    ?? URL(string: item.value)
+                guard let target else { continue }
+                if let article = await ArticleExtractor.shared.extract(url: target) {
+                    CollectionSearchIndex.shared.index(
+                        itemId: item.id,
+                        title: article.title ?? item.title ?? "",
+                        body: article.text)
+                }
+            }
+            await MainActor.run {
+                indexing = false
+                CollectionSearchIndex.shared.publishToSpotlight(items)
+            }
+        }
     }
 
     private func flash(_ message: String) {
