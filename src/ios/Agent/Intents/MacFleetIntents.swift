@@ -166,10 +166,16 @@ struct CommandMacIntent: AppIntent {
             return .result(dialog: "任务内容是空的,没有开工。",
                            view: MacDispatchSnippet(machine: mac.name, cli: cli.displayName, task: "内容为空"))
         }
+        // [T-local-brain] Siri 里是口述进来的,常常是一段流水话。先让本机
+        // 模型整理成"标题 + 要点"再下发,Mac 那头拿到的是清楚的任务。
+        // 本机模型不可用就原样下发——不因为它缺席而少一个功能。
+        let structured = await LocalBrain.shared.structureTask(from: text)
+        let dispatch = structured.map { "\($0.title)\n\n\($0.detail)" } ?? text
         do {
-            _ = try await client.createHarnessSession(harness: cli.rawValue, cwd: "~", prompt: text)
+            _ = try await client.createHarnessSession(harness: cli.rawValue, cwd: "~", prompt: dispatch)
             return .result(dialog: "已让 \(mac.name) 的 \(cli.displayName) 开工。",
-                           view: MacDispatchSnippet(machine: mac.name, cli: cli.displayName, task: text))
+                           view: MacDispatchSnippet(machine: mac.name, cli: cli.displayName,
+                                                    task: structured?.title ?? text))
         } catch {
             return .result(dialog: "没能开工:\(error.localizedDescription)",
                            view: MacDispatchSnippet(machine: mac.name, cli: cli.displayName,

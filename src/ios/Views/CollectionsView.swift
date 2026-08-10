@@ -354,6 +354,16 @@ struct CollectionsView: View {
                         }
                     }
                 }
+                // [T-local-brain] 顺手让本机模型给一句话摘要与标签。
+                // 不可用就跳过——收藏功能本身不依赖它。
+                if item.summary == nil {
+                    let material = [item.title, item.value].compactMap { $0 }.joined(separator: "\n")
+                    if let insight = await LocalBrain.shared.summarizeCollection(
+                        title: item.title, text: material) {
+                        item.summary = insight.summary
+                        if item.tags.isEmpty { item.tags = insight.tags }
+                    }
+                }
                 CollectionStore.update(item)
                 await MainActor.run { reload() }
             }

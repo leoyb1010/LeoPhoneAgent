@@ -62,6 +62,8 @@ struct SettingsHomeView: View {
                               icon: "terminal.fill", color: .teal) { GatewayEntryView() },
                 SettingsEntry("Siri 指挥中心", keywords: "siri 语音 快捷指令 shortcuts 审批 action button 自动化",
                               icon: "mic.fill", color: .purple) { SiriCommandCenterView() },
+                SettingsEntry("本机模型", keywords: "本机 端上 离线 apple intelligence foundation models 改写 摘要 隐私",
+                              icon: "cpu.fill", color: .pink) { LocalBrainSettingsView() },
                 SettingsEntry("远程主机(SSH·备用)", keywords: "ssh remote host 备用",
                               icon: "server.rack", color: .gray) { RemoteHostSettingsView() },
             ]),

@@ -24,6 +24,13 @@ struct LeoReleaseNote: Identifiable {
 enum LeoReleaseNotes {
     static let all: [LeoReleaseNote] = [
         LeoReleaseNote(
+            version: "1.14.0",
+            date: "2026-08-10",
+            items: [
+                "🧠 本机模型上线(端上跑,内容不出手机):收藏自动生成一句话摘要与标签 · 输入框上方新增「改写」(润色/精简/翻译/语气转换,离线可用)· 用 Siri 指挥 Mac 时把口述整理成标题+要点再下发",
+                "🔍 设置 → 我的设备 → 本机模型:状态、原因、生效范围一页讲清,还能当场自检;不可用时全部功能自动回落原方式,不会消失",
+            ]),
+        LeoReleaseNote(
             version: "1.13.0",
             date: "2026-08-10",
             items: [

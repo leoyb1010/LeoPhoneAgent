@@ -214,6 +214,8 @@ struct AIChatView: View {
     @State private var macChatTarget: ComposerMacTarget?
     // [T-model-quickswitch] 输入条上的模型胶囊
     @State private var showQuickModelSwitch = false
+    // [T-local-brain] 本机改写:选项菜单 + 进行中状态
+    @State private var rewriting = false
     @ObservedObject private var fontSettings = FontSettings.shared
     @ObservedObject private var deepLink = DeepLinkCoordinator.shared
     @Environment(\.dismiss) private var dismiss
@@ -3322,6 +3324,12 @@ struct AIChatView: View {
             .accessibilityHint("Browse, run or create quick tasks")
             // [T-ipad-pointer] Trackpad feedback; no-op on touch.
             .hoverEffect(.lift)
+            // [T-local-brain] 输入框里有字且本机模型可用时,给一个改写入口。
+            // 全程不出手机,弱网也能用。
+            if !vm.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               LocalBrain.shared.isReady {
+                rewriteMenu
+            }
             // [T-model-quickswitch] 当前模型胶囊:点开就是最近用过的几个,
             // 换回上一个模型两下搞定,不必再翻全量 picker。
             modelCapsule
@@ -3357,6 +3365,40 @@ struct AIChatView: View {
             showQuickModelSwitch = true
         }
         return AnyView(strip)
+    }
+
+    /// [T-local-brain] 本机改写菜单。结果直接替换输入框内容;失败保留原文。
+    private var rewriteMenu: some View {
+        Menu {
+            ForEach(LocalBrain.RewriteStyle.allCases) { style in
+                Button {
+                    applyRewrite(style)
+                } label: { Label(style.title, systemImage: style.icon) }
+            }
+        } label: {
+            Label(rewriting ? "改写中…" : "改写", systemImage: "wand.and.stars")
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+        }
+        .disabled(rewriting)
+        .buttonStyle(.glass)
+        .controlSize(.small)
+        .hoverEffect(.lift)
+    }
+
+    private func applyRewrite(_ style: LocalBrain.RewriteStyle) {
+        let original = vm.inputText
+        guard !original.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        rewriting = true
+        LeoHaptics.selection()
+        Task {
+            let result = await LocalBrain.shared.rewrite(original, style: style)
+            await MainActor.run {
+                rewriting = false
+                // 本机模型不可用或返回空:原文一个字不动。
+                if let result, !result.isEmpty { vm.inputText = result }
+            }
+        }
     }
 
     /// [T-model-quickswitch] 当前模型胶囊。名字太长会截断,点开是快切面板。
