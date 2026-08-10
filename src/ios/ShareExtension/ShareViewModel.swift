@@ -59,6 +59,11 @@ final class ShareViewModel {
         return true
     }
 
+    /// [T-collections] 收藏模式:把已处理的物料交给收藏库,不经 pendingShare。
+    func builtShare() -> PendingShare {
+        PendingShare(items: pendingItems, timestamp: Date())
+    }
+
     // MARK: - Processors
 
     private func processURL(_ provider: NSItemProvider) async {

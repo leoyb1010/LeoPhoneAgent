@@ -24,6 +24,15 @@ struct LeoReleaseNote: Identifiable {
 enum LeoReleaseNotes {
     static let all: [LeoReleaseNote] = [
         LeoReleaseNote(
+            version: "1.10.0",
+            date: "2026-08-08",
+            items: [
+                "⭐️ 全局收藏上线:任意 app 分享 → LeoPhoneAgent,可选「发到对话」或「收藏」;设为「总是收藏」后分享即存,不打断刷内容(三星全局收藏式体验)",
+                "🗂 收藏页(主界面星标图标 / 设置 → 数据 → 收藏):链接自动抓标题封面、来源徽标(小红书/微博/B站…自动识别)、搜索、按来源过滤、置顶",
+                "🤖 收藏 × Agent:左滑「发给 Agent」带进新对话;「总结」一滑让 Agent 提炼要点",
+                "🧹 深度瘦身:清除 94 个复制残留文件与三条废弃产品线(旧菜单栏 app、Android、LAME),修复单测编译损坏,删 13 个死视图,App 图标压缩,主视图拆分 600 行",
+            ]),
+        LeoReleaseNote(
             version: "1.9.2",
             date: "2026-08-08",
             items: [

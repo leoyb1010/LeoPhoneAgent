@@ -1830,6 +1830,15 @@ struct ContentView: View {
                 }
             }
         }
+        // [T-collections] 收藏一级入口:分享进来的东西从这里翻。
+        ToolbarItem(placement: .topBarTrailing) {
+            if !isSelecting {
+                NavigationLink { CollectionsView() } label: {
+                    Image(systemName: "star.square.on.square")
+                }
+                .accessibilityLabel(Text("收藏"))
+            }
+        }
         // [T-settings-ia] Mac 控制台是主功能,不是设置项——一级入口常驻标题栏。
         ToolbarItem(placement: .topBarTrailing) {
             if !isSelecting {

@@ -92,6 +92,8 @@ struct SettingsHomeView: View {
                               icon: "paintbrush.fill", color: .blue) { AppearanceSettingsView() },
             ]),
             SettingsGroup(id: "data", title: "数据", entries: [
+                SettingsEntry("收藏", keywords: "收藏 collect 分享 小红书 favorite 星标",
+                              icon: "star.square.on.square", color: .yellow) { CollectionsView() },
                 SettingsEntry("存储", keywords: "storage 空间 清理",
                               icon: "internaldrive.fill", color: .mint) { StorageManagementView() },
                 SettingsEntry("共享文件夹", keywords: "shared folder 文件",
