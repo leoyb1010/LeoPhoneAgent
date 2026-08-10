@@ -32,6 +32,8 @@ from typing import Any, Dict, List, Optional
 
 from aiohttp import WSMsgType, web
 
+from .apns import build_pusher
+
 VERSION = "0.1.0"
 DEFAULT_PORT = 8650
 REQUEST_TIMEOUT_S = 60
@@ -64,6 +66,9 @@ class Relay:
         # 一次就能补齐"我不在的时候发生了什么"。也是将来接 APNs 的取数处。
         self.recent_events: List[Dict[str, Any]] = []
         self.event_waiters: List[asyncio.Future] = []
+        # [T-live-mission] APNs 推送器。没配 ~/.leoagent/apns.json 就整体
+        # 禁用,中继本体照常工作(降级而非报错)。
+        self.apns = build_pusher()
 
     # -- auth ---------------------------------------------------------------
 
@@ -185,6 +190,65 @@ class Relay:
         self.event_waiters.clear()
         kind = event.get("event", "?")
         print(f"[relay] event {kind} from {machine_name}", flush=True)
+        # [T-live-mission] 关键事件转 APNs:app 完全没运行时的唯一触达路径。
+        if self.apns.enabled:
+            asyncio.get_running_loop().create_task(
+                self._push_apns(machine_name, event))
+
+    async def _push_apns(self, machine_name: str, event: Dict[str, Any]) -> None:
+        kind = event.get("event")
+        try:
+            if kind == "approval.request":
+                await self.apns.send_alert(
+                    title=f"🖥 {machine_name} 等你审批",
+                    body=str(event.get("command") or "")[:200],
+                    user_info={
+                        "harnessApproval": True,
+                        "machine": machine_name,
+                        "harnessSessionId": str(event.get("session_id") or ""),
+                        "approvalId": str(event.get("approval_id") or ""),
+                    },
+                    category="HARNESS_APPROVAL",
+                    time_sensitive=True,
+                )
+            elif kind == "run.failed":
+                await self.apns.send_alert(
+                    title=f"🖥 {machine_name} 任务失败",
+                    body=str(event.get("error") or "")[:200],
+                    user_info={"harnessSessionId": str(event.get("session_id") or "")},
+                )
+            elif kind == "run.completed":
+                await self.apns.send_alert(
+                    title=f"✅ {machine_name} 任务完成",
+                    body=str(event.get("output") or "任务已结束")[:200],
+                    user_info={"harnessSessionId": str(event.get("session_id") or "")},
+                )
+        except Exception as exc:  # noqa: BLE001
+            print(f"[relay] apns push failed: {exc}", flush=True)
+
+    async def register_device(self, request: web.Request) -> web.Response:
+        """手机登记推送 token。kind ∈ {device, push_to_start}。"""
+        if not self._authorized(request):
+            return self._unauthorized()
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001
+            return web.json_response({"error": {"message": "invalid json"}}, status=400)
+        ok = self.apns.register(
+            kind=str(body.get("kind") or "device"),
+            token=str(body.get("token") or ""),
+            bundle_id=str(body.get("bundle_id") or ""),
+            environment=str(body.get("environment") or "development"),
+        )
+        if not ok:
+            return web.json_response({"error": {"message": "bad token payload"}}, status=400)
+        return web.json_response({"ok": True, "apns": self.apns.status()})
+
+    async def push_status(self, request: web.Request) -> web.Response:
+        """诊断:推送为什么没生效,一眼看得出来。"""
+        if not self._authorized(request):
+            return self._unauthorized()
+        return web.json_response(self.apns.status())
 
     async def list_events(self, request: web.Request) -> web.Response:
         """手机取最近事件。?after=<received_at> 只取更新的;?wait=1 长轮询。
@@ -313,6 +377,8 @@ class Relay:
         app.router.add_get("/relay/agent", self.agent_ws)
         app.router.add_get("/relay/api/machines", self.list_machines)
         app.router.add_get("/relay/api/events", self.list_events)
+        app.router.add_post("/relay/api/device", self.register_device)
+        app.router.add_get("/relay/api/push-status", self.push_status)
         app.router.add_route("*", "/relay/api/m/{name}/{tail:.*}", self.forward)
         return app
 

@@ -22,7 +22,7 @@ import UIKit
 import UserNotifications
 
 @MainActor
-final class RelayEventCatchUp {
+final class RelayEventCatchUp: ObservableObject {
     static let shared = RelayEventCatchUp()
 
     private var lastSeenAt: Double {
@@ -31,8 +31,17 @@ final class RelayEventCatchUp {
     }
 
     /// 已经提示过的事件指纹,防止同一条重复打扰(中继可能重发)。
-    private var notified = Set<String>()
+    /// 用数组保序,超限淘汰最旧的(全清会瞬间失去去重记忆)。
+    private var notified: [String] = []
+    private var notifiedSet = Set<String>()
     private var inFlight = false
+
+    /// [T-catchup-surface] 前台时错过的待审批。app 在最前时发系统通知是
+    /// 无效动作(用户正看着 app),所以前台走这个已发布属性,由界面显示
+    /// 横幅;后台/非活跃才发通知。
+    @Published private(set) var missedApprovals: [RelayEventItem] = []
+
+    func clearMissedApprovals() { missedApprovals = [] }
 
     private init() {
         NotificationCenter.default.addObserver(
@@ -47,23 +56,33 @@ final class RelayEventCatchUp {
 
     func catchUp() async {
         guard !inFlight else { return }
-        guard let host = GatewayHostStore.shared.activeHosts.first,
-              let client = GatewayHostStore.shared.client(for: host) else { return }
+        // 首台可能是直连 Mac(没有中继地址),不能只看它 —— 取第一台
+        // 真正能解析出中继地址的主机。
+        let client = GatewayHostStore.shared.activeHosts
+            .compactMap { GatewayHostStore.shared.client(for: $0) }
+            .first { $0.relayEventsURL != nil }
+        guard let client else { return }
         inFlight = true
         defer { inFlight = false }
 
         guard let payload = try? await client.relayEvents(after: lastSeenAt) else { return }
         guard !payload.items.isEmpty else {
-            lastSeenAt = max(lastSeenAt, payload.now)
+            // 空结果也推进水位,但只推进到"本批已看到的最大时间",
+            // 不用服务端的 now —— 查询快照与读 now 之间写入的事件
+            // 会被永久跳过。
             return
         }
 
+        var approvals: [RelayEventItem] = []
+        var highWater = lastSeenAt
         for item in payload.items {
+            highWater = max(highWater, item.receivedAt)
             let fingerprint = item.fingerprint
-            guard !notified.contains(fingerprint) else { continue }
-            notified.insert(fingerprint)
+            guard !notifiedSet.contains(fingerprint) else { continue }
+            remember(fingerprint)
             switch item.eventName {
             case "approval.request":
+                approvals.append(item)
                 postApproval(item, hostName: item.machine)
             case "run.failed":
                 postSimple(title: "🖥 \(item.machine) 任务失败", body: item.text ?? "")
@@ -73,16 +92,30 @@ final class RelayEventCatchUp {
                 break
             }
         }
-        lastSeenAt = max(lastSeenAt, payload.now)
-        if notified.count > 400 { notified.removeAll() }
+        // 前台时通知发不出去(系统会压掉),改由界面显示这批待审批。
+        if !approvals.isEmpty {
+            missedApprovals = approvals
+        }
+        lastSeenAt = highWater
+    }
+
+    private func remember(_ fingerprint: String) {
+        notified.append(fingerprint)
+        notifiedSet.insert(fingerprint)
+        while notified.count > 400 {
+            notifiedSet.remove(notified.removeFirst())
+        }
     }
 
     private func postApproval(_ item: RelayEventItem, hostName: String) {
-        // 前台时 app 内的会话卡片已经会显示,不重复打扰
-        guard UIApplication.shared.applicationState != .active else { return }
         guard let sessionId = item.sessionId, let approvalId = item.approvalId else { return }
-        let hostId = GatewayHostStore.shared.activeHosts
-            .first { $0.name == hostName }?.id
+        // [T-catchup-hostid] 中继报的 machine 名与用户在「我的 Mac」里自取的
+        // 名字未必一致;精确匹配失败就退到"唯一一台中继主机",再退到首台。
+        // 匹配不上会导致通知按钮回调找不到 host,批准静默失败。
+        let hosts = GatewayHostStore.shared.activeHosts
+        let hostId = (hosts.first { $0.name == hostName }
+            ?? hosts.first { hostName.contains($0.name) || $0.name.contains(hostName) }
+            ?? hosts.first)?.id
         let approval = GatewayApprovalRequest(
             approvalId: approvalId, runId: sessionId,
             choices: ["once", "deny"], command: item.command,
@@ -92,6 +125,7 @@ final class RelayEventCatchUp {
     }
 
     private func postSimple(title: String, body: String) {
+        // 前台不发终态提示(用户正看着 app),审批则不受此限——它要人拍板。
         guard UIApplication.shared.applicationState != .active else { return }
         let content = UNMutableNotificationContent()
         content.title = title
@@ -152,8 +186,12 @@ extension LeoAgentClient {
         req.setValue("Bearer \(apiKeyForRelay)", forHTTPHeaderField: "Authorization")
         req.timeoutInterval = 20
         let (data, response) = try await session.data(for: req)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            return RelayEventPayload(items: [], now: 0)
+        guard let http = response as? HTTPURLResponse else {
+            throw GatewayError.malformedResponse("not an HTTP response")
+        }
+        if http.statusCode == 401 || http.statusCode == 403 { throw GatewayError.unauthorized }
+        guard (200..<300).contains(http.statusCode) else {
+            throw GatewayError.http(status: http.statusCode, message: nil)
         }
         let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
         let rows = obj["events"] as? [[String: Any]] ?? []

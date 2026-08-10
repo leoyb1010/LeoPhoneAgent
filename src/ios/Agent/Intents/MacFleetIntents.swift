@@ -93,6 +93,8 @@ enum MacFleetScan {
     struct HostSessions {
         let host: GatewayHost
         let sessions: [HarnessSessionSummary]
+        /// false = 没连上(而不是"没有任务")。两者绝不能混为一谈。
+        var reachable: Bool = true
     }
 
     /// 活跃 = CLI 还活着,可继续对话/需要人:starting/running/idle/waiting。
@@ -100,17 +102,25 @@ enum MacFleetScan {
         ["starting", "running", "idle", "waiting_for_approval"].contains(s.status)
     }
 
-    /// 并发扫全部主机;单台失败按空处理(Siri 场景下部分可达好过整体失败)。
+    /// 并发扫全部主机。
+    ///
+    /// [T-fleet-offline] 关键:网络失败不能降级成"空会话列表"——那会让
+    /// 一台关机的 Mac 被汇报成"空闲",与事实相反。用 reachable 标出来。
     @MainActor
     static func scan() async -> [HostSessions] {
         let hosts = GatewayHostStore.shared.activeHosts
         var out: [HostSessions] = []
         await withTaskGroup(of: HostSessions?.self) { group in
             for host in hosts {
-                guard let client = GatewayHostStore.shared.client(for: host) else { continue }
+                guard let client = GatewayHostStore.shared.client(for: host) else {
+                    out.append(HostSessions(host: host, sessions: [], reachable: false))
+                    continue
+                }
                 group.addTask {
-                    let sessions = (try? await client.harnessSessions()) ?? []
-                    return HostSessions(host: host, sessions: sessions)
+                    if let sessions = try? await client.harnessSessions() {
+                        return HostSessions(host: host, sessions: sessions, reachable: true)
+                    }
+                    return HostSessions(host: host, sessions: [], reachable: false)
                 }
             }
             for await item in group {
@@ -145,20 +155,25 @@ struct CommandMacIntent: AppIntent {
     }
 
     @MainActor
-    func perform() async throws -> some IntentResult & ProvidesDialog {
+    func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
+        let text = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let host = GatewayHostStore.shared.activeHosts.first(where: { $0.id == mac.id }),
               let client = GatewayHostStore.shared.client(for: host) else {
-            return .result(dialog: "找不到 \(mac.name) 的访问密钥,去 app 里「设置 → 我的 Mac」补上。")
+            return .result(dialog: "找不到 \(mac.name) 的访问密钥,去 app 里「设置 → 我的 Mac」补上。",
+                           view: MacDispatchSnippet(machine: mac.name, cli: cli.displayName, task: "缺少访问密钥"))
         }
-        let text = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else {
-            return .result(dialog: "任务内容是空的,没有开工。")
+            return .result(dialog: "任务内容是空的,没有开工。",
+                           view: MacDispatchSnippet(machine: mac.name, cli: cli.displayName, task: "内容为空"))
         }
         do {
             _ = try await client.createHarnessSession(harness: cli.rawValue, cwd: "~", prompt: text)
-            return .result(dialog: "已让 \(mac.name) 的 \(cli.displayName) 开工。进 app 首页「指挥一台 Mac」可随时查看、审批或接管。")
+            return .result(dialog: "已让 \(mac.name) 的 \(cli.displayName) 开工。",
+                           view: MacDispatchSnippet(machine: mac.name, cli: cli.displayName, task: text))
         } catch {
-            return .result(dialog: "没能开工:\(error.localizedDescription)")
+            return .result(dialog: "没能开工:\(error.localizedDescription)",
+                           view: MacDispatchSnippet(machine: mac.name, cli: cli.displayName,
+                                                    task: error.localizedDescription))
         }
     }
 }
@@ -172,20 +187,30 @@ struct MacFleetStatusIntent: AppIntent {
     static var openAppWhenRun = false
 
     @MainActor
-    func perform() async throws -> some IntentResult & ProvidesDialog {
+    func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
         let hosts = GatewayHostStore.shared.activeHosts
         guard !hosts.isEmpty else {
-            return .result(dialog: "还没有配置任何 Mac。去 app 里「设置 → 我的 Mac」一键添加。")
+            return .result(dialog: "还没有配置任何 Mac。去 app 里「设置 → 我的 Mac」一键添加。",
+                           view: FleetStatusSnippet(rows: []))
         }
         let scan = await MacFleetScan.scan()
         guard !scan.isEmpty else {
-            return .result(dialog: "一台 Mac 都没连上,检查网络或密钥。")
+            return .result(dialog: "一台 Mac 都没连上,检查网络或密钥。",
+                           view: FleetStatusSnippet(rows: []))
         }
         var parts: [String] = []
+        var rows: [FleetSnapshotRow] = []
         for item in scan {
             let active = item.sessions.filter(MacFleetScan.isActive)
             let waiting = active.filter(\.waitingForApproval)
-            if let w = waiting.first, let cmd = w.pendingApprovalCommand, !cmd.isEmpty {
+            let cmd = waiting.first?.pendingApprovalCommand
+            rows.append(FleetSnapshotRow(
+                id: item.host.id, name: item.host.name,
+                activeCount: active.count, waitingCount: waiting.count,
+                pendingCommand: cmd, reachable: item.reachable))
+            if !item.reachable {
+                parts.append("\(item.host.name):没连上")
+            } else if let cmd, !cmd.isEmpty {
                 parts.append("\(item.host.name):\(active.count) 个进行中,有任务等你审批(\(String(cmd.prefix(40))))")
             } else if !waiting.isEmpty {
                 parts.append("\(item.host.name):\(active.count) 个进行中,\(waiting.count) 个等审批")
@@ -195,10 +220,9 @@ struct MacFleetStatusIntent: AppIntent {
                 parts.append("\(item.host.name):空闲")
             }
         }
-        if scan.count < hosts.count {
-            parts.append("另有 \(hosts.count - scan.count) 台没连上")
-        }
-        return .result(dialog: IntentDialog(stringLiteral: parts.joined(separator: ";") + "。"))
+        return .result(
+            dialog: IntentDialog(stringLiteral: parts.joined(separator: ";") + "。"),
+            view: FleetStatusSnippet(rows: rows))
     }
 }
 
@@ -211,22 +235,54 @@ struct ApprovePendingMacIntent: AppIntent {
     static var openAppWhenRun = false
 
     @MainActor
-    func perform() async throws -> some IntentResult & ProvidesDialog {
+    func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
         let scan = await MacFleetScan.scan()
-        for item in scan {
-            guard let session = item.sessions.first(where: { $0.pendingApprovalId != nil }),
-                  let approvalId = session.pendingApprovalId,
-                  let client = GatewayHostStore.shared.client(for: item.host) else { continue }
-            let cmd = session.pendingApprovalCommand ?? session.name
-            do {
-                try await client.approveHarness(sessionId: session.id, choice: "once",
-                                                approvalId: approvalId)
-                return .result(dialog: "已批准 \(item.host.name) 上的操作:\(String(cmd.prefix(60)))")
-            } catch {
-                return .result(dialog: "批准没送达:\(error.localizedDescription)")
+
+        // [T-approve-newest] 这是在放行 shell 命令,选错对象不是小事。
+        // 收齐全部待审批,取 seq 最大的那条(= 最近的),而不是"首台主机的
+        // 第一条"(= 最老的,与文案自述相反)。
+        struct Candidate {
+            let host: GatewayHost
+            let session: HarnessSessionSummary
+            let approvalId: String
+        }
+        var candidates: [Candidate] = []
+        for item in scan where item.reachable {
+            for session in item.sessions {
+                if let aid = session.pendingApprovalId {
+                    candidates.append(Candidate(host: item.host, session: session, approvalId: aid))
+                }
             }
         }
-        return .result(dialog: "现在没有等待审批的任务。")
+        candidates.sort { $0.session.seq > $1.session.seq }
+
+        guard !candidates.isEmpty else {
+            let unreachable = scan.filter { !$0.reachable }.count
+            let tail = unreachable > 0 ? "(另有 \(unreachable) 台没连上)" : ""
+            return .result(dialog: IntentDialog(stringLiteral: "现在没有等待审批的任务。" + tail),
+                           view: ApprovalResultSnippet(machine: "—", command: "无待审批", approved: false))
+        }
+
+        // [T-approve-retry] 首台失败不该让其余待审批全部落空,继续试下一条。
+        var lastError: String?
+        for candidate in candidates {
+            guard let client = GatewayHostStore.shared.client(for: candidate.host) else { continue }
+            let cmd = candidate.session.pendingApprovalCommand ?? candidate.session.name
+            do {
+                try await client.approveHarness(sessionId: candidate.session.id,
+                                                choice: "once", approvalId: candidate.approvalId)
+                return .result(
+                    dialog: "已批准 \(candidate.host.name) 上的操作:\(String(cmd.prefix(60)))",
+                    view: ApprovalResultSnippet(machine: candidate.host.name,
+                                                command: cmd, approved: true))
+            } catch {
+                lastError = error.localizedDescription
+                continue
+            }
+        }
+        return .result(dialog: "批准没送达:\(lastError ?? "未知原因")",
+                       view: ApprovalResultSnippet(machine: candidates[0].host.name,
+                                                   command: lastError ?? "", approved: false))
     }
 }
 

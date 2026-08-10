@@ -44,10 +44,20 @@ final class HarnessLiveActivityBridge {
 
     func register(driver: HarnessSessionDriver, hostName: String?) {
         entries[ObjectIdentifier(driver)] = Entry(driver: driver, hostName: hostName ?? "Mac")
+        // [T-liveactivity-filter] 关键:AgentLiveActivityManager 的
+        // _startActivity/_updateActivity 都会按 SessionActivityTracker
+        // .activeSessions 过滤传入的 snapshot。Mac 会话从不进那个集合,
+        // 所以不登记的话喂进去的全被丢掉,灵动岛永远是空的。
+        if let sid = driver.sessionId {
+            SessionActivityTracker.shared.setActive(sid, source: "HarnessLiveActivityBridge")
+        }
         refresh()
     }
 
     func unregister(driver: HarnessSessionDriver) {
+        if let sid = driver.sessionId {
+            SessionActivityTracker.shared.setInactive(sid, source: "HarnessLiveActivityBridge")
+        }
         entries.removeValue(forKey: ObjectIdentifier(driver))
         refresh()
     }
@@ -84,11 +94,15 @@ final class HarnessLiveActivityBridge {
             }
             return
         }
-        if startedByBridge {
+        if startedByBridge && AgentLiveActivityManager.shared.hasLiveActivity {
             AgentLiveActivityManager.shared.updateActivity(sessions: snapshots)
+        } else if startedByBridge {
+            // 我们起的那个已经被别人(聊天任务)结束并接管了 —— 交还所有权,
+            // 绝不能继续往它的卡上写,更不能在结束时把它掐掉。
+            startedByBridge = false
         } else if !AgentLiveActivityManager.shared.hasLiveActivity {
             // start 仅前台合法;后台时跳过,didBecomeActive 会补。
-            guard UIApplication.shared.applicationState == .active else { return }
+            guard UIApplication.shared.applicationState != .background else { return }
             AgentLiveActivityManager.shared.startActivity(sessions: snapshots)
             startedByBridge = true
         }

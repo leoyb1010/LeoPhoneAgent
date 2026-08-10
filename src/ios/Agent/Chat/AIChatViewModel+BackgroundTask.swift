@@ -128,11 +128,17 @@ extension AIChatViewModel {
 
     func endBackgroundProcessing() {
         let continuedKey = continuedProcessingSessionKey ?? sessionId ?? draftId ?? ""
-        let completionHasError = messages.last?.error != nil || errorMessage != nil
+        // [T-bg-false-failure] 取最后一条 ASSISTANT 行,不是 messages.last。
+        // 排队的 .user 行、/model 与 /memory 追加的 .systemInfo 行都会排在
+        // 助手回合之后 —— 用 messages.last 会把真失败读成"无错误",
+        // 于是给一次失败的回合推送"任务完成"。同一坑本文件别处已修过。
+        let lastAssistantError = messages.last(where: { $0.role == .assistant })?.error
+        let completionHasError = lastAssistantError != nil || errorMessage != nil
         if #available(iOS 26.0, *), !continuedKey.isEmpty {
+            // 与通知同一套语义:用户主动停止不算失败,挂起也不算。
             AgentContinuedProcessingManager.shared.finish(
                 sessionKey: continuedKey,
-                success: !completionHasError && !backgroundSuspended
+                success: !(completionHasError && !backgroundSuspended && !userDidCancel)
             )
         }
         continuedProcessingSessionKey = nil
@@ -186,11 +192,17 @@ extension AIChatViewModel {
             // 三者都不是"任务失败",而这正是"切到别的 app 收到失败提示、
             // 点进去却好好的"的成因。真正的失败要满足:有错、没被挂起、
             // 不是用户取消、且不可恢复。
-            let hasError = completionHasError
-                && !backgroundSuspended
-                && !userDidCancel
-                && !canResume
+            // [T-bg-false-failure] 三态,不是二态。上一版把 canResume 也算作
+            // "不是失败"是过度矫正:canResume 涵盖断流、max_tokens 截断、
+            // 模型拒答、空响应、轮次上限——全是用户真正需要知道的失败,
+            // 只是可以续跑。把它们一起静音等于连成功通知都不发了。
+            //   · 后台挂起 / 用户主动停止 → 不报(回前台自动续)
+            //   · 可恢复的中断        → 如实报"中断",不叫"失败"
+            //   · 其余有错            → 报失败
             let wasSuspended = backgroundSuspended
+            let userStopped = userDidCancel
+            let interrupted = completionHasError && canResume && !wasSuspended && !userStopped
+            let hasError = completionHasError && !wasSuspended && !userStopped && !canResume
             let responseSummary: String = {
                 let assistantTurns = agentHistory.filter { $0.role == .assistant }
                 logger.info("[BackgroundNotification] building responseSummary from agentHistory: totalMsgs=\(agentHistory.count) assistantTurns=\(assistantTurns.count) wasBackground=\(wasBackground) hasError=\(hasError)")
@@ -259,20 +271,26 @@ extension AIChatViewModel {
                 // 宁可不提醒,也不能报一个假失败。
                 let stillWorthNotifying = await MainActor.run { () -> Bool in
                     if self.isProcessing { return false }      // 又跑起来了
-                    if self.canResume { return false }         // 可恢复 = 挂起,不是失败
-                    if wasSuspended { return false }           // 本次是后台挂起,回前台会续
-                    if hasError {
-                        // 失败必须此刻仍然成立
-                        return self.messages.last?.error != nil || self.errorMessage != nil
+                    if wasSuspended { return false }           // 后台挂起,回前台会续
+                    if userStopped { return false }            // 用户自己停的,不用通知
+                    if hasError || interrupted {
+                        // 报错前按此刻状态复核一次,状态已自愈就不报
+                        let stillBad = self.messages.last(where: { $0.role == .assistant })?.error != nil
+                            || self.errorMessage != nil
+                        return stillBad
                     }
                     return true
                 }
                 if stillWorthNotifying {
+                    let summary = interrupted && !hasError
+                        ? String(localized: "任务中断,回到 app 可继续。") + " " + responseSummary
+                        : responseSummary
                     BackgroundKeepAliveManager.shared.postBackgroundTaskNotification(
-                        sessionTitle: sessionTitle, responseSummary: responseSummary, sessionId: sid, isError: hasError, wasBackground: wasBackground
+                        sessionTitle: sessionTitle, responseSummary: summary, sessionId: sid,
+                        isError: hasError || interrupted, wasBackground: wasBackground
                     )
                 } else {
-                    logger.info("[BackgroundNotification] suppressed — suspended=\(wasSuspended) hasError=\(hasError) (状态已恢复或属挂起,不报失败)")
+                    logger.info("[BackgroundNotification] suppressed — suspended=\(wasSuspended) stopped=\(userStopped) hasError=\(hasError) interrupted=\(interrupted)")
                 }
                 await MainActor.run {
                     UIApplication.shared.endBackgroundTask(bgTaskID)

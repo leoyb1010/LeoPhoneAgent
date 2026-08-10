@@ -40,6 +40,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         ShortcutNotificationDelegate.shared.register()
         // [T-leophone-push] 回到前台时对账 Mac 上错过的审批/终态事件。
         RelayEventCatchUp.shared.activate()
+        // [T-live-mission] 向 APNs 注册,把 token 登记到中继——app 完全
+        // 没运行时,Mac 上的审批只能靠这条路响。
+        PushRegistrar.shared.start()
 
         // Refresh the dynamic shortcut list every cold launch. The
         // items themselves are stable, but their localized titles
@@ -166,6 +169,18 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     /// only ever sends it to the APP delegate, so the crash-reporter flush and
     /// the `[T-ios-bgactivitysession-leak]` location-indicator teardown never
     /// actually ran on termination.
+    // MARK: - [T-live-mission] 远程通知注册回调
+
+    func application(_ application: UIApplication,
+                     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        PushRegistrar.shared.handleDeviceToken(deviceToken)
+    }
+
+    func application(_ application: UIApplication,
+                     didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        NSLog("[Push] APNs registration failed: %@", error.localizedDescription)
+    }
+
     func applicationWillTerminate(_ application: UIApplication) {
         CrashReporter.shared.onWillTerminate()
         // [T-ios-bgactivitysession-leak] Retract the background location session
