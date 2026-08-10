@@ -3414,7 +3414,10 @@ struct AIChatView: View {
         Button {
             showQuickModelSwitch = true
         } label: {
+            // 顺序:本会话绑定 → 默认分组解析(新对话实际会用的)→ 遗留字段。
+            // 直接落到 selectedModel 会显示一个根本不会被使用的模型名。
             Label(ModelSwitcher.currentLabel(sessionId: vm.sessionId)
+                    ?? ModelSwitcher.defaultLabel()
                     ?? vm.selectedModel.displayName,
                   systemImage: "cpu")
                 .font(.caption.weight(.semibold))

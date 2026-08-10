@@ -184,6 +184,11 @@ extension LeoAgentClient {
                     "summary": item.summary ?? "",
                     "tags": item.tags,
                     "created_at": item.createdAt.timeIntervalSince1970,
+                    // 归档的条目在 Mac 上也该收起来 —— 不传这个字段,
+                    // 手机上归档了 Mac 端照样列着,两端就不一致了。
+                    "archived": item.archived,
+                    "annotation": item.annotation ?? "",
+                    "updated_at": item.updatedAt.timeIntervalSince1970,
                 ] as [String: Any]
             },
         ]

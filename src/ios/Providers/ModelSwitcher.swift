@@ -254,6 +254,20 @@ enum ModelSwitcher {
         }
     }
 
+    /// 没有会话绑定时,新对话实际会用的模型 —— 默认模型分组解析出的那个。
+    ///
+    /// 胶囊显示的必须是"发出去会用谁",不是某个遗留的 selectedModel。
+    /// 用户看到胶囊写 Haiku、实际发出去走默认分组的 Kimi,是欺骗。
+    static func defaultLabel(store: ProviderConfigStore = .shared) -> String? {
+        guard let groupId = store.defaultPrimaryGroupId,
+              let group = store.group(for: groupId) else { return nil }
+        if let entryId = ModelGroupRouter.resolve(group: group, sessionId: "draft", store: store),
+           let entry = store.entry(for: entryId) {
+            return entry.model.displayName
+        }
+        return group.name
+    }
+
     /// 当前会话绑定对应的短名,给胶囊显示用。
     static func currentLabel(sessionId: String?, store: ProviderConfigStore = .shared) -> String? {
         guard let sessionId, !sessionId.isEmpty,

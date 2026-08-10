@@ -137,6 +137,10 @@ struct CollectionsView: View {
             }
         }
         .refreshable { reload() }
+        // [T-treasury-ui] 条目的进出与重排(置顶跳到最前、归档滑走、删除
+        // 收起)都走弹簧,不再瞬间跳变。items 是 Equatable,代价可控。
+        .animation(.snappy(duration: 0.3), value: items)
+        .animation(.snappy(duration: 0.3), value: showArchived)
         .toolbar { toolbarContent }
         // [T-attachments] 相册:PhotosPicker 走系统选择器,不必申请相册权限
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoSelection,
@@ -205,12 +209,18 @@ struct CollectionsView: View {
         }
         .overlay(alignment: .bottom) {
             if let toast {
-                Text(toast)
-                    .font(.footnote.weight(.medium))
-                    .padding(.horizontal, 14).padding(.vertical, 9)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .padding(.bottom, 24)
-                    .transition(.opacity)
+                HStack(spacing: 7) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.green)
+                    Text(toast).font(.system(size: 13, weight: .semibold))
+                }
+                .padding(.horizontal, 16).padding(.vertical, 10)
+                .background(.regularMaterial, in: Capsule())
+                .overlay(Capsule().strokeBorder(.quaternary, lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.10), radius: 12, y: 4)
+                .padding(.bottom, 24)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .onAppear {
@@ -392,13 +402,16 @@ struct CollectionsView: View {
     @ViewBuilder
     private var importRow: some View {
         if !editMode.isEditing, UIPasteboard.general.hasURLs || UIPasteboard.general.hasStrings {
-            HStack(spacing: 10) {
-                Image(systemName: "doc.on.clipboard")
-                    .foregroundStyle(.yellow)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("剪贴板里有内容").font(.system(size: 14, weight: .medium))
-                    Text("小红书等只给「复制链接」的 app,从这里收藏")
-                        .font(.caption2).foregroundStyle(.secondary)
+            HStack(spacing: 12) {
+                Image(systemName: "doc.on.clipboard.fill")
+                    .font(.system(size: 15))
+                    .foregroundStyle(.white)
+                    .frame(width: 34, height: 34)
+                    .background(.orange.gradient, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("剪贴板里有内容").font(.system(size: 14, weight: .semibold))
+                    Text("小红书等只给「复制链接」的 app,从这里收")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
                 Spacer(minLength: 4)
                 PasteButton(payloadType: String.self) { strings in
@@ -411,16 +424,22 @@ struct CollectionsView: View {
                 }
                 .labelStyle(.iconOnly)
                 .buttonBorderShape(.capsule)
+                .tint(.orange)
             }
-            .listRowBackground(Color.yellow.opacity(0.08))
+            .padding(.vertical, 2)
+            .listRowBackground(Color.orange.opacity(0.07))
         }
     }
 
     private var emptyState: some View {
         VStack(spacing: 10) {
-            Image(systemName: "star.square.on.square")
-                .font(.system(size: 40)).foregroundStyle(.secondary)
-            Text("藏宝阁还是空的").font(.headline)
+            Image(systemName: "shippingbox")
+                .font(.system(size: 44, weight: .light))
+                .foregroundStyle(.linearGradient(colors: [.orange, .pink],
+                                                 startPoint: .topLeading,
+                                                 endPoint: .bottomTrailing))
+                .symbolEffect(.bounce, options: .nonRepeating)
+            Text("藏宝阁还是空的").font(.system(size: 17, weight: .semibold))
             Text("在任意 app 点分享 → LeoPhoneAgent,或者从这里开始:")
                 .font(.footnote).foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -460,14 +479,16 @@ struct CollectionsView: View {
     }
 
     private func filterChip(_ source: String?, label: String) -> some View {
-        Button {
-            filterSource = source
+        let selected = filterSource == source
+        return Button {
+            withAnimation(.snappy(duration: 0.25)) { filterSource = source }
+            LeoHaptics.selection()
         } label: {
             Text(label)
-                .font(.caption.weight(.medium))
-                .padding(.horizontal, 10).padding(.vertical, 5)
-                .background(filterSource == source ? Color.accentColor.opacity(0.2)
-                                                   : Color.secondary.opacity(0.12),
+                .font(.system(size: 13, weight: selected ? .semibold : .medium))
+                .foregroundStyle(selected ? Color.white : .primary)
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(selected ? Color.accentColor : Color.secondary.opacity(0.1),
                             in: Capsule())
         }
         .buttonStyle(.plain)
@@ -630,7 +651,7 @@ struct CollectionsView: View {
     }
 
     private func flash(_ message: String) {
-        withAnimation { toast = message }
+        withAnimation(.spring(duration: 0.35, bounce: 0.25)) { toast = message }
         Task {
             try? await Task.sleep(nanoseconds: 1_800_000_000)
             await MainActor.run { withAnimation { toast = nil } }
@@ -789,41 +810,92 @@ private struct CollectionImportSheet: View {
 
 // MARK: - 卡片
 
+/// [T-treasury-ui] 来源 → 稳定颜色。同一个来源永远同色,列表里形成识别;
+/// 卡片徽标、无图占位共用这一个函数,不许各配各的色。
+func leoSourceColor(_ source: String) -> Color {
+    let palette: [Color] = [.blue, .purple, .pink, .orange, .green, .teal, .indigo, .brown]
+    return palette[abs(source.hashValue) % palette.count]
+}
+
+/// 相对时间:"3 分钟前"比"08-10 15:24"更接近人问自己的问题("刚存的
+/// 那条呢?"),超过一周才退回日期。
+func leoRelativeDate(_ date: Date) -> String {
+    let interval = Date().timeIntervalSince(date)
+    if interval > 7 * 86400 {
+        return date.formatted(.dateTime.month().day())
+    }
+    let formatter = RelativeDateTimeFormatter()
+    formatter.unitsStyle = .short
+    formatter.locale = Locale(identifier: "zh_CN")
+    return formatter.localizedString(for: date, relativeTo: Date())
+}
+
 private struct CollectionCard: View {
     let item: CollectedItem
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             thumbnail
-                .frame(width: 64, height: 64)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .frame(width: 60, height: 60)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(.quaternary, lineWidth: 0.5))
+                .overlay(alignment: .bottomTrailing) {
+                    // 笔记角标:一眼分清"我写的"和"我收的"
+                    if item.kind == .note {
+                        Image(systemName: "pencil")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundStyle(.white)
+                            .padding(4)
+                            .background(.indigo, in: Circle())
+                            .offset(x: 4, y: 4)
+                    }
+                }
             VStack(alignment: .leading, spacing: 4) {
-                Text(displayTitle)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
+                HStack(spacing: 5) {
+                    if item.pinned {
+                        Image(systemName: "pin.fill")
+                            .font(.system(size: 10)).foregroundStyle(.orange)
+                    }
+                    Text(displayTitle)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
                 if let summary = item.summary, !summary.isEmpty {
-                    Text(summary).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                    Text(summary)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+                if let note = item.annotation, !note.isEmpty {
+                    // 批注:引用样式,和摘要视觉上分开 —— 这是"我的话"
+                    HStack(spacing: 5) {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(.teal.opacity(0.6)).frame(width: 2)
+                        Text(note).font(.system(size: 12)).foregroundStyle(.teal)
+                            .lineLimit(1)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
                 }
                 HStack(spacing: 6) {
-                    if item.pinned {
-                        Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(.orange)
-                    }
                     Text(item.sourceLabel)
-                        .font(.caption2.weight(.semibold))
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(leoSourceColor(item.sourceLabel))
                         .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(Color.accentColor.opacity(0.15), in: Capsule())
-                    Text(item.createdAt.formatted(.dateTime.month().day().hour().minute()))
-                        .font(.caption2).foregroundStyle(.tertiary)
-                    ForEach(item.tags.prefix(3), id: \.self) { tag in
-                        Text("#\(tag)").font(.caption2).foregroundStyle(.secondary)
+                        .background(leoSourceColor(item.sourceLabel).opacity(0.13), in: Capsule())
+                    Text(leoRelativeDate(item.updatedAt))
+                        .font(.system(size: 11)).foregroundStyle(.tertiary)
+                    ForEach(item.tags.prefix(2), id: \.self) { tag in
+                        Text("#\(tag)").font(.system(size: 11)).foregroundStyle(.secondary)
                     }
                 }
             }
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
         .contentShape(Rectangle())
     }
 
@@ -859,12 +931,7 @@ private struct CollectionCard: View {
         }
     }
 
-    /// 按来源取一个稳定的颜色 —— 同一个来源永远同色,列表里能形成识别。
-    private var placeholderColor: Color {
-        let palette: [Color] = [.blue, .purple, .pink, .orange, .green, .teal, .indigo, .brown]
-        let seed = abs(item.sourceLabel.hashValue)
-        return palette[seed % palette.count]
-    }
+    private var placeholderColor: Color { leoSourceColor(item.sourceLabel) }
 
     /// 标题首个有意义的字符。
     private var placeholderGlyph: Character? {
