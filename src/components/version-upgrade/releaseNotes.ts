@@ -17,6 +17,15 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '1.66.0',
+    date: '2026-08-10',
+    items: [
+      '关于页大扫除:去掉全部装饰图,直接从版本信息开始;更新记录改读随包内置数据(原来读 GitHub Release,内部版本永远是空的)',
+      '通知设置:开启后的「关闭通知」按钮原来是红底红字(完全看不清,像一块莫名的红框),改为普通描边按钮',
+      '舰队页:后台标签不再空转轮询;上一轮请求没回来不叠发;手机收藏跟随同一节拍刷新,不再冻结在进入页面那一刻',
+    ],
+  },
+  {
     version: '1.65.1',
     date: '2026-08-10',
     items: [

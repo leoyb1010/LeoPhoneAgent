@@ -76,7 +76,7 @@ export default function NotificationsSettingsTab({
                   }}
                   className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors ${
                     desktopNotifications?.enabled
-                      ? 'bg-destructive text-destructive hover:bg-destructive dark:bg-destructive/30 dark:text-destructive dark:hover:bg-destructive/50'
+                      ? 'border border-input bg-background text-foreground hover:bg-accent'
                       : 'bg-info text-primary-foreground hover:bg-info dark:bg-info dark:hover:bg-info'
                   }`}
                 >
@@ -122,7 +122,7 @@ export default function NotificationsSettingsTab({
                 }}
                 className={`inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
                   isPushSubscribed
-                    ? 'bg-destructive text-destructive hover:bg-destructive dark:bg-destructive/30 dark:text-destructive dark:hover:bg-destructive/50'
+                    ? 'border border-input bg-background text-foreground hover:bg-accent'
                     : 'bg-info text-primary-foreground hover:bg-info dark:bg-info dark:hover:bg-info'
                 }`}
               >

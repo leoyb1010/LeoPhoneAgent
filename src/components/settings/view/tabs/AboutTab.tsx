@@ -1,5 +1,3 @@
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -15,6 +13,7 @@ import {
 
 import { LEOCODEBOX_WORDMARK_FONT_FAMILY } from '../../../../constants/branding';
 import { useVersionCheck } from '../../../../hooks/useVersionCheck';
+import { LEO_RELEASE_NOTES } from '../../../version-upgrade/releaseNotes';
 
 import RecoverySection from './RecoverySection';
 
@@ -45,7 +44,6 @@ export default function AboutTab() {
     downloadUpdate,
     installUpdate,
     setGithubToken,
-    releaseHistory,
   } = useVersionCheck();
   const [token, setToken] = useState('');
   const [actionError, setActionError] = useState('');
@@ -77,41 +75,6 @@ export default function AboutTab() {
 
   return (
     <div className="space-y-6">
-      <div className="relative h-40 overflow-hidden rounded-lg border border-border/60 bg-zinc-950">
-        <img src="/visuals/release/feature-overview.webp" alt="" className="h-full w-full object-cover opacity-90" />
-        <div className="absolute inset-0 bg-black/35" />
-        <div className="absolute inset-y-0 left-0 flex items-end p-5 text-sm font-medium text-primary-foreground">
-          {desktopUpdate?.status === 'downloaded'
-            ? t('about.downloaded', { version: desktopUpdate.latestVersion })
-            : t('about.localData')}
-        </div>
-      </div>
-
-      <section className="grid gap-3 sm:grid-cols-3" aria-label="本机能力概览">
-        {[
-          ['/visuals/release/local-security.webp', '本机数据'],
-          ['/visuals/release/multi-device-local-discovery.webp', '设备发现'],
-          ['/visuals/release/leoapi-overview.webp', 'Leoapi 路由'],
-        ].map(([src, label]) => (
-          <figure key={src} className="overflow-hidden rounded-md border border-border/60 bg-muted/20">
-            <img src={src} alt="" className="aspect-[16/9] w-full object-cover" />
-            <figcaption className="px-3 py-2 text-xs text-muted-foreground">{label}</figcaption>
-          </figure>
-        ))}
-      </section>
-
-      <section className="grid gap-3 sm:grid-cols-2" aria-label="本机工作流">
-        {[
-          ['local-permissions', '权限只作用于本机'],
-          ['leoapi-routing', '接口路由清晰可见'],
-        ].map(([name, label]) => (
-          <figure key={name} className="overflow-hidden rounded-md border border-border/60 bg-muted/20">
-            <img src={`/visuals/onboarding/${name}-light.webp`} alt="" className="aspect-[16/9] w-full object-cover dark:hidden" />
-            <img src={`/visuals/onboarding/${name}-dark.webp`} alt="" className="hidden aspect-[16/9] w-full object-cover dark:block" />
-            <figcaption className="px-3 py-2 text-xs text-muted-foreground">{label}</figcaption>
-          </figure>
-        ))}
-      </section>
       <div className="flex items-center gap-3">
         <img src="/logo.svg" alt="leocodebox" className="h-10 w-10" />
         <div>
@@ -238,27 +201,26 @@ export default function AboutTab() {
       <section className="border-b border-border/60 pb-5">
         <div className="mb-3">
           <h3 className="text-sm font-medium text-foreground">{t('about.recentUpdates')}</h3>
-          <p className="mt-1 text-xs text-muted-foreground">{t('about.releaseHistory')}</p>
         </div>
-        <div className="space-y-2">
-          {releaseHistory.slice(0, 5).map((release) => (
-            <details key={release.version} className="rounded-md border border-border bg-muted/10 px-4 py-3">
-              <summary className="flex cursor-pointer list-none items-start justify-between gap-3">
-                <span>
-                  <span className="text-sm font-medium text-foreground">{release.title}</span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">{release.summary || t('about.noReleaseNotes')}</span>
-                </span>
-                <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-                  v{release.version}{release.version === currentVersion ? ` · ${t('about.currentRelease')}` : ''}
-                </span>
-              </summary>
-              <div className="prose prose-sm mt-4 max-w-none border-t border-border pt-4 dark:prose-invert">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{release.body}</ReactMarkdown>
-              </div>
-              <a href={release.htmlUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-                {t('about.viewRelease')} <ExternalLink className="h-3.5 w-3.5" />
-              </a>
-            </details>
+        {/* [T-release-notes] 更新记录读随包内置的 LEO_RELEASE_NOTES。
+            原来这里读 GitHub Release——内部迭代不发 release,列表永远是空的,
+            用户点进"关于"看不到任何实际记录。 */}
+        <div className="space-y-3">
+          {LEO_RELEASE_NOTES.map((note) => (
+            <div key={note.version} className="rounded-md border border-border px-4 py-3">
+              <p className="text-xs text-muted-foreground">
+                v{note.version} · {note.date}
+                {note.version === currentVersion ? ` · ${t('about.currentRelease')}` : ''}
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                {note.items.map((item) => (
+                  <li key={item} className="flex gap-2 text-sm leading-relaxed text-foreground">
+                    <span className="text-muted-foreground">·</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ))}
         </div>
       </section>

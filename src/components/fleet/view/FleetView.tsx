@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { apiClient } from '../../../utils/apiClient';
 
@@ -49,7 +49,13 @@ export default function FleetView() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
+  const inFlight = useRef(false);
+
   const load = useCallback(async () => {
+    // 门控:后台标签不打接口(fleet 一次最坏 30s);上一轮没回来不叠发
+    if (document.visibilityState === 'hidden') return;
+    if (inFlight.current) return;
+    inFlight.current = true;
     try {
       const [fleet, pending] = await Promise.all([
         apiClient.get<{ configured?: boolean; machines?: Machine[] }>('/api/leophone/fleet'),
@@ -61,12 +67,19 @@ export default function FleetView() {
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : '读取失败');
+    } finally {
+      inFlight.current = false;
     }
   }, []);
 
+  const [tick, setTick] = useState(0);
+
   useEffect(() => {
     void load();
-    const timer = setInterval(() => void load(), POLL_MS);
+    const timer = setInterval(() => {
+      void load();
+      setTick((v) => v + 1);
+    }, POLL_MS);
     return () => clearInterval(timer);
   }, [load]);
 
@@ -193,7 +206,7 @@ export default function FleetView() {
         </div>
       </section>
 
-      <CollectionsMirror />
+      <CollectionsMirror refreshTick={tick} />
     </div>
   );
 }

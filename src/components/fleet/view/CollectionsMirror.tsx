@@ -21,7 +21,7 @@ type Item = {
   created_at: number;
 };
 
-export default function CollectionsMirror() {
+export default function CollectionsMirror({ refreshTick = 0 }: { refreshTick?: number }) {
   const [items, setItems] = useState<Item[]>([]);
   const [query, setQuery] = useState('');
   const [configured, setConfigured] = useState(true);
@@ -42,9 +42,10 @@ export default function CollectionsMirror() {
     }
   }, []);
 
+  // 同页的机器和审批 15 秒一刷,收藏跟着同一节拍——不能一活一死
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshTick]);
 
   if (!configured) return null;
 

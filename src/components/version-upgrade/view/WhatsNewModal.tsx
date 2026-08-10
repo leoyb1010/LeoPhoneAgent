@@ -34,7 +34,7 @@ export function WhatsNewModal() {
   const notes = showAll ? LEO_RELEASE_NOTES : [note];
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
       <button
         className="fixed inset-0 bg-black/40"
         onClick={close}
