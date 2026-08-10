@@ -24,6 +24,14 @@ struct LeoReleaseNote: Identifiable {
 enum LeoReleaseNotes {
     static let all: [LeoReleaseNote] = [
         LeoReleaseNote(
+            version: "1.15.1",
+            date: "2026-08-10",
+            items: [
+                "🐛 停用某个供应商后,它的模型不再出现在「最近用过」里(以前点了会把会话绑到不可用的实例,发送时才报错)",
+                "🐛 切换模型失败时不再假装成功:面板会留在原地并说明原因(供应商已停用、或分组里没有可用成员)",
+                "🖥 Mac 端 1.64.0 同步发布:舰队视图(在任意一台看见另外两台)+ 审批中心(全舰队待审批聚一处),并补上了随包内置的更新记录与启动弹卡",
+            ]),
+        LeoReleaseNote(
             version: "1.15.0",
             date: "2026-08-10",
             items: [

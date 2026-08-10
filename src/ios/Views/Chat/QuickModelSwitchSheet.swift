@@ -47,6 +47,12 @@ struct QuickModelSwitchSheet: View {
                 }
             }
             .searchable(text: $query, prompt: "搜索模型")
+            .alert("没能切换", isPresented: Binding(
+                get: { failure != nil }, set: { if !$0 { failure = nil } })) {
+                Button("知道了", role: .cancel) { failure = nil }
+            } message: {
+                Text(failure ?? "")
+            }
             .navigationTitle("切换模型")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -128,14 +134,22 @@ struct QuickModelSwitchSheet: View {
         .buttonStyle(.plain)
     }
 
+    @State private var failure: String?
+
     private func commit(_ choiceId: String) {
         LeoHaptics.selection()
         Task {
             var sid = sessionId ?? ""
             if sid.isEmpty { sid = await ensureSessionId?() ?? "" }
-            guard !sid.isEmpty else { return }
-            await ModelSwitcher.apply(choiceId: choiceId, sessionId: sid)
-            await MainActor.run { dismiss() }
+            guard !sid.isEmpty else {
+                await MainActor.run { failure = "会话还没准备好,稍后再试。" }
+                return
+            }
+            let ok = await ModelSwitcher.apply(choiceId: choiceId, sessionId: sid)
+            await MainActor.run {
+                // 切失败还关面板,用户会以为切好了 —— 留在原地并说明原因。
+                if ok { dismiss() } else { failure = "这个模型当前不可用(供应商已停用,或分组里没有可用成员)。" }
+            }
         }
     }
 }

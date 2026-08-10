@@ -39,9 +39,13 @@ enum ModelSwitcher {
 
     /// 最近用过的模型条目(已过滤掉被删除/隐藏的)。
     static func recentEntries(store: ProviderConfigStore, limit: Int = 3) -> [ModelEntry] {
+        // 供应商被停用后,它下面的模型不能再出现在"最近用过"里——
+        // 点了会把会话绑到一个不可用的实例上,发送时才报错。
+        let enabled = Set(store.instances.filter(\.isEnabled).map(\.id))
         var out: [ModelEntry] = []
         for key in recentKeys where !key.hasPrefix("group:") {
-            if let entry = store.entry(for: key), !entry.isHidden {
+            if let entry = store.entry(for: key), !entry.isHidden,
+               enabled.contains(entry.providerInstanceId) {
                 out.append(entry)
                 if out.count >= limit { break }
             }
@@ -106,7 +110,12 @@ enum ModelSwitcher {
         if choiceId.hasPrefix("group:") {
             let gid = String(choiceId.dropFirst("group:".count))
             guard let group = store.modelGroups.first(where: { $0.id == gid }) else { return false }
-            let resolvedEntryId = ModelGroupRouter.resolve(group: group, sessionId: sessionId, store: store) ?? ""
+            // 分组成员全被隐藏/删除时解析不出模型,绑上去等于绑了个空——
+            // 发送时才失败。这里直接拒绝,让调用方能如实告诉用户。
+            guard let resolvedEntryId = ModelGroupRouter.resolve(
+                group: group, sessionId: sessionId, store: store), !resolvedEntryId.isEmpty else {
+                return false
+            }
             let existing = store.binding(for: sessionId)
             store.setBinding(SessionModelBinding(
                 sessionId: sessionId,
