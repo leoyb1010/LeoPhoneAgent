@@ -29,6 +29,7 @@ from typing import Any, Optional
 
 from aiohttp import web
 
+from . import harness
 from .harness import HarnessManager, available_harnesses
 
 VERSION = "0.2.0"
@@ -383,6 +384,9 @@ def main(argv: Optional[list] = None) -> int:
             client = RelayClient(relay_url,
                                  os.getenv("LEOAGENT_RELAY_KEY", "").strip() or key,
                                  args.port, key)
+            # [T-leophone-push] 把 harness 的关键事件接到中继通道上:
+            # 手机没连着时,这是审批请求唯一的触达路径。
+            harness.set_event_sink(client.push_event)
             started["_relay_task"] = asyncio.get_event_loop().create_task(client.run_forever())
         app.on_startup.append(_start_relay)
     print(f"LeoAgent {VERSION} listening on http://{args.host}:{args.port}", flush=True)

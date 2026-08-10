@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 import json
 import socket
-from typing import Any, Dict, Optional
+from typing import List, Any, Dict, Optional
 
 import aiohttp
 
@@ -34,6 +34,43 @@ class RelayClient:
         self.name = name or socket.gethostname().split(".")[0]
         # stream_id → cancel event
         self._stream_cancels: Dict[str, asyncio.Event] = {}
+        # [T-leophone-push] 当前活动连接 + 断线期间的事件暂存。
+        # 手机没连着时 SSE 通道根本不存在,审批请求只躺在本机日志里——
+        # 这条外推是它唯一的触达路径,所以推不出去要留着补发,不能丢。
+        self._ws: Optional[Any] = None
+        self._outbox: List[Dict[str, Any]] = []
+
+    OUTBOX_LIMIT = 200
+
+    def push_event(self, event: Dict[str, Any]) -> None:
+        """把一条关键事件外推给中继。非阻塞,失败落队列等重连补发。"""
+        frame = {"type": "event", "machine": self.name, "event": event}
+        ws = self._ws
+        if ws is not None and not ws.closed:
+            try:
+                asyncio.get_running_loop().create_task(ws.send_json(frame))
+                return
+            except RuntimeError:
+                pass
+            except Exception:  # noqa: BLE001
+                pass
+        self._outbox.append(frame)
+        if len(self._outbox) > self.OUTBOX_LIMIT:
+            del self._outbox[: len(self._outbox) - self.OUTBOX_LIMIT]
+
+    async def _flush_outbox(self, ws) -> None:
+        if not self._outbox:
+            return
+        pending = self._outbox[:]
+        self._outbox.clear()
+        for frame in pending:
+            try:
+                await ws.send_json(frame)
+            except Exception:  # noqa: BLE001
+                self._outbox.append(frame)
+        sent = len(pending) - len(self._outbox)
+        if sent:
+            print(f"[relay-client] flushed {sent} queued event(s)", flush=True)
 
     async def run_forever(self) -> None:
         backoff = 1
@@ -45,6 +82,8 @@ class RelayClient:
                 raise
             except Exception as exc:  # noqa: BLE001 — 任何断因都只是重连
                 print(f"[relay-client] disconnected: {exc}", flush=True)
+            finally:
+                self._ws = None
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 30)
 
@@ -55,6 +94,8 @@ class RelayClient:
                                     "key": self.relay_key,
                                     "info": {"platform": "leoagent"}})
                 print(f"[relay-client] connected to relay as {self.name}", flush=True)
+                self._ws = ws
+                await self._flush_outbox(ws)
                 async for msg in ws:
                     if msg.type != aiohttp.WSMsgType.TEXT:
                         continue

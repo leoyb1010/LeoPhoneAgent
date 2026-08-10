@@ -321,6 +321,33 @@ TRANSLATORS = {
 }
 
 
+# [T-leophone-push] 值得推给手机的事件。
+#
+# 只推"有行动价值"的:审批要人拍板,终态要人知道结果。message.delta
+# 这类进度帧量大且无行动价值,推了只会刷屏、烧配额。
+PUSHABLE_EVENTS = {
+    EVENT_APPROVAL_REQUEST,
+    EVENT_RUN_COMPLETED,
+    EVENT_RUN_FAILED,
+    EVENT_RUN_CANCELLED,
+}
+
+# 外推回调。由 relay_client 在启动时注册——用回调而不是直接 import,
+# 是为了避开 harness ↔ relay_client 的循环依赖。
+_event_sink = None
+
+
+def set_event_sink(sink) -> None:
+    global _event_sink
+    _event_sink = sink
+
+
+def _push_event(event: Dict[str, Any]) -> None:
+    if _event_sink is not None:
+        _event_sink(event)
+
+
+
 # --------------------------------------------------------------------------
 # Session
 # --------------------------------------------------------------------------
@@ -416,6 +443,15 @@ class HarnessSession:
                 handle.write(json.dumps(event, ensure_ascii=False) + "\n")
         except OSError:
             pass
+
+        # [T-leophone-push] 关键事件外推给中继。放在持久化之后:推出去的
+        # 必须是已落盘、带 seq 与 approval_id 的富化帧,中继与手机才能按
+        # seq 幂等合并。外推是尽力而为,绝不能影响本地流。
+        if name in PUSHABLE_EVENTS:
+            try:
+                _push_event(event)
+            except Exception:  # noqa: BLE001
+                pass
 
         for queue in list(self._subscribers):
             try:

@@ -188,13 +188,18 @@ actor LeoAgentClient {
     /// Where the harness service lives (tailnet :8647 → local :8646). nil for
     /// hosts configured before this existed; harness calls then fail with a
     /// named, actionable error instead of hitting the engine port and 404ing.
-    private let harnessBaseURL: URL?
-    private let apiKey: String
+    private nonisolated let harnessBaseURL: URL?
+    private nonisolated let apiKey: String
     let session: URLSession
     /// [T-siri-fleet] 这个 client 属于哪台 Mac(GatewayHostStore 填)。
     /// Siri 审批通知需要跨进程回溯到主机来重建 client,靠它寻址。
     nonisolated let hostId: String?
     nonisolated let hostName: String?
+
+    /// [T-leophone-push] 中继事件端点要绕开 harness 路径前缀自行拼 URL,
+    /// 所以把这两样以只读形式露出来(仍然只在本模块内使用)。
+    nonisolated var harnessBaseURLForRelay: URL? { harnessBaseURL }
+    nonisolated var apiKeyForRelay: String { apiKey }
 
     init(baseURL: URL, apiKey: String, harnessBaseURL: URL? = nil,
          hostId: String? = nil, hostName: String? = nil) {

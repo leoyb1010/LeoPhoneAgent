@@ -38,6 +38,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         // the wrong (new) session. The .onAppear registration in MinisApp
         // remains as an idempotent backstop.
         ShortcutNotificationDelegate.shared.register()
+        // [T-leophone-push] 回到前台时对账 Mac 上错过的审批/终态事件。
+        RelayEventCatchUp.shared.activate()
 
         // Refresh the dynamic shortcut list every cold launch. The
         // items themselves are stable, but their localized titles

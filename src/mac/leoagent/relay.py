@@ -28,7 +28,7 @@ import json
 import os
 import time
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from aiohttp import WSMsgType, web
 
@@ -59,6 +59,11 @@ class Relay:
         # 被拒的钥匙落盘(0600,仅本机可读),便于把它收编进 RELAY_KEYS。
         self.rejected_log = rejected_log
         self.machines: Dict[str, Machine] = {}
+        # [T-leophone-push] Mac 主动外推的关键事件(审批请求、任务终态)。
+        # 手机拉 SSE 只在它连着时才收得到;这里留一份最近事件,手机回来
+        # 一次就能补齐"我不在的时候发生了什么"。也是将来接 APNs 的取数处。
+        self.recent_events: List[Dict[str, Any]] = []
+        self.event_waiters: List[asyncio.Future] = []
 
     # -- auth ---------------------------------------------------------------
 
@@ -142,6 +147,12 @@ class Relay:
                     queue = machine.streams.get(str(frame.get("id")))
                     if queue is not None:
                         queue.put_nowait(frame)
+
+                elif kind == "event":
+                    # [T-leophone-push] Mac 主动上报的关键事件。手机不在线
+                    # 时这是唯一的留痕;上限内保最近的。
+                    self._record_event(str(frame.get("machine") or machine.name),
+                                       dict(frame.get("event") or {}))
         finally:
             if machine is not None and self.machines.get(machine.name) is machine:
                 del self.machines[machine.name]
@@ -153,6 +164,63 @@ class Relay:
                 for queue in machine.streams.values():
                     queue.put_nowait({"type": "stream_close", "reason": "machine disconnected"})
         return ws
+
+    # -- 事件缓冲 -------------------------------------------------------------
+
+    MAX_EVENTS = 200
+
+    def _record_event(self, machine_name: str, event: Dict[str, Any]) -> None:
+        item = {
+            "machine": machine_name,
+            "received_at": time.time(),
+            "event": event,
+        }
+        self.recent_events.append(item)
+        if len(self.recent_events) > self.MAX_EVENTS:
+            del self.recent_events[: len(self.recent_events) - self.MAX_EVENTS]
+        # 唤醒所有等着的手机
+        for fut in self.event_waiters:
+            if not fut.done():
+                fut.set_result(None)
+        self.event_waiters.clear()
+        kind = event.get("event", "?")
+        print(f"[relay] event {kind} from {machine_name}", flush=True)
+
+    async def list_events(self, request: web.Request) -> web.Response:
+        """手机取最近事件。?after=<received_at> 只取更新的;?wait=1 长轮询。
+
+        这是"手机不在线时错过的事情"的补齐口:回到前台先拉一次,就知道
+        有没有待审批、哪个任务结束了。
+        """
+        if not self._authorized(request):
+            return self._unauthorized()
+        try:
+            after = float(request.query.get("after", "0") or 0)
+        except ValueError:
+            after = 0.0
+
+        def newer() -> List[Dict[str, Any]]:
+            return [e for e in self.recent_events if e["received_at"] > after]
+
+        items = newer()
+        if not items and request.query.get("wait") == "1":
+            # 长轮询:最多挂 25 秒,期间来了新事件立刻返回
+            loop = asyncio.get_running_loop()
+            fut: asyncio.Future = loop.create_future()
+            self.event_waiters.append(fut)
+            try:
+                await asyncio.wait_for(fut, timeout=25)
+            except asyncio.TimeoutError:
+                pass
+            finally:
+                if fut in self.event_waiters:
+                    self.event_waiters.remove(fut)
+            items = newer()
+
+        return web.json_response({
+            "events": items,
+            "now": time.time(),
+        })
 
     # -- 手机侧 --------------------------------------------------------------
 
@@ -244,6 +312,7 @@ class Relay:
         app.router.add_get("/relay/health", self.health)
         app.router.add_get("/relay/agent", self.agent_ws)
         app.router.add_get("/relay/api/machines", self.list_machines)
+        app.router.add_get("/relay/api/events", self.list_events)
         app.router.add_route("*", "/relay/api/m/{name}/{tail:.*}", self.forward)
         return app
 

@@ -388,6 +388,7 @@
 		E5AUT0001 /* AutomationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AUT0002 /* AutomationEngine.swift */; };
 		E5SET0001 /* SettingsHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SET0002 /* SettingsHomeView.swift */; };
 		E5REL0001 /* ReleaseNotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5REL0002 /* ReleaseNotesView.swift */; };
+		E5RLY0001 /* RelayEventCatchUp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RLY0002 /* RelayEventCatchUp.swift */; };
 		E5MDL0003 /* QuickModelSwitchSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MDL0004 /* QuickModelSwitchSheet.swift */; };
 		E5MDL0001 /* ModelSwitcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5MDL0002 /* ModelSwitcher.swift */; };
 		E5COL0009 /* CollectionOpener.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5COL0010 /* CollectionOpener.swift */; };
@@ -1101,6 +1102,7 @@
 		E5AUT0002 /* AutomationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomationEngine.swift; sourceTree = "<group>"; };
 		E5SET0002 /* SettingsHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Settings/SettingsHomeView.swift"; sourceTree = SOURCE_ROOT; };
 		E5REL0002 /* ReleaseNotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Settings/ReleaseNotesView.swift"; sourceTree = SOURCE_ROOT; };
+		E5RLY0002 /* RelayEventCatchUp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Agent/Gateway/RelayEventCatchUp.swift"; sourceTree = SOURCE_ROOT; };
 		E5MDL0004 /* QuickModelSwitchSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Chat/QuickModelSwitchSheet.swift"; sourceTree = SOURCE_ROOT; };
 		E5MDL0002 /* ModelSwitcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Providers/ModelSwitcher.swift"; sourceTree = SOURCE_ROOT; };
 		E5COL0010 /* CollectionOpener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Shared/CollectionOpener.swift"; sourceTree = SOURCE_ROOT; };
@@ -1965,6 +1967,7 @@
 				E5AUT0002 /* AutomationEngine.swift */,
 				E5SET0002 /* SettingsHomeView.swift */,
 				E5REL0002 /* ReleaseNotesView.swift */,
+				E5RLY0002 /* RelayEventCatchUp.swift */,
 				E5MDL0004 /* QuickModelSwitchSheet.swift */,
 				E5MDL0002 /* ModelSwitcher.swift */,
 				E5COL0010 /* CollectionOpener.swift */,
@@ -2954,6 +2957,7 @@
 				E5AUT0001 /* AutomationEngine.swift in Sources */,
 				E5SET0001 /* SettingsHomeView.swift in Sources */,
 				E5REL0001 /* ReleaseNotesView.swift in Sources */,
+				E5RLY0001 /* RelayEventCatchUp.swift in Sources */,
 				E5MDL0003 /* QuickModelSwitchSheet.swift in Sources */,
 				E5MDL0001 /* ModelSwitcher.swift in Sources */,
 				E5COL0009 /* CollectionOpener.swift in Sources */,
