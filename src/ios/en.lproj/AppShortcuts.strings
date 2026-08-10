@@ -34,3 +34,7 @@
 "Hey ${applicationName}" = "Hey ${applicationName}";
 "${applicationName} get to work" = "${applicationName} get to work";
 "${applicationName} stop" = "${applicationName} stop";
+
+/* [T-collections] collect */
+"Collect with ${applicationName}" = "Collect with ${applicationName}";
+"${applicationName} collect this" = "${applicationName} collect this";

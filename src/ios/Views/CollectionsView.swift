@@ -2,26 +2,35 @@
 //  CollectionsView.swift
 //  MinisApp
 //
-//  [T-collections] 收藏页:任意 app 分享进来的链接/图片/文本,带预览卡片。
+//  [T-collections] 收藏页:任意 app 分享/粘贴进来的链接、图片、文本。
 //
 //  链接的标题/封面在这里惰性补抓(LPMetadataProvider)——分享扩展进程
 //  内存受限不做抓取,主 app 打开本页时补,结果缓存进条目,只抓一次。
 //
-//  「发给 Agent」复用分享管道:把条目装回 ShareCoordinator 的缓冲,
-//  再请求新建对话——与从小红书分享进来的路径完全一致,零新协议。
+//  三个交互决定:
+//  1) 点击 = 回到内容原处(链接走 UIApplication.open,装了小红书就跳
+//     小红书 app;没有对应 app 才落到浏览器)。应用内预览退到长按菜单。
+//  2) 删除走 .onDelete + 编辑模式多选 + 长按菜单三条路——之前只挂
+//     .swipeActions 且行上有 .onTapGesture,手势被 tap 吞掉,删不动。
+//  3) 导入:很多 app(小红书)只给"复制链接"不给系统分享,所以收藏
+//     必须能从剪贴板进。PasteButton 是唯一不弹权限提示的读剪贴板方式。
 //
 
 import LinkPresentation
-import QuickLook
 import SafariServices
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 struct CollectionsView: View {
     @State private var items: [CollectedItem] = []
     @State private var query = ""
     @State private var filterSource: String? = nil
     @State private var previewItem: CollectedItem?
+    @State private var showImportSheet = false
+    @State private var selection = Set<String>()
+    @State private var editMode: EditMode = .inactive
+    @State private var toast: String?
     @AppStorage(CollectionStore.defaultActionKey, store: SharedContainerStore.sharedDefaults)
     private var defaultAction = "ask"
     @Environment(\.dismiss) private var dismiss
@@ -49,50 +58,125 @@ struct CollectionsView: View {
     }
 
     var body: some View {
-        List {
+        List(selection: $selection) {
+            importRow
             if items.isEmpty {
                 emptyState
             } else {
                 if sources.count > 1 { sourceFilter }
                 ForEach(visible) { item in
-                    CollectionCard(item: item)
-                        .contentShape(Rectangle())
-                        .onTapGesture { previewItem = item }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button(role: .destructive) {
-                                CollectionStore.delete(ids: [item.id])
-                                reload()
-                            } label: { Label("删除", systemImage: "trash") }
-                            Button {
-                                var updated = item
-                                updated.pinned.toggle()
-                                CollectionStore.update(updated)
-                                reload()
-                            } label: {
-                                Label(item.pinned ? "取消置顶" : "置顶",
-                                      systemImage: item.pinned ? "pin.slash" : "pin")
-                            }.tint(.orange)
-                        }
-                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                            Button {
-                                sendToAgent(item, prompt: nil)
-                            } label: { Label("发给 Agent", systemImage: "paperplane.fill") }
-                                .tint(.indigo)
-                            Button {
-                                sendToAgent(item, prompt: "用一两句话总结这条收藏的内容要点。")
-                            } label: { Label("总结", systemImage: "sparkles") }
-                                .tint(.purple)
-                        }
+                    row(item)
+                }
+                .onDelete { offsets in
+                    let ids = Set(offsets.map { visible[$0].id })
+                    CollectionStore.delete(ids: ids)
+                    reload()
                 }
             }
         }
-        .navigationTitle("收藏")
+        .environment(\.editMode, $editMode)
+        .navigationTitle(editMode.isEditing && !selection.isEmpty ? "已选 \(selection.count) 条" : "收藏")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, prompt: "搜索收藏")
         .refreshable { reload() }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+        .toolbar { toolbarContent }
+        .sheet(item: $previewItem) { CollectionPreviewSheet(item: $0) }
+        .sheet(isPresented: $showImportSheet) {
+            CollectionImportSheet { added in
+                reload()
+                fetchMissingMetadata()
+                flash("已收藏 \(added) 条")
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if let toast {
+                Text(toast)
+                    .font(.footnote.weight(.medium))
+                    .padding(.horizontal, 14).padding(.vertical, 9)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .padding(.bottom, 24)
+                    .transition(.opacity)
+            }
+        }
+        .onAppear {
+            reload()
+            fetchMissingMetadata()
+        }
+    }
+
+    // MARK: 行
+
+    private func row(_ item: CollectedItem) -> some View {
+        Button {
+            open(item)
+        } label: {
+            CollectionCard(item: item)
+        }
+        .buttonStyle(.plain)
+        .tag(item.id)
+        .contextMenu {
+            Button {
+                open(item)
+            } label: { Label(item.kind == .link ? "在原 App 打开" : "打开", systemImage: "arrow.up.forward.app") }
+            if item.kind == .link {
+                Button {
+                    previewItem = item
+                } label: { Label("在应用内预览", systemImage: "safari") }
+                Button {
+                    UIPasteboard.general.string = item.value
+                    flash("链接已复制")
+                } label: { Label("拷贝链接", systemImage: "doc.on.doc") }
+            }
+            Button {
+                sendToAgent(item, prompt: nil)
+            } label: { Label("发给 Agent", systemImage: "paperplane.fill") }
+            Button {
+                sendToAgent(item, prompt: "用一两句话总结这条收藏的内容要点。")
+            } label: { Label("让 Agent 总结", systemImage: "sparkles") }
+            Button {
+                var updated = item
+                updated.pinned.toggle()
+                CollectionStore.update(updated)
+                reload()
+            } label: {
+                Label(item.pinned ? "取消置顶" : "置顶", systemImage: item.pinned ? "pin.slash" : "pin")
+            }
+            Divider()
+            Button(role: .destructive) {
+                CollectionStore.delete(ids: [item.id])
+                reload()
+            } label: { Label("删除", systemImage: "trash") }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                CollectionStore.delete(ids: [item.id])
+                reload()
+            } label: { Label("删除", systemImage: "trash") }
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            Button {
+                sendToAgent(item, prompt: nil)
+            } label: { Label("发给 Agent", systemImage: "paperplane.fill") }
+                .tint(.indigo)
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            if editMode.isEditing {
+                Button("完成") {
+                    withAnimation { editMode = .inactive; selection = [] }
+                }
+            } else {
                 Menu {
+                    Button {
+                        showImportSheet = true
+                    } label: { Label("粘贴链接收藏", systemImage: "doc.on.clipboard") }
+                    Button {
+                        withAnimation { editMode = .active }
+                    } label: { Label("选择并删除", systemImage: "checkmark.circle") }
+                    Divider()
                     Picker("分享时的默认动作", selection: $defaultAction) {
                         Text("每次询问").tag("ask")
                         Text("总是发到对话").tag("chat")
@@ -101,10 +185,45 @@ struct CollectionsView: View {
                 } label: { Image(systemName: "ellipsis.circle") }
             }
         }
-        .sheet(item: $previewItem) { CollectionPreviewSheet(item: $0) }
-        .onAppear {
-            reload()
-            fetchMissingMetadata()
+        ToolbarItem(placement: .bottomBar) {
+            if editMode.isEditing {
+                Button(role: .destructive) {
+                    CollectionStore.delete(ids: selection)
+                    selection = []
+                    reload()
+                } label: {
+                    Label("删除所选", systemImage: "trash")
+                }
+                .disabled(selection.isEmpty)
+            }
+        }
+    }
+
+    /// 剪贴板里有链接时的一键收藏条。PasteButton 不触发"允许粘贴"提示。
+    @ViewBuilder
+    private var importRow: some View {
+        if !editMode.isEditing, UIPasteboard.general.hasURLs || UIPasteboard.general.hasStrings {
+            HStack(spacing: 10) {
+                Image(systemName: "doc.on.clipboard")
+                    .foregroundStyle(.yellow)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("剪贴板里有内容").font(.system(size: 14, weight: .medium))
+                    Text("小红书等只给「复制链接」的 app,从这里收藏")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 4)
+                PasteButton(payloadType: String.self) { strings in
+                    let added = strings.reduce(0) { $0 + CollectionStore.ingestText($1) }
+                    Task { @MainActor in
+                        reload()
+                        fetchMissingMetadata()
+                        flash(added > 0 ? "已收藏 \(added) 条" : "剪贴板里没有可收藏的内容")
+                    }
+                }
+                .labelStyle(.iconOnly)
+                .buttonBorderShape(.capsule)
+            }
+            .listRowBackground(Color.yellow.opacity(0.08))
         }
     }
 
@@ -113,12 +232,12 @@ struct CollectionsView: View {
             Image(systemName: "star.square.on.square")
                 .font(.system(size: 40)).foregroundStyle(.secondary)
             Text("还没有收藏").font(.headline)
-            Text("在小红书等任意 app 里点分享 → LeoPhoneAgent → 收藏。\n设置为「总是收藏」后分享即存,不打断刷内容。")
+            Text("两种进来的方式:\n① 在任意 app 点分享 → LeoPhoneAgent → 收藏\n② 只给「复制链接」的 app(如小红书):复制后回到这里,\n用上方剪贴板条或右上角「粘贴链接收藏」")
                 .font(.footnote).foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
+        .padding(.vertical, 32)
         .listRowSeparator(.hidden)
     }
 
@@ -146,8 +265,30 @@ struct CollectionsView: View {
         .buttonStyle(.plain)
     }
 
+    // MARK: 行为
+
     private func reload() {
         items = CollectionStore.load()
+    }
+
+    private func flash(_ message: String) {
+        withAnimation { toast = message }
+        Task {
+            try? await Task.sleep(nanoseconds: 1_800_000_000)
+            await MainActor.run { withAnimation { toast = nil } }
+        }
+    }
+
+    /// 点击 = 回到内容原处。链接交给系统:装了对应 app(小红书/B站…)就
+    /// 跳 app,没有才落浏览器;图片/文本没有"原处",走应用内预览。
+    private func open(_ item: CollectedItem) {
+        guard item.kind == .link, let url = URL(string: item.value) else {
+            previewItem = item
+            return
+        }
+        UIApplication.shared.open(url, options: [:]) { ok in
+            if !ok { Task { @MainActor in previewItem = item } }
+        }
     }
 
     /// 装回分享缓冲 → 请求新建对话。与外部分享进来的路径一致。
@@ -157,7 +298,6 @@ struct CollectionsView: View {
         case .link, .text:
             shareItems.append(.init(kind: .inlineText, value: item.value))
         case .file:
-            // 复制回分享中转目录(附件消费方从那里取)
             if let src = CollectionStore.filesDirectory?.appendingPathComponent(item.value),
                let destDir = SharedContainerStore.sharedFileDirectory {
                 try? FileManager.default.createDirectory(at: destDir, withIntermediateDirectories: true)
@@ -187,7 +327,8 @@ struct CollectionsView: View {
                 let metadata = try? await provider.startFetchingMetadata(for: url)
                 item.metadataFetched = true
                 if let metadata {
-                    item.title = metadata.title
+                    // 抓到的标题优先;抓不到时保留导入时从文案里截的标题
+                    if let fetched = metadata.title, !fetched.isEmpty { item.title = fetched }
                     if let imageProvider = metadata.imageProvider,
                        let image = try? await imageProvider.loadUIImage(),
                        let thumbDir = CollectionStore.thumbsDirectory {
@@ -206,6 +347,54 @@ struct CollectionsView: View {
     }
 }
 
+// MARK: - 导入(粘贴)
+
+private struct CollectionImportSheet: View {
+    let onDone: (Int) -> Void
+    @State private var text = ""
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextEditor(text: $text)
+                        .frame(minHeight: 130)
+                        .font(.system(size: 15))
+                } header: {
+                    Text("粘贴内容")
+                } footer: {
+                    Text("整段粘贴即可——小红书那种「99 复制打开小红书,看看【…】 http://xhslink.com/…」的文案会自动抽出链接,前面的文字当标题。多条可换行分隔。")
+                }
+                Section {
+                    PasteButton(payloadType: String.self) { strings in
+                        text = strings.joined(separator: "\n")
+                    }
+                    .buttonBorderShape(.capsule)
+                }
+            }
+            .navigationTitle("粘贴收藏")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("收藏") {
+                        let added = text
+                            .components(separatedBy: .newlines)
+                            .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+                            .reduce(0) { $0 + CollectionStore.ingestText($1) }
+                        onDone(added)
+                        dismiss()
+                    }
+                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
+}
+
 // MARK: - 卡片
 
 private struct CollectionCard: View {
@@ -219,12 +408,16 @@ private struct CollectionCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(displayTitle)
                     .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.primary)
                     .lineLimit(2)
+                    .multilineTextAlignment(.leading)
                 if let summary = item.summary, !summary.isEmpty {
                     Text(summary).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                 }
                 HStack(spacing: 6) {
-                    if item.pinned { Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(.orange) }
+                    if item.pinned {
+                        Image(systemName: "pin.fill").font(.system(size: 9)).foregroundStyle(.orange)
+                    }
                     Text(item.sourceLabel)
                         .font(.caption2.weight(.semibold))
                         .padding(.horizontal, 6).padding(.vertical, 2)
@@ -236,17 +429,15 @@ private struct CollectionCard: View {
                     }
                 }
             }
+            Spacer(minLength: 0)
         }
         .padding(.vertical, 2)
+        .contentShape(Rectangle())
     }
 
     private var displayTitle: String {
         if let title = item.title, !title.isEmpty { return title }
-        switch item.kind {
-        case .link: return item.value
-        case .text: return item.value
-        case .file: return item.value
-        }
+        return item.value
     }
 
     @ViewBuilder
@@ -276,7 +467,7 @@ private struct CollectionCard: View {
     }
 }
 
-// MARK: - 预览
+// MARK: - 应用内预览
 
 private struct CollectionPreviewSheet: View {
     let item: CollectedItem

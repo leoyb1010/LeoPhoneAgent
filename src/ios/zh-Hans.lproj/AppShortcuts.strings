@@ -31,3 +31,7 @@
 "Hey ${applicationName}" = "问${applicationName}";
 "${applicationName} get to work" = "让${applicationName}干活";
 "${applicationName} stop" = "${applicationName}停止任务";
+
+/* [T-collections] 收藏 */
+"Collect with ${applicationName}" = "${applicationName}收藏";
+"${applicationName} collect this" = "让${applicationName}收藏这个";

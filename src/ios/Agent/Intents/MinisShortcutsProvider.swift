@@ -58,14 +58,16 @@ struct MinisShortcutsProvider: AppShortcutsProvider {
             shortTitle: "Session Status",
             systemImageName: "info.circle.fill"
         )
+        // [T-collections] 收藏比「列出会话」日常价值高得多——App Shortcut
+        // 上限 10 已满,让出名额;ListSessionsIntent 在快捷指令动作列表里仍在。
         AppShortcut(
-            intent: ListSessionsIntent(),
+            intent: CollectLinkIntent(),
             phrases: [
-                "List \(.applicationName) sessions",
-                "Show \(.applicationName) chats",
+                "Collect with \(.applicationName)",
+                "\(.applicationName) collect this",
             ],
-            shortTitle: "List Sessions",
-            systemImageName: "list.bullet"
+            shortTitle: "收藏到 LPA",
+            systemImageName: "star.square.on.square"
         )
         AppShortcut(
             intent: FollowUpSessionIntent(),

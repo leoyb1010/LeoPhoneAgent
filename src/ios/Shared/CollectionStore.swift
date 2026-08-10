@@ -167,6 +167,46 @@ enum CollectionStore {
         return new.count
     }
 
+    // MARK: 从一段文字收藏(剪贴板 / 快捷指令 / Siri)
+
+    /// 收藏一段原始文字。很多 app(小红书、抖音)只提供"复制链接",
+    /// 剪出来的是一整段文案:
+    ///   `99 复制打开小红书,看看【标题…】 http://xhslink.com/xxx`
+    /// 所以这里用 NSDataDetector 抽 URL,剩下的文字当标题——用户粘贴
+    /// 整段即可,不必自己剪链接。
+    /// 返回新增条数(0 = 空内容)。
+    @discardableResult
+    static func ingestText(_ raw: String) -> Int {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return 0 }
+
+        let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        let match = detector?.firstMatch(in: text, range: range)
+
+        guard let match, let url = match.url,
+              let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
+            add([CollectedItem(kind: .text, value: text, sourceLabel: "文本")])
+            return 1
+        }
+
+        var item = CollectedItem(kind: .link, value: url.absoluteString,
+                                 sourceLabel: sourceLabel(forHost: url.host))
+        // 链接之外的文字做临时标题(元数据抓到真标题后会被覆盖)。
+        var leftover = text
+        if let r = Range(match.range, in: text) {
+            leftover.removeSubrange(r)
+        }
+        let caption = leftover
+            .replacingOccurrences(of: "复制本条信息", with: "")
+            .trimmingCharacters(in: CharacterSet(charactersIn: " ,,。;;、\n\t"))
+        if !caption.isEmpty {
+            item.title = String(caption.prefix(80))
+        }
+        add([item])
+        return 1
+    }
+
     // MARK: 来源推断
 
     static func sourceLabel(forHost host: String?) -> String {
