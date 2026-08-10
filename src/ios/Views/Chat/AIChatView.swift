@@ -212,6 +212,8 @@ struct AIChatView: View {
     // [T-mac-composer] 对话框直达 Mac:Quick Tasks 旁的"指挥 Mac"按钮。
     @ObservedObject private var gatewayStore = GatewayHostStore.shared
     @State private var macChatTarget: ComposerMacTarget?
+    // [T-model-quickswitch] 输入条上的模型胶囊
+    @State private var showQuickModelSwitch = false
     @ObservedObject private var fontSettings = FontSettings.shared
     @ObservedObject private var deepLink = DeepLinkCoordinator.shared
     @Environment(\.dismiss) private var dismiss
@@ -3173,6 +3175,25 @@ struct AIChatView: View {
                 } label: {
                     Label("Send Background Ready", systemImage: "moon.stars")
                 }
+                // [T-model-quickswitch] 用别的模型发这一条:切绑定后立即发送。
+                // 会话绑定确实会变(iOS 上"只此一条"需要另一套临时覆写,
+                // 那属于后续工作),所以文案照实说"改用 X 并发送"。
+                let recents = ModelSwitcher.recentEntries(store: ProviderConfigStore.shared, limit: 3)
+                if !recents.isEmpty {
+                    Divider()
+                    ForEach(recents, id: \.compositeKey) { entry in
+                        Button {
+                            sendWithModel(choiceId: entry.compositeKey)
+                        } label: {
+                            Label("改用 \(entry.model.displayName) 并发送", systemImage: "cpu")
+                        }
+                    }
+                }
+                Button {
+                    showQuickModelSwitch = true
+                } label: {
+                    Label("切换模型…", systemImage: "arrow.triangle.swap")
+                }
             }
         }
     }
@@ -3301,6 +3322,9 @@ struct AIChatView: View {
             .accessibilityHint("Browse, run or create quick tasks")
             // [T-ipad-pointer] Trackpad feedback; no-op on touch.
             .hoverEffect(.lift)
+            // [T-model-quickswitch] 当前模型胶囊:点开就是最近用过的几个,
+            // 换回上一个模型两下搞定,不必再翻全量 picker。
+            modelCapsule
             // [T-mac-composer] Quick Tasks 后面:选一台 Mac + 一个 CLI,
             // 直接开聊。不去设置、不去控制台。
             if !gatewayStore.activeHosts.isEmpty {
@@ -3323,7 +3347,33 @@ struct AIChatView: View {
         .fullScreenCover(item: $macChatTarget) { target in
             ComposerMacChatCover(target: target) { macChatTarget = nil }
         }
+        .sheet(isPresented: $showQuickModelSwitch) {
+            QuickModelSwitchSheet(sessionId: vm.sessionId) {
+                await vm.ensureSessionReturningId()
+            }
+            .presentationDetents([.medium, .large])
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .leoOpenQuickModelSwitch)) { _ in
+            showQuickModelSwitch = true
+        }
         return AnyView(strip)
+    }
+
+    /// [T-model-quickswitch] 当前模型胶囊。名字太长会截断,点开是快切面板。
+    private var modelCapsule: some View {
+        Button {
+            showQuickModelSwitch = true
+        } label: {
+            Label(ModelSwitcher.currentLabel(sessionId: vm.sessionId)
+                    ?? vm.selectedModel.displayName,
+                  systemImage: "cpu")
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+        }
+        .buttonStyle(.glass)
+        .controlSize(.small)
+        .hoverEffect(.lift)
+        .accessibilityHint("切换本会话使用的模型")
     }
 
     /// [T-mac-composer] "指挥 Mac"菜单:一台 Mac 时直接列 3 个 CLI,
@@ -4327,6 +4377,17 @@ struct AIChatView: View {
             || !vm.attachments.isEmpty
     }
 
+
+    /// [T-model-quickswitch] 先切模型再发这一条。
+    private func sendWithModel(choiceId: String) {
+        Task {
+            var sid = vm.sessionId ?? ""
+            if sid.isEmpty { sid = await vm.ensureSessionReturningId() }
+            guard !sid.isEmpty else { return }
+            await ModelSwitcher.apply(choiceId: choiceId, sessionId: sid)
+            await MainActor.run { performSend() }
+        }
+    }
 
     private func performEnqueue() {
         // Dismiss the software keyboard on enqueue. With a hardware keyboard,

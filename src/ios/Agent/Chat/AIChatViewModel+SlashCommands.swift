@@ -37,6 +37,8 @@ extension AIChatViewModel {
         SlashCommand(id: "compact", icon: "arrow.down.right.and.arrow.up.left", title: "Compact", subtitle: "Compress conversation history into summary"),
         SlashCommand(id: "memory", icon: "brain.head.profile", title: "Memory", subtitle: "Toggle memory writes on/off (reads unaffected)"),
         SlashCommand(id: "thinking", icon: "lightbulb", title: "Thinking", subtitle: "Toggle deep thinking mode on/off"),
+        // [T-model-quickswitch] /model kimi 一步切换;单独 /model 打开快切面板
+        SlashCommand(id: "model", icon: "cpu", title: "Model", subtitle: "切换本会话模型,可直接跟名字:/model kimi"),
     ]
 
     /// Show slash menu without replacing existing input text.
@@ -409,8 +411,63 @@ extension AIChatViewModel {
             appendSystemInfo("Memory writes \(status). Reads are unaffected.", icon: "brain.head.profile")
         case "clear":
             clearChatConfirmRequested = true
+        case "model":
+            handleModelSlashCommand()
         default:
             break
         }
     }
+
+    /// [T-model-quickswitch] 无参数的 `/model`:请 UI 打开快切面板。
+    private func handleModelSlashCommand() {
+        NotificationCenter.default.post(name: .leoOpenQuickModelSwitch, object: nil)
+    }
+
+    /// [T-model-quickswitch] 发送前拦截 `/model <名字>`。
+    ///
+    /// 斜杠菜单是个选择器,没有"参数"概念(输入的内容是菜单过滤词),
+    /// 所以带名字的用法只能在发送这一步截:命中唯一就直接切,多个命中
+    /// 列出来让人打细一点,一条都不匹配就如实说——三种情况都不会把
+    /// "/model kimi" 这句话当成提问发给模型。
+    /// 返回 true 表示已作为命令处理,调用方应中止本次发送。
+    func interceptModelCommand(_ raw: String) -> Bool {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lower = text.lowercased()
+        guard lower == "/model" || lower.hasPrefix("/model ") else { return false }
+        let arg = String(text.dropFirst("/model".count))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        inputText = ""
+        guard !arg.isEmpty else {
+            NotificationCenter.default.post(name: .leoOpenQuickModelSwitch, object: nil)
+            return true
+        }
+        let hits = ModelSwitcher.search(arg, store: ProviderConfigStore.shared)
+        guard let first = hits.first else {
+            appendSystemInfo("没有匹配「\(arg)」的模型。", icon: "cpu")
+            return true
+        }
+        let exact = hits.first { $0.title.lowercased() == arg.lowercased() }
+        let target = exact ?? first
+        if hits.count > 1, exact == nil {
+            let names = hits.prefix(5).map(\.title).joined(separator: "、")
+            appendSystemInfo("匹配到多个:\(names)。再打细一点,或点输入条上的模型胶囊选。", icon: "cpu")
+            return true
+        }
+        Task { [weak self] in
+            guard let self else { return }
+            var sid = self.sessionId ?? ""
+            if sid.isEmpty { sid = await self.ensureSessionReturningId() }
+            guard !sid.isEmpty else { return }
+            await ModelSwitcher.apply(choiceId: target.id, sessionId: sid)
+            await MainActor.run {
+                self.appendSystemInfo("已切到 \(target.title)。", icon: "cpu")
+            }
+        }
+        return true
+    }
+}
+
+extension Notification.Name {
+    /// [T-model-quickswitch] `/model` 无参数时请视图层打开快切面板。
+    static let leoOpenQuickModelSwitch = Notification.Name("leoOpenQuickModelSwitch")
 }

@@ -2181,6 +2181,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // so in practice this just prunes failed chips the user left in place.
         attachments.removeAll { $0.loadState != .ready }
 
+        // [T-model-quickswitch] "/model kimi" 是命令不是提问,在这里截住。
+        if interceptModelCommand(inputText) { return }
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         let pendingAttachments = attachments
         logger.info("🔑DRAFT [vm=\(self.vmInstanceId)] send() text=\(text.count)ch attachments=\(pendingAttachments.count) isProcessing=\(self.isProcessing) sessionId=\(self.sessionId ?? "nil") draftId=\(self.draftId ?? "nil")")

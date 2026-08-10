@@ -176,7 +176,21 @@ extension AIChatViewModel {
         do {
             let sid = sessionId ?? ""
             let wasBackground = UIApplication.shared.applicationState != .active
+            // [T-bg-false-failure] "失败"必须是事件判定,不能是状态快照。
+            //
+            // completionHasError 只是"最后一条消息上挂着 error"——它会被两类
+            // 非失败情形点亮:(a) 后台时限到期把在跑的工具打成 cancelled 并
+            // 顺手写了一条 error,回到前台会自动恢复;(b) 用户自己按了停止;
+            // (c) 上一轮留下的陈旧 error(本函数有十几个调用点,任何一次在
+            // 后台触发都会拿这个旧状态重新报一次失败)。
+            // 三者都不是"任务失败",而这正是"切到别的 app 收到失败提示、
+            // 点进去却好好的"的成因。真正的失败要满足:有错、没被挂起、
+            // 不是用户取消、且不可恢复。
             let hasError = completionHasError
+                && !backgroundSuspended
+                && !userDidCancel
+                && !canResume
+            let wasSuspended = backgroundSuspended
             let responseSummary: String = {
                 let assistantTurns = agentHistory.filter { $0.role == .assistant }
                 logger.info("[BackgroundNotification] building responseSummary from agentHistory: totalMsgs=\(agentHistory.count) assistantTurns=\(assistantTurns.count) wasBackground=\(wasBackground) hasError=\(hasError)")
@@ -239,9 +253,27 @@ extension AIChatViewModel {
                 } else {
                     sessionTitle = fallbackTitle
                 }
-                BackgroundKeepAliveManager.shared.postBackgroundTaskNotification(
-                    sessionTitle: sessionTitle, responseSummary: responseSummary, sessionId: sid, isError: hasError, wasBackground: wasBackground
-                )
+                // [T-bg-false-failure] 第二道闸:通知是在若干 await 之后才发出的,
+                // 这中间会话可能已经恢复(前台回来续跑、或挂起转为可恢复)。
+                // 发之前按"此刻"的真实状态再核一次,状态已翻转就一条都不发——
+                // 宁可不提醒,也不能报一个假失败。
+                let stillWorthNotifying = await MainActor.run { () -> Bool in
+                    if self.isProcessing { return false }      // 又跑起来了
+                    if self.canResume { return false }         // 可恢复 = 挂起,不是失败
+                    if wasSuspended { return false }           // 本次是后台挂起,回前台会续
+                    if hasError {
+                        // 失败必须此刻仍然成立
+                        return self.messages.last?.error != nil || self.errorMessage != nil
+                    }
+                    return true
+                }
+                if stillWorthNotifying {
+                    BackgroundKeepAliveManager.shared.postBackgroundTaskNotification(
+                        sessionTitle: sessionTitle, responseSummary: responseSummary, sessionId: sid, isError: hasError, wasBackground: wasBackground
+                    )
+                } else {
+                    logger.info("[BackgroundNotification] suppressed — suspended=\(wasSuspended) hasError=\(hasError) (状态已恢复或属挂起,不报失败)")
+                }
                 await MainActor.run {
                     UIApplication.shared.endBackgroundTask(bgTaskID)
                 }

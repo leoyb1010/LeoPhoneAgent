@@ -24,6 +24,13 @@ struct LeoReleaseNote: Identifiable {
 enum LeoReleaseNotes {
     static let all: [LeoReleaseNote] = [
         LeoReleaseNote(
+            version: "1.11.0",
+            date: "2026-08-10",
+            items: [
+                "🔀 换模型不再费劲,三条路都是两步内:输入框上方新增当前模型胶囊(点开=最近用过的直接选)· 打「/model kimi」一步切换 · 长按发送键可「改用某模型并发送」",
+                "🐛 根治切到别的 app 误报「任务失败」:失败判定过去是「最后一条消息上挂着错误」这种状态快照,后台挂起顺手打的错、上一轮的旧错、你自己按的停止,都会被算成失败。现在失败必须是本次真失败,且发通知前会按此刻状态复核一次——挂起/已恢复一律不报",
+            ]),
+        LeoReleaseNote(
             version: "1.10.2",
             date: "2026-08-08",
             items: [

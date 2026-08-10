@@ -1,0 +1,141 @@
+//
+//  QuickModelSwitchSheet.swift
+//  MinisApp
+//
+//  [T-model-quickswitch] 换模型的快车道。
+//
+//  紧凑面板(medium 尺寸,不是全屏):最近用过的置顶 → 搜索框 → 全部。
+//  日常"换回刚才那个"变成两下:开面板、点名字。要翻全部供应商时,
+//  底部一行进入原来的完整 picker,老路径一步没少。
+//
+
+import SwiftUI
+
+struct QuickModelSwitchSheet: View {
+    let sessionId: String?
+    /// 会话还没建时(草稿)由调用方补建,拿到 id 才能写绑定。
+    let ensureSessionId: (() async -> String)?
+
+    @StateObject private var store = ProviderConfigStore.shared
+    @State private var query = ""
+    @State private var showFullPicker = false
+    @Environment(\.dismiss) private var dismiss
+
+    private var currentLabel: String? { ModelSwitcher.currentLabel(sessionId: sessionId) }
+
+    private var searching: Bool {
+        !query.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if searching {
+                    let hits = ModelSwitcher.search(query, store: store)
+                    if hits.isEmpty {
+                        Text("没有匹配的模型").foregroundStyle(.secondary)
+                    } else {
+                        ForEach(hits.prefix(30)) { choice in
+                            choiceRow(id: choice.id, title: choice.title,
+                                      subtitle: choice.subtitle, isGroup: choice.kind == .group)
+                        }
+                    }
+                } else {
+                    recentSection
+                    groupSection
+                    allSection
+                }
+            }
+            .searchable(text: $query, prompt: "搜索模型")
+            .navigationTitle("切换模型")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+            }
+            .sheet(isPresented: $showFullPicker) {
+                NavigationStack {
+                    SessionModelPicker(sessionId: sessionId) {
+                        await ensureSessionId?() ?? ""
+                    }
+                }
+                .presentationDetents([.large])
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var recentSection: some View {
+        let recents = ModelSwitcher.recentEntries(store: store, limit: 4)
+        if !recents.isEmpty {
+            Section("最近用过") {
+                ForEach(recents, id: \.compositeKey) { entry in
+                    choiceRow(id: entry.compositeKey, title: entry.model.displayName,
+                              subtitle: store.instances.first { $0.id == entry.providerInstanceId }?.label ?? "",
+                              isGroup: false)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var groupSection: some View {
+        if !store.modelGroups.isEmpty {
+            Section("模型分组") {
+                ForEach(store.modelGroups.prefix(6), id: \.id) { group in
+                    choiceRow(id: "group:\(group.id)", title: group.name,
+                              subtitle: "分组 · 自动路由", isGroup: true)
+                }
+            }
+        }
+    }
+
+    private var allSection: some View {
+        Section {
+            Button {
+                showFullPicker = true
+            } label: {
+                Label("全部模型与供应商…", systemImage: "square.grid.2x2")
+            }
+        } footer: {
+            Text("提示:在输入框直接打 /model kimi 可以一步切换;长按发送键可以只用某个模型发这一条。")
+        }
+    }
+
+    private func choiceRow(id: String, title: String, subtitle: String, isGroup: Bool) -> some View {
+        Button {
+            commit(id)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: isGroup ? "square.stack.3d.up" : "cpu")
+                    .font(.system(size: 12))
+                    .foregroundStyle(isGroup ? .orange : .indigo)
+                    .frame(width: 22)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).font(.system(size: 15)).foregroundStyle(.primary)
+                    if !subtitle.isEmpty {
+                        Text(subtitle).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                Spacer(minLength: 0)
+                if title == currentLabel {
+                    Image(systemName: "checkmark").font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.tint)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func commit(_ choiceId: String) {
+        LeoHaptics.selection()
+        Task {
+            var sid = sessionId ?? ""
+            if sid.isEmpty { sid = await ensureSessionId?() ?? "" }
+            guard !sid.isEmpty else { return }
+            await ModelSwitcher.apply(choiceId: choiceId, sessionId: sid)
+            await MainActor.run { dismiss() }
+        }
+    }
+}
