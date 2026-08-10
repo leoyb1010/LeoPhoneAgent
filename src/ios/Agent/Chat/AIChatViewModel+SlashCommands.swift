@@ -446,10 +446,20 @@ extension AIChatViewModel {
             appendSystemInfo("没有匹配「\(arg)」的模型。", icon: "cpu")
             return true
         }
-        let exact = hits.first { $0.title.lowercased() == arg.lowercased() }
-        let target = exact ?? first
-        if hits.count > 1, exact == nil {
-            let names = hits.prefix(5).map(\.title).joined(separator: "、")
+        // [T-model-pin] 钉过的优先 —— 但"多个钉选都命中"和"多个普通候选
+        // 都命中"是同一种歧义,不能闷头挑第一个:钉了 gpt-4o 和 gpt-4o-mini,
+        // 打 /model gpt 两个都命中,静默切到排在前面那个就是切错了。
+        // 名字完全一致时(同一模型挂在官方与中转两个实例下)也取钉过的。
+        let argLower = arg.lowercased()
+        let exactHits = hits.filter { $0.title.lowercased() == argLower }
+        let pinnedHits = hits.filter { ModelSwitcher.isPinned($0.id) }
+        let exact = exactHits.first { ModelSwitcher.isPinned($0.id) } ?? exactHits.first
+        let pinnedHit = pinnedHits.count == 1 ? pinnedHits.first : nil
+        let target = exact ?? pinnedHit ?? first
+        if exact == nil, pinnedHit == nil, hits.count > 1 {
+            // 多个钉选命中时只列钉选,别拿一堆没钉过的噪音刷屏
+            let candidates = pinnedHits.count > 1 ? pinnedHits : hits
+            let names = candidates.prefix(5).map(\.title).joined(separator: "、")
             appendSystemInfo("匹配到多个:\(names)。再打细一点,或点输入条上的模型胶囊选。", icon: "cpu")
             return true
         }

@@ -20,6 +20,75 @@ import Foundation
 enum ModelSwitcher {
     private static let recentsKey = "leo.model.recents.v1"
     private static let maxRecents = 8
+    private static let pinnedKey = "leo.model.pinned.v1"
+    /// 钉选上限。超过这个数,长按胶囊弹出的菜单就不再是"一眼扫完"了,
+    /// 而那正是这条路径存在的全部理由。
+    static let maxPinned = 6
+
+    // MARK: - 常用(钉选)
+    //
+    // 为什么不用"最近使用":最近使用是算法在猜你的习惯,猜错了就是
+    // "面板里全是我不想要的"。常用由用户自己钉,顺序也自己定 ——
+    // 这是"我说了算"和"系统替我猜"的区别。
+
+    /// 钉选的 key 列表,有序(即菜单里的顺序)。
+    static var pinnedKeys: [String] {
+        get { (SharedContainerStore.sharedDefaults ?? .standard).stringArray(forKey: pinnedKey) ?? [] }
+        // 不在 setter 里截断:静默丢一条比报错更难查。数量由 togglePin 把关。
+        set { (SharedContainerStore.sharedDefaults ?? .standard).set(newValue, forKey: pinnedKey) }
+    }
+
+    static func isPinned(_ key: String) -> Bool { pinnedKeys.contains(key) }
+
+    /// 钉/取消钉。已满时钉入失败,返回 false 让调用方能如实提示。
+    @discardableResult
+    static func togglePin(_ key: String) -> Bool {
+        guard !key.isEmpty else { return false }
+        var list = pinnedKeys
+        if let idx = list.firstIndex(of: key) {
+            list.remove(at: idx)
+            pinnedKeys = list
+            return true
+        }
+        guard list.count < maxPinned else { return false }
+        list.append(key)
+        pinnedKeys = list
+        return true
+    }
+
+    /// 按 key 重排。
+    ///
+    /// 不能直接拿 UI 给的下标去动 pinnedKeys:列表里显示的是**可用**的
+    /// 钉选(pinnedEntries 过滤掉了停用供应商下的条目),而 pinnedKeys 是
+    /// 全集。有条目不可用时两者下标不对齐,直接 move 会移错行,越界还会崩。
+    /// 所以先在"可见序列"上算出新顺序,再把不可见的按原相对位置缝回去。
+    static func movePinned(visibleKeys: [String], from source: IndexSet, to destination: Int) {
+        var visible = visibleKeys
+        guard !visible.isEmpty else { return }
+        visible.move(fromOffsets: source, toOffset: destination)
+        let visibleSet = Set(visibleKeys)
+        var result: [String] = []
+        var cursor = visible.makeIterator()
+        for key in pinnedKeys {
+            if visibleSet.contains(key) {
+                if let next = cursor.next() { result.append(next) }
+            } else {
+                result.append(key)   // 不可用的留在原位,别把它挤掉
+            }
+        }
+        pinnedKeys = result
+    }
+
+    /// 钉选对应的可用条目。不可用的(供应商停用/条目删除)直接跳过 ——
+    /// 但不从存储里摘,因为供应商可能只是临时停用,回头启用就该回来。
+    static func pinnedEntries(store: ProviderConfigStore) -> [ModelEntry] {
+        let enabled = Set(store.instances.filter(\.isEnabled).map(\.id))
+        return pinnedKeys.compactMap { key in
+            guard let entry = store.entry(for: key), !entry.isHidden,
+                  enabled.contains(entry.providerInstanceId) else { return nil }
+            return entry
+        }
+    }
 
     // MARK: - 最近使用(LRU)
 
@@ -75,11 +144,16 @@ enum ModelSwitcher {
         let subtitle: String    // 供应商实例名 / "模型分组"
     }
 
-    static func allChoices(store: ProviderConfigStore) -> [Choice] {
+    /// includeGroups:分组是路由配置(默认模型 + 语音模型的组合),
+    /// 和"日常换个模型"是两回事,快切路径不列它;/model 与完整选择器仍要。
+    static func allChoices(store: ProviderConfigStore,
+                           includeGroups: Bool = true) -> [Choice] {
         var out: [Choice] = []
-        for group in store.modelGroups {
-            out.append(Choice(id: "group:\(group.id)", kind: .group,
-                              title: group.name, subtitle: String(localized: "模型分组")))
+        if includeGroups {
+            for group in store.modelGroups {
+                out.append(Choice(id: "group:\(group.id)", kind: .group,
+                                  title: group.name, subtitle: String(localized: "模型分组")))
+            }
         }
         for instance in store.instances where instance.isEnabled {
             for entry in store.entries(for: instance.id) where !entry.isHidden {
@@ -89,6 +163,24 @@ enum ModelSwitcher {
             }
         }
         return out
+    }
+
+    /// 没被钉的其他模型。最近用过的排前面 —— 最近使用不再单独占一节,
+    /// 降级成这里的排序信号。
+    static func unpinnedChoices(store: ProviderConfigStore) -> [Choice] {
+        let pinned = Set(pinnedKeys)
+        // uniqueKeysWithValues 遇重复 key 直接 trap。recentKeys 来自持久化
+        // 存储,脏一次就崩 —— 用 uniquingKeysWith 保守取最早那个名次。
+        let recentRank = Dictionary(recentKeys.enumerated().map { ($0.element, $0.offset) },
+                                    uniquingKeysWith: { first, _ in first })
+        return allChoices(store: store, includeGroups: false)
+            .filter { !pinned.contains($0.id) }
+            .sorted { a, b in
+                let ra = recentRank[a.id] ?? Int.max
+                let rb = recentRank[b.id] ?? Int.max
+                if ra != rb { return ra < rb }
+                return a.title.localizedStandardCompare(b.title) == .orderedAscending
+            }
     }
 
     /// 模糊匹配:"/model kimi" 这种只打几个字母就要命中。
@@ -144,6 +236,22 @@ enum ModelSwitcher {
         }
         remember(choiceId)
         return true
+    }
+
+    /// 当前绑定对应的 choiceId(compositeKey 或 "group:<id>")。
+    ///
+    /// 打勾必须按这个比,不能按显示名 —— 同一个模型挂在官方和中转两个
+    /// 实例下时,按名字比会两行都打勾,而点哪行都会真的换实例。
+    static func currentChoiceId(sessionId: String?, store: ProviderConfigStore = .shared) -> String? {
+        guard let sessionId, !sessionId.isEmpty,
+              let binding = store.binding(for: sessionId) else { return nil }
+        switch binding.primarySource {
+        case .group(let groupId, _):
+            return "group:\(groupId)"
+        case .directEntry(let entryId, let composite):
+            let key = composite ?? entryId
+            return store.entry(for: key)?.compositeKey ?? key
+        }
     }
 
     /// 当前会话绑定对应的短名,给胶囊显示用。

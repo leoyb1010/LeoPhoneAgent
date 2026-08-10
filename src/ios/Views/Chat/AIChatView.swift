@@ -3180,10 +3180,11 @@ struct AIChatView: View {
                 // [T-model-quickswitch] 用别的模型发这一条:切绑定后立即发送。
                 // 会话绑定确实会变(iOS 上"只此一条"需要另一套临时覆写,
                 // 那属于后续工作),所以文案照实说"改用 X 并发送"。
-                let recents = ModelSwitcher.recentEntries(store: ProviderConfigStore.shared, limit: 3)
-                if !recents.isEmpty {
+                // [T-model-pin] 用钉选的常用,不用"最近使用"猜。
+                let quick = ModelSwitcher.pinnedEntries(store: ProviderConfigStore.shared).prefix(4)
+                if !quick.isEmpty {
                     Divider()
-                    ForEach(recents, id: \.compositeKey) { entry in
+                    ForEach(Array(quick), id: \.compositeKey) { entry in
                         Button {
                             sendWithModel(choiceId: entry.compositeKey)
                         } label: {
@@ -3402,6 +3403,11 @@ struct AIChatView: View {
     }
 
     /// [T-model-quickswitch] 当前模型胶囊。名字太长会截断,点开是快切面板。
+    /// [T-model-pin] 模型胶囊。
+    ///
+    /// 点按 = 开面板(管理常用、找不常用的模型);
+    /// 长按 = 直接弹出钉好的常用,一步换完,不开任何面板 —— 这才是
+    /// 日常最短路径。两条路都在同一个控件上,不必记两个地方。
     private var modelCapsule: some View {
         Button {
             showQuickModelSwitch = true
@@ -3415,7 +3421,54 @@ struct AIChatView: View {
         .buttonStyle(.glass)
         .controlSize(.small)
         .hoverEffect(.lift)
-        .accessibilityHint("切换本会话使用的模型")
+        .accessibilityHint("点按管理常用模型,长按直接切换")
+        .contextMenu { pinnedQuickMenu }
+    }
+
+    /// 长按胶囊弹出的常用列表。空的时候给一句话指路,不给一个空菜单。
+    @ViewBuilder
+    private var pinnedQuickMenu: some View {
+        let pinned = ModelSwitcher.pinnedEntries(store: ProviderConfigStore.shared)
+        let currentKey = ModelSwitcher.currentChoiceId(sessionId: vm.sessionId)
+        if pinned.isEmpty {
+            Button {
+                showQuickModelSwitch = true
+            } label: {
+                Label("还没钉常用模型,去挑几个", systemImage: "star")
+            }
+        } else {
+            ForEach(pinned, id: \.compositeKey) { entry in
+                Button {
+                    switchTo(entry.compositeKey)
+                } label: {
+                    if entry.compositeKey == currentKey {
+                        Label(entry.model.displayName, systemImage: "checkmark")
+                    } else {
+                        Text(entry.model.displayName)
+                    }
+                }
+            }
+            Divider()
+            Button {
+                showQuickModelSwitch = true
+            } label: {
+                Label("更多…", systemImage: "list.bullet")
+            }
+        }
+    }
+
+    /// 长按菜单里的一步切换。失败要说话 —— 静默失败会让人以为切好了。
+    private func switchTo(_ choiceId: String) {
+        Task {
+            var sid = vm.sessionId ?? ""
+            if sid.isEmpty { sid = await vm.ensureSessionReturningId() }
+            guard !sid.isEmpty else { return }
+            let ok = await ModelSwitcher.apply(choiceId: choiceId, sessionId: sid)
+            await MainActor.run {
+                LeoHaptics.selection()
+                if !ok { vm.appendSystemInfo("这个模型当前不可用(供应商已停用,或已被删除)。", icon: "cpu") }
+            }
+        }
     }
 
     /// [T-mac-composer] "指挥 Mac"菜单:一台 Mac 时直接列 3 个 CLI,
