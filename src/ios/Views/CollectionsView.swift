@@ -871,6 +871,9 @@ private struct CollectionCard: View {
 // MARK: - 应用内预览
 
 private struct CollectionPreviewSheet: View {
+    /// 扫描件/图片的 OCR 正文(惰性读盘)
+    @State private var ocrText = ""
+
     let item: CollectedItem
     @Environment(\.dismiss) private var dismiss
 
@@ -916,8 +919,26 @@ private struct CollectionPreviewSheet: View {
         case .file:
             if let dir = CollectionStore.filesDirectory,
                let image = UIImage(contentsOfFile: dir.appendingPathComponent(item.value).path) {
-                ScrollView([.horizontal, .vertical]) {
-                    Image(uiImage: image).resizable().scaledToFit()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Image(uiImage: image).resizable().scaledToFit()
+                        // [T-attachments] OCR 识别出的文字。存了却看不到
+                        // 就等于没存 —— 扫描件的价值一半在图、一半在字。
+                        if !ocrText.isEmpty {
+                            Divider()
+                            Text("识别到的文字")
+                                .font(.caption).foregroundStyle(.secondary)
+                                .padding(.horizontal)
+                            Text(ocrText)
+                                .font(.system(size: 15))
+                                .textSelection(.enabled)
+                                .padding(.horizontal)
+                        }
+                    }
+                }
+                .task {
+                    guard ocrText.isEmpty, let file = item.bodyFile else { return }
+                    ocrText = await NoteBodyStore.load(file)
                 }
             } else {
                 VStack(spacing: 8) {

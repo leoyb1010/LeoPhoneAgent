@@ -24,6 +24,14 @@ struct LeoReleaseNote: Identifiable {
 enum LeoReleaseNotes {
     static let all: [LeoReleaseNote] = [
         LeoReleaseNote(
+            version: "1.20.2",
+            date: "2026-08-10",
+            items: [
+                "🛟 笔记退出时的保存改为「先取值再落盘」:原来是退出后才去读输入框内容,而那时视图已经销毁,读到的可能不是你最后打的字——也就是「写完退出内容没了」。现在取值发生在视图还在的那一刻",
+                "🔍 扫描件/图片识别出的文字现在能看见了:点开附件,图片下方显示 OCR 全文,可选中复制。之前只进了搜索索引,存了却看不到",
+                "⚡️ 历史版本列表不再每行两次读盘:改为进页一次性预读,滚动不顿",
+            ]),
+        LeoReleaseNote(
             version: "1.20.1",
             date: "2026-08-10",
             items: [

@@ -121,9 +121,18 @@ struct NoteEditorView: View {
             loaded = true
         }
         .onDisappear {
-            // 退出立即落盘:去抖任务还没到点就被取消,内容就丢了
+            // 退出立即落盘:去抖任务还没到点就被取消,内容就丢了。
+            //
+            // 关键是**在这里同步取值**再交给 Task:@State 的存储由 SwiftUI
+            // 管理,视图从层级里移除后再去读它,拿到的可能已经不是用户最后
+            // 输入的内容 —— 那就是"写完退出,内容没了"。取值发生在视图还
+            // 活着的这一刻,Task 里只碰局部常量,没有任何不确定性。
             saveTask?.cancel()
-            Task { await persist() }
+            let bodySnapshot = body_
+            let titleSnapshot = title
+            let target = item
+            Task { await Self.persist(body: bodySnapshot, title: titleSnapshot,
+                                      item: target, onSaved: onSaved) }
         }
     }
 
@@ -147,17 +156,25 @@ struct NoteEditorView: View {
     }
 
     private func persist() async {
-        guard loaded, let file = item.bodyFile else { return }
-        await NoteBodyStore.save(body_, to: file)
+        guard loaded else { return }
+        await Self.persist(body: body_, title: title, item: item, onSaved: onSaved)
+    }
+
+    /// 静态版本:只吃传进来的值,不读任何 @State。视图已经消失时也能安全跑完。
+    private static func persist(body: String, title: String,
+                                item: CollectedItem,
+                                onSaved: @escaping (CollectedItem) -> Void) async {
+        guard let file = item.bodyFile else { return }
+        await NoteBodyStore.save(body, to: file)
         var updated = item
         let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         updated.title = trimmedTitle.isEmpty ? nil : trimmedTitle
         updated.updatedAt = Date()
         // value 存首行摘要,列表和搜索都直接用它,不必去读正文文件
-        updated.value = String(body_.prefix(200))
+        updated.value = String(body.prefix(200))
         await MainActor.run { onSaved(updated) }
         await CollectionSearchIndex.shared.index(
-            itemId: updated.id, title: updated.title ?? "", body: body_)
+            itemId: updated.id, title: updated.title ?? "", body: body)
     }
 
     private func summarize() {
@@ -180,6 +197,9 @@ private struct NoteVersionsView: View {
     var onRestore: (String) -> Void
 
     @State private var versions: [NoteBodyStore.Version] = []
+    /// 预读的每版首行。原来在 List 行里直接调 readVersion(同步磁盘 IO),
+    /// 每行还调两次 —— 十版就是二十次主线程读盘,滚动能感觉到顿。
+    @State private var snippets: [String: String] = [:]
     @State private var previewText: String?
     @Environment(\.dismiss) private var dismiss
 
@@ -196,7 +216,7 @@ private struct NoteVersionsView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(version.savedAt.formatted(date: .abbreviated, time: .shortened))
                             .font(.system(size: 15))
-                        Text(String(NoteBodyStore.readVersion(version).prefix(60)))
+                        Text(snippets[version.id] ?? "")
                             .font(.caption).foregroundStyle(.secondary).lineLimit(1)
                     }
                 }
@@ -210,7 +230,15 @@ private struct NoteVersionsView: View {
                 Button("关闭") { dismiss() }
             }
         }
-        .onAppear { versions = NoteBodyStore.versions(of: fileName) }
+        .task {
+            let found = NoteBodyStore.versions(of: fileName)
+            var previews: [String: String] = [:]
+            for version in found {
+                previews[version.id] = String(NoteBodyStore.readVersion(version).prefix(60))
+            }
+            versions = found
+            snippets = previews
+        }
         .sheet(isPresented: Binding(get: { previewText != nil },
                                     set: { if !$0 { previewText = nil } })) {
             NavigationStack {
