@@ -70,8 +70,12 @@ final class PushRegistrar {
     /// 把 token 送到中继。中继与全部 Mac 共用同一把钥匙,所以任取一台
     /// 已配置的主机的 client 即可;拿不到就跳过(没配 Mac 时本就不需要)。
     private func register(kind: String, token: String) async {
-        guard let host = GatewayHostStore.shared.activeHosts.first,
-              let client = GatewayHostStore.shared.client(for: host) else { return }
+        // 必须挑"配了中继"的主机:第一台若是直连 Mac(relayEventsURL 为
+        // nil),token 会静默注册失败,整条 APNs 链路无声失效。
+        // 其他三处调用点都已这么写,这里之前漏了。
+        guard let client = GatewayHostStore.shared.activeHosts
+            .compactMap({ GatewayHostStore.shared.client(for: $0) })
+            .first(where: { $0.relayEventsURL != nil }) else { return }
         let payload: [String: Any] = [
             "kind": kind,
             "token": token,
@@ -109,9 +113,12 @@ final class PushRegistrar {
 extension LeoAgentClient {
     /// 向中继登记推送 token。中继根地址从 harness 地址推导(与事件端点同法)。
     func registerPushToken(_ payload: [String: Any]) async {
+        // 按 relay 根拼,不做字符串替换 —— 与 uploadCollections 同法:
+        // 部署路径本身含 /events 时替换会把地址拼碎。
         guard let eventsURL = relayEventsURL,
-              let base = URL(string: eventsURL.absoluteString
-                  .replacingOccurrences(of: "/events", with: "/device")) else { return }
+              let range = eventsURL.absoluteString.range(of: "/relay/api/"),
+              let base = URL(string: String(eventsURL.absoluteString[..<range.upperBound]) + "device")
+        else { return }
         var req = URLRequest(url: base)
         req.httpMethod = "POST"
         req.setValue("Bearer \(apiKeyForRelay)", forHTTPHeaderField: "Authorization")

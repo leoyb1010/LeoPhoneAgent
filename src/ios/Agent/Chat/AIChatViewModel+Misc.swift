@@ -68,6 +68,9 @@ extension AIChatViewModel {
     /// Queue the current input text as a prompt to be injected into the running agent loop.
     /// The message immediately appears in the chat with a dashed border (isQueued=true).
     func enqueuePrompt() {
+        // [T-model-pin] 排队路径同样要拦 /model:agent 正在跑时打
+        // "/model kimi" 回车,不拦的话它会作为字面提问进队列发给模型。
+        if interceptModelCommand(inputText) { return }
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !attachments.isEmpty, isProcessing else { return }
         LeoHaptics.impact(.light)

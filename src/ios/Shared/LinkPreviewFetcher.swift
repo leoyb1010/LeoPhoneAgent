@@ -79,17 +79,27 @@ enum LinkPreviewFetcher {
         var request = URLRequest(url: url)
         request.timeoutInterval = 12
         request.setValue(mobileUA, forHTTPHeaderField: "User-Agent")
-        guard let (data, resp) = try? await URLSession.shared.data(for: request),
+        // 流式读:data(for:) 会把整个响应体收完才返回 —— 收藏一条视频/
+        // 安装包直链时,那是几十 MB 的流量和内存尖峰,哪怕后面只 prefix。
+        // bytes(for:) 读到 512KB 就断,预览要的 <head> 早就在里面了。
+        guard let (bytes, resp) = try? await URLSession.shared.bytes(for: request),
               let http = resp as? HTTPURLResponse,
               // 不看状态码的话,403/404/风控页的 <title>("请在微信客户端
               // 打开""人机验证")会覆盖掉导入时截好的真标题,而
               // metadataFetched 置位后不再重试,标题就永久废在那儿。
               (200..<300).contains(http.statusCode) else { return nil }
-        // 预览只要 <head>,没必要把整个响应体读进内存再跑十几条正则 ——
-        // 收藏一条视频/安装包直链时那是几十 MB。
         let mime = (http.mimeType ?? "").lowercased()
         guard mime.isEmpty || mime.hasPrefix("text/") || mime.contains("html") else { return nil }
-        let capped = data.prefix(512 * 1024)
+        var capped = Data()
+        capped.reserveCapacity(512 * 1024)
+        do {
+            for try await byte in bytes {
+                capped.append(byte)
+                if capped.count >= 512 * 1024 { break }
+            }
+        } catch {
+            if capped.isEmpty { return nil }   // 读了一半断线:有多少解多少
+        }
         // 公众号返回 UTF-8;少数老站是 GBK,解不出就放弃(总比乱码强)
         return String(data: capped, encoding: .utf8)
             ?? String(data: capped, encoding: .init(rawValue:

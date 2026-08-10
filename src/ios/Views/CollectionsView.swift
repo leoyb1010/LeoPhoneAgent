@@ -48,6 +48,7 @@ struct CollectionsView: View {
     @State private var selection = Set<String>()
     @State private var editMode: EditMode = .inactive
     @State private var toast: String?
+    @State private var toastID = UUID()
     /// [T-collections-fulltext] 当前查询在全文索引里的命中(条目 id)。
     @State private var fullTextMatches: [String] = []
     @State private var fullTextSnippets: [String: String] = [:]
@@ -432,39 +433,25 @@ struct CollectionsView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 12) {
             Image(systemName: "shippingbox")
                 .font(.system(size: 44, weight: .light))
                 .foregroundStyle(.linearGradient(colors: [.orange, .pink],
                                                  startPoint: .topLeading,
                                                  endPoint: .bottomTrailing))
                 .symbolEffect(.bounce, options: .nonRepeating)
-            Text("藏宝阁还是空的").font(.system(size: 17, weight: .semibold))
-            Text("在任意 app 点分享 → LeoPhoneAgent,或者从这里开始:")
-                .font(.footnote).foregroundStyle(.secondary)
+            Text("藏宝阁还是空的")
+                .font(.system(size: 17, weight: .semibold))
+            // 不放按钮:入口已经有右上角「+」和剪贴板条,这里再放一对
+    // 就是重复;空状态只负责指路,页面属于内容本身。
+            Text("在任意 app 分享给 LeoPhoneAgent\n或点右上角 + 开始")
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            // 空状态给可点的按钮,而不是一段"你可以去哪里点"的说明
-            HStack(spacing: 10) {
-                Button {
-                    newNote()
-                } label: {
-                    Label("写笔记", systemImage: "square.and.pencil")
-                }
-                .buttonStyle(.borderedProminent)
-                Button {
-                    showImportSheet = true
-                } label: {
-                    Label("粘贴链接", systemImage: "doc.on.clipboard")
-                }
-                .buttonStyle(.bordered)
-            }
-            .padding(.top, 4)
-            Text("小红书这类只给「复制链接」的 app:复制后回到这里,\n顶部剪贴板条一点即存。")
-                .font(.caption).foregroundStyle(.tertiary)
-                .multilineTextAlignment(.center)
+                .lineSpacing(3)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 32)
+        .padding(.vertical, 56)
         .listRowSeparator(.hidden)
     }
 
@@ -539,7 +526,7 @@ struct CollectionsView: View {
     private func runImport(count: Int, _ work: @escaping () async -> [CollectedItem]) {
         guard !importing else { return }
         importing = true
-        flash("正在导入 \(count) 项…")
+        flash("正在导入 \(count) 项…", autoHide: false)
         Task {
             let made = await work()
             await MainActor.run {
@@ -572,12 +559,9 @@ struct CollectionsView: View {
         CollectionStore.update(updated)
         annotating = nil
         reload()
-        Task {
-            await CollectionSearchIndex.shared.index(
-                itemId: updated.id,
-                title: updated.title ?? "",
-                body: [updated.value, text].joined(separator: "\n"))
-        }
+        // 不写全文索引:index() 是先删后插,这一写会把已抽取的几万字
+        // 文章正文替换成"URL+批注"两行,而 indexedIds 里 id 还在,
+        // 永不重抽 —— 损失不可逆。批注本身走内存过滤已经能搜到。
     }
 
     private func reload() {
@@ -591,7 +575,9 @@ struct CollectionsView: View {
     private func syncToRelay() {
         let snapshot = items
         let fingerprint = snapshot.map {
-            "\($0.id)|\($0.title ?? "")|\($0.summary ?? "")|\($0.tags.joined())|\($0.pinned)"
+            // archived/annotation 必须进指纹:少了它们,归档/写批注后
+            // 指纹不变 → 同步被跳过 → 手机归档了 Mac 端照样列着。
+            "\($0.id)|\($0.title ?? "")|\($0.summary ?? "")|\($0.tags.joined())|\($0.pinned)|\($0.archived)|\($0.annotation ?? "")"
         }.joined(separator: "\n").hashValue.description
         guard fingerprint != lastSyncedFingerprint else { return }
         Task {
@@ -650,11 +636,19 @@ struct CollectionsView: View {
         }
     }
 
-    private func flash(_ message: String) {
+    /// autoHide=false 用于"正在导入…"这类进行中提示:导入 OCR 是串行的,
+    /// 九张图要跑十几秒,1.8 秒就消失等于中途界面毫无动静。
+    /// toastID 挡竞态:前一条的隐藏任务醒来时若已有新 toast,不许掐掉它。
+    private func flash(_ message: String, autoHide: Bool = true) {
+        let id = UUID()
+        toastID = id
         withAnimation(.spring(duration: 0.35, bounce: 0.25)) { toast = message }
+        guard autoHide else { return }
         Task {
             try? await Task.sleep(nanoseconds: 1_800_000_000)
-            await MainActor.run { withAnimation { toast = nil } }
+            await MainActor.run {
+                if toastID == id { withAnimation { toast = nil } }
+            }
         }
     }
 
@@ -675,9 +669,7 @@ struct CollectionsView: View {
             let (resolved, destination) = await CollectionOpener.plan(
                 item.value, cachedResolved: item.resolvedURL)
             if let resolved {
-                var updated = item
-                updated.resolvedURL = resolved
-                CollectionStore.update(updated)
+                CollectionStore.mutate(id: item.id) { $0.resolvedURL = resolved }
                 reload()
             }
             switch destination {
@@ -753,9 +745,24 @@ struct CollectionsView: View {
                         if item.tags.isEmpty { item.tags = insight.tags }
                     }
                 }
-                CollectionStore.update(item)
-                await MainActor.run { reload() }
+                // 条目级写回:长路径期间用户可能置顶/批注/归档了这条,
+                // 整条 update 会把那些回滚。只写自己抓到的字段。
+                let captured = item
+                let capturedPreviewTitle = preview.title
+                CollectionStore.mutate(id: captured.id) { fresh in
+                    fresh.metadataFetched = true
+                    if fresh.resolvedURL == nil { fresh.resolvedURL = captured.resolvedURL }
+                    if let fetched = capturedPreviewTitle, !fetched.isEmpty { fresh.title = fetched }
+                    if let thumb = captured.thumbnailFile { fresh.thumbnailFile = thumb }
+                    if fresh.summary == nil {
+                        fresh.summary = captured.summary
+                        if fresh.tags.isEmpty { fresh.tags = captured.tags }
+                    }
+                }
             }
+            // 循环尾统一刷一次:每条抓完就 reload 的话,十条 = 一分钟内
+            // 十波全表解码 + Equatable 比较 + 列表动画。
+            await MainActor.run { reload() }
         }
     }
 }
@@ -814,20 +821,29 @@ private struct CollectionImportSheet: View {
 /// 卡片徽标、无图占位共用这一个函数,不许各配各的色。
 func leoSourceColor(_ source: String) -> Color {
     let palette: [Color] = [.blue, .purple, .pink, .orange, .green, .teal, .indigo, .brown]
-    return palette[abs(source.hashValue) % palette.count]
+    // 不能用 hashValue:Swift 的字符串哈希每次启动换随机种子,
+    // "同一来源永远同色"重启一次就破了。djb2 是稳定的。
+    var hash: UInt64 = 5381
+    for byte in source.utf8 { hash = hash &* 33 &+ UInt64(byte) }
+    return palette[Int(hash % UInt64(palette.count))]
 }
 
 /// 相对时间:"3 分钟前"比"08-10 15:24"更接近人问自己的问题("刚存的
 /// 那条呢?"),超过一周才退回日期。
+/// 格式器构造是昂贵操作,列表每行每帧 new 一个会拖慢滚动 —— 缓存住。
+private let leoRelativeFormatter: RelativeDateTimeFormatter = {
+    let formatter = RelativeDateTimeFormatter()
+    formatter.unitsStyle = .short
+    formatter.locale = Locale(identifier: "zh_CN")
+    return formatter
+}()
+
 func leoRelativeDate(_ date: Date) -> String {
     let interval = Date().timeIntervalSince(date)
     if interval > 7 * 86400 {
         return date.formatted(.dateTime.month().day())
     }
-    let formatter = RelativeDateTimeFormatter()
-    formatter.unitsStyle = .short
-    formatter.locale = Locale(identifier: "zh_CN")
-    return formatter.localizedString(for: date, relativeTo: Date())
+    return leoRelativeFormatter.localizedString(for: date, relativeTo: Date())
 }
 
 private struct CollectionCard: View {

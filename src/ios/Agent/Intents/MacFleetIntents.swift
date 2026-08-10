@@ -172,14 +172,20 @@ struct CommandMacIntent: AppIntent {
         // 4 秒竞速:Foundation Models 冷启动可能要好几秒,而 App Intent
         // 总预算约 30 秒还要留给中继网络往返。整理超时就用原文,
         // 绝不能因为"想把任务写漂亮"把任务本身弄丢。
+        // 模型调用必须放独立 Task:直接放 group 里的话,withTaskGroup 的
+        // body 返回后会**隐式等待所有剩余子任务**,而 structureTask 内部
+        // 没有取消检查点 —— cancelAll 停不掉它,超时只决定"用不用结果",
+        // 一秒钟都省不下来。QuickNoteIntent 已用此法,这里之前漏改。
+        let brain = Task { await LocalBrain.shared.structureTask(from: text) }
         let structured = await withTaskGroup(of: LocalBrain.StructuredTask?.self) { group -> LocalBrain.StructuredTask? in
-            group.addTask { await LocalBrain.shared.structureTask(from: text) }
+            group.addTask { await brain.value }
             group.addTask {
                 try? await Task.sleep(nanoseconds: 4_000_000_000)
                 return nil
             }
             let first = await group.next() ?? nil
             group.cancelAll()
+            brain.cancel()
             return first
         }
         let dispatch = structured.map { "\($0.title)\n\n\($0.detail)" } ?? text

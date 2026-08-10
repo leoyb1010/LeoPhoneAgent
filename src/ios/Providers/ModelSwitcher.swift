@@ -261,7 +261,12 @@ enum ModelSwitcher {
     static func defaultLabel(store: ProviderConfigStore = .shared) -> String? {
         guard let groupId = store.defaultPrimaryGroupId,
               let group = store.group(for: groupId) else { return nil }
-        if let entryId = ModelGroupRouter.resolve(group: group, sessionId: "draft", store: store),
+        // loadBalance 按真实 sessionId 散列,草稿阶段无法预知会命中谁 ——
+        // 谎报一个具体模型名(显示 A 实际用 B)不如如实显示分组名。
+        // fallback 策略 resolve 恒取第一个可用成员,与真实发送一致,可显示。
+        if group.strategy == .loadBalance { return group.name }
+        if let entryId = ModelGroupRouter.resolve(group: group, sessionId: "draft",
+                                                  store: store, verbose: false),
            let entry = store.entry(for: entryId) {
             return entry.model.displayName
         }

@@ -208,6 +208,20 @@ enum CollectionStore {
         }
     }
 
+    /// 条目级读-改-写:整个变换在队列内完成,写的是"库里此刻的最新版"。
+    ///
+    /// update(整条覆盖) 的问题:调用方在长 await(网络抓取能跑一分钟)
+    /// 之前拿的副本,写回时会把期间用户的置顶/批注/归档整条回滚。
+    /// 长路径一律用这个,只改自己的字段。
+    static func mutate(id: String, _ transform: (inout CollectedItem) -> Void) {
+        ioQueue.sync {
+            var items = loadLocked()
+            guard let i = items.firstIndex(where: { $0.id == id }) else { return }
+            transform(&items[i])
+            saveLocked(items)
+        }
+    }
+
     static func update(_ item: CollectedItem) {
         ioQueue.sync {
             var items = loadLocked()

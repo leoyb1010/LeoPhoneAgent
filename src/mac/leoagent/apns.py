@@ -163,7 +163,8 @@ class APNsPusher:
 
     async def send_alert(self, title: str, body: str, user_info: Dict[str, Any],
                          category: Optional[str] = None,
-                         time_sensitive: bool = False) -> int:
+                         time_sensitive: bool = False,
+                         collapse_id: Optional[str] = None) -> int:
         """给所有已登记设备发一条可交互通知。返回成功条数。"""
         if not self.enabled:
             return 0
@@ -196,6 +197,10 @@ class APNsPusher:
                     "apns-push-type": "alert",
                     "apns-priority": "10",
                 }
+                if collapse_id:
+                    # 同一会话的连续事件折叠成一条横幅,而不是刷一屏;
+                    # 中继重启后 outbox 补发的重复推送也被折叠掉
+                    headers["apns-collapse-id"] = collapse_id[:64]
                 try:
                     status, text = await self._post(client, host, f"/3/device/{token}",
                                                     headers, payload)

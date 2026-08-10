@@ -119,9 +119,14 @@ struct NoteEditorView: View {
         }
         .task {
             guard !loaded, let file = item.bodyFile else { loaded = true; return }
-            body_ = await NoteBodyStore.load(file)
-            loadedBody = body_
+            let disk = await NoteBodyStore.load(file)
+            // load 排在共用串行队列里,刚导入一批照片(OCR 写盘)时要等
+            // 几秒 —— 期间用户可能已经开始打字。无条件覆盖就是把那两秒
+            // 的输入吃掉。用户开打了就以输入为准,回头补存。
+            if body_.isEmpty { body_ = disk }
+            loadedBody = disk
             loaded = true
+            if !body_.isEmpty, body_ != disk { scheduleSave() }
         }
         .onDisappear {
             // 退出立即落盘:去抖任务还没到点就被取消,内容就丢了。

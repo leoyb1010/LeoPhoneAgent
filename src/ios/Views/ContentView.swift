@@ -1002,6 +1002,10 @@ struct ContentView: View {
                 // Re-claim app-wide notifications for whichever window the user
                 // just brought forward. [T-multiwindow-notification-fanout]
                 if phase == .active { WindowRegistry.shared.markActive(windowId) }
+                // [T-mac-in-main-list] 退后台停掉 Mac 会话轮询:保活场景下
+                // 进程不挂起,否则每 20 秒白打一轮网络。回前台重启,幂等。
+                if phase == .background { MacLiveSessionsStore.shared.stop() }
+                if phase == .active { MacLiveSessionsStore.shared.start() }
                 // [T-ios-scenephase-active-sigkill] Defer ALL .active work off the
                 // synchronous callback. Writing @Published (SyncCore.isAppInBackground)
                 // here triggers objectWillChange → SwiftUI view invalidation in the

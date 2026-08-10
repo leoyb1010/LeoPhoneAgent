@@ -453,13 +453,19 @@ extension AIChatViewModel {
         let argLower = arg.lowercased()
         let exactHits = hits.filter { $0.title.lowercased() == argLower }
         let pinnedHits = hits.filter { ModelSwitcher.isPinned($0.id) }
-        let exact = exactHits.first { ModelSwitcher.isPinned($0.id) } ?? exactHits.first
+        // 同一模型挂在官方+中转两个实例、都没钉选时,静默挑第一个会让
+        // 实例选择不可见 —— 同样按歧义处理,列表里带上实例名。
+        let exact: ModelSwitcher.Choice? = exactHits.count > 1
+            ? exactHits.first { ModelSwitcher.isPinned($0.id) }
+            : exactHits.first
         let pinnedHit = pinnedHits.count == 1 ? pinnedHits.first : nil
         let target = exact ?? pinnedHit ?? first
         if exact == nil, pinnedHit == nil, hits.count > 1 {
             // 多个钉选命中时只列钉选,别拿一堆没钉过的噪音刷屏
-            let candidates = pinnedHits.count > 1 ? pinnedHits : hits
-            let names = candidates.prefix(5).map(\.title).joined(separator: "、")
+            let candidates = exactHits.count > 1 ? exactHits
+                : (pinnedHits.count > 1 ? pinnedHits : hits)
+            let names = candidates.prefix(5)
+                .map { "\($0.title)(\($0.subtitle))" }.joined(separator: "、")
             appendSystemInfo("匹配到多个:\(names)。再打细一点,或点输入条上的模型胶囊选。", icon: "cpu")
             return true
         }

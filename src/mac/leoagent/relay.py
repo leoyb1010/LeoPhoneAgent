@@ -185,7 +185,10 @@ class Relay:
                     if not fut.done():
                         fut.set_exception(ConnectionError("machine disconnected"))
                 for queue in machine.streams.values():
-                    queue.put_nowait({"type": "stream_close", "reason": "machine disconnected"})
+                    try:
+                        queue.put_nowait({"type": "stream_close", "reason": "machine disconnected"})
+                    except asyncio.QueueFull:
+                        pass  # 满 = 消费端已死,close 帧丢了也会随连接一起清
         return ws
 
     # -- 事件缓冲 -------------------------------------------------------------
@@ -233,18 +236,24 @@ class Relay:
                     },
                     category="HARNESS_APPROVAL",
                     time_sensitive=True,
+                
+                    collapse_id=f"{kind}-{event.get('session_id', '')}",
                 )
             elif kind == "run.failed":
                 await self.apns.send_alert(
                     title=f"🖥 {machine_name} 任务失败",
                     body=str(event.get("error") or "")[:200],
                     user_info={"harnessSessionId": str(event.get("session_id") or "")},
+                
+                    collapse_id=f"{kind}-{event.get('session_id', '')}",
                 )
             elif kind == "run.completed":
                 await self.apns.send_alert(
                     title=f"✅ {machine_name} 任务完成",
                     body=str(event.get("output") or "任务已结束")[:200],
                     user_info={"harnessSessionId": str(event.get("session_id") or "")},
+                
+                    collapse_id=f"{kind}-{event.get('session_id', '')}",
                 )
         except Exception as exc:  # noqa: BLE001
             print(f"[relay] apns push failed: {exc}", flush=True)

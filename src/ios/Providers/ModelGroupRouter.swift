@@ -13,22 +13,28 @@ enum ModelGroupRouter {
     ///   - sessionId: Used for deterministic load-balance hashing.
     ///   - store: The provider config store to look up entries.
     /// - Returns: The resolved ModelEntry id, or nil if no enabled member is available.
-    static func resolve(group: ModelGroup, sessionId: String, store: ProviderConfigStore) -> String? {
+    /// verbose=false 给高频 UI 路径用(如胶囊每次 body 重算):这里每条
+    /// logger.info 都会写崩溃日志环形缓冲(仅 20 条),草稿态打 20 个字
+    /// 就能把真正的崩溃上下文全部挤掉。
+    static func resolve(group: ModelGroup, sessionId: String, store: ProviderConfigStore,
+                        verbose: Bool = true) -> String? {
         let available = availableEntryIds(group: group, store: store)
-        logger.info("🔀ROUTE resolve group=\(group.name) strategy=\(group.strategy.rawValue) members=\(group.memberEntryIds) available=\(available)")
+        if verbose {
+            logger.info("🔀ROUTE resolve group=\(group.name) strategy=\(group.strategy.rawValue) members=\(group.memberEntryIds) available=\(available)")
+        }
         guard !available.isEmpty else {
-            logger.warning("🔀ROUTE resolve: no available entries")
+            if verbose { logger.warning("🔀ROUTE resolve: no available entries") }
             return nil
         }
 
         switch group.strategy {
         case .fallback:
-            logger.info("🔀ROUTE resolve fallback → \(available.first!)")
+            if verbose { logger.info("🔀ROUTE resolve fallback → \(available.first!)") }
             return available.first
 
         case .loadBalance:
             let index = abs(sessionId.hashValue) % available.count
-            logger.info("🔀ROUTE resolve loadBalance index=\(index) → \(available[index])")
+            if verbose { logger.info("🔀ROUTE resolve loadBalance index=\(index) → \(available[index])") }
             return available[index]
         }
     }

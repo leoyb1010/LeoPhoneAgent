@@ -98,10 +98,20 @@ enum HarnessApprovalNotifier {
         }
         guard let choice else { return false }
 
+        // APNs 路径的推送里只有 machine(机器名),没有 hostId ——
+        // 只按 id 精确匹配的话,锁屏按「批准一次」什么都不会发生,
+        // Mac 上的任务永远挂着。逐级回退:id → 名字全等 → 名字包含 →
+        // 唯一主机兜底(与 catch-up 路径同一套解析)。
+        let machine = info["machine"] as? String ?? ""
         Task { @MainActor in
             defer { completion() }
-            guard let host = GatewayHostStore.shared.hosts.first(where: { $0.id == hostId }),
-                  let client = GatewayHostStore.shared.client(for: host) else { return }
+            let hosts = GatewayHostStore.shared.hosts
+            let host = hosts.first { $0.id == hostId }
+                ?? hosts.first { !machine.isEmpty && $0.name == machine }
+                ?? hosts.first { !machine.isEmpty
+                    && (machine.contains($0.name) || $0.name.contains(machine)) }
+                ?? (hosts.count == 1 ? hosts.first : nil)
+            guard let host, let client = GatewayHostStore.shared.client(for: host) else { return }
             try? await client.approveHarness(sessionId: sessionId, choice: choice,
                                              approvalId: approvalId)
         }
