@@ -199,10 +199,10 @@ Environment Variables:
   CLAUDE_CLI_PATH     Set custom Claude CLI path
 
 Documentation:
-  ${packageJson.homepage || 'https://github.com/leoyb1010/leocodebox'}
+  ${packageJson.homepage || 'https://github.com/leoyb1010/LeoPhoneAgent/tree/main/src/mac/leocodebox'}
 
 Report Issues:
-  ${packageJson.bugs?.url || 'https://github.com/leoyb1010/leocodebox/issues'}
+  ${packageJson.bugs?.url || 'https://github.com/leoyb1010/LeoPhoneAgent/issues'}
 `);
 }
 
@@ -234,7 +234,7 @@ async function checkForUpdates(silent = false): Promise<UpdateResult> {
             return { hasUpdate: false, latestVersion: currentVersion, currentVersion };
         }
 
-        const response = await fetch('https://api.github.com/repos/leoyb1010/leocodebox/releases/latest', {
+        const response = await fetch('https://api.github.com/repos/leoyb1010/leocodebox-updates/releases/latest', {
             headers: {
                 Accept: 'application/vnd.github+json',
                 Authorization: `Bearer ${token}`,

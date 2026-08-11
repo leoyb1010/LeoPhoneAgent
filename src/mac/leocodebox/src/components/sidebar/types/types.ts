@@ -55,9 +55,6 @@ export type SidebarProps = {
   loadingProgress: LoadingProgress | null;
   onRefresh: () => Promise<void> | void;
   onShowSettings: () => void;
-  showSettings: boolean;
-  settingsInitialTab: string;
-  onCloseSettings: () => void;
   isMobile: boolean;
 };
 

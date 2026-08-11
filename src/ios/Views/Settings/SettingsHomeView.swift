@@ -51,6 +51,7 @@ struct SettingsHomeView: View {
     @AppStorage("settings.group.general") private var openGeneral = false
     @AppStorage("settings.group.data") private var openData = false
     @AppStorage("settings.group.advanced") private var openAdvanced = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // ── 分组数据(个人版信息架构)────────────────────────────────────────
     private var groups: [SettingsGroup] {
@@ -109,7 +110,9 @@ struct SettingsHomeView: View {
                 SettingsEntry("Agent 时间线", keywords: "timeline 今天 做了什么",
                               icon: "list.bullet.rectangle.portrait", color: .mint) { AgentTimelineView() },
                 SettingsEntry("更新记录", keywords: "更新 版本 release notes changelog 新功能",
-                              icon: "sparkles.rectangle.stack", color: .blue) { ReleaseNotesView() },
+                              icon: "sparkles.rectangle.stack", color: .blue) {
+                    LeoReleaseNotesView(mode: .history)
+                },
                 SettingsEntry("日志", keywords: "logs 日志 反馈 诊断",
                               icon: "doc.text.fill", color: .gray) { LogManagementView() },
             ]),
@@ -138,69 +141,223 @@ struct SettingsHomeView: View {
     }
 
     var body: some View {
-        List {
-            if searching {
-                let hits = groups.flatMap(\.entries).filter(matches)
-                if hits.isEmpty {
-                    Text("没有匹配的设置项").foregroundStyle(.secondary)
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                settingsSearchField
+                if searching {
+                    searchResults
                 } else {
-                    ForEach(hits) { entry in
-                        SettingsRow(entry: entry)
+                    controlCenterIntro
+                    groupCard(groups[0], isOpen: $openDevice, index: 0)
+                    groupCard(groups[1], isOpen: $openAgent, index: 1)
+                    orchestrationCard
+                    groupCard(groups[2], isOpen: $openGeneral, index: 2)
+                    groupCard(groups[3], isOpen: $openData, index: 3)
+                    groupCard(groups[4], isOpen: $openAdvanced, index: 4)
+                    feedbackCard
+                }
+            }
+            .frame(maxWidth: 760)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity)
+        }
+        .background(LeoTheme.ColorToken.groupedBackground)
+        .scrollDismissesKeyboard(.interactively)
+    }
+
+    private var settingsSearchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.secondary)
+            TextField("搜索设置、能力或设备", text: $query)
+                .textInputAutocapitalization(.never)
+                .submitLabel(.search)
+            if !query.isEmpty {
+                Button {
+                    withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) { query = "" }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.tertiary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("清除搜索")
+            }
+        }
+        .padding(.horizontal, 14)
+        .frame(minHeight: 48)
+        .background(LeoTheme.ColorToken.elevatedSurface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(LeoTheme.ColorToken.separator.opacity(0.25), lineWidth: 0.5)
+        }
+    }
+
+    private var controlCenterIntro: some View {
+        HStack(spacing: 13) {
+            Image(systemName: "switch.2")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(.tint)
+                .frame(width: 42, height: 42)
+                .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            VStack(alignment: .leading, spacing: 3) {
+                Text("控制中心")
+                    .font(.headline.weight(.bold))
+                Text("设备、Agent、数据与权限，按使用场景收纳在一处。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(16)
+        .background(LeoTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
+        .leoStaggerEntrance(index: 0)
+    }
+
+    private var searchResults: some View {
+        let hits = groups.flatMap(\.entries).filter(matches)
+        return VStack(spacing: 0) {
+            if hits.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.title2)
+                        .foregroundStyle(.tertiary)
+                    Text("没有匹配的设置项")
+                        .font(.subheadline.weight(.semibold))
+                    Text("试试「模型」、「Mac」、「藏宝阁」或「权限」")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+            } else {
+                ForEach(Array(hits.enumerated()), id: \.element.id) { index, entry in
+                    SettingsRow(entry: entry)
+                    if index < hits.count - 1 {
+                        Divider().padding(.leading, 60)
                     }
                 }
-            } else {
-                groupSection(groups[0], isOpen: $openDevice)
-                groupSection(groups[1], isOpen: $openAgent)
-                orchestrationRow
-                groupSection(groups[2], isOpen: $openGeneral)
-                groupSection(groups[3], isOpen: $openData)
-                groupSection(groups[4], isOpen: $openAdvanced)
-                feedbackRow
             }
         }
-        .searchable(text: $query, prompt: "搜索设置")
+        .background(LeoTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
+        .transition(.opacity.combined(with: .move(edge: .top)))
     }
 
-    private func groupSection(_ group: SettingsGroup, isOpen: Binding<Bool>) -> some View {
-        Section {
-            DisclosureGroup(isExpanded: isOpen) {
-                ForEach(group.entries) { entry in
-                    SettingsRow(entry: entry)
+    private func groupCard(_ group: SettingsGroup, isOpen: Binding<Bool>, index: Int) -> some View {
+        VStack(spacing: 0) {
+            Button {
+                withAnimation(LeoMotion.spring(reduceMotion: reduceMotion, dampingFraction: 0.86)) {
+                    isOpen.wrappedValue.toggle()
                 }
+                LeoHaptics.selection()
             } label: {
-                Text(group.title).font(.system(size: 15, weight: .semibold))
+                HStack(spacing: 12) {
+                    Image(systemName: groupSymbol(group.id))
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(groupTint(group.id))
+                        .frame(width: 34, height: 34)
+                        .background(groupTint(group.id).opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(group.title)
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(.primary)
+                        Text("\(group.entries.count) 项")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.tertiary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(isOpen.wrappedValue ? 90 : 0))
+                }
+                .padding(.horizontal, 14)
+                .frame(minHeight: 58)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(isOpen.wrappedValue ? Text("已展开") : Text("已折叠"))
+
+            if isOpen.wrappedValue {
+                Divider().padding(.leading, 60)
+                ForEach(Array(group.entries.enumerated()), id: \.element.id) { rowIndex, entry in
+                    SettingsRow(entry: entry)
+                        .leoStaggerEntrance(index: rowIndex)
+                    if rowIndex < group.entries.count - 1 {
+                        Divider().padding(.leading, 60)
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+        .background(LeoTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous)
+                .stroke(LeoTheme.ColorToken.separator.opacity(0.2), lineWidth: 0.5)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
+        .leoStaggerEntrance(index: index + 1)
     }
 
-    private var orchestrationRow: some View {
-        Section {
-            Toggle(isOn: $orchestrationEnabled) {
-                Label {
-                    Text("多代理编排")
-                } icon: {
-                    Image(systemName: "person.3.sequence.fill")
-                        .font(.system(size: 9)).foregroundStyle(.white)
-                        .frame(width: 21, height: 21)
-                        .background(.purple, in: Circle())
+    private var orchestrationCard: some View {
+        Toggle(isOn: $orchestrationEnabled) {
+            HStack(spacing: 12) {
+                Image(systemName: "person.3.sequence.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.purple)
+                    .frame(width: 34, height: 34)
+                    .background(Color.purple.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("多代理编排").font(.subheadline.weight(.semibold))
+                    Text("让多个 Agent 分工协作").font(.caption2).foregroundStyle(.secondary)
                 }
             }
         }
+        .padding(.horizontal, 14)
+        .frame(minHeight: 62)
+        .background(LeoTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
+        .onChange(of: orchestrationEnabled) { _, _ in LeoHaptics.selection() }
     }
 
-    private var feedbackRow: some View {
-        Section {
-            Button(action: onFeedback) {
-                Label {
-                    Text("反馈")
-                } icon: {
-                    Image(systemName: "bubble.left.and.bubble.right.fill")
-                        .font(.system(size: 9)).foregroundStyle(.white)
-                        .frame(width: 21, height: 21)
-                        .background(.indigo, in: Circle())
-                }
+    private var feedbackCard: some View {
+        Button(action: onFeedback) {
+            HStack(spacing: 12) {
+                Image(systemName: "bubble.left.and.bubble.right.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.indigo)
+                    .frame(width: 34, height: 34)
+                    .background(Color.indigo.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                Text("反馈与建议").font(.subheadline.weight(.semibold))
+                Spacer()
+                Image(systemName: "arrow.up.right").font(.caption.weight(.bold)).foregroundStyle(.tertiary)
             }
-            .foregroundStyle(.primary)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 58)
+            .background(LeoTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
+        }
+        .buttonStyle(LeoSquishButtonStyle())
+        .foregroundStyle(.primary)
+    }
+
+    private func groupSymbol(_ id: String) -> String {
+        switch id {
+        case "device": return "macbook.and.iphone"
+        case "agent": return "sparkles"
+        case "general": return "paintbrush"
+        case "data": return "externaldrive"
+        default: return "lock.shield"
+        }
+    }
+
+    private func groupTint(_ id: String) -> Color {
+        switch id {
+        case "device": return .teal
+        case "agent": return .indigo
+        case "general": return .blue
+        case "data": return .mint
+        default: return .orange
         }
     }
 }
@@ -212,14 +369,25 @@ private struct SettingsRow: View {
         NavigationLink {
             entry.destination()
         } label: {
-            Label {
-                Text(entry.title)
-            } icon: {
+            HStack(spacing: 12) {
                 Image(systemName: entry.icon)
-                    .font(.system(size: 10)).foregroundStyle(.white)
-                    .frame(width: 21, height: 21)
-                    .background(entry.color, in: Circle())
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(entry.color)
+                    .frame(width: 34, height: 34)
+                    .background(entry.color.opacity(0.11), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                Text(entry.title)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.primary)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.tertiary)
             }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 54)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
+        .hoverEffect(.highlight)
     }
 }

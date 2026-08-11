@@ -26,7 +26,7 @@ private struct LeoPulseModifier: ViewModifier {
         content
             .scaleEffect(active && up && !reduceMotion ? 1.12 : 1)
             .opacity(active && up && !reduceMotion ? 0.85 : 1)
-            .onChange(of: active) { isOn in
+            .onChange(of: active) { _, isOn in
                 guard isOn, !reduceMotion else { up = false; return }
                 withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { up = true }
             }
@@ -48,7 +48,7 @@ private struct LeoShakeModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .offset(x: offset)
-            .onChange(of: trigger) { _ in
+            .onChange(of: trigger) { _, _ in
                 guard !reduceMotion else { return }
                 // Three decaying swings, transform-only.
                 withAnimation(.easeIn(duration: 0.05)) { offset = -7 }
@@ -105,7 +105,7 @@ private struct LeoShineModifier: ViewModifier {
             }
             .clipped()
         )
-        .onChange(of: trigger) { _ in
+        .onChange(of: trigger) { _, _ in
             guard !reduceMotion else { return }
             phase = -1
             withAnimation(.easeInOut(duration: 0.7)) { phase = 1 }

@@ -1,28 +1,28 @@
-# leocodebox
+# LeoPhoneAgent · Mac
 
 ![leocodebox 本地 Agent 工作台](public/visuals/release/readme-hero.webp)
 
-![version](https://img.shields.io/badge/version-1.54.0-blue)
+![version](https://img.shields.io/badge/version-1.67.1-blue)
 ![platform](https://img.shields.io/badge/platform-macOS%20arm64-lightgrey)
-![signed](https://img.shields.io/badge/signed-Developer%20ID%20%2B%20Notarized-brightgreen)
+![signed](https://img.shields.io/badge/signed-Developer%20ID-blue)
 ![license](https://img.shields.io/badge/license-AGPL--3.0-orange)
 
-**leocodebox** 是一个本地优先的 macOS 桌面应用，用来在一个界面里统一管理本机的 AI 编码 Agent CLI —— Claude Code、Codex、Cursor、OpenCode、Gemini CLI、Hermes 与 Grok Build。无需注册、无需云端账号，打开即用。
+**LeoPhoneAgent · Mac** 是 LeoPhoneAgent 的本地优先 macOS 工作台，用一个界面统一管理本机的 AI 编码 Agent CLI，并作为 iPhone / iPad 的 Mac 端能力入口。内部应用标识 `leocodebox` 为兼容既有安装与自动更新而保留。
+
+> 源码已并入 [LeoPhoneAgent 主仓库](https://github.com/leoyb1010/LeoPhoneAgent/tree/main/src/mac/leocodebox)。`leocodebox-updates` 仅承载签名更新产物，不承载源码或 Issue。
 
 > English: leocodebox is a local-only macOS desktop app that unifies the management of local coding-agent CLIs (Claude Code, Codex, Cursor, OpenCode, Grok Build) — projects, sessions, skills, MCP servers, and provider configuration — with no cloud account required.
 
 ## ⬇️ 下载
 
-[![下载 DMG](https://img.shields.io/badge/下载-leocodebox%201.54.0%20(mac--arm64)-brightgreen?style=for-the-badge)](https://github.com/leoyb1010/leocodebox/releases/latest)
+[![下载 DMG](https://img.shields.io/badge/下载-LeoPhoneAgent%20Mac%201.67.1%20(arm64)-brightgreen?style=for-the-badge)](https://github.com/leoyb1010/leocodebox-updates/releases/latest)
 
-- **最新版本**：<https://github.com/leoyb1010/leocodebox/releases/latest>
-- **当前正式版**：`1.54.0`
-- **直接下载 DMG**：[leocodebox-1.54.0-mac-arm64.dmg](https://github.com/leoyb1010/leocodebox/releases/download/v1.54.0/leocodebox-1.54.0-mac-arm64.dmg)（仅 Apple 芯片）
-- **SHA-256**：`4e2c14a46cf4fc7efa949552d0140361d8ec58d25b68dbf014ee1c17f1029e52`
+- **最新版本**：<https://github.com/leoyb1010/leocodebox-updates/releases/latest>
+- **当前源码版本**：`1.67.1`
+- **源码**：<https://github.com/leoyb1010/LeoPhoneAgent/tree/main/src/mac/leocodebox>
+- **Issues**：<https://github.com/leoyb1010/LeoPhoneAgent/issues>
 
-已 **Developer ID 签名 + Apple 公证**：双击 DMG → 拖入「应用程序」→ 双击运行，无 Gatekeeper 警告，无需 `xattr` 去隔离。
-
-> ⚠️ 本仓库为**私有**，上面的下载链接需要用有本仓库访问权限的 GitHub 账号登录后才能下载。若要让任意人一键下载，需把仓库或该 Release 改为公开。
+本机 1.67.1 交付包已完成 **Developer ID 签名**。公开发布到更新仓前还必须完成 Apple 公证与钉章；未公证的本地验证包不会冒充公开发布资产。
 
 ---
 

@@ -52,7 +52,6 @@ actor VoiceCorrectionRecorder {
         let beforeSentences = SentenceSplitter.split(beforeText)
         let afterSentences = SentenceSplitter.split(afterText)
 
-        var candidates: [(from: String, to: String, context: String)] = []
         // Sentence counts can differ (the user split or merged sentences). Pair them
         // positionally where we can, and fall back to whole-text diff if the shapes differ
         // too much to align — a wrong alignment produces garbage pairs, which is worse

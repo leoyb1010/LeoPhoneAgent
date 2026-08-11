@@ -41,7 +41,7 @@ export type DashboardData = {
   authUser: Slice<{ username: string }>;
   quota: Slice<ClaudeQuotaEstimate>;
   projects: Slice<ProjectSummary[]>;
-  refresh: () => void;
+  refresh: () => Promise<{ ok: boolean }>;
 };
 
 function toErrorMessage(error: unknown): string {
@@ -82,11 +82,13 @@ export function useDashboardData(): DashboardData {
   const loadCliTools = useCallback(async () => {
     try {
       const payload = await apiClient.get<CliToolsStatusPayload>('/api/leocodebox/cli/status');
-      if (!mountedRef.current) return;
+      if (!mountedRef.current) return true;
       setCliTools({ data: Array.isArray(payload.tools) ? payload.tools : [], loading: false, error: null });
+      return true;
     } catch (error) {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current) return false;
       setCliTools((prev) => ({ ...prev, loading: false, error: toErrorMessage(error) }));
+      return false;
     }
   }, []);
 
@@ -100,7 +102,7 @@ export function useDashboardData(): DashboardData {
         return [provider, { ...status, provider }] as const;
       }),
     );
-    if (!mountedRef.current) return;
+    if (!mountedRef.current) return true;
     const map: Record<string, ProviderAuthStatus> = {};
     let firstError: string | null = null;
     results.forEach((result, index) => {
@@ -117,6 +119,7 @@ export function useDashboardData(): DashboardData {
       }
     });
     setProviderAuth({ data: map, loading: false, error: firstError });
+    return firstError === null;
   }, []);
 
   const loadUsage = useCallback(async () => {
@@ -128,77 +131,92 @@ export function useDashboardData(): DashboardData {
         '/api/usage/summary',
         { from: isoDay(from), to: isoDay(to) },
       );
-      if (!mountedRef.current) return;
+      if (!mountedRef.current) return true;
       setUsage({ data: Array.isArray(payload.rows) ? payload.rows : [], loading: false, error: null });
+      return true;
     } catch (error) {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current) return false;
       setUsage((prev) => ({ ...prev, loading: false, error: toErrorMessage(error) }));
+      return false;
     }
   }, []);
 
   const loadMissions = useCallback(async () => {
     try {
       const payload = await apiClient.get<{ success?: boolean; cards?: MissionCard[] }>('/api/leocodebox/missions');
-      if (!mountedRef.current) return;
+      if (!mountedRef.current) return true;
       setMissions({ data: Array.isArray(payload.cards) ? payload.cards : [], loading: false, error: null });
+      return true;
     } catch (error) {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current) return false;
       setMissions((prev) => ({ ...prev, loading: false, error: toErrorMessage(error) }));
+      return false;
     }
   }, []);
 
   const loadAuthUser = useCallback(async () => {
     try {
       const payload = await apiClient.get<{ user?: { username?: string } }>('/api/auth/user');
-      if (!mountedRef.current) return;
+      if (!mountedRef.current) return true;
       const username = payload.user?.username || 'local-user';
       setAuthUser({ data: { username }, loading: false, error: null });
+      return true;
     } catch {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current) return true;
       // Local-only desktop auth may not expose /auth/user; degrade gracefully.
       setAuthUser({ data: { username: 'local-user' }, loading: false, error: null });
+      return true;
     }
   }, []);
 
   const loadQuota = useCallback(async () => {
     try {
       const payload = await apiClient.get<{ success?: boolean; quota?: ClaudeQuotaEstimate }>('/api/usage/claude-quota');
-      if (!mountedRef.current) return;
+      if (!mountedRef.current) return true;
       setQuota({ data: payload.quota ?? null, loading: false, error: null });
+      return true;
     } catch (error) {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current) return true;
       // Quota is optional — a failure just hides the rings, not the page.
       setQuota({ data: null, loading: false, error: toErrorMessage(error) });
+      return true;
     }
   }, []);
 
   const loadProjects = useCallback(async () => {
     try {
       const payload = await apiClient.get<ProjectSummary[]>('/api/projects');
-      if (!mountedRef.current) return;
+      if (!mountedRef.current) return true;
       setProjects({ data: Array.isArray(payload) ? payload : [], loading: false, error: null });
+      return true;
     } catch (error) {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current) return false;
       setProjects((prev) => ({ ...prev, loading: false, error: toErrorMessage(error) }));
+      return false;
     }
   }, []);
 
   // No running-sessions slice here on purpose: RunningSessionsCard owns that
   // data and polls /sessions/running every 5s itself. This hook used to fetch
   // the same endpoint every 30s into a slice nothing ever read.
-  const loadAll = useCallback(() => {
-    void loadCliTools();
-    void loadProviderAuth();
-    void loadUsage();
-    void loadMissions();
-    void loadAuthUser();
-    void loadQuota();
-    void loadProjects();
+  const loadAll = useCallback(async () => {
+    const results = await Promise.all([
+      loadCliTools(),
+      loadProviderAuth(),
+      loadUsage(),
+      loadMissions(),
+      loadAuthUser(),
+      loadQuota(),
+      loadProjects(),
+    ]);
+    return { ok: results.every(Boolean) };
   }, [loadCliTools, loadProviderAuth, loadUsage, loadMissions, loadAuthUser, loadQuota, loadProjects]);
 
   useEffect(() => {
-    loadAll();
-    const stop = startVisibleInterval(loadAll, REFRESH_INTERVAL_MS);
+    void loadAll();
+    const stop = startVisibleInterval(() => {
+      void loadAll();
+    }, REFRESH_INTERVAL_MS);
     return stop;
   }, [loadAll]);
 

@@ -1,24 +1,15 @@
-import { lazy, Suspense, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { AlertTriangle, EyeOff, Trash2 } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import { Button } from '../../../../shared/view/ui';
 import VersionUpgradeModal from '../../../version-upgrade/view';
-import type { Project } from '../../../../types/app';
-import { normalizeProjectForSettings } from '../../utils/utils';
-import type { DeleteProjectConfirmation, SessionDeleteConfirmation, SettingsProject } from '../../types/types';
+import type { DeleteProjectConfirmation, SessionDeleteConfirmation } from '../../types/types';
 import ProjectCreationWizard from '../../../project-creation-wizard';
 
 import LocalToolModal from './LocalToolModal';
 
-const Settings = lazy(() => import('../../../settings/view/Settings'));
-
 type SidebarModalsProps = {
-  projects: Project[];
-  showSettings: boolean;
-  settingsInitialTab: string;
-  onCloseSettings: () => void;
   showNewProject: boolean;
   onCloseNewProject: () => void;
   onProjectCreated: () => void;
@@ -35,24 +26,7 @@ type SidebarModalsProps = {
   onCloseLocalTool: () => void;
 };
 
-type TypedSettingsProps = {
-  isOpen: boolean;
-  onClose: () => void;
-  projects: SettingsProject[];
-  initialTab: string;
-};
-
-const SettingsComponent = Settings as (props: TypedSettingsProps) => JSX.Element;
-
-function TypedSettings(props: TypedSettingsProps) {
-  return <SettingsComponent {...props} />;
-}
-
 export default function SidebarModals({
-  projects,
-  showSettings,
-  settingsInitialTab,
-  onCloseSettings,
   showNewProject,
   onCloseNewProject,
   onProjectCreated,
@@ -68,12 +42,6 @@ export default function SidebarModals({
   localTool,
   onCloseLocalTool,
 }: SidebarModalsProps) {
-  // Settings expects project identity/path fields to be present for dropdown labels and local-scope MCP config.
-  const settingsProjects = useMemo(
-    () => projects.map(normalizeProjectForSettings),
-    [projects],
-  );
-
   return (
     <>
       {localTool && ReactDOM.createPortal(
@@ -90,19 +58,6 @@ export default function SidebarModals({
             onClose={onCloseNewProject}
             onProjectCreated={onProjectCreated}
           />,
-          document.body,
-        )}
-
-      {showSettings &&
-        ReactDOM.createPortal(
-          <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 text-sm text-muted-foreground">{t('localUi.loadingSettings')}</div>}>
-            <TypedSettings
-              isOpen={showSettings}
-              onClose={onCloseSettings}
-              projects={settingsProjects}
-              initialTab={settingsInitialTab}
-            />
-          </Suspense>,
           document.body,
         )}
 

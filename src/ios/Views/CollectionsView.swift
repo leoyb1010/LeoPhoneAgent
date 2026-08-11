@@ -58,6 +58,7 @@ struct CollectionsView: View {
     @AppStorage(CollectionStore.defaultActionKey, store: SharedContainerStore.sharedDefaults)
     private var defaultAction = "ask"
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var sources: [String] {
         Array(Set(items.map(\.sourceLabel))).sorted()
@@ -90,7 +91,11 @@ struct CollectionsView: View {
 
     var body: some View {
         List(selection: $selection) {
-            importRow
+            if !editMode.isEditing {
+                treasuryHero
+                captureActions
+                importRow
+            }
             if items.isEmpty {
                 emptyState
             } else if visible.isEmpty {
@@ -107,6 +112,13 @@ struct CollectionsView: View {
                 if sources.count > 1 { sourceFilter }
                 ForEach(visible) { item in
                     row(item)
+                        .listRowInsets(EdgeInsets(top: 5, leading: 14, bottom: 5, trailing: 14))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .fill(LeoTheme.ColorToken.surface)
+                                .padding(.vertical, 2)
+                        )
                 }
                 .onDelete { offsets in
                     // visible 是计算属性,搜索防抖会在 MainActor 上异步改
@@ -119,9 +131,12 @@ struct CollectionsView: View {
             }
         }
         .environment(\.editMode, $editMode)
-        .navigationTitle(editMode.isEditing && !selection.isEmpty ? "已选 \(selection.count) 条" : "Leo藏宝阁")
+        .navigationTitle(editMode.isEditing && !selection.isEmpty ? "已选 \(selection.count) 条" : "藏宝阁")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $query, prompt: "搜索收藏(含正文)")
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(LeoTheme.ColorToken.groupedBackground)
         .onChange(of: query) { _, newValue in
             // 防抖 250ms 再查:FTS 查询别跟着每一次击键跑
             searchTask?.cancel()
@@ -140,8 +155,8 @@ struct CollectionsView: View {
         .refreshable { reload() }
         // [T-treasury-ui] 条目的进出与重排(置顶跳到最前、归档滑走、删除
         // 收起)都走弹簧,不再瞬间跳变。items 是 Equatable,代价可控。
-        .animation(.snappy(duration: 0.3), value: items)
-        .animation(.snappy(duration: 0.3), value: showArchived)
+        .animation(LeoMotion.smooth(reduceMotion: reduceMotion, duration: 0.3), value: items)
+        .animation(LeoMotion.snappy(reduceMotion: reduceMotion), value: showArchived)
         .toolbar { toolbarContent }
         // [T-attachments] 相册:PhotosPicker 走系统选择器,不必申请相册权限
         .photosPicker(isPresented: $showPhotoPicker, selection: $photoSelection,
@@ -229,6 +244,106 @@ struct CollectionsView: View {
             fetchMissingMetadata()
             indexMissingFullText()
         }
+    }
+
+    private var treasuryHero: some View {
+        let activeCount = items.filter { !$0.archived }.count
+        let noteCount = items.filter { !$0.archived && $0.kind == .note }.count
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "sparkles.rectangle.stack.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(.orange)
+                    .frame(width: 44, height: 44)
+                    .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("你的可调用记忆")
+                        .font(.headline.weight(.bold))
+                    Text("收藏、笔记、扫描与文件会统一索引，随时交给 Agent 继续工作。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            HStack(spacing: 0) {
+                treasuryMetric(value: activeCount, label: "内容")
+                Divider().frame(height: 28)
+                treasuryMetric(value: noteCount, label: "笔记")
+                Divider().frame(height: 28)
+                treasuryMetric(value: sources.count, label: "来源")
+            }
+        }
+        .padding(16)
+        .background(LeoTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.orange.opacity(0.16), lineWidth: 0.5)
+        }
+        .listRowInsets(EdgeInsets(top: 10, leading: 14, bottom: 5, trailing: 14))
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
+        .leoStaggerEntrance(index: 0)
+    }
+
+    private func treasuryMetric(value: Int, label: String) -> some View {
+        VStack(spacing: 2) {
+            Text("\(value)")
+                .font(.headline.monospacedDigit().weight(.bold))
+            Text(label).font(.caption2).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var captureActions: some View {
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
+        return LazyVGrid(columns: columns, spacing: 8) {
+            treasuryAction("笔记", icon: "square.and.pencil", tint: .indigo, index: 0) { newNote() }
+            treasuryAction("粘贴", icon: "doc.on.clipboard", tint: .orange, index: 1) { showImportSheet = true }
+            treasuryAction("扫描", icon: "doc.viewfinder", tint: .teal, index: 2) { showScanner = true }
+            Menu {
+                Button { showPhotoPicker = true } label: { Label("从相册导入", systemImage: "photo.on.rectangle") }
+                Button { showFileImporter = true } label: { Label("从文件导入", systemImage: "folder") }
+            } label: {
+                treasuryActionLabel("导入", icon: "square.and.arrow.down", tint: .blue)
+            }
+            .buttonStyle(LeoSquishButtonStyle())
+            .leoStaggerEntrance(index: 3)
+        }
+        .listRowInsets(EdgeInsets(top: 5, leading: 14, bottom: 5, trailing: 14))
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
+    }
+
+    private func treasuryAction(
+        _ title: String,
+        icon: String,
+        tint: Color,
+        index: Int,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            LeoHaptics.impact(.light)
+            action()
+        } label: {
+            treasuryActionLabel(title, icon: icon, tint: tint)
+        }
+        .buttonStyle(LeoSquishButtonStyle())
+        .leoStaggerEntrance(index: index)
+    }
+
+    private func treasuryActionLabel(_ title: String, icon: String, tint: Color) -> some View {
+        VStack(spacing: 7) {
+            Image(systemName: icon)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(tint)
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.primary)
+        }
+        .frame(maxWidth: .infinity, minHeight: 62)
+        .background(LeoTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
     // MARK: 行
@@ -324,24 +439,6 @@ struct CollectionsView: View {
             } else {
                 Menu {
                     Button {
-                        newNote()
-                    } label: { Label("写一条笔记", systemImage: "square.and.pencil") }
-                    Button {
-                        showImportSheet = true
-                    } label: { Label("粘贴链接收藏", systemImage: "doc.on.clipboard") }
-                    Divider()
-                    // [T-attachments] 附件三条路,全用系统件
-                    Button {
-                        showScanner = true
-                    } label: { Label("扫描纸质文档", systemImage: "doc.viewfinder") }
-                    Button {
-                        showPhotoPicker = true
-                    } label: { Label("从相册导入", systemImage: "photo.on.rectangle") }
-                    Button {
-                        showFileImporter = true
-                    } label: { Label("从文件导入", systemImage: "folder") }
-                    Divider()
-                    Button {
                         withAnimation { showArchived.toggle() }
                     } label: {
                         Label(showArchived ? "回到收藏" : "查看归档",
@@ -357,33 +454,6 @@ struct CollectionsView: View {
                         Text("总是收藏(不打断)").tag("collect")
                     }
                 } label: { Image(systemName: "ellipsis.circle") }
-            }
-        }
-        // [T-ia] 新增入口:点一下直接写笔记(进藏宝阁最常做的事),
-        // 长按才展开其他导入方式。一次点击拿到最常用的那个,不必先读菜单
-        // ——把"写笔记"埋在杂项 ⋯ 里,正是"点进来了还要再找"的根源。
-        ToolbarItem(placement: .topBarTrailing) {
-            if !editMode.isEditing {
-                Menu {
-                    Button {
-                        showImportSheet = true
-                    } label: { Label("粘贴链接", systemImage: "doc.on.clipboard") }
-                    Divider()
-                    Button {
-                        showScanner = true
-                    } label: { Label("扫描纸质文档", systemImage: "doc.viewfinder") }
-                    Button {
-                        showPhotoPicker = true
-                    } label: { Label("从相册导入", systemImage: "photo.on.rectangle") }
-                    Button {
-                        showFileImporter = true
-                    } label: { Label("从文件导入", systemImage: "folder") }
-                } label: {
-                    Image(systemName: "plus")
-                } primaryAction: {
-                    newNote()
-                }
-                .accessibilityLabel("写笔记;长按可选其他导入方式")
             }
         }
         ToolbarItem(placement: .bottomBar) {
@@ -444,7 +514,7 @@ struct CollectionsView: View {
                 .font(.system(size: 17, weight: .semibold))
             // 不放按钮:入口已经有右上角「+」和剪贴板条,这里再放一对
     // 就是重复;空状态只负责指路,页面属于内容本身。
-            Text("在任意 app 分享给 LeoPhoneAgent\n或点右上角 + 开始")
+            Text("在任意 app 分享给 LeoPhoneAgent\n或用上方四种方式开始")
                 .font(.system(size: 14))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)

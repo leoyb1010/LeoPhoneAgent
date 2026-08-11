@@ -31,10 +31,12 @@ enum ChatLaunchAction: Equatable {
     case startVoice
     case openCamera
     case prefillQuickTask(id: String)
-    /// Opens a fresh, device-local conversation with the Home prompt ready
-    /// in the composer. Sending remains explicit so the user can still add a
-    /// file, change the model, or edit the request before the Agent runs it.
+    /// Opens a fresh conversation with the prompt ready for editing.
     case prefillPrompt(String)
+    /// Opens a fresh conversation and immediately sends the Home prompt.
+    /// This is deliberately distinct from `prefillPrompt`: the Home CTA says
+    /// "开始", so a second send tap would violate the control's promise.
+    case sendPrompt(String)
 }
 
 @MainActor

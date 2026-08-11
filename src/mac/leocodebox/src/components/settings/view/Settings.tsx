@@ -20,6 +20,7 @@ import PluginSettingsTab from '../../plugins/view/PluginSettingsTab';
 import AboutTab from '../view/tabs/AboutTab';
 import { useSettingsController } from '../hooks/useSettingsController';
 import { useWebPush } from '../../../hooks/useWebPush';
+import { SETTINGS_MAIN_TABS } from '../constants/constants';
 import type { SettingsProps } from '../types/types';
 
 type DesktopNotificationsState = {
@@ -187,13 +188,26 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
   }
 
   const isAuthenticated = Boolean(loginProvider && providerAuthStatus[loginProvider].authenticated);
+  const activeMeta = SETTINGS_MAIN_TABS.find((item) => item.id === activeTab) ?? SETTINGS_MAIN_TABS[0];
+  const ActiveIcon = activeMeta.icon;
 
   return (
-    <div className="modal-backdrop fixed inset-0 z-[9999] flex items-center justify-center bg-black/35 backdrop-blur-[3px] md:p-4">
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="leocodebox-settings-title" tabIndex={-1} className="leocodebox-settings-dialog flex h-full w-full flex-col overflow-hidden border border-border bg-background shadow-elevation-3 md:h-[88vh] md:max-w-5xl md:rounded-lg">
+    <div className="modal-backdrop fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-[5px] md:p-5">
+      <div id="leocodebox-settings-dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="leocodebox-settings-title" tabIndex={-1} className="leocodebox-settings-dialog flex h-full w-full flex-col overflow-hidden border border-border bg-background shadow-elevation-3 md:h-[90vh] md:max-w-6xl md:rounded-[22px]">
         {/* Header */}
-        <div className="flex h-14 flex-shrink-0 items-center justify-between border-b border-border px-4 md:px-5">
-          <h2 id="leocodebox-settings-title" className="text-base font-semibold text-foreground">{t('title')}</h2>
+        <div className="flex min-h-16 flex-shrink-0 items-center justify-between border-b border-border/80 px-4 md:px-5">
+          <div className="flex min-w-0 items-center gap-3">
+            <img src="/logo-32.png" alt="LeoPhoneAgent" className="h-9 w-9 rounded-xl shadow-elevation-1" />
+            <div className="min-w-0">
+              <h2 id="leocodebox-settings-title" className="truncate text-[15px] font-semibold tracking-tight text-foreground">LeoPhoneAgent · Mac</h2>
+              <p className="flex items-center gap-1.5 truncate text-[11px] text-muted-foreground">
+                <span>{t('title')}</span>
+                <span aria-hidden="true">/</span>
+                <ActiveIcon className="h-3 w-3" />
+                <span>{t(activeMeta.labelKey)}</span>
+              </p>
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             {saveStatus === 'success' && (
               <span className="text-xs text-muted-foreground animate-in fade-in">{t('saveStatus.success')}</span>
@@ -220,7 +234,7 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
 
           {/* Content */}
           <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
-            <div key={activeTab} className="settings-content-enter min-w-0 space-y-6 overflow-x-hidden p-4 pb-safe-area-inset-bottom md:space-y-8 md:p-6">
+            <div key={activeTab} className="settings-content-enter mx-auto min-w-0 max-w-[880px] space-y-6 overflow-x-hidden p-4 pb-safe-area-inset-bottom md:space-y-8 md:p-7 lg:p-8">
               {activeTab === 'appearance' && (
                 <AppearanceSettingsTab
                   projectSortOrder={projectSortOrder}

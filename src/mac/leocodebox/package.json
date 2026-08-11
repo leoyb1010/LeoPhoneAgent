@@ -1,8 +1,8 @@
 {
   "name": "leocodebox",
-  "version": "1.66.1",
+  "version": "1.67.1",
   "productName": "leocodebox",
-  "description": "Local desktop controller for coding agents",
+  "description": "LeoPhoneAgent Mac workstation for local coding agents",
   "type": "module",
   "main": "dist-server/server/index.js",
   "private": true,
@@ -21,13 +21,14 @@
     "LICENSE",
     "NOTICE"
   ],
-  "homepage": "https://github.com/leoyb1010/leocodebox",
+  "homepage": "https://github.com/leoyb1010/LeoPhoneAgent/tree/main/src/mac/leocodebox",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/leoyb1010/leocodebox.git"
+    "url": "git+https://github.com/leoyb1010/LeoPhoneAgent.git",
+    "directory": "src/mac/leocodebox"
   },
   "bugs": {
-    "url": "https://github.com/leoyb1010/leocodebox/issues"
+    "url": "https://github.com/leoyb1010/LeoPhoneAgent/issues"
   },
   "scripts": {
     "dev": "concurrently --kill-others \"npm run server:dev\" \"npm run client\"",
@@ -56,6 +57,7 @@
     "test:desktop": "node --test electron/*.test.js",
     "test:clean-device": "node scripts/test-clean-device.mjs",
     "test:client": "node scripts/test-client.mjs",
+    "pretest:server": "electron-builder install-app-deps",
     "test:server": "node scripts/test-server.mjs",
     "lint": "eslint src/ server/ electron/ scripts/ --max-warnings 0",
     "lint:fix": "eslint src/ server/ electron/ scripts/ --fix",
@@ -122,7 +124,7 @@
       {
         "provider": "github",
         "owner": "leoyb1010",
-        "repo": "leocodebox",
+        "repo": "leocodebox-updates",
         "private": true
       }
     ]
@@ -141,7 +143,7 @@
     "ui",
     "mobile IDE"
   ],
-  "author": "leocodebox maintainers",
+  "author": "LeoPhoneAgent contributors",
   "license": "AGPL-3.0-or-later",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.165",
@@ -171,9 +173,9 @@
     "react-dom": "^18.2.0",
     "react-error-boundary": "^4.1.2",
     "react-i18next": "^16.5.3",
-    "react-router-dom": "^6.8.1",
+    "react-router-dom": "^7.18.2",
     "tailwind-merge": "^3.3.1",
-    "undici": "^7.28.0",
+    "undici": "^7.29.0",
     "virtua": "^0.39.3",
     "web-push": "^3.6.7",
     "ws": "^8.14.2"
@@ -190,7 +192,6 @@
     "@commitlint/cli": "^20.5.0",
     "@commitlint/config-conventional": "^20.5.0",
     "@eslint/js": "^9.39.3",
-    "@release-it/conventional-changelog": "^10.0.5",
     "@replit/codemirror-minimap": "^0.5.2",
     "@tailwindcss/typography": "^0.5.16",
     "@types/better-sqlite3": "^7.6.13",
@@ -210,11 +211,9 @@
     "@xterm/addon-web-links": "^0.11.0",
     "@xterm/addon-webgl": "^0.18.0",
     "@xterm/xterm": "^5.5.0",
-    "auto-changelog": "^2.5.0",
     "autoprefixer": "^10.4.16",
     "cmdk": "^1.1.1",
     "concurrently": "^8.2.2",
-    "cross-env": "^10.1.0",
     "dompurify": "^3.4.7",
     "electron": "^43.1.0",
     "electron-builder": "^26.15.3",
@@ -241,7 +240,6 @@
     "react-test-renderer": "^18.3.1",
     "rehype-katex": "^7.0.1",
     "rehype-raw": "^7.0.0",
-    "release-it": "^19.0.5",
     "remark-gfm": "^4.0.0",
     "remark-math": "^6.0.0",
     "sharp": "^0.34.2",
@@ -261,5 +259,15 @@
   },
   "engines": {
     "node": ">=22"
+  },
+  "overrides": {
+    "@hono/node-server": "2.1.0",
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "body-parser@1.20.5": "1.20.6",
+    "fast-uri": "3.1.5",
+    "hono": "4.13.1",
+    "ip-address": "10.5.0",
+    "js-yaml@3.15.0": "3.15.1",
+    "js-yaml@4.3.0": "4.3.1"
   }
 }

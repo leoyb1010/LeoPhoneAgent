@@ -81,9 +81,9 @@ public final class TextSegmenter: Sendable {
         guard wrapper.isReady else { return segmentWithNLTokenizer(text) }
         let result: [String]
         if forSearch {
-            result = wrapper.segment(forSearch: text) as? [String] ?? []
+            result = wrapper.segment(forSearch: text)
         } else {
-            result = wrapper.segment(text) as? [String] ?? []
+            result = wrapper.segment(text)
         }
         return result.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }

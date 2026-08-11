@@ -20,6 +20,7 @@ extension Notification.Name {
 ///   leophoneagent://voice
 ///   leophoneagent://views/alarm
 ///   leophoneagent://open_terminal[?init_command=…]
+///   leophoneagent://collections       (alias: treasury)
 ///   leophoneagent://open?session=<sid>&path=<scope-prefixed-path>  (LeoPhoneAgent launcher round-trip)
 ///   leophoneagent://session/<id>      (legacy singular alias)
 ///   leophoneagent://sessions/<id>     (canonical — matches minis-sessions-cli)
@@ -85,6 +86,9 @@ enum DeepLinkRouter {
             let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
             coord.terminalInitCommand = components?.queryItems?.first(where: { $0.name == "init_command" })?.value
             coord.showTerminal = true
+
+        case "collections", "treasury":
+            coord.pendingCollections = true
 
         case "open":
             handleWebAppLauncherReturn(url: url)

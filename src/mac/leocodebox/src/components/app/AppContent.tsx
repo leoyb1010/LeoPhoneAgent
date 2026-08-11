@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import Sidebar from '../sidebar/view/Sidebar';
 import MainContent from '../main-content/view/MainContent';
+import SettingsHost from '../settings/view/SettingsHost';
 import CommandPalette from '../command-palette/CommandPalette';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { PaletteOpsProvider, usePaletteOpsRegister } from '../../contexts/PaletteOpsContext';
@@ -358,6 +359,12 @@ function AppContentInner() {
         onStartNewChat={handleNewSession}
         onOpenSettings={() => openSettings()}
         onShowTab={setActiveTab}
+      />
+      <SettingsHost
+        isOpen={sidebarSharedProps.showSettings}
+        initialTab={sidebarSharedProps.settingsInitialTab}
+        projects={sidebarSharedProps.projects}
+        onClose={sidebarSharedProps.onCloseSettings}
       />
     </div>
   );

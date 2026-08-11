@@ -1492,6 +1492,26 @@ struct AIChatView: View {
             // primary workspace, where the user can attach local context or
             // switch models before execution.
             QuickActionWorkflow.shared.markCoverPresented()
+        case .sendPrompt(let prompt):
+            let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else {
+                QuickActionWorkflow.shared.markCoverPresented()
+                return
+            }
+            vm.inputText = trimmed
+            inputFocused = false
+            // The workflow hands off only after the draft chat is mounted.
+            // Sending on the next run loop lets SwiftUI commit that mount first,
+            // avoiding a navigation/state transaction collision on real devices.
+            DispatchQueue.main.async {
+                // Do not gate this on `isReady`: the regular send path owns
+                // provider validation and presents its real error. A computed
+                // readiness snapshot here could silently turn “开始” back into
+                // the exact prefill-only/double-tap behaviour this action fixes.
+                guard isChatViewVisible, !vm.isProcessing else { return }
+                performSend()
+            }
+            QuickActionWorkflow.shared.markCoverPresented()
         }
     }
 
@@ -6028,16 +6048,17 @@ private struct StatRow: View {
     }
 }
 
-// MARK: - Empty iPhone Agent Workspace
+// MARK: - Empty Local Agent Workspace
 
 /// Useful, action-oriented empty state for every fresh local conversation.
 /// The old card led with `/var/minis/` implementation details and only appeared
 /// once, which made later drafts feel blank and made the product read like a
-/// Mac controller. This keeps the iPhone execution boundary explicit and moves
+/// Mac controller. This keeps the local-device execution boundary explicit and moves
 /// file-system detail behind the real browser action.
 private struct EmptyChatWorkspaceCard: View {
     var onPrompt: (String) -> Void
     var onBrowse: () -> Void
+    private let isIPad = UIDevice.current.userInterfaceIdiom == .pad
 
     private let prompts = [
         (String(localized: "整理今天要做的事"), "checklist"),
@@ -6048,13 +6069,13 @@ private struct EmptyChatWorkspaceCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
-                Image(systemName: "iphone")
+                Image(systemName: isIPad ? "ipad" : "iphone")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(.tint)
                     .frame(width: 36, height: 36)
                     .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("此 iPhone 工作区")
+                    Text(isIPad ? "此 iPad 工作区" : "此 iPhone 工作区")
                         .font(.headline.weight(.bold))
                         .foregroundStyle(ChatColors.primaryText)
                     Text("对话、文件、浏览器和 iSH 都在本机可用")

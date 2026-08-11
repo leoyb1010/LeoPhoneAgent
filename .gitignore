@@ -120,3 +120,6 @@ src/ios/Configs/ProviderCustomization.xcconfig
 # LeoAgentDesktop vendored CLI 二进制(可重新下载;GitHub 单文件上限 100MB)
 src/mac/leoagent/__pycache__/
 __pycache__/
+
+# 本机视觉/构建审查证据，可能含设备截图或绝对路径，不进入源码仓。
+/audit/

@@ -85,9 +85,9 @@ export default function AgentGridCard({ cliTools, providerAuth, loading, error, 
       ) : AGENT_ORDER.every((agent) => !toolById[agent.id] && !providerAuth?.[agent.id]) ? (
         <DashEmpty message={t('dashboard.agentsEmpty', { defaultValue: '未检测到任何 Agent CLI' })} />
       ) : (
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-1 overflow-hidden rounded-lg border border-border/80 sm:grid-cols-2">
           {installError && (
-            <div className="sm:col-span-2">
+            <div className="border-b border-border p-2 sm:col-span-2">
               {/* No retry button: the fix is usually manual (see the message),
                   and a 重试 that only dismissed would be its own small lie. */}
               <DashError message={installError} />
@@ -105,45 +105,40 @@ export default function AgentGridCard({ cliTools, providerAuth, loading, error, 
             return (
               <div
                 key={agent.id}
-                className={`rounded-lg p-3 transition-all ${
-                  installed
-                    ? 'border border-transparent bg-secondary/60 hover:border-primary/25 hover:bg-secondary/90 hover:shadow-elevation-1'
-                    : 'border border-dashed border-border bg-transparent hover:border-border'
-                }`}
+                className="group flex min-h-[64px] items-center gap-3 border-b border-border/70 px-3 py-2.5 transition-colors hover:bg-accent/35 sm:odd:border-r"
               >
-                <div className="mb-1 flex items-center gap-2">
-                  <StatusDot tone={tone} />
-                  <span className={`text-[13px] font-medium ${installed ? 'text-foreground' : 'text-muted-foreground'}`}>
-                    {tool?.label || agent.label}
-                  </span>
-                  {hasUpdate && (
-                    <span className="ml-auto inline-flex items-center gap-0.5 text-[11px] text-info" title={t('dashboard.canUpdate', { defaultValue: '可更新' })}>
-                      <ArrowUp className="h-3 w-3" />
-                      {tool?.latestVersion}
+                <StatusDot tone={tone} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className={`truncate text-[13px] font-medium ${installed ? 'text-foreground' : 'text-muted-foreground'}`}>
+                      {tool?.label || agent.label}
                     </span>
-                  )}
-                </div>
-
-                <div className="pl-4">
+                    {hasUpdate && (
+                      <span className="ml-auto inline-flex flex-shrink-0 items-center gap-0.5 text-[11px] text-info" title={t('dashboard.canUpdate', { defaultValue: '可更新' })}>
+                        <ArrowUp className="h-3 w-3" />
+                        {tool?.latestVersion}
+                      </span>
+                    )}
+                  </div>
                   {installed ? (
-                    <>
-                      <div className="truncate text-[12px] text-muted-foreground">
+                    <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+                      <span className="truncate">
                         {agent.hasAuth
                           ? authenticated
                             ? auth?.email || t('dashboard.loggedIn', { defaultValue: '已登录' })
                             : t('dashboard.notLoggedIn', { defaultValue: '未登录' })
                           : t('dashboard.installed', { defaultValue: '已安装' })}
-                      </div>
+                      </span>
                       {tool?.currentVersion && (
-                        <div className="mt-0.5 font-mono text-[11px] text-muted-foreground/70">v{tool.currentVersion}</div>
+                        <span className="flex-shrink-0 font-mono text-muted-foreground/70">v{tool.currentVersion}</span>
                       )}
-                    </>
+                    </div>
                   ) : (
                     <button
                       type="button"
                       disabled={installing === agent.id || !tool?.installSource}
                       onClick={() => void handleInstall(agent.id)}
-                      className="inline-flex items-center gap-1 text-[12px] text-info transition-colors hover:text-info/80 disabled:opacity-50"
+                      className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-info transition-colors hover:text-info/80 disabled:opacity-50"
                     >
                       <Download className="h-3 w-3" />
                       {installing === agent.id

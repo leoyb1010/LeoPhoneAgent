@@ -47,16 +47,23 @@ export default function SettingsSidebar({ activeTab, onChange }: SettingsSidebar
     return (
       <button
         key={item.id}
+        type="button"
         onClick={() => onChange(item.id)}
+        aria-current={isActive ? 'page' : undefined}
         className={cn(
-          'flex items-center gap-3 rounded-md border-l-2 px-3 py-2 text-left text-sm font-medium',
+          'leo-squish group flex min-h-10 w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-sm font-medium transition-colors',
           isActive
-            ? 'border-l-primary bg-primary/[0.07] text-foreground'
-            : 'border-l-transparent text-muted-foreground hover:bg-accent/50 hover:text-foreground active:bg-accent/50',
+            ? 'bg-primary/[0.09] text-primary shadow-[inset_0_0_0_1px_hsl(var(--primary)/0.14)]'
+            : 'text-muted-foreground hover:bg-accent/55 hover:text-foreground active:bg-accent/70',
         )}
       >
-        <Icon className="h-4 w-4 flex-shrink-0" />
-        {t(item.labelKey)}
+        <span className={cn(
+          'flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg transition-colors',
+          isActive ? 'bg-primary/10' : 'bg-background/70 group-hover:bg-background',
+        )}>
+          <Icon className="h-3.5 w-3.5" />
+        </span>
+        <span className="truncate">{t(item.labelKey)}</span>
       </button>
     );
   };
@@ -64,16 +71,16 @@ export default function SettingsSidebar({ activeTab, onChange }: SettingsSidebar
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="leocodebox-settings-nav hidden w-52 flex-shrink-0 flex-col border-r border-border md:flex">
-        <div className="px-3 pb-1 pt-3">
+      <aside className="leocodebox-settings-nav hidden w-60 flex-shrink-0 flex-col border-r border-border/80 md:flex">
+        <div className="px-3 pb-1 pt-4">
           <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <input
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={t('search.placeholder', { defaultValue: '搜索设置' })}
-              className="h-8 w-full rounded-md border border-border bg-background pl-8 pr-7 text-sm outline-none focus:border-primary"
+              className="h-9 w-full rounded-xl border border-border/80 bg-background/75 pl-9 pr-8 text-sm outline-none transition-shadow focus:border-primary/45 focus:shadow-[0_0_0_3px_hsl(var(--primary)/0.08)]"
             />
             {searching && (
               <button
@@ -102,8 +109,8 @@ export default function SettingsSidebar({ activeTab, onChange }: SettingsSidebar
               const items = SETTINGS_MAIN_TABS.filter((item) => item.group === group);
               if (items.length === 0) return null;
               return (
-                <div key={group} className="mb-1">
-                  <p className="px-3 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                <div key={group} className="mb-2">
+                  <p className="px-2.5 pb-1.5 pt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/80">
                     {t(SETTINGS_TAB_GROUP_KEYS[group])}
                   </p>
                   {items.map(renderButton)}

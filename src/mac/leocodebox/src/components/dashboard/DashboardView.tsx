@@ -16,7 +16,7 @@ type DashboardViewProps = {
   onNavigateToSession?: (sessionId: string) => void;
   onShowTab?: (tab: string) => void;
   onNewChat?: () => void;
-  onShowSettings?: () => void;
+  onShowSettings: () => void;
 };
 
 function todayIso(): string {
@@ -56,8 +56,6 @@ export default function DashboardView({ onNavigateToSession, onShowTab, onNewCha
     const todayRows = (data.usage.data ?? []).filter((row) => row.day === today);
     return {
       sessionsToday: todayRows.reduce((sum, row) => sum + (row.sessionCount || 0), 0),
-      tokensToday: todayRows.reduce((sum, row) => sum + (row.inputTokens || 0) + (row.outputTokens || 0) + (row.cacheTokens || 0), 0),
-      costTodayUsd: todayRows.reduce((sum, row) => sum + (row.costUsd || 0), 0),
       runningNow: runningCount,
     };
   }, [data.usage.data, runningCount]);
@@ -80,8 +78,7 @@ export default function DashboardView({ onNavigateToSession, onShowTab, onNewCha
           onRefresh={data.refresh}
           onNewChat={() => onNewChat?.()}
           onShowFleet={() => onShowTab?.('fleet')}
-          onShowMissions={handleOpenMissions}
-          onShowSettings={() => onShowSettings?.()}
+          onShowSettings={onShowSettings}
         />
 
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">

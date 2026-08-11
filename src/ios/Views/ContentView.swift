@@ -104,6 +104,7 @@ enum LeoSessionListDensity: Int, CaseIterable {
 /// Sheets triggered from the toolbar menu, consolidated into a single `.sheet(item:)`.
 enum ToolSheet: String, Identifiable {
     case settings
+    case collections
     case rootfsManagement
     case browser
     case browserManagement
@@ -188,6 +189,13 @@ struct ContentView: View {
     /// row; otherwise it renders as small capsules per type or a single
     /// status string. Refreshed by a 5s timer.
     @State private var migrationSubtitle: SyncSubtitleState?
+    /// Historical buckets start folded so the Home screen stays focused on
+    /// today's work. Each preference is independent and persists once the user
+    /// explicitly opens a bucket.
+    @AppStorage("home.history.yesterday.expanded") private var yesterdayExpanded = false
+    @AppStorage("home.history.week.expanded") private var weekExpanded = false
+    @AppStorage("home.history.month.expanded") private var monthExpanded = false
+    @AppStorage("home.history.earlier.expanded") private var earlierExpanded = false
 
     enum SyncSubtitleState: Equatable {
         case paused
@@ -224,7 +232,6 @@ struct ContentView: View {
     @State private var remoteDeviceSessions: [(device: SyncDevice, sessions: [ChatSession])] = []
     // showSettings consolidated into activeToolSheet (.settings)
     @State private var showTerminal = false
-    @State private var showWhatsNew = false
     @State private var showAlarmList = false
     @State private var hasAlarms = false
     @State private var activeToolSheet: ToolSheet?
@@ -627,16 +634,6 @@ struct ContentView: View {
                     ISHTerminalView(showCloseButton: true)
                 }
             }
-            // [T-release-notes] 侧载 app 没有商店的"更新说明"面:版本变化后的
-            // 首次启动弹一张"本次更新"卡,历史在 设置 → 更新记录。
-            .sheet(isPresented: $showWhatsNew) {
-                WhatsNewSheet()
-            }
-            .task {
-                if LeoReleaseNotes.shouldShowWhatsNew() {
-                    showWhatsNew = true
-                }
-            }
             .sheet(isPresented: $showAlarmList, onDismiss: { fetchAlarmsIfNeeded() }) {
                 AlarmListView()
             }
@@ -644,6 +641,15 @@ struct ContentView: View {
                 switch sheet {
                 case .settings:
                     SettingsSheet(showTerminal: $showTerminal)
+                case .collections:
+                    NavigationStack {
+                        CollectionsView()
+                            .toolbar {
+                                ToolbarItem(placement: .cancellationAction) {
+                                    Button("Done") { activeToolSheet = nil }
+                                }
+                            }
+                    }
                 case .rootfsManagement:
                     NavigationStack {
                         RootfsManagementView()
@@ -993,6 +999,12 @@ struct ContentView: View {
                     activeToolSheet = .settings
                 }
             }
+            .onChange(of: deepLink.pendingCollections) { pending in
+                if pending {
+                    activeToolSheet = .collections
+                    deepLink.pendingCollections = false
+                }
+            }
             .onChange(of: deepLink.pendingRootfsManagement) { pending in
                 if pending {
                     activeToolSheet = .rootfsManagement
@@ -1217,6 +1229,42 @@ struct ContentView: View {
     /// Grouped sidebar sections carrying only session IDs (cheap to diff).
     private func groupedSessionIDs(_ list: [ChatSession]) -> [(label: String, ids: [String])] {
         groupedSessions(list).map { (label: $0.label, ids: $0.sessions.map(\.id)) }
+    }
+
+    private func isCollapsibleHistoryGroup(_ label: String) -> Bool {
+        label == "Yesterday" || label == "This Week" || label == "This Month" || label == "Earlier"
+    }
+
+    private func historyGroupIsExpanded(_ label: String) -> Bool {
+        switch label {
+        case "Yesterday": return yesterdayExpanded
+        case "This Week": return weekExpanded
+        case "This Month": return monthExpanded
+        case "Earlier": return earlierExpanded
+        default: return true
+        }
+    }
+
+    /// Search and multi-select temporarily reveal every row; normal browsing
+    /// keeps older history folded until its header is tapped.
+    private func visibleSessionIDs(in group: (label: String, ids: [String])) -> [String] {
+        guard !isSelecting, !isSearching, isCollapsibleHistoryGroup(group.label) else {
+            return group.ids
+        }
+        return historyGroupIsExpanded(group.label) ? group.ids : []
+    }
+
+    private func toggleHistoryGroup(_ label: String) {
+        withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) {
+            switch label {
+            case "Yesterday": yesterdayExpanded.toggle()
+            case "This Week": weekExpanded.toggle()
+            case "This Month": monthExpanded.toggle()
+            case "Earlier": earlierExpanded.toggle()
+            default: break
+            }
+        }
+        LeoHaptics.selection()
     }
 
 
@@ -1479,9 +1527,9 @@ struct ContentView: View {
             macLiveSection
             // [T-ios-session-list-equatable-jank] id-list projection — see splitList.
             let groups = groupedSessionIDs(filteredSessions)
-            ForEach(Array(groups.enumerated()), id: \.offset) { index, group in
+            ForEach(groups, id: \.label) { group in
                 Section {
-                    ForEach(group.ids, id: \.self) { sessionId in
+                    ForEach(visibleSessionIDs(in: group), id: \.self) { sessionId in
                         // [T-ios-session-list-equatable-jank] Resolve via the
                         // @State cache (sessionForRow), NOT a captured
                         // [String:ChatSession] — see sessionsByIdCache.
@@ -1522,7 +1570,11 @@ struct ContentView: View {
                                 )
                             .listRowInsets(EdgeInsets())
                             .listRowSeparator(.hidden)
-                            .listRowBackground(Color(.systemBackground))
+                            .listRowBackground(
+                                group.label == "Today"
+                                    ? Color.accentColor.opacity(0.035)
+                                    : Color(.systemBackground)
+                            )
                             .contextMenu {
                                 // [T-ios-crash-contextmenu-uaf] Value-only menu view,
                                 // no closure captures — see SessionContextMenu.
@@ -1536,7 +1588,7 @@ struct ContentView: View {
                         }  // if let session
                     }
                 } header: {
-                    sectionHeader(index: index, group: group)
+                    sectionHeader(group: group)
                 }
             }
 
@@ -1573,9 +1625,9 @@ struct ContentView: View {
             // so SwiftUI compares a [String] id list, not a [ChatSession] value
             // array. Rows resolve the model via displaySessionsById.
             let groups = groupedSessionIDs(displaySessions)
-            ForEach(Array(groups.enumerated()), id: \.offset) { index, group in
+            ForEach(groups, id: \.label) { group in
                 Section {
-                    ForEach(group.ids, id: \.self) { sessionId in
+                    ForEach(visibleSessionIDs(in: group), id: \.self) { sessionId in
                         // [T-ios-session-list-equatable-jank] Resolve via the
                         // @State cache (sessionForRow), NOT a captured
                         // [String:ChatSession] — see sessionsByIdCache.
@@ -1657,7 +1709,7 @@ struct ContentView: View {
                                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                                         .fill(isSessionHighlighted(session.id)
                                               ? Color(red: 183/255.0, green: 175/255.0, blue: 150/255.0).opacity(0.3)
-                                              : Color.clear)
+                                              : (group.label == "Today" ? Color.accentColor.opacity(0.035) : Color.clear))
                                         .padding(.horizontal, 6)
                                         .padding(.vertical, 2)
                                 )
@@ -1665,7 +1717,7 @@ struct ContentView: View {
                         }  // if let session
                     }
                 } header: {
-                    sectionHeader(index: index, group: group)
+                    sectionHeader(group: group)
                 }
             }
 
@@ -2474,14 +2526,14 @@ struct ContentView: View {
         let hasProviders = !providerStore.instances.isEmpty
         let hasModel = !providerStore.modelGroups.isEmpty
         let activeCount = sidebarActivityTracker.activeSessions.count
-        let columns = [GridItem(.adaptive(minimum: compact ? 76 : 88), spacing: 8)]
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
 
         return AnyView(VStack(alignment: .leading, spacing: compact ? 14 : 18) {
             HStack(spacing: 12) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(Color.accentColor.opacity(0.14))
-                    Image(systemName: "iphone")
+                    Image(systemName: isIPad ? "ipad" : "iphone")
                         .font(.system(size: 22, weight: .semibold))
                         .foregroundStyle(.tint)
                 }
@@ -2489,11 +2541,12 @@ struct ContentView: View {
                 .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("LeoPhoneAgent")
+                    Text(isIPad ? "此 iPad 工作区" : "此 iPhone 工作区")
                         .font(.headline.weight(.bold))
-                    Text("独立运行在此 iPhone")
+                    Text("对话、视觉、文件、Web 与自动化都在本机可用")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .lineLimit(2)
                 }
 
                 Spacer(minLength: 8)
@@ -2502,6 +2555,7 @@ struct ContentView: View {
                     Circle()
                         .fill(activeCount > 0 ? LeoTheme.ColorToken.success : Color.accentColor)
                         .frame(width: 7, height: 7)
+                        .leoPulse(active: activeCount > 0)
                     Text(activeCount > 0
                          ? String(localized: "本机运行中 \(activeCount)")
                          : String(localized: "本机就绪"))
@@ -2514,10 +2568,10 @@ struct ContentView: View {
             }
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("交代一个任务")
+                Text("今天想完成什么？")
                     .font(.subheadline.weight(.semibold))
 
-                TextField("让此 iPhone 帮你分析、查找、写作或执行…", text: $homePrompt, axis: .vertical)
+                TextField("描述目标，点击开始后立即执行…", text: $homePrompt, axis: .vertical)
                     .lineLimit(compact ? 2...4 : 3...6)
                     .textFieldStyle(.plain)
                     .padding(.horizontal, 14)
@@ -2541,8 +2595,8 @@ struct ContentView: View {
                                 ProgressView()
                                     .tint(.white)
                             } else {
-                                Text("继续")
-                                Image(systemName: "arrow.right")
+                                Text("开始")
+                                Image(systemName: "paperplane.fill")
                             }
                         }
                         .font(.subheadline.weight(.bold))
@@ -2554,7 +2608,7 @@ struct ContentView: View {
                     .buttonStyle(LeoSquishButtonStyle())
                     .disabled(!canRunHomePrompt)
                     .opacity(canRunHomePrompt ? 1 : 0.35)
-                    .accessibilityLabel(Text("进入任务工作区继续编辑"))
+                    .accessibilityLabel(Text("开始任务并立即发送"))
                     .accessibilityHint(Text(homeExecutionTargetHint))
                 }
 
@@ -2596,26 +2650,31 @@ struct ContentView: View {
             }
 
             VStack(alignment: .leading, spacing: 9) {
-                Text("此 iPhone 的能力")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("选择开始方式")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Text("每一项都会打开对应的本机工作流")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
                 LazyVGrid(columns: columns, spacing: 8) {
-                    homeCapabilityButton("语音", systemImage: "mic.fill", tint: .orange) {
+                    homeCapabilityButton("语音模式", systemImage: "waveform", tint: .orange, index: 0) {
                         startHomeChatAction(.startVoice)
                     }
-                    homeCapabilityButton("相机", systemImage: "camera.fill", tint: .pink) {
+                    homeCapabilityButton("相机识别", systemImage: "camera.viewfinder", tint: .pink, index: 1) {
                         startHomeChatAction(.openCamera)
                     }
-                    homeCapabilityButton("文件", systemImage: "folder.fill", tint: .blue) {
+                    homeCapabilityButton("本机文件", systemImage: "folder.fill", tint: .blue, index: 2) {
                         activeToolSheet = .rootfsManagement
                     }
-                    homeCapabilityButton("快捷指令", systemImage: "bolt.fill", tint: .indigo) {
+                    homeCapabilityButton("自动化", systemImage: "bolt.fill", tint: .indigo, index: 3) {
                         activeToolSheet = .quickTasks
                     }
-                    homeCapabilityButton("浏览器", systemImage: "globe", tint: .teal) {
+                    homeCapabilityButton("网页研究", systemImage: "globe", tint: .teal, index: 4) {
                         activeToolSheet = .browser
                     }
-                    homeCapabilityButton("iSH", systemImage: "terminal.fill", tint: .green) {
+                    homeCapabilityButton("iSH 终端", systemImage: "terminal.fill", tint: .green, index: 5) {
                         showTerminal = true
                     }
                 }
@@ -2623,7 +2682,7 @@ struct ContentView: View {
 
             if hasModel, !quickTaskStore.composerTasks.isEmpty {
                 VStack(alignment: .leading, spacing: 9) {
-                    Text("本机快捷任务")
+                    Text("一键任务")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -2654,19 +2713,18 @@ struct ContentView: View {
                         .frame(width: 28, height: 28)
                         .background(LeoTheme.ColorToken.elevatedSurface, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("可选的 Mac 执行目标")
+                        Text("需要时切换到 Mac")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.primary)
                         Text(gatewayStore.activeHosts.isEmpty
-                             ? String(localized: "未连接，不影响 iPhone 独立工作")
+                             ? (isIPad
+                                ? String(localized: "未连接，不影响 iPad 独立工作")
+                                : String(localized: "未连接，不影响 iPhone 独立工作"))
                              : String(localized: "已配置 \(gatewayStore.activeHosts.count) 台，发送时验证连接"))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.tertiary)
                 }
                 .frame(minHeight: LeoTheme.TouchTarget.minimum)
             }
@@ -2695,7 +2753,9 @@ struct ContentView: View {
     private var homeExecutionTargetHint: String {
         switch homeExecutionTarget {
         case .iphone:
-            return String(localized: "在此 iPhone 的新对话中继续")
+            return isIPad
+                ? String(localized: "在此 iPad 的新对话中立即开始")
+                : String(localized: "在此 iPhone 的新对话中立即开始")
         case .mac(_, _, let cliName):
             return String(localized: "交给所选 Mac 的 \(cliName)")
         }
@@ -2704,7 +2764,7 @@ struct ContentView: View {
     private var homeExecutionTargetTitle: String {
         switch homeExecutionTarget {
         case .iphone:
-            return String(localized: "此 iPhone")
+            return isIPad ? String(localized: "此 iPad") : String(localized: "此 iPhone")
         case .mac(let hostId, _, let cliName):
             let hostName = gatewayStore.activeHosts.first(where: { $0.id == hostId })?.name ?? "Mac"
             return "\(hostName) · \(cliName)"
@@ -2718,7 +2778,8 @@ struct ContentView: View {
                 homeRoutingError = nil
                 LeoHaptics.selection()
             } label: {
-                Label("此 iPhone（默认）", systemImage: homeTargetIsIPhone ? "checkmark.circle.fill" : "iphone")
+                Label(isIPad ? "此 iPad（默认）" : "此 iPhone（默认）",
+                      systemImage: homeTargetIsIPhone ? "checkmark.circle.fill" : (isIPad ? "ipad" : "iphone"))
             }
             if !gatewayStore.activeHosts.isEmpty {
                 Section("需要时切换到 Mac") {
@@ -2739,7 +2800,7 @@ struct ContentView: View {
             }
         } label: {
             HStack(spacing: 7) {
-                Image(systemName: homeTargetIsIPhone ? "iphone" : "desktopcomputer")
+                Image(systemName: homeTargetIsIPhone ? (isIPad ? "ipad" : "iphone") : "desktopcomputer")
                 Text(homeExecutionTargetTitle)
                     .lineLimit(1)
                 Image(systemName: "chevron.up.chevron.down")
@@ -2758,6 +2819,7 @@ struct ContentView: View {
         _ title: String,
         systemImage: String,
         tint: Color,
+        index: Int,
         action: @escaping () -> Void
     ) -> some View {
         Button {
@@ -2778,6 +2840,7 @@ struct ContentView: View {
         }
         .buttonStyle(LeoSquishButtonStyle())
         .accessibilityLabel(Text(title))
+        .leoStaggerEntrance(index: index)
     }
 
     private func selectHomeMac(_ host: GatewayHost, key: String, name: String) {
@@ -2804,7 +2867,7 @@ struct ContentView: View {
             homeRoutingError = nil
             homePrompt = ""
             LeoHaptics.impact(.medium)
-            startHomeChatAction(.prefillPrompt(prompt))
+            startHomeChatAction(.sendPrompt(prompt))
         case .mac(let hostId, let cliKey, let cliName):
             guard let host = gatewayStore.activeHosts.first(where: { $0.id == hostId }) else {
                 homeRoutingError = String(localized: "这台 Mac 已不可用，请重新选择执行目标")
@@ -3003,7 +3066,7 @@ struct ContentView: View {
     /// always) ⌘3 opened a different chat than the third row on screen.
     /// Flatten the same grouping the list renders.
     private func selectSession(at index: Int) {
-        let visibleIDs = groupedSessionIDs(displaySessions).flatMap(\.ids)
+        let visibleIDs = groupedSessionIDs(displaySessions).flatMap { visibleSessionIDs(in: $0) }
         guard index >= 0, index < visibleIDs.count else { return }
         jumpToSession(visibleIDs[index])
     }
@@ -3208,7 +3271,7 @@ struct ContentView: View {
     // MARK: - Section Header
 
     @ViewBuilder
-    private func sectionHeader(index: Int, group: (label: String, ids: [String])) -> some View {
+    private func sectionHeader(group: (label: String, ids: [String])) -> some View {
         if isSelecting {
             let groupIds = Set(group.ids)
             let allSelected = groupIds.isSubset(of: selectedIds)
@@ -3232,21 +3295,42 @@ struct ContentView: View {
                 .textCase(nil)
             }
             .buttonStyle(.plain)
-        } else if index > 0 || group.label == "Pinned" {
-            HStack(spacing: 4) {
-                if group.label == "Pinned" {
-                    Image(systemName: "pin.fill")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Color(UIColor.secondaryLabel))
-                }
-                // group.label stays an English key for logic; LocalizedStringKey
-                // resolves the display string per system language.
-                Text(LocalizedStringKey(group.label))
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color(UIColor.secondaryLabel))
+        } else if isCollapsibleHistoryGroup(group.label) {
+            Button {
+                toggleHistoryGroup(group.label)
+            } label: {
+                historyHeaderLabel(group)
             }
-            .textCase(nil)
+            .buttonStyle(.plain)
+            .accessibilityValue(historyGroupIsExpanded(group.label) ? Text("已展开") : Text("已折叠"))
+        } else {
+            historyHeaderLabel(group)
         }
+    }
+
+    private func historyHeaderLabel(_ group: (label: String, ids: [String])) -> some View {
+        HStack(spacing: 7) {
+            Image(systemName: group.label == "Pinned" ? "pin.fill" : (group.label == "Today" ? "sparkles" : "clock"))
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(group.label == "Today" ? Color.accentColor : Color(UIColor.secondaryLabel))
+            Text(LocalizedStringKey(group.label))
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(group.label == "Today" ? Color.primary : Color(UIColor.secondaryLabel))
+            Text("\(group.ids.count)")
+                .font(.caption2.monospacedDigit().weight(.semibold))
+                .foregroundStyle(.tertiary)
+            Spacer(minLength: 8)
+            if isCollapsibleHistoryGroup(group.label) {
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(historyGroupIsExpanded(group.label) ? 90 : 0))
+                    .animation(LeoMotion.spring(reduceMotion: reduceMotion), value: historyGroupIsExpanded(group.label))
+            }
+        }
+        .frame(minHeight: 30)
+        .contentShape(Rectangle())
+        .textCase(nil)
     }
 
     // MARK: - Selection Toolbar

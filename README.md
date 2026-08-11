@@ -1,6 +1,7 @@
 # LeoPhoneAgent
 
-[![Version](https://img.shields.io/badge/iOS-1.8.3%20(56)-0A84FF.svg)](src/ios/Views/Settings/ReleaseNotesView.swift)
+[![iOS](https://img.shields.io/badge/iOS-1.23.1%20(93)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![macOS](https://img.shields.io/badge/macOS-1.67.1-7C3AED.svg)](src/mac/leocodebox/package.json)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Primary platform](https://img.shields.io/badge/primary-iOS-black.svg)](#当前-ios-版本)
 
@@ -46,6 +47,8 @@ Mac 上的编码 CLI(Claude Code / Codex / Grok),支持断线续传、远程审�
 
 ```text
 src/ios/                iOS 主 app(Swift/SwiftUI)+ Share/FileProvider/Widget/Watch
+src/mac/leocodebox/     LeoPhoneAgent · Mac:Electron 桌面工作台、CLI 管理、
+                        本机服务、会话/技能/MCP 与跨设备控制
 src/mac/leoagent/       Mac 常驻服务:server.py(harness 会话)、relay.py(中继)、
                         relay_client.py(出站注册)、harness.py(CLI 方言翻译)
                         ※ harness 面已由 leocodebox 1.63+ 接管(协议同构);
@@ -55,7 +58,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 版本/构建:`1.8.4 (57)`;Bundle ID `com.leoyuan.leophoneagent`
+- 版本/构建:`1.23.1 (93)`;Bundle ID `com.leoyuan.leophoneagent`
 - 主对话框直达 Mac:「指挥一台 Mac」选机 + 选 CLI 即开聊;发送在会话建立
   期间自动排队,永不吞点击
 - 会话接管:进入任意 Mac 先列进行中任务,一键接管(全量回放 + 实时跟随)
@@ -75,19 +78,28 @@ cd LeoPhoneAgent
 open src/ios/LeoPhoneAgent.xcodeproj
 ```
 
-Mac 端(每台受控 Mac):**leocodebox 1.63+**(独立仓
-[leoyb1010/leocodebox](https://github.com/leoyb1010/leocodebox))内置
-`leophone` 模块,直接说本仓的 harness 协议并出站注册中继——Mac 侧只需装
-leocodebox。旧版 `src/mac/leoagent/` 由 launchd 拉起 `server.py`,保留作
-灰度回退;中继机继续跑 `relay.py` 并用 `tailscale funnel --set-path`
-暴露公网路径。桌面端 LeoAgentDesktop 已停止开发并从仓库移除
-(历史见 git 记录,由 leocodebox 全面替代)。
+Mac 桌面端已并入本仓 `src/mac/leocodebox/`,内部兼容名仍为 leocodebox,
+界面品牌为 **LeoPhoneAgent · Mac**。源码、Issue 与版本说明以本仓为唯一
+事实来源;`leocodebox-updates` 只保存自动更新的签名产物,不再作为源码仓。
+
+```sh
+cd src/mac/leocodebox
+npm ci
+npm run typecheck && npm run lint && npm test && npm run build
+npm run desktop:dist:mac
+```
+
+旧版 `src/mac/leoagent/` 保留作协议灰度回退,`relay.py` 继续服务中继。
+合并和迁移边界见
+[REPOSITORY_MERGE_AND_READINESS_2026-08-11.md](docs/REPOSITORY_MERGE_AND_READINESS_2026-08-11.md)。
 
 ## 来源与许可
 
 - 主仓库:GPLv3,fork 自 OpenMinis(基线
   [`9cf3a855`](https://github.com/OpenMinis/OpenMinis/commit/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd),
   保留 `upstream` remote;升级流程见 [UPSTREAM_SYNC.md](docs/UPSTREAM_SYNC.md))。
+- `src/mac/leocodebox/` 保留其 AGPL-3.0-or-later、NOTICE 与第三方归属;
+  合并不改变该目录原有许可。
 - 已移除的 `src/mac/LeoAgentDesktop/`(Cindy/Apache-2.0 改造)见 git 历史,
   其 NOTICE 随历史保留;未使用其商标。
 - 第三方致谢与许可证文本:[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)。

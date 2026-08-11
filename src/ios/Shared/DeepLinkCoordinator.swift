@@ -63,6 +63,11 @@ final class DeepLinkCoordinator: ObservableObject {
     /// `Routes.ROOTFS_MANAGEMENT` route.
     @Published var pendingRootfsManagement: Bool = false
 
+    /// Open the top-level Treasury surface. Kept separate from Settings so
+    /// `leophoneagent://collections` lands on the product capability itself,
+    /// not on the Data settings group that merely links to it.
+    @Published var pendingCollections: Bool = false
+
     /// Switch to a specific session. ContentView observes this and sets
     /// `selectedSessionId` to the requested id (also reloading the
     /// session list if the id isn't already loaded).

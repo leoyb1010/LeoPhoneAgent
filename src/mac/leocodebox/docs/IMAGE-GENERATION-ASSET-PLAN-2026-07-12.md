@@ -42,7 +42,7 @@ public/visuals/
 源文件和模型原始输出放入：
 
 ```text
-design/source-images/
+design/source-images/   # 生成阶段临时目录；优化完成后不纳入主仓
 ├── brand/
 ├── onboarding/
 ├── empty-states/

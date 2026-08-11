@@ -37,9 +37,6 @@ function Sidebar({
   loadingProgress,
   onRefresh,
   onShowSettings,
-  showSettings,
-  settingsInitialTab,
-  onCloseSettings,
   isMobile,
 }: SidebarProps) {
   const { t } = useTranslation(['sidebar', 'common']);
@@ -222,25 +219,21 @@ function Sidebar({
   return (
     <>
         <SidebarModals
-          projects={projects}
-        showSettings={showSettings}
-        settingsInitialTab={settingsInitialTab}
-        onCloseSettings={onCloseSettings}
-        showNewProject={showNewProject}
-        onCloseNewProject={() => setShowNewProject(false)}
-        onProjectCreated={handleProjectCreated}
-        deleteConfirmation={deleteConfirmation}
-        onCancelDeleteProject={() => setDeleteConfirmation(null)}
-        onConfirmDeleteProject={confirmDeleteProject}
-        sessionDeleteConfirmation={sessionDeleteConfirmation}
-        onCancelDeleteSession={() => setSessionDeleteConfirmation(null)}
-        onConfirmDeleteSession={confirmDeleteSession}
-        showVersionModal={showVersionModal}
-        onCloseVersionModal={() => setShowVersionModal(false)}
-        t={t}
-        localTool={localTool}
-        onCloseLocalTool={closeLocalTool}
-      />
+          showNewProject={showNewProject}
+          onCloseNewProject={() => setShowNewProject(false)}
+          onProjectCreated={handleProjectCreated}
+          deleteConfirmation={deleteConfirmation}
+          onCancelDeleteProject={() => setDeleteConfirmation(null)}
+          onConfirmDeleteProject={confirmDeleteProject}
+          sessionDeleteConfirmation={sessionDeleteConfirmation}
+          onCancelDeleteSession={() => setSessionDeleteConfirmation(null)}
+          onConfirmDeleteSession={confirmDeleteSession}
+          showVersionModal={showVersionModal}
+          onCloseVersionModal={() => setShowVersionModal(false)}
+          t={t}
+          localTool={localTool}
+          onCloseLocalTool={closeLocalTool}
+        />
 
       {isSidebarCollapsed ? (
         <SidebarCollapsed
