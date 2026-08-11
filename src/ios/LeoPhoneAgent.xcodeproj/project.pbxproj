@@ -620,13 +620,6 @@
 			dstPath = "";
 			dstSubfolderSpec = 7;
 			files = (
-				AAF00F022F50A00000049557 /* FFmpeg.framework in Embed Frameworks */,
-				AAF10F022F50A00000049557 /* libavcodec.framework in Embed Frameworks */,
-				AAF10F052F50A00000049557 /* libavformat.framework in Embed Frameworks */,
-				AAF10F082F50A00000049557 /* libavutil.framework in Embed Frameworks */,
-				AAF10F0B2F50A00000049557 /* libavfilter.framework in Embed Frameworks */,
-				AAF10F0E2F50A00000049557 /* libswresample.framework in Embed Frameworks */,
-				AAF10F112F50A00000049557 /* libswscale.framework in Embed Frameworks */,
 			);
 			name = "Copy Alpine Rootfs";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -637,6 +630,13 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
+				AAF00F022F50A00000049557 /* FFmpeg.framework in Embed Frameworks */,
+				AAF10F022F50A00000049557 /* libavcodec.framework in Embed Frameworks */,
+				AAF10F052F50A00000049557 /* libavformat.framework in Embed Frameworks */,
+				AAF10F082F50A00000049557 /* libavutil.framework in Embed Frameworks */,
+				AAF10F0B2F50A00000049557 /* libavfilter.framework in Embed Frameworks */,
+				AAF10F0E2F50A00000049557 /* libswresample.framework in Embed Frameworks */,
+				AAF10F112F50A00000049557 /* libswscale.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -3420,7 +3420,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 89;
+				CURRENT_PROJECT_VERSION = 90;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -3444,7 +3444,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 89;
+				CURRENT_PROJECT_VERSION = 90;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -3464,7 +3464,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 89;
+				CURRENT_PROJECT_VERSION = 90;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -3495,7 +3495,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 89;
+				CURRENT_PROJECT_VERSION = 90;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -3655,7 +3655,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = LeoPhoneAgent.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 89;
+				CURRENT_PROJECT_VERSION = 90;
 				DEVELOPMENT_ASSET_PATHS = "\"Preview Content\"";
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
@@ -3710,7 +3710,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = LeoPhoneAgent.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 89;
+				CURRENT_PROJECT_VERSION = 90;
 				DEVELOPMENT_ASSET_PATHS = "\"Preview Content\"";
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
@@ -3761,7 +3761,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 89;
+				CURRENT_PROJECT_VERSION = 90;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
@@ -3788,7 +3788,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 89;
+				CURRENT_PROJECT_VERSION = 90;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
@@ -3815,7 +3815,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FileProvider/FileProvider.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 89;
+				CURRENT_PROJECT_VERSION = 90;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = FileProvider/Info.plist;
@@ -3842,7 +3842,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FileProvider/FileProvider.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 89;
+				CURRENT_PROJECT_VERSION = 90;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = FileProvider/Info.plist;
@@ -3869,7 +3869,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = AgentWidget/AgentWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 89;
+				CURRENT_PROJECT_VERSION = 90;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AgentWidget/Info.plist;
@@ -3896,7 +3896,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = AgentWidget/AgentWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 89;
+				CURRENT_PROJECT_VERSION = 90;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AgentWidget/Info.plist;
@@ -3923,7 +3923,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 89;
+				CURRENT_PROJECT_VERSION = 90;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -3948,7 +3948,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 89;
+				CURRENT_PROJECT_VERSION = 90;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = LeoPhoneAgent;
