@@ -1,0 +1,315 @@
+/* Hide markdown backticks in prose content */
+.prose code::before,
+.prose code::after {
+  content: "" !important;
+  display: none !important;
+}
+
+/* Custom spinner animation for mobile compatibility */
+@layer utilities {
+  .animate-spin {
+    animation: spin 1s linear infinite;
+  }
+  
+  /* Force hardware acceleration for smoother animation on mobile */
+  .loading-spinner {
+    animation: spin 1s linear infinite;
+    will-change: transform;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+
+  /* Block-level skeleton placeholder: a muted block with a light sweep.
+     Distinct from Shimmer.tsx (bg-clip-text text shimmer). Both reduced-motion
+     channels above pin the sweep to a near-instant static block automatically. */
+  @keyframes skeleton-sweep {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(100%); }
+  }
+
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background: hsl(var(--muted));
+    border-radius: var(--radius);
+  }
+
+  .skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      hsl(var(--foreground) / 0.06),
+      transparent
+    );
+    animation: skeleton-sweep 1.6s var(--ease-in-out) infinite;
+  }
+
+  /* Improved textarea styling */
+  .chat-input-placeholder {
+    display: block !important;
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--scrollbar)) transparent;
+  }
+
+  /* Ensure container fits textarea tightly */
+  .chat-input-placeholder:not(:focus) {
+    height: auto;
+  }
+  
+  .chat-input-placeholder::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .chat-input-placeholder::-webkit-scrollbar-track {
+    background: transparent;
+    margin: 8px 0;
+  }
+  
+  .chat-input-placeholder::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--scrollbar));
+    border-radius: var(--radius-control);
+    transition: background-color 0.2s;
+  }
+  
+  .chat-input-placeholder::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--scrollbar-hover));
+  }
+  
+  .dark .chat-input-placeholder {
+    scrollbar-color: hsl(var(--scrollbar)) transparent;
+  }
+  
+  .dark .chat-input-placeholder::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--scrollbar));
+  }
+  
+  .dark .chat-input-placeholder::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--scrollbar-hover));
+  }
+  
+  /* Enhanced box shadow when textarea expands */
+  .chat-input-expanded {
+    box-shadow: var(--elevation-2);
+  }
+  
+  .dark .chat-input-expanded {
+    box-shadow: var(--elevation-3);
+  }
+  
+  /* Fix focus ring offset color in dark mode */
+  .dark [class*="ring-offset"] {
+    --tw-ring-offset-color: hsl(var(--background));
+  }
+
+  /* Ensure buttons don't show white backgrounds in dark mode */
+  .dark button:focus {
+    --tw-ring-offset-color: hsl(var(--background));
+  }
+  
+  /* Fix mobile select dropdown styling */
+  @supports (-webkit-touch-callout: none) {
+    select {
+      font-size: 16px !important;
+      -webkit-appearance: none;
+    }
+  }
+  
+  /* Improve select appearance in dark mode */
+  .dark select {
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 0.5rem center;
+    background-size: 1.5em 1.5em;
+    padding-right: 2.5rem;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+  }
+  
+  select {
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 0.5rem center;
+    background-size: 1.5em 1.5em;
+    padding-right: 2.5rem;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+  }
+  
+  /* Fix select option text in mobile */
+  select option {
+    font-size: 16px !important;
+    padding: 8px !important;
+    background-color: var(--background) !important;
+    color: var(--foreground) !important;
+  }
+  
+  .dark select option {
+    background-color: rgb(31 31 31) !important;
+    color: rgb(237 235 230) !important;
+  }
+
+  /* Tool details chevron animation */
+  details[open] .details-chevron,
+  details[open] summary svg[class*="group-open"] {
+    transform: rotate(180deg);
+  }
+
+  /* Smooth chevron transition */
+  .details-chevron,
+  summary svg[class*="transition-transform"] {
+    transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Settings content fade-in transition */
+  @keyframes settings-fade-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .settings-content-enter {
+    animation: settings-fade-in 150ms ease-out;
+  }
+
+  .leocodebox-app-shell::before {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: url('/visuals/textures/cold-metal-light.webp') center / cover fixed;
+    content: '';
+    opacity: 0.035;
+  }
+
+  .dark .leocodebox-app-shell::before {
+    background-image: url('/visuals/textures/graphite-dark.webp');
+    opacity: 0.05;
+  }
+
+  .leocodebox-app-shell > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  @keyframes chat-activity-enter {
+    0% {
+      opacity: 0;
+      filter: blur(3px);
+      transform: translateY(18px) scaleY(0.92);
+    }
+    65% {
+      opacity: 1;
+      filter: blur(0);
+      transform: translateY(-2px) scaleY(1.01);
+    }
+    100% {
+      opacity: 1;
+      filter: blur(0);
+      transform: translateY(0) scaleY(1);
+    }
+  }
+
+  @keyframes chat-activity-exit {
+    0% {
+      opacity: 1;
+      filter: blur(0);
+      transform: translateY(0) scaleY(1);
+    }
+    100% {
+      opacity: 0;
+      filter: blur(2px);
+      transform: translateY(14px) scaleY(0.96);
+    }
+  }
+
+  /* Search result highlight flash */
+  .search-highlight-flash {
+    animation: search-flash 4s ease-out;
+  }
+
+  @keyframes search-flash {
+    0%, 50% {
+      outline: 3px solid hsl(var(--primary));
+      outline-offset: 4px;
+      border-radius: var(--radius-card);
+      background-color: hsl(var(--primary) / 0.06);
+    }
+    100% {
+      outline: 3px solid transparent;
+      outline-offset: 4px;
+      background-color: transparent;
+    }
+  }
+}
+
+/* Unified panel/dialog transitions */
+.dialog-overlay {
+  animation: leocodebox-dialog-overlay-in var(--motion-fast) var(--motion-ease-out) both;
+}
+.dialog-content {
+  animation: leocodebox-dialog-content-in var(--motion-base) var(--motion-spring) both;
+}
+[data-state="closed"] > .dialog-overlay {
+  animation: leocodebox-dialog-overlay-out var(--motion-fast) var(--motion-ease-in) both;
+}
+[data-state="closed"] > .dialog-content {
+  animation: leocodebox-dialog-content-out var(--motion-fast) var(--motion-ease-in) both;
+  pointer-events: none;
+}
+.leocodebox-panel-enter {
+  animation: leocodebox-panel-enter var(--motion-fast) var(--motion-ease-out) both;
+}
+@keyframes leocodebox-dialog-overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes leocodebox-dialog-overlay-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes leocodebox-dialog-content-in {
+  from { opacity: 0; transform: translate(-50%, -48%) scale(.96); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes leocodebox-dialog-content-out {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to { opacity: 0; transform: translate(-50%, -48%) scale(.96); }
+}
+@keyframes leocodebox-panel-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.leocodebox-motion-fast { transition-duration: var(--motion-fast); }
+
+/* Shared route/tab/sheet motion primitives. */
+.workspace-tab-panel[data-active='true'] {
+  animation: workspace-tab-enter var(--motion-fast) var(--motion-ease-out) both;
+}
+
+@keyframes workspace-tab-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.sheet-panel {
+  transition: transform 240ms var(--motion-spring), opacity var(--motion-base) var(--motion-ease-out);
+}
+
+.sheet-overlay {
+  transition: opacity var(--motion-base) var(--motion-ease-out), visibility 0s linear var(--motion-base);
+}
+
+.sheet-overlay.visible {
+  transition-delay: 0s;
+}
+
+.session-list-enter {
+  animation: session-list-enter var(--motion-base) var(--motion-ease-out) both;
+}
+
+@keyframes session-list-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}

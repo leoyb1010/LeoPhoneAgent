@@ -1,0 +1,242 @@
+/* Mobile optimizations and components */
+@layer components {
+  .chat-messages-pane {
+    contain: layout style paint;
+  }
+
+  .chat-composer-shell {
+    contain: layout style;
+  }
+
+  .chat-activity-enter {
+    animation: chat-activity-enter 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    transform-origin: bottom center;
+    will-change: transform, opacity, filter;
+  }
+
+  .chat-activity-exit {
+    animation: chat-activity-exit 220ms cubic-bezier(0.4, 0, 1, 1) both;
+    transform-origin: bottom center;
+    will-change: transform, opacity, filter;
+  }
+
+  .chat-activity-tab {
+    clip-path: inset(-8px -8px 0 -8px);
+  }
+
+  .chat-message {
+    contain: layout style paint;
+    content-visibility: auto;
+    contain-intrinsic-size: auto 180px;
+  }
+
+  .chat-message.assistant {
+    contain-intrinsic-size: auto 240px;
+  }
+
+  .chat-message.user,
+  .chat-message.tool,
+  .chat-message.error {
+    contain-intrinsic-size: auto 96px;
+  }
+
+  /* Mobile touch optimization and safe areas */
+  @media (max-width: 768px) {
+    * {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    
+    /* Allow vertical scrolling in scroll containers */
+    .overflow-y-auto, [data-scroll-container] {
+      touch-action: pan-y;
+      -webkit-overflow-scrolling: touch;
+    }
+    
+    /* Preserve checkbox visibility */
+    input[type="checkbox"] {
+      -webkit-tap-highlight-color: hsl(var(--foreground) / 0.1);
+      opacity: 1 !important;
+    }
+    
+    button, 
+    [role="button"],
+    .clickable,
+    a,
+    .cursor-pointer {
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+    
+    /* Better mobile touch targets */
+    .mobile-touch-target {
+      @apply min-h-[44px] min-w-[44px];
+    }
+    
+    /* Chat message improvements */
+    .chat-message.user {
+      @apply justify-end;
+    }
+    
+    .chat-message.user > div {
+      @apply max-w-[85%];
+    }
+    
+    .chat-message.assistant > div,
+    .chat-message.error > div {
+      @apply w-full sm:max-w-[95%];
+    }
+    
+    /* Session name truncation on mobile */
+    .session-name-mobile {
+      @apply truncate;
+      max-width: calc(100vw - 120px); /* Account for sidebar padding and buttons */
+    }
+    
+    /* Enable text selection on mobile for terminal */
+    .xterm,
+    .xterm .xterm-viewport {
+      -webkit-user-select: text !important;
+      user-select: text !important;
+      -webkit-touch-callout: default !important;
+    }
+    
+    /* Fix mobile scrolling */
+    .overflow-y-auto {
+      touch-action: pan-y;
+      -webkit-overflow-scrolling: touch;
+    }
+    
+    .chat-message {
+      touch-action: pan-y;
+    }
+    
+    /* Fix hover states on mobile */
+    .group:active .group-hover\:opacity-100,
+    .group .group-hover\:opacity-100 {
+      opacity: 1 !important;
+    }
+    
+    @media (hover: none) and (pointer: coarse) {
+      .group-hover\:opacity-100 {
+        opacity: 1 !important;
+      }
+      
+      .hover\:bg-gray-50:hover,
+      .hover\:bg-gray-100:hover,
+      .hover\:bg-red-200:hover,
+      .dark\:hover\:bg-gray-700:hover,
+      .dark\:hover\:bg-red-900\/50:hover {
+        background-color: inherit;
+      }
+    }
+  }
+  
+  /* Touch device optimizations for all screen sizes */
+  @media (hover: none) and (pointer: coarse) {
+    .touch\:opacity-100 {
+      opacity: 1 !important;
+    }
+    
+    /* Completely disable hover states on touch devices */
+    * {
+      -webkit-tap-highlight-color: transparent !important;
+    }
+    
+    /* Preserve checkbox visibility on touch devices */
+    input[type="checkbox"] {
+      -webkit-tap-highlight-color: hsl(var(--foreground) / 0.1) !important;
+      opacity: 1 !important;
+    }
+    
+    /* Only disable hover states for interactive elements, not containers */
+    button:hover,
+    [role="button"]:hover,
+    .cursor-pointer:hover,
+    a:hover,
+    .hover\:bg-gray-50:hover,
+    .hover\:bg-gray-100:hover,
+    .hover\:text-gray-900:hover,
+    .hover\:opacity-100:hover {
+      background-color: inherit !important;
+      color: inherit !important;
+      opacity: inherit !important;
+      transform: inherit !important;
+    }
+    
+    /* Force buttons to be immediately clickable */
+    button, [role="button"], .cursor-pointer {
+      cursor: pointer !important;
+      pointer-events: auto !important;
+    }
+    
+    /* Keep active states for immediate feedback */
+    .active\:scale-\[0\.98\]:active,
+    .active\:scale-95:active {
+      transform: scale(0.98) !important;
+    }
+  }
+  
+  /* Safe area support for iOS devices */
+  .ios-bottom-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  /* PWA specific header adjustments - uses CSS variables for consistency */
+  .pwa-header-safe {
+    padding-top: var(--header-base-padding);
+  }
+
+  /* When PWA mode is detected by JavaScript */
+  body.pwa-mode .pwa-header-safe {
+    /* Reset padding since #root already handles safe area */
+    padding-top: 0px !important;
+  }
+
+  /* For mobile PWA, add bottom padding for better spacing */
+  @media screen and (max-width: 768px) {
+    body.pwa-mode .pwa-header-safe {
+      padding-bottom: 8px;
+    }
+  }
+  
+  @media screen and (max-width: 768px) {
+    .chat-input-mobile {
+      padding-bottom: calc(60px + env(safe-area-inset-bottom));
+    }
+  }
+
+  /* Text wrapping improvements */
+  .chat-message {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
+  }
+
+  /* Force wrap long URLs and code */
+  .chat-message pre,
+  .chat-message code {
+    white-space: pre-wrap !important;
+    word-break: break-all;
+    overflow-wrap: break-word;
+  }
+
+  /* Prevent horizontal scroll in chat area */
+  .chat-message * {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Hide scrollbar utility for horizontal scroll */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+

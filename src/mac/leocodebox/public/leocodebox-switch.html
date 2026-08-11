@@ -1,0 +1,1833 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f8f9fa">
+  <title>leocodebox Leoapi</title>
+  <link rel="icon" href="/favicon.png">
+  <script>
+    (() => {
+      if (new URLSearchParams(window.location.search).get("embedded") === "1") document.documentElement.dataset.embedded = "true";
+      const themeMode = localStorage.getItem("themeMode") || localStorage.getItem("theme") || "system";
+      const isDark = themeMode === "dark" || (themeMode === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      document.documentElement.dataset.theme = isDark ? "dark" : "light";
+    })();
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f8f9fa;
+      --surface: #ffffff;
+      --surface-hover: #f1f3f4;
+      --surface-strong: #e9edef;
+      --text: #17191c;
+      --muted: #626870;
+      --subtle: #858b93;
+      --line: #dce1e4;
+      --line-strong: #c2c9cd;
+      --blue: #178f82;
+      --blue-hover: #117a70;
+      --blue-soft: #e8f6f3;
+      --orange: #178f82;
+      --green: #178a55;
+      --red: #c93b36;
+      --focus: #178f82;
+      --toolbar: #eef1f2;
+      --toolbar-line: #dce1e4;
+      --tab-active: #ffffff;
+      --tab-hover: #f7f6f3;
+      --card-selected: #eff8f6;
+      --mark-bg: #f0f2f3;
+      --mark-line: #dce1e4;
+      --mark-text: #55575d;
+      --active-mark-bg: #dff3ef;
+      --active-mark-line: #9dd8cf;
+      --active-mark-text: #116e65;
+      --chip-bg: #dff3ef;
+      --chip-text: #116e65;
+      --input-bg: #ffffff;
+      --dialog-bg: #ffffff;
+      --menu-bg: #ffffff;
+      --menu-hover: #f1f0ed;
+      --row-line: #e5e9eb;
+      --toast-bg: #ffffff;
+      --icon-filter: brightness(0) opacity(.58);
+      --icon-filter-hover: brightness(0) opacity(.82);
+      --shadow: rgba(38, 38, 42, .14);
+      /* Motion tokens — kept in lockstep with src/index.css (same values). */
+      --motion-fast: 120ms;
+      --motion-base: 200ms;
+      --motion-slow: 320ms;
+      --ease-out-quint: cubic-bezier(0.23, 1, 0.32, 1);
+      --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+      --elevation-2: 0 4px 12px var(--shadow);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #111316;
+      --surface: #181b1f;
+      --surface-hover: #202429;
+      --surface-strong: #252a2f;
+      --text: #edf0f2;
+      --muted: #a0a7ae;
+      --subtle: #747c84;
+      --line: #2d3238;
+      --line-strong: #414850;
+      --blue: #36c9b7;
+      --blue-hover: #48d5c3;
+      --blue-soft: #183b37;
+      --green: #44c985;
+      --red: #ff665f;
+      --toolbar: #1d2125;
+      --toolbar-line: #2d3238;
+      --tab-active: #252a2f;
+      --tab-hover: #252a2f;
+      --card-selected: #172c2a;
+      --mark-bg: #23282d;
+      --mark-line: #3a4148;
+      --mark-text: #c9c9cf;
+      --active-mark-bg: #183b37;
+      --active-mark-line: #27645d;
+      --active-mark-text: #72e3d5;
+      --chip-bg: #183b37;
+      --chip-text: #8ce9de;
+      --input-bg: #14171a;
+      --dialog-bg: #181b1f;
+      --menu-bg: #202429;
+      --menu-hover: #2a3036;
+      --row-line: #292f34;
+      --toast-bg: #24292e;
+      --icon-filter: brightness(0) invert(.72);
+      --icon-filter-hover: brightness(0) invert(1);
+      --shadow: rgba(0, 0, 0, .4);
+    }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; }
+    body { margin: 0; background: linear-gradient(rgba(248, 249, 250, .84), rgba(248, 249, 250, .84)), var(--bg) url('/visuals/textures/local-signal-light.webp') center / cover fixed; color: var(--text); font-size: 14px; }
+    html[data-theme="dark"] body { background-image: linear-gradient(rgba(16, 18, 21, .82), rgba(16, 18, 21, .82)), url('/visuals/textures/local-signal-dark.webp'); }
+    html[data-embedded="true"] .app-shell { padding: 16px 22px 28px; }
+    html[data-embedded="true"] #backToMain { display: none; }
+    button, input, select, textarea { font: inherit; letter-spacing: 0; }
+    button, summary, select { cursor: pointer; }
+    button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible {
+      outline: 2px solid var(--focus); outline-offset: 2px;
+    }
+    button:disabled { cursor: not-allowed; opacity: .45; }
+    .app-shell { min-height: 100vh; padding: 18px 28px 36px; animation: surface-enter .22s cubic-bezier(.2, 0, 0, 1) both; }
+    .topbar {
+      min-height: 54px; display: grid; grid-template-columns: minmax(170px, 1fr) auto minmax(170px, 1fr);
+      align-items: center; gap: 18px; margin-bottom: 20px; border-bottom: 1px solid var(--line); padding-bottom: 14px;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .brand img { width: 34px; height: 34px; border-radius: 8px; }
+    .back-button {
+      min-height: 38px; display: inline-flex; align-items: center; gap: 6px; padding: 0 9px 0 7px;
+      border: 1px solid var(--line); border-radius: 7px; background: var(--surface); color: var(--muted); font-weight: 600;
+    }
+    .back-button:hover { border-color: var(--line-strong); background: var(--surface-hover); color: var(--text); }
+    .back-button img { width: 18px; height: 18px; border-radius: 0; filter: var(--icon-filter); }
+    .back-button:hover img { filter: var(--icon-filter-hover); }
+    .brand-copy { min-width: 0; }
+    .brand-name { font-size: 18px; line-height: 1.1; font-weight: 650; color: var(--text); }
+    .brand-meta { margin-top: 4px; color: var(--subtle); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .agent-tabs {
+      display: flex; align-items: center; gap: 3px; max-width: min(760px, 58vw); padding: 3px;
+      border: 1px solid var(--toolbar-line); border-radius: 7px; background: var(--toolbar); overflow-x: auto; scrollbar-width: none;
+    }
+    .agent-tabs::-webkit-scrollbar { display: none; }
+    .agent-tab {
+      flex: 0 0 auto; min-height: 34px; border: 0; border-radius: 5px; padding: 0 13px;
+      background: transparent; color: var(--muted); font-weight: 600;
+    }
+    .agent-tab img { width: 18px; height: 18px; object-fit: contain; }
+    .agent-tab:hover { color: var(--text); background: var(--tab-hover); }
+    .agent-tab[aria-selected="true"] { color: var(--text); background: var(--tab-active); box-shadow: 0 1px 2px var(--shadow); }
+    .top-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
+    .tool-group { display: flex; gap: 3px; padding: 5px; border-radius: 8px; background: var(--toolbar); border: 1px solid var(--toolbar-line); }
+    .icon-button, .add-button {
+      border: 0; display: inline-grid; place-items: center; flex: 0 0 auto;
+    }
+    .icon-button { width: 38px; height: 38px; border-radius: 7px; background: transparent; color: var(--muted); }
+    .icon-button:hover { background: var(--surface-strong); color: var(--text); }
+    .icon-button.danger:hover { color: var(--red); }
+    .icon-button img, .button-icon { width: 19px; height: 19px; filter: var(--icon-filter); }
+    .icon-button:hover img { filter: var(--icon-filter-hover); }
+    .primary-button .button-icon, .add-button .button-icon { filter: brightness(0) invert(1); }
+    .add-button { width: 40px; height: 40px; border-radius: 7px; background: var(--blue); color: #fff; box-shadow: none; }
+    .add-button:hover { background: var(--blue-hover); transform: translateY(-1px); }
+    .add-button:active { transform: translateY(0) scale(.97); }
+    .add-button img { width: 20px; height: 20px; filter: brightness(0) invert(1); }
+    .workspace { max-width: 1260px; margin: 0 auto; }
+    .context-row { display: flex; align-items: end; justify-content: space-between; gap: 18px; margin-bottom: 16px; }
+    .context-row h1 { margin: 0; font-size: 18px; line-height: 1.3; font-weight: 650; }
+    .context-row p { margin: 5px 0 0; color: var(--subtle); font-size: 13px; }
+    .quiet-button, .text-button, .primary-button, .danger-button {
+      min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      border-radius: 7px; padding: 0 14px; font-weight: 600;
+    }
+    .quiet-button, .text-button { border: 1px solid var(--line); background: var(--surface); color: var(--text); }
+    .quiet-button:hover, .text-button:hover { border-color: var(--line-strong); background: var(--surface-hover); }
+    .primary-button { border: 1px solid var(--blue); background: var(--blue); color: #fff; }
+    .primary-button:hover { background: var(--blue-hover); }
+    .danger-button { border: 1px solid rgba(255, 102, 95, .5); background: transparent; color: var(--red); }
+    .provider-list { display: grid; gap: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .provider-card {
+      position: relative; min-height: 88px; display: grid; grid-template-columns: 28px 44px minmax(0, 1fr) auto;
+      align-items: center; gap: 14px; padding: 15px 18px; border: 0; border-bottom: 1px solid var(--row-line); border-radius: 0;
+      background: transparent; transition: background .16s ease;
+    }
+    .provider-card:last-child { border-bottom: 0; }
+    .provider-card:hover, .provider-card.is-selected { background: var(--surface-hover); }
+    .provider-card.is-active { background: var(--card-selected); box-shadow: inset 2px 0 var(--blue); }
+    .drag-handle { display: grid; place-items: center; user-select: none; }
+    .drag-handle img { width: 20px; height: 20px; filter: var(--icon-filter); }
+    .provider-mark {
+      width: 38px; height: 38px; display: grid; place-items: center; border-radius: 7px;
+      border: 1px solid var(--mark-line); background: var(--mark-bg); color: var(--mark-text); font-size: 15px; font-weight: 700;
+    }
+    .provider-mark img { width: 22px; height: 22px; }
+    .provider-card.is-active .provider-mark { border-color: var(--active-mark-line); background: var(--active-mark-bg); color: var(--active-mark-text); }
+    .provider-info { min-width: 0; }
+    .provider-title { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
+    .provider-title strong { font-size: 15px; line-height: 1.25; font-weight: 650; }
+    .provider-url {
+      display: block; max-width: 100%; margin-top: 8px; padding: 0; border: 0; background: transparent;
+      color: var(--blue); font-size: 12px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .provider-url:hover { color: var(--blue-hover); text-decoration: underline; text-underline-offset: 3px; }
+    .state-chip { min-height: 25px; display: inline-flex; align-items: center; padding: 0 9px; border-radius: 6px; background: var(--chip-bg); color: var(--chip-text); font-size: 12px; }
+    .state-chip.readonly { background: #34343a; color: var(--muted); }
+    .state-chip.health-ok { background: rgba(46, 160, 67, .16); color: #3fb950; }
+    .state-chip.health-warn { background: rgba(210, 153, 34, .16); color: #d29922; }
+    .state-chip.health-fail { background: rgba(248, 81, 73, .16); color: #ff6b63; }
+    .state-chip.health-idle { background: var(--chip-bg); color: var(--muted); }
+    .provider-health { display: block; margin-top: 5px; color: var(--subtle); font-size: 11px; }
+    .health-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; padding: 9px 12px; border-radius: 10px; font-size: 12px; line-height: 1.5; }
+    .health-banner.warn { background: rgba(210, 153, 34, .12); color: #d29922; border: 1px solid rgba(210, 153, 34, .35); }
+    .health-banner.info { background: rgba(56, 139, 253, .1); color: #58a6ff; border: 1px solid rgba(56, 139, 253, .3); }
+    .health-banner .quiet-button { padding: 3px 10px; font-size: 12px; }
+    .failover-button { border-color: rgba(210, 153, 34, .55); color: #d29922; }
+    .card-actions {
+      display: flex; align-items: center; justify-content: flex-end; gap: 7px;
+      opacity: 0; pointer-events: none; transition: opacity .16s ease;
+    }
+    .provider-card:hover .card-actions,
+    .provider-card:focus-within .card-actions,
+    .provider-card.is-selected .card-actions,
+    .provider-card.is-active .card-actions { opacity: 1; pointer-events: auto; }
+    .activate-button { min-width: 94px; }
+    .more-menu { position: relative; }
+    .more-menu summary { list-style: none; }
+    .more-menu summary::-webkit-details-marker { display: none; }
+    .menu-popover {
+      position: absolute; right: 0; top: 44px; z-index: 7; width: 168px; padding: 6px;
+      border: 1px solid var(--line-strong); border-radius: 8px; background: var(--menu-bg); box-shadow: 0 14px 34px var(--shadow);
+    }
+    .menu-popover button {
+      width: 100%; min-height: 36px; display: flex; align-items: center; gap: 10px; border: 0; border-radius: 6px;
+      padding: 0 10px; background: transparent; color: var(--text); text-align: left;
+    }
+    .menu-popover button:hover { background: var(--menu-hover); }
+    .menu-popover button.danger { color: var(--red); }
+    .menu-popover img { width: 17px; height: 17px; filter: var(--icon-filter); }
+    .empty-state { position: relative; min-height: 320px; display: grid; place-content: center; padding: 72px 24px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); text-align: center; color: var(--muted); overflow: hidden; isolation: isolate; }
+    .empty-state::before { position: absolute; inset: 0; z-index: -2; background: url('/visuals/release/leoapi-overview.webp') center / cover no-repeat; opacity: .2; content: ''; }
+    .empty-state::after { position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, var(--bg) 0%, transparent 48%, var(--bg) 100%); content: ''; }
+    .empty-state strong { display: block; margin-bottom: 7px; color: var(--text); font-size: 17px; }
+    .main-error {
+      margin-bottom: 16px; padding: 12px 14px; border: 1px solid rgba(255, 102, 95, .5); border-radius: 8px;
+      background: color-mix(in srgb, var(--red) 8%, transparent); color: var(--red); line-height: 1.5;
+    }
+    .main-error[hidden] { display: none; }
+    dialog {
+      width: min(620px, calc(100vw - 32px)); max-height: min(760px, calc(100vh - 42px)); margin: auto;
+      padding: 0; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--dialog-bg); color: var(--text);
+      box-shadow: 0 24px 70px var(--shadow); overflow: hidden;
+    }
+    dialog::backdrop { background: rgba(5, 5, 7, .68); backdrop-filter: blur(4px); }
+    .settings-dialog { width: min(820px, calc(100vw - 32px)); }
+    #confirmDialog { width: min(460px, calc(100vw - 32px)); }
+    .confirm-message { margin: 0; white-space: pre-wrap; font-size: 14px; line-height: 1.6; color: var(--text); }
+    .provider-section-label { margin: 18px 0 6px; font-size: 12px; font-weight: 650; letter-spacing: .04em; color: var(--muted); text-transform: none; }
+    .provider-section-label:first-child { margin-top: 0; }
+    .endpoint-bar { position: relative; grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+    .endpoint-bar i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--blue); }
+    .endpoint-bar.bad i { background: var(--red); }
+    .endpoint-spark { grid-column: 1 / -1; width: 100%; height: 22px; display: block; }
+    .endpoint-spark polyline { fill: none; stroke: var(--blue); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+    .endpoint-spark.bad polyline { stroke: var(--red); }
+    .endpoint-label-input { max-width: 128px; }
+    .dialog-head { min-height: 70px; display: flex; align-items: center; gap: 12px; padding: 0 20px; border-bottom: 1px solid var(--line); }
+    .dialog-head h2 { margin: 0; font-size: 18px; font-weight: 650; }
+    .dialog-head .icon-button { margin-left: auto; }
+    .dialog-body { max-height: calc(100vh - 170px); overflow-y: auto; padding: 22px; }
+    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+    .field { display: grid; gap: 7px; margin-bottom: 15px; }
+    .field.span-2 { grid-column: 1 / -1; }
+    label { color: var(--muted); font-size: 13px; font-weight: 600; }
+    .template-meta { min-height: 18px; color: var(--subtle); font-size: 12px; line-height: 1.45; }
+    .template-meta[hidden] { display: none; }
+    .template-meta a { color: var(--blue); font-weight: 600; text-decoration: none; }
+    .template-meta a:hover { text-decoration: underline; }
+    input, select, textarea {
+      width: 100%; min-height: 42px; border: 1px solid var(--line); border-radius: 7px; padding: 9px 11px;
+      background: var(--input-bg); color: var(--text);
+    }
+    textarea { min-height: 78px; resize: vertical; }
+    input::placeholder, textarea::placeholder { color: var(--subtle); }
+    .advanced-form { margin: 3px 0 16px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .advanced-form summary { min-height: 48px; display: flex; align-items: center; color: var(--muted); font-weight: 600; }
+    .advanced-fields { padding: 4px 0 2px; }
+    .dialog-actions { min-height: 68px; display: flex; justify-content: flex-end; gap: 9px; padding: 14px 20px; border-top: 1px solid var(--line); }
+    .settings-tabs { display: flex; gap: 4px; padding: 5px; margin-bottom: 22px; border-radius: 8px; background: var(--toolbar); }
+    .settings-tab { flex: 1; min-height: 38px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-weight: 600; }
+    .settings-tab[aria-selected="true"] { background: var(--tab-active); color: var(--text); }
+    .settings-panel[hidden] { display: none; }
+    .setting-section { padding: 3px 0 23px; }
+    .setting-section + .setting-section { padding-top: 23px; border-top: 1px solid var(--line); }
+    .setting-section h3 { margin: 0 0 5px; font-size: 15px; }
+    .setting-section > p { margin: 0 0 16px; color: var(--muted); line-height: 1.5; }
+    .segmented { display: inline-flex; gap: 4px; padding: 4px; border-radius: 8px; background: var(--toolbar); }
+    .segmented button { min-height: 34px; border: 0; border-radius: 6px; padding: 0 18px; background: transparent; color: var(--muted); }
+    .segmented button[aria-pressed="true"] { background: var(--tab-active); color: var(--text); }
+    .setting-actions { display: flex; flex-wrap: wrap; gap: 9px; }
+    .check-row { display: flex; align-items: center; gap: 9px; color: var(--text); font-weight: 500; }
+    .check-row input { width: 16px; min-height: 16px; margin: 0; accent-color: var(--blue); }
+    .endpoint-list { display: grid; gap: 9px; margin: 14px 0; }
+    .endpoint-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto 38px; align-items: center; gap: 9px; }
+    .endpoint-row input { min-height: 38px; }
+    .endpoint-result { min-width: 88px; color: var(--subtle); font-size: 12px; text-align: right; }
+    .endpoint-result.good { color: var(--green); }
+    .endpoint-result.bad { color: var(--red); }
+    .diagnostic-result { min-height: 48px; margin-top: 14px; padding: 12px 0; border-top: 1px solid var(--row-line); color: var(--muted); line-height: 1.55; white-space: pre-wrap; }
+    .diagnostic-result.good { color: var(--green); }
+    .diagnostic-result.bad { color: var(--red); }
+    .path-groups { display: grid; gap: 18px; }
+    .path-group h4 { margin: 0 0 9px; font-size: 13px; }
+    .path-row, .backup-row { min-height: 43px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--row-line); }
+    .path-row code, .backup-row code { min-width: 0; overflow-wrap: anywhere; color: var(--muted); font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .backup-row { padding: 10px 0; }
+    .backup-main { min-width: 0; display: grid; gap: 4px; }
+    .backup-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+    .backup-title strong { color: var(--text); font-size: 13px; }
+    .backup-title span { color: var(--muted); font-size: 12px; }
+    .backup-meta { color: var(--subtle); font-size: 11px; }
+    .file-state { flex: 0 0 auto; color: var(--green); font-size: 12px; }
+    .file-state.missing { color: var(--subtle); }
+    .restore-button { flex: 0 0 auto; min-height: 30px; border: 1px solid var(--line); border-radius: 6px; padding: 0 10px; background: transparent; color: var(--text); }
+    .restore-button:hover { background: var(--surface-strong); }
+    .toast {
+      position: fixed; left: 50%; bottom: 28px; z-index: 30; max-width: min(580px, calc(100vw - 32px));
+      transform: translateX(-50%); padding: 11px 15px; border: 1px solid var(--line-strong); border-radius: 8px;
+      background: var(--toast-bg); color: var(--text); box-shadow: 0 12px 32px var(--shadow); white-space: pre-wrap;
+    }
+    .toast.ok { border-color: rgba(68, 201, 133, .48); }
+    .toast.error { border-color: rgba(255, 102, 95, .58); color: #ffb4b0; }
+    .toast[hidden] { display: none; }
+    @media (max-width: 980px) {
+      .app-shell { padding: 18px 20px 36px; }
+      .topbar { grid-template-columns: 1fr auto; align-items: center; }
+      .agent-tabs { grid-column: 1 / -1; grid-row: 2; max-width: 100%; justify-self: stretch; }
+      .top-actions { grid-column: 2; grid-row: 1; }
+      .provider-card { grid-template-columns: 44px minmax(0, 1fr); padding: 18px; }
+      .drag-handle { display: none; }
+      .provider-mark { width: 42px; height: 42px; }
+      .card-actions { grid-column: 1 / -1; justify-content: flex-end; padding-top: 3px; }
+    }
+    @media (max-width: 620px) {
+      .app-shell { padding: 14px 14px 28px; }
+      .topbar { margin-bottom: 22px; gap: 12px; }
+      .brand-name { font-size: 21px; }
+      .brand-meta { display: none; }
+      .back-button span { display: none; }
+      .back-button { width: 36px; padding: 0; justify-content: center; }
+      .tool-group { padding: 3px; }
+      .tool-group .icon-button { width: 34px; height: 34px; }
+      .add-button { width: 44px; height: 44px; }
+      .context-row { align-items: center; }
+      .provider-card { gap: 12px; padding: 16px 14px; }
+      .provider-title strong { font-size: 16px; }
+      .provider-url { font-size: 13px; }
+      .card-actions { justify-content: stretch; }
+      .activate-button { flex: 1; }
+      .field-grid { grid-template-columns: 1fr; }
+      .field.span-2 { grid-column: auto; }
+      .dialog-body { padding: 18px; }
+      .endpoint-row { grid-template-columns: minmax(0, 1fr) auto 38px; }
+      .endpoint-row .endpoint-result { display: none; }
+      .endpoint-result { grid-column: 1 / -1; grid-row: 2; text-align: left; }
+    }
+    @media (hover: none) {
+      .card-actions { opacity: 1; pointer-events: auto; }
+    }
+    @keyframes surface-enter { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    @media (prefers-reduced-motion: reduce) { .app-shell { animation: none; } }
+
+    .cc-model-dropdown { position: absolute; z-index: 60; margin-top: 4px; max-height: 220px; overflow-y: auto; min-width: 220px; border: 1px solid var(--border, #d5d9dd); border-radius: 8px; background: var(--surface, #fff); box-shadow: 0 10px 30px rgba(15, 26, 36, .16); }
+    .cc-model-dropdown[hidden] { display: none; }
+    .cc-model-dropdown .cc-model-option { padding: 7px 10px; font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cc-model-dropdown .cc-model-option:hover, .cc-model-dropdown .cc-model-option.hl { background: rgba(23, 143, 130, .12); }
+    .cc-model-dropdown .cc-model-empty { padding: 7px 10px; font-size: 12px; color: #8a9198; }
+    html[data-theme="dark"] .cc-model-dropdown { background: #1b1f24; border-color: #2d3238; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <button class="back-button" id="backToMain" type="button" aria-label="返回 leocodebox" title="返回 leocodebox"><img src="/icons/lucide/arrow-left.svg" alt=""><span>返回</span></button>
+        <img src="/logo-32.png" alt="">
+        <div class="brand-copy">
+          <div class="brand-name">Leoapi</div>
+          <div class="brand-meta" id="statusText" aria-live="polite">本地接口切换</div>
+        </div>
+      </div>
+      <nav class="agent-tabs" id="agentTabs" aria-label="智能体"></nav>
+      <div class="top-actions">
+        <div class="tool-group">
+          <button class="icon-button" id="refresh" type="button" aria-label="刷新" title="刷新"><img src="/icons/lucide/refresh-cw.svg" alt=""></button>
+          <button class="icon-button" id="openSettings" type="button" aria-label="设置" title="设置"><img src="/icons/lucide/settings.svg" alt=""></button>
+        </div>
+        <button class="add-button" id="addProvider" type="button" aria-label="新增接口" title="新增接口"><img src="/icons/lucide/plus.svg" alt=""></button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <div class="context-row">
+        <div>
+          <h1 id="currentTargetTitle">接口配置</h1>
+          <p id="currentTargetMeta">选择需要启用的本机接口</p>
+        </div>
+      </div>
+      <div class="main-error" id="mainError" role="alert" hidden></div>
+      <div class="provider-list" id="providerList"></div>
+    </main>
+  </div>
+
+  <dialog id="providerDialog" aria-labelledby="providerDialogTitle">
+    <form id="providerForm">
+      <div class="dialog-head">
+        <h2 id="providerDialogTitle">新增接口</h2>
+        <button class="icon-button" id="closeProvider" type="button" aria-label="关闭"><img src="/icons/lucide/x.svg" alt=""></button>
+      </div>
+      <div class="dialog-body">
+        <input type="hidden" name="id">
+        <div class="field-grid">
+          <div class="field span-2">
+            <label for="providerPreset">厂商快捷模板</label>
+            <select id="providerPreset" name="preset" aria-describedby="providerPresetMeta"><option value="">自定义</option></select>
+            <div class="template-meta" id="providerPresetMeta" hidden>
+              <span id="providerPresetStatus"></span>
+              <a id="providerPresetDocs" href="#" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">打开官方文档 ↗</a>
+            </div>
+          </div>
+          <div class="field span-2">
+            <label for="providerName">名称</label>
+            <input id="providerName" name="name" autocomplete="off" required placeholder="例如：DeepSeek">
+          </div>
+          <div class="field">
+            <label for="providerTarget">智能体</label>
+            <select id="providerTarget" name="target" required></select>
+          </div>
+          <div class="field">
+            <label for="providerModel">模型</label>
+            <div style="display:flex;gap:8px">
+              <input id="providerModel" name="model" placeholder="模型名称" autocomplete="off" style="flex:1">
+              <button class="quiet-button" id="discoverDraftModels" type="button">自动获取</button>
+            </div>
+          </div>
+          <div class="field span-2">
+            <label for="providerBaseUrl">接口地址</label>
+            <input id="providerBaseUrl" name="baseUrl" inputmode="url" placeholder="https://api.example.com/v1">
+          </div>
+          <div class="field span-2">
+            <label for="providerApiKey">密钥</label>
+            <input id="providerApiKey" name="apiKey" type="password" autocomplete="off" placeholder="编辑时留空可保留现有密钥">
+          </div>
+          <div class="field span-2">
+            <label class="check-row"><input id="providerAutoDiscover" type="checkbox" checked>保存后自动发现可用模型</label>
+          </div>
+        </div>
+        <details class="advanced-form">
+          <summary>高级选项</summary>
+          <div class="advanced-fields field-grid">
+            <div class="field">
+              <label for="providerWireApi">请求协议</label>
+              <select id="providerWireApi" name="wireApi"><option value="responses">Responses</option><option value="chat">Chat Completions</option></select>
+            </div>
+            <div class="field span-2" id="claudeModelMapping" hidden>
+              <label>Claude 模型映射</label>
+              <div class="field-grid">
+                <div class="field">
+                  <label for="providerSonnetModel">Sonnet</label>
+                  <input id="providerSonnetModel" placeholder="留空时使用默认模型">
+                </div>
+                <div class="field">
+                  <label for="providerOpusModel">Opus</label>
+                  <input id="providerOpusModel" placeholder="留空时使用默认模型">
+                </div>
+                <div class="field span-2">
+                  <label for="providerHaikuModel">Haiku</label>
+                  <input id="providerHaikuModel" placeholder="留空时使用默认模型">
+                </div>
+              </div>
+            </div>
+            <div class="field span-2">
+              <label for="providerNotes">备注</label>
+              <textarea id="providerNotes" name="notes" placeholder="用途、账号或代理说明"></textarea>
+            </div>
+          </div>
+        </details>
+      </div>
+      <div class="dialog-actions">
+        <button class="quiet-button" id="cancelProvider" type="button">取消</button>
+        <button class="primary-button" type="submit">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="settings-dialog" id="toolsDialog" aria-labelledby="toolsDialogTitle">
+    <div class="dialog-head">
+      <h2 id="toolsDialogTitle">管理与测速</h2>
+      <button class="icon-button" id="closeTools" type="button" aria-label="关闭"><img src="/icons/lucide/x.svg" alt=""></button>
+    </div>
+    <div class="dialog-body">
+      <section class="setting-section">
+        <h3>请求地址</h3>
+        <p>可以保存多个兼容地址；测速后可自动选择当前最快且凭据有效的地址。</p>
+        <label class="check-row"><input id="autoSelectEndpoint" type="checkbox">测速后自动选择最快地址</label>
+        <div class="endpoint-list" id="endpointList"></div>
+        <div class="setting-actions">
+          <button class="quiet-button" id="addEndpoint" type="button"><img class="button-icon" src="/icons/lucide/plus.svg" alt="">添加地址</button>
+          <button class="quiet-button" id="testEndpoints" type="button"><img class="button-icon" src="/icons/lucide/activity.svg" alt="">测试所有地址</button>
+        </div>
+      </section>
+      <section class="setting-section">
+        <h3>模型与测速</h3>
+        <p>读取接口公开的模型列表；模型测速会发送最短测试请求，可能产生极少量计费。</p>
+        <div class="field">
+          <label for="testModel">测试模型</label>
+          <input id="testModel" placeholder="先读取模型，或直接输入模型名称" autocomplete="off">
+        </div>
+        <div class="setting-actions">
+          <button class="quiet-button" id="loadModels" type="button"><img class="button-icon" src="/icons/lucide/download.svg" alt="">读取模型列表</button>
+          <button class="quiet-button" id="benchmarkModel" type="button"><img class="button-icon" src="/icons/lucide/activity.svg" alt="">模型测速</button>
+          <button class="primary-button" id="autoDiagnose" type="button"><img class="button-icon" src="/icons/lucide/refresh-cw.svg" alt="">自动检测</button>
+        </div>
+        <div class="diagnostic-result" id="diagnosticResult" aria-live="polite">尚未检测。</div>
+      </section>
+    </div>
+    <div class="dialog-actions">
+      <button class="quiet-button" id="cancelTools" type="button">取消</button>
+      <button class="primary-button" id="saveTools" type="button">保存</button>
+    </div>
+  </dialog>
+
+  <dialog class="settings-dialog" id="settingsDialog" aria-labelledby="settingsDialogTitle">
+    <div class="dialog-head">
+      <h2 id="settingsDialogTitle">Leoapi 设置</h2>
+      <button class="icon-button" id="closeSettings" type="button" aria-label="关闭"><img src="/icons/lucide/x.svg" alt=""></button>
+    </div>
+    <div class="dialog-body">
+      <div class="settings-tabs" role="tablist" aria-label="设置分类">
+        <button class="settings-tab" type="button" role="tab" aria-selected="true" aria-controls="generalSettings" id="generalTab">通用</button>
+        <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="advancedSettings" id="advancedTab">高级</button>
+      </div>
+      <div class="settings-panel" id="generalSettings" role="tabpanel" aria-labelledby="generalTab">
+        <section class="setting-section">
+          <h3>外观主题</h3>
+          <p>与 leocodebox 主界面使用相同设置。</p>
+          <div class="segmented" id="themeControl">
+            <button type="button" data-theme-mode="system" aria-pressed="false">跟随系统</button>
+            <button type="button" data-theme-mode="light" aria-pressed="false">浅色</button>
+            <button type="button" data-theme-mode="dark" aria-pressed="false">深色</button>
+          </div>
+        </section>
+        <section class="setting-section">
+          <h3>界面语言</h3>
+          <p>默认使用简体中文。</p>
+          <div class="segmented" id="languageControl">
+            <button type="button" data-language="zh-CN" aria-pressed="true">简体中文</button>
+            <button type="button" data-language="en" aria-pressed="false">English</button>
+          </div>
+        </section>
+        <section class="setting-section">
+          <h3>导入配置</h3>
+          <p>从本机智能体配置或旧切换器中读取已有接口。</p>
+          <div class="setting-actions">
+            <button class="quiet-button" id="importCurrent" type="button"><img class="button-icon" src="/icons/lucide/download.svg" alt="">读取本机配置</button>
+            <button class="quiet-button" id="importLegacy" type="button"><img class="button-icon" src="/icons/lucide/history.svg" alt="">导入旧切换器数据</button>
+          </div>
+        </section>
+        <section class="setting-section">
+          <h3>健康监控</h3>
+          <p>后台定期探测各智能体当前启用的节点（走免费的模型列表请求，不消耗 token）。节点连续失败会在列表顶部提醒。</p>
+          <div class="field-grid">
+            <div class="field">
+              <label class="check-row"><input id="healthEnabled" type="checkbox" checked>启用后台轮询</label>
+            </div>
+            <div class="field">
+              <label for="healthInterval">轮询间隔（分钟）</label>
+              <input id="healthInterval" type="number" min="1" max="60" step="1" value="5">
+            </div>
+          </div>
+          <p>勾选的智能体在当前节点降级时<strong>自动切换</strong>到同类健康备用（切换前自动备份，可一键撤销）：</p>
+          <div class="field-grid" id="healthAutoTargets"></div>
+        </section>
+      </div>
+      <div class="settings-panel" id="advancedSettings" role="tabpanel" aria-labelledby="advancedTab" hidden>
+        <section class="setting-section">
+          <h3>检测参数</h3>
+          <p>用于请求地址检测、模型列表读取和模型测速。</p>
+          <div class="field-grid">
+            <div class="field">
+              <label for="testTimeoutSeconds">超时时间（秒）</label>
+              <input id="testTimeoutSeconds" type="number" min="1" max="30" step="1" value="8">
+            </div>
+            <div class="field">
+              <label for="testAttempts">测速次数</label>
+              <input id="testAttempts" type="number" min="1" max="5" step="1" value="1">
+            </div>
+            <div class="field span-2">
+              <label for="degradedThreshold">慢速提示阈值（毫秒）</label>
+              <input id="degradedThreshold" type="number" min="500" max="30000" step="100" value="6000">
+            </div>
+          </div>
+        </section>
+        <section class="setting-section">
+          <h3>配置文件</h3>
+          <p>Leoapi 只写入已识别的本机路径，写入前自动备份。</p>
+          <div class="path-groups" id="pathsBox"></div>
+        </section>
+        <section class="setting-section">
+          <h3>备份与恢复</h3>
+          <p>恢复操作会替换对应的当前配置文件。</p>
+          <div id="backupsBox"></div>
+        </section>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="confirmDialog" aria-labelledby="confirmMessage">
+    <div class="dialog-head">
+      <h2>确认操作</h2>
+    </div>
+    <div class="dialog-body">
+      <p id="confirmMessage" class="confirm-message"></p>
+    </div>
+    <div class="dialog-actions">
+      <button class="quiet-button" id="confirmCancel" type="button">取消</button>
+      <button class="primary-button" id="confirmOk" type="button">确认</button>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <script>
+    const translations = {
+      "zh-CN": {
+        localSwitch: "本地接口切换", count: "{{count}} 条配置", config: "接口配置", select: "选择需要启用的本机接口",
+        active: "使用中", enable: "启用", readonly: "仅记录", edit: "编辑", test: "管理与测速", copy: "复制接口地址",
+        remove: "删除", emptyTitle: "还没有接口配置", emptyBody: "点击右上角的加号创建第一个接口。", add: "新增接口",
+        editTitle: "编辑接口", saved: "已保存", applied: "已启用 {{name}}", copied: "接口地址已复制", testing: "正在测试连接…",
+        deleted: "已删除", imported: "已导入 {{count}} 项", restored: "已恢复", exists: "已识别", missing: "未创建", noBackups: "暂无备份"
+      },
+      en: {
+        localSwitch: "Local API switch", count: "{{count}} profiles", config: "API profiles", select: "Choose the local API profile to activate",
+        active: "Active", enable: "Enable", readonly: "Status only", edit: "Edit", test: "Models and speed", copy: "Copy URL",
+        remove: "Delete", emptyTitle: "No API profiles", emptyBody: "Use the plus button to create the first profile.", add: "Add profile",
+        editTitle: "Edit profile", saved: "Saved", applied: "Enabled {{name}}", copied: "URL copied", testing: "Testing connection…",
+        deleted: "Deleted", imported: "Imported {{count}} items", restored: "Restored", exists: "Detected", missing: "Missing", noBackups: "No backups"
+      }
+    };
+
+    let state = null;
+    let backups = [];
+    let switchProfiles = [];
+    let backupError = "";
+    let selectedTarget = localStorage.getItem("leoapi-target") || "claude";
+    let selectedProvider = "";
+    let toolsProviderId = "";
+    let lastAppliedPresetId = "";
+    let toastTimer = null;
+
+    const diagnosticDefaults = { timeoutSeconds: 8, attempts: 1, degradedThreshold: 6000 };
+
+    function readDiagnosticSettings() {
+      try {
+        const saved = JSON.parse(localStorage.getItem("leoapi-diagnostic-settings") || "{}");
+        return {
+          timeoutSeconds: Math.min(30, Math.max(1, Number(saved.timeoutSeconds) || diagnosticDefaults.timeoutSeconds)),
+          attempts: Math.min(5, Math.max(1, Number(saved.attempts) || diagnosticDefaults.attempts)),
+          degradedThreshold: Math.min(30000, Math.max(500, Number(saved.degradedThreshold) || diagnosticDefaults.degradedThreshold)),
+        };
+      } catch {
+        return { ...diagnosticDefaults };
+      }
+    }
+
+    function loadDiagnosticSettings() {
+      const settings = readDiagnosticSettings();
+      $("#testTimeoutSeconds").value = settings.timeoutSeconds;
+      $("#testAttempts").value = settings.attempts;
+      $("#degradedThreshold").value = settings.degradedThreshold;
+    }
+
+    function saveDiagnosticSettings() {
+      const settings = {
+        timeoutSeconds: Math.min(30, Math.max(1, Number($("#testTimeoutSeconds").value) || 8)),
+        attempts: Math.min(5, Math.max(1, Number($("#testAttempts").value) || 1)),
+        degradedThreshold: Math.min(30000, Math.max(500, Number($("#degradedThreshold").value) || 6000)),
+      };
+      localStorage.setItem("leoapi-diagnostic-settings", JSON.stringify(settings));
+      loadDiagnosticSettings();
+      return settings;
+    }
+
+    // ---- 健康监控设置（服务端持久化，随 /switch/status 下发） ----
+    function loadHealthSettings() {
+      // 状态未加载时不渲染（also see saveHealthSettings 的守卫）：否则表单里是
+      // 默认值，任何 change 都会把默认值存回服务端，静默冲掉真实设置。
+      if (!state?.health) {
+        $("#healthAutoTargets").innerHTML = "";
+        return;
+      }
+      const health = state.health || {};
+      $("#healthEnabled").checked = health.enabled !== false;
+      $("#healthInterval").value = health.intervalMinutes || 5;
+      const autoTargets = Array.isArray(health.autoFailoverTargets) ? health.autoFailoverTargets : [];
+      const writable = Object.values(state?.targets || {}).filter((target) => target.writable);
+      $("#healthAutoTargets").innerHTML = writable.map((target) => `<div class="field"><label class="check-row"><input type="checkbox" data-health-auto="${escapeHtml(target.id)}" ${autoTargets.includes(target.id) ? "checked" : ""}>${escapeHtml(target.label)}</label></div>`).join("");
+    }
+
+    async function saveHealthSettings() {
+      // 状态未加载就保存 = 把表单默认值写回服务端,会静默清掉用户已存设置。
+      if (!state?.health) {
+        showToast("配置尚未加载，请稍后重试", "error");
+        return;
+      }
+      const autoFailoverTargets = Array.from(document.querySelectorAll("[data-health-auto]"))
+        .filter((input) => input.checked)
+        .map((input) => input.dataset.healthAuto);
+      const body = {
+        enabled: $("#healthEnabled").checked,
+        intervalMinutes: Math.min(60, Math.max(1, Number($("#healthInterval").value) || 5)),
+        autoFailoverTargets,
+      };
+      const result = await api("/api/leocodebox/switch/health/settings", { method: "POST", body: JSON.stringify(body) });
+      if (state) state.health = { ...state.health, ...result.health };
+    }
+
+    async function healthCheckNow() {
+      showToast("正在重新探测…");
+      const result = await api("/api/leocodebox/switch/health/check-now", { method: "POST", body: "{}" });
+      if (state) state.health = result.health;
+      renderProviders();
+      const entry = result.health?.targets?.[selectedTarget];
+      showToast(entry ? (entry.status === "ok" ? `探测通过${entry.lastLatencyMs != null ? ` · ${entry.lastLatencyMs} ms` : ""}` : entry.lastNote || "探测未通过") : "已完成探测", entry?.status === "ok" ? "ok" : entry ? "error" : "");
+    }
+
+    function syncTheme() {
+      const themeMode = localStorage.getItem("themeMode") || localStorage.getItem("theme") || "system";
+      const isDark = themeMode === "dark" || (themeMode === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      document.documentElement.dataset.theme = isDark ? "dark" : "light";
+      document.querySelector('meta[name="theme-color"]')?.setAttribute("content", isDark ? "#1b1b1e" : "#f6f4ef");
+      document.querySelectorAll("[data-theme-mode]").forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.dataset.themeMode === themeMode));
+      });
+    }
+
+    window.addEventListener("storage", (event) => {
+      if (event.key === "theme" || event.key === "themeMode") syncTheme();
+    });
+    window.addEventListener("focus", syncTheme);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) syncTheme();
+    });
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncTheme);
+
+    const $ = (selector) => document.querySelector(selector);
+    const token = () => localStorage.getItem("auth-token") || "";
+    const language = () => localStorage.getItem("userLanguage") === "en" ? "en" : "zh-CN";
+    const text = (key, values = {}) => Object.entries(values).reduce(
+      (result, [name, value]) => result.replace(`{{${name}}}`, String(value)),
+      translations[language()][key] || key,
+    );
+    const icon = (name) => `/icons/lucide/${name}.svg`;
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+    }
+
+    function showToast(message, tone = "") {
+      const toast = $("#toast");
+      window.clearTimeout(toastTimer);
+      toast.textContent = message;
+      toast.className = `toast ${tone}`;
+      toast.hidden = false;
+      toastTimer = window.setTimeout(() => { toast.hidden = true; }, 4200);
+    }
+
+    async function api(path, options = {}) {
+      const response = await fetch(path, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token()}`,
+          ...(options.headers || {}),
+        },
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok || json.success === false) throw new Error(json.error || response.statusText);
+      return json;
+    }
+
+    function orderedTargets() {
+      const order = ["claude", "codex", "gemini", "opencode", "cursor", "hermes"];
+      return Object.values(state?.targets || {}).sort((a, b) => {
+        const left = order.indexOf(a.id);
+        const right = order.indexOf(b.id);
+        return (left < 0 ? 99 : left) - (right < 0 ? 99 : right);
+      });
+    }
+
+    function fillTargetSelect() {
+      const select = $("#providerTarget");
+      const previous = select.value;
+      select.innerHTML = orderedTargets().map((target) => `<option value="${escapeHtml(target.id)}">${escapeHtml(target.label)}</option>`).join("");
+      select.value = previous && state.targets[previous] ? previous : selectedTarget;
+      fillPresetSelect();
+    }
+
+    function providerTemplateStatusLabel(status) {
+      if (!status || status === "verified") return "";
+      if (status === "beta") return "Beta";
+      if (status === "preview") return "Preview";
+      return String(status);
+    }
+
+    function fillPresetSelect() {
+      const select = $("#providerPreset");
+      if (!select) return;
+      const previous = select.value;
+      select.innerHTML = `<option value="">自定义</option>` + (state?.presets || []).map((preset) => {
+        const statusLabel = providerTemplateStatusLabel(preset.status);
+        return `<option value="${escapeHtml(preset.id)}">${escapeHtml(preset.name + (statusLabel ? ` · ${statusLabel}` : ""))}</option>`;
+      }).join("");
+      select.value = (state?.presets || []).some((preset) => preset.id === previous) ? previous : "";
+      syncPresetMeta();
+    }
+
+    function selectedPreset() {
+      return (state?.presets || []).find((item) => item.id === $("#providerPreset").value);
+    }
+
+    function syncPresetMeta() {
+      const preset = selectedPreset();
+      const container = $("#providerPresetMeta");
+      const docs = $("#providerPresetDocs");
+      const status = $("#providerPresetStatus");
+      if (!preset) {
+        container.hidden = true;
+        docs.removeAttribute("href");
+        return;
+      }
+      const templateStatus = providerTemplateStatusLabel(preset.status);
+      const statusLabel = templateStatus ? `${templateStatus} 模板 · ` : "";
+      status.textContent = statusLabel;
+      if (typeof preset.docsUrl === "string" && /^https:\/\//i.test(preset.docsUrl)) {
+        docs.href = preset.docsUrl;
+        docs.hidden = false;
+        container.hidden = false;
+      } else if (statusLabel) {
+        docs.removeAttribute("href");
+        docs.hidden = true;
+        container.hidden = false;
+      } else {
+        docs.removeAttribute("href");
+        container.hidden = true;
+      }
+    }
+
+    async function applyPreset() {
+      const preset = selectedPreset();
+      const form = $("#providerForm");
+      const selectedPresetId = $("#providerPreset").value;
+      const hasUserConfiguration = [
+        form.elements.baseUrl.value,
+        form.elements.apiKey.value,
+        form.elements.model.value,
+      ].some((value) => value.trim());
+      if (preset && hasUserConfiguration && selectedPresetId !== lastAppliedPresetId) {
+        const confirmed = await confirmDialog("切换厂商模板会覆盖当前接口地址、模型和请求协议，是否继续？");
+        if (!confirmed) {
+          $("#providerPreset").value = lastAppliedPresetId;
+          syncPresetMeta();
+          return;
+        }
+      }
+      syncPresetMeta();
+      if (!preset) {
+        lastAppliedPresetId = "";
+        return;
+      }
+      form.elements.name.value = preset.name || "";
+      form.elements.target.value = preset.target || selectedTarget;
+      form.elements.baseUrl.value = preset.baseUrl || "";
+      form.elements.model.value = preset.defaultModel || "";
+      form.elements.wireApi.value = preset.wireApi || "chat";
+      lastAppliedPresetId = selectedPresetId;
+      syncProviderTargetFields();
+    }
+
+    function modelCacheSourceLabel(cache) {
+      if (!cache?.source) return "";
+      if (cache.source === "fresh") return "实时";
+      if (cache.source === "disk") return "磁盘缓存";
+      if (cache.source === "memory") return "内存缓存";
+      return cache.source;
+    }
+
+    async function discoverDraftModels() {
+      const form = $("#providerForm");
+      const button = $("#discoverDraftModels");
+      button.disabled = true;
+      button.textContent = "获取中…";
+      try {
+        const result = await api("/api/leocodebox/switch/discover-models", {
+          method: "POST",
+          body: JSON.stringify({
+            providerId: form.elements.id.value || undefined,
+            target: form.elements.target.value,
+            baseUrl: form.elements.baseUrl.value,
+            apiKey: form.elements.apiKey.value,
+            useStoredKey: Boolean(form.elements.id.value && !form.elements.apiKey.value),
+            wireApi: form.elements.wireApi.value,
+          }),
+        });
+        setModelOptions("providerModel", result.models || []);
+        if (!form.elements.model.value && result.models?.length) form.elements.model.value = result.models[0];
+        const cacheLabel = modelCacheSourceLabel(result.cache);
+        showToast(`已获取 ${result.models?.length || 0} 个模型${cacheLabel ? ` · ${cacheLabel}` : ""}`, "ok");
+      } finally {
+        button.disabled = false;
+        button.textContent = "自动获取";
+      }
+    }
+
+    function renderTabs() {
+      const targets = orderedTargets();
+      if (!state.targets[selectedTarget] && targets.length) selectedTarget = targets[0].id;
+      $("#agentTabs").innerHTML = targets.map((target) => `<button class="agent-tab" type="button" role="tab" aria-selected="${target.id === selectedTarget}" data-target="${escapeHtml(target.id)}"><img src="${targetIcon(target.id)}" alt="">${escapeHtml(target.label)}</button>`).join("");
+    }
+
+    function targetIcon(targetId) {
+      const supported = new Set(["claude", "codex", "gemini", "opencode", "cursor", "hermes"]);
+      return supported.has(targetId) ? `/icons/providers/${targetId}.svg` : "/logo.svg";
+    }
+
+    function providerMark(provider) {
+      const source = String(provider.name || provider.target || "L").trim();
+      return escapeHtml((source[0] || "L").toUpperCase());
+    }
+
+    function confirmDialog(message) {
+      return new Promise((resolve) => {
+        const dialog = $("#confirmDialog");
+        const okButton = $("#confirmOk");
+        const cancelButton = $("#confirmCancel");
+        $("#confirmMessage").textContent = message;
+        const finish = (result) => {
+          okButton.removeEventListener("click", onOk);
+          cancelButton.removeEventListener("click", onCancel);
+          dialog.removeEventListener("close", onClose);
+          if (dialog.open) dialog.close();
+          resolve(result);
+        };
+        const onOk = () => finish(true);
+        const onCancel = () => finish(false);
+        const onClose = () => finish(false);
+        okButton.addEventListener("click", onOk);
+        cancelButton.addEventListener("click", onCancel);
+        dialog.addEventListener("close", onClose);
+        dialog.showModal();
+        okButton.focus();
+      });
+    }
+
+    function relativeTime(iso) {
+      const timestamp = new Date(iso).getTime();
+      if (!Number.isFinite(timestamp)) return "";
+      const elapsedMs = Date.now() - timestamp;
+      if (elapsedMs < 60000) return "刚刚";
+      if (elapsedMs < 3600000) return `${Math.floor(elapsedMs / 60000)} 分钟前`;
+      if (elapsedMs < 86400000) return `${Math.floor(elapsedMs / 3600000)} 小时前`;
+      return `${Math.floor(elapsedMs / 86400000)} 天前`;
+    }
+
+    function providerHealth(provider) {
+      const discovery = provider?.modelDiscovery || {};
+      if (provider?.modelDiscoveryError) {
+        return { id: "failed", label: "失败", className: "health-fail", detail: provider.modelDiscoveryError };
+      }
+      const modelCount = Number(discovery.modelCount ?? provider?.discoveredModels?.length ?? 0);
+      const checkedAgo = discovery.updatedAt ? relativeTime(discovery.updatedAt) : "";
+      if (discovery.updatedAt && modelCount > 0) {
+        const latency = Number.isFinite(Number(discovery.latencyMs)) ? ` · ${Math.round(Number(discovery.latencyMs))}ms` : "";
+        return { id: "healthy", label: "健康", className: "health-ok", detail: `${modelCount} 个模型${latency}${checkedAgo ? ` · ${checkedAgo}检测` : ""}` };
+      }
+      if (discovery.updatedAt) {
+        return { id: "degraded", label: "降级", className: "health-warn", detail: `连接成功，但未发现模型${checkedAgo ? ` · ${checkedAgo}检测` : ""}` };
+      }
+      return { id: "unverified", label: "未验证", className: "health-idle", detail: "尚未执行模型发现" };
+    }
+
+    function failoverCandidate(provider) {
+      const alternatives = state.providers.filter((item) => item.target === provider.target && item.id !== provider.id);
+      // 只提议缓存排名 healthy 的候选;宁可返回 null 也不兜底到已知 failed 的节点。
+      return alternatives.find((item) => providerHealth(item).id === "healthy") || null;
+    }
+
+    // 降级横幅的「切换到健康备用」:让后端对候选逐个活体探测后切换,
+    // 而不是用前端可能过期数天的 modelDiscovery 缓存排名。
+    async function liveFailover(target) {
+      const label = state.targets[target]?.label || target;
+      if (!(await confirmDialog(`对 ${label} 的备用节点逐个实测,切换到第一个探测通过的节点?\n\n切换前会自动备份现有配置,可随时撤销。`))) return;
+      const result = await api("/api/leocodebox/switch/health/failover-now", {
+        method: "POST",
+        body: JSON.stringify({ target }),
+      });
+      if (result.health && state) state.health = result.health;
+      window.parent.dispatchEvent(new CustomEvent("leocodebox-provider:applied", { detail: { target, activeModel: null } }));
+      await refresh();
+      showToast(`已切换到「${result.failover?.toName || "备用节点"}」`, "ok");
+    }
+
+    async function suggestFailover(providerId) {
+      const provider = state.providers.find((item) => item.id === providerId);
+      const candidate = provider ? failoverCandidate(provider) : null;
+      if (!provider || !candidate) {
+        showToast("没有可用的备用 Provider", "error");
+        return;
+      }
+      const prompt = `检测到 ${provider.name} 当前不可用。是否切换到备用 Provider「${candidate.name}」？\n\n切换前会自动备份现有配置，可随时恢复。`;
+      if (!(await confirmDialog(prompt))) return;
+      await applyProvider(candidate.id);
+    }
+
+    function renderProviders() {
+      const target = state.targets[selectedTarget];
+      const providers = state.providers.filter((provider) => provider.target === selectedTarget);
+      const nativeActive = !state.activeByTarget?.[selectedTarget];
+      const nativeAvailable = Boolean(state.nativeAvailableByTarget?.[selectedTarget]);
+      $("#currentTargetTitle").textContent = target?.label || text("config");
+      const shellOverride = state.shellOverrides?.[selectedTarget];
+      const activeProviderForTarget = state.providers.find((provider) => state.activeByTarget?.[provider.target] === provider.id && provider.target === selectedTarget);
+      let overrideNote = "";
+      if (selectedTarget === "claude" && shellOverride?.baseUrl && shellOverride.baseUrl !== activeProviderForTarget?.baseUrl) {
+        overrideNote = ` · ⚠️ 检测到 shell 环境变量 ANTHROPIC_BASE_URL=${shellOverride.baseUrl}（可能来自 cc-switch 等），终端会话会优先走它；本应用内会话由 Leoapi 接管`;
+      } else if (selectedTarget === "codex" && shellOverride?.apiKeyPresent && activeProviderForTarget) {
+        overrideNote = " · ⚠️ 检测到 shell 环境变量 OPENAI_API_KEY，终端会话会优先使用它；本应用内会话由 Leoapi 接管";
+      } else if (selectedTarget === "gemini"
+        && ((shellOverride?.baseUrl && shellOverride.baseUrl !== activeProviderForTarget?.baseUrl) || shellOverride?.apiKeyPresent)
+        && activeProviderForTarget) {
+        // Gemini has no in-app runtime, so terminal sessions are the ONLY
+        // sessions — a shell export silently defeating ~/.gemini/.env matters
+        // more here. Same-URL exports are harmless and stay quiet (claude 同款守卫).
+        const differentBase = shellOverride.baseUrl && shellOverride.baseUrl !== activeProviderForTarget.baseUrl;
+        overrideNote = ` · ⚠️ 检测到 shell 环境变量${differentBase ? ` GOOGLE_GEMINI_BASE_URL=${shellOverride.baseUrl}` : " GEMINI_API_KEY/GOOGLE_API_KEY"}，终端里的 Gemini CLI 会优先使用它而不是 Leoapi 写入的配置`;
+      }
+      $("#currentTargetMeta").textContent = `${providers.length + 1} 个配置 · 选择需要使用的接口${overrideNote}`;
+      if (nativeActive) {
+        selectedProvider = "";
+      } else if (!providers.some((provider) => provider.id === selectedProvider)) {
+        selectedProvider = providers.find((provider) => state.activeByTarget?.[provider.target] === provider.id)?.id || providers[0].id;
+      }
+      const nativeCard = `<article class="provider-card${nativeActive ? " is-active is-selected" : ""}" data-card-native="${escapeHtml(selectedTarget)}">
+        <div class="drag-handle" aria-hidden="true"><img src="${icon("rotate-ccw")}" alt=""></div>
+        <div class="provider-mark" aria-hidden="true"><img src="${targetIcon(selectedTarget)}" alt=""></div>
+        <div class="provider-info">
+          <div class="provider-title"><strong>本机原配置</strong>${nativeActive ? `<span class="state-chip">${text("active")}</span>` : ""}</div>
+          <span class="provider-url">登录授权 / CLI 原生配置</span>
+        </div>
+        <div class="card-actions">
+          ${nativeActive ? "" : `<button class="primary-button activate-button" type="button" data-restore-default="${escapeHtml(selectedTarget)}" ${nativeAvailable ? "" : "disabled"}><img class="button-icon" src="${icon("rotate-ccw")}" alt="">恢复</button>`}
+        </div>
+      </article>`;
+      const renderProviderCard = (provider) => {
+        const active = state.activeByTarget?.[provider.target] === provider.id;
+        const selected = provider.id === selectedProvider;
+        const providerName = escapeHtml(provider.name);
+        const providerId = escapeHtml(provider.id);
+        const baseUrl = (provider.baseUrl || "").replace(/\/+$/, "");
+        const nickname = provider.endpointLabels?.[baseUrl];
+        const url = escapeHtml(nickname ? `${nickname} · ${provider.baseUrl}` : provider.baseUrl || "本机默认配置");
+        const health = providerHealth(provider);
+        const backup = health.id === "failed" ? failoverCandidate(provider) : null;
+        return `<article class="provider-card${active ? " is-active" : ""}${selected ? " is-selected" : ""}" data-card-provider="${providerId}" tabindex="0">
+          <div class="drag-handle" aria-hidden="true"><img src="${icon("grip-vertical")}" alt=""></div>
+          <div class="provider-mark" aria-hidden="true"><img src="${targetIcon(provider.target)}" alt=""></div>
+          <div class="provider-info">
+            <div class="provider-title"><strong>${providerName}</strong>${active ? `<span class="state-chip">${text("active")}</span>` : !target?.writable ? `<span class="state-chip readonly">${text("readonly")}</span>` : ""}<span class="state-chip ${health.className}" title="${escapeHtml(health.detail)}">${health.label}</span></div>
+            <button class="provider-url" type="button" data-copy="${providerId}" title="${text("copy")}">${url}</button>
+            <span class="provider-health">${escapeHtml(health.detail)}</span>
+          </div>
+          <div class="card-actions">
+            ${backup ? `<button class="quiet-button failover-button" type="button" data-failover="${providerId}" title="切换到 ${escapeHtml(backup.name)}">切换备用</button>` : ""}
+            ${active ? "" : `<button class="primary-button activate-button" type="button" data-apply="${providerId}" ${target?.writable ? "" : "disabled"}><img class="button-icon" src="${icon("play")}" alt="">${target?.writable ? text("enable") : text("readonly")}</button>`}
+            <button class="icon-button" type="button" data-edit="${providerId}" aria-label="${text("edit")} ${providerName}" title="${text("edit")}"><img src="${icon("pencil")}" alt=""></button>
+            <button class="icon-button" type="button" data-test="${providerId}" aria-label="${text("test")} ${providerName}" title="${text("test")}"><img src="${icon("activity")}" alt=""></button>
+            <details class="more-menu">
+              <summary class="icon-button" aria-label="更多操作" title="更多操作"><img src="${icon("ellipsis")}" alt=""></summary>
+              <div class="menu-popover">
+                <button type="button" data-copy="${providerId}"><img src="${icon("copy")}" alt="">${text("copy")}</button>
+                <button type="button" data-save-profile="${providerId}"><img src="${icon("file-json-2")}" alt="">保存为方案</button>
+                <button class="danger" type="button" data-delete="${providerId}"><img src="${icon("trash-2")}" alt="">${text("remove")}</button>
+              </div>
+            </details>
+          </div>
+        </article>`;
+      };
+      // 三卡叙事：本机原配置永远第一；当前启用其次；备选按健康与延迟排序。
+      const activeProvider = providers.find((provider) => state.activeByTarget?.[provider.target] === provider.id) || null;
+      const alternatives = providers.filter((provider) => provider !== activeProvider).sort((a, b) => {
+        const healthRank = (p) => ({ healthy: 0, degraded: 1, unverified: 2, failed: 3 })[providerHealth(p).id] ?? 2;
+        const latency = (p) => {
+          const value = Number(p?.modelDiscovery?.latencyMs);
+          return Number.isFinite(value) ? value : Infinity;
+        };
+        return healthRank(a) - healthRank(b) || latency(a) - latency(b);
+      });
+      const section = (label, content) => (content ? `<div class="provider-section-label">${label}</div>${content}` : "");
+      // Live background-monitor banners: degraded active node, or a recent
+      // auto-failover with one-click undo (undo = a plain confirmed re-apply).
+      let healthBanner = "";
+      const liveHealth = state.health?.targets?.[selectedTarget];
+      if (liveHealth?.status === "degraded" && activeProvider && liveHealth.providerId === activeProvider.id) {
+        healthBanner = `<div class="health-banner warn">⚠️ 「${escapeHtml(liveHealth.providerName)}」连续 ${liveHealth.consecutiveFailures} 次后台探测失败${liveHealth.lastNote ? `：${escapeHtml(liveHealth.lastNote)}` : ""}
+          <button class="quiet-button" type="button" data-live-failover="${escapeHtml(selectedTarget)}">切换到健康备用</button>
+          <button class="quiet-button" type="button" data-health-check>立即重测</button></div>`;
+      } else if (liveHealth?.lastAutoFailover) {
+        const failover = liveHealth.lastAutoFailover;
+        const fromStillExists = state.providers.some((item) => item.id === failover.fromId);
+        healthBanner = `<div class="health-banner info">已自动切换：「${escapeHtml(failover.fromName)}」探测失败 → 「${escapeHtml(failover.toName)}」（${escapeHtml(relativeTime(failover.at))}）
+          ${fromStillExists ? `<button class="quiet-button" type="button" data-apply="${escapeHtml(failover.fromId)}">撤销，切回原节点</button>` : ""}</div>`;
+      }
+      $("#providerList").innerHTML = [
+        healthBanner,
+        section("本机原配置", nativeCard),
+        section("今天在用", activeProvider ? renderProviderCard(activeProvider) : ""),
+        section("备选节点", alternatives.map(renderProviderCard).join("")),
+        section("一键方案", switchProfiles.filter((profile) => profile.target === selectedTarget).map((profile) => `<article class="provider-card">
+          <div class="provider-mark" aria-hidden="true"><img src="${targetIcon(profile.target)}" alt=""></div>
+          <div class="provider-info"><div class="provider-title"><strong>${escapeHtml(profile.name)}</strong><span class="state-chip readonly">Profile</span></div><span class="provider-url">${escapeHtml(state.providers.find((item) => item.id === profile.providerId)?.name || profile.providerId)}</span></div>
+          <div class="card-actions"><button class="primary-button activate-button" type="button" data-apply-profile="${escapeHtml(profile.name)}">应用</button><button class="icon-button danger" type="button" data-delete-profile="${escapeHtml(profile.name)}" title="删除方案"><img src="${icon("trash-2")}" alt=""></button></div>
+        </article>`).join("")),
+      ].join("");
+    }
+
+    function diagnosticProvider() {
+      return state?.providers.find((provider) => provider.id === toolsProviderId) || null;
+    }
+
+    function setDiagnosticResult(message, tone = "") {
+      const result = $("#diagnosticResult");
+      result.textContent = message;
+      result.className = `diagnostic-result ${tone}`;
+    }
+
+    function renderEndpointEditor(provider, liveResults = []) {
+      const endpoints = provider?.endpoints?.length
+        ? provider.endpoints
+        : provider?.baseUrl ? [provider.baseUrl] : [""];
+      const liveByUrl = Object.fromEntries(liveResults.map((result) => [result.url, result]));
+      const statFor = (url) => liveByUrl[url] || provider?.endpointStats?.[url];
+      // 历史趋势：只读持久化的 history（liveResults 无 history），最近在右。
+      const historyFor = (url) => provider?.endpointStats?.[url]?.history;
+      const endpointSparkline = (history, usable) => {
+        const points = Array.isArray(history)
+          ? history.map((sample) => Number(sample?.latencyMs)).filter((value) => Number.isFinite(value))
+          : [];
+        if (points.length < 2) return "";
+        const W = 100, H = 22, pad = 3;
+        const min = Math.min(...points), max = Math.max(...points);
+        const span = max - min || 1;
+        const stepX = (W - pad * 2) / (points.length - 1);
+        const coords = points.map((value, index) => {
+          const x = pad + index * stepX;
+          // 延迟越低越好 → 点越高（y 越小）。
+          const y = pad + ((value - min) / span) * (H - pad * 2);
+          return `${x.toFixed(1)},${y.toFixed(1)}`;
+        }).join(" ");
+        return `<svg class="endpoint-spark${usable ? "" : " bad"}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><polyline points="${coords}"></polyline></svg>`;
+      };
+      // 条带基准：本组端点里最慢的一个作为 100%。
+      const maxLatency = Math.max(1, ...endpoints
+        .map((url) => Number(statFor(url)?.latencyMs))
+        .filter((value) => Number.isFinite(value)));
+      $("#endpointList").innerHTML = endpoints.map((url, index) => {
+        const stat = statFor(url);
+        const usable = stat?.usable;
+        const label = provider?.endpointLabels?.[url] || "";
+        const status = stat
+          ? `${usable ? "可用" : "异常"}${stat.latencyMs != null ? ` · ${stat.latencyMs} ms` : ""}${stat.httpStatus ? ` · HTTP ${stat.httpStatus}` : ""}`
+          : "未测试";
+        const latency = Number(stat?.latencyMs);
+        const bar = Number.isFinite(latency)
+          ? `<span class="endpoint-bar${usable ? "" : " bad"}" aria-hidden="true"><i style="width:${Math.max(4, Math.round((latency / maxLatency) * 100))}%"></i></span>`
+          : "";
+        const spark = endpointSparkline(historyFor(url), usable);
+        return `<div class="endpoint-row">
+          <input type="url" data-endpoint-url value="${escapeHtml(url)}" placeholder="https://api.example.com/v1" aria-label="请求地址 ${index + 1}">
+          <input type="text" class="endpoint-label-input" data-endpoint-label value="${escapeHtml(label)}" placeholder="昵称（如：家里光猫）" maxlength="60" aria-label="地址昵称 ${index + 1}">
+          <span class="endpoint-result${stat ? usable ? " good" : " bad" : ""}">${escapeHtml(status)}</span>
+          <button class="icon-button danger" type="button" data-remove-endpoint="${index}" aria-label="删除此地址" title="删除"><img src="${icon("trash-2")}" alt=""></button>
+          ${bar}
+          ${spark}
+        </div>`;
+      }).join("");
+    }
+
+    function collectEndpointUrls() {
+      return Array.from(document.querySelectorAll("[data-endpoint-url]"))
+        .map((input) => input.value.trim().replace(/\/+$/, ""))
+        .filter((url, index, urls) => url && urls.indexOf(url) === index);
+    }
+
+    function collectEndpointLabels() {
+      const labels = {};
+      for (const row of document.querySelectorAll(".endpoint-row")) {
+        const url = row.querySelector("[data-endpoint-url]")?.value.trim().replace(/\/+$/, "");
+        const label = row.querySelector("[data-endpoint-label]")?.value.trim();
+        if (url && label) labels[url] = label;
+      }
+      return labels;
+    }
+
+    function openProviderTools(id) {
+      const provider = state.providers.find((item) => item.id === id);
+      if (!provider) return;
+      toolsProviderId = id;
+      $("#toolsDialogTitle").textContent = `${provider.name} · 管理与测速`;
+      $("#autoSelectEndpoint").checked = Boolean(provider.autoSelectEndpoint);
+      $("#testModel").value = provider.model || "";
+      setModelOptions("testModel", []);
+      renderEndpointEditor(provider);
+      setDiagnosticResult("可读取模型列表、测试多个请求地址，或执行最短模型请求测速。");
+      $("#toolsDialog").showModal();
+    }
+
+    async function persistProviderTools({ close = false } = {}) {
+      const provider = diagnosticProvider();
+      if (!provider) throw new Error("接口配置已不存在，请刷新后重试。");
+      const endpoints = collectEndpointUrls();
+      if (!endpoints.length) throw new Error("至少保留一个请求地址。");
+      const baseUrl = endpoints.includes(provider.baseUrl) ? provider.baseUrl : endpoints[0];
+      await api("/api/leocodebox/switch/providers", {
+        method: "POST",
+        body: JSON.stringify({
+          id: provider.id,
+          baseUrl,
+          endpoints,
+          endpointLabels: collectEndpointLabels(),
+          autoSelectEndpoint: $("#autoSelectEndpoint").checked,
+          apiKey: "__KEEP__",
+        }),
+      });
+      await refresh();
+      if (close) $("#toolsDialog").close();
+    }
+
+    async function testAllEndpoints() {
+      await persistProviderTools();
+      const provider = diagnosticProvider();
+      const settings = saveDiagnosticSettings();
+      setDiagnosticResult("正在测试所有请求地址…");
+      const result = await api(`/api/leocodebox/switch/providers/${encodeURIComponent(provider.id)}/endpoints/test`, {
+        method: "POST",
+        body: JSON.stringify({
+          endpoints: collectEndpointUrls(),
+          autoSelectEndpoint: $("#autoSelectEndpoint").checked,
+          timeoutMs: settings.timeoutSeconds * 1000,
+        }),
+      });
+      await refresh();
+      renderEndpointEditor(diagnosticProvider(), result.results);
+      const usableCount = result.results.filter((item) => item.usable).length;
+      setDiagnosticResult(
+        `${usableCount}/${result.results.length} 个地址可用。当前选择：${result.selectedBaseUrl || "无"}`,
+        usableCount ? "good" : "bad",
+      );
+      return result;
+    }
+
+    async function loadProviderModels() {
+      const provider = diagnosticProvider();
+      if (!provider) throw new Error("接口配置已不存在，请刷新后重试。");
+      const settings = saveDiagnosticSettings();
+      setDiagnosticResult("正在读取模型列表…");
+      const result = await api(`/api/leocodebox/switch/providers/${encodeURIComponent(provider.id)}/models`, {
+        method: "POST",
+        body: JSON.stringify({ timeoutMs: settings.timeoutSeconds * 1000, bypassCache: true }),
+      });
+      setModelOptions("testModel", result.models);
+      if (!$("#testModel").value && result.models[0]) $("#testModel").value = result.models[0];
+      const cacheLabel = modelCacheSourceLabel(result.cache);
+      setDiagnosticResult(
+        result.models.length
+          ? `已读取 ${result.models.length} 个模型 · ${result.latencyMs} ms${result.cache ? ` · ${cacheLabel}` : ""}`
+          : `接口可访问，但没有返回可识别的模型列表 · ${result.latencyMs} ms`,
+        result.models.length ? "good" : "",
+      );
+      return result;
+    }
+
+    async function benchmarkSelectedModel() {
+      const provider = diagnosticProvider();
+      const model = $("#testModel").value.trim();
+      if (!provider || !model) throw new Error("请选择或输入需要测速的模型。");
+      const settings = saveDiagnosticSettings();
+      setDiagnosticResult(`正在测试 ${model}…`);
+      const result = await api(`/api/leocodebox/switch/providers/${encodeURIComponent(provider.id)}/benchmark`, {
+        method: "POST",
+        body: JSON.stringify({
+          model,
+          attempts: settings.attempts,
+          timeoutMs: settings.timeoutSeconds * 1000,
+        }),
+      });
+      const degraded = result.averageLatencyMs != null && result.averageLatencyMs >= settings.degradedThreshold;
+      const tone = result.successCount === result.attempts && !degraded ? "good" : "bad";
+      const detail = result.results.map((item) => item.ok
+        ? `第 ${item.attempt} 次：${item.latencyMs} ms`
+        : `第 ${item.attempt} 次：失败${item.httpStatus ? `（HTTP ${item.httpStatus}）` : ""} · ${item.error || "未知错误"}`
+      ).join("\n");
+      setDiagnosticResult(
+        `${model} · 成功 ${result.successCount}/${result.attempts}${result.averageLatencyMs != null ? ` · 平均 ${result.averageLatencyMs} ms` : ""}${degraded ? " · 响应偏慢" : ""}\n${detail}`,
+        tone,
+      );
+      return result;
+    }
+
+    async function runAutomaticDiagnostics() {
+      setDiagnosticResult("正在执行地址检测、模型读取和模型测速…");
+      await testAllEndpoints();
+      try {
+        await loadProviderModels();
+      } catch (error) {
+        setDiagnosticResult(`地址检测完成，但模型列表读取失败：${error.message}`, "bad");
+      }
+      if ($("#testModel").value.trim()) await benchmarkSelectedModel();
+    }
+
+    function renderPaths() {
+      const targets = orderedTargets();
+      $("#pathsBox").innerHTML = targets.map((target) => `<div class="path-group">
+        <h4>${escapeHtml(target.label)}</h4>
+        ${(target.files || []).map((file) => `<div class="path-row"><code>${escapeHtml(file.path)}</code><span class="file-state${file.exists ? "" : " missing"}">${file.exists ? text("exists") : text("missing")}</span></div>`).join("")}
+      </div>`).join("");
+    }
+
+    function renderBackups() {
+      const box = $("#backupsBox");
+      if (backupError) {
+        box.innerHTML = `<div class="path-row"><span class="file-state missing">备份暂不可用：${escapeHtml(backupError)}</span></div>`;
+        return;
+      }
+      if (!backups.length) {
+        box.innerHTML = `<div class="path-row"><span class="file-state missing">${text("noBackups")}</span></div>`;
+        return;
+      }
+      const locale = language() === "en" ? "en-US" : "zh-CN";
+      const dateTime = new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" });
+      const formatSize = (size) => size < 1024 ? `${size} B` : `${(size / 1024).toFixed(size < 10240 ? 1 : 0)} KB`;
+      box.innerHTML = backups.slice(0, 30).map((backup) => `<div class="backup-row">
+        <div class="backup-main">
+          <div class="backup-title"><strong>${escapeHtml(backup.targetLabel || "未知智能体")}</strong><span>${escapeHtml(backup.fileName || "配置文件")}</span></div>
+          <code>${escapeHtml(backup.targetPath || backup.relativePath)}</code>
+          <span class="backup-meta">${escapeHtml(dateTime.format(new Date(backup.createdAt)))} · ${escapeHtml(formatSize(Number(backup.size) || 0))}</span>
+        </div>
+        <button class="restore-button" type="button" data-restore="${escapeHtml(backup.relativePath)}">恢复</button>
+      </div>`).join("");
+    }
+
+    function renderLanguage() {
+      document.documentElement.lang = language();
+      $("#languageControl").querySelectorAll("button").forEach((button) => {
+        button.setAttribute("aria-pressed", String(button.dataset.language === language()));
+      });
+    }
+
+    function render() {
+      if (!state) return;
+      renderTabs();
+      fillTargetSelect();
+      renderProviders();
+      renderPaths();
+      renderBackups();
+      renderLanguage();
+      syncTheme();
+      $("#statusText").textContent = text("localSwitch");
+    }
+
+    async function refresh() {
+      const [statusResult, backupResult, profilesResult] = await Promise.allSettled([
+        api("/api/leocodebox/switch/status"),
+        api("/api/leocodebox/switch/backups"),
+        api("/api/leocodebox/switch/profiles"),
+      ]);
+      if (statusResult.status === "rejected") {
+        const message = `无法读取 Leoapi 接口配置：${statusResult.reason.message}。请点击右上角刷新重试。`;
+        $("#mainError").textContent = message;
+        $("#mainError").hidden = false;
+        throw statusResult.reason;
+      }
+      state = statusResult.value;
+      $("#mainError").hidden = true;
+      if (backupResult.status === "fulfilled") {
+        backups = backupResult.value.backups || [];
+        backupError = "";
+      } else {
+        backups = [];
+        backupError = backupResult.reason.message;
+      }
+      switchProfiles = profilesResult.status === "fulfilled" ? (profilesResult.value.profiles || []) : [];
+      render();
+    }
+
+    function resetProviderForm() {
+      const form = $("#providerForm");
+      form.reset();
+      form.elements.id.value = "";
+      fillTargetSelect();
+      form.elements.target.value = selectedTarget;
+      form.elements.wireApi.value = "responses";
+      $("#providerAutoDiscover").checked = true;
+      lastAppliedPresetId = "";
+      syncPresetMeta();
+      $("#providerSonnetModel").value = "";
+      $("#providerOpusModel").value = "";
+      $("#providerHaikuModel").value = "";
+      syncProviderTargetFields();
+      $("#providerDialogTitle").textContent = text("add");
+    }
+
+    function syncProviderTargetFields() {
+      $("#claudeModelMapping").hidden = $("#providerTarget").value !== "claude";
+    }
+
+    function openAddProvider() {
+      resetProviderForm();
+      $("#providerDialog").showModal();
+      window.setTimeout(() => $("#providerName").focus(), 0);
+    }
+
+    function openEditProvider(id) {
+      const provider = state.providers.find((item) => item.id === id);
+      if (!provider) return;
+      const form = $("#providerForm");
+      resetProviderForm();
+      form.elements.id.value = provider.id;
+      form.elements.name.value = provider.name || "";
+      form.elements.target.value = provider.target || selectedTarget;
+      form.elements.wireApi.value = provider.wireApi || "responses";
+      form.elements.baseUrl.value = provider.baseUrl || "";
+      form.elements.apiKey.value = "";
+      form.elements.model.value = provider.model || "";
+      setModelOptions("providerModel", provider.discoveredModels || []);
+      form.elements.notes.value = provider.notes || "";
+      $("#providerSonnetModel").value = provider.modelMapping?.sonnet || provider.model || "";
+      $("#providerOpusModel").value = provider.modelMapping?.opus || provider.model || "";
+      $("#providerHaikuModel").value = provider.modelMapping?.haiku || provider.model || "";
+      syncProviderTargetFields();
+      $("#providerDialogTitle").textContent = text("editTitle");
+      $("#providerDialog").showModal();
+      window.setTimeout(() => $("#providerName").focus(), 0);
+    }
+
+    async function saveProvider(event) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const body = Object.fromEntries(new FormData(form).entries());
+      if (body.target === "claude") {
+        body.modelMapping = {
+          sonnet: $("#providerSonnetModel").value.trim(),
+          opus: $("#providerOpusModel").value.trim(),
+          haiku: $("#providerHaikuModel").value.trim(),
+        };
+      }
+      if (body.id && !body.apiKey) body.apiKey = "__KEEP__";
+      body.autoDiscover = $("#providerAutoDiscover").checked;
+      body.timeoutMs = 8000;
+      const result = await api("/api/leocodebox/switch/providers", { method: "POST", body: JSON.stringify(body) });
+      selectedTarget = result.provider.target;
+      selectedProvider = result.provider.id;
+      localStorage.setItem("leoapi-target", selectedTarget);
+      $("#providerDialog").close();
+      await refresh();
+      if (result.reapplied) {
+        // Editing the live provider rewrote the agent config — tell the app
+        // shell so open composers pick up the new model for new sessions.
+        window.parent.dispatchEvent(new CustomEvent("leocodebox-provider:applied", {
+          detail: { target: result.provider.target, activeModel: result.activeModel || null },
+        }));
+      }
+      if (result.warning) {
+        showToast(result.warning, "error");
+      } else if (result.discovery === "pending") {
+        showToast(`${text("saved")}：${result.provider.name} · 正在后台发现模型`, "ok");
+        void pollProviderDiscovery(result.provider.id);
+      } else if (result.reapplied) {
+        showToast(`${text("saved")}：${result.provider.name} · 已重新应用，对新会话生效`, "ok");
+      } else {
+        showToast(`${text("saved")}：${result.provider.name}`, "ok");
+      }
+    }
+
+    async function pollProviderDiscovery(providerId) {
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 600));
+        await refresh();
+        const provider = state.providers.find((item) => item.id === providerId);
+        if (!provider) return;
+        if (provider.modelDiscoveryError) {
+          showToast(`模型自动发现失败：${provider.modelDiscoveryError}`, "error");
+          return;
+        }
+        if (provider.modelDiscovery?.updatedAt) {
+          showToast(`已发现 ${provider.discoveredModels?.length || 0} 个模型`, "ok");
+          return;
+        }
+      }
+    }
+
+
+    // Scrollable model pickers: datalist only filters as you type, so the full
+    // list was effectively invisible. These dropdowns open on focus, scroll,
+    // and filter as you type.
+    const modelOptionSets = new Map();
+    function setModelOptions(inputId, models) {
+      modelOptionSets.set(inputId, Array.isArray(models) ? models.filter(Boolean) : []);
+      const input = document.getElementById(inputId);
+      if (input && document.activeElement === input) renderModelDropdown(inputId);
+    }
+    function getModelDropdown(inputId) {
+      let dropdown = document.getElementById(`${inputId}Dropdown`);
+      if (!dropdown) {
+        dropdown = document.createElement("div");
+        dropdown.id = `${inputId}Dropdown`;
+        dropdown.className = "cc-model-dropdown";
+        dropdown.hidden = true;
+        document.getElementById(inputId).closest("dialog, body").appendChild(dropdown);
+      }
+      return dropdown;
+    }
+    function renderModelDropdown(inputId, options) {
+      const input = document.getElementById(inputId);
+      const dropdown = getModelDropdown(inputId);
+      const all = modelOptionSets.get(inputId) || [];
+      // Focus shows the FULL list (the previous value would otherwise filter
+      // everything out and the picker looked empty); only live typing filters.
+      const query = options && options.filter ? input.value.trim().toLowerCase() : "";
+      const models = query ? all.filter((model) => model.toLowerCase().includes(query)) : all;
+      if (!all.length) { dropdown.hidden = true; return; }
+      dropdown.innerHTML = models.length
+        ? models.map((model) => `<div class="cc-model-option" data-model="${escapeHtml(model)}">${escapeHtml(model)}</div>`).join("")
+        : '<div class="cc-model-empty">无匹配模型</div>';
+      const rect = input.getBoundingClientRect();
+      const host = dropdown.parentElement.getBoundingClientRect();
+      dropdown.style.left = `${rect.left - host.left}px`;
+      dropdown.style.top = `${rect.bottom - host.top}px`;
+      dropdown.style.width = `${Math.max(rect.width, 220)}px`;
+      dropdown.hidden = false;
+    }
+    function attachModelDropdown(inputId) {
+      const input = document.getElementById(inputId);
+      if (!input || input.dataset.dropdownWired) return;
+      input.dataset.dropdownWired = "1";
+      const dropdown = getModelDropdown(inputId);
+      input.addEventListener("focus", () => renderModelDropdown(inputId, { filter: false }));
+      input.addEventListener("input", () => renderModelDropdown(inputId, { filter: true }));
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !dropdown.hidden) { dropdown.hidden = true; event.stopPropagation(); }
+      });
+      input.addEventListener("blur", () => { window.setTimeout(() => { dropdown.hidden = true; }, 150); });
+      dropdown.addEventListener("mousedown", (event) => {
+        const option = event.target.closest("[data-model]");
+        if (!option) return;
+        event.preventDefault();
+        input.value = option.getAttribute("data-model");
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        dropdown.hidden = true;
+      });
+    }
+    attachModelDropdown("providerModel");
+    attachModelDropdown("testModel");
+
+    async function applyProvider(id) {
+      const provider = state.providers.find((item) => item.id === id);
+      if (!provider) return;
+      const target = state.targets[provider.target];
+      const preview = await api(`/api/leocodebox/switch/providers/${encodeURIComponent(id)}/preview`);
+      const changes = (preview.diff || []).filter((entry) => entry.changed).map((entry) => {
+        const before = entry.before == null ? "(new file)" : entry.before;
+        const after = entry.after == null ? "(removed)" : entry.after;
+        return `${entry.filePath}\n--- before\n${before.slice(0, 1200)}\n+++ after\n${after.slice(0, 1200)}`;
+      }).join("\n\n");
+      const prompt = language() === "en"
+        ? `Enable ${provider.name} for ${target?.label || provider.target}?\n\nExact dry-run diff (secrets masked):\n${changes || "No file changes"}`
+        : `确认将 ${provider.name} 用于 ${target?.label || provider.target}？\n\n真实 dry-run 差异（密钥已隐藏）：\n${changes || "没有文件变化"}`;
+      if (!(await confirmDialog(prompt))) return;
+      const result = await api(`/api/leocodebox/switch/providers/${encodeURIComponent(id)}/apply`, { method: "POST", body: "{}" });
+      window.parent.dispatchEvent(new CustomEvent("leocodebox-provider:applied", {
+        detail: { target: provider.target, activeModel: result.activeModel || null },
+      }));
+      selectedProvider = id;
+      await refresh();
+      showToast(text("applied", { name: provider.name }), "ok");
+    }
+
+    async function saveSwitchProfile(providerId) {
+      const provider = state.providers.find((item) => item.id === providerId);
+      if (!provider) return;
+      const name = window.prompt("方案名称", `${provider.name} · ${provider.target}`)?.trim();
+      if (!name) return;
+      await api("/api/leocodebox/switch/profiles", { method: "POST", body: JSON.stringify({ name, providerId }) });
+      await refresh();
+      showToast(`已保存方案 ${name}`, "ok");
+    }
+
+    async function applySwitchProfile(name) {
+      const result = await api(`/api/leocodebox/switch/profiles/${encodeURIComponent(name)}/apply`, { method: "POST", body: "{}" });
+      window.parent.dispatchEvent(new CustomEvent("leocodebox-provider:applied", { detail: { target: result.profile?.target, activeModel: result.provider?.model || null } }));
+      await refresh();
+      showToast(`已应用方案 ${name}`, "ok");
+    }
+
+    async function deleteSwitchProfile(name) {
+      if (!(await confirmDialog(`删除方案「${name}」？`))) return;
+      await api(`/api/leocodebox/switch/profiles/${encodeURIComponent(name)}`, { method: "DELETE" });
+      await refresh();
+    }
+
+    async function restoreDefault(target) {
+      const label = state.targets[target]?.label || target;
+      if (!(await confirmDialog(`恢复 ${label} 的本机原配置？\n\n当前配置会先自动备份。`))) return;
+      await api(`/api/leocodebox/switch/targets/${encodeURIComponent(target)}/restore-default`, { method: "POST", body: "{}" });
+      window.parent.dispatchEvent(new CustomEvent("leocodebox-provider:applied", {
+        detail: { target, activeModel: null },
+      }));
+      await refresh();
+      showToast(`${label} 已恢复本机原配置`, "ok");
+    }
+
+    async function testProvider(id) {
+      showToast(text("testing"));
+      const result = await api(`/api/leocodebox/switch/providers/${encodeURIComponent(id)}/test`, { method: "POST", body: "{}" });
+      const latency = result.latencyMs != null ? ` · ${result.latencyMs} ms` : "";
+      const tone = !result.reachable || result.authStatus === "rejected"
+        ? "error"
+        : result.authStatus === "accepted" ? "ok" : "";
+      showToast(`${result.note || (result.reachable ? "连接成功" : "连接失败")}${latency}`, tone);
+    }
+
+    async function copyTextToClipboard(value) {
+      try {
+        await navigator.clipboard.writeText(value);
+        return true;
+      } catch {
+        // Clipboard API can be denied inside embedded views; fall back to the
+        // selection-based path which does not require a permission grant.
+        const holder = document.createElement("textarea");
+        holder.value = value;
+        holder.style.position = "fixed";
+        holder.style.opacity = "0";
+        document.body.appendChild(holder);
+        holder.select();
+        let copied = false;
+        try { copied = document.execCommand("copy"); } catch { copied = false; }
+        holder.remove();
+        return copied;
+      }
+    }
+
+    async function copyProviderUrl(id) {
+      const provider = state.providers.find((item) => item.id === id);
+      if (!provider?.baseUrl) return;
+      const copied = await copyTextToClipboard(provider.baseUrl);
+      showToast(copied ? text("copied") : "复制失败，请手动选择地址复制", copied ? "ok" : "error");
+    }
+
+    async function deleteProvider(id) {
+      const provider = state.providers.find((item) => item.id === id);
+      if (!provider) return;
+      if (!(await confirmDialog(`确认删除 ${provider.name}？此操作不会还原已写入的智能体配置。`))) return;
+      await api(`/api/leocodebox/switch/providers/${encodeURIComponent(id)}`, { method: "DELETE" });
+      selectedProvider = "";
+      await refresh();
+      showToast(`${text("deleted")}：${provider.name}`, "ok");
+    }
+
+    async function restoreBackup(relativePath) {
+      const backup = backups.find((item) => item.relativePath === relativePath);
+      const target = backup?.targetPath || relativePath;
+      const source = backup ? `${backup.targetLabel} · ${backup.fileName}` : "配置备份";
+      if (!(await confirmDialog(`确认恢复 ${source}？\n\n将替换：${target}\n恢复前会再次备份当前文件。`))) return;
+      const result = await api("/api/leocodebox/switch/backups/restore", { method: "POST", body: JSON.stringify({ relativePath }) });
+      await refresh();
+      showToast(`${text("restored")}：${result.restoredPath}`, "ok");
+    }
+
+    async function importCurrent() {
+      const result = await api("/api/leocodebox/switch/import-current", { method: "POST", body: "{}" });
+      await refresh();
+      showToast(text("imported", { count: result.imported.length }), "ok");
+    }
+
+    async function importLegacy() {
+      const result = await api("/api/leocodebox/switch/import-cc-switch", { method: "POST", body: "{}" });
+      await refresh();
+      showToast(text("imported", { count: result.imported.length }), "ok");
+    }
+
+    function switchSettingsPanel(panel) {
+      const general = panel === "general";
+      $("#generalTab").setAttribute("aria-selected", String(general));
+      $("#advancedTab").setAttribute("aria-selected", String(!general));
+      $("#generalSettings").hidden = !general;
+      $("#advancedSettings").hidden = general;
+    }
+
+    document.addEventListener("click", (event) => {
+      const targetTab = event.target.closest("[data-target]");
+      if (targetTab) {
+        selectedTarget = targetTab.dataset.target;
+        selectedProvider = "";
+        localStorage.setItem("leoapi-target", selectedTarget);
+        render();
+      }
+      const card = event.target.closest("[data-card-provider]");
+      if (card && !event.target.closest("button, summary")) {
+        selectedProvider = card.dataset.cardProvider;
+        renderProviders();
+      }
+      const edit = event.target.closest("[data-edit]");
+      if (edit) openEditProvider(edit.dataset.edit);
+      const apply = event.target.closest("[data-apply]");
+      if (apply) applyProvider(apply.dataset.apply).catch((error) => showToast(error.message, "error"));
+      const failover = event.target.closest("[data-failover]");
+      if (failover) suggestFailover(failover.dataset.failover).catch((error) => showToast(error.message, "error"));
+      const healthCheck = event.target.closest("[data-health-check]");
+      if (healthCheck) healthCheckNow().catch((error) => showToast(error.message, "error"));
+      const liveFailoverButton = event.target.closest("[data-live-failover]");
+      if (liveFailoverButton) liveFailover(liveFailoverButton.dataset.liveFailover).catch((error) => showToast(error.message, "error"));
+      const test = event.target.closest("[data-test]");
+      if (test) openProviderTools(test.dataset.test);
+      const copy = event.target.closest("[data-copy]");
+      if (copy) copyProviderUrl(copy.dataset.copy).catch((error) => showToast(error.message, "error"));
+      const remove = event.target.closest("[data-delete]");
+      if (remove) deleteProvider(remove.dataset.delete).catch((error) => showToast(error.message, "error"));
+      const saveProfile = event.target.closest("[data-save-profile]");
+      if (saveProfile) saveSwitchProfile(saveProfile.dataset.saveProfile).catch((error) => showToast(error.message, "error"));
+      const applyProfile = event.target.closest("[data-apply-profile]");
+      if (applyProfile) applySwitchProfile(applyProfile.dataset.applyProfile).catch((error) => showToast(error.message, "error"));
+      const deleteProfile = event.target.closest("[data-delete-profile]");
+      if (deleteProfile) deleteSwitchProfile(deleteProfile.dataset.deleteProfile).catch((error) => showToast(error.message, "error"));
+      const restore = event.target.closest("[data-restore]");
+      if (restore) restoreBackup(restore.dataset.restore).catch((error) => showToast(error.message, "error"));
+      const restoreDefaultButton = event.target.closest("[data-restore-default]");
+      if (restoreDefaultButton) restoreDefault(restoreDefaultButton.dataset.restoreDefault).catch((error) => showToast(error.message, "error"));
+      const removeEndpoint = event.target.closest("[data-remove-endpoint]");
+      if (removeEndpoint) {
+        const urls = Array.from(document.querySelectorAll("[data-endpoint-url]")).map((input) => input.value.trim());
+        const pendingLabels = collectEndpointLabels();
+        urls.splice(Number(removeEndpoint.dataset.removeEndpoint), 1);
+        const provider = diagnosticProvider();
+        renderEndpointEditor({
+          ...provider,
+          endpoints: urls.length ? urls : [""],
+          endpointLabels: { ...provider?.endpointLabels, ...pendingLabels },
+        });
+      }
+    });
+
+    $("#providerForm").addEventListener("submit", (event) => saveProvider(event).catch((error) => showToast(error.message, "error")));
+    $("#providerTarget").addEventListener("change", syncProviderTargetFields);
+    $("#providerPreset").addEventListener("change", applyPreset);
+    $("#discoverDraftModels").addEventListener("click", () => discoverDraftModels().catch((error) => showToast(error.message, "error")));
+    $("#addProvider").addEventListener("click", openAddProvider);
+    $("#closeProvider").addEventListener("click", () => $("#providerDialog").close());
+    $("#cancelProvider").addEventListener("click", () => $("#providerDialog").close());
+    $("#refresh").addEventListener("click", () => refresh().catch((error) => showToast(error.message, "error")));
+    $("#openSettings").addEventListener("click", () => { loadDiagnosticSettings(); loadHealthSettings(); switchSettingsPanel("general"); $("#settingsDialog").showModal(); });
+    $("#healthEnabled").addEventListener("change", () => saveHealthSettings().catch((error) => showToast(error.message, "error")));
+    $("#healthInterval").addEventListener("change", () => saveHealthSettings().catch((error) => showToast(error.message, "error")));
+    $("#healthAutoTargets").addEventListener("change", () => saveHealthSettings().catch((error) => showToast(error.message, "error")));
+    $("#closeSettings").addEventListener("click", () => $("#settingsDialog").close());
+    $("#generalTab").addEventListener("click", () => switchSettingsPanel("general"));
+    $("#advancedTab").addEventListener("click", () => switchSettingsPanel("advanced"));
+    $("#importCurrent").addEventListener("click", () => importCurrent().catch((error) => showToast(error.message, "error")));
+    $("#importLegacy").addEventListener("click", () => importLegacy().catch((error) => showToast(error.message, "error")));
+    $("#languageControl").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-language]");
+      if (!button) return;
+      localStorage.setItem("userLanguage", button.dataset.language === "en" ? "en" : "zh-CN");
+      render();
+    });
+    $("#themeControl").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-theme-mode]");
+      if (!button) return;
+      localStorage.setItem("themeMode", button.dataset.themeMode);
+      syncTheme();
+    });
+    $("#backToMain").addEventListener("click", async () => {
+      if (typeof window.leocodeboxLocal?.openMain === "function") {
+        await window.leocodeboxLocal.openMain();
+        return;
+      }
+      window.location.assign("/");
+    });
+    $("#closeTools").addEventListener("click", () => $("#toolsDialog").close());
+    $("#cancelTools").addEventListener("click", () => $("#toolsDialog").close());
+    $("#addEndpoint").addEventListener("click", () => {
+      const urls = Array.from(document.querySelectorAll("[data-endpoint-url]")).map((input) => input.value.trim());
+      const provider = diagnosticProvider();
+      renderEndpointEditor({
+        ...provider,
+        endpoints: [...urls, ""],
+        endpointLabels: { ...provider?.endpointLabels, ...collectEndpointLabels() },
+      });
+    });
+    $("#testEndpoints").addEventListener("click", () => testAllEndpoints().catch((error) => setDiagnosticResult(error.message, "bad")));
+    $("#loadModels").addEventListener("click", () => loadProviderModels().catch((error) => setDiagnosticResult(error.message, "bad")));
+    $("#benchmarkModel").addEventListener("click", () => benchmarkSelectedModel().catch((error) => setDiagnosticResult(error.message, "bad")));
+    $("#autoDiagnose").addEventListener("click", () => runAutomaticDiagnostics().catch((error) => setDiagnosticResult(error.message, "bad")));
+    $("#saveTools").addEventListener("click", () => persistProviderTools({ close: true })
+      .then(() => showToast("请求地址设置已保存", "ok"))
+      .catch((error) => setDiagnosticResult(error.message, "bad")));
+    ["#testTimeoutSeconds", "#testAttempts", "#degradedThreshold"].forEach((selector) => {
+      $(selector).addEventListener("change", saveDiagnosticSettings);
+    });
+
+    // Keyboard focus lives inside this iframe, so the parent modal's own Esc
+    // listener never fires; relay a close request when no dialog is open.
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      if (document.documentElement.dataset.embedded !== "true") return;
+      if (document.querySelector("dialog[open]")) return;
+      window.parent.postMessage({ type: "leocodebox-switch:close" }, window.location.origin);
+    });
+
+    loadDiagnosticSettings();
+    syncTheme();
+    refresh().catch((error) => {
+      $("#statusText").textContent = error.message;
+      $("#mainError").textContent = `无法读取 Leoapi 接口配置：${error.message}。请点击右上角刷新重试。`;
+      $("#mainError").hidden = false;
+      showToast(error.message, "error");
+    });
+  </script>
+</body>
+</html>

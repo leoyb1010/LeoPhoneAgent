@@ -1,0 +1,614 @@
+{
+  "buttons": {
+    "save": "保存",
+    "cancel": "取消",
+    "delete": "删除",
+    "create": "创建",
+    "edit": "编辑",
+    "close": "关闭",
+    "confirm": "确认",
+    "submit": "提交",
+    "retry": "重试",
+    "refresh": "刷新",
+    "search": "搜索",
+    "clear": "清除",
+    "copy": "复制",
+    "download": "下载",
+    "upload": "上传",
+    "browse": "浏览"
+  },
+  "tabs": {
+    "chat": "聊天",
+    "shell": "终端",
+    "files": "文件",
+    "git": "源代码管理",
+    "tasks": "任务",
+    "browser": "浏览器",
+    "computer": "计算机",
+    "audit": "会话审计",
+    "fleet": "Mac 控制台",
+    "skills": "Skills"
+  },
+  "status": {
+    "loading": "加载中...",
+    "success": "成功",
+    "error": "错误",
+    "failed": "失败",
+    "pending": "待处理",
+    "completed": "已完成",
+    "inProgress": "进行中"
+  },
+  "messages": {
+    "savedSuccessfully": "保存成功",
+    "deletedSuccessfully": "删除成功",
+    "updatedSuccessfully": "更新成功",
+    "operationFailed": "操作失败",
+    "networkError": "网络错误，请检查您的连接。",
+    "unauthorized": "未授权，请登录。",
+    "notFound": "未找到",
+    "invalidInput": "输入无效",
+    "requiredField": "此字段为必填项",
+    "unknownError": "发生未知错误"
+  },
+  "navigation": {
+    "settings": "设置",
+    "home": "首页",
+    "back": "返回",
+    "next": "下一步",
+    "previous": "上一步",
+    "logout": "退出登录"
+  },
+  "common": {
+    "language": "语言",
+    "theme": "主题",
+    "darkMode": "深色模式",
+    "lightMode": "浅色模式",
+    "name": "名称",
+    "description": "描述",
+    "enabled": "已启用",
+    "disabled": "已禁用",
+    "optional": "可选",
+    "version": "版本",
+    "select": "选择",
+    "selectAll": "全选",
+    "deselectAll": "取消全选",
+    "cancel": "取消",
+    "save": "保存"
+  },
+  "time": {
+    "justNow": "刚刚",
+    "minutesAgo": "{{count}} 分钟前",
+    "hoursAgo": "{{count}} 小时前",
+    "daysAgo": "{{count}} 天前",
+    "yesterday": "昨天"
+  },
+  "fileOperations": {
+    "newFile": "新建文件",
+    "newFolder": "新建文件夹",
+    "rename": "重命名",
+    "move": "移动",
+    "copyPath": "复制路径",
+    "openInEditor": "在编辑器中打开"
+  },
+  "mainContent": {
+    "loading": "正在加载 leocodebox",
+    "settingUpWorkspace": "正在设置您的工作空间...",
+    "chooseProject": "选择您的项目",
+    "selectProjectDescription": "从侧边栏选择一个项目，然后使用已连接的本机智能体开始编程。每个项目包含聊天会话和文件历史。",
+    "tip": "提示",
+    "createProjectMobile": "点击上方的菜单按钮以访问项目",
+    "createProjectDesktop": "点击侧边栏中的文件夹图标以创建新项目",
+    "newSession": "新会话",
+    "untitledSession": "未命名会话",
+    "projectFiles": "项目文件"
+  },
+  "fileTree": {
+    "loading": "正在加载文件...",
+    "files": "文件",
+    "simpleView": "简单视图",
+    "compactView": "紧凑视图",
+    "detailedView": "详细视图",
+    "searchPlaceholder": "搜索文件和文件夹...",
+    "clearSearch": "清除搜索",
+    "name": "名称",
+    "size": "大小",
+    "modified": "修改时间",
+    "permissions": "权限",
+    "noFilesFound": "未找到文件",
+    "checkProjectPath": "检查项目路径是否可访问",
+    "noMatchesFound": "未找到匹配项",
+    "tryDifferentSearch": "尝试不同的搜索词或清除搜索",
+    "justNow": "刚刚",
+    "minAgo": "{{count}} 分钟前",
+    "hoursAgo": "{{count}} 小时前",
+    "daysAgo": "{{count}} 天前",
+    "newFile": "新建文件 (Cmd+N)",
+    "newFolder": "新建文件夹 (Cmd+Shift+N)",
+    "refresh": "刷新",
+    "collapseAll": "全部折叠",
+    "context": {
+      "rename": "重命名",
+      "delete": "删除",
+      "copyPath": "复制路径",
+      "download": "下载",
+      "newFile": "新建文件",
+      "newFolder": "新建文件夹",
+      "refresh": "刷新",
+      "menuLabel": "文件上下文菜单",
+      "loading": "加载中..."
+    }
+  },
+  "projectWizard": {
+    "title": "创建新项目",
+    "steps": {
+      "type": "类型",
+      "configure": "配置",
+      "confirm": "确认"
+    },
+    "step1": {
+      "question": "您已经有工作区，还是想创建一个新的工作区？",
+      "existing": {
+        "title": "现有工作区",
+        "description": "我的服务器上已经有工作区，只需要将其添加到项目列表中"
+      },
+      "new": {
+        "title": "新建工作区",
+        "description": "创建一个新工作区，可选择从 GitHub 仓库克隆"
+      }
+    },
+    "step2": {
+      "existingPath": "工作区路径",
+      "newPath": "工作区路径",
+      "existingPlaceholder": "/path/to/existing/workspace",
+      "newPlaceholder": "/path/to/new/workspace",
+      "existingHelp": "您现有工作区目录的完整路径",
+      "newHelp": "工作区目录的完整路径",
+      "githubUrl": "GitHub URL（可选）",
+      "githubPlaceholder": "https://github.com/username/repository",
+      "githubHelp": "可选：提供 GitHub URL 以克隆仓库",
+      "githubAuth": "GitHub 身份验证（可选）",
+      "githubAuthHelp": "仅私有仓库需要。公共仓库无需身份验证即可克隆。",
+      "loadingTokens": "正在加载已保存的令牌...",
+      "storedToken": "已保存的令牌",
+      "newToken": "新令牌",
+      "nonePublic": "无（公共）",
+      "selectToken": "选择令牌",
+      "selectTokenPlaceholder": "-- 选择令牌 --",
+      "tokenPlaceholder": "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "tokenHelp": "此令牌仅用于此操作",
+      "publicRepoInfo": "公共仓库不需要身份验证。如果克隆公共仓库，可以跳过提供令牌。",
+      "noTokensHelp": "没有可用的已保存令牌。您可以在“设置 → 接口与凭据”中添加令牌以便重复使用。",
+      "optionalTokenPublic": "GitHub 令牌（公共仓库可选）",
+      "tokenPublicPlaceholder": "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx（公共仓库可留空）"
+    },
+    "step3": {
+      "reviewConfig": "查看您的配置",
+      "existingWorkspace": "现有工作区",
+      "newWorkspace": "新建工作区",
+      "path": "路径：",
+      "cloneFrom": "克隆自：",
+      "authentication": "身份验证：",
+      "usingStoredToken": "使用已保存的令牌：",
+      "usingProvidedToken": "使用提供的令牌",
+      "noAuthentication": "无身份验证",
+      "sshKey": "SSH 密钥",
+      "existingInfo": "工作区将被添加到您的项目列表中，并可用于 Claude/Cursor 会话。",
+      "newWithClone": "仓库将从此文件夹克隆。",
+      "newEmpty": "工作区将被添加到您的项目列表中，并可用于 Claude/Cursor 会话。",
+      "cloningRepository": "正在克隆仓库..."
+    },
+    "buttons": {
+      "cancel": "取消",
+      "back": "返回",
+      "next": "下一步",
+      "createProject": "创建项目",
+      "creating": "创建中...",
+      "cloning": "正在克隆..."
+    },
+    "errors": {
+      "selectType": "请选择您已有现有工作区还是想创建新工作区",
+      "providePath": "请提供工作区路径",
+      "failedToCreate": "创建工作区失败",
+      "failedToCreateFolder": "创建文件夹失败"
+    }
+  },
+  "notifications": {
+    "genericTool": "工具",
+    "codes": {
+      "generic": {
+        "info": {
+          "title": "通知"
+        }
+      },
+      "permission": {
+        "required": {
+          "title": "需要处理",
+          "body": "{{toolName}} 正在等待你的决策。"
+        }
+      },
+      "run": {
+        "stopped": {
+          "title": "运行已停止",
+          "body": "原因：{{reason}}"
+        },
+        "failed": {
+          "title": "运行失败"
+        }
+      },
+      "agent": {
+        "notification": {
+          "title": "智能体通知"
+        }
+      }
+    },
+    "desktop": {
+      "title": "Notify this desktop app",
+      "unsupported": "Desktop notifications are not supported on this system.",
+      "disable": "Disable desktop notifications",
+      "enable": "Enable desktop notifications",
+      "enabled": "Desktop notifications are enabled"
+    },
+    "sound": {
+      "title": "Sound",
+      "description": "Play a short tone when a chat run finishes.",
+      "enabled": "Enabled",
+      "test": "Test sound"
+    }
+  },
+  "versionUpdate": {
+    "title": "有可用更新",
+    "newVersionReady": "新版本已准备就绪",
+    "currentVersion": "当前版本",
+    "latestVersion": "最新版本",
+    "whatsNew": "新内容：",
+    "viewFullRelease": "查看完整发布",
+    "updateProgress": "更新进度：",
+    "manualUpgrade": "手动升级：",
+    "npmUpgradeCommand": "请安装新版 leocodebox DMG",
+    "manualUpgradeHint": "或点击'立即更新'以自动运行更新。",
+    "updateCompleted": "更新成功完成！",
+    "restartServer": "请重启服务器以应用更改。",
+    "updateFailed": "更新失败",
+    "buttons": {
+      "close": "关闭",
+      "later": "稍后",
+      "copyCommand": "复制命令",
+      "updateNow": "立即更新",
+      "updating": "更新中..."
+    },
+    "ariaLabels": {
+      "closeModal": "关闭版本升级模态框",
+      "showSidebar": "显示侧边栏",
+      "settings": "设置",
+      "updateAvailable": "有可用更新",
+      "closeSidebar": "关闭侧边栏"
+    }
+  },
+  "audit": {
+    "title": "会话审计",
+    "description": "跨 Provider 筛选会话，并回放消息、工具调用、错误、权限请求和 Token 用量。",
+    "refresh": "刷新",
+    "export": "导出",
+    "search": "搜索会话或回放内容",
+    "project": "项目",
+    "provider": "Provider",
+    "allProjects": "全部项目",
+    "allProviders": "全部 Provider",
+    "dateFrom": "开始日期",
+    "dateTo": "结束日期",
+    "sessions": "审计会话",
+    "noSessions": "没有符合当前筛选条件的会话。",
+    "selectSession": "选择一个会话以回放其完整历史。",
+    "eventType": "事件类型",
+    "allEvents": "全部事件",
+    "toolCalls": "工具调用",
+    "errors": "错误",
+    "permissions": "权限请求",
+    "tokenUsage": "Token 用量",
+    "event": "事件",
+    "noEvents": "没有符合筛选条件的回放事件。",
+    "loadError": "无法加载会话审计。",
+    "replayError": "无法加载会话回放。"
+  },
+  "workspaceShell": {
+    "navigationLabel": "工作区导航",
+    "projects": "项目",
+    "chat": "对话",
+    "changes": "变更",
+    "localLog": "本地记录",
+    "log": "记录",
+    "settings": "设置",
+    "serviceHealthy": "本机服务正常",
+    "tasksRunning": "{{count}} 个任务运行中",
+    "agentIdle": "Agent 空闲",
+    "localOnly": "仅本机",
+    "autoSave": "自动保存",
+    "leoapiNodeHint": "当前接口节点：{{node}}（对新会话生效）",
+    "updateReady": "有可用更新 v{{version}}",
+    "restartRequired": "更新已安装，重启后生效",
+    "healthTitle": "环境体检",
+    "healthOk": "环境就绪",
+    "healthWarn": "{{count}} 项注意",
+    "healthFail": "{{count}} 项异常",
+    "healthChecking": "体检中…",
+    "dashboard": "首页"
+  },
+  "errorBoundary": {
+    "regionTitle": "此区域暂时无法加载",
+    "regionDescription": "可以重新加载该区域；其他项目和会话不会受到影响。",
+    "details": "查看开发错误详情",
+    "reload": "重新加载",
+    "projectsLoad": "本地项目加载失败",
+    "retry": "重试",
+    "invalidProjects": "项目列表响应格式无效",
+    "projectsLoadFallback": "项目列表加载失败"
+  },
+  "workspaceRuntime": {
+    "loadingWorkspace": "正在加载工作区…",
+    "stepSelectProject": "从左侧选择最近项目",
+    "stepRestore": "聊天、文件与历史会自动恢复",
+    "stepChooseAgent": "选择本机 Agent 并输入任务",
+    "stepLocalOnly": "变更、命令与记录始终留在本机",
+    "running": "运行中",
+    "processingCurrent": "正在处理当前任务…",
+    "localExecution": "本机执行",
+    "currentRun": "当前运行",
+    "localTasks": "{{count}} 个本机任务",
+    "processing": "正在处理任务",
+    "localPermissions": "权限仅作用于本机",
+    "workingDirectory": "工作目录"
+  },
+  "commandPalette": {
+    "title": "命令面板",
+    "back": "返回全部",
+    "backHint": "按退格键返回",
+    "searchPage": "搜索{{page}}…",
+    "searchAll": "输入内容以搜索…",
+    "noResults": "没有结果。",
+    "actions": "操作",
+    "files": "文件",
+    "sessions": "会话",
+    "commits": "提交",
+    "branches": "分支",
+    "navigate": "导航",
+    "settings": "设置",
+    "git": "Git",
+    "startChat": "开始新对话",
+    "selectProject": "请先选择项目",
+    "openSettings": "打开设置",
+    "toggleTheme": "切换主题",
+    "goChat": "前往对话",
+    "goFiles": "前往文件",
+    "goShell": "前往终端",
+    "goGit": "前往 Git",
+    "goTasks": "前往任务",
+    "fetch": "Git：拉取远端状态",
+    "pull": "Git：拉取",
+    "push": "Git：推送",
+    "settingItem": "设置：{{label}}",
+    "browseSessions": "浏览全部会话（{{count}}）",
+    "browseFiles": "浏览全部文件（{{count}}）",
+    "browseCommits": "浏览全部提交（{{count}}）",
+    "browseBranches": "浏览全部分支（{{count}}）",
+    "switchBranch": "切换到：{{name}}",
+    "leoapi": "Leoapi 节点",
+    "switchLeoapi": "换轨 Leoapi 接口节点…",
+    "confirmSwitch": "确认切到「{{name}}」（对新会话生效）",
+    "testNode": "测速「{{name}}」",
+    "backToNodes": "返回节点列表",
+    "sessionsCovered": "会话（全文搜索覆盖：{{providers}}）",
+    "handoff": "交接给另一个 Agent…",
+    "handoffHeading": "交接给…",
+    "handoffTo": "交接给 {{provider}}（可编辑后再发送）",
+    "handoffHint": "会把最近对话拼成可编辑的接力前言,不会自动发送",
+    "handoffPreparing": "正在整理最近对话…",
+    "handoffReturn": "回到交接来源",
+    "doctor": "环境体检"
+  },
+  "dashboard": {
+    "greetingNight": "夜深了",
+    "greetingMorning": "早上好",
+    "greetingAfternoon": "下午好",
+    "greetingEvening": "晚上好",
+    "localAccount": "本地账号已就绪",
+    "metricSessions": "今日会话",
+    "metricTokens": "今日 Tokens",
+    "metricCost": "今日成本",
+    "metricRunning": "正在运行",
+    "metricRunningValue": "{{count}} 个",
+    "healthSummary": "就绪 {{ok}} · 注意 {{warn}}",
+    "healthOkCount": "就绪 {{count}}",
+    "updateAvailable": "v{{version}} 可用",
+    "refresh": "刷新",
+    "agentsTitle": "Agent 授权与安装",
+    "agentsLoggedIn": "{{count}} / {{total}} 已登录",
+    "agentsEmpty": "未检测到任何 Agent CLI",
+    "loggedIn": "已登录",
+    "notLoggedIn": "未登录",
+    "installed": "已安装",
+    "canUpdate": "可更新",
+    "install": "一键安装",
+    "installing": "安装中…",
+    "runningTitle": "运行中会话",
+    "liveCount": "{{count}} 运行中",
+    "runningEmpty": "当前没有运行中的 Agent",
+    "runningEmptyCta": "去对话发起一个",
+    "runningBusy": "处理中…",
+    "missionsTitle": "Mission 看板",
+    "missionsEmpty": "还没有 Mission",
+    "missionsEmptyCta": "去创建",
+    "missionStatus": {
+      "backlog": "待办",
+      "running": "进行中",
+      "review": "待评审",
+      "done": "已完成"
+    },
+    "projectsTitle": "项目概览",
+    "projectsTotal": "项目",
+    "projectsSessions": "会话",
+    "projectsStarred": "星标",
+    "projectsEmpty": "还没有项目",
+    "projectsEmptyCta": "去添加",
+    "usageTitle": "用量中心",
+    "today": "今天",
+    "sessions": "会话",
+    "cost": "成本",
+    "byModel": "按模型",
+    "byCli": "各 CLI 累计",
+    "trend7d": "近 7 日成本",
+    "usageEmpty": "今天还没有用量记录",
+    "claudeWindowTitle": "Claude 窗口消耗",
+    "localMeasured": "本地实测",
+    "window5h": "5 小时窗口",
+    "windowWeekly": "近 7 日窗口",
+    "windowReset": "{{time}} 重置",
+    "windowMeta": "{{turns}} 轮 · ≈{{cost}}",
+    "windowNote": "计入限额的输入+输出 token；不含缓存读取与其他设备。",
+    "viewAll": "查看全部",
+    "actionDoctor": "运行 Doctor",
+    "actionCheckUpdate": "检查更新",
+    "actionBackup": "配置备份",
+    "actionRecycle": "回收站",
+    "kernelTitle": "自有内核",
+    "kernelRoot": "项目根目录,如 /Users/you/code/app",
+    "kernelPrompt": "问代码库一个问题,内核会读文件后作答(⌘↵ 运行)",
+    "kernelAllowWrite": "允许写文件",
+    "kernelAllowExec": "允许执行命令",
+    "kernelRunning": "运行中",
+    "kernelRun": "运行",
+    "kernelCapWarn": "已开启写/执行:内核会在根目录内修改文件或运行命令(有沙箱/超时,仍请在可回滚的目录使用)。",
+    "kernelSteps": "{{n}} 步",
+    "installFailed": "安装失败,请查看设置里的详细输出。",
+    "gatewayTitle": "Leoapi 网关",
+    "gatewayLive": "实时计量中 · 仅经网关的请求",
+    "gatewayNodes": "{{n}} 节点分流",
+    "gatewayFailover": "{{n}} 次容错",
+    "gatewayRequests": "请求",
+    "gatewayCost": "成本",
+    "gatewayCompaction": "上下文瘦身 · 降本",
+    "gatewaySaved": "已省 ~{{n}} 字符",
+    "gatewayOff": "开启后,当前 Leoapi 节点的 Claude 流量将经本机网关转发并按请求实时计量(可随时关闭,默认关)。"
+  },
+  "tooltips": {
+    "attentionRequiredIndicator": "Session needs attention"
+  },
+  "sessions": {
+    "pinned": "已置顶",
+    "exportMarkdown": "导出为 Markdown",
+    "exportJson": "导出为 JSON"
+  },
+  "actions": {
+    "close": "Close"
+  },
+  "search": {
+    "placeholder": "搜索设置",
+    "clear": "清除",
+    "noResults": "没有匹配的设置项"
+  },
+  "recovery": {
+    "restored": "已还原到原位置。",
+    "conflict": "原位置已存在同名内容,未覆盖。",
+    "recycleTitle": "回收站",
+    "recycleDesc": "被删除或覆盖的技能会在这里保留 30 天,可一键还原。",
+    "recycleEmpty": "回收站是空的——很好。",
+    "restore": "还原",
+    "backupsTitle": "配置备份",
+    "backupsDesc": "覆盖 CLI 配置(如 ~/.claude.json)前自动保留的上一版,存于 ~/.leocodebox/config-backups。",
+    "backupsEmpty": "暂无配置备份。",
+    "readOnly": "只读"
+  },
+  "messageTypes": {
+    "opencode": "OpenCode"
+  },
+  "input": {
+    "scrollToBottom": "Scroll to bottom",
+    "hintText": {
+      "updateQueued": "Enter to update queued message",
+      "queue": "Enter to queue your next message"
+    },
+    "queue": {
+      "update": "Update queued message",
+      "sendNext": "Queue next message",
+      "label": "Queued",
+      "willSend": "Will send when this finishes",
+      "edit": "Edit queued message",
+      "delete": "Delete queued message"
+    },
+    "clearInput": "Clear input"
+  },
+  "claudeStatus": {
+    "stop": "Stop"
+  },
+  "copyMessage": {
+    "copyAsMarkdown": "Copy as markdown",
+    "copyAsText": "Copy as text",
+    "markdownShort": "MD",
+    "textShort": "TXT",
+    "selectFormat": "Select copy format"
+  },
+  "missions": {
+    "discardConfirm": "该任务有未提交改动,确认丢弃并删除 worktree?",
+    "actions": {
+      "open": "打开会话",
+      "start": "开工",
+      "toReview": "送审",
+      "merge": "合并完成",
+      "complete": "完成",
+      "retry": "重试"
+    },
+    "mergeConflict": "合并存在冲突,请先在会话中解决:{{files}}",
+    "noProject": "请先在左侧选择一个项目。",
+    "title": "任务看板",
+    "titlePlaceholder": "任务标题",
+    "goalPlaceholder": "目标(发给智能体的任务描述)",
+    "addCard": "新建"
+  },
+  "terminalShortcuts": {
+    "paste": "Paste"
+  },
+  "agentHub": {
+    "editTitle": "编辑档案",
+    "newTitle": "新建智能体档案",
+    "emoji": "图标",
+    "name": "名称",
+    "namePlaceholder": "例如:代码审查员",
+    "provider": "CLI",
+    "model": "模型",
+    "effort": "努力度",
+    "permission": "权限模式",
+    "openingPrompt": "开场提示词(可选)",
+    "openingPromptPlaceholder": "启动时自动填入对话框的内容",
+    "notes": "备注(可选)",
+    "saving": "保存中…",
+    "title": "智能体档案",
+    "description": "保存常用的智能体设定,一键启动预配置的新对话。",
+    "import": "导入",
+    "export": "导出",
+    "new": "新建",
+    "emptyTitle": "还没有智能体档案",
+    "emptyHint": "创建一个档案来固定你常用的 CLI、模型、权限模式和开场提示词。",
+    "launch": "启动",
+    "edit": "编辑",
+    "duplicate": "复制",
+    "delete": "删除"
+  },
+  "mcpOverview": {
+    "title": "MCP 全景（跨 CLI）",
+    "description": "汇总各 Agent CLI 已装的 MCP 服务器,按名去重。点 CLI 标签即可在该 CLI 上安装/移除(实心=已装,虚线=可装)。",
+    "partialError": "部分 CLI 配置未能读取：",
+    "empty": "还没有检测到任何已安装的 MCP 服务器。",
+    "managed": "托管"
+  },
+  "mcpServers": {
+    "managed": {
+      "badge": "Managed",
+      "hint": "Managed automatically by leocodebox."
+    }
+  },
+  "providerSkills": {
+    "safetyHigh": "检测到高危内容,确认无误再安装",
+    "safetyWarn": "检测到可疑内容,请核对后再安装",
+    "installAnyway": "仍要安装",
+    "deleteSkill": "删除(可从回收站还原)"
+  }
+}

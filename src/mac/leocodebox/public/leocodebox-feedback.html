@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>leocodebox Feedback</title>
+  <link rel="icon" href="/favicon.png">
+  <script>
+    (() => {
+      if (new URLSearchParams(window.location.search).get("embedded") === "1") document.documentElement.dataset.embedded = "true";
+      const themeMode = localStorage.getItem("themeMode") || localStorage.getItem("theme") || "system";
+      const isDark = themeMode === "dark" || (themeMode === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      document.documentElement.dataset.theme = isDark ? "dark" : "light";
+    })();
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f8f9fa;
+      --panel: #ffffff;
+      --panel-2: #f1f3f4;
+      --text: #17191c;
+      --muted: #626870;
+      --line: #dce1e4;
+      --accent: #178f82;
+      --ok: #0b7a46;
+      --danger: #b42318;
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    html[data-theme="dark"] {
+        color-scheme: dark;
+        --bg: #111316;
+        --panel: #181b1f;
+        --panel-2: #202429;
+        --text: #edf0f2;
+        --muted: #a0a7ae;
+        --line: #2d3238;
+        --accent: #36c9b7;
+        --ok: #61d394;
+        --danger: #ff8d85;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-size: 14px; }
+    button, input, select, textarea { font: inherit; }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 24px; animation: feedback-enter .22s cubic-bezier(.2,0,0,1) both; }
+    html[data-embedded="true"] .wrap { padding-top: 18px; }
+    html[data-embedded="true"] header .toolbar { display: none; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 18px; }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand img { width: 30px; height: 30px; }
+    h1 { margin: 0; font-size: 20px; }
+    p { margin: 0; color: var(--muted); line-height: 1.55; }
+    main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; }
+    section, aside { background: transparent; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+    .head { padding: 14px 16px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
+    .body { padding: 16px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .field { display: grid; gap: 6px; margin-bottom: 12px; }
+    label { color: var(--muted); font-size: 12px; font-weight: 700; }
+    input, select, textarea {
+      width: 100%; min-height: 38px; border: 1px solid var(--line); border-radius: 6px;
+      padding: 8px 10px; background: var(--panel); color: var(--text);
+    }
+    textarea { min-height: 100px; resize: vertical; }
+    .btn {
+      min-height: 36px; border: 1px solid var(--line); border-radius: 6px;
+      padding: 0 13px; background: var(--panel-2); color: var(--text); cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none;
+    }
+    .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .message { min-height: 22px; margin-top: 10px; color: var(--muted); white-space: pre-wrap; }
+    .message.ok { color: var(--ok); }
+    .message.error { color: var(--danger); }
+    .list { display: grid; gap: 8px; }
+    .item { padding: 9px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; }
+    .item:last-child { border-bottom: 0; }
+    .item strong { display: block; margin-bottom: 3px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+    @media (max-width: 860px) {
+      main { grid-template-columns: 1fr; }
+      .grid2 { grid-template-columns: 1fr; }
+      header { align-items: flex-start; flex-direction: column; }
+    }
+    @keyframes feedback-enter { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    @media (prefers-reduced-motion: reduce) { .wrap { animation: none; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <img src="/logo-32.png" alt="">
+        <div><h1>报告问题</h1><p>本地记录 bug、使用问题和审计发现，不连接云端。</p></div>
+      </div>
+      <div class="toolbar"><a class="btn" href="/leocodebox-switch.html">Leoapi 接口切换</a><a class="btn" href="/">返回 leocodebox</a></div>
+    </header>
+    <main>
+      <section>
+        <div class="head"><strong>问题记录</strong><p>请写到足够能复现。提交后会保存到本机 `~/.leocodebox/feedback`。</p></div>
+        <div class="body">
+          <form id="feedbackForm">
+            <div class="grid2">
+              <div class="field">
+                <label>角色视角</label>
+                <select name="role">
+                  <option>重度 agent 用户</option>
+                  <option>新手</option>
+                  <option>老手</option>
+                  <option>开发</option>
+                  <option>架构</option>
+                  <option>安全</option>
+                  <option>隐私</option>
+                  <option>品牌</option>
+                  <option>法务</option>
+                  <option>运维</option>
+                  <option>技术支持</option>
+                  <option>产品</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>严重级别</label>
+                <select name="severity">
+                  <option value="P1">P1 阻断使用</option>
+                  <option value="P2">P2 主要流程受损</option>
+                  <option value="P3">P3 体验或文案问题</option>
+                  <option value="P4">P4 建议</option>
+                </select>
+              </div>
+            </div>
+            <div class="grid2">
+              <div class="field"><label>问题区域</label><input name="area" placeholder="本地服务 / Leoapi / 会话 / 更新 / 界面"></div>
+              <div class="field"><label>标题</label><input name="title" required placeholder="一句话说明问题"></div>
+            </div>
+            <div class="field"><label>问题描述</label><textarea name="description" required placeholder="发生了什么，影响什么工作流"></textarea></div>
+            <div class="field"><label>复现步骤</label><textarea name="steps" placeholder="1. 打开...
+2. 点击...
+3. 看到..."></textarea></div>
+            <div class="grid2">
+              <div class="field"><label>期望结果</label><textarea name="expected" placeholder="应该发生什么"></textarea></div>
+              <div class="field"><label>实际结果</label><textarea name="actual" placeholder="实际发生什么"></textarea></div>
+            </div>
+            <div class="toolbar">
+              <button class="btn primary" type="submit">保存记录</button>
+              <button class="btn" type="reset">清空</button>
+              <button class="btn" type="button" id="loadReports">查看最近记录</button>
+            </div>
+            <div id="message" class="message"></div>
+          </form>
+        </div>
+      </section>
+      <aside>
+        <div class="head"><strong>审计覆盖角色</strong></div>
+        <div class="body">
+          <div class="list">
+            <div class="item"><strong>品牌/视觉</strong><span>名称、Logo、统一性、原作者痕迹。</span></div>
+            <div class="item"><strong>法务</strong><span>AGPL/MIT notice、归属和误导风险。</span></div>
+            <div class="item"><strong>技术/开发</strong><span>代码质量、打包、错误处理、可维护性。</span></div>
+            <div class="item"><strong>安全/隐私</strong><span>本地 token、API key、云端隔离。</span></div>
+            <div class="item"><strong>新手/老手/重度用户</strong><span>首次打开、快捷配置、多 agent 重度切换。</span></div>
+            <div class="item"><strong>运维/支持</strong><span>端口、日志、更新、反馈记录。</span></div>
+          </div>
+        </div>
+      </aside>
+    </main>
+    <section style="margin-top:18px">
+      <div class="head"><strong>最近记录</strong></div>
+      <div class="body"><div id="reports" class="list"><p>尚未加载。</p></div></div>
+    </section>
+  </div>
+  <script>
+    const $ = (selector) => document.querySelector(selector);
+    const token = () => localStorage.getItem("auth-token") || "";
+    const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+    function setMessage(text, tone = "") {
+      $("#message").className = `message ${tone}`;
+      $("#message").textContent = text;
+    }
+    async function api(path, options = {}) {
+      const response = await fetch(path, {
+        ...options,
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token()}`, ...(options.headers || {}) },
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok || json.success === false) throw new Error(json.error || response.statusText);
+      return json;
+    }
+    async function submitFeedback(event) {
+      event.preventDefault();
+      const body = Object.fromEntries(new FormData(event.currentTarget).entries());
+      body.pageUrl = location.href;
+      body.userAgent = navigator.userAgent;
+      body.appVersion = window.__APP_VERSION__ || "";
+      body.language = localStorage.getItem("userLanguage") || "zh-CN";
+      const result = await api("/api/leocodebox/feedback", { method: "POST", body: JSON.stringify(body) });
+      setMessage(`已保存：${result.filePath}`, "ok");
+      event.currentTarget.reset();
+      await loadReports();
+    }
+    async function loadReports() {
+      const result = await api("/api/leocodebox/feedback");
+      const reports = result.reports || [];
+      $("#reports").innerHTML = reports.length ? reports.map((report) => `<div class="item">
+        <strong>${escapeHtml(report.severity)} · ${escapeHtml(report.title)}</strong>
+        <div>${escapeHtml(report.role)} / ${escapeHtml(report.area || "-")} / ${escapeHtml(report.createdAt)}</div>
+        <div class="mono">${escapeHtml(report.fileName)}</div>
+      </div>`).join("") : "<p>没有记录。</p>";
+    }
+    $("#feedbackForm").addEventListener("submit", (event) => submitFeedback(event).catch((error) => setMessage(error.message, "error")));
+    $("#loadReports").addEventListener("click", () => loadReports().catch((error) => setMessage(error.message, "error")));
+  </script>
+</body>
+</html>

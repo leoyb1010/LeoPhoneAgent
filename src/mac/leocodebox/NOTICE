@@ -1,0 +1,20 @@
+leocodebox
+==========
+
+leocodebox is a local-only desktop adaptation for controlling local coding agents.
+
+This distribution is based on CloudCLI UI:
+CloudCLI UI (https://github.com/siteboon/claudecodeui)
+
+CloudCLI UI is licensed under AGPL-3.0-or-later with additional Section 7
+attribution terms. See LICENSE for the full license text and required notices.
+
+Modifications in this distribution include local-only desktop startup, removal of
+hosted account flows from the product UI, leocodebox branding, and
+desktop-managed local authentication for the bundled local service.
+
+Provider switch functionality references CC Switch:
+CC Switch (https://github.com/farion1231/cc-switch)
+
+CC Switch is licensed under the MIT License.
+Copyright (c) 2025 Jason Young.

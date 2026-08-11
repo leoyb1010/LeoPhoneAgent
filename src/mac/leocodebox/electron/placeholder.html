@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>leocodebox</title>
+    <style>
+      :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; background: #f8f9fa; color: #17191c; }
+      body { display: grid; place-items: center; overflow: hidden; }
+      body::before { position: fixed; inset: 0; background: linear-gradient(90deg, rgba(248,249,250,.98) 0%, rgba(248,249,250,.92) 42%, rgba(248,249,250,.18) 72%), url('../public/visuals/brand/launch-light.webp') 72% 50% / cover no-repeat; content: ''; }
+      .shell { width: min(430px, calc(100vw - 48px)); text-align: center; animation: shell-in .38s cubic-bezier(.2,0,0,1) both; }
+      .shell { position: relative; z-index: 1; margin-right: min(44vw, 620px); }
+      .logo-wrap { position: relative; width: 72px; height: 72px; margin: 0 auto 22px; overflow: hidden; border-radius: 16px; animation: logo-in .5s cubic-bezier(.2,0,0,1) both; }
+      .logo { width: 72px; height: 72px; border-radius: 16px; box-shadow: 0 12px 34px rgba(24, 35, 56, .14); }
+      .scan { position: absolute; left: 8px; right: 8px; top: 8px; height: 2px; border-radius: 2px; background: #36c9b7; opacity: 0; animation: scan 1.25s .35s cubic-bezier(.2,0,0,1) both; }
+      h1 { margin: 0; font-size: 23px; line-height: 1.2; font-weight: 650; letter-spacing: 0; }
+      #message { min-height: 22px; margin: 10px 0 16px; color: #666d74; font-size: 14px; }
+      .steps { display: flex; justify-content: center; gap: 18px; margin-bottom: 18px; color: #8a9198; font-size: 11px; }
+      .step { display: inline-flex; align-items: center; gap: 6px; }
+      .step::before { width: 5px; height: 5px; border-radius: 50%; background: #b9bec2; content: ''; }
+      /* Steps light by real startup phase (data-phase on .steps): done = solid teal, active = pulsing. */
+      .step.done { color: #4a5158; }
+      .step.done::before { background: #178f82; }
+      .step.active { color: #178f82; font-weight: 600; }
+      .step.active::before { background: #178f82; animation: step-pulse 1.2s ease-in-out infinite; }
+      .track { height: 2px; overflow: hidden; border-radius: 2px; background: #e1e5e7; }
+      .bar { width: 30%; height: 100%; border-radius: inherit; background: #178f82; animation: travel 1.45s ease-in-out infinite; }
+      details { margin-top: 20px; color: #7c838a; font-size: 11px; text-align: left; }
+      summary { width: max-content; margin: 0 auto; cursor: pointer; user-select: none; }
+      pre { max-height: 180px; margin: 10px 0 0; overflow: auto; border: 1px solid #dedfdf; border-radius: 6px; background: #fff; padding: 10px; color: #5f6268; font: 11px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; user-select: text; }
+      @keyframes travel { 0% { transform: translateX(-110%); } 50% { transform: translateX(82%); } 100% { transform: translateX(270%); } }
+      @keyframes shell-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+      @keyframes logo-in { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: scale(1); } }
+      @keyframes scan { 0% { opacity: 0; transform: translateY(0); } 15% { opacity: .9; } 85% { opacity: .9; } 100% { opacity: 0; transform: translateY(54px); } }
+      @keyframes step-pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.35); opacity: .75; } }
+      @media (prefers-color-scheme: dark) {
+        html, body { background: #111316; color: #edf0f2; }
+        #message { color: #a0a7ae; }
+        .steps { color: #747c84; }
+        .step::before { background: #414850; }
+        .step.done { color: #9aa2aa; }
+        .step.done::before, .step.active::before { background: #36c9b7; }
+        .step.active { color: #36c9b7; }
+        .track { background: #2d3238; }
+        .bar { background: #36c9b7; }
+        details { color: #747c84; }
+        pre { border-color: #2d3238; background: #181b1f; color: #b7bdc3; }
+        .logo { box-shadow: 0 12px 34px rgba(0, 0, 0, .35); }
+        body::before { background-image: linear-gradient(90deg, rgba(17,19,22,.98) 0%, rgba(17,19,22,.92) 42%, rgba(17,19,22,.22) 72%), url('../public/visuals/brand/launch-dark.webp'); }
+      }
+      @media (max-width: 900px) { body::before { opacity: .18; background-position: center; } .shell { margin-right: 0; } }
+      @media (prefers-reduced-motion: reduce) { .shell, .logo-wrap, .scan, .step.active::before { animation: none; } .bar { animation-duration: 3s; } }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <div class="logo-wrap"><img class="logo" src="assets/logo-macos.png" alt=""><span class="scan" aria-hidden="true"></span></div>
+      <h1>leocodebox</h1>
+      <p id="message" aria-live="polite">正在准备本机 Agent 工作台…</p>
+      <div class="steps" id="steps" aria-hidden="true"><span class="step active">发现 Agent</span><span class="step">启动服务</span><span class="step">准备工作区</span></div>
+      <div class="track" aria-hidden="true"><div class="bar"></div></div>
+      <details><summary>诊断信息</summary><pre id="logs">正在检查本机服务…</pre></details>
+    </main>
+    <script>
+      window.leocodeboxRenderPlaceholder = function (payload) {
+        var next = payload || {};
+        document.title = String(next.title || 'leocodebox');
+        document.getElementById('message').textContent = String(next.message || '正在打开 leocodebox…');
+        document.getElementById('logs').textContent = Array.isArray(next.logs) && next.logs.length
+          ? next.logs.map(String).join('\n')
+          : '正在检查本机服务…';
+        var phase = typeof next.phase === 'number' ? next.phase : 0;
+        var steps = document.getElementById('steps').children;
+        for (var i = 0; i < steps.length; i += 1) {
+          steps[i].className = 'step' + (i < phase ? ' done' : i === phase ? ' active' : '');
+        }
+      };
+    </script>
+  </body>
+</html>

@@ -1,0 +1,546 @@
+/* Global spinner animation - defined early to ensure it loads */
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@-webkit-keyframes spin {
+  0% {
+    -webkit-transform: rotate(0deg);
+  }
+  100% {
+    -webkit-transform: rotate(360deg);
+  }
+}
+
+@layer base {
+  :root {
+    --background: 210 17% 98%;
+    --foreground: 220 14% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 14% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 14% 10%;
+    --primary: 174 72% 32%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 13% 94%;
+    --secondary-foreground: 220 12% 18%;
+    --muted: 210 13% 94%;
+    --muted-foreground: 215 8% 44%;
+    --accent: 210 13% 93%;
+    --accent-foreground: 220 12% 16%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --success: 151 55% 40%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 48%;
+    --warning-foreground: 24 10% 10%;
+    --info: 204 80% 48%;
+    --info-foreground: 0 0% 100%;
+    --graph-3: 271 81% 56%;
+    --graph-6: 48 96% 47%;
+    --graph-7: 173 80% 40%;
+    --graph-8: 330 81% 60%;
+    --graph-9: 239 84% 67%;
+    --graph-10: 82 77% 45%;
+    --scrollbar: var(--muted-foreground) / 0.35;
+    --scrollbar-hover: var(--muted-foreground) / 0.6;
+    --scrollbar-track: var(--muted) / 0.35;
+    --border: 215 13% 87%;
+    --input: 215 13% 87%;
+    --ring: 174 72% 32%;
+    --radius: 0.5rem;
+    --radius-control: 0.375rem;
+    --radius-card: 0.5rem;
+    --radius-overlay: 0.75rem;
+
+    /* Nav design tokens */
+    --nav-glass-bg: 210 17% 98% / 0.82;
+    --nav-glass-blur: 18px;
+    --nav-glass-saturate: 1.25;
+    --nav-tab-glow: 174 72% 32% / 0.12;
+    --nav-tab-ring: 174 72% 32% / 0.12;
+    --nav-float-shadow: 0 0% 0% / 0.06;
+    --nav-float-ring: 215 13% 87% / 0.65;
+    --nav-divider-color: 215 13% 87% / 0.72;
+    --nav-input-bg: 210 13% 94% / 0.76;
+    --nav-input-focus-ring: 174 72% 32% / 0.2;
+
+    /* Safe area CSS variables */
+    --safe-area-inset-top: env(safe-area-inset-top);
+    --safe-area-inset-right: env(safe-area-inset-right);
+    --safe-area-inset-bottom: env(safe-area-inset-bottom);
+    --safe-area-inset-left: env(safe-area-inset-left);
+
+    /* Mobile navigation dimensions - Single source of truth */
+    /* Floating nav: ~52px bar + 8px bottom margin + 12px px-3 top spacing */
+    --mobile-nav-height: 52px;
+    --mobile-nav-padding: 20px;
+    --mobile-nav-total: calc(var(--mobile-nav-height) + var(--mobile-nav-padding) + env(safe-area-inset-bottom, 0px));
+
+    /* Header safe area dimensions */
+    --header-safe-area-top: env(safe-area-inset-top, 0px);
+    --header-base-padding: 8px;
+    --header-total-padding: calc(var(--header-safe-area-top) + var(--header-base-padding));
+  }
+  
+  /* Fallback for older iOS versions */
+  @supports (padding-top: constant(safe-area-inset-top)) {
+    :root {
+      --safe-area-inset-top: constant(safe-area-inset-top);
+      --safe-area-inset-right: constant(safe-area-inset-right);
+      --safe-area-inset-bottom: constant(safe-area-inset-bottom);
+      --safe-area-inset-left: constant(safe-area-inset-left);
+    }
+  }
+
+  .dark {
+    --background: 220 10% 7%;
+    --foreground: 210 10% 92%;
+    --card: 220 9% 10%;
+    --card-foreground: 210 10% 92%;
+    --popover: 220 9% 11%;
+    --popover-foreground: 210 10% 92%;
+    --primary: 174 67% 47%;
+    --primary-foreground: 220 12% 7%;
+    --secondary: 220 8% 15%;
+    --secondary-foreground: 210 10% 92%;
+    --muted: 220 8% 15%;
+    --muted-foreground: 215 7% 62%;
+    --accent: 220 8% 16%;
+    --accent-foreground: 210 10% 94%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 40 8% 93%;
+    --success: 151 55% 48%;
+    --success-foreground: 220 12% 7%;
+    --warning: 38 92% 56%;
+    --warning-foreground: 24 10% 10%;
+    --info: 204 80% 58%;
+    --info-foreground: 220 12% 7%;
+    --graph-3: 271 81% 66%;
+    --graph-6: 48 96% 57%;
+    --graph-7: 173 80% 50%;
+    --graph-8: 330 81% 70%;
+    --graph-9: 239 84% 77%;
+    --graph-10: 82 77% 55%;
+    --scrollbar: var(--muted-foreground) / 0.35;
+    --scrollbar-hover: var(--muted-foreground) / 0.6;
+    --scrollbar-track: var(--muted) / 0.35;
+    --border: 220 8% 20%;
+    --input: 220 8% 22%;
+    --ring: 174 67% 47%;
+
+    /* Nav design tokens — dark overrides */
+    --nav-glass-bg: 220 9% 10% / 0.86;
+    --nav-glass-blur: 18px;
+    --nav-glass-saturate: 1.15;
+    --nav-tab-glow: 174 67% 47% / 0.14;
+    --nav-tab-ring: 174 67% 47% / 0.16;
+    --nav-float-shadow: 0 0% 0% / 0.35;
+    --nav-float-ring: 220 8% 20% / 0.72;
+    --nav-divider-color: 220 8% 20% / 0.8;
+    --nav-input-bg: 220 8% 15% / 0.78;
+    --nav-input-focus-ring: 174 67% 47% / 0.22;
+  }
+
+  :root[data-accent="green"] {
+    --primary: 151 55% 38%;
+    --ring: 151 55% 38%;
+    --nav-tab-glow: 151 55% 38% / 0.20;
+    --nav-input-focus-ring: 151 55% 38% / 0.24;
+  }
+
+  :root[data-accent="amber"] {
+    --primary: 35 92% 42%;
+    --ring: 35 92% 42%;
+    --nav-tab-glow: 35 92% 42% / 0.20;
+    --nav-input-focus-ring: 35 92% 42% / 0.24;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+    transition: none;
+  }
+  
+  body {
+    @apply bg-background text-foreground;
+
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    margin: 0;
+    padding: 0;
+  }
+
+  html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    /* The app shell is a fixed inset-0 container (see AppContent), so the
+       document itself never needs to scroll. Clipping it removes the phantom
+       full-height page scrollbar and disables the browser pull-to-refresh
+       gesture that reloads the page when scrolling up on mobile. */
+    overflow: hidden;
+    overscroll-behavior-y: contain;
+  }
+  
+  /* Root element with safe area padding for PWA */
+  #root {
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  :root[data-density="compact"] {
+    --leocodebox-density-scale: 0.88;
+  }
+
+  :root[data-density="comfortable"] {
+    --leocodebox-density-scale: 1;
+  }
+
+  :root[data-density="compact"] .settings-content-enter {
+    row-gap: 1rem;
+  }
+
+  :root[data-reduce-motion="true"] *,
+  :root[data-reduce-motion="true"] ::before,
+  :root[data-reduce-motion="true"] ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  
+  /* Apply safe area padding in standalone mode */
+  @supports (padding-top: env(safe-area-inset-top)) {
+    @media (display-mode: standalone) {
+      #root {
+        padding-top: var(--safe-area-inset-top);
+        padding-left: var(--safe-area-inset-left);
+        padding-right: var(--safe-area-inset-right);
+      }
+    }
+  }
+
+  /* PWA mode detected by JavaScript - more reliable */
+  body.pwa-mode #root {
+    padding-left: var(--safe-area-inset-left);
+    padding-right: var(--safe-area-inset-right);
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* Adjust fixed inset positioning in PWA mode */
+  body.pwa-mode .fixed.inset-0 {
+    top: var(--header-total-padding);
+    left: var(--safe-area-inset-left);
+    right: var(--safe-area-inset-right);
+    bottom: 0;
+  }
+  
+  /* Shared motion tokens: keep UI transitions consistent and easy to reduce. */
+  :root {
+    --motion-fast: 120ms;
+    --motion-base: 200ms;
+    --motion-slow: 320ms;
+    --motion-ease-out: cubic-bezier(0.2, 0, 0, 1);
+    --motion-ease-in: cubic-bezier(0.4, 0, 1, 1);
+    --radius-control: var(--radius);
+    --radius-card: calc(var(--radius) + 0.25rem);
+    --radius-overlay: calc(var(--radius) + 0.5rem);
+    --motion-spring: cubic-bezier(0.16, 1, 0.3, 1);
+    /* Entrance / positional easings shared with public/leocodebox-switch.html */
+    --ease-out-quint: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+    /* Elevation scale (HSL+alpha so a single value self-adapts light/dark). */
+    --elevation-1: 0 1px 2px hsl(220 20% 2% / 0.05);
+    --elevation-2: 0 4px 12px hsl(220 20% 2% / 0.08);
+    --elevation-3: 0 12px 30px hsl(220 20% 2% / 0.12);
+
+    /* Dashboard / upgraded motion language. Three curves + three durations so
+       every animation across the app speaks the same language. Reuses the
+       existing --motion-* values where they already fit. */
+    --ease-standard: var(--motion-ease-out);                 /* 0.2,0,0,1 — regular in/out */
+    --ease-emphasized: cubic-bezier(0.05, 0.7, 0.1, 1);      /* card entrance, overlays */
+    --ease-out-expo: var(--motion-spring);                   /* 0.16,1,0.3,1 — stagger, number tween */
+    --dur-fast: var(--motion-fast);                          /* 120ms hover/press */
+    --dur-base: var(--motion-base);                          /* 200ms regular transitions */
+    --dur-slow: var(--motion-slow);                          /* 320ms entrance/page transition */
+    --z-popover: 40;
+    --z-sheet: 50;
+    --z-dialog: 60;
+    --z-toast: 70;
+  }
+
+  /* Dark elevation needs heavier shadows to read against the near-black surface.
+     `:root.dark` (specificity 0,2,0) beats the `:root` light defaults above
+     regardless of source order — a plain `.dark` block would lose the tie. */
+  :root.dark {
+    --elevation-1: 0 1px 2px hsl(0 0% 0% / 0.30);
+    --elevation-2: 0 4px 12px hsl(0 0% 0% / 0.40);
+    --elevation-3: 0 12px 30px hsl(0 0% 0% / 0.52);
+  }
+
+  /* Global transition defaults */
+  button,
+  a, 
+  input, 
+  textarea, 
+  select,
+  [role="button"],
+  .transition-all {
+    transition-property: color, background-color, border-color, opacity, box-shadow, transform;
+    transition-duration: var(--motion-fast);
+    transition-timing-function: var(--motion-ease-out);
+  }
+  
+  /* Color transitions for theme switching - exclude interactive elements */
+  html,
+  body,
+  #root,
+  .leocodebox-app-shell,
+  .leocodebox-app-rail,
+  .leocodebox-project-sidebar,
+  .leocodebox-workspace {
+    transition: background-color 180ms ease-out, border-color 180ms ease-out, color 180ms ease-out;
+  }
+  
+  /* Transform transitions */
+  .transition-transform {
+    transition: transform 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  /* Opacity transitions */
+  .transition-opacity {
+    transition: opacity 200ms ease-in-out;
+  }
+  
+  /* Scale transitions for interactions */
+  .transition-scale {
+    transition: transform 100ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  /* Shadow transitions */
+  .transition-shadow {
+    transition: box-shadow 200ms ease-in-out;
+  }
+  
+  /* Respect reduced motion preference */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+
+    .leo-squish:active:not(:disabled) {
+      transform: none !important;
+    }
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Dashboard entrance & interaction motion.
+ * Only transform + opacity are animated so these stay on the compositor and
+ * never jank. Everything collapses to instant under reduced-motion (handled
+ * globally above).
+ * ------------------------------------------------------------------------- */
+@keyframes dash-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dash-live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@layer utilities {
+  /* Staggered card entrance: apply .dash-enter to each card and set
+     --dash-delay per sibling (0ms / 40ms / 80ms …). */
+  .dash-enter {
+    animation: dash-rise var(--dur-slow) var(--ease-emphasized) both;
+    animation-delay: var(--dash-delay, 0ms);
+    will-change: opacity, transform;
+  }
+
+  /* Interactive card: lifts + deepens shadow on hover. Composes with the base
+     Card via an extra className. */
+  .dash-card-interactive {
+    transition: transform var(--dur-fast) var(--ease-standard),
+      box-shadow var(--dur-fast) var(--ease-standard),
+      border-color var(--dur-fast) var(--ease-standard);
+  }
+  .dash-card-interactive:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--elevation-2);
+  }
+
+  /* Live indicator dot on the running-sessions card. */
+  .dash-live-dot {
+    animation: dash-live-pulse 2s var(--ease-standard) infinite;
+  }
+
+  /* Status dot colour transitions when an agent logs in/out. */
+  .dash-status-dot {
+    transition: background-color var(--dur-base) var(--ease-standard);
+  }
+
+  /* Progress/quota bar fill animates when the value changes. */
+  .dash-bar-fill {
+    transition: width var(--dur-base) var(--ease-out-expo);
+  }
+
+  /* ---- Rich dashboard visual treatments ------------------------------ */
+
+  /* Stat tile: subtle inset surface that deepens on the parent card hover. */
+  .dash-stat {
+    background: hsl(var(--secondary) / 0.6);
+    border: 0.5px solid hsl(var(--border) / 0.5);
+    transition: background var(--dur-fast) var(--ease-standard),
+      border-color var(--dur-fast) var(--ease-standard),
+      transform var(--dur-fast) var(--ease-standard);
+  }
+  .dash-stat:hover {
+    background: hsl(var(--secondary) / 0.9);
+    transform: translateY(-1px);
+  }
+
+  /* Featured card: a soft primary-tinted top glow drawn with a gradient line.
+     Purely decorative, no motion, so it costs nothing. */
+  .dash-card-glow {
+    position: relative;
+    overflow: hidden;
+  }
+  .dash-card-glow::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 2px;
+    background: linear-gradient(90deg,
+      hsl(var(--primary) / 0) 0%,
+      hsl(var(--primary) / 0.55) 50%,
+      hsl(var(--primary) / 0) 100%);
+    pointer-events: none;
+  }
+
+  /* Hero panel: layered gradient wash over the card surface. */
+  .dash-hero {
+    position: relative;
+    overflow: hidden;
+  }
+  .dash-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(120% 160% at 0% 0%, hsl(var(--primary) / 0.10) 0%, transparent 55%),
+      radial-gradient(120% 160% at 100% 0%, hsl(var(--info) / 0.07) 0%, transparent 50%);
+    pointer-events: none;
+  }
+  .dash-hero > * {
+    position: relative;
+  }
+
+  /* Status dot with a soft glow ring for the "ok/online" reading. */
+  .dash-dot-glow {
+    box-shadow: 0 0 0 3px hsl(var(--success) / 0.18);
+  }
+
+  /* Trend bars grow upward on entrance. */
+  @keyframes dash-bar-grow {
+    from {
+      transform: scaleY(0);
+    }
+    to {
+      transform: scaleY(1);
+    }
+  }
+  .dash-bar-grow {
+    animation: dash-bar-grow var(--dur-slow) var(--ease-out-expo) both;
+  }
+
+  /* Animated count tick for hero metrics: subtle pop when value changes. */
+  @keyframes dash-pop {
+    0% {
+      transform: scale(1);
+    }
+    40% {
+      transform: scale(1.06);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+  .dash-pop {
+    animation: dash-pop var(--dur-base) var(--ease-standard);
+  }
+
+  /* Tactile press: quick compression, slower spring release. Adapted from
+     Leotexiao's Squish Button at a restrained 0.96 scale for dense desktop UI. */
+  .leo-squish {
+    transition: transform 500ms cubic-bezier(0.34, 1.56, 0.64, 1),
+      box-shadow var(--dur-fast) var(--ease-standard),
+      border-color var(--dur-fast) var(--ease-standard),
+      background-color var(--dur-fast) var(--ease-standard),
+      color var(--dur-fast) var(--ease-standard);
+  }
+  .leo-squish:active:not(:disabled) {
+    transform: scale(0.96);
+    transition-duration: 80ms;
+    transition-timing-function: ease-out;
+  }
+
+  /* Idle → loading status morph, used by real network actions rather than a
+     decorative timer. */
+  .leo-status-pill[data-state='loading'] {
+    border-color: hsl(var(--primary) / 0.35);
+    background: hsl(var(--primary) / 0.09);
+    color: hsl(var(--primary));
+  }
+
+  /* Network-derived progress settles gently when a refreshed value arrives. */
+  .leo-elastic-progress {
+    transition: width 900ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* Section divider label with flanking rules. */
+  .dash-section-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: hsl(var(--muted-foreground));
+    font-size: 11px;
+    letter-spacing: 0.02em;
+  }
+  .dash-section-label::before,
+  .dash-section-label::after {
+    content: '';
+    flex: 1;
+    height: 0.5px;
+    background: hsl(var(--border) / 0.6);
+  }
+}

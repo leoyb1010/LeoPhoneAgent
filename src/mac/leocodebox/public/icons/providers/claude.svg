@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-label="Claude Code">
+  <rect width="24" height="24" rx="5" fill="#D77655"/>
+  <g fill="none" stroke="#FCF2EE" stroke-width="1.7" stroke-linecap="round">
+    <path d="M12 4.2v15.6M4.2 12h15.6M6.5 6.5l11 11M17.5 6.5l-11 11"/>
+    <path d="M8.7 4.8l6.6 14.4M19.2 8.7L4.8 15.3M15.3 4.8L8.7 19.2M4.8 8.7l14.4 6.6"/>
+  </g>
+</svg>

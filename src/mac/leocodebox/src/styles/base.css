@@ -1,0 +1,324 @@
+@layer utilities {
+  /* Smooth hover transitions for interactive elements */
+  button:hover,
+  a:hover,
+  [role="button"]:hover {
+    transition-duration: 100ms;
+  }
+  
+  /* Active state transitions */
+  button:active,
+  a:active,
+  [role="button"]:active {
+    transition-duration: 50ms;
+  }
+  
+  /* Focus transitions */
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    transition: outline-offset 150ms ease-out, box-shadow 150ms ease-out;
+  }
+  
+  /* Sidebar transitions */
+  .sidebar-transition {
+    transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1),
+                opacity 300ms ease-in-out;
+  }
+
+  /* Nav glass surface — uses theme tokens */
+  .nav-glass {
+    background: hsl(var(--nav-glass-bg));
+    backdrop-filter: blur(var(--nav-glass-blur)) saturate(var(--nav-glass-saturate));
+    -webkit-backdrop-filter: blur(var(--nav-glass-blur)) saturate(var(--nav-glass-saturate));
+  }
+
+  /* Nav tab active pill glow — uses theme tokens */
+  .nav-tab-active {
+    box-shadow: 0 1px 8px hsl(var(--nav-tab-glow)),
+                0 0 0 1px hsl(var(--nav-tab-ring));
+  }
+
+  /* Floating mobile nav bar — uses theme tokens */
+  .mobile-nav-float {
+    box-shadow: 0 -1px 20px hsl(var(--nav-float-shadow)),
+                0 0 0 1px hsl(var(--nav-float-ring));
+  }
+
+  /* Subtle sidebar divider — uses theme tokens */
+  .nav-divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--nav-divider-color)) 20%, hsl(var(--nav-divider-color)) 80%, transparent);
+  }
+
+  /* Nav search input surface — uses theme tokens */
+  .nav-search-input {
+    background: hsl(var(--nav-input-bg));
+    border: none;
+  }
+
+  .nav-search-input:focus-within {
+    background: hsl(var(--background));
+    box-shadow: 0 0 0 2px hsl(var(--nav-input-focus-ring));
+  }
+  
+  /* Modal and dropdown transitions */
+  .modal-transition {
+    transition: opacity 200ms ease-in-out,
+                transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  /* Chat message transitions */
+  .message-transition {
+    transition: opacity 300ms ease-in-out,
+                transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  /* Height transitions for expanding elements */
+  .height-transition {
+    transition: height 200ms ease-in-out,
+                max-height 200ms ease-in-out;
+  }
+  
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground)) transparent;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground));
+    border-radius: var(--radius-control);
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.8);
+  }
+  
+  /* Dark mode scrollbar styles */
+  .dark .scrollbar-thin {
+    scrollbar-color: hsl(var(--scrollbar)) transparent;
+  }
+  
+  .dark .scrollbar-thin::-webkit-scrollbar-track {
+    background: hsl(var(--scrollbar-track));
+  }
+  
+  .dark .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--scrollbar));
+    border-radius: var(--radius-control);
+  }
+  
+  .dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--scrollbar-hover));
+  }
+  
+  /* Global scrollbar styles for main content areas */
+  .dark::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  .dark::-webkit-scrollbar-track {
+    background: hsl(var(--scrollbar-track));
+  }
+  
+  .dark::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--scrollbar));
+    border-radius: var(--radius-control);
+  }
+  
+  .dark::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--scrollbar-hover));
+  }
+  
+  /* Firefox scrollbar styles */
+  .dark {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--scrollbar)) hsl(var(--scrollbar-track));
+  }
+  
+  /* Ensure checkbox styling is preserved */
+  input[type="checkbox"] {
+    @apply accent-primary;
+    opacity: 1;
+  }
+  
+  input[type="checkbox"]:focus {
+    opacity: 1;
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+  
+  /* Fix checkbox appearance in dark mode */
+  .dark input[type="checkbox"] {
+    background-color: rgb(31 41 55); /* gray-800 */
+    border-color: rgb(75 85 99); /* gray-600 */
+    color: rgb(37 99 235); /* blue-600 */
+    color-scheme: dark;
+  }
+  
+  .dark input[type="checkbox"]:checked {
+    background-color: rgb(37 99 235); /* blue-600 */
+    border-color: rgb(37 99 235); /* blue-600 */
+  }
+  
+  .dark input[type="checkbox"]:focus {
+    --tw-ring-color: rgb(59 130 246); /* blue-500 */
+    --tw-ring-offset-color: rgb(31 41 55); /* gray-800 */
+  }
+  
+  /* Fix radio button appearance in dark mode */
+  .dark input[type="radio"] {
+    background-color: rgb(31 41 55); /* gray-800 */
+    border-color: rgb(75 85 99); /* gray-600 */
+    color: rgb(37 99 235); /* blue-600 */
+    color-scheme: dark;
+  }
+  
+  .dark input[type="radio"]:checked {
+    background-color: rgb(37 99 235); /* blue-600 */
+    border-color: rgb(37 99 235); /* blue-600 */
+  }
+  
+  .dark input[type="radio"]:focus {
+    --tw-ring-color: rgb(59 130 246); /* blue-500 */
+    --tw-ring-offset-color: rgb(31 41 55); /* gray-800 */
+  }
+  
+  /* Ensure textarea text is always visible in dark mode */
+  textarea {
+    color-scheme: light dark;
+  }
+  
+  .dark textarea {
+    color: rgb(243 244 246) !important; /* gray-100 */
+    -webkit-text-fill-color: rgb(243 244 246) !important;
+    caret-color: rgb(243 244 246) !important;
+  }
+  
+  /* Fix for focus state in dark mode */
+  .dark textarea:focus {
+    color: rgb(243 244 246) !important;
+    -webkit-text-fill-color: rgb(243 244 246) !important;
+  }
+  
+  /* Fix for iOS/Safari dark mode textarea issues */
+  @supports (-webkit-touch-callout: none) {
+    .dark textarea {
+      background-color: transparent !important;
+      color: rgb(243 244 246) !important;
+      -webkit-text-fill-color: rgb(243 244 246) !important;
+    }
+    
+    .dark textarea:focus {
+      background-color: transparent !important;
+      color: rgb(243 244 246) !important;
+      -webkit-text-fill-color: rgb(243 244 246) !important;
+    }
+  }
+  
+  /* Ensure parent container doesn't override textarea styles */
+  .dark .bg-gray-800 textarea {
+    color: rgb(243 244 246) !important;
+    -webkit-text-fill-color: rgb(243 244 246) !important;
+  }
+  
+  /* Fix focus-within container issues in dark mode */
+  .dark .focus-within\:ring-2:focus-within {
+    background-color: rgb(20 20 20) !important;
+  }
+  
+  /* Ensure textarea remains transparent with visible text */
+  .dark textarea.bg-transparent {
+    background-color: transparent !important;
+    color: rgb(243 244 246) !important;
+    -webkit-text-fill-color: rgb(243 244 246) !important;
+  }
+  
+  /* Fix placeholder text color to be properly gray */
+  textarea::placeholder {
+    color: rgb(156 163 175) !important; /* gray-400 */
+    opacity: 1 !important;
+  }
+  
+  .dark textarea::placeholder {
+    color: rgb(75 85 99) !important; /* gray-600 - darker gray */
+    opacity: 1 !important;
+  }
+  
+  /* More specific selector for chat input textarea */
+  .dark .bg-gray-800 textarea::placeholder,
+  .dark textarea.bg-transparent::placeholder {
+    color: rgb(75 85 99) !important; /* gray-600 - darker gray */
+    opacity: 1 !important;
+    -webkit-text-fill-color: rgb(75 85 99) !important;
+  }
+  
+  /* Custom class for chat input placeholder */
+  .chat-input-placeholder::placeholder {
+    color: rgb(156 163 175) !important;
+    opacity: 1 !important;
+  }
+
+  .dark .chat-input-placeholder::placeholder {
+    color: rgb(75 85 99) !important;
+    opacity: 1 !important;
+    -webkit-text-fill-color: rgb(75 85 99) !important;
+  }
+
+  .chat-input-placeholder::-webkit-input-placeholder {
+    color: rgb(156 163 175) !important;
+    opacity: 1 !important;
+  }
+
+  .dark .chat-input-placeholder::-webkit-input-placeholder {
+    color: rgb(75 85 99) !important;
+    opacity: 1 !important;
+    -webkit-text-fill-color: rgb(75 85 99) !important;
+  }
+  
+  /* WebKit specific placeholder styles */
+  textarea::-webkit-input-placeholder {
+    color: rgb(156 163 175) !important;
+    opacity: 1 !important;
+  }
+  
+  .dark textarea::-webkit-input-placeholder {
+    color: rgb(75 85 99) !important; /* gray-600 - darker gray */
+    opacity: 1 !important;
+  }
+  
+  /* Mozilla specific placeholder styles */
+  textarea::-moz-placeholder {
+    color: rgb(156 163 175) !important;
+    opacity: 1 !important;
+  }
+  
+  .dark textarea::-moz-placeholder {
+    color: rgb(75 85 99) !important; /* gray-600 - darker gray */
+    opacity: 1 !important;
+  }
+  
+  /* IE/Edge specific placeholder styles */
+  textarea:-ms-input-placeholder {
+    color: rgb(156 163 175) !important;
+    opacity: 1 !important;
+  }
+  
+  .dark textarea:-ms-input-placeholder {
+    color: rgb(75 85 99) !important; /* gray-600 - darker gray */
+    opacity: 1 !important;
+  }
+}
+
