@@ -12,12 +12,18 @@ escaped_version=$(printf '%s' "$expected_version" | sed 's/\./\\./g')
 version_count=$(rg -c "MARKETING_VERSION = ${escaped_version};" "$project")
 build_count=$(rg -c "CURRENT_PROJECT_VERSION = ${expected_build};" "$project")
 
-[ "$version_count" -eq 12 ] || {
-  echo "expected 12 target/config version entries for $expected_version; found $version_count" >&2
+# [T-ci-honest-green] 不硬编码"12":target 数会随扩展/Widget 增减(现在
+# 是 14)。真正要保证的是"所有 MARKETING_VERSION 都等于期望版本",
+# 也就是:期望版本的出现次数 == 全部 MARKETING_VERSION 声明的总数。
+# 硬编码一个具体数字,只会让每次加 target 后发布脚本假性失败。
+total_version_lines=$(rg -c "MARKETING_VERSION = " "$project")
+total_build_lines=$(rg -c "CURRENT_PROJECT_VERSION = " "$project")
+[ "$version_count" -eq "$total_version_lines" ] || {
+  echo "有 target 的版本号不是 $expected_version:$version_count/$total_version_lines 个匹配" >&2
   exit 1
 }
-[ "$build_count" -eq 12 ] || {
-  echo "expected 12 target/config build entries for $expected_build; found $build_count" >&2
+[ "$build_count" -eq "$total_build_lines" ] || {
+  echo "有 target 的 build 号不是 $expected_build:$build_count/$total_build_lines 个匹配" >&2
   exit 1
 }
 

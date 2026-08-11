@@ -1,10 +1,23 @@
 # 最小 CI:MinisTests 单测。守住"重复声明进编译目标"这类必炸问题
 # (2026-08 审计发现 5 个 ' 2.swift' 让测试 target 断编译逾两周无人知)。
+#
+# [T-ci-honest-green] 这个文件本身曾是"假绿"的根:
+#   xcodebuild ... 2>&1 | tail -30
+# 管道的退出码只看最后一条命令(tail 永远成功),所以 xcodebuild 失败
+# 时整步仍返回 0,GitHub 显示绿灯 —— 编译失败、测试失败、依赖缺失全被
+# 一条 tail 吞掉。绿灯变得毫无意义。修法见下:pipefail + 不截断退出码。
 name: iOS Tests
 on:
   push:
     branches: [main]
-    paths: ['src/ios/**']
+    # 触发面放宽:Python 服务、脚本、协议、工作流本身的改动也要能触发,
+    # 否则改中继/发布脚本 CI 完全不看,等于没有。
+    paths:
+      - 'src/**'
+      - 'scripts/**'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 jobs:
   unit-tests:
@@ -12,9 +25,20 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive   # 缺 submodule 会让构建静默少文件
       - name: Run MinisTests
         run: |
+          set -euo pipefail        # 管道里任一命令失败即失败,不被 tail 掩盖
           cd src/ios
+          # 完整日志留存进文件,终端只看尾部;退出码取 xcodebuild 本身。
           xcodebuild test -project LeoPhoneAgent.xcodeproj -scheme LeoPhoneAgent \
             -destination 'platform=iOS Simulator,name=iPhone 16' \
-            -only-testing:MinisTests CODE_SIGNING_ALLOWED=NO 2>&1 | tail -30
+            -only-testing:MinisTests CODE_SIGNING_ALLOWED=NO 2>&1 \
+            | tee /tmp/xcodebuild.log \
+            || { echo "::error::xcodebuild test failed"; tail -60 /tmp/xcodebuild.log; exit 1; }
+          # 双保险:日志里出现测试失败标记也判红(某些配置下 xcodebuild
+          # 退出码不可靠)。
+          if grep -qE "Testing failed|\*\* TEST FAILED \*\*|\*\* BUILD FAILED \*\*" /tmp/xcodebuild.log; then
+            echo "::error::found failure markers in xcodebuild log"; exit 1
+          fi

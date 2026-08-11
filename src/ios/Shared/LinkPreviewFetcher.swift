@@ -19,6 +19,11 @@
 //  标题同理:og:title → twitter:title → 站点变量 → <h1> → <title>。
 //  任何链接都能进收藏,拿不到预览也不影响收藏本身成立。
 //
+//  [T-ssrf] 抓取前必须过 SSRF 闸:这个抓取器会主动对用户收藏的任意
+//  URL 发起请求。不设防的话,收藏一条 http://127.0.0.1:… 或内网地址,
+//  app 就成了打内网的代理(读到路由器后台、本机服务、云元数据端点
+//  169.254.169.254 等)。公网 URL 302 跳内网同样要拦 —— 所以解析后的
+//  最终地址也要复检。
 
 import Foundation
 import LinkPresentation
@@ -30,13 +35,58 @@ enum LinkPreviewFetcher {
         var image: UIImage?
     }
 
+    /// 会拦截"跳向内网"的重定向的 session。URLSession.shared 会自动跟随
+    /// 302,公网 URL 一跳就进内网,SSRF 闸只查首地址是拦不住的。
+    private static let session: URLSession = {
+        let delegate = RedirectGuard()
+        return URLSession(configuration: .ephemeral, delegate: delegate, delegateQueue: nil)
+    }()
+
     /// 移动端 UA:很多站(尤其公众号)对桌面 UA 返回"请在微信中打开"的空壳。
     private static let mobileUA =
         "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 " +
         "(KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
 
+    /// 内网 / 环回 / 链路本地 / 云元数据地址一律不抓。返回 true = 危险。
+    static func isBlockedHost(_ url: URL) -> Bool {
+        guard let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              let host = url.host?.lowercased() else { return true }
+        // 直接域名黑名单
+        if host == "localhost" || host.hasSuffix(".localhost")
+            || host.hasSuffix(".local") || host == "metadata.google.internal" {
+            return true
+        }
+        // IP 字面量:落在私有/环回/链路本地/保留段就拦
+        if let v = ipv4Octets(host) {
+            switch (v[0], v[1]) {
+            case (10, _), (127, _), (0, _),
+                 (192, 168), (169, 254),
+                 (172, 16...31):
+                return true
+            default: break
+            }
+            if v[0] >= 224 { return true }   // 组播/保留
+        }
+        // IPv6 环回/链路本地/唯一本地
+        if host.contains(":") {
+            if host == "::1" || host.hasPrefix("fe80") || host.hasPrefix("fc")
+                || host.hasPrefix("fd") || host == "::" { return true }
+        }
+        return false
+    }
+
+    private static func ipv4Octets(_ host: String) -> [Int]? {
+        let parts = host.split(separator: ".")
+        guard parts.count == 4 else { return nil }
+        let nums = parts.compactMap { Int($0) }
+        guard nums.count == 4, nums.allSatisfy({ (0...255).contains($0) }) else { return nil }
+        return nums
+    }
+
     static func fetch(_ url: URL) async -> Preview {
         var result = Preview()
+        guard !isBlockedHost(url) else { return result }   // SSRF 闸
 
         // 1) 系统抓取器
         let provider = LPMetadataProvider()
@@ -76,13 +126,14 @@ enum LinkPreviewFetcher {
     // MARK: - HTML 兜底
 
     private static func fetchHTML(_ url: URL) async -> String? {
+        guard !isBlockedHost(url) else { return nil }
         var request = URLRequest(url: url)
         request.timeoutInterval = 12
         request.setValue(mobileUA, forHTTPHeaderField: "User-Agent")
         // 流式读:data(for:) 会把整个响应体收完才返回 —— 收藏一条视频/
         // 安装包直链时,那是几十 MB 的流量和内存尖峰,哪怕后面只 prefix。
         // bytes(for:) 读到 512KB 就断,预览要的 <head> 早就在里面了。
-        guard let (bytes, resp) = try? await URLSession.shared.bytes(for: request),
+        guard let (bytes, resp) = try? await session.bytes(for: request),
               let http = resp as? HTTPURLResponse,
               // 不看状态码的话,403/404/风控页的 <title>("请在微信客户端
               // 打开""人机验证")会覆盖掉导入时截好的真标题,而
@@ -159,6 +210,7 @@ enum LinkPreviewFetcher {
     }
 
     private static func loadImage(_ url: URL, referer: String) async -> UIImage? {
+        guard !isBlockedHost(url) else { return nil }
         var request = URLRequest(url: url)
         request.timeoutInterval = 12
         request.setValue(mobileUA, forHTTPHeaderField: "User-Agent")
@@ -166,7 +218,7 @@ enum LinkPreviewFetcher {
         // 拒绝跨站请求。统一带上来源页的 Referer —— 这是通用做法,不是
         // 给某个站开的特例。
         request.setValue(referer, forHTTPHeaderField: "Referer")
-        guard let (data, _) = try? await URLSession.shared.data(for: request),
+        guard let (data, _) = try? await session.data(for: request),
               let image = UIImage(data: data) else { return nil }
         // 太小的多半是占位图标/像素图,当作没抓到,让上层继续往下试
         guard image.size.width >= 48, image.size.height >= 48 else { return nil }
@@ -190,5 +242,19 @@ enum LinkPreviewFetcher {
             .replacingOccurrences(of: "&lt;", with: "<")
             .replacingOccurrences(of: "&gt;", with: ">")
             .replacingOccurrences(of: "&nbsp;", with: " ")
+    }
+}
+
+/// 重定向到内网/环回一律掐断(返回 nil request = 取消跳转)。
+private final class RedirectGuard: NSObject, URLSessionTaskDelegate {
+    func urlSession(_ session: URLSession, task: URLSessionTask,
+                    willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest,
+                    completionHandler: @escaping (URLRequest?) -> Void) {
+        if let url = request.url, LinkPreviewFetcher.isBlockedHost(url) {
+            completionHandler(nil)   // 跳向内网 → 取消
+        } else {
+            completionHandler(request)
+        }
     }
 }

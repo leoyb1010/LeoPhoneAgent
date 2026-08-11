@@ -24,6 +24,14 @@ struct LeoReleaseNote: Identifiable {
 enum LeoReleaseNotes {
     static let all: [LeoReleaseNote] = [
         LeoReleaseNote(
+            version: "1.20.6",
+            date: "2026-08-11",
+            items: [
+                "🔒 链接预览加 SSRF 防护:收藏含内网/本机地址(127.0.0.1、192.168.x、169.254 云元数据等)的链接时不再去请求,公网链接 302 跳内网也会被拦——此前 app 会成为打内网的代理",
+                "🟢 修复「假绿」CI:测试步骤原来用 | tail 把失败退出码吞掉了,编译/测试真失败也显示绿灯;现在 pipefail + 失败标记双重判红,并把触发面从只看 iOS 扩到服务/脚本/协议",
+                "🔧 发布自检脚本不再硬编码目标数(加扩展就假性失败),改为动态核对所有目标版本号一致",
+            ]),
+        LeoReleaseNote(
             version: "1.20.5",
             date: "2026-08-11",
             items: [
