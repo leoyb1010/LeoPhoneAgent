@@ -28,6 +28,7 @@ export default function CollectionsMirror({ refreshTick = 0 }: { refreshTick?: n
   const [query, setQuery] = useState('');
   const [configured, setConfigured] = useState(true);
   const [updatedAt, setUpdatedAt] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -39,8 +40,10 @@ export default function CollectionsMirror({ refreshTick = 0 }: { refreshTick?: n
       setConfigured(data?.configured !== false);
       setItems(data?.items ?? []);
       setUpdatedAt(data?.updatedAt ?? 0);
-    } catch {
-      // 读不到就保持上一次的内容,不清空
+      setError(null);
+    } catch (loadError) {
+      // Keep the last good mirror, but make the stale state visible.
+      setError(loadError instanceof Error ? loadError.message : '手机收藏同步失败');
     }
   }, []);
 
@@ -72,6 +75,12 @@ export default function CollectionsMirror({ refreshTick = 0 }: { refreshTick?: n
         )}
       </div>
 
+      {error && (
+        <p role="status" className="mt-2 rounded-lg border border-warning/35 bg-warning/10 px-3 py-2 text-xs text-warning">
+          收藏暂时无法同步，下面保留的是上次成功内容。{error}
+        </p>
+      )}
+
       {items.length > 0 && (
         <input
           type="search"
@@ -83,7 +92,7 @@ export default function CollectionsMirror({ refreshTick = 0 }: { refreshTick?: n
       )}
 
       <div className="mt-2 space-y-2">
-        {items.length === 0 && (
+        {items.length === 0 && !error && (
           <p className="text-sm text-muted-foreground">
             手机上还没有收藏,或者手机还没同步过来。
           </p>

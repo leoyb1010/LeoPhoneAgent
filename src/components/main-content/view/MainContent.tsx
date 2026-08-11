@@ -66,6 +66,7 @@ function MainContent({
   onNavigateToSession,
   onSessionEstablished,
   onShowSettings,
+  onStartNewChat,
   externalMessageUpdate,
   newSessionTrigger,
 }: MainContentProps) {
@@ -168,6 +169,38 @@ function MainContent({
     },
   });
 
+  // The home dashboard and Mac fleet are product-level workspaces. They must
+  // remain useful before a coding project is selected (or when none exists).
+  if (activeTab === 'dashboard') {
+    return (
+      <div className="leocodebox-workspace-enter h-full overflow-hidden">
+        <ErrorBoundary showDetails>
+          <React.Suspense fallback={panelFallback}>
+            <DashboardView
+              onNavigateToSession={(sessionId) => {
+                setActiveTab('chat');
+                onNavigateToSession(sessionId);
+              }}
+              onShowTab={(tab) => setActiveTab(tab as AppTab)}
+              onNewChat={onStartNewChat}
+              onShowSettings={onShowSettings}
+            />
+          </React.Suspense>
+        </ErrorBoundary>
+      </div>
+    );
+  }
+
+  if (activeTab === 'fleet') {
+    return (
+      <div className="leocodebox-workspace-enter h-full overflow-hidden">
+        <ErrorBoundary showDetails>
+          <FleetView />
+        </ErrorBoundary>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return <MainContentStateView mode="loading" isMobile={isMobile} onMenuClick={onMenuClick} />;
   }
@@ -197,23 +230,6 @@ function MainContent({
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className={`flex min-h-0 min-w-[200px] flex-col overflow-hidden ${editorExpanded ? 'hidden' : ''} flex-1`}>
-          {activeTab === 'dashboard' && (
-            <div className="workspace-tab-panel h-full overflow-hidden" data-active="true">
-              <ErrorBoundary showDetails>
-              <React.Suspense fallback={panelFallback}>
-                <DashboardView
-                  onNavigateToSession={(sessionId) => {
-                    setActiveTab('chat');
-                    onNavigateToSession(sessionId);
-                  }}
-                  onShowTab={(tab) => setActiveTab(tab as AppTab)}
-                  onNewChat={() => setActiveTab('chat')}
-                />
-              </React.Suspense>
-              </ErrorBoundary>
-            </div>
-          )}
-
           <div className={`workspace-tab-panel h-full ${activeTab === 'chat' ? 'block' : 'hidden'}`} data-active={activeTab === 'chat'}>
             <ErrorBoundary showDetails>
               <React.Suspense fallback={panelFallback}>
@@ -310,14 +326,6 @@ function MainContent({
                 <React.Suspense fallback={panelFallback}>
                   <ConversationAuditPanel />
                 </React.Suspense>
-              </ErrorBoundary>
-            </div>
-          )}
-
-          {activeTab === 'fleet' && (
-            <div className="workspace-tab-panel h-full overflow-hidden" data-active="true">
-              <ErrorBoundary showDetails>
-                <FleetView />
               </ErrorBoundary>
             </div>
           )}

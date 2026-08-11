@@ -36,6 +36,18 @@ function getTabTitle(activeTab: AppTab, shouldShowTasksTab: boolean, t: (key: st
     return t('tabs.audit');
   }
 
+  if (activeTab === 'fleet') {
+    return t('tabs.fleet');
+  }
+
+  if (activeTab === 'missions') {
+    return t('workspaceShell.missions');
+  }
+
+  if (activeTab === 'dashboard') {
+    return t('workspaceShell.dashboard');
+  }
+
   return 'Project';
 }
 

@@ -55,6 +55,7 @@ export type MainContentProps = {
   onNavigateToSession: (targetSessionId: string, options?: SessionNavigationOptions) => void;
   onSessionEstablished: (sessionId: string, context: SessionEstablishedContext) => void;
   onShowSettings: (tab?: SettingsMainTab) => void;
+  onStartNewChat: () => void;
   externalMessageUpdate: number;
   newSessionTrigger: number;
 };

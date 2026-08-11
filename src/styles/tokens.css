@@ -344,6 +344,10 @@
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
     }
+
+    .leo-squish:active:not(:disabled) {
+      transform: none !important;
+    }
   }
 }
 
@@ -495,6 +499,34 @@
     animation: dash-pop var(--dur-base) var(--ease-standard);
   }
 
+  /* Tactile press: quick compression, slower spring release. Adapted from
+     Leotexiao's Squish Button at a restrained 0.96 scale for dense desktop UI. */
+  .leo-squish {
+    transition: transform 500ms cubic-bezier(0.34, 1.56, 0.64, 1),
+      box-shadow var(--dur-fast) var(--ease-standard),
+      border-color var(--dur-fast) var(--ease-standard),
+      background-color var(--dur-fast) var(--ease-standard),
+      color var(--dur-fast) var(--ease-standard);
+  }
+  .leo-squish:active:not(:disabled) {
+    transform: scale(0.96);
+    transition-duration: 80ms;
+    transition-timing-function: ease-out;
+  }
+
+  /* Idle → loading status morph, used by real network actions rather than a
+     decorative timer. */
+  .leo-status-pill[data-state='loading'] {
+    border-color: hsl(var(--primary) / 0.35);
+    background: hsl(var(--primary) / 0.09);
+    color: hsl(var(--primary));
+  }
+
+  /* Network-derived progress settles gently when a refreshed value arrives. */
+  .leo-elastic-progress {
+    transition: width 900ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
   /* Section divider label with flanking rules. */
   .dash-section-label {
     display: flex;
@@ -512,4 +544,3 @@
     background: hsl(var(--border) / 0.6);
   }
 }
-

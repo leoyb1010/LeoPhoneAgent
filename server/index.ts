@@ -106,12 +106,15 @@ app.get('/health', (req, res) => {
 // LeoPhoneAgent harness 面(自带 Bearer 鉴权,与本机 UI token 隔离)。
 // 挂两处:/leophone 前缀给 tailscale serve/反代直连;根路径别名给中继透传
 // (/harness/*、/v1/*;/health 由上面的公共端点先命中,形状兼容)。
-app.use('/api', fleetRoutes);
 app.use('/leophone', leophoneRoutes);
 app.use(leophoneRoutes);
 
 // Optional API key validation (if configured)
 app.use('/api', validateApiKey);
+
+// Fleet reads relay metadata and can answer privileged approvals. It belongs
+// behind the same local-user authentication boundary as every other UI API.
+app.use('/api', authenticateToken, fleetRoutes);
 
 // Authentication routes (public)
 app.use('/api/auth', authRoutes);

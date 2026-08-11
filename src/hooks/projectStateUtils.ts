@@ -308,7 +308,7 @@ export const removeSessionFromProject = (project: Project, sessionIdToDelete: st
   return updatedProject;
 };
 
-const VALID_TABS: Set<string> = new Set(['dashboard', 'chat', 'files', 'shell', 'git', 'tasks', 'browser', 'missions']);
+const VALID_TABS: Set<string> = new Set(['dashboard', 'chat', 'files', 'shell', 'git', 'tasks', 'browser', 'missions', 'fleet']);
 
 export const isValidTab = (tab: string): tab is AppTab => {
   return VALID_TABS.has(tab) || tab.startsWith('plugin:');

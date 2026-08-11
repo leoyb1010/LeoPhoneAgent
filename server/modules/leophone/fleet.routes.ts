@@ -17,6 +17,7 @@ import { resolveRelayConfig } from './relay-client.service.js';
 const router: express.Router = express.Router();
 
 const REQUEST_TIMEOUT_MS = 15_000;
+const SNAPSHOT_CACHE_MS = 3_000;
 
 type RelayTarget = { base: string; key: string };
 
@@ -63,6 +64,77 @@ type MachineRow = {
   sessions: Array<Record<string, unknown>>;
 };
 
+type SnapshotMachine = {
+  name: string;
+  online: boolean;
+  reachable: boolean;
+  sessions: Array<Record<string, unknown>>;
+};
+
+type SnapshotCache = {
+  base: string;
+  key: string;
+  expiresAt: number;
+  promise: Promise<SnapshotMachine[]>;
+};
+
+let snapshotCache: SnapshotCache | null = null;
+
+/**
+ * Fleet 与 approvals 是同屏并发请求。旧实现会各自拉一次 /machines，
+ * 再把每台 Mac 的 sessions 也各拉一次；三台机器就是一次刷新 8 个中继
+ * 请求。这个 3 秒 single-flight 快照让同屏请求复用同一轮真实数据，
+ * 不改变 15 秒 UI 刷新语义，也不会把状态长期缓存。
+ */
+async function loadFleetSnapshot(target: RelayTarget, forceFresh = false): Promise<SnapshotMachine[]> {
+  const now = Date.now();
+  if (!forceFresh
+    && snapshotCache
+    && snapshotCache.base === target.base
+    && snapshotCache.key === target.key
+    && snapshotCache.expiresAt > now) {
+    return snapshotCache.promise;
+  }
+
+  const promise = (async () => {
+    const payload = (await relayFetch('/machines', target)) as {
+      machines?: Array<{ name?: string; online?: boolean }>;
+    };
+    return Promise.all((payload.machines ?? []).map(async (machine): Promise<SnapshotMachine> => {
+      const name = String(machine.name ?? '');
+      const base: SnapshotMachine = {
+        name,
+        online: machine.online === true,
+        reachable: false,
+        sessions: [],
+      };
+      if (!base.online) return base;
+      try {
+        const detail = (await relayFetch(
+          `/m/${encodeURIComponent(name)}/harness/sessions`,
+          target,
+        )) as { sessions?: Array<Record<string, unknown>> };
+        return { ...base, reachable: true, sessions: detail.sessions ?? [] };
+      } catch {
+        return base;
+      }
+    }));
+  })();
+
+  snapshotCache = {
+    base: target.base,
+    key: target.key,
+    expiresAt: now + SNAPSHOT_CACHE_MS,
+    promise,
+  };
+  try {
+    return await promise;
+  } catch (error) {
+    if (snapshotCache?.promise === promise) snapshotCache = null;
+    throw error;
+  }
+}
+
 /** 舰队总览:每台机器 + 它上面的会话与待审批。 */
 router.get('/leophone/fleet', async (_req, res) => {
   const target = relayTarget();
@@ -71,38 +143,19 @@ router.get('/leophone/fleet', async (_req, res) => {
     return;
   }
   try {
-    const payload = (await relayFetch('/machines', target)) as {
-      machines?: Array<{ name?: string; online?: boolean }>;
-    };
-    const machines = payload.machines ?? [];
-    const rows: MachineRow[] = await Promise.all(
-      machines.map(async (machine) => {
-        const name = String(machine.name ?? '');
-        const base: MachineRow = {
-          name,
-          online: machine.online === true,
-          reachable: false,
-          activeCount: 0,
-          sessions: [],
-        };
-        if (!base.online) return base;
-        try {
-          const detail = (await relayFetch(
-            `/m/${encodeURIComponent(name)}/harness/sessions`,
-            target,
-          )) as { sessions?: Array<Record<string, unknown>> };
-          const sessions = detail.sessions ?? [];
-          const active = sessions.filter((s) =>
-            ['starting', 'running', 'idle', 'waiting_for_approval'].includes(String(s.status)),
-          );
-          // reachable 与 online 是两件事:注册着但服务没响应也算不可达,
-          // 不能把它显示成"空闲"。
-          return { ...base, reachable: true, activeCount: active.length, sessions: active };
-        } catch {
-          return base;
-        }
-      }),
-    );
+    const snapshot = await loadFleetSnapshot(target);
+    const rows: MachineRow[] = snapshot.map((machine) => {
+      const active = machine.sessions.filter((session) =>
+        ['starting', 'running', 'idle', 'waiting_for_approval'].includes(String(session.status)),
+      );
+      return {
+        name: machine.name,
+        online: machine.online,
+        reachable: machine.reachable,
+        activeCount: active.length,
+        sessions: active,
+      };
+    });
     res.json({ configured: true, machines: rows });
   } catch (error) {
     res.status(502).json({
@@ -119,39 +172,25 @@ router.get('/leophone/approvals', async (_req, res) => {
     return;
   }
   try {
-    const payload = (await relayFetch('/machines', target)) as {
-      machines?: Array<{ name?: string; online?: boolean }>;
-    };
+    const snapshot = await loadFleetSnapshot(target);
     const approvals: Array<Record<string, unknown>> = [];
-    await Promise.all(
-      (payload.machines ?? [])
-        .filter((m) => m.online === true)
-        .map(async (machine) => {
-          const name = String(machine.name ?? '');
-          try {
-            const detail = (await relayFetch(
-              `/m/${encodeURIComponent(name)}/harness/sessions`,
-              target,
-            )) as { sessions?: Array<Record<string, unknown>> };
-            for (const session of detail.sessions ?? []) {
-              const pending = (session.pending_approvals as Array<Record<string, unknown>>) ?? [];
-              for (const approval of pending) {
-                approvals.push({
-                  machine: name,
-                  session_id: session.session_id,
-                  harness: session.harness,
-                  seq: session.seq ?? 0,
-                  approval_id: approval.approval_id,
-                  command: approval.command ?? '',
-                  choices: approval.choices ?? ['once', 'deny'],
-                });
-              }
-            }
-          } catch {
-            // 单台不可达不影响其余
-          }
-        }),
-    );
+    for (const machine of snapshot) {
+      if (!machine.online || !machine.reachable) continue;
+      for (const session of machine.sessions) {
+        const pending = (session.pending_approvals as Array<Record<string, unknown>>) ?? [];
+        for (const approval of pending) {
+          approvals.push({
+            machine: machine.name,
+            session_id: session.session_id,
+            harness: session.harness,
+            seq: session.seq ?? 0,
+            approval_id: approval.approval_id,
+            command: approval.command ?? '',
+            choices: approval.choices ?? ['once', 'deny'],
+          });
+        }
+      }
+    }
     // 最近的排前面 —— 放行 shell 命令时默认选中的必须是最新那条
     approvals.sort((a, b) => Number(b.seq ?? 0) - Number(a.seq ?? 0));
     res.json({ configured: true, approvals });
@@ -170,16 +209,38 @@ router.post('/leophone/approvals/respond', async (req, res) => {
     return;
   }
   const { machine, session_id: sessionId, approval_id: approvalId, choice } = req.body ?? {};
-  if (!machine || !sessionId || !approvalId || !choice) {
+  if (![machine, sessionId, approvalId, choice].every((value) => typeof value === 'string' && value.length > 0 && value.length <= 512)) {
     res.status(400).json({ error: { message: 'machine/session_id/approval_id/choice required' } });
     return;
   }
   try {
+    // Never proxy an arbitrary renderer-supplied choice. Re-read the live
+    // approval and allow only the options advertised by that exact session.
+    const snapshot = await loadFleetSnapshot(target, true);
+    const targetMachine = snapshot.find((candidate) => candidate.name === machine);
+    const targetSession = targetMachine?.sessions.find((session) => session.session_id === sessionId);
+    const pending = Array.isArray(targetSession?.pending_approvals)
+      ? targetSession.pending_approvals as Array<Record<string, unknown>>
+      : [];
+    const targetApproval = pending.find((approval) => approval.approval_id === approvalId);
+    if (!targetApproval) {
+      res.status(409).json({ error: { message: 'approval is no longer pending' } });
+      return;
+    }
+    const allowedChoices = Array.isArray(targetApproval.choices)
+      ? targetApproval.choices.filter((item): item is string => typeof item === 'string')
+      : ['once', 'deny'];
+    if (!allowedChoices.includes(choice)) {
+      res.status(400).json({ error: { message: 'choice is not allowed for this approval' } });
+      return;
+    }
+
     const result = await relayPost(
-      `/m/${encodeURIComponent(String(machine))}/harness/sessions/${encodeURIComponent(String(sessionId))}/approval`,
+      `/m/${encodeURIComponent(machine)}/harness/sessions/${encodeURIComponent(sessionId)}/approval`,
       target,
       { approval_id: approvalId, choice },
     );
+    snapshotCache = null;
     res.json({ ok: true, result });
   } catch (error) {
     // 送不到就明说,不能让 UI 把卡片清掉而 CLI 还在等

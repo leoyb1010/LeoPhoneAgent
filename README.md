@@ -101,7 +101,7 @@ npm install
 # 开发（前端 + 服务并行）
 npm run dev
 
-# 桌面开发（Electron 指向本地服务）
+# 桌面开发（一条命令启动 Electron ABI 后端、Vite 与桌面壳）
 npm run desktop:dev
 
 # 完整构建（前端 + 服务）
@@ -113,7 +113,7 @@ npm run desktop:dist:mac
 
 质量检查：`npm run typecheck` · `npm run lint`
 
-> 注意：运行时原生依赖（better-sqlite3 等）按 Electron ABI 编译，服务端脚本需用 Electron 的 Node 运行。
+> `desktop:dev` 会自动用 Electron 的 Node 启动服务端，并统一本地端口与开发令牌，避免 `38473` 未就绪或原生模块 ABI 不一致。
 
 ## 🖊️ 签名与公证（对外分发）
 

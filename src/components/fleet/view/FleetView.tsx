@@ -1,19 +1,20 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Check,
+  CheckCircle2,
+  CircleAlert,
+  Clock3,
+  Copy,
+  LoaderCircle,
+  Monitor,
+  RefreshCw,
+  ShieldCheck,
+  Smartphone,
+} from 'lucide-react';
 
 import { apiClient } from '../../../utils/apiClient';
 
 import CollectionsMirror from './CollectionsMirror';
-
-/**
- * [T-fleet-mac] 舰队视图 + 审批中心。
- *
- * 手机上早就能"在一处看全部 Mac、批全部待审批";Mac 端一直只知道自己。
- * 这一页让两端对称:坐在任何一台前面都能掌握全局。
- *
- * 风格上刻意克制:没有插画、没有色块阵、没有装饰图标。一台机器一行,
- * 状态用一个小圆点表达,剩下全是可读的字。要看的是"哪台在跑什么、
- * 谁在等我拍板",不是看图。
- */
 
 type Session = {
   session_id: string;
@@ -41,34 +42,93 @@ type Approval = {
 };
 
 const POLL_MS = 15_000;
+const RELAY_CONFIG_PATH = '~/.leoagent/relay.json';
+
+function approvalChoiceLabel(choice: string): string {
+  switch (choice.toLowerCase()) {
+    case 'once':
+    case 'allow_once':
+      return '批准一次';
+    case 'always':
+    case 'allow_always':
+    case 'session':
+      return '本会话允许';
+    case 'deny':
+    case 'reject':
+      return '拒绝';
+    default:
+      return choice;
+  }
+}
+
+function isDenyChoice(choice: string): boolean {
+  const normalized = choice.toLowerCase();
+  return ['deny', 'reject', 'cancel', 'abort', 'decline', 'never', 'disallow', 'no', '放弃', '拒绝']
+    .some((word) => normalized === word || normalized.includes(word));
+}
+
+function isAllowChoice(choice: string): boolean {
+  const normalized = choice.toLowerCase();
+  return ['once', 'allow_once', 'always', 'allow_always', 'session', 'allow', 'approve', 'accept', 'yes']
+    .includes(normalized);
+}
+
+function approvalKey(approval: Approval): string {
+  return `${approval.machine}:${approval.session_id}:${approval.approval_id}`;
+}
+
+function machineStatus(machine: Machine): { label: string; tone: string } {
+  if (!machine.online) return { label: '离线', tone: 'bg-muted-foreground' };
+  if (!machine.reachable) return { label: '没有响应', tone: 'bg-warning' };
+  if (machine.sessions.some((session) => session.waiting_for_approval)) return { label: '等待审批', tone: 'bg-warning' };
+  if (machine.activeCount > 0) return { label: `${machine.activeCount} 个进行中`, tone: 'bg-success' };
+  return { label: '空闲', tone: 'bg-success' };
+}
 
 export default function FleetView() {
   const [machines, setMachines] = useState<Machine[]>([]);
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [configured, setConfigured] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
-
+  const [busy, setBusy] = useState<Map<string, string>>(() => new Map());
+  const [copied, setCopied] = useState(false);
   const inFlight = useRef(false);
+  const hasLoaded = useRef(false);
+  const busyApprovals = useRef(new Set<string>());
 
   const load = useCallback(async () => {
-    // 门控:后台标签不打接口(fleet 一次最坏 30s);上一轮没回来不叠发
-    if (document.visibilityState === 'hidden') return;
-    if (inFlight.current) return;
+    if (document.visibilityState === 'hidden' || inFlight.current) return;
     inFlight.current = true;
+    if (hasLoaded.current) setRefreshing(true);
     try {
-      const [fleet, pending] = await Promise.all([
+      const [fleetResult, pendingResult] = await Promise.allSettled([
         apiClient.get<{ configured?: boolean; machines?: Machine[] }>('/api/leophone/fleet'),
         apiClient.get<{ approvals?: Approval[] }>('/api/leophone/approvals'),
       ]);
-      setConfigured(fleet?.configured !== false);
-      setMachines(fleet?.machines ?? []);
-      setApprovals(pending?.approvals ?? []);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '读取失败');
+      const failures: string[] = [];
+      if (fleetResult.status === 'fulfilled') {
+        setConfigured(fleetResult.value?.configured !== false);
+        setMachines(fleetResult.value?.machines ?? []);
+      } else {
+        failures.push(`Mac 状态：${fleetResult.reason instanceof Error ? fleetResult.reason.message : '读取失败'}`);
+      }
+      if (pendingResult.status === 'fulfilled') {
+        setApprovals(pendingResult.value?.approvals ?? []);
+      } else {
+        failures.push(`待审批：${pendingResult.reason instanceof Error ? pendingResult.reason.message : '读取失败'}`);
+      }
+      setError(failures.length > 0 ? `部分数据未更新（${failures.join('；')}）` : null);
+      if (fleetResult.status === 'fulfilled' || pendingResult.status === 'fulfilled') {
+        setLastUpdatedAt(new Date());
+      }
     } finally {
       inFlight.current = false;
+      setLoading(false);
+      setRefreshing(false);
+      hasLoaded.current = true;
     }
   }, []);
 
@@ -78,13 +138,23 @@ export default function FleetView() {
     void load();
     const timer = setInterval(() => {
       void load();
-      setTick((v) => v + 1);
+      setTick((value) => value + 1);
     }, POLL_MS);
-    return () => clearInterval(timer);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') void load();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [load]);
 
   const respond = async (approval: Approval, choice: string) => {
-    setBusy(approval.approval_id);
+    const key = approvalKey(approval);
+    if (busyApprovals.current.has(key)) return;
+    busyApprovals.current.add(key);
+    setBusy((current) => new Map(current).set(key, choice));
     try {
       await apiClient.post('/api/leophone/approvals/respond', {
         machine: approval.machine,
@@ -92,121 +162,227 @@ export default function FleetView() {
         approval_id: approval.approval_id,
         choice,
       });
+      setApprovals((current) => current.filter((item) => approvalKey(item) !== key));
       await load();
-    } catch (e) {
-      // 送不到就留着卡片并说明原因 —— 清掉它而 CLI 还在等是最坏的结果
-      setError(e instanceof Error ? e.message : '应答未送达,请重试');
+    } catch (respondError) {
+      setError(respondError instanceof Error ? respondError.message : '应答没有送达，请重试');
     } finally {
-      setBusy(null);
+      busyApprovals.current.delete(key);
+      setBusy((current) => {
+        const next = new Map(current);
+        next.delete(key);
+        return next;
+      });
     }
   };
 
-  if (!configured) {
-    return (
-      <div className="p-6 text-sm text-muted-foreground">
-        <p className="text-foreground">还没有配置中继</p>
-        <p className="mt-2">
-          在 <code className="rounded-md bg-muted px-1">~/.leoagent/relay.json</code> 里填好中继地址与钥匙后,这里会显示全部 Mac。
-        </p>
-      </div>
-    );
-  }
+  const copyRelayPath = async () => {
+    try {
+      await navigator.clipboard.writeText(RELAY_CONFIG_PATH);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setError(`无法自动复制，请手动打开 ${RELAY_CONFIG_PATH}`);
+    }
+  };
+
+  const onlineCount = useMemo(() => machines.filter((machine) => machine.online && machine.reachable).length, [machines]);
+  const activeCount = useMemo(() => machines.reduce((sum, machine) => sum + machine.activeCount, 0), [machines]);
+  const onlineProgress = machines.length > 0 ? Math.round((onlineCount / machines.length) * 100) : 0;
+  const lastUpdatedLabel = lastUpdatedAt
+    ? lastUpdatedAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    : '尚未完成同步';
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto p-4">
-      {error && (
-        <p className="mb-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {error}
-        </p>
-      )}
-
-      {approvals.length > 0 && (
-        <section className="mb-5">
-          <h2 className="text-sm font-medium text-foreground">等你拍板 · {approvals.length}</h2>
-          <div className="mt-2 space-y-2">
-            {approvals.map((approval) => (
-              <div
-                key={`${approval.machine}-${approval.approval_id}`}
-                className="rounded-md border border-border p-3"
-              >
-                <p className="text-xs text-muted-foreground">
-                  {approval.machine} · {approval.harness}
+    <div className="h-full overflow-y-auto bg-background">
+      <div className="mx-auto max-w-[1120px] space-y-4 px-5 py-5 lg:px-8 lg:py-7">
+        <section className="rounded-xl border border-border bg-card px-5 py-5 shadow-elevation-1 lg:px-6">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="flex min-w-0 items-start gap-4">
+              <span className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Monitor className="h-6 w-6" />
+              </span>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">LeoPhoneAgent · 跨端执行</p>
+                <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-foreground">我的 Mac</h1>
+                <p className="mt-1 max-w-[680px] text-sm leading-6 text-muted-foreground">
+                  这里只管理三台 Mac 的任务、待审批操作与手机收藏。iPhone 本身可以独立完成工作；只有主动选择 Mac 的任务才会出现在这里。
                 </p>
-                <p className="mt-1 break-all font-mono text-sm text-foreground">
-                  {approval.command || '(无命令内容)'}
-                </p>
-                <div className="mt-2 flex gap-2">
-                  <button
-                    type="button"
-                    disabled={busy === approval.approval_id}
-                    onClick={() => void respond(approval, 'once')}
-                    className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground disabled:opacity-50"
-                  >
-                    批准一次
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy === approval.approval_id}
-                    onClick={() => void respond(approval, 'deny')}
-                    className="rounded-md border border-border px-3 py-1 text-xs text-muted-foreground disabled:opacity-50"
-                  >
-                    拒绝
-                  </button>
-                </div>
               </div>
-            ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => void load()}
+              disabled={loading || refreshing}
+              data-state={loading || refreshing ? 'loading' : 'idle'}
+              className="leo-status-pill leo-squish inline-flex min-h-10 items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm font-medium text-foreground hover:bg-accent disabled:cursor-wait disabled:opacity-70"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading || refreshing ? 'animate-spin' : ''}`} />
+              {loading || refreshing ? '同步中' : '刷新'}
+            </button>
+          </div>
+
+          <div className="mt-5 grid gap-2.5 sm:grid-cols-3">
+            <div className="rounded-xl bg-secondary/65 px-4 py-3">
+              <p className="text-xs text-muted-foreground">在线 Mac</p>
+              <p className="mt-1 text-xl font-semibold text-foreground">{onlineCount} / {machines.length}</p>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-border/70" aria-hidden="true">
+                <div className="leo-elastic-progress h-full rounded-full bg-success" style={{ width: `${onlineProgress}%` }} />
+              </div>
+            </div>
+            <div className="rounded-xl bg-secondary/65 px-4 py-3">
+              <p className="text-xs text-muted-foreground">正在执行</p>
+              <p className="mt-1 text-xl font-semibold text-foreground">{activeCount}</p>
+            </div>
+            <div className="rounded-xl bg-secondary/65 px-4 py-3">
+              <p className="text-xs text-muted-foreground">等待拍板</p>
+              <p className="mt-1 text-xl font-semibold text-foreground">{approvals.length}</p>
+            </div>
           </div>
         </section>
-      )}
 
-      <section>
-        <h2 className="text-sm font-medium text-foreground">我的 Mac</h2>
-        <div className="mt-2 space-y-2">
-          {machines.length === 0 && (
-            <p className="text-sm text-muted-foreground">还没有 Mac 连上中继。</p>
-          )}
-          {machines.map((machine) => (
-            <div key={machine.name} className="rounded-md border border-border p-3">
-              <div className="flex items-baseline gap-2">
-                <span
-                  className={`h-2 w-2 rounded-full ${
-                    !machine.online || !machine.reachable
-                      ? 'bg-muted-foreground'
-                      : machine.sessions.some((s) => s.waiting_for_approval)
-                        ? 'bg-amber-500'
-                        : 'bg-emerald-500'
-                  }`}
-                />
-                <span className="text-sm font-medium text-foreground">{machine.name}</span>
-                <span className="text-xs text-muted-foreground">
-                  {!machine.online
-                    ? '离线'
-                    : !machine.reachable
-                      ? '没响应'
-                      : machine.activeCount > 0
-                        ? `${machine.activeCount} 个进行中`
-                        : '空闲'}
-                </span>
+        {error && (
+          <div role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/35 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <CircleAlert className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <span className="flex-1">{error}</span>
+            <button type="button" onClick={() => setError(null)} className="font-medium">关闭</button>
+          </div>
+        )}
+
+        {loading ? (
+          <section aria-live="polite" className="rounded-xl border border-border bg-card p-6 shadow-elevation-1">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <LoaderCircle className="h-5 w-5 animate-spin" />
+              </span>
+              <div>
+                <h2 className="text-base font-semibold text-foreground">正在同步三台 Mac</h2>
+                <p className="mt-0.5 text-sm text-muted-foreground">读取在线状态、进行中任务和待审批操作。</p>
               </div>
-              {machine.sessions.length > 0 && (
-                <ul className="mt-2 space-y-1">
-                  {machine.sessions.map((session) => (
-                    <li key={session.session_id} className="text-xs text-muted-foreground">
-                      {session.harness} · {session.status}
-                      {session.waiting_for_approval && (
-                        <span className="ml-1 text-amber-600">等审批</span>
-                      )}
-                      <span className="ml-1 opacity-60">{session.cwd}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
             </div>
-          ))}
-        </div>
-      </section>
+          </section>
+        ) : !configured ? (
+          <section className="rounded-xl border border-border bg-card p-6 text-center shadow-elevation-1">
+            <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Smartphone className="h-7 w-7" />
+            </span>
+            <h2 className="mt-4 text-xl font-semibold text-foreground">先连接自己的中继</h2>
+            <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
+              配好一把共享密钥后，MacBook Pro、Mac mini 和 Mac Studio 会自动出现在这里；手机走蜂窝网络也能控制。
+            </p>
+            <div className="mx-auto mt-5 max-w-lg rounded-xl border border-border bg-background p-3 text-left">
+              <p className="text-xs font-medium text-muted-foreground">中继配置文件</p>
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <code className="min-w-0 truncate text-sm text-foreground">{RELAY_CONFIG_PATH}</code>
+                <button type="button" onClick={() => void copyRelayPath()} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">
+                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  {copied ? '已复制' : '复制路径'}
+                </button>
+              </div>
+            </div>
+          </section>
+        ) : (
+          <>
+            {approvals.length > 0 && (
+              <section className="rounded-xl border border-warning/35 bg-card p-5 shadow-elevation-1">
+                <div className="flex items-center gap-3">
+                  <span className="bg-warning/12 flex h-10 w-10 items-center justify-center rounded-xl text-warning">
+                    <ShieldCheck className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <h2 className="text-base font-semibold text-foreground">等你拍板 · {approvals.length}</h2>
+                    <p className="text-xs text-muted-foreground">批准或拒绝后，结果会立即送回对应 Mac。</p>
+                  </div>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {approvals.map((approval) => (
+                    <article key={`${approval.machine}-${approval.approval_id}`} className="rounded-xl border border-border bg-background p-4">
+                      <p className="text-xs font-medium text-muted-foreground">{approval.machine} · {approval.harness}</p>
+                      <p className="mt-2 break-all rounded-lg bg-secondary/70 px-3 py-2 font-mono text-sm text-foreground">{approval.command || '(无命令内容)'}</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {(approval.choices?.length ? approval.choices : ['once', 'deny']).map((choice) => {
+                          const key = approvalKey(approval);
+                          const activeChoice = busy.get(key);
+                          const waiting = activeChoice !== undefined;
+                          const sendingThisChoice = activeChoice === choice;
+                          const deny = isDenyChoice(choice);
+                          const allow = isAllowChoice(choice);
+                          return (
+                            <button
+                              key={choice}
+                              type="button"
+                              disabled={waiting}
+                              onClick={() => void respond(approval, choice)}
+                              data-state={sendingThisChoice ? 'loading' : 'idle'}
+                              className={allow
+                                ? 'leo-squish inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:cursor-wait disabled:opacity-70'
+                                : deny
+                                  ? 'leo-squish inline-flex min-h-10 items-center gap-2 rounded-lg border border-destructive/35 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive disabled:cursor-wait disabled:opacity-50'
+                                  : 'leo-squish inline-flex min-h-10 items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground disabled:cursor-wait disabled:opacity-50'}
+                            >
+                              {sendingThisChoice
+                                ? <LoaderCircle className="h-4 w-4 animate-spin" />
+                                : allow && <CheckCircle2 className="h-4 w-4" />}
+                              {sendingThisChoice ? '发送中' : approvalChoiceLabel(choice)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            )}
 
-      <CollectionsMirror refreshTick={tick} />
+            <section className="rounded-[22px] border border-border bg-card p-5 shadow-elevation-1">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-semibold text-foreground">已连接的 Mac</h2>
+                  <p className="mt-0.5 text-xs text-muted-foreground">每 15 秒自动刷新 · 上次同步 {lastUpdatedLabel}</p>
+                </div>
+                <span className="rounded-full bg-success/10 px-2.5 py-1 text-xs font-medium text-success">{onlineCount} 在线</span>
+              </div>
+
+              {machines.length === 0 ? (
+                <div className="py-10 text-center">
+                  <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-secondary text-muted-foreground"><Monitor className="h-6 w-6" /></span>
+                  <h3 className="mt-3 text-base font-semibold text-foreground">中继已配置，正在等 Mac 上线</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">确认三台 Mac 都启动了 LeoAgent，然后刷新此页。</p>
+                </div>
+              ) : (
+                <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                  {machines.map((machine) => {
+                    const status = machineStatus(machine);
+                    return (
+                      <article key={machine.name} className="rounded-xl border border-border bg-background p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><Monitor className="h-5 w-5" /></span>
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2 py-1 text-xs text-muted-foreground"><span className={`h-2 w-2 rounded-full ${status.tone}`} />{status.label}</span>
+                        </div>
+                        <h3 className="mt-3 text-base font-semibold text-foreground">{machine.name}</h3>
+                        {machine.sessions.length === 0 ? (
+                          <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"><Clock3 className="h-3.5 w-3.5" />当前没有任务</p>
+                        ) : (
+                          <ul className="mt-3 space-y-2">
+                            {machine.sessions.map((session) => (
+                              <li key={session.session_id} className="rounded-lg bg-secondary/65 px-3 py-2 text-xs text-muted-foreground">
+                                <div className="flex items-center justify-between gap-2"><span className="font-medium text-foreground">{session.harness}</span><span>{session.status}</span></div>
+                                <p className="mt-1 truncate opacity-75" title={session.cwd}>{session.cwd}</p>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          </>
+        )}
+
+        <CollectionsMirror refreshTick={tick} />
+      </div>
     </div>
   );
 }

@@ -2,9 +2,10 @@ import {
   Activity,
   FolderKanban,
   GitBranch,
-  LayoutDashboard,
+  House,
   LayoutGrid,
   MessageSquare,
+  MonitorCog,
   Settings,
   SlidersHorizontal,
 } from 'lucide-react';
@@ -23,11 +24,11 @@ type DesktopAppRailProps = {
 };
 
 const primaryItems = [
-  { id: 'dashboard', labelKey: 'workspaceShell.dashboard', icon: LayoutDashboard, tab: 'dashboard' as AppTab, fallback: '首页' },
-  { id: 'projects', labelKey: 'workspaceShell.projects', icon: FolderKanban, tab: 'files' as AppTab, fallback: '项目' },
+  { id: 'dashboard', labelKey: 'workspaceShell.dashboard', icon: House, tab: 'dashboard' as AppTab, fallback: '首页' },
   { id: 'chat', labelKey: 'workspaceShell.chat', icon: MessageSquare, tab: 'chat' as AppTab, fallback: '对话' },
-  { id: 'missions', labelKey: 'workspaceShell.missions', icon: LayoutGrid, tab: 'missions' as AppTab, fallback: '任务' },
-  { id: 'git', labelKey: 'workspaceShell.changes', icon: GitBranch, tab: 'git' as AppTab, fallback: '变更' },
+  { id: 'fleet', labelKey: 'tabs.fleet', icon: MonitorCog, tab: 'fleet' as AppTab, fallback: 'Mac 控制台' },
+  { id: 'missions', labelKey: 'workspaceShell.missions', icon: LayoutGrid, tab: 'missions' as AppTab, fallback: '快速任务' },
+  { id: 'projects', labelKey: 'workspaceShell.projects', icon: FolderKanban, tab: 'files' as AppTab, fallback: '项目' },
 ];
 
 export default function DesktopAppRail({
@@ -66,6 +67,13 @@ export default function DesktopAppRail({
         })}
 
         <div className="my-2 h-px w-7 bg-border/70" />
+
+        <Tooltip content={t('workspaceShell.changes', { defaultValue: '变更' })} position="right">
+          <button type="button" aria-label={t('workspaceShell.changes', { defaultValue: '变更' })} onClick={() => onTabChange('git')} className={cn('leocodebox-rail-button', activeTab === 'git' && 'is-active')}>
+            <GitBranch className="h-[18px] w-[18px]" strokeWidth={activeTab === 'git' ? 2.1 : 1.7} />
+            <span>{t('workspaceShell.changes', { defaultValue: '变更' })}</span>
+          </button>
+        </Tooltip>
 
         <Tooltip content={t('workspaceShell.localLog')} position="right">
           <button type="button" aria-label={t('workspaceShell.localLog')} onClick={onShowLocalLog} className="leocodebox-rail-button">

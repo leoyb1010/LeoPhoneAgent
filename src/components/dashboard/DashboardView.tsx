@@ -16,6 +16,7 @@ type DashboardViewProps = {
   onNavigateToSession?: (sessionId: string) => void;
   onShowTab?: (tab: string) => void;
   onNewChat?: () => void;
+  onShowSettings?: () => void;
 };
 
 function todayIso(): string {
@@ -28,7 +29,7 @@ function todayIso(): string {
  * projects, middle = live sessions + missions, right = usage centre. Rich
  * hero on top, quick actions along the bottom. Cards stagger their entrance.
  */
-export default function DashboardView({ onNavigateToSession, onShowTab, onNewChat }: DashboardViewProps) {
+export default function DashboardView({ onNavigateToSession, onShowTab, onNewChat, onShowSettings }: DashboardViewProps) {
   const data = useDashboardData();
   const [runningCount, setRunningCount] = useState(0);
 
@@ -63,13 +64,39 @@ export default function DashboardView({ onNavigateToSession, onShowTab, onNewCha
 
   const handleRunningCount = useCallback((count: number) => setRunningCount(count), []);
 
+  const readyAgents = useMemo(
+    () => Object.values(data.providerAuth.data ?? {}).filter((provider) => provider.authenticated).length,
+    [data.providerAuth.data],
+  );
+
   return (
     <div className="h-full overflow-y-auto bg-background">
-      <div className="mx-auto max-w-[1400px] space-y-3 p-4">
-        <DashboardHero username={data.authUser.data?.username ?? 'local-user'} metrics={heroMetrics} onRefresh={data.refresh} />
+      <div className="mx-auto max-w-[1320px] space-y-4 px-5 py-5 lg:px-8 lg:py-7">
+        <DashboardHero
+          username={data.authUser.data?.username ?? 'local-user'}
+          metrics={heroMetrics}
+          readyAgents={readyAgents}
+          projectCount={data.projects.data?.length ?? 0}
+          onRefresh={data.refresh}
+          onNewChat={() => onNewChat?.()}
+          onShowFleet={() => onShowTab?.('fleet')}
+          onShowMissions={handleOpenMissions}
+          onShowSettings={() => onShowSettings?.()}
+        />
 
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
-          {/* Left: agent grid + projects overview (spans 5 on large). */}
+          <div className="flex flex-col gap-3 lg:col-span-7">
+            <RunningSessionsCard onOpenSession={handleOpenSession} onCountChange={handleRunningCount} delay={40} />
+            <MissionSummaryCard
+              missions={data.missions.data}
+              loading={data.missions.loading}
+              error={data.missions.error}
+              onOpenMissions={handleOpenMissions}
+              onRetry={data.refresh}
+              delay={80}
+            />
+          </div>
+
           <div className="flex flex-col gap-3 lg:col-span-5">
             <AgentGridCard
               cliTools={data.cliTools.data}
@@ -77,7 +104,7 @@ export default function DashboardView({ onNavigateToSession, onShowTab, onNewCha
               loading={data.cliTools.loading || data.providerAuth.loading}
               error={data.cliTools.error ?? data.providerAuth.error}
               onRefresh={data.refresh}
-              delay={40}
+              delay={120}
             />
             <ProjectsOverviewCard
               projects={data.projects.data}
@@ -85,25 +112,18 @@ export default function DashboardView({ onNavigateToSession, onShowTab, onNewCha
               error={data.projects.error}
               onOpenProjects={handleOpenProjects}
               onRetry={data.refresh}
-              delay={80}
-            />
-          </div>
-
-          {/* Middle: live sessions + missions (spans 4). */}
-          <div className="flex flex-col gap-3 lg:col-span-4">
-            <RunningSessionsCard onOpenSession={handleOpenSession} onCountChange={handleRunningCount} delay={120} />
-            <MissionSummaryCard
-              missions={data.missions.data}
-              loading={data.missions.loading}
-              error={data.missions.error}
-              onOpenMissions={handleOpenMissions}
-              onRetry={data.refresh}
               delay={160}
             />
           </div>
+        </div>
 
-          {/* Right: usage centre + Leoapi gateway (spans 3). */}
-          <div className="flex flex-col gap-3 lg:col-span-3">
+        <details className="group rounded-xl border border-border bg-card shadow-elevation-1">
+          <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium text-foreground">
+            <span>工程与用量详情</span>
+            <span className="text-xs font-normal text-muted-foreground group-open:hidden">需要时展开，不打扰日常任务</span>
+            <span className="hidden text-xs font-normal text-muted-foreground group-open:inline">收起详情</span>
+          </summary>
+          <div className="grid grid-cols-1 gap-3 border-t border-border p-3 lg:grid-cols-3">
             <UsageCenterCard
               usage={data.usage.data}
               quota={data.quota.data}
@@ -111,14 +131,14 @@ export default function DashboardView({ onNavigateToSession, onShowTab, onNewCha
               loading={data.usage.loading}
               error={data.usage.error}
               onRefresh={data.refresh}
-              delay={200}
+              delay={0}
             />
-            <GatewayCard delay={240} />
-            <KernelCard delay={280} />
+            <GatewayCard delay={0} />
+            <KernelCard delay={0} />
           </div>
-        </div>
+        </details>
 
-        <QuickActionsBar onRunDoctor={handleRunDoctor} delay={240} />
+        <QuickActionsBar onRunDoctor={handleRunDoctor} delay={200} />
       </div>
     </div>
   );

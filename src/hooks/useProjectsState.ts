@@ -97,6 +97,7 @@ export function useProjectsState({
    * (for example websocket/project refresh updates) that could cause accidental resets.
    */
   const [newSessionTrigger, setNewSessionTrigger] = useState(0);
+  const pendingRootSelectionReset = useRef(false);
 
   const { attentionSessionIds, markSessionAttention, clearSessionAttention } = useProjectSessionAttention(
     selectedSession,
@@ -330,6 +331,14 @@ export function useProjectsState({
   }, [clearSessionAttention, selectedSession?.id, sessionId]);
 
   useEffect(() => {
+    // A root navigation is the explicit boundary between an old session and a
+    // fresh/project-level workspace. React may render once with the previous
+    // route param after the click; do not let that stale param repopulate the
+    // session we just cleared.
+    if (pendingRootSelectionReset.current) {
+      if (!sessionId) pendingRootSelectionReset.current = false;
+      return;
+    }
     if (!sessionId || projects.length === 0) {
       return;
     }
@@ -381,6 +390,7 @@ export function useProjectsState({
 
   const handleProjectSelect = useCallback(
     (project: Project) => {
+      pendingRootSelectionReset.current = true;
       setSelectedProject(project);
       setSelectedSession(null);
       navigate('/');
@@ -421,6 +431,7 @@ export function useProjectsState({
 
   const handleNewSession = useCallback(
     (project: Project) => {
+      pendingRootSelectionReset.current = true;
       setSelectedProject(project);
       setSelectedSession(null);
       setActiveTab('chat');

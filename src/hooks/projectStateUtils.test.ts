@@ -6,12 +6,17 @@ import type { Project } from '../types/app';
 import {
   mergeExpandedSessionPages,
   mergeProjectSessionPage,
+  isValidTab,
   persistHandoffSource,
   readHandoffSource,
   removeSessionFromProject,
   upsertSessionIntoProject,
   type SessionUpsertedEvent,
 } from './projectStateUtils';
+
+test('fleet is a valid persisted top-level workspace', () => {
+  assert.equal(isValidTab('fleet'), true);
+});
 
 // Minimal in-memory localStorage for the handoff-map helpers (Node has none).
 class MemoryStorage {

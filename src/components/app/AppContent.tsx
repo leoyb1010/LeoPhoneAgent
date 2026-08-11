@@ -254,6 +254,17 @@ function AppContentInner() {
     [registerOptimisticSession],
   );
 
+  const handleDashboardNewChat = useCallback(() => {
+    if (selectedProject) {
+      handleNewSession(selectedProject);
+      return;
+    }
+    setActiveTab('chat');
+  }, [handleNewSession, selectedProject, setActiveTab]);
+
+  const showProjectSidebar = !isMobile && activeTab !== 'dashboard' && activeTab !== 'fleet';
+  const isProjectIndependentTab = activeTab === 'dashboard' || activeTab === 'fleet';
+
   return (
     <div className="leocodebox-app-shell fixed inset-0 flex bg-background" style={{ bottom: 'var(--keyboard-height, 0px)' }}>
       {!isMobile && (
@@ -265,11 +276,11 @@ function AppContentInner() {
           onShowLocalLog={() => openLocalTool('feedback')}
         />
       )}
-      {!isMobile ? (
+      {showProjectSidebar ? (
         <div className="leocodebox-project-sidebar h-full flex-shrink-0 border-r border-border/70">
           <Sidebar {...sidebarSharedProps} />
         </div>
-      ) : (
+      ) : isMobile ? (
         <div
           className={`sheet-overlay fixed inset-0 z-50 flex ${sidebarOpen ? 'visible opacity-100' : 'invisible opacity-0'
             }`}
@@ -296,10 +307,10 @@ function AppContentInner() {
             <Sidebar {...sidebarSharedProps} />
           </div>
         </div>
-      )}
+      ) : null}
 
       <div className="leocodebox-workspace flex min-w-0 flex-1 flex-col">
-        {projectsError ? (
+        {projectsError && !isProjectIndependentTab ? (
           <main className="flex min-w-0 flex-1 items-center justify-center p-6">
             <div role="alert" className="max-w-lg border border-destructive/40 bg-card p-6 text-center">
               <h2 className="text-base font-semibold text-foreground">{t('errorBoundary.projectsLoad')}</h2>
@@ -330,6 +341,7 @@ function AppContentInner() {
           onNavigateToSession={handleNavigateToSession}
           onSessionEstablished={handleSessionEstablished}
           onShowSettings={openSettings}
+          onStartNewChat={handleDashboardNewChat}
           externalMessageUpdate={externalMessageUpdate}
           newSessionTrigger={newSessionTrigger}
         />}

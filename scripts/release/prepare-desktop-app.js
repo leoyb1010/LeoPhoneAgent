@@ -1,16 +1,22 @@
 #!/usr/bin/env node
-import { readFileSync } from 'node:fs';
+import { constants, readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..', '..');
-const stageDir = path.join(rootDir, '.desktop-build', 'desktop-app');
+const stageDir = process.env.LEOCODEBOX_DESKTOP_STAGE_DIR
+  ? path.resolve(process.env.LEOCODEBOX_DESKTOP_STAGE_DIR)
+  : path.join(rootDir, '.desktop-build', 'desktop-app');
 const macOutputDir = path.join(rootDir, 'release', 'desktop', 'mac-arm64');
+let removedDependencyConflictCopies = 0;
 
 const packageJson = JSON.parse(
   await fs.readFile(path.join(rootDir, 'package.json'), 'utf8'),
+);
+const packageLock = JSON.parse(
+  await fs.readFile(path.join(rootDir, 'package-lock.json'), 'utf8'),
 );
 
 function getElectronVersion() {
@@ -65,6 +71,109 @@ async function copyNodeModule(packageName) {
   return true;
 }
 
+function createConcurrencyGate(limit) {
+  let active = 0;
+  const waiters = [];
+
+  return async (task) => {
+    if (active >= limit) {
+      await new Promise((resolve) => waiters.push(resolve));
+    }
+    active += 1;
+    try {
+      return await task();
+    } finally {
+      active -= 1;
+      waiters.shift()?.();
+    }
+  };
+}
+
+const withCopySlot = createConcurrencyGate(24);
+
+async function copyTree(source, target, filter) {
+  if (!filter(source)) return;
+
+  const sourceStat = await withCopySlot(() => fs.lstat(source));
+  if (sourceStat.isDirectory()) {
+    await withCopySlot(() => fs.mkdir(target, { recursive: true }));
+    const entries = await withCopySlot(() => fs.readdir(source));
+    await Promise.all(entries.map((entry) => copyTree(
+      path.join(source, entry),
+      path.join(target, entry),
+      filter,
+    )));
+    return;
+  }
+
+  if (sourceStat.isSymbolicLink()) {
+    const linkTarget = await withCopySlot(() => fs.readlink(source));
+    await withCopySlot(() => fs.symlink(linkTarget, target));
+    return;
+  }
+
+  if (sourceStat.isFile()) {
+    await withCopySlot(async () => {
+      await fs.copyFile(source, target, constants.COPYFILE_FICLONE);
+      await fs.chmod(target, sourceStat.mode);
+    });
+  }
+}
+
+async function copyRuntimeNodeModules() {
+  const sourceRoot = path.join(rootDir, 'node_modules');
+  const targetRoot = path.join(stageDir, 'node_modules');
+  if (!(await pathExists(sourceRoot))) {
+    throw new Error('Required desktop build input is missing: node_modules');
+  }
+
+  await copyTree(sourceRoot, targetRoot, (source) => {
+      const relative = path.relative(sourceRoot, source);
+      if (!relative) return true;
+      const parts = relative.split(path.sep);
+      const leafName = parts.at(-1) || '';
+
+      // Type declarations and source maps are development/debug artifacts.
+      // Electron executes the emitted JavaScript, so staging these files only
+      // inflates ASAR size and multiplies small-file I/O on cloud-backed disks.
+      if (/\.d\.(?:ts|mts|cts)$/.test(leafName) || leafName.endsWith('.map')) return false;
+
+      // Finder/iCloud conflict copies are never part of the dependency graph.
+      // Reject them while copying so release staging does not need a second,
+      // very slow recursive walk across node_modules on Documents volumes.
+      if (/(?:\s2| copy|conflicted copy)\.[^.]+$/i.test(leafName)) {
+        removedDependencyConflictCopies += 1;
+        return false;
+      }
+
+      // package-lock v3 marks packages that are reachable only from
+      // devDependencies. electron-builder would prune these after staging, so
+      // copying them first is pure I/O. Check only exact package-root entries;
+      // descendants inherit the decision made when fs.cp enters that root.
+      const lockKey = `node_modules/${parts.join('/')}`;
+      if (packageLock.packages?.[lockKey]?.dev === true) return false;
+
+      // Vite's dependency cache is development-only, can contain thousands of
+      // tiny files, and is regenerated from package dependencies. Copying it
+      // into the release stage was the slowest part of packaging on iCloud /
+      // Documents volumes even though electron-builder never needs it.
+      if (parts[0].startsWith('.vite') || parts[0] === '.cache') return false;
+
+      // These platform binaries are deliberately downloaded on demand or
+      // replaced by the user's own CLI. Skip them before staging instead of
+      // spending minutes copying data that electron-builder removes later.
+      if (parts[0] === '@anthropic-ai'
+        && /^claude-agent-sdk-(?:darwin|linux|win32)-/.test(parts[1] || '')) return false;
+      if (parts[0] === '@openai'
+        && /^codex-(?:darwin|linux|win32)-/.test(parts[1] || '')) return false;
+      if (parts[0] === 'playwright-core'
+        && parts[1] === '.local-browsers'
+        && /^chromium-/.test(parts[2] || '')) return false;
+
+      return true;
+  });
+}
+
 async function findConflictCopies(directory) {
   const matches = [];
   for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
@@ -76,20 +185,6 @@ async function findConflictCopies(directory) {
     }
   }
   return matches;
-}
-
-async function removeConflictCopies(directory) {
-  let removed = 0;
-  for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
-    const fullPath = path.join(directory, entry.name);
-    if (entry.isDirectory()) {
-      removed += await removeConflictCopies(fullPath);
-    } else if (/(?:\s2| copy|conflicted copy)\.[^.]+$/i.test(entry.name)) {
-      await fs.rm(fullPath, { force: true });
-      removed += 1;
-    }
-  }
-  return removed;
 }
 
 function buildDesktopPackageJson(copiedOptionalDependencies) {
@@ -111,7 +206,7 @@ function buildDesktopPackageJson(copiedOptionalDependencies) {
       artifactName: packageJson.build.artifactName,
       electronVersion: getElectronVersion(),
       directories: {
-        output: '../../release/desktop',
+        output: path.join(rootDir, 'release', 'desktop'),
       },
       extraMetadata: {
         main: 'electron/main.js',
@@ -188,13 +283,7 @@ if (await pathExists(stagedVisualsRoot)) {
   }
 }
 
-await copyRequired('node_modules');
-
-// Finder/iCloud conflict copies occasionally appear inside installed packages.
-// They are never part of the dependency graph and must not enter a release.
-const removedDependencyConflictCopies = await removeConflictCopies(
-  path.join(stageDir, 'node_modules'),
-);
+await copyRuntimeNodeModules();
 
 const stagedBrowserRoot = path.join(stageDir, 'node_modules', 'playwright-core', '.local-browsers');
 if (await pathExists(stagedBrowserRoot)) {
@@ -234,7 +323,7 @@ await fs.writeFile(
   'utf8',
 );
 
-console.log(`Prepared thin desktop app at ${path.relative(rootDir, stageDir)}`);
+console.log(`Prepared thin desktop app at ${stageDir}`);
 console.log(`Removed dependency conflict copies: ${removedDependencyConflictCopies}`);
 console.log(`Runtime dependencies: ${copiedRuntimeDependencies.join(', ')}`);
 if (Object.keys(copiedOptionalDependencies).length) {
