@@ -1134,6 +1134,20 @@ final class BrowserUseManager: NSObject, ObservableObject {
 
     // MARK: - Get Cookies
 
+    /// 删掉超过 1 小时的 cookie env 文件。即用即弃物,不留明文凭证堆。
+    private func sweepStaleCookieEnvFiles(in dir: URL) {
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(
+            at: dir, includingPropertiesForKeys: [.contentModificationDateKey]) else { return }
+        let cutoff = Date().addingTimeInterval(-3600)
+        for url in files where url.lastPathComponent.hasPrefix("env_cookies_") {
+            let mod = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+            if let mod, mod < cutoff {
+                try? fm.removeItem(at: url)
+            }
+        }
+    }
+
     private func getCookies(keywords: [String]?, fuzzy: Bool) async -> BrowserActionResult {
         guard let pageURL = webView.url else {
             return .error("No page is currently loaded")
@@ -1225,8 +1239,19 @@ final class BrowserUseManager: NSObject, ObservableObject {
         let combinedHeader = shellEscape(cookieHeaderParts.joined(separator: "; "))
         envLines.append("export BROWSER_COOKIE_HEADER='\(combinedHeader)'")
 
+        // [T-offload-hygiene] 先清扫过期的 cookie env 文件:它们是给"当场
+        // source 进一条 shell 命令"用的即用即弃物,不该在磁盘上留成明文
+        // 凭证堆。超过 1 小时的一律删。
+        sweepStaleCookieEnvFiles(in: offloadsDir)
+
         let envContent = envLines.joined(separator: "\n") + "\n"
         try? envContent.write(to: envFileURL, atomically: true, encoding: .utf8)
+        // 写盘即加密:这份文件是明文 Cookie(含 HttpOnly),锁屏静置时
+        // 不该可读。completeUntilFirstUserAuthentication 让 shell 在会话内
+        // 仍能读到,重启后首解锁前不可读。
+        try? FileManager.default.setAttributes(
+            [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+            ofItemAtPath: envFileURL.path)
 
         // Build response (no raw values)
         var lines: [String] = []
