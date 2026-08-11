@@ -430,6 +430,11 @@ actor ChatStore {
     // MARK: - Database Setup
 
     private func openDatabase() {
+        // [T-db-protection] 聊天库里是对话全文,可能夹带凭证片段。落盘前
+        // 加文件保护:CompleteUntilFirstUserAuthentication —— 设备重启后
+        // 首次解锁前不可读(静置即加密),之后可读,所以后台任务/通知
+        // 仍能访问。用 Complete 会在锁屏时切断后台 DB 访问,不适合这个 app。
+        applyFileProtection()
         let result = sqlite3_open(dbURL.path, &db)
         if result != SQLITE_OK {
             logger.error("Failed to open database at \(self.dbURL.path): \(result)")
@@ -437,6 +442,20 @@ actor ChatStore {
         // Enable WAL mode for better concurrent read performance
         exec("PRAGMA journal_mode=WAL")
         exec("PRAGMA foreign_keys=ON")
+        applyFileProtection()   // WAL/SHM 是 open 后才生成的,再设一次
+    }
+
+    /// 给 db 及其 WAL/SHM 边车文件设文件保护。已存在才设,不存在的
+    /// (首次启动的边车)由第二次调用兜住。
+    private func applyFileProtection() {
+        let fm = FileManager.default
+        let attrs: [FileAttributeKey: Any] = [
+            .protectionKey: FileProtectionType.completeUntilFirstUserAuthentication
+        ]
+        for path in [dbURL.path, dbURL.path + "-wal", dbURL.path + "-shm"] {
+            guard fm.fileExists(atPath: path) else { continue }
+            try? fm.setAttributes(attrs, ofItemAtPath: path)
+        }
     }
 
     private func createTables() {

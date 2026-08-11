@@ -24,6 +24,13 @@ struct LeoReleaseNote: Identifiable {
 enum LeoReleaseNotes {
     static let all: [LeoReleaseNote] = [
         LeoReleaseNote(
+            version: "1.20.7",
+            date: "2026-08-11",
+            items: [
+                "🔐 OAuth 授权/令牌端点强制 HTTPS:此前代码放行明文 http(错误提示却写着必须 https),token 与 client_secret 可被中间人截走;现在与提示一致,只接受 https",
+                "🗄 聊天数据库加文件保护:对话内容锁屏静置时加密(设备重启首次解锁前不可读),后台任务与通知仍能访问——对话里可能夹带凭证片段,不该以明文躺在磁盘上",
+            ]),
+        LeoReleaseNote(
             version: "1.20.6",
             date: "2026-08-11",
             items: [

@@ -397,11 +397,14 @@ final class MCPOAuthController: NSObject, ObservableObject {
         guard !oauth.clientId.trimmingCharacters(in: .whitespaces).isEmpty else {
             throw OAuthError.badConfig(String(localized: "Client ID is required."))
         }
+        // 必须是 https,不是 hasPrefix("http") —— 后者把明文 http 也放行了,
+        // 而 token / client_secret 走明文 = 一路可被中间人截走。错误文案
+        // 本来就写着"must be a valid https URL",代码要对得上文案。
         guard let authBase = URL(string: oauth.authorizationEndpoint),
-              authBase.scheme?.hasPrefix("http") == true else {
+              authBase.scheme?.lowercased() == "https" else {
             throw OAuthError.badConfig(String(localized: "Authorization Endpoint must be a valid https URL."))
         }
-        guard URL(string: oauth.tokenEndpoint)?.scheme?.hasPrefix("http") == true else {
+        guard URL(string: oauth.tokenEndpoint)?.scheme?.lowercased() == "https" else {
             throw OAuthError.badConfig(String(localized: "Token Endpoint must be a valid https URL."))
         }
         let redirect = (oauth.redirectURI?.isEmpty == false ? oauth.redirectURI! : Self.defaultRedirectURI)
