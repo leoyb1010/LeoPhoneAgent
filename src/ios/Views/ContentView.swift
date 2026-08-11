@@ -2465,13 +2465,18 @@ struct ContentView: View {
         }
     }
 
-    private func agentHomeCard(compact: Bool) -> some View {
+    // 返回 AnyView 是刻意的,不是偷懒:这张卡片是 200+ 行的单表达式泛型
+    // 树,又被挂进 rootLayout→stackLayout→sessionList→stackList 这条本就
+    // 很深的类型链。真机主线程栈只有 1MB,Swift 运行时解码这棵合并后的
+    // 泛型元数据会递归爆栈(启动即 SIGSEGV);模拟器主线程栈 8MB 测不出。
+    // AnyView 在卡片边界截断类型累积,祖先链只看到一个不透明节点。
+    private func agentHomeCard(compact: Bool) -> AnyView {
         let hasProviders = !providerStore.instances.isEmpty
         let hasModel = !providerStore.modelGroups.isEmpty
         let activeCount = sidebarActivityTracker.activeSessions.count
         let columns = [GridItem(.adaptive(minimum: compact ? 76 : 88), spacing: 8)]
 
-        return VStack(alignment: .leading, spacing: compact ? 14 : 18) {
+        return AnyView(VStack(alignment: .leading, spacing: compact ? 14 : 18) {
             HStack(spacing: 12) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -2674,7 +2679,7 @@ struct ContentView: View {
                 .stroke(LeoTheme.ColorToken.separator.opacity(0.32), lineWidth: 0.5)
         }
         .shadow(color: .black.opacity(compact ? 0.04 : 0.07), radius: compact ? 8 : 14, y: compact ? 3 : 6)
-        .accessibilityElement(children: .contain)
+        .accessibilityElement(children: .contain))
     }
 
     private var homeTargetIsIPhone: Bool {
