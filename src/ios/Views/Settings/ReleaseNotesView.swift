@@ -24,6 +24,14 @@ struct LeoReleaseNote: Identifiable {
 enum LeoReleaseNotes {
     static let all: [LeoReleaseNote] = [
         LeoReleaseNote(
+            version: "1.21.0",
+            date: "2026-08-11",
+            items: [
+                "🔐 敏感操作按次审批:当某个任务要读取或写入网站登录凭证(Cookie)时,会先弹窗让你确认——「本会话允许 / 允许一次 / 拒绝」。这是那条「恶意网页→读 Cookie→外传」攻击链的关键一道人工闸",
+                "🛡 后台安全兜底:后台任务或 Siri 派发的会话没有确认窗口,这类凭证操作会被直接拒绝并提示「请在前台确认一次」,绝不静默放行、也不会把任务挂死",
+                "🔄 授权不跨会话:每切换一个对话,上一个对话给的「本会话允许」都会清空,不会被继承",
+            ]),
+        LeoReleaseNote(
             version: "1.20.9",
             date: "2026-08-11",
             items: [

@@ -216,6 +216,7 @@ struct AIChatView: View {
     @State private var macChatTarget: ComposerMacTarget?
     // [T-model-quickswitch] 输入条上的模型胶囊
     @State private var showQuickModelSwitch = false
+    @ObservedObject private var credGate = SensitiveToolGate.shared
     // [T-local-brain] 本机改写:选项菜单 + 进行中状态
     @State private var rewriting = false
     @ObservedObject private var fontSettings = FontSettings.shared
@@ -656,6 +657,20 @@ struct AIChatView: View {
                     refreshTitlePillSession()
                 }
                 titlePillEditSession = nil
+            }
+        }
+        // [T-cred-approval] 凭证按次审批弹窗。前台时敏感工具(读/写 Cookie)
+        // 执行前弹这个,三选一;后台不会走到这里(闸在后台直接安全拒绝)。
+        .alert("需要确认",
+               isPresented: Binding(
+                get: { credGate.pending != nil },
+                set: { if !$0 { credGate.resolve(.deny) } })) {
+            Button("本会话允许") { credGate.resolve(.allowSession) }
+            Button("允许一次") { credGate.resolve(.allowOnce) }
+            Button("拒绝", role: .cancel) { credGate.resolve(.deny) }
+        } message: {
+            if let p = credGate.pending {
+                Text("有一个任务想\(p.category.humanName)——来自 \(p.host)。只在你确实要它这么做时允许。")
             }
         }
         .alert(String(localized: "Force Pull Messages"), isPresented: $showForcePullConfirm) {

@@ -136,6 +136,9 @@ extension AIChatViewModel {
     /// matching how they appeared during the live session.
     func loadSession() async {
         guard let sessionId else { return }
+        // [T-cred-approval] 授权不跨会话继承:切进任何会话都清掉上一会话
+        // 授予的"本会话允许"。
+        await MainActor.run { SensitiveToolGate.shared.resetSession() }
 
         let sinceAppear = (CFAbsoluteTimeGetCurrent() - Self.onAppearTimestamp) * 1000
         logger.info("[SessionLoad] loadSession START T+\(String(format: "%.0f", sinceAppear))ms session=\(sessionId) msgs=\(self.messages.count)")
