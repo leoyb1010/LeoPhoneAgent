@@ -22,7 +22,10 @@ final class DebugServer: @unchecked Sendable {
         var addr = sockaddr_in()
         addr.sin_family = sa_family_t(AF_INET)
         addr.sin_port = port.bigEndian
-        addr.sin_addr.s_addr = INADDR_ANY
+        // 只绑回环:文档契约就是 http://localhost:8321(模拟器共享 Mac 网络栈,
+        // curl localhost 照常可用)。绑 INADDR_ANY 会让 DEBUG 真机在共享 WiFi
+        // 上暴露一个无鉴权、可读 Cookie 的 RPC 面,纯属多余的攻击面。
+        addr.sin_addr.s_addr = inet_addr("127.0.0.1")
 
         let bindResult = withUnsafePointer(to: &addr) { ptr in
             ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockPtr in

@@ -48,6 +48,9 @@ class LeoAgentServer:
     def __init__(self, key: str, home: Optional[Path] = None):
         self.key = key
         self.manager = HarnessManager(home=home)
+        # grok_token 的进程内互斥:flock 只隔离跨进程(CLI 自身),同进程的
+        # 并发请求必须先在这里排队,否则阻塞的 flock 会冻结整个事件循环。
+        self._grok_lock = asyncio.Lock()
 
     # -- auth --------------------------------------------------------------
 
@@ -101,58 +104,12 @@ class LeoAgentServer:
                 status=502)
         lock_file = open(auth_path + ".lock", "a+")
         try:
-            fcntl.flock(lock_file, fcntl.LOCK_EX)
-            with open(auth_path) as f:
-                data = json.load(f)
-            entry_key = None
-            for k, v in data.items():
-                if isinstance(v, dict) and v.get("key") and v.get("refresh_token"):
-                    entry_key = k
-                    break
-            if entry_key is None:
-                return web.json_response(
-                    {"error": {"message": "grok 登录记录不完整:在 Mac 终端重新 grok login"}},
-                    status=502)
-            entry = data[entry_key]
-            expires_at = entry.get("expires_at") or ""
-            try:
-                exp = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
-            except ValueError:
-                exp = datetime.now(timezone.utc)
-            if exp - datetime.now(timezone.utc) < timedelta(minutes=10):
-                import aiohttp as _aiohttp
-                issuer = str(entry.get("oidc_issuer") or "https://auth.x.ai")
-                async with _aiohttp.ClientSession() as http:
-                    async with http.get(
-                            issuer + "/.well-known/openid-configuration",
-                            timeout=_aiohttp.ClientTimeout(total=15)) as r:
-                        token_endpoint = (await r.json())["token_endpoint"]
-                    async with http.post(token_endpoint, data={
-                            "grant_type": "refresh_token",
-                            "refresh_token": entry["refresh_token"],
-                            "client_id": str(entry.get("oidc_client_id") or ""),
-                    }, timeout=_aiohttp.ClientTimeout(total=20)) as r:
-                        if r.status != 200:
-                            detail = (await r.text())[:200]
-                            return web.json_response(
-                                {"error": {"message": f"grok 登录刷新被拒({r.status}):在 Mac 终端重新 grok login。{detail}"}},
-                                status=502)
-                        tok = await r.json()
-                entry["key"] = tok["access_token"]
-                if tok.get("refresh_token"):
-                    entry["refresh_token"] = tok["refresh_token"]
-                new_exp = datetime.now(timezone.utc) + timedelta(seconds=int(tok.get("expires_in") or 3600))
-                entry["expires_at"] = new_exp.isoformat().replace("+00:00", "Z")
-                tmp = auth_path + ".tmp"
-                with open(tmp, "w") as f:
-                    json.dump(data, f, indent=2)
-                os.replace(tmp, auth_path)
-                exp = new_exp
-            return web.json_response({
-                "access_token": entry["key"],
-                "expires_at": exp.isoformat().replace("+00:00", "Z"),
-                "email": entry.get("email") or "",
-            })
+            # 两级锁:asyncio.Lock 串行化本进程内的并发请求(flock 对同进程
+            # 不同 fd 也互斥,若直接阻塞在事件循环线程上会连锁冻结整个 daemon);
+            # flock 本身放到工作线程获取,等 grok CLI 持锁刷新时不冻结事件循环。
+            async with self._grok_lock:
+                await asyncio.to_thread(fcntl.flock, lock_file, fcntl.LOCK_EX)
+                return await self._grok_token_locked(auth_path)
         except Exception as exc:
             return web.json_response(
                 {"error": {"message": f"grok token 获取失败: {exc}"}}, status=502)
@@ -162,6 +119,60 @@ class LeoAgentServer:
                 lock_file.close()
             except OSError:
                 pass
+
+    async def _grok_token_locked(self, auth_path: str) -> web.Response:
+        from datetime import datetime, timezone, timedelta
+        with open(auth_path) as f:
+            data = json.load(f)
+        entry_key = None
+        for k, v in data.items():
+            if isinstance(v, dict) and v.get("key") and v.get("refresh_token"):
+                entry_key = k
+                break
+        if entry_key is None:
+            return web.json_response(
+                {"error": {"message": "grok 登录记录不完整:在 Mac 终端重新 grok login"}},
+                status=502)
+        entry = data[entry_key]
+        expires_at = entry.get("expires_at") or ""
+        try:
+            exp = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+        except ValueError:
+            exp = datetime.now(timezone.utc)
+        if exp - datetime.now(timezone.utc) < timedelta(minutes=10):
+            import aiohttp as _aiohttp
+            issuer = str(entry.get("oidc_issuer") or "https://auth.x.ai")
+            async with _aiohttp.ClientSession() as http:
+                async with http.get(
+                        issuer + "/.well-known/openid-configuration",
+                        timeout=_aiohttp.ClientTimeout(total=15)) as r:
+                    token_endpoint = (await r.json())["token_endpoint"]
+                async with http.post(token_endpoint, data={
+                        "grant_type": "refresh_token",
+                        "refresh_token": entry["refresh_token"],
+                        "client_id": str(entry.get("oidc_client_id") or ""),
+                }, timeout=_aiohttp.ClientTimeout(total=20)) as r:
+                    if r.status != 200:
+                        detail = (await r.text())[:200]
+                        return web.json_response(
+                            {"error": {"message": f"grok 登录刷新被拒({r.status}):在 Mac 终端重新 grok login。{detail}"}},
+                            status=502)
+                    tok = await r.json()
+            entry["key"] = tok["access_token"]
+            if tok.get("refresh_token"):
+                entry["refresh_token"] = tok["refresh_token"]
+            new_exp = datetime.now(timezone.utc) + timedelta(seconds=int(tok.get("expires_in") or 3600))
+            entry["expires_at"] = new_exp.isoformat().replace("+00:00", "Z")
+            tmp = auth_path + ".tmp"
+            with open(tmp, "w") as f:
+                json.dump(data, f, indent=2)
+            os.replace(tmp, auth_path)
+            exp = new_exp
+        return web.json_response({
+            "access_token": entry["key"],
+            "expires_at": exp.isoformat().replace("+00:00", "Z"),
+            "email": entry.get("email") or "",
+        })
 
     async def create_session(self, request: web.Request) -> web.Response:
         if not self._authorized(request):
@@ -373,17 +384,18 @@ def main(argv: Optional[list] = None) -> int:
     # relay:主通路。配置了 LEOAGENT_RELAY_URL 就出站挂上去,手机从任何
     # 网络经 relay 找到这台机器——Mac 端不需要公网、不需要 VPN。
     relay_url = os.getenv("LEOAGENT_RELAY_URL", "").strip()
-    if relay_url:
-        from .relay_client import RelayClient
-
-        relay_key = os.getenv("LEOAGENT_RELAY_KEY", "").strip() or key
 
     app = server.build_app()
     if relay_url:
+        from .relay_client import RelayClient
+
         async def _start_relay(started: web.Application) -> None:
             client = RelayClient(relay_url,
                                  os.getenv("LEOAGENT_RELAY_KEY", "").strip() or key,
-                                 args.port, key)
+                                 args.port, key,
+                                 # 绑在具体 LAN IP 时 127.0.0.1 上没有监听,
+                                 # relay 回打必须走真实绑定地址。
+                                 local_host=args.host)
             # [T-leophone-push] 把 harness 的关键事件接到中继通道上:
             # 手机没连着时,这是审批请求唯一的触达路径。
             harness.set_event_sink(client.push_event)

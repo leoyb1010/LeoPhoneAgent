@@ -166,10 +166,21 @@ class Relay:
                         try:
                             queue.put_nowait(frame)
                         except asyncio.QueueFull:
-                            # 手机端读得慢时丢这一帧。绝不能让 QueueFull
-                            # 冲出消息循环——那会注销整台 Mac 的中继连接,
-                            # 一条慢流拖死全部功能。
-                            pass
+                            # 手机端读得慢。绝不能让 QueueFull 冲出消息循环
+                            # ——那会注销整台 Mac 的中继连接;但静默丢帧会给
+                            # live 流留下 seq 空洞且对端毫无感知。挤掉一帧改塞
+                            # stream_close,让手机立刻走重连 + replay 补齐
+                            # (与 harness 端慢订阅者哨兵同一策略)。
+                            try:
+                                queue.get_nowait()
+                            except asyncio.QueueEmpty:
+                                pass
+                            try:
+                                queue.put_nowait({"type": "stream_close",
+                                                  "id": frame.get("id"),
+                                                  "reason": "slow consumer"})
+                            except asyncio.QueueFull:
+                                pass
 
                 elif kind == "event":
                     # [T-leophone-push] Mac 主动上报的关键事件。手机不在线
@@ -236,8 +247,10 @@ class Relay:
                     },
                     category="HARNESS_APPROVAL",
                     time_sensitive=True,
-                
-                    collapse_id=f"{kind}-{event.get('session_id', '')}",
+                    # 审批按 approval_id 折叠而不是按会话:同会话并发两条
+                    # 待审批时,第二条横幅不能把第一条顶掉(各自独立可答);
+                    # outbox 补发的同一条审批依然被折叠。
+                    collapse_id=f"{kind}-{event.get('approval_id') or event.get('session_id', '')}",
                 )
             elif kind == "run.failed":
                 await self.apns.send_alert(

@@ -60,6 +60,10 @@ EVENT_RUN_COMPLETED = "run.completed"
 EVENT_RUN_FAILED = "run.failed"
 EVENT_RUN_CANCELLED = "run.cancelled"
 
+# 慢订阅者被摘除时塞进其队列的哨兵(按身份比较)。读端见到即关流,
+# 客户端凭 seq 重连补齐,避免"流活着但永远没数据"的静默悬挂。
+_SUBSCRIBER_OVERFLOW: Dict[str, Any] = {"event": "__subscriber.overflow__"}
+
 
 @dataclass
 class HarnessSpec:
@@ -458,8 +462,20 @@ class HarnessSession:
                 queue.put_nowait(event)
             except asyncio.QueueFull:
                 # A stalled subscriber is dropped rather than allowed to block
-                # the session; it can catch up from the log by seq.
+                # the session; it can catch up from the log by seq. 摘除时必须
+                # 让对端"知道"被摘了:否则 subscribe 排空残余后会永远挂在
+                # queue.get() 上——流活着但再无数据,客户端要等到自己的读超时
+                # (经中继最长 1 小时)才会重连。腾一格塞哨兵,让流立刻关闭,
+                # 客户端按 seq 重连补齐,被顶掉的那条也在补齐范围内。
                 self._subscribers.remove(queue)
+                try:
+                    queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    pass
+                try:
+                    queue.put_nowait(_SUBSCRIBER_OVERFLOW)
+                except asyncio.QueueFull:
+                    pass
 
     def replay(self, after_seq: int = 0) -> List[Dict[str, Any]]:
         """Everything since `after_seq`. This is what makes a phone that lost
@@ -505,6 +521,10 @@ class HarnessSession:
                 return
             while True:
                 event = await queue.get()
+                if event is _SUBSCRIBER_OVERFLOW:
+                    # 本订阅被 _emit 判定为慢消费者摘除了。立即关流,让客户端
+                    # 走重连+replay(after_seq) 补齐,而不是在空队列上挂到超时。
+                    return
                 if event.get("seq", 0) <= highest:
                     continue  # already delivered by the replay above
                 highest = event.get("seq", highest)
@@ -1077,6 +1097,13 @@ class HarnessManager:
             if prompt:
                 await session.send(prompt)
         except OSError as exc:
+            # start() 成功但 send(prompt) 失败时,子进程已 spawn、pump 已在跑:
+            # 必须先 stop 收割,否则进程既不在 sessions 里(shutdown_all 够不着)
+            # 又活着,daemon 退出后成孤儿;pump 还会把刚删的日志重建出来。
+            try:
+                await session.stop()
+            except Exception:  # noqa: BLE001
+                pass
             try:
                 log_path = self.sessions_dir / f"{session_id}.ndjson"
                 log_path.unlink(missing_ok=True)

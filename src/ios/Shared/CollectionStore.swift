@@ -175,13 +175,37 @@ enum CollectionStore {
 
     private static let ioQueue = DispatchQueue(label: "leo.collections.io")
 
+    /// [T-notes] 正文文件的串行队列。声明在这里而不是 NoteBodyStore,
+    /// 是因为本文件被 ShareExtension 一起编译而 NoteBodyStore 只在主 app ——
+    /// 删除条目时正文的清理必须与正文保存排同一条队列(见 delete)。
+    static let noteIOQueue = DispatchQueue(label: "leo.note.body", qos: .userInitiated)
+
     static func load() -> [CollectedItem] { ioQueue.sync { loadLocked() } }
 
     static func save(_ items: [CollectedItem]) { ioQueue.sync { saveLocked(items) } }
 
+    // ioQueue 只序列化本进程;ShareExtension 与主 app 各有一条 ioQueue,
+    // 两个进程并发读-改-写 items.json 还是 last-writer-wins,慢的一方
+    // 整份写回会抹掉另一方刚存的条目。所以叶子 IO 处再包一层
+    // NSFileCoordinator(系统级跨进程锁)。它在同进程重入会死锁 ——
+    // 只允许在 ioQueue 内的这几个 Locked 方法里各包一层,绝不嵌套。
+
     /// 队列内部使用,自身不再加锁 —— 嵌套 sync 会死锁。
     private static func loadLocked() -> [CollectedItem] {
-        guard let url = indexURL, let data = try? Data(contentsOf: url) else { return [] }
+        guard let url = indexURL else { return [] }
+        var items: [CollectedItem] = []
+        var coordError: NSError?
+        NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &coordError) { readURL in
+            items = decodeItems(at: readURL)
+        }
+        // 协调失败(极少)退化为直读:宁可读到一份可能过期的数据,也不能
+        // 返回空数组让调用方以为"库是空的"、下一次 save 把空写回去。
+        if coordError != nil { items = decodeItems(at: url) }
+        return items
+    }
+
+    private static func decodeItems(at url: URL) -> [CollectedItem] {
+        guard let data = try? Data(contentsOf: url) else { return [] }
         do {
             return try JSONDecoder().decode([CollectedItem].self, from: data)
         } catch {
@@ -196,15 +220,43 @@ enum CollectionStore {
 
     private static func saveLocked(_ items: [CollectedItem]) {
         guard let url = indexURL, let data = try? JSONEncoder().encode(items) else { return }
-        try? data.write(to: url, options: .atomic)
+        var coordError: NSError?
+        NSFileCoordinator().coordinate(writingItemAt: url, options: .forReplacing,
+                                       error: &coordError) { writeURL in
+            try? data.write(to: writeURL, options: .atomic)
+        }
+        if coordError != nil { try? data.write(to: url, options: .atomic) }
+    }
+
+    /// 读-改-写必须在**同一个**写协调块里完成才对另一个进程原子:
+    /// 分开的 coordinate(reading) + coordinate(writing) 之间,对方照样
+    /// 能插进来写一版,又回到 last-writer-wins。
+    private static func mutateLocked(_ transform: (inout [CollectedItem]) -> Void) {
+        guard let url = indexURL else { return }
+        var coordError: NSError?
+        NSFileCoordinator().coordinate(writingItemAt: url, options: .forMerging,
+                                       error: &coordError) { activeURL in
+            var items = decodeItems(at: activeURL)
+            transform(&items)
+            if let data = try? JSONEncoder().encode(items) {
+                try? data.write(to: activeURL, options: .atomic)
+            }
+        }
+        if coordError != nil {
+            var items = decodeItems(at: url)
+            transform(&items)
+            if let data = try? JSONEncoder().encode(items) {
+                try? data.write(to: url, options: .atomic)
+            }
+        }
     }
 
     static func add(_ new: [CollectedItem]) {
         guard !new.isEmpty else { return }
         ioQueue.sync {
-            var items = loadLocked()
-            items.insert(contentsOf: new, at: 0)
-            saveLocked(items)
+            mutateLocked { items in
+                items.insert(contentsOf: new, at: 0)
+            }
         }
     }
 
@@ -215,55 +267,63 @@ enum CollectionStore {
     /// 长路径一律用这个,只改自己的字段。
     static func mutate(id: String, _ transform: (inout CollectedItem) -> Void) {
         ioQueue.sync {
-            var items = loadLocked()
-            guard let i = items.firstIndex(where: { $0.id == id }) else { return }
-            transform(&items[i])
-            saveLocked(items)
+            mutateLocked { items in
+                guard let i = items.firstIndex(where: { $0.id == id }) else { return }
+                transform(&items[i])
+            }
         }
     }
 
     static func update(_ item: CollectedItem) {
         ioQueue.sync {
-            var items = loadLocked()
-            guard let i = items.firstIndex(where: { $0.id == item.id }) else { return }
-            items[i] = item
-            saveLocked(items)
+            mutateLocked { items in
+                guard let i = items.firstIndex(where: { $0.id == item.id }) else { return }
+                items[i] = item
+            }
         }
     }
 
     static func delete(ids: Set<String>) {
         ioQueue.sync {
-            var items = loadLocked()
-            for item in items where ids.contains(item.id) {
-                if item.kind == .file, let dir = filesDirectory {
-                    try? FileManager.default.removeItem(at: dir.appendingPathComponent(item.value))
+            mutateLocked { items in
+                for item in items where ids.contains(item.id) {
+                    if item.kind == .file, let dir = filesDirectory {
+                        try? FileManager.default.removeItem(at: dir.appendingPathComponent(item.value))
+                    }
+                    if let thumb = item.thumbnailFile, let dir = thumbsDirectory {
+                        try? FileManager.default.removeItem(at: dir.appendingPathComponent(thumb))
+                    }
+                    // 正文与版本快照一起清:只删索引会在容器里留下永远没人
+                    // 认领的文件,用户只会看到容量一直涨却找不到原因。
+                    //
+                    // 直接写文件操作而不调 NoteBodyStore —— 这个文件被
+                    // ShareExtension 一起编译,而 NoteBodyStore 只在主 app 里。
+                    if let body = item.bodyFile { removeBodyAndVersions(body) }
                 }
-                if let thumb = item.thumbnailFile, let dir = thumbsDirectory {
-                    try? FileManager.default.removeItem(at: dir.appendingPathComponent(thumb))
-                }
-                // 正文与版本快照一起清:只删索引会在容器里留下永远没人
-                // 认领的文件,用户只会看到容量一直涨却找不到原因。
-                //
-                // 直接写文件操作而不调 NoteBodyStore —— 这个文件被
-                // ShareExtension 一起编译,而 NoteBodyStore 只在主 app 里。
-                if let body = item.bodyFile { removeBodyAndVersions(body) }
+                items.removeAll { ids.contains($0.id) }
             }
-            items.removeAll { ids.contains($0.id) }
-            saveLocked(items)
         }
     }
 
     /// 删正文与它的全部版本快照。
+    ///
+    /// 排进 noteIOQueue 而不是就地删:正文保存(NoteBodyStore)走的正是
+    /// 这条串行队列,"关编辑器立刻删条目"时去抖存盘可能还排在队列里 ——
+    /// 就地删完文件后,那次 save 会把正文重写出来,而索引里已没有这条,
+    /// 文件成了永远没人认领的孤儿。同队列 FIFO 保证排队的 save 先跑、
+    /// 随后的删除把它连同新落的版本快照一起清干净。
     private static func removeBodyAndVersions(_ fileName: String) {
-        if let dir = notesDirectory {
-            try? FileManager.default.removeItem(at: dir.appendingPathComponent(fileName))
-        }
-        guard let versionDir = versionsDirectory,
-              let all = try? FileManager.default.contentsOfDirectory(
-                at: versionDir, includingPropertiesForKeys: nil) else { return }
-        let stem = (fileName as NSString).deletingPathExtension
-        for url in all where url.lastPathComponent.hasPrefix(stem + "@") {
-            try? FileManager.default.removeItem(at: url)
+        noteIOQueue.async {
+            if let dir = notesDirectory {
+                try? FileManager.default.removeItem(at: dir.appendingPathComponent(fileName))
+            }
+            guard let versionDir = versionsDirectory,
+                  let all = try? FileManager.default.contentsOfDirectory(
+                    at: versionDir, includingPropertiesForKeys: nil) else { return }
+            let stem = (fileName as NSString).deletingPathExtension
+            for url in all where url.lastPathComponent.hasPrefix(stem + "@") {
+                try? FileManager.default.removeItem(at: url)
+            }
         }
     }
 

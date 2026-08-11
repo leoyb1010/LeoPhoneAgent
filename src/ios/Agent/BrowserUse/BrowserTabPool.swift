@@ -713,6 +713,22 @@ final class BrowserTabPool: ObservableObject {
         action input: BrowserActionInput,
         singleTab: Bool = false
     ) async throws -> BrowserActionResult {
+        // [T-cred-approval] 敏感动作(读/写 Cookie)统一在这里过审批闸。
+        // 这是所有调用路径的单一收口——agent 工具分发和 shell CLI
+        // (minis-browser-use → BrowserUseOffloadBridge)都走 pool.execute,
+        // 闸放在上层任何一处都会留后门。前台弹确认挂起等待;后台无 UI
+        // 一律安全拒绝而不是挂死。
+        if let credCategory = Self.sensitiveCategory(for: input.action) {
+            let host = gateHost(for: input.tabId)
+            let ok = await SensitiveToolGate.shared.authorize(credCategory, host: host)
+            if !ok {
+                let denied = UIApplication.shared.applicationState == .active
+                    ? "用户拒绝了这次\(credCategory.humanName)。"
+                    : SensitiveToolGate.backgroundDeniedMessage
+                return .error(denied)
+            }
+        }
+
         let diagId = BrowserResourceMonitor.shared.actionWillStart(
             action: input.action.rawValue,
             url: input.url,
@@ -737,6 +753,29 @@ final class BrowserTabPool: ObservableObject {
             )
             throw error
         }
+    }
+
+    /// 敏感动作 → 审批类别。非敏感返回 nil(不拦)。目前只有 Cookie 读写
+    /// 属于凭证类;execute_js 读 document.cookie 拿不到 HttpOnly,不在此列。
+    static func sensitiveCategory(for action: BrowserAction) -> SensitiveToolGate.Category? {
+        switch action {
+        case .getCookies: return .readCredentials
+        case .setCookies: return .writeCredentials
+        default: return nil
+        }
+    }
+
+    /// 审批弹窗上显示的站点:目标 tab(显式 tab_id 或当前选中 tab)的
+    /// 真实 host。拿不到时返回「未知站点」占位——它和任何真实 host 的
+    /// grantKey 天然不同,占位授权不会放行真实站点。
+    private func gateHost(for tabId: Int?) -> String {
+        let tab = tabId.flatMap { id in tabs.first(where: { $0.id == id }) }
+            ?? tabs.first(where: { $0.id == selectedTabId })
+            ?? tabs.first
+        guard let tab else { return "未知站点" }
+        let url = tab.manager.webView.url ?? URL(string: tab.manager.currentURL)
+        guard let host = url?.host, !host.isEmpty else { return "未知站点" }
+        return host
     }
 
     private func executeInner(

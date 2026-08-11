@@ -25,8 +25,12 @@ struct NoteEditorView: View {
     @State private var title: String
     @State private var body_: String = ""
     @State private var loaded = false
-    /// 载入时的正文。用来判断这次打开有没有真的改过东西。
-    @State private var loadedBody = ""
+    /// 上一次**已持久化**的正文/标题。退出时与它比较判断要不要再落一次盘。
+    /// 基线必须跟着每次成功落盘走,不能停在初次载入那版:去抖保存已经
+    /// 写过中间态、用户又改回原文再退出,和初始基线比是"没改过",
+    /// 磁盘却定格在中间那版。
+    @State private var lastPersistedBody = ""
+    @State private var lastPersistedTitle: String
     @State private var previewing = false
     @State private var showVersions = false
     @State private var saveTask: Task<Void, Never>?
@@ -37,6 +41,7 @@ struct NoteEditorView: View {
         self.item = item
         self.onSaved = onSaved
         _title = State(initialValue: item.title ?? "")
+        _lastPersistedTitle = State(initialValue: item.title ?? "")
     }
 
     var body: some View {
@@ -124,7 +129,7 @@ struct NoteEditorView: View {
             // 几秒 —— 期间用户可能已经开始打字。无条件覆盖就是把那两秒
             // 的输入吃掉。用户开打了就以输入为准,回头补存。
             if body_.isEmpty { body_ = disk }
-            loadedBody = disk
+            lastPersistedBody = disk
             loaded = true
             if !body_.isEmpty, body_ != disk { scheduleSave() }
         }
@@ -145,9 +150,11 @@ struct NoteEditorView: View {
             let bodySnapshot = body_
             let titleSnapshot = title
             let target = item
-            // 只读打开(什么都没改)就不写盘:updatedAt 一动,这条笔记
-            // 就被顶到列表最前面 —— 点开看一眼不该改变它的位置。
-            guard bodySnapshot != loadedBody || titleSnapshot != (item.title ?? "") else { return }
+            // 相对上次落盘没有净改动就不写:一是只读打开不该动 updatedAt
+            // 把笔记顶到列表最前;二是比较对象必须是"上次已持久化"的内容
+            // 而不是初次载入的 —— 否则去抖保存过中间态后改回原文再退出,
+            // 会被误判"没改过"而跳过落盘。
+            guard bodySnapshot != lastPersistedBody || titleSnapshot != lastPersistedTitle else { return }
             Task { await Self.persist(body: bodySnapshot, title: titleSnapshot,
                                       item: target, onSaved: onSaved) }
         }
@@ -174,7 +181,14 @@ struct NoteEditorView: View {
 
     private func persist() async {
         guard loaded else { return }
-        await Self.persist(body: body_, title: title, item: item, onSaved: onSaved)
+        let bodySnapshot = body_
+        let titleSnapshot = title
+        await Self.persist(body: bodySnapshot, title: titleSnapshot, item: item, onSaved: onSaved)
+        // 基线跟着落盘走:之后"改回原样再退出"与这版比才是真的没改。
+        await MainActor.run {
+            lastPersistedBody = bodySnapshot
+            lastPersistedTitle = titleSnapshot
+        }
     }
 
     /// 静态版本:只吃传进来的值,不读任何 @State。视图已经消失时也能安全跑完。

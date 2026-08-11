@@ -848,6 +848,9 @@ func leoRelativeDate(_ date: Date) -> String {
 
 private struct CollectionCard: View {
     let item: CollectedItem
+    /// file 类条目的异步缩略图。原来在行里同步 UIImage(contentsOfFile:)
+    /// 把原图整张解码(最长边可达 2400px)再缩到 60×60,滚动掉帧。
+    @State private var fileThumb: UIImage?
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -913,6 +916,18 @@ private struct CollectionCard: View {
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
+        .task(id: item.value) {
+            // ThumbnailCache 用 ImageIO 直接产 120px 小图(不整张解码),
+            // 后台队列 + NSCache 都是现成的,直接复用。
+            guard item.kind == .file, item.thumbnailFile == nil,
+                  let dir = CollectionStore.filesDirectory else { return }
+            let image = await ThumbnailCache.shared.thumbnail(
+                for: dir.appendingPathComponent(item.value).path, maxSize: 120)
+            // 行被复用去显示别的条目时 task(id:) 会取消本任务 ——
+            // 别把旧条目的图填进新行。
+            guard !Task.isCancelled else { return }
+            fileThumb = image
+        }
     }
 
     private var displayTitle: String {
@@ -926,9 +941,8 @@ private struct CollectionCard: View {
            let dir = CollectionStore.thumbsDirectory,
            let image = UIImage(contentsOfFile: dir.appendingPathComponent(thumb).path) {
             Image(uiImage: image).resizable().scaledToFill()
-        } else if item.kind == .file,
-                  let dir = CollectionStore.filesDirectory,
-                  let image = UIImage(contentsOfFile: dir.appendingPathComponent(item.value).path) {
+        } else if item.kind == .file, let image = fileThumb {
+            // 异步缩略图就绪前先落到下面的占位分支,填充后自动刷新
             Image(uiImage: image).resizable().scaledToFill()
         } else {
             // [T-preview] 抓不到封面时不留白:用来源色 + 标题首字做占位,

@@ -496,25 +496,9 @@ extension AIChatViewModel {
         case "browser_use":
             var browserResult: BrowserActionResult
             if let input = BrowserActionInput.parse(from: argsJson) {
-                // [T-cred-approval] 读/写 Cookie 前过按次审批闸。前台弹确认
-                // (允许一次 / 本会话允许 / 拒绝),后台无 UI 一律安全拒绝
-                // 而不是挂死。get_cookies 正是审计画的凭证外泄链起点。
-                if let credCategory = sensitiveCategory(for: input.action) {
-                    let host = await currentBrowserHost()
-                    let ok = await SensitiveToolGate.shared.authorize(credCategory, host: host)
-                    if !ok {
-                        let denied = UIApplication.shared.applicationState == .active
-                            ? "用户拒绝了这次\(credCategory.humanName)。"
-                            : SensitiveToolGate.backgroundDeniedMessage
-                        browserResult = .error(denied)
-                        if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
-                            messages[msgIdx].blocks[blockIdx].content = browserResult.text
-                        }
-                        toolOutput = browserResult.text
-                        toolSuccess = false
-                        break
-                    }
-                }
+                // [T-cred-approval] 读/写 Cookie 的按次审批闸不在这里——已
+                // 下沉到 BrowserTabPool.execute(所有路径的单一收口,含
+                // shell 的 minis-browser-use),避免这里再审一次造成双弹窗。
                 do {
                     browserResult = try await browserTabPool.execute(action: input)
                 } catch {
@@ -1092,21 +1076,6 @@ extension AIChatViewModel {
 
     static func isDangerousRemoteCommand(_ command: String) -> Bool {
         dangerousRemotePattern(command) != nil
-    }
-
-    /// 敏感动作 → 审批类别。非敏感返回 nil(不拦)。
-    private func sensitiveCategory(for action: BrowserAction) -> SensitiveToolGate.Category? {
-        switch action {
-        case .getCookies: return .readCredentials
-        case .setCookies: return .writeCredentials
-        default: return nil
-        }
-    }
-
-    /// 审批弹窗上显示的站点标签。tab pool 没有便捷的"当前 URL"读口,
-    /// 而 host 只是给用户看的——用通用文案,不为它多发一次浏览器动作。
-    private func currentBrowserHost() async -> String {
-        "当前浏览的网站"
     }
 
 }

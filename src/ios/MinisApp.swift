@@ -90,6 +90,9 @@ struct MinisApp: App {
     @StateObject private var shareCoordinator = ShareCoordinator.shared
     @ObservedObject private var fontSettings = FontSettings.shared
     @ObservedObject private var configConfirmGate = ConfigConfirmationGate.shared
+    // [T-cred-approval] 凭证审批闸挂在根视图:agent 在会话列表/设置等任何
+    // 页面触发敏感工具时都能弹出审批,不再只有聊天页能响应。
+    @ObservedObject private var credGate = SensitiveToolGate.shared
     @Environment(\.scenePhase) private var scenePhase
     /// Set by the OpenWebAppIntent notification observer; drives a fullScreenCover
     /// presenting `WebAppWebViewScreen`. Cleared when the user dismisses the
@@ -198,6 +201,31 @@ struct MinisApp: App {
                     set: { _ in /* dismissal goes through gate.userReject() */ }
                 )) { _ in
                     ConfigConfirmSheet(gate: configConfirmGate)
+                }
+                // [T-cred-approval] 凭证按次审批弹窗。前台时敏感工具(读/写
+                // Cookie)执行前弹这个,三选一;后台不会走到这里(闸在后台
+                // 直接安全拒绝)。挂在根视图,任何页面都能弹出。
+                // 按钮 action 与 dismiss setter 会各回调一次且顺序未定义:
+                // 全部带 requestId 走幂等 resolve;dismiss 的兜底拒绝推迟一轮
+                // runloop,只在该请求确实没被任何按钮裁决时才生效。
+                .alert("需要确认",
+                       isPresented: Binding(
+                        get: { credGate.pending != nil },
+                        set: { presented in
+                            guard !presented else { return }
+                            let dismissedId = credGate.pending?.id
+                            Task { @MainActor in
+                                if let id = dismissedId {
+                                    credGate.resolve(.deny, requestId: id)
+                                }
+                            }
+                        }),
+                       presenting: credGate.pending) { p in
+                    Button("本会话允许") { credGate.resolve(.allowSession, requestId: p.id) }
+                    Button("允许一次") { credGate.resolve(.allowOnce, requestId: p.id) }
+                    Button("拒绝", role: .cancel) { credGate.resolve(.deny, requestId: p.id) }
+                } message: { p in
+                    Text("有一个任务想\(p.category.humanName)——来自 \(p.host)。只在你确实要它这么做时允许。")
                 }
                 .sheet(isPresented: $isPresentingReleaseNotes) {
                     LeoReleaseNotesView(mode: .latest) {

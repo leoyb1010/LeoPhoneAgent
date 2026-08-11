@@ -17,19 +17,23 @@ from typing import List, Any, Dict, Optional
 
 import aiohttp
 
-LOCAL_BASE = "http://127.0.0.1:{port}"
+LOCAL_BASE = "http://{host}:{port}"
 
 
 class RelayClient:
     def __init__(self, relay_url: str, relay_key: str, local_port: int, local_key: str,
-                 name: Optional[str] = None):
+                 name: Optional[str] = None, local_host: str = "127.0.0.1"):
         # ws 地址:接受 https://…/relay/agent 或省略路径的根地址
         url = relay_url.rstrip("/")
         if not url.endswith("/relay/agent"):
             url = url + "/relay/agent"
         self.ws_url = url.replace("https://", "wss://").replace("http://", "ws://")
         self.relay_key = relay_key
-        self.local_base = LOCAL_BASE.format(port=local_port)
+        # server 绑在具体 LAN IP(Bonjour 模式)时 127.0.0.1 上没有监听,
+        # 回打必须用真实绑定地址;通配地址(0.0.0.0/::)则回环最稳。
+        if local_host in ("", "0.0.0.0", "::"):
+            local_host = "127.0.0.1"
+        self.local_base = LOCAL_BASE.format(host=local_host, port=local_port)
         self.local_key = local_key
         self.name = name or socket.gethostname().split(".")[0]
         # stream_id → cancel event
@@ -114,6 +118,14 @@ class RelayClient:
                 finally:
                     sender.cancel()
                     self._wake = None
+                # relay 主动关连接时(如 key 校验失败的 4001),async for 会
+                # "正常"结束——不抛错的话 run_forever 会把退避重置回 1 秒,
+                # 变成每秒打一次日志的静默风暴,且 close 原因完全丢失。
+                if ws.close_code and ws.close_code >= 4000:
+                    reason = (ws.close_message or b"").decode("utf-8", "replace")
+                    raise RuntimeError(
+                        f"relay rejected connection (close={ws.close_code} {reason!r})"
+                        +(":检查 LEOAGENT_RELAY_KEY 是否与 relay 一致" if ws.close_code == 4001 else ""))
                 return
 
     async def _consume(self, ws, session) -> None:
@@ -201,9 +213,10 @@ _BACKGROUND_TASKS: set = set()
 
 
 def start_in_background(relay_url: str, relay_key: str, local_port: int,
-                        local_key: str) -> None:
+                        local_key: str, local_host: str = "127.0.0.1") -> None:
     """在 server 的事件循环里常驻。失败只影响 relay 通路,不影响本机服务。"""
-    client = RelayClient(relay_url, relay_key, local_port, local_key)
+    client = RelayClient(relay_url, relay_key, local_port, local_key,
+                         local_host=local_host)
     # 模块级持引用:这条任务是整个 Mac↔中继链路,被 GC 即静默死亡。
     # 挂在 client 自己身上是循环引用,gc 照样能收;必须有外部根。
     task = asyncio.create_task(client.run_forever())

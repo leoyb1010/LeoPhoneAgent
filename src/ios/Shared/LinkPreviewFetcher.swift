@@ -47,33 +47,184 @@ enum LinkPreviewFetcher {
         "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 " +
         "(KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"
 
+    // MARK: - SSRF 闸
+
     /// 内网 / 环回 / 链路本地 / 云元数据地址一律不抓。返回 true = 危险。
+    ///
+    /// 这是**词法层**检查:host 本身就是内网地址的各种写法时直接拦。
+    /// 只认"4 段十进制 IPv4"是不够的 —— 系统解析器同样接受
+    /// http://2130706433/(纯十进制)、http://0177.0.0.1/(八进制)、
+    /// http://0x7f.0.0.1/(十六进制)、http://[::ffff:169.254.169.254]/
+    /// (IPv4-mapped IPv6),词法上不像内网,连出去全是 127.0.0.1 /
+    /// 元数据端点。所以 IPv4 必须按 inet_aton 语义归一化,IPv6 必须
+    /// 归一化后识别内嵌的 IPv4。
+    /// 非 IP 的域名这里放行,DNS 归属由 isBlockedHostResolved 复核。
     static func isBlockedHost(_ url: URL) -> Bool {
         guard let scheme = url.scheme?.lowercased(),
               scheme == "http" || scheme == "https",
-              let host = url.host?.lowercased() else { return true }
+              var host = url.host?.lowercased(), !host.isEmpty else { return true }
+        // 不同系统版本的 URL.host 对 IPv6 字面量可能带/不带方括号,统一剥掉
+        if host.hasPrefix("["), host.hasSuffix("]") {
+            host = String(host.dropFirst().dropLast())
+        }
         // 直接域名黑名单
         if host == "localhost" || host.hasSuffix(".localhost")
             || host.hasSuffix(".local") || host == "metadata.google.internal" {
             return true
         }
-        // IP 字面量:落在私有/环回/链路本地/保留段就拦
-        if let v = ipv4Octets(host) {
-            switch (v[0], v[1]) {
-            case (10, _), (127, _), (0, _),
-                 (192, 168), (169, 254),
-                 (172, 16...31):
-                return true
-            default: break
-            }
-            if v[0] >= 224 { return true }   // 组播/保留
-        }
-        // IPv6 环回/链路本地/唯一本地
+        // IPv6 字面量。合法域名不含冒号 —— 含冒号又解析不出的,按危险
+        // 处理(fail closed),不给畸形写法留缝。
         if host.contains(":") {
-            if host == "::1" || host.hasPrefix("fe80") || host.hasPrefix("fc")
-                || host.hasPrefix("fd") || host == "::" { return true }
+            let bare = host.split(separator: "%").first.map(String.init) ?? host   // 去掉 zone id
+            var addr = in6_addr()
+            guard inet_pton(AF_INET6, bare, &addr) == 1 else { return true }
+            return isBlockedIPv6(addr)
+        }
+        // IPv4 字面量(含非点分十进制写法):归一化成功就按 32 位地址判段
+        if let addr = normalizedIPv4(host) {
+            return isBlockedIPv4(addr)
         }
         return false
+    }
+
+    /// inet_aton 语义的 IPv4 归一化:1~4 段,每段可以是十进制 / 八进制
+    /// (前导 0)/ 十六进制(0x),最后一段填满剩余字节。解析失败返回 nil
+    /// (说明不是 IP 字面量,当域名处理)。
+    static func normalizedIPv4(_ host: String) -> UInt32? {
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false).map(String.init)
+        guard (1...4).contains(parts.count) else { return nil }
+        var nums: [UInt64] = []
+        for part in parts {
+            guard let v = parseIPv4Part(part) else { return nil }
+            nums.append(v)
+        }
+        let tail = nums.removeLast()
+        for v in nums where v > 255 { return nil }   // 前面各段是单字节
+        let tailByteCount = 4 - nums.count
+        guard tailByteCount == 4 || tail < (1 << (8 * tailByteCount)) else { return nil }
+        var addr: UInt64 = 0
+        for v in nums { addr = addr << 8 | v }
+        addr = addr << (8 * tailByteCount) | tail
+        return UInt32(truncatingIfNeeded: addr)
+    }
+
+    /// inet_aton 的单段解析:0x/0X 开头按十六进制,前导 0 按八进制,
+    /// 其余十进制。拒绝符号/空段(UInt64(_:radix:) 会接受 "+",这里不要)。
+    private static func parseIPv4Part(_ s: String) -> UInt64? {
+        var str = s
+        var radix = 10
+        if str.hasPrefix("0x") || str.hasPrefix("0X") {
+            radix = 16
+            str = String(str.dropFirst(2))
+        } else if str.count > 1, str.hasPrefix("0") {
+            radix = 8
+            str = String(str.dropFirst())
+        }
+        guard !str.isEmpty, str.allSatisfy({ $0.isHexDigit }),
+              let v = UInt64(str, radix: radix), v <= 0xFFFF_FFFF else { return nil }
+        return v
+    }
+
+    /// 32 位地址的内网段判定,统一 CIDR 写法,一处维护:
+    /// 127/8 环回、10/8、172.16/12、192.168/16 私网、169.254/16 链路本地
+    /// (云元数据 169.254.169.254 在此)、100.64/10 CGNAT(尾镜/内网穿透
+    /// 常用,同样能打到别人内网)、0/8 保留("0.0.0.0" 在多数栈上等于本机)、
+    /// 224.0.0.0 起的组播/保留/广播。
+    static func isBlockedIPv4(_ addr: UInt32) -> Bool {
+        let blockedCIDRs: [(base: UInt32, bits: UInt32)] = [
+            (0x7F00_0000, 8),    // 127.0.0.0/8
+            (0x0A00_0000, 8),    // 10.0.0.0/8
+            (0xAC10_0000, 12),   // 172.16.0.0/12
+            (0xC0A8_0000, 16),   // 192.168.0.0/16
+            (0xA9FE_0000, 16),   // 169.254.0.0/16
+            (0x6440_0000, 10),   // 100.64.0.0/10 CGNAT
+            (0x0000_0000, 8),    // 0.0.0.0/8
+        ]
+        for cidr in blockedCIDRs {
+            let mask = ~UInt32(0) << (32 - cidr.bits)
+            if addr & mask == cidr.base { return true }
+        }
+        if addr >= 0xE000_0000 { return true }   // 224.0.0.0 起:组播 + 保留 + 广播
+        return false
+    }
+
+    /// IPv6 内网判定。关键是 IPv4-mapped(::ffff:a.b.c.d 与 ::ffff:xxxx:xxxx
+    /// 两种写法 inet_pton 都归一成同样 16 字节):内嵌的 IPv4 抠出来走
+    /// IPv4 检查,否则 [::ffff:169.254.169.254] 一穿就过。链路本地按
+    /// fe80::/10 整段判 —— 旧版只匹配 "fe80" 字符串前缀,fe9x/feax/febx 全漏。
+    static func isBlockedIPv6(_ addr: in6_addr) -> Bool {
+        let b = withUnsafeBytes(of: addr) { Array($0) }   // 16 字节,网络序
+        // 环回 ::1 与未指定 ::
+        if b[0..<15].allSatisfy({ $0 == 0 }), b[15] <= 1 { return true }
+        // 链路本地 fe80::/10
+        if b[0] == 0xFE, b[1] & 0xC0 == 0x80 { return true }
+        // 唯一本地 fc00::/7(fcxx / fdxx)
+        if b[0] & 0xFE == 0xFC { return true }
+        // IPv4-mapped ::ffff:0:0/96 与(已废弃但部分栈仍路由的)
+        // IPv4-compatible ::/96:内嵌 IPv4 按 IPv4 段判
+        if b[0..<10].allSatisfy({ $0 == 0 }),
+           (b[10] == 0xFF && b[11] == 0xFF) || (b[10] == 0 && b[11] == 0) {
+            let v4 = UInt32(b[12]) << 24 | UInt32(b[13]) << 16
+                | UInt32(b[14]) << 8 | UInt32(b[15])
+            return isBlockedIPv4(v4)
+        }
+        return false
+    }
+
+    /// [T-ssrf] DNS rebinding 预检:公网域名可以把解析记录指向 127.0.0.1
+    /// 或 10.x,词法检查对它无能为力。发请求前先把域名解析一遍,任一地址
+    /// 落在内网段就拒绝。
+    /// 注意:这是预检,不是完备防御 —— 预检和真正连接是两次独立解析,
+    /// 攻击者用超短 TTL 仍可能在两次之间换记录(TOCTOU 残余)。彻底解法
+    /// 要在 socket 层固定已校验的 IP,URLSession 做不到;这里的目标是把
+    /// 攻击门槛从"改一条 A 记录"抬高到"精确卡时序的 rebinding 服务"。
+    /// 解析失败返回 false(放行):交给系统正常报错,不误伤离线/DNS 抖动。
+    /// getaddrinfo 会阻塞,只能在后台线程调。
+    static func hostResolvesToBlockedAddress(_ host: String) -> Bool {
+        var hints = addrinfo()
+        hints.ai_family = AF_UNSPEC
+        hints.ai_socktype = SOCK_STREAM
+        var list: UnsafeMutablePointer<addrinfo>?
+        guard getaddrinfo(host, nil, &hints, &list) == 0, let first = list else { return false }
+        defer { freeaddrinfo(first) }
+        var cursor: UnsafeMutablePointer<addrinfo>? = first
+        while let info = cursor {
+            if let sa = info.pointee.ai_addr {
+                switch Int32(sa.pointee.sa_family) {
+                case AF_INET:
+                    let v4 = sa.withMemoryRebound(to: sockaddr_in.self, capacity: 1) {
+                        UInt32(bigEndian: $0.pointee.sin_addr.s_addr)
+                    }
+                    if isBlockedIPv4(v4) { return true }
+                case AF_INET6:
+                    let v6 = sa.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) {
+                        $0.pointee.sin6_addr
+                    }
+                    if isBlockedIPv6(v6) { return true }
+                default:
+                    break
+                }
+            }
+            cursor = info.pointee.ai_next
+        }
+        return false
+    }
+
+    /// 完整校验(词法 + DNS 预解析)的同步版。会阻塞,只给后台队列用
+    /// (RedirectGuard 的 delegate 回调就在 session 后台队列上)。
+    static func isBlockedHostWithDNS(_ url: URL) -> Bool {
+        if isBlockedHost(url) { return true }
+        guard let host = url.host?.lowercased(), !host.isEmpty else { return true }
+        // IP 字面量在词法层已判过,不必再查 DNS
+        if host.contains(":") || normalizedIPv4(host) != nil { return false }
+        return hostResolvesToBlockedAddress(host)
+    }
+
+    /// 完整校验的 async 版:DNS 解析挪到后台线程,不卡调用方。
+    static func isBlockedHostResolved(_ url: URL) async -> Bool {
+        await Task.detached(priority: .utility) {
+            isBlockedHostWithDNS(url)
+        }.value
     }
 
     /// http → https(仅换 scheme)。已是 https 或非 http 原样返回。
@@ -84,21 +235,18 @@ enum LinkPreviewFetcher {
         return comps.url ?? url
     }
 
-    private static func ipv4Octets(_ host: String) -> [Int]? {
-        let parts = host.split(separator: ".")
-        guard parts.count == 4 else { return nil }
-        let nums = parts.compactMap { Int($0) }
-        guard nums.count == 4, nums.allSatisfy({ (0...255).contains($0) }) else { return nil }
-        return nums
-    }
-
     static func fetch(_ rawURL: URL) async -> Preview {
         var result = Preview()
         // [T-ats-tighten] ATS 收紧后主 app 不再抓明文 http。但很多 http
         // 链接的站点其实支持 https(用户只是复制了 http 版)—— 先升级成
         // https 试,抓不到再说,把"收藏预览没了"的概率压到最低。
         let url = upgradeToHTTPS(rawURL)
-        guard !isBlockedHost(url) else { return result }   // SSRF 闸
+        // SSRF 闸:词法 + DNS 预解析,必须在 LPMetadataProvider 之前做完。
+        // 系统抓取器自己跟随重定向,不走下面带 RedirectGuard 的 session,
+        // 请求进了它内部就再也拦不住 —— 所以初始 URL 在这里查到最严(含
+        // 域名实际解析到的地址);重定向逃逸的兜底,靠 fetchHTML/loadImage
+        // 走的受保护 session 补。
+        guard !(await isBlockedHostResolved(url)) else { return result }
 
         // 1) 系统抓取器
         let provider = LPMetadataProvider()
@@ -138,7 +286,8 @@ enum LinkPreviewFetcher {
     // MARK: - HTML 兜底
 
     private static func fetchHTML(_ url: URL) async -> String? {
-        guard !isBlockedHost(url) else { return nil }
+        // HTML 里解析出来的 URL 也可能指内网,同样过完整闸(词法 + DNS)
+        guard !(await isBlockedHostResolved(url)) else { return nil }
         var request = URLRequest(url: url)
         request.timeoutInterval = 12
         request.setValue(mobileUA, forHTTPHeaderField: "User-Agent")
@@ -222,7 +371,8 @@ enum LinkPreviewFetcher {
     }
 
     private static func loadImage(_ url: URL, referer: String) async -> UIImage? {
-        guard !isBlockedHost(url) else { return nil }
+        // 图片 URL 来自页面内容,完全不可信,同样过完整闸(词法 + DNS)
+        guard !(await isBlockedHostResolved(url)) else { return nil }
         var request = URLRequest(url: url)
         request.timeoutInterval = 12
         request.setValue(mobileUA, forHTTPHeaderField: "User-Agent")
@@ -276,15 +426,18 @@ enum LinkPreviewFetcher {
 }
 
 /// 重定向到内网/环回一律掐断(返回 nil request = 取消跳转)。
+/// 复检用与首查同一套完整校验(词法 + DNS 预解析)—— 只查词法的话,
+/// 公网 URL 302 到"解析指向内网的公网域名"照样穿。delegate 回调本来
+/// 就在 session 的后台队列上,阻塞式 getaddrinfo 可以直接调。
 private final class RedirectGuard: NSObject, URLSessionTaskDelegate {
     func urlSession(_ session: URLSession, task: URLSessionTask,
                     willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest,
                     completionHandler: @escaping (URLRequest?) -> Void) {
-        if let url = request.url, LinkPreviewFetcher.isBlockedHost(url) {
-            completionHandler(nil)   // 跳向内网 → 取消
-        } else {
+        if let url = request.url, !LinkPreviewFetcher.isBlockedHostWithDNS(url) {
             completionHandler(request)
+        } else {
+            completionHandler(nil)   // 跳向内网 → 取消
         }
     }
 }

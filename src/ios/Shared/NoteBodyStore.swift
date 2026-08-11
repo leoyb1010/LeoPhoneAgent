@@ -21,7 +21,9 @@ enum NoteBodyStore {
     private static let maxVersions = 10
 
     /// 后台串行队列:同一篇笔记的写入必须有序,否则慢的那次会覆盖新的。
-    private static let queue = DispatchQueue(label: "leo.note.body", qos: .userInitiated)
+    /// 队列本体声明在 CollectionStore(两个 target 共同编译)—— 删除条目
+    /// 时的正文清理也要排进同一条队列,才不会与排队中的自动保存竞态。
+    private static var queue: DispatchQueue { CollectionStore.noteIOQueue }
 
     // MARK: - 读
 

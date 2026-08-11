@@ -100803,6 +100803,58 @@
         }
       }
     },
+    "给 %@ 交代任务（@ 引用文件）": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geben Sie %@ eine Aufgabe (@ für Dateien)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Give %@ a task (@ to reference files)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Donnez une tâche à %@ (@ pour citer des fichiers)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ にタスクを与える（@ でファイル参照）"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@에게 과제 주기 (@로 파일 참조)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Дайте задачу %@ (@ — ссылка на файлы)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "给 %@ 交代任务（@ 引用文件）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "給 %@ 交代任務（@ 引用檔案）"
+          }
+        }
+      }
+    },
     "继续": {
       "localizations": {
         "de": {

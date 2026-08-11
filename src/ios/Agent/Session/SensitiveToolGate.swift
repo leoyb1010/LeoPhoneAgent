@@ -108,14 +108,25 @@ final class SensitiveToolGate: ObservableObject {
     }
 
     /// 用户在弹窗上的选择回传。
-    func resolve(_ decision: Decision) {
+    ///
+    /// 幂等设计:SwiftUI alert 的按钮 action 和 isPresented dismiss setter
+    /// 会各回调一次(顺序未定义),第二次必须是 no-op,不能误裁决队列里
+    /// 刚被提升的下一条请求。传 `requestId` 时只对该请求生效;当前 pending
+    /// 已被裁决(或已换成别的请求)则直接忽略。
+    func resolve(_ decision: Decision, requestId: UUID? = nil) {
         guard let p = pending else { return }
+        if let requestId, requestId != p.id { return }
         if case .allowSession = decision {
             sessionGrants.insert(grantKey(p.category, host: p.host))
         }
         p.continuation.resume(returning: decision)
         pending = nil
-        presentNextIfNeeded()
+        // 推迟到下一个 runloop 再提升队列下一条:同一轮里 alert 还没
+        // 完全 dismiss,同步换 pending 会让迟到的 dismiss 回调打在新
+        // 请求上,也会让 SwiftUI 的呈现状态和数据打架。
+        Task { @MainActor in
+            self.presentNextIfNeeded()
+        }
     }
 
     private func presentNextIfNeeded() {

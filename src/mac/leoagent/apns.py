@@ -15,6 +15,7 @@ APNs 回 410(BadDeviceToken/Unregistered)即自动摘除,不留幽灵 token。
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import time
@@ -201,11 +202,24 @@ class APNsPusher:
                     # 同一会话的连续事件折叠成一条横幅,而不是刷一屏;
                     # 中继重启后 outbox 补发的重复推送也被折叠掉
                     headers["apns-collapse-id"] = collapse_id[:64]
-                try:
-                    status, text = await self._post(client, host, f"/3/device/{token}",
-                                                    headers, payload)
-                except Exception as exc:  # noqa: BLE001
-                    print(f"[apns] send failed: {exc}", flush=True)
+                # 有界重试:app 被杀时这条推送是审批唯一的触达路径,瞬时
+                # 网络抖动/APNs 5xx 不该直接丢。3 次仍不行才放弃(手机回
+                # 前台的 list_events 对账是最后兜底)。
+                status, text = 0, ""
+                for attempt in range(3):
+                    if attempt:
+                        await asyncio.sleep(0.5 * (2 ** (attempt - 1)))
+                    try:
+                        status, text = await self._post(client, host, f"/3/device/{token}",
+                                                        headers, payload)
+                    except Exception as exc:  # noqa: BLE001
+                        print(f"[apns] send failed (attempt {attempt + 1}/3): {exc}", flush=True)
+                        status = 0
+                        continue
+                    if status == 200 or status < 500:
+                        break  # 成功或确定性错误(4xx 重试无意义)
+                    print(f"[apns] {status} (attempt {attempt + 1}/3), retrying", flush=True)
+                if status == 0:
                     continue
                 if status == 200:
                     sent += 1

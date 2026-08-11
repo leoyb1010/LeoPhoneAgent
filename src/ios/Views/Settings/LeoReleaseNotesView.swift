@@ -12,6 +12,17 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.22.0",
+            date: "2026-08-11",
+            title: "大更新全面加固:审批闸收口、竞态清零",
+            highlights: [
+                "凭证审批闸下沉到所有调用路径的总收口:shell 命令读写 Cookie 同样要过审批,弹窗按真实域名记账,给 A 站的授权不再顺带放行 B 站。",
+                "并发审批不再互相打架;人在会话列表时触发的审批也能弹出,不再无声挂起。",
+                "链接预览的内网防护识别更多 IP 伪装写法并做域名解析预检;笔记保存、藏宝阁跨进程写入、删除竞态等数据一致性问题一并修复。",
+                "Mac 端 LeoAgent 服务同步加固:登录死锁、静默断流、推送重试等 8 项修复。"
+            ]
+        ),
+        LeoRelease(
             version: "1.21.0",
             date: "2026-08-11",
             title: "个人代理的授权与连接边界更清楚",
