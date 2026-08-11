@@ -76,6 +76,14 @@ enum LinkPreviewFetcher {
         return false
     }
 
+    /// http → https(仅换 scheme)。已是 https 或非 http 原样返回。
+    private static func upgradeToHTTPS(_ url: URL) -> URL {
+        guard url.scheme?.lowercased() == "http",
+              var comps = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
+        comps.scheme = "https"
+        return comps.url ?? url
+    }
+
     private static func ipv4Octets(_ host: String) -> [Int]? {
         let parts = host.split(separator: ".")
         guard parts.count == 4 else { return nil }
@@ -84,8 +92,12 @@ enum LinkPreviewFetcher {
         return nums
     }
 
-    static func fetch(_ url: URL) async -> Preview {
+    static func fetch(_ rawURL: URL) async -> Preview {
         var result = Preview()
+        // [T-ats-tighten] ATS 收紧后主 app 不再抓明文 http。但很多 http
+        // 链接的站点其实支持 https(用户只是复制了 http 版)—— 先升级成
+        // https 试,抓不到再说,把"收藏预览没了"的概率压到最低。
+        let url = upgradeToHTTPS(rawURL)
         guard !isBlockedHost(url) else { return result }   // SSRF 闸
 
         // 1) 系统抓取器

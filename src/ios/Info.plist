@@ -211,7 +211,13 @@
 	<string>LeoPhoneAgent uses AlarmKit so the AI agent can set alarms and timers on your behalf.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<key>NSAllowsArbitraryLoads</key>
+		<!-- [T-ats-tighten] 从全局明文闸(NSAllowsArbitraryLoads)收紧为
+		     只放开 WKWebView 里的网页(browser_use 要打开任意站点,其中
+		     有 http 的)。主 app 的 URLSession 请求(中继 wss、模型 API、
+		     推送)已全部走 https —— 盘点确认无生产路径走明文。
+		     阅读器用 SFSafariViewController,跑在系统进程,不受这里约束。
+		     唯一代价:极少数纯 http 站点的收藏预览抓不到,有占位色块兜底。 -->
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
 		<true/>
 	</dict>
 	<key>NSAppleMusicUsageDescription</key>

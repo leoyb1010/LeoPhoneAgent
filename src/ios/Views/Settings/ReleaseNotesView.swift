@@ -24,6 +24,13 @@ struct LeoReleaseNote: Identifiable {
 enum LeoReleaseNotes {
     static let all: [LeoReleaseNote] = [
         LeoReleaseNote(
+            version: "1.20.9",
+            date: "2026-08-11",
+            items: [
+                "🔒 收紧明文网络闸门:此前整个 app 允许任意明文 http 连接(等于把这道闸拆了),现在只放开浏览器里打开的网页(浏览任意站点需要),app 自身的中继/模型/推送请求已全部走加密连接",
+                "🔗 配套补偿:收藏 http 链接时先尝试它的 https 版本再抓预览——很多站点其实支持 https,只是链接复制的是 http 版,这样收紧后预览基本不受影响",
+            ]),
+        LeoReleaseNote(
             version: "1.20.8",
             date: "2026-08-11",
             items: [
