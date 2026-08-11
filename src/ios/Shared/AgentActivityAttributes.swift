@@ -399,9 +399,9 @@ enum WidgetMemoryStore {
 /// cancelled inside the app's process.
 @available(iOS 17.0, *)
 struct StopAllTasksFromWidgetIntent: LiveActivityIntent {
-    static var title: LocalizedStringResource = "Stop Running Tasks"
-    static var description = IntentDescription("Cancels every running LeoPhoneAgent task.")
-    static var openAppWhenRun = false
+    static let title: LocalizedStringResource = "Stop Running Tasks"
+    static let description = IntentDescription("Cancels every running LeoPhoneAgent task.")
+    static let openAppWhenRun = false
 
     func perform() async throws -> some IntentResult {
         await WidgetIntentBridge.shared.stopAllTasks()
@@ -419,10 +419,10 @@ struct RunQuickTaskFromWidgetIntent: LiveActivityIntent {
     /// and take a proper QuickTaskEntity.
     static var isDiscoverable: Bool { false }
 
-    static var title: LocalizedStringResource = "Run Quick Task"
-    static var description = IntentDescription("Runs a LeoPhoneAgent quick task in the background.")
+    static let title: LocalizedStringResource = "Run Quick Task"
+    static let description = IntentDescription("Runs a LeoPhoneAgent quick task in the background.")
     /// Stay out of the way: the point of the widget button is not opening the app.
-    static var openAppWhenRun = false
+    static let openAppWhenRun = false
 
     @Parameter(title: "Task")
     var taskId: String
@@ -630,9 +630,9 @@ struct AgentActivityAttributes: ActivityAttributes {
 /// showing it would be a dead end.
 @available(iOS 18.0, *)
 struct OpenNewChatControlIntent: AppIntent {
-    static var title: LocalizedStringResource = "New Chat"
-    static var description = IntentDescription("Opens LeoPhoneAgent on a new conversation.")
-    static var openAppWhenRun = true
+    static let title: LocalizedStringResource = "New Chat"
+    static let description = IntentDescription("Opens LeoPhoneAgent on a new conversation.")
+    static let openAppWhenRun = true
 
     func perform() async throws -> some IntentResult {
         await WidgetIntentBridge.shared.openControlDestination(.newChat)
@@ -642,9 +642,9 @@ struct OpenNewChatControlIntent: AppIntent {
 
 @available(iOS 18.0, *)
 struct StartVoiceControlIntent: AppIntent {
-    static var title: LocalizedStringResource = "Voice Chat"
-    static var description = IntentDescription("Opens LeoPhoneAgent and starts voice input.")
-    static var openAppWhenRun = true
+    static let title: LocalizedStringResource = "Voice Chat"
+    static let description = IntentDescription("Opens LeoPhoneAgent and starts voice input.")
+    static let openAppWhenRun = true
 
     func perform() async throws -> some IntentResult {
         await WidgetIntentBridge.shared.openControlDestination(.voice)
@@ -654,9 +654,9 @@ struct StartVoiceControlIntent: AppIntent {
 
 @available(iOS 18.0, *)
 struct StartCameraControlIntent: AppIntent {
-    static var title: LocalizedStringResource = "Camera Chat"
-    static var description = IntentDescription("Opens LeoPhoneAgent with the camera ready.")
-    static var openAppWhenRun = true
+    static let title: LocalizedStringResource = "Camera Chat"
+    static let description = IntentDescription("Opens LeoPhoneAgent with the camera ready.")
+    static let openAppWhenRun = true
 
     func perform() async throws -> some IntentResult {
         await WidgetIntentBridge.shared.openControlDestination(.camera)

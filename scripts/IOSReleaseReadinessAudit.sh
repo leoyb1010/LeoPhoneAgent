@@ -5,8 +5,10 @@ repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 project="$repo_root/src/ios/LeoPhoneAgent.xcodeproj/project.pbxproj"
 catalog="$repo_root/src/ios/Views/Settings/LeoReleaseNotesView.swift"
 app="$repo_root/src/ios/MinisApp.swift"
-expected_version=${1:-1.1.2}
-expected_build=${2:-25}
+detected_version=$(sed -n 's/.*MARKETING_VERSION = \([^;]*\);/\1/p' "$project" | head -n 1)
+detected_build=$(sed -n 's/.*CURRENT_PROJECT_VERSION = \([^;]*\);/\1/p' "$project" | head -n 1)
+expected_version=${1:-$detected_version}
+expected_build=${2:-$detected_build}
 
 escaped_version=$(printf '%s' "$expected_version" | sed 's/\./\\./g')
 version_count=$(rg -c "MARKETING_VERSION = ${escaped_version};" "$project")

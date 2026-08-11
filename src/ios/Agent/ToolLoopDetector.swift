@@ -87,17 +87,21 @@ final class ToolLoopDetector {
 
         // Strategy 2: global_circuit_breaker — backstop, runs before poll-specific check.
         let noProgressStreak = getNoProgressStreak(toolName: toolName, argsHash: argsHash)
-        if noProgressStreak >= config.globalCircuitBreakerThreshold {
-            let msg = "[LOOP BLOCKED] CRITICAL: \(toolName) has repeated identical no-progress outcomes \(noProgressStreak) times. Session execution blocked by global circuit breaker."
-            logger.error("loop-detector: global_circuit_breaker critical tool=\(toolName) streak=\(noProgressStreak)")
+        // check(...) runs before the upcoming tool call. Critical thresholds are
+        // attempt limits, so 29 proven no-progress outcomes must block attempt 30
+        // instead of allowing it and only noticing after the fact.
+        let upcomingNoProgressCount = noProgressStreak + 1
+        if upcomingNoProgressCount >= config.globalCircuitBreakerThreshold {
+            let msg = "[LOOP BLOCKED] CRITICAL: \(toolName) is about to repeat an identical no-progress outcome for attempt \(upcomingNoProgressCount). Session execution blocked by global circuit breaker."
+            logger.error("loop-detector: global_circuit_breaker critical tool=\(toolName) upcoming=\(upcomingNoProgressCount)")
             return LoopCheckResult(level: .critical, message: msg, warningKey: nil)
         }
 
         // Strategy 3: known_poll_no_progress — dual threshold for known polling tools.
         if isPollTool(toolName, params) {
-            if noProgressStreak >= config.criticalThreshold {
-                let msg = "[LOOP BLOCKED] CRITICAL: Called \(toolName) \(noProgressStreak) times with identical no-progress results. Session execution blocked."
-                logger.error("loop-detector: poll_no_progress critical tool=\(toolName) streak=\(noProgressStreak)")
+            if upcomingNoProgressCount >= config.criticalThreshold {
+                let msg = "[LOOP BLOCKED] CRITICAL: \(toolName) is about to make its \(upcomingNoProgressCount)th identical no-progress poll. Session execution blocked."
+                logger.error("loop-detector: poll_no_progress critical tool=\(toolName) upcoming=\(upcomingNoProgressCount)")
                 return LoopCheckResult(level: .critical, message: msg, warningKey: nil)
             }
             if noProgressStreak >= config.warningThreshold {

@@ -11,6 +11,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 // MARK: - Settings
 
@@ -48,12 +49,57 @@ struct GatewaySettingsView: View {
 
     var body: some View {
         List {
-            Section {
-                if store.hosts.isEmpty {
-                    Text("还没有连接任何 Mac。添加一台跑着 LeoAgent 的 Mac。")
-                        .font(.system(size: 14))
-                        .foregroundStyle(.secondary)
-                } else {
+            if store.hosts.isEmpty {
+                Section {
+                    VStack(spacing: LeoTheme.Spacing.md) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.cyan.opacity(0.12))
+                                .frame(width: 68, height: 68)
+                            Image(systemName: "desktopcomputer.and.macbook")
+                                .font(.system(size: 30, weight: .medium))
+                                .foregroundStyle(.cyan)
+                        }
+                        .accessibilityHidden(true)
+
+                        VStack(spacing: LeoTheme.Spacing.xs) {
+                            Text("把三台 Mac 装进口袋")
+                                .font(.title3.bold())
+                            Text("一把密钥连接 MacBook Pro、Mac mini 和 Mac Studio。之后在手机上就能发任务、看进度、审批和叫停。")
+                                .font(.subheadline)
+                                .foregroundStyle(LeoTheme.ColorToken.secondaryText)
+                                .multilineTextAlignment(.center)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        Button {
+                            showQuickSetup = true
+                        } label: {
+                            Label("一键连接我的三台 Mac", systemImage: "link.badge.plus")
+                                .frame(maxWidth: .infinity, minHeight: LeoTheme.TouchTarget.minimum)
+                        }
+                        .buttonStyle(.borderedProminent)
+
+                        Button {
+                            editor.beginNew()
+                        } label: {
+                            Label("手动添加其他 Mac", systemImage: "plus")
+                                .frame(maxWidth: .infinity, minHeight: LeoTheme.TouchTarget.minimum)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    .padding(.vertical, LeoTheme.Spacing.sm)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                }
+
+                Section("连接后可以") {
+                    Label("远程运行 Codex、Claude Code 和 Grok", systemImage: "terminal")
+                    Label("直接审批、转向或停止正在跑的任务", systemImage: "checkmark.shield")
+                    Label("手机休眠后，Mac 上的任务继续执行", systemImage: "moon.zzz")
+                }
+            } else {
+                Section("已连接的 Mac") {
                     ForEach(store.hosts) { host in
                         Button {
                             editor.beginEdit(host)
@@ -66,34 +112,21 @@ struct GatewaySettingsView: View {
                         for index in offsets { store.delete(id: store.hosts[index].id) }
                     }
                 }
-            } header: {
-                Text("我的 Mac")
-            } footer: {
-                Text("Mac 端由 leoagent 服务或 leocodebox(1.63+,推荐)承载,协议一致、地址与密钥不变。手机休眠时它也在干活;在这里可以看它、审批它、随时叫停。")
-            }
 
-            if store.hosts.isEmpty {
                 Section {
                     Button {
-                        showQuickSetup = true
+                        editor.beginNew()
                     } label: {
-                        Label("一键添加我的三台 Mac", systemImage: "wand.and.stars")
+                        Label("添加 Mac", systemImage: "plus.circle")
                     }
                 } footer: {
-                    Text("MacBook Pro、Mac mini(cortex)、Mac Studio 已内置,只需要粘贴一次密钥。")
-                }
-            }
-
-            Section {
-                Button {
-                    editor.beginNew()
-                } label: {
-                    Label("手动添加 Mac", systemImage: "plus.circle")
+                    Text("Mac 端可由 leocodebox 或 leoagent 承载，协议、地址和访问密钥保持一致。")
                 }
             }
         }
         .navigationTitle(Text("我的 Mac"))
         .navigationBarTitleDisplayMode(.inline)
+        .refreshable { await refresh() }
         .sheet(isPresented: $showQuickSetup) {
             QuickFleetSetupSheet { key in
                 for preset in FLEET_PRESETS {
@@ -150,6 +183,7 @@ private struct QuickFleetSetupSheet: View {
     @State private var key = ""
     @State private var testing = false
     @State private var result: String?
+    @State private var copiedCommand = false
 
     var body: some View {
         NavigationStack {
@@ -167,10 +201,22 @@ private struct QuickFleetSetupSheet: View {
                     SecureField("粘贴密钥", text: $key)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                    Button {
+                        UIPasteboard.general.string = "ssh leo@mac-mini-cortex \"cat ~/.leoagent/key\""
+                        copiedCommand = true
+                        LeoHaptics.notification(.success)
+                    } label: {
+                        Label(copiedCommand ? "已复制取密钥命令" : "复制取密钥命令",
+                              systemImage: copiedCommand ? "checkmark.circle.fill" : "doc.on.doc")
+                    }
                 } header: {
                     Text("中继密钥(三台共用一把)")
                 } footer: {
-                    Text("在任意一台 Mac 终端运行:ssh leo@mac-mini-cortex \"cat ~/.leoagent/key\",或直接在 cortex 上 cat ~/.leoagent/key。\n\n⚠️ 如果手机上开着代理(Shadowrocket 等),请把 *.ts.net 设为直连,否则连接会被代理劫持而失败。")
+                    VStack(alignment: .leading, spacing: LeoTheme.Spacing.xs) {
+                        Text("把复制的命令粘贴到 Mac 终端，再把返回的密钥粘贴到上方。")
+                        Label("如果手机开着 Shadowrocket 等代理，请将 *.ts.net 设为直连。",
+                              systemImage: "exclamationmark.triangle.fill")
+                    }
                 }
                 Section {
                     Button {
@@ -179,7 +225,7 @@ private struct QuickFleetSetupSheet: View {
                             let probe = GatewayHost(id: "probe", name: "probe", baseURL: "",
                                                     harnessURL: RELAY_BASE + FLEET_PRESETS[0].machine)
                             let ok = await GatewayHostStore.probe(probe)
-                            result = ok ? "中继可达 ✓" :
+                            result = ok ? "中继连接成功" :
                                 "连不上中继。若手机开着代理,把 *.ts.net 加直连或暂时关闭代理再试。"
                             testing = false
                         }
@@ -417,9 +463,9 @@ private struct GatewayHostEditor: View {
                 // 1.63+ 起 harness 由 leocodebox 接管(协议同构);标出承载方
                 // 便于灰度期分辨这台 Mac 切没切。
                 let hostedBy = caps.server == "leocodebox" ? "由 leocodebox 承载," : ""
-                testResult = "连接成功 ✓ \(hostedBy)密钥有效,审批\(caps.has("approval_events") ? "可用" : "不可用")。保存即可开始使用。"
+                testResult = "连接成功。\(hostedBy)密钥有效,审批\(caps.has("approval_events") ? "可用" : "不可用")。保存即可开始使用。"
             } else {
-                testResult = "连接成功 ✓(\(caps.platform))。"
+                testResult = "连接成功(\(caps.platform))。"
             }
         } catch {
             testResult = "密钥被拒绝或服务异常:\(error.localizedDescription)"
@@ -656,9 +702,29 @@ struct GatewayEntryView: View {
         List {
             if store.activeHosts.isEmpty {
                 Section {
-                    Text("先在「设置 → 我的 Mac」里添加一台 Mac,然后就能在这里驱动它干活。")
-                        .font(.system(size: 14))
-                        .foregroundStyle(.secondary)
+                    VStack(spacing: LeoTheme.Spacing.md) {
+                        Image(systemName: "desktopcomputer.trianglebadge.exclamationmark")
+                            .font(.system(size: 34, weight: .medium))
+                            .foregroundStyle(.tint)
+                        VStack(spacing: LeoTheme.Spacing.xs) {
+                            Text("还没有可指挥的 Mac")
+                                .font(.headline)
+                            Text("先连接 Mac，就能从这里直接运行编码任务、审批和叫停。")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                        NavigationLink {
+                            GatewaySettingsView()
+                        } label: {
+                            Label("去连接 Mac", systemImage: "link.badge.plus")
+                                .frame(maxWidth: .infinity, minHeight: LeoTheme.TouchTarget.minimum)
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    .padding(.vertical, LeoTheme.Spacing.lg)
+                    .frame(maxWidth: .infinity)
+                    .listRowBackground(Color.clear)
                 }
             }
             ForEach(store.activeHosts) { host in

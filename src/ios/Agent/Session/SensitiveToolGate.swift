@@ -45,11 +45,14 @@ final class SensitiveToolGate: ObservableObject {
         case deny
     }
 
-    /// 本会话已授予"整会话允许"的类别。会话切换即清空(见 resetSession)。
+    /// 本会话已授予"整会话允许"的「动作类别 + 站点」。会话切换即清空。
+    /// 不能只按类别授权，否则给 example.com 的 Cookie 放行会顺带放行
+    /// bank.example；个人自用也不该用这种隐式扩大来换便利。
     private var sessionGrants: Set<String> = []
 
     /// 当前等待用户拍板的审批请求(前台时由聊天视图渲染成弹窗)。
     @Published var pending: PendingApproval?
+    private var queued: [PendingApproval] = []
 
     struct PendingApproval: Identifiable {
         let id = UUID()
@@ -60,18 +63,25 @@ final class SensitiveToolGate: ObservableObject {
 
     private init() {}
 
+    private func grantKey(_ category: Category, host: String) -> String {
+        "\(category.rawValue)|\(host.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())"
+    }
+
     /// 会话切换时清空整会话授权 —— 授权不跨会话继承。
     func resetSession() {
         sessionGrants.removeAll()
         pending?.continuation.resume(returning: .deny)
         pending = nil
+        queued.forEach { $0.continuation.resume(returning: .deny) }
+        queued.removeAll()
     }
 
     /// 请求执行一个敏感动作。返回是否放行。
     /// - host: 目标站点,给用户看"是哪个网站的凭证"。
     func authorize(_ category: Category, host: String) async -> Bool {
         // 本会话已整体允许
-        if sessionGrants.contains(category.rawValue) { return true }
+        let key = grantKey(category, host: host)
+        if sessionGrants.contains(key) { return true }
 
         // 后台安全拒绝:没有前台 UI 就不能弹审批,更不能挂起等待。
         guard UIApplication.shared.applicationState == .active else {
@@ -79,14 +89,18 @@ final class SensitiveToolGate: ObservableObject {
         }
 
         let decision = await withCheckedContinuation { (cont: CheckedContinuation<Decision, Never>) in
-            self.pending = PendingApproval(category: category, host: host, continuation: cont)
+            let request = PendingApproval(category: category, host: host, continuation: cont)
+            if self.pending == nil {
+                self.pending = request
+            } else {
+                // 多工具并发时排队，不能覆盖 pending；覆盖会让前一个
+                // continuation 永远不恢复，整条 agent run 看起来像“卡死”。
+                self.queued.append(request)
+            }
         }
 
         switch decision {
-        case .allowSession:
-            sessionGrants.insert(category.rawValue)
-            return true
-        case .allowOnce:
+        case .allowSession, .allowOnce:
             return true
         case .deny:
             return false
@@ -96,8 +110,26 @@ final class SensitiveToolGate: ObservableObject {
     /// 用户在弹窗上的选择回传。
     func resolve(_ decision: Decision) {
         guard let p = pending else { return }
+        if case .allowSession = decision {
+            sessionGrants.insert(grantKey(p.category, host: p.host))
+        }
         p.continuation.resume(returning: decision)
         pending = nil
+        presentNextIfNeeded()
+    }
+
+    private func presentNextIfNeeded() {
+        while pending == nil, !queued.isEmpty {
+            let next = queued.removeFirst()
+            let key = grantKey(next.category, host: next.host)
+            if sessionGrants.contains(key) {
+                next.continuation.resume(returning: .allowSession)
+            } else if UIApplication.shared.applicationState != .active {
+                next.continuation.resume(returning: .deny)
+            } else {
+                pending = next
+            }
+        }
     }
 
     /// 后台拒绝时给模型的回执文案。

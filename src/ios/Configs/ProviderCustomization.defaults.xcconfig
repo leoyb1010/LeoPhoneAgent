@@ -1,0 +1,6 @@
+// Committed, secret-free defaults. Clean clones and CI always have this file.
+// A developer may create the ignored ProviderCustomization.xcconfig beside it;
+// the optional include overrides these empty defaults without leaking secrets.
+ANTHROPIC_OAUTH_IDENTIFIER_PROMPT =
+
+#include? "ProviderCustomization.xcconfig"

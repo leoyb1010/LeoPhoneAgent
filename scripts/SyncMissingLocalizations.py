@@ -42,6 +42,25 @@ COPY_AS_IS = {
     "HTTP", "LB", "FB", "npx", "SKILL.md", "model-id", "github.com/user/repo/blob/main/SKILL.md",
 }
 
+# SwiftUI extracts these literal keys during a normal Xcode localization build.
+# Keep them explicit here so this repository's lightweight audit can populate
+# them without requiring a full app build.
+NEW_HOME_SOURCE_STRINGS = {
+    "此 iPhone 工作区", "对话、文件、浏览器和 iSH 都在本机可用", "本机",
+    "直接输入任务，或从下面开始。只有你主动选择“切换到 Mac”时，任务才会交给远端设备。",
+    "整理今天要做的事", "分析一份本机文件", "打开浏览器查资料", "浏览此对话的文件",
+    "快捷任务", "切换到 Mac", "独立运行在此 iPhone", "本机就绪", "交代一个任务",
+    "让此 iPhone 帮你分析、查找、写作或执行…", "继续", "进入任务工作区继续编辑",
+    "选择本机默认模型", "连接本机模型", "只需完成这一步，Mac 连接不是必需项",
+    "此 iPhone 的能力", "语音", "相机", "文件", "快捷指令", "浏览器", "本机快捷任务",
+    "可选的 Mac 执行目标", "未连接，不影响 iPhone 独立工作", "在此 iPhone 的新对话中继续",
+    "此 iPhone", "此 iPhone（默认）", "需要时切换到 Mac", "本机运行中 %lld",
+    "已配置 %lld 台，发送时验证连接", "交给所选 Mac 的 %@",
+    "这台 Mac 已不可用，请重新选择执行目标", "这台 Mac 缺少访问密钥，任务仍保留在输入框",
+    "这台 Mac 当前没有响应，任务仍保留在输入框", "缺少访问密钥",
+    "去 设置 → 我的 Mac 里补上这台 Mac 的密钥。",
+}
+
 # Product-language overrides for high-traffic controls where generic machine
 # translation lacks the app context (for example, "Composer" is the chat input,
 # not a musician). These are applied without replacing other existing work.
@@ -207,7 +226,7 @@ def restore(text: str, replacements: dict[str, str]) -> str:
 
 def should_copy_source(text: str) -> bool:
     stripped = text.strip()
-    if not stripped or stripped in COPY_AS_IS or not re.search(r"[A-Za-z]", stripped):
+    if not stripped or stripped in COPY_AS_IS or not re.search(r"[A-Za-z\u3400-\u9fff]", stripped):
         return True
     if re.fullmatch(r"[A-Z0-9_.+\-/ ]{1,16}", stripped):
         return True
@@ -219,7 +238,7 @@ def should_copy_source(text: str) -> bool:
 def translate_request(text: str, target: str) -> str:
     query = urllib.parse.urlencode({
         "client": "gtx",
-        "sl": "en",
+        "sl": "auto",
         "tl": target,
         "dt": "t",
         "q": text,
@@ -310,6 +329,11 @@ def main() -> None:
     parser.add_argument("--catalog", default="src/ios/Localizable.xcstrings")
     parser.add_argument("--apply", action="store_true")
     parser.add_argument(
+        "--home-only",
+        action="store_true",
+        help="limit translation work to the independent iPhone home/workspace strings",
+    )
+    parser.add_argument(
         "--refresh-token-terms",
         action="store_true",
         help="retranslate Token-related entries while preserving the word Token",
@@ -320,7 +344,11 @@ def main() -> None:
     path = Path(args.catalog)
     catalog = json.loads(path.read_text(encoding="utf-8"))
     strings = catalog["strings"]
+    for source in NEW_HOME_SOURCE_STRINGS:
+        strings.setdefault(source, {})
     jobs = missing_jobs(strings)
+    if args.home_only:
+        jobs = [job for job in jobs if job[0] in NEW_HOME_SOURCE_STRINGS]
     counts = {locale: 0 for locale in LOCALES}
     for _, locale in jobs:
         counts[locale] += 1

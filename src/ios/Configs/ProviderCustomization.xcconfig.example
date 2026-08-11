@@ -2,8 +2,8 @@
 //
 // Template for build-time customization values. Copy this file to
 // ProviderCustomization.xcconfig (same directory) and fill in the values below,
-// then set the LeoPhoneAgent target's base configuration to ProviderCustomization.xcconfig
-// (Project > Info > Configurations) if it is not already.
+// then rebuild. ProviderCustomization.defaults.xcconfig includes this local file
+// when present; no Xcode project setting needs to change.
 //
 // Leaving a value empty is allowed for building; the app fails at runtime the
 // first time that value is actually needed.

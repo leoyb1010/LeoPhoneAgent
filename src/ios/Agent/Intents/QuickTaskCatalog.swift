@@ -315,6 +315,14 @@ final class QuickTaskStore: ObservableObject {
     static let storageKey = "leo.quickTasks.v1"
     static let composerTaskIDsKey = "leo.quickTasks.composerTaskIDs.v1"
     static let composerTaskLimit = 3
+    /// Keep the first-run composer deliberately curated. Deriving this from
+    /// catalog order made adding or reordering built-ins silently change the
+    /// primary shortcuts presented to every new user.
+    static let defaultComposerTaskIDs = [
+        "morningBriefing",
+        "dailyNews",
+        "clipboardAssistant",
+    ]
 
     @Published private(set) var tasks: [QuickTaskDefinition]
     @Published private(set) var composerTaskIDs: [String]
@@ -334,7 +342,10 @@ final class QuickTaskStore: ObservableObject {
         if let storedIDs = defaults.array(forKey: Self.composerTaskIDsKey) as? [String] {
             self.composerTaskIDs = Self.normalizedComposerTaskIDs(storedIDs, tasks: loadedTasks)
         } else {
-            self.composerTaskIDs = Array(loadedTasks.prefix(Self.composerTaskLimit).map(\.id))
+            self.composerTaskIDs = Self.normalizedComposerTaskIDs(
+                Self.defaultComposerTaskIDs,
+                tasks: loadedTasks
+            )
         }
         persist(notifyShortcuts: false)
         persistComposerTaskIDs()

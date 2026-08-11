@@ -164,7 +164,9 @@ actor ProviderConfigDB {
                     member_entry_ids_json    TEXT NOT NULL,
                     sort_order               INTEGER NOT NULL DEFAULT 0,
                     updated_at               REAL NOT NULL,
-                    extras_json              TEXT
+                    extras_json              TEXT,
+                    removed_members_json     TEXT NOT NULL DEFAULT '{}',
+                    added_members_json       TEXT NOT NULL DEFAULT '{}'
                 )
             """)
 
@@ -280,6 +282,11 @@ actor ProviderConfigDB {
             }
         }
         sqlite3_finalize(stmt)
+        // A brand-new database reaches this repair hook before the v1 CREATE
+        // TABLE statements below. An empty result means there is no table yet,
+        // not that every column is missing. The v1 schema already creates both
+        // tombstone columns, so skip the ALTERs and their noisy SQLite errors.
+        guard !existing.isEmpty else { return }
         if !existing.contains("removed_members_json") {
             exec(db: db, "ALTER TABLE provider_model_groups ADD COLUMN removed_members_json TEXT NOT NULL DEFAULT '{}'")
             logger.info("[v3] schema repair: added missing column removed_members_json")

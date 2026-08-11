@@ -21,19 +21,24 @@ on:
   workflow_dispatch:
 jobs:
   unit-tests:
-    runs-on: macos-15
+    # 项目 deployment target 是 iOS 26。macos-15 的默认 Xcode 仍是 16.4，
+    # 即使逻辑测试本身没问题也会在解析 target 时失败。macos-26 当前自带
+    # Xcode 26.6 + iOS 26.5 Simulator，和本机验证矩阵一致。
+    runs-on: macos-26
     timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive   # 缺 submodule 会让构建静默少文件
       - name: Run MinisTests
         run: |
           set -euo pipefail        # 管道里任一命令失败即失败,不被 tail 掩盖
           cd src/ios
-          # 完整日志留存进文件,终端只看尾部;退出码取 xcodebuild 本身。
-          xcodebuild test -project LeoPhoneAgent.xcodeproj -scheme LeoPhoneAgent \
-            -destination 'platform=iOS Simulator,name=iPhone 16' \
+          # 逻辑测试必须真正独立于 App/Watch/iSH:这样 CI 既不被缺失的
+          # watchOS runtime 卡死，也不依赖尚未发布的本地 iSH submodule commit。
+          # 完整 App + 原生依赖另走 release gate，不能拿来替代快速单测。
+          xcodebuild test -project LeoPhoneAgent.xcodeproj -scheme MinisLogicTests \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
             -only-testing:MinisTests CODE_SIGNING_ALLOWED=NO 2>&1 \
             | tee /tmp/xcodebuild.log \
             || { echo "::error::xcodebuild test failed"; tail -60 /tmp/xcodebuild.log; exit 1; }

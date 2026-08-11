@@ -1495,6 +1495,16 @@ struct AIChatView: View {
             // This action has no cover. Reuse the workflow's terminal-success
             // checkpoint so the retry timer cannot deliver the template twice.
             QuickActionWorkflow.shared.markCoverPresented()
+        case .prefillPrompt(let prompt):
+            let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                vm.inputText = trimmed
+                inputFocused = true
+            }
+            // Prefill is intentionally not auto-send: the iPhone remains the
+            // primary workspace, where the user can attach local context or
+            // switch models before execution.
+            QuickActionWorkflow.shared.markCoverPresented()
         }
     }
 
@@ -2447,18 +2457,20 @@ struct AIChatView: View {
                     .contentShape(Rectangle())
                     .onTapGesture { inputFocused = false }
             }
-            // Empty-chat onboarding tip: a single card explaining the
-            // per-session vs cross-session /var/minis/ layout. Only shown
-            // on a true draft (vm.sessionId == nil) — opening an existing
-            // session would otherwise flash the card during the brief
-            // window before its messages load. Returning users with any
-            // prior chat skip the tip even on a fresh draft (so it's a
-            // genuine first-launch hint).
+            // Every true draft starts as an iPhone workspace, not a blank
+            // remote-control screen. Existing sessions never flash this card
+            // during load because they already have a real session id.
             if vm.sessionId == nil
                 && vm.messages.isEmpty
-                && !vm.isLoadingSession
-                && (totalSessionCount ?? Int.max) == 0 {
-                EmptyChatDirectoryTimeline(onBrowse: { showFileBrowser = true })
+                && !vm.isLoadingSession {
+                EmptyChatWorkspaceCard(
+                    onPrompt: { prompt in
+                        vm.inputText = prompt
+                        inputFocused = true
+                        LeoHaptics.selection()
+                    },
+                    onBrowse: { showFileBrowser = true }
+                )
                     .padding(.horizontal, 24)
             }
         }
@@ -3288,7 +3300,7 @@ struct AIChatView: View {
             // `%@` form ("Message %@ (@ to mention files)") as the lookup
             // key in Localizable.xcstrings, so translators get one
             // parameterized entry per locale instead of one per soul name.
-            placeholder: String(localized: "Message \(soulName) (@ to mention files)"),
+            placeholder: String(localized: "给 \(soulName) 交代任务（@ 引用文件）"),
             onPasteImage: { image in vm.addImageAttachment(image) },
             onPasteFile: { url in vm.addFileAttachment(from: url) },
             onReturnKey: handleReturnKey,
@@ -3333,7 +3345,7 @@ struct AIChatView: View {
             Button {
                 showQuickTaskPicker = true
             } label: {
-                Label("Quick Tasks", systemImage: "bolt.fill")
+            Label("快捷任务", systemImage: "bolt.fill")
                     .font(.caption.weight(.semibold))
                     .lineLimit(1)
             }
@@ -3510,7 +3522,7 @@ struct AIChatView: View {
                 }
             }
         } label: {
-            Label("指挥 Mac", systemImage: "desktopcomputer")
+            Label("切换到 Mac", systemImage: "desktopcomputer")
                 .font(.caption.weight(.semibold))
                 .lineLimit(1)
         }
@@ -6029,72 +6041,103 @@ private struct StatRow: View {
     }
 }
 
-// MARK: - Empty Chat Directory Timeline
+// MARK: - Empty iPhone Agent Workspace
 
-/// Onboarding view rendered in the center of a New Chat (no messages yet).
-/// Shows the per-session vs cross-session directory layout under
-/// `/var/minis/` as a 2-column folder grid so the user understands what's
-/// available before typing.
-///
-/// Source-of-truth for the descriptions: AIChatViewModel.swift system-prompt
-/// directory listing (`Shared directory /var/minis/ ...`). Keep them aligned
-/// when either side changes.
-private struct EmptyChatDirectoryTimeline: View {
+/// Useful, action-oriented empty state for every fresh local conversation.
+/// The old card led with `/var/minis/` implementation details and only appeared
+/// once, which made later drafts feel blank and made the product read like a
+/// Mac controller. This keeps the iPhone execution boundary explicit and moves
+/// file-system detail behind the real browser action.
+private struct EmptyChatWorkspaceCard: View {
+    var onPrompt: (String) -> Void
     var onBrowse: () -> Void
 
+    private let prompts = [
+        (String(localized: "整理今天要做的事"), "checklist"),
+        (String(localized: "分析一份本机文件"), "doc.text.magnifyingglass"),
+        (String(localized: "打开浏览器查资料"), "globe"),
+    ]
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: "lightbulb")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(ChatColors.secondaryText)
-                Text("Workspace layout")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(ChatColors.secondaryText)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: "iphone")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.tint)
+                    .frame(width: 36, height: 36)
+                    .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("此 iPhone 工作区")
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(ChatColors.primaryText)
+                    Text("对话、文件、浏览器和 iSH 都在本机可用")
+                        .font(.caption)
+                        .foregroundStyle(ChatColors.secondaryText)
+                }
+                Spacer(minLength: 8)
+                HStack(spacing: 4) {
+                    Circle().fill(Color.green).frame(width: 6, height: 6)
+                    Text("本机")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(ChatColors.secondaryText)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(ChatColors.secondaryBg, in: Capsule())
             }
-            Text("Each chat gets its own **workspace**, **attachments**, **offloads**, and **browser** folders — wiped when the session ends.")
-                .font(.system(size: 12))
-                .foregroundStyle(ChatColors.primaryText)
+
+            Text("直接输入任务，或从下面开始。只有你主动选择“切换到 Mac”时，任务才会交给远端设备。")
+                .font(.subheadline)
+                .foregroundStyle(ChatColors.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
-            Text("All chats share **shared**, **skills**, **memory**, and **mounts** — persistent across sessions.")
-                .font(.system(size: 12))
-                .foregroundStyle(ChatColors.primaryText)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack {
-                Spacer()
-                Button(action: onBrowse) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "folder")
-                            .font(.system(size: 10, weight: .semibold))
-                        Text("Browse Chat Files")
-                            .font(.system(size: 11, weight: .semibold))
+
+            VStack(spacing: 7) {
+                ForEach(prompts, id: \.0) { prompt in
+                    Button { onPrompt(prompt.0) } label: {
+                        HStack(spacing: 9) {
+                            Image(systemName: prompt.1)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.tint)
+                                .frame(width: 20)
+                            Text(prompt.0)
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(ChatColors.primaryText)
+                            Spacer()
+                            Image(systemName: "arrow.up.left")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(ChatColors.tertiaryText)
+                        }
+                        .padding(.horizontal, 10)
+                        .frame(minHeight: LeoTheme.TouchTarget.minimum)
+                        .background(ChatColors.secondaryBg.opacity(0.72), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                     }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Button(action: onBrowse) {
+                Label("浏览此对话的文件", systemImage: "folder")
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(ChatColors.primaryText)
                     .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(
-                        Capsule().fill(ChatColors.secondaryBg)
-                    )
-                    .overlay(
-                        Capsule().stroke(ChatColors.toolBorder, lineWidth: 0.5)
-                    )
-                }
-                .buttonStyle(.plain)
+                    .frame(minHeight: LeoTheme.TouchTarget.minimum)
+                    .background(Capsule().fill(ChatColors.secondaryBg))
+                    .overlay(Capsule().stroke(ChatColors.toolBorder, lineWidth: 0.5))
             }
-            .padding(.top, 2)
+            .buttonStyle(.plain)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(16)
         .frame(maxWidth: 460, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(ChatColors.secondaryBg.opacity(0.6))
+                .fill(ChatColors.secondaryBg.opacity(0.48))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(ChatColors.toolBorder, lineWidth: 0.5)
         )
         .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .contain)
     }
 }
 

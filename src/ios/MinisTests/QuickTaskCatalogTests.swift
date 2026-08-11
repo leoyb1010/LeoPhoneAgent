@@ -1,12 +1,14 @@
 import XCTest
 
 final class QuickTaskCatalogTests: XCTestCase {
-    func testBuiltInIdentifiersMatchLegacyAppEnumRawValues() {
+    func testBuiltInIdentifiersPreserveLegacyAppEnumRawValues() {
         let legacyIDs = Set(QuickTask.allCases.map(\.rawValue))
         let entityIDs = Set(QuickTaskDefinition.builtIns.map(\.id))
 
-        XCTAssertEqual(entityIDs, legacyIDs)
-        XCTAssertEqual(entityIDs.count, 8)
+        XCTAssertTrue(legacyIDs.isSubset(of: entityIDs))
+        XCTAssertEqual(legacyIDs.count, 8)
+        XCTAssertEqual(entityIDs.count, QuickTaskDefinition.builtIns.count, "built-in identifiers must be unique")
+        XCTAssertEqual(entityIDs.count, 13)
     }
 
     func testCustomQuickTaskDisplayNameRemainsUserAuthored() {
@@ -48,7 +50,7 @@ final class QuickTaskCatalogTests: XCTestCase {
 
         let normalized = QuickTaskStore.normalized([editedWeather, custom])
 
-        XCTAssertEqual(normalized.count, 9)
+        XCTAssertEqual(normalized.count, QuickTaskDefinition.builtIns.count + 1)
         XCTAssertEqual(normalized.first?.name, "Weather Before Leaving")
         XCTAssertTrue(normalized.first?.isBuiltIn == true)
         XCTAssertFalse(normalized.first(where: { $0.id == custom.id })!.isBuiltIn)
@@ -71,7 +73,7 @@ final class QuickTaskCatalogTests: XCTestCase {
 
         XCTAssertEqual(created.name, "Prepare Meeting")
         XCTAssertEqual(created.prompt, "Review the next calendar event")
-        XCTAssertEqual(store.tasks.count, 9)
+        XCTAssertEqual(store.tasks.count, QuickTaskDefinition.builtIns.count + 1)
 
         var edited = created
         edited.name = "Meeting Brief"
@@ -83,10 +85,10 @@ final class QuickTaskCatalogTests: XCTestCase {
 
         store.delete(id: created.id)
         XCTAssertNil(store.definition(for: created.id))
-        XCTAssertEqual(store.tasks.count, 8)
+        XCTAssertEqual(store.tasks.count, QuickTaskDefinition.builtIns.count)
 
         let reloaded = QuickTaskStore(defaults: defaults)
-        XCTAssertEqual(reloaded.tasks.count, 8)
+        XCTAssertEqual(reloaded.tasks.count, QuickTaskDefinition.builtIns.count)
         XCTAssertNotNil(reloaded.definition(for: "checkWeather"))
     }
 
@@ -143,19 +145,19 @@ final class QuickTaskCatalogTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let store = QuickTaskStore(defaults: defaults)
 
-        XCTAssertEqual(store.composerTaskIDs, ["analyzeSleep", "healthReport", "checkWeather"])
-        XCTAssertFalse(store.setComposerPinned(true, id: "morningBriefing"))
-        XCTAssertTrue(store.setComposerPinned(false, id: "healthReport"))
-        XCTAssertTrue(store.setComposerPinned(true, id: "morningBriefing"))
-        XCTAssertEqual(store.composerTaskIDs, ["analyzeSleep", "checkWeather", "morningBriefing"])
+        XCTAssertEqual(store.composerTaskIDs, QuickTaskStore.defaultComposerTaskIDs)
+        XCTAssertFalse(store.setComposerPinned(true, id: "checkWeather"))
+        XCTAssertTrue(store.setComposerPinned(false, id: "dailyNews"))
+        XCTAssertTrue(store.setComposerPinned(true, id: "checkWeather"))
+        XCTAssertEqual(store.composerTaskIDs, ["morningBriefing", "clipboardAssistant", "checkWeather"])
 
         let custom = try XCTUnwrap(store.add(name: "Temporary", prompt: "Do the task"))
-        XCTAssertTrue(store.setComposerPinned(false, id: "analyzeSleep"))
+        XCTAssertTrue(store.setComposerPinned(false, id: "clipboardAssistant"))
         XCTAssertTrue(store.setComposerPinned(true, id: custom.id))
         store.delete(id: custom.id)
         XCTAssertFalse(store.composerTaskIDs.contains(custom.id))
 
         let reloaded = QuickTaskStore(defaults: defaults)
-        XCTAssertEqual(reloaded.composerTaskIDs, ["checkWeather", "morningBriefing"])
+        XCTAssertEqual(reloaded.composerTaskIDs, ["morningBriefing", "checkWeather"])
     }
 }

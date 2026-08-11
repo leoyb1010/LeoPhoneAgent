@@ -230,8 +230,26 @@ enum LinkPreviewFetcher {
         // 拒绝跨站请求。统一带上来源页的 Referer —— 这是通用做法,不是
         // 给某个站开的特例。
         request.setValue(referer, forHTTPHeaderField: "Referer")
-        guard let (data, _) = try? await session.data(for: request),
-              let image = UIImage(data: data) else { return nil }
+        // 图片也必须流式限额。data(for:) 会先把伪装成图片的超大响应完整
+        // 收进内存，一条恶意收藏就能制造几十/几百 MB 峰值。12 MB 足够
+        // 覆盖常见封面与原图，超过就停止读取并把这次预览当作无图。
+        guard let (bytes, response) = try? await session.bytes(for: request),
+              let http = response as? HTTPURLResponse,
+              (200..<300).contains(http.statusCode) else { return nil }
+        let mime = (http.mimeType ?? "").lowercased()
+        guard mime.isEmpty || mime.hasPrefix("image/") else { return nil }
+        let maxImageBytes = 12 * 1024 * 1024
+        var data = Data()
+        data.reserveCapacity(min(maxImageBytes, 2 * 1024 * 1024))
+        do {
+            for try await byte in bytes {
+                data.append(byte)
+                if data.count > maxImageBytes { return nil }
+            }
+        } catch {
+            return nil
+        }
+        guard let image = UIImage(data: data) else { return nil }
         // 太小的多半是占位图标/像素图,当作没抓到,让上层继续往下试
         guard image.size.width >= 48, image.size.height >= 48 else { return nil }
         return image

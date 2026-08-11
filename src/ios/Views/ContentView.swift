@@ -107,6 +107,7 @@ enum ToolSheet: String, Identifiable {
     case rootfsManagement
     case browser
     case browserManagement
+    case quickTasks
     case syncMigrationDetail
     var id: String { rawValue }
 }
@@ -657,6 +658,15 @@ struct ContentView: View {
                 case .browserManagement:
                     NavigationStack {
                         BrowserManagementView(pool: browserPool)
+                    }
+                case .quickTasks:
+                    NavigationStack {
+                        QuickTaskSettingsView()
+                            .toolbar {
+                                ToolbarItem(placement: .cancellationAction) {
+                                    Button("Done") { activeToolSheet = nil }
+                                }
+                            }
                     }
                 case .syncMigrationDetail:
                     NavigationStack {
@@ -1320,6 +1330,40 @@ struct ContentView: View {
                 }
             }
         }
+        .fullScreenCover(item: $macChatTarget) { target in
+            NavigationStack {
+                if let client = gatewayStore.client(for: target.host) {
+                    HarnessConsoleView(
+                        driver: HarnessSessionDriver(
+                            client: client,
+                            harness: HarnessKind(key: target.cliKey, name: target.cliName),
+                            cwd: "~"),
+                        firstPrompt: target.firstPrompt)
+                    .navigationTitle("\(target.host.name) · \(target.cliName)")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("关闭") { macChatTarget = nil }
+                        }
+                    }
+                } else {
+                    VStack(spacing: 12) {
+                        Text("缺少访问密钥")
+                            .font(.headline)
+                        Text("去 设置 → 我的 Mac 里补上这台 Mac 的密钥。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        Button("关闭") { macChatTarget = nil }
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showAddProvider) {
+            NavigationStack { AddProviderView() }
+        }
+        .sheet(isPresented: $showSelectModels) {
+            NavigationStack { OnboardingModelSelectionView() }
+        }
         // [T-session-attention-bar] Aggregate what needs the user, above the
         // list. Individual rows already carry badges, but with several
         // long-running tasks the badges are scattered down a scrolling list —
@@ -1431,6 +1475,7 @@ struct ContentView: View {
     /// Plain List with NavigationLink for stack (iPhone) layout.
     private var stackList: some View {
         List {
+            agentHomeListSection(hasSessions: !filteredSessions.isEmpty)
             macLiveSection
             // [T-ios-session-list-equatable-jank] id-list projection — see splitList.
             let groups = groupedSessionIDs(filteredSessions)
@@ -1522,6 +1567,7 @@ struct ContentView: View {
     /// Selection-bound List for split (iPad) layout.
     private var splitList: some View {
         List(selection: $selectedSessionId) {
+            agentHomeListSection(hasSessions: !displaySessions.isEmpty)
             macLiveSection
             // [T-ios-session-list-equatable-jank] Diff a (label, ids) projection
             // so SwiftUI compares a [String] id list, not a [ChatSession] value
@@ -2370,228 +2416,423 @@ struct ContentView: View {
     @ObservedObject private var macLive = MacLiveSessionsStore.shared
     @State private var macAttachTarget: MacLiveSessionsStore.Row?
     @State private var macChatTarget: MacChatTarget?
+    @State private var homePrompt = ""
+    @State private var homeExecutionTarget: HomeExecutionTarget = .iphone
+    @State private var homeRoutingError: String?
+    @State private var homeRoutingInProgress = false
+
+    private enum HomeExecutionTarget: Equatable {
+        case iphone
+        case mac(hostId: String, cliKey: String, cliName: String)
+    }
 
     struct MacChatTarget: Identifiable {
         let host: GatewayHost
         let cliKey: String
         let cliName: String
+        let firstPrompt: String
         var id: String { host.id + cliKey }
     }
 
-    private func openMacChat(_ host: GatewayHost, _ key: String, _ name: String) {
-        macChatTarget = MacChatTarget(host: host, cliKey: key, cliName: name)
+    private func openMacChat(_ host: GatewayHost, _ key: String, _ name: String, prompt: String = "") {
+        macChatTarget = MacChatTarget(host: host, cliKey: key, cliName: name, firstPrompt: prompt)
     }
     @State private var showAddProvider = false
     @State private var showSelectModels = false
 
     private var emptyState: some View {
+        ScrollView {
+            agentHomeCard(compact: false)
+                .frame(maxWidth: 560)
+                .padding(.horizontal, LeoTheme.Spacing.md)
+                .padding(.vertical, LeoTheme.Spacing.lg)
+        }
+        .background(LeoTheme.ColorToken.groupedBackground)
+    }
+
+    /// The primary home surface is the Agent running on this iPhone. Macs are
+    /// selectable execution destinations, never a prerequisite or the product's
+    /// default identity.
+    @ViewBuilder
+    private func agentHomeListSection(hasSessions: Bool) -> some View {
+        if hasSessions, !isSelecting, !isSearching {
+            Section {
+                agentHomeCard(compact: true)
+                    .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+            }
+        }
+    }
+
+    private func agentHomeCard(compact: Bool) -> some View {
         let hasProviders = !providerStore.instances.isEmpty
-        let hasGroups = !providerStore.modelGroups.isEmpty
+        let hasModel = !providerStore.modelGroups.isEmpty
+        let activeCount = sidebarActivityTracker.activeSessions.count
+        let columns = [GridItem(.adaptive(minimum: compact ? 76 : 88), spacing: 8)]
 
-        return VStack(spacing: 32) {
-            Spacer()
-            // App icon / hero
-            Image(systemName: "sparkles")
-                .font(.system(size: 56))
-                .foregroundStyle(.tint)
-                .padding(.bottom, 4)
+        return VStack(alignment: .leading, spacing: compact ? 14 : 18) {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.14))
+                    Image(systemName: "iphone")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(.tint)
+                }
+                .frame(width: 44, height: 44)
+                .accessibilityHidden(true)
 
-            VStack(spacing: 8) {
-                Text("Welcome to LeoPhoneAgent")
-                    .font(.title2.bold())
-                Text("Your first On-Device Agent is almost ready.")
-                    .font(.subheadline)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("LeoPhoneAgent")
+                        .font(.headline.weight(.bold))
+                    Text("独立运行在此 iPhone")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 8)
+
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(activeCount > 0 ? LeoTheme.ColorToken.success : Color.accentColor)
+                        .frame(width: 7, height: 7)
+                    Text(activeCount > 0
+                         ? String(localized: "本机运行中 \(activeCount)")
+                         : String(localized: "本机就绪"))
+                        .font(.caption2.weight(.semibold))
+                        .lineLimit(1)
+                }
+                .padding(.horizontal, 9)
+                .padding(.vertical, 6)
+                .background(LeoTheme.ColorToken.elevatedSurface, in: Capsule())
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("交代一个任务")
+                    .font(.subheadline.weight(.semibold))
+
+                TextField("让此 iPhone 帮你分析、查找、写作或执行…", text: $homePrompt, axis: .vertical)
+                    .lineLimit(compact ? 2...4 : 3...6)
+                    .textFieldStyle(.plain)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .frame(minHeight: compact ? 72 : 92, alignment: .topLeading)
+                    .background(LeoTheme.ColorToken.background, in: RoundedRectangle(cornerRadius: LeoTheme.Radius.field, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: LeoTheme.Radius.field, style: .continuous)
+                            .stroke(LeoTheme.ColorToken.separator.opacity(0.45), lineWidth: 0.5)
+                    }
+                    .submitLabel(.send)
+                    .onSubmit { runHomePrompt() }
+                    .onChange(of: homePrompt) { _ in homeRoutingError = nil }
+
+                HStack(spacing: 10) {
+                    homeTargetMenu
+                    Spacer(minLength: 8)
+                    Button(action: runHomePrompt) {
+                        HStack(spacing: 6) {
+                            if homeRoutingInProgress {
+                                ProgressView()
+                                    .tint(.white)
+                            } else {
+                                Text("继续")
+                                Image(systemName: "arrow.right")
+                            }
+                        }
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 15)
+                        .frame(minHeight: LeoTheme.TouchTarget.minimum)
+                        .background(Color.accentColor, in: Capsule())
+                    }
+                    .buttonStyle(LeoSquishButtonStyle())
+                    .disabled(!canRunHomePrompt)
+                    .opacity(canRunHomePrompt ? 1 : 0.35)
+                    .accessibilityLabel(Text("进入任务工作区继续编辑"))
+                    .accessibilityHint(Text(homeExecutionTargetHint))
+                }
+
+                if let homeRoutingError {
+                    Label(homeRoutingError, systemImage: "exclamationmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(LeoTheme.ColorToken.destructive)
+                        .transition(.opacity.combined(with: .move(edge: .top)))
+                        .accessibilityLabel(Text("任务未发送：\(homeRoutingError)"))
+                }
+            }
+            .padding(14)
+            .background(LeoTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
+
+            if !hasModel, homeTargetIsIPhone {
+                Button {
+                    if hasProviders { showSelectModels = true } else { showAddProvider = true }
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "slider.horizontal.3")
+                            .foregroundStyle(.tint)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(hasProviders ? "选择本机默认模型" : "连接本机模型")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.primary)
+                            Text("只需完成这一步，Mac 连接不是必需项")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(12)
+                    .background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: LeoTheme.Radius.field, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            }
+
+            VStack(alignment: .leading, spacing: 9) {
+                Text("此 iPhone 的能力")
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-
-            // Setup steps
-            VStack(spacing: 16) {
-                // Step 1 – Add Provider
-                setupStep(
-                    number: 1,
-                    title: "Add a Provider",
-                    subtitle: hasProviders ? "Done" : "Configure an API key or sign in with OAuth",
-                    isDone: hasProviders
-                ) {
-                    if !hasProviders {
-                        showAddProvider = true
+                LazyVGrid(columns: columns, spacing: 8) {
+                    homeCapabilityButton("语音", systemImage: "mic.fill", tint: .orange) {
+                        startHomeChatAction(.startVoice)
                     }
-                }
-
-                // Step 2 – Select Models
-                setupStep(
-                    number: 2,
-                    title: "Select Models",
-                    subtitle: hasGroups ? "Done" : (hasProviders ? "Choose the models you want to use" : "Complete step 1 first"),
-                    isDone: hasGroups
-                ) {
-                    if hasProviders && !hasGroups {
-                        showSelectModels = true
+                    homeCapabilityButton("相机", systemImage: "camera.fill", tint: .pink) {
+                        startHomeChatAction(.openCamera)
                     }
-                }
-
-                // Step 3 – Start chatting
-                setupStep(
-                    number: 3,
-                    title: "Start a Conversation",
-                    subtitle: hasGroups ? "Tap the button below to begin" : "Complete step 2 first",
-                    isDone: false
-                ) {
-                    if hasGroups {
-                        openSession(Self.makeNewSessionId())
+                    homeCapabilityButton("文件", systemImage: "folder.fill", tint: .blue) {
+                        activeToolSheet = .rootfsManagement
+                    }
+                    homeCapabilityButton("快捷指令", systemImage: "bolt.fill", tint: .indigo) {
+                        activeToolSheet = .quickTasks
+                    }
+                    homeCapabilityButton("浏览器", systemImage: "globe", tint: .teal) {
+                        activeToolSheet = .browser
+                    }
+                    homeCapabilityButton("iSH", systemImage: "terminal.fill", tint: .green) {
+                        showTerminal = true
                     }
                 }
             }
-            .padding(.horizontal, 8)
-            .frame(maxWidth: 400)
 
-            if hasGroups, !quickTaskStore.composerTasks.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Start with a Quick Task")
-                        .font(.headline)
+            if hasModel, !quickTaskStore.composerTasks.isEmpty {
+                VStack(alignment: .leading, spacing: 9) {
+                    Text("本机快捷任务")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 10) {
+                        HStack(spacing: 8) {
                             ForEach(quickTaskStore.composerTasks) { task in
-                                Button {
-                                    openQuickTask(task)
-                                } label: {
+                                Button { openQuickTask(task) } label: {
                                     Label(task.displayName, systemImage: task.symbolName)
-                                        .font(.subheadline.weight(.medium))
+                                        .font(.caption.weight(.semibold))
                                         .lineLimit(1)
+                                        .padding(.horizontal, 11)
+                                        .frame(minHeight: LeoTheme.TouchTarget.minimum)
+                                        .background(LeoTheme.ColorToken.elevatedSurface, in: Capsule())
                                 }
-                                .buttonStyle(.glass)
-                                .controlSize(.large)
+                                .buttonStyle(.plain)
                             }
                         }
                     }
                 }
-                .frame(maxWidth: 400, alignment: .leading)
-                .accessibilityElement(children: .contain)
             }
 
-            // [T-mac-composer] 对话框直达 Mac:每台在线 Mac 一个按钮,弹出
-            // CLI 三选,选中直接开聊——不必去设置或控制台。这是"手机是主
-            // 控制面"的正确形态:主对话界面完成一切。
+            NavigationLink {
+                GatewaySettingsView()
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "desktopcomputer")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 28, height: 28)
+                        .background(LeoTheme.ColorToken.elevatedSurface, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("可选的 Mac 执行目标")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text(gatewayStore.activeHosts.isEmpty
+                             ? String(localized: "未连接，不影响 iPhone 独立工作")
+                             : String(localized: "已配置 \(gatewayStore.activeHosts.count) 台，发送时验证连接"))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(.tertiary)
+                }
+                .frame(minHeight: LeoTheme.TouchTarget.minimum)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(compact ? 14 : 18)
+        .background(LeoTheme.ColorToken.background, in: RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous)
+                .stroke(LeoTheme.ColorToken.separator.opacity(0.32), lineWidth: 0.5)
+        }
+        .shadow(color: .black.opacity(compact ? 0.04 : 0.07), radius: compact ? 8 : 14, y: compact ? 3 : 6)
+        .accessibilityElement(children: .contain)
+    }
+
+    private var homeTargetIsIPhone: Bool {
+        if case .iphone = homeExecutionTarget { return true }
+        return false
+    }
+
+    private var canRunHomePrompt: Bool {
+        !homeRoutingInProgress
+            && !homePrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var homeExecutionTargetHint: String {
+        switch homeExecutionTarget {
+        case .iphone:
+            return String(localized: "在此 iPhone 的新对话中继续")
+        case .mac(_, _, let cliName):
+            return String(localized: "交给所选 Mac 的 \(cliName)")
+        }
+    }
+
+    private var homeExecutionTargetTitle: String {
+        switch homeExecutionTarget {
+        case .iphone:
+            return String(localized: "此 iPhone")
+        case .mac(let hostId, _, let cliName):
+            let hostName = gatewayStore.activeHosts.first(where: { $0.id == hostId })?.name ?? "Mac"
+            return "\(hostName) · \(cliName)"
+        }
+    }
+
+    private var homeTargetMenu: some View {
+        Menu {
+            Button {
+                homeExecutionTarget = .iphone
+                homeRoutingError = nil
+                LeoHaptics.selection()
+            } label: {
+                Label("此 iPhone（默认）", systemImage: homeTargetIsIPhone ? "checkmark.circle.fill" : "iphone")
+            }
             if !gatewayStore.activeHosts.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("指挥一台 Mac")
-                        .font(.headline)
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 10) {
-                            ForEach(gatewayStore.activeHosts) { host in
-                                Menu {
-                                    Button("Claude Code") { openMacChat(host, "claude", "Claude Code") }
-                                    Button("Codex") { openMacChat(host, "codex", "Codex") }
-                                    Button("Grok") { openMacChat(host, "grok", "Grok") }
-                                } label: {
-                                    Label(host.name, systemImage: "desktopcomputer")
-                                        .font(.subheadline.weight(.medium))
-                                        .lineLimit(1)
-                                }
-                                .buttonStyle(.glass)
-                                .controlSize(.large)
+                Section("需要时切换到 Mac") {
+                    ForEach(gatewayStore.activeHosts) { host in
+                        Menu(host.name) {
+                            Button("Claude Code") {
+                                selectHomeMac(host, key: "claude", name: "Claude Code")
+                            }
+                            Button("Codex") {
+                                selectHomeMac(host, key: "codex", name: "Codex")
+                            }
+                            Button("Grok") {
+                                selectHomeMac(host, key: "grok", name: "Grok")
                             }
                         }
                     }
                 }
-                .frame(maxWidth: 400, alignment: .leading)
             }
-            Spacer()
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: homeTargetIsIPhone ? "iphone" : "desktopcomputer")
+                Text(homeExecutionTargetTitle)
+                    .lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 11)
+            .frame(minHeight: LeoTheme.TouchTarget.minimum)
+            .background(LeoTheme.ColorToken.elevatedSurface, in: Capsule())
         }
-        .frame(maxHeight: .infinity)
-        .padding(.horizontal, 32)
-        .fullScreenCover(item: $macChatTarget) { target in
-            NavigationStack {
-                if let client = gatewayStore.client(for: target.host) {
-                    HarnessConsoleView(
-                        driver: HarnessSessionDriver(
-                            client: client,
-                            harness: HarnessKind(key: target.cliKey, name: target.cliName),
-                            cwd: "~"),
-                        firstPrompt: "")
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("关闭") { macChatTarget = nil }
-                        }
-                    }
-                } else {
-                    VStack(spacing: 12) {
-                        Text("缺少访问密钥")
-                        Text("去 设置 → 我的 Mac 里补上这台 Mac 的密钥。")
-                            .font(.footnote).foregroundStyle(.secondary)
-                        Button("关闭") { macChatTarget = nil }
-                    }
+        .accessibilityLabel(Text("执行目标：\(homeExecutionTargetTitle)"))
+    }
+
+    private func homeCapabilityButton(
+        _ title: String,
+        systemImage: String,
+        tint: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            LeoHaptics.impact(.light)
+            action()
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(tint)
+                Text(title)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, minHeight: 56)
+            .background(LeoTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+        }
+        .buttonStyle(LeoSquishButtonStyle())
+        .accessibilityLabel(Text(title))
+    }
+
+    private func selectHomeMac(_ host: GatewayHost, key: String, name: String) {
+        homeExecutionTarget = .mac(hostId: host.id, cliKey: key, cliName: name)
+        homeRoutingError = nil
+        LeoHaptics.selection()
+    }
+
+    private func startHomeChatAction(_ action: ChatLaunchAction) {
+        QuickActionWorkflow.shared.start(action)
+        popToHomeForQuickAction()
+    }
+
+    private func runHomePrompt() {
+        let prompt = homePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prompt.isEmpty else { return }
+        switch homeExecutionTarget {
+        case .iphone:
+            guard !providerStore.modelGroups.isEmpty else {
+                if providerStore.instances.isEmpty { showAddProvider = true }
+                else { showSelectModels = true }
+                return
+            }
+            homeRoutingError = nil
+            homePrompt = ""
+            LeoHaptics.impact(.medium)
+            startHomeChatAction(.prefillPrompt(prompt))
+        case .mac(let hostId, let cliKey, let cliName):
+            guard let host = gatewayStore.activeHosts.first(where: { $0.id == hostId }) else {
+                homeRoutingError = String(localized: "这台 Mac 已不可用，请重新选择执行目标")
+                LeoHaptics.notification(.error)
+                return
+            }
+            guard gatewayStore.client(for: host) != nil else {
+                homeRoutingError = String(localized: "这台 Mac 缺少访问密钥，任务仍保留在输入框")
+                LeoHaptics.notification(.error)
+                return
+            }
+            homeRoutingError = nil
+            homeRoutingInProgress = true
+            Task { @MainActor in
+                let reachable = await GatewayHostStore.probe(host)
+                defer { homeRoutingInProgress = false }
+                guard homeExecutionTarget == .mac(hostId: hostId, cliKey: cliKey, cliName: cliName),
+                      homePrompt.trimmingCharacters(in: .whitespacesAndNewlines) == prompt
+                else { return }
+                guard reachable else {
+                    homeRoutingError = String(localized: "这台 Mac 当前没有响应，任务仍保留在输入框")
+                    LeoHaptics.notification(.error)
+                    return
                 }
-            }
-        }
-        .sheet(isPresented: $showAddProvider) {
-            NavigationStack {
-                AddProviderView()
-            }
-        }
-        .sheet(isPresented: $showSelectModels) {
-            NavigationStack {
-                OnboardingModelSelectionView()
+                homePrompt = ""
+                LeoHaptics.impact(.medium)
+                openMacChat(host, cliKey, cliName, prompt: prompt)
             }
         }
     }
 
     private func openQuickTask(_ task: QuickTaskDefinition) {
-        QuickActionWorkflow.shared.start(.prefillQuickTask(id: task.id))
-        QuickActionWorkflow.shared.markHome()
-    }
-
-    private func setupStep(
-        number: Int,
-        title: String,
-        subtitle: String,
-        isDone: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 14) {
-                // Step indicator
-                ZStack {
-                    Circle()
-                        .fill(isDone ? Color.green : Color.accentColor)
-                        .frame(width: 32, height: 32)
-                    if isDone {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(.white)
-                    } else {
-                        Text("\(number)")
-                            .font(.system(size: 15, weight: .semibold, design: .rounded))
-                            .foregroundColor(.white)
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.body.weight(.medium))
-                        .foregroundStyle(isDone ? .secondary : .primary)
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                if !isDone {
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                }
-            }
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color(UIColor.secondarySystemGroupedBackground))
-            )
-        }
-        .buttonStyle(.plain)
-        .disabled(isDone)
+        startHomeChatAction(.prefillQuickTask(id: task.id))
     }
 
     // MARK: - Search Bar
@@ -2863,6 +3104,9 @@ struct ContentView: View {
                         }
                     }
             }
+            .opacity(sessions.isEmpty && providerStore.modelGroups.isEmpty ? 0 : 1)
+            .allowsHitTesting(!(sessions.isEmpty && providerStore.modelGroups.isEmpty))
+            .accessibilityHidden(sessions.isEmpty && providerStore.modelGroups.isEmpty)
 
             // Search FAB or inline search bar (hidden when no sessions)
             if !sessions.isEmpty {

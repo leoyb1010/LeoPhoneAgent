@@ -80,6 +80,26 @@ enum LeoMotion {
     }
 }
 
+/// Shared tactile press language for primary Agent actions. The control
+/// compresses quickly under the finger and returns on the app's spring token;
+/// Reduce Motion removes the scale entirely while preserving the tap target.
+struct LeoSquishButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.94 : 1))
+            .animation(
+                reduceMotion
+                    ? nil
+                    : (configuration.isPressed
+                       ? .easeOut(duration: 0.08)
+                       : .spring(response: 0.36, dampingFraction: 0.68)),
+                value: configuration.isPressed
+            )
+    }
+}
+
 extension View {
     /// A floating panel: toolbars, inline banners, the composer's accessory row.
     func leoGlassSurface(cornerRadius: CGFloat = LeoTheme.Radius.surface) -> some View {

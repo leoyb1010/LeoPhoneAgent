@@ -377,7 +377,7 @@ struct WhatsNewSheet: View {
                 if let note = LeoReleaseNotes.current {
                     Section {
                         ForEach(note.items, id: \.self) { line in
-                            Text(line).font(.system(size: 15))
+                            ReleaseNoteRow(line: line)
                         }
                     } header: {
                         Text("v\(note.version) · \(note.date)")
@@ -412,7 +412,7 @@ struct ReleaseNotesView: View {
             ForEach(LeoReleaseNotes.all) { note in
                 Section {
                     ForEach(note.items, id: \.self) { line in
-                        Text(line).font(.system(size: 15))
+                        ReleaseNoteRow(line: line)
                     }
                 } header: {
                     Text("v\(note.version) · \(note.date)")
@@ -421,5 +421,40 @@ struct ReleaseNotesView: View {
         }
         .navigationTitle("更新记录")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct ReleaseNoteRow: View {
+    let line: String
+
+    private var text: String {
+        guard let space = line.firstIndex(of: " ") else { return line }
+        let prefix = line[..<space]
+        return prefix.unicodeScalars.contains(where: { !$0.properties.isEmoji })
+            ? line
+            : String(line[line.index(after: space)...])
+    }
+
+    private var symbol: String {
+        if line.contains("敏感") || line.contains("OAuth") || line.contains("密钥") { return "key.fill" }
+        if line.contains("后台") || line.contains("锁屏") { return "shield.lefthalf.filled" }
+        if line.contains("会话") || line.contains("同步") { return "arrow.triangle.2.circlepath" }
+        if line.contains("修复") || line.contains("防护") { return "checkmark.shield.fill" }
+        if line.contains("Mac") { return "desktopcomputer" }
+        return "checkmark.circle.fill"
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: LeoTheme.Spacing.sm) {
+            Image(systemName: symbol)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.tint)
+                .frame(width: 22, height: 22)
+                .accessibilityHidden(true)
+            Text(text)
+                .font(.system(size: 15))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, LeoTheme.Spacing.xxs)
     }
 }

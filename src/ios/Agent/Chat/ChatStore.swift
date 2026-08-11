@@ -498,7 +498,6 @@ actor ChatStore {
         addColumnIfMissing(table: "sessions", column: "memory_enabled", definition: "INTEGER NOT NULL DEFAULT 1")
         addColumnIfMissing(table: "sessions", column: "last_synced_at", definition: "REAL")
         addColumnIfMissing(table: "sessions", column: "remote_origin_device_id", definition: "TEXT")
-        addColumnIfMissing(table: "sync_devices", column: "upload_types", definition: "TEXT NOT NULL DEFAULT ''")
         addColumnIfMissing(table: "sessions", column: "pinned_at", definition: "REAL")
         addColumnIfMissing(table: "messages", column: "updated_at", definition: "REAL")
         // [T-error-persist-ios] Device-local error string shown on a failed
@@ -523,8 +522,6 @@ actor ChatStore {
         // 28k+ row backlog never starves freshly-typed user messages.
         // priority: 0 = user-driven (default), 1 = migration backlog
         // (push only after priority=0 drains in each batch).
-        addColumnIfMissing(table: "sync_dirty_records", column: "priority", definition: "INTEGER NOT NULL DEFAULT 0")
-        addColumnIfMissing(table: "sync_dirty_records", column: "created_at", definition: "REAL NOT NULL DEFAULT 0")
 
         // One-shot cleanup: drop legacy v1 dirty rows that have a v2
         // counterpart. Under the V2 engine these have no consumer (the
@@ -612,6 +609,8 @@ actor ChatStore {
                 PRIMARY KEY (record_type, record_id)
             )
         """)
+        addColumnIfMissing(table: "sync_dirty_records", column: "priority", definition: "INTEGER NOT NULL DEFAULT 0")
+        addColumnIfMissing(table: "sync_dirty_records", column: "created_at", definition: "REAL NOT NULL DEFAULT 0")
         // Distinct recordIDs that have ever been confirmed saved to
         // iCloud (via CKSyncEngine SentRecordZoneChanges). Used by the
         // migration progress UI to show a real "unique records pushed"
@@ -673,6 +672,7 @@ actor ChatStore {
                 os_version  TEXT NOT NULL DEFAULT ''
             )
         """)
+        addColumnIfMissing(table: "sync_devices", column: "upload_types", definition: "TEXT NOT NULL DEFAULT ''")
         exec("""
             CREATE TABLE IF NOT EXISTS remote_sessions (
                 id          TEXT NOT NULL,

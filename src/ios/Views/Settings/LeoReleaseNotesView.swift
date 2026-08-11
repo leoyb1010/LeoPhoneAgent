@@ -12,6 +12,17 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.21.0",
+            date: "2026-08-11",
+            title: "个人代理的授权与连接边界更清楚",
+            highlights: [
+                "读取浏览器 Cookie、导出凭据等敏感操作现在支持「允许一次 / 本次会话允许 / 拒绝」，个人使用时可以减少重复确认，又不会静默执行。",
+                "OAuth 授权入口统一要求 HTTPS，网页预览会拦截本机与私有网段地址，并限制重定向边界。",
+                "聊天数据库启用设备文件保护；临时 Cookie 环境文件会自动清理，不再长期残留。",
+                "网络传输不再全局放开明文请求，仅网页内容保留兼容范围。"
+            ]
+        ),
+        LeoRelease(
             version: "1.7.0",
             date: "2026-08-05",
             title: "网关:让 Mac 成为手机的第二具身体",

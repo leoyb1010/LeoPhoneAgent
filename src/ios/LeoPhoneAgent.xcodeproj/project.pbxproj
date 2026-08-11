@@ -228,6 +228,7 @@
 		E5G000002 /* AgentLiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5G000012 /* AgentLiveActivityManager.swift */; };
 		E5G000003 /* EnhancedBackgroundSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5G000013 /* EnhancedBackgroundSettingsView.swift */; };
 		E5G000004 /* AgentActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5G000014 /* AgentActivityAttributes.swift */; };
+		E5G000005 /* AgentActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5G000014 /* AgentActivityAttributes.swift */; };
 		E5GWF0003 /* GeminiWireFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWF0013 /* GeminiWireFormat.swift */; };
 		E5GWF0004 /* GeminiWireFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5GWF0013 /* GeminiWireFormat.swift */; };
 		E5H000001 /* AgentWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5H000011 /* AgentWidgetBundle.swift */; };
@@ -618,6 +619,13 @@
 			dstPath = "";
 			dstSubfolderSpec = 7;
 			files = (
+				AAF00F022F50A00000049557 /* FFmpeg.framework in Embed Frameworks */,
+				AAF10F022F50A00000049557 /* libavcodec.framework in Embed Frameworks */,
+				AAF10F052F50A00000049557 /* libavformat.framework in Embed Frameworks */,
+				AAF10F082F50A00000049557 /* libavutil.framework in Embed Frameworks */,
+				AAF10F0B2F50A00000049557 /* libavfilter.framework in Embed Frameworks */,
+				AAF10F0E2F50A00000049557 /* libswresample.framework in Embed Frameworks */,
+				AAF10F112F50A00000049557 /* libswscale.framework in Embed Frameworks */,
 			);
 			name = "Copy Alpine Rootfs";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -628,13 +636,6 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				AAF00F022F50A00000049557 /* FFmpeg.framework in Embed Frameworks */,
-				AAF10F022F50A00000049557 /* libavcodec.framework in Embed Frameworks */,
-				AAF10F052F50A00000049557 /* libavformat.framework in Embed Frameworks */,
-				AAF10F082F50A00000049557 /* libavutil.framework in Embed Frameworks */,
-				AAF10F0B2F50A00000049557 /* libavfilter.framework in Embed Frameworks */,
-				AAF10F0E2F50A00000049557 /* libswresample.framework in Embed Frameworks */,
-				AAF10F112F50A00000049557 /* libswscale.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -755,7 +756,7 @@
 		AAF10F0A2F50A00000049557 /* libavfilter.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = libavfilter.framework; path = ../../deps/frameworks/libavfilter.framework; sourceTree = "<group>"; };
 		AAF10F0D2F50A00000049557 /* libswresample.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = libswresample.framework; path = ../../deps/frameworks/libswresample.framework; sourceTree = "<group>"; };
 		AAF10F102F50A00000049557 /* libswscale.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = libswscale.framework; path = ../../deps/frameworks/libswscale.framework; sourceTree = "<group>"; };
-		AC0000001 /* ProviderCustomization.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = ProviderCustomization.xcconfig; path = Configs/ProviderCustomization.xcconfig; sourceTree = "<group>"; };
+		AC0000001 /* ProviderCustomization.defaults.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = ProviderCustomization.defaults.xcconfig; path = Configs/ProviderCustomization.defaults.xcconfig; sourceTree = "<group>"; };
 		AC0000201 /* ProviderCustomizationGenerated.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ProviderCustomizationGenerated.swift; path = Generated/ProviderCustomizationGenerated.swift; sourceTree = "<group>"; };
 		E54000AC2 /* DebugSkillGenerated.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DebugSkillGenerated.swift; path = Generated/DebugSkillGenerated.swift; sourceTree = "<group>"; };
 		B7E2CB0D0D63E6D6FDB45568 /* VoiceActivityDetector.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoiceActivityDetector.swift; sourceTree = "<group>"; };
@@ -1467,7 +1468,7 @@
 				E5BSH0014 /* bashism_rules.json */,
 				AC0000201 /* ProviderCustomizationGenerated.swift */,
 				E54000AC2 /* DebugSkillGenerated.swift */,
-				AC0000001 /* ProviderCustomization.xcconfig */,
+				AC0000001 /* ProviderCustomization.defaults.xcconfig */,
 			);
 			name = "Recovered References";
 			sourceTree = "<group>";
@@ -2820,6 +2821,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E5G000005 /* AgentActivityAttributes.swift in Sources */,
 				E5ART0003 /* ArtifactModels.swift in Sources */,
 				E5ART0004 /* ArtifactRepository.swift in Sources */,
 				E5CSC0002 /* ChatStoreSchemaContract.swift in Sources */,
@@ -3481,7 +3483,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_OBJC_BRIDGING_HEADER = "MinisApp-Bridging-Header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "MinisTests/MinisTests-Bridging-Header.h";
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -3508,7 +3510,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_OBJC_BRIDGING_HEADER = "MinisApp-Bridging-Header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "MinisTests/MinisTests-Bridging-Header.h";
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -3516,7 +3518,7 @@
 		};
 		E51000070 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = AC0000001 /* ProviderCustomization.xcconfig */;
+			baseConfigurationReference = AC0000001 /* ProviderCustomization.defaults.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -3582,7 +3584,7 @@
 		};
 		E51000071 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = AC0000001 /* ProviderCustomization.xcconfig */;
+			baseConfigurationReference = AC0000001 /* ProviderCustomization.defaults.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;

@@ -174,18 +174,23 @@ final class ToolLoopDetectorTests: XCTestCase {
         // Models often suffix it with a counter ("#1", "#2", ...), which must NOT
         // make logically-identical calls look unique to the detector.
         let detector = ToolLoopDetector()
+        var thresholdResult = LoopCheckResult.pass
         for i in 1...10 {
             let params: [String: Any] = [
                 "path": "/etc/hostname",
                 "tool_title": "Read /etc/hostname #\(i)",
             ]
-            _ = detector.record(toolName: "file_read", params: params, result: "localhost")
+            thresholdResult = detector.record(
+                toolName: "file_read",
+                params: params,
+                result: "localhost"
+            )
         }
-        let pre = detector.check(
-            toolName: "file_read",
-            params: ["path": "/etc/hostname", "tool_title": "Read /etc/hostname #11"]
+        XCTAssertEqual(
+            thresholdResult.level,
+            .warning,
+            "tool_title variation must NOT defeat repeat detection"
         )
-        XCTAssertNotEqual(pre.level, .none, "tool_title variation must NOT defeat repeat detection")
     }
 
     func testArgsHash_keyOrderInvariant() {
@@ -197,11 +202,11 @@ final class ToolLoopDetectorTests: XCTestCase {
         for _ in 0..<5 {
             _ = detector.record(toolName: "file_read", params: p1, result: "ok")
         }
+        var thresholdResult = LoopCheckResult.pass
         for _ in 0..<5 {
-            _ = detector.record(toolName: "file_read", params: p2, result: "ok")
+            thresholdResult = detector.record(toolName: "file_read", params: p2, result: "ok")
         }
-        // 10 total (with stable hashing) → next pre-check sees count=10 → warning.
-        let post = detector.record(toolName: "file_read", params: p2, result: "ok")
-        XCTAssertEqual(post.level, .warning, "key-order-invariant hashing must collapse to a single bucket")
+        // 10 total (with stable hashing) → the threshold record emits a warning.
+        XCTAssertEqual(thresholdResult.level, .warning, "key-order-invariant hashing must collapse to a single bucket")
     }
 }
