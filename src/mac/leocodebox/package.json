@@ -125,7 +125,7 @@
         "provider": "github",
         "owner": "leoyb1010",
         "repo": "leocodebox-updates",
-        "private": true
+        "private": false
       }
     ]
   },
