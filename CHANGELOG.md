@@ -34,8 +34,8 @@
 ### 验证
 
 - 新增 `SystemEntryParserTest`、`AgentRunRecoveryTest`；保留 `AssistIntentsTest`。
-- 中文资源门禁与设置页英文硬编码门禁应通过。
-- Standard / Power 以 JDK 17 做 Debug compile / 相关 JVM 测试。Release APK 交给 CI；本版不伪造 SHA，也不假装已发 GitHub Release。
+- 中文资源门禁与设置页英文硬编码门禁通过。
+- Standard / Power JVM 测试各 426，0 失败（各 1 个既有跳过）。双 flavor Debug APK 已 assemble 通过。Release APK 交给 CI；本版不伪造 SHA，也不假装已发 GitHub Release。
 
 ## Android v1.0.0-alpha.3 - 2026-08-16
 
