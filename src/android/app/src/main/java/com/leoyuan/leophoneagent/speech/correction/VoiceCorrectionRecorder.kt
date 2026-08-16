@@ -90,7 +90,16 @@ class VoiceCorrectionRecorder(
             // digit normalization). `contextSample` is the sentence the span
             // was diffed within, so its length is the locality denominator;
             // fall back to the whole edited text when a sentence isn't known.
-            val sentenceLength = contextSample?.length ?: maxOf(b.length, a.length)
+            val rawSentenceLength = contextSample?.length ?: maxOf(b.length, a.length)
+            // A plain text replacement callback contains only the selected
+            // range, not its surrounding sentence. Give it enough synthetic
+            // context to let the phonetic/rewrite signals decide instead of
+            // rejecting every short selection as a 100% sentence rewrite.
+            val sentenceLength = if (source == VoiceCorrectionDb.SOURCE_TEXT) {
+                maxOf(rawSentenceLength, maxOf(fromText.length, toText.length) * 2)
+            } else {
+                rawSentenceLength
+            }
             val verdict = CorrectionAdmission.judge(
                 from = fromText,
                 to = toText,

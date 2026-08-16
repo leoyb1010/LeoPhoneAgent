@@ -36,6 +36,7 @@ OUTPUT_BIN="$ASSETS_DIR/proot-aarch64"
 # app's nativeLibraryDir at install time). Keep both in sync.
 JNILIBS_DIR="$PROJECT_ROOT/src/android/app/src/main/jniLibs/arm64-v8a"
 JNILIBS_BIN="$JNILIBS_DIR/libproot.so"
+JNILIBS_LOADER="$JNILIBS_DIR/libproot-loader.so"
 
 # talloc version pinned to a known-good release. Single-file build avoids
 # Samba's waf-based build system entirely (we just compile talloc.c).
@@ -340,6 +341,17 @@ install_asset() {
     mkdir -p "$JNILIBS_DIR"
     install -m 0755 "$BUILT_PROOT" "$JNILIBS_BIN"
     log_success "Installed: $JNILIBS_BIN ($(du -h "$JNILIBS_BIN" | awk '{print $1}'))"
+
+    # Android 15+ SELinux denies execute_no_trans for the loader that PRoot
+    # normally extracts into the writable app cache. Ship the exact same
+    # loader as an extracted native library and point PROOT_LOADER at this
+    # read-only executable location instead.
+    local built_loader="$PROOT_DIR/src/loader/loader"
+    if [ ! -f "$built_loader" ]; then
+        log_error "Build finished but $built_loader is missing"
+    fi
+    install -m 0755 "$built_loader" "$JNILIBS_LOADER"
+    log_success "Installed: $JNILIBS_LOADER ($(du -h "$JNILIBS_LOADER" | awk '{print $1}'))"
 }
 
 # ----------------------------------------------------------------------------

@@ -39,6 +39,10 @@ object ExecutionCoordinator {
     /** Thread-safe per-session shell registry. */
     private val shells = ConcurrentHashMap<String, PersistentShell>()
 
+    /** Read-only diagnostic snapshot used by lifecycle tests and debug UI. */
+    internal val activeSessionIds: Set<String>
+        get() = shells.keys.toSet()
+
     /** Thread-safe per-session mutex registry. */
     private val mutexes = ConcurrentHashMap<String, Mutex>()
 

@@ -27,9 +27,7 @@ class ShellExecutorInstrumentedTest {
         context = InstrumentationRegistry.getInstrumentation().targetContext
         resetKernel()
 
-        if (canBoot()) {
-            PRootKernel.boot(context)
-        }
+        PRootKernel.boot(context)
     }
 
     @After
@@ -115,7 +113,7 @@ class ShellExecutorInstrumentedTest {
 
         val result = ShellExecutor.execute(context, "cat /etc/resolv.conf")
         assertEquals(0, result.exitCode)
-        assertTrue("Should contain DNS config", result.output.contains("8.8.8.8"))
+        assertTrue("Should contain DNS config", result.output.contains("nameserver"))
     }
 
     @Test

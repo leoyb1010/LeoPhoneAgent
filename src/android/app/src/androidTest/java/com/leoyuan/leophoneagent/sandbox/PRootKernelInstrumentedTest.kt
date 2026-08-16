@@ -110,7 +110,10 @@ class PRootKernelInstrumentedTest {
         val cmd = PRootKernel.buildProotCommand("echo hello")
 
         // Should contain proot binary path
-        assertTrue("Should start with proot binary", cmd[0].endsWith("proot-aarch64"))
+        assertTrue(
+            "Should start with bundled proot binary: ${cmd[0]}",
+            cmd[0].endsWith("proot-aarch64") || cmd[0].endsWith("libproot.so"),
+        )
 
         // Should have -0 flag (fake root)
         assertTrue("Should contain -0 flag", cmd.contains("-0"))
@@ -265,7 +268,11 @@ class PRootKernelInstrumentedTest {
 
     private fun canBoot(): Boolean {
         return try {
-            context.assets.open("alpine-minirootfs.tar.gz").use { }
+            try {
+                context.assets.open("alpine-minirootfs.tar.gz").use { }
+            } catch (_: Exception) {
+                context.assets.open("alpine-minirootfs.tar").use { }
+            }
             context.assets.open("proot-aarch64").use { }
             true
         } catch (_: Exception) {
@@ -278,6 +285,11 @@ class PRootKernelInstrumentedTest {
             val field = PRootKernel::class.java.getDeclaredField("isBooted")
             field.isAccessible = true
             field.set(PRootKernel, false)
+        } catch (_: Exception) { }
+        try {
+            val field = PRootKernel::class.java.getDeclaredField("rootfsManager")
+            field.isAccessible = true
+            field.set(PRootKernel, null)
         } catch (_: Exception) { }
         PRootKernel.clearBindMounts()
         PRootKernel.customEnvironment.clear()

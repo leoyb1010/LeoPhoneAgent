@@ -133,6 +133,7 @@ class TerminalSession(private val context: Context) {
                     envMap["PROOT_LOADER"] = PRootKernel.prootLoaderPath
                 if (PRootKernel.prootLoader32Path.isNotEmpty())
                     envMap["PROOT_LOADER_32"] = PRootKernel.prootLoader32Path
+                envMap["PROOT_VERBOSE"] = "-1"
                 envMap["TERM"] = "xterm-256color"
                 envMap["LANG"] = "C.UTF-8"
                 envMap["LC_ALL"] = "C.UTF-8"

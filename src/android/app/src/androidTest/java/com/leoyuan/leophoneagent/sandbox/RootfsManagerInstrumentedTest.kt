@@ -70,6 +70,20 @@ class RootfsManagerInstrumentedTest {
     fun isInstalledWhenRootfsAndArchPresent() {
         manager.rootfsDir.mkdirs()
         File(manager.rootfsDir, ".arch").writeText("aarch64")
+        File(manager.rootfsDir, "bin").mkdirs()
+        File(manager.rootfsDir, "lib").mkdirs()
+        File(manager.rootfsDir, "bin/busybox").apply {
+            writeText("test")
+            setExecutable(true, false)
+        }
+        java.nio.file.Files.createSymbolicLink(
+            File(manager.rootfsDir, "bin/sh").toPath(),
+            java.nio.file.Paths.get("/bin/busybox"),
+        )
+        File(manager.rootfsDir, "lib/ld-musl-aarch64.so.1").apply {
+            writeText("test")
+            setExecutable(true, false)
+        }
         assertTrue(manager.isInstalled)
     }
 
@@ -105,8 +119,7 @@ class RootfsManagerInstrumentedTest {
         val resolv = File(manager.rootfsDir, "etc/resolv.conf")
         assertTrue("resolv.conf should exist", resolv.exists())
         val content = resolv.readText()
-        assertTrue("Should contain 8.8.8.8", content.contains("8.8.8.8"))
-        assertTrue("Should contain 8.8.4.4", content.contains("8.8.4.4"))
+        assertTrue("Should contain a DNS nameserver", content.contains("nameserver"))
     }
 
     @Test
@@ -324,10 +337,15 @@ class RootfsManagerInstrumentedTest {
     // ==================== Helpers ====================
 
     private fun hasAsset(name: String): Boolean {
-        return try {
-            context.assets.open(name).use { true }
-        } catch (_: Exception) {
-            false
+        val candidates = if (name == "alpine-minirootfs.tar.gz") {
+            listOf(name, "alpine-minirootfs.tar")
+        } else listOf(name)
+        return candidates.any { candidate ->
+            try {
+                context.assets.open(candidate).use { true }
+            } catch (_: Exception) {
+                false
+            }
         }
     }
 

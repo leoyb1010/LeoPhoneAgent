@@ -4,10 +4,9 @@ import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
-import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.TimeUnit
 
 /**
  * Executes shell commands inside the PRoot sandbox via ProcessBuilder.
@@ -69,6 +68,7 @@ object ShellExecutor {
         if (PRootKernel.prootLoader32Path.isNotEmpty()) {
             env["PROOT_LOADER_32"] = PRootKernel.prootLoader32Path
         }
+        env["PROOT_VERBOSE"] = "-1"
 
         // Apply custom environment from PRootKernel
         for ((key, value) in PRootKernel.customEnvironment) {
@@ -80,69 +80,93 @@ object ShellExecutor {
             env[key] = value
         }
 
-        val output = StringBuilder()
+        val rawOutput = StringBuilder()
         var exitCode = -1
+        var readerThread: Thread? = null
 
         try {
-            withTimeout(timeout) {
-                val process = processBuilder.start()
-                currentProcess = process
-
+            val process = processBuilder.start()
+            currentProcess = process
+            readerThread = Thread({
                 try {
-                    // Read raw chars to preserve \r for TerminalSanitizer CR-folding.
-                    // readLine() would consume \r as line terminator, losing progress overwrites.
                     InputStreamReader(process.inputStream, StandardCharsets.UTF_8).use { reader ->
                         val buf = CharArray(4096)
-                        var lastLineForCallback = StringBuilder()
+                        val callbackLine = StringBuilder()
+                        var suppressDiagnostics = false
                         var n: Int
                         while (reader.read(buf).also { n = it } != -1) {
-                            output.append(buf, 0, n)
-                            // Feed lines to callback for UI updates
+                            synchronized(rawOutput) { rawOutput.append(buf, 0, n) }
                             if (lineCallback != null) {
                                 for (i in 0 until n) {
                                     val c = buf[i]
                                     if (c == '\n') {
-                                        lineCallback.invoke(lastLineForCallback.toString())
-                                        lastLineForCallback.clear()
+                                        val line = callbackLine.toString()
+                                        callbackLine.clear()
+                                        if (line.startsWith("talloc report on 'null_context'")) {
+                                            suppressDiagnostics = true
+                                        } else if (!suppressDiagnostics && !line.startsWith("proot info:")) {
+                                            lineCallback.invoke(line)
+                                        }
                                     } else if (c != '\r') {
-                                        lastLineForCallback.append(c)
+                                        callbackLine.append(c)
                                     }
                                 }
                             }
                         }
-                        if (lineCallback != null && lastLineForCallback.isNotEmpty()) {
-                            lineCallback.invoke(lastLineForCallback.toString())
+                        if (lineCallback != null && callbackLine.isNotEmpty() && !suppressDiagnostics) {
+                            val line = callbackLine.toString()
+                            if (!line.startsWith("proot info:")) lineCallback.invoke(line)
                         }
                     }
-
-                    exitCode = process.waitFor()
-                } finally {
-                    currentProcess = null
+                } catch (_: Exception) {
+                    // Stream closure is expected when a timed-out process is killed.
                 }
+            }, "ShellExecutor-reader").apply {
+                isDaemon = true
+                start()
             }
-        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-            Log.w(TAG, "Command timed out after ${timeout}ms: $command")
-            currentProcess?.destroyForcibly()
-            currentProcess = null
-            output.appendLine("\n[Command timed out after ${timeout / 1000}s]")
-            exitCode = 124 // Standard timeout exit code
+
+            if (process.waitFor(timeout, TimeUnit.MILLISECONDS)) {
+                exitCode = process.exitValue()
+            } else {
+                Log.w(TAG, "Command timed out after ${timeout}ms: $command")
+                process.destroyForcibly()
+                // Do not block on waitFor after SIGKILL. Some PRoot workloads
+                // keep inherited descriptors alive while the guest child is
+                // being reaped, which previously stretched a 2s timeout past
+                // 13s and could destabilize the instrumentation device.
+                synchronized(rawOutput) {
+                    rawOutput.appendLine("\n[Command timed out after ${timeout / 1000}s]")
+                }
+                exitCode = 124
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Command failed: $command", e)
             currentProcess?.destroyForcibly()
-            currentProcess = null
-            output.appendLine("\n[Error: ${e.message}]")
+            synchronized(rawOutput) { rawOutput.appendLine("\n[Error: ${e.message}]") }
             exitCode = -1
+        } finally {
+            readerThread?.join(500)
+            currentProcess = null
         }
 
+        val output = cleanProotDiagnostics(synchronized(rawOutput) { rawOutput.toString() })
         val durationMs = System.currentTimeMillis() - startTime
         Log.d(TAG, "Command completed in ${durationMs}ms with exit code $exitCode")
 
         ShellResult(
-            output = output.toString().trimEnd(),
+            output = output.trimEnd(),
             exitCode = exitCode,
             durationMs = durationMs
         )
     }
+
+    /** Removes PRoot implementation diagnostics that are not command output. */
+    internal fun cleanProotDiagnostics(raw: String): String = raw
+        .lineSequence()
+        .takeWhile { !it.startsWith("talloc report on 'null_context'") }
+        .filterNot { it.startsWith("proot info:") }
+        .joinToString("\n")
 
     /**
      * Forcibly destroy the currently running process.

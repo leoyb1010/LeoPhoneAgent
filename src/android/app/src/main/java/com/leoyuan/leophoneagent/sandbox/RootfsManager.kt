@@ -46,7 +46,12 @@ class RootfsManager private constructor(private val context: Context) {
 
     val isInstalled: Boolean
         get() = rootfsDir.exists() && archFile.exists() &&
-                archFile.readText().trim() == ARCH
+                archFile.readText().trim() == ARCH &&
+                File(rootfsDir, "bin/busybox").canExecute() &&
+                File(rootfsDir, "bin/sh").let {
+                    it.exists() || java.nio.file.Files.isSymbolicLink(it.toPath())
+                } &&
+                File(rootfsDir, "lib/ld-musl-aarch64.so.1").canExecute()
 
     /**
      * Observable install progress. UI layers (OnboardingScreen,

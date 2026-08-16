@@ -129,6 +129,7 @@ class PersistentShell(
         if (PRootKernel.prootLoader32Path.isNotEmpty()) {
             env["PROOT_LOADER_32"] = PRootKernel.prootLoader32Path
         }
+        env["PROOT_VERBOSE"] = "-1"
         env["TERM"] = "dumb"
         env["PS1"] = ""  // Suppress prompt to avoid polluting output
         // Timezone: customEnvironment["TZ"] is seeded at PRootKernel.boot(),
@@ -275,7 +276,10 @@ class PersistentShell(
         }
 
         val marker = UUID.randomUUID().toString().take(8)
-        val wrappedCommand = "$command\necho \"__MINIS_DONE_${marker}_EXIT_\$?__\"\n"
+        // Run user input in a child shell so commands such as `exit 1` cannot
+        // terminate the long-lived session before its completion marker.
+        val wrappedCommand = "(\n$command\n)\n__minis_status=\$?\n" +
+            "echo \"__MINIS_DONE_${marker}_EXIT_\${__minis_status}__\"\n"
 
         return withContext(Dispatchers.IO) {
             val result = withTimeoutOrNull(timeout) {
