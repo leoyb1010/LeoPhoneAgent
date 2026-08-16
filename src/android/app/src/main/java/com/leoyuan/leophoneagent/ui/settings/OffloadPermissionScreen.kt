@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.leoyuan.leophoneagent.BuildConfig
 import com.leoyuan.leophoneagent.R
 import com.leoyuan.leophoneagent.accessibility.MinisAccessibilityService
 import com.leoyuan.leophoneagent.logging.AppLogger
@@ -109,40 +110,36 @@ fun OffloadPermissionScreen(
         // Each card shows the CLI description, the tri-state agent gate, the
         // system-layer status, and (when system-layer is not satisfied) a
         // deeplink back to the OS settings page that fixes it.
-        IntegrationSection(
-            iconVector = Icons.Outlined.Accessibility,
-            iconTint = Color(0xFF34C759),
-            sectionHeaderRes = R.string.perm_section_a11y,
-            sectionFooterRes = R.string.perm_a11y_section_footer,
-            toolName = "a11y_cli",
-            descriptionRes = R.string.perm_a11y_cli_description,
-            systemReady = a11yEnabled,
-            systemStatusTitleRes =
-                if (a11yEnabled) R.string.perm_a11y_system_ready
-                else R.string.perm_a11y_system_disabled,
-            systemActionTitleRes = R.string.perm_a11y_open_settings,
-            onSystemAction = { openAccessibilitySettings(context) },
-        )
+        if (BuildConfig.POWER_FEATURES_ENABLED) {
+            IntegrationSection(
+                iconVector = Icons.Outlined.Accessibility,
+                iconTint = Color(0xFF34C759),
+                sectionHeaderRes = R.string.perm_section_a11y,
+                sectionFooterRes = R.string.perm_a11y_section_footer,
+                toolName = "a11y_cli",
+                descriptionRes = R.string.perm_a11y_cli_description,
+                systemReady = a11yEnabled,
+                systemStatusTitleRes =
+                    if (a11yEnabled) R.string.perm_a11y_system_ready
+                    else R.string.perm_a11y_system_disabled,
+                systemActionTitleRes = R.string.perm_a11y_open_settings,
+                onSystemAction = { openAccessibilitySettings(context) },
+            )
 
-        IntegrationSection(
-            iconVector = Icons.Outlined.Shield,
-            iconTint = Color(0xFFAF52DE),
-            // [T-android-privileged-backend] One section covers both Shizuku
-            // and AXManager (they share the same binder slot + protocol);
-            // toolName stays "shizuku_cli" so user authz is preserved.
-            sectionHeaderRes = R.string.perm_section_privileged_backend,
-            sectionFooterRes = R.string.perm_shizuku_section_footer,
-            toolName = "shizuku_cli",
-            descriptionRes = R.string.perm_privileged_cli_description,
-            systemReady = ShizukuManager.isReady(),
-            systemStatusTitleRes = shizukuSubtitleRes(shizukuSnap.state),
-            systemActionTitleRes = shizukuActionTitleRes(shizukuSnap.state),
-            // Open the unified Shizuku-protocol screen for setup actions.
-            onSystemAction = onOpenPrivilegedBackend,
-            // The status row itself opens the same page so users can revisit
-            // the setup walkthrough even after the manager is already ready.
-            onStatusRowClick = onOpenPrivilegedBackend,
-        )
+            IntegrationSection(
+                iconVector = Icons.Outlined.Shield,
+                iconTint = Color(0xFFAF52DE),
+                sectionHeaderRes = R.string.perm_section_privileged_backend,
+                sectionFooterRes = R.string.perm_shizuku_section_footer,
+                toolName = "shizuku_cli",
+                descriptionRes = R.string.perm_privileged_cli_description,
+                systemReady = ShizukuManager.isReady(),
+                systemStatusTitleRes = shizukuSubtitleRes(shizukuSnap.state),
+                systemActionTitleRes = shizukuActionTitleRes(shizukuSnap.state),
+                onSystemAction = onOpenPrivilegedBackend,
+                onStatusRowClick = onOpenPrivilegedBackend,
+            )
+        }
 
         Spacer(Modifier.height(16.dp))
     }

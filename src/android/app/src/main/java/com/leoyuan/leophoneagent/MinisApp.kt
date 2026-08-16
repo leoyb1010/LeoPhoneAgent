@@ -381,8 +381,11 @@ class MinisApp : Application(), ImageLoaderFactory {
         NativeOffloadServer.register("android-speak", SpeakOffloadHandler(this))
         NativeOffloadServer.register("android-speech", SpeechOffloadHandler(this))
         NativeOffloadServer.register("android-weather", WeatherOffloadHandler(this))
-        // T323: UI-layer automation backed by MinisAccessibilityService.
-        NativeOffloadServer.register("android-a11y-cli", AccessibilityOffloadHandler(this))
+        // Power-only: the Standard edition never installs either privileged
+        // shell surface, so an agent cannot discover or invoke it accidentally.
+        if (BuildConfig.POWER_FEATURES_ENABLED) {
+            NativeOffloadServer.register("android-a11y-cli", AccessibilityOffloadHandler(this))
+        }
         NativeOffloadServer.register("minis-model-use", ModelUseOffloadHandler(this, providerRepository))
         // T-config: minis-config — agent-facing settings management
         // (read/write registered ConfigFields with audit + revert).
@@ -411,8 +414,10 @@ class MinisApp : Application(), ImageLoaderFactory {
         // user hasn't installed / started / authorized Shizuku, so we
         // can register unconditionally; ShizukuManager.init below wires
         // up the binder lifecycle listeners + StateFlow.
-        NativeOffloadServer.register("android-shizuku-cli", ShizukuOffloadHandler(this))
-        com.leoyuan.leophoneagent.offload.ShizukuManager.init(this)
+        if (BuildConfig.POWER_FEATURES_ENABLED) {
+            NativeOffloadServer.register("android-shizuku-cli", ShizukuOffloadHandler(this))
+            com.leoyuan.leophoneagent.offload.ShizukuManager.init(this)
+        }
 
         // T-android-minis-debug-cli: shell-side CLI wrapper around the in-app
         // DebugServer (127.0.0.1:5321) JSON-RPC. DEBUG-only — Release builds

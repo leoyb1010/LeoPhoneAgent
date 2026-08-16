@@ -3,6 +3,7 @@ package com.leoyuan.leophoneagent.sandbox
 import android.net.LocalServerSocket
 import android.net.LocalSocket
 import android.util.Log
+import com.leoyuan.leophoneagent.BuildConfig
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.File
@@ -52,12 +53,15 @@ fun interface NativeOffloadHandler {
 
 object NativeOffloadServer {
     private const val TAG = "NativeOffloadServer"
-    private const val SOCKET_NAME = "native-offload"
+    // The Standard and Power APKs are intentionally co-installable. Android's
+    // abstract Unix socket namespace is device-global, so a shared literal
+    // makes the second edition crash during Application.onCreate().
+    private val SOCKET_NAME = "native-offload-${BuildConfig.APPLICATION_ID}"
     private const val MAGIC_REQ = 0x46464F4E  // 'N' 'O' 'F' 'F' little-endian
     private const val MAGIC_RSP = 0x52464F4E  // 'N' 'O' 'F' 'R'
     private const val VERSION = 1
 
-    const val socketName: String = SOCKET_NAME
+    val socketName: String = SOCKET_NAME
 
     private val handlers = ConcurrentHashMap<String, NativeOffloadHandler>()
     private val counter = AtomicLong(0)

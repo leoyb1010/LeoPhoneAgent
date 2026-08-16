@@ -160,7 +160,7 @@ class DebugRPCHandler(private val context: Context) {
             // Debug-only: direct CLI / offload-handler invocation (T344).
             // Registered solely on DEBUG builds so release APKs cannot expose it.
             "debug.shizuku.exec" -> {
-                if (!BuildConfig.DEBUG) {
+                if (!BuildConfig.DEBUG || !BuildConfig.POWER_FEATURES_ENABLED) {
                     throw RPCException(-32601, "Method not found: $method. Call 'rpc.discover' to list available methods.")
                 }
                 handleShizukuExec(params)

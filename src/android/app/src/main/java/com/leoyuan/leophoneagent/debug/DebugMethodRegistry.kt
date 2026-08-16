@@ -39,7 +39,12 @@ object DebugMethodRegistry {
     val methods: List<MethodSpec> by lazy {
         buildList {
             addAll(BASE_METHODS)
-            if (BuildConfig.DEBUG) addAll(DEBUG_ONLY_METHODS)
+            if (BuildConfig.DEBUG) {
+                addAll(
+                    if (BuildConfig.POWER_FEATURES_ENABLED) DEBUG_ONLY_METHODS
+                    else DEBUG_ONLY_METHODS.filterNot { it.name == "debug.shizuku.exec" },
+                )
+            }
         }
     }
 

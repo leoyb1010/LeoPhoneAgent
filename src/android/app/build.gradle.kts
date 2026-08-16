@@ -66,6 +66,7 @@ android {
         create("standard") {
             dimension = "capability"
             buildConfigField("boolean", "POWER_FEATURES_ENABLED", "false")
+            manifestPlaceholders["powerFeaturesEnabled"] = "false"
             resValue("string", "app_display_name", "LeoPhoneAgent")
         }
         create("power") {
@@ -73,6 +74,7 @@ android {
             applicationIdSuffix = ".power"
             versionNameSuffix = "-power"
             buildConfigField("boolean", "POWER_FEATURES_ENABLED", "true")
+            manifestPlaceholders["powerFeaturesEnabled"] = "true"
             resValue("string", "app_display_name", "LeoPhoneAgent Power")
         }
     }

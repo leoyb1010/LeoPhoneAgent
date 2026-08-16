@@ -486,7 +486,7 @@
             android:name="rikka.shizuku.ShizukuProvider"
             android:authorities="${applicationId}.shizuku"
             android:multiprocess="false"
-            android:enabled="true"
+            android:enabled="${powerFeaturesEnabled}"
             android:exported="true"
             android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
 
@@ -516,6 +516,7 @@
              never start it programmatically (Android forbids that). -->
         <service
             android:name=".accessibility.MinisAccessibilityService"
+            android:enabled="${powerFeaturesEnabled}"
             android:exported="true"
             android:label="@string/a11y_service_label"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
