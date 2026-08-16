@@ -25,6 +25,7 @@ import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.BatteryFull
 import androidx.compose.material.icons.outlined.BugReport
+import androidx.compose.material.icons.outlined.Computer
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Email
@@ -89,6 +90,7 @@ fun SettingsScreen(
     onPermissionsClick: () -> Unit = {},
     onUsageClick: () -> Unit = {},
     onAppearanceClick: () -> Unit = {},
+    onFleetClick: () -> Unit = {},
     onLogsClick: () -> Unit = {},
     // T219-2: Mount External Folders entry. Default no-op for any caller
     // that hasn't wired the route yet.
@@ -165,6 +167,18 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_section_appearance),
                     subtitle = stringResource(R.string.settings_appearance_subtitle),
                     onClick = onAppearanceClick,
+                    showDivider = false,
+                )
+            }
+
+            // -- Agent Runtime --
+            SettingsSection(title = "连接的设备") {
+                SettingsItem(
+                    icon = Icons.Outlined.Computer,
+                    iconColor = Color(0xFF30B0C7),
+                    title = "我的 Mac",
+                    subtitle = "远程发任务、看进度、审批和停止",
+                    onClick = onFleetClick,
                     showDivider = false,
                 )
             }
@@ -597,4 +611,3 @@ private fun SettingsItem(
         }
     }
 }
-

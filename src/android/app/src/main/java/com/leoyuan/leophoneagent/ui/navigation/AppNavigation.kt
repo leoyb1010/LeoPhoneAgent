@@ -83,6 +83,7 @@ import com.leoyuan.leophoneagent.sandbox.RootfsManager
 import com.leoyuan.leophoneagent.sandbox.TerminalSession
 import com.leoyuan.leophoneagent.ui.terminal.TerminalScreen
 import com.leoyuan.leophoneagent.ui.onboarding.OnboardingModelSelectionScreen
+import com.leoyuan.leophoneagent.ui.relay.RelayFleetScreen
 
 // T342: Material 3 motion easing curves. Compose-Material3 (1.3.x) ships
 // `MotionScheme` only in 1.4-alpha; mirror the spec values directly so we
@@ -180,6 +181,7 @@ object Routes {
     const val APPEARANCE = "appearance"
     const val BACKGROUND = "background"
     const val ABOUT = "about"
+    const val RELAY_FLEET = "relay_fleet"
     const val ONBOARDING_MODELS = "onboarding_models"
     /** T219-2: Mount external folders settings + detail. */
     const val MOUNTED_FOLDERS = "mounted_folders"
@@ -647,12 +649,17 @@ fun AppNavigation(
                 onPermissionsClick = { navController.safeNavigate(Routes.PERMISSIONS) },
                 onUsageClick = { navController.safeNavigate(Routes.USAGE_STATS) },
                 onAppearanceClick = { navController.safeNavigate(Routes.APPEARANCE) },
+                onFleetClick = { navController.safeNavigate(Routes.RELAY_FLEET) },
                 onBackgroundClick = { navController.safeNavigate(Routes.BACKGROUND) },
                 onLogsClick = { navController.safeNavigate(Routes.LOGS) },
                 onAboutClick = { navController.safeNavigate(Routes.ABOUT) },
                 onMountedFoldersClick = { navController.safeNavigate(Routes.MOUNTED_FOLDERS) },
                 onSharedFoldersClick = { navController.safeNavigate(Routes.SHARED_FOLDERS) },
             )
+        }
+
+        composable(Routes.RELAY_FLEET) {
+            RelayFleetScreen(onBack = { navController.safePopBackStack() })
         }
 
         composable(Routes.SHARED_FOLDERS) {
