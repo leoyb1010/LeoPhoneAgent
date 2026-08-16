@@ -17,8 +17,9 @@ jobs:
         working-directory: src/android
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
+      - name: Initialize Android PRoot source only
+        run: git submodule update --init deps/proot
+        working-directory: .
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
