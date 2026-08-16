@@ -640,6 +640,36 @@ class OpenAIProvider private constructor(
             )
         }
 
+        // Some OpenAI-compatible gateways ignore `stream=true` and return a
+        // normal Chat Completions JSON object. Treat that as a valid response
+        // instead of feeding it to the SSE line parser (which would discard
+        // every line and later surface a misleading empty-stream error).
+        val responsePrefix = response.peekBody(128).string().trimStart()
+        if (responsePrefix.startsWith("{")) {
+            try {
+                val payload = JSONObject(response.body?.string().orEmpty())
+                send(LLMStreamChunk.Started)
+                val choice = payload.optJSONArray("choices")?.optJSONObject(0)
+                val message = choice?.optJSONObject("message")
+                val text = message?.safeOptString("content", "").orEmpty()
+                if (text.isNotEmpty()) send(LLMStreamChunk.Text(text))
+                payload.optJSONObject("usage")?.let {
+                    send(LLMStreamChunk.Usage(parseChatCompletionsUsage(it)))
+                }
+                send(LLMStreamChunk.Finished(choice?.safeOptString("finish_reason", "")?.ifEmpty { null }))
+            } catch (e: Exception) {
+                cancel("JSON response parse error", mapError(e))
+            } finally {
+                response.close()
+            }
+            channel.close()
+            awaitClose {
+                try { call.cancel() } catch (_: Exception) {}
+                try { response.close() } catch (_: Exception) {}
+            }
+            return@callbackFlow
+        }
+
         val reader = BufferedReader(InputStreamReader(response.body!!.byteStream()))
 
         // [T-codex-gpt-image2-oauth-android] gpt-image-2: the Codex backend

@@ -80,7 +80,8 @@ class OpenAIProviderTest {
         server.enqueue(MockResponse().setBody(responseBody))
         val response = provider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "Hi")), null, 1024)
 
-        assertEquals(100, response.usage?.inputTokens)
+        // inputTokens is fresh-only; cached tokens are reported separately.
+        assertEquals(50, response.usage?.inputTokens)
         assertEquals(10, response.usage?.outputTokens)
         assertEquals(50, response.usage?.cacheReadInputTokens)
         assertNull(response.usage?.cacheCreationInputTokens)
@@ -105,12 +106,16 @@ class OpenAIProviderTest {
     }
 
     @Test
-    fun `sendMessage handles empty choices`() = runBlocking {
+    fun `sendMessage treats empty choices as a transient upstream failure`() = runBlocking {
         server.enqueue(MockResponse().setBody("""{"choices":[],"usage":{"prompt_tokens":5,"completion_tokens":0}}"""))
 
-        val response = provider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "Hi")), null, 1024)
-        assertEquals("", response.text)
-        assertNull(response.stopReason)
+        var failedAsTransient = false
+        try {
+            provider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "Hi")), null, 1024)
+        } catch (_: LLMError.TransientError) {
+            failedAsTransient = true
+        }
+        assertTrue(failedAsTransient)
     }
 
     // -- Request construction --
@@ -193,15 +198,15 @@ class OpenAIProviderTest {
     }
 
     @Test
-    fun `sendMessage sets stream false for non-streaming`() = runBlocking {
+    fun `sendMessage uses a stream internally and requests usage`() = runBlocking {
         server.enqueue(MockResponse().setBody("""{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":0,"completion_tokens":0}}"""))
 
         provider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "test")), null, 100)
 
         val request = server.takeRequest()
         val body = JSONObject(request.body.readUtf8())
-        assertEquals(false, body.getBoolean("stream"))
-        assertTrue(!body.has("stream_options"))
+        assertEquals(true, body.getBoolean("stream"))
+        assertEquals(true, body.getJSONObject("stream_options").getBoolean("include_usage"))
     }
 
     // -- Streaming --

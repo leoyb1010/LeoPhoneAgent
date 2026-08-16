@@ -1,5 +1,6 @@
 package com.leoyuan.leophoneagent.provider
 
+import com.leoyuan.leophoneagent.BuildConfig
 import com.leoyuan.leophoneagent.data.model.AgentContentPart
 import com.leoyuan.leophoneagent.data.model.LLMError
 import com.leoyuan.leophoneagent.data.model.LLMMessage
@@ -18,6 +19,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 
 class AnthropicProviderTest {
@@ -598,6 +600,11 @@ class AnthropicProviderTest {
 
     @Test
     fun `OAuth request omits redact-thinking beta so thinking text is not blanked`() = runBlocking {
+        // Public/self-built editions intentionally omit the private Claude
+        // Code identifier prompt. API-key coverage still runs everywhere;
+        // this OAuth-only wire test runs when the required customization is
+        // actually configured.
+        assumeTrue(BuildConfig.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT.isNotEmpty())
         // Mirrors iOS 958ee16c (T-anthropic-redact-thinking). The Claude-Code
         // mimicry beta set must NOT carry `redact-thinking-2026-02-12`; with it,
         // the server blanks thinking text (signature only) even though the model

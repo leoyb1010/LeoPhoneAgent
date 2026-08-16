@@ -22,14 +22,15 @@ object TerminalSanitizer {
     fun sanitize(raw: String): String {
         if (raw.isEmpty()) return raw
 
-        // Pass 1: CR folding
-        val crFolded = foldCarriageReturns(raw)
+        // ANSI escapes are zero-width terminal instructions. Remove them
+        // before CR folding so their bytes do not shift overwrite columns.
+        val stripped = ANSI_REGEX.replace(raw, "")
 
-        // Pass 2: Strip ANSI sequences
-        val stripped = ANSI_REGEX.replace(crFolded, "")
+        // Pass 2: CR folding
+        val crFolded = foldCarriageReturns(stripped)
 
         // Pass 3: Remove null bytes and non-printable control chars (except \n \t)
-        val cleaned = stripped.filter { it == '\n' || it == '\t' || it.code >= 0x20 }
+        val cleaned = crFolded.filter { it == '\n' || it == '\t' || it.code >= 0x20 }
 
         // Pass 4: Remove "null" artifacts from PRoot/pipe issues
         // - Lines that are entirely "null"
@@ -41,7 +42,7 @@ object TerminalSanitizer {
             .replace(Regex("(?:null){2,}"), "") // Remove runs of 2+ consecutive "null"
 
         // Pass 5: Collapse excessive blank lines (3+ consecutive → 2)
-        return noNullLines.replace(Regex("\n{3,}"), "\n\n").trim()
+        return noNullLines.replace(Regex("\n{3,}"), "\n\n").trim('\n')
     }
 
     /**
@@ -64,26 +65,29 @@ object TerminalSanitizer {
      * content (up to its length) is visible.
      */
     private fun foldCarriageReturns(text: String): String {
-        val lines = text.split('\n')
         val result = StringBuilder()
+        val line = StringBuilder()
+        var cursor = 0
 
-        for ((index, line) in lines.withIndex()) {
-            if (index > 0) result.append('\n')
-
-            if ('\r' !in line) {
-                result.append(line)
-                continue
-            }
-
-            // Split on CR and simulate overwriting.
-            // Each CR resets cursor to column 0. The last non-empty segment wins.
-            val segments = line.split('\r')
-            val lastNonEmpty = segments.lastOrNull { it.isNotEmpty() }
-            if (lastNonEmpty != null) {
-                result.append(lastNonEmpty)
-            }
+        fun flushLine(addNewline: Boolean) {
+            result.append(line)
+            if (addNewline) result.append('\n')
+            line.setLength(0)
+            cursor = 0
         }
 
+        for (char in text) {
+            when (char) {
+                '\r' -> cursor = 0
+                '\n' -> flushLine(addNewline = true)
+                else -> {
+                    if (cursor < line.length) line.setCharAt(cursor, char)
+                    else line.append(char)
+                    cursor++
+                }
+            }
+        }
+        flushLine(addNewline = false)
         return result.toString()
     }
 }

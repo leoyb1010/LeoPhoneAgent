@@ -285,8 +285,12 @@ class AnthropicProvider(
      *   Returns null when the prompt is null/empty (iOS parity — no empty `system` field).
      */
     internal fun resolveSystemPrompt(userPrompt: String?): JSONArray? {
-        val claudeCodePrefix = com.leoyuan.leophoneagent.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
         if (isOAuth) {
+            // The identifier is a Claude Code OAuth requirement, not an
+            // Anthropic API-key requirement. Resolve it lazily inside this
+            // branch so public/self-built editions can use normal API keys
+            // without needing the private OAuth customization value.
+            val claudeCodePrefix = com.leoyuan.leophoneagent.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
             // Strip the prefix if the caller already prepended it; the tail is the real user prompt.
             val tail = when {
                 userPrompt == null -> ""
