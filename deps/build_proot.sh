@@ -109,9 +109,10 @@ setup_toolchain() {
     STRIP="$TOOLCHAIN_BIN/llvm-strip"
     OBJCOPY="$TOOLCHAIN_BIN/llvm-objcopy"
     OBJDUMP="$TOOLCHAIN_BIN/llvm-objdump"
+    READELF="$TOOLCHAIN_BIN/llvm-readelf"
     RANLIB="$TOOLCHAIN_BIN/llvm-ranlib"
 
-    for tool in "$CC" "$AR" "$STRIP" "$OBJCOPY" "$OBJDUMP" "$RANLIB"; do
+    for tool in "$CC" "$AR" "$STRIP" "$OBJCOPY" "$OBJDUMP" "$READELF" "$RANLIB"; do
         if [ ! -x "$tool" ]; then
             log_error "Missing toolchain binary: $tool"
         fi
@@ -249,9 +250,42 @@ build_proot() {
     # Note: Makefile's default CPPFLAGS adds `-D_FILE_OFFSET_BITS=64
     # -D_GNU_SOURCE -I. -I$(VPATH)` — we must preserve -I. since proot
     # sources use paths like `#include "execve/elf.h"`.
-    local cppflags="-D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -I. -DARG_MAX=131072 -I$TALLOC_DIR"
+    # Keep repository paths out of make's whitespace-split flag values. The
+    # project is commonly stored in folders such as "日常 2", and absolute
+    # -I/-L paths would otherwise be split before clang sees them. These paths
+    # are stable relative to deps/proot/src and work from any checkout path.
+    local talloc_rel="../../talloc"
+    local build_rel="../../build/proot-android"
+    local tool_shims="$BUILD_DIR/tool-shims"
+    local system_awk
+    system_awk="$(command -v awk)"
+    if [ -z "$system_awk" ]; then
+        log_error "awk is required to generate the embedded loader metadata"
+    fi
+    local cppflags="-D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -I. -DARG_MAX=131072 -I$talloc_rel"
     local cflags="-O2 -Wall -Wextra -fPIE"
-    local ldflags="-Wl,-z,noexecstack -pie -L$BUILD_DIR -ltalloc"
+    local ldflags="-Wl,-z,noexecstack -pie -L$build_rel -ltalloc"
+
+    # PRoot's GNUmakefile invokes `readelf` directly and its loader script uses
+    # GNU awk extensions. macOS ships neither GNU command. Build-local shims
+    # keep the submodule untouched while preventing the Makefile's
+    # `readelf | awk` pipeline from silently generating a zero loader offset.
+    mkdir -p "$tool_shims"
+    ln -sf "$READELF" "$tool_shims/readelf"
+    cat > "$tool_shims/awk" <<'EOF'
+#!/bin/sh
+if [ "$#" -eq 2 ] && [ "$1" = "-f" ] && [ "$2" = "loader/loader-info.awk" ]; then
+    exec "$SYSTEM_AWK" '
+$NF == "pokedata_workaround" { pokedata = ("0x" $2) + 0 }
+$NF == "_start" { start = ("0x" $2) + 0 }
+END {
+    print "#include <unistd.h>"
+    print "const ssize_t offset_to_pokedata_workaround=" (pokedata - start) ";"
+}'
+fi
+exec "$SYSTEM_AWK" "$@"
+EOF
+    chmod 0755 "$tool_shims/awk"
 
     (
         cd "$PROOT_DIR/src"
@@ -259,7 +293,7 @@ build_proot() {
             make clean >/dev/null 2>&1 || true
         fi
 
-        make \
+        SYSTEM_AWK="$system_awk" PATH="$tool_shims:$PATH" make \
             CC="$CC" \
             STRIP="$STRIP" \
             OBJCOPY="$OBJCOPY" \
