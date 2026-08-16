@@ -734,4 +734,9 @@
     <string name="browser_downloads_cancel">取消下載</string>
     <string name="browser_downloads_failed">失敗</string>
     <string name="browser_downloads_open">開啟</string>
+    <string name="xai_login_title">使用 xAI 登入</string>
+    <string name="xai_login_instructions">開啟 xAI 驗證頁面並確認以下代碼。完成後 LeoPhoneAgent 會自動登入。</string>
+    <string name="xai_login_copy_code">複製 xAI 驗證碼</string>
+    <string name="xai_login_open_verification">開啟 xAI 驗證頁面</string>
+    <string name="xai_login_waiting">正在等待 xAI 授權…</string>
 </resources>

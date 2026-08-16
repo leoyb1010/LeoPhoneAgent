@@ -1,6 +1,7 @@
 package com.leoyuan.leophoneagent.ui.relay
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,6 +24,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -124,7 +126,7 @@ fun RelayFleetScreen(onBack: () -> Unit) {
         ) {
             Text("把 Mac 装进口袋", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Text(
-                "通过你自己的 Leo Relay 远程运行 Codex、Claude Code 和 Grok，手机休眠后 Mac 继续工作。",
+                "通过你自己的 Leo Relay 远程运行 Codex、Claude Code、Cursor 和 Grok，手机休眠后 Mac 继续工作。",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
@@ -262,6 +264,23 @@ private fun TaskComposer(
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(harness, onHarnessChange, label = { Text("CLI") }, modifier = Modifier.weight(1f), singleLine = true)
                 OutlinedTextField(cwd, onCwdChange, label = { Text("工作目录") }, modifier = Modifier.weight(1f), singleLine = true)
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                listOf(
+                    "codex" to "Codex",
+                    "claude" to "Claude Code",
+                    "cursor" to "Cursor",
+                    "grok" to "Grok",
+                ).forEach { (key, label) ->
+                    FilterChip(
+                        selected = harness == key,
+                        onClick = { onHarnessChange(key) },
+                        label = { Text(label) },
+                    )
+                }
             }
             Text("在下方选择目标 Mac 启动。", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

@@ -13,7 +13,7 @@ import {
 import { buildDigest, buildReceipt, isTerminal } from './harness-digest.service.js';
 import { listArtifacts, readArtifact } from './harness-artifacts.service.js';
 import { HarnessManager, HarnessSession } from './harness-session.service.js';
-import type { HarnessSpec } from './harness-specs.js';
+import { HARNESSES, type HarnessSpec } from './harness-specs.js';
 
 // 协议保真是本模块的全部意义:手机端(LeoAgentHarness.swift)按字段名
 // 渲染,这里的断言以 leoagent(Python harness.py)的输出为准。
@@ -22,6 +22,12 @@ const FAKE_SPEC: HarnessSpec = {
   key: 'claude', displayName: 'Claude Code', executable: 'claude',
   args: [], dialect: 'claude_stream_json',
 };
+
+test('cursor harness uses the official one-shot stream-json contract', () => {
+  assert.deepEqual(HARNESSES.cursor.args, ['-p', '{prompt}', '--output-format', 'stream-json']);
+  assert.equal(HARNESSES.cursor.executable, 'cursor-agent');
+  assert.equal(HARNESSES.cursor.promptInArgs, true);
+});
 
 function tempLog(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'leophone-test-'));

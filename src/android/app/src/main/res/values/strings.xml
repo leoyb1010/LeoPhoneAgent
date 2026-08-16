@@ -1612,4 +1612,9 @@
     <string name="storage_untitled">Untitled</string>
     <string name="storage_session_title">Session</string>
     <string name="storage_clear_size">Clear %1$s</string>
+    <string name="xai_login_title">Sign in with xAI</string>
+    <string name="xai_login_instructions">Open the xAI verification page and confirm this code. LeoPhoneAgent will finish signing in automatically.</string>
+    <string name="xai_login_copy_code">Copy xAI verification code</string>
+    <string name="xai_login_open_verification">Open xAI verification page</string>
+    <string name="xai_login_waiting">Waiting for xAI authorization…</string>
 </resources>

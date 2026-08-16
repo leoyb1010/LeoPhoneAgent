@@ -1543,4 +1543,9 @@
     <string name="storage_untitled">未命名</string>
     <string name="storage_session_title">会话</string>
     <string name="storage_clear_size">清理 %1$s</string>
+    <string name="xai_login_title">使用 xAI 登录</string>
+    <string name="xai_login_instructions">打开 xAI 验证页面并确认以下代码。完成后 LeoPhoneAgent 会自动登录。</string>
+    <string name="xai_login_copy_code">复制 xAI 验证码</string>
+    <string name="xai_login_open_verification">打开 xAI 验证页面</string>
+    <string name="xai_login_waiting">正在等待 xAI 授权…</string>
 </resources>

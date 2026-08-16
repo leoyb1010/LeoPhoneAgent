@@ -4,6 +4,26 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## Android v1.0.0-alpha.2 - 2026-08-16
+
+### 修复
+
+- xAI OAuth 改用官方 RFC 8628 设备码流程：App 显示短码、复制入口和 xAI 验证页，并在后台自动轮询完成登录。
+- 不再依赖 Android 浏览器对 `127.0.0.1:56121` 的回调，避免授权页要求把 Grok Build 长码粘回客户端、但 App 没有输入口的死路。
+- xAI 授权网址严格限制为 HTTPS `x.ai` 官方域名；用户码、设备码和 Token 不记入日志。
+
+### 新增
+
+- Android“我的 Mac”任务区新增 Codex、Claude Code、Cursor、Grok 四个快捷选择。
+- leocodebox 远程 harness 新增 Cursor Agent，通过官方 `cursor-agent -p --output-format stream-json` 无头协议启动 Mac 端任务。
+
+### 验证
+
+- xAI 真实设备授权端点已验证返回短码、`accounts.x.ai` 完整验证链接、1800 秒有效期与 5 秒轮询间隔（证据全部脱敏）。
+- `XAIDeviceFlowTest` 与 Kimi 设备码回归测试通过；Standard Debug Kotlin/Compose 编译通过。
+- Cursor CLI 可执行文件与版本已检出；当 Mac 尚未登录 Cursor 时会明确返回需先执行 `cursor-agent login`，不会假报任务成功。
+- Standard/Power Release APK 已在 JDK 17 下构建成功，版本号与包名已用 `aapt` 复核，两包均通过 APK Signature Scheme v2 签名校验。
+
 ## Android v1.0.0-alpha.1 - 2026-08-16
 
 首个 LeoPhoneAgent Android 双版本个人 Alpha 交付。

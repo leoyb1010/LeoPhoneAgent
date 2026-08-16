@@ -17,6 +17,8 @@ export interface HarnessSpec {
   pathEnvVar?: string;
   /** Leoapi 供应商切换的目标名;有值的 CLI 启动时套用 applyActiveSwitchEnv。 */
   switchTarget?: 'claude' | 'codex';
+  /** One-shot CLIs such as Cursor receive the first prompt as an argv value. */
+  promptInArgs?: boolean;
 }
 
 export const HARNESSES: Record<string, HarnessSpec> = {
@@ -61,6 +63,16 @@ export const HARNESSES: Record<string, HarnessSpec> = {
     // 裸 `grok` 是 TUI;无头走 ACP over stdio(Agent Client Protocol)。
     args: ['agent', 'stdio'],
     dialect: 'grok_acp',
+  },
+  cursor: {
+    key: 'cursor',
+    displayName: 'Cursor Agent',
+    executable: 'cursor-agent',
+    // Cursor's supported headless contract is one-shot stream-json. `spawn`
+    // receives an argv array, so even multiline prompts never pass through a shell.
+    args: ['-p', '{prompt}', '--output-format', 'stream-json'],
+    dialect: 'claude_stream_json',
+    promptInArgs: true,
   },
 };
 

@@ -145,10 +145,14 @@ export class HarnessSession {
       if (answered != null) this.pendingApprovals.delete(String(answered));
       if (this.pendingApprovals.size === 0) this.status = 'running';
     } else if (name === EVENT_RUN_COMPLETED || name === EVENT_RUN_FAILED) {
-      // stream-json 类 CLI 回合结束后进程仍活着——"空闲可继续",不是"会话
-      // 结束"。终态只由进程退出与 stop() 设置。
-      if (this.proc !== null && this.proc.exitCode === null && !['cancelled', 'completed', 'failed'].includes(this.status)) {
-        this.status = 'idle';
+      if (this.spec.promptInArgs) {
+        this.status = name === EVENT_RUN_COMPLETED ? 'completed' : 'failed';
+      } else {
+        // stream-json 类 CLI 回合结束后进程仍活着——"空闲可继续",不是"会话
+        // 结束"。终态只由进程退出与 stop() 设置。
+        if (this.proc !== null && this.proc.exitCode === null && !['cancelled', 'completed', 'failed'].includes(this.status)) {
+          this.status = 'idle';
+        }
       }
     }
 
@@ -260,7 +264,7 @@ export class HarnessSession {
     }
   }
 
-  async start(): Promise<void> {
+  async start(initialPrompt?: string | null): Promise<void> {
     const executable = resolveExecutable(this.spec);
     if (!executable) {
       throw new Error(`${this.spec.displayName} is not installed on this machine`);
@@ -275,7 +279,9 @@ export class HarnessSession {
       env = await applyActiveSwitchEnv(env, this.spec.switchTarget);
     }
 
-    const proc = spawn(executable, this.spec.args.map((arg) => arg.replaceAll('{cwd}', this.cwd)), {
+    const proc = spawn(executable, this.spec.args.map((arg) => (
+      arg.replaceAll('{cwd}', this.cwd).replaceAll('{prompt}', initialPrompt ?? '')
+    )), {
       cwd: this.cwd,
       env: env as NodeJS.ProcessEnv,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -306,6 +312,7 @@ export class HarnessSession {
     proc.on('close', (code) => this.onProcessClose(code));
 
     this.writeFrames(this.dialect.handshake());
+    if (this.spec.promptInArgs) proc.stdin.end();
   }
 
   private onStdoutLine(line: string): void {
@@ -352,6 +359,9 @@ export class HarnessSession {
 
   /** 给运行中的会话追加指令。 */
   async send(text: string): Promise<void> {
+    if (this.spec.promptInArgs) {
+      throw new Error(`${this.spec.displayName} remote sessions are one-shot; start a new task to continue`);
+    }
     if (!this.proc || !this.proc.stdin || this.proc.stdin.destroyed || this.proc.exitCode !== null) {
       throw new Error('session is not running');
     }
@@ -524,6 +534,9 @@ export class HarnessManager {
     if (!resolveExecutable(spec)) {
       throw new HarnessRequestError(`${spec.displayName} is not installed on this machine`);
     }
+    if (spec.promptInArgs && !args.prompt?.trim()) {
+      throw new HarnessRequestError(`${spec.displayName} requires a prompt`);
+    }
     const workDir = expandUser(args.cwd);
     let isDir = false;
     try {
@@ -545,8 +558,9 @@ export class HarnessManager {
     // 之后:spawn 失败绝不能留下永久的僵尸条目。
     session.emit({ event: EVENT_SESSION_CREATED, harness: spec.key, name: spec.displayName, cwd: workDir });
     try {
-      await session.start();
-      if (args.prompt) await session.send(args.prompt);
+      if (args.prompt && spec.promptInArgs) session.emit({ event: EVENT_USER_MESSAGE, text: args.prompt });
+      await session.start(args.prompt);
+      if (args.prompt && !spec.promptInArgs) await session.send(args.prompt);
     } catch (error) {
       try {
         fs.unlinkSync(session.logPath);

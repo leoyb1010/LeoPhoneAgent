@@ -725,6 +725,24 @@ private fun OAuthCredentialBlock(
             },
         )
     }
+    var xaiDeviceAuth by remember(instance.id) {
+        mutableStateOf<com.leoyuan.leophoneagent.auth.XAIDeviceFlow.DeviceAuthorization?>(null)
+    }
+    xaiDeviceAuth?.let { auth ->
+        DeviceCodeLoginDialog(
+            title = stringResource(R.string.xai_login_title),
+            instructions = stringResource(R.string.xai_login_instructions),
+            waitingText = stringResource(R.string.xai_login_waiting),
+            copyCodeDescription = stringResource(R.string.xai_login_copy_code),
+            openVerificationText = stringResource(R.string.xai_login_open_verification),
+            userCode = auth.userCode,
+            verificationUrl = auth.openUrl,
+            onCancel = {
+                kimiLoginJob?.cancel()
+                xaiDeviceAuth = null
+            },
+        )
+    }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
@@ -808,7 +826,8 @@ private fun OAuthCredentialBlock(
                             ProviderType.xAI ->
                                 com.leoyuan.leophoneagent.auth.XAIOAuthManager.login(
                                     context, instance.id, providerRepository,
-                                )
+                                    onDeviceCode = { auth -> xaiDeviceAuth = auth },
+                                ).also { xaiDeviceAuth = null }
                             else -> null
                         }
                         // login() persists the token via providerRepository.saveApiKey;
@@ -823,6 +842,7 @@ private fun OAuthCredentialBlock(
                     } finally {
                         isAuthenticating = false
                         kimiDeviceAuth = null
+                        xaiDeviceAuth = null
                     }
                 }
             },

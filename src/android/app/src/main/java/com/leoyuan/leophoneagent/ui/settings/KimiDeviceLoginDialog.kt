@@ -53,7 +53,12 @@ import com.leoyuan.leophoneagent.R
  * Dismissing cancels the login coroutine (the caller wires [onCancel]).
  */
 @Composable
-fun KimiDeviceLoginDialog(
+fun DeviceCodeLoginDialog(
+    title: String,
+    instructions: String,
+    waitingText: String,
+    copyCodeDescription: String,
+    openVerificationText: String,
     userCode: String,
     verificationUrl: String,
     onCancel: () -> Unit,
@@ -64,11 +69,11 @@ fun KimiDeviceLoginDialog(
 
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { Text(stringResource(R.string.kimi_login_title)) },
+        title = { Text(title) },
         text = {
             Column {
                 Text(
-                    stringResource(R.string.kimi_login_instructions),
+                    instructions,
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Spacer(Modifier.height(16.dp))
@@ -98,7 +103,7 @@ fun KimiDeviceLoginDialog(
                         Spacer(Modifier.width(10.dp))
                         Icon(
                             if (copied) Icons.Default.CheckCircle else Icons.Default.ContentCopy,
-                            contentDescription = stringResource(R.string.kimi_login_copy_code),
+                            contentDescription = copyCodeDescription,
                             tint = if (copied) {
                                 androidx.compose.ui.graphics.Color(0xFF34C759)
                             } else {
@@ -130,7 +135,7 @@ fun KimiDeviceLoginDialog(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        stringResource(R.string.kimi_login_open_verification),
+                        openVerificationText,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Medium,
                     )
@@ -143,7 +148,7 @@ fun KimiDeviceLoginDialog(
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        stringResource(R.string.kimi_login_waiting),
+                        waitingText,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -158,3 +163,19 @@ fun KimiDeviceLoginDialog(
         },
     )
 }
+
+@Composable
+fun KimiDeviceLoginDialog(
+    userCode: String,
+    verificationUrl: String,
+    onCancel: () -> Unit,
+) = DeviceCodeLoginDialog(
+    title = stringResource(R.string.kimi_login_title),
+    instructions = stringResource(R.string.kimi_login_instructions),
+    waitingText = stringResource(R.string.kimi_login_waiting),
+    copyCodeDescription = stringResource(R.string.kimi_login_copy_code),
+    openVerificationText = stringResource(R.string.kimi_login_open_verification),
+    userCode = userCode,
+    verificationUrl = verificationUrl,
+    onCancel = onCancel,
+)

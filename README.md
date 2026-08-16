@@ -1,7 +1,7 @@
 # LeoPhoneAgent
 
 [![iOS](https://img.shields.io/badge/iOS-1.23.1%20(93)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
-[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.1-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.1)
+[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.2-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.2)
 [![macOS](https://img.shields.io/badge/macOS-1.67.1-7C3AED.svg)](src/mac/leocodebox/package.json)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Mobile](https://img.shields.io/badge/mobile-iOS%20%2B%20Android-black.svg)](#系统架构)
@@ -10,7 +10,7 @@
 
 手机端本身是一个完整的端上 Agent（模型接入、Linux 沙箱、浏览器自动化、
 技能与记忆);同时通过自营中继,在任意网络(蜂窝/WiFi)远程指挥任意一台
-Mac 上的编码 CLI(Claude Code / Codex / Grok),支持断线续传、远程审批、
+Mac 上的编码 CLI(Claude Code / Codex / Cursor / Grok),支持断线续传、远程审批、
 会话接管。Mac 侧另有一个完整的桌面端(Cindy 开源桌面的深度改造版)。
 
 Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Standard
@@ -26,16 +26,16 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
 > 同一台手机上同时安装。Power 版只有在用户完成产品内授权以及 Android
 > 无障碍/Shizuku 系统授权后，才会开放更深的跨应用操控。
 
-- [下载 Standard APK](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.1/LeoPhoneAgent-Standard-1.0.0-alpha.1.apk)
-- [下载 Power APK](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.1/LeoPhoneAgent-Power-1.0.0-alpha.1.apk)
-- [查看本次更新记录](CHANGELOG.md#android-v100-alpha1---2026-08-16)
+- [下载 Standard APK](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.2/LeoPhoneAgent-Standard-1.0.0-alpha.2.apk)
+- [下载 Power APK](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.2/LeoPhoneAgent-Power-1.0.0-alpha.2.apk)
+- [查看本次更新记录](CHANGELOG.md#android-v100-alpha2---2026-08-16)
 - [查看完整五轮审计与交付报告](docs/ANDROID_DELIVERY_1.0.0_ALPHA1.md)
 
 SHA-256：
 
 ```text
-Standard  670dd30735b1206c12e2527642c2f03ae0569ffbe00f4984cbdd04578da27fa5
-Power     c09f502c5132855fb60b58626d2e624a296f7f6f11e139f91d7fbd79806f884e
+Standard  c94f7675d7eeba5d45e843eef256a9928c60952f67930bb19b0ed980c630fd7b
+Power     702a092611853e86e57c1ac5a60133e65dccaa1fcfd013cba463d9887d144b7b
 ```
 
 本次公开附件使用显式开启的个人 Alpha 调试证书签名，不应作为应用商店的
@@ -62,7 +62,7 @@ Alpha 切换到正式版时可能需要先卸载旧包。APK 内已附 GPL、第
    ws出站│      ws出站│      ws出站│
 ┌──────▼───┐ ┌─────▼────┐ ┌────▼─────┐
 │ MacBook  │ │ Mac mini │ │ Mac Studio│   每台跑 leoagent 常驻服务:
-│  Pro     │ │ (cortex) │ │           │   claude/codex/grok 无头会话
+│  Pro     │ │ (cortex) │ │           │   claude/codex/cursor/grok 无头会话
 └──────────┘ └──────────┘ └───────────┘   NDJSON 日志 + SSE 续传 + 审批
 ```
 
@@ -71,7 +71,10 @@ Alpha 切换到正式版时可能需要先卸载旧包。APK 内已附 GPL、第
 - **协议**:自研 harness 协议(单调 seq 的 NDJSON 事件日志,SSE `?after=N`
   回放再跟随),断线不丢事件;审批带独立 `approval_id`,手机/手表均可应答。
 - **CLI 方言**:Claude Code(stream-json)、Codex(app-server JSON-RPC)、
-  Grok(`grok agent stdio`,ACP/Agent Client Protocol)。
+  Cursor Agent(one-shot stream-json)、Grok(`grok agent stdio`,ACP/Agent Client Protocol)。
+- **Cursor 快捷配置**:在每台 Mac 上安装 Cursor CLI 后执行
+  `cursor-agent login`；Android「我的 Mac」新任务里直接点「Cursor」即可运行。
+  无头机也可向 leocodebox 进程安全注入 `CURSOR_API_KEY`。
 - **安全**:一把 ≥16 字符密钥保护中继与全部端点(个人产品,单用户模型);
   Funnel 只挂中继路径;密钥自动清洗复制残渣(尾部 `%`/换行)。
 
@@ -102,7 +105,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 Android 版本
 
-- 开发版本：`1.0.0-alpha.1`，`minSdk 26`、`targetSdk 35`、仅 ARM64
+- 开发版本：`1.0.0-alpha.2`，`minSdk 26`、`targetSdk 35`、仅 ARM64
 - Standard 包名：`com.leoyuan.leophoneagent`
 - Power 包名：`com.leoyuan.leophoneagent.power`
 - 两个版本共享本机 Agent、Provider、Skills、MCP、Memory、PRoot 与浏览器底座；

@@ -67,9 +67,10 @@ class XAIOAuthManager(context: Context, instanceId: String) : OAuthManager(conte
             context: Context,
             instanceId: String,
             providerRepository: com.leoyuan.leophoneagent.data.repository.ProviderRepository,
+            onDeviceCode: (XAIDeviceFlow.DeviceAuthorization) -> Unit,
         ): String {
             val manager = XAIOAuthManager(context, instanceId)
-            val token = manager.performLogin(context)
+            val token = manager.performDeviceLogin(onDeviceCode)
             providerRepository.saveApiKey(instanceId, token)
             return token
         }
@@ -183,6 +184,101 @@ class XAIOAuthManager(context: Context, instanceId: String) : OAuthManager(conte
     private suspend fun resolveTokenEndpoint(): String =
         loadOAuthString("token_endpoint")?.takeIf { it.isNotEmpty() }
             ?: fetchDiscoveryEndpoints().second
+
+    private suspend fun resolveDeviceAuthorizationEndpoint(): String = withContext(Dispatchers.IO) {
+        loadOAuthString("device_authorization_endpoint")?.takeIf { it.isNotEmpty() }?.let { return@withContext it }
+        val req = Request.Builder().url(DISCOVERY_URL).get().build()
+        val body = httpClient.newCall(req).execute().use { response ->
+            if (!response.isSuccessful) throw IllegalStateException("xAI OIDC discovery failed: HTTP ${response.code}")
+            response.body?.string().orEmpty()
+        }
+        val endpoint = JSONObject(body).optString("device_authorization_endpoint", "")
+        requireTrustedXAIUrl(endpoint, "device authorization endpoint")
+        saveOAuthString("device_authorization_endpoint", endpoint)
+        endpoint
+    }
+
+    private fun requireTrustedXAIUrl(value: String, label: String): String {
+        val uri = Uri.parse(value)
+        require(uri.scheme == "https" && uri.host?.let { it == "x.ai" || it.endsWith(".x.ai") } == true) {
+            "xAI OAuth returned untrusted $label"
+        }
+        return value
+    }
+
+    private fun postForm(url: String, params: Map<String, String>): Pair<Int, JSONObject> {
+        requireTrustedXAIUrl(url, "token endpoint")
+        val formBody = params.entries.joinToString("&") { "${it.key}=${Uri.encode(it.value)}" }
+        val request = Request.Builder()
+            .url(url)
+            .post(formBody.toRequestBody("application/x-www-form-urlencoded".toMediaType()))
+            .build()
+        return httpClient.newCall(request).execute().use { response ->
+            val raw = response.body?.string().orEmpty()
+            response.code to runCatching { JSONObject(raw) }.getOrDefault(JSONObject())
+        }
+    }
+
+    suspend fun requestDeviceAuthorization(): XAIDeviceFlow.DeviceAuthorization = withContext(Dispatchers.IO) {
+        val endpoint = resolveDeviceAuthorizationEndpoint()
+        val (status, json) = postForm(
+            endpoint,
+            mapOf("client_id" to clientId, "scope" to scopes),
+        )
+        if (status !in 200..299) {
+            val description = json.optString("error_description", "")
+                .ifBlank { json.optString("error", "device authorization failed") }
+            throw Exception("xAI device authorization failed: $description")
+        }
+        val auth = XAIDeviceFlow.parseDeviceAuthorization(json)
+            ?: throw Exception("xAI device authorization response missing required fields")
+        requireTrustedXAIUrl(auth.verificationUri, "verification URL")
+        auth.verificationUriComplete?.let { requireTrustedXAIUrl(it, "complete verification URL") }
+        auth
+    }
+
+    suspend fun pollForDeviceToken(auth: XAIDeviceFlow.DeviceAuthorization): String = withContext(Dispatchers.IO) {
+        val deadline = System.currentTimeMillis() + auth.expiresInSeconds.coerceAtMost(3600L) * 1000L
+        var interval = auth.intervalSeconds.coerceIn(1L, 30L)
+        while (System.currentTimeMillis() < deadline) {
+            delay(interval * 1000L)
+            val (status, json) = postForm(
+                resolveTokenEndpoint(),
+                mapOf(
+                    "grant_type" to XAIDeviceFlow.GRANT_TYPE,
+                    "device_code" to auth.deviceCode,
+                    "client_id" to clientId,
+                ),
+            )
+            when (val result = XAIDeviceFlow.classifyPoll(json, status in 200..299)) {
+                is XAIDeviceFlow.PollResult.Success -> {
+                    val tokens = result.tokens
+                    val expiresIn = tokens.optLong("expires_in", 0)
+                    if (expiresIn > 0) tokens.put("expire_at", System.currentTimeMillis() + expiresIn * 1000L)
+                    saveTokensJson(tokens)
+                    onTokensReceived(tokens)
+                    Log.i(TAG, "xAI device login complete; refresh token present=${tokens.has("refresh_token")}")
+                    return@withContext tokens.getString("access_token")
+                }
+                XAIDeviceFlow.PollResult.Pending -> Unit
+                XAIDeviceFlow.PollResult.SlowDown -> interval = XAIDeviceFlow.bumpedInterval(interval).coerceAtMost(60L)
+                is XAIDeviceFlow.PollResult.Denied -> throw Exception("xAI login denied: ${result.description}")
+                is XAIDeviceFlow.PollResult.Expired -> throw Exception("xAI login code expired: ${result.description}")
+                is XAIDeviceFlow.PollResult.Fatal -> throw Exception("xAI login failed: ${result.description}")
+            }
+        }
+        throw Exception("xAI login timed out")
+    }
+
+    suspend fun performDeviceLogin(
+        onDeviceCode: (XAIDeviceFlow.DeviceAuthorization) -> Unit,
+    ): String {
+        val auth = requestDeviceAuthorization()
+        // Never log the user code or device code: both are short-lived credentials.
+        Log.i(TAG, "xAI device authorization issued; expires=${auth.expiresInSeconds}s interval=${auth.intervalSeconds}s")
+        withContext(Dispatchers.Main) { onDeviceCode(auth) }
+        return pollForDeviceToken(auth)
+    }
 
     // ── Authorization URL ─────────────────────────────────────────────
 

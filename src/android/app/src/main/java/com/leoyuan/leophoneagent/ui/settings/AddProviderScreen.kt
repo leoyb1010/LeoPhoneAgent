@@ -667,6 +667,24 @@ private fun ColumnScope.OAuthConfigSection(
             },
         )
     }
+    var xaiDeviceAuth by remember {
+        mutableStateOf<com.leoyuan.leophoneagent.auth.XAIDeviceFlow.DeviceAuthorization?>(null)
+    }
+    xaiDeviceAuth?.let { auth ->
+        DeviceCodeLoginDialog(
+            title = stringResource(R.string.xai_login_title),
+            instructions = stringResource(R.string.xai_login_instructions),
+            waitingText = stringResource(R.string.xai_login_waiting),
+            copyCodeDescription = stringResource(R.string.xai_login_copy_code),
+            openVerificationText = stringResource(R.string.xai_login_open_verification),
+            userCode = auth.userCode,
+            verificationUrl = auth.openUrl,
+            onCancel = {
+                kimiLoginJob?.cancel()
+                xaiDeviceAuth = null
+            },
+        )
+    }
 
     if (isAuthenticated) {
         // ── Authenticated state — Token + Save ─────────────────────────
@@ -756,7 +774,11 @@ private fun ColumnScope.OAuthConfigSection(
                                         maskedToken = maskOAuthToken(key)
                                     }
                                     ProviderType.xAI -> {
-                                        val key = com.leoyuan.leophoneagent.auth.XAIOAuthManager.login(context, pendingInstanceId, providerRepository)
+                                        val key = com.leoyuan.leophoneagent.auth.XAIOAuthManager.login(
+                                            context, pendingInstanceId, providerRepository,
+                                            onDeviceCode = { auth -> xaiDeviceAuth = auth },
+                                        )
+                                        xaiDeviceAuth = null
                                         maskedToken = maskOAuthToken(key)
                                     }
                                     else -> {
@@ -768,9 +790,11 @@ private fun ColumnScope.OAuthConfigSection(
                                 // [T-kimi-oauth] User dismissed the device-code
                                 // dialog — not an error; just reset the button.
                                 kimiDeviceAuth = null
+                                xaiDeviceAuth = null
                                 throw e
                             } catch (e: Exception) {
                                 kimiDeviceAuth = null
+                                xaiDeviceAuth = null
                                 // T-android-codex-oauth-dns: surface a
                                 // localized "check network / proxy" hint
                                 // when the OAuth manager flags a DNS /
@@ -785,6 +809,7 @@ private fun ColumnScope.OAuthConfigSection(
                                 }
                             } finally {
                                 isAuthenticating = false
+                                xaiDeviceAuth = null
                             }
                         }
                     },
