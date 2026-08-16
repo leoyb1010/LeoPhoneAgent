@@ -196,6 +196,8 @@ object DeepLinkHandler {
             "background" -> DeepLinkAction.OpenSettingsScreen(Routes.BACKGROUND)
             "about" -> DeepLinkAction.OpenSettingsScreen(Routes.ABOUT)
             "permissions" -> DeepLinkAction.OpenPermissionSettings
+            "system-permissions", "system_permissions", "assistant" ->
+                DeepLinkAction.OpenSettingsScreen(Routes.SYSTEM_PERMISSIONS)
             // mirrors live as a section inside Rootfs management — no
             // standalone destination, so route both /mirrors and /rootfs
             // there. The user lands on the same screen; mirror config is

@@ -84,4 +84,27 @@ object DeepLinkCoordinator {
         _pendingChatAction.value = null
         return current
     }
+
+    /**
+     * System-assistant launch (ROLE_ASSISTANT / ACTION_ASSIST / VoiceInteraction).
+     * ChatScreen consumes this once to seed the composer + optional screenshot.
+     */
+    data class AssistLaunch(val sourcePackage: String?, val screenshotPath: String?)
+
+    private val _pendingAssist = MutableStateFlow<AssistLaunch?>(null)
+    val pendingAssist: StateFlow<AssistLaunch?> = _pendingAssist.asStateFlow()
+
+    fun setPendingAssist(sourcePackage: String?, screenshotPath: String?) {
+        _pendingAssist.value = AssistLaunch(sourcePackage, screenshotPath)
+    }
+
+    fun setPendingAssist(launch: com.leoyuan.leophoneagent.assistant.AssistIntents.Launch) {
+        setPendingAssist(launch.sourcePackage, launch.screenshotPath)
+    }
+
+    fun consumePendingAssist(): AssistLaunch? {
+        val current = _pendingAssist.value
+        _pendingAssist.value = null
+        return current
+    }
 }

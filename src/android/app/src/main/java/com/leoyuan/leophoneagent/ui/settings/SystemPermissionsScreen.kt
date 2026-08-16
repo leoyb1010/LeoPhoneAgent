@@ -2,9 +2,16 @@ package com.leoyuan.leophoneagent.ui.settings
 
 import android.widget.Toast
 import android.app.Activity
+import android.app.StatusBarManager
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.graphics.drawable.Icon
+import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -15,8 +22,11 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Accessibility
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.BatteryAlert
+import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.RestartAlt
+import androidx.compose.material.icons.outlined.Widgets
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
@@ -52,6 +62,12 @@ import kotlinx.coroutines.delay
 @Composable
 fun SystemPermissionsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
+    val roleLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { /* ON_RESUME / poll refreshes isHeld */ }
+    var assistantHeld by remember {
+        mutableStateOf(com.leoyuan.leophoneagent.assistant.AssistantRole.isHeld(context))
+    }
     var a11yEnabled by remember { mutableStateOf(isAccessibilityEnabled(context)) }
     // [T-android-a11y-miui-service-failure] "Service failed" degraded state:
     // the OEM ROM (MIUI etc.) reports the service as enabled in Settings but
@@ -63,6 +79,7 @@ fun SystemPermissionsScreen(onBack: () -> Unit) {
 
     LaunchedEffect(Unit) {
         while (true) {
+            assistantHeld = com.leoyuan.leophoneagent.assistant.AssistantRole.isHeld(context)
             val inSettings = isAccessibilityEnabled(context)
             val connected = MinisAccessibilityService.getInstance() != null
             a11yEnabled = inSettings || connected
@@ -89,6 +106,51 @@ fun SystemPermissionsScreen(onBack: () -> Unit) {
                 .padding(padding)
                 .verticalScroll(rememberScrollState()),
         ) {
+            SettingsSection(
+                header = stringResource(R.string.system_permissions_section_assistant),
+                footer = stringResource(R.string.system_permissions_assistant_footer),
+            ) {
+                SettingsRow(
+                    icon = Icons.Outlined.AutoAwesome,
+                    iconColor = Color(0xFF5856D6),
+                    title = stringResource(R.string.system_permissions_assistant_row),
+                    subtitle = if (assistantHeld) {
+                        stringResource(R.string.system_permissions_assistant_enabled)
+                    } else {
+                        stringResource(R.string.system_permissions_assistant_disabled)
+                    },
+                    onClick = {
+                        try {
+                            roleLauncher.launch(
+                                com.leoyuan.leophoneagent.assistant.AssistantRole.requestIntent(context),
+                            )
+                        } catch (_: Throwable) {
+                            try {
+                                context.startActivity(
+                                    com.leoyuan.leophoneagent.assistant.AssistantRole.fallbackSettingsIntent()
+                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                )
+                            } catch (_: Throwable) {}
+                        }
+                    },
+                )
+                SettingsRow(
+                    icon = Icons.Outlined.Dashboard,
+                    iconColor = Color(0xFF007AFF),
+                    title = stringResource(R.string.system_permissions_qs_row),
+                    subtitle = stringResource(R.string.system_permissions_qs_sub),
+                    onClick = { requestQuickTile(context) },
+                )
+                SettingsRow(
+                    icon = Icons.Outlined.Widgets,
+                    iconColor = Color(0xFF34C759),
+                    title = stringResource(R.string.system_permissions_widget_row),
+                    subtitle = stringResource(R.string.system_permissions_widget_sub),
+                    onClick = { requestPinWidget(context) },
+                    showDivider = false,
+                )
+            }
+
             SettingsSection(
                 header = stringResource(R.string.system_permissions_section_a11y),
                 footer = stringResource(R.string.system_permissions_a11y_footer),
@@ -223,6 +285,34 @@ private fun isAccessibilityEnabled(context: Context): Boolean {
         Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
     ) ?: return false
     return enabled.split(':').any { it.equals(expected, ignoreCase = true) }
+}
+
+private fun requestQuickTile(context: Context) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val statusBar = context.getSystemService(StatusBarManager::class.java)
+        try {
+            statusBar?.requestAddTileService(
+                ComponentName(context, com.leoyuan.leophoneagent.tile.LeoQuickTileService::class.java),
+                context.getString(R.string.qs_tile_label),
+                Icon.createWithResource(context, R.drawable.ic_qs_new_chat),
+                context.mainExecutor,
+            ) { /* added / already / rejected — user sees the system sheet */ }
+            return
+        } catch (_: Throwable) {}
+    }
+    Toast.makeText(context, context.getString(R.string.system_permissions_qs_manual), Toast.LENGTH_SHORT).show()
+}
+
+private fun requestPinWidget(context: Context) {
+    val manager = AppWidgetManager.getInstance(context)
+    val component = ComponentName(context, com.leoyuan.leophoneagent.widget.LeoHomeWidgetProvider::class.java)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && manager.isRequestPinAppWidgetSupported) {
+        try {
+            manager.requestPinAppWidget(component, null, null)
+            return
+        } catch (_: Throwable) {}
+    }
+    Toast.makeText(context, context.getString(R.string.system_permissions_widget_manual), Toast.LENGTH_SHORT).show()
 }
 
 private fun openAccessibilitySettings(context: Context) {

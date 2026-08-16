@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
+import com.leoyuan.leophoneagent.assistant.AssistIntents
 import com.leoyuan.leophoneagent.deeplink.DeepLinkAction
 import com.leoyuan.leophoneagent.deeplink.DeepLinkCoordinator
 import com.leoyuan.leophoneagent.deeplink.DeepLinkHandler
@@ -334,11 +335,16 @@ class MainActivity : ComponentActivity() {
         // while inside a chat, synthesise an OpenSession deep-link so
         // the navigation stack lands on that chat instead of the
         // sessions list. T166.
+        val assistLaunch = AssistIntents.fromIntent(intent)
+        if (assistLaunch != null) {
+            DeepLinkCoordinator.setPendingAssist(assistLaunch)
+        }
         val explicitDeepLink = DeepLinkHandler.parse(intent?.data)
-        val launchDeepLink = if (explicitDeepLink !is DeepLinkAction.Unknown) {
-            explicitDeepLink
-        } else {
-            restoredChatSessionId
+        val launchDeepLink = when {
+            assistLaunch != null && explicitDeepLink is DeepLinkAction.Unknown ->
+                DeepLinkAction.NewChat
+            explicitDeepLink !is DeepLinkAction.Unknown -> explicitDeepLink
+            else -> restoredChatSessionId
                 ?.let { DeepLinkAction.OpenSession(it) }
                 ?: DeepLinkAction.Unknown
         }
@@ -476,6 +482,7 @@ class MainActivity : ComponentActivity() {
      */
     override fun onStart() {
         super.onStart()
+        com.leoyuan.leophoneagent.assistant.ScreenCaptureNotice.register(this)
         if (!hasResumedFromBackground) {
             hasResumedFromBackground = true
             return
@@ -488,6 +495,11 @@ class MainActivity : ComponentActivity() {
         nav.safeNavigate(newRoute) {
             popUpTo(Routes.SESSION_LIST) { inclusive = false }
         }
+    }
+
+    override fun onStop() {
+        com.leoyuan.leophoneagent.assistant.ScreenCaptureNotice.unregister(this)
+        super.onStop()
     }
 
     /**
@@ -540,6 +552,12 @@ class MainActivity : ComponentActivity() {
         // touching the deep-link path so the share coordinator sees it.
         if (intent.getBooleanExtra("shared_content", false)) {
             com.leoyuan.leophoneagent.share.ShareCoordinator.processPendingShare(this)
+        }
+        val assistLaunch = AssistIntents.fromIntent(intent)
+        if (assistLaunch != null) {
+            DeepLinkCoordinator.setPendingAssist(assistLaunch)
+            handleDeepLink(Uri.parse(AssistIntents.NEW_CHAT_URI))
+            return
         }
         handleDeepLink(intent.data)
     }

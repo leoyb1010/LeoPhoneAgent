@@ -1298,6 +1298,23 @@
     <!-- T323: System Permissions screen + AccessibilityService -->
     <string name="system_permissions_title">System Permissions</string>
     <string name="system_permissions_subtitle">OS-level permissions granted from system Settings</string>
+    <string name="system_permissions_shortcut_subtitle">Default assistant, Quick Settings tile, and home widget</string>
+    <string name="system_permissions_section_assistant">System assistant and shortcuts</string>
+    <string name="system_permissions_assistant_row">Default digital assistant</string>
+    <string name="system_permissions_assistant_enabled">LeoPhoneAgent is the current system assistant</string>
+    <string name="system_permissions_assistant_disabled">Tap to set LeoPhoneAgent as the default assistant</string>
+    <string name="system_permissions_assistant_footer">Long-press Home or the assistant gesture to open a new chat with the current app\'s context. Uses the official ROLE_ASSISTANT and VoiceInteractionService APIs; you can change this anytime in system settings.</string>
+    <string name="system_permissions_qs_row">Add Quick Settings tile</string>
+    <string name="system_permissions_qs_sub">Open a new chat from the status-bar shade</string>
+    <string name="system_permissions_qs_manual">Add the LeoPhoneAgent tile from the Quick Settings edit panel</string>
+    <string name="system_permissions_widget_row">Add home-screen widget</string>
+    <string name="system_permissions_widget_sub">New chat and voice chat on the home screen</string>
+    <string name="system_permissions_widget_manual">Long-press the home screen and add the LeoPhoneAgent widget</string>
+    <string name="qs_tile_label">New chat</string>
+    <string name="widget_title">LeoPhoneAgent</string>
+    <string name="widget_description">Start a new chat or voice chat</string>
+    <string name="assist_composer_hint">I was invoked as the system assistant from %1$s. Help with what is on that screen.</string>
+    <string name="screen_capture_notice">A screenshot or screen recording of LeoPhoneAgent was just captured.</string>
     <string name="system_permissions_section_a11y">Accessibility</string>
     <string name="system_permissions_a11y_row">LeoPhoneAgent Accessibility Service</string>
     <string name="system_permissions_a11y_enabled">Enabled — android-a11y-cli is ready</string>

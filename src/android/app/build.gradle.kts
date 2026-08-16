@@ -37,8 +37,8 @@ android {
         applicationId = "com.leoyuan.leophoneagent"
         minSdk = 26
         targetSdk = 35
-        versionCode = 100002
-        versionName = "1.0.0-alpha.2"
+        versionCode = 100003
+        versionName = "1.0.0-alpha.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -58,6 +58,7 @@ android {
             cmake {
                 cppFlags += "-std=c++17"
                 arguments += "-DANDROID_STL=c++_shared"
+                arguments += "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
             }
         }
     }

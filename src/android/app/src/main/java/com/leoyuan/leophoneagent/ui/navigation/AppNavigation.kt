@@ -648,6 +648,7 @@ fun AppNavigation(
                 onMcpClick = { navController.safeNavigate(Routes.MCP) },
                 onSoulClick = { navController.safeNavigate(Routes.SOUL) },
                 onPermissionsClick = { navController.safeNavigate(Routes.PERMISSIONS) },
+                onSystemPermissionsClick = { navController.safeNavigate(Routes.SYSTEM_PERMISSIONS) },
                 onUsageClick = { navController.safeNavigate(Routes.USAGE_STATS) },
                 onAppearanceClick = { navController.safeNavigate(Routes.APPEARANCE) },
                 onFleetClick = { navController.safeNavigate(Routes.RELAY_FLEET) },

@@ -88,6 +88,7 @@ fun SettingsScreen(
     // the route yet.
     onSoulClick: () -> Unit = {},
     onPermissionsClick: () -> Unit = {},
+    onSystemPermissionsClick: () -> Unit = {},
     onUsageClick: () -> Unit = {},
     onAppearanceClick: () -> Unit = {},
     onFleetClick: () -> Unit = {},
@@ -262,6 +263,13 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_section_permissions),
                     subtitle = stringResource(R.string.settings_permissions_subtitle),
                     onClick = onPermissionsClick,
+                )
+                SettingsItem(
+                    icon = Icons.Outlined.AutoAwesome,
+                    iconColor = Color(0xFF5856D6),
+                    title = stringResource(R.string.system_permissions_title),
+                    subtitle = stringResource(R.string.system_permissions_shortcut_subtitle),
+                    onClick = onSystemPermissionsClick,
                     showDivider = false,
                 )
             }

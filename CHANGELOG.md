@@ -4,6 +4,30 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## Android v1.0.0-alpha.3 - 2026-08-16
+
+### 新增
+
+- 可替换系统数字助手：`ROLE_ASSISTANT` + `VoiceInteractionService` + `ACTION_ASSIST`。长按 Home / 助手手势打开新对话，并带上当前 App 包名与可选截图。
+- 快捷设置磁贴：从状态栏下拉直接开新对话；设置页可一键请求添加。
+- 桌面小组件：新建对话 / 语音对话，复用现有 `minis://action/` 深链。
+- 设置 → 系统权限：默认助手、磁贴、小组件入口（此前该页未挂到设置）。
+- 截屏/录屏提示（Android 14+）：聊天界面被系统截取时给出提示。
+- 预测性返回：`enableOnBackInvokedCallback`。
+- 原生库按 16KB 页大小对齐（`ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES`）。
+
+### 已有并保留
+
+- 悬浮窗、Android 16 Live Updates / 状态胶囊、前台服务、忽略电池优化、精确闹钟、边到边、照片选择器、分屏/折叠双栏、应用内语言、分享入口。
+
+### 刻意未做
+
+- 通知气泡、画中画、Credential Manager / Passkey、配套设备、NFC、全屏 Intent、Health Connect：对单用户本机 Agent 没有真实产品价值，或会与现有悬浮窗/灵动岛抢表面。
+
+### 验证
+
+- 新增 `AssistIntentsTest` 6/6 通过；中文资源门禁通过；Standard/Power Release APK 已用 JDK 17 组装，`aapt` 复核 versionCode `100003`，双包均通过 APK Signature Scheme v2。
+
 ## Android v1.0.0-alpha.2 - 2026-08-16
 
 ### 修复

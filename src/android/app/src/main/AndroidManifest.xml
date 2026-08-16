@@ -166,6 +166,7 @@
         android:label="@string/app_display_name"
         android:localeConfig="@xml/locales_config"
         android:supportsRtl="true"
+        android:enableOnBackInvokedCallback="true"
         android:theme="@style/Theme.Minis">
 
         <activity
@@ -190,6 +191,15 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="leophoneagent" />
                 <data android:scheme="minis" />
+            </intent-filter>
+            <!-- Qualify for ROLE_ASSISTANT / default digital assistant. -->
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VOICE_COMMAND" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
 
@@ -443,6 +453,45 @@
             android:name=".service.AgentForegroundService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+
+        <service
+            android:name=".assistant.LeoVoiceInteractionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.voice_interaction"
+                android:resource="@xml/voice_interaction_service" />
+        </service>
+        <service
+            android:name=".assistant.LeoVoiceInteractionSessionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION" />
+
+        <service
+            android:name=".tile.LeoQuickTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_qs_new_chat"
+            android:label="@string/qs_tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <receiver
+            android:name=".widget.LeoHomeWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_title">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/leo_home_widget_info" />
+        </receiver>
 
         <!-- Alarm broadcasts are app-private; reboot handling is isolated in
              the system-action-only exported receiver below. -->
