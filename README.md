@@ -1,7 +1,7 @@
 # LeoPhoneAgent
 
 [![iOS](https://img.shields.io/badge/iOS-1.23.1%20(93)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
-[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.1-3DDC84.svg)](#当前-android-版本)
+[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.1-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.1)
 [![macOS](https://img.shields.io/badge/macOS-1.67.1-7C3AED.svg)](src/mac/leocodebox/package.json)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Mobile](https://img.shields.io/badge/mobile-iOS%20%2B%20Android-black.svg)](#系统架构)
@@ -19,6 +19,29 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
 
 > 本仓库是 [OpenMinis](https://github.com/OpenMinis/OpenMinis) 的独立 GPLv3
 > fork,与 OpenMinis 官方产品无关,亦未获其背书。
+
+## 直接下载 Android APK
+
+> 当前为个人 Alpha 预发布版，仅支持 ARM64。两个 APK 使用不同包名，可以在
+> 同一台手机上同时安装。Power 版只有在用户完成产品内授权以及 Android
+> 无障碍/Shizuku 系统授权后，才会开放更深的跨应用操控。
+
+- [下载 Standard APK](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.1/LeoPhoneAgent-Standard-1.0.0-alpha.1.apk)
+- [下载 Power APK](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.1/LeoPhoneAgent-Power-1.0.0-alpha.1.apk)
+- [查看本次更新记录](CHANGELOG.md#android-v100-alpha1---2026-08-16)
+- [查看完整五轮审计与交付报告](docs/ANDROID_DELIVERY_1.0.0_ALPHA1.md)
+
+SHA-256：
+
+```text
+Standard  670dd30735b1206c12e2527642c2f03ae0569ffbe00f4984cbdd04578da27fa5
+Power     c09f502c5132855fb60b58626d2e624a296f7f6f11e139f91d7fbd79806f884e
+```
+
+本次公开附件使用显式开启的个人 Alpha 调试证书签名，不应作为应用商店的
+正式升级证书链。正式分发前仍需换成长期托管的发行 keystore；因此从本次
+Alpha 切换到正式版时可能需要先卸载旧包。APK 内已附 GPL、第三方许可、
+隐私说明与源码提供说明。
 
 ## 系统架构
 
@@ -83,8 +106,14 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 - Standard 包名：`com.leoyuan.leophoneagent`
 - Power 包名：`com.leoyuan.leophoneagent.power`
 - 两个版本共享本机 Agent、Provider、Skills、MCP、Memory、PRoot 与浏览器底座；
-  Power 高权限能力通过独立构建标志逐步接入
+  Power 高权限能力通过独立构建标志和逐次危险命令确认隔离
 - 兼容既有 `minis://` 内部资源协议，同时新增 `leophoneagent://` 导航入口
+- Fold8 宽折叠适配：1080×1728 封面单栏、1768×2208 展开双栏，并通过
+  200% 系统字体可用性验证
+- 简体中文设置、列表、按钮、弹窗与主操作 TalkBack 标签已资源化，并加入
+  中文资源完整性与设置页英文硬编码构建门禁
+- 五轮验证：Standard/Power 各 401 个 JVM 测试、Fold8 设备端 111 个测试、
+  双 Release lint 0 error
 
 ## 构建
 
@@ -97,16 +126,31 @@ cd LeoPhoneAgent
 open src/ios/LeoPhoneAgent.xcodeproj
 ```
 
-Android（JDK 17、SDK 36、NDK r28+、ARM64）：
+Android（JDK 17、SDK 36、NDK 27.0.12077973、ARM64）：
 
 ```sh
 export JAVA_HOME=/path/to/jdk-17
-export ANDROID_NDK_HOME="$HOME/Library/Android/sdk/ndk/28.0.13004108"
+export ANDROID_NDK_HOME="$HOME/Library/Android/sdk/ndk/27.0.12077973"
 ./deps/build_proot.sh
 ./scripts/prepare_android_sandbox.sh
 cd src/android
 ./gradlew :app:assembleStandardDebug
 ./gradlew :app:assemblePowerDebug
+```
+
+生成与本次附件相同类型的个人 Alpha Release（显式调试证书）及完整门禁：
+
+```sh
+./gradlew \
+  :app:verifyChineseResources \
+  :app:verifyChineseSettingsStrings \
+  :app:testStandardDebugUnitTest \
+  :app:testPowerDebugUnitTest \
+  :app:lintStandardRelease \
+  :app:lintPowerRelease \
+  :app:assembleStandardRelease \
+  :app:assemblePowerRelease \
+  -Pleophone.allowDebugReleaseSigning=true
 ```
 
 生成的 PRoot、Alpine、Debug Skill 与 APK 都是可重建产物，不进入 Git。

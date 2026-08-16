@@ -4,18 +4,42 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
-## Android 1.0.0-alpha.1 - 2026-08-16（开发中）
+## Android v1.0.0-alpha.1 - 2026-08-16
 
-- 从 LeoPhoneAgent 与 OpenMinis 的共同历史恢复完整 Kotlin/Compose Android
-  工程，保留本机 Agent、Provider、Skills、MCP、Memory、浏览器与 PRoot。
-- Android 产品身份切换为 LeoPhoneAgent，Standard 与 Power 使用独立包名并可
-  同机安装；Power 高权限能力由专用 BuildConfig 闸门承载。
-- 修复仓库路径含空格时 PRoot 编译失败，以及 macOS 缺少 GNU readelf/awk
-  时静默生成错误 loader 偏移的问题；ARM64 PRoot 偏移与产物校验通过。
-- 修复公开仓库缺少私有 Debug Skill 时 Gradle 拒绝打包的问题，缺失时生成
-  明确占位文档，且 Debug 资产不会进入 Release 或 Git。
-- Standard、Power Debug APK 均已完成本机构建；真机/模拟器安装验证待设备
-  测试阶段完成。
+首个 LeoPhoneAgent Android 双版本个人 Alpha 交付。
+
+### 新增
+
+- Standard 与 Power 两个独立包，可同时安装、独立保存数据。
+- 本机 Agent、模型服务商、Skills、MCP、Memory、PRoot Linux 沙箱、终端、浏览器、语音、计划任务和 Mac Relay/Fleet 协同。
+- Power 版新增无障碍与 Shizuku 深度 Android 操控路径；危险 shell/破坏性操作逐次展示完整命令并确认。
+- Fold8 宽折叠适配：封面单栏、展开双栏、跨尺寸草稿保留和 200% 字体布局。
+- 简体中文设置、列表、功能按钮、弹窗、错误提示和主操作 TalkBack 标签。
+- Android CI、中文资源门禁、设置页英文硬编码门禁、双版本 lint 与测试。
+
+### 安全与隐私
+
+- 凭据存储不再在 Keystore 异常时降级成明文；失败时只保留进程内临时数据。
+- OAuth callback 仅监听 loopback，不记录 code/state，并强制校验 state。
+- Debug RPC 仅 Debug 构建启用、仅监听 loopback，并要求每安装随机令牌。
+- Release 关闭普通明文 HTTP 与系统备份；拆分并收紧 Alarm/Boot Receiver。
+- 无障碍文字只在主动监听期间采集并忽略密码字段；分享内容增加数量与大小上限。
+- APK 内置 GPL、第三方许可、隐私说明和源码提供说明；Alpine/PRoot 下载增加固定 SHA-256 校验。
+
+### 验证与下载
+
+- Standard/Power 各 401 个 JVM 测试，0 失败（各 1 个既有跳过）。
+- Fold8 API 35 设备端 111 个测试，0 失败、0 跳过；双 Release lint 均为 0 error。
+- 无令牌 Debug RPC 返回 401，合法令牌返回 200。
+- 两个最终 Release APK 已覆盖安装并同时运行，无启动崩溃。
+- [GitHub Release 与 APK](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.1)
+- [完整五轮审计与交付报告](docs/ANDROID_DELIVERY_1.0.0_ALPHA1.md)
+
+### 已知边界
+
+- 当前仅提供 ARM64 APK。
+- 本次附件使用个人 Alpha 调试证书签名，不是正式商店证书链；切换正式签名版时可能需要先卸载 Alpha。
+- 正式公开发行前仍需完成真实 Fold8 物理机长稳/功耗测试、数据库全版本升级 fixture、商店隐私表单和发行 keystore 托管。
 
 ## 1.1.2 - 2026-07-26
 
