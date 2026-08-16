@@ -375,6 +375,155 @@ private data class ScrollFollowKey(
     val blockSig: Long,
 )
 
+@Composable
+private fun LeoAgentEmptyState(
+    isPowerEdition: Boolean,
+    onSuggestion: (String) -> Unit,
+) {
+    val accent = Color(0xFF6157F5)
+    val cyan = Color(0xFF18BFD0)
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp, vertical = 22.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(68.dp)
+                .background(
+                    brush = Brush.linearGradient(listOf(accent, cyan)),
+                    shape = RoundedCornerShape(22.dp),
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Default.AutoAwesome,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(30.dp),
+            )
+        }
+        Spacer(Modifier.height(18.dp))
+        Text(
+            text = androidx.compose.ui.res.stringResource(R.string.agent_home_ready_title),
+            color = ChatColors.primaryText,
+            fontSize = 23.sp,
+            lineHeight = 28.sp,
+            fontWeight = FontWeight.Bold,
+        )
+        Spacer(Modifier.height(7.dp))
+        Text(
+            text = androidx.compose.ui.res.stringResource(
+                if (isPowerEdition) R.string.agent_home_power_subtitle
+                else R.string.agent_home_standard_subtitle,
+            ),
+            color = ChatColors.secondaryText,
+            fontSize = 14.sp,
+            lineHeight = 20.sp,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+        Spacer(Modifier.height(14.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            LeoStatusPill(
+                text = androidx.compose.ui.res.stringResource(R.string.agent_home_local_badge),
+                dotColor = Color(0xFF25B96F),
+            )
+            LeoStatusPill(
+                text = androidx.compose.ui.res.stringResource(
+                    if (isPowerEdition) R.string.agent_home_power_badge
+                    else R.string.agent_home_private_badge,
+                ),
+                dotColor = if (isPowerEdition) accent else cyan,
+            )
+        }
+        Spacer(Modifier.height(24.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            LeoQuickTask(
+                icon = Icons.Default.Terminal,
+                title = androidx.compose.ui.res.stringResource(R.string.agent_home_task_phone),
+                prompt = androidx.compose.ui.res.stringResource(R.string.agent_home_prompt_phone),
+                accent = accent,
+                onSuggestion = onSuggestion,
+            )
+            LeoQuickTask(
+                icon = Icons.Default.Language,
+                title = androidx.compose.ui.res.stringResource(R.string.agent_home_task_research),
+                prompt = androidx.compose.ui.res.stringResource(R.string.agent_home_prompt_research),
+                accent = cyan,
+                onSuggestion = onSuggestion,
+            )
+            LeoQuickTask(
+                icon = Icons.Default.Schedule,
+                title = androidx.compose.ui.res.stringResource(R.string.agent_home_task_automate),
+                prompt = androidx.compose.ui.res.stringResource(R.string.agent_home_prompt_automate),
+                accent = Color(0xFFF19B38),
+                onSuggestion = onSuggestion,
+            )
+        }
+    }
+}
+
+@Composable
+private fun LeoStatusPill(text: String, dotColor: Color) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(ChatColors.secondaryBg)
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(Modifier.size(6.dp).background(dotColor, CircleShape))
+        Text(text, color = ChatColors.secondaryText, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
+private fun LeoQuickTask(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    prompt: String,
+    accent: Color,
+    onSuggestion: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(ChatColors.secondaryBg.copy(alpha = if (ChatColors.isDark) 0.82f else 0.72f))
+            .border(0.5.dp, ChatColors.separator.copy(alpha = 0.28f), RoundedCornerShape(16.dp))
+            .clickable { onSuggestion(prompt) }
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .background(accent.copy(alpha = if (ChatColors.isDark) 0.22f else 0.12f), RoundedCornerShape(11.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text = title,
+            color = ChatColors.primaryText,
+            fontSize = 14.sp,
+            lineHeight = 18.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f),
+        )
+        Icon(
+            Icons.AutoMirrored.Filled.ArrowForward,
+            contentDescription = null,
+            tint = ChatColors.tertiaryText,
+            modifier = Modifier.size(18.dp),
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class, kotlinx.coroutines.FlowPreview::class)
 @Composable
 fun ChatScreen(
@@ -1647,30 +1796,10 @@ fun ChatScreen(
             }
     }
 
-    // Auto-focus input on new sessions so keyboard pops up immediately.
-    //
-    // T176: theme switch (Activity recreate) re-enters this LE before the
-    // composer's `Modifier.focusRequester(inputFocusRequester)` has been
-    // attached for the new composition. requestFocus() then throws
-    // `FocusRequester is not initialized` and the process crashes. Guard
-    // with try/catch — we lose nothing if the focus call is a no-op on
-    // the recreated activity (the user wasn't typing anyway), and the
-    // common new-session path still works because the 300 ms delay lets
-    // the Modifier attach.
-    LaunchedEffect(Unit) {
-        if (sessionId.startsWith("__new__")) {
-            // Small delay to let the layout settle before requesting focus
-            kotlinx.coroutines.delay(300)
-            try {
-                inputFocusRequester.requestFocus()
-            } catch (e: IllegalStateException) {
-                AppLogger.debug(
-                    tagScroll,
-                    "auto-focus skipped: FocusRequester not attached (likely activity recreate / theme switch): ${e.message}",
-                )
-            }
-        }
-    }
+    // A new session opens as a calm command surface instead of immediately
+    // covering the useful empty state with the IME. Focus remains one tap
+    // away through the composer and all quick-action/deep-link paths still
+    // request it explicitly when they carry input.
 
     // Show top-level error in snackbar (only for errors without an assistant message)
     LaunchedEffect(error) {
@@ -3500,6 +3629,21 @@ fun ChatScreen(
                     }
                 }
                 } // AlwaysStretchOverscrollBox
+                if (messages.isEmpty() && !isStreaming) {
+                    LeoAgentEmptyState(
+                        isPowerEdition = com.leoyuan.leophoneagent.BuildConfig.POWER_FEATURES_ENABLED,
+                        onSuggestion = { prompt ->
+                            viewModel.setInputText(prompt)
+                            try {
+                                inputFocusRequester.requestFocus()
+                                keyboardController?.show()
+                            } catch (_: IllegalStateException) {
+                                // The composer can be between layout passes;
+                                // the populated draft remains visible and tappable.
+                            }
+                        },
+                    )
+                }
                 // SelectionDragTracker bridges gesture-published dragIntent
                 // with listState scroll observation — that's what keeps the
                 // selection extending across newly-scrolled-in shards when
@@ -5863,5 +6007,3 @@ private fun ThinkingLevelSheet(
         }
     }
 }
-
-

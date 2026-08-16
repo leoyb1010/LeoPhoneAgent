@@ -1096,14 +1096,15 @@
     <string name="model_picker_non_text_warning_choose_other">更换其他模型</string>
 
     <!-- Welcome / onboarding (T332) -->
-    <string name="sessionlist_welcome_title">欢迎使用 LeoPhoneAgent</string>
-    <string name="sessionlist_welcome_subtitle">你的第一个端侧 Agent 即将就绪。</string>
-    <string name="sessionlist_welcome_step1_title">添加供应商</string>
+    <string name="sessionlist_welcome_title">认识你的本机操作员</string>
+    <string name="sessionlist_welcome_subtitle">连接一个模型，即可用同一个私密 Agent 操作应用、文件和你的 Mac。</string>
+    <string name="sessionlist_welcome_local_status">本机运行时已安装</string>
+    <string name="sessionlist_welcome_step1_title">连接智能模型</string>
     <string name="sessionlist_welcome_step1_subtitle">配置 API Key 或使用 OAuth 登录</string>
-    <string name="sessionlist_welcome_step2_title">选择模型</string>
+    <string name="sessionlist_welcome_step2_title">选择执行模型</string>
     <string name="sessionlist_welcome_step2_subtitle">选择你想使用的模型</string>
     <string name="sessionlist_welcome_step2_locked">请先完成第 1 步</string>
-    <string name="sessionlist_welcome_step3_title">开始对话</string>
+    <string name="sessionlist_welcome_step3_title">启动第一个任务</string>
     <string name="sessionlist_welcome_step3_subtitle">点击开始</string>
     <string name="sessionlist_welcome_step3_locked">请先完成第 2 步</string>
     <string name="sessionlist_welcome_step_done">已完成</string>
@@ -1363,4 +1364,16 @@
     <string name="browser_downloads_cancel">取消下载</string>
     <string name="browser_downloads_failed">失败</string>
     <string name="browser_downloads_open">打开</string>
+    <string name="agent_home_ready_title">本机 Agent 已就绪</string>
+    <string name="agent_home_standard_subtitle">直接在这台手机上开始任务，文件和执行权始终由你控制。</string>
+    <string name="agent_home_power_subtitle">已启用深度 Android 操控，可执行更完整的跨应用任务。</string>
+    <string name="agent_home_local_badge">本机运行</string>
+    <string name="agent_home_private_badge">默认私密</string>
+    <string name="agent_home_power_badge">Power 引擎</string>
+    <string name="agent_home_task_phone">操作这台手机</string>
+    <string name="agent_home_task_research">调研并整理结论</string>
+    <string name="agent_home_task_automate">创建自动化</string>
+    <string name="agent_home_prompt_phone">帮我在手机上完成这件事：</string>
+    <string name="agent_home_prompt_research">调研这个主题，对比可靠来源并给出简明结论：</string>
+    <string name="agent_home_prompt_automate">为这件事创建安全、可重复执行的自动化：</string>
 </resources>

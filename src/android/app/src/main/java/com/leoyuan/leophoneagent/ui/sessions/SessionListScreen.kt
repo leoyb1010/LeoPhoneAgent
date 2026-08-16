@@ -119,6 +119,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.focus.FocusRequester
@@ -1526,23 +1527,35 @@ private fun OnboardingLanding(
             .fillMaxSize()
             // Bottom padding ≈ top-bar height so the content visually centers
             // relative to the whole screen, not just the Scaffold inner area.
-            .padding(horizontal = 32.dp)
-            .padding(bottom = 64.dp),
+            .padding(horizontal = 24.dp)
+            .padding(bottom = 48.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Icon(
-            imageVector = Icons.Default.AutoAwesome,
-            contentDescription = null,
-            modifier = Modifier.size(56.dp),
-            tint = MaterialTheme.colorScheme.primary,
-        )
-        Spacer(Modifier.height(16.dp))
+        Box(
+            modifier = Modifier
+                .size(72.dp)
+                .background(
+                    Brush.linearGradient(listOf(Color(0xFF6157F5), Color(0xFF18BFD0))),
+                    RoundedCornerShape(23.dp),
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Default.AutoAwesome,
+                contentDescription = null,
+                modifier = Modifier.size(32.dp),
+                tint = Color.White,
+            )
+        }
+        Spacer(Modifier.height(20.dp))
 
         Text(
             text = stringResource(R.string.sessionlist_welcome_title),
-            style = MaterialTheme.typography.headlineSmall,
+            fontSize = 27.sp,
+            lineHeight = 32.sp,
             fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(8.dp))
         Text(
@@ -1552,10 +1565,28 @@ private fun OnboardingLanding(
             textAlign = TextAlign.Center,
         )
 
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(26.dp))
+
+        Row(
+            modifier = Modifier
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f), RoundedCornerShape(50))
+                .padding(horizontal = 12.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            Box(Modifier.size(7.dp).background(Color(0xFF25B96F), CircleShape))
+            Text(
+                stringResource(R.string.sessionlist_welcome_local_status),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+
+        Spacer(Modifier.height(22.dp))
 
         Column(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.fillMaxWidth(),
         ) {
             SetupStepCard(
@@ -1610,25 +1641,36 @@ private fun SetupStepCard(
     onClick: () -> Unit,
 ) {
     val isEnabled = !isDone && !isLocked
+    val accent = when {
+        isDone -> Color(0xFF25B96F)
+        isLocked -> MaterialTheme.colorScheme.outlineVariant
+        else -> Color(0xFF6157F5)
+    }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isLocked) 0.28f else 0.58f),
+                shape = RoundedCornerShape(18.dp),
+            )
+            .border(
+                width = if (isEnabled) 1.dp else 0.5.dp,
+                color = if (isEnabled) accent.copy(alpha = 0.34f)
+                else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                shape = RoundedCornerShape(18.dp),
             )
             .clickable(enabled = isEnabled, onClick = onClick)
-            .padding(14.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Box(
             modifier = Modifier
-                .size(32.dp)
+                .size(38.dp)
                 .background(
-                    color = if (isDone) Color(0xFF34C759) else MaterialTheme.colorScheme.primary,
-                    shape = CircleShape,
+                    color = accent,
+                    shape = RoundedCornerShape(12.dp),
                 ),
             contentAlignment = Alignment.Center,
         ) {
@@ -1637,7 +1679,7 @@ private fun SetupStepCard(
                     imageVector = Icons.Default.Check,
                     contentDescription = null,
                     tint = Color.White,
-                    modifier = Modifier.size(16.dp),
+                    modifier = Modifier.size(18.dp),
                 )
             } else {
                 Text(
@@ -1650,13 +1692,13 @@ private fun SetupStepCard(
         }
 
         Column(
-            modifier = Modifier.weight(1f).height(56.dp),
+            modifier = Modifier.weight(1f).height(52.dp),
             verticalArrangement = Arrangement.Center,
         ) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
+                fontWeight = FontWeight.SemiBold,
                 color = if (isDone) MaterialTheme.colorScheme.onSurfaceVariant
                 else MaterialTheme.colorScheme.onSurface,
             )
@@ -1889,4 +1931,3 @@ private fun exportSession(
         }
     }
 }
-

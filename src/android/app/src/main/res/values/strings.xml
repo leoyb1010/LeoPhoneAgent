@@ -1315,14 +1315,15 @@
     <string name="back">Back</string>
 
     <!-- Welcome / onboarding (T332) -->
-    <string name="sessionlist_welcome_title">Welcome to LeoPhoneAgent</string>
-    <string name="sessionlist_welcome_subtitle">Your first On-Device Agent is almost ready.</string>
-    <string name="sessionlist_welcome_step1_title">Add a Provider</string>
+    <string name="sessionlist_welcome_title">Meet your on-device operator</string>
+    <string name="sessionlist_welcome_subtitle">Connect one model, then work across apps, files, and your Mac from one private agent.</string>
+    <string name="sessionlist_welcome_local_status">Local runtime installed</string>
+    <string name="sessionlist_welcome_step1_title">Connect intelligence</string>
     <string name="sessionlist_welcome_step1_subtitle">Configure an API key or sign in with OAuth</string>
-    <string name="sessionlist_welcome_step2_title">Select Models</string>
+    <string name="sessionlist_welcome_step2_title">Choose execution models</string>
     <string name="sessionlist_welcome_step2_subtitle">Choose the models you want to use</string>
     <string name="sessionlist_welcome_step2_locked">Complete step 1 first</string>
-    <string name="sessionlist_welcome_step3_title">Start a Conversation</string>
+    <string name="sessionlist_welcome_step3_title">Launch your first task</string>
     <string name="sessionlist_welcome_step3_subtitle">Tap to begin</string>
     <string name="sessionlist_welcome_step3_locked">Complete step 2 first</string>
     <string name="sessionlist_welcome_step_done">Done</string>
@@ -1522,4 +1523,16 @@
     <string name="browser_downloads_cancel">Cancel download</string>
     <string name="browser_downloads_failed">Failed</string>
     <string name="browser_downloads_open">Open</string>
+    <string name="agent_home_ready_title">Local agent ready</string>
+    <string name="agent_home_standard_subtitle">Start a task on this phone. Your files and execution stay under your control.</string>
+    <string name="agent_home_power_subtitle">Power control is available for deeper Android automation and cross-app work.</string>
+    <string name="agent_home_local_badge">On-device runtime</string>
+    <string name="agent_home_private_badge">Private by default</string>
+    <string name="agent_home_power_badge">Power engine</string>
+    <string name="agent_home_task_phone">Operate this phone</string>
+    <string name="agent_home_task_research">Research and summarize</string>
+    <string name="agent_home_task_automate">Build an automation</string>
+    <string name="agent_home_prompt_phone">Help me complete this task on my phone: </string>
+    <string name="agent_home_prompt_research">Research this topic, compare reliable sources, and give me a concise conclusion: </string>
+    <string name="agent_home_prompt_automate">Create a safe, repeatable automation for: </string>
 </resources>
