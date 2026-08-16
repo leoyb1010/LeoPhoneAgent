@@ -480,6 +480,26 @@
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
         </service>
+        <service
+            android:name=".tile.LeoVoiceTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_qs_new_chat"
+            android:label="@string/qs_tile_voice_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <receiver
+            android:name=".deeplink.SystemEntryReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.leoyuan.leophoneagent.action.PAUSE_SESSION" />
+                <action android:name="com.leoyuan.leophoneagent.action.RESUME_SESSION" />
+                <action android:name="com.leoyuan.leophoneagent.action.OPEN_SESSION" />
+            </intent-filter>
+        </receiver>
 
         <receiver
             android:name=".widget.LeoHomeWidgetProvider"
@@ -503,6 +523,9 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
 

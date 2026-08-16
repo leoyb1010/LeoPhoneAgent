@@ -70,7 +70,7 @@ object DeepLinkCoordinator {
      * `minis://action/camera_chat`; consumed exactly once by ChatScreen
      * so re-entering the same chat later doesn't fire the action again.
      */
-    enum class ChatAction { START_VOICE, OPEN_CAMERA }
+    enum class ChatAction { START_VOICE, OPEN_CAMERA, RESUME }
 
     private val _pendingChatAction = MutableStateFlow<ChatAction?>(null)
     val pendingChatAction: StateFlow<ChatAction?> = _pendingChatAction.asStateFlow()

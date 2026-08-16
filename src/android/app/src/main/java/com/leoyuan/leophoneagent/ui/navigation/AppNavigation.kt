@@ -308,6 +308,27 @@ fun AppNavigation(
                 // when the launch intent carries one of these actions.
                 // Nothing to do here — see startDestination block below.
             }
+            is DeepLinkAction.LastSession -> {
+                val sid = com.leoyuan.leophoneagent.task.AgentRunStore.lastSessionId()
+                    ?: chatRepository.dao.listSessions().firstOrNull()?.id
+                if (sid != null) {
+                    navController.safeNavigate(Routes.chat(sid)) {
+                        popUpTo(Routes.SESSION_LIST) { inclusive = false }
+                    }
+                }
+            }
+            is DeepLinkAction.ResumeSession -> {
+                DeepLinkCoordinator.setPendingChatAction(
+                    DeepLinkCoordinator.ChatAction.RESUME,
+                )
+                navController.safeNavigate(Routes.chat(initialDeepLink.sessionId)) {
+                    popUpTo(Routes.SESSION_LIST) { inclusive = false }
+                    launchSingleTop = true
+                }
+            }
+            is DeepLinkAction.PauseSession -> {
+                com.leoyuan.leophoneagent.service.SessionActivityTracker.cancelAllActiveStreams()
+            }
             else -> {}
         }
     }
@@ -434,6 +455,15 @@ fun AppNavigation(
             Routes.chat("__new__${java.util.UUID.randomUUID()}")
         }
         is DeepLinkAction.NewChat -> Routes.chat("__new__${java.util.UUID.randomUUID()}")
+        is DeepLinkAction.LastSession ->
+            com.leoyuan.leophoneagent.task.AgentRunStore.lastSessionId()
+                ?.let { Routes.chat(it) }
+        is DeepLinkAction.ResumeSession -> {
+            DeepLinkCoordinator.setPendingChatAction(
+                DeepLinkCoordinator.ChatAction.RESUME,
+            )
+            Routes.chat(initialDeepLink.sessionId)
+        }
         else -> null
     }
     val startDestination = when {

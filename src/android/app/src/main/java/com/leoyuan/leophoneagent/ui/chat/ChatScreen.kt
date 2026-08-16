@@ -1007,15 +1007,19 @@ fun ChatScreen(
     // Voice variant lives next to the MicButton because it needs sttAvailable
     // — camera is always available so it can fire from the top-level scope.
     LaunchedEffect(sessionId) {
-        val assist = com.leoyuan.leophoneagent.deeplink.DeepLinkCoordinator.consumePendingAssist()
-        if (assist != null) {
-            if (!assist.sourcePackage.isNullOrBlank()) {
-                viewModel.setInputText(
-                    context.getString(R.string.assist_composer_hint, assist.sourcePackage),
-                )
-            }
-            assist.screenshotPath?.let { path ->
-                viewModel.addAttachmentFromStagedShare(java.io.File(path))
+        runCatching {
+            val assist = com.leoyuan.leophoneagent.deeplink.DeepLinkCoordinator.consumePendingAssist()
+            if (assist != null) {
+                if (!assist.sourcePackage.isNullOrBlank()) {
+                    viewModel.setInputText(
+                        context.getString(R.string.assist_composer_hint, assist.sourcePackage),
+                    )
+                }
+                assist.screenshotPath?.let { path ->
+                    runCatching {
+                        viewModel.addAttachmentFromStagedShare(java.io.File(path))
+                    }
+                }
             }
         }
         val pending = com.leoyuan.leophoneagent.deeplink.DeepLinkCoordinator
@@ -1031,6 +1035,17 @@ fun ChatScreen(
             ) == PackageManager.PERMISSION_GRANTED
             if (granted) launchCamera()
             else cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+        }
+    }
+
+    LaunchedEffect(sessionId, canResume) {
+        val pending = com.leoyuan.leophoneagent.deeplink.DeepLinkCoordinator
+            .pendingChatAction.value
+        if (pending == com.leoyuan.leophoneagent.deeplink.DeepLinkCoordinator.ChatAction.RESUME &&
+            canResume && !isStreaming
+        ) {
+            com.leoyuan.leophoneagent.deeplink.DeepLinkCoordinator.consumePendingChatAction()
+            runCatching { viewModel.resume() }
         }
     }
 

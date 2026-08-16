@@ -2583,6 +2583,13 @@ class ChatViewModel(
                         sessionId,
                         com.leoyuan.leophoneagent.service.SessionBadgeStore.SessionBadgeState.PAUSED,
                     )
+                    val sid = realSessionId.ifBlank { sessionId }
+                    if (!sid.startsWith("__new__")) {
+                        com.leoyuan.leophoneagent.task.AgentRunStore.markWaitingUser(sid)
+                        runCatching {
+                            com.leoyuan.leophoneagent.task.TaskSurfaceStore.refreshFromStore(context)
+                        }
+                    }
                 } else {
                     com.leoyuan.leophoneagent.service.SessionBadgeStore.remove(
                         sessionId,

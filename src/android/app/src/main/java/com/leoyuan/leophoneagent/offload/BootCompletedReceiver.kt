@@ -3,17 +3,25 @@ package com.leoyuan.leophoneagent.offload
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.leoyuan.leophoneagent.deeplink.SystemEntry
+import com.leoyuan.leophoneagent.deeplink.SystemEntryParser
 import com.leoyuan.leophoneagent.logging.AppLogger
+import com.leoyuan.leophoneagent.scheduled.ScheduledTaskReconcile
 
-/** System-only reboot entry point; ordinary alarm payloads never cross an exported receiver. */
+/** Boot / timezone / replace entry — same reconcile path as notification actions. */
 class BootCompletedReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        val entry = SystemEntryParser.resolve(intent.action, intent.dataString)
+        if (entry !is SystemEntry.Reconcile &&
+            intent.action != Intent.ACTION_BOOT_COMPLETED
+        ) {
+            return
+        }
         try {
-            com.leoyuan.leophoneagent.scheduled.ScheduledTaskManager(context).rescheduleAll()
-            AppLogger.info("BootCompletedReceiver", "scheduled tasks restored after reboot")
+            ScheduledTaskReconcile.enqueue(context.applicationContext)
+            AppLogger.info("BootCompletedReceiver", "reconcile enqueued action=${intent.action}")
         } catch (t: Throwable) {
-            AppLogger.warning("BootCompletedReceiver", "task restore failed: ${t.message}")
+            AppLogger.warning("BootCompletedReceiver", "reconcile failed: ${t.message}")
         }
     }
 }
