@@ -37,6 +37,8 @@
          can be issued without falling through to the broader settings list. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Android 14+ screenshot / screen-record callback used by ScreenCaptureNotice. -->
+    <uses-permission android:name="android.permission.DETECT_SCREEN_CAPTURE" />
     <!-- [T-android-dynamic-island] Android 16 (Baklava) Live Updates: lets the
          ongoing agent-status notification be promoted to the always-visible
          status-chip / "dynamic island" surface. Non-runtime (install-time)

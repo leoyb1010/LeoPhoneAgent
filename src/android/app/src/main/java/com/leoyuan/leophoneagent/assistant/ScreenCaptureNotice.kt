@@ -33,6 +33,7 @@ private object ScreenCaptureNoticeApi34 {
                 Toast.LENGTH_SHORT,
             ).show()
         }
+        // DETECT_SCREEN_CAPTURE is a normal install-time permission (API 34+).
         activity.registerScreenCaptureCallback(activity.mainExecutor, callback)
         callbacks[activity] = callback
     }

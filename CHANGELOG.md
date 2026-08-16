@@ -35,7 +35,8 @@
 
 - 新增 `SystemEntryParserTest`、`AgentRunRecoveryTest`；保留 `AssistIntentsTest`。
 - 中文资源门禁与设置页英文硬编码门禁通过。
-- Standard / Power JVM 测试各 426，0 失败（各 1 个既有跳过）。双 flavor Debug APK 已 assemble 通过。Release APK 交给 CI；本版不伪造 SHA，也不假装已发 GitHub Release。
+- Standard / Power JVM 测试各 426，0 失败（各 1 个既有跳过）。双 flavor Debug APK 已 assemble 通过。
+- 修掉 alpha.3 起就红的 Release lint：补 `DETECT_SCREEN_CAPTURE`、`AssistState` 标 API 29、磁贴在 API 34 以下仍走旧 `startActivityAndCollapse` 但不再被 lint 判死刑。快捷方式按 Standard / Power 包名拆开。Release APK 交给 CI；本版不伪造 SHA，也不假装已发 GitHub Release。
 
 ## Android v1.0.0-alpha.3 - 2026-08-16
 

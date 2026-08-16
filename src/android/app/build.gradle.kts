@@ -132,6 +132,8 @@ android {
         // translation is partial. Simplified Chinese completeness is enforced
         // separately by verifyChineseResources and remains a hard build gate.
         disable += "MissingTranslation"
+        textReport = true
+        htmlReport = true
     }
 
 }

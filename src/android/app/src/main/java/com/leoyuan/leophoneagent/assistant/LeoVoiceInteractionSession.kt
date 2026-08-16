@@ -8,6 +8,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
 import android.service.voice.VoiceInteractionSession
+import androidx.annotation.RequiresApi
 import com.leoyuan.leophoneagent.MainActivity
 import com.leoyuan.leophoneagent.deeplink.DeepLinkCoordinator
 import com.leoyuan.leophoneagent.deeplink.SystemEntryParser
@@ -28,6 +29,7 @@ class LeoVoiceInteractionSession(context: Context) : VoiceInteractionSession(con
         runCatching { setUiEnabled(false) }
     }
 
+    @RequiresApi(29)
     override fun onHandleAssist(state: AssistState) {
         runCatching {
             super.onHandleAssist(state)
