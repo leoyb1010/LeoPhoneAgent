@@ -31,6 +31,7 @@ android {
     // Android 16 behavior changes; the Live Updates path is runtime-gated on
     // Build.VERSION.SDK_INT >= 36 (see DynamicIslandSupport / AgentForegroundService).
     compileSdk = 36
+    ndkVersion = "27.0.12077973"
 
     defaultConfig {
         applicationId = "com.leoyuan.leophoneagent"
@@ -93,7 +94,13 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
+            // Production release signing must be supplied by the distributor.
+            // Personal alpha APKs may opt in explicitly; this prevents an
+            // accidental store/release build from silently adopting the
+            // Android debug identity and creating an irreversible upgrade path.
+            if (providers.gradleProperty("leophone.allowDebugReleaseSigning").orNull == "true") {
+                signingConfig = signingConfigs.getByName("debug")
+            }
         }
     }
 
@@ -120,18 +127,12 @@ android {
     }
 
     lint {
-        // AGP 8.x ships a NonNullableMutableLiveData detector that throws
-        // IncompatibleClassChangeError on Kotlin source during
-        // lintVitalAnalyzeRelease, regardless of whether the project uses
-        // LiveData (this project does not). The crash happens in the
-        // detector's dispatch phase — before the configured `disable` list
-        // is consulted — so disabling the rule alone is not enough.
-        // checkReleaseBuilds=false skips lintVitalAnalyzeRelease entirely;
-        // debug-build lint coverage is unaffected. Re-enable once AGP ships
-        // a fixed detector (tracked at issuetracker.google.com/388538014).
-        checkReleaseBuilds = false
-        disable += "NonNullableMutableLiveData"
+        // English is the product fallback for locales whose community
+        // translation is partial. Simplified Chinese completeness is enforced
+        // separately by verifyChineseResources and remains a hard build gate.
+        disable += "MissingTranslation"
     }
+
 }
 
 // [T-bash-on-demand] Keep the shared bashism rule table / test vectors as a
@@ -297,6 +298,52 @@ val verifyChineseResources by tasks.registering {
     }
 }
 
-tasks.matching { it.name == "check" }.configureEach {
-    dependsOn(verifyChineseResources)
+val verifyChineseSettingsStrings by tasks.registering {
+    group = "verification"
+    description = "Rejects known user-facing English literals in Android settings UI source."
+    val settingsSource = fileTree("src/main/java/com/leoyuan/leophoneagent/ui/settings") {
+        include("**/*.kt")
+    }
+    inputs.files(settingsSource)
+    doLast {
+        val banned = setOf(
+            "Back", "Selected", "Edit name", "Hide", "Show", "Delete Model",
+            "Defaults", "Default Primary", "Default Sub", "Name saved",
+            "No models in this group.", "Model no longer available",
+            "Authentication failed", "Refresh model list", "Not connected", "Configured",
+        )
+        val failures = mutableListOf<String>()
+        val literal = Regex("\\\"([^\\\"\\n]+)\\\"")
+        settingsSource.files.sorted().forEach { source ->
+            source.readLines().forEachIndexed { index, line ->
+                literal.findAll(line).forEach { match ->
+                    if (match.groupValues[1] in banned) {
+                        failures += "${source.relativeTo(projectDir)}:${index + 1}: ${match.value}"
+                    }
+                }
+            }
+        }
+        check(failures.isEmpty()) {
+            "Hard-coded English settings UI strings found:\n${failures.joinToString("\n")}"
+        }
+    }
 }
+
+tasks.matching { it.name == "check" }.configureEach {
+    dependsOn(verifyChineseResources, verifyChineseSettingsStrings)
+}
+
+// Ship the license, third-party notice, source offer, and privacy disclosure
+// inside every APK without duplicating their repository source files.
+val stageLegalAssets by tasks.registering(Copy::class) {
+    from(rootProject.file("../../LICENSE")) { rename { "GPL-3.0.txt" } }
+    from(rootProject.file("../../THIRD_PARTY_LICENSES.md"))
+    from(rootProject.file("../../docs/ANDROID_PRIVACY.md"))
+    from(layout.projectDirectory.file("src/main/legal/SOURCE_OFFER.txt"))
+    into(layout.buildDirectory.dir("generated/legalAssets/legal"))
+}
+android.sourceSets.getByName("main").assets.srcDir(layout.buildDirectory.dir("generated/legalAssets"))
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }
+    .configureEach { dependsOn(stageLegalAssets) }
+tasks.matching { it.name.contains("Lint", ignoreCase = true) }
+    .configureEach { dependsOn(stageLegalAssets) }

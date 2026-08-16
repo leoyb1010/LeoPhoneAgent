@@ -71,6 +71,10 @@ class MinisAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
+        // Do not maintain a background transcript of everything the user does.
+        // Events are captured only while an explicitly approved `events watch`
+        // request has an active listener, and password fields are never read.
+        if (eventListeners.isEmpty() || event.isPassword) return
         val rec = RecordedEvent(
             type = AccessibilityEvent.eventTypeToString(event.eventType),
             packageName = event.packageName?.toString(),

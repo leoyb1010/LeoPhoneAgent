@@ -102,6 +102,7 @@ fun ModelGroupDetailScreen(
 
     var name by remember { mutableStateOf(group.name) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val nameSavedMessage = stringResource(R.string.model_group_name_saved)
     val coroutineScope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
     var strategy by remember { mutableStateOf(group.strategy) }
@@ -177,7 +178,7 @@ fun ModelGroupDetailScreen(
                                 if (!focusState.isFocused && name.isNotBlank() && name != group.name) {
                                     providerRepository.updateGroup(group.copy(name = name))
                                     coroutineScope.launch {
-                                        snackbarHostState.showSnackbar("Name saved")
+                                        snackbarHostState.showSnackbar(nameSavedMessage)
                                     }
                                 }
                             },
@@ -191,8 +192,8 @@ fun ModelGroupDetailScreen(
                 SettingsSection(
                     header = stringResource(R.string.model_group_detail_routing_strategy),
                     footer = when (strategy) {
-                        RoutingStrategy.fallback -> "Try models in order. If one fails, advance to the next."
-                        RoutingStrategy.loadBalance -> "Distribute sessions across models in the group."
+                        RoutingStrategy.fallback -> stringResource(R.string.model_group_routing_fallback_footer)
+                        RoutingStrategy.loadBalance -> stringResource(R.string.model_group_routing_balance_footer)
                     },
                 ) {
                     SettingsChoiceRow(
@@ -221,8 +222,8 @@ fun ModelGroupDetailScreen(
                     SettingsSection(
                         header = stringResource(R.string.model_group_detail_fallback_trigger),
                         footer = when (fallbackStrategy) {
-                            FallbackStrategy.default -> "Fall back on rate limits (429) and server errors (5xx) only."
-                            FallbackStrategy.always -> "Fall back on any error, including network and auth failures."
+                            FallbackStrategy.default -> stringResource(R.string.model_group_trigger_default_footer)
+                            FallbackStrategy.always -> stringResource(R.string.model_group_trigger_always_footer)
                         },
                     ) {
                         SettingsChoiceRow(
@@ -266,7 +267,7 @@ fun ModelGroupDetailScreen(
                             .padding(horizontal = 16.dp),
                     ) {
                         Text(
-                            "No models in this group.",
+                            stringResource(R.string.model_group_no_models),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(vertical = 12.dp),
@@ -288,7 +289,7 @@ fun ModelGroupDetailScreen(
                             ListItem(
                                 headlineContent = {
                                     Text(
-                                        "Model no longer available",
+                                        stringResource(R.string.model_group_model_unavailable),
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 },

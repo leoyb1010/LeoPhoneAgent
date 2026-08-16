@@ -49,6 +49,16 @@ abstract class OAuthManager(
             return if (masked.length <= maxLen) masked else masked.take(maxLen) + "…(${masked.length} chars)"
         }
 
+        /** Constant-time OAuth state comparison; null is always invalid. */
+        internal fun secureStateMatches(expected: String?, received: String?): Boolean {
+            if (expected == null || received == null || expected.length != received.length) return false
+            var diff = 0
+            for (index in expected.indices) {
+                diff = diff or (expected[index].code xor received[index].code)
+            }
+            return diff == 0
+        }
+
         /** Create the appropriate OAuthManager for a provider instance. */
         fun forInstance(context: Context, instance: com.leoyuan.leophoneagent.data.model.ProviderInstance): OAuthManager? {
             return when (instance.providerType) {
@@ -140,7 +150,7 @@ abstract class OAuthManager(
     suspend fun startLogin(onComplete: (Boolean) -> Unit) {
         callbackServer?.stop()
         callbackServer = OAuthCallbackServer(callbackPort) { code, state ->
-            if (state != null && state != currentState) {
+            if (!secureStateMatches(currentState, state)) {
                 Log.w(TAG, "State mismatch")
                 onComplete(false)
                 return@OAuthCallbackServer

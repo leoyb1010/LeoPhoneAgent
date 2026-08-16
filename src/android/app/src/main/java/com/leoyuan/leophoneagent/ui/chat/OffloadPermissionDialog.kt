@@ -88,11 +88,13 @@ fun OffloadPermissionDialog() {
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 // Allow in this session — happy path goes first.
-                MinisButton(
-                    onClick = { OffloadPermissionManager.respondToRequest(OffloadPermissionManager.Response.ALLOW_SESSION) },
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(stringResource(R.string.offload_perm_allow_session))
+                if (!req.singleUseOnly) {
+                    MinisButton(
+                        onClick = { OffloadPermissionManager.respondToRequest(OffloadPermissionManager.Response.ALLOW_SESSION) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(R.string.offload_perm_allow_session))
+                    }
                 }
                 // Allow once — no caching; next call re-prompts.
                 MinisOutlinedButton(

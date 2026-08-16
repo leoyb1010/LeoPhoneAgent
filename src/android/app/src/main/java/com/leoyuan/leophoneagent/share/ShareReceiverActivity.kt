@@ -35,7 +35,12 @@ class ShareReceiverActivity : ComponentActivity() {
     companion object {
         private const val TAG = "ShareReceiver"
         private const val INLINE_TEXT_LIMIT = 1000
+        private const val MAX_SHARED_FILE_BYTES = 100L * 1024L * 1024L
+        private const val MAX_SHARED_TOTAL_BYTES = 200L * 1024L * 1024L
+        private const val MAX_SHARED_ITEMS = 20
     }
+
+    private var stagedBytesThisIntent = 0L
 
     // T-n01-andmenu-l10n: pre-Tiramisu locale override (see MainActivity).
     override fun attachBaseContext(newBase: android.content.Context) {
@@ -200,7 +205,7 @@ class ShareReceiverActivity : ComponentActivity() {
     private fun handleMultipleSend(intent: Intent, out: MutableList<PendingShare.Item>) {
         val type = intent.type ?: ""
         val uris = getParcelableArrayListExtra<Uri>(intent, Intent.EXTRA_STREAM) ?: return
-        for (uri in uris) {
+        for (uri in uris.take(MAX_SHARED_ITEMS)) {
             copyUriToStaging(uri, type)?.let {
                 out += PendingShare.Item(PendingShare.Item.Kind.ATTACHMENT, it)
             }
@@ -240,11 +245,28 @@ class ShareReceiverActivity : ComponentActivity() {
         val dest = File(SharedShareStore.sharedFileDirectory(this), name)
         return try {
             contentResolver.openInputStream(uri)?.use { input ->
-                dest.outputStream().use { input.copyTo(it) }
+                dest.outputStream().use { output ->
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    var fileBytes = 0L
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        fileBytes += count
+                        if (fileBytes > MAX_SHARED_FILE_BYTES || stagedBytesThisIntent + fileBytes > MAX_SHARED_TOTAL_BYTES) {
+                            throw java.io.IOException("shared content exceeds size limit")
+                        }
+                        output.write(buffer, 0, count)
+                    }
+                    stagedBytesThisIntent += fileBytes
+                }
             }
             name
         } catch (e: Exception) {
+            dest.delete()
             AppLogger.warning(TAG, "copyUriToStaging($uri): ${e.message}")
+            if (e.message?.contains("size limit") == true) {
+                toast(getString(com.leoyuan.leophoneagent.R.string.share_size_limit))
+            }
             null
         }
     }

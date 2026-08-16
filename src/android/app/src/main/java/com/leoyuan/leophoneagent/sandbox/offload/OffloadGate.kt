@@ -49,6 +49,21 @@ internal object OffloadGate {
     fun allow(toolName: String, displayName: String, request: NativeOffloadRequest): Boolean =
         allow(toolName, displayName, request.sessionId)
 
+    fun allowEveryTime(
+        toolName: String,
+        displayName: String,
+        description: String,
+        request: NativeOffloadRequest,
+    ): Boolean = runBlocking {
+        OffloadPermissionManager.checkPermission(
+            toolName = toolName,
+            toolTitle = displayName,
+            sessionId = request.sessionId ?: OffloadPermissionManager.OFFLOAD_GLOBAL_SESSION_ID,
+            description = description,
+            singleUseOnly = true,
+        )
+    }
+
     /**
      * Convenience: gate the call and return null when allowed, or a
      * pre-formatted PERMISSION_DENIED envelope when not. Lets a handler

@@ -147,7 +147,7 @@ fun StorageManagementScreen(
                 )
                 else -> sessions.forEachIndexed { index, session ->
                     SettingsValueRow(
-                        title = session.title ?: "Untitled",
+                        title = session.title ?: stringResource(R.string.storage_untitled),
                         value = Formatter.formatFileSize(context, session.totalSize),
                         onClick = { onSessionClick(session.id) },
                         showDivider = index < sessions.size - 1,
@@ -196,7 +196,7 @@ fun SessionStorageDetailScreen(
     val totalSize = minisSize + mediaSize
     val hasFiles = totalSize > 0
 
-    SettingsScaffold(title = session?.title ?: "Session", onBack = onBack) {
+    SettingsScaffold(title = session?.title ?: stringResource(R.string.storage_session_title), onBack = onBack) {
         SettingsSection(header = stringResource(R.string.storage_section_minis_files)) {
             if (minisSize > 0) {
                 SettingsValueRow(
@@ -297,7 +297,7 @@ fun SessionStorageDetailScreen(
                     }
                 }) {
                     Text(
-                        "Clear ${Formatter.formatFileSize(context, totalSize)}",
+                        stringResource(R.string.storage_clear_size, Formatter.formatFileSize(context, totalSize)),
                         color = MaterialTheme.colorScheme.error,
                     )
                 }

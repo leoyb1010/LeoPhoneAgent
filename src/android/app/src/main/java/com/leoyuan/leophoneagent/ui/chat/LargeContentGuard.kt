@@ -224,14 +224,13 @@ internal fun LargeContentGuard(
             // [T-android-content-perf-diag] Log the degrade with a structural
             // fingerprint (once per ~2K growth) so a hang report shows exactly
             // what shape the tail had. Only summarize the tail window we scan.
-            remember(content.length / 2000) {
+            androidx.compose.runtime.LaunchedEffect(stableKey, content.length / 2000) {
                 val s = com.leoyuan.leophoneagent.diagnostics.ContentDiag.summarize(content)
                 AppLogger.info(
                     "Perf",
                     "[Perf][ContentDiag] stream-degrade key=$stableKey breaker=$breakerActive " +
                         "threshold=$STREAM_DEGRADE_CHARS ${s.asLogFields()}",
                 )
-                Unit
             }
             DegradedStreamingTail(content)
             return
@@ -246,13 +245,12 @@ internal fun LargeContentGuard(
         // markdown parse). Fires once via the wasDegraded latch.
         if (!isStreaming && wasDegraded.value) {
             wasDegraded.value = false
-            remember(stableKey, content.length) {
+            androidx.compose.runtime.LaunchedEffect(stableKey, content.length) {
                 val s = com.leoyuan.leophoneagent.diagnostics.ContentDiag.summarize(content)
                 AppLogger.info(
                     "Perf",
                     "[Perf][ContentDiag] stream-end-swap key=$stableKey ${s.asLogFields()}",
                 )
-                Unit
             }
         }
         // [T-android-content-perf-diag] Register this body as the currently-
@@ -278,12 +276,11 @@ internal fun LargeContentGuard(
     var expanded by rememberSaveable(stableKey) { mutableStateOf(false) }
 
     // Diagnostic — emitted on first composition per large block.
-    remember(stableKey) {
+    androidx.compose.runtime.LaunchedEffect(stableKey) {
         AppLogger.info(
             "LargeContentGuard",
             "collapse key=$stableKey chars=${content.length} threshold=$LARGE_MESSAGE_THRESHOLD_CHARS",
         )
-        Unit
     }
 
     if (expanded) {

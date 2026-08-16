@@ -442,6 +442,7 @@ object PRootKernel {
      * on Android 11+ it's MANAGE_EXTERNAL_STORAGE; on Android 10 base ROMs
      * (HarmonyOS/EMUI) it's whether legacy READ_EXTERNAL_STORAGE was granted.
      */
+    @android.annotation.SuppressLint("NewApi")
     private fun storageAccessDiag(context: Context): String {
         val sdk = Build.VERSION.SDK_INT
         return when {

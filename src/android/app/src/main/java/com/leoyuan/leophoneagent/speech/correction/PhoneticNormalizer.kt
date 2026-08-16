@@ -73,6 +73,9 @@ object PinyinNormalizer : PhoneticNormalizer {
      * thread-safe for `transliterate` on a shared instance.
      */
     private val transliterator: android.icu.text.Transliterator? by lazy {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) {
+            return@lazy null
+        }
         runCatching {
             android.icu.text.Transliterator.getInstance(
                 "Han-Latin; nfd; [:nonspacing mark:] remove",
@@ -82,6 +85,7 @@ object PinyinNormalizer : PhoneticNormalizer {
         }.getOrNull()
     }
 
+    @android.annotation.SuppressLint("NewApi")
     override fun normalize(text: String): String {
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return ""

@@ -80,6 +80,23 @@ class ShizukuOffloadHandler(private val context: Context) : NativeOffloadHandler
             ShizukuManager.State.READY -> { /* fall through */ }
         }
 
+        if (requiresPerCallConfirmation(group, rest)) {
+            val command = (listOf("android-shizuku-cli", group) + rest).joinToString(" ").take(1_500)
+            if (!OffloadGate.allowEveryTime(
+                    toolName = "shizuku_dangerous",
+                    displayName = context.getString(com.leoyuan.leophoneagent.R.string.shizuku_command_title),
+                    description = context.getString(com.leoyuan.leophoneagent.R.string.shizuku_command_review, command),
+                    request = request,
+                )
+            ) {
+                return errEnvelope(
+                    "PERMISSION_DENIED",
+                    context.getString(com.leoyuan.leophoneagent.R.string.shizuku_command_denied),
+                    args,
+                )
+            }
+        }
+
         return try {
             when (group) {
                 "package" -> handlePackage(rest, args)
@@ -104,6 +121,22 @@ class ShizukuOffloadHandler(private val context: Context) : NativeOffloadHandler
         } catch (t: Throwable) {
             AppLogger.warning(TAG, "group=$group failed: ${t.message}")
             errEnvelope("OPERATION_FAILED", t.message ?: "unknown", args)
+        }
+    }
+
+    private fun requiresPerCallConfirmation(group: String, rest: List<String>): Boolean {
+        val sub = rest.firstOrNull().orEmpty()
+        return when (group) {
+            "exec" -> true
+            "package" -> sub in setOf("install", "uninstall", "enable", "disable", "clear")
+            "permission" -> sub in setOf("grant", "revoke", "appops")
+            "display" -> sub in setOf("set", "reset")
+            "settings" -> sub in setOf("set", "delete")
+            "user" -> sub in setOf("create", "remove", "switch", "start", "stop")
+            "network" -> sub !in setOf("", "help", "--help", "-h", "status", "list")
+            "notification" -> sub in setOf("dismiss", "channel")
+            "file" -> sub in setOf("push", "rm")
+            else -> false
         }
     }
 

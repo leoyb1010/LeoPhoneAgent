@@ -19,25 +19,6 @@ class AlarmReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context, intent: Intent) {
-        // BOOT_COMPLETED arrives with no extras; it just keeps the receiver
-        // resident so the AlarmManager re-fires the persisted alarms after
-        // a reboot. Nothing to clean up in that branch.
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
-            AppLogger.info(TAG, "BOOT_COMPLETED — alarm receiver resident")
-            // [T-android-scheduled-tasks-design] Re-register every enabled
-            // ScheduledTask with AlarmManager. The OS drops all pending
-            // alarms on reboot, so persisted tasks would silently stop
-            // firing without this. The legacy AlarmOffloadManager entries
-            // are repeating alarms and DO survive reboot via the OS, so
-            // we don't have to re-register them here.
-            try {
-                com.leoyuan.leophoneagent.scheduled.ScheduledTaskManager(context).rescheduleAll()
-            } catch (t: Throwable) {
-                AppLogger.warning(TAG, "scheduled-task rescheduleAll failed: ${t.message}")
-            }
-            return
-        }
-
         val alarmId = intent.getStringExtra(AlarmOffloadManager.EXTRA_ALARM_ID) ?: "unknown"
         val label = intent.getStringExtra(AlarmOffloadManager.EXTRA_ALARM_LABEL) ?: "Alarm"
 
@@ -71,7 +52,7 @@ class AlarmReceiver : BroadcastReceiver() {
 
         val notification = NotificationCompat.Builder(context, AlarmOffloadManager.CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-            .setContentTitle("LeoPhoneAgent Alarm")
+            .setContentTitle(context.getString(com.leoyuan.leophoneagent.R.string.alarm_notification_title))
             .setContentText(label)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_ALARM)

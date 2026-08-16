@@ -412,7 +412,7 @@ private fun SkillImportSheet(
             // `SkillsManagementView.documentPicker` + `SkillStore.importFromArchive`.
             val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
             if (bytes == null) {
-                errorText = "Failed to read file"
+                errorText = context.getString(R.string.skill_import_error_read)
                 return@rememberLauncherForActivityResult
             }
             // PK\x03\x04 = standard ZIP local file header; PK\x05\x06 is the
@@ -429,15 +429,15 @@ private fun SkillImportSheet(
                     java.io.ByteArrayInputStream(bytes),
                 )
                 if (result != null) onDismiss()
-                else errorText = "Invalid skill archive — no SKILL.md found at the root or one directory deep"
+                else errorText = context.getString(R.string.skill_import_error_archive)
             } else {
                 val content = String(bytes, Charsets.UTF_8)
                 val result = skillRepository.importFromContent(content, SkillRepository.ImportSource.FILE)
                 if (result != null) onDismiss()
-                else errorText = "Invalid SKILL.md content"
+                else errorText = context.getString(R.string.skill_import_error_content)
             }
         } catch (e: Exception) {
-            errorText = "Failed to read file: ${e.message}"
+            errorText = context.getString(R.string.skill_import_error_read_detail, e.message.orEmpty())
         }
     }
 
@@ -531,7 +531,7 @@ private fun SkillImportSheet(
                                             // sibling python scripts never made it to local storage.
                                             val result = skillRepository.importFromGitHub(urlText.trim())
                                             if (result != null) onDismiss() else errorText = context.getString(R.string.skill_import_error_invalid)
-                                        } catch (e: Exception) { errorText = "Error: ${e.message}" }
+                                        } catch (e: Exception) { errorText = context.getString(R.string.skill_import_error_detail, e.message.orEmpty()) }
                                         finally { isLoading = false }
                                     }
                                 }
@@ -706,7 +706,7 @@ fun SkillDetailScreen(
                     Text(skill.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.width(4.dp))
                     Icon(
-                        Icons.Default.Edit, contentDescription = "Edit name",
+                        Icons.Default.Edit, contentDescription = stringResource(R.string.skill_detail_edit_name_title),
                         modifier = Modifier.size(14.dp).clickable {
                             editName = skill.name
                             showEditNameDialog = true

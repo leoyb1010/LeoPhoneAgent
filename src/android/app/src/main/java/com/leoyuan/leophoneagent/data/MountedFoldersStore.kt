@@ -147,6 +147,7 @@ class MountedFoldersStore(private val context: Context) {
      * granted at runtime (legacy opt-in alone is not enough) and whether the
      * process still holds the legacy storage view.
      */
+    @android.annotation.SuppressLint("NewApi")
     private fun storageDiag(context: Context): String {
         val sdk = Build.VERSION.SDK_INT
         return if (sdk >= Build.VERSION_CODES.R) {

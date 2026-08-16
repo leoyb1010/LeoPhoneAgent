@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlin.coroutines.resume
 
 /**
@@ -29,6 +31,7 @@ object OffloadPermissionManager {
         val toolTitle: String,
         val description: String,
         val sessionId: String,
+        val singleUseOnly: Boolean = false,
     )
 
     enum class PermissionCategory(val displayName: String) {
@@ -61,9 +64,8 @@ object OffloadPermissionManager {
      * BYPASS across the board to mirror iOS — the user opted into running an
      * agent app, so background access is permitted unless they explicitly
      * downgrade an entry to ASK_ONCE / NOT_ALLOWED. Tools omitted from this
-     * registry (e.g. the former `open_url` and `model_use` entries) fall
-     * through to BYPASS via [getLevel]'s unknown-tool branch — no separate
-     * "always permit" carve-out needed.
+     * registry fail closed as NOT_ALLOWED; every new bridge capability must
+     * declare its permission contract here before it can execute.
      */
     val toolRegistry: List<ToolPermissionInfo> = listOf(
         // Privacy — user-configurable, visible in Settings.
@@ -88,6 +90,7 @@ object OffloadPermissionManager {
         // is already authorized.
         ToolPermissionInfo("a11y_cli", "android-a11y-cli", PermissionCategory.INTEGRATIONS, PermissionLevel.NOT_ALLOWED),
         ToolPermissionInfo("shizuku_cli", "android-shizuku-cli", PermissionCategory.INTEGRATIONS, PermissionLevel.NOT_ALLOWED),
+        ToolPermissionInfo("shizuku_dangerous", "Privileged destructive command", PermissionCategory.INTEGRATIONS, PermissionLevel.ASK_ONCE, showInSettings = false),
     )
 
     /** Stable session-id used by NativeOffloadHandlers when calling
@@ -120,6 +123,7 @@ object OffloadPermissionManager {
     val pendingRequest: StateFlow<PermissionRequest?> = _pendingRequest.asStateFlow()
 
     private var pendingContinuation: kotlin.coroutines.Continuation<Response>? = null
+    private val permissionPromptMutex = Mutex()
 
     // ── Android system runtime permission request (for location etc.) ──────────
 
@@ -311,7 +315,7 @@ object OffloadPermissionManager {
 
     fun getLevel(toolName: String): PermissionLevel {
         val info = toolRegistry.find { it.toolName == toolName }
-            ?: return PermissionLevel.BYPASS // Unknown tools are bypassed
+            ?: return PermissionLevel.NOT_ALLOWED
 
         val stored = prefs.getString("level_$toolName", null)
         return if (stored != null) {
@@ -353,8 +357,18 @@ object OffloadPermissionManager {
      * For ASK_ONCE, suspends until user responds via the dialog.
      * Returns true if allowed.
      */
-    suspend fun checkPermission(toolName: String, toolTitle: String, sessionId: String): Boolean {
+    suspend fun checkPermission(
+        toolName: String,
+        toolTitle: String,
+        sessionId: String,
+        description: String? = null,
+        singleUseOnly: Boolean = false,
+    ): Boolean {
         val level = getLevel(toolName)
+        if (singleUseOnly) {
+            if (level == PermissionLevel.NOT_ALLOWED) return false
+            return promptForPermission(toolName, toolTitle, sessionId, description, singleUseOnly = true)
+        }
         return when (level) {
             PermissionLevel.BYPASS -> true
             PermissionLevel.NOT_ALLOWED -> false
@@ -368,33 +382,44 @@ object OffloadPermissionManager {
                 val grants = sessionGrants.getOrPut(sessionId) { mutableSetOf() }
                 if (toolName in grants) return true
 
-                // Show dialog and wait for response.
-                val info = toolRegistry.find { it.toolName == toolName }
-                val response = suspendCancellableCoroutine<Response> { cont ->
-                    pendingContinuation = cont
-                    _pendingRequest.value = PermissionRequest(
-                        toolName = toolName,
-                        toolTitle = toolTitle,
-                        description = "Allow ${info?.displayName ?: toolName} access?",
-                        sessionId = sessionId,
-                    )
-                    cont.invokeOnCancellation {
-                        _pendingRequest.value = null
-                        pendingContinuation = null
-                    }
-                }
+                promptForPermission(toolName, toolTitle, sessionId, description, singleUseOnly = false)
+            }
+        }
+    }
 
-                when (response) {
-                    Response.ALLOW_SESSION -> {
-                        grants.add(toolName)
-                        true
-                    }
-                    Response.ALLOW_ONCE -> true  // no caching; next call re-prompts
-                    Response.DENY_SESSION -> {
-                        denials.add(toolName)
-                        false
-                    }
-                }
+    private suspend fun promptForPermission(
+        toolName: String,
+        toolTitle: String,
+        sessionId: String,
+        description: String?,
+        singleUseOnly: Boolean,
+    ): Boolean = permissionPromptMutex.withLock {
+        val denials = sessionDenials.getOrPut(sessionId) { mutableSetOf() }
+        if (toolName in denials) return@withLock false
+        val info = toolRegistry.find { it.toolName == toolName }
+        val response = suspendCancellableCoroutine<Response> { cont ->
+            pendingContinuation = cont
+            _pendingRequest.value = PermissionRequest(
+                toolName = toolName,
+                toolTitle = toolTitle,
+                description = description ?: "Allow ${info?.displayName ?: toolName} access?",
+                sessionId = sessionId,
+                singleUseOnly = singleUseOnly,
+            )
+            cont.invokeOnCancellation {
+                _pendingRequest.value = null
+                pendingContinuation = null
+            }
+        }
+        when (response) {
+            Response.ALLOW_SESSION -> {
+                if (!singleUseOnly) sessionGrants.getOrPut(sessionId) { mutableSetOf() }.add(toolName)
+                true
+            }
+            Response.ALLOW_ONCE -> true
+            Response.DENY_SESSION -> {
+                denials.add(toolName)
+                false
             }
         }
     }

@@ -12,10 +12,11 @@ import java.io.InputStreamReader
 import java.io.PrintWriter
 import java.net.ServerSocket
 import java.net.Socket
+import java.net.InetAddress
 
 /**
- * Debug-only JSON-RPC 2.0 server on port 8321.
- * Listens on all interfaces (0.0.0.0) so it's reachable from the local network for debugging.
+ * Debug-only JSON-RPC 2.0 server on port 5321.
+ * Listens on device loopback and is reached through adb forwarding.
  * Mirrors the iOS DebugServer for parity with the debug-server CLI skill.
  *
  * IMPORTANT: Only start this in debug builds. Never start in release.
@@ -26,23 +27,15 @@ class DebugServer(
 ) {
     companion object {
         private const val TAG = "DebugServer"
+        private const val MAX_REQUEST_BODY_BYTES = 1_048_576
 
         /**
          * [T-android-debugserver-auth] Remote-connection auth decision, kept
-         * pure for unit testing. Loopback connections (adb forward — the
-         * developer's own machine over USB) stay token-free so the local
-         * tooling keeps working unchanged; any NON-loopback (LAN) connection
-         * must present the device token. Rationale: Android debug builds are
-         * never distributed (release channel ships assembleRelease without
-         * this server), but the dev workflow leaves the device reachable on
-         * the LAN for remote-worker e2e — an unauthenticated 0.0.0.0 RPC
-         * surface there can read logs/files and burn API quota. The iOS
-         * protocol-v1 encrypted envelope (358e3ded) is deliberately NOT
-         * ported: with no distribution surface the token gate is the
-         * proportionate hardening (evaluated in the A8 batch report).
+         * pure for unit testing. Android apps share the device network
+         * namespace, so loopback is not an authentication boundary: every
+         * client, including adb-forwarded tooling, must present the token.
          */
         fun isAuthorized(isLoopback: Boolean, providedToken: String?, expectedToken: String): Boolean {
-            if (isLoopback) return true
             if (expectedToken.isEmpty()) return false
             val provided = providedToken ?: return false
             if (provided.length != expectedToken.length) return false
@@ -61,11 +54,11 @@ class DebugServer(
     private val rpcHandler = DebugRPCHandler(context)
 
     /**
-     * [T-android-debugserver-auth] Per-install token required from
-     * non-loopback clients. Generated once, persisted in filesDir so the
+     * [T-android-debugserver-auth] Per-install token required from every
+     * client. Generated once, persisted in filesDir so the
      * developer can read it with:
      *   adb shell run-as com.leoyuan.leophoneagent cat files/debug_server_token
-     * Also logged at startup (logcat is adb-only — not readable remotely).
+     * The token itself is never written to logcat.
      */
     private val authToken: String by lazy {
         val f = java.io.File(context.filesDir, "debug_server_token")
@@ -93,11 +86,11 @@ class DebugServer(
 
         acceptJob = scope.launch {
             try {
-                // Listen on all interfaces (0.0.0.0) for network access
-                val ss = ServerSocket(port, 10)
+                // Debug RPC is device-local only. adb forward still reaches
+                // this socket, while the LAN never can.
+                val ss = ServerSocket(port, 10, InetAddress.getLoopbackAddress())
                 serverSocket = ss
-                Log.i(TAG, "Debug server listening on port $port (all interfaces)")
-                Log.i(TAG, "Remote (non-loopback) clients must send X-LeoPhoneAgent-Token: $authToken")
+                Log.i(TAG, "Debug server listening on loopback port $port; token required")
 
                 while (!stopped) {
                     try {
@@ -138,7 +131,7 @@ class DebugServer(
                 }
                 val method = parts[0]
                 // [T-android-debugserver-skill] Path (query stripped) so the
-                // unauthenticated GET skill routes can be dispatched.
+                // authenticated GET skill routes can be dispatched.
                 val path = parts.getOrNull(1)?.substringBefore('?') ?: "/"
 
                 // Handle CORS preflight
@@ -163,7 +156,7 @@ class DebugServer(
                     }
                     // [T-android-debugserver-auth] Token via X-LeoPhoneAgent-Token or
                     // Authorization: Bearer — either spelling accepted.
-                    if (lower.startsWith("x-minis-token:")) {
+                    if (lower.startsWith("x-minis-token:") || lower.startsWith("x-leophoneagent-token:")) {
                         providedToken = headerLine.substringAfter(":").trim()
                     }
                     if (lower.startsWith("authorization:")) {
@@ -175,7 +168,8 @@ class DebugServer(
                 }
 
                 // [T-android-debugserver-auth] Gate BEFORE any RPC dispatch:
-                // loopback (adb forward) is exempt; LAN clients need the token.
+                // Loopback is shared by every app on-device, so it is not
+                // exempt. The token is required before every route/RPC.
                 val isLoopback = s.inetAddress?.isLoopbackAddress == true
                 if (!isAuthorized(isLoopback, providedToken, authToken)) {
                     Log.w(TAG, "401 unauthorized ${if (isLoopback) "loopback" else s.inetAddress?.hostAddress ?: "?"} (missing/wrong token)")
@@ -190,9 +184,7 @@ class DebugServer(
                 // Deliberately placed AFTER the auth gate above: unlike iOS
                 // (whose /skill is unauthenticated because every RPC is still
                 // sealed by the v1 envelope), Android's RPCs are plaintext, so
-                // the token remains the only barrier for LAN clients and must not
-                // be bypassed. Over `adb forward` (loopback) it's token-free,
-                // which is the path the tooling actually uses.
+                // the token remains mandatory even over `adb forward`.
                 if (method == "GET") {
                     val wantsHuman = accept.contains("text/html") ||
                         accept.contains("text/markdown") ||
@@ -232,6 +224,10 @@ class DebugServer(
                     sendResponse(writer, 400, rpcHandler.errorJSON(-32700, "Empty body"))
                     return
                 }
+                if (contentLength > MAX_REQUEST_BODY_BYTES) {
+                    sendResponse(writer, 413, rpcHandler.errorJSON(-32600, "Request body too large"))
+                    return
+                }
 
                 // Read body
                 val body = CharArray(contentLength)
@@ -255,9 +251,8 @@ class DebugServer(
     }
 
     /// [T-android-debugserver-skill] Capability descriptor. Mirrors the iOS
-    /// shape so a shared client can detect the platform: `auth` reports the
-    /// Android scheme ("token-lan" — plaintext payloads, token only for
-    /// non-loopback) rather than iOS's "v1" envelope, and there is no pair_path.
+    /// shape so a shared client can detect the platform. Android debug RPC is
+    /// loopback-only and requires a token on every request.
     private fun schemaJSON(): String {
         val version = try {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "?"
@@ -265,7 +260,7 @@ class DebugServer(
             "?"
         }
         return """{"app":"MinisApp","platform":"android","version":"$version",""" +
-            """"rpc":"jsonrpc-2.0","auth":"token-lan","transport":"plaintext",""" +
+            """"rpc":"jsonrpc-2.0","auth":"token-required","transport":"plaintext-loopback",""" +
             """"rpc_path":"/","skill_path":"/skill"}"""
     }
 

@@ -166,7 +166,7 @@ class ClaudeOAuthManager(context: Context, instanceId: String) : OAuthManager(co
 
             // Step 2: Validate state (CSRF protection)
             val savedState = loadOAuthString("state")
-            if (state != null && state != savedState) {
+            if (!OAuthManager.secureStateMatches(savedState, state)) {
                 throw Exception("OAuth state mismatch — possible CSRF attack")
             }
 

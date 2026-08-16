@@ -562,9 +562,9 @@ class AgentForegroundService : Service() {
                 "minis:inference",
             ).apply {
                 setReferenceCounted(false)
-                // No timeout — release happens deterministically in onDestroy
-                // when SessionActivityTracker reports zero active sessions.
-                acquire()
+                // onDestroy still releases deterministically; the timeout is a
+                // final safety net if the service/process lifecycle misbehaves.
+                acquire(6L * 60L * 60L * 1000L)
             }
             Log.d(TAG, "WakeLock acquired (PARTIAL_WAKE_LOCK)")
         } catch (e: Exception) {

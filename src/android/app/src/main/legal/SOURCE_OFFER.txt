@@ -1,0 +1,14 @@
+LeoPhoneAgent Android source offer
+
+LeoPhoneAgent and the bundled PRoot-based sandbox contain software licensed
+under the GNU General Public License. The complete corresponding source for
+this build, including build scripts and the exact dependency revisions, is
+available at:
+
+https://github.com/leoyb1010/LeoPhoneAgent
+
+Use the Git commit recorded in the APK delivery manifest to obtain the source
+matching your binary. A written source copy can also be requested through the
+repository issue tracker for at least three years after this build is
+distributed. No fee beyond the reasonable cost of physical transfer will be
+charged.

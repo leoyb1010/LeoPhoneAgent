@@ -220,7 +220,7 @@ fun ProviderDetailScreen(
             SettingsSection(
                 header = stringResource(R.string.provider_detail_manual_bearer_token),
                 footer = stringResource(R.string.provider_detail_use_a_static_bearer_token_instead_of_the) +
-                    "Useful with custom proxy endpoints.",
+                    stringResource(R.string.provider_proxy_endpoint_hint),
             ) {
                 SettingsCardBlock {
                     ManualBearerTokenSection(
@@ -345,9 +345,9 @@ fun ProviderDetailScreen(
             SettingsSection(
                 header = stringResource(R.string.provider_detail_api_format),
                 footer = if (instance.useResponsesAPI) {
-                    "Uses /v1/responses endpoint format. Required for some Responses-API-only services."
+                    stringResource(R.string.provider_api_responses_footer)
                 } else {
-                    "Standard /v1/chat/completions format. Compatible with most OpenAI-compatible services."
+                    stringResource(R.string.provider_api_chat_footer)
                 },
             ) {
                 SettingsCardBlock {
@@ -519,7 +519,9 @@ fun ProviderDetailScreen(
             // Refresh action sits as the first row, mirroring the iOS
             // tap-to-refresh affordance in the section header area.
             SettingsRow(
-                title = if (isRefreshing) "Refreshing…" else "Refresh model list",
+                title = stringResource(
+                    if (isRefreshing) R.string.provider_models_refreshing else R.string.provider_models_refresh,
+                ),
                 onClick = if (isRefreshing) {
                     null
                 } else {
@@ -747,7 +749,7 @@ private fun OAuthCredentialBlock(
         } else {
             Spacer(modifier = Modifier.weight(1f))
             Text(
-                "Not connected",
+                stringResource(R.string.provider_not_connected),
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -856,7 +858,9 @@ private fun ApiKeyCredentialBlock(
                 IconButton(onClick = onToggleVisibility) {
                     Icon(
                         if (keyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                        contentDescription = if (keyVisible) "Hide" else "Show",
+                        contentDescription = stringResource(
+                            if (keyVisible) R.string.common_hide else R.string.common_show,
+                        ),
                     )
                 }
             },
@@ -891,7 +895,9 @@ private fun ApiKeyCredentialBlock(
             IconButton(onClick = onToggleVisibility) {
                 Icon(
                     if (keyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                    contentDescription = if (keyVisible) "Hide" else "Show",
+                    contentDescription = stringResource(
+                        if (keyVisible) R.string.common_hide else R.string.common_show,
+                    ),
                 )
             }
             MinisSmallTextButton(onClick = onBeginEdit) {
@@ -1012,7 +1018,7 @@ private fun ManualBearerTokenSection(
     if (hasToken) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "Configured",
+                stringResource(R.string.provider_configured),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),

@@ -307,8 +307,7 @@ fun SettingsScreen(
                     iconColor = Color(0xFF007AFF),
                     title = stringResource(R.string.settings_privacy_policy),
                     subtitle = null,
-                    // iOS canonical URL — ContentView.swift / AddProviderView.swift
-                    onClick = { openExternalUrl(context, "https://openminis.github.io/privacy-policy.html") },
+                    onClick = { openExternalUrl(context, "https://github.com/leoyb1010/LeoPhoneAgent/blob/main/docs/ANDROID_PRIVACY.md") },
                 )
                 SettingsItem(
                     icon = Icons.Outlined.Feedback,

@@ -387,12 +387,13 @@ private fun LeoAgentEmptyState(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(
                     horizontal = if (compactHeight) 18.dp else 24.dp,
                     vertical = if (compactHeight) 10.dp else 22.dp,
                 ),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+            verticalArrangement = if (compactHeight) Arrangement.Top else Arrangement.Center,
         ) {
         Box(
             modifier = Modifier
@@ -612,6 +613,7 @@ fun ChatScreen(
     val memoryToolRecords by viewModel.memoryToolRecords.collectAsState()
     val selectedGroupName by viewModel.selectedGroupName.collectAsState()
     val providerName by viewModel.providerName.collectAsState()
+    val thinkingLevel by viewModel.thinkingLevel.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
     // [T-android-voice-panel] Shared 3-stage RECORD_AUDIO permission flow
@@ -2326,7 +2328,7 @@ fun ChatScreen(
                 navigationIcon = {
                     if (showBackButton) {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
                         }
                     }
                 },
@@ -2334,7 +2336,7 @@ fun ChatScreen(
                     // iOS: "..." circle button → dropdown menu
                     Box {
                         IconButton(onClick = { showChatMenu = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = "More")
+                            Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.content_desc_more))
                         }
                         MinisMenu(
                             expanded = showChatMenu,
@@ -3507,7 +3509,7 @@ fun ChatScreen(
                                 // legacy DB-restored messages (snapshot=null)
                                 // follow the chat's current level.
                                 val effectiveLevel = item.messageThinkingLevel
-                                    ?: viewModel.thinkingLevel.value
+                                    ?: thinkingLevel
                                 if (effectiveLevel.isEnabled) {
                                     // [T-android-thinking-auto-collapse] Use
                                     // `isLastBlockOverall` (not `isLast` =
@@ -5048,7 +5050,7 @@ fun ChatScreen(
                             ) {
                                 Icon(
                                     Icons.Default.Add,
-                                    contentDescription = "Attach",
+                                    contentDescription = stringResource(R.string.content_desc_attach),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(20.dp),
                                 )
@@ -5164,7 +5166,7 @@ fun ChatScreen(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(38.dp)
+                                    .size(48.dp)
                                     .background(ChatColors.inputIconBg, CircleShape)
                                     .border(0.5.dp, ChatColors.inputIconBorder, CircleShape)
                                     .clip(CircleShape)
@@ -5466,7 +5468,7 @@ fun ChatScreen(
                             ) {
                                 Icon(
                                     Icons.Default.ArrowUpward,
-                                    contentDescription = "Send",
+                                    contentDescription = stringResource(R.string.send),
                                     tint = if (canActivate) ChatColors.background
                                     else ChatColors.primaryText.copy(alpha = 0.5f),
                                     modifier = Modifier.size(20.dp),

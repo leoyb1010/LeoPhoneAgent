@@ -234,19 +234,19 @@ fun ModelGroupsScreen(
                     Spacer(modifier = Modifier.height(SectionDesign.SectionTopGap))
                 }
                 item("defaults_section_header") {
-                    SectionHeader(text = "Defaults")
+                    SectionHeader(text = stringResource(R.string.model_groups_defaults))
                 }
                 item("defaults_section_card") {
                     SectionCard {
                         GroupDropdown(
-                            label = "Default Primary",
+                            label = stringResource(R.string.model_groups_default_primary),
                             groups = groups,
                             selectedId = config.defaultPrimaryGroupId,
                             onSelect = { providerRepository.defaultPrimaryGroupId = it },
                         )
                         SectionDivider()
                         GroupDropdown(
-                            label = "Default Sub",
+                            label = stringResource(R.string.model_groups_default_sub),
                             groups = groups,
                             selectedId = config.defaultSubGroupId,
                             onSelect = { providerRepository.defaultSubGroupId = it },
@@ -308,7 +308,7 @@ fun ModelGroupsScreen(
             text = {
                 Column {
                     Text(
-                        "Enter a name for the new model group.",
+                        stringResource(R.string.model_groups_new_group_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -861,8 +861,8 @@ private fun GroupRow(
                 groupTopModalities(group, config).forEach { marker ->
                     GroupModalityIcon(marker)
                 }
-                if (isPrimary) BadgeLabel("Primary", MaterialTheme.colorScheme.primary)
-                if (isSub) BadgeLabel("Sub", MaterialTheme.colorScheme.tertiary)
+                if (isPrimary) BadgeLabel(stringResource(R.string.model_groups_primary_badge), MaterialTheme.colorScheme.primary)
+                if (isSub) BadgeLabel(stringResource(R.string.model_groups_sub_badge), MaterialTheme.colorScheme.tertiary)
                 if (allDisabled) {
                     BadgeLabel(
                         stringResource(R.string.model_group_no_usable_models_badge),

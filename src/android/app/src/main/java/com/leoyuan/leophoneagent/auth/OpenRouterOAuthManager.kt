@@ -54,13 +54,16 @@ object OpenRouterOAuthManager {
         callbackServer = null
 
         val (verifier, challenge) = generatePKCE()
+        val expectedState = generateState()
         Log.i(TAG, "PKCE generated — verifier length: ${verifier.length}")
 
         val apiKey = withContext(Dispatchers.IO) {
             val code = suspendCancellableCoroutine { cont ->
-                val server = OAuthCallbackServer(CALLBACK_PORT, FALLBACK_PORTS) { receivedCode, _ ->
-                    if (cont.isActive) {
+                val server = OAuthCallbackServer(CALLBACK_PORT, FALLBACK_PORTS) { receivedCode, receivedState ->
+                    if (cont.isActive && OAuthManager.secureStateMatches(expectedState, receivedState)) {
                         cont.resume(receivedCode)
+                    } else if (cont.isActive) {
+                        cont.cancel(SecurityException("OAuth state mismatch — possible CSRF attack"))
                     }
                 }
                 callbackServer = server
@@ -78,6 +81,7 @@ object OpenRouterOAuthManager {
                     .appendQueryParameter("callback_url", callbackUrl)
                     .appendQueryParameter("code_challenge", challenge)
                     .appendQueryParameter("code_challenge_method", "S256")
+                    .appendQueryParameter("state", expectedState)
                     .appendQueryParameter("_nc", System.currentTimeMillis().toString()) // cache-bust
                     .build()
                 Log.d(TAG, "Auth URL: $authUrl")
@@ -127,6 +131,12 @@ object OpenRouterOAuthManager {
         Log.d(TAG, "PKCE challenge (${challenge.length} chars): $challenge")
 
         return verifier to challenge
+    }
+
+    private fun generateState(): String {
+        val bytes = ByteArray(32)
+        SecureRandom().nextBytes(bytes)
+        return standardBase64ToUrlSafe(bytes)
     }
 
     /**

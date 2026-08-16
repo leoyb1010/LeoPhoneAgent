@@ -74,8 +74,9 @@ fun UsageStatsScreen(
     var grandTotal by remember { mutableStateOf(GrandTotal()) }
     var providerGroups by remember { mutableStateOf<List<ProviderGroup>>(emptyList()) }
     var isLoaded by remember { mutableStateOf(false) }
+    val unknownLabel = stringResource(R.string.common_unknown)
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(providerConfig, unknownLabel) {
         val records = chatDao.allUsageRecords()
 
         val modelLookup = mutableMapOf<String, Pair<String, String>>()
@@ -101,7 +102,7 @@ fun UsageStatsScreen(
             val cacheRd = usage.optLong("cacheReadTokens", usage.optLong("cacheReadInputTokens", 0))
 
             val (displayName, provider) = modelLookup[record.modelId]
-                ?: (record.modelId to "Unknown")
+                ?: (record.modelId to unknownLabel)
 
             val stats = statsMap.getOrPut(record.modelId) {
                 ModelStats(record.modelId, displayName, provider)
@@ -114,7 +115,7 @@ fun UsageStatsScreen(
             stats.distinctSessions.add(record.sessionId)
         }
 
-        val providerOrder = listOf("OpenAI", "Anthropic", "Google Gemini", "Google", "Antigravity", "Unknown")
+        val providerOrder = listOf("OpenAI", "Anthropic", "Google Gemini", "Google", "Antigravity", unknownLabel)
         val grouped = statsMap.values.groupBy { it.provider }
         val sortedGroups = grouped.entries.sortedBy { (name, _) ->
             val idx = providerOrder.indexOf(name)

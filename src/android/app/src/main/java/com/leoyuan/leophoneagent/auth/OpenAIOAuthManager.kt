@@ -91,13 +91,13 @@ class OpenAIOAuthManager(context: Context, instanceId: String) : OAuthManager(co
 
             loginCallbackServer?.stop()
             loginCallbackServer = null
-            val stateMatches = expectedState != null && state == expectedState
+            val stateMatches = secureStateMatches(expectedState, state)
             AppLogger.info(
                 TAG,
-                "callback received: codeLen=${code.length} state=$state expected=$expectedState match=$stateMatches",
+                "callback received: codeLen=${code.length} statePresent=${state != null} match=$stateMatches",
             )
             if (!stateMatches) {
-                AppLogger.warning(TAG, "state mismatch — proceeding anyway to mirror prior behaviour")
+                throw SecurityException("OAuth state mismatch — possible CSRF attack")
             }
 
             // Step 2: Exchange code for tokens (JSON body, matching iOS CodexOAuthManager)

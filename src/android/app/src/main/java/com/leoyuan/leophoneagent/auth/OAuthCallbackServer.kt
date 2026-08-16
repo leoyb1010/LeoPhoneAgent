@@ -4,6 +4,7 @@ import android.util.Log
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.ServerSocket
+import java.net.InetAddress
 import java.net.URI
 
 class OAuthCallbackServer(
@@ -43,7 +44,7 @@ class OAuthCallbackServer(
                 var bound = false
                 for (p in portsToTry) {
                     try {
-                        serverSocket = ServerSocket(p)
+                        serverSocket = ServerSocket(p, 4, InetAddress.getLoopbackAddress())
                         boundPort = p
                         bound = true
                         break
@@ -59,9 +60,14 @@ class OAuthCallbackServer(
                 while (running) {
                     val socket = serverSocket?.accept() ?: break
                     try {
+                        socket.soTimeout = 10_000
                         val reader = BufferedReader(InputStreamReader(socket.getInputStream()))
                         val requestLine = reader.readLine() ?: continue
-                        Log.d(TAG, "Request: $requestLine")
+                        if (requestLine.length > 8_192) {
+                            socket.close()
+                            continue
+                        }
+                        Log.d(TAG, "Request: ${requestLine.substringBefore('?').take(120)}")
 
                         // CORS preflight for providers (e.g. xAI) that
                         // OPTIONS /callback from their authorization page
@@ -81,7 +87,8 @@ class OAuthCallbackServer(
                                 }
                             }
                             val trustedHosts = listOf("auth.x.ai", "accounts.x.ai")
-                            val allowOrigin = if (origin != null && trustedHosts.any { origin!!.contains(it) }) {
+                            val originHost = runCatching { origin?.let { URI(it).host } }.getOrNull()
+                            val allowOrigin = if (origin != null && originHost in trustedHosts) {
                                 origin
                             } else {
                                 "null"
@@ -111,8 +118,10 @@ class OAuthCallbackServer(
 
                             // Send response
                             val html = "<html><body><h1>Authorization complete</h1><p>You can close this tab.</p><script>window.close()</script></body></html>"
-                            val response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: ${html.length}\r\nConnection: close\r\n\r\n$html"
-                            socket.getOutputStream().write(response.toByteArray())
+                            val htmlBytes = html.toByteArray(Charsets.UTF_8)
+                            val response = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${htmlBytes.size}\r\nConnection: close\r\n\r\n"
+                            socket.getOutputStream().write(response.toByteArray(Charsets.US_ASCII))
+                            socket.getOutputStream().write(htmlBytes)
                             socket.close()
 
                             if (code != null) {

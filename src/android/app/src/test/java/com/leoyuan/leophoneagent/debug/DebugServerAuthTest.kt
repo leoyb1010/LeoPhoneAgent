@@ -15,8 +15,9 @@ class DebugServerAuthTest {
 
     @Test
     fun `loopback is exempt regardless of token`() {
-        assertTrue(DebugServer.isAuthorized(isLoopback = true, providedToken = null, expectedToken = token))
-        assertTrue(DebugServer.isAuthorized(isLoopback = true, providedToken = "wrong", expectedToken = token))
+        assertFalse(DebugServer.isAuthorized(isLoopback = true, providedToken = null, expectedToken = token))
+        assertFalse(DebugServer.isAuthorized(isLoopback = true, providedToken = "wrong", expectedToken = token))
+        assertTrue(DebugServer.isAuthorized(isLoopback = true, providedToken = token, expectedToken = token))
     }
 
     @Test

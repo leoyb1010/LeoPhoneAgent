@@ -376,7 +376,7 @@ internal fun InputCircleButton(
 ) {
     Box(
         modifier = Modifier
-            .size(38.dp)
+            .size(48.dp)
             .background(ChatColors.inputIconBg, CircleShape)
             .border(0.5.dp, ChatColors.inputIconBorder, CircleShape)
             .clip(CircleShape)
@@ -412,7 +412,7 @@ internal fun MicButton(
     val borderColor = if (isRecording) Color.Transparent else ChatColors.inputIconBorder
     Box(
         modifier = Modifier
-            .size(38.dp)
+            .size(48.dp)
             .background(bg, CircleShape)
             .border(0.5.dp, borderColor, CircleShape)
             .clip(CircleShape)
@@ -424,8 +424,11 @@ internal fun MicButton(
     ) {
         Icon(
             if (isVoiceActive) Icons.Default.Keyboard else Icons.Default.Mic,
-            contentDescription = if (isVoiceActive) "Switch to keyboard"
-            else if (isRecording) "Stop recording" else "Voice input",
+            contentDescription = stringResource(
+                if (isVoiceActive) R.string.content_desc_switch_keyboard
+                else if (isRecording) R.string.content_desc_stop_recording
+                else R.string.content_desc_voice_input,
+            ),
             tint = tint,
             modifier = Modifier.size(20.dp),
         )

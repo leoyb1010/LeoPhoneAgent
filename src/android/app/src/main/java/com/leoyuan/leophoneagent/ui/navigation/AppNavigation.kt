@@ -239,6 +239,7 @@ fun AppNavigation(
     initialDeepLink: DeepLinkAction? = null,
 ) {
     val context = LocalContext.current
+    val providerConfig by providerRepository.config.collectAsState()
 
     // T219-5: use the application-scoped singleton from MinisApp so UI
     // add/remove shares state with PRootKernel and the lifecycle re-probe
@@ -1224,7 +1225,7 @@ fun AppNavigation(
         composable(Routes.USAGE_STATS) {
             UsageStatsScreen(
                 chatDao = chatRepository.dao,
-                providerConfig = providerRepository.config.value,
+                providerConfig = providerConfig,
                 onBack = { navController.safePopBackStack() },
             )
         }

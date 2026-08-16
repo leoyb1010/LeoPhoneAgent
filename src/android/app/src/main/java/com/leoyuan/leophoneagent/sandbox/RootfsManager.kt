@@ -390,8 +390,11 @@ class RootfsManager private constructor(private val context: Context) {
         // bottom-up keeps the intent clear and avoids any traversal surprise.
         for (f in libDir.walkBottomUp()) {
             f.setWritable(false, false)
-            f.setReadable(true, false)
-            if (f.isDirectory) f.setExecutable(true, false)
+            // PRoot runs under this same application UID; world-readable
+            // permissions are unnecessary and would widen exposure on a
+            // compromised/shared-user device.
+            f.setReadable(true, true)
+            if (f.isDirectory) f.setExecutable(true, true)
             count++
         }
         return count

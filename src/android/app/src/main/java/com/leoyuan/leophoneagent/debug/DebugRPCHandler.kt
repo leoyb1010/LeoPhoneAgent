@@ -379,12 +379,21 @@ class DebugRPCHandler(private val context: Context) {
 
         val fileSize = hostFile.length()
         val offset = params.optLong("offset", 0)
-        val limit = params.optInt("limit", 524_288)
+        val limit = params.optInt("limit", 524_288).coerceIn(0, 5 * 1024 * 1024)
         val forceBase64 = params.optBoolean("base64", false)
 
         val bytes = hostFile.inputStream().use { stream ->
             if (offset > 0) stream.skip(offset)
-            stream.readNBytes(limit)
+            val output = ByteArrayOutputStream(minOf(limit, 64 * 1024))
+            val buffer = ByteArray(minOf(limit.coerceAtLeast(1), 8 * 1024))
+            var remaining = limit
+            while (remaining > 0) {
+                val count = stream.read(buffer, 0, minOf(buffer.size, remaining))
+                if (count < 0) break
+                output.write(buffer, 0, count)
+                remaining -= count
+            }
+            output.toByteArray()
         }
 
         val isText = !forceBase64 && bytes.all {

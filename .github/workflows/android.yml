@@ -1,0 +1,41 @@
+name: Android
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: src/android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+      - uses: android-actions/setup-android@v3
+      - name: Install Android toolchain
+        run: sdkmanager 'platforms;android-36' 'build-tools;35.0.0' 'cmake;3.22.1' 'ndk;27.0.12077973'
+      - name: Download checksum-pinned sandbox assets
+        working-directory: .
+        run: ./scripts/prepare_android_sandbox.sh
+      - name: Verify, test, lint, and assemble both editions
+        run: >-
+          ./gradlew
+          :app:verifyChineseResources
+          :app:verifyChineseSettingsStrings
+          :app:testStandardDebugUnitTest
+          :app:testPowerDebugUnitTest
+          :app:lintStandardRelease
+          :app:lintPowerRelease
+          :app:assembleStandardRelease
+          :app:assemblePowerRelease

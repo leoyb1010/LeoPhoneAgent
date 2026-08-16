@@ -502,7 +502,9 @@ private fun ColumnScope.ApiKeyConfigSection(
                     IconButton(onClick = { showApiKeyPlaintext = !showApiKeyPlaintext }) {
                         Icon(
                             if (showApiKeyPlaintext) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                            contentDescription = if (showApiKeyPlaintext) "Hide" else "Show",
+                            contentDescription = stringResource(
+                                if (showApiKeyPlaintext) R.string.common_hide else R.string.common_show,
+                            ),
                         )
                     }
                 },
@@ -528,13 +530,13 @@ private fun ColumnScope.ApiKeyConfigSection(
         // without scraping issue threads. Default Anthropic + other
         // provider types keep their original footer copy.
         val baseUrlFooter = if (providerType == ProviderType.gemini) {
-            "Leave empty to use the default Google endpoint. Enter the full base URL including version path."
+            stringResource(R.string.add_provider_endpoint_gemini_footer)
         } else if (providerType == ProviderType.anthropic) {
             stringResource(R.string.add_provider_endpoint_anthropic_hint)
         } else if (appendV1Suffix) {
-            "Leave empty to use the default endpoint. \"/v1\" is appended automatically — enter the base host only."
+            stringResource(R.string.add_provider_endpoint_append_v1_footer)
         } else {
-            "The URL is used verbatim. Include the full path up to (but not including) the endpoint."
+            stringResource(R.string.add_provider_endpoint_verbatim_footer)
         }
         SettingsSection(
             header = stringResource(R.string.add_provider_endpoint),
@@ -566,9 +568,9 @@ private fun ColumnScope.ApiKeyConfigSection(
         SettingsSection(
             header = stringResource(R.string.provider_detail_api_format),
             footer = if (useResponsesAPI) {
-                "Uses /v1/responses endpoint format. Required for some Responses-API-only services."
+                stringResource(R.string.provider_api_responses_footer)
             } else {
-                "Standard /v1/chat/completions format. Compatible with most OpenAI-compatible services."
+                stringResource(R.string.provider_api_chat_footer)
             },
         ) {
             SettingsCardBlock {
@@ -779,7 +781,7 @@ private fun ColumnScope.OAuthConfigSection(
                                 errorMessage = if (e is com.leoyuan.leophoneagent.auth.OAuthNetworkUnreachableException) {
                                     context.getString(R.string.add_provider_oauth_network_unreachable)
                                 } else {
-                                    e.message ?: "Authentication failed"
+                                    e.message ?: context.getString(R.string.provider_auth_failed)
                                 }
                             } finally {
                                 isAuthenticating = false

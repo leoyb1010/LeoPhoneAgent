@@ -131,3 +131,5 @@ __pycache__/
 
 # 本机视觉/构建审查证据，可能含设备截图或绝对路径，不进入源码仓。
 /audit/
+# Local delivery bundles (APKs, mappings, reports, screenshots).
+/outputs/

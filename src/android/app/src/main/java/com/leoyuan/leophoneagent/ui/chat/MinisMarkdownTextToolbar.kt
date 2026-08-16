@@ -179,13 +179,13 @@ internal class MinisMarkdownTextToolbar(
     internal fun copyMarkdown() {
         val md = state.originatingMarkdown ?: return
         MarkdownClipboard.copyMarkdown(context, md)
-        Toast.makeText(context, "Copied as Markdown", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.selection_copied_markdown), Toast.LENGTH_SHORT).show()
     }
 
     internal fun copyRichText() {
         val md = state.originatingMarkdown ?: return
         MarkdownClipboard.copyRichText(context, md)
-        Toast.makeText(context, "Copied as Rich Text", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.selection_copied_rich_text), Toast.LENGTH_SHORT).show()
     }
 
     internal data class ToolbarState(
@@ -252,7 +252,7 @@ internal fun MinisMarkdownTextToolbarHost(toolbar: MinisMarkdownTextToolbar) {
                     .height(40.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                ToolbarButton(label = "Copy") {
+                ToolbarButton(label = stringResource(R.string.selection_copy)) {
                     state.onCopyRequested?.invoke()
                     toolbar.hide()
                 }
@@ -290,12 +290,12 @@ internal fun MinisMarkdownTextToolbarHost(toolbar: MinisMarkdownTextToolbar) {
                 // which message's source to copy.
                 if (state.originatingMarkdown != null) {
                     ToolbarDivider()
-                    ToolbarButton(label = "Copy Markdown") {
+                    ToolbarButton(label = stringResource(R.string.selection_copy_markdown)) {
                         toolbar.copyMarkdown()
                         toolbar.hide()
                     }
                     ToolbarDivider()
-                    ToolbarButton(label = "Copy Rich Text") {
+                    ToolbarButton(label = stringResource(R.string.selection_copy_rich_text)) {
                         toolbar.copyRichText()
                         toolbar.hide()
                     }
