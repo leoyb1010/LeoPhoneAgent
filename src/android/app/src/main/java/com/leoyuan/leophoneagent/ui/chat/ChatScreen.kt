@@ -382,19 +382,24 @@ private fun LeoAgentEmptyState(
 ) {
     val accent = Color(0xFF6157F5)
     val cyan = Color(0xFF18BFD0)
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 24.dp, vertical = 22.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val compactHeight = maxHeight < 600.dp
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(
+                    horizontal = if (compactHeight) 18.dp else 24.dp,
+                    vertical = if (compactHeight) 10.dp else 22.dp,
+                ),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
         Box(
             modifier = Modifier
-                .size(68.dp)
+                .size(if (compactHeight) 52.dp else 68.dp)
                 .background(
                     brush = Brush.linearGradient(listOf(accent, cyan)),
-                    shape = RoundedCornerShape(22.dp),
+                    shape = RoundedCornerShape(if (compactHeight) 17.dp else 22.dp),
                 ),
             contentAlignment = Alignment.Center,
         ) {
@@ -402,18 +407,18 @@ private fun LeoAgentEmptyState(
                 Icons.Default.AutoAwesome,
                 contentDescription = null,
                 tint = Color.White,
-                modifier = Modifier.size(30.dp),
+                modifier = Modifier.size(if (compactHeight) 24.dp else 30.dp),
             )
         }
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(if (compactHeight) 9.dp else 18.dp))
         Text(
             text = androidx.compose.ui.res.stringResource(R.string.agent_home_ready_title),
             color = ChatColors.primaryText,
-            fontSize = 23.sp,
-            lineHeight = 28.sp,
+            fontSize = if (compactHeight) 20.sp else 23.sp,
+            lineHeight = if (compactHeight) 24.sp else 28.sp,
             fontWeight = FontWeight.Bold,
         )
-        Spacer(Modifier.height(7.dp))
+        Spacer(Modifier.height(if (compactHeight) 3.dp else 7.dp))
         Text(
             text = androidx.compose.ui.res.stringResource(
                 if (isPowerEdition) R.string.agent_home_power_subtitle
@@ -424,7 +429,7 @@ private fun LeoAgentEmptyState(
             lineHeight = 20.sp,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(if (compactHeight) 7.dp else 14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             LeoStatusPill(
                 text = androidx.compose.ui.res.stringResource(R.string.agent_home_local_badge),
@@ -438,13 +443,14 @@ private fun LeoAgentEmptyState(
                 dotColor = if (isPowerEdition) accent else cyan,
             )
         }
-        Spacer(Modifier.height(24.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+        Spacer(Modifier.height(if (compactHeight) 10.dp else 24.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(if (compactHeight) 6.dp else 9.dp)) {
             LeoQuickTask(
                 icon = Icons.Default.Terminal,
                 title = androidx.compose.ui.res.stringResource(R.string.agent_home_task_phone),
                 prompt = androidx.compose.ui.res.stringResource(R.string.agent_home_prompt_phone),
                 accent = accent,
+                compact = compactHeight,
                 onSuggestion = onSuggestion,
             )
             LeoQuickTask(
@@ -452,6 +458,7 @@ private fun LeoAgentEmptyState(
                 title = androidx.compose.ui.res.stringResource(R.string.agent_home_task_research),
                 prompt = androidx.compose.ui.res.stringResource(R.string.agent_home_prompt_research),
                 accent = cyan,
+                compact = compactHeight,
                 onSuggestion = onSuggestion,
             )
             LeoQuickTask(
@@ -459,9 +466,11 @@ private fun LeoAgentEmptyState(
                 title = androidx.compose.ui.res.stringResource(R.string.agent_home_task_automate),
                 prompt = androidx.compose.ui.res.stringResource(R.string.agent_home_prompt_automate),
                 accent = Color(0xFFF19B38),
+                compact = compactHeight,
                 onSuggestion = onSuggestion,
             )
         }
+    }
     }
 }
 
@@ -486,6 +495,7 @@ private fun LeoQuickTask(
     title: String,
     prompt: String,
     accent: Color,
+    compact: Boolean = false,
     onSuggestion: (String) -> Unit,
 ) {
     Row(
@@ -495,16 +505,16 @@ private fun LeoQuickTask(
             .background(ChatColors.secondaryBg.copy(alpha = if (ChatColors.isDark) 0.82f else 0.72f))
             .border(0.5.dp, ChatColors.separator.copy(alpha = 0.28f), RoundedCornerShape(16.dp))
             .clickable { onSuggestion(prompt) }
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = 14.dp, vertical = if (compact) 8.dp else 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier = Modifier
-                .size(34.dp)
+                .size(if (compact) 30.dp else 34.dp)
                 .background(accent.copy(alpha = if (ChatColors.isDark) 0.22f else 0.12f), RoundedCornerShape(11.dp)),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
+            Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(if (compact) 16.dp else 18.dp))
         }
         Spacer(Modifier.width(12.dp))
         Text(
@@ -534,6 +544,9 @@ fun ChatScreen(
     skillRepository: com.leoyuan.leophoneagent.data.repository.SkillRepository? = null,
     mcpRepository: com.leoyuan.leophoneagent.data.repository.MCPRepository? = null,
     onBack: () -> Unit,
+    /** Foldable inner-screen panes already expose the session list beside
+     *  chat, so a redundant back arrow wastes the narrow detail header. */
+    showBackButton: Boolean = true,
     /** [T-new-chat-menu-entry] "New Chat" from the chat "..." menu: caller
      *  navigates to a fresh draft chat (same funnel as the session list's
      *  new-chat button), replacing this chat on the back stack. */
@@ -2311,8 +2324,10 @@ fun ChatScreen(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    if (showBackButton) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
                     }
                 },
                 actions = {

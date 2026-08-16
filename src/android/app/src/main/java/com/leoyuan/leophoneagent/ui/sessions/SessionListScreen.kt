@@ -31,6 +31,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -281,6 +283,9 @@ fun SessionListScreen(
     onRootfsClick: () -> Unit = {},
     // [T-android-scheduled-tasks-design] Entry to the scheduled-tasks list.
     onScheduledTasksClick: () -> Unit = {},
+    modifier: Modifier = Modifier,
+    /** Compact chrome for the Fold8 inner-screen navigation pane. */
+    compactHeader: Boolean = false,
 ) {
     val context = LocalContext.current
     // T46: hoist VM ownership to the NavBackStackEntry's ViewModelStore so
@@ -386,6 +391,7 @@ fun SessionListScreen(
     }.collectAsState(initial = 0)
 
     Scaffold(
+        modifier = modifier,
         topBar = {
             TopAppBar(
                 title = {
@@ -400,7 +406,7 @@ fun SessionListScreen(
                         )
                     } else {
                         Text(
-                            stringResource(R.string.app_name),
+                            if (compactHeader) "Leo" else stringResource(R.string.app_name),
                             fontWeight = FontWeight.Bold,
                             fontSize = 20.sp,
                         )
@@ -433,7 +439,7 @@ fun SessionListScreen(
                         // [T-android-scheduled-tasks-full] Badge shows the count of
                         // scheduled tasks so the user can see at a glance how many
                         // are configured without opening the list.
-                        IconButton(onClick = onScheduledTasksClick) {
+                        if (!compactHeader) IconButton(onClick = onScheduledTasksClick) {
                             if (scheduledTaskCount > 0) {
                                 BadgedBox(badge = { Badge { Text("$scheduledTaskCount") } }) {
                                     Icon(
@@ -458,6 +464,19 @@ fun SessionListScreen(
                                 onDismissRequest = { showOverflowMenu = false },
                                 offset = DpOffset(0.dp, 0.dp),
                             ) {
+                                if (compactHeader) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.sessionlist_scheduled_tasks)) },
+                                        onClick = {
+                                            showOverflowMenu = false
+                                            onScheduledTasksClick()
+                                        },
+                                        leadingIcon = {
+                                            Icon(Icons.Outlined.Schedule, contentDescription = null)
+                                        },
+                                    )
+                                    MinisMenuDivider()
+                                }
                                 if (sessions.isNotEmpty()) {
                                     DropdownMenuItem(
                                         text = { Text(stringResource(R.string.sessionlist_select_action)) },
@@ -569,6 +588,7 @@ fun SessionListScreen(
                                     if (sessionId != null) onNewChatGuarded(sessionId)
                                 }
                             },
+                            compactLayout = compactHeader,
                         )
                     }
                 } else {
@@ -1521,16 +1541,19 @@ private fun OnboardingLanding(
     onAddProvider: () -> Unit,
     onSelectModels: () -> Unit,
     onStartConversation: () -> Unit,
+    compactLayout: Boolean = false,
 ) {
+    val scrollState = rememberScrollState()
     Column(
         modifier = Modifier
             .fillMaxSize()
             // Bottom padding ≈ top-bar height so the content visually centers
             // relative to the whole screen, not just the Scaffold inner area.
             .padding(horizontal = 24.dp)
-            .padding(bottom = 48.dp),
+            .then(if (compactLayout) Modifier.verticalScroll(scrollState) else Modifier)
+            .padding(top = if (compactLayout) 24.dp else 0.dp, bottom = 48.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+        verticalArrangement = if (compactLayout) Arrangement.Top else Arrangement.Center,
     ) {
         Box(
             modifier = Modifier

@@ -7,6 +7,11 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -15,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import com.leoyuan.leophoneagent.deeplink.DeepLinkAction
 import com.leoyuan.leophoneagent.deeplink.DeepLinkCoordinator
 import com.leoyuan.leophoneagent.ui.settings.KEY_LAUNCH_SESSION
@@ -84,6 +90,18 @@ import com.leoyuan.leophoneagent.ui.onboarding.OnboardingModelSelectionScreen
 // Source: m3.material.io/styles/motion/easing-and-duration/tokens-specs
 private val EmphasizedDecelerate = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1.0f)
 private val EmphasizedAccelerate = CubicBezierEasing(0.3f, 0.0f, 0.8f, 0.15f)
+
+/**
+ * Chooses the persistent session + chat workspace from the live app window.
+ *
+ * 600dp is Android's medium-width boundary. It makes the official 7.6-inch
+ * Fold-in AVD (about 674dp wide when open) use two panes, while a Fold cover
+ * display and phone-sized split-screen windows remain single-pane. The height
+ * guard prevents an unusable two-pane layout in shallow landscape/freeform
+ * windows.
+ */
+internal fun shouldUseFoldableTwoPane(widthDp: Float, heightDp: Float): Boolean =
+    widthDp >= 600f && heightDp >= 480f
 
 object Routes {
     const val SESSION_LIST = "sessions"
@@ -522,49 +540,96 @@ fun AppNavigation(
             arguments = listOf(navArgument("sessionId") { type = NavType.StringType }),
         ) { backStackEntry ->
             val sessionId = backStackEntry.arguments?.getString("sessionId") ?: return@composable
-            ChatScreen(
-                sessionId = sessionId,
-                chatRepository = chatRepository,
-                providerRepository = providerRepository,
-                memoryRepository = memoryRepository,
-                skillRepository = skillRepository,
-                mcpRepository = mcpRepository,
-                onBack = { navController.safePopBackStack() },
-                // [T-new-chat-menu-entry] Chat-menu "New Chat": same draft-id
-                // funnel as the session list / NewChat deep link — a fresh
-                // "__new__" route whose DB record is only created on first
-                // send, so abandoning it leaves no empty session. popUpTo
-                // removes the current chat from the stack (back → list) and
-                // a double-fire just replaces one unpersisted draft with
-                // another instead of stacking two chats.
-                onNewChat = {
-                    navController.safeNavigate(Routes.chat("__new__${java.util.UUID.randomUUID()}")) {
-                        popUpTo(Routes.SESSION_LIST) { inclusive = false }
-                        launchSingleTop = true
-                    }
-                },
-                onOpenTerminal = {
-                    navController.safeNavigate(Routes.terminal(sessionId = sessionId))
-                },
-                onOpenTerminalWithCommand = { command ->
-                    navController.safeNavigate(
-                        Routes.terminal(initCommand = command, sessionId = sessionId),
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                // Galaxy Z Fold8: the 10:16 cover display stays below this
+                // boundary, while the unfolded 4:3 workspace clears it. Use
+                // the live app window (not device identity) so split-screen,
+                // freeform windows, rotation and future foldables adapt too.
+                val useTwoPane = shouldUseFoldableTwoPane(maxWidth.value, maxHeight.value)
+
+                val chatContent: @Composable (Boolean) -> Unit = { showBack ->
+                    ChatScreen(
+                        sessionId = sessionId,
+                        chatRepository = chatRepository,
+                        providerRepository = providerRepository,
+                        memoryRepository = memoryRepository,
+                        skillRepository = skillRepository,
+                        mcpRepository = mcpRepository,
+                        onBack = { navController.safePopBackStack() },
+                        showBackButton = showBack,
+                        onNewChat = {
+                            navController.safeNavigate(Routes.chat("__new__${java.util.UUID.randomUUID()}")) {
+                                popUpTo(Routes.SESSION_LIST) { inclusive = false }
+                                launchSingleTop = true
+                            }
+                        },
+                        onOpenTerminal = {
+                            navController.safeNavigate(Routes.terminal(sessionId = sessionId))
+                        },
+                        onOpenTerminalWithCommand = { command ->
+                            navController.safeNavigate(
+                                Routes.terminal(initCommand = command, sessionId = sessionId),
+                            )
+                        },
+                        onMoveToSession = { targetId ->
+                            navController.safeNavigate(Routes.chat(targetId)) {
+                                popUpTo(Routes.SESSION_LIST) { inclusive = false }
+                            }
+                        },
+                        onBrowseChatFiles = {
+                            navController.safeNavigate(Routes.chatFiles(sessionId))
+                        },
+                        onPreviewAttachment = { item ->
+                            FilePreviewHolder.currentItem = item
+                            navController.safeNavigate(Routes.FILE_PREVIEW)
+                        },
+                        onModelGroupsClick = { navController.safeNavigate(Routes.MODEL_GROUPS) },
                     )
-                },
-                onMoveToSession = { targetId ->
-                    navController.safeNavigate(Routes.chat(targetId)) {
-                        popUpTo(Routes.SESSION_LIST) { inclusive = false }
+                }
+
+                if (useTwoPane) {
+                    Row(Modifier.fillMaxSize()) {
+                        SessionListScreen(
+                            chatRepository = chatRepository,
+                            providerRepository = providerRepository,
+                            onSessionClick = { targetId ->
+                                navController.safeNavigate(Routes.chat(targetId)) {
+                                    popUpTo(Routes.SESSION_LIST) { inclusive = false }
+                                    launchSingleTop = true
+                                }
+                            },
+                            onNewChat = { targetId ->
+                                navController.safeNavigate(Routes.chat(targetId)) {
+                                    popUpTo(Routes.SESSION_LIST) { inclusive = false }
+                                    launchSingleTop = true
+                                }
+                            },
+                            onSettingsClick = { navController.safeNavigate(Routes.SETTINGS) },
+                            onAddProviderClick = { navController.safeNavigate(Routes.ADD_PROVIDER) },
+                            onSelectModelsClick = { navController.safeNavigate(Routes.ONBOARDING_MODELS) },
+                            onTerminalClick = { navController.safeNavigate(Routes.terminal()) },
+                            onRootfsClick = { navController.safeNavigate(Routes.ROOTFS_MANAGEMENT) },
+                            onScheduledTasksClick = { navController.safeNavigate(Routes.SCHEDULED_TASKS) },
+                            // Equal weights keep the navigation/content seam on
+                            // the Fold's physical center hinge instead of
+                            // letting either pane render underneath it.
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            compactHeader = true,
+                        )
+                        Box(
+                            Modifier
+                                .width(1.dp)
+                                .fillMaxHeight()
+                                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)),
+                        )
+                        Box(Modifier.weight(1f).fillMaxHeight()) {
+                            chatContent(false)
+                        }
                     }
-                },
-                onBrowseChatFiles = {
-                    navController.safeNavigate(Routes.chatFiles(sessionId))
-                },
-                onPreviewAttachment = { item ->
-                    FilePreviewHolder.currentItem = item
-                    navController.safeNavigate(Routes.FILE_PREVIEW)
-                },
-                onModelGroupsClick = { navController.safeNavigate(Routes.MODEL_GROUPS) },
-            )
+                } else {
+                    chatContent(true)
+                }
+            }
         }
 
         composable(Routes.SETTINGS) {
