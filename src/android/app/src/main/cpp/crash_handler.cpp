@@ -83,7 +83,7 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ctx) {
 
     char buf[1024];
     int n = snprintf(buf, sizeof(buf),
-        "=== Minis Native Crash ===\n"
+        "=== LeoPhoneAgent Native Crash ===\n"
         "Time: %04d-%02d-%02d %02d:%02d:%02d\n"
         "Signal: %d (%s)\n"
         "si_code: %d\n"
@@ -118,7 +118,7 @@ static void crash_signal_handler(int sig, siginfo_t* info, void* ctx) {
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_openminis_app_crash_NativeCrashHandler_nativeInstall(
+Java_com_leoyuan_leophoneagent_crash_NativeCrashHandler_nativeInstall(
         JNIEnv* env, jobject /*thiz*/, jstring jLogDir) {
     if (jLogDir == nullptr) return;
     const char* dir = env->GetStringUTFChars(jLogDir, nullptr);

@@ -4,6 +4,19 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## Android 1.0.0-alpha.1 - 2026-08-16（开发中）
+
+- 从 LeoPhoneAgent 与 OpenMinis 的共同历史恢复完整 Kotlin/Compose Android
+  工程，保留本机 Agent、Provider、Skills、MCP、Memory、浏览器与 PRoot。
+- Android 产品身份切换为 LeoPhoneAgent，Standard 与 Power 使用独立包名并可
+  同机安装；Power 高权限能力由专用 BuildConfig 闸门承载。
+- 修复仓库路径含空格时 PRoot 编译失败，以及 macOS 缺少 GNU readelf/awk
+  时静默生成错误 loader 偏移的问题；ARM64 PRoot 偏移与产物校验通过。
+- 修复公开仓库缺少私有 Debug Skill 时 Gradle 拒绝打包的问题，缺失时生成
+  明确占位文档，且 Debug 资产不会进入 Release 或 Git。
+- Standard、Power Debug APK 均已完成本机构建；真机/模拟器安装验证待设备
+  测试阶段完成。
+
 ## 1.1.2 - 2026-07-26
 
 - 修复 1.1.1 只补齐语言目录、但没有覆盖部分动态控件真实渲染路径的问题。

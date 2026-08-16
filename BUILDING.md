@@ -185,18 +185,22 @@ step is needed.
 
 ```sh
 cd src/android
-./gradlew :app:assembleDebug          # → app/build/outputs/apk/debug/
-./gradlew :app:installDebug           # install onto a connected device
+./gradlew :app:assembleStandardDebug  # → app/build/outputs/apk/standard/debug/
+./gradlew :app:assemblePowerDebug     # → app/build/outputs/apk/power/debug/
+./gradlew :app:installStandardDebug   # install standard onto a connected device
+./gradlew :app:installPowerDebug      # install power alongside standard
 ```
 
-Release builds are configured with the debug signing config, so no keystore is
-required to produce one locally.
+Standard uses `com.leoyuan.leophoneagent`; Power uses the independently
+installable `com.leoyuan.leophoneagent.power`. Debug builds use the local debug
+key. Production delivery must use the Leo release keystore and must not publish
+debug-signed APKs.
 
 ### Tests
 
 ```sh
-./gradlew :app:testDebugUnitTest        # JVM unit tests
-./gradlew :app:connectedAndroidTest     # instrumented; needs a device/emulator
+./gradlew :app:testStandardDebugUnitTest        # JVM unit tests
+./gradlew :app:connectedStandardDebugAndroidTest # instrumented; needs a device/emulator
 ```
 
 ---

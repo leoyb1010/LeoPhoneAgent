@@ -11,7 +11,7 @@
 # Why a separate script from gen_debug_skill.sh (iOS): iOS embeds base64 into a
 # generated Swift source file; Android just needs plain files on disk. And the
 # CLIENT differs — Android's debug server uses plaintext JSON-RPC + an optional
-# X-Minis-Token header, NOT the iOS protocol-v1 encrypted envelope, so shipping
+# X-LeoPhoneAgent-Token header, NOT the iOS protocol-v1 encrypted envelope, so shipping
 # the iOS envelope clients here would actively mislead.
 #
 # DO NOT COMMIT the output (src/debug/ is gitignored).
@@ -34,7 +34,7 @@ fi
 #    envelope clients: Android needs plaintext JSON-RPC + optional token.
 cat > "$OUT_DIR/examples/minis_rpc_android.py" <<'PYCLIENT'
 #!/usr/bin/env python3
-"""Minis ANDROID debug server client (stdlib only).
+"""LeoPhoneAgent ANDROID debug server client (stdlib only).
 
 Usage:
     python3 minis_rpc_android.py [--host HOST:PORT] [--token TOKEN] <method> [params-json]
@@ -51,7 +51,7 @@ Transport notes (Android differs from iOS!):
   - Auth: loopback (via `adb forward`) needs no token. NON-loopback (LAN)
     clients must send the per-install device token:
         adb shell run-as com.leoyuan.leophoneagent cat files/debug_server_token
-    Passed as X-Minis-Token (Authorization: Bearer also accepted).
+    Passed as X-LeoPhoneAgent-Token (Authorization: Bearer also accepted).
     Or set MINIS_DEBUG_TOKEN in the environment.
 """
 
@@ -68,7 +68,7 @@ def call(host: str, method: str, params: dict, token: str | None) -> dict:
     }).encode()
     headers = {"Content-Type": "application/json"}
     if token:
-        headers["X-Minis-Token"] = token
+        headers["X-LeoPhoneAgent-Token"] = token
     req = urllib.request.Request(f"http://{host}/", data=body,
                                 headers=headers, method="POST")
     try:
@@ -123,7 +123,7 @@ curl -s localhost:5321/ -d '{"jsonrpc":"2.0","id":1,"method":"debug.appInfo","pa
 # LAN (non-loopback) — token required
 TOK=$(adb shell run-as com.leoyuan.leophoneagent cat files/debug_server_token)
 curl -s http://<device-ip>:5321/ \
-     -H "X-Minis-Token: $TOK" \
+     -H "X-LeoPhoneAgent-Token: $TOK" \
      -d '{"jsonrpc":"2.0","id":1,"method":"debug.appInfo","params":{}}'
 ```
 

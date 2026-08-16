@@ -161,7 +161,7 @@
         android:usesCleartextTraffic="true"
         android:extractNativeLibs="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
+        android:label="@string/app_display_name"
         android:localeConfig="@xml/locales_config"
         android:supportsRtl="true"
         android:theme="@style/Theme.Minis">
@@ -179,12 +179,14 @@
                  itself never appears in the launcher directly, but all
                  internal Intent(this, MainActivity::class.java) startActivity
                  calls keep working because MainActivity is always enabled.
-                 The minis:// deep-link filter stays on MainActivity since
-                 deep-links never go through the LAUNCHER category. -->
+                 Both the Leo scheme and the legacy minis:// compatibility
+                 scheme stay on MainActivity since deep-links never go
+                 through the LAUNCHER category. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="leophoneagent" />
                 <data android:scheme="minis" />
             </intent-filter>
         </activity>
@@ -202,7 +204,7 @@
             android:enabled="true"
             android:exported="true"
             android:icon="@mipmap/ic_launcher"
-            android:label="@string/app_name">
+            android:label="@string/app_display_name">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -224,7 +226,7 @@
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_classic_light"
-            android:label="@string/app_name">
+            android:label="@string/app_display_name">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -240,7 +242,7 @@
             android:enabled="false"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_classic_dark"
-            android:label="@string/app_name">
+            android:label="@string/app_display_name">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -353,7 +355,7 @@
             android:excludeFromRecents="false"
             android:theme="@style/Theme.Minis">
             <intent-filter>
-                <action android:name="com.openminis.app.action.OPEN_WEBAPP" />
+                <action android:name="com.leoyuan.leophoneagent.action.OPEN_WEBAPP" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
@@ -469,7 +471,7 @@
         <service
             android:name=".offload.MinisNotificationListenerService"
             android:exported="true"
-            android:label="@string/app_name"
+            android:label="@string/app_display_name"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />

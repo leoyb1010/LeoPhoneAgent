@@ -23,7 +23,7 @@ fun customizationValue(key: String): String =
     (appCustomization.getProperty(key) ?: "").replace("\"", "\\\"")
 
 android {
-    namespace = "com.openminis.app"
+    namespace = "com.leoyuan.leophoneagent"
     // [T-android-dynamic-island] Bumped 35→36 so the Android 16 (Baklava)
     // Live Updates APIs — Notification.ProgressStyle, FLAG_PROMOTED_ONGOING,
     // NotificationManager.canPostPromotedNotifications(), setShortCriticalText —
@@ -33,11 +33,11 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.openminis.app"
+        applicationId = "com.leoyuan.leophoneagent"
         minSdk = 26
         targetSdk = 35
-        versionCode = 20
-        versionName = "0.20-preview"
+        versionCode = 100001
+        versionName = "1.0.0-alpha.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -58,6 +58,22 @@ android {
                 cppFlags += "-std=c++17"
                 arguments += "-DANDROID_STL=c++_shared"
             }
+        }
+    }
+
+    flavorDimensions += "capability"
+    productFlavors {
+        create("standard") {
+            dimension = "capability"
+            buildConfigField("boolean", "POWER_FEATURES_ENABLED", "false")
+            resValue("string", "app_display_name", "LeoPhoneAgent")
+        }
+        create("power") {
+            dimension = "capability"
+            applicationIdSuffix = ".power"
+            versionNameSuffix = "-power"
+            buildConfigField("boolean", "POWER_FEATURES_ENABLED", "true")
+            resValue("string", "app_display_name", "LeoPhoneAgent Power")
         }
     }
 

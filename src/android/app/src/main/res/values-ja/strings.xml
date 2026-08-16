@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Minis</string>
+    <string name="app_name">LeoPhoneAgent</string>
     <string name="new_chat">新しいチャット</string>
     <string name="settings">設定</string>
     <string name="providers">AIプロバイダー</string>
@@ -73,7 +73,7 @@
     <string name="search_no_results">\"%1$s\" の結果はありません</string>
     <string name="stop_tool">ツールを停止</string>
     <string name="mic_permission_title">マイクの権限が必要です</string>
-    <string name="mic_permission_message">音声入力にはマイクの権限が必要です。「設定を開く」をタップして Minis に許可を与えてください。</string>
+    <string name="mic_permission_message">音声入力にはマイクの権限が必要です。「設定を開く」をタップして LeoPhoneAgent に許可を与えてください。</string>
     <string name="mic_permission_open_settings">設定を開く</string>
     <string name="mic_permission_cancel">キャンセル</string>
     <string name="bg_section_header">バックグラウンドと通知</string>
@@ -81,7 +81,7 @@
     <string name="bg_section_footer">長時間のエージェントタスクは画面オフ中も CPU を起動状態に保つ権限が必要です。これらの設定がないと、システムは数分後にバックグラウンド推論を停止することがあります。</string>
     <string name="bg_service_channel_name">エージェントの状態</string>
     <string name="bg_service_channel_description">実行中のエージェントセッションの状態を表示します。</string>
-    <string name="bg_service_notification_title">Minis Agent 実行中</string>
+    <string name="bg_service_notification_title">LeoPhoneAgent Agent 実行中</string>
     <string name="bg_service_notification_text">%1$s | %2$s | %3$s</string>
     <string name="bg_service_stop_action">停止</string>
     <plurals name="bg_service_sessions">
@@ -92,11 +92,11 @@
     <string name="battery_opt_section_footer">除外設定にすると、Android はタスク実行中にアプリをスリープさせません。この画面に戻るたびに再確認します。</string>
     <string name="battery_opt_row_title">バックグラウンド実行を許可</string>
     <string name="battery_opt_already_exempt">許可済み</string>
-    <string name="battery_opt_request_subtitle">タップして Minis の中断のない実行を許可</string>
+    <string name="battery_opt_request_subtitle">タップして LeoPhoneAgent の中断のない実行を許可</string>
     <string name="rom_autostart_section_title">自動起動の権限</string>
-    <string name="rom_autostart_section_footer">一部の Android UI（%1$s）では、標準のシステム設定に加えて自動起動の権限が必要です。これがないと Minis はバックグラウンドへ移行後に数分で強制終了される可能性があります。</string>
+    <string name="rom_autostart_section_footer">一部の Android UI（%1$s）では、標準のシステム設定に加えて自動起動の権限が必要です。これがないと LeoPhoneAgent はバックグラウンドへ移行後に数分で強制終了される可能性があります。</string>
     <string name="rom_autostart_row_title">自動起動の設定を開く</string>
-    <string name="rom_autostart_row_subtitle">%1$s で Minis を有効にする</string>
+    <string name="rom_autostart_row_subtitle">%1$s で LeoPhoneAgent を有効にする</string>
     <string name="browser_settings_ua_not_set">未設定</string>
     <!-- T135 — Settings + About i18n keys -->
     <string name="settings_back">戻る</string>
@@ -125,7 +125,7 @@
     <string name="settings_section_logs">ログ</string>
     <string name="settings_logs_subtitle">アプリのログを表示・エクスポート</string>
     <string name="settings_section_about">情報</string>
-    <string name="settings_about_minis">Minis について</string>
+    <string name="settings_about_minis">LeoPhoneAgent について</string>
     <string name="settings_about_subtitle">バージョンとプロジェクト情報</string>
     <string name="settings_privacy_policy">プライバシーポリシー</string>
     <string name="settings_feedback">フィードバック</string>
@@ -133,7 +133,7 @@
     <string name="settings_feedback_telegram">フィードバック (Telegram)</string>
     <string name="settings_feedback_email">フィードバック (メール)</string>
     <string name="about_title">情報</string>
-    <string name="about_minis_tagline">Minis は完全にローカルで完全にプライベートなオンデバイスエージェントです。</string>
+    <string name="about_minis_tagline">LeoPhoneAgent は完全にローカルで完全にプライベートなオンデバイスエージェントです。</string>
     <string name="about_links">リンク</string>
     <string name="about_github_repository">GitHub リポジトリ</string>
     <string name="about_version_format">バージョン %1$s (%2$s)</string>
@@ -317,9 +317,9 @@
     <string name="skill_section_installed">インストール済み</string>
     <string name="skill_section_footer">Skill は専用の指示やワークフローで AI エージェントを拡張します。有効時にシステムプロンプトに読み込まれます。</string>
     <string name="skill_empty_title">Skill が未インストール</string>
-    <string name="skill_empty_action">+ をタップして SKILL.md をインポートするか、Minis Skills を閲覧してください。</string>
+    <string name="skill_empty_action">+ をタップして SKILL.md をインポートするか、LeoPhoneAgent Skills を閲覧してください。</string>
     <string name="skill_import_modal_title">スキルをインポート</string>
-    <string name="skill_minis_skills_modal">Minis Skills</string>
+    <string name="skill_minis_skills_modal">LeoPhoneAgent Skills</string>
     <string name="skill_delete_confirm_title">%1$s を削除しますか？</string>
     <string name="skill_delete_confirm_text">この skill とファイルを完全に削除します。</string>
     <string name="skill_import_sheet_title">スキルをインポート</string>
@@ -367,7 +367,7 @@
     <string name="skill_detail_source_file">ファイルインポート</string>
     <string name="skill_detail_source_bundled">内蔵</string>
     <string name="skill_detail_source_session">セッション作成</string>
-    <string name="skills_browser_title">Minis Skills</string>
+    <string name="skills_browser_title">LeoPhoneAgent Skills</string>
     <string name="skills_browser_import_button">これをインポート</string>
     <string name="skills_browser_hud_importing">インポート中…</string>
     <string name="skills_browser_error_not_folder">先に skill フォルダを選択してください</string>
@@ -383,8 +383,8 @@
     <string name="storage_overview_sessions">セッションファイル</string>
     <string name="storage_section_sessions">セッション</string>
     <string name="storage_no_sessions">セッションなし</string>
-    <string name="storage_section_minis_files">Minis ファイル</string>
-    <string name="storage_no_minis_files">Minis ファイルなし</string>
+    <string name="storage_section_minis_files">LeoPhoneAgent ファイル</string>
+    <string name="storage_no_minis_files">LeoPhoneAgent ファイルなし</string>
     <string name="storage_section_media">メディアファイル</string>
     <string name="storage_no_media_files">メディアファイルなし</string>
     <string name="storage_clear_session_footer">このセッションで生成されたすべてのファイルを削除します。会話自体は保持されます。</string>
@@ -455,7 +455,7 @@
     <string name="common_close">閉じる</string>
     <string name="common_skip">スキップ</string>
     <string name="common_next">次へ</string>
-    <string name="onboarding_welcome_title">Minis へようこそ</string>
+    <string name="onboarding_welcome_title">LeoPhoneAgent へようこそ</string>
     <string name="onboarding_welcome_subtitle">ターミナル、ブラウザ、ネイティブデバイスへのアクセスを備えた AI エージェント。</string>
     <string name="onboarding_get_started">はじめる</string>
     <string name="onboarding_provider_title">プロバイダーを追加</string>
@@ -552,7 +552,7 @@
     <string name="browser_nav_forward">進む</string>
     <string name="browser_stop">停止</string>
     <string name="browser_reload">再読み込み</string>
-    <string name="browser_minis_browsing">Minis がブラウジング中</string>
+    <string name="browser_minis_browsing">LeoPhoneAgent がブラウジング中</string>
     <string name="chat_typing_indicator">%1$s が考えています</string>
     <string name="chat_input_placeholder">%1$s にメッセージ（@ でファイルを参照）</string>
     <string name="browser_takeover">操作引き継ぎ</string>
@@ -585,7 +585,7 @@
     <string name="browser_history_results">結果</string>
     <string name="browser_history_clear_dialog_title">閲覧履歴を消去しますか？</string>
     <string name="browser_history_clear_dialog_message">すべての閲覧履歴が削除されます。この操作は元に戻せません。</string>
-    <string name="terminal_title">Minis シェル</string>
+    <string name="terminal_title">LeoPhoneAgent シェル</string>
     <string name="terminal_clear">クリア</string>
     <string name="terminal_show_keyboard">表示</string>
     <string name="terminal_hide_keyboard">非表示</string>
@@ -752,8 +752,8 @@
     <string name="notif_config_confirm_channel_name">設定の承認</string>
     <string name="notif_config_confirm_channel_description">アプリがバックグラウンドの間、設定変更が承認待ちのときに通知します。</string>
     <string name="notif_config_confirm_title">⚙️ 設定変更が承認待ちです</string>
-    <string name="notif_config_confirm_body_single">確認が必要な変更があります —— Minis を開いて承認または拒否してください。</string>
-    <string name="notif_config_confirm_body_multi">確認が必要な変更が %d 件あります —— Minis を開いて承認または拒否してください。</string>
+    <string name="notif_config_confirm_body_single">確認が必要な変更があります —— LeoPhoneAgent を開いて承認または拒否してください。</string>
+    <string name="notif_config_confirm_body_multi">確認が必要な変更が %d 件あります —— LeoPhoneAgent を開いて承認または拒否してください。</string>
     <string name="notif_task_failed_body">タスクがエラーで終了しました。タップしてチャットを開きます。</string>
 
     <!-- T182 agent loop section i18n -->
@@ -914,7 +914,7 @@
 
     <!-- Welcome / onboarding (T332) -->
     <!-- TODO translate -->
-    <string name="sessionlist_welcome_title">Minis へようこそ</string>
+    <string name="sessionlist_welcome_title">LeoPhoneAgent へようこそ</string>
     <string name="sessionlist_welcome_subtitle">最初のオンデバイス Agent がもうすぐ準備完了です。</string>
     <string name="sessionlist_welcome_step1_title">プロバイダを追加</string>
     <string name="sessionlist_welcome_step1_subtitle">API キーを設定するか OAuth でサインイン</string>
@@ -943,10 +943,10 @@
     <string name="update_error_open_releases">GitHub Releases を開く</string>
     <!-- T-android-crash-freq-share -->
     <string name="crash_freq_dialog_title">複数回のクラッシュを検出</string>
-    <string name="crash_freq_dialog_message">Minis は過去 1 時間に複数回クラッシュしました。問題解決のためにクラッシュログを共有しますか？</string>
+    <string name="crash_freq_dialog_message">LeoPhoneAgent は過去 1 時間に複数回クラッシュしました。問題解決のためにクラッシュログを共有しますか？</string>
     <string name="crash_freq_dialog_share">ログを共有</string>
     <string name="crash_freq_dialog_dismiss">後で</string>
-    <string name="crash_freq_email_subject">Minis クラッシュレポート %1$s</string>
+    <string name="crash_freq_email_subject">LeoPhoneAgent クラッシュレポート %1$s</string>
     <string name="crash_freq_share_chooser">クラッシュログを送信</string>
     <string name="image_action_copy">コピー</string>
     <string name="image_action_share">共有</string>
@@ -1041,7 +1041,7 @@
     <string name="voice_bare_link">リンク</string>
     <!-- [T-android-voice-correction] Consent + correction UI -->
     <string name="voice_correction_consent_title">音声修正を改善しますか？</string>
-    <string name="voice_correction_consent_body">Minis は文字起こしの修正（元の文 → 修正後）と採用された AI 修正を端末内のデータベースに保存し、今後の音声修正の精度を高めます。アップロードは行いません。設定でいつでも変更・削除できます。</string>
+    <string name="voice_correction_consent_body">LeoPhoneAgent は文字起こしの修正（元の文 → 修正後）と採用された AI 修正を端末内のデータベースに保存し、今後の音声修正の精度を高めます。アップロードは行いません。設定でいつでも変更・削除できます。</string>
     <string name="voice_correction_consent_enable">有効にする</string>
     <string name="voice_correction_consent_not_now">後で</string>
     <string name="voice_correction_button_a11y">AI で文字起こしを修正</string>
@@ -1056,7 +1056,7 @@
     <string name="voice_provider_system">システム</string>
     <string name="add_provider_subtitle_kimi">Kimi Coding Plan — Kimi アカウントでサインイン</string>
     <string name="kimi_login_title">Kimi Code でサインイン</string>
-    <string name="kimi_login_instructions">認証ページを開き、このコードを入力して Minis を許可してください:</string>
+    <string name="kimi_login_instructions">認証ページを開き、このコードを入力して LeoPhoneAgent を許可してください:</string>
     <string name="kimi_login_copy_code">コードをコピー</string>
     <string name="kimi_login_open_verification">認証ページを開く</string>
     <string name="kimi_login_waiting">認証を待っています…</string>

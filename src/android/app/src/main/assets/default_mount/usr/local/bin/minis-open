@@ -37,12 +37,12 @@ emit() {
     case "$1" in
         http://*|https://*|about:*)
             emit_marker "$1"
-            printf 'Opened in Minis browser: %s\n' "$1"
+            printf 'Opened in LeoPhoneAgent browser: %s\n' "$1"
             ;;
         minis://*)
             # Already a minis:// URL — pass through.
             emit_marker "$1"
-            printf 'Opened in Minis preview: %s\n' "$1"
+            printf 'Opened in LeoPhoneAgent preview: %s\n' "$1"
             ;;
         /var/minis/*)
             # Convert /var/minis/<host>/<path> → minis://<host>/<path>
@@ -54,7 +54,7 @@ emit() {
                     host="${rel%%/*}"
                     path="${rel#*/}"
                     emit_marker "minis://$host/$path"
-                    printf 'Opened in Minis preview: minis://%s/%s\n' "$host" "$path"
+                    printf 'Opened in LeoPhoneAgent preview: minis://%s/%s\n' "$host" "$path"
                     ;;
                 *)
                     # e.g. /var/minis/workspace with no trailing path — a bare
