@@ -2,10 +2,7 @@ package com.leoyuan.leophoneagent.notification
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -13,6 +10,8 @@ import androidx.core.content.ContextCompat
 import com.leoyuan.leophoneagent.R
 import com.leoyuan.leophoneagent.data.repository.BackgroundSettingsRepository
 import com.leoyuan.leophoneagent.data.repository.ChatRepository
+import com.leoyuan.leophoneagent.deeplink.SystemEntryIntents
+import com.leoyuan.leophoneagent.deeplink.SystemEntryParser
 import com.leoyuan.leophoneagent.logging.AppLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -99,20 +98,21 @@ class BackgroundTaskNotifier(
             return
         }
 
-        val deepLink = Uri.parse("minis://session/$sessionId")
-        val launchIntent = Intent(Intent.ACTION_VIEW, deepLink).apply {
-            // FLAG_ACTIVITY_NEW_TASK because we're posting from a
-            // background scope without an Activity context.
-            // FLAG_ACTIVITY_CLEAR_TOP so MainActivity (singleTask) reuses
-            // the existing instance and routes the deep-link via
-            // onNewIntent rather than spawning a duplicate.
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-        }
-        val pendingIntent = PendingIntent.getActivity(
+        val pendingIntent = SystemEntryIntents.activity(
             context,
+            SystemEntryParser.sessionUri(sessionId),
             sessionId.hashCode(),
-            launchIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val resumeIntent = SystemEntryIntents.activity(
+            context,
+            SystemEntryParser.resumeUri(sessionId),
+            sessionId.hashCode() + 11,
+        )
+        val pauseIntent = SystemEntryIntents.broadcast(
+            context,
+            SystemEntryParser.ACTION_PAUSE,
+            sessionId,
+            sessionId.hashCode() + 12,
         )
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
@@ -121,6 +121,9 @@ class BackgroundTaskNotifier(
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setContentIntent(pendingIntent)
+            .addAction(0, context.getString(R.string.notif_action_open), pendingIntent)
+            .addAction(0, context.getString(R.string.notif_action_continue), resumeIntent)
+            .addAction(0, context.getString(R.string.notif_action_pause), pauseIntent)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)

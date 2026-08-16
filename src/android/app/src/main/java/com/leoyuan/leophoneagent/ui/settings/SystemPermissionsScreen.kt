@@ -24,9 +24,12 @@ import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Accessibility
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.BatteryAlert
+import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.Widgets
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
@@ -76,6 +79,11 @@ fun SystemPermissionsScreen(onBack: () -> Unit) {
     // battery "no restrictions"; surface those (reusing PowerOptimizationManager)
     // only when the service is degraded AND the vendor is known to enforce it.
     var a11yDegraded by remember { mutableStateOf(false) }
+    var notificationsOn by remember { mutableStateOf(areNotificationsEnabled(context)) }
+    var batteryExempt by remember {
+        mutableStateOf(PowerOptimizationManager.isIgnoringBatteryOptimizations(context))
+    }
+    var shizukuLabel by remember { mutableStateOf(shizukuStatusLabel(context)) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -84,6 +92,9 @@ fun SystemPermissionsScreen(onBack: () -> Unit) {
             val connected = MinisAccessibilityService.getInstance() != null
             a11yEnabled = inSettings || connected
             a11yDegraded = inSettings && !connected
+            notificationsOn = areNotificationsEnabled(context)
+            batteryExempt = PowerOptimizationManager.isIgnoringBatteryOptimizations(context)
+            shizukuLabel = shizukuStatusLabel(context)
             delay(1000)
         }
     }
@@ -149,6 +160,61 @@ fun SystemPermissionsScreen(onBack: () -> Unit) {
                     onClick = { requestPinWidget(context) },
                     showDivider = false,
                 )
+            }
+
+            SettingsSection(
+                header = stringResource(R.string.system_entry_hub_header),
+                footer = stringResource(R.string.system_entry_hub_footer),
+            ) {
+                SettingsRow(
+                    icon = Icons.Outlined.Notifications,
+                    iconColor = Color(0xFFFF9500),
+                    title = stringResource(R.string.system_permissions_notifications_row),
+                    subtitle = if (notificationsOn) {
+                        stringResource(R.string.system_permissions_notifications_on)
+                    } else {
+                        stringResource(R.string.system_permissions_notifications_off)
+                    },
+                    onClick = { openNotificationSettings(context) },
+                )
+                SettingsRow(
+                    icon = Icons.Outlined.BatteryAlert,
+                    iconColor = Color(0xFFFF9500),
+                    title = stringResource(R.string.system_permissions_battery_row),
+                    subtitle = if (batteryExempt) {
+                        stringResource(R.string.system_permissions_battery_on)
+                    } else {
+                        stringResource(R.string.system_permissions_battery_off)
+                    },
+                    onClick = {
+                        val activity = context as? Activity
+                        if (activity != null) {
+                            if (!PowerOptimizationManager.requestBatteryOptimizationExemption(activity)) {
+                                PowerOptimizationManager.openAppDetailsSettings(activity)
+                            }
+                        } else {
+                            openAppDetails(context)
+                        }
+                    },
+                )
+                SettingsRow(
+                    icon = Icons.Outlined.Apps,
+                    iconColor = Color(0xFF007AFF),
+                    title = stringResource(R.string.system_permissions_shortcuts_row),
+                    subtitle = stringResource(R.string.system_permissions_shortcuts_sub),
+                    onClick = { openAppDetails(context) },
+                    showDivider = !com.leoyuan.leophoneagent.BuildConfig.POWER_FEATURES_ENABLED,
+                )
+                if (com.leoyuan.leophoneagent.BuildConfig.POWER_FEATURES_ENABLED) {
+                    SettingsRow(
+                        icon = Icons.Outlined.Shield,
+                        iconColor = Color(0xFF5856D6),
+                        title = stringResource(R.string.system_permissions_shizuku_row),
+                        subtitle = shizukuLabel,
+                        onClick = { openShizuku(context) },
+                        showDivider = false,
+                    )
+                }
             }
 
             SettingsSection(
@@ -301,6 +367,56 @@ private fun requestQuickTile(context: Context) {
         } catch (_: Throwable) {}
     }
     Toast.makeText(context, context.getString(R.string.system_permissions_qs_manual), Toast.LENGTH_SHORT).show()
+}
+
+private fun areNotificationsEnabled(context: Context): Boolean =
+    androidx.core.app.NotificationManagerCompat.from(context).areNotificationsEnabled()
+
+private fun openNotificationSettings(context: Context) {
+    val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+        }
+    } else {
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+            data = android.net.Uri.fromParts("package", context.packageName, null)
+        }
+    }
+    runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+}
+
+private fun openAppDetails(context: Context) {
+    runCatching {
+        context.startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = android.net.Uri.fromParts("package", context.packageName, null)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            },
+        )
+    }
+}
+
+private fun shizukuStatusLabel(context: Context): String {
+    if (!com.leoyuan.leophoneagent.BuildConfig.POWER_FEATURES_ENABLED) {
+        return context.getString(R.string.system_permissions_shizuku_standard)
+    }
+    return when (com.leoyuan.leophoneagent.offload.ShizukuManager.snapshot.value.state) {
+        com.leoyuan.leophoneagent.offload.ShizukuManager.State.READY ->
+            context.getString(R.string.system_permissions_shizuku_ready)
+        com.leoyuan.leophoneagent.offload.ShizukuManager.State.NEED_PERMISSION ->
+            context.getString(R.string.system_permissions_shizuku_need_perm)
+        com.leoyuan.leophoneagent.offload.ShizukuManager.State.NOT_RUNNING ->
+            context.getString(R.string.system_permissions_shizuku_not_running)
+        com.leoyuan.leophoneagent.offload.ShizukuManager.State.NOT_INSTALLED ->
+            context.getString(R.string.system_permissions_shizuku_not_installed)
+    }
+}
+
+private fun openShizuku(context: Context) {
+    runCatching {
+        val mgr = com.leoyuan.leophoneagent.offload.ShizukuManager
+        if (mgr.isInstalled()) mgr.openShizukuApp(context) else mgr.openInstallPage(context)
+    }
 }
 
 private fun requestPinWidget(context: Context) {

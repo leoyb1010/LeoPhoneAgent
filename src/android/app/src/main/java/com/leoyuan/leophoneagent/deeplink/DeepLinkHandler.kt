@@ -66,6 +66,9 @@ sealed class DeepLinkAction {
     data object NewChat : DeepLinkAction()
     data object NewVoiceChat : DeepLinkAction()
     data object NewCameraChat : DeepLinkAction()
+    data object LastSession : DeepLinkAction()
+    data class ResumeSession(val sessionId: String) : DeepLinkAction()
+    data class PauseSession(val sessionId: String?) : DeepLinkAction()
 
     /**
      * T183: any settings screen reachable by route string. Extends the
@@ -118,6 +121,14 @@ object DeepLinkHandler {
                 "new_chat" -> DeepLinkAction.NewChat
                 "voice_chat" -> DeepLinkAction.NewVoiceChat
                 "camera_chat" -> DeepLinkAction.NewCameraChat
+                "last_session" -> DeepLinkAction.LastSession
+                "resume" -> uri.getQueryParameter("session")
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { DeepLinkAction.ResumeSession(it) }
+                    ?: DeepLinkAction.LastSession
+                "pause" -> DeepLinkAction.PauseSession(
+                    uri.getQueryParameter("session")?.takeIf { it.isNotBlank() },
+                )
                 else -> DeepLinkAction.Unknown
             }
             "settings" -> parseSettingsPath(uri)

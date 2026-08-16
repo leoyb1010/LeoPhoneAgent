@@ -37,8 +37,8 @@ android {
         applicationId = "com.leoyuan.leophoneagent"
         minSdk = 26
         targetSdk = 35
-        versionCode = 100003
-        versionName = "1.0.0-alpha.3"
+        versionCode = 100004
+        versionName = "1.0.0-alpha.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -132,6 +132,8 @@ android {
         // translation is partial. Simplified Chinese completeness is enforced
         // separately by verifyChineseResources and remains a hard build gate.
         disable += "MissingTranslation"
+        textReport = true
+        htmlReport = true
     }
 
 }
@@ -236,6 +238,9 @@ dependencies {
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+
+    // Recoverable scheduled work after process death / boot / timezone change.
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
 
     // T283: ACRA — local crash report capture. acra-core only (no http
     // sender, no network permission). CrashFileSender writes reports to

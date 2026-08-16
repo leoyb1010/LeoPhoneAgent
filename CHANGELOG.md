@@ -4,6 +4,40 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## Android v1.0.0-alpha.4 - 2026-08-16
+
+### 闪退根因
+
+- `LeoVoiceInteractionSession.onShow` 在未关闭会话 UI 时立刻 `startActivity` + `hide()`。系统在升级后探测 `VoiceInteractionService`、或长按 Home / `ACTION_ASSIST` 绑定时会创建会话窗口，和这次抢窗口叠在一起，把主进程打崩。桌面图标、磁贴、小组件、深链都走同一进程，所以表现为「一开就闪退」。
+- 助手截图若是 Hardware Bitmap，`compress` 会抛错；ChatScreen 消费截图/包名时也没有兜底。
+
+### 修复
+
+- VoiceInteraction：`setUiEnabled(false)`，`onShow` / `onReady` / 截图保存全部包起来，失败只降级到已有聊天页，不再崩进程。
+- 磁贴、小组件、`ACTION_ASSIST`、`minis://` 深链、通知动作、开机/时区全部进同一条 `SystemEntryParser` 路由。
+- 进程被杀后，遗留非终态 Run 写成「等待用户继续」，对齐 iOS；用户点了横幅或通知「继续」才恢复，不会偷偷重跑。危险/跨应用操作仍走 Power 版逐次确认。
+
+### 新增
+
+- 桌面小组件改为任务状态面：空闲 / 执行中 / 已暂停 / 已完成 / 需要处理。点状态进对应会话。隐私模式不写标题正文。语音按钮只打开前台 App 再录音。
+- 快捷设置：新对话磁贴修稳，并加语音磁贴。设置页仍是原来的一键请求添加。
+- App Shortcuts：新对话 / 语音 / 上次会话（去掉写死的 Standard 包名，Power 也能用）。
+- 通知按钮：继续 / 暂停 / 打开会话。
+- WorkManager 在开机、时区变化、覆盖安装后补登记计划任务；前台服务通知带上同一套动作。
+- 设置 → 系统权限收成「系统入口」：默认助手、磁贴、小组件、通知、电池、快捷方式、无障碍，Power 另加 Shizuku 状态。
+
+### 刻意未做
+
+- 通知气泡、画中画、Credential Manager / Passkey、配套设备、NFC、Health Connect、全屏 Intent：仍然没有产品价值。
+- 没有新开假日历。Android 已有 `android-calendar` 工具，不在本版另接一套 CalendarContract UI。
+
+### 验证
+
+- 新增 `SystemEntryParserTest`、`AgentRunRecoveryTest`；保留 `AssistIntentsTest`。
+- 中文资源门禁与设置页英文硬编码门禁通过。
+- Standard / Power JVM 测试各 426，0 失败（各 1 个既有跳过）。双 flavor Debug APK 已 assemble 通过。
+- 修掉 alpha.3 起就红的 Release lint：补 `DETECT_SCREEN_CAPTURE`、`AssistState` 标 API 29、磁贴在 API 34 以下仍走旧 `startActivityAndCollapse` 但不再被 lint 判死刑。快捷方式按 Standard / Power 包名拆开。Release APK 交给 CI；本版不伪造 SHA，也不假装已发 GitHub Release。
+
 ## Android v1.0.0-alpha.3 - 2026-08-16
 
 ### 新增

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/leo_home_widget_bg"
@@ -8,6 +9,7 @@
     android:padding="12dp">
 
     <TextView
+        android:id="@+id/widget_title"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:ellipsize="end"
@@ -17,33 +19,44 @@
         android:textSize="13sp"
         android:textStyle="bold" />
 
+    <TextView
+        android:id="@+id/widget_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:text="@string/task_state_idle"
+        android:textColor="#B3FFFFFF"
+        android:textSize="12sp" />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
         android:orientation="horizontal">
 
-        <Button
+        <TextView
             android:id="@+id/widget_new_chat"
             android:layout_width="0dp"
-            android:layout_height="40dp"
+            android:layout_height="36dp"
             android:layout_marginEnd="6dp"
             android:layout_weight="1"
             android:background="@drawable/leo_home_widget_btn"
+            android:gravity="center"
             android:text="@string/shortcut_new_chat_short"
-            android:textAllCaps="false"
             android:textColor="#FF111111"
             android:textSize="13sp" />
 
-        <Button
+        <TextView
             android:id="@+id/widget_voice_chat"
             android:layout_width="0dp"
-            android:layout_height="40dp"
+            android:layout_height="36dp"
             android:layout_marginStart="6dp"
             android:layout_weight="1"
             android:background="@drawable/leo_home_widget_btn"
+            android:gravity="center"
             android:text="@string/shortcut_voice_chat_short"
-            android:textAllCaps="false"
             android:textColor="#FF111111"
             android:textSize="13sp" />
     </LinearLayout>

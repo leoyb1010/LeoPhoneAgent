@@ -667,15 +667,21 @@ class AgentForegroundService : Service() {
         val seconds = elapsedSeconds % 60
         val timeString = String.format("%d:%02d", minutes, seconds)
 
-        val mainIntent = Intent(this, Class.forName("com.leoyuan.leophoneagent.MainActivity")).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        val pendingIntent = PendingIntent.getActivity(
+        val sessionId = SessionActivityTracker.currentSessionId.value
+        val openUri = sessionId?.let { com.leoyuan.leophoneagent.deeplink.SystemEntryParser.sessionUri(it) }
+            ?: com.leoyuan.leophoneagent.deeplink.SystemEntryParser.NEW_CHAT_URI
+        val pendingIntent = com.leoyuan.leophoneagent.deeplink.SystemEntryIntents.activity(
             this,
-            0,
-            mainIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            openUri,
+            20,
         )
+        val continueIntent = sessionId?.let {
+            com.leoyuan.leophoneagent.deeplink.SystemEntryIntents.activity(
+                this,
+                com.leoyuan.leophoneagent.deeplink.SystemEntryParser.resumeUri(it),
+                21,
+            )
+        }
 
         val stopIntent = Intent(this, AgentForegroundService::class.java).apply {
             action = ACTION_STOP
@@ -740,6 +746,7 @@ class AgentForegroundService : Service() {
                 isToolRunning = isToolRunning,
                 contentIntent = pendingIntent,
                 stopIntent = stopPendingIntent,
+                continueIntent = continueIntent,
             )
         }
 
@@ -754,9 +761,13 @@ class AgentForegroundService : Service() {
             .setContentIntent(pendingIntent)
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
-                getString(R.string.bg_service_stop_action),
+                getString(R.string.notif_action_pause),
                 stopPendingIntent,
             )
+        continueIntent?.let {
+            builder.addAction(0, getString(R.string.notif_action_continue), it)
+        }
+        builder.addAction(0, getString(R.string.notif_action_open), pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
 
@@ -790,6 +801,7 @@ class AgentForegroundService : Service() {
         isToolRunning: Boolean,
         contentIntent: PendingIntent,
         stopIntent: PendingIntent,
+        continueIntent: PendingIntent? = null,
     ): Notification {
         // [T-android-dynamic-island] A ProgressStyle only counts as a valid
         // *promotable* style when it carries at least one progress segment with
@@ -806,8 +818,13 @@ class AgentForegroundService : Service() {
 
         val stopAction = Notification.Action.Builder(
             Icon.createWithResource(this, android.R.drawable.ic_menu_close_clear_cancel),
-            getString(R.string.bg_service_stop_action),
+            getString(R.string.notif_action_pause),
             stopIntent,
+        ).build()
+        val openAction = Notification.Action.Builder(
+            Icon.createWithResource(this, android.R.drawable.ic_menu_more),
+            getString(R.string.notif_action_open),
+            contentIntent,
         ).build()
 
         val builder = Notification.Builder(this, CHANNEL_ID)
@@ -820,10 +837,18 @@ class AgentForegroundService : Service() {
             .setOnlyAlertOnce(true)
             .setContentIntent(contentIntent)
             .addAction(stopAction)
-            // Explicitly NOT colorized and NOT a group summary — both would
-            // disqualify the notification from promotion.
+            .addAction(openAction)
             .setColorized(false)
             .setShortCriticalText(shortCritical)
+        continueIntent?.let {
+            builder.addAction(
+                Notification.Action.Builder(
+                    Icon.createWithResource(this, android.R.drawable.ic_media_play),
+                    getString(R.string.notif_action_continue),
+                    it,
+                ).build(),
+            )
+        }
 
         // [T-android-dynamic-island] Request the always-visible "dynamic island"
         // promotion. The public builder method `setRequestPromotedOngoing(true)`

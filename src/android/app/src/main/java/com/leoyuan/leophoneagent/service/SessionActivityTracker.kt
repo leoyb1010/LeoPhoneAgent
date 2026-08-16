@@ -273,6 +273,10 @@ object SessionActivityTracker {
         _lastToolName.value = null
         _lastToolTitle.value = null
         _lastToolStatus.value = null
+        runCatching {
+            com.leoyuan.leophoneagent.task.AgentRunStore.markRunning(sessionId)
+            appContext?.let { com.leoyuan.leophoneagent.task.TaskSurfaceStore.refreshFromStore(it) }
+        }
         Log.d(TAG, "Session activated: $sessionId (total: ${_activeSessions.value.size})")
 
         if (wasIdle) {
@@ -324,6 +328,16 @@ object SessionActivityTracker {
         // Skip if the session was never marked active (defensive — keeps
         // the "completed" semantic honest).
         if (wasActive) {
+            runCatching {
+                if (wasError) {
+                    com.leoyuan.leophoneagent.task.AgentRunStore.markFailed(sessionId)
+                } else if (com.leoyuan.leophoneagent.task.AgentRunStore.current(sessionId)
+                        ?.isResumable != true
+                ) {
+                    com.leoyuan.leophoneagent.task.AgentRunStore.markCompleted(sessionId)
+                }
+                appContext?.let { com.leoyuan.leophoneagent.task.TaskSurfaceStore.refreshFromStore(it) }
+            }
             completionListener?.invoke(sessionId, wasError)
         }
     }

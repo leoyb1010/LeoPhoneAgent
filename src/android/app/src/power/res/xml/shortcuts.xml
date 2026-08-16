@@ -1,9 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   T-android-app-icon-shortcuts: app-icon long-press quick actions.
-  Mirrors iOS Shared/QuickActionRouter.swift 1:1 (newChat / voiceChat / cameraChat).
-  Each shortcut launches MainActivity via a minis://action/<name> deep-link
-  parsed by DeepLinkHandler → DeepLinkAction.{NewChat,NewVoiceChat,NewCameraChat}.
+  targetPackage must match Power's applicationId (suffix .power).
 -->
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
     <shortcut
@@ -14,7 +12,7 @@
         android:shortcutLongLabel="@string/shortcut_new_chat_long">
         <intent
             android:action="android.intent.action.VIEW"
-            android:targetPackage="com.leoyuan.leophoneagent"
+            android:targetPackage="com.leoyuan.leophoneagent.power"
             android:targetClass="com.leoyuan.leophoneagent.MainActivity"
             android:data="minis://action/new_chat" />
         <categories android:name="android.shortcut.conversation" />
@@ -27,7 +25,7 @@
         android:shortcutLongLabel="@string/shortcut_voice_chat_long">
         <intent
             android:action="android.intent.action.VIEW"
-            android:targetPackage="com.leoyuan.leophoneagent"
+            android:targetPackage="com.leoyuan.leophoneagent.power"
             android:targetClass="com.leoyuan.leophoneagent.MainActivity"
             android:data="minis://action/voice_chat" />
         <categories android:name="android.shortcut.conversation" />
@@ -40,9 +38,22 @@
         android:shortcutLongLabel="@string/shortcut_camera_chat_long">
         <intent
             android:action="android.intent.action.VIEW"
-            android:targetPackage="com.leoyuan.leophoneagent"
+            android:targetPackage="com.leoyuan.leophoneagent.power"
             android:targetClass="com.leoyuan.leophoneagent.MainActivity"
             android:data="minis://action/camera_chat" />
+        <categories android:name="android.shortcut.conversation" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="last_session"
+        android:enabled="true"
+        android:icon="@mipmap/ic_shortcut_new_chat"
+        android:shortcutShortLabel="@string/shortcut_last_session_short"
+        android:shortcutLongLabel="@string/shortcut_last_session_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.leoyuan.leophoneagent.power"
+            android:targetClass="com.leoyuan.leophoneagent.MainActivity"
+            android:data="minis://action/last_session" />
         <categories android:name="android.shortcut.conversation" />
     </shortcut>
 </shortcuts>

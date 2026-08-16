@@ -440,6 +440,20 @@ class MinisApp : Application(), ImageLoaderFactory {
         // displayed in the session-list cell corner. Init early so the
         // session list can read persisted PAUSED badges on first compose.
         com.leoyuan.leophoneagent.service.SessionBadgeStore.init(this)
+        com.leoyuan.leophoneagent.task.AgentRunStore.init(this)
+        com.leoyuan.leophoneagent.task.TaskSurfaceStore.init(this)
+        val recoveredRuns = runCatching {
+            com.leoyuan.leophoneagent.task.AgentRunStore.recoverInterrupted()
+        }.getOrElse { emptyList() }
+        recoveredRuns.forEach { rec ->
+            com.leoyuan.leophoneagent.service.SessionBadgeStore.push(
+                rec.sessionId,
+                com.leoyuan.leophoneagent.service.SessionBadgeStore.SessionBadgeState.PAUSED,
+            )
+        }
+        com.leoyuan.leophoneagent.task.TaskSurfaceStore.refreshFromStore(this)
+        runCatching { com.leoyuan.leophoneagent.shortcut.AppShortcutPublisher.refresh(this) }
+        runCatching { com.leoyuan.leophoneagent.scheduled.ScheduledTaskReconcile.enqueue(this) }
 
         // [T-android-session-paused-badge-hardkill] Reconcile PAUSED badges
         // against the DB's interrupted-session set. The lifecycle-callback push
@@ -471,6 +485,16 @@ class MinisApp : Application(), ImageLoaderFactory {
         )
         SessionActivityTracker.setCompletionListener { sessionId, isError ->
             backgroundTaskNotifier.notifyTaskCompleted(sessionId, isError)
+            runCatching {
+                if (isError) {
+                    com.leoyuan.leophoneagent.task.AgentRunStore.markFailed(sessionId)
+                } else if (com.leoyuan.leophoneagent.task.AgentRunStore.current(sessionId)
+                        ?.isResumable != true
+                ) {
+                    com.leoyuan.leophoneagent.task.AgentRunStore.markCompleted(sessionId)
+                }
+                com.leoyuan.leophoneagent.task.TaskSurfaceStore.refreshFromStore(this)
+            }
         }
 
         // [T-android-config-confirm-timeout] Wire the config-confirm background

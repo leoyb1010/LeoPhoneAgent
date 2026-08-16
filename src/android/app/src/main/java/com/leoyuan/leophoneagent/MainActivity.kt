@@ -30,10 +30,11 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.rememberNavController
-import com.leoyuan.leophoneagent.assistant.AssistIntents
 import com.leoyuan.leophoneagent.deeplink.DeepLinkAction
 import com.leoyuan.leophoneagent.deeplink.DeepLinkCoordinator
 import com.leoyuan.leophoneagent.deeplink.DeepLinkHandler
+import com.leoyuan.leophoneagent.deeplink.SystemEntry
+import com.leoyuan.leophoneagent.deeplink.SystemEntryParser
 import com.leoyuan.leophoneagent.logging.AppLogger
 import com.leoyuan.leophoneagent.service.SessionActivityTracker
 import com.leoyuan.leophoneagent.ui.navigation.AppNavigation
@@ -335,19 +336,7 @@ class MainActivity : ComponentActivity() {
         // while inside a chat, synthesise an OpenSession deep-link so
         // the navigation stack lands on that chat instead of the
         // sessions list. T166.
-        val assistLaunch = AssistIntents.fromIntent(intent)
-        if (assistLaunch != null) {
-            DeepLinkCoordinator.setPendingAssist(assistLaunch)
-        }
-        val explicitDeepLink = DeepLinkHandler.parse(intent?.data)
-        val launchDeepLink = when {
-            assistLaunch != null && explicitDeepLink is DeepLinkAction.Unknown ->
-                DeepLinkAction.NewChat
-            explicitDeepLink !is DeepLinkAction.Unknown -> explicitDeepLink
-            else -> restoredChatSessionId
-                ?.let { DeepLinkAction.OpenSession(it) }
-                ?: DeepLinkAction.Unknown
-        }
+        val launchDeepLink = resolveLaunchDeepLink(intent, restoredChatSessionId)
 
         setContent {
             val prefs = remember { getAppearancePrefs(this) }
@@ -418,6 +407,8 @@ class MainActivity : ComponentActivity() {
                                 }
                                 if (sid != null) {
                                     SessionActivityTracker.setPresent(sid)
+                                    com.leoyuan.leophoneagent.task.AgentRunStore.rememberLastSession(sid)
+                                    com.leoyuan.leophoneagent.shortcut.AppShortcutPublisher.refresh(this@MainActivity)
                                 }
                                 currentChatSessionId = sid
                             }
@@ -482,7 +473,7 @@ class MainActivity : ComponentActivity() {
      */
     override fun onStart() {
         super.onStart()
-        com.leoyuan.leophoneagent.assistant.ScreenCaptureNotice.register(this)
+        runCatching { com.leoyuan.leophoneagent.assistant.ScreenCaptureNotice.register(this) }
         if (!hasResumedFromBackground) {
             hasResumedFromBackground = true
             return
@@ -498,7 +489,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onStop() {
-        com.leoyuan.leophoneagent.assistant.ScreenCaptureNotice.unregister(this)
+        runCatching { com.leoyuan.leophoneagent.assistant.ScreenCaptureNotice.unregister(this) }
         super.onStop()
     }
 
@@ -553,17 +544,80 @@ class MainActivity : ComponentActivity() {
         if (intent.getBooleanExtra("shared_content", false)) {
             com.leoyuan.leophoneagent.share.ShareCoordinator.processPendingShare(this)
         }
-        val assistLaunch = AssistIntents.fromIntent(intent)
-        if (assistLaunch != null) {
-            DeepLinkCoordinator.setPendingAssist(assistLaunch)
-            handleDeepLink(Uri.parse(AssistIntents.NEW_CHAT_URI))
-            return
+        applySystemEntry(intent)
+    }
+
+    private fun resolveLaunchDeepLink(intent: Intent?, restoredChatSessionId: String?): DeepLinkAction {
+        return try {
+            val extras = intentExtras(intent)
+            val entry = SystemEntryParser.resolve(intent?.action, intent?.data?.toString(), extras)
+            if (entry is SystemEntry.Assist) {
+                DeepLinkCoordinator.setPendingAssist(entry.sourcePackage, entry.screenshotPath)
+            }
+            if (entry is SystemEntry.PauseSession) {
+                com.leoyuan.leophoneagent.service.SessionActivityTracker.cancelAllActiveStreams()
+            }
+            val mapped = SystemEntryParser.toDeepLinkAction(entry)
+            when {
+                mapped !is DeepLinkAction.Unknown -> mapped
+                else -> {
+                    val explicit = DeepLinkHandler.parse(intent?.data)
+                    if (explicit !is DeepLinkAction.Unknown) explicit
+                    else restoredChatSessionId?.let { DeepLinkAction.OpenSession(it) }
+                        ?: DeepLinkAction.Unknown
+                }
+            }
+        } catch (t: Throwable) {
+            AppLogger.warning("MainActivity", "resolveLaunchDeepLink failed: ${t.message}")
+            DeepLinkAction.Unknown
         }
-        handleDeepLink(intent.data)
+    }
+
+    private fun applySystemEntry(intent: Intent?) {
+        try {
+            val extras = intentExtras(intent)
+            val entry = SystemEntryParser.resolve(intent?.action, intent?.data?.toString(), extras)
+            when (entry) {
+                is SystemEntry.Assist -> {
+                    DeepLinkCoordinator.setPendingAssist(entry.sourcePackage, entry.screenshotPath)
+                    handleDeepLinkAction(DeepLinkAction.NewChat)
+                }
+                is SystemEntry.PauseSession -> {
+                    com.leoyuan.leophoneagent.service.SessionActivityTracker.cancelAllActiveStreams()
+                    handleDeepLinkAction(DeepLinkAction.Unknown)
+                }
+                SystemEntry.Home, SystemEntry.Reconcile -> handleDeepLink(intent?.data)
+                else -> handleDeepLinkAction(SystemEntryParser.toDeepLinkAction(entry))
+            }
+        } catch (t: Throwable) {
+            AppLogger.warning("MainActivity", "applySystemEntry failed: ${t.message}")
+            handleDeepLink(intent?.data)
+        }
+    }
+
+    private fun intentExtras(intent: Intent?): Map<String, String?> {
+        if (intent == null) return emptyMap()
+        return buildMap {
+            intent.getStringExtra(SystemEntryParser.EXTRA_SOURCE_PACKAGE)?.let {
+                put(SystemEntryParser.EXTRA_SOURCE_PACKAGE, it)
+            }
+            intent.getStringExtra(SystemEntryParser.EXTRA_ASSIST_PACKAGE)?.let {
+                put(SystemEntryParser.EXTRA_ASSIST_PACKAGE, it)
+            }
+            intent.getStringExtra(SystemEntryParser.EXTRA_SCREENSHOT_PATH)?.let {
+                put(SystemEntryParser.EXTRA_SCREENSHOT_PATH, it)
+            }
+            intent.getStringExtra(SystemEntryParser.EXTRA_SESSION_ID)?.let {
+                put(SystemEntryParser.EXTRA_SESSION_ID, it)
+            }
+        }
     }
 
     private fun handleDeepLink(uri: Uri?) {
-        val action = DeepLinkHandler.parse(uri)
+        handleDeepLinkAction(DeepLinkHandler.parse(uri))
+    }
+
+    private fun handleDeepLinkAction(action: DeepLinkAction) {
         val nav = navController ?: return
         when (action) {
             is DeepLinkAction.OpenTerminal -> {
@@ -621,6 +675,19 @@ class MainActivity : ComponentActivity() {
                     popUpTo(Routes.SESSION_LIST) { inclusive = false }
                     launchSingleTop = true
                 }
+            }
+            is DeepLinkAction.LastSession -> {
+                val sid = com.leoyuan.leophoneagent.task.AgentRunStore.lastSessionId()
+                if (sid != null) {
+                    handleDeepLinkAction(DeepLinkAction.OpenSession(sid))
+                }
+            }
+            is DeepLinkAction.ResumeSession -> {
+                DeepLinkCoordinator.setPendingChatAction(DeepLinkCoordinator.ChatAction.RESUME)
+                handleDeepLinkAction(DeepLinkAction.OpenSession(action.sessionId))
+            }
+            is DeepLinkAction.PauseSession -> {
+                com.leoyuan.leophoneagent.service.SessionActivityTracker.cancelAllActiveStreams()
             }
             is DeepLinkAction.OpenAlarmList -> {
                 // T297: minis://views/alarm now opens the system Clock app
