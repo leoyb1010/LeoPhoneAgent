@@ -122,8 +122,6 @@ fun showChatTitleEnabled(context: Context): Boolean =
 fun autoExpandThinkingEnabled(context: Context): Boolean =
     getAppearancePrefs(context).getBoolean(KEY_AUTO_EXPAND_THINKING, true)
 
-/** Font scale levels matching iOS: XS(-2) Small(-1) Default(0) Medium(1) Large(2) XL(3) */
-private val fontScaleLabels = listOf("XS", "Small", "Default", "Medium", "Large", "XL")
 private val fontScaleValues = listOf(-2, -1, 0, 1, 2, 3)
 private val fontScaleMultipliers = listOf(0.88f, 0.94f, 1.0f, 1.06f, 1.12f, 1.21f)
 
@@ -652,7 +650,17 @@ private fun FontScaleSliderRow(
 ) {
     val idx = fontScaleValues.indexOf(level).coerceIn(0, fontScaleValues.lastIndex)
     var sliderPos by remember(level) { mutableFloatStateOf(idx.toFloat()) }
-    val currentLabel = fontScaleLabels.getOrElse(sliderPos.roundToInt()) { "Default" }
+    val fontScaleLabels = listOf(
+        stringResource(R.string.appearance_font_xs),
+        stringResource(R.string.appearance_font_small),
+        stringResource(R.string.appearance_font_default),
+        stringResource(R.string.appearance_font_medium),
+        stringResource(R.string.appearance_font_large),
+        stringResource(R.string.appearance_font_xl),
+    )
+    val currentLabel = fontScaleLabels.getOrElse(sliderPos.roundToInt()) {
+        stringResource(R.string.appearance_font_default)
+    }
 
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         Row(

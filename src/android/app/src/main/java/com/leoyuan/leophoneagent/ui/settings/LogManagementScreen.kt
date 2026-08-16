@@ -270,8 +270,8 @@ private fun LogsBody(
         // ── Crash Logs (T283) — only show when present ──────────────────
         if (crashLogs.isNotEmpty()) {
             SettingsSection(
-                header = "Crash Logs",
-                footer = "Most recent ${crashLogs.size} crash report(s) (Java/Kotlin + native).",
+                header = stringResource(R.string.log_section_crash),
+                footer = stringResource(R.string.log_section_crash_footer, crashLogs.size),
             ) {
                 crashLogs.forEachIndexed { index, meta ->
                     SettingsValueRow(
@@ -559,4 +559,3 @@ private fun shareLogFile(context: Context, file: File) {
         context.startActivity(Intent.createChooser(intent, context.getString(R.string.log_share_chooser)))
     }
 }
-

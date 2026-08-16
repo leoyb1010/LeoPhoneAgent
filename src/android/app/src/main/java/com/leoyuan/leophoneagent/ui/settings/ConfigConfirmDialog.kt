@@ -33,10 +33,12 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.DialogProperties
+import com.leoyuan.leophoneagent.R
 import com.leoyuan.leophoneagent.config.ConfigRisk
 import com.leoyuan.leophoneagent.config.confirm.ConfigConfirmationGate
 import com.leoyuan.leophoneagent.config.confirm.PendingConfigChange
@@ -81,7 +83,11 @@ private fun ConfigConfirmDialog(change: PendingConfigChange) {
         ),
         title = {
             Text(
-                if (workingItems.size > 1) "Confirm ${workingItems.size} changes" else "Confirm change"
+                if (workingItems.size > 1) {
+                    stringResource(R.string.config_confirm_many, workingItems.size)
+                } else {
+                    stringResource(R.string.config_confirm_single)
+                }
             )
         },
         text = {
@@ -113,7 +119,9 @@ private fun ConfigConfirmDialog(change: PendingConfigChange) {
             }
         },
         confirmButton = {
-            val applyText = if (approvedCount == 0) "Reject All" else "Apply"
+            val applyText = stringResource(
+                if (approvedCount == 0) R.string.config_confirm_reject_all else R.string.config_confirm_apply,
+            )
             MinisTextButton(
                 onClick = { ConfigConfirmationGate.userApprove(workingItems.toList()) },
                 enabled = workingItems.isNotEmpty(),
@@ -123,7 +131,7 @@ private fun ConfigConfirmDialog(change: PendingConfigChange) {
         },
         dismissButton = {
             MinisTextButton(onClick = { ConfigConfirmationGate.userReject() }) {
-                Text("Cancel")
+                Text(stringResource(R.string.common_cancel))
             }
         },
     )

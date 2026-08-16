@@ -140,7 +140,7 @@ fun MemoryManagementScreen(
     if (deleteFileName != null) {
         AlertDialog(
             onDismissRequest = { deleteFileName = null },
-            title = { Text("Delete ${deleteFileName}?") },
+            title = { Text(stringResource(R.string.common_delete_named, deleteFileName ?: "")) },
             text = { Text(stringResource(R.string.memory_delete_confirm_text)) },
             confirmButton = {
                 MinisTextButton(onClick = {
@@ -284,7 +284,7 @@ fun MemoryFileEditScreen(
                             saveError = e.message
                         }
                     }) {
-                        Text("Save")
+                        Text(stringResource(R.string.common_save))
                     }
                 },
             )

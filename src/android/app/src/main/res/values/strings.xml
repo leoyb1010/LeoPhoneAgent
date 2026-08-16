@@ -1535,4 +1535,27 @@
     <string name="agent_home_prompt_phone">Help me complete this task on my phone: </string>
     <string name="agent_home_prompt_research">Research this topic, compare reliable sources, and give me a concise conclusion: </string>
     <string name="agent_home_prompt_automate">Create a safe, repeatable automation for: </string>
+    <string name="appearance_font_xs">XS</string>
+    <string name="appearance_font_small">Small</string>
+    <string name="appearance_font_default">Default</string>
+    <string name="appearance_font_medium">Medium</string>
+    <string name="appearance_font_large">Large</string>
+    <string name="appearance_font_xl">XL</string>
+    <string name="common_delete_named">Delete %1$s?</string>
+    <string name="common_skill">skill</string>
+    <string name="common_variable">variable</string>
+    <string name="log_section_crash">Crash Logs</string>
+    <string name="log_section_crash_footer">Most recent %1$d crash report(s) (Java/Kotlin + native).</string>
+    <string name="provider_image_generation">Image Generation</string>
+    <string name="provider_image_auto">Auto</string>
+    <string name="provider_image_images_api">Images API</string>
+    <string name="provider_image_chat">Chat</string>
+    <string name="provider_image_auto_resolved">Auto: tries /v1/images/generations first, falls back to /v1/chat/completions. Last successful endpoint: %1$s.</string>
+    <string name="provider_image_auto_footer">Auto: tries /v1/images/generations first, falls back to /v1/chat/completions. Caches the working endpoint after the first call.</string>
+    <string name="provider_image_images_footer">Always use /v1/images/generations.</string>
+    <string name="provider_image_chat_footer">Always use /v1/chat/completions (multimodal output).</string>
+    <string name="config_confirm_many">Confirm %1$d changes</string>
+    <string name="config_confirm_single">Confirm change</string>
+    <string name="config_confirm_reject_all">Reject All</string>
+    <string name="config_confirm_apply">Apply</string>
 </resources>

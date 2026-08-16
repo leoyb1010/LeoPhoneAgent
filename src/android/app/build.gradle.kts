@@ -272,3 +272,31 @@ dependencies {
     androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     androidTestImplementation("junit:junit:4.13.2")
 }
+
+val verifyChineseResources by tasks.registering {
+    group = "verification"
+    description = "Fails when a default Android string resource has no Simplified Chinese entry."
+    val defaults = file("src/main/res/values/strings.xml")
+    val chinese = file("src/main/res/values-zh/strings.xml")
+    inputs.files(defaults, chinese)
+    doLast {
+        fun names(source: File): Set<String> {
+            val document = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+                .newDocumentBuilder()
+                .parse(source)
+            return (0 until document.documentElement.childNodes.length)
+                .map { document.documentElement.childNodes.item(it) }
+                .filterIsInstance<org.w3c.dom.Element>()
+                .mapNotNull { it.getAttribute("name").takeIf(String::isNotBlank) }
+                .toSet()
+        }
+        val missing = names(defaults) - names(chinese)
+        check(missing.isEmpty()) {
+            "Missing Simplified Chinese resources: ${missing.sorted().joinToString()}"
+        }
+    }
+}
+
+tasks.matching { it.name == "check" }.configureEach {
+    dependsOn(verifyChineseResources)
+}

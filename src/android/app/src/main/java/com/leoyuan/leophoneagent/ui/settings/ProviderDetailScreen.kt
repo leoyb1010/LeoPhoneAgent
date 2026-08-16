@@ -405,21 +405,21 @@ fun ProviderDetailScreen(
         if (instance.supportsImageEndpointSetting) {
             val mode = instance.imageEndpointMode
             SettingsSection(
-                header = "Image Generation",
+                header = stringResource(R.string.provider_image_generation),
                 footer = when (mode) {
                     com.leoyuan.leophoneagent.data.model.ImageEndpointMode.auto ->
                         if (instance.imageEndpointResolved != null) {
                             val resolved = if (instance.imageEndpointResolved ==
                                 com.leoyuan.leophoneagent.data.model.ImageEndpointMode.imagesGenerations
                             ) "/v1/images/generations" else "/v1/chat/completions"
-                            "Auto: tries /v1/images/generations first, falls back to /v1/chat/completions. Last successful endpoint: $resolved."
+                            stringResource(R.string.provider_image_auto_resolved, resolved)
                         } else {
-                            "Auto: tries /v1/images/generations first, falls back to /v1/chat/completions. Caches the working endpoint after the first call."
+                            stringResource(R.string.provider_image_auto_footer)
                         }
                     com.leoyuan.leophoneagent.data.model.ImageEndpointMode.imagesGenerations ->
-                        "Always use /v1/images/generations."
+                        stringResource(R.string.provider_image_images_footer)
                     com.leoyuan.leophoneagent.data.model.ImageEndpointMode.chatCompletions ->
-                        "Always use /v1/chat/completions (multimodal output)."
+                        stringResource(R.string.provider_image_chat_footer)
                 },
             ) {
                 SettingsCardBlock {
@@ -436,7 +436,7 @@ fun ProviderDetailScreen(
                                 }
                             },
                             shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
-                        ) { Text("Auto") }
+                        ) { Text(stringResource(R.string.provider_image_auto)) }
                         SegmentedButton(
                             selected = mode == com.leoyuan.leophoneagent.data.model.ImageEndpointMode.imagesGenerations,
                             onClick = {
@@ -451,7 +451,7 @@ fun ProviderDetailScreen(
                                 }
                             },
                             shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
-                        ) { Text("Images API") }
+                        ) { Text(stringResource(R.string.provider_image_images_api)) }
                         SegmentedButton(
                             selected = mode == com.leoyuan.leophoneagent.data.model.ImageEndpointMode.chatCompletions,
                             onClick = {
@@ -465,7 +465,7 @@ fun ProviderDetailScreen(
                                 }
                             },
                             shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
-                        ) { Text("Chat") }
+                        ) { Text(stringResource(R.string.provider_image_chat)) }
                     }
                 }
             }

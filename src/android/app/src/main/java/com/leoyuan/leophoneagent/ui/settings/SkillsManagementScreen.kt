@@ -362,13 +362,15 @@ fun SkillsManagementScreen(
         val skill = skills.find { it.id == deleteSkillId }
         AlertDialog(
             onDismissRequest = { deleteSkillId = null },
-            title = { Text("Delete ${skill?.name ?: "skill"}?") },
+            title = {
+                Text(stringResource(R.string.common_delete_named, skill?.name ?: stringResource(R.string.common_skill)))
+            },
             text = { Text(stringResource(R.string.skill_delete_confirm_text)) },
             confirmButton = {
                 MinisTextButton(onClick = {
                     deleteSkillId?.let { skillRepository.delete(it) }
                     deleteSkillId = null
-                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.common_delete), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 MinisTextButton(onClick = { deleteSkillId = null }) { Text(stringResource(R.string.common_cancel)) }
@@ -828,7 +830,7 @@ fun SkillDetailScreen(
             val preview = previewLines.joinToString("\n") + if (hasMore) "\n…" else ""
 
             if (preview.isNotEmpty()) {
-                DetailSection(header = "Description") {
+                DetailSection(header = stringResource(R.string.skill_detail_section_description)) {
                     Column(modifier = Modifier.padding(14.dp)) {
                         MarkdownText(
                             markdown = preview,
@@ -847,7 +849,7 @@ fun SkillDetailScreen(
                 skillRepository.listSkillFiles(skill.id)
                     .ifEmpty { listOf("SKILL.md") }
             }
-            DetailSection(header = "Files") {
+            DetailSection(header = stringResource(R.string.skill_detail_section_files)) {
                 skillFiles.forEachIndexed { index, relativePath ->
                     if (index > 0) DetailDivider()
                     DetailRow(clickable = true, onClick = { onFileClick(skill.id, relativePath) }) {
@@ -889,7 +891,7 @@ fun SkillDetailScreen(
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
-            title = { Text("Delete ${skill.name}?") },
+            title = { Text(stringResource(R.string.common_delete_named, skill.name)) },
             text = { Text(stringResource(R.string.skill_delete_confirm_text)) },
             confirmButton = {
                 MinisTextButton(onClick = {
@@ -897,7 +899,7 @@ fun SkillDetailScreen(
                     skillRepository.delete(skill.id)
                     showDeleteDialog = false
                     onBack()
-                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(R.string.common_delete), color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = {
                 MinisTextButton(onClick = { showDeleteDialog = false }) { Text(stringResource(R.string.common_cancel)) }
