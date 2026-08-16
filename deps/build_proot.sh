@@ -12,7 +12,7 @@ set -e
 # Repository: https://github.com/OpenMinis/proot (fork of termux/proot)
 #
 # Prerequisites:
-#   - Android NDK r28+ (default path: ~/Library/Android/sdk/ndk/28.0.12433566,
+#   - Android NDK 27.0.12077973 (or another compatible NDK,
 #     or set $ANDROID_NDK_HOME)
 #   - curl, tar, make, awk, sed
 #
