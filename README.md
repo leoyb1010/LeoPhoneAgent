@@ -1,7 +1,7 @@
 # LeoPhoneAgent
 
 [![iOS](https://img.shields.io/badge/iOS-1.23.1%20(93)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
-[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.4-3DDC84.svg)](CHANGELOG.md#android-v100-alpha4---2026-08-16)
+[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.5-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.5)
 [![macOS](https://img.shields.io/badge/macOS-1.67.1-7C3AED.svg)](src/mac/leocodebox/package.json)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Mobile](https://img.shields.io/badge/mobile-iOS%20%2B%20Android-black.svg)](#系统架构)
@@ -26,22 +26,25 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
 > 同一台手机上同时安装。Power 版只有在用户完成产品内授权以及 Android
 > 无障碍/Shizuku 系统授权后，才会开放更深的跨应用操控。
 
-- 当前开发版本是 `1.0.0-alpha.4`（versionCode `100004`）。本仓库不伪造未发布 APK 的 SHA，Release 附件等指挥官挂上后再用。
-- 上一版已发布附件仍可作对照：[Standard alpha.3](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.3/LeoPhoneAgent-Standard-1.0.0-alpha.3.apk) · [Power alpha.3](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.3/LeoPhoneAgent-Power-1.0.0-alpha.3.apk)
-- [查看本次更新记录](CHANGELOG.md#android-v100-alpha4---2026-08-16)
+- [下载 Standard alpha.5](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.5/LeoPhoneAgent-Standard-1.0.0-alpha.5.apk)
+- [下载 Power alpha.5](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.5/LeoPhoneAgent-Power-1.0.0-alpha.5.apk)
+- [查看本次更新记录](CHANGELOG.md#android-v100-alpha5---2026-08-17)
 - [查看完整五轮审计与交付报告](docs/ANDROID_DELIVERY_1.0.0_ALPHA1.md)
 
 SHA-256：
 
 ```text
-Standard  7406b6d0971997cfa28629f191064a693ca78974da57e4c5f2be322d9c960f8b
-Power     378fe8ae3f44a30d5aab9c5039874d0aaa212cdd29e18b384d2b19c4a5761318
+Standard  7213d4f28a6a7744445761d5680bd149966a7675111edfc4e810835359111ec0
+Power     5292f93fb8b5aa169e37ba964f89ab5091cdd95f9de62910117deb66cc60486c
 ```
 
 本次公开附件使用显式开启的个人 Alpha 调试证书签名，不应作为应用商店的
 正式升级证书链。正式分发前仍需换成长期托管的发行 keystore；因此从本次
 Alpha 切换到正式版时可能需要先卸载旧包。APK 内已附 GPL、第三方许可、
 隐私说明与源码提供说明。
+个人 Alpha 升级链的证书 SHA-256 固定为
+`f325bc65f4f6ba456938c7d88c96ad2ef418197d1204cfd2bd881aa145bf11df`；
+发布前用 `scripts/verify_android_alpha_release.sh` 强制校验。
 
 ## 系统架构
 
@@ -105,7 +108,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 Android 版本
 
-- 开发版本：`1.0.0-alpha.4`（versionCode `100004`），`minSdk 26`、`targetSdk 35`、`compileSdk 36`、仅 ARM64
+- 开发版本：`1.0.0-alpha.5`（versionCode `100005`），`minSdk 26`、`targetSdk 35`、`compileSdk 36`、仅 ARM64
 - Standard 包名：`com.leoyuan.leophoneagent`
 - Power 包名：`com.leoyuan.leophoneagent.power`
 - 两个版本共享本机 Agent、Provider、Skills、MCP、Memory、PRoot 与浏览器底座；

@@ -4,6 +4,25 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## Android v1.0.0-alpha.5 - 2026-08-17
+
+### 紧急修复
+
+- 修复 alpha.4 无法覆盖安装：alpha.4 Release 附件误用了不同调试证书，Android 现场返回 `INSTALL_FAILED_UPDATE_INCOMPATIBLE`。alpha.5 恢复与 alpha.1–alpha.3 相同的个人 Alpha 签名链，可直接从 alpha.3 覆盖安装。
+- 完整携带 alpha.4 的助手闪退修复：VoiceInteraction 不再抢占会话窗口，截图与系统入口异常会降级而不是崩溃主进程。
+- 修正 README 中与 alpha.4 Release 附件不一致的 SHA-256，不再把未闭环的产物当成可安装版。
+
+### 发布门禁
+
+- 新增 Android Alpha APK 校验脚本，同时核对 Standard/Power 包名、versionCode、versionName、APK 签名有效性和预期证书指纹。
+- 发布前必须在已安装 alpha.3 的 Fold8 模拟器上用 `adb install -r` 通过 Standard/Power 覆盖安装，并做冷启动闪退检查。
+
+### 验证
+
+- Standard / Power 中文资源门禁、JVM 测试、Release lint 和 R8 双包构建一次通过；lint `0 errors`。
+- Fold8 API 35 模拟器从 alpha.3 原地升级 Standard / Power 均返回 `Success`，安装后为 versionCode `100005`。
+- Standard / Power 普通冷启动与 `ACTION_ASSIST` 冷启动均为 `Status: ok`，进程存活，Logcat 无 `FATAL EXCEPTION`。
+
 ## Android v1.0.0-alpha.4 - 2026-08-16
 
 ### 闪退根因
