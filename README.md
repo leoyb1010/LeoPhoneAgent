@@ -1,7 +1,7 @@
 # LeoPhoneAgent
 
 [![iOS](https://img.shields.io/badge/iOS-1.23.1%20(93)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
-[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.4-3DDC84.svg)](CHANGELOG.md#android-v100-alpha4---2026-08-16)
+[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.4-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.4)
 [![macOS](https://img.shields.io/badge/macOS-1.67.1-7C3AED.svg)](src/mac/leocodebox/package.json)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Mobile](https://img.shields.io/badge/mobile-iOS%20%2B%20Android-black.svg)](#系统架构)
@@ -26,16 +26,16 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
 > 同一台手机上同时安装。Power 版只有在用户完成产品内授权以及 Android
 > 无障碍/Shizuku 系统授权后，才会开放更深的跨应用操控。
 
-- 当前开发版本是 `1.0.0-alpha.4`（versionCode `100004`）。本仓库不伪造未发布 APK 的 SHA，Release 附件等指挥官挂上后再用。
-- 上一版已发布附件仍可作对照：[Standard alpha.3](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.3/LeoPhoneAgent-Standard-1.0.0-alpha.3.apk) · [Power alpha.3](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.3/LeoPhoneAgent-Power-1.0.0-alpha.3.apk)
+- 当前版本是 `1.0.0-alpha.4`（versionCode `100004`），已发布 GitHub Release：[android-v1.0.0-alpha.4](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.4)
+- [Standard 1.0.0-alpha.4](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.4/LeoPhoneAgent-Standard-1.0.0-alpha.4.apk) · [Power 1.0.0-alpha.4](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.4/LeoPhoneAgent-Power-1.0.0-alpha.4.apk)
 - [查看本次更新记录](CHANGELOG.md#android-v100-alpha4---2026-08-16)
 - [查看完整五轮审计与交付报告](docs/ANDROID_DELIVERY_1.0.0_ALPHA1.md)
 
 SHA-256：
 
 ```text
-Standard  7406b6d0971997cfa28629f191064a693ca78974da57e4c5f2be322d9c960f8b
-Power     378fe8ae3f44a30d5aab9c5039874d0aaa212cdd29e18b384d2b19c4a5761318
+Standard  7215aaee2c2f1c1731d1e906df11f1aa3b5067cecc89d0dbc808222e8248b285
+Power     1c6d352a34c720a3ba025299b8df190596677893d5249f3768c4eeb86961061c
 ```
 
 本次公开附件使用显式开启的个人 Alpha 调试证书签名，不应作为应用商店的
@@ -105,7 +105,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 Android 版本
 
-- 开发版本：`1.0.0-alpha.4`（versionCode `100004`），`minSdk 26`、`targetSdk 35`、`compileSdk 36`、仅 ARM64
+- 当前版本：`1.0.0-alpha.4`（versionCode `100004`），`minSdk 26`、`targetSdk 35`、`compileSdk 36`、仅 ARM64
 - Standard 包名：`com.leoyuan.leophoneagent`
 - Power 包名：`com.leoyuan.leophoneagent.power`
 - 两个版本共享本机 Agent、Provider、Skills、MCP、Memory、PRoot 与浏览器底座；

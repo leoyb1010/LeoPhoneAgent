@@ -36,7 +36,9 @@
 - 新增 `SystemEntryParserTest`、`AgentRunRecoveryTest`；保留 `AssistIntentsTest`。
 - 中文资源门禁与设置页英文硬编码门禁通过。
 - Standard / Power JVM 测试各 426，0 失败（各 1 个既有跳过）。双 flavor Debug APK 已 assemble 通过。
-- 修掉 alpha.3 起就红的 Release lint：补 `DETECT_SCREEN_CAPTURE`、`AssistState` 标 API 29、磁贴在 API 34 以下仍走旧 `startActivityAndCollapse` 但不再被 lint 判死刑。快捷方式按 Standard / Power 包名拆开。Release APK 交给 CI；本版不伪造 SHA，也不假装已发 GitHub Release。
+- 修掉 alpha.3 起就红的 Release lint：补 `DETECT_SCREEN_CAPTURE`、`AssistState` 标 API 29、磁贴在 API 34 以下仍走旧 `startActivityAndCollapse` 但不再被 lint 判死刑。快捷方式按 Standard / Power 包名拆开。
+- 已发布 GitHub Release [`android-v1.0.0-alpha.4`](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.4)（tag 打在 `e42add78`）。`aapt`/`apkanalyzer` 复核 versionName `1.0.0-alpha.4`、versionCode `100004`，包名分别为 `com.leoyuan.leophoneagent` / `com.leoyuan.leophoneagent.power`，仅 ARM64，双包均通过 APK Signature Scheme v2。
+- SHA-256：Standard `7215aaee2c2f1c1731d1e906df11f1aa3b5067cecc89d0dbc808222e8248b285`；Power `1c6d352a34c720a3ba025299b8df190596677893d5249f3768c4eeb86961061c`。
 
 ## Android v1.0.0-alpha.3 - 2026-08-16
 
