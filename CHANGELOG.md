@@ -16,6 +16,7 @@
 
 - 新增 Android Alpha APK 校验脚本，同时核对 Standard/Power 包名、versionCode、versionName、APK 签名有效性和预期证书指纹。
 - 发布前必须在已安装 alpha.3 的 Fold8 模拟器上用 `adb install -r` 通过 Standard/Power 覆盖安装，并做冷启动闪退检查。
+- README 新增面向 Codex、Cursor、Claude Code 等 Agent 的完整交接手册；同步增加仓库级 `AGENTS.md`，并修正 BUILDING/CONTRIBUTING/CLAUDE 中已过时或相互冲突的 Android 发布说明。
 
 ### 验证
 

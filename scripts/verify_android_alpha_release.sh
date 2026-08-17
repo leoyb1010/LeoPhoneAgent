@@ -20,7 +20,15 @@ if [[ -z "$apksigner" || -z "$aapt" ]]; then
 fi
 
 expected_signer="f325bc65f4f6ba456938c7d88c96ad2ef418197d1204cfd2bd881aa145bf11df"
-expected_code="100005"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/.." && pwd)"
+gradle_file="$repo_root/src/android/app/build.gradle.kts"
+expected_code="$(sed -nE 's/^[[:space:]]*versionCode = ([0-9]+).*$/\1/p' "$gradle_file" | head -1)"
+expected_version="$(sed -nE 's/^[[:space:]]*versionName = "([^"]+)".*$/\1/p' "$gradle_file" | head -1)"
+if [[ -z "$expected_code" || -z "$expected_version" ]]; then
+  echo "could not read Android version from $gradle_file" >&2
+  exit 65
+fi
 
 verify_apk() {
   local apk="$1"
@@ -44,5 +52,5 @@ verify_apk() {
   shasum -a 256 "$apk"
 }
 
-verify_apk "$1" "com.leoyuan.leophoneagent" "1.0.0-alpha.5"
-verify_apk "$2" "com.leoyuan.leophoneagent.power" "1.0.0-alpha.5-power"
+verify_apk "$1" "com.leoyuan.leophoneagent" "$expected_version"
+verify_apk "$2" "com.leoyuan.leophoneagent.power" "$expected_version-power"

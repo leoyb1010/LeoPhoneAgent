@@ -19,9 +19,13 @@ For iOS changes, build the generic device target and state whether signing was
 enabled. Changes that touch iSH, FFmpeg, LAME or the rootfs must rebuild the
 affected native artifacts. Include device/OS details for runtime bugs.
 
-Android source is present, but Android release work is currently deferred; do
-not assume an Android change has been validated unless the pull request includes
-the relevant Gradle and device test results.
+Android Standard and Power are active deliverables. Before changing or
+publishing them, read the root README's
+[Android Agent handoff and release rules](README.md#android-agent-交接与发布铁律).
+Android evidence must state both flavors' tests/lint/build results, device or
+emulator profile, upgrade-install result from the previous usable release,
+cold-start and Logcat result, and APK signer/digest verification. A green CI
+build alone is not evidence that an APK preserves the installed upgrade chain.
 
 ## License
 

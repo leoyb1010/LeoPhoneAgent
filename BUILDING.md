@@ -193,8 +193,21 @@ cd src/android
 
 Standard uses `com.leoyuan.leophoneagent`; Power uses the independently
 installable `com.leoyuan.leophoneagent.power`. Debug builds use the local debug
-key. Production delivery must use the Leo release keystore and must not publish
-debug-signed APKs.
+key.
+
+The current public Android artifacts are explicitly **personal Alpha builds**,
+not store-production builds. Their upgrade chain is pinned to the certificate
+fingerprint documented in the root README. A new machine's automatically
+generated `debug.keystore` is a different identity and must never be used to
+publish an update. Build and test there if needed, but stop before release when
+the signer gate cannot pass. Never commit or upload a keystore or its password.
+
+For the exact dual-flavor release command, signer verification, Fold8 upgrade
+test, cold-start checks and GitHub asset verification, follow
+[Android Agent handoff and release rules](README.md#android-agent-交接与发布铁律)
+without skipping steps. A future store release needs a separately managed
+long-term production key and an explicit migration plan; it cannot silently
+replace the current Alpha identity.
 
 ### Tests
 
