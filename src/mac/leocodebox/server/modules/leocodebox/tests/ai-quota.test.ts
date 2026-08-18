@@ -54,7 +54,8 @@ test('codex quota is read from the last rate_limits frame in the newest rollout'
   assert.equal(codex.authoritative, true, 'codex 的额度来自服务端下发,必须标为权威');
   assert.equal(codex.plan, 'pro');
   assert.deepEqual(codex.windows, [
-    { name: 'primary', usedPercent: 73, windowMinutes: 10080, resetsAt: 1787018811 },
+    // pace 为 null:这条 fixture 的 resetsAt 已经过去,配速给不出结论(见下一个用例)。
+    { name: 'primary', usedPercent: 73, windowMinutes: 10080, resetsAt: 1787018811, pace: null },
   ]);
 });
 
@@ -66,4 +67,25 @@ test('a machine with no codex logs reports unavailable instead of zero', async (
   // 读不到就说读不到 —— 填 0% 会让人以为额度是满的。
   assert.equal(codex.available, false);
   assert.equal(codex.windows, undefined);
+});
+
+
+test('pace compares actual burn against elapsed time in the window', async () => {
+  const { computePace } = await import('../ai-quota.service.js');
+  const now = 1_800_000_000_000;
+  // 一周窗口走了一半,重置还有 3.5 天。
+  const halfway = { name: 'w', windowMinutes: 10080, resetsAt: Math.floor(now / 1000) + 302_400 };
+
+  // 用了 50%,正好踩在时间线上。
+  assert.equal(computePace({ ...halfway, usedPercent: 50 }, now)?.stage, 'onTrack');
+  // 用了 90%,超前 40 个百分点 —— 严重超支,并且撑不到重置。
+  const ahead = computePace({ ...halfway, usedPercent: 90 }, now);
+  assert.equal(ahead?.stage, 'farAhead');
+  assert.equal(Math.round(ahead?.deltaPercent ?? 0), 40);
+  assert.equal(ahead?.lastsToReset, false);
+  assert.ok((ahead?.etaSeconds ?? 0) > 0, '超支时要给出预计耗尽时间');
+  // 一点没用:按当前速率当然撑得到重置。
+  assert.equal(computePace({ ...halfway, usedPercent: 0 }, now)?.lastsToReset, true);
+  // 没有重置时间就不给配速结论,而不是拿 0 硬算。
+  assert.equal(computePace({ name: 'w', windowMinutes: 10080, resetsAt: null, usedPercent: 50 }, now), null);
 });

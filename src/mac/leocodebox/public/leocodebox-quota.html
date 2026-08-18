@@ -135,6 +135,28 @@
     return `Resets in ${Math.max(1, m)}m`;
   };
 
+  // CodexBar UsagePaceText.detailLeftLabel / detailRightLabel 的文案规则。
+  const paceText = (pace) => {
+    if (!pace) return null;
+    const d = Math.round(Math.abs(pace.deltaPercent));
+    const left = (d === 0 || pace.stage === 'onTrack')
+      ? 'On pace'
+      : (pace.deltaPercent >= 0 ? `${d}% in deficit` : `${d}% in reserve`);
+    let right = null;
+    if (pace.lastsToReset) right = 'Lasts to reset';
+    else if (typeof pace.etaSeconds === 'number') {
+      const s = pace.etaSeconds;
+      if (s <= 60) right = 'Runs out now';
+      else {
+        const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+        right = h > 0 ? `Runs out in ${h}h ${m}m` : `Runs out in ${m}m`;
+      }
+    }
+    return right ? `Pace: ${left} · ${right}` : `Pace: ${left}`;
+  };
+
+  const money = (v) => `$ ${(v || 0).toFixed(2)}`;
+
   let providers = [];
   let gateway = null;
   let active = 0;
@@ -195,7 +217,7 @@
 
     const rows = [];
     for (const w of p.windows || []) {
-      rows.push(metric(windowName(w.windowMinutes), w.usedPercent, resetIn(w.resetsAt)));
+      rows.push(metric(windowName(w.windowMinutes), w.usedPercent, resetIn(w.resetsAt), paceText(w.pace)));
     }
     if (p.rolling) {
       rows.push(metric(`Last ${p.rolling.windowHours}h`, 0,
@@ -209,6 +231,28 @@
       const sec = el('div', 'sec');
       sec.append(el('h2', null, 'Not connected'));
       sec.append(el('div', 'pace', p.note || '本机读不到这家的用量记录。'));
+      rows.push(sec);
+    }
+    if (p.cost) {
+      rows.push(el('div', 'sep'));
+      const sec = el('div', 'sec');
+      const h = el('h2', null, 'Cost');
+      h.style.display = 'flex';
+      const chev = el('span', null, '›');
+      chev.style.marginLeft = 'auto';
+      chev.style.color = 'var(--sub)';
+      h.append(chev);
+      sec.append(h);
+      sec.append(el('div', 'pace', `Today: ${money(p.cost.todayCostUSD)} · ${num(p.cost.todayTokens)} tokens`));
+      sec.append(el('div', 'pace',
+        `Last 30 days: ${money(p.cost.last30DaysCostUSD)} · ${num(p.cost.last30DaysTokens)} tokens`));
+      const top = (p.cost.modelBreakdowns || []).slice(0, 3)
+        .map((m) => `${m.modelName} ${money(m.cost)}`).join(' · ');
+      if (top) sec.append(el('div', 'pace', top));
+      if ((p.cost.unpricedModels || []).length) {
+        // 单价表里没有的模型:token 算了,花费没算 —— 说清楚,别让人以为花费是全的。
+        sec.append(el('div', 'pace', `未计价模型: ${p.cost.unpricedModels.join(', ')}`));
+      }
       rows.push(sec);
     }
     if (gateway && gateway.today) {

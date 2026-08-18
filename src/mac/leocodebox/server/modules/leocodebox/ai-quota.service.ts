@@ -33,6 +33,23 @@ export type QuotaWindow = {
   windowMinutes: number;
   /** epoch 秒。null = 该窗口没给重置时间。 */
   resetsAt: number | null;
+  /** 配速:实际用量相对"按时间均匀消耗"的偏差。窗口没有重置时间时为 null。 */
+  pace?: UsagePace | null;
+};
+
+/**
+ * 配速模型,公式抄自 CodexBar 的 UsagePace(MIT,见 NOTICE):
+ *   expected = 已过时间 / 窗口长度 × 100
+ *   delta    = 实际已用% − expected
+ *   分档     |δ|≤2 持平;≤6 略;≤12 明显;更大为严重
+ * 右侧标签:按当前速率能撑到重置 → lastsToReset;否则给耗尽预计秒数。
+ */
+export type UsagePace = {
+  expectedUsedPercent: number;
+  deltaPercent: number;
+  stage: 'onTrack' | 'slightlyAhead' | 'ahead' | 'farAhead' | 'slightlyBehind' | 'behind' | 'farBehind';
+  etaSeconds: number | null;
+  lastsToReset: boolean;
 };
 
 export type QuotaProvider = {
@@ -105,14 +122,53 @@ type CodexRateLimits = {
   plan_type?: string | null;
 };
 
+const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
+
+function stageFor(delta: number): UsagePace['stage'] {
+  const magnitude = Math.abs(delta);
+  if (magnitude <= 2) return 'onTrack';
+  if (magnitude <= 6) return delta >= 0 ? 'slightlyAhead' : 'slightlyBehind';
+  if (magnitude <= 12) return delta >= 0 ? 'ahead' : 'behind';
+  return delta >= 0 ? 'farAhead' : 'farBehind';
+}
+
+export function computePace(window: QuotaWindow, nowMs = Date.now()): UsagePace | null {
+  if (!window.resetsAt || !window.windowMinutes) return null;
+  const durationSeconds = window.windowMinutes * 60;
+  const untilReset = window.resetsAt - Math.floor(nowMs / 1000);
+  if (untilReset <= 0 || untilReset > durationSeconds) return null;
+  const elapsed = clamp(durationSeconds - untilReset, 0, durationSeconds);
+  const expected = clamp((elapsed / durationSeconds) * 100, 0, 100);
+  const actual = clamp(window.usedPercent, 0, 100);
+  // 窗口刚开就已有用量,说明这个窗口不是从零开始的,不给配速结论。
+  if (elapsed === 0 && actual > 0) return null;
+
+  let etaSeconds: number | null = null;
+  let lastsToReset = false;
+  if (actual >= 100) {
+    etaSeconds = 0;
+  } else if (elapsed > 0 && actual > 0) {
+    const rate = actual / elapsed;
+    const candidate = (100 - actual) / rate;
+    if (candidate >= untilReset) lastsToReset = true;
+    else etaSeconds = candidate;
+  } else if (elapsed > 0) {
+    lastsToReset = true;
+  }
+
+  const delta = actual - expected;
+  return { expectedUsedPercent: expected, deltaPercent: delta, stage: stageFor(delta), etaSeconds, lastsToReset };
+}
+
 function windowFrom(name: string, raw: CodexRateLimits['primary']): QuotaWindow | null {
   if (!raw || typeof raw.used_percent !== 'number') return null;
-  return {
+  const window: QuotaWindow = {
     name,
     usedPercent: raw.used_percent,
     windowMinutes: typeof raw.window_minutes === 'number' ? raw.window_minutes : 0,
     resetsAt: typeof raw.resets_at === 'number' ? raw.resets_at : null,
   };
+  return { ...window, pace: computePace(window) };
 }
 
 /** Codex:从最近的 rollout 日志尾部取最后一帧 rate_limits。 */
