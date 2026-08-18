@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Gauge, RefreshCw } from 'lucide-react';
+import { Check, Copy, Gauge, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { apiClient } from '../../utils/apiClient';
@@ -8,22 +8,22 @@ import { cn } from '../../lib/utils';
 import { formatCny, formatCountCn, formatTokensCn } from '../dashboard/format';
 import SessionProviderLogo from '../llm-logo-provider/SessionProviderLogo';
 
+import MetricRow from './MetricRow';
+import UsageProgressBar from './UsageProgressBar';
 import { useLocalAgents } from './useLocalAgents';
-
-type QuotaWindow = { name: string; usedPercent: number; windowMinutes: number; resetsAt: number | null };
-
-type QuotaProvider = {
-  id: string;
-  label: string;
-  authoritative: boolean;
-  source: string;
-  available: boolean;
-  plan?: string | null;
-  windows?: QuotaWindow[];
-  credits?: { hasCredits: boolean; unlimited: boolean; balance: string } | null;
-  rolling?: { windowHours: number; tokens: number; requests: number } | null;
-  note?: string;
-};
+import {
+  displayPercent,
+  formatMetaText,
+  formatPercentLabel,
+  formatResetText,
+  formatWindowLabel,
+  headerSubtitle,
+  quotaTone,
+  quotaTrust,
+  visibleMetrics,
+  warningMarkerPercents,
+} from './quotaFormat';
+import type { ProviderSnapshot, Translate } from './quotaFormat';
 
 type GatewayStatus = {
   enabled: boolean;
@@ -31,45 +31,68 @@ type GatewayStatus = {
 };
 
 const REFRESH_MS = 120_000;
+/** 打开时每 30 秒重算一次"还有多久重置" —— 秒级跳动在菜单里是噪音。 */
+const TICK_MS = 30_000;
 
-function windowLabel(minutes: number): string {
-  if (minutes >= 10080) return `${Math.round(minutes / 10080)} 周`;
-  if (minutes >= 1440) return `${Math.round(minutes / 1440)} 天`;
-  if (minutes >= 60) return `${Math.round(minutes / 60)} 小时`;
-  return `${minutes} 分钟`;
-}
+/** 卡片版式常量,照抄上游 CodexBar(MIT,见 NOTICE)。 */
+const CARD_WIDTH = 310;
+const CARD_PADDING = 20;
+const CONTENT_WIDTH = CARD_WIDTH - CARD_PADDING * 2;
 
-/** 重置倒计时。到点之前只给到分钟级 —— 秒级跳动在状态栏里是噪音。 */
-function resetLabel(resetsAt: number | null, now: number): string {
-  if (!resetsAt) return '';
-  const seconds = resetsAt - Math.floor(now / 1000);
-  if (seconds <= 0) return '已重置';
-  const hours = Math.floor(seconds / 3600);
-  if (hours >= 24) return `${Math.floor(hours / 24)} 天后重置`;
-  if (hours >= 1) return `${hours} 小时后重置`;
-  return `${Math.max(1, Math.round(seconds / 60))} 分钟后重置`;
-}
-
-function meterTone(percent: number): string {
-  if (percent >= 90) return 'bg-destructive';
-  if (percent >= 70) return 'bg-warning';
-  return 'bg-primary';
+function Divider() {
+  return <div className="h-px bg-border" />;
 }
 
 /**
- * [T-quota-bar] 状态栏的 AI 额度浮窗。
- *
- * 借 CodexBar 的思路(不登录每一家、只读本机已有状态),但只吸收对这个工作台
- * 有意义的那部分,并且把"服务端真实额度"和"本机日志累加"在界面上分开标注 ——
- * 把估算值摆成配额是最容易骗到自己的做法。
+ * 三档状态色。上游那条永远是品牌色,严重度只体现在配速条纹上;本项目额外要求
+ * "剩余 ≤10% 红、≤50% 橙",所以在这里接管填充色。
  */
+function toneColor(usedPercent: number, accentColor: string): string {
+  const tone = quotaTone(usedPercent);
+  if (tone === 'critical') return 'hsl(var(--destructive))';
+  if (tone === 'warning') return 'hsl(var(--warning))';
+  return accentColor;
+}
+
+/** 上游的 section 节奏:usage 区上边距 10px,其余 6px;下边距统一 6px。 */
+function Section({ usage = false, children }: { usage?: boolean; children: React.ReactNode }) {
+  return (
+    <div className={cn('px-5 pb-[6px]', usage ? 'pt-[10px]' : 'pt-[6px]')}>{children}</div>
+  );
+}
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <div className="text-[12px] font-medium leading-[1.35] text-foreground">{children}</div>;
+}
+
+/**
+ * 邮箱走中间截断(上游是 .middle truncationMode)。CSS 没有中间省略号,这里
+ * 按 `@` 切开:本地名可截、域名钉死 —— 域名恰好是分辨账号时最有用的一半,
+ * 尾截断会把它吃掉。
+ */
+function MiddleTruncatedEmail({ email }: { email: string }) {
+  const at = email.lastIndexOf('@');
+  const [head, tail] = at > 0 ? [email.slice(0, at), email.slice(at)] : [email, ''];
+  return (
+    <span
+      className="flex min-w-0 max-w-[60%] text-[10.5px] leading-[1.3] text-muted-foreground"
+      title={email}
+    >
+      <span className="truncate">{head}</span>
+      {tail && <span className="shrink-0">{tail}</span>}
+    </span>
+  );
+}
+
 export default function QuotaPopover() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const translate = t as unknown as Translate;
   const [open, setOpen] = useState(false);
-  const [providers, setProviders] = useState<QuotaProvider[]>([]);
+  const [providers, setProviders] = useState<ProviderSnapshot[]>([]);
   const [gateway, setGateway] = useState<GatewayStatus | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const { agents } = useLocalAgents();
 
@@ -77,7 +100,7 @@ export default function QuotaPopover() {
     if (force) setRefreshing(true);
     try {
       const [quota, gatewayStatus] = await Promise.all([
-        apiClient.get<{ providers?: QuotaProvider[] }>(`/api/leocodebox/quota${force ? '?refresh=1' : ''}`),
+        apiClient.get<{ providers?: ProviderSnapshot[] }>(`/api/leocodebox/quota${force ? '?refresh=1' : ''}`),
         apiClient.get<GatewayStatus>('/api/leocodebox/gateway/status').catch(() => null),
       ]);
       setProviders(Array.isArray(quota.providers) ? quota.providers : []);
@@ -97,6 +120,12 @@ export default function QuotaPopover() {
 
   useEffect(() => {
     if (!open) return undefined;
+    const timer = window.setInterval(() => setNow(Date.now()), TICK_MS);
+    return () => window.clearInterval(timer);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
     const onAway = (event: MouseEvent) => {
       if (!ref.current?.contains(event.target as Node)) setOpen(false);
     };
@@ -109,20 +138,30 @@ export default function QuotaPopover() {
     };
   }, [open]);
 
-  // 状态栏上的迷你计量条取"最紧张的那个窗口"——一眼看到的应该是最危险的数字。
+  const copy = useCallback((key: string, text: string) => {
+    void navigator.clipboard?.writeText(text).catch(() => undefined);
+    setCopiedKey(key);
+    window.setTimeout(() => setCopiedKey((current) => (current === key ? null : current)), 900);
+  }, []);
+
+  // 状态栏上的迷你计量条取"最紧张的那个权威窗口"—— 一眼看到的应该是最危险的数字,
+  // 而本机日志估出来的百分比不配上状态栏。
   const headline = useMemo(() => {
-    const windows = providers.flatMap((provider) => (provider.authoritative ? provider.windows ?? [] : []));
+    const windows = providers
+      .filter((provider) => quotaTrust(provider.source) === 'authoritative')
+      .flatMap((provider) => visibleMetrics(provider, { primary: '', secondary: '', tertiary: '' }));
     if (windows.length === 0) return null;
-    return windows.reduce((worst, window) => (window.usedPercent > worst.usedPercent ? window : worst));
+    return windows.reduce((worst, metric) =>
+      (metric.window.usedPercent > worst.window.usedPercent ? metric : worst));
   }, [providers]);
 
   const today = gateway?.meter?.today;
   const todayTokens = (today?.inputTokens ?? 0) + (today?.outputTokens ?? 0);
+  const locale = i18n.language || 'zh-CN';
+  const headlineUsed = headline ? Math.round(headline.window.usedPercent) : 0;
 
   return (
     <div ref={ref} className="relative">
-      {/* 状态栏上要一眼认得出这是个可点的额度计。之前只有一条 8px 的细条,
-          在 9.5px 的状态栏里等于隐身 —— 现在给足图标 + 文字 + 百分比。 */}
       <button
         type="button"
         onClick={() => { setOpen((value) => !value); setNow(Date.now()); }}
@@ -141,11 +180,15 @@ export default function QuotaPopover() {
           <>
             <span className="h-1 w-7 overflow-hidden rounded-full bg-background">
               <span
-                className={cn('block h-full rounded-full transition-[width] duration-slow', meterTone(headline.usedPercent))}
-                style={{ width: `${Math.min(100, Math.round(headline.usedPercent))}%` }}
+                className={cn(
+                  'block h-full rounded-full transition-[width] duration-slow',
+                  quotaTone(headline.window.usedPercent) === 'critical' ? 'bg-destructive'
+                    : quotaTone(headline.window.usedPercent) === 'warning' ? 'bg-warning' : 'bg-primary',
+                )}
+                style={{ width: `${Math.min(100, headlineUsed)}%` }}
               />
             </span>
-            <span className="tabular-nums">{Math.round(headline.usedPercent)}%</span>
+            <span className="tabular-nums">{headlineUsed}%</span>
           </>
         )}
       </button>
@@ -154,125 +197,293 @@ export default function QuotaPopover() {
         <div
           role="dialog"
           aria-label={t('workbench.quotaTooltip', { defaultValue: 'AI 额度与状态' })}
-          className="wb-anim-card absolute bottom-full right-0 z-[70] mb-2 w-[340px] rounded-xl bg-card p-3 font-sans shadow-elevation-3 ring-1 ring-inset ring-border"
+          className="wb-anim-card absolute bottom-full right-0 z-[70] mb-2 max-h-[70vh] overflow-y-auto rounded-xl bg-popover py-[6px] font-sans shadow-elevation-3 ring-1 ring-inset ring-border"
+          style={{ width: CARD_WIDTH }}
         >
-          <div className="mb-2 flex items-center gap-2 px-1">
-            <span className="text-xs font-bold text-foreground">
+          <div className="flex items-center gap-2 px-5 py-[6px]">
+            <span className="flex-1 truncate text-[12.5px] font-semibold text-foreground">
               {t('workbench.quotaTitle', { defaultValue: 'AI 额度' })}
             </span>
-            <span className="font-mono text-[9px] text-wb-faint">本机采集</span>
             <button
               type="button"
               onClick={() => void load(true)}
               disabled={refreshing}
               title={t('workbench.quotaRefresh', { defaultValue: '重新采集' })}
               aria-label={t('workbench.quotaRefresh', { defaultValue: '重新采集' })}
-              className="wb-chip-button ml-auto h-[22px] w-[22px]"
+              className="wb-chip-button h-[20px] w-[20px] rounded-md"
             >
               <RefreshCw className={cn('h-3 w-3', refreshing && 'animate-spin')} />
             </button>
           </div>
 
-          <div className="flex flex-col gap-2">
-            {providers.map((provider) => (
-              <div key={provider.id} className="rounded-lg bg-muted px-3 py-2.5 ring-1 ring-inset ring-border">
-                <div className="flex items-center gap-2">
-                  <SessionProviderLogo provider={provider.id} className="h-4 w-4" />
-                  <span className="text-[12px] font-semibold text-foreground">{provider.label}</span>
-                  {provider.plan && (
-                    <span className="rounded-md bg-background px-1.5 py-px font-mono text-[9px] uppercase text-primary">
-                      {provider.plan}
-                    </span>
-                  )}
-                  {!provider.authoritative && (
-                    <span className="rounded-md bg-background px-1.5 py-px font-mono text-[9px] text-wb-faint">
-                      {t('workbench.quotaLocalTally', { defaultValue: '本机统计' })}
-                    </span>
-                  )}
-                </div>
+          {providers.map((provider) => (
+            <ProviderCard
+              key={provider.id}
+              snapshot={provider}
+              now={now}
+              locale={locale}
+              t={translate}
+              copiedKey={copiedKey}
+              onCopy={copy}
+            />
+          ))}
 
-                {!provider.available && (
-                  <p className="mt-1.5 text-[10.5px] leading-relaxed text-wb-faint">
-                    {provider.note || t('workbench.quotaUnavailable', { defaultValue: '本机暂时读不到这家的用量记录。' })}
-                  </p>
-                )}
-
-                {provider.windows?.map((window) => (
-                  <div key={window.name} className="mt-2">
-                    <div className="flex justify-between font-mono text-[9.5px] text-wb-faint">
-                      <span>{windowLabel(window.windowMinutes)}窗口 · {Math.round(window.usedPercent)}%</span>
-                      <span>{resetLabel(window.resetsAt, now)}</span>
-                    </div>
-                    <div className="mt-1 h-1 overflow-hidden rounded-full bg-background">
-                      <div
-                        className={cn('h-full rounded-full transition-[width] duration-slow', meterTone(window.usedPercent))}
-                        style={{ width: `${Math.min(100, window.usedPercent)}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-
-                {provider.rolling && (
-                  <p className="mt-1.5 font-mono text-[9.5px] text-wb-faint">
-                    近 {provider.rolling.windowHours} 小时 · {formatTokensCn(provider.rolling.tokens)} tokens · {formatCountCn(provider.rolling.requests)} 次
-                  </p>
-                )}
-
-                {provider.credits?.hasCredits && (
-                  <p className="mt-1 font-mono text-[9.5px] text-wb-faint">余额 {provider.credits.balance}</p>
-                )}
-              </div>
-            ))}
-
-            <div className="rounded-lg bg-muted px-3 py-2.5 ring-1 ring-inset ring-border">
-              <div className="flex items-center gap-2">
-                <span className="text-[12px] font-semibold text-foreground">Leoapi</span>
-                <span className={cn('h-1.5 w-1.5 rounded-full', gateway?.enabled ? 'bg-primary' : 'bg-wb-faint')} />
-                <span className="font-mono text-[9px] text-wb-faint">
-                  {gateway?.enabled
-                    ? t('workbench.gatewayRunning', { defaultValue: '网关运行中' })
-                    : t('workbench.gatewayOff', { defaultValue: '网关未启用' })}
-                </span>
-              </div>
-              <p className="mt-1.5 font-mono text-[9.5px] text-wb-faint">
-                今日 · {formatTokensCn(todayTokens)} tokens · {formatCountCn(today?.requests ?? 0)} 次 · {formatCny(today?.costUsd ?? 0)}
-              </p>
+          <Divider />
+          <Section>
+            <div className="flex items-baseline gap-2">
+              <SectionTitle>Leoapi</SectionTitle>
+              <span className={cn('h-1.5 w-1.5 rounded-full', gateway?.enabled ? 'bg-primary' : 'bg-wb-faint')} />
+              <span className="text-[10.5px] text-muted-foreground">
+                {gateway?.enabled
+                  ? t('workbench.gatewayRunning', { defaultValue: '网关运行中' })
+                  : t('workbench.gatewayOff', { defaultValue: '网关未启用' })}
+              </span>
             </div>
-          </div>
+            <p className="mt-[3px] text-[10.5px] leading-[1.4] text-muted-foreground">
+              {formatTokensCn(todayTokens)} tokens · {formatCountCn(today?.requests ?? 0)} · {formatCny(today?.costUsd ?? 0)}
+            </p>
+          </Section>
 
           {/* 读不到额度的 Agent 至少要能看到"装没装、登没登" —— 面板叫「额度与状态」,
               状态这半边不能只在有额度的那两家身上。 */}
           {agents.length > 0 && (
-            <div className="mt-2">
-              <p className="mb-1.5 px-1 font-mono text-[9px] tracking-[0.18em] text-wb-faint">
-                {t('workbench.quotaOtherAgents', { defaultValue: '其他本机 Agent' })}
-              </p>
-              <div className="flex flex-col gap-1">
-                {agents
-                  .filter((agent) => !providers.some((provider) => provider.id === agent.provider))
-                  .map((agent) => (
-                    <div key={agent.provider} className="flex items-center gap-2 rounded-lg px-2.5 py-1.5">
-                      <SessionProviderLogo provider={agent.provider} className="h-3.5 w-3.5 flex-none" />
-                      <span className="flex-1 truncate text-[11px] text-foreground">{agent.label}</span>
-                      <span className={cn(
-                        'font-mono text-[9px]',
-                        agent.updateAvailable ? 'text-warning' : agent.installed ? 'text-primary' : 'text-wb-faint',
-                      )}>
-                        {agent.status}
-                      </span>
-                    </div>
-                  ))}
-              </div>
-            </div>
+            <>
+              <Divider />
+              <Section>
+                <div className="text-[9.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  {t('workbench.quotaOtherAgents', { defaultValue: '其他本机 Agent' })}
+                </div>
+                <div className="mt-[4px] flex flex-col gap-[3px]">
+                  {agents
+                    .filter((agent) => !providers.some((provider) => provider.id === agent.provider))
+                    .map((agent) => (
+                      <div key={agent.provider} className="flex items-baseline gap-2">
+                        <SessionProviderLogo provider={agent.provider} className="h-3 w-3 shrink-0 self-center" />
+                        <span className="flex-1 truncate text-[10px] text-muted-foreground">{agent.label}</span>
+                        <span className={cn(
+                          'shrink-0 text-[10px]',
+                          agent.updateAvailable ? 'text-warning' : 'text-muted-foreground',
+                        )}>
+                          {agent.status}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </Section>
+            </>
           )}
 
-          <p className="mt-2 px-1 text-[9.5px] leading-relaxed text-wb-faint">
-            {t('workbench.quotaFootnote', {
-              defaultValue: '额度直接读各家 CLI 落在本机的状态,不额外登录。标「本机统计」的是日志累加值,不是官方配额。',
-            })}
-          </p>
+          <Divider />
+          <Section>
+            <p className="text-[9.5px] leading-normal text-wb-faint">
+              {t('workbench.quotaFootnote', {
+                defaultValue: '额度直接读各家 CLI 落在本机的状态,不额外登录。标「本机统计」的是日志累加值,不是官方配额。',
+              })}
+            </p>
+          </Section>
         </div>
       )}
     </div>
   );
+}
+
+type ProviderCardProps = {
+  snapshot: ProviderSnapshot;
+  now: number;
+  locale: string;
+  t: Translate;
+  copiedKey: string | null;
+  onCopy: (key: string, text: string) => void;
+};
+
+function ProviderCard({ snapshot, now, locale, t, copiedKey, onCopy }: ProviderCardProps) {
+  const trust = quotaTrust(snapshot.source);
+  const subtitle = headerSubtitle(snapshot, now, t);
+  const metrics = visibleMetrics(snapshot, {
+    primary: t('workbench.quotaWindowPrimary'),
+    secondary: t('workbench.quotaWindowSecondary'),
+    tertiary: t('workbench.quotaWindowTertiary'),
+  });
+  const accent = snapshot.accentColor || 'hsl(var(--primary))';
+  const credits = snapshot.credits;
+  const cost = snapshot.cost;
+  const details = snapshot.details ?? [];
+  const errorKey = `error:${snapshot.id}`;
+
+  const creditsUsedPercent = credits && credits.total && credits.total > 0 && credits.remaining != null
+    ? Math.max(0, Math.min(100, (1 - credits.remaining / credits.total) * 100))
+    : null;
+
+  const emptyText = snapshot.status === 'unconfigured'
+    ? (snapshot.note || t('workbench.quotaUnconfiguredHint'))
+    : snapshot.status === 'error'
+      ? t('workbench.quotaLimitsUnavailable')
+      : snapshot.updatedAt == null
+        ? t('workbench.quotaNoUsageYet')
+        : t('workbench.quotaNoUsageConfigured');
+
+  return (
+    <>
+      <Divider />
+
+      {/* ① Header:两行。第一行 名字 — 邮箱;第二行 副标题 — [复制] — 套餐。 */}
+      <div className="flex flex-col gap-[4px] px-5 py-[6px]">
+        <div className="flex items-baseline gap-3">
+          <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold leading-[1.3] text-foreground">
+            {snapshot.label}
+          </span>
+          {snapshot.identity?.accountEmail && (
+            <MiddleTruncatedEmail email={snapshot.identity.accountEmail} />
+          )}
+        </div>
+
+        <div className="flex items-baseline gap-3">
+          <span
+            className={cn(
+              'min-w-0 flex-1 text-[10.5px] leading-[1.4]',
+              subtitle.kind === 'error' ? 'line-clamp-4 text-destructive' : 'truncate text-muted-foreground',
+            )}
+          >
+            {subtitle.text}
+          </span>
+          {subtitle.kind === 'error' && (
+            <button
+              type="button"
+              onClick={() => onCopy(errorKey, subtitle.text)}
+              title={t('workbench.quotaCopyError')}
+              aria-label={t('workbench.quotaCopyError')}
+              className="shrink-0 self-center text-muted-foreground transition-colors duration-fast hover:text-foreground"
+            >
+              {copiedKey === errorKey
+                ? <Check className="h-3 w-3 text-success" />
+                : <Copy className="h-3 w-3" />}
+            </button>
+          )}
+          <span className="shrink-0 text-[10.5px] leading-[1.4] text-muted-foreground">
+            {/* 数据可信度必须写在脸上:本机日志估算不能长得像官方额度。 */}
+            {trust === 'local' && (
+              <span className="text-warning">{t('workbench.quotaLocalTally', { defaultValue: '本机统计' })}</span>
+            )}
+            {trust === 'authoritative' && <span>{t('workbench.quotaTrustAuthoritative')}</span>}
+            {snapshot.identity?.plan && <span className="ml-1.5">{snapshot.identity.plan}</span>}
+          </span>
+        </div>
+      </div>
+
+      {/* ③ Usage 区:metric 之间 12px。unconfigured 不画进度条,只说缺什么。 */}
+      <Divider />
+      <Section usage>
+        {metrics.length > 0 ? (
+          <div className="flex flex-col gap-3">
+            {metrics.map((metric) => (
+              <MetricRow
+                key={metric.key}
+                title={metric.title}
+                percentLabel={formatPercentLabel(metric.window.usedPercent, 'left', t)}
+                resetText={formatResetText(metric.window.resetsAt, now, t, {
+                  locale,
+                  description: metric.window.resetDescription,
+                })}
+                metaText={formatMetaText(metric.pace, t)}
+                detailText={formatWindowLabel(metric.window.windowMinutes, t)}
+                usedPercent={metric.window.usedPercent}
+                fillColor={toneColor(metric.window.usedPercent, accent)}
+                pace={metric.pace}
+                windowMinutes={metric.window.windowMinutes}
+                barWidth={CONTENT_WIDTH}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="text-[10.5px] leading-[1.4] text-muted-foreground">{emptyText}</p>
+        )}
+      </Section>
+
+      {credits && (credits.remaining != null || credits.total != null) && (
+        <>
+          <Divider />
+          <Section>
+            <SectionTitle>{t('workbench.quotaCreditsTitle')}</SectionTitle>
+            {creditsUsedPercent != null && (
+              <UsageProgressBar
+                percent={displayPercent(creditsUsedPercent, 'left')}
+                fillColor={toneColor(creditsUsedPercent, accent)}
+                markerPercents={warningMarkerPercents(undefined, 'left')}
+                width={CONTENT_WIDTH}
+                className="my-[6px] block"
+              />
+            )}
+            <div className="flex items-baseline gap-3 text-[10px]">
+              {credits.remaining != null && (
+                <span className="flex-1 truncate text-foreground">
+                  {t('workbench.quotaCreditsLeft', { value: formatCredit(credits.remaining, credits.unit) })}
+                </span>
+              )}
+              {credits.total != null && (
+                <span className="shrink-0 text-muted-foreground">
+                  {t('workbench.quotaCreditsTotal', { value: formatCredit(credits.total, credits.unit) })}
+                </span>
+              )}
+            </div>
+            {credits.hint && (
+              <p className="mt-[2px] text-[10px] leading-[1.4] text-muted-foreground">{credits.hint}</p>
+            )}
+          </Section>
+        </>
+      )}
+
+      {cost && (cost.todayUSD != null || cost.last30DaysUSD != null) && (
+        <>
+          <Divider />
+          <Section>
+            <SectionTitle>{t('workbench.quotaCostTitle')}</SectionTitle>
+            <p className="mt-[2px] text-[10.5px] leading-normal text-muted-foreground">
+              {t('workbench.quotaCostToday', {
+                cost: formatCny(cost.todayUSD ?? 0),
+                tokens: formatTokensCn(cost.todayTokens ?? 0),
+              })}
+            </p>
+            <p className="text-[10.5px] leading-normal text-muted-foreground">
+              {t('workbench.quotaCostLast30', {
+                cost: formatCny(cost.last30DaysUSD ?? 0),
+                tokens: formatTokensCn(cost.last30DaysTokens ?? 0),
+              })}
+            </p>
+          </Section>
+        </>
+      )}
+
+      {details.map((section) => (
+        <div key={section.title}>
+          <Divider />
+          <Section>
+            <div className="text-[9.5px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              {section.title}
+            </div>
+            <div className="mt-[4px] flex flex-col gap-[2px]">
+              {section.rows.map((row) => (
+                <div key={`${row.label}:${row.value}`} className="flex items-baseline gap-3 text-[10px]">
+                  <span className="min-w-0 flex-1 truncate text-muted-foreground">{row.label}</span>
+                  <span className="shrink-0 truncate font-medium text-foreground">
+                    {row.value}
+                    {row.secondaryValue && (
+                      <span className="ml-1.5 font-normal text-muted-foreground">{row.secondaryValue}</span>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </Section>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function formatCredit(value: number, unit?: string | null): string {
+  const text = Number.isInteger(value) ? value.toLocaleString() : value.toLocaleString(undefined, {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+  return unit ? `${text} ${unit}` : text;
 }

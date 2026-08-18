@@ -17,6 +17,30 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '1.69.0',
+    date: '2026-08-18',
+    items: [
+      '额度改成问官方要,不再靠猜:此前是被动扫本机日志尾部、等服务端偶然下发的额度帧(可能是几小时前的旧数字),现在用本机已有的登录态直接调官方接口拿当前额度。Codex 与 Claude Code 已打通,面板上标「权威」。',
+      '菜单栏额度面板按 CodexBar 的设计重做:每个额度窗口一行「标题 + 剩余百分比 + 重置倒计时 + 进度条 + 配速」,进度条上还画出配速位置与 50%/20% 警戒刻度。',
+      '新增配速判断:告诉你「按当前速度用得完用不完」——超前多少、还能撑多久、预计几点用光、有多大风险,而不只是一个干巴巴的百分比。',
+      '读不到就明说读不到:Gemini、Cursor、Grok、OpenCode 各自写清楚缺哪一样凭据,不再是笼统的「未接入」,更不会填 0 或编一个百分比冒充额度。',
+      '本机日志统计降级为接口失败时的兜底,并明确标注「本机统计」,不会再和权威额度混在一起看不出区别。',
+      '发版更新提示加了自动闸门:版本号与更新说明对不上就直接构建失败 —— 1.68.0 那次漏写、装上却弹不出更新的情况,以后不会再发生。',
+    ],
+  },
+  {
+    version: '1.68.0',
+    date: '2026-08-18',
+    items: [
+      '对话即首页:去掉 9 项侧边导航与仪表盘首页,冷启动直接落在会话上,新任务只走一个悬浮指挥条。',
+      '菜单栏新增 AI 额度面板:⏲ 图标 + 计量条 + 百分比,点开是本机 AI 用量总览,只读各家 CLI 已落在本机的状态,不登录任何一家服务。',
+      '额度数字严格区分权威与估算:服务端下发的真实额度窗口标「权威」,本机日志统计标「本机统计」,读不到就显示「读不到」,不填 0、不编百分比。',
+      '会话列表本机与远程同列,meta 标机器名;Fleet 收进标题栏远程胶囊,快速任务与项目树收进 ⌘K。',
+      '停在旧的仪表盘 / Fleet / 快速任务页面的安装,会一次性迁移到对话页。',
+      '设置栏目一个没减,只重新归组:外观移入「工作区」,插件移入「系统」。',
+    ],
+  },
+  {
     version: '1.67.1',
     date: '2026-08-11',
     items: [
@@ -119,5 +143,15 @@ export function markWhatsNewSeen(): void {
 
 export function currentReleaseNote(): LeoReleaseNote | null {
   const version = currentAppVersion();
-  return LEO_RELEASE_NOTES.find((n) => n.version === version) ?? LEO_RELEASE_NOTES[0] ?? null;
+  const exact = LEO_RELEASE_NOTES.find((n) => n.version === version);
+  if (exact) return exact;
+  if (!version) return LEO_RELEASE_NOTES[0] ?? null;
+  // 当前版本漏了条目。绝不能拿上一版内容顶上——那样弹卡看着正常,内容却是
+  // 上一版的,"漏写"被伪装成"已写",下次照漏(1.68.0 就是这么漏过去的)。
+  // 宁可把缺失摆在脸上:弹照弹(铁律要求每次发版都弹),但明说这版没写。
+  return {
+    version,
+    date: '',
+    items: [`本版本(${version})的更新说明缺失 —— 发版时漏了 LEO_RELEASE_NOTES 条目,请补上。`],
+  };
 }

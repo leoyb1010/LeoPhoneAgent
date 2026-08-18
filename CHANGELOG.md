@@ -4,6 +4,29 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## macOS leocodebox 1.69.0 - 2026-08-18
+
+### 额度改成问官方要,不再靠猜
+
+- 吸收 CodexBar 的抓取能力:此前被动扫本机日志尾部、等服务端偶然下发额度帧(可能是几小时前的旧数字),现在用本机已有登录态直接调官方接口拿当前额度。Codex(`chatgpt.com/backend-api/wham/usage`)与 Claude Code(`api.anthropic.com/api/oauth/usage`)已打通,实测 Codex 33%@7d、Claude 30%@5h + 24%@7d。
+- Claude 凭据**钥匙串优先、文件兜底**,且每个来源用前先查 `expiresAt` —— 本机文件里的 token 已过期 13 天,直接用只会拿到 401。
+- 不硬编码窗口白名单:以「有数值 utilization + 有可解析 resets_at」为真实窗口判据,自动滤掉 Anthropic 的内部代号窗口,将来新增窗口也能接住。Codex 窗口长度一律从 `limit_window_seconds` 算,不按 lane 位置假设。
+- 面板按 CodexBar 卡片规格重做:310px 卡片、每窗口一行(标题 + 剩余百分比 + 重置倒计时 + 6px 进度条 + 配速),进度条上画出配速位置、50%/20% 警戒刻度与 7 天窗口的工作日刻度。
+- 新增配速判断:超前/落后多少、还能撑多久、预计几点用光、多大风险;数据不足以下结论时返回空,不给看起来很确定的 0。
+- 权威与估算落到数据结构(`source` 字段):接口数据标「权威」,日志回落标「本机统计」。Gemini/Cursor/Grok/OpenCode 各自写明缺哪一样凭据,不填 0、不编百分比。
+- 凭据全程只读:不写回、不刷新、不落日志;测试断言序列化快照里不出现任何 access token。
+
+### 发版更新提示:加自动闸门
+
+- `npm run verify:release-notes` 挂进 `desktop:dist:mac:signed` 链首,版本号与更新说明对不上直接构建失败 —— 1.68.0 那次漏写、装上却弹不出更新的情况不会再发生。
+- 缺条目时明说"本版本更新说明缺失",不再 fallback 到上一版内容冒充。
+- 修正根 CLAUDE.md 里早已废弃的 `resources/release-notes` JSON 路径,并把「每次发版都必须弹出本次更新」升格为全端通用第一条铁律。
+
+### 验证
+
+- 全量测试 518 通过 / 0 失败(desktop 34 + client 112 + server 372)。
+- 端到端实跑 `readAiQuota()`,两家均返回真实权威额度。
+
 ## macOS leocodebox 1.68.0 - 2026-08-18
 
 ### 工作台外壳重做:对话即首页

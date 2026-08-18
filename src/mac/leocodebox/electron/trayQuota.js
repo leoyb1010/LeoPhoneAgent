@@ -10,9 +10,27 @@ import http from 'node:http';
  *
  * 两条硬规则:
  *  1. 权威额度与本机估算必须分开标注 —— 把估算值摆成配额是最容易骗到自己的做法。
- *  2. 还没接入的 provider **照样列出来**并写明"未接入",而不是从菜单里消失。
+ *     判据是 snapshot 的 `source`:oauth/api/web/cli 才是服务端下发的额度,
+ *     local 一律加"本机统计"后缀。
+ *  2. 还没接入的 provider **照样列出来**并写明缺什么,而不是从菜单里消失。
  *     授权是陆续补的,菜单要能告诉你还差谁。
  */
+
+/** 服务端下发的额度来源。local 是本机日志估算,不算数。 */
+const AUTHORITATIVE_SOURCES = new Set(['oauth', 'api', 'web', 'cli']);
+
+export const isAuthoritative = (provider) =>
+  provider?.status === 'ok' && AUTHORITATIVE_SOURCES.has(provider?.source);
+
+/**
+ * 一个 provider 身上所有能显示的窗口。
+ * 占位窗口(isSyntheticPlaceholder)必须滤掉 —— 它的 0% 不是"没用",是"没数据"。
+ */
+export function displayWindows(provider) {
+  const named = (provider?.extraRateWindows ?? []).map((entry) => entry?.window);
+  return [provider?.primary, provider?.secondary, provider?.tertiary, ...named]
+    .filter((window) => window && !window.isSyntheticPlaceholder && Number.isFinite(window.usedPercent));
+}
 
 /** 菜单里始终列出的 provider。没数据的显示未接入,不隐藏。 */
 export const TRACKED_PROVIDERS = [
@@ -41,9 +59,10 @@ export function windowLabel(minutes) {
   return `${minutes} 分钟`;
 }
 
+/** resetsAt 是 epoch **毫秒**(契约见 server/modules/leocodebox/ai-quota.types.ts)。 */
 export function resetLabel(resetsAt, nowMs = Date.now()) {
   if (!resetsAt) return '';
-  const seconds = resetsAt - Math.floor(nowMs / 1000);
+  const seconds = Math.floor((resetsAt - nowMs) / 1000);
   if (seconds <= 0) return '已重置';
   const hours = Math.floor(seconds / 3600);
   if (hours >= 24) return `${Math.floor(hours / 24)} 天后重置`;
@@ -63,30 +82,32 @@ function formatTokens(value) {
  * 没有任何额度可读时返回空串 —— 菜单栏上不摆一个恒为 0% 的假计量。
  */
 export function trayTitle(providers) {
-  const authoritative = providers.filter((provider) => provider.authoritative && provider.available);
+  const authoritative = (providers ?? []).filter(isAuthoritative)
+    .map((provider) => displayWindows(provider))
+    .filter((windows) => windows.length > 0);
   if (authoritative.length === 0) return '';
-  const worstOf = (provider) => (provider.windows ?? []).reduce(
-    (worst, window) => Math.max(worst, window.usedPercent ?? 0),
-    0,
-  );
-  const bars = authoritative.map((provider) => blockFor(worstOf(provider))).join('');
+  const worstOf = (windows) => windows.reduce((worst, window) => Math.max(worst, window.usedPercent), 0);
+  const bars = authoritative.map((windows) => blockFor(worstOf(windows))).join('');
   const worst = Math.max(...authoritative.map(worstOf));
   return `${bars} ${Math.round(worst)}%`;
 }
 
 /** 一个 provider 在菜单里的若干行。第一行是它自己,后面缩进的是各时间窗。 */
 export function providerMenuLines(provider, nowMs = Date.now()) {
-  if (!provider || !provider.available) {
-    return [{ label: `${provider?.label ?? '未知'} — 未接入`, enabled: false }];
+  const label = provider?.label ?? '未知';
+  if (!provider || provider.status !== 'ok') {
+    // 缺什么要说清楚 —— 光写"未接入"等于没说。
+    const why = provider?.note || provider?.error;
+    return [{ label: `${label} — 未接入${why ? ` · ${why}` : ''}`, enabled: false }];
   }
 
   const lines = [];
-  const plan = provider.plan ? ` · ${provider.plan}` : '';
-  const tag = provider.authoritative ? '' : ' · 本机统计';
-  lines.push({ label: `${provider.label}${plan}${tag}`, enabled: false });
+  const plan = provider.identity?.plan ? ` · ${provider.identity.plan}` : '';
+  const tag = isAuthoritative(provider) ? '' : ' · 本机统计';
+  lines.push({ label: `${label}${plan}${tag}`, enabled: false });
 
-  for (const window of provider.windows ?? []) {
-    const percent = Math.round(window.usedPercent ?? 0);
+  for (const window of displayWindows(provider)) {
+    const percent = Math.round(window.usedPercent);
     const scope = windowLabel(window.windowMinutes);
     const reset = resetLabel(window.resetsAt, nowMs);
     lines.push({
@@ -95,15 +116,17 @@ export function providerMenuLines(provider, nowMs = Date.now()) {
     });
   }
 
-  if (provider.rolling) {
-    lines.push({
-      label: `    近 ${provider.rolling.windowHours} 小时 · ${formatTokens(provider.rolling.tokens)} tokens · ${provider.rolling.requests} 次`,
-      enabled: false,
-    });
+  // 本机统计这类没有窗口的快照,靠 details 把话说明白。
+  for (const section of provider.details ?? []) {
+    for (const row of section.rows ?? []) {
+      if (section.title !== '本机统计') continue;
+      lines.push({ label: `    ${row.label} · ${row.value}${row.secondaryValue ? ` · ${row.secondaryValue}` : ''}`, enabled: false });
+    }
   }
 
-  if (provider.credits?.hasCredits) {
-    lines.push({ label: `    余额 ${provider.credits.balance}`, enabled: false });
+  const remaining = provider.credits?.remaining;
+  if (Number.isFinite(remaining) && remaining > 0) {
+    lines.push({ label: `    余额 ${formatTokens(remaining)} ${provider.credits.unit ?? ''}`.trimEnd(), enabled: false });
   }
 
   return lines;
@@ -116,8 +139,8 @@ export function quotaMenuSection(snapshot, nowMs = Date.now()) {
   const items = [];
 
   for (const tracked of TRACKED_PROVIDERS) {
-    const provider = byId.get(tracked.id) ?? { ...tracked, available: false };
-    items.push(...providerMenuLines({ ...tracked, ...provider }, nowMs));
+    const provider = byId.get(tracked.id) ?? { ...tracked, status: 'unconfigured' };
+    items.push(...providerMenuLines({ ...tracked, ...provider, label: tracked.label }, nowMs));
   }
 
   const today = snapshot?.gateway?.today;
