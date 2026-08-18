@@ -1,6 +1,6 @@
 import express from 'express';
 
-import { resolveRelayConfig } from './relay-client.service.js';
+import { localMachineName, resolveRelayConfig } from './relay-client.service.js';
 
 /**
  * [T-fleet-mac] 舰队视图与审批中心的后端。
@@ -138,8 +138,9 @@ async function loadFleetSnapshot(target: RelayTarget, forceFresh = false): Promi
 /** 舰队总览:每台机器 + 它上面的会话与待审批。 */
 router.get('/leophone/fleet', async (_req, res) => {
   const target = relayTarget();
+  const localName = localMachineName();
   if (!target) {
-    res.json({ configured: false, machines: [] });
+    res.json({ configured: false, localName, machines: [] });
     return;
   }
   try {
@@ -156,7 +157,7 @@ router.get('/leophone/fleet', async (_req, res) => {
         sessions: active,
       };
     });
-    res.json({ configured: true, machines: rows });
+    res.json({ configured: true, localName, machines: rows });
   } catch (error) {
     res.status(502).json({
       error: { message: error instanceof Error ? error.message : 'relay unreachable' },
@@ -249,6 +250,116 @@ router.post('/leophone/approvals/respond', async (req, res) => {
     });
   }
 });
+
+/**
+ * [T-fleet-remote-run] 在某台远程 Mac 上开会话 / 驱动 / 接管。
+ *
+ * 工作台的指挥条把 @目标 切到远程时,以及会话列表里点「接管会话」时走这几条。
+ * 全都是中继的薄代理:leocodebox 自己不复制一份远程会话状态,回放与实时跟随
+ * 都由远端那台机器的 harness 事件日志负责(单调 seq,`?after=N` 续传不丢不重)。
+ */
+router.post('/leophone/fleet/sessions', async (req, res) => {
+  const target = relayTarget();
+  if (!target) {
+    res.status(409).json({ error: { message: '未配置中继' } });
+    return;
+  }
+  const machine = String(req.body?.machine ?? '').trim();
+  const prompt = String(req.body?.prompt ?? '').trim();
+  if (!machine || !prompt) {
+    res.status(400).json({ error: { message: 'machine 与 prompt 均为必填' } });
+    return;
+  }
+  try {
+    const created = await relayPost(
+      `/m/${encodeURIComponent(machine)}/harness/sessions`,
+      target,
+      {
+        harness: String(req.body?.harness ?? 'claude'),
+        cwd: typeof req.body?.cwd === 'string' ? req.body.cwd : undefined,
+        prompt,
+      },
+    );
+    res.status(202).json(created);
+  } catch (error) {
+    res.status(502).json({
+      error: { message: error instanceof Error ? error.message : 'relay unreachable' },
+    });
+  }
+});
+
+/** 接管:先回放 `after` 之前的全部事件,再实时跟随。SSE 原样透传。 */
+router.get('/leophone/fleet/machines/:machine/sessions/:sessionId/events', async (req, res) => {
+  const target = relayTarget();
+  if (!target) {
+    res.status(409).json({ error: { message: '未配置中继' } });
+    return;
+  }
+  const { machine, sessionId } = req.params;
+  const after = Number.parseInt(String(req.query.after ?? '0'), 10) || 0;
+  const upstream = new AbortController();
+  // 客户端断开时一并掐掉上游,别把中继连接泄漏在那儿。
+  req.on('close', () => upstream.abort());
+
+  try {
+    const relayRes = await fetch(
+      `${target.base}/m/${encodeURIComponent(machine)}/harness/sessions/${encodeURIComponent(sessionId)}/events?after=${after}`,
+      {
+        headers: { authorization: `Bearer ${target.key}`, accept: 'text/event-stream' },
+        signal: upstream.signal,
+      },
+    );
+    if (!relayRes.ok || !relayRes.body) {
+      res.status(502).json({ error: { message: `relay ${relayRes.status}` } });
+      return;
+    }
+    res.writeHead(200, {
+      'content-type': 'text/event-stream',
+      'cache-control': 'no-cache, no-transform',
+      connection: 'keep-alive',
+    });
+    const reader = relayRes.body.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      res.write(value);
+    }
+    res.end();
+  } catch (error) {
+    if (upstream.signal.aborted) return;
+    if (!res.headersSent) {
+      res.status(502).json({
+        error: { message: error instanceof Error ? error.message : 'relay unreachable' },
+      });
+      return;
+    }
+    res.end();
+  }
+});
+
+/** 接管后的多回合驾驶与叫停。 */
+for (const action of ['send', 'stop'] as const) {
+  router.post(`/leophone/fleet/machines/:machine/sessions/:sessionId/${action}`, async (req, res) => {
+    const target = relayTarget();
+    if (!target) {
+      res.status(409).json({ error: { message: '未配置中继' } });
+      return;
+    }
+    const { machine, sessionId } = req.params;
+    try {
+      const result = await relayPost(
+        `/m/${encodeURIComponent(machine)}/harness/sessions/${encodeURIComponent(sessionId)}/${action}`,
+        target,
+        req.body ?? {},
+      );
+      res.json(result);
+    } catch (error) {
+      res.status(502).json({
+        error: { message: error instanceof Error ? error.message : 'relay unreachable' },
+      });
+    }
+  });
+}
 
 /** [T-collections-fleet] 手机上传的收藏索引(只读镜像)。 */
 router.get('/leophone/collections', async (_req, res) => {

@@ -482,9 +482,14 @@ export function useChatComposerState({
 
   // ⌘K "Handoff to…" pre-fills the composer with an editable handoff preamble
   // after switching provider; nothing is sent until the user confirms.
+  //
+  // The workbench 指挥条 rides the same event with `send: true`: it is the one
+  // global "new task" entry, so its Enter must actually start the run. Sending
+  // goes through handleSubmit, which already queues the draft when the target
+  // session is busy — that is what keeps the 指挥条 from ever swallowing a click.
   useEffect(() => {
     const onHandoffDraft = (event: Event) => {
-      const detail = (event as CustomEvent<{ text?: string; sourceSessionId?: string }>).detail;
+      const detail = (event as CustomEvent<{ text?: string; sourceSessionId?: string; send?: boolean }>).detail;
       if (detail?.sourceSessionId) {
         pendingHandoffSourceRef.current = detail.sourceSessionId;
         handoffArmedRef.current = true;
@@ -493,6 +498,7 @@ export function useChatComposerState({
       if (typeof text === 'string' && text) {
         inputValueRef.current = text;
         setInput(text);
+        if (detail?.send) handleSubmitRef.current?.(createFakeSubmitEvent());
       }
     };
     window.addEventListener('leocodebox:handoff-draft', onHandoffDraft);

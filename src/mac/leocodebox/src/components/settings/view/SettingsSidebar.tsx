@@ -71,7 +71,7 @@ export default function SettingsSidebar({ activeTab, onChange }: SettingsSidebar
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="leocodebox-settings-nav hidden w-60 flex-shrink-0 flex-col border-r border-border/80 md:flex">
+      <aside className="leocodebox-settings-nav hidden w-56 flex-shrink-0 flex-col border-r border-border/80 md:flex">
         <div className="px-3 pb-1 pt-4">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />

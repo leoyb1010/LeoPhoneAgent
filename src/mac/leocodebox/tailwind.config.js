@@ -67,6 +67,17 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // Workbench chrome surfaces (see tokens.css). These carry alpha inside
+        // the custom property, so they are declared with the bare hsl() form.
+        wb: {
+          chip: "hsl(var(--wb-chip))",
+          chipline: "hsl(var(--wb-chip-line))",
+          bar: "hsl(var(--wb-bar))",
+          barline: "hsl(var(--wb-bar-line))",
+          log: "hsl(var(--wb-log))",
+          faint: "hsl(var(--wb-faint))",
+          accent2: "hsl(var(--wb-accent2))",
+        },
       },
       borderRadius: {
         md: "var(--radius-control)",

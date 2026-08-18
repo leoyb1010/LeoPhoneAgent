@@ -308,7 +308,16 @@ export const removeSessionFromProject = (project: Project, sessionIdToDelete: st
   return updatedProject;
 };
 
-const VALID_TABS: Set<string> = new Set(['dashboard', 'chat', 'files', 'shell', 'git', 'tasks', 'browser', 'missions', 'fleet']);
+const VALID_TABS: Set<string> = new Set(['chat', 'files', 'shell', 'git', 'tasks', 'browser']);
+
+/**
+ * Tabs that the 工作台 shell retired. `dashboard` and `fleet` stopped being
+ * pages (the dashboard's numbers moved into Leoapi/关于, the fleet into the
+ * titlebar capsule) and `missions` moved into ⌘K. They are still listed here
+ * so an existing install whose `activeTab` points at one of them lands on the
+ * conversation instead of a blank workspace.
+ */
+const RETIRED_TABS: Set<string> = new Set(['dashboard', 'fleet', 'missions']);
 
 export const isValidTab = (tab: string): tab is AppTab => {
   return VALID_TABS.has(tab) || tab.startsWith('plugin:');
@@ -317,15 +326,18 @@ export const isValidTab = (tab: string): tab is AppTab => {
 export const readPersistedTab = (): AppTab => {
   try {
     const stored = localStorage.getItem('activeTab');
+    if (stored && RETIRED_TABS.has(stored)) {
+      localStorage.removeItem('activeTab');
+      return 'chat';
+    }
     if (stored && isValidTab(stored)) {
       return stored as AppTab;
     }
   } catch {
     // localStorage unavailable
   }
-  // Dashboard is the landing page for fresh installs; anyone with a persisted
-  // tab keeps their habit (see the Settings "启动页" option).
-  return 'dashboard';
+  // 对话即首页:工作台冷启动直接进会话,不再落在仪表盘。
+  return 'chat';
 };
 
 const LAST_SESSION_KEY = 'last-session-id';

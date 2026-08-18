@@ -1,9 +1,10 @@
-import { Cpu, HardDrive, Route, ShieldCheck } from 'lucide-react';
+import { Cpu, Route, ShieldCheck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import type { Project } from '../../types/app';
 import { useLeoapiStatus } from '../../hooks/useLeoapiStatus';
 import { useVersionCheck } from '../../hooks/useVersionCheck';
+import QuotaPopover from '../workbench/QuotaPopover';
 
 import { resolveUpdateBadge } from './updateBadge';
 import DoctorHealthLight from './DoctorHealthLight';
@@ -13,18 +14,31 @@ type WorkspaceStatusBarProps = {
   runningCount: number;
   /** Chat provider of the current session, used to pick the matching Leoapi target. */
   activeProvider?: string | null;
+  /** Opens the local-log popover. The rail that used to host this entry is gone. */
+  onOpenLocalLog?: () => void;
 };
 
-export default function WorkspaceStatusBar({ selectedProject, runningCount, activeProvider }: WorkspaceStatusBarProps) {
+/**
+ * 30px 状态栏 —— 工作台唯一的常驻信息带。
+ *
+ * 它同时接手了原来 DesktopAppRail 底部的「本地日志」入口:导航栏删掉之后,
+ * 日志不该只能从命令面板找到,状态栏是它最自然的家。
+ */
+export default function WorkspaceStatusBar({
+  selectedProject,
+  runningCount,
+  activeProvider,
+  onOpenLocalLog,
+}: WorkspaceStatusBarProps) {
   const { t } = useTranslation();
   const leoapiNodes = useLeoapiStatus();
-  const { updateAvailable, restartRequired, latestVersion } = useVersionCheck();
+  const { updateAvailable, restartRequired, latestVersion, currentVersion } = useVersionCheck();
   const updateBadge = resolveUpdateBadge(updateAvailable, restartRequired);
   // cursor-agent sessions map onto the `cursor` config target; the rest match by id.
   const targetId = activeProvider === 'cursor-agent' ? 'cursor' : activeProvider;
   const activeNode = targetId ? leoapiNodes[targetId] : null;
   return (
-    <footer className="leocodebox-status-bar hidden h-7 flex-shrink-0 items-center justify-between border-t border-border px-3 text-[10px] text-muted-foreground md:flex">
+    <footer className="leocodebox-status-bar relative z-20 hidden h-[30px] flex-shrink-0 items-center justify-between border-t border-border px-5 font-mono text-[9.5px] text-wb-faint md:flex">
       <div className="flex min-w-0 items-center gap-3">
         <span className="inline-flex items-center gap-1.5 text-success dark:text-success">
           <span className="h-1.5 w-1.5 rounded-full bg-current" />
@@ -64,10 +78,20 @@ export default function WorkspaceStatusBar({ selectedProject, runningCount, acti
             {activeNode.latencyMs !== null && ` · ${activeNode.latencyMs}ms`}
           </span>
         )}
+        <QuotaPopover />
         <DoctorHealthLight />
         <span className="inline-flex items-center gap-1"><Cpu className="h-3 w-3" />{runningCount > 0 ? t('workspaceShell.tasksRunning', { count: runningCount }) : t('workspaceShell.agentIdle')}</span>
         <span className="inline-flex items-center gap-1"><ShieldCheck className="h-3 w-3" />{t('workspaceShell.localOnly')}</span>
-        <span className="inline-flex items-center gap-1"><HardDrive className="h-3 w-3" />{t('workspaceShell.autoSave')}</span>
+        {onOpenLocalLog && (
+          <button
+            type="button"
+            onClick={onOpenLocalLog}
+            className="border-b border-dotted border-current transition-colors hover:text-muted-foreground"
+          >
+            {t('workspaceShell.localLog')}
+          </button>
+        )}
+        <span>leocodebox {currentVersion ?? ''}</span>
       </div>
     </footer>
   );

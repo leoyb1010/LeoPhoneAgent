@@ -680,6 +680,8 @@ async function createDesktopWindow() {
       openNotificationTarget,
       isAppQuitting: () => isQuitting,
       requestQuit: () => app.quit(),
+      // 托盘的额度分区要直接问本地服务要数据,所以主进程得把本地 token 递过去。
+      getLocalAuthToken: () => localServer.getLocalAuthToken(),
     },
   });
 

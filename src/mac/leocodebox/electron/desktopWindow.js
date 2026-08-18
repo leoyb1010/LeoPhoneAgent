@@ -1,5 +1,7 @@
 import { BrowserWindow, Menu, Tray, clipboard, nativeImage, nativeTheme, session, webContents as electronWebContents } from 'electron';
 
+import { fetchQuotaSnapshot, quotaMenuSection, trayTitle } from './trayQuota.js';
+
 import { ViewHost } from './viewHost.js';
 
 const TITLEBAR_HEIGHT = 44;
@@ -60,6 +62,11 @@ export class DesktopWindowManager {
     this.mainWindow = null;
     this.settingsWindow = null;
     this.tray = null;
+    // 菜单栏额度:快照 + 轮询句柄。取不到就保持上一次的内容,菜单不闪。
+    this.quotaSnapshot = null;
+    this.quotaTimer = null;
+    this.quotaPopover = null;
+    this.trayMenu = null;
     this.launcherLoaded = false;
     this.contentViewResizeTimer = null;
     this.viewHost = new ViewHost({
@@ -619,6 +626,17 @@ export class DesktopWindowManager {
     const localState = this.getLocalState();
 
     const template = [
+      // 额度排在最上面:菜单栏图标存在的意义就是不打开应用也能看到还剩多少。
+      ...quotaMenuSection(this.quotaSnapshot),
+      {
+        label: '打开额度面板',
+        click: () => this.toggleQuotaPopover(),
+      },
+      {
+        label: '刷新额度',
+        click: () => void this.refreshQuota(true),
+      },
+      { type: 'separator' },
 	      {
 		        label: '本地',
         submenu: [
@@ -650,7 +668,8 @@ export class DesktopWindowManager {
     ];
 
     this.tray.setToolTip(`${this.appName}${this.actions.getActiveTarget()?.name ? ` - ${this.actions.getActiveTarget().name}` : ''}`);
-    this.tray.setContextMenu(Menu.buildFromTemplate(template));
+    // 不用 setContextMenu:那会把左键也接管过去,而左键要留给额度面板。
+    this.trayMenu = Menu.buildFromTemplate(template);
   }
 
   async showDesktopSettings() {
@@ -711,18 +730,114 @@ export class DesktopWindowManager {
     });
   }
 
+  /**
+   * 拉一次额度快照并刷新菜单栏。
+   * `force` 只影响服务端缓存(60 秒),菜单本身每次都会重建。
+   */
+  /**
+   * 本地服务的地址。开发模式下服务由 scripts/desktop-dev.mjs 外部拉起,
+   * localServer 自己没有 spawn 过它,所以 localWebUrl 是空的 —— 这时按
+   * SERVER_PORT 兜底,否则托盘会把"取不到"误报成"未接入"。
+   */
+  getQuotaBaseUrl() {
+    const fromLocalServer = this.getLocalState().localWebUrl;
+    if (fromLocalServer) return fromLocalServer;
+    const port = Number.parseInt(process.env.SERVER_PORT || '', 10);
+    return Number.isInteger(port) && port > 0 ? `http://127.0.0.1:${port}` : null;
+  }
+
+  async refreshQuota(force = false) {
+    const baseUrl = this.getQuotaBaseUrl();
+    const token = this.actions.getLocalAuthToken?.() ?? process.env.LEOCODEBOX_LOCAL_AUTH_TOKEN ?? null;
+    const snapshot = await fetchQuotaSnapshot(baseUrl, token, force);
+    if (snapshot) this.quotaSnapshot = snapshot;
+    if (!this.tray) return;
+    // 没有任何权威额度时标题为空 —— 菜单栏上不摆一个恒为 0% 的假计量。
+    this.tray.setTitle(trayTitle(this.quotaSnapshot?.providers ?? []));
+    this.buildTrayMenu();
+  }
+
+  /**
+   * 菜单栏图标下方的额度面板。
+   *
+   * 这里用无边框窗口而不是原生 Menu:原生菜单只能排灰色文本,画不出计量条、
+   * 重置倒计时和刷新按钮 —— 而菜单栏工具的价值恰恰在于"一眼看到还剩多少"。
+   * 面板本身是同源的独立工具页(与 Leoapi 切换页同一套做法),复用 preload
+   * 注入的本地 token,不需要另建一条鉴权通道。
+   */
+  ensureQuotaPopover() {
+    if (this.quotaPopover && !this.quotaPopover.isDestroyed()) return this.quotaPopover;
+    const baseUrl = this.getQuotaBaseUrl();
+    if (!baseUrl) return null;
+
+    this.quotaPopover = new BrowserWindow({
+      // CodexBar 的面板宽约 360、内容一次铺完不滚动;这里给足高度,
+      // 面板内部不再自己滚。
+      width: 372,
+      height: 660,
+      show: false,
+      frame: false,
+      transparent: true,
+      resizable: false,
+      movable: false,
+      minimizable: false,
+      maximizable: false,
+      fullscreenable: false,
+      skipTaskbar: true,
+      alwaysOnTop: true,
+      hasShadow: false,
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        preload: this.getPreloadPath(),
+      },
+    });
+    this.quotaPopover.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+    // 点到别处就收起来,菜单栏面板不该一直挂在最上层。
+    this.quotaPopover.on('blur', () => this.quotaPopover?.hide());
+    this.quotaPopover.on('closed', () => { this.quotaPopover = null; });
+    void this.quotaPopover.loadURL(`${baseUrl}/leocodebox-quota.html`);
+    return this.quotaPopover;
+  }
+
+  toggleQuotaPopover() {
+    const popover = this.ensureQuotaPopover();
+    if (!popover) {
+      // 本地服务还没起来时退回原来的行为:把工作台叫出来。
+      this.showMainWindow();
+      return;
+    }
+    if (popover.isVisible()) {
+      popover.hide();
+      return;
+    }
+    const trayBounds = this.tray?.getBounds?.();
+    const [width] = popover.getSize();
+    if (trayBounds) {
+      popover.setPosition(
+        Math.round(trayBounds.x + trayBounds.width / 2 - width / 2),
+        Math.round(trayBounds.y + trayBounds.height + 4),
+        false,
+      );
+    }
+    popover.show();
+    popover.focus();
+    void this.refreshQuota();
+  }
+
   createTray() {
     if (this.tray) return;
     this.tray = new Tray(this.getTrayImage());
-    this.tray.on('click', () => {
-      if (!this.mainWindow) return;
-      if (this.mainWindow.isVisible()) {
-        this.mainWindow.focus();
-      } else {
-        this.mainWindow.show();
-      }
+    // 左键 = 额度面板(菜单栏工具的主用途),右键 = 本地服务与退出。
+    this.tray.on('click', () => this.toggleQuotaPopover());
+    this.tray.on('right-click', () => {
+      if (this.trayMenu) this.tray.popUpContextMenu(this.trayMenu);
     });
     this.buildTrayMenu();
+    void this.refreshQuota();
+    // 2 分钟一轮:额度窗口是按小时/周算的,再密就是白烧电。
+    this.quotaTimer = setInterval(() => void this.refreshQuota(), 120_000);
+    this.quotaTimer.unref?.();
   }
 
   async createWindow() {
@@ -732,17 +847,17 @@ export class DesktopWindowManager {
       minWidth: 1024,
       minHeight: 720,
       show: false,
-      backgroundColor: '#0f172a',
+      backgroundColor: '#141514',
       title: this.appName,
       icon: this.getWindowIconPath(),
       titleBarStyle: 'hidden',
       ...(process.platform === 'darwin'
-        ? { trafficLightPosition: { x: 18, y: 14 } }
+        ? { trafficLightPosition: { x: 18, y: 17 } }
         : {
             titleBarOverlay: {
-              color: nativeTheme.shouldUseDarkColors ? '#111111' : '#f7f8fa',
-              symbolColor: nativeTheme.shouldUseDarkColors ? '#a1a1a1' : '#5b6470',
-              height: 44,
+              color: nativeTheme.shouldUseDarkColors ? '#141514' : '#f6f5f4',
+              symbolColor: nativeTheme.shouldUseDarkColors ? '#8fa39c' : '#5b6470',
+              height: 46,
             },
           }),
       webPreferences: {

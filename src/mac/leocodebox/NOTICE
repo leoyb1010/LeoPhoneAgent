@@ -18,3 +18,12 @@ CC Switch (https://github.com/farion1231/cc-switch)
 
 CC Switch is licensed under the MIT License.
 Copyright (c) 2025 Jason Young.
+
+
+CodexBar
+--------
+The menu-bar quota panel (public/leocodebox-quota.html) and the tray quota
+formatting (electron/trayQuota.js) follow the layout and information design of
+CodexBar by Peter Steinberger — https://github.com/steipete/CodexBar — which is
+distributed under the MIT License. Data acquisition in leocodebox is its own
+implementation reading local CLI state; no CodexBar source is bundled.

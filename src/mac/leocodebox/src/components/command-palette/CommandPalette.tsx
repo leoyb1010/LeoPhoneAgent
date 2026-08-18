@@ -63,6 +63,18 @@ const NAV_TABS: Array<{ id: AppTab; labelKey: string; keywords: string }> = [
   { id: 'shell', labelKey: 'commandPalette.goShell', keywords: 'shell terminal console' },
   { id: 'git', labelKey: 'commandPalette.goGit', keywords: 'git diff branches' },
   { id: 'tasks', labelKey: 'commandPalette.goTasks', keywords: 'tasks taskmaster' },
+  // 快速任务从一级导航位搬到这里 —— 它一天用不到几次,不值一个常驻入口。
+  { id: 'missions', labelKey: 'commandPalette.goMissions', keywords: 'missions quick tasks 快速任务 任务板' },
+];
+
+/**
+ * 工作台入口 —— 导航栏删掉之后,这三个浮层的唯一键盘入口。
+ * 外壳监听这几个事件(见 AppContent),面板只负责发。
+ */
+const SHELL_ENTRIES: Array<{ event: string; labelKey: string; fallback: string; keywords: string }> = [
+  { event: 'leocodebox:open-projects', labelKey: 'commandPalette.openProjects', fallback: '项目', keywords: 'projects 项目 仓库 新建项目' },
+  { event: 'leocodebox:open-leoapi', labelKey: 'commandPalette.openLeoapi', fallback: 'Leoapi 网关', keywords: 'leoapi gateway 网关 模型路由' },
+  { event: 'leocodebox:open-local-log', labelKey: 'commandPalette.openLocalLog', fallback: '本地日志', keywords: 'log 日志 diagnostics' },
 ];
 
 export default function CommandPalette({
@@ -90,8 +102,14 @@ export default function CommandPalette({
       e.preventDefault();
       setOpen((prev) => !prev);
     };
+    // 标题栏的 ⌘K 按钮走事件,和真的按 ⌘K 是同一条路。
+    const handleExternalOpen = () => setOpen(true);
     document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('leocodebox:open-command-palette', handleExternalOpen);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('leocodebox:open-command-palette', handleExternalOpen);
+    };
   }, []);
 
   const [pendingSwitchNode, setPendingSwitchNode] = React.useState<LeoapiSwitchNode | null>(null);
@@ -369,6 +387,20 @@ export default function CommandPalette({
                 {leoapi.lastResult && (
                   <div className="px-3 py-1.5 text-xs text-muted-foreground">{leoapi.lastResult}</div>
                 )}
+              </CommandGroup>
+            )}
+
+            {showActions && (
+              <CommandGroup heading={t('commandPalette.workbench', { defaultValue: '工作台' })}>
+                {SHELL_ENTRIES.map((entry) => (
+                  <CommandItem
+                    key={entry.event}
+                    value={`${t(entry.labelKey, { defaultValue: entry.fallback })} ${entry.keywords}`}
+                    onSelect={() => run(() => window.dispatchEvent(new CustomEvent(entry.event)))}
+                  >
+                    <span className="flex-1">{t(entry.labelKey, { defaultValue: entry.fallback })}</span>
+                  </CommandItem>
+                ))}
               </CommandGroup>
             )}
 

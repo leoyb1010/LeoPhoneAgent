@@ -9,13 +9,18 @@ import {
   isValidTab,
   persistHandoffSource,
   readHandoffSource,
+  readPersistedTab,
   removeSessionFromProject,
   upsertSessionIntoProject,
   type SessionUpsertedEvent,
 } from './projectStateUtils';
 
-test('fleet is a valid persisted top-level workspace', () => {
-  assert.equal(isValidTab('fleet'), true);
+test('retired top-level workspaces are no longer valid tabs', () => {
+  // 工作台外壳把 dashboard/fleet/missions 从"页面"降级掉了。
+  for (const retired of ['dashboard', 'fleet', 'missions']) {
+    assert.equal(isValidTab(retired), false, `${retired} should be retired`);
+  }
+  assert.equal(isValidTab('chat'), true);
 });
 
 // Minimal in-memory localStorage for the handoff-map helpers (Node has none).
@@ -31,6 +36,17 @@ const installLocalStorage = () => {
   (globalThis as unknown as { localStorage: MemoryStorage }).localStorage = storage;
   return storage;
 };
+
+test('an install parked on a retired tab lands on the conversation', () => {
+  const storage = installLocalStorage();
+  storage.setItem('activeTab', 'dashboard');
+  assert.equal(readPersistedTab(), 'chat');
+  // 迁移是一次性的:陈旧的值被清掉,不会每次启动都重算。
+  assert.equal(storage.getItem('activeTab'), null);
+
+  storage.setItem('activeTab', 'files');
+  assert.equal(readPersistedTab(), 'files');
+});
 
 const project = (overrides: Partial<Project> = {}): Project => ({
   projectId: 'project-1',

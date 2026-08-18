@@ -1,0 +1,195 @@
+/* 工作台外壳 —— 对话优先的极简 shell -------------------------------------- */
+
+@layer components {
+  /* 46px 标题栏。hiddenInset 窗口下整条都是拖拽区,只有控件本身不拖。 */
+  .wb-titlebar {
+    -webkit-app-region: drag;
+  }
+
+  .wb-titlebar button,
+  .wb-titlebar input,
+  .wb-titlebar a,
+  .wb-no-drag {
+    -webkit-app-region: no-drag;
+  }
+
+  /* 芯片:标题栏按钮、指挥条控件、弹层里的小按钮统一用它。 */
+  .wb-chip-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: none;
+    cursor: pointer;
+    border-radius: 9px;
+    background: hsl(var(--wb-chip));
+    box-shadow: inset 0 0 0 1px hsl(var(--wb-chip-line));
+    color: hsl(var(--muted-foreground));
+    transition: filter var(--motion-fast) var(--ease-out-quint),
+      transform var(--motion-fast) var(--ease-out-quint),
+      background var(--motion-slow) var(--ease-in-out);
+  }
+
+  .wb-chip-button:hover {
+    filter: brightness(1.15);
+    color: hsl(var(--foreground));
+  }
+
+  .wb-chip-button:active {
+    transform: scale(0.94);
+  }
+
+  .wb-chip-button:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  /* 齿轮 hover 旋转 40°(设计稿第六节)。 */
+  .wb-gear:hover svg {
+    transform: rotate(40deg);
+  }
+
+  .wb-gear svg {
+    transition: transform var(--motion-slow) cubic-bezier(0.2, 1, 0.4, 1);
+  }
+
+  /* Agent 徽标按钮按下时的小回弹。 */
+  .wb-agent-button:active {
+    transform: scale(0.88) rotate(-8deg);
+  }
+
+  /* 指挥条:全局唯一的新任务入口。 */
+  .wb-command-bar {
+    background: hsl(var(--wb-bar));
+    backdrop-filter: blur(36px) saturate(1.4);
+    -webkit-backdrop-filter: blur(36px) saturate(1.4);
+    box-shadow: inset 0 0 0 1px hsl(var(--wb-bar-line)), var(--elevation-3);
+    transition: background var(--motion-slow) var(--ease-in-out);
+  }
+
+  /* 会话列表行。 */
+  .wb-session-row {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    width: 100%;
+    border: none;
+    cursor: pointer;
+    padding: 9px 10px;
+    border-radius: 10px;
+    text-align: left;
+    background: transparent;
+    transition: background var(--motion-base) var(--ease-out-quint),
+      filter var(--motion-fast) var(--ease-out-quint);
+  }
+
+  .wb-session-row:hover {
+    background: hsl(var(--accent) / 0.55);
+  }
+
+  .wb-session-row.is-active {
+    background: hsl(var(--muted));
+    box-shadow: inset 0 0 0 1px hsl(var(--border));
+  }
+
+  .wb-session-row:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: -2px;
+  }
+
+  /* 紧凑密度:行高压一档,不靠 hover 才出现的控件(GUIDELINES 第 4 条)。 */
+  [data-density='compact'] .wb-session-row {
+    padding: 6px 10px;
+  }
+
+  [data-density='compact'] .wb-settings-row {
+    padding: 8px 14px;
+  }
+
+  .wb-settings-row {
+    padding: 11px 14px;
+  }
+
+  /* 日志/事件流底。 */
+  .wb-log-surface {
+    background: hsl(var(--wb-log));
+    box-shadow: inset 0 0 0 1px hsl(var(--border));
+    transition: background var(--motion-slow) var(--ease-in-out);
+  }
+}
+
+/* 动效 ------------------------------------------------------------------- */
+
+@keyframes wb-sheet-down {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes wb-inspector-in {
+  from { opacity: 0; transform: translateX(18px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes wb-zoom-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes wb-entry-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes wb-card-up {
+  from { opacity: 0; transform: translateY(14px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes wb-dot-work {
+  0%, 60%, 100% { opacity: 0.2; }
+  30% { opacity: 1; }
+}
+
+@keyframes wb-badge-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0.35); }
+  60% { box-shadow: 0 0 0 6px hsl(var(--primary) / 0); }
+}
+
+@keyframes wb-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.wb-anim-sheet { animation: wb-sheet-down 0.24s cubic-bezier(0.2, 1, 0.4, 1) both; }
+.wb-anim-inspector { animation: wb-inspector-in 0.34s cubic-bezier(0.32, 0.72, 0.33, 1) both; }
+.wb-anim-zoom { animation: wb-zoom-in 0.28s cubic-bezier(0.2, 1, 0.4, 1) both; }
+.wb-anim-entry { animation: wb-entry-in 0.3s both; }
+.wb-anim-card { animation: wb-card-up 0.3s cubic-bezier(0.2, 1, 0.4, 1) both; }
+.wb-anim-fade { animation: wb-fade-in 0.22s both; }
+.wb-dot { animation: wb-dot-work 1.2s infinite; }
+.wb-dot-2 { animation: wb-dot-work 1.2s 0.2s infinite; }
+.wb-dot-3 { animation: wb-dot-work 1.2s 0.4s infinite; }
+.wb-badge-live { animation: wb-badge-pulse 3s infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .wb-anim-sheet,
+  .wb-anim-inspector,
+  .wb-anim-zoom,
+  .wb-anim-entry,
+  .wb-anim-card,
+  .wb-anim-fade,
+  .wb-dot,
+  .wb-dot-2,
+  .wb-dot-3,
+  .wb-badge-live {
+    animation: none !important;
+  }
+
+  .wb-chip-button,
+  .wb-gear svg,
+  .wb-session-row,
+  .wb-command-bar,
+  .wb-log-surface {
+    transition: none !important;
+  }
+}

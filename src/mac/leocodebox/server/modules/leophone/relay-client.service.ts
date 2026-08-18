@@ -60,8 +60,15 @@ function resolveConfig(): RelayConfig | null {
   if (!wsUrl.endsWith('/relay/agent')) wsUrl = `${wsUrl}/relay/agent`;
   wsUrl = wsUrl.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
 
-  const name = (process.env.LEOAGENT_RELAY_NAME || '').trim() || os.hostname().split('.')[0];
-  return { wsUrl, relayKey, localKey, name };
+  return { wsUrl, relayKey, localKey, name: localMachineName() };
+}
+
+/**
+ * 本机在中继里的名字。没配中继时也要能回答——工作台标题栏的
+ * `本机 · <name>` 和"把自己从远程列表里剔掉"都依赖它。
+ */
+export function localMachineName(): string {
+  return (process.env.LEOAGENT_RELAY_NAME || '').trim() || os.hostname().split('.')[0];
 }
 
 /** leoagent(Python)是否仍在本机服役——在,则它也在向 relay 注册。 */

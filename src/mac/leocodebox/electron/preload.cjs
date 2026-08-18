@@ -57,7 +57,10 @@ const localAuthReady = installLocalOnlyAuthToken(window.location);
 
 if (isLocalHttpOrigin(window.location)) {
   const localBridge = { enabled: true, authReady: localAuthReady };
-  if (window.location.pathname === '/leocodebox-switch.html') {
+  // 托盘的额度面板与 Leoapi 切换页一样,是同源的独立工具页,同样需要
+  // 「回到工作台」这条出口。
+  if (window.location.pathname === '/leocodebox-switch.html'
+    || window.location.pathname === '/leocodebox-quota.html') {
     localBridge.openMain = () => ipcRenderer.invoke('leocodebox-desktop:open-local');
   }
   contextBridge.exposeInMainWorld('leocodeboxLocal', Object.freeze(localBridge));

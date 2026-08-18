@@ -3,6 +3,7 @@
 @import './styles/chat.css';
 @import './styles/settings.css';
 @import './styles/file-tree.css';
+@import './styles/workbench.css';
 
 @tailwind base;
 @tailwind components;

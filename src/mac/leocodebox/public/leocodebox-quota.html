@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI 额度</title>
+<style>
+  /*
+   * 菜单栏额度面板 —— 版式照搬 CodexBar(steipete/CodexBar, MIT)。
+   *
+   * 关键结构(区别于"把所有 provider 竖着堆起来"):
+   *   顶部 provider 标签条,每个标签下面一条迷你用量线 → 一次只显示一家,不用滚动
+   *   头部:名字(大号粗体) / 更新时间(左) + 套餐(右)
+   *   每个 Metric:标题独占一行 → 满宽进度条 → 下面一行 左"N% used" 右"Resets in…"
+   *   分隔线 → Extra usage → Cost(可展开) → 动作(带图标) → Settings/About/Quit
+   */
+  :root {
+    --panel: #fbfbfa; --line: rgba(20,24,22,.09); --text: #17191a; --sub: rgba(23,25,26,.55);
+    --track: rgba(20,24,22,.09); --sel: #0f766e; --selfg: #ffffff; --hover: rgba(20,24,22,.05);
+    --ok: #e08a4a; --warn: #b7791f; --danger: #c0392b; --live: #2fb457;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --panel: #1c1e1d; --line: rgba(255,255,255,.10); --text: #f0f2f1; --sub: rgba(240,242,241,.55);
+      --track: rgba(255,255,255,.12); --sel: #56f0b8; --selfg: #10241d; --hover: rgba(255,255,255,.07);
+      --ok: #e8a06a; --warn: #f5c84c; --danger: #e06a5f; --live: #56f0b8;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: transparent; color: var(--text); user-select: none;
+    font: 13px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .shell {
+    margin: 7px; border-radius: 14px; background: var(--panel);
+    box-shadow: 0 16px 44px rgba(0,0,0,.28), inset 0 0 0 1px var(--line);
+    overflow: hidden; -webkit-app-region: drag;
+  }
+  button, .tab { -webkit-app-region: no-drag; }
+
+  /* --- provider 标签条 --- */
+  .tabs { display: flex; gap: 2px; padding: 9px 9px 0; }
+  .tab {
+    flex: 1; min-width: 0; border: none; background: transparent; cursor: pointer;
+    border-radius: 9px; padding: 6px 2px 5px; color: var(--text);
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    transition: background .15s;
+  }
+  .tab:hover { background: var(--hover); }
+  .tab.on { background: var(--sel); color: var(--selfg); }
+  .tab .ico { font-size: 15px; line-height: 1; }
+  .tab .nm { font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .tab .mini { width: 100%; height: 3px; border-radius: 2px; background: var(--track); overflow: hidden; position: relative; }
+  .tab.on .mini { background: rgba(255,255,255,.28); }
+  .tab .mini i { display: block; height: 100%; border-radius: 2px; }
+  .tab .mini.off i { width: 4px; background: var(--sub); }
+
+  .rule { height: 1px; background: var(--line); margin: 9px 14px 0; }
+
+  /* --- 头部 --- */
+  .head { padding: 12px 16px 0; }
+  .head h1 { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
+  .head .meta { display: flex; align-items: baseline; margin-top: 3px; font-size: 12.5px; color: var(--sub); }
+  .head .meta .plan { margin-left: auto; }
+
+  /* --- Metric --- */
+  .body { padding: 0 16px 4px; }
+  .sec { padding-top: 15px; }
+  .sec h2 { margin: 0 0 9px; font-size: 16px; font-weight: 700; letter-spacing: -.01em; }
+  .bar { height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
+  .bar i { display: block; height: 100%; border-radius: 3px; transition: width .4s cubic-bezier(.2,1,.4,1); }
+  .under { display: flex; align-items: baseline; margin-top: 7px; font-size: 12.5px; }
+  .under .r { margin-left: auto; color: var(--sub); }
+  .pace { margin-top: 5px; font-size: 12.5px; color: var(--sub); }
+  .sep { height: 1px; background: var(--line); margin: 15px 0 0; }
+
+  /* --- 动作 --- */
+  .acts { padding: 6px 0 7px; }
+  .act {
+    display: flex; align-items: center; gap: 11px; width: 100%; border: none; background: transparent;
+    cursor: pointer; color: var(--text); font: 13.5px -apple-system, sans-serif; text-align: left;
+    padding: 6px 16px;
+  }
+  .act:hover { background: var(--hover); }
+  .act .g { width: 17px; text-align: center; color: var(--sub); font-size: 13px; }
+  .act .chev { margin-left: auto; color: var(--sub); }
+  .act[disabled] { color: var(--sub); cursor: default; }
+  .act[disabled]:hover { background: transparent; }
+  .hint { padding: 2px 16px 10px; font-size: 11px; line-height: 1.45; color: var(--sub); }
+  @media (prefers-reduced-motion: reduce) { .bar i { transition: none; } }
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="tabs" id="tabs"></div>
+  <div class="rule"></div>
+  <div class="head" id="head"></div>
+  <div class="body" id="body"></div>
+  <div class="sep"></div>
+  <div class="acts" id="acts"></div>
+</div>
+
+<script>
+  const token = () => localStorage.getItem('auth-token') || '';
+  const api = async (path) => {
+    const res = await fetch(path, { headers: { Authorization: `Bearer ${token()}` } });
+    if (!res.ok) throw new Error(String(res.status));
+    return res.json();
+  };
+  const el = (tag, cls, text) => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  };
+  const ICON = { codex: '◎', claude: '✳', cursor: '▣', grok: '✦', gemini: '◆', opencode: '◇' };
+  const tone = (p) => (p >= 90 ? 'var(--danger)' : p >= 70 ? 'var(--warn)' : 'var(--ok)');
+  const num = (v) => (!v ? '0' : v >= 1e6 ? `${(v / 1e6).toFixed(0)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : String(Math.round(v)));
+
+  const windowName = (m) => {
+    if (!m) return 'Usage';
+    if (m >= 10080) return 'Weekly';
+    if (m >= 1440) return `${Math.round(m / 1440)}-Day`;
+    if (m >= 300) return 'Session';
+    return `${Math.round(m / 60) || m}h`;
+  };
+  const resetIn = (at) => {
+    if (!at) return '';
+    const s = at - Math.floor(Date.now() / 1000);
+    if (s <= 0) return 'Reset';
+    const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+    if (d > 0) return `Resets in ${d}d ${h}h`;
+    if (h > 0) return `Resets in ${h}h ${m}m`;
+    return `Resets in ${Math.max(1, m)}m`;
+  };
+
+  let providers = [];
+  let gateway = null;
+  let active = 0;
+
+  /** 标题 → 满宽进度条 → 左"N% used" 右"Resets in…"。CodexBar 的 Metric 就这三行。 */
+  function metric(title, percent, rightText, extra) {
+    const sec = el('div', 'sec');
+    sec.append(el('h2', null, title));
+    const bar = el('div', 'bar');
+    const fill = el('i');
+    // 0% 也留一个可见的圆点,和 CodexBar 一样让人知道"读到了,只是很低"。
+    fill.style.width = percent > 0 ? `${Math.min(100, Math.max(1.5, percent))}%` : '0';
+    fill.style.background = tone(percent);
+    bar.append(fill);
+    sec.append(bar);
+    const under = el('div', 'under');
+    under.append(el('span', null, `${Math.round(percent)}% used`));
+    if (rightText) under.append(el('span', 'r', rightText));
+    sec.append(under);
+    if (extra) sec.append(el('div', 'pace', extra));
+    return sec;
+  }
+
+  function renderTabs() {
+    const tabs = document.getElementById('tabs');
+    tabs.replaceChildren(...providers.map((p, i) => {
+      const b = el('button', `tab${i === active ? ' on' : ''}`);
+      b.append(el('span', 'ico', ICON[p.id] || '●'));
+      b.append(el('span', 'nm', p.label.split(' ')[0]));
+      const worst = (p.windows || []).reduce((m, w) => Math.max(m, w.usedPercent || 0), 0);
+      const mini = el('span', `mini${p.available ? '' : ' off'}`);
+      const fill = el('i');
+      if (p.available) {
+        fill.style.width = `${Math.min(100, Math.max(4, worst))}%`;
+        fill.style.background = i === active ? 'var(--selfg)' : tone(worst);
+      }
+      mini.append(fill);
+      b.append(mini);
+      b.addEventListener('click', () => { active = i; render(); });
+      return b;
+    }));
+  }
+
+  function render() {
+    renderTabs();
+    const p = providers[active];
+    const head = document.getElementById('head');
+    const body = document.getElementById('body');
+    const acts = document.getElementById('acts');
+    if (!p) return;
+
+    head.replaceChildren();
+    head.append(el('h1', null, p.label));
+    const meta = el('div', 'meta');
+    meta.append(el('span', null, p.available ? 'Updated just now' : 'Not connected'));
+    if (p.plan) meta.append(el('span', 'plan', p.plan));
+    head.append(meta);
+
+    const rows = [];
+    for (const w of p.windows || []) {
+      rows.push(metric(windowName(w.windowMinutes), w.usedPercent, resetIn(w.resetsAt)));
+    }
+    if (p.rolling) {
+      rows.push(metric(`Last ${p.rolling.windowHours}h`, 0,
+        `${num(p.rolling.tokens)} tokens`,
+        `本机日志累加 · ${p.rolling.requests} 次调用 · 不是官方配额`));
+    }
+    if (p.credits && p.credits.hasCredits) {
+      rows.push(metric('Credits', 0, p.credits.balance));
+    }
+    if (!p.available) {
+      const sec = el('div', 'sec');
+      sec.append(el('h2', null, 'Not connected'));
+      sec.append(el('div', 'pace', p.note || '本机读不到这家的用量记录。'));
+      rows.push(sec);
+    }
+    if (gateway && gateway.today) {
+      rows.push(el('div', 'sep'));
+      const t = gateway.today;
+      const sec = el('div', 'sec');
+      sec.append(el('h2', null, 'Leoapi'));
+      sec.append(el('div', 'pace',
+        `Today: ${num((t.inputTokens || 0) + (t.outputTokens || 0))} tokens · ${t.requests || 0} 次`));
+      rows.push(sec);
+    }
+    body.replaceChildren(...rows);
+
+    const action = (icon, label, onClick, chevron) => {
+      const b = el('button', 'act');
+      b.append(el('span', 'g', icon));
+      b.append(el('span', null, label));
+      if (chevron) b.append(el('span', 'chev', '›'));
+      if (onClick) b.addEventListener('click', onClick); else b.disabled = true;
+      return b;
+    };
+    acts.replaceChildren(
+      action('⟳', 'Refresh', () => void load(true)),
+      action('◱', 'Usage Dashboard', () => window.leocodeboxLocal?.openMain?.()),
+      action('⚙', 'Settings…', () => window.leocodeboxLocal?.openMain?.()),
+    );
+    document.querySelector('.hint')?.remove();
+    const hint = el('div', 'hint',
+      '直接读各家 CLI 落在本机的状态,不额外登录。标「本机日志累加」的不是官方配额。');
+    acts.after(hint);
+  }
+
+  async function load(force) {
+    try {
+      const [quota, gw] = await Promise.all([
+        api(`/api/leocodebox/quota${force ? '?refresh=1' : ''}`),
+        api('/api/leocodebox/gateway/status').catch(() => null),
+      ]);
+      providers = quota.providers || [];
+      gateway = gw && gw.meter ? { enabled: gw.enabled, today: gw.meter.today } : null;
+      // 默认落在用得最紧张的那家 —— CodexBar 的 highest-usage auto-selection。
+      if (active >= providers.length) active = 0;
+      render();
+    } catch (error) {
+      document.getElementById('body').replaceChildren(el('div', 'pace', `读取失败:${error.message}`));
+    }
+  }
+
+  void load(false);
+  setInterval(() => void load(false), 120_000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) void load(false); });
+</script>
+</body>
+</html>

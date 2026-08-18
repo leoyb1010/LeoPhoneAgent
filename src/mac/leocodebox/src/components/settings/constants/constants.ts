@@ -50,21 +50,24 @@ export const SETTINGS_TAB_GROUP_KEYS: Record<SettingsMainTabGroup, string> = {
 };
 
 export const SETTINGS_MAIN_TABS: SettingsMainTabMeta[] = [
-  { id: 'agents', label: 'Agents', labelKey: 'mainTabs.agents', group: 'agent', keywords: 'agents subagents claude code 智能体', icon: Bot },
+  // 智能体:先装好、再定档案、再接工具与技能。
+  { id: 'agents', label: 'Agents', labelKey: 'mainTabs.agents', group: 'agent', keywords: 'agents subagents claude code 智能体 本机智能体', icon: Bot },
   { id: 'agentHub', label: 'Agent Hub', labelKey: 'mainTabs.agentHub', group: 'agent', keywords: 'agent hub profiles presets 智能体 档案 launch', icon: Boxes },
-  { id: 'skills', label: 'Skills', labelKey: 'mainTabs.skills', group: 'agent', keywords: 'skills abilities SKILL.md 技能', icon: Sparkles },
   { id: 'mcp', label: 'MCP', labelKey: 'mainTabs.mcp', group: 'agent', keywords: 'mcp servers model context protocol tools 工具', icon: Server },
-  { id: 'plugins', label: 'Plugins', labelKey: 'mainTabs.plugins', group: 'agent', keywords: 'plugins extensions integrations 插件', icon: Plug },
+  { id: 'skills', label: 'Skills', labelKey: 'mainTabs.skills', group: 'agent', keywords: 'skills abilities SKILL.md 技能', icon: Sparkles },
 
-  { id: 'git', label: 'Git', labelKey: 'mainTabs.git', group: 'workspace', keywords: 'git github commits 提交 分支', icon: GitBranch },
+  // 工作区:外观从「系统」搬进来——它调的是这台机器的工作环境,不是系统能力。
+  { id: 'appearance', label: 'Appearance', labelKey: 'mainTabs.appearance', group: 'workspace', keywords: 'appearance theme dark light language density 外观 主题 语言 密度', icon: Palette },
+  { id: 'git', label: 'Git', labelKey: 'mainTabs.git', group: 'workspace', keywords: 'git github commits 提交 分支 代码仓库', icon: GitBranch },
   { id: 'tasks', label: 'Tasks', labelKey: 'mainTabs.tasks', group: 'workspace', keywords: 'tasks taskmaster 任务', icon: ListChecks },
   { id: 'browser', label: 'Browser', labelKey: 'mainTabs.browser', group: 'workspace', keywords: 'browser playwright chromium automation 浏览器', icon: MonitorPlay },
   { id: 'voice', label: 'Voice', labelKey: 'mainTabs.voice', group: 'workspace', keywords: 'voice speech dictation microphone 语音', icon: Mic },
 
-  { id: 'api', label: 'API Tokens', labelKey: 'mainTabs.apiTokens', group: 'system', keywords: 'api tokens auth keys 密钥 令牌', icon: KeyRound },
-  { id: 'appearance', label: 'Appearance', labelKey: 'mainTabs.appearance', group: 'system', keywords: 'appearance theme dark light language 外观 主题 语言', icon: Palette },
+  // 系统:插件从「智能体」搬过来——它扩的是工作台本身,不是某个 Agent。
+  { id: 'api', label: 'API Tokens', labelKey: 'mainTabs.apiTokens', group: 'system', keywords: 'api tokens auth keys 密钥 令牌 接口 凭据', icon: KeyRound },
   { id: 'notifications', label: 'Notifications', labelKey: 'mainTabs.notifications', group: 'system', keywords: 'notifications alerts push 通知', icon: Bell },
-  { id: 'about', label: 'About', labelKey: 'mainTabs.about', group: 'system', keywords: 'about version info 关于 版本', icon: Info },
+  { id: 'plugins', label: 'Plugins', labelKey: 'mainTabs.plugins', group: 'system', keywords: 'plugins extensions integrations 插件', icon: Plug },
+  { id: 'about', label: 'About', labelKey: 'mainTabs.about', group: 'system', keywords: 'about version info 关于 版本 更新', icon: Info },
 ];
 
 /** 派生:给 controller 做合法性校验用,不要再手写第二份。 */

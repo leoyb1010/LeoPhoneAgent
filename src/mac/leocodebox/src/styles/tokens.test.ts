@@ -35,6 +35,19 @@ test('index.css imports the five design-system style modules', () => {
   }
 });
 
+test('the app shell does not blanket-position its direct children', () => {
+  // 这条规则(`.leocodebox-app-shell > * { position: relative }`)会把每个直接
+  // 子元素的定位改写掉:Leoapi 面板、本地工具模态这些 fixed/absolute 浮层挂到
+  // 外壳下就被打回文档流,表现为"弹层出现在状态栏下面""下拉气泡被主区盖住"。
+  // 层级改由子元素各自声明,这里把它钉死,避免以后又被加回来。
+  // 注释里写了这条规则长什么样,所以先把注释剥掉再匹配。
+  const withoutComments = appCss.replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.ok(
+    !/\.leocodebox-app-shell\s*>\s*\*\s*(?::not\([^)]*\))?\s*\{/.test(withoutComments),
+    'app styles must not blanket-position .leocodebox-app-shell > *',
+  );
+});
+
 test('switch.html carries the same motion/ease token values as app styles', () => {
   for (const [token, value] of SHARED_MOTION_TOKENS) {
     const declaration = `${token}: ${value};`;

@@ -178,25 +178,17 @@
     animation: settings-fade-in 150ms ease-out;
   }
 
-  .leocodebox-app-shell::before {
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    pointer-events: none;
-    background: url('/visuals/textures/cold-metal-light.webp') center / cover fixed;
-    content: '';
-    opacity: 0.035;
-  }
+  /* 外壳底色保持纯色。这里曾经叠一层 webp 噪点纹理(浅色 cold-metal、
+     深色 graphite,3.5%–5% 不透明度),意图是让大面积底色不那么平,实际
+     在浅色下把 #f6f5f1 压出一层脏黄。去掉之后明暗两套都是干净的纯色。 */
 
-  .dark .leocodebox-app-shell::before {
-    background-image: url('/visuals/textures/graphite-dark.webp');
-    opacity: 0.05;
-  }
-
-  .leocodebox-app-shell > * {
-    position: relative;
-    z-index: 1;
-  }
+  /* 这里**故意没有** `.leocodebox-app-shell > * { position: relative; z-index: 1 }`。
+     那条规则用来把内容抬到 ::before 纹理层(z-index:0)之上,代价是改写了每个
+     直接子元素的定位:任何 fixed/absolute 的浮层(Leoapi 面板、本地工具模态、
+     下拉气泡)挂到外壳下就被打回文档流,掉到状态栏下方或被后面的兄弟盖住。
+     现在改为由外壳的四个在流子元素各自声明 relative + z-index(标题栏 40 >
+     指挥条 30 > 状态栏 20 > 主区 10),浮层则自己用 fixed/portal —— 谁的层级
+     谁负责,不再有一条规则替所有人做决定。 */
 
   @keyframes chat-activity-enter {
     0% {
