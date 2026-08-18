@@ -94,6 +94,7 @@
     "appearance": "外观",
     "git": "代码仓库",
     "apiTokens": "接口与凭据",
+    "quota": "AI 额度",
     "voice": "语音",
     "tasks": "任务",
     "browser": "浏览器",
@@ -700,5 +701,48 @@
     "placeholder": "搜索设置",
     "noResults": "没有匹配的设置项",
     "clear": "清除"
+  },
+  "quota": {
+    "title": "AI 额度",
+    "description": "每家 AI 的额度从哪读到的,还差什么。",
+    "loading": "加载中…",
+    "loadError": "额度状态读取失败。",
+    "saveError": "凭据保存失败。",
+    "empty": "没有任何 provider 返回。",
+    "refresh": "刷新",
+    "refreshing": "刷新中…",
+    "autoConnected": "已通过本机登录态自动接入",
+    "credentialOrigin": "凭据来源:",
+    "updatedAt": "{{time}} 更新",
+    "storageNote": "凭据只存在这台 Mac 上,位于 ~/.leocodebox/quota-credentials.json,权限 0600。完整 key 绝不回传到本页面,页面上只显示是否已配置和尾 4 位。",
+    "status": {
+      "connected": "已接入",
+      "notConnected": "未接入",
+      "error": "出错"
+    },
+    "source": {
+      "oauth": "官方额度(OAuth)",
+      "api": "官方数据(API)",
+      "web": "官方额度(浏览器会话)",
+      "cli": "官方额度(CLI)",
+      "local": "本机估算,不是官方额度",
+      "none": "无数据"
+    },
+    "credential": {
+      "notConfigured": "未填写",
+      "configured": "已配置",
+      "configuredWithTail": "已配置 · 尾号 {{last4}}",
+      "placeholder": "粘贴 API key",
+      "inputLabel": "{{provider}} 的 API key",
+      "save": "保存",
+      "saving": "保存中…",
+      "remove": "清除"
+    },
+    "howTo": {
+      "gemini": "用 Google 账号重新登录 gemini CLI(登录方式为 oauth-personal)。个人配额接口不对 API key 开放。",
+      "cursor": "在 cursor.com → Dashboard → API Keys 生成 key。这里会存下来,但 Cursor 只对 Enterprise 团队的 admin key 开放用量接口。",
+      "grok": "在 console.x.ai 生成一个 xai- 开头的 API key 填到这里,会实时校验。xAI 未对这类 key 提供余额接口。",
+      "opencode": "OpenCode 按你自己配的上游计费,额度请到那家上游查看。"
+    }
   }
 }

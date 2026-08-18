@@ -93,6 +93,7 @@
     "appearance": "Darstellung",
     "git": "Git",
     "apiTokens": "API & Token",
+    "quota": "KI-Kontingent",
     "tasks": "Aufgaben",
     "notifications": "Benachrichtigungen",
     "plugins": "Plugins",
@@ -626,5 +627,48 @@
     "placeholder": "Einstellungen suchen",
     "noResults": "Keine passenden Einstellungen",
     "clear": "Löschen"
+  },
+  "quota": {
+    "title": "KI-Kontingent",
+    "description": "Woher das Kontingent jedes Anbieters gelesen wird und was noch fehlt.",
+    "loading": "Wird geladen…",
+    "loadError": "Kontingentstatus konnte nicht geladen werden.",
+    "saveError": "Zugangsdaten konnten nicht gespeichert werden.",
+    "empty": "Kein Anbieter hat geantwortet.",
+    "refresh": "Aktualisieren",
+    "refreshing": "Wird aktualisiert…",
+    "autoConnected": "Automatisch über die Anmeldung auf diesem Mac verbunden",
+    "credentialOrigin": "Quelle der Zugangsdaten: ",
+    "updatedAt": "aktualisiert {{time}}",
+    "storageNote": "Zugangsdaten bleiben auf diesem Mac, in ~/.leocodebox/quota-credentials.json mit den Rechten 0600. Ein Schlüssel wird nie an diese Seite zurückgegeben – nur, ob einer hinterlegt ist, und seine letzten 4 Zeichen.",
+    "status": {
+      "connected": "Verbunden",
+      "notConnected": "Nicht verbunden",
+      "error": "Fehler"
+    },
+    "source": {
+      "oauth": "offizielles Kontingent (OAuth)",
+      "api": "offizielle Daten (API)",
+      "web": "offizielles Kontingent (Browser-Sitzung)",
+      "cli": "offizielles Kontingent (CLI)",
+      "local": "lokale Schätzung, kein offizielles Kontingent",
+      "none": "keine Daten"
+    },
+    "credential": {
+      "notConfigured": "Kein Schlüssel hinterlegt",
+      "configured": "Schlüssel hinterlegt",
+      "configuredWithTail": "Schlüssel hinterlegt · endet auf {{last4}}",
+      "placeholder": "API-Schlüssel einfügen",
+      "inputLabel": "{{provider}}-API-Schlüssel",
+      "save": "Speichern",
+      "saving": "Wird gespeichert…",
+      "remove": "Entfernen"
+    },
+    "howTo": {
+      "gemini": "Melde dich in der Gemini-CLI mit einem Google-Konto an (Auth-Typ oauth-personal). Der Endpunkt für das persönliche Kontingent ist für API-Schlüssel nicht freigegeben.",
+      "cursor": "Erstelle einen Schlüssel unter cursor.com → Dashboard → API Keys. Er wird hier gespeichert, aber Cursor gibt Nutzungsdaten nur an Admin-Schlüssel von Enterprise-Teams heraus.",
+      "grok": "Erstelle einen API-Schlüssel auf console.x.ai und füge ihn hier ein. Er wird gegen die xAI-API geprüft; für diesen Schlüsseltyp veröffentlicht xAI kein Guthaben.",
+      "opencode": "OpenCode rechnet über den von dir konfigurierten Anbieter ab – prüfe das Kontingent dort."
+    }
   }
 }

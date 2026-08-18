@@ -536,6 +536,7 @@ function registerIpcHandlers() {
   ipcMain.handle('leocodebox-desktop:get-state', (event) => getDesktopStateForSender(event));
   trustedHandle('leocodebox-desktop:open-local', async () => openLocalInDesktop());
   trustedHandle('leocodebox-desktop:open-switch', async () => openSwitchInDesktop());
+  trustedHandle('leocodebox-desktop:resize-quota-panel', async (_event, height) => desktopWindow.resizeQuotaPopover(height));
   trustedHandle('leocodebox-desktop:open-local-web-ui', async () => openLocalWebUi());
   trustedHandle('leocodebox-desktop:reload-active-tab', async () => desktopWindow.reloadActiveTab());
   // Environment switching collapsed to "open the local workspace" when the

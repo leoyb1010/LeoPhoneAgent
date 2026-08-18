@@ -12,6 +12,7 @@ import type {
 
 import { apiClient } from '../../../utils/apiClient';
 import type { MarkSessionProcessing } from '../../../hooks/useSessionProtection';
+import { APPROVAL_RESOLVED_EVENT, type ApprovalResolvedDetail } from '../../../hooks/useSessionApprovals';
 import { persistHandoffSource } from '../../../hooks/projectStateUtils';
 import { grantClaudeToolPermission } from '../utils/chatPermissions';
 import {
@@ -25,6 +26,7 @@ import type {
 } from '../types/types';
 import type { Project, ProjectSession, LLMProvider } from '../../../types/app';
 
+import { decideHandoffAutoSend } from './handoffAutoSend';
 import { useFileMentions } from './useFileMentions';
 import { useChatImageAttachments } from './useChatImageAttachments';
 import { useChatTextareaLayout } from './useChatTextareaLayout';
@@ -165,6 +167,10 @@ export function useChatComposerState({
   // first trigger change after arming must keep the ref; any later change means
   // the handoff was abandoned for another new session, so the ref is dropped.
   const handoffArmedRef = useRef(false);
+  // 指挥条回车带 `send: true` 时先在这里挂号,等新会话状态落定再真正发出去
+  // (见下面的 auto-send effect)。tick 只用来把 effect 叫醒。
+  const pendingAutoSendRef = useRef(false);
+  const [autoSendTick, setAutoSendTick] = useState(0);
   const selectedProjectId = selectedProject?.projectId;
   // Prefer the stable backend-allocated id (selectedSession.id) but fall back
   // to currentSessionId for a just-established session that hasn't been
@@ -484,9 +490,10 @@ export function useChatComposerState({
   // after switching provider; nothing is sent until the user confirms.
   //
   // The workbench 指挥条 rides the same event with `send: true`: it is the one
-  // global "new task" entry, so its Enter must actually start the run. Sending
-  // goes through handleSubmit, which already queues the draft when the target
-  // session is busy — that is what keeps the 指挥条 from ever swallowing a click.
+  // global "new task" entry, so its Enter must actually start the run. `send`
+  // only *arms* the send here — the auto-send effect below fires it once the
+  // brand-new session's state has landed, so the text can never go to the
+  // session the user was looking at a moment ago.
   useEffect(() => {
     const onHandoffDraft = (event: Event) => {
       const detail = (event as CustomEvent<{ text?: string; sourceSessionId?: string; send?: boolean }>).detail;
@@ -498,12 +505,43 @@ export function useChatComposerState({
       if (typeof text === 'string' && text) {
         inputValueRef.current = text;
         setInput(text);
-        if (detail?.send) handleSubmitRef.current?.(createFakeSubmitEvent());
+        // 只挂号,不立刻 submit —— 立刻发会打进上一个会话,见 auto-send effect。
+        if (detail?.send) {
+          pendingAutoSendRef.current = true;
+          setAutoSendTick((previous) => previous + 1);
+        }
       }
     };
     window.addEventListener('leocodebox:handoff-draft', onHandoffDraft);
     return () => window.removeEventListener('leocodebox:handoff-draft', onHandoffDraft);
   }, []);
+
+  /**
+   * 指挥条回车的延后发送。
+   *
+   * 为什么不能同步发:AppContent 先调 handleNewSession(把 selectedSession 清空、
+   * bump newSessionTrigger、navigate('/')),紧接着**同步**派发 handoff-draft。
+   * 此时 React 还没重渲染,handleSubmitRef 里仍是上一次渲染的闭包,
+   * selectedSession / currentSessionId 都还指向刚才那个会话 —— 直接 submit 的话
+   * targetSessionId 取到旧会话,这句话被发进旧会话(旧会话在跑就更糟,直接入队),
+   * 而用户被 navigate 带到新会话,看到的是"选择您的 AI 助手"空态,输入也没了。
+   *
+   * 所以这里等两件事都归零(父层的 selectedSession + 本地 currentSessionId,
+   * 后者由 useChatSessionState 的 newSessionTrigger reset 清)再发。届时闭包是新的,
+   * handleSubmit 会走"没有会话 → 向网关申请一个新 sessionId"的分支,落到新会话里。
+   * 这个 effect 声明在 handleSubmitRef 赋值 effect 之后,保证读到的是当前渲染的闭包。
+   */
+  useEffect(() => {
+    const decision = decideHandoffAutoSend({
+      armed: pendingAutoSendRef.current,
+      selectedSessionId: selectedSession?.id ?? null,
+      currentSessionId,
+      draft: inputValueRef.current,
+    });
+    if (decision === 'wait') return;
+    pendingAutoSendRef.current = false;
+    if (decision === 'send') void handleSubmitRef.current?.(createFakeSubmitEvent());
+  }, [autoSendTick, currentSessionId, selectedSession]);
 
   // Bound the pending handoff source to exactly the session the handoff created.
   // The handoff's own onStartNewChat bumps newSessionTrigger first, so consume a
@@ -675,8 +713,15 @@ export function useChatComposerState({
       setPendingPermissionRequests((previous) =>
         previous.filter((request) => !validIds.includes(request.requestId)),
       );
+
+      // 答复走 chat.permission-response,服务端不会回一条广播,所以外层的
+      // 会话级待审批表只能靠这里销号 —— 否则会话列表的"待审批"会一直挂到
+      // run 结束为止,而这正是用户点进去发现什么都没有的那种假标签。
+      window.dispatchEvent(new CustomEvent<ApprovalResolvedDetail>(APPROVAL_RESOLVED_EVENT, {
+        detail: { sessionId: sessionKey, requestIds: validIds },
+      }));
     },
-    [sendMessage, setPendingPermissionRequests],
+    [sendMessage, sessionKey, setPendingPermissionRequests],
   );
 
 

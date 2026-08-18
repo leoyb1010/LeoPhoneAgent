@@ -56,6 +56,8 @@ export type ProviderCost = {
   todayTokens?: number | null;
   last30DaysTokens?: number | null;
   currencyCode?: string | null;
+  /** 单价表里没有的模型:token 算了、花费按 0 记。不点名就会让人以为「免费」。 */
+  unpricedModels?: string[] | null;
 };
 
 export type ProviderDetailRow = { label: string; value: string; secondaryValue?: string | null };

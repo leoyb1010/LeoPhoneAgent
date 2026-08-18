@@ -93,6 +93,7 @@
     "appearance": "Görünüm",
     "git": "Git",
     "apiTokens": "API ve Token'lar",
+    "quota": "AI Kotası",
     "tasks": "Görevler",
     "notifications": "Bildirimler",
     "plugins": "Eklentiler",
@@ -632,5 +633,48 @@
     "placeholder": "Search settings",
     "noResults": "No matching settings",
     "clear": "Clear"
+  },
+  "quota": {
+    "title": "AI Kotası",
+    "description": "Her sağlayıcının kotası nereden okunuyor ve hâlâ ne eksik.",
+    "loading": "Yükleniyor…",
+    "loadError": "Kota durumu yüklenemedi.",
+    "saveError": "Kimlik bilgisi kaydedilemedi.",
+    "empty": "Yanıt veren sağlayıcı yok.",
+    "refresh": "Yenile",
+    "refreshing": "Yenileniyor…",
+    "autoConnected": "Bu Mac'teki oturum kullanılarak otomatik bağlandı",
+    "credentialOrigin": "kimlik bilgisi kaynağı: ",
+    "updatedAt": "{{time}} güncellendi",
+    "storageNote": "Kimlik bilgileri yalnızca bu Mac'te, ~/.leocodebox/quota-credentials.json içinde 0600 izniyle saklanır. Anahtar bu sayfaya asla geri gönderilmez — yalnızca ayarlı olup olmadığı ve son 4 karakteri gösterilir.",
+    "status": {
+      "connected": "Bağlı",
+      "notConnected": "Bağlı değil",
+      "error": "Hata"
+    },
+    "source": {
+      "oauth": "resmî kota (OAuth)",
+      "api": "resmî veri (API)",
+      "web": "resmî kota (tarayıcı oturumu)",
+      "cli": "resmî kota (CLI)",
+      "local": "yerel tahmin, resmî kota değil",
+      "none": "veri yok"
+    },
+    "credential": {
+      "notConfigured": "Anahtar yok",
+      "configured": "Anahtar kayıtlı",
+      "configuredWithTail": "Anahtar kayıtlı · son {{last4}}",
+      "placeholder": "API anahtarını yapıştır",
+      "inputLabel": "{{provider}} API anahtarı",
+      "save": "Kaydet",
+      "saving": "Kaydediliyor…",
+      "remove": "Kaldır"
+    },
+    "howTo": {
+      "gemini": "Gemini CLI'ye bir Google hesabıyla giriş yapın (kimlik doğrulama türü oauth-personal). Kişisel kota uç noktası API anahtarlarına açık değil.",
+      "cursor": "cursor.com → Dashboard → API Keys üzerinden anahtar oluşturun. Burada saklanır, ancak Cursor kullanım verisini yalnızca Enterprise ekip yönetici anahtarlarına açar.",
+      "grok": "console.x.ai üzerinde bir API anahtarı oluşturup buraya yapıştırın. xAI API'siyle doğrulanır; xAI bu anahtar türü için bakiye yayınlamaz.",
+      "opencode": "OpenCode yapılandırdığınız sağlayıcı üzerinden ücretlendirilir, kotayı oradan kontrol edin."
+    }
   }
 }

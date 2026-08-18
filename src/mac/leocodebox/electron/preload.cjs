@@ -62,6 +62,9 @@ if (isLocalHttpOrigin(window.location)) {
   if (window.location.pathname === '/leocodebox-switch.html'
     || window.location.pathname === '/leocodebox-quota.html') {
     localBridge.openMain = () => ipcRenderer.invoke('leocodebox-desktop:open-local');
+    // 面板高度随内容走:固定高度会把「配速」这类靠后的区块整段切掉,
+    // 底部圆角也被切在窗口外,看着就是一条生硬的直边。
+    localBridge.resizePanel = (height) => ipcRenderer.invoke('leocodebox-desktop:resize-quota-panel', height);
   }
   contextBridge.exposeInMainWorld('leocodeboxLocal', Object.freeze(localBridge));
 }

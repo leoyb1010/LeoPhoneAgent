@@ -27,6 +27,10 @@
     }
   }
   * { box-sizing: border-box; }
+  html, body { max-width: 100%; overflow-x: hidden; }
+  /* 高度由主进程按内容调整;万一顶到屏幕上限,让面板自己滚,别把内容切没。 */
+  body { max-height: 100vh; overflow-y: auto; }
+  body::-webkit-scrollbar { width: 0; }
   body {
     margin: 0; background: transparent; color: var(--text); user-select: none;
     font: 13px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
@@ -40,9 +44,9 @@
   button, .tab { -webkit-app-region: no-drag; }
 
   /* --- provider 标签条 --- */
-  .tabs { display: flex; gap: 2px; padding: 9px 9px 0; }
+  .tabs { display: flex; gap: 2px; padding: 9px 9px 0; min-width: 0; }
   .tab {
-    flex: 1; min-width: 0; border: none; background: transparent; cursor: pointer;
+    flex: 1 1 0; min-width: 0; border: none; background: transparent; cursor: pointer;
     border-radius: 9px; padding: 6px 2px 5px; color: var(--text);
     display: flex; flex-direction: column; align-items: center; gap: 2px;
     transition: background .15s;
@@ -61,17 +65,20 @@
   /* --- 头部 --- */
   .head { padding: 12px 16px 0; }
   .head h1 { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -.01em; }
-  .head .meta { display: flex; align-items: baseline; margin-top: 3px; font-size: 12.5px; color: var(--sub); }
-  .head .meta .plan { margin-left: auto; }
+  .head .meta { display: flex; align-items: baseline; gap: 8px; margin-top: 3px; font-size: 12.5px; color: var(--sub); min-width: 0; }
+  .head .meta > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .head .meta .plan { margin-left: auto; flex-shrink: 0; max-width: 55%; }
 
   /* --- Metric --- */
   .body { padding: 0 16px 4px; }
   .sec { padding-top: 15px; }
-  .sec h2 { margin: 0 0 9px; font-size: 16px; font-weight: 700; letter-spacing: -.01em; }
+  .sec h2 { margin: 0 0 9px; font-size: 16px; font-weight: 700; letter-spacing: -.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .bar { height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
   .bar i { display: block; height: 100%; border-radius: 3px; transition: width .4s cubic-bezier(.2,1,.4,1); }
-  .under { display: flex; align-items: baseline; margin-top: 7px; font-size: 12.5px; }
-  .under .r { margin-left: auto; color: var(--sub); }
+  .under { display: flex; align-items: baseline; gap: 8px; margin-top: 7px; font-size: 12.5px; min-width: 0; }
+  /* 左右两端都要能截断 —— 邮箱、重置时间都可能很长,撑开就会把整个面板顶出边界。 */
+  .under > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .under .r { margin-left: auto; color: var(--sub); flex-shrink: 0; max-width: 60%; }
   .pace { margin-top: 5px; font-size: 12.5px; color: var(--sub); }
   .sep { height: 1px; background: var(--line); margin: 15px 0 0; }
 
@@ -115,67 +122,132 @@
     return n;
   };
   const ICON = { codex: '◎', claude: '✳', cursor: '▣', grok: '✦', gemini: '◆', opencode: '◇' };
-  const tone = (p) => (p >= 90 ? 'var(--danger)' : p >= 70 ? 'var(--warn)' : 'var(--ok)');
-  const num = (v) => (!v ? '0' : v >= 1e6 ? `${(v / 1e6).toFixed(0)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : String(Math.round(v)));
 
-  const windowName = (m) => {
-    if (!m) return 'Usage';
-    if (m >= 10080) return 'Weekly';
-    if (m >= 1440) return `${Math.round(m / 1440)}-Day`;
-    if (m >= 300) return 'Session';
-    return `${Math.round(m / 60) || m}h`;
+  /** 服务端下发的额度才算权威;local 是本机日志累加,必须标出来。 */
+  const AUTHORITATIVE = new Set(['oauth', 'api', 'web', 'cli']);
+  const isLive = (p) => p && p.status === 'ok';
+  const isAuthoritative = (p) => isLive(p) && AUTHORITATIVE.has(p.source);
+
+  /** CodexBar 的三档:剩余 ≤10% 红,≤50% 橙,其余走 provider 品牌色。 */
+  const toneByLeft = (leftPercent, accent) =>
+    leftPercent <= 10 ? 'var(--danger)' : leftPercent <= 50 ? 'var(--warn)' : (accent || 'var(--ok)');
+
+  const num = (v) => (!v ? '0' : v >= 1e6 ? `${(v / 1e6).toFixed(0)}M` : v >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : String(Math.round(v)));
+  const money = (v) => `$ ${(v || 0).toFixed(2)}`;
+
+  const windowName = (m, fallback) => {
+    if (!m) return fallback || '用量';
+    if (m >= 10080) return '每周';
+    if (m >= 1440) return `${Math.round(m / 1440)} 天`;
+    if (m >= 300) return '会话';
+    return `${Math.round(m / 60) || m} 小时`;
   };
+
+  /** resetsAt 是 epoch **毫秒**(契约见 server/modules/leocodebox/ai-quota.types.ts)。 */
   const resetIn = (at) => {
     if (!at) return '';
-    const s = at - Math.floor(Date.now() / 1000);
-    if (s <= 0) return 'Reset';
+    const s = Math.floor((at - Date.now()) / 1000);
+    if (s <= 0) return '已重置';
     const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
-    if (d > 0) return `Resets in ${d}d ${h}h`;
-    if (h > 0) return `Resets in ${h}h ${m}m`;
-    return `Resets in ${Math.max(1, m)}m`;
+    if (d > 0) return `${d} 天 ${h} 小时后重置`;
+    if (h > 0) return `${h} 小时 ${m} 分后重置`;
+    return `${Math.max(1, m)} 分钟后重置`;
   };
 
-  // CodexBar UsagePaceText.detailLeftLabel / detailRightLabel 的文案规则。
+  /**
+   * 配速 —— 照搬 CodexBar UsagePace 的公式,在前端算(快照里不带 pace)。
+   * 数据不足以下结论时返回 null,绝不给一个看起来很确定的 0。
+   */
+  function computePace(w) {
+    if (!w || w.isSyntheticPlaceholder) return null;
+    if (!w.resetsAt || !w.windowMinutes) return null;
+    const duration = w.windowMinutes * 60;
+    const timeUntilReset = (w.resetsAt - Date.now()) / 1000;
+    if (timeUntilReset <= 0 || timeUntilReset > duration) return null;
+    const elapsed = duration - timeUntilReset;
+    if (elapsed <= 0) return null;
+    const expected = (elapsed / duration) * 100;
+    if (expected < 3) return null;              // 时间进度太浅,配速没有意义
+    const actual = Math.min(100, Math.max(0, w.usedPercent));
+    const delta = actual - expected;
+    const rate = actual / elapsed;
+    let etaSeconds = null;
+    let lastsToReset = true;
+    if (rate > 0) {
+      etaSeconds = (100 - actual) / rate;
+      lastsToReset = etaSeconds >= timeUntilReset;
+    }
+    const abs = Math.abs(delta);
+    const stage = abs <= 2 ? 'onTrack' : (delta > 0 ? (abs <= 6 ? 'slightlyAhead' : abs <= 12 ? 'ahead' : 'farAhead')
+                                                    : (abs <= 6 ? 'slightlyBehind' : abs <= 12 ? 'behind' : 'farBehind'));
+    return { stage, deltaPercent: delta, expectedUsedPercent: expected, etaSeconds, lastsToReset };
+  }
+
   const paceText = (pace) => {
     if (!pace) return null;
     const d = Math.round(Math.abs(pace.deltaPercent));
-    const left = (d === 0 || pace.stage === 'onTrack')
-      ? 'On pace'
-      : (pace.deltaPercent >= 0 ? `${d}% in deficit` : `${d}% in reserve`);
+    // CodexBar 的 deficit/reserve:deficit 是"用超了"(烧得比时间快),
+    // reserve 是"还有余量"(烧得比时间慢)。中文别用"超前/落后" —— 那听起来
+    // 像进度快慢,方向正好会被读反。
+    const left = (d === 0 || pace.stage === 'onTrack') ? '按节奏'
+      : (pace.deltaPercent > 0 ? `超用 ${d}%` : `省下 ${d}%`);
     let right = null;
-    if (pace.lastsToReset) right = 'Lasts to reset';
+    if (pace.lastsToReset) right = '够用到重置';
     else if (typeof pace.etaSeconds === 'number') {
       const s = pace.etaSeconds;
-      if (s <= 60) right = 'Runs out now';
+      if (s <= 60) right = '即将用尽';
       else {
         const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
-        right = h > 0 ? `Runs out in ${h}h ${m}m` : `Runs out in ${m}m`;
+        right = h > 0 ? `预计 ${h} 小时 ${m} 分后用光` : `预计 ${m} 分钟后用光`;
       }
     }
-    return right ? `Pace: ${left} · ${right}` : `Pace: ${left}`;
+    return right ? `${left} · ${right}` : left;
   };
 
-  const money = (v) => `$ ${(v || 0).toFixed(2)}`;
+  /**
+   * 一个 provider 身上所有该显示的窗口。
+   * 占位窗口(isSyntheticPlaceholder)必须滤掉 —— 它的 0% 不是"没用",是"没数据"。
+   */
+  function displayWindows(p) {
+    const out = [];
+    const push = (w, title) => {
+      if (w && !w.isSyntheticPlaceholder && Number.isFinite(w.usedPercent)) out.push({ window: w, title });
+    };
+    push(p.primary, null);
+    push(p.secondary, null);
+    push(p.tertiary, null);
+    for (const named of p.extraRateWindows || []) push(named && named.window, named && named.title);
+    return out;
+  }
 
   let providers = [];
   let gateway = null;
   let active = 0;
 
-  /** 标题 → 满宽进度条 → 左"N% used" 右"Resets in…"。CodexBar 的 Metric 就这三行。 */
-  function metric(title, percent, rightText, extra) {
+  /** 标题 + 剩余百分比 → 进度条 → 重置倒计时 / 配速。CodexBar 的 Metric 就这几行。 */
+  function metric(title, usedPercent, rightText, extra, accent) {
+    const leftPercent = Math.max(0, 100 - usedPercent);
     const sec = el('div', 'sec');
-    sec.append(el('h2', null, title));
+    const h = el('h2');
+    h.append(document.createTextNode(title));
+    const pct = el('span', null, leftPercent < 1 && leftPercent > 0 ? ' 剩 <1%' : ` 剩 ${Math.round(leftPercent)}%`);
+    pct.style.fontWeight = '500';
+    pct.style.color = 'var(--sub)';
+    h.append(pct);
+    sec.append(h);
     const bar = el('div', 'bar');
     const fill = el('i');
-    // 0% 也留一个可见的圆点,和 CodexBar 一样让人知道"读到了,只是很低"。
-    fill.style.width = percent > 0 ? `${Math.min(100, Math.max(1.5, percent))}%` : '0';
-    fill.style.background = tone(percent);
+    // 进度条画的是"剩余",跟标签上的数字同一个口径(CodexBar 默认如此,用着用着会排空)。
+    fill.style.width = leftPercent > 0 ? `${Math.min(100, Math.max(1.5, leftPercent))}%` : '0';
+    fill.style.background = toneByLeft(leftPercent, accent);
     bar.append(fill);
     sec.append(bar);
-    const under = el('div', 'under');
-    under.append(el('span', null, `${Math.round(percent)}% used`));
-    if (rightText) under.append(el('span', 'r', rightText));
-    sec.append(under);
+    if (rightText) {
+      const under = el('div', 'under');
+      under.append(el('span', null, `已用 ${Math.round(usedPercent)}%`));
+      under.append(el('span', 'r', rightText));
+      sec.append(under);
+    }
     if (extra) sec.append(el('div', 'pace', extra));
     return sec;
   }
@@ -185,13 +257,16 @@
     tabs.replaceChildren(...providers.map((p, i) => {
       const b = el('button', `tab${i === active ? ' on' : ''}`);
       b.append(el('span', 'ico', ICON[p.id] || '●'));
-      b.append(el('span', 'nm', p.label.split(' ')[0]));
-      const worst = (p.windows || []).reduce((m, w) => Math.max(m, w.usedPercent || 0), 0);
-      const mini = el('span', `mini${p.available ? '' : ' off'}`);
+      b.append(el('span', 'nm', (p.label || '').split(' ')[0]));
+      const live = isLive(p);
+      const wins = live ? displayWindows(p) : [];
+      const worstUsed = wins.reduce((m, x) => Math.max(m, x.window.usedPercent || 0), 0);
+      const leftPercent = Math.max(0, 100 - worstUsed);
+      const mini = el('span', `mini${wins.length ? '' : ' off'}`);
       const fill = el('i');
-      if (p.available) {
-        fill.style.width = `${Math.min(100, Math.max(4, worst))}%`;
-        fill.style.background = i === active ? 'var(--selfg)' : tone(worst);
+      if (wins.length) {
+        fill.style.width = `${Math.min(100, Math.max(4, leftPercent))}%`;
+        fill.style.background = i === active ? 'var(--selfg)' : toneByLeft(leftPercent, p.accentColor);
       }
       mini.append(fill);
       b.append(mini);
@@ -199,6 +274,16 @@
       return b;
     }));
   }
+
+  const agoText = (ts) => {
+    if (!ts) return '尚未获取';
+    const s = Math.floor((Date.now() - ts) / 1000);
+    if (s < 45) return '刚刚更新';
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${Math.max(1, m)} 分钟前更新`;
+    const h = Math.floor(m / 60);
+    return h < 24 ? `${h} 小时前更新` : `${Math.floor(h / 24)} 天前更新`;
+  };
 
   function render() {
     renderTabs();
@@ -211,57 +296,92 @@
     head.replaceChildren();
     head.append(el('h1', null, p.label));
     const meta = el('div', 'meta');
-    meta.append(el('span', null, p.available ? 'Updated just now' : 'Not connected'));
-    if (p.plan) meta.append(el('span', 'plan', p.plan));
+    // 状态一行说清:读到了没有、什么时候读的、是不是官方数字。
+    const state = p.status === 'ok'
+      ? (isAuthoritative(p) ? agoText(p.updatedAt) : `${agoText(p.updatedAt)} · 本机日志累加`)
+      : (p.status === 'error' ? '读取失败' : '未接入');
+    meta.append(el('span', null, state));
+    const plan = p.identity && (p.identity.plan || p.identity.accountEmail);
+    if (plan) meta.append(el('span', 'plan', plan));
     head.append(meta);
 
     const rows = [];
-    for (const w of p.windows || []) {
-      rows.push(metric(windowName(w.windowMinutes), w.usedPercent, resetIn(w.resetsAt), paceText(w.pace)));
+    const wins = isLive(p) ? displayWindows(p) : [];
+    for (const item of wins) {
+      const w = item.window;
+      rows.push(metric(
+        item.title || windowName(w.windowMinutes),
+        w.usedPercent,
+        resetIn(w.resetsAt) || w.resetDescription || '',
+        paceText(computePace(w)),
+        p.accentColor,
+      ));
     }
-    if (p.rolling) {
-      rows.push(metric(`Last ${p.rolling.windowHours}h`, 0,
-        `${num(p.rolling.tokens)} tokens`,
-        `本机日志累加 · ${p.rolling.requests} 次调用 · 不是官方配额`));
-    }
-    if (p.credits && p.credits.hasCredits) {
-      rows.push(metric('Credits', 0, p.credits.balance));
-    }
-    if (!p.available) {
+
+    // 读不到就明说读不到,并写清楚缺什么 —— 不填 0、不编百分比。
+    if (!isLive(p) || (!wins.length && !p.credits)) {
       const sec = el('div', 'sec');
-      sec.append(el('h2', null, 'Not connected'));
-      sec.append(el('div', 'pace', p.note || '本机读不到这家的用量记录。'));
+      sec.append(el('h2', null, p.status === 'error' ? '读取失败' : '未接入'));
+      sec.append(el('div', 'pace', p.note || p.error || '本机读不到这家的用量记录。'));
       rows.push(sec);
     }
-    if (p.cost) {
+
+    if (p.credits && (p.credits.remaining != null || p.credits.hint)) {
+      const sec = el('div', 'sec');
+      sec.append(el('h2', null, '积分'));
+      const line = el('div', 'under');
+      const unit = p.credits.unit ? ` ${p.credits.unit}` : '';
+      line.append(el('span', null, p.credits.remaining != null ? `剩余 ${p.credits.remaining}${unit}` : '—'));
+      if (p.credits.total != null) line.append(el('span', 'r', `共 ${p.credits.total}${unit}`));
+      sec.append(line);
+      if (p.credits.hint) sec.append(el('div', 'pace', p.credits.hint));
+      rows.push(sec);
+    }
+
+    if (p.cost && (p.cost.todayUSD != null || p.cost.last30DaysUSD != null)) {
       rows.push(el('div', 'sep'));
       const sec = el('div', 'sec');
-      const h = el('h2', null, 'Cost');
-      h.style.display = 'flex';
-      const chev = el('span', null, '›');
-      chev.style.marginLeft = 'auto';
-      chev.style.color = 'var(--sub)';
-      h.append(chev);
-      sec.append(h);
-      sec.append(el('div', 'pace', `Today: ${money(p.cost.todayCostUSD)} · ${num(p.cost.todayTokens)} tokens`));
-      sec.append(el('div', 'pace',
-        `Last 30 days: ${money(p.cost.last30DaysCostUSD)} · ${num(p.cost.last30DaysTokens)} tokens`));
-      const top = (p.cost.modelBreakdowns || []).slice(0, 3)
-        .map((m) => `${m.modelName} ${money(m.cost)}`).join(' · ');
-      if (top) sec.append(el('div', 'pace', top));
-      if ((p.cost.unpricedModels || []).length) {
-        // 单价表里没有的模型:token 算了,花费没算 —— 说清楚,别让人以为花费是全的。
-        sec.append(el('div', 'pace', `未计价模型: ${p.cost.unpricedModels.join(', ')}`));
+      sec.append(el('h2', null, '花费'));
+      sec.append(el('div', 'pace', `今日 ${money(p.cost.todayUSD)} · ${num(p.cost.todayTokens)} tokens`));
+      sec.append(el('div', 'pace', `近 30 天 ${money(p.cost.last30DaysUSD)} · ${num(p.cost.last30DaysTokens)} tokens`));
+      // token 有一大堆、花费却是 0,通常不是免费,是这些模型不在单价表里。
+      // 不点名就会被读成"免费",这里必须说清楚。
+      const unpriced = p.cost.unpricedModels || [];
+      if (unpriced.length) {
+        sec.append(el('div', 'pace', `未计价模型(token 已计、花费未计):${unpriced.slice(0, 4).join('、')}${unpriced.length > 4 ? ` 等 ${unpriced.length} 个` : ''}`));
       }
       rows.push(sec);
     }
+
+    for (const section of p.details || []) {
+      if (!section || !(section.rows || []).length) continue;
+      rows.push(el('div', 'sep'));
+      const sec = el('div', 'sec');
+      const t = el('h2', null, section.title);
+      t.style.fontSize = '12px';
+      t.style.textTransform = 'uppercase';
+      t.style.color = 'var(--sub)';
+      t.style.letterSpacing = '.04em';
+      sec.append(t);
+      for (const row of section.rows) {
+        const line = el('div', 'under');
+        line.style.marginTop = '4px';
+        const k = el('span', null, row.label);
+        k.style.color = 'var(--sub)';
+        line.append(k);
+        line.append(el('span', 'r', row.secondaryValue ? `${row.value} · ${row.secondaryValue}` : row.value));
+        sec.append(line);
+      }
+      rows.push(sec);
+    }
+
     if (gateway && gateway.today) {
       rows.push(el('div', 'sep'));
       const t = gateway.today;
       const sec = el('div', 'sec');
       sec.append(el('h2', null, 'Leoapi'));
       sec.append(el('div', 'pace',
-        `Today: ${num((t.inputTokens || 0) + (t.outputTokens || 0))} tokens · ${t.requests || 0} 次`));
+        `今日 ${num((t.inputTokens || 0) + (t.outputTokens || 0))} tokens · ${t.requests || 0} 次`));
       rows.push(sec);
     }
     body.replaceChildren(...rows);
@@ -275,14 +395,45 @@
       return b;
     };
     acts.replaceChildren(
-      action('⟳', 'Refresh', () => void load(true)),
-      action('◱', 'Usage Dashboard', () => window.leocodeboxLocal?.openMain?.()),
-      action('⚙', 'Settings…', () => window.leocodeboxLocal?.openMain?.()),
+      action('⟳', '刷新', () => void load(true)),
+      action('◱', '用量总览', () => window.leocodeboxLocal?.openMain?.()),
+      action('⚙', '设置…', () => window.leocodeboxLocal?.openQuotaSettings?.()
+        || window.leocodeboxLocal?.openMain?.()),
     );
     document.querySelector('.hint')?.remove();
     const hint = el('div', 'hint',
-      '直接读各家 CLI 落在本机的状态,不额外登录。标「本机日志累加」的不是官方配额。');
+      '直接读各家 CLI 落在本机的登录态,不额外登录。标「本机日志累加」的不是官方配额。');
     acts.after(hint);
+    // 等这一帧画完再量;字体和换行落定得更晚,所以下面还挂了 ResizeObserver。
+    requestAnimationFrame(() => requestAnimationFrame(syncHeight));
+  }
+
+  /**
+   * 光在 render 末尾量一次不够:文字换行、字体替换都会在那之后再改高度,
+   * 结果就是底部那行说明被切掉一截。让观察者一直跟着 shell 的实际高度走。
+   */
+  function watchHeight() {
+    const shell = document.querySelector('.shell');
+    if (!shell || typeof ResizeObserver === 'undefined') return;
+    new ResizeObserver(() => syncHeight()).observe(shell);
+  }
+
+  /**
+   * 把面板的实际内容高度告诉主进程。
+   *
+   * 写死窗口高度会把靠后的区块(「配速」「账户」)整段切掉,而且 shell 的
+   * 底部圆角被切在窗口外,边缘就成了一条生硬的直边 —— 用户看到的"下面被
+   * 遮挡 + 边上一圈奇怪的线"就是这么来的。
+   */
+  let lastSent = 0;
+  function syncHeight() {
+    const shell = document.querySelector('.shell');
+    if (!shell || !window.leocodeboxLocal?.resizePanel) return;
+    // shell 上下各 7px margin,阴影也画在这一圈里,必须一起算进去。
+    const wanted = Math.ceil(shell.getBoundingClientRect().height) + 14;
+    if (!wanted || Math.abs(wanted - lastSent) < 2) return;
+    lastSent = wanted;
+    try { void window.leocodeboxLocal.resizePanel(wanted); } catch { /* 面板独立于主窗口,失败就维持原高 */ }
   }
 
   async function load(force) {
@@ -293,7 +444,6 @@
       ]);
       providers = quota.providers || [];
       gateway = gw && gw.meter ? { enabled: gw.enabled, today: gw.meter.today } : null;
-      // 默认落在用得最紧张的那家 —— CodexBar 的 highest-usage auto-selection。
       if (active >= providers.length) active = 0;
       render();
     } catch (error) {
@@ -301,6 +451,7 @@
     }
   }
 
+  watchHeight();
   void load(false);
   setInterval(() => void load(false), 120_000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) void load(false); });

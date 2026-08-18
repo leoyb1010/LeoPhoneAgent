@@ -20,6 +20,7 @@ import type { SessionEstablishedContext, SessionNavigationOptions } from '../cha
 import type { Project, ProjectSession } from '../../types/app';
 import { useDeviceSettings } from '../../hooks/useDeviceSettings';
 import { useSessionProtection } from '../../hooks/useSessionProtection';
+import { useSessionApprovals } from '../../hooks/useSessionApprovals';
 import { useProjectsState } from '../../hooks/useProjectsState';
 import { useQueuedMessageAutoSend } from '../../hooks/useQueuedMessageAutoSend';
 import { apiClient } from '../../utils/apiClient';
@@ -106,6 +107,9 @@ function AppContentInner() {
     activeSessions: processingSessions,
   });
   const runningSessionFailures = useRef(0);
+
+  // 会话列表的"待审批"标签只认这一份状态:真实的 permission_request。
+  const { approvalSessionIds } = useSessionApprovals({ subscribe });
 
   // Queued messages for sessions that finish while another session (or none)
   // is being viewed are sent from here; the viewed session's composer handles
@@ -294,8 +298,9 @@ function AppContentInner() {
 
   /**
    * 指挥条回车:在当前项目里开一个新会话,并把这句话作为第一条指令发出去。
-   * 复用 ⌘K handoff 已经跑通的那条链路 —— 先切 provider,再开会话,再灌草稿,
-   * 目标忙碌时由 handleSubmit 自己入队,不会吞掉这一次回车。
+   * 复用 ⌘K handoff 那条链路(handoff-draft 事件)灌草稿;`send: true` 只是**挂号**,
+   * 真正的发送由 composer 等新会话状态落定后再做 —— 这里的 handleNewSession 是异步
+   * 生效的 setState,同步发会打进上一个会话,详见 useChatComposerState 的 auto-send。
    */
   const startLocalRun = useCallback((prompt: string) => {
     if (!selectedProject) {
@@ -427,7 +432,7 @@ function AppContentInner() {
             projects={projects}
             selectedSessionId={selectedSession?.id ?? sessionId ?? null}
             activeSessions={processingSessions}
-            attentionSessionIds={sidebarSharedProps.attentionSessionIds}
+            approvalSessionIds={approvalSessionIds}
             remotes={remotes}
             localName={localName}
             onSelectLocal={selectRailSession}

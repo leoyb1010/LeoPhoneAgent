@@ -1,4 +1,4 @@
-import { BrowserWindow, Menu, Tray, clipboard, nativeImage, nativeTheme, session, webContents as electronWebContents } from 'electron';
+import { BrowserWindow, Menu, Tray, clipboard, nativeImage, nativeTheme, screen, session, webContents as electronWebContents } from 'electron';
 
 import { fetchQuotaSnapshot, quotaMenuSection, trayTitle } from './trayQuota.js';
 
@@ -771,10 +771,12 @@ export class DesktopWindowManager {
     if (!baseUrl) return null;
 
     this.quotaPopover = new BrowserWindow({
-      // CodexBar 的面板宽约 360、内容一次铺完不滚动;这里给足高度,
-      // 面板内部不再自己滚。
+      // CodexBar 的面板宽约 360,高度**跟着内容走**。写死高度的下场是:
+      // Codex 这种窗口多的家会被从中间切断(「配速」整段没了),而且 shell
+      // 的底部圆角被切在窗口外,边缘看起来是一条生硬的直边。
+      // 这里只给一个初始值,页面渲染完会回传实测高度。
       width: 372,
-      height: 660,
+      height: 420,
       show: false,
       frame: false,
       transparent: true,
@@ -798,6 +800,26 @@ export class DesktopWindowManager {
     this.quotaPopover.on('closed', () => { this.quotaPopover = null; });
     void this.quotaPopover.loadURL(`${baseUrl}/leocodebox-quota.html`);
     return this.quotaPopover;
+  }
+
+  /**
+   * 面板高度跟随内容。
+   *
+   * 上限取当前屏幕可用高度再留 120px 余量 —— 顶到屏幕边缘的菜单栏面板
+   * 会被系统裁掉底部,那比内容滚动更难用。超过上限时页面内部自己滚。
+   */
+  resizeQuotaPopover(height) {
+    const win = this.quotaPopover;
+    if (!win || win.isDestroyed()) return null;
+    const wanted = Math.round(Number(height) || 0);
+    if (!Number.isFinite(wanted) || wanted <= 0) return null;
+    const display = screen.getDisplayMatching(win.getBounds());
+    const maxHeight = Math.max(320, display.workArea.height - 120);
+    const next = Math.min(Math.max(wanted, 260), maxHeight);
+    const current = win.getBounds();
+    if (Math.abs(current.height - next) < 2) return next;
+    win.setBounds({ ...current, height: next }, false);
+    return next;
   }
 
   toggleQuotaPopover() {

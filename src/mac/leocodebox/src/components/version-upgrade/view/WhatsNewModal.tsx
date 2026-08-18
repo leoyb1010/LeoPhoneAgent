@@ -35,11 +35,14 @@ export function WhatsNewModal() {
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-      <button
-        className="fixed inset-0 bg-black/40"
-        onClick={close}
-        aria-label="关闭"
-      />
+      {/*
+        遮罩只做背景,不承担关闭。
+        它原本是 `<button onClick={close}>`,又恰好是页面上第一个可聚焦元素 ——
+        启动时任何一次自动聚焦 + 回车/空格,就会在用户看清之前把弹窗关掉,
+        还顺手把这一版记成"已读",下次不再弹。铁律要求每次发版都看得见更新,
+        所以关闭只能来自下面那个明确的按钮。
+      */}
+      <div className="fixed inset-0 bg-black/40" aria-hidden="true" />
       <div className="relative max-h-[80vh] w-full max-w-md overflow-y-auto rounded-lg border border-border bg-card p-5">
         <h2 className="text-base font-medium text-foreground">本次更新</h2>
 

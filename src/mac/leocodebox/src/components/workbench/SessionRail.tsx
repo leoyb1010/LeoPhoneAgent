@@ -27,7 +27,13 @@ type SessionRailProps = {
   projects: Project[];
   selectedSessionId: string | null;
   activeSessions: SessionActivityMap;
-  attentionSessionIds: Set<string>;
+  /**
+   * 当前真的有工具授权在等你点头的会话 id。
+   *
+   * 这里刻意**不用** attentionSessionIds —— 那个集合的语义是"这个非当前会话刚有过
+   * 任何动静",拿它渲染"待审批"就会出现挂着橙色标签、点进去什么都没有的假标签。
+   */
+  approvalSessionIds: ReadonlySet<string>;
   remotes: FleetMachine[];
   localName: string;
   onSelectLocal: (session: ProjectSession, project: Project) => void;
@@ -63,7 +69,7 @@ export default function SessionRail({
   projects,
   selectedSessionId,
   activeSessions,
-  attentionSessionIds,
+  approvalSessionIds,
   remotes,
   localName,
   onSelectLocal,
@@ -89,7 +95,7 @@ export default function SessionRail({
           meta: [localName || '本机', provider, project.displayName].filter(Boolean).join(' · '),
           provider,
           live: Boolean(activity),
-          needsApproval: attentionSessionIds.has(session.id),
+          needsApproval: approvalSessionIds.has(session.id),
           remote: null,
           duration: activity ? formatDuration(now - activity.startedAt) : formatDuration(now - updatedAt),
           sortAt: activity ? activity.startedAt : updatedAt,
@@ -127,7 +133,7 @@ export default function SessionRail({
         .sort((a, b) => b.sortAt - a.sortAt),
       lookup: index,
     };
-  }, [projects, activeSessions, attentionSessionIds, remotes, localName, t]);
+  }, [projects, activeSessions, approvalSessionIds, remotes, localName, t]);
 
   const renderRow = (row: RailRow, dimmed: boolean) => (
     <button

@@ -12,6 +12,7 @@ import {
   readGeminiAuthType,
   readGeminiCredential,
 } from './ai-quota.credentials.js';
+import { readGrokSnapshot } from './ai-quota.grok.js';
 import { computeUsagePace } from './ai-quota.pace.js';
 import {
   accentFor,
@@ -91,7 +92,7 @@ const defaultFetch: FetchLike = (url, init) => {
 type HttpResult = { ok: true; data: unknown } | { ok: false; message: string };
 
 /** 失败信息里只有状态码和人话 —— token 一个字符都不许出现在这里。 */
-async function requestJson(
+export async function requestJson(
   url: string,
   headers: Record<string, string>,
   deps: QuotaDeps,
@@ -182,13 +183,18 @@ function paceRow(label: string, window: RateWindow | null | undefined, nowMs: nu
   if (!window) return null;
   const pace = computeUsagePace(window, nowMs);
   if (!pace) return null;
-  const sign = pace.deltaPercent >= 0 ? '+' : '';
+  // 给用户看的行,不能漏内部枚举("farBehind")和自造单位("-38.8pt")。
+  // 口径与面板上的 pace 文案保持一致:超用 = 烧得比时间快,省下 = 还有余量。
+  const delta = Math.round(Math.abs(pace.deltaPercent));
+  const head = pace.stage === 'onTrack' || delta === 0
+    ? '按节奏'
+    : (pace.deltaPercent > 0 ? `超用 ${delta}%` : `省下 ${delta}%`);
   const tail = pace.willLastToReset
-    ? '可撑到重置'
-    : pace.etaSeconds === null ? '' : `约 ${Math.max(1, Math.round(pace.etaSeconds / 3600))} 小时后耗尽`;
+    ? '够用到重置'
+    : pace.etaSeconds === null ? '' : `约 ${Math.max(1, Math.round(pace.etaSeconds / 3600))} 小时后用光`;
   return {
     label,
-    value: `${pace.stage} · ${sign}${pace.deltaPercent.toFixed(1)}pt`,
+    value: head,
     secondaryValue: tail || null,
   };
 }
@@ -675,17 +681,18 @@ const PENDING_PROVIDERS: { id: string; label: string; note: string }[] = [
   {
     id: 'cursor',
     label: 'Cursor',
-    note: '本机有 ~/.cursor,但用量只在 cursor.com 后台;要读得先拿到浏览器会话 cookie 或官方 API key,这轮没做。',
-  },
-  {
-    id: 'grok',
-    label: 'Grok',
-    note: '本机有 ~/.grok,但额度要查 xAI 控制台;缺一个可用的 xAI API key 或会话凭据。',
+    // 查证过 cursor.com/docs(2026-08):个人 key 只有 `GET /v1/me` 能拿身份,
+    // 用量接口 `POST /teams/daily-usage-data`、`POST /teams/spend` 全部要
+    // Enterprise 团队的 admin key。个人账号**没有**任何公开的用量接口 ——
+    // 所以这里只存凭据、不接额度,不去编一个端点出来。
+    note: '本机有 ~/.cursor,但 Cursor 只给 Enterprise 团队的 admin key 开放用量接口(/teams/spend 等),'
+      + '个人账号没有公开的用量接口;用量请在 cursor.com 后台查看。',
   },
   {
     id: 'opencode',
     label: 'OpenCode',
-    note: '本机有 ~/.config/opencode,但它按你自己配的上游计费,没有统一的额度接口可读。',
+    note: '本机有 ~/.config/opencode,但它按你自己配的上游计费,没有统一的额度接口可读;'
+      + '额度要去你配的那家上游(Anthropic / OpenAI / OpenRouter 等)自己看。',
   },
 ];
 
@@ -705,8 +712,11 @@ export async function readAiQuota(deps: QuotaDeps = {}): Promise<ProviderSnapsho
     readCodexSnapshot(deps, nowMs),
     readClaudeSnapshot(deps, nowMs),
     readGeminiSnapshot(nowMs),
+    readGrokSnapshot((url, headers) => requestJson(url, headers, deps), nowMs),
   ]);
-  const labels: [string, string][] = [['codex', 'Codex'], ['claude', 'Claude Code'], ['gemini', 'Gemini']];
+  const labels: [string, string][] = [
+    ['codex', 'Codex'], ['claude', 'Claude Code'], ['gemini', 'Gemini'], ['grok', 'Grok'],
+  ];
   const value = probes.map((probe, index): ProviderSnapshot => {
     if (probe.status === 'fulfilled') return probe.value;
     const [id, label] = labels[index];

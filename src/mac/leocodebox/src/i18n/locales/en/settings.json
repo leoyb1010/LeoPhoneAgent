@@ -110,6 +110,7 @@
     "appearance": "Appearance",
     "git": "Git",
     "apiTokens": "API & Tokens",
+    "quota": "AI Quota",
     "voice": "Voice",
     "tasks": "Tasks",
     "browser": "Browser",
@@ -728,5 +729,48 @@
     "placeholder": "Search settings",
     "noResults": "No matching settings",
     "clear": "Clear"
+  },
+  "quota": {
+    "title": "AI Quota",
+    "description": "Where each provider's quota is read from, and what is still missing.",
+    "loading": "Loading…",
+    "loadError": "Could not load quota status.",
+    "saveError": "Could not save the credential.",
+    "empty": "No providers reported.",
+    "refresh": "Refresh",
+    "refreshing": "Refreshing…",
+    "autoConnected": "Connected automatically using the sign-in on this Mac",
+    "credentialOrigin": "credential source: ",
+    "updatedAt": "updated {{time}}",
+    "storageNote": "Credentials stay on this Mac, in ~/.leocodebox/quota-credentials.json with 0600 permissions. A key is never sent back to this page — only whether one is set and its last 4 characters.",
+    "status": {
+      "connected": "Connected",
+      "notConnected": "Not connected",
+      "error": "Error"
+    },
+    "source": {
+      "oauth": "official quota (OAuth)",
+      "api": "official data (API)",
+      "web": "official quota (browser session)",
+      "cli": "official quota (CLI)",
+      "local": "local estimate, not official quota",
+      "none": "no data"
+    },
+    "credential": {
+      "notConfigured": "No key saved",
+      "configured": "Key saved",
+      "configuredWithTail": "Key saved · ends in {{last4}}",
+      "placeholder": "Paste API key",
+      "inputLabel": "{{provider}} API key",
+      "save": "Save",
+      "saving": "Saving…",
+      "remove": "Remove"
+    },
+    "howTo": {
+      "gemini": "Sign in to the Gemini CLI with a Google account (auth type oauth-personal). The personal quota endpoint is not open to API keys.",
+      "cursor": "Create a key at cursor.com → Dashboard → API Keys. It is stored here, but Cursor only exposes usage data to Enterprise team admin keys.",
+      "grok": "Create an API key at console.x.ai and paste it here. It is verified against the xAI API; xAI publishes no credit balance for this key type.",
+      "opencode": "OpenCode bills through whichever upstream you configured, so check the quota with that provider instead."
+    }
   }
 }
