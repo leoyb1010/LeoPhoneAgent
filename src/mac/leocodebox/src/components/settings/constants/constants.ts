@@ -12,7 +12,6 @@ import {
   Palette,
   Plug,
   Server,
-  Gauge,
   Sparkles,
 } from 'lucide-react';
 
@@ -66,7 +65,6 @@ export const SETTINGS_MAIN_TABS: SettingsMainTabMeta[] = [
 
   // 系统:插件从「智能体」搬过来——它扩的是工作台本身,不是某个 Agent。
   { id: 'api', label: 'API Tokens', labelKey: 'mainTabs.apiTokens', group: 'system', keywords: 'api tokens auth keys 密钥 令牌 接口 凭据', icon: KeyRound },
-  { id: 'quota', label: 'AI Quota', labelKey: 'mainTabs.quota', group: 'system', keywords: 'quota usage limits credits api key 额度 用量 配额 凭据 授权 grok cursor gemini opencode', icon: Gauge },
   { id: 'notifications', label: 'Notifications', labelKey: 'mainTabs.notifications', group: 'system', keywords: 'notifications alerts push 通知', icon: Bell },
   { id: 'plugins', label: 'Plugins', labelKey: 'mainTabs.plugins', group: 'system', keywords: 'plugins extensions integrations 插件', icon: Plug },
   { id: 'about', label: 'About', labelKey: 'mainTabs.about', group: 'system', keywords: 'about version info 关于 版本 更新', icon: Info },

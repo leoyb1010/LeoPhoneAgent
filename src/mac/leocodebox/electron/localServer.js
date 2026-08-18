@@ -732,6 +732,33 @@ export class LocalServerController {
     this.ownedServerProcess = null;
   }
 
+  /**
+   * 退出时把本地服务收干净 —— 包括**这次不是自己 spawn 的那一个**。
+   *
+   * shutdownOwnedServer() 只认 ownedServerProcess,也就是本次启动亲自拉起来的
+   * 子进程。但暖启动会走 adoptExistingServer() 接管上一次遗留的服务,那种情况下
+   * ownedServerProcess 是 null,旧逻辑于是在退出时什么都不做:服务一直活着,
+   * 下次启动又被接管 —— 用户看到的就是「退出了它还自己重启」。
+   *
+   * 这里补上按 marker pid 收尾这条路,并且只在 marker 端口 == 本次真正在用的端口
+   * 时才动手,避免误杀用户自己在终端里跑的另一个 leocodebox。
+   */
+  async stopLocalServer() {
+    if (this.ownedServerProcess) {
+      await this.shutdownOwnedServer();
+      return;
+    }
+    if (!this.localServerPort) return;
+    const marker = await readServerMarker();
+    const markerPort = marker ? getPortFromUrl(marker.url) : null;
+    if (!marker || markerPort !== this.localServerPort) return;
+    await terminateStaleServer(marker.pid);
+    this.localServerUrl = null;
+    this.localServerPort = null;
+    this.startupPromise = null;
+    this.onChange?.();
+  }
+
   async shutdownOwnedServer() {
     if (!this.ownedServerProcess) return;
 

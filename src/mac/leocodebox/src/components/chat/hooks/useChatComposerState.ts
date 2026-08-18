@@ -14,6 +14,7 @@ import { apiClient } from '../../../utils/apiClient';
 import type { MarkSessionProcessing } from '../../../hooks/useSessionProtection';
 import { APPROVAL_RESOLVED_EVENT, type ApprovalResolvedDetail } from '../../../hooks/useSessionApprovals';
 import { persistHandoffSource } from '../../../hooks/projectStateUtils';
+import { decidePendingPromptSend } from '../../../hooks/pendingPrompt';
 import { grantClaudeToolPermission } from '../utils/chatPermissions';
 import {
   safeLocalStorage,
@@ -26,7 +27,6 @@ import type {
 } from '../types/types';
 import type { Project, ProjectSession, LLMProvider } from '../../../types/app';
 
-import { decideHandoffAutoSend } from './handoffAutoSend';
 import { useFileMentions } from './useFileMentions';
 import { useChatImageAttachments } from './useChatImageAttachments';
 import { useChatTextareaLayout } from './useChatTextareaLayout';
@@ -50,6 +50,14 @@ interface UseChatComposerStateArgs {
   currentSessionId: string | null;
   /** Bumped by the parent each time a brand-new session is started. */
   newSessionTrigger?: number;
+  /**
+   * 新会话的第一句话,和 `newSessionTrigger` 同一批下发。
+   * 它是 props/state,不是 ref —— 新会话 reset 会清空 composer,任何存在 ref 里的
+   * 草稿都会在那一刻被冲掉(前两轮修复正是这样把内容弄丢的)。
+   */
+  pendingPrompt?: string | null;
+  /** 取走首句并清空;同一条只会被取走一次。 */
+  consumePendingPrompt?: () => string | null;
   provider: LLMProvider;
   permissionMode: PermissionMode | string;
   cyclePermissionMode: () => void;
@@ -100,6 +108,8 @@ export function useChatComposerState({
   selectedSession,
   currentSessionId,
   newSessionTrigger,
+  pendingPrompt = null,
+  consumePendingPrompt,
   provider,
   permissionMode,
   cyclePermissionMode,
@@ -167,10 +177,10 @@ export function useChatComposerState({
   // first trigger change after arming must keep the ref; any later change means
   // the handoff was abandoned for another new session, so the ref is dropped.
   const handoffArmedRef = useRef(false);
-  // 指挥条回车带 `send: true` 时先在这里挂号,等新会话状态落定再真正发出去
-  // (见下面的 auto-send effect)。tick 只用来把 effect 叫醒。
-  const pendingAutoSendRef = useRef(false);
-  const [autoSendTick, setAutoSendTick] = useState(0);
+  // 首句已经被取走、正在发送(申请 sessionId 是一次网络往返)。这段时间里
+  // chatMessages 还是空的,但绝不能因此弹出"再选一次 Agent"的空态页 ——
+  // 用户已经选好了。见 ChatMessagesPane 的 isStartingNewSession。
+  const [isStartingPendingRun, setIsStartingPendingRun] = useState(false);
   const selectedProjectId = selectedProject?.projectId;
   // Prefer the stable backend-allocated id (selectedSession.id) but fall back
   // to currentSessionId for a just-established session that hasn't been
@@ -488,15 +498,14 @@ export function useChatComposerState({
 
   // ⌘K "Handoff to…" pre-fills the composer with an editable handoff preamble
   // after switching provider; nothing is sent until the user confirms.
+  // Agent 档案的「开场白」(useAgentProfiles)走的也是这条路。
   //
-  // The workbench 指挥条 rides the same event with `send: true`: it is the one
-  // global "new task" entry, so its Enter must actually start the run. `send`
-  // only *arms* the send here — the auto-send effect below fires it once the
-  // brand-new session's state has landed, so the text can never go to the
-  // session the user was looking at a moment ago.
+  // 这条链路**只灌草稿、从不自动发送**。以前指挥条借它带 `send: true` 自动发,
+  // 那是这个 bug 的来源:事件在 ChatInterface 挂载前派发就没人听见,草稿又只存在
+  // 会被新会话 reset 冲掉的 ref 里。要"回车即开跑"的入口现在走 pendingPrompt。
   useEffect(() => {
     const onHandoffDraft = (event: Event) => {
-      const detail = (event as CustomEvent<{ text?: string; sourceSessionId?: string; send?: boolean }>).detail;
+      const detail = (event as CustomEvent<{ text?: string; sourceSessionId?: string }>).detail;
       if (detail?.sourceSessionId) {
         pendingHandoffSourceRef.current = detail.sourceSessionId;
         handoffArmedRef.current = true;
@@ -505,11 +514,6 @@ export function useChatComposerState({
       if (typeof text === 'string' && text) {
         inputValueRef.current = text;
         setInput(text);
-        // 只挂号,不立刻 submit —— 立刻发会打进上一个会话,见 auto-send effect。
-        if (detail?.send) {
-          pendingAutoSendRef.current = true;
-          setAutoSendTick((previous) => previous + 1);
-        }
       }
     };
     window.addEventListener('leocodebox:handoff-draft', onHandoffDraft);
@@ -517,31 +521,50 @@ export function useChatComposerState({
   }, []);
 
   /**
-   * 指挥条回车的延后发送。
+   * 指挥条 / 主控台回车带来的首句:reset 落定后填入并提交,然后立刻消费掉。
    *
-   * 为什么不能同步发:AppContent 先调 handleNewSession(把 selectedSession 清空、
-   * bump newSessionTrigger、navigate('/')),紧接着**同步**派发 handoff-draft。
-   * 此时 React 还没重渲染,handleSubmitRef 里仍是上一次渲染的闭包,
-   * selectedSession / currentSessionId 都还指向刚才那个会话 —— 直接 submit 的话
-   * targetSessionId 取到旧会话,这句话被发进旧会话(旧会话在跑就更糟,直接入队),
-   * 而用户被 navigate 带到新会话,看到的是"选择您的 AI 助手"空态,输入也没了。
+   * ── 为什么是"同源状态"而不是继续等时序 ──────────────────────────
+   * 这个 bug 修过两轮,两轮都在调"等多久才发"。真正的病根是草稿和会话重置
+   * 走的是两条互不相干的流:草稿靠全局事件灌进 ref,重置靠 newSessionTrigger。
+   * 于是主控台按下开始时 ChatInterface 还没挂载(MainContent 停在 dashboard
+   * 分支),事件没人听;而在会话页里,reset 又会把 ref 里的草稿冲掉,补发时
+   * 判据读到空串,直接判作废 —— 两条路都是"内容凭空消失"。
    *
-   * 所以这里等两件事都归零(父层的 selectedSession + 本地 currentSessionId,
-   * 后者由 useChatSessionState 的 newSessionTrigger reset 清)再发。届时闭包是新的,
-   * handleSubmit 会走"没有会话 → 向网关申请一个新 sessionId"的分支,落到新会话里。
-   * 这个 effect 声明在 handleSubmitRef 赋值 effect 之后,保证读到的是当前渲染的闭包。
+   * 现在首句是 props(`pendingPrompt`),它和 `newSessionTrigger` 同一批到达:
+   * - 组件挂载晚了没关系,状态还在,挂载后这个 effect 立刻跑;
+   * - composer 被清空也没关系,真值不在输入框里;
+   * - 只在两个 id 都归零后才发,`handleSubmit` 会走"申请新 sessionId"的分支,
+   *   绝不会打进用户刚才看的那个会话。
+   *
+   * `consumePendingPrompt()` 取值即清空,保证同一句话只发一次(StrictMode 双跑、
+   * 或 reset 与挂载撞在一起时,第二次读到的是 null)。
+   * 声明在 handleSubmitRef 赋值 effect 之后,读到的一定是当前渲染的闭包。
    */
   useEffect(() => {
-    const decision = decideHandoffAutoSend({
-      armed: pendingAutoSendRef.current,
+    const decision = decidePendingPromptSend({
+      pendingPrompt,
       selectedSessionId: selectedSession?.id ?? null,
       currentSessionId,
-      draft: inputValueRef.current,
+      hasProject: Boolean(selectedProject),
     });
     if (decision === 'wait') return;
-    pendingAutoSendRef.current = false;
-    if (decision === 'send') void handleSubmitRef.current?.(createFakeSubmitEvent());
-  }, [autoSendTick, currentSessionId, selectedSession]);
+    // 无论发还是作废,都要先把它取走 —— 留在那儿会被下一次渲染再判一遍。
+    const prompt = consumePendingPrompt?.();
+    if (decision === 'drop' || !prompt) return;
+
+    setInput(prompt);
+    inputValueRef.current = prompt;
+    setIsStartingPendingRun(true);
+    void Promise.resolve(handleSubmitRef.current?.(createFakeSubmitEvent()))
+      .finally(() => setIsStartingPendingRun(false));
+  }, [
+    consumePendingPrompt,
+    currentSessionId,
+    pendingPrompt,
+    selectedProject,
+    selectedSession,
+    setInput,
+  ]);
 
   // Bound the pending handoff source to exactly the session the handoff created.
   // The handoff's own onStartNewChat bumps newSessionTrigger first, so consume a
@@ -774,5 +797,6 @@ export function useChatComposerState({
     commandModalPayload,
     closeCommandModal,
     showCostModal,
+    isStartingPendingRun,
   };
 }

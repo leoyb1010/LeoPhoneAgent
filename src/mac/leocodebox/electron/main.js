@@ -536,7 +536,6 @@ function registerIpcHandlers() {
   ipcMain.handle('leocodebox-desktop:get-state', (event) => getDesktopStateForSender(event));
   trustedHandle('leocodebox-desktop:open-local', async () => openLocalInDesktop());
   trustedHandle('leocodebox-desktop:open-switch', async () => openSwitchInDesktop());
-  trustedHandle('leocodebox-desktop:resize-quota-panel', async (_event, height) => desktopWindow.resizeQuotaPopover(height));
   trustedHandle('leocodebox-desktop:open-local-web-ui', async () => openLocalWebUi());
   trustedHandle('leocodebox-desktop:reload-active-tab', async () => desktopWindow.reloadActiveTab());
   // Environment switching collapsed to "open the local workspace" when the
@@ -583,7 +582,7 @@ function registerIpcHandlers() {
     await desktopUpdater.installUpdate(async () => {
       isQuitting = true;
       desktopNotifications?.stop();
-      await localServer?.shutdownOwnedServer();
+      await localServer?.stopLocalServer();
     });
     return desktopUpdater.getState();
   });
@@ -591,6 +590,9 @@ function registerIpcHandlers() {
 
 function registerAppEvents() {
   app.on('activate', () => {
+    // 已经在退出流程里就不再开窗:否则退出等待期间点一下 Dock 图标,
+    // 应用又被拉回来,看着就像"关不掉/自己重启"。
+    if (isQuitting) return;
     if (BrowserWindow.getAllWindows().length === 0) {
       const reopen = desktopWindow ? desktopWindow.createWindow() : createDesktopWindow();
       void reopen.catch((error) => {
@@ -614,23 +616,28 @@ function registerAppEvents() {
   app.on('before-quit', (event) => {
     if (isQuitting) return;
     isQuitting = true;
-    if (!localServer?.hasOwnedServer()) return;
+    if (!localServer) return;
 
     if (localServer.getSettings().keepLocalServerRunning) {
-      // Warm resume across app restarts: leave the server running; the next
-      // launch adopts it via the marker file instead of cold-starting.
+      // 用户显式打开「退出后保温」时才留后台服务:下次启动按 marker 直接接管。
       localServer.detachOwnedServer();
       return;
     }
 
+    // 默认路径:退出就是退出。这里用 stopLocalServer() 而不是
+    // shutdownOwnedServer(),因为本次启动可能是**接管**了上次遗留的服务
+    // (ownedServerProcess 为空),那种情况下旧代码直接放行,后台服务就永远
+    // 活着、每次启动又被接管 —— 表现出来正是"退出后自己老重启"。
     event.preventDefault();
-    void localServer.shutdownOwnedServer().finally(() => app.quit());
+    void localServer.stopLocalServer().finally(() => app.quit());
   });
 
   app.on('window-all-closed', () => {
-    // Closing the window hides the app into the tray/Dock instead of quitting,
-    // keeping the local server warm. Quit stays on ⌘Q / tray "退出".
-    if (isQuitting) app.quit();
+    // 产品收缩:菜单栏托盘没了,"关窗口 = 隐藏到托盘"也就没有落点。
+    // 关掉最后一个窗口就是退出,本地服务在 before-quit 里一并收掉。
+    // macOS 仍保留 activate 重开窗口的能力(Dock 图标点击),但那只在
+    // 应用还没退出时才会发生。
+    app.quit();
   });
 
   app.on('will-quit', () => {
@@ -681,12 +688,9 @@ async function createDesktopWindow() {
       openNotificationTarget,
       isAppQuitting: () => isQuitting,
       requestQuit: () => app.quit(),
-      // 托盘的额度分区要直接问本地服务要数据,所以主进程得把本地 token 递过去。
-      getLocalAuthToken: () => localServer.getLocalAuthToken(),
     },
   });
 
-  desktopWindow.createTray();
   desktopWindow.configurePermissions();
   await desktopWindow.createWindow();
 }

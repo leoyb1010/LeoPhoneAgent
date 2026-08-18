@@ -180,7 +180,8 @@
     },
     "loading": {
       "olderMessages": "Loading older messages...",
-      "sessionMessages": "Loading session messages..."
+      "sessionMessages": "Loading session messages...",
+      "startingRun": "Starting…"
     },
     "messages": {
       "showingOf": "Showing {{shown}} of {{total}} messages",

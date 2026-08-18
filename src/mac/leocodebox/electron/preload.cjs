@@ -57,14 +57,10 @@ const localAuthReady = installLocalOnlyAuthToken(window.location);
 
 if (isLocalHttpOrigin(window.location)) {
   const localBridge = { enabled: true, authReady: localAuthReady };
-  // 托盘的额度面板与 Leoapi 切换页一样,是同源的独立工具页,同样需要
-  // 「回到工作台」这条出口。
-  if (window.location.pathname === '/leocodebox-switch.html'
-    || window.location.pathname === '/leocodebox-quota.html') {
+  // Leoapi 切换页是同源的独立工具页,需要「回到工作台」这条出口。
+  // (菜单栏额度面板曾经也走这里;产品收缩后那条线已整体移除。)
+  if (window.location.pathname === '/leocodebox-switch.html') {
     localBridge.openMain = () => ipcRenderer.invoke('leocodebox-desktop:open-local');
-    // 面板高度随内容走:固定高度会把「配速」这类靠后的区块整段切掉,
-    // 底部圆角也被切在窗口外,看着就是一条生硬的直边。
-    localBridge.resizePanel = (height) => ipcRenderer.invoke('leocodebox-desktop:resize-quota-panel', height);
   }
   contextBridge.exposeInMainWorld('leocodeboxLocal', Object.freeze(localBridge));
 }

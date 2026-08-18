@@ -137,6 +137,13 @@ export interface ChatInterfaceProps {
   sendByCtrlEnter?: boolean;
   externalMessageUpdate?: number;
   newSessionTrigger?: number;
+  /**
+   * 新会话的第一句话。和 `newSessionTrigger` 同一批下发,所以 composer 一就绪
+   * 就能读到它 —— 不依赖任何事件、也不怕 reset 清空输入框(见 hooks/pendingPrompt.ts)。
+   */
+  pendingPrompt?: string | null;
+  /** 取走首句并清空;同一条只会被取走一次,避免重复发送。 */
+  consumePendingPrompt?: () => string | null;
   onTaskClick?: (...args: unknown[]) => void;
   onShowAllTasks?: (() => void) | null;
 }

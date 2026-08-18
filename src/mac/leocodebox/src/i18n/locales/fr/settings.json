@@ -93,7 +93,6 @@
     "appearance": "Apparence",
     "git": "Git",
     "apiTokens": "API & Tokens",
-    "quota": "Quota IA",
     "tasks": "Tâches",
     "notifications": "Notifications",
     "plugins": "Plugins",
@@ -685,48 +684,5 @@
     "placeholder": "Rechercher",
     "noResults": "Aucun réglage correspondant",
     "clear": "Effacer"
-  },
-  "quota": {
-    "title": "Quota IA",
-    "description": "D'où vient le quota de chaque fournisseur, et ce qu'il manque encore.",
-    "loading": "Chargement…",
-    "loadError": "Impossible de charger l'état des quotas.",
-    "saveError": "Impossible d'enregistrer les identifiants.",
-    "empty": "Aucun fournisseur n'a répondu.",
-    "refresh": "Actualiser",
-    "refreshing": "Actualisation…",
-    "autoConnected": "Connecté automatiquement via la session ouverte sur ce Mac",
-    "credentialOrigin": "source des identifiants : ",
-    "updatedAt": "mis à jour {{time}}",
-    "storageNote": "Les identifiants restent sur ce Mac, dans ~/.leocodebox/quota-credentials.json avec les droits 0600. Une clé n'est jamais renvoyée à cette page — seulement le fait qu'elle existe et ses 4 derniers caractères.",
-    "status": {
-      "connected": "Connecté",
-      "notConnected": "Non connecté",
-      "error": "Erreur"
-    },
-    "source": {
-      "oauth": "quota officiel (OAuth)",
-      "api": "données officielles (API)",
-      "web": "quota officiel (session navigateur)",
-      "cli": "quota officiel (CLI)",
-      "local": "estimation locale, pas un quota officiel",
-      "none": "aucune donnée"
-    },
-    "credential": {
-      "notConfigured": "Aucune clé enregistrée",
-      "configured": "Clé enregistrée",
-      "configuredWithTail": "Clé enregistrée · se termine par {{last4}}",
-      "placeholder": "Coller la clé API",
-      "inputLabel": "Clé API {{provider}}",
-      "save": "Enregistrer",
-      "saving": "Enregistrement…",
-      "remove": "Supprimer"
-    },
-    "howTo": {
-      "gemini": "Connectez-vous à la CLI Gemini avec un compte Google (type d'auth oauth-personal). Le point d'accès au quota personnel n'est pas ouvert aux clés API.",
-      "cursor": "Créez une clé sur cursor.com → Dashboard → API Keys. Elle est stockée ici, mais Cursor ne publie les données d'usage qu'aux clés admin des équipes Enterprise.",
-      "grok": "Créez une clé API sur console.x.ai et collez-la ici. Elle est vérifiée auprès de l'API xAI ; xAI ne publie aucun solde pour ce type de clé.",
-      "opencode": "OpenCode facture via le fournisseur amont que vous avez configuré : consultez le quota chez lui."
-    }
   }
 }

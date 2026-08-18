@@ -466,12 +466,12 @@ window.__MOCK_STATE__ = {
     var body = '<div class="cc-surface">' +
       '<div class="cc-meta mono">' + esc(url) + '</div>' +
       '<p class="cc-note">' + (keepRunning
-        ? 'leocodebox 打开时自动启动本地 Agent 服务；退出后服务保温运行，下次打开秒回。'
-        : 'leocodebox 打开时自动启动本地 Agent 服务，退出时自动停止。') + '</p>' +
+        ? 'leocodebox 打开时自动启动本地 Agent 服务；退出后服务仍在后台运行，下次打开秒回。'
+        : 'leocodebox 打开时自动启动本地 Agent 服务；退出应用时一并停止，不留后台进程。') + '</p>' +
       '</div>' +
       '<div class="cc-surface cc-choice-group">' +
-      CC.renderRadioOption('keep-server-running', 'off', !keepRunning, '退出即停', '完全退出 leocodebox 时停止本地服务（默认）。') +
-      CC.renderRadioOption('keep-server-running', 'on', keepRunning, '退出后保温', '完全退出后保留本地服务，下次启动直接接管，实现秒开。重启服务后生效。') +
+      CC.renderRadioOption('keep-server-running', 'off', !keepRunning, '退出即停（默认）', '关掉最后一个窗口或按 ⌘Q 就是完整退出：本地服务同时停掉，不留任何后台进程。') +
+      CC.renderRadioOption('keep-server-running', 'on', keepRunning, '退出后保温', '退出应用后本地服务继续在后台跑，下次启动直接接管、秒开。代价是退出后仍有一个常驻进程；不需要秒开就别开。重启服务后生效。') +
       '</div>';
     return CC.renderSection(
       options.eyebrow || '本地服务',

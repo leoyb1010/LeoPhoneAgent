@@ -180,7 +180,8 @@
     },
     "loading": {
       "olderMessages": "正在載入較早的訊息...",
-      "sessionMessages": "正在載入工作階段訊息..."
+      "sessionMessages": "正在載入工作階段訊息...",
+      "startingRun": "正在開始…"
     },
     "messages": {
       "showingOf": "顯示 {{shown}} / {{total}} 則訊息",

@@ -1,6 +1,4 @@
-import { BrowserWindow, Menu, Tray, clipboard, nativeImage, nativeTheme, screen, session, webContents as electronWebContents } from 'electron';
-
-import { fetchQuotaSnapshot, quotaMenuSection, trayTitle } from './trayQuota.js';
+import { BrowserWindow, Menu, clipboard, nativeTheme, session, webContents as electronWebContents } from 'electron';
 
 import { ViewHost } from './viewHost.js';
 
@@ -61,12 +59,6 @@ export class DesktopWindowManager {
 
     this.mainWindow = null;
     this.settingsWindow = null;
-    this.tray = null;
-    // 菜单栏额度:快照 + 轮询句柄。取不到就保持上一次的内容,菜单不闪。
-    this.quotaSnapshot = null;
-    this.quotaTimer = null;
-    this.quotaPopover = null;
-    this.trayMenu = null;
     this.launcherLoaded = false;
     this.contentViewResizeTimer = null;
     this.viewHost = new ViewHost({
@@ -106,11 +98,6 @@ export class DesktopWindowManager {
     if (win.isMinimized()) win.restore();
     win.show();
     win.focus();
-  }
-
-  getTrayImage() {
-    const image = nativeImage.createFromPath(this.getWindowIconPath());
-    return image.resize({ width: 18, height: 18 });
   }
 
   getContentViewBounds() {
@@ -200,7 +187,9 @@ export class DesktopWindowManager {
       show: false,
       frame: false,
       transparent: true,
-      hasShadow: false,
+      // 投影交给系统窗口:CSS 里那层阴影需要 margin 撑空间,而那圈留白
+      // 一旦高度算得不严丝合缝就会四边不等,看起来像渲染坏了。
+      hasShadow: true,
       resizable: false,
       minimizable: false,
       maximizable: false,
@@ -434,30 +423,6 @@ export class DesktopWindowManager {
     return items;
   }
 
-  buildTrayEnvironmentSection() {
-    const cloudState = this.getCloudState();
-    if (cloudState.localOnly) return [];
-
-    if (!cloudState.account?.apiKey) {
-      return [
-        {
-          label: cloudState.account?.email ? `Reconnect ${cloudState.account.email}` : 'Login',
-          click: () => void this.actions.connectCloudAccount()
-            .catch((error) => this.actions.showError('Could not connect leocodebox account', error)),
-        },
-      ];
-    }
-
-    if (!cloudState.environments.length) {
-      return [{ label: 'No environments found', enabled: false }];
-    }
-
-    return cloudState.environments.map((environment) => ({
-      label: `${environment.name || environment.subdomain} - ${environment.status}`,
-      submenu: this.buildEnvironmentActionsSubmenu(environment),
-    }));
-  }
-
   buildAppMenu() {
     if (!this.mainWindow) return;
     const cloudState = this.getCloudState();
@@ -616,60 +581,6 @@ export class DesktopWindowManager {
     ];
 
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
-    this.buildTrayMenu();
-  }
-
-  buildTrayMenu() {
-    if (!this.tray) return;
-    const cloudState = this.getCloudState();
-    const localOnly = Boolean(cloudState.localOnly);
-    const localState = this.getLocalState();
-
-    const template = [
-      // 额度排在最上面:菜单栏图标存在的意义就是不打开应用也能看到还剩多少。
-      ...quotaMenuSection(this.quotaSnapshot),
-      {
-        label: '打开额度面板',
-        click: () => this.toggleQuotaPopover(),
-      },
-      {
-        label: '刷新额度',
-        click: () => void this.refreshQuota(true),
-      },
-      { type: 'separator' },
-	      {
-		        label: '本地',
-        submenu: [
-          {
-		            label: localState.localServerRunning ? '在 leocodebox 中打开本地服务' : '启动本地 leocodebox',
-	            click: () => void this.actions.openLocalInDesktop().catch((error) => this.actions.showError('Could not open local leocodebox', error)),
-          },
-	        ],
-	      },
-	      ...(localOnly ? [] : [{
-	        label: 'Remote environments',
-	        submenu: this.buildTrayEnvironmentSection(),
-	      },
-	      { type: 'separator' },
-	      {
-	        label: cloudState.account?.email ? `Connected: ${cloudState.account.email}` : 'Login',
-	        click: () => void this.actions.connectCloudAccount().catch((error) => this.actions.showError('Could not connect leocodebox account', error)),
-	      },
-	      {
-	        label: 'Logout leocodebox Account',
-	        click: () => void this.actions.clearCloudAccount().catch((error) => this.actions.showError('Could not logout', error)),
-	        enabled: Boolean(cloudState.account?.apiKey),
-	      }]),
-      { type: 'separator' },
-      {
-        label: `退出 ${this.appName}`,
-        role: 'quit',
-      },
-    ];
-
-    this.tray.setToolTip(`${this.appName}${this.actions.getActiveTarget()?.name ? ` - ${this.actions.getActiveTarget().name}` : ''}`);
-    // 不用 setContextMenu:那会把左键也接管过去,而左键要留给额度面板。
-    this.trayMenu = Menu.buildFromTemplate(template);
   }
 
   async showDesktopSettings() {
@@ -728,138 +639,6 @@ export class DesktopWindowManager {
       if (!webContents) return false;
       return isAllowedPermission(webContents, permission);
     });
-  }
-
-  /**
-   * 拉一次额度快照并刷新菜单栏。
-   * `force` 只影响服务端缓存(60 秒),菜单本身每次都会重建。
-   */
-  /**
-   * 本地服务的地址。开发模式下服务由 scripts/desktop-dev.mjs 外部拉起,
-   * localServer 自己没有 spawn 过它,所以 localWebUrl 是空的 —— 这时按
-   * SERVER_PORT 兜底,否则托盘会把"取不到"误报成"未接入"。
-   */
-  getQuotaBaseUrl() {
-    const fromLocalServer = this.getLocalState().localWebUrl;
-    if (fromLocalServer) return fromLocalServer;
-    const port = Number.parseInt(process.env.SERVER_PORT || '', 10);
-    return Number.isInteger(port) && port > 0 ? `http://127.0.0.1:${port}` : null;
-  }
-
-  async refreshQuota(force = false) {
-    const baseUrl = this.getQuotaBaseUrl();
-    const token = this.actions.getLocalAuthToken?.() ?? process.env.LEOCODEBOX_LOCAL_AUTH_TOKEN ?? null;
-    const snapshot = await fetchQuotaSnapshot(baseUrl, token, force);
-    if (snapshot) this.quotaSnapshot = snapshot;
-    if (!this.tray) return;
-    // 没有任何权威额度时标题为空 —— 菜单栏上不摆一个恒为 0% 的假计量。
-    this.tray.setTitle(trayTitle(this.quotaSnapshot?.providers ?? []));
-    this.buildTrayMenu();
-  }
-
-  /**
-   * 菜单栏图标下方的额度面板。
-   *
-   * 这里用无边框窗口而不是原生 Menu:原生菜单只能排灰色文本,画不出计量条、
-   * 重置倒计时和刷新按钮 —— 而菜单栏工具的价值恰恰在于"一眼看到还剩多少"。
-   * 面板本身是同源的独立工具页(与 Leoapi 切换页同一套做法),复用 preload
-   * 注入的本地 token,不需要另建一条鉴权通道。
-   */
-  ensureQuotaPopover() {
-    if (this.quotaPopover && !this.quotaPopover.isDestroyed()) return this.quotaPopover;
-    const baseUrl = this.getQuotaBaseUrl();
-    if (!baseUrl) return null;
-
-    this.quotaPopover = new BrowserWindow({
-      // CodexBar 的面板宽约 360,高度**跟着内容走**。写死高度的下场是:
-      // Codex 这种窗口多的家会被从中间切断(「配速」整段没了),而且 shell
-      // 的底部圆角被切在窗口外,边缘看起来是一条生硬的直边。
-      // 这里只给一个初始值,页面渲染完会回传实测高度。
-      width: 372,
-      height: 420,
-      show: false,
-      frame: false,
-      transparent: true,
-      resizable: false,
-      movable: false,
-      minimizable: false,
-      maximizable: false,
-      fullscreenable: false,
-      skipTaskbar: true,
-      alwaysOnTop: true,
-      hasShadow: false,
-      webPreferences: {
-        contextIsolation: true,
-        nodeIntegration: false,
-        preload: this.getPreloadPath(),
-      },
-    });
-    this.quotaPopover.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-    // 点到别处就收起来,菜单栏面板不该一直挂在最上层。
-    this.quotaPopover.on('blur', () => this.quotaPopover?.hide());
-    this.quotaPopover.on('closed', () => { this.quotaPopover = null; });
-    void this.quotaPopover.loadURL(`${baseUrl}/leocodebox-quota.html`);
-    return this.quotaPopover;
-  }
-
-  /**
-   * 面板高度跟随内容。
-   *
-   * 上限取当前屏幕可用高度再留 120px 余量 —— 顶到屏幕边缘的菜单栏面板
-   * 会被系统裁掉底部,那比内容滚动更难用。超过上限时页面内部自己滚。
-   */
-  resizeQuotaPopover(height) {
-    const win = this.quotaPopover;
-    if (!win || win.isDestroyed()) return null;
-    const wanted = Math.round(Number(height) || 0);
-    if (!Number.isFinite(wanted) || wanted <= 0) return null;
-    const display = screen.getDisplayMatching(win.getBounds());
-    const maxHeight = Math.max(320, display.workArea.height - 120);
-    const next = Math.min(Math.max(wanted, 260), maxHeight);
-    const current = win.getBounds();
-    if (Math.abs(current.height - next) < 2) return next;
-    win.setBounds({ ...current, height: next }, false);
-    return next;
-  }
-
-  toggleQuotaPopover() {
-    const popover = this.ensureQuotaPopover();
-    if (!popover) {
-      // 本地服务还没起来时退回原来的行为:把工作台叫出来。
-      this.showMainWindow();
-      return;
-    }
-    if (popover.isVisible()) {
-      popover.hide();
-      return;
-    }
-    const trayBounds = this.tray?.getBounds?.();
-    const [width] = popover.getSize();
-    if (trayBounds) {
-      popover.setPosition(
-        Math.round(trayBounds.x + trayBounds.width / 2 - width / 2),
-        Math.round(trayBounds.y + trayBounds.height + 4),
-        false,
-      );
-    }
-    popover.show();
-    popover.focus();
-    void this.refreshQuota();
-  }
-
-  createTray() {
-    if (this.tray) return;
-    this.tray = new Tray(this.getTrayImage());
-    // 左键 = 额度面板(菜单栏工具的主用途),右键 = 本地服务与退出。
-    this.tray.on('click', () => this.toggleQuotaPopover());
-    this.tray.on('right-click', () => {
-      if (this.trayMenu) this.tray.popUpContextMenu(this.trayMenu);
-    });
-    this.buildTrayMenu();
-    void this.refreshQuota();
-    // 2 分钟一轮:额度窗口是按小时/周算的,再密就是白烧电。
-    this.quotaTimer = setInterval(() => void this.refreshQuota(), 120_000);
-    this.quotaTimer.unref?.();
   }
 
   async createWindow() {

@@ -16,11 +16,15 @@ import {
 } from './projectStateUtils';
 
 test('retired top-level workspaces are no longer valid tabs', () => {
-  // 工作台外壳把 dashboard/fleet/missions 从"页面"降级掉了。
-  for (const retired of ['dashboard', 'fleet', 'missions']) {
-    assert.equal(isValidTab(retired), false, `${retired} should be retired`);
-  }
+  // 只剩 missions 是真退役的(快速任务搬进了 ⌘K)。fleet 曾一起被列进来,但它
+  // 其实**还是**页签栏里的「Mac 控制台」(MainContentTabSwitcher 无条件渲染
+  // FLEET_TAB,MainContent 也照常渲染 FleetView)—— 当成退役的后果是:能点、
+  // 能用,一重启就被判非法、默默弹回聊天。清单以页签栏为准。
+  assert.equal(isValidTab('missions'), false, 'missions should be retired');
   assert.equal(isValidTab('chat'), true);
+  assert.equal(isValidTab('fleet'), true, 'Mac 控制台仍在页签栏里');
+  assert.equal(isValidTab('audit'), true, '会话审计仍在页签栏里');
+  assert.equal(isValidTab('dashboard'), true, '主控台是「选 Agent 开新任务」的落点,必须合法');
 });
 
 // Minimal in-memory localStorage for the handoff-map helpers (Node has none).
@@ -37,15 +41,44 @@ const installLocalStorage = () => {
   return storage;
 };
 
-test('an install parked on a retired tab lands on the conversation', () => {
+test('an install parked on a retired tab lands on the console', () => {
   const storage = installLocalStorage();
-  storage.setItem('activeTab', 'dashboard');
-  assert.equal(readPersistedTab(), 'chat');
+  storage.setItem('console-landing-seen', '1');
+  storage.setItem('activeTab', 'missions');
+  assert.equal(readPersistedTab(), 'dashboard');
   // 迁移是一次性的:陈旧的值被清掉,不会每次启动都重算。
   assert.equal(storage.getItem('activeTab'), null);
 
   storage.setItem('activeTab', 'files');
   assert.equal(readPersistedTab(), 'files');
+});
+
+test('升级后的第一次启动强制落在主控台一次', () => {
+  // 老装机的 activeTab 全停在 'chat';不迁移一次,恢复回来的主控台谁也看不见。
+  const storage = installLocalStorage();
+  storage.setItem('activeTab', 'chat');
+  assert.equal(readPersistedTab(), 'dashboard');
+  // 只强制一次:标记落下之后就照旧尊重用户上次停的地方。
+  assert.equal(readPersistedTab(), 'chat');
+});
+
+test('冷启动落在主控台,而不是某个会话', () => {
+  // 「换 Agent」必须发生在一个还没绑定 Agent 的地方。一开机就落进会话,等于把
+  // 每一次 Agent 切换都推回"在已有会话里改还是开新的?"那个歧义里 —— 三轮没根治的
+  // 「选了 Codex 发出去还是 Claude」就长在这块土壤上。
+  const storage = installLocalStorage();
+  storage.clear();
+  assert.equal(readPersistedTab(), 'dashboard');
+  // 全新装机同样只走一次迁移,之后没有 activeTab 记录时的默认值仍是主控台。
+  assert.equal(readPersistedTab(), 'dashboard');
+});
+
+test('上次停在主控台,下次打开还在主控台', () => {
+  const storage = installLocalStorage();
+  storage.setItem('console-landing-seen', '1');
+  storage.setItem('activeTab', 'dashboard');
+  assert.equal(readPersistedTab(), 'dashboard');
+  assert.equal(storage.getItem('activeTab'), 'dashboard', '合法页签不该被迁移逻辑清掉');
 });
 
 const project = (overrides: Partial<Project> = {}): Project => ({

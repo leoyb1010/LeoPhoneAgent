@@ -25,6 +25,12 @@ interface ChatMessagesPaneProps {
   isLoadingSessionMessages: boolean;
   /** True while the viewed session has an active provider run in flight. */
   isProcessing?: boolean;
+  /**
+   * 指挥条/主控台已经带着 Agent 和第一句话开了这个会话,首条消息还在路上。
+   * 这段时间 `chatMessages` 仍是空的,但不能弹「选择您的 AI 助手」——
+   * 用户刚刚才选过 Agent,再让他选一次就是这个 bug 的表象本身。
+   */
+  isStartingNewSession?: boolean;
   /** True while ChatComposer's floating activity/stop tab is rendered above the input. */
   hasActivityIndicator?: boolean;
   chatMessages: ChatMessage[];
@@ -76,6 +82,7 @@ function ChatMessagesPane({
   onTouchMove,
   isLoadingSessionMessages,
   isProcessing = false,
+  isStartingNewSession = false,
   hasActivityIndicator = false,
   chatMessages,
   selectedSession,
@@ -232,6 +239,10 @@ function ChatMessagesPane({
             <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-border" />
             <p>{t('session.loading.sessionMessages')}</p>
           </div>
+        </div>
+      ) : chatMessages.length === 0 && isStartingNewSession ? (
+        <div className="mt-8 text-center text-sm text-muted-foreground">
+          {t('session.loading.startingRun', { defaultValue: '正在开始…' })}
         </div>
       ) : chatMessages.length === 0 ? (
         <ProviderSelectionEmptyState

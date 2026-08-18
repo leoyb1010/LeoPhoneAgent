@@ -274,7 +274,7 @@ export default function TaskDetailModal({
                   type="button"
                   onClick={handleSaveChanges}
                   disabled={isSaving}
-                  className="rounded-md p-2 text-success hover:bg-success disabled:opacity-50 dark:hover:bg-success"
+                  className="rounded-md p-2 text-success hover:bg-success/25 disabled:opacity-50 dark:hover:bg-success/25"
                   title="Save"
                   aria-label="Save task"
                 >
@@ -360,7 +360,7 @@ export default function TaskDetailModal({
                       type="button"
                       key={String(dependency)}
                       onClick={() => onTaskClick?.({ id: dependency })}
-                      className="rounded-md bg-info px-2 py-1 text-sm text-info hover:bg-info dark:bg-info/25 dark:text-info dark:hover:bg-info"
+                      className="rounded-md bg-info/15 px-2 py-1 text-sm text-info hover:bg-info/25 dark:bg-info/25 dark:text-info dark:hover:bg-info/35"
                     >
                       <ArrowRight className="mr-1 inline h-3 w-3" />
                       {dependency}

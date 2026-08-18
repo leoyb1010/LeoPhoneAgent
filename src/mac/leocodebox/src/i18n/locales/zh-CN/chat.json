@@ -161,7 +161,8 @@
     },
     "loading": {
       "olderMessages": "正在加载更早的消息...",
-      "sessionMessages": "正在加载会话消息..."
+      "sessionMessages": "正在加载会话消息...",
+      "startingRun": "正在开始…"
     },
     "messages": {
       "showingOf": "显示 {{shown}} / {{total}} 条消息",

@@ -161,7 +161,7 @@ export default function ActionMenu({
                     item.disabled || item.loading
                       ? 'cursor-not-allowed opacity-50'
                       : item.isDanger
-                        ? 'text-destructive hover:bg-destructive dark:text-destructive dark:hover:bg-destructive'
+                        ? 'text-destructive hover:bg-destructive/25 dark:text-destructive dark:hover:bg-destructive/25'
                         : 'hover:bg-accent',
                   )}
                 >

@@ -36,6 +36,8 @@ function ChatInterface({
   sendByCtrlEnter,
   externalMessageUpdate,
   newSessionTrigger,
+  pendingPrompt = null,
+  consumePendingPrompt,
   onShowAllTasks,
 }: ChatInterfaceProps) {
   const { tasksEnabled, isTaskMasterInstalled } = useTasksSettings();
@@ -198,11 +200,14 @@ function ChatInterface({
     commandModalPayload,
     closeCommandModal,
     showCostModal,
+    isStartingPendingRun,
   } = useChatComposerState({
     selectedProject,
     selectedSession,
     currentSessionId,
     newSessionTrigger,
+    pendingPrompt,
+    consumePendingPrompt,
     provider,
     permissionMode,
     cyclePermissionMode,
@@ -299,6 +304,11 @@ function ChatInterface({
   // overlapping the last message.
   const hasActivityIndicator = Boolean(sessionActivity && pendingPermissionRequests.length === 0);
 
+  // 指挥条/主控台已经带着 Agent 和第一句话进来了:在这句话落地成第一条消息之前,
+  // 绝不能弹「选择您的 AI 助手」——那等于让用户把刚做过的选择再做一遍。
+  // `pendingPrompt` 覆盖"还没发",`isStartingPendingRun` 覆盖"正在申请 sessionId"。
+  const isStartingNewSession = Boolean(pendingPrompt) || isStartingPendingRun;
+
   if (!selectedProject) {
     const selectedProviderLabel =
       provider === 'cursor'
@@ -332,6 +342,7 @@ function ChatInterface({
           onTouchMove={handleScroll}
           isLoadingSessionMessages={isLoadingSessionMessages}
           isProcessing={isProcessing}
+          isStartingNewSession={isStartingNewSession}
           hasActivityIndicator={hasActivityIndicator}
           chatMessages={chatMessages}
           selectedSession={selectedSession}

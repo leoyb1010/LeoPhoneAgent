@@ -11,7 +11,6 @@ import McpSettingsTab from '../view/tabs/McpSettingsTab';
 import SkillsSettingsTab from '../view/tabs/SkillsSettingsTab';
 import AppearanceSettingsTab from '../view/tabs/AppearanceSettingsTab';
 import CredentialsSettingsTab from '../view/tabs/api-settings/CredentialsSettingsTab';
-import QuotaSettingsTab from '../view/tabs/quota-settings/QuotaSettingsTab';
 import VoiceSettingsTab from '../view/tabs/VoiceSettingsTab';
 import GitSettingsTab from '../view/tabs/git-settings/GitSettingsTab';
 import BrowserUseSettingsTab from '../view/tabs/browser-use-settings/BrowserUseSettingsTab';
@@ -292,7 +291,6 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
 
               {activeTab === 'api' && <CredentialsSettingsTab />}
 
-              {activeTab === 'quota' && <QuotaSettingsTab />}
 
               {activeTab === 'voice' && <VoiceSettingsTab />}
 

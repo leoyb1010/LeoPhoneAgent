@@ -308,27 +308,52 @@ export const removeSessionFromProject = (project: Project, sessionIdToDelete: st
   return updatedProject;
 };
 
-const VALID_TABS: Set<string> = new Set(['chat', 'files', 'shell', 'git', 'tasks', 'browser']);
+/**
+ * 这份清单必须和页签栏(MainContentTabSwitcher 的 BASE_TABS + 条件页签)一致。
+ * 之前 `audit` 漏在外面、`fleet` 还被当成已下线:两个页签在界面上照常渲染、也
+ * 能点开,但重启之后 readPersistedTab 判它们非法,直接把人弹回聊天 —— 从用户
+ * 视角就是"停在会话审计/Mac 控制台上,下次打开却回到了聊天"。
+ *
+ * `dashboard`(主控台)在 1.68 被降级掉,又在这一轮请回来:它是「选 Agent 开新
+ * 任务」的唯一落点,不是一个可有可无的仪表盘。详见 DashboardView 的注释。
+ */
+const VALID_TABS: Set<string> = new Set(['dashboard', 'chat', 'files', 'shell', 'git', 'tasks', 'browser', 'audit', 'fleet']);
 
 /**
- * Tabs that the 工作台 shell retired. `dashboard` and `fleet` stopped being
- * pages (the dashboard's numbers moved into Leoapi/关于, the fleet into the
- * titlebar capsule) and `missions` moved into ⌘K. They are still listed here
- * so an existing install whose `activeTab` points at one of them lands on the
- * conversation instead of a blank workspace.
+ * Tabs that the 工作台 shell retired. `missions` moved into ⌘K. It stays listed
+ * here so an existing install whose `activeTab` points at it lands somewhere
+ * real instead of a blank workspace.
  */
-const RETIRED_TABS: Set<string> = new Set(['dashboard', 'fleet', 'missions']);
+const RETIRED_TABS: Set<string> = new Set(['missions']);
+
+/**
+ * 冷启动的落点。回到主控台,而不是某个会话 —— 「换 Agent」必须发生在一个还没
+ * 绑定 Agent 的地方,否则代码只能猜用户是想改这个会话还是想开新的,猜错就是
+ * 「选了 Codex 发出去还是 Claude」。装过旧版本的机器有 activeTab 记录,按记录走。
+ */
+const DEFAULT_TAB: AppTab = 'dashboard';
 
 export const isValidTab = (tab: string): tab is AppTab => {
   return VALID_TABS.has(tab) || tab.startsWith('plugin:');
 };
 
+/**
+ * 一次性迁移标记。主控台在 1.68 被删掉,几乎所有老装机的 `activeTab` 都停在
+ * 'chat' —— 光把默认值改回 dashboard 等于谁也看不见它。升级后的第一次启动强制
+ * 落在主控台一次,让"换 Agent 在这儿"被看见;之后照旧按用户上次停的地方走。
+ */
+const CONSOLE_LANDING_KEY = 'console-landing-seen';
+
 export const readPersistedTab = (): AppTab => {
   try {
+    if (!localStorage.getItem(CONSOLE_LANDING_KEY)) {
+      localStorage.setItem(CONSOLE_LANDING_KEY, '1');
+      return DEFAULT_TAB;
+    }
     const stored = localStorage.getItem('activeTab');
     if (stored && RETIRED_TABS.has(stored)) {
       localStorage.removeItem('activeTab');
-      return 'chat';
+      return DEFAULT_TAB;
     }
     if (stored && isValidTab(stored)) {
       return stored as AppTab;
@@ -336,8 +361,7 @@ export const readPersistedTab = (): AppTab => {
   } catch {
     // localStorage unavailable
   }
-  // 对话即首页:工作台冷启动直接进会话,不再落在仪表盘。
-  return 'chat';
+  return DEFAULT_TAB;
 };
 
 const LAST_SESSION_KEY = 'last-session-id';

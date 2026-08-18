@@ -449,11 +449,11 @@ function ChatComposer({
                 permissionMode === 'default'
                   ? 'border-border/60 bg-muted/50 text-muted-foreground hover:bg-muted'
                   : permissionMode === 'acceptEdits'
-                    ? 'border-success/60 bg-success/15 text-success hover:bg-success dark:border-success/40 dark:bg-success/15 dark:text-success dark:hover:bg-success/25'
+                    ? 'border-success/60 bg-success/15 text-success hover:bg-success/25 dark:border-success/40 dark:bg-success/15 dark:text-success dark:hover:bg-success/25'
                     : permissionMode === 'auto'
-                      ? 'border-info/60 bg-info/15 text-info hover:bg-info dark:border-info/40 dark:bg-info/15 dark:text-info dark:hover:bg-info/25'
+                      ? 'border-info/60 bg-info/15 text-info hover:bg-info/25 dark:border-info/40 dark:bg-info/15 dark:text-info dark:hover:bg-info/25'
                       : permissionMode === 'bypassPermissions'
-                        ? 'border-warning/60 bg-warning/15 text-warning hover:bg-warning dark:border-warning/40 dark:bg-warning/15 dark:text-warning dark:hover:bg-warning/25'
+                        ? 'border-warning/60 bg-warning/15 text-warning hover:bg-warning/25 dark:border-warning/40 dark:bg-warning/15 dark:text-warning dark:hover:bg-warning/25'
                         : 'border-primary/20 bg-primary/5 text-primary hover:bg-primary/10'
               }`}
               title={t('input.clickToChangeMode')}

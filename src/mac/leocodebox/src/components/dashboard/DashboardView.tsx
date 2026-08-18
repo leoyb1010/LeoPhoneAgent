@@ -1,8 +1,14 @@
 import { useCallback, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useDashboardData } from '../../hooks/useDashboardData';
+import { useAppPreferences } from '../../contexts/PreferencesContext';
+import { useLocalAgents } from '../workbench/useLocalAgents';
+import { useFleetSnapshot } from '../workbench/useFleetSnapshot';
 
+import type { ConsoleMachineOption, NewTaskLaunch } from './newTask';
 import AgentGridCard from './cards/AgentGridCard';
+import NewTaskCard from './cards/NewTaskCard';
 import DashboardHero from './cards/DashboardHero';
 import GatewayCard from './cards/GatewayCard';
 import KernelCard from './cards/KernelCard';
@@ -16,7 +22,11 @@ type DashboardViewProps = {
   onNavigateToSession?: (sessionId: string) => void;
   onShowTab?: (tab: string) => void;
   onNewChat?: () => void;
-  onShowSettings: () => void;
+  onShowSettings: (tab?: string) => void;
+  /** 外壳当前选中的项目,作为「新任务」目录的初始值。 */
+  selectedProjectId?: string | null;
+  /** 主控台发起新任务 —— 选中的 Agent 显式随请求下发,见 newTask.ts。 */
+  onStartTask?: (launch: NewTaskLaunch) => void;
 };
 
 function todayIso(): string {
@@ -25,12 +35,31 @@ function todayIso(): string {
 }
 
 /**
- * The dashboard landing view: a 3-column responsive grid. Left = agent grid +
- * projects, middle = live sessions + missions, right = usage centre. Rich
- * hero on top, quick actions along the bottom. Cards stagger their entrance.
+ * 主控台 —— 工作台的落地页,也是**换 Agent 唯一不产生歧义的地方**。
+ *
+ * 1.68 把这一页删掉("对话即首页"),结果所有 Agent 切换都被迫发生在某个
+ * 已经绑定了 Agent 的会话内部:代码只能猜用户是想改这个会话、还是想开新的,
+ * 猜错就是三轮没修干净的「选了 Codex,发出去还是 Claude」。请回这一页不是
+ * 为了把仪表盘画回来,而是为了给「选 Agent + 开新任务」一个还没有会话的落点
+ * —— 那就是最上面的 NewTaskCard,其余卡片仍然只是状态陈列。
+ *
+ * 对话优先的外壳(标题栏 / 会话列表 / 指挥条)一并保留:从这里点进任意会话,
+ * 进去之后还是现在那套会话界面。
  */
-export default function DashboardView({ onNavigateToSession, onShowTab, onNewChat, onShowSettings }: DashboardViewProps) {
+export default function DashboardView({
+  onNavigateToSession,
+  onShowTab,
+  onNewChat,
+  onShowSettings,
+  selectedProjectId = null,
+  onStartTask,
+}: DashboardViewProps) {
+  const { t } = useTranslation();
   const data = useDashboardData();
+  const { preferences } = useAppPreferences();
+  // Agent / 远程机器都复用指挥条那两个数据源,不另起一份事实。
+  const { agents: localAgents } = useLocalAgents();
+  const { remotes, localName } = useFleetSnapshot();
   const [runningCount, setRunningCount] = useState(0);
 
   const handleOpenSession = useCallback(
@@ -42,6 +71,35 @@ export default function DashboardView({ onNavigateToSession, onShowTab, onNewCha
       }
     },
     [onNavigateToSession, onNewChat],
+  );
+
+  const machineOptions = useMemo<ConsoleMachineOption[]>(
+    () => [{
+      name: null as string | null,
+      label: localName || t('dashboard.newTaskLocal', { defaultValue: '本机' }),
+      desc: t('dashboard.newTaskLocalDesc', { defaultValue: '这台 Mac' }),
+    }].concat(
+      // 离线机器不进菜单,免得任务打进黑洞。
+      remotes
+        .filter((machine) => machine.online && machine.reachable)
+        .map((machine) => ({
+          name: machine.name,
+          label: machine.name,
+          desc: machine.activeCount > 0
+            ? t('workbench.remoteActive', { count: machine.activeCount, defaultValue: `${machine.activeCount} 个会话运行中` })
+            : t('dashboard.newTaskRemoteIdle', { defaultValue: '空闲 · 经中继下发' }),
+        })),
+    ),
+    [localName, remotes, t],
+  );
+
+  const projectOptions = useMemo(
+    () => (data.projects.data ?? []).map((project) => ({
+      projectId: project.projectId,
+      displayName: project.displayName,
+      path: project.path || project.fullPath,
+    })),
+    [data.projects.data],
   );
 
   const handleOpenMissions = useCallback(() => onShowTab?.('missions'), [onShowTab]);
@@ -78,8 +136,27 @@ export default function DashboardView({ onNavigateToSession, onShowTab, onNewCha
           onRefresh={data.refresh}
           onNewChat={() => onNewChat?.()}
           onShowFleet={() => onShowTab?.('fleet')}
-          onShowSettings={onShowSettings}
+          onShowSettings={() => onShowSettings()}
         />
+
+        {onStartTask && (
+          <NewTaskCard
+            agents={localAgents.map((agent) => ({
+              provider: agent.provider,
+              label: agent.label,
+              status: agent.status,
+              disabled: !agent.installed,
+            }))}
+            machines={machineOptions}
+            projects={projectOptions}
+            defaultProvider={preferences.defaultProvider}
+            selectedProjectId={selectedProjectId}
+            onStartTask={onStartTask}
+            onOpenAgentSettings={() => onShowSettings('agents')}
+            onOpenProjects={() => window.dispatchEvent(new CustomEvent('leocodebox:open-projects'))}
+            delay={20}
+          />
+        )}
 
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
           <div className="flex flex-col gap-3 lg:col-span-7">

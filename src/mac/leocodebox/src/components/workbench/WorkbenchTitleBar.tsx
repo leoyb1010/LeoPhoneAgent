@@ -8,6 +8,9 @@ import RemotePopover from './RemotePopover';
 import type { FleetMachine } from './useFleetSnapshot';
 
 type WorkbenchTitleBarProps = {
+  /** 回主控台 —— 换 Agent / 开新任务唯一不产生歧义的落点。 */
+  onOpenConsole: () => void;
+  consoleActive: boolean;
   localName: string;
   remotes: FleetMachine[];
   onlineCount: number;
@@ -23,11 +26,14 @@ type WorkbenchTitleBarProps = {
 /**
  * 46px 标题栏 —— 工作台唯一的常驻控件带。
  *
- * 这里刻意**没有导航**:9 项侧边导航栏被删掉之后,标题栏只负责身份
- * (本机是谁)与四个全局工具(远程 / Leoapi / ⌘K / 外观 / 设置)。
- * 任何"去某个页面"的动作都归 ⌘K。
+ * 这里只有**一个**导航位:「主控台」。9 项侧边导航栏被删掉之后,其余"去某个
+ * 页面"都归 ⌘K;主控台是例外,因为它是「选 Agent 开新任务」唯一不产生歧义的
+ * 落点 —— 一个必须随时点得到的东西不能只藏在快捷键后面。除此之外标题栏仍然
+ * 只负责身份(本机是谁)与几个全局工具(远程 / Leoapi / ⌘K / 外观 / 设置)。
  */
 export default function WorkbenchTitleBar({
+  onOpenConsole,
+  consoleActive,
   localName,
   remotes,
   onlineCount,
@@ -47,6 +53,19 @@ export default function WorkbenchTitleBar({
       {/* macOS 的红绿灯由系统绘制在 x=18,这里只给它让位。 */}
       <span aria-hidden className="w-[62px] flex-none" />
       <span className="font-mono text-[10.5px] tracking-[0.24em] text-wb-faint">LEO</span>
+
+      <Tooltip content={t('workbench.consoleTooltip', { defaultValue: '主控台 · 选 Agent、开新任务' })} position="bottom">
+        <button
+          type="button"
+          onClick={onOpenConsole}
+          aria-label={t('workbench.console', { defaultValue: '主控台' })}
+          aria-current={consoleActive ? 'page' : undefined}
+          className={`wb-chip-button ml-3 h-[26px] px-2.5 text-[11px] ${consoleActive ? 'text-foreground' : 'text-muted-foreground'}`}
+        >
+          {t('workbench.console', { defaultValue: '主控台' })}
+        </button>
+      </Tooltip>
+
       <span className="ml-2.5 truncate text-[11px] text-muted-foreground">
         {t('workbench.localMachine', { name: localName, defaultValue: `本机 · ${localName}` })}
       </span>

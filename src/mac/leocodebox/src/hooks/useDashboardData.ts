@@ -29,6 +29,9 @@ function idleSlice<T>(): Slice<T> {
 export type ProjectSummary = {
   projectId: string;
   displayName: string;
+  /** 真实路径 —— 主控台「新任务」的目录选择器要把它显示出来。 */
+  path?: string;
+  fullPath?: string;
   isStarred?: boolean;
   providerCounts?: Record<string, number>;
 };

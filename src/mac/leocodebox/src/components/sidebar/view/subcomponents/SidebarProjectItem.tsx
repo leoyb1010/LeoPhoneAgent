@@ -393,7 +393,7 @@ function SidebarProjectItem({
             {isEditing ? (
               <>
                 <div
-                  className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-success transition-colors hover:bg-success hover:text-success dark:hover:bg-success/20"
+                  className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-success transition-colors hover:bg-success/25 hover:text-success dark:hover:bg-success/20"
                   onClick={(event) => {
                     event.stopPropagation();
                     saveProjectName();

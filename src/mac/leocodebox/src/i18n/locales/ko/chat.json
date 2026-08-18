@@ -144,7 +144,8 @@
     },
     "loading": {
       "olderMessages": "이전 메시지 로딩 중...",
-      "sessionMessages": "세션 메시지 로딩 중..."
+      "sessionMessages": "세션 메시지 로딩 중...",
+      "startingRun": "시작하는 중…"
     },
     "messages": {
       "showingOf": "{{total}}개 중 {{shown}}개 표시",

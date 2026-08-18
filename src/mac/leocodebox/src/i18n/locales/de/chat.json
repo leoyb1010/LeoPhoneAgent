@@ -144,7 +144,8 @@
     },
     "loading": {
       "olderMessages": "Ältere Nachrichten werden geladen...",
-      "sessionMessages": "Sitzungsnachrichten werden geladen..."
+      "sessionMessages": "Sitzungsnachrichten werden geladen...",
+      "startingRun": "Wird gestartet…"
     },
     "messages": {
       "showingOf": "{{shown}} von {{total}} Nachrichten werden angezeigt",

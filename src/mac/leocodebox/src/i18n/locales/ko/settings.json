@@ -93,7 +93,6 @@
     "appearance": "외관",
     "git": "Git",
     "apiTokens": "API & 토큰",
-    "quota": "AI 사용량",
     "tasks": "작업",
     "notifications": "알림",
     "plugins": "플러그인",
@@ -627,48 +626,5 @@
     "placeholder": "설정 검색",
     "noResults": "일치하는 설정 없음",
     "clear": "지우기"
-  },
-  "quota": {
-    "title": "AI 사용량",
-    "description": "각 제공자의 사용량을 어디서 읽어오는지, 무엇이 아직 없는지.",
-    "loading": "불러오는 중…",
-    "loadError": "사용량 상태를 불러오지 못했습니다.",
-    "saveError": "자격 증명을 저장하지 못했습니다.",
-    "empty": "응답한 제공자가 없습니다.",
-    "refresh": "새로고침",
-    "refreshing": "새로고침 중…",
-    "autoConnected": "이 Mac의 로그인 상태로 자동 연결됨",
-    "credentialOrigin": "자격 증명 출처: ",
-    "updatedAt": "{{time}}에 업데이트",
-    "storageNote": "자격 증명은 이 Mac의 ~/.leocodebox/quota-credentials.json에 0600 권한으로만 저장됩니다. 전체 키는 이 화면으로 되돌아오지 않으며, 설정 여부와 마지막 4자리만 표시됩니다.",
-    "status": {
-      "connected": "연결됨",
-      "notConnected": "연결 안 됨",
-      "error": "오류"
-    },
-    "source": {
-      "oauth": "공식 사용량 (OAuth)",
-      "api": "공식 데이터 (API)",
-      "web": "공식 사용량 (브라우저 세션)",
-      "cli": "공식 사용량 (CLI)",
-      "local": "로컬 추정치, 공식 할당량 아님",
-      "none": "데이터 없음"
-    },
-    "credential": {
-      "notConfigured": "미설정",
-      "configured": "설정됨",
-      "configuredWithTail": "설정됨 · 끝자리 {{last4}}",
-      "placeholder": "API 키 붙여넣기",
-      "inputLabel": "{{provider}} API 키",
-      "save": "저장",
-      "saving": "저장 중…",
-      "remove": "삭제"
-    },
-    "howTo": {
-      "gemini": "Google 계정으로 gemini CLI에 다시 로그인하세요 (인증 방식 oauth-personal). 개인 할당량 API는 API 키에 열려 있지 않습니다.",
-      "cursor": "cursor.com → Dashboard → API Keys에서 키를 만드세요. 여기에 저장되지만 Cursor는 Enterprise 팀 관리자 키에만 사용량 API를 공개합니다.",
-      "grok": "console.x.ai에서 API 키를 만들어 여기에 붙여넣으세요. xAI API로 검증됩니다. 이 키 종류에는 잔액 API가 없습니다.",
-      "opencode": "OpenCode는 직접 설정한 상위 제공자로 과금되므로 할당량은 해당 제공자에서 확인하세요."
-    }
   }
 }

@@ -15,6 +15,10 @@ import {
   FALLBACK_PROVIDER_EFFORT_VALUES,
   toProviderEffortOptions,
 } from '../constants/providerEffort';
+// 兜底能力表搬到 constants,指挥条(在会话之外)也要读同一份。
+import { FALLBACK_PERMISSION_MODES } from '../constants/providerPermissions';
+
+import { decideSessionProviderSync } from './sessionProviderSync';
 
 const FALLBACK_DEFAULT_MODEL: Record<LLMProvider, string> = {
   claude: 'default',
@@ -31,20 +35,6 @@ const readStoredProvider = (): LLMProvider => {
   return PROVIDERS.includes(storedProvider as LLMProvider)
     ? storedProvider as LLMProvider
     : 'codex';
-};
-
-/**
- * Fallback permission-mode matrix used only until the backend capability
- * matrix (`GET /api/providers/capabilities`) has loaded. The backend is the
- * source of truth; this mirror exists so the composer renders sensibly on
- * first paint and when the capabilities request fails.
- */
-const FALLBACK_PERMISSION_MODES: Record<LLMProvider, PermissionMode[]> = {
-  claude: ['default', 'auto', 'acceptEdits', 'bypassPermissions', 'plan'],
-  cursor: ['default', 'acceptEdits', 'bypassPermissions', 'plan'],
-  codex: ['default', 'acceptEdits', 'bypassPermissions'],
-  opencode: ['default', 'acceptEdits', 'bypassPermissions', 'plan'],
-  grok: ['default', 'acceptEdits', 'bypassPermissions', 'plan'],
 };
 
 type ProviderCapabilities = {
@@ -518,11 +508,22 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
     setPermissionMode(savedMode ?? getDefaultPermissionModeForProvider(provider));
   }, [selectedSession?.id, provider, getDefaultPermissionModeForProvider, getPermissionModesForProvider]);
 
+  // 只在**换了会话**时跟随该会话的 provider。以前这里的判据是"会话的 provider
+  // 和当前 provider 不一样就改回去",而 provider 又在依赖里 —— 用户刚在指挥条选完
+  // Codex,这个 effect 立刻用当前打开的 Claude 会话把它按回去(还改写了全局默认),
+  // 于是「选了 Codex 仍然走 Claude」。判据换成会话身份,详见 sessionProviderSync。
+  const syncedSessionIdRef = useRef<string | null>(selectedSession?.id ?? null);
   useEffect(() => {
-    if (!selectedSession?.__provider || selectedSession.__provider === provider) {
-      return;
-    }
-
+    const sessionId = selectedSession?.id ?? null;
+    const decision = decideSessionProviderSync({
+      syncedSessionId: syncedSessionIdRef.current,
+      sessionId,
+      sessionProvider: selectedSession?.__provider ?? null,
+      provider,
+    });
+    if (decision === 'keep') return;
+    syncedSessionIdRef.current = sessionId;
+    if (decision !== 'follow' || !selectedSession?.__provider) return;
     setProvider(selectedSession.__provider);
     localStorage.setItem('selected-provider', selectedSession.__provider);
   }, [provider, selectedSession]);

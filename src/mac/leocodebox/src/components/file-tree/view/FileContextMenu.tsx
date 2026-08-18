@@ -294,7 +294,7 @@ export default function FileContextMenu({
                     action.isDisabled
                       ? 'opacity-50 cursor-not-allowed'
                       : action.isDanger
-                      ? 'text-destructive dark:text-destructive hover:bg-destructive dark:hover:bg-destructive'
+                      ? 'text-destructive dark:text-destructive hover:bg-destructive/25 dark:hover:bg-destructive/25'
                       : 'hover:bg-accent',
                     isLoading && 'pointer-events-none',
                   )}

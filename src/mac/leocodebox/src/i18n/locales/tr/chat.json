@@ -144,7 +144,8 @@
     },
     "loading": {
       "olderMessages": "Eski mesajlar yükleniyor...",
-      "sessionMessages": "Oturum mesajları yükleniyor..."
+      "sessionMessages": "Oturum mesajları yükleniyor...",
+      "startingRun": "Başlatılıyor…"
     },
     "messages": {
       "showingOf": "{{total}} mesajdan {{shown}} tanesi gösteriliyor",

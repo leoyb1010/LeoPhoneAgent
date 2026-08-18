@@ -168,7 +168,7 @@ function PluginCard({
               title={confirmingUninstall ? t('pluginSettings.confirmUninstall') : t('pluginSettings.uninstallPlugin')}
               aria-label={t('pluginSettings.uninstallPlugin')}
               className={`rounded-md p-1.5 transition-colors ${confirmingUninstall
-                ? 'bg-destructive text-destructive hover:bg-destructive dark:bg-destructive/20 dark:hover:bg-destructive/30'
+                ? 'bg-destructive/15 text-destructive hover:bg-destructive/25 dark:bg-destructive/20 dark:hover:bg-destructive/30'
                 : 'text-muted-foreground hover:bg-muted hover:text-destructive'
                 }`}
             >
@@ -181,7 +181,7 @@ function PluginCard({
 
         {/* Confirm uninstall banner */}
         {confirmingUninstall && (
-          <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-destructive bg-destructive px-3 py-2 dark:border-destructive/50 dark:bg-destructive/30">
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-md border border-destructive bg-destructive/15 px-3 py-2 dark:border-destructive/50 dark:bg-destructive/30">
             <span className="text-sm text-destructive dark:text-destructive">
               {t('pluginSettings.confirmUninstallMessage', { name: plugin.displayName })}
             </span>
@@ -194,7 +194,7 @@ function PluginCard({
               </button>
               <button
                 onClick={onUninstall}
-                className="rounded-md border border-destructive px-2.5 py-1 text-sm font-medium text-destructive transition-colors hover:bg-destructive dark:border-destructive dark:text-destructive dark:hover:bg-destructive/30"
+                className="rounded-md border border-destructive px-2.5 py-1 text-sm font-medium text-destructive transition-colors hover:bg-destructive/25 dark:border-destructive dark:text-destructive dark:hover:bg-destructive/30"
               >
                 {t('pluginSettings.remove')}
               </button>

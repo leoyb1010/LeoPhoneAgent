@@ -141,7 +141,8 @@
     },
     "loading": {
       "olderMessages": "過去のメッセージを読み込んでいます...",
-      "sessionMessages": "セッションメッセージを読み込んでいます..."
+      "sessionMessages": "セッションメッセージを読み込んでいます...",
+      "startingRun": "開始しています…"
     },
     "messages": {
       "showingOf": "{{total}}件中{{shown}}件を表示",

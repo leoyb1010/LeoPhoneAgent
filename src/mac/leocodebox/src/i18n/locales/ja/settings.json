@@ -93,7 +93,6 @@
     "appearance": "外観",
     "git": "Git",
     "apiTokens": "API & トークン",
-    "quota": "AI 使用量",
     "tasks": "タスク",
     "notifications": "通知",
     "plugins": "プラグイン",
@@ -627,48 +626,5 @@
     "placeholder": "設定を検索",
     "noResults": "一致する設定がありません",
     "clear": "クリア"
-  },
-  "quota": {
-    "title": "AI 使用量",
-    "description": "各プロバイダの使用量をどこから取得しているか、何が足りないか。",
-    "loading": "読み込み中…",
-    "loadError": "使用量の状態を取得できませんでした。",
-    "saveError": "認証情報を保存できませんでした。",
-    "empty": "プロバイダの応答がありません。",
-    "refresh": "更新",
-    "refreshing": "更新中…",
-    "autoConnected": "この Mac のログイン状態で自動的に接続済み",
-    "credentialOrigin": "認証情報の取得元: ",
-    "updatedAt": "{{time}} に更新",
-    "storageNote": "認証情報はこの Mac の ~/.leocodebox/quota-credentials.json にパーミッション 0600 で保存されます。キー全体がこの画面に返されることはなく、設定済みかどうかと末尾 4 文字のみ表示されます。",
-    "status": {
-      "connected": "接続済み",
-      "notConnected": "未接続",
-      "error": "エラー"
-    },
-    "source": {
-      "oauth": "公式の使用量 (OAuth)",
-      "api": "公式データ (API)",
-      "web": "公式の使用量 (ブラウザセッション)",
-      "cli": "公式の使用量 (CLI)",
-      "local": "ローカル推定値・公式の割り当てではありません",
-      "none": "データなし"
-    },
-    "credential": {
-      "notConfigured": "未設定",
-      "configured": "設定済み",
-      "configuredWithTail": "設定済み · 末尾 {{last4}}",
-      "placeholder": "API キーを貼り付け",
-      "inputLabel": "{{provider}} の API キー",
-      "save": "保存",
-      "saving": "保存中…",
-      "remove": "削除"
-    },
-    "howTo": {
-      "gemini": "Google アカウントで gemini CLI にログインし直してください (認証方式 oauth-personal)。個人向けの割り当て API は API キーには公開されていません。",
-      "cursor": "cursor.com → Dashboard → API Keys でキーを作成します。ここに保存されますが、Cursor は Enterprise チームの管理者キーにしか使用量 API を公開していません。",
-      "grok": "console.x.ai で API キーを作成して貼り付けてください。xAI の API で検証されます。このキー種別には残高 API が提供されていません。",
-      "opencode": "OpenCode は設定した上流プロバイダで課金されるため、割り当てはそちらで確認してください。"
-    }
   }
 }

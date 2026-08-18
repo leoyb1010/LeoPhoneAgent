@@ -58,6 +58,8 @@ type CommandPaletteProps = {
 };
 
 const NAV_TABS: Array<{ id: AppTab; labelKey: string; keywords: string }> = [
+  // 主控台排第一:换 Agent / 开新任务都在那儿,是这个外壳的落地页。
+  { id: 'dashboard', labelKey: 'commandPalette.goConsole', keywords: 'console home dashboard 主控台 首页 新任务 换 agent' },
   { id: 'chat', labelKey: 'commandPalette.goChat', keywords: 'chat messages conversation' },
   { id: 'files', labelKey: 'commandPalette.goFiles', keywords: 'files file tree explorer' },
   { id: 'shell', labelKey: 'commandPalette.goShell', keywords: 'shell terminal console' },

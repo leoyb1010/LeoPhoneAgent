@@ -8,7 +8,6 @@ import { findAppRoot } from '@/utils/runtime-paths.js';
 import { listRecycled, restoreRecycled } from '@/shared/recycle.js';
 import { listConfigBackups } from '@/shared/utils.js';
 
-import aiQuotaRoutes from './ai-quota.routes.js';
 import cliToolsRoutes, { CLI_TOOLS, getCliToolStatus } from './cli-tools.routes.js';
 import gatewayControlRoutes from './leoapi-gateway/gateway-control.routes.js';
 import { collectDiagnostics } from './diagnostics.service.js';
@@ -23,7 +22,6 @@ import worktreeRoutes from './worktree.routes.js';
 
 const router = express.Router();
 
-router.use(aiQuotaRoutes);
 router.use('/cli', cliToolsRoutes);
 router.use('/gateway', gatewayControlRoutes);
 router.use('/routing', providerRoutingRoutes);

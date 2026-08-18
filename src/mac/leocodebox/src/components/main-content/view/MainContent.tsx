@@ -10,6 +10,7 @@ import { useFileOpenResolver } from '../../../hooks/useFileOpenResolver';
 import { apiClient } from '../../../utils/apiClient';
 import { useEditorSidebar } from '../../code-editor/hooks/useEditorSidebar';
 import type { AppTab, LLMProvider, Project } from '../../../types/app';
+import type { SettingsMainTab } from '../../settings/types/types';
 import type { OpenMissionSession } from '../../missions/view/MissionsView';
 import FleetView from '../../fleet/view/FleetView';
 
@@ -67,8 +68,11 @@ function MainContent({
   onSessionEstablished,
   onShowSettings,
   onStartNewChat,
+  onStartConsoleTask,
   externalMessageUpdate,
   newSessionTrigger,
+  pendingPrompt,
+  consumePendingPrompt,
 }: MainContentProps) {
   const { preferences } = useUiPreferences();
   const { showRawParameters, showThinking, sendByCtrlEnter } = preferences;
@@ -169,9 +173,13 @@ function MainContent({
     },
   });
 
-  // The home dashboard and Mac fleet are product-level workspaces. They must
-  // remain useful before a coding project is selected (or when none exists).
-  if (activeTab === 'dashboard') {
+  // 主控台是这个外壳的落地页,不是一个可有可无的仪表盘:它是「选 Agent 开新
+  // 任务」唯一还没有绑定会话的地方(见 DashboardView 的注释)。所以除了显式停在
+  // `dashboard` 页签上,**没有项目可停靠时也落在这里** —— 以前那种"选择项目"
+  // 空态是个死胡同:它既开不了任务,也换不了 Agent。
+  // 移动端例外:那里没有指挥条/会话列表,选项目全靠抽屉的汉堡按钮,所以保留
+  // 带菜单入口的空态,否则没项目的手机会被困在一个开不了抽屉的页面上。
+  if (activeTab === 'dashboard' || (!isLoading && !selectedProject && !isMobile)) {
     return (
       <div className="leocodebox-workspace-enter h-full overflow-hidden">
         <ErrorBoundary showDetails>
@@ -183,7 +191,9 @@ function MainContent({
               }}
               onShowTab={(tab) => setActiveTab(tab as AppTab)}
               onNewChat={onStartNewChat}
-              onShowSettings={onShowSettings}
+              onShowSettings={(tab) => onShowSettings(tab as SettingsMainTab | undefined)}
+              selectedProjectId={selectedProject?.projectId ?? null}
+              onStartTask={onStartConsoleTask}
             />
           </React.Suspense>
         </ErrorBoundary>
@@ -251,6 +261,8 @@ function MainContent({
                 sendByCtrlEnter={sendByCtrlEnter}
                 externalMessageUpdate={externalMessageUpdate}
                 newSessionTrigger={newSessionTrigger}
+                pendingPrompt={pendingPrompt}
+                consumePendingPrompt={consumePendingPrompt}
                 onShowAllTasks={tasksEnabled ? () => setActiveTab('tasks') : null}
               />
               </React.Suspense>

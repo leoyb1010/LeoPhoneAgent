@@ -144,7 +144,8 @@
     },
     "loading": {
       "olderMessages": "Загрузка старых сообщений...",
-      "sessionMessages": "Загрузка сообщений сеанса..."
+      "sessionMessages": "Загрузка сообщений сеанса...",
+      "startingRun": "Запуск…"
     },
     "messages": {
       "showingOf": "Показано {{shown}} из {{total}} сообщений",

@@ -2,9 +2,9 @@ import { Cpu, Route, ShieldCheck } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import type { Project } from '../../types/app';
+import { useWebSocket } from '../../contexts/WebSocketContext';
 import { useLeoapiStatus } from '../../hooks/useLeoapiStatus';
 import { useVersionCheck } from '../../hooks/useVersionCheck';
-import QuotaPopover from '../workbench/QuotaPopover';
 
 import { resolveUpdateBadge } from './updateBadge';
 import DoctorHealthLight from './DoctorHealthLight';
@@ -31,6 +31,9 @@ export default function WorkspaceStatusBar({
   onOpenLocalLog,
 }: WorkspaceStatusBarProps) {
   const { t } = useTranslation();
+  // 这颗点以前是写死的绿色 + 写死的"本机服务正常":服务真断了它也照说正常,
+  // 旁边的体检灯却是实时的,两个放一起最容易骗人。改成读真实的长连接状态。
+  const { isConnected } = useWebSocket();
   const leoapiNodes = useLeoapiStatus();
   const { updateAvailable, restartRequired, latestVersion, currentVersion } = useVersionCheck();
   const updateBadge = resolveUpdateBadge(updateAvailable, restartRequired);
@@ -40,9 +43,11 @@ export default function WorkspaceStatusBar({
   return (
     <footer className="leocodebox-status-bar relative z-20 hidden h-[30px] flex-shrink-0 items-center justify-between border-t border-border px-5 font-mono text-[9.5px] text-wb-faint md:flex">
       <div className="flex min-w-0 items-center gap-3">
-        <span className="inline-flex items-center gap-1.5 text-success dark:text-success">
+        <span className={isConnected ? 'inline-flex items-center gap-1.5 text-success' : 'inline-flex items-center gap-1.5 text-warning'}>
           <span className="h-1.5 w-1.5 rounded-full bg-current" />
-          {t('workspaceShell.serviceHealthy')}
+          {isConnected
+            ? t('workspaceShell.serviceHealthy')
+            : t('workspaceShell.serviceOffline', { defaultValue: '本机服务未连接' })}
         </span>
         {selectedProject && (
           <span className="max-w-[42vw] truncate font-mono" title={selectedProject.fullPath}>
@@ -78,7 +83,6 @@ export default function WorkspaceStatusBar({
             {activeNode.latencyMs !== null && ` · ${activeNode.latencyMs}ms`}
           </span>
         )}
-        <QuotaPopover />
         <DoctorHealthLight />
         <span className="inline-flex items-center gap-1"><Cpu className="h-3 w-3" />{runningCount > 0 ? t('workspaceShell.tasksRunning', { count: runningCount }) : t('workspaceShell.agentIdle')}</span>
         <span className="inline-flex items-center gap-1"><ShieldCheck className="h-3 w-3" />{t('workspaceShell.localOnly')}</span>

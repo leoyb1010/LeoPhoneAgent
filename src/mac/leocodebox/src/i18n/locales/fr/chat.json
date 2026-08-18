@@ -146,7 +146,8 @@
     },
     "loading": {
       "olderMessages": "Chargement des messages précédents...",
-      "sessionMessages": "Chargement des messages de la session..."
+      "sessionMessages": "Chargement des messages de la session...",
+      "startingRun": "Démarrage…"
     },
     "messages": {
       "showingOf": "Affichage de {{shown}} sur {{total}} messages",

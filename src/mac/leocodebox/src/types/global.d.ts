@@ -7,7 +7,10 @@ declare global {
     leocodeboxDesktopTools?: {
       setThemeMode: (mode: 'system' | 'light' | 'dark') => Promise<unknown>;
       setRunningBadge?: (count: number) => Promise<unknown>;
-      onOpenModal: (callback: (tool: 'settings' | 'leoapi' | 'feedback') => void) => () => void;
+      /** 桌面壳发过来的"打开某个东西":本地工具页 / 设置窗。 */
+      onOpenModal: (
+        callback: (tool: 'settings' | 'leoapi' | 'feedback') => void,
+      ) => () => void;
     };
     leocodeboxDesktopUpdater?: {
       getState: () => Promise<DesktopUpdateState>;

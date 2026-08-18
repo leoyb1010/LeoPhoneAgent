@@ -93,7 +93,6 @@
     "appearance": "Aspetto",
     "git": "Git",
     "apiTokens": "API e Token",
-    "quota": "Quota IA",
     "tasks": "Attività",
     "notifications": "Notifiche",
     "plugins": "Plugin",
@@ -633,48 +632,5 @@
     "placeholder": "Search settings",
     "noResults": "No matching settings",
     "clear": "Clear"
-  },
-  "quota": {
-    "title": "Quota IA",
-    "description": "Da dove viene letta la quota di ogni provider e cosa manca ancora.",
-    "loading": "Caricamento…",
-    "loadError": "Impossibile caricare lo stato delle quote.",
-    "saveError": "Impossibile salvare le credenziali.",
-    "empty": "Nessun provider ha risposto.",
-    "refresh": "Aggiorna",
-    "refreshing": "Aggiornamento…",
-    "autoConnected": "Collegato automaticamente tramite l'accesso su questo Mac",
-    "credentialOrigin": "origine delle credenziali: ",
-    "updatedAt": "aggiornato {{time}}",
-    "storageNote": "Le credenziali restano su questo Mac, in ~/.leocodebox/quota-credentials.json con permessi 0600. La chiave non viene mai restituita a questa pagina: solo se è impostata e i suoi ultimi 4 caratteri.",
-    "status": {
-      "connected": "Collegato",
-      "notConnected": "Non collegato",
-      "error": "Errore"
-    },
-    "source": {
-      "oauth": "quota ufficiale (OAuth)",
-      "api": "dati ufficiali (API)",
-      "web": "quota ufficiale (sessione browser)",
-      "cli": "quota ufficiale (CLI)",
-      "local": "stima locale, non è la quota ufficiale",
-      "none": "nessun dato"
-    },
-    "credential": {
-      "notConfigured": "Nessuna chiave salvata",
-      "configured": "Chiave salvata",
-      "configuredWithTail": "Chiave salvata · termina con {{last4}}",
-      "placeholder": "Incolla la chiave API",
-      "inputLabel": "Chiave API {{provider}}",
-      "save": "Salva",
-      "saving": "Salvataggio…",
-      "remove": "Rimuovi"
-    },
-    "howTo": {
-      "gemini": "Accedi alla CLI Gemini con un account Google (tipo di auth oauth-personal). L'endpoint della quota personale non è aperto alle chiavi API.",
-      "cursor": "Crea una chiave su cursor.com → Dashboard → API Keys. Viene salvata qui, ma Cursor espone i dati di utilizzo solo alle chiavi admin dei team Enterprise.",
-      "grok": "Crea una chiave API su console.x.ai e incollala qui. Viene verificata con l'API xAI; xAI non pubblica alcun saldo per questo tipo di chiave.",
-      "opencode": "OpenCode fattura tramite il provider a monte che hai configurato: controlla lì la quota."
-    }
   }
 }

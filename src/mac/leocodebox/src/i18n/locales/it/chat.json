@@ -144,7 +144,8 @@
     },
     "loading": {
       "olderMessages": "Caricamento messaggi precedenti...",
-      "sessionMessages": "Caricamento messaggi della sessione..."
+      "sessionMessages": "Caricamento messaggi della sessione...",
+      "startingRun": "Avvio in corso…"
     },
     "messages": {
       "showingOf": "Visualizzati {{shown}} di {{total}} messaggi",

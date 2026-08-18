@@ -151,14 +151,6 @@ function Sidebar({
     document.body.classList.toggle('pwa-mode', isPWA);
   }, [isPWA]);
 
-  // The status-bar update dot lives in a sibling component; it asks the sidebar
-  // (owner of the version modal) to open the update card via a window event.
-  useEffect(() => {
-    const openVersionModal = () => setShowVersionModal(true);
-    window.addEventListener('leocodebox:open-version-modal', openVersionModal);
-    return () => window.removeEventListener('leocodebox:open-version-modal', openVersionModal);
-  }, [setShowVersionModal]);
-
   const handleProjectCreated = () => {
     void paletteOps.refreshProjects();
   };

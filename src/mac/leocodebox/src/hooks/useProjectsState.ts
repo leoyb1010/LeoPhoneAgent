@@ -32,6 +32,7 @@ import {
   type SessionUpsertedEvent,
 } from './projectStateUtils';
 import type { SessionActivityMap } from './useSessionProtection';
+import { createPendingPromptSlot } from './pendingPrompt';
 import { useProjectRealtimeEvents } from './useProjectRealtimeEvents';
 import { useProjectSessionAttention } from './useProjectSessionAttention';
 
@@ -97,7 +98,29 @@ export function useProjectsState({
    * (for example websocket/project refresh updates) that could cause accidental resets.
    */
   const [newSessionTrigger, setNewSessionTrigger] = useState(0);
+  /**
+   * 新会话的「第一句话」,和 `newSessionTrigger` **同一批**设置。
+   *
+   * 这是本次修复的核心:以前指挥条/主控台是「先 handleNewSession,再同步派发
+   * 一个全局事件把草稿灌进 composer」—— 两条独立的异步流,没有共同的真源。
+   * 主控台按下时 ChatInterface 还没挂载,事件没人听见;听见了草稿也落在会被
+   * 新会话 reset 冲掉的 ref 里。于是内容凭空消失,人还被丢在"再选一次 Agent"
+   * 的空态页上。把首句挂进新会话状态之后,它和重置信号一起到达,谁先谁后都不影响。
+   *
+   * `pendingPrompt` 是给渲染层看的(空态页据此不再出现),真值在 slot 里 ——
+   * 消费必须同步且只有一次,详见 pendingPrompt.ts。
+   */
+  const pendingPromptSlot = useRef(createPendingPromptSlot()).current;
+  const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
   const pendingRootSelectionReset = useRef(false);
+
+  const consumePendingPrompt = useCallback(() => {
+    const prompt = pendingPromptSlot.consume();
+    if (prompt !== null) {
+      setPendingPrompt(null);
+    }
+    return prompt;
+  }, [pendingPromptSlot]);
 
   const { attentionSessionIds, markSessionAttention, clearSessionAttention } = useProjectSessionAttention(
     selectedSession,
@@ -405,9 +428,15 @@ export function useProjectsState({
   const handleSessionSelect = useCallback(
     (session: ProjectSession) => {
       clearSessionAttention(session.id);
+      // 用户改主意去看别的会话了:那句还没发出去的首句就此作废,
+      // 不能留着等下一次开新会话时冒出来。
+      pendingPromptSlot.consume();
+      setPendingPrompt(null);
       setSelectedSession(session);
 
-      if (activeTab === 'tasks' || activeTab === 'browser') {
+      // 主控台/任务/浏览器都不是会话视图:选了会话就得真的看得见它,
+      // 否则点了列表却停在原地,像是"没反应"。
+      if (activeTab === 'tasks' || activeTab === 'browser' || activeTab === 'dashboard') {
         setActiveTab('chat');
       }
 
@@ -426,12 +455,19 @@ export function useProjectsState({
 
       navigate(`/session/${session.id}`);
     },
-    [activeTab, clearSessionAttention, isMobile, navigate, selectedProject?.projectId],
+    [activeTab, clearSessionAttention, isMobile, navigate, pendingPromptSlot, selectedProject?.projectId],
   );
 
+  /**
+   * 开一个新会话。`initialPrompt` 非空时,它是这个新会话的第一条消息 ——
+   * 和重置信号在同一批 setState 里下发,composer 一就绪就能读到它并发出去。
+   * 不传(侧栏「新会话」、⌘K 换 Agent)则清空待发位,避免上一条串到这个会话。
+   */
   const handleNewSession = useCallback(
-    (project: Project) => {
+    (project: Project, initialPrompt?: string) => {
       pendingRootSelectionReset.current = true;
+      pendingPromptSlot.set(initialPrompt);
+      setPendingPrompt(pendingPromptSlot.peek());
       setSelectedProject(project);
       setSelectedSession(null);
       setActiveTab('chat');
@@ -442,7 +478,7 @@ export function useProjectsState({
         setSidebarOpen(false);
       }
     },
-    [isMobile, navigate],
+    [isMobile, navigate, pendingPromptSlot],
   );
 
   const handleSessionDelete = useCallback(
@@ -615,6 +651,8 @@ export function useProjectsState({
     settingsInitialTab,
     externalMessageUpdate,
     newSessionTrigger,
+    pendingPrompt,
+    consumePendingPrompt,
     setActiveTab,
     setSidebarOpen,
     setIsInputFocused,
