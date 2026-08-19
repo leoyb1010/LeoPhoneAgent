@@ -399,7 +399,6 @@ struct ThinkingAndModelSlotsView: View {
     @State private var newPrefix = ""
     @State private var newMax: ThinkingLevel = .high
     @ObservedObject private var store = ProviderConfigStore.shared
-    @AppStorage(AgentModelSlots.visionKey) private var visionId = ""
     @AppStorage(AgentModelSlots.compactKey) private var compactId = ""
 
     var body: some View {
@@ -439,17 +438,6 @@ struct ThinkingAndModelSlotsView: View {
                 Text("推理强度规则")
             } footer: {
                 Text("一行一个模型家族。读不到内置档时在这里写最高档，否则界面显示未知，不会默默降级。")
-            }
-
-            Section {
-                Picker("读图委托", selection: $visionId) {
-                    Text("不委托").tag("")
-                    ForEach(store.modelEntries.filter { !$0.isHidden }, id: \.id) { entry in
-                        Text(entry.model.id).tag(entry.id)
-                    }
-                }
-            } footer: {
-                Text("非视觉模型收到图时，回复会写明图是谁看的。没指定就明说看不了。")
             }
 
             Section {

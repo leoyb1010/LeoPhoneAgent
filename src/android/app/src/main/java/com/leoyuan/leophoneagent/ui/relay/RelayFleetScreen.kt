@@ -31,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -69,7 +70,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun RelayFleetScreen(onBack: () -> Unit) {
     val context = LocalContext.current
-    val store = remember { RelayFleetStore(context) }
+    val store = remember { RelayFleetStore.get(context) }
     val config by store.config.collectAsState()
     val scope = rememberCoroutineScope()
     var base by remember(config.relayApiBase) { mutableStateOf(config.relayApiBase) }
@@ -177,10 +178,28 @@ fun RelayFleetScreen(onBack: () -> Unit) {
                             }
                         }
                     }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("允许本机接受远程任务", fontWeight = FontWeight.Medium)
+                            Text(
+                                "关闭时只用手机控制其他机器；开启后远程可驱动本机 Agent。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = config.bodyEnabled,
+                            onCheckedChange = store::setBodyEnabled,
+                            enabled = config.accessKey.length >= 16,
+                        )
+                    }
                 }
             }
 
-            if (config.accessKey.length >= 16) {
+            if (config.accessKey.length >= 16 && config.bodyEnabled) {
                 val machineName = remember { store.ensureMachineName(Build.MODEL) }
                 val pair = RelayPairCodec.encode(config.relayApiBase, machineName)
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {

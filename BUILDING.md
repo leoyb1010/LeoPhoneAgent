@@ -76,12 +76,15 @@ without setting this.
 | Tool | Version / notes |
 |---|---|
 | macOS | Apple Silicon strongly recommended (see the simulator note below) |
-| Xcode | With the iOS SDK; the project targets **iOS 26.2** and **Swift 6.0** |
+| Xcode | With iOS 26.5+ and watchOS 26.5 runtimes; the project targets **iOS 26.2** and **Swift 6.0** |
 | Homebrew packages | `brew install ninja llvm lld libarchive pkg-config meson` |
 | Python 3 | Included with current macOS/Xcode or install through Homebrew |
 
 `llvm` is needed to compile the guest VDSO, `libarchive` to unpack the rootfs,
 and Meson/Ninja to build the iSH kernel.
+The main app scheme embeds LeoWatch, so a generic device/App build also needs
+the matching watchOS runtime. `MinisLogicTests` is intentionally independent
+of Watch and native sandbox artifacts.
 
 ### 1. Build the native dependencies
 

@@ -18,7 +18,7 @@ object RelayBodyService {
 
     fun start(context: Context) {
         val app = context.applicationContext
-        val store = RelayFleetStore(app)
+        val store = RelayFleetStore.get(app)
         scope.launch {
             // StateFlow already suppresses equal consecutive values.
             store.config.collect { config ->
@@ -54,6 +54,7 @@ object RelayBodyService {
             ),
             router,
         )
+        router.setEventSink(next::pushEvent)
         client = next
         startedFor = token
         next.start(scope)

@@ -2,6 +2,7 @@ package com.leoyuan.leophoneagent.relay
 
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -39,6 +40,7 @@ class RelayOutboundClient(
 ) {
     private val stopped = AtomicBoolean(false)
     private val streams = ConcurrentHashMap<String, Job>()
+    private val outbox = ArrayDeque<JSONObject>()
     private var socket: WebSocket? = null
     private var loopJob: Job? = null
     private val _online = MutableStateFlow(false)
@@ -64,15 +66,28 @@ class RelayOutboundClient(
         }
     }
 
+    @Synchronized
     fun stop() {
         stopped.set(true)
         streams.values.forEach { it.cancel() }
         streams.clear()
-        socket?.close(1000, "stop")
+        // cancel() also aborts an in-flight HTTP upgrade. A graceful close only
+        // works after onOpen and could let a stale-key client register later.
+        socket?.cancel()
         socket = null
         loopJob?.cancel()
         loopJob = null
         _online.value = false
+    }
+
+    fun pushEvent(event: JSONObject) {
+        val frame = RelayOutboundCodec.event(config.name, event)
+        synchronized(outbox) {
+            val ws = socket
+            if (ws != null && _online.value && ws.send(frame.toString())) return
+            outbox.addLast(frame)
+            while (outbox.size > OUTBOX_LIMIT) outbox.removeFirst()
+        }
     }
 
     /** One connection cycle. Exported for tests. */
@@ -82,20 +97,37 @@ class RelayOutboundClient(
         val request = Request.Builder().url(config.wsUrl).build()
         val listener = object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                socket = webSocket
-                webSocket.send(
-                    RelayOutboundCodec.registerFrame(config.name, config.relayKey, config.version).toString(),
-                )
-                _online.value = true
-                Log.i(TAG, "connected to relay as ${config.name}")
+                synchronized(this@RelayOutboundClient) {
+                    if (stopped.get()) {
+                        webSocket.cancel()
+                        latch.countDown()
+                        return
+                    }
+                    socket = webSocket
+                    webSocket.send(
+                        RelayOutboundCodec.registerFrame(config.name, config.relayKey, config.version).toString(),
+                    )
+                }
+                Log.i(TAG, "relay socket open; registering as ${config.name}")
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
                 val frame = RelayOutboundCodec.parse(text) ?: return
                 when (frame.optString("type")) {
+                    "registered" -> {
+                        _online.value = true
+                        flushOutbox(webSocket)
+                        Log.i(TAG, "registered with relay as ${config.name}")
+                    }
                     "http" -> handleHttp(webSocket, frame)
                     "stream_open" -> handleStream(webSocket, frame)
-                    "stream_cancel" -> streams.remove(frame.optString("id"))?.cancel()
+                    "stream_cancel" -> {
+                        val id = frame.optString("id")
+                        streams.remove(id)?.let {
+                            it.cancel()
+                            send(webSocket, RelayOutboundCodec.streamClose(id))
+                        }
+                    }
                 }
             }
 
@@ -115,9 +147,21 @@ class RelayOutboundClient(
                 latch.countDown()
             }
         }
-        http.newWebSocket(request, listener)
-        latch.await()
-        failure[0]?.let { throw it }
+        val connecting = http.newWebSocket(request, listener)
+        socket = connecting
+        if (stopped.get()) {
+            connecting.cancel()
+            latch.countDown()
+        }
+        try {
+            latch.await()
+            failure[0]?.let { throw it }
+        } finally {
+            synchronized(this) {
+                if (socket === connecting) socket = null
+            }
+            cancelStreams()
+        }
     }
 
     private fun handleHttp(ws: WebSocket, frame: JSONObject) {
@@ -145,9 +189,10 @@ class RelayOutboundClient(
 
     private fun handleStream(ws: WebSocket, frame: JSONObject) {
         val streamId = frame.optString("id")
+        if (streamId.isBlank()) return
         val path = frame.optString("path", "/")
         val jobScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        val job = jobScope.launch {
+        val job = jobScope.launch(start = CoroutineStart.LAZY) {
             try {
                 val result = router.handle("GET", path, null)
                 if (result.stream == null) {
@@ -162,20 +207,37 @@ class RelayOutboundClient(
                     Log.w(TAG, "stream $streamId error: ${error.message}")
                 }
             } finally {
-                streams.remove(streamId)
-                send(ws, RelayOutboundCodec.streamClose(streamId))
+                val owned = coroutineContext[Job]?.let { streams.remove(streamId, it) } == true
+                if (owned) send(ws, RelayOutboundCodec.streamClose(streamId))
                 jobScope.cancel()
             }
         }
-        streams[streamId] = job
+        streams.put(streamId, job)?.cancel()
+        job.start()
     }
 
     private fun send(ws: WebSocket, frame: JSONObject) {
         ws.send(frame.toString())
     }
 
+    private fun flushOutbox(ws: WebSocket) {
+        synchronized(outbox) {
+            while (outbox.isNotEmpty()) {
+                val frame = outbox.first()
+                if (!ws.send(frame.toString())) return
+                outbox.removeFirst()
+            }
+        }
+    }
+
+    private fun cancelStreams() {
+        streams.values.forEach { it.cancel() }
+        streams.clear()
+    }
+
     companion object {
         private const val TAG = "RelayOutbound"
+        private const val OUTBOX_LIMIT = 200
         private fun defaultClient() = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(0, TimeUnit.SECONDS)

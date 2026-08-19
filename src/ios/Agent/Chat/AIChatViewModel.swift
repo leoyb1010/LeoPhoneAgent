@@ -2201,8 +2201,11 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         let pendingAttachments = attachments
         if pendingAttachments.contains(where: { $0.kind == .image }) {
-            let note = visionPolicyNote()
-            if !note.isEmpty { appendSystemInfo(note, icon: "eye") }
+            let canSee = resolveCurrentEntry()?.model.capabilities.supportedModalities.contains(.imageInput) ?? false
+            guard canSee else {
+                appendSystemInfo("当前模型不支持读图。请切换到支持图像输入的模型后重试；附件已保留。", icon: "eye.slash")
+                return
+            }
         }
         logger.info("🔑DRAFT [vm=\(self.vmInstanceId)] send() text=\(text.count)ch attachments=\(pendingAttachments.count) isProcessing=\(self.isProcessing) sessionId=\(self.sessionId ?? "nil") draftId=\(self.draftId ?? "nil")")
         guard !text.isEmpty || !pendingAttachments.isEmpty, !isProcessing else {
@@ -5919,17 +5922,6 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         ThinkingRuleStore.rememberCarried(pending)
         pendingThinkingLevel = nil
         return true
-    }
-
-    /// Non-vision models: name the delegate or say we cannot see.
-    func visionPolicyNote() -> String {
-        let canSee = resolveCurrentEntry()?.model.capabilities.supportedModalities.contains(.imageInput) ?? false
-        if canSee { return "" }
-        if let id = AgentModelSlots.visionEntryId,
-           let entry = ProviderConfigStore.shared.entry(for: id) {
-            return "图是由 \(entry.model.id) 看的。当前对话模型本身没有读图能力。"
-        }
-        return "当前模型看不了图。到设置 → 推理与模型 指定读图委托。"
     }
 
     /// Append an ephemeral system info message (not sent to LLM).

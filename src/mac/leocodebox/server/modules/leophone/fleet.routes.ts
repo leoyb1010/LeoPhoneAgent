@@ -60,6 +60,9 @@ type MachineRow = {
   name: string;
   online: boolean;
   reachable: boolean;
+  platform?: string;
+  server?: string;
+  version?: string;
   activeCount: number;
   sessions: Array<Record<string, unknown>>;
 };
@@ -68,6 +71,9 @@ type SnapshotMachine = {
   name: string;
   online: boolean;
   reachable: boolean;
+  platform?: string;
+  server?: string;
+  version?: string;
   sessions: Array<Record<string, unknown>>;
 };
 
@@ -98,7 +104,7 @@ async function loadFleetSnapshot(target: RelayTarget, forceFresh = false): Promi
 
   const promise = (async () => {
     const payload = (await relayFetch('/machines', target)) as {
-      machines?: Array<{ name?: string; online?: boolean }>;
+      machines?: Array<{ name?: string; online?: boolean; platform?: string; server?: string; version?: string }>;
     };
     return Promise.all((payload.machines ?? []).map(async (machine): Promise<SnapshotMachine> => {
       const name = String(machine.name ?? '');
@@ -106,6 +112,9 @@ async function loadFleetSnapshot(target: RelayTarget, forceFresh = false): Promi
         name,
         online: machine.online === true,
         reachable: false,
+        platform: machine.platform,
+        server: machine.server,
+        version: machine.version,
         sessions: [],
       };
       if (!base.online) return base;
@@ -147,12 +156,15 @@ router.get('/leophone/fleet', async (_req, res) => {
     const snapshot = await loadFleetSnapshot(target);
     const rows: MachineRow[] = snapshot.map((machine) => {
       const active = machine.sessions.filter((session) =>
-        ['starting', 'running', 'idle', 'waiting_for_approval'].includes(String(session.status)),
+        ['starting', 'running', 'waiting_for_approval'].includes(String(session.status)),
       );
       return {
         name: machine.name,
         online: machine.online,
         reachable: machine.reachable,
+        platform: machine.platform,
+        server: machine.server,
+        version: machine.version,
         activeCount: active.length,
         sessions: active,
       };
@@ -278,6 +290,7 @@ router.post('/leophone/fleet/sessions', async (req, res) => {
         harness: String(req.body?.harness ?? 'claude'),
         cwd: typeof req.body?.cwd === 'string' ? req.body.cwd : undefined,
         prompt,
+        thinking: typeof req.body?.thinking === 'string' ? req.body.thinking : undefined,
       },
     );
     res.status(202).json(created);

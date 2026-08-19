@@ -56,7 +56,7 @@ type CommandBarProps = {
   /** 回主控台 —— 锁住的 Agent 芯片点下去就去那儿换。 */
   onOpenConsole: () => void;
   onStartLocalRun: (prompt: string) => void;
-  onStartRemoteRun: (machine: FleetMachine, prompt: string, provider: string) => void;
+  onStartRemoteRun: (machine: FleetMachine, prompt: string, provider: string, effort: string) => Promise<boolean>;
 };
 
 /**
@@ -117,6 +117,11 @@ export default function CommandBar({
     ),
     [localLabel, remotes],
   );
+  const selectedRemote = targetOptions.find((option) => option.value === target)?.machine ?? null;
+  const remoteSupportsThinking = selectedRemote == null
+    || selectedRemote.platform === 'android'
+    || selectedRemote.platform === 'harmony'
+    || selectedRemote.server === 'minis';
 
   // 远程机器掉线时把选择收回本机。
   useEffect(() => {
@@ -149,12 +154,13 @@ export default function CommandBar({
     const prompt = draft.trim();
     if (!prompt) return;
     const machine = targetOptions.find((option) => option.value === target)?.machine ?? null;
-    setDraft('');
     if (machine) {
-      // 远程也把 Agent 显式带上(中继支持 harness);不带就永远落成默认的 claude。
-      onStartRemoteRun(machine, prompt, provider);
+      void onStartRemoteRun(machine, prompt, provider, effort).then((ok) => {
+        if (ok) setDraft('');
+      });
       return;
     }
+    setDraft('');
     // 先交出 Agent,再开会话。芯片上的选择和会话真正用的 provider 是两份状态,
     // 只靠这条通道对齐;在会话之间点选过之后,之前那次宣告已经被会话跟随逻辑冲掉,
     // 不重新交一次就会拿上一个会话的 provider 建新会话(= 选了 Codex 仍然走 Claude)。
@@ -257,29 +263,35 @@ export default function CommandBar({
           @ {target || localLabel}
         </ChipMenu>
 
-        <ChipMenu
-          value={permission}
-          onSelect={(next) => void updatePreferences({ permissionMode: next as PermissionMode })}
-          align="right"
-          tooltip={t('workbench.permissionTooltip', { defaultValue: '权限模式:控制工具授权策略' })}
-          ariaLabel={t('workbench.permissionTooltip', { defaultValue: '权限模式' })}
-          className="h-[26px] gap-1.5 rounded-lg px-2.5 text-[10.5px]"
-          options={PERMISSION_MODES.map((mode) => {
-            const supported = supportedPermissions.includes(mode.id);
-            return {
-              value: mode.id,
-              label: mode.label,
-              desc: supported ? mode.desc : `${agentLabel} 不支持这一档`,
-              disabled: !supported,
-              icon: <span className={cn('h-1.5 w-1.5 flex-none rounded-full', mode.dot)} />,
-            };
-          })}
-        >
-          <span className={cn('h-1.5 w-1.5 flex-none rounded-full transition-colors duration-slow', permissionMeta.dot)} />
-          {permissionMeta.label}
-        </ChipMenu>
+        {selectedRemote ? (
+          <Tooltip content="远程机器使用它自己的审批策略" position="bottom">
+            <span className="wb-chip-button h-[26px] rounded-lg px-2.5 text-[10.5px] text-wb-faint">远程端审批</span>
+          </Tooltip>
+        ) : (
+          <ChipMenu
+            value={permission}
+            onSelect={(next) => void updatePreferences({ permissionMode: next as PermissionMode })}
+            align="right"
+            tooltip={t('workbench.permissionTooltip', { defaultValue: '权限模式:控制工具授权策略' })}
+            ariaLabel={t('workbench.permissionTooltip', { defaultValue: '权限模式' })}
+            className="h-[26px] gap-1.5 rounded-lg px-2.5 text-[10.5px]"
+            options={PERMISSION_MODES.map((mode) => {
+              const supported = supportedPermissions.includes(mode.id);
+              return {
+                value: mode.id,
+                label: mode.label,
+                desc: supported ? mode.desc : `${agentLabel} 不支持这一档`,
+                disabled: !supported,
+                icon: <span className={cn('h-1.5 w-1.5 flex-none rounded-full', mode.dot)} />,
+              };
+            })}
+          >
+            <span className={cn('h-1.5 w-1.5 flex-none rounded-full transition-colors duration-slow', permissionMeta.dot)} />
+            {permissionMeta.label}
+          </ChipMenu>
+        )}
 
-        <ChipMenu
+        {remoteSupportsThinking ? <ChipMenu
           value={effort}
           onSelect={pickEffort}
           align="right"
@@ -293,7 +305,11 @@ export default function CommandBar({
           }))}
         >
           {effort}
-        </ChipMenu>
+        </ChipMenu> : (
+          <Tooltip content="这个 Mac CLI 的远程推理档尚未映射，将使用 CLI 默认值" position="bottom">
+            <span className="wb-chip-button h-[26px] rounded-lg px-2.5 font-mono text-[10.5px] text-wb-faint">默认推理</span>
+          </Tooltip>
+        )}
 
         <span aria-hidden className="flex-none pr-1 font-mono text-[10px] text-wb-faint">⏎</span>
       </div>

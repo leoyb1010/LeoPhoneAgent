@@ -1,10 +1,13 @@
 package com.leoyuan.leophoneagent.relay
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
@@ -22,6 +25,7 @@ sealed class EngineChunk {
 interface MinisSessionEngine {
     fun runTurn(sessionId: String, text: String, thinking: String?): Flow<EngineChunk>
     fun stop(sessionId: String)
+    fun release(sessionId: String) = stop(sessionId)
 }
 
 data class HarnessHttpResult(
@@ -41,6 +45,11 @@ class MinisHarnessRouter(
     private val nowSeconds: () -> Double = { System.currentTimeMillis() / 1000.0 },
 ) {
     private val sessions = ConcurrentHashMap<String, MinisHarnessSession>()
+    @Volatile private var eventSink: ((JSONObject) -> Unit)? = null
+
+    fun setEventSink(sink: ((JSONObject) -> Unit)?) {
+        eventSink = sink
+    }
 
     fun handle(method: String, pathAndQuery: String, body: JSONObject?): HarnessHttpResult {
         val path = pathAndQuery.substringBefore('?')
@@ -116,12 +125,24 @@ class MinisHarnessRouter(
             return error(400, "unknown harness: $harness (this Android body only runs minis)")
         }
         val prompt = body.optString("prompt").takeIf { it.isNotBlank() }
+        if (prompt != null && prompt.length > MAX_PROMPT_CHARS) return error(413, "prompt is too large")
         val thinking = body.optString("thinking").ifBlank { body.optString("effort") }.takeIf { it.isNotBlank() }
         val cwd = body.optString("cwd").ifBlank { "~" }
+        if (cwd.length > MAX_CWD_CHARS) return error(400, "cwd is too long")
+        if (sessions.size >= MAX_SESSIONS) {
+            val evictable = sessions.values
+                .filter { it.status in setOf("idle", "cancelled", "completed", "failed") }
+                .minByOrNull { it.lastTouched }
+                ?: return error(429, "too many active sessions")
+            sessions.remove(evictable.sessionId, evictable)
+            evictable.cancelTurn()?.cancel()
+            engine.release(evictable.sessionId)
+        }
         val session = MinisHarnessSession(
             sessionId = "hs_" + UUID.randomUUID().toString().replace("-", "").take(16),
             cwd = cwd,
             nowSeconds = nowSeconds,
+            eventSink = { event -> eventSink?.invoke(event) },
         )
         sessions[session.sessionId] = session
         session.emit(
@@ -146,6 +167,7 @@ class MinisHarnessRouter(
         val session = sessions[sessionId] ?: return notFound()
         val text = body.optString("text")
         if (text.isBlank()) return error(400, "text is required")
+        if (text.length > MAX_PROMPT_CHARS) return error(413, "text is too large")
         val thinking = body.optString("thinking").ifBlank { body.optString("effort") }.takeIf { it.isNotBlank() }
         engine.stop(session.sessionId)
         startTurn(session, text, thinking)
@@ -154,6 +176,7 @@ class MinisHarnessRouter(
 
     private fun stop(sessionId: String): HarnessHttpResult {
         val session = sessions[sessionId] ?: return notFound()
+        session.cancelTurn()?.cancel()
         engine.stop(sessionId)
         session.status = "cancelled"
         session.emit(JSONObject().put("event", "run.cancelled"))
@@ -161,30 +184,39 @@ class MinisHarnessRouter(
     }
 
     private fun startTurn(session: MinisHarnessSession, text: String, thinking: String?) {
+        val generation = session.beginTurn()
         session.status = "running"
         session.emit(JSONObject().put("event", "user.message").put("text", text))
-        scope.launch {
+        val job = scope.launch(start = CoroutineStart.LAZY) {
             try {
-                var output = ""
+                val output = StringBuilder()
                 engine.runTurn(session.sessionId, text, thinking).collect { chunk ->
                     when (chunk) {
                         is EngineChunk.Delta -> {
-                            output += chunk.text
-                            session.emit(JSONObject().put("event", "message.delta").put("delta", chunk.text))
+                            if (output.length < MAX_OUTPUT_CHARS) {
+                                output.append(chunk.text.take(MAX_OUTPUT_CHARS - output.length))
+                            }
+                            session.emitForTurn(
+                                generation,
+                                null,
+                                JSONObject().put("event", "message.delta").put("delta", chunk.text),
+                            )
                         }
                         is EngineChunk.Completed -> {
-                            output = chunk.output.ifBlank { output }
-                            session.status = "idle"
-                            session.emit(
+                            val completed = chunk.output.ifBlank { output.toString() }.take(MAX_OUTPUT_CHARS)
+                            session.emitForTurn(
+                                generation,
+                                "idle",
                                 JSONObject()
                                     .put("event", "run.completed")
-                                    .put("output", output)
+                                    .put("output", completed)
                                     .put("usage", JSONObject()),
                             )
                         }
                         is EngineChunk.Failed -> {
-                            session.status = "idle"
-                            session.emit(
+                            session.emitForTurn(
+                                generation,
+                                "idle",
                                 JSONObject()
                                     .put("event", "run.failed")
                                     .put("message", chunk.message),
@@ -192,15 +224,20 @@ class MinisHarnessRouter(
                         }
                     }
                 }
+            } catch (_: CancellationException) {
+                // stop/steer owns the visible terminal event.
             } catch (error: Throwable) {
-                session.status = "idle"
-                session.emit(
+                session.emitForTurn(
+                    generation,
+                    "idle",
                     JSONObject()
                         .put("event", "run.failed")
                         .put("message", error.message ?: "minis turn failed"),
                 )
             }
         }
+        session.attachTurn(generation, job)
+        job.start()
     }
 
     private fun ok(body: JSONObject) = HarnessHttpResult(200, body)
@@ -210,6 +247,10 @@ class MinisHarnessRouter(
 
     companion object {
         const val PROTOCOL_VERSION = "0.4.0"
+        private const val MAX_SESSIONS = 64
+        private const val MAX_PROMPT_CHARS = 64 * 1024
+        private const val MAX_CWD_CHARS = 2 * 1024
+        private const val MAX_OUTPUT_CHARS = 1024 * 1024
         private val EVENTS = Regex("^/harness/sessions/([^/]+)/events$")
         private val SEND = Regex("^/harness/sessions/([^/]+)/send$")
         private val STOP = Regex("^/harness/sessions/([^/]+)/stop$")
@@ -221,21 +262,62 @@ private class MinisHarnessSession(
     val sessionId: String,
     val cwd: String,
     private val nowSeconds: () -> Double,
+    private val eventSink: (JSONObject) -> Unit,
 ) {
     @Volatile var status: String = "starting"
     @Volatile var seq: Int = 0
+    @Volatile var lastTouched: Double = nowSeconds()
+    @Volatile private var turnGeneration: Long = 0
+    private var turnJob: Job? = null
     private val events = mutableListOf<JSONObject>()
-    private val live = MutableSharedFlow<JSONObject>(extraBufferCapacity = 64)
+    private val subscribers = mutableSetOf<Channel<JSONObject>>()
+
+    fun emit(event: JSONObject) {
+        val enriched: JSONObject
+        val overflowed = mutableListOf<Channel<JSONObject>>()
+        synchronized(this) {
+            seq += 1
+            lastTouched = nowSeconds()
+            enriched = JSONObject(event.toString())
+                .put("seq", seq)
+                .put("session_id", sessionId)
+                .put("timestamp", lastTouched)
+            events += enriched
+            subscribers.forEach { channel ->
+                if (channel.trySend(enriched).isFailure) overflowed += channel
+            }
+            subscribers.removeAll(overflowed.toSet())
+        }
+        overflowed.forEach { it.close(IllegalStateException("subscriber overflow; reconnect with after=$seq")) }
+        val name = enriched.optString("event")
+        if (name in PUSH_EVENTS) eventSink(enriched)
+    }
 
     @Synchronized
-    fun emit(event: JSONObject) {
-        seq += 1
-        val enriched = JSONObject(event.toString())
-            .put("seq", seq)
-            .put("session_id", sessionId)
-            .put("timestamp", nowSeconds())
-        events += enriched
-        live.tryEmit(enriched)
+    fun beginTurn(): Long {
+        turnGeneration += 1
+        turnJob?.cancel()
+        turnJob = null
+        return turnGeneration
+    }
+
+    @Synchronized
+    fun attachTurn(generation: Long, job: Job) {
+        if (turnGeneration == generation) turnJob = job else job.cancel()
+    }
+
+    @Synchronized
+    fun cancelTurn(): Job? {
+        turnGeneration += 1
+        return turnJob.also { turnJob = null }
+    }
+
+    @Synchronized
+    fun emitForTurn(generation: Long, nextStatus: String?, event: JSONObject): Boolean {
+        if (turnGeneration != generation) return false
+        if (nextStatus != null) status = nextStatus
+        emit(event)
+        return true
     }
 
     fun replay(after: Int): Flow<JSONObject> {
@@ -248,17 +330,27 @@ private class MinisHarnessSession(
     }
 
     fun subscribe(after: Int): Flow<JSONObject> = flow {
-        var seen = after
-        replay(after).collect { event ->
-            seen = maxOf(seen, event.optInt("seq"))
-            emit(event)
+        val channel = Channel<JSONObject>(capacity = LIVE_BUFFER)
+        val snapshot = synchronized(this@MinisHarnessSession) {
+            subscribers += channel
+            events.filter { it.optInt("seq") > after }
         }
-        live.collect { event ->
-            val seq = event.optInt("seq")
-            if (seq > seen) {
-                seen = seq
+        var seen = after
+        try {
+            snapshot.forEach { event ->
+                seen = maxOf(seen, event.optInt("seq"))
                 emit(event)
             }
+            for (event in channel) {
+                val eventSeq = event.optInt("seq")
+                if (eventSeq > seen) {
+                    seen = eventSeq
+                    emit(event)
+                }
+            }
+        } finally {
+            synchronized(this@MinisHarnessSession) { subscribers.remove(channel) }
+            channel.close()
         }
     }
 
@@ -272,4 +364,15 @@ private class MinisHarnessSession(
         .put("seq", seq)
         .put("waiting_for_approval", false)
         .put("pending_approvals", JSONArray())
+
+    companion object {
+        private const val LIVE_BUFFER = 64
+        private val PUSH_EVENTS = setOf(
+            "approval.request",
+            "run.completed",
+            "run.failed",
+            "run.cancelled",
+            "artifact.ready",
+        )
+    }
 }

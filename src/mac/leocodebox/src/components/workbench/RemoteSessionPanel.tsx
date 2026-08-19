@@ -4,14 +4,14 @@ import { useTranslation } from 'react-i18next';
 
 import { apiClient } from '../../utils/apiClient';
 
+import { describeRemoteEvent, readRemoteSse, type RemoteLogLine } from './remoteSessionEvents';
+
 export type RemoteTarget = { machine: string; sessionId: string; harness?: string };
 
 type RemoteSessionPanelProps = {
   target: RemoteTarget;
   onClose: () => void;
 };
-
-type LogLine = { seq: number; text: string; tone: 'info' | 'warn' | 'approval' };
 
 /** 待答复的审批。choices 由远端方言给出,标签沿用舰队视图的中文映射。 */
 type PendingApproval = { approvalId: string; command: string; choices: string[] };
@@ -24,27 +24,6 @@ function approvalChoiceLabel(choice: string): string {
   return choice;
 }
 
-/** 把一帧 harness 事件压成一行日志。未知帧原样显示,不静默吞掉。 */
-function describe(frame: Record<string, unknown>): LogLine | null {
-  const seq = Number(frame.seq ?? 0);
-  const type = String(frame.type ?? '');
-  if (type === 'tool.started' || type === 'tool.completed') {
-    const name = String(frame.name ?? frame.tool ?? 'tool');
-    const args = typeof frame.args === 'string' ? frame.args : '';
-    return { seq, text: `✓ ${name}${args ? ` · ${args}` : ''}`, tone: 'info' };
-  }
-  if (type === 'message.delta' || type === 'message.completed') {
-    const text = String(frame.text ?? frame.content ?? '').trim();
-    return text ? { seq, text, tone: 'info' } : null;
-  }
-  if (type === 'approval.requested') {
-    return { seq, text: `⏸ ${String(frame.command ?? '等待审批')}`, tone: 'approval' };
-  }
-  if (type === 'run.completed') return { seq, text: '■ 运行结束', tone: 'warn' };
-  if (type === 'run.failed') return { seq, text: `■ 运行失败 · ${String(frame.error ?? '')}`, tone: 'warn' };
-  return { seq, text: `· ${type || JSON.stringify(frame).slice(0, 160)}`, tone: 'info' };
-}
-
 /**
  * 接管远程会话 —— 全量回放 + 实时跟随。
  *
@@ -55,57 +34,66 @@ function describe(frame: Record<string, unknown>): LogLine | null {
  */
 export default function RemoteSessionPanel({ target, onClose }: RemoteSessionPanelProps) {
   const { t } = useTranslation();
-  const [lines, setLines] = useState<LogLine[]>([]);
+  const [lines, setLines] = useState<RemoteLogLine[]>([]);
   const [approval, setApproval] = useState<PendingApproval | null>(null);
   const [connected, setConnected] = useState(false);
   const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   const lastSeqRef = useRef(0);
   const logRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    let source: EventSource | null = null;
+    const abort = new AbortController();
     let retryTimer: number | undefined;
     let closed = false;
+    lastSeqRef.current = 0;
+    setLines([]);
+    setApproval(null);
+    setConnected(false);
+    setDraft('');
+    setError('');
 
-    const connect = () => {
+    const connect = async () => {
       if (closed) return;
       const url = `/api/leophone/fleet/machines/${encodeURIComponent(target.machine)}`
         + `/sessions/${encodeURIComponent(target.sessionId)}/events?after=${lastSeqRef.current}`;
-      source = new EventSource(url, { withCredentials: true });
-      source.onopen = () => setConnected(true);
-      source.onmessage = (event) => {
-        let frame: Record<string, unknown>;
-        try {
-          frame = JSON.parse(event.data) as Record<string, unknown>;
-        } catch {
-          return;
-        }
-        const seq = Number(frame.seq ?? 0);
-        if (seq > lastSeqRef.current) lastSeqRef.current = seq;
-        if (String(frame.type) === 'approval.requested') {
-          setApproval({
-            approvalId: String(frame.approval_id ?? frame.approvalId ?? ''),
-            command: String(frame.command ?? ''),
-            choices: Array.isArray(frame.choices) ? frame.choices.map(String) : ['once', 'always', 'deny'],
-          });
-        }
-        if (String(frame.type) === 'approval.resolved') setApproval(null);
-        const line = describe(frame);
-        if (line) setLines((previous) => previous.concat(line).slice(-400));
-      };
-      source.onerror = () => {
+      try {
+        const response = await apiClient.raw(url, {
+          headers: { Accept: 'text/event-stream' },
+          signal: abort.signal,
+        });
+        if (!response.body) throw new Error('远程事件流不可用');
+        setConnected(true);
+        await readRemoteSse(response.body, (frame) => {
+          const seq = Number(frame.seq ?? 0);
+          if (seq > 0 && seq <= lastSeqRef.current) return;
+          if (seq > lastSeqRef.current) lastSeqRef.current = seq;
+          if (String(frame.event) === 'approval.request') {
+            setApproval({
+              approvalId: String(frame.approval_id ?? frame.approvalId ?? ''),
+              command: String(frame.command ?? ''),
+              choices: Array.isArray(frame.choices) ? frame.choices.map(String) : ['once', 'always', 'deny'],
+            });
+          }
+          if (String(frame.event) === 'approval.responded') setApproval(null);
+          const line = describeRemoteEvent(frame);
+          if (line) setLines((previous) => previous.concat(line).slice(-400));
+        });
+        if (!closed) throw new Error('远程事件流已结束');
+      } catch (streamError) {
+        if (closed || abort.signal.aborted) return;
         setConnected(false);
-        source?.close();
-        // 断线续传:带着已收到的最大 seq 重连,回放缺口后继续跟随。
-        retryTimer = window.setTimeout(connect, 2_000);
-      };
+        setError(streamError instanceof Error ? streamError.message : '远程事件流断开');
+        retryTimer = window.setTimeout(() => void connect(), 2_000);
+      }
     };
 
-    connect();
+    void connect();
     return () => {
       closed = true;
       if (retryTimer) window.clearTimeout(retryTimer);
-      source?.close();
+      abort.abort();
     };
   }, [target.machine, target.sessionId]);
 
@@ -115,7 +103,8 @@ export default function RemoteSessionPanel({ target, onClose }: RemoteSessionPan
 
   const respond = useCallback(async (choice: string) => {
     if (!approval) return;
-    setApproval(null);
+    setBusy(true);
+    setError('');
     try {
       await apiClient.post('/api/leophone/approvals/respond', {
         machine: target.machine,
@@ -123,20 +112,29 @@ export default function RemoteSessionPanel({ target, onClose }: RemoteSessionPan
         approval_id: approval.approvalId,
         choice,
       });
+      setApproval(null);
     } catch (error) {
-      console.error('[RemoteSessionPanel] approval failed:', error);
+      setError(error instanceof Error ? error.message : '审批发送失败');
+    } finally {
+      setBusy(false);
     }
   }, [approval, target.machine, target.sessionId]);
 
-  const drive = useCallback(async (action: 'send' | 'stop', body: unknown) => {
+  const drive = useCallback(async (action: 'send' | 'stop', body: unknown): Promise<boolean> => {
+    setBusy(true);
+    setError('');
     try {
       await apiClient.post(
         `/api/leophone/fleet/machines/${encodeURIComponent(target.machine)}`
         + `/sessions/${encodeURIComponent(target.sessionId)}/${action}`,
         body,
       );
+      return true;
     } catch (error) {
-      console.error(`[RemoteSessionPanel] ${action} failed:`, error);
+      setError(error instanceof Error ? error.message : `${action} 失败`);
+      return false;
+    } finally {
+      setBusy(false);
     }
   }, [target.machine, target.sessionId]);
 
@@ -159,6 +157,7 @@ export default function RemoteSessionPanel({ target, onClose }: RemoteSessionPan
           <button
             type="button"
             onClick={() => void drive('stop', {})}
+            disabled={busy}
             title={t('workbench.stopRun', { defaultValue: '停止运行' })}
             aria-label={t('workbench.stopRun', { defaultValue: '停止运行' })}
             className="wb-chip-button h-[26px] w-[26px] text-destructive"
@@ -200,6 +199,7 @@ export default function RemoteSessionPanel({ target, onClose }: RemoteSessionPan
                 key={choice}
                 type="button"
                 onClick={() => void respond(choice)}
+                disabled={busy}
                 className={index === 0
                   ? 'flex-1 cursor-pointer rounded-lg border-none bg-foreground py-1.5 text-[11.5px] font-bold text-background active:scale-95'
                   : 'wb-chip-button flex-1 py-1.5 text-[11.5px] font-semibold text-foreground'}
@@ -211,6 +211,8 @@ export default function RemoteSessionPanel({ target, onClose }: RemoteSessionPan
         </div>
       )}
 
+      {error && <p role="alert" className="mt-2 text-[11px] text-destructive">{error}</p>}
+
       <div className="mt-2.5 flex items-center gap-2.5 rounded-[13px] bg-muted py-1.5 pl-3.5 pr-2 ring-1 ring-inset ring-border">
         <input
           value={draft}
@@ -219,8 +221,9 @@ export default function RemoteSessionPanel({ target, onClose }: RemoteSessionPan
             if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
             const text = draft.trim();
             if (!text) return;
-            setDraft('');
-            void drive('send', { prompt: text });
+            void drive('send', { text }).then((ok) => {
+              if (ok) setDraft('');
+            });
           }}
           aria-label={t('workbench.remoteReply', { defaultValue: '追问远程会话' })}
           placeholder={t('workbench.remoteReplyPlaceholder', { defaultValue: '继续驾驶这台机器上的会话…' })}

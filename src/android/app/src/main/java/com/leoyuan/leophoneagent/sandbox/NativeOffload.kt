@@ -181,7 +181,7 @@ object NativeOffloadServer {
         val cwd = input.readLEString()
 
         val name = argv.firstOrNull().orEmpty().substringAfterLast('/')
-        Log.d(TAG, "recv pid=$pid name='$name' argc=$argc argv=$argv cwd=$cwd envc=$envc")
+        Log.d(TAG, "recv pid=$pid handler='$name' argc=$argc envc=$envc")
 
         val t0 = System.nanoTime()
         val handler = handlers[name]
@@ -198,7 +198,7 @@ object NativeOffloadServer {
                     sessionId = env["MINIS_CHAT_SESSION_ID"]?.takeIf { it.isNotEmpty() },
                 ))
             } catch (e: Exception) {
-                Log.w(TAG, "handler '$name' threw: ${e.message}", e)
+                Log.w(TAG, "handler '$name' failed (${e::class.java.simpleName})")
                 NativeOffloadResult(exitCode = 1, output = "native_offload: ${e.message}\n")
             }
         }

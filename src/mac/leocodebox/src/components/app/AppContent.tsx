@@ -13,7 +13,7 @@ import SessionRail from '../workbench/SessionRail';
 import ProjectDrawer from '../workbench/ProjectDrawer';
 import RemoteSessionPanel, { type RemoteTarget } from '../workbench/RemoteSessionPanel';
 import VersionUpgradeModal from '../version-upgrade/view';
-import { useFleetSnapshot, type FleetMachine } from '../workbench/useFleetSnapshot';
+import { harnessForMachine, useFleetSnapshot, type FleetMachine } from '../workbench/useFleetSnapshot';
 import type { NewTaskLaunch } from '../dashboard/newTask';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { PaletteOpsProvider, usePaletteOpsRegister } from '../../contexts/PaletteOpsContext';
@@ -353,11 +353,11 @@ function AppContentInner() {
   const startRemoteRun = useCallback(async (
     machineName: string,
     prompt: string,
-    options: { harness?: string; cwd?: string } = {},
+    options: { harness?: string; cwd?: string; thinking?: string } = {},
   ) => {
     closeOverlays();
     try {
-      await apiClient.post('/api/leophone/fleet/sessions', {
+      const created = await apiClient.post<{ session_id?: string; harness?: string }>('/api/leophone/fleet/sessions', {
         machine: machineName,
         prompt,
         // 中继一直支持指定 harness/cwd,这里以前一个都没传 —— 于是远程任务无论
@@ -365,14 +365,24 @@ function AppContentInner() {
         // 发出去还是 Claude」是同一个病,只是躲在远程这条路上没被看见。
         ...(options.harness ? { harness: options.harness } : {}),
         ...(options.cwd ? { cwd: options.cwd } : {}),
+        ...(options.thinking && options.thinking !== 'default' ? { thinking: options.thinking } : {}),
       });
+      if (created.session_id) {
+        setRemoteTarget({
+          machine: machineName,
+          sessionId: created.session_id,
+          harness: created.harness ?? options.harness,
+        });
+      }
       await refreshProjectsSilently();
+      return true;
     } catch (error) {
       console.error('[AppContent] Remote run failed:', error);
       window.alert(t('workbench.remoteRunFailed', {
         machine: machineName,
         defaultValue: `无法在 ${machineName} 上创建会话,请检查中继连接。`,
       }));
+      return false;
     }
   }, [closeOverlays, refreshProjectsSilently, t]);
 
@@ -391,9 +401,11 @@ function AppContentInner() {
       return;
     }
     if (launch.machine) {
+      const remote = remotes.find((machine) => machine.name === launch.machine);
       void startRemoteRun(launch.machine, launch.prompt, {
-        harness: launch.provider,
+        harness: harnessForMachine(remote, launch.provider),
         cwd: project.fullPath || project.path,
+        thinking: localStorage.getItem(`${launch.provider}-effort`) || undefined,
       });
       return;
     }
@@ -404,7 +416,7 @@ function AppContentInner() {
     // 按下开始那一刻 MainContent 还停在 dashboard 分支,ChatInterface 根本没挂载,
     // 同步派发的 handoff-draft 没有任何监听者。
     handleNewSession(project, launch.prompt);
-  }, [closeOverlays, handleNewSession, projects, setActiveTab, startRemoteRun]);
+  }, [closeOverlays, handleNewSession, projects, remotes, setActiveTab, startRemoteRun]);
 
   /** 接管远程会话 = 在主区挂上那台机器的事件流(全量回放 + 实时跟随)。 */
   const takeOverRemote = useCallback((machine: FleetMachine, remoteSessionId?: string) => {
@@ -501,10 +513,11 @@ function AppContentInner() {
           remotes={remotes}
           onOpenAgentSettings={() => openSettingsTab('agents')}
           onStartLocalRun={startLocalRun}
-          onStartRemoteRun={(machine, prompt, provider) => {
-            void startRemoteRun(machine.name, prompt, {
-              harness: provider,
+          onStartRemoteRun={(machine, prompt, provider, effort) => {
+            return startRemoteRun(machine.name, prompt, {
+              harness: harnessForMachine(machine, provider),
               cwd: selectedProject?.fullPath || selectedProject?.path,
+              thinking: effort,
             });
           }}
           /*

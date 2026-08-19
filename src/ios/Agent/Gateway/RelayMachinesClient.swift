@@ -10,6 +10,16 @@ struct RelayDiscoveredMachine: Equatable, Sendable {
     var isAndroidBody: Bool { platform == "android" || server == "minis" }
 }
 
+struct RelayCredentialCandidate: Equatable, Sendable {
+    let harnessURL: String?
+    let key: String?
+}
+
+struct RelayCredential: Equatable, Sendable {
+    let apiRoot: String
+    let key: String
+}
+
 enum RelayDiscoveryError: Error {
     case unauthorized
     case badURL
@@ -97,6 +107,25 @@ enum RelayMachinesClient {
         case "LeoMac-Studio-2": return "Mac Studio"
         default: return machine
         }
+    }
+
+    static func credentials(from candidates: [RelayCredentialCandidate]) -> [RelayCredential] {
+        var seen = Set<String>()
+        return candidates.compactMap { candidate in
+            guard let root = apiRoot(fromHarnessURL: candidate.harnessURL),
+                  let key = candidate.key?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  key.count >= 16 else { return nil }
+            let normalized = normalizeApiRoot(root).lowercased()
+            guard seen.insert(normalized).inserted else { return nil }
+            return RelayCredential(apiRoot: root, key: key)
+        }
+    }
+
+    static func credential(
+        matching apiRoot: String,
+        from candidates: [RelayCredentialCandidate]
+    ) -> RelayCredential? {
+        credentials(from: candidates).first { sameApiRoot($0.apiRoot, apiRoot) }
     }
 }
 

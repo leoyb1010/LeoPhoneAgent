@@ -52,4 +52,25 @@ final class RelayMachinesClientTests: XCTestCase {
         XCTAssertEqual(RelayMachinesClient.sanitizeMachine("LeoFold8"), "LeoFold8")
         XCTAssertNil(RelayMachinesClient.sanitizeMachine("foo/bar"))
     }
+
+    func testCredentialAlwaysBindsKeyToTheSameRelayRoot() {
+        let rows = [
+            RelayCredentialCandidate(
+                harnessURL: "https://a.example/relay/api/m/mac",
+                key: "a-key-0123456789"
+            ),
+            RelayCredentialCandidate(
+                harnessURL: "https://b.example/relay/api/m/body",
+                key: "b-key-0123456789"
+            ),
+        ]
+        XCTAssertEqual(
+            RelayMachinesClient.credential(matching: "https://b.example/relay/api/", from: rows),
+            RelayCredential(apiRoot: "https://b.example/relay/api", key: "b-key-0123456789")
+        )
+        XCTAssertNil(RelayMachinesClient.credential(
+            matching: "https://c.example/relay/api",
+            from: rows
+        ))
+    }
 }

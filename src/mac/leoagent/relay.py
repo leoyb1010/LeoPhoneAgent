@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import hmac
 import json
 import os
@@ -60,6 +61,7 @@ class Relay:
         self.keys = [key] + [k for k in (extra_keys or []) if len(k) >= 16]
         # 被拒的钥匙落盘(0600,仅本机可读),便于把它收编进 RELAY_KEYS。
         self.rejected_log = rejected_log
+        self._last_rejected_log_at = float("-inf")
         self.machines: Dict[str, Machine] = {}
         # [T-leophone-push] Mac 主动外推的关键事件(审批请求、任务终态)。
         # 手机拉 SSE 只在它连着时才收得到;这里留一份最近事件,手机回来
@@ -102,9 +104,23 @@ class Relay:
     def _record_rejected(self, presented: str, path: str) -> None:
         if not self.rejected_log or not presented:
             return
+        now = time.monotonic()
+        if now - self._last_rejected_log_at < 1.0:
+            return
+        self._last_rejected_log_at = now
         try:
-            import time
-            line = f"{time.strftime('%Y-%m-%dT%H:%M:%S')} {path} {presented}\n"
+            fingerprint = hmac.new(
+                self.key.encode("utf-8"), presented.encode("utf-8"), hashlib.sha256
+            ).hexdigest()[:16]
+            safe_path = path.replace("\n", "").replace("\r", "")[:160]
+            line = f"{time.strftime('%Y-%m-%dT%H:%M:%S')} {safe_path} hmac={fingerprint}\n"
+            if os.path.exists(self.rejected_log) and os.path.getsize(self.rejected_log) >= 64 * 1024:
+                backup = self.rejected_log + ".1"
+                try:
+                    os.unlink(backup)
+                except FileNotFoundError:
+                    pass
+                os.replace(self.rejected_log, backup)
             fd = os.open(self.rejected_log, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
             with os.fdopen(fd, "a") as f:
                 f.write(line)

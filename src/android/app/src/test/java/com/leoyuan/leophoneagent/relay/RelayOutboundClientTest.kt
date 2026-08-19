@@ -11,6 +11,7 @@ import okhttp3.mockwebserver.MockWebServer
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -35,6 +36,7 @@ class RelayOutboundClientTest {
         val registered = CountDownLatch(1)
         val gotResp = CountDownLatch(1)
         val streamClosed = CountDownLatch(1)
+        val gotTerminalEvent = CountDownLatch(1)
         val register = arrayOfNulls<JSONObject>(1)
         val resp = arrayOfNulls<JSONObject>(1)
         val streamFrames = mutableListOf<JSONObject>()
@@ -60,6 +62,9 @@ class RelayOutboundClientTest {
                         }
                         "stream_data" -> streamFrames += frame
                         "stream_close" -> streamClosed.countDown()
+                        "event" -> if (frame.optJSONObject("event")?.optString("event") == "run.completed") {
+                            gotTerminalEvent.countDown()
+                        }
                     }
                 }
             }),
@@ -79,6 +84,7 @@ class RelayOutboundClientTest {
             router,
             OkHttpClient(),
         )
+        router.setEventSink(client::pushEvent)
         val run = Thread { runCatching { client.connectOnce() } }.also { it.start() }
 
         assertTrue(registered.await(5, TimeUnit.SECONDS))
@@ -97,6 +103,7 @@ class RelayOutboundClientTest {
             JSONObject().put("harness", "minis").put("prompt", "go"),
         )
         val sessionId = created.body.getString("session_id")
+        assertTrue(gotTerminalEvent.await(5, TimeUnit.SECONDS))
         agent.send("""{"type":"stream_open","id":"s1","path":"/harness/sessions/$sessionId/events?after=0"}""")
         repeat(40) {
             if (streamFrames.any { it.optString("data").contains("session.created") }) return@repeat
@@ -109,5 +116,40 @@ class RelayOutboundClientTest {
         agent.close(1000, "done")
         run.join(2000)
         client.stop()
+    }
+
+    @Test
+    fun stopDuringHandshakeNeverRegistersWithStaleKey() {
+        val registered = CountDownLatch(1)
+        server.enqueue(
+            MockResponse()
+                .setHeadersDelay(500, TimeUnit.MILLISECONDS)
+                .withWebSocketUpgrade(object : WebSocketListener() {
+                    override fun onMessage(webSocket: WebSocket, text: String) {
+                        if (JSONObject(text).optString("type") == "register") registered.countDown()
+                    }
+                }),
+        )
+        val router = MinisHarnessRouter("test", object : MinisSessionEngine {
+            override fun runTurn(sessionId: String, text: String, thinking: String?): Flow<EngineChunk> = flow { }
+            override fun stop(sessionId: String) = Unit
+        })
+        val client = RelayOutboundClient(
+            RelayOutboundConfig(
+                server.url("/relay/agent").toString().replace("http://", "ws://"),
+                "old-relay-key-0123456789abcdef",
+                "LeoFold8",
+                "test",
+            ),
+            router,
+            OkHttpClient(),
+        )
+        val run = Thread { runCatching { client.connectOnce() } }.also { it.start() }
+        Thread.sleep(50)
+        client.stop()
+
+        assertFalse(registered.await(1, TimeUnit.SECONDS))
+        run.join(2_000)
+        assertFalse("stopped handshake must unblock connectOnce", run.isAlive)
     }
 }

@@ -9,7 +9,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 /** Keeps the relay bearer key in Android Keystore-backed preferences. */
-class RelayFleetStore(context: Context) {
+class RelayFleetStore private constructor(context: Context) {
     private val prefs = EncryptedPrefsFactory.safeCreate(
         context.applicationContext,
         "leo_relay_fleet_secure",
@@ -39,6 +39,10 @@ class RelayFleetStore(context: Context) {
         _config.value = RelayFleetConfig()
     }
 
+    fun setBodyEnabled(enabled: Boolean) {
+        persist(_config.value.copy(bodyEnabled = enabled))
+    }
+
     private fun persist(next: RelayFleetConfig) {
         prefs.edit().putString(KEY_CONFIG, json.encodeToString(next)).apply()
         _config.value = next
@@ -53,14 +57,22 @@ class RelayFleetStore(context: Context) {
     companion object {
         private const val KEY_CONFIG = "config"
 
+        @Volatile
+        private var instance: RelayFleetStore? = null
+
+        fun get(context: Context): RelayFleetStore =
+            instance ?: synchronized(this) {
+                instance ?: RelayFleetStore(context.applicationContext).also { instance = it }
+            }
+
         internal fun normalizeBase(raw: String): String {
             val value = raw.trim().trimEnd('/')
             val url = java.net.URI(value)
             require(url.scheme.equals("https", ignoreCase = true) && !url.host.isNullOrBlank()) {
                 "中继地址必须是有效的 HTTPS URL"
             }
-            require(url.userInfo == null && url.fragment == null) {
-                "中继地址不能包含账号或片段"
+            require(url.userInfo == null && url.fragment == null && url.query == null) {
+                "中继地址不能包含账号、查询或片段"
             }
             return value
         }

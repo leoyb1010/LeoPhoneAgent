@@ -202,19 +202,16 @@ struct GatewaySettingsView: View {
                     scanMessage = "不是本 App 的配对码。码里应是中继根和机器名。"
                     return
                 }
-                guard let key = store.hosts.compactMap({ GatewayHostStore.accessKey(hostId: $0.id) }).first else {
+                guard let credential = RelayMachinesClient.credential(
+                    matching: pair.apiRoot,
+                    from: relayCredentialCandidates()
+                ) else {
                     scanMessage = "先粘贴中继密钥，再扫这台身体的配对码。"
-                    return
-                }
-                let trusted = store.hosts.compactMap { RelayMachinesClient.apiRoot(fromHarnessURL: $0.harnessURL) }.first
-                    ?? RelayMachinesClient.defaultApiRoot
-                guard RelayMachinesClient.sameApiRoot(pair.apiRoot, trusted) else {
-                    scanMessage = "配对码里的中继不是你已经在用的那台。钥匙不会发到别的地址。"
                     return
                 }
                 store.upsertDiscovered([
                     RelayDiscoveredMachine(name: pair.machine, online: false, platform: nil, server: nil, version: nil)
-                ], key: key, apiRoot: trusted)
+                ], key: credential.key, apiRoot: credential.apiRoot)
                 scanMessage = "已加入 \(pair.machine)"
                 Task { await refresh() }
             }
@@ -222,11 +219,9 @@ struct GatewaySettingsView: View {
     }
 
     private func refresh() async {
-        if let first = store.hosts.first, let key = GatewayHostStore.accessKey(hostId: first.id) {
-            let apiRoot = store.hosts.compactMap { RelayMachinesClient.apiRoot(fromHarnessURL: $0.harnessURL) }.first
-                ?? RelayMachinesClient.defaultApiRoot
-            if let live = try? await RelayMachinesClient.list(apiRoot: apiRoot, key: key) {
-                store.upsertDiscovered(live, key: key, apiRoot: apiRoot)
+        for credential in RelayMachinesClient.credentials(from: relayCredentialCandidates()) {
+            if let live = try? await RelayMachinesClient.list(apiRoot: credential.apiRoot, key: credential.key) {
+                store.upsertDiscovered(live, key: credential.key, apiRoot: credential.apiRoot)
             }
         }
         for host in store.hosts {
@@ -235,6 +230,15 @@ struct GatewaySettingsView: View {
             let ok = await GatewayHostStore.probe(host)
             reachable[host.id] = ok
             if ok { store.markSeen(id: host.id) }
+        }
+    }
+
+    private func relayCredentialCandidates() -> [RelayCredentialCandidate] {
+        store.hosts.map { host in
+            RelayCredentialCandidate(
+                harnessURL: host.harnessURL,
+                key: GatewayHostStore.accessKey(hostId: host.id)
+            )
         }
     }
 }

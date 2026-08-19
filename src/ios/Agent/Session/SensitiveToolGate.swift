@@ -32,6 +32,8 @@ final class SensitiveToolGate: ObservableObject {
         case writeCredentials   // 写 Cookie(可劫持会话)
         case fileWrite          // 写/改文件
         case shell              // 本机终端
+        case remoteShell        // 远程主机终端
+        case remoteAgent        // 远程主机 Agent
 
         var humanName: String {
             switch self {
@@ -39,6 +41,8 @@ final class SensitiveToolGate: ObservableObject {
             case .writeCredentials: return "写入网站登录凭证(Cookie)"
             case .fileWrite: return "写入或修改本机文件"
             case .shell: return "在本机执行终端命令"
+            case .remoteShell: return "在远程主机执行终端命令"
+            case .remoteAgent: return "在远程主机启动 Agent 任务"
             }
         }
 
@@ -46,6 +50,8 @@ final class SensitiveToolGate: ObservableObject {
             switch name {
             case "file_write", "file_edit": return .fileWrite
             case "shell_execute": return .shell
+            case "remote_shell": return .remoteShell
+            case "remote_agent": return .remoteAgent
             default: return nil
             }
         }
@@ -63,6 +69,14 @@ final class SensitiveToolGate: ObservableObject {
                     if !trimmed.isEmpty { return String(trimmed.prefix(160)) }
                 }
                 return "本机终端"
+            case "remote_shell", "remote_agent":
+                let host = (args["host"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .nilIfEmpty ?? "未指定主机"
+                let detailKey = tool == "remote_shell" ? "command" : "prompt"
+                let detail = (args[detailKey] as? String)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .nilIfEmpty ?? "空任务"
+                return "\(host) · \(String(detail.prefix(160)))"
             default:
                 return "本机"
             }
@@ -176,4 +190,8 @@ final class SensitiveToolGate: ObservableObject {
     /// 后台拒绝时给模型的回执文案。
     static let backgroundDeniedMessage =
         "这个操作需要你在前台确认一次。请打开 app 后重试这一步。"
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }

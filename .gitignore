@@ -61,6 +61,7 @@ Podfile.lock
 .build/
 .swiftpm/
 Package.resolved
+!src/ios/LeoPhoneAgent.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
 # macOS
 .DS_Store

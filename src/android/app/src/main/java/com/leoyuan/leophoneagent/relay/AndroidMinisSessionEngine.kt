@@ -3,6 +3,7 @@ package com.leoyuan.leophoneagent.relay
 import android.content.Context
 import com.leoyuan.leophoneagent.data.model.ThinkingLevel
 import com.leoyuan.leophoneagent.debug.HeadlessChatRunner
+import com.leoyuan.leophoneagent.ui.chat.ChatViewModelStore
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -41,6 +42,13 @@ class AndroidMinisSessionEngine(private val context: Context) : MinisSessionEngi
         kotlinx.coroutines.runBlocking {
             HeadlessChatRunner.cancel(context, chatId)
         }
+    }
+
+    override fun release(sessionId: String) {
+        val chatId = boundIds.remove(sessionId) ?: return
+        kotlinx.coroutines.runBlocking { HeadlessChatRunner.cancel(context, chatId) }
+        HeadlessChatRunner.forget(chatId)
+        ChatViewModelStore.release(chatId)
     }
 
     companion object {

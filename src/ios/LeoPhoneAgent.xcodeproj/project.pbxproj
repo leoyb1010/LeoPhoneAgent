@@ -389,6 +389,7 @@
 		E5AUT0001 /* AutomationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5AUT0002 /* AutomationEngine.swift */; };
 		E5SET0001 /* SettingsHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SET0002 /* SettingsHomeView.swift */; };
 		E5STG9001 /* SensitiveToolGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5STG9002 /* SensitiveToolGate.swift */; };
+		E5STG9003 /* SensitiveToolGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5STG9002 /* SensitiveToolGate.swift */; };
 		E5QNI9001 /* QuickNoteIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5QNI9002 /* QuickNoteIntent.swift */; };
 		E5DSC9001 /* DocumentScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DSC9002 /* DocumentScannerView.swift */; };
 		E5ATI9001 /* AttachmentImporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5ATI9002 /* AttachmentImporter.swift */; };
@@ -426,6 +427,9 @@
 		E5RMC0001 /* RelayMachinesClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RMC0002 /* RelayMachinesClient.swift */; };
 		E5RMC0003 /* RelayMachinesClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RMC0002 /* RelayMachinesClient.swift */; };
 		E5TLC0003 /* ThinkingLevelCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5TLC0002 /* ThinkingLevelCatalog.swift */; };
+		E5TT0001 /* ThinkingTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5TT0002 /* ThinkingTypes.swift */; };
+		E5TT0003 /* ThinkingTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5TT0002 /* ThinkingTypes.swift */; };
+		E5MG0003 /* ModelGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D00014 /* ModelGroup.swift */; };
 		E5SCH003 /* RunDueScheduledTasksIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SCH013 /* RunDueScheduledTasksIntent.swift */; };
 		E5SCH004 /* ScheduledTaskSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SCH014 /* ScheduledTaskSettingsView.swift */; };
 		E5CAP002 /* CapabilitiesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CAP012 /* CapabilitiesView.swift */; };
@@ -1188,6 +1192,7 @@
 		E5T00001B /* UserMessageEntity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserMessageEntity.swift; sourceTree = "<group>"; };
 		E5T0000A2 /* AskMinisIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskMinisIntent.swift; sourceTree = "<group>"; };
 		E5TLC0002 /* ThinkingLevelCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingLevelCatalog.swift; sourceTree = "<group>"; };
+		E5TT0002 /* ThinkingTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThinkingTypes.swift; sourceTree = "<group>"; };
 		E5U000011 /* KaTeXRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KaTeXRenderer.swift; sourceTree = "<group>"; };
 		E5U000012 /* KaTeX */ = {isa = PBXFileReference; lastKnownFileType = folder; name = KaTeX; path = Resources/KaTeX; sourceTree = "<group>"; };
 		E5UMP0011 /* UnifiedModelPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedModelPicker.swift; sourceTree = "<group>"; };
@@ -1296,20 +1301,10 @@
 		F2941B643B8A2F048A2B154E /* VoiceProviderFactory.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoiceProviderFactory.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
-/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		E5EXC0001 /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				ThinkingLevelTests.swift,
-			);
-			target = BB1000070F700000000000AA /* MinisTests */;
-		};
-/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
-
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		AA0838CB2F3CA8A900049557 /* Terminal */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = Terminal; sourceTree = "<group>"; };
 		AA8A568C2F6FBB7A00A3E54E /* MinisUITests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = MinisUITests; sourceTree = "<group>"; };
-		BB1000012F700000000000AA /* MinisTests */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (E5EXC0001 /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = MinisTests; sourceTree = "<group>"; };
+		BB1000012F700000000000AA /* MinisTests */ = {isa = PBXFileSystemSynchronizedRootGroup; explicitFileTypes = {}; explicitFolders = (); path = MinisTests; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -1552,6 +1547,7 @@
 			isa = PBXGroup;
 			children = (
 				E52000011 /* LLMTypes.swift */,
+				E5TT0002 /* ThinkingTypes.swift */,
 				E52000012 /* LLMError.swift */,
 				E5OARC030 /* OAuthRefreshCoordinator.swift */,
 				E5OARC031 /* OAuthRefreshSingleFlight.swift */,
@@ -2825,6 +2821,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				E5RMC0003 /* RelayMachinesClient.swift in Sources */,
+				E5STG9003 /* SensitiveToolGate.swift in Sources */,
+				E5TT0003 /* ThinkingTypes.swift in Sources */,
+				E5MG0003 /* ModelGroup.swift in Sources */,
 				E5TLC0003 /* ThinkingLevelCatalog.swift in Sources */,
 				E5G000005 /* AgentActivityAttributes.swift in Sources */,
 				E5ART0003 /* ArtifactModels.swift in Sources */,
@@ -2914,6 +2913,7 @@
 				E5SHV0001 /* SharedFolderVisibility.swift in Sources */,
 				E5SHV0003 /* SharedFoldersSettingsView.swift in Sources */,
 				E5SHV0004 /* MountDetailView.swift in Sources */,
+				E5TT0001 /* ThinkingTypes.swift in Sources */,
 				E52000001 /* LLMTypes.swift in Sources */,
 				E52000002 /* LLMError.swift in Sources */,
 				E52000003 /* LLMProvider.swift in Sources */,

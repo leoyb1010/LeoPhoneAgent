@@ -83,6 +83,9 @@ class RelayFleetClientTest {
             RelayFleetStore.normalizeBase("http://relay.example.com/relay/api")
         }.exceptionOrNull()
         assertTrue(rejected is IllegalArgumentException)
+        assertTrue(runCatching {
+            RelayFleetStore.normalizeBase("https://relay.example.com/relay/api?token=wrong-place")
+        }.exceptionOrNull() is IllegalArgumentException)
         assertEquals(
             "https://relay.example.com/relay/api",
             RelayFleetStore.normalizeBase(" https://relay.example.com/relay/api/ "),

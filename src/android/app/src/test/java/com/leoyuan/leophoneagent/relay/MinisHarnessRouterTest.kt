@@ -1,9 +1,15 @@
 package com.leoyuan.leophoneagent.relay
 
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -100,6 +106,50 @@ class MinisHarnessRouterTest {
         val sent = r.handle("POST", "/harness/sessions/$id/send", JSONObject().put("text", "steer"))
         assertEquals(200, sent.status)
         assertEquals(listOf(id), engine.stopped)
+    }
+
+    @Test
+    fun stopInvalidatesDelayedOldTurn() = runBlocking {
+        val started = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val engine = object : MinisSessionEngine {
+            override fun runTurn(sessionId: String, text: String, thinking: String?): Flow<EngineChunk> = flow {
+                started.complete(Unit)
+                emit(EngineChunk.Delta("old"))
+                release.await()
+                emit(EngineChunk.Completed("stale completion"))
+            }
+            override fun stop(sessionId: String) = Unit
+        }
+        val r = router(engine)
+        val id = r.handle("POST", "/harness/sessions", JSONObject().put("prompt", "go"))
+            .body.getString("session_id")
+        withTimeout(2_000) { started.await() }
+        r.handle("POST", "/harness/sessions/$id/stop", JSONObject())
+        release.complete(Unit)
+        delay(100)
+
+        val events = r.eventsAfter(id, 0).toList()
+        val cancelledAt = events.indexOfFirst { it.optString("event") == "run.cancelled" }
+        assertTrue(cancelledAt >= 0)
+        assertFalse(events.drop(cancelledAt + 1).any { it.optString("event") == "run.completed" })
+    }
+
+    @Test
+    fun slowSubscriberFailsClosedInsteadOfSilentlySkippingSequences() = runBlocking {
+        val chunks = (1..100).map { EngineChunk.Delta("$it") } + EngineChunk.Completed("done")
+        val r = router(FakeEngine(chunks))
+        val id = r.handle("POST", "/harness/sessions", JSONObject()).body.getString("session_id")
+        val stream = r.handle("GET", "/harness/sessions/$id/events?after=0", null).stream!!
+        val result = async {
+            runCatching {
+                stream.collect { delay(20) }
+            }.exceptionOrNull()
+        }
+        delay(50)
+        r.handle("POST", "/harness/sessions/$id/send", JSONObject().put("text", "flood"))
+
+        assertNotNull(withTimeout(5_000) { result.await() })
     }
 }
 

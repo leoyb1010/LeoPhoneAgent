@@ -15,9 +15,18 @@ export type FleetMachine = {
   name: string;
   online: boolean;
   reachable: boolean;
+  platform?: string;
+  server?: string;
+  version?: string;
   activeCount: number;
   sessions: FleetSession[];
 };
+
+export function harnessForMachine(machine: FleetMachine | undefined, selected: string): string {
+  return machine?.platform === 'android' || machine?.platform === 'harmony' || machine?.server === 'minis'
+    ? 'minis'
+    : selected;
+}
 
 type FleetPayload = {
   configured?: boolean;

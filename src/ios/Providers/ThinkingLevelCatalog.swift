@@ -41,13 +41,7 @@ enum ThinkingRuleStore {
 }
 
 enum AgentModelSlots {
-    static let visionKey = "leo.visionDelegateEntryId"
     static let compactKey = "leo.compactTitleEntryId"
-
-    static var visionEntryId: String? {
-        get { UserDefaults.standard.string(forKey: visionKey)?.nilIfEmpty }
-        set { UserDefaults.standard.set(newValue, forKey: visionKey) }
-    }
 
     static var compactEntryId: String? {
         get { UserDefaults.standard.string(forKey: compactKey)?.nilIfEmpty }
@@ -63,7 +57,7 @@ private extension String {
 }
 
 enum ThinkingLevelCatalog {
-    private static let rules: [(match: (String) -> Bool, max: ThinkingLevel)] = [
+    private static let rules: [(match: @Sendable (String) -> Bool, max: ThinkingLevel)] = [
         // GPT-5.6 sol/terra/luna all reach .max. (.ultra is a client-side
         // "Max + orchestration" concept — the wire effort tops out at "max",
         // reasoningEffort(for:level:) maps both .max and .ultra to "max".)

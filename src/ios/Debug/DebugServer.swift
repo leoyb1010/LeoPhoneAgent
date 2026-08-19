@@ -45,7 +45,7 @@ final class DebugServer: @unchecked Sendable {
         }
 
         self.listenSocket = fd
-        print("[DebugServer] Listening on http://0.0.0.0:\(port)")
+        print("[DebugServer] Listening on http://127.0.0.1:\(port)")
 
         // Initialize inspector + RPC on main actor, then start accept loop
         Task { @MainActor in

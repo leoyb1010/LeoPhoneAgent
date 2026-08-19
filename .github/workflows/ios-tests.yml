@@ -46,6 +46,7 @@ jobs:
           # watchOS runtime 卡死，也不依赖尚未发布的本地 iSH submodule commit。
           # 完整 App + 原生依赖另走 release gate，不能拿来替代快速单测。
           xcodebuild test -project LeoPhoneAgent.xcodeproj -scheme MinisLogicTests \
+            -onlyUsePackageVersionsFromResolvedFile \
             -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
             -only-testing:MinisTests CODE_SIGNING_ALLOWED=NO 2>&1 \
             | tee /tmp/xcodebuild.log \
