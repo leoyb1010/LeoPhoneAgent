@@ -28,6 +28,9 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
 - 唯一源码主仓：`https://github.com/leoyb1010/LeoPhoneAgent`，默认分支 `main`。
 - Android 主工程：`src/android/`；iOS：`src/ios/`；Mac 桌面端：
   `src/mac/leocodebox/`。`src/mac/leoagent/` 是协议兼容/灰度回退，不是 Android UI 工程。
+  鸿蒙 7 交付计划：
+  [`docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md`](docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md)；
+  工程落地在 `src/harmony/`，1.0 之前不要把它写成已交付端。
 - Android 同时交付 Standard 和 Power；修改 `main` 公共源码后必须同时验证两个 flavor。
 - 不得把「能编译」、「CI 是绿的」或「APK 已上传」当成可发布证据。
   可升级签名、覆盖安装、冷启动、发布附件哈希都必须单独校验。
