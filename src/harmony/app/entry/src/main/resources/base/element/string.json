@@ -1,0 +1,7 @@
+{
+  "string": [
+    { "name": "module_desc", "value": "LeoPhoneAgent HarmonyOS thin controller" },
+    { "name": "EntryAbility_desc", "value": "LeoPhoneAgent" },
+    { "name": "EntryAbility_label", "value": "LeoPhoneAgent" }
+  ]
+}

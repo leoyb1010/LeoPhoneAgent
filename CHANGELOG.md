@@ -4,6 +4,18 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## HarmonyOS 0.1.0-alpha.1 (100001) - 2026-08-19
+
+- 首个鸿蒙瘦控制面：填中继钥匙后读 `/machines`，可对在线 Mac 或 Android 身体开新任务。
+- 断线按 `?after=N` 续上；审批必须带 `approval_id`。配对码只含中继根和机器名。
+- 首启弹出「本次更新」：鸿蒙瘦控制面。本机 Agent 与鸿蒙当身体未交付。
+
+### 验证
+
+- 协议层 `node --experimental-strip-types src/harmony/protocol/protocol.test.mjs` 通过。
+- `bash src/harmony/scripts/verify_harmony_release_notes.sh` 必须通过后才能装机。
+- 本机 `hvigor assembleHap` 已通过，产物为未签名 `entry-default-unsigned.hap`（165K）。`hdc list targets` 为空，未做真机覆盖安装。
+
 ## iOS 1.24.0 (94) / macOS leocodebox 1.74.0 / Android 1.0.0-alpha.6 - 2026-08-19
 
 - Android 可作为中继身体（`platform=android` / harness `minis`）；三端机器列表改读 `/machines`。

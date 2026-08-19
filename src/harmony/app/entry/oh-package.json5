@@ -1,0 +1,9 @@
+{
+  "name": "entry",
+  "version": "0.1.0-alpha.1",
+  "description": "LeoPhoneAgent HarmonyOS entry",
+  "main": "",
+  "author": "leoyuan",
+  "license": "GPL-3.0",
+  "dependencies": {}
+}

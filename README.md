@@ -3,6 +3,7 @@
 [![iOS](https://img.shields.io/badge/iOS-1.24.0%20(94)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.5-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.5)
 [![macOS](https://img.shields.io/badge/macOS-1.74.0-7C3AED.svg)](src/mac/leocodebox/package.json)
+[![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.1.0--alpha.1-D94B16.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Mobile](https://img.shields.io/badge/mobile-iOS%20%2B%20Android-black.svg)](#系统架构)
 
@@ -30,12 +31,26 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
   `src/mac/leocodebox/`。`src/mac/leoagent/` 是协议兼容/灰度回退，不是 Android UI 工程。
   鸿蒙 7 交付计划：
   [`docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md`](docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md)；
-  工程落地在 `src/harmony/`，1.0 之前不要把它写成已交付端。
+  工程落地在 `src/harmony/`。Ship 1 瘦控制面是 `0.1.0-alpha.1`，只走 `hdc install`，
+  本机 Agent / 身体注册还没交付。
 - Android 同时交付 Standard 和 Power；修改 `main` 公共源码后必须同时验证两个 flavor。
 - 不得把「能编译」、「CI 是绿的」或「APK 已上传」当成可发布证据。
   可升级签名、覆盖安装、冷启动、发布附件哈希都必须单独校验。
 - 任务开始先读 `git status`并获取最新 `origin/main`；未知本地改动默认属于用户，
   不得 `reset --hard`、覆盖或删除。
+
+## HarmonyOS 0.1.0-alpha.1
+
+个人 hdc 安装，不上应用市场。包名 `com.leoyuan.leophoneagent.harmony`。
+
+```bash
+bash src/harmony/scripts/verify_harmony_release_notes.sh
+bash src/harmony/scripts/build_hap.sh
+# 产物：/tmp/leo-harmony-app/entry/build/default/outputs/default/entry-default-unsigned.hap
+# 在 DevEco 里对工程签一次名后再 hdc install。仓库路径含中文，hvigor 必须在 /tmp 舞台目录构建。
+```
+
+这一版只做瘦控制面：钥匙、`/machines`、远程开聊、续传、审批。本机 Agent 和鸿蒙当身体还没开。
 
 ## 直接下载 Android APK
 
@@ -103,6 +118,7 @@ Alpha 切换到正式版时可能需要先卸载旧包。APK 内已附 GPL、第
 ```text
 src/ios/                iOS 主 app(Swift/SwiftUI)+ Share/FileProvider/Widget/Watch
 src/android/            Android 主 app(Kotlin/Compose)+ PRoot/Accessibility/Shizuku
+src/harmony/            HarmonyOS 7 瘦控制面(ArkTS)：协议层 + DevEco 工程
 src/mac/leocodebox/     LeoPhoneAgent · Mac:Electron 桌面工作台、CLI 管理、
                         本机服务、会话/技能/MCP 与跨设备控制
 src/mac/leoagent/       Mac 常驻服务:server.py(harness 会话)、relay.py(中继)、
