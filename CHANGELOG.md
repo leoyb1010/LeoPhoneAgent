@@ -4,6 +4,24 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## Android v1.0.0-alpha.7 - 2026-08-19
+
+### 核心修复
+
+- Android Relay Body 改为明确手动开启，默认只控制其他机器；关闭或清除密钥会立即终止旧 WebSocket。
+- 修复 stop/steer 后旧 turn 继续回传终态、SSE 快照/实时接缝丢帧、慢订阅者静默丢帧和断线后旧 stream 泄漏。
+- Android 主动上报审批/终态事件，断线期间有界缓存、重连后补发。
+- Mac 工作台修复远程接管鉴权、事件字段、追问请求体、审批失败恢复和切换会话串状态；Android/Harmony 身体自动使用 `minis` harness。
+- iOS 修复推理类型测试 target、Relay 地址/密钥串用和远程 Shell/Agent 绕过本地审批；非视觉模型不再假报已读图。
+- Relay 拒绝日志改为 HMAC 指纹 + 限速 + 64KB 轮转；Native Offload 不再记录完整 argv/cwd；DOMPurify 升级至 3.4.13。
+
+### 验证
+
+- iOS MinisLogicTests `243/243`；Mac Client `137/137`、Server `354/354`，typecheck 与定向 eslint 通过。
+- Android Standard/Power 各 `443` 个 JVM 测试，0 失败（各 1 个既有跳过）；Relay 并发与签名门禁继续通过。
+- Fold8 API 35 从 alpha.6 原地覆盖 alpha.7，Standard/Power 均返回 `Success`；普通冷启动与 `ACTION_ASSIST` 均为 `Status: ok`，进程存活，Logcat 无本 App `FATAL EXCEPTION`。
+- Standard SHA-256 `ff9257c23ce865e2edaf53bf02dd32fada9783ac7fbd0f46de1b51ef7aad44ba`；Power SHA-256 `89db6ec66fc7fd1bb2845bff23d653a28922b4b12a9d4466d4aab103ea617abb`。
+
 ## HarmonyOS 0.1.0-alpha.1 (100001) - 2026-08-19
 
 - 首个鸿蒙瘦控制面：填中继钥匙后读 `/machines`，可对在线 Mac 或 Android 身体开新任务。
