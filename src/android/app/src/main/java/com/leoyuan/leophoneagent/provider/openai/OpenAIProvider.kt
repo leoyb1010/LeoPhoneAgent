@@ -133,7 +133,7 @@ class OpenAIProvider private constructor(
          * budget: response HEADERS must arrive within this window. Does NOT
          * bound the SSE body — a flowing stream stays unlimited.
          */
-        private const val STREAM_TTFB_TIMEOUT_MS = 30_000L
+        private const val STREAM_TTFB_TIMEOUT_MS = 120_000L
 
         /**
          * Factory for OAuth-bearer OpenAI-compatible providers that aren't

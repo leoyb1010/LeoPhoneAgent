@@ -62,7 +62,7 @@ class RelayFleetClient(
             .put("prompt", prompt.trim())
         val obj = post(machinePath(machine, "/harness/sessions"), body)
         obj.optString("session_id").takeIf { it.isNotBlank() }
-            ?: throw RelayException("远程 Mac 未返回会话 ID")
+            ?: throw RelayException("远程机器未返回会话 ID")
     }
 
     suspend fun send(machine: String, sessionId: String, text: String) = withContext(Dispatchers.IO) {

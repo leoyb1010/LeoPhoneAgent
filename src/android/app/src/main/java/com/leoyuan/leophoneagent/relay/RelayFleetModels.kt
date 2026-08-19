@@ -6,6 +6,8 @@ import kotlinx.serialization.Serializable
 data class RelayFleetConfig(
     val relayApiBase: String = DEFAULT_RELAY_API_BASE,
     val accessKey: String = "",
+    val machineName: String = "",
+    val bodyEnabled: Boolean = true,
 ) {
     companion object {
         const val DEFAULT_RELAY_API_BASE =

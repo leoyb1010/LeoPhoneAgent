@@ -213,6 +213,33 @@ extension AIChatViewModel {
             return "{}"
         }()
 
+        if let category = SensitiveToolGate.Category.forToolName(tu.name) {
+            let host = SensitiveToolGate.Category.hostHint(tool: tu.name, args: toolArgs)
+            let allowed = await SensitiveToolGate.shared.authorize(category, host: host)
+            if !allowed {
+                let modelMessage = UIApplication.shared.applicationState == .active
+                    ? "用户拒绝了「\(category.humanName)」（\(host)）。不要重试同一动作，改用人话说明需要许可。"
+                    : SensitiveToolGate.backgroundDeniedMessage
+                let uiMessage = String(localized: "需要确认")
+                if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                    messages[msgIdx].blocks[blockIdx].content = uiMessage
+                    messages[msgIdx].blocks[blockIdx].toolStatus = .failed(message: uiMessage)
+                }
+                let blockedSnap = ToolSnapshot(type: .text, text: modelMessage, mediaRef: nil, duration: nil)
+                let item = ToolSnapshotItem(
+                    id: tu.id, toolName: tu.name, snapshot: blockedSnap,
+                    mediaResolver: await ChatStore.shared.mediaFileURLResolver()
+                )
+                return ToolExecOutcome(
+                    toolId: tu.id, toolName: tu.name,
+                    resultPart: .toolResult(id: tu.id, name: tu.name, content: modelMessage, isError: true),
+                    snapshotEntry: (toolName: tu.name, snapshot: blockedSnap),
+                    snapshotItem: item,
+                    cancelled: false
+                )
+            }
+        }
+
         do {
         switch tu.name {
         case "shell_execute":

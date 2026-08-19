@@ -80,9 +80,10 @@ extension LeoAgentClient {
 
     // MARK: Control
 
-    func createHarnessSession(harness: String, cwd: String, prompt: String?) async throws -> String {
+    func createHarnessSession(harness: String, cwd: String, prompt: String?, thinking: String? = nil) async throws -> String {
         var payload: [String: Any] = ["harness": harness, "cwd": cwd]
         if let prompt, !prompt.isEmpty { payload["prompt"] = prompt }
+        if let thinking, !thinking.isEmpty { payload["thinking"] = thinking }
         let obj = try await postJSON("/harness/sessions", body: payload, service: .harness)
         guard let id = obj["session_id"] as? String else {
             throw GatewayError.malformedResponse("missing session_id")
@@ -201,7 +202,7 @@ final class HarnessSessionDriver: ObservableObject {
     /// 排队而不是拒绝:sessionId 一到就依序发出。点击永远有响应。
     private var queuedSteers: [String] = []
 
-    func start(prompt: String) {
+    func start(prompt: String, thinking: String? = nil) {
         guard sessionId == nil, !isRunning else { return }
         firstPrompt = prompt
         isRunning = true
@@ -210,7 +211,8 @@ final class HarnessSessionDriver: ObservableObject {
             guard let self else { return }
             do {
                 let id = try await self.client.createHarnessSession(
-                    harness: self.harness.key, cwd: self.cwd, prompt: prompt)
+                    harness: self.harness.key, cwd: self.cwd, prompt: prompt,
+                    thinking: thinking)
                 await MainActor.run {
                     self.sessionId = id
                     self.status = "running"

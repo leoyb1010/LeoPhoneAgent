@@ -30,11 +30,41 @@ final class SensitiveToolGate: ObservableObject {
     enum Category: String {
         case readCredentials    // 读 Cookie / 凭证
         case writeCredentials   // 写 Cookie(可劫持会话)
+        case fileWrite          // 写/改文件
+        case shell              // 本机终端
 
         var humanName: String {
             switch self {
             case .readCredentials: return "读取网站登录凭证(Cookie)"
             case .writeCredentials: return "写入网站登录凭证(Cookie)"
+            case .fileWrite: return "写入或修改本机文件"
+            case .shell: return "在本机执行终端命令"
+            }
+        }
+
+        static func forToolName(_ name: String) -> Category? {
+            switch name {
+            case "file_write", "file_edit": return .fileWrite
+            case "shell_execute": return .shell
+            default: return nil
+            }
+        }
+
+        static func hostHint(tool: String, args: [String: Any]) -> String {
+            switch tool {
+            case "file_write", "file_edit":
+                if let path = args["path"] as? String, !path.isEmpty {
+                    return (path as NSString).standardizingPath
+                }
+                return "本机文件"
+            case "shell_execute":
+                if let command = args["command"] as? String {
+                    let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmed.isEmpty { return String(trimmed.prefix(160)) }
+                }
+                return "本机终端"
+            default:
+                return "本机"
             }
         }
     }
@@ -145,5 +175,5 @@ final class SensitiveToolGate: ObservableObject {
 
     /// 后台拒绝时给模型的回执文案。
     static let backgroundDeniedMessage =
-        "读取/写入网站登录凭证需要你在前台确认一次。请打开 app 后重试这一步。"
+        "这个操作需要你在前台确认一次。请打开 app 后重试这一步。"
 }

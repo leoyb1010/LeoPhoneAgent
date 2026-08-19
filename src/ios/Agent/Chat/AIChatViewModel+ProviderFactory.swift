@@ -424,6 +424,11 @@ extension AIChatViewModel {
     /// Resolve a sub-model entry for lightweight tasks (title gen, etc.).
     func resolveSubEntry() -> ModelEntry? {
         let store = ProviderConfigStore.shared
+        if let compactId = AgentModelSlots.compactEntryId,
+           let cheap = store.entry(for: compactId),
+           !cheap.isHidden {
+            return cheap
+        }
 
         // 1. Session-specific sub model binding takes precedence — user
         //    explicitly picked a sub model for this conversation.

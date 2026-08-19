@@ -193,7 +193,7 @@ export default function DashboardView({
 
         <details className="group rounded-xl border border-border bg-card shadow-elevation-1">
           <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium text-foreground">
-            <span>工程与用量详情</span>
+            <span>本机日志</span>
             <span className="text-xs font-normal text-muted-foreground group-open:hidden">需要时展开，不打扰日常任务</span>
             <span className="hidden text-xs font-normal text-muted-foreground group-open:inline">收起详情</span>
           </summary>

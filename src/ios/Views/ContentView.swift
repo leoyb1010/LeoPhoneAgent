@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 import WidgetKit
 
 private let shareLog = AppLogger(category: "Share")
@@ -31,6 +32,75 @@ private enum SessionMenuAction {
     case forcePull(String)
     case select(String)
     case delete(String)
+    case archive(String)
+    case unarchive(String)
+    case moveToFolder(String, String?)
+}
+
+@MainActor
+final class SessionListExtras: ObservableObject {
+    static let shared = SessionListExtras()
+    private let archiveKey = "leo.session.archived"
+    private let folderKey = "leo.session.folders"
+    private let namesKey = "leo.session.folderNames"
+
+    enum Filter: Equatable {
+        case all
+        case archived
+        case inbox
+        case folder(String)
+    }
+
+    @Published var archived: Set<String>
+    @Published var folders: [String: String]
+    @Published var folderNames: [String]
+    @Published var filter: Filter = .all
+
+    private init() {
+        let defaults = UserDefaults.standard
+        archived = Set(defaults.stringArray(forKey: archiveKey) ?? [])
+        folders = (defaults.dictionary(forKey: folderKey) as? [String: String]) ?? [:]
+        folderNames = defaults.stringArray(forKey: namesKey) ?? []
+    }
+
+    func isArchived(_ sid: String) -> Bool { archived.contains(sid) }
+
+    func passes(_ sid: String) -> Bool {
+        switch filter {
+        case .all: return !archived.contains(sid)
+        case .archived: return archived.contains(sid)
+        case .inbox: return folders[sid] == nil && !archived.contains(sid)
+        case .folder(let name): return folders[sid] == name && !archived.contains(sid)
+        }
+    }
+
+    func setArchived(_ sid: String, _ on: Bool) {
+        if on { archived.insert(sid) } else { archived.remove(sid) }
+        persist()
+    }
+
+    func addFolder(_ name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !folderNames.contains(trimmed) else { return }
+        folderNames.append(trimmed)
+        persist()
+    }
+
+    func assign(sid: String, folder: String?) {
+        if let folder, !folder.isEmpty {
+            folders[sid] = folder
+            if !folderNames.contains(folder) { folderNames.append(folder) }
+        } else {
+            folders.removeValue(forKey: sid)
+        }
+        persist()
+    }
+
+    private func persist() {
+        UserDefaults.standard.set(Array(archived), forKey: archiveKey)
+        UserDefaults.standard.set(folders, forKey: folderKey)
+        UserDefaults.standard.set(folderNames, forKey: namesKey)
+    }
 }
 
 #if DEBUG
@@ -314,6 +384,10 @@ struct ContentView: View {
 
     // [T-ios-crash-contextmenu-uaf] Stable action relay for session context menus.
     @State private var menuActions = SessionMenuActionChannel()
+    @ObservedObject private var sessionExtras = SessionListExtras.shared
+    @State private var showSessionImporter = false
+    @State private var newFolderName = ""
+    @State private var showNewFolderAlert = false
 
     // Search
     @State private var showSearchBar = false
@@ -636,6 +710,19 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showAlarmList, onDismiss: { fetchAlarmsIfNeeded() }) {
                 AlarmListView()
+            }
+            .fileImporter(isPresented: $showSessionImporter, allowedContentTypes: [.json, .zip], allowsMultipleSelection: false) { result in
+                if case .success(let urls) = result, let url = urls.first {
+                    importSessions(from: url)
+                }
+            }
+            .alert("新分组", isPresented: $showNewFolderAlert) {
+                TextField("分组名", text: $newFolderName)
+                Button("取消", role: .cancel) { newFolderName = "" }
+                Button("添加") {
+                    sessionExtras.addFolder(newFolderName)
+                    newFolderName = ""
+                }
             }
             .sheet(item: $activeToolSheet) { sheet in
                 switch sheet {
@@ -1158,8 +1245,11 @@ struct ContentView: View {
 
     /// Sessions filtered by active search query, or all sessions if not searching.
     private var filteredSessions: [ChatSession] {
-        guard let matchedIds = searchMatchedIds else { return sessions }
-        return sessions.filter { matchedIds.contains($0.id) }
+        let searched: [ChatSession] = {
+            guard let matchedIds = searchMatchedIds else { return sessions }
+            return sessions.filter { matchedIds.contains($0.id) }
+        }()
+        return searched.filter { sessionExtras.passes($0.id) }
     }
 
     /// Group sessions by date period for section display, with pinned sessions at the top.
@@ -1386,7 +1476,8 @@ struct ContentView: View {
                             client: client,
                             harness: HarnessKind(key: target.cliKey, name: target.cliName),
                             cwd: "~"),
-                        firstPrompt: target.firstPrompt)
+                        firstPrompt: target.firstPrompt,
+                        thinking: target.thinking)
                     .navigationTitle("\(target.host.name) · \(target.cliName)")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
@@ -1398,7 +1489,7 @@ struct ContentView: View {
                     VStack(spacing: 12) {
                         Text("缺少访问密钥")
                             .font(.headline)
-                        Text("去 设置 → 我的 Mac 里补上这台 Mac 的密钥。")
+                        Text("去 设置 → 远程机器 里补上这台机器的密钥。")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                         Button("关闭") { macChatTarget = nil }
@@ -1481,14 +1572,14 @@ struct ContentView: View {
         }
     }
 
-    /// [T-mac-in-main-list] 「Mac 上进行中」——点一下直接进那段对话。
+    /// [T-mac-in-main-list] 「进行中」——点一下直接进那段对话。
     ///
     /// 以前要走 设置 → Mac 控制台 → 等扫描 CLI → 点进会话,四步。
     /// 这是每天要看好几次的东西,不该埋那么深。没有在跑的就整节不出现。
     @ViewBuilder
     private var macLiveSection: some View {
         if !isSelecting, !macLive.rows.isEmpty {
-            Section("Mac 上进行中") {
+            Section("进行中") {
                 ForEach(macLive.rows) { row in
                     Button {
                         macAttachTarget = row
@@ -2346,6 +2437,12 @@ struct ContentView: View {
                     }
                     print("[DELETE] sessionToDelete set, sheet should appear")
                 }
+            case .archive(let sid):
+                sessionExtras.setArchived(sid, true)
+            case .unarchive(let sid):
+                sessionExtras.setArchived(sid, false)
+            case .moveToFolder(let sid, let folder):
+                sessionExtras.assign(sid: sid, folder: folder)
             }
         }
     }
@@ -2483,14 +2580,65 @@ struct ContentView: View {
         let cliKey: String
         let cliName: String
         let firstPrompt: String
+        let thinking: String?
         var id: String { host.id + cliKey }
     }
 
     private func openMacChat(_ host: GatewayHost, _ key: String, _ name: String, prompt: String = "") {
-        macChatTarget = MacChatTarget(host: host, cliKey: key, cliName: name, firstPrompt: prompt)
+        macChatTarget = MacChatTarget(
+            host: host, cliKey: key, cliName: name, firstPrompt: prompt,
+            thinking: lastCarriedThinking())
+    }
+
+    private func lastCarriedThinking() -> String? {
+        if let sid = selectedSessionId ?? sessions.first?.id,
+           let cfg = ProviderConfigStore.shared.inferenceConfig(for: sid) {
+            return cfg.preferredOrStored.rawValue
+        }
+        return ThinkingRuleStore.lastCarriedRaw()
     }
     @State private var showAddProvider = false
     @State private var showSelectModels = false
+
+    @ViewBuilder
+    private var sessionFilterChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                filterChip("全部", selected: sessionExtras.filter == .all) {
+                    sessionExtras.filter = .all
+                }
+                filterChip("未分组", selected: sessionExtras.filter == .inbox) {
+                    sessionExtras.filter = .inbox
+                }
+                filterChip("归档", selected: sessionExtras.filter == .archived) {
+                    sessionExtras.filter = .archived
+                }
+                ForEach(sessionExtras.folderNames, id: \.self) { name in
+                    filterChip(name, selected: sessionExtras.filter == .folder(name)) {
+                        sessionExtras.filter = .folder(name)
+                    }
+                }
+                Button {
+                    showNewFolderAlert = true
+                } label: {
+                    Label("新分组", systemImage: "plus")
+                        .font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+    }
+
+    private func filterChip(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(selected ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.10), in: Capsule())
+        }
+        .buttonStyle(.plain)
+    }
 
     private var emptyState: some View {
         ScrollView {
@@ -2511,6 +2659,10 @@ struct ContentView: View {
             Section {
                 agentHomeCard(compact: true)
                     .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                sessionFilterChips
+                    .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 8, trailing: 12))
                     .listRowSeparator(.hidden)
                     .listRowBackground(Color.clear)
             }
@@ -2571,7 +2723,7 @@ struct ContentView: View {
                 Text("今天想完成什么？")
                     .font(.subheadline.weight(.semibold))
 
-                TextField("描述目标，点击开始后立即执行…", text: $homePrompt, axis: .vertical)
+                TextField("描述目标，点击新任务后立即执行…", text: $homePrompt, axis: .vertical)
                     .lineLimit(compact ? 2...4 : 3...6)
                     .textFieldStyle(.plain)
                     .padding(.horizontal, 14)
@@ -2595,7 +2747,7 @@ struct ContentView: View {
                                 ProgressView()
                                     .tint(.white)
                             } else {
-                                Text("开始")
+                                Text("新任务")
                                 Image(systemName: "paperplane.fill")
                             }
                         }
@@ -2608,7 +2760,7 @@ struct ContentView: View {
                     .buttonStyle(LeoSquishButtonStyle())
                     .disabled(!canRunHomePrompt)
                     .opacity(canRunHomePrompt ? 1 : 0.35)
-                    .accessibilityLabel(Text("开始任务并立即发送"))
+                    .accessibilityLabel(Text("新任务并立即发送"))
                     .accessibilityHint(Text(homeExecutionTargetHint))
                 }
 
@@ -2651,7 +2803,7 @@ struct ContentView: View {
 
             VStack(alignment: .leading, spacing: 9) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("选择开始方式")
+                    Text("选择新任务方式")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                     Text("每一项都会打开对应的本机工作流")
@@ -2757,7 +2909,7 @@ struct ContentView: View {
                 ? String(localized: "在此 iPad 的新对话中立即开始")
                 : String(localized: "在此 iPhone 的新对话中立即开始")
         case .mac(_, _, let cliName):
-            return String(localized: "交给所选 Mac 的 \(cliName)")
+            return String(localized: "交给所选机器的 \(cliName)")
         }
     }
 
@@ -2766,8 +2918,21 @@ struct ContentView: View {
         case .iphone:
             return isIPad ? String(localized: "此 iPad") : String(localized: "此 iPhone")
         case .mac(let hostId, _, let cliName):
-            let hostName = gatewayStore.activeHosts.first(where: { $0.id == hostId })?.name ?? "Mac"
+            let host = gatewayStore.activeHosts.first(where: { $0.id == hostId })
+            let hostName = host?.name ?? (host?.isAndroidBody == true ? "Android" : "Mac")
             return "\(hostName) · \(cliName)"
+        }
+    }
+
+    private var homeTargetMenuIcon: String {
+        switch homeExecutionTarget {
+        case .iphone:
+            return isIPad ? "ipad" : "iphone"
+        case .mac(let hostId, _, _):
+            if gatewayStore.activeHosts.first(where: { $0.id == hostId })?.isAndroidBody == true {
+                return "flipphone"
+            }
+            return "desktopcomputer"
         }
     }
 
@@ -2782,17 +2947,23 @@ struct ContentView: View {
                       systemImage: homeTargetIsIPhone ? "checkmark.circle.fill" : (isIPad ? "ipad" : "iphone"))
             }
             if !gatewayStore.activeHosts.isEmpty {
-                Section("需要时切换到 Mac") {
+                Section("远程机器") {
                     ForEach(gatewayStore.activeHosts) { host in
                         Menu(host.name) {
-                            Button("Claude Code") {
-                                selectHomeMac(host, key: "claude", name: "Claude Code")
-                            }
-                            Button("Codex") {
-                                selectHomeMac(host, key: "codex", name: "Codex")
-                            }
-                            Button("Grok") {
-                                selectHomeMac(host, key: "grok", name: "Grok")
+                            if host.isAndroidBody {
+                                Button("本机 Agent") {
+                                    selectHomeMac(host, key: "minis", name: "LeoPhoneAgent")
+                                }
+                            } else {
+                                Button("Claude Code") {
+                                    selectHomeMac(host, key: "claude", name: "Claude Code")
+                                }
+                                Button("Codex") {
+                                    selectHomeMac(host, key: "codex", name: "Codex")
+                                }
+                                Button("Grok") {
+                                    selectHomeMac(host, key: "grok", name: "Grok")
+                                }
                             }
                         }
                     }
@@ -2800,7 +2971,7 @@ struct ContentView: View {
             }
         } label: {
             HStack(spacing: 7) {
-                Image(systemName: homeTargetIsIPhone ? (isIPad ? "ipad" : "iphone") : "desktopcomputer")
+                Image(systemName: homeTargetMenuIcon)
                 Text(homeExecutionTargetTitle)
                     .lineLimit(1)
                 Image(systemName: "chevron.up.chevron.down")
@@ -2870,12 +3041,12 @@ struct ContentView: View {
             startHomeChatAction(.sendPrompt(prompt))
         case .mac(let hostId, let cliKey, let cliName):
             guard let host = gatewayStore.activeHosts.first(where: { $0.id == hostId }) else {
-                homeRoutingError = String(localized: "这台 Mac 已不可用，请重新选择执行目标")
+                homeRoutingError = String(localized: "这台机器已不可用，请重新选择执行目标")
                 LeoHaptics.notification(.error)
                 return
             }
             guard gatewayStore.client(for: host) != nil else {
-                homeRoutingError = String(localized: "这台 Mac 缺少访问密钥，任务仍保留在输入框")
+                homeRoutingError = String(localized: "这台机器缺少访问密钥，任务仍保留在输入框")
                 LeoHaptics.notification(.error)
                 return
             }
@@ -2888,7 +3059,7 @@ struct ContentView: View {
                       homePrompt.trimmingCharacters(in: .whitespacesAndNewlines) == prompt
                 else { return }
                 guard reachable else {
-                    homeRoutingError = String(localized: "这台 Mac 当前没有响应，任务仍保留在输入框")
+                    homeRoutingError = String(localized: "这台机器当前没有响应，任务仍保留在输入框")
                     LeoHaptics.notification(.error)
                     return
                 }
@@ -3348,6 +3519,11 @@ struct ContentView: View {
                 } label: {
                     Label("Plain Text", systemImage: "text.alignleft")
                 }
+                Button {
+                    showSessionImporter = true
+                } label: {
+                    Label("导入 JSON", systemImage: "square.and.arrow.down")
+                }
             } label: {
                 VStack(spacing: 4) {
                     Image(systemName: "square.and.arrow.up")
@@ -3628,6 +3804,68 @@ struct ContentView: View {
     }
 
     enum ExportFormat { case json, plainText }
+
+    private func importSessions(from url: URL) {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        guard let data = try? Data(contentsOf: url) else { return }
+        Task { @MainActor in
+            let imported = await Self.importExportedJSON(data)
+            if imported > 0 {
+                refreshSessionList()
+            }
+        }
+    }
+
+    private static func jsonPayload(fromImport data: Data) -> Data? {
+        if let first = data.first, first == UInt8(ascii: "[") || first == UInt8(ascii: "{") {
+            return data
+        }
+        guard data.starts(with: [0x50, 0x4B]),
+              let entries = try? SkillStore.readZipEntries(data: data) else { return nil }
+        return entries.first(where: { $0.name.lowercased().hasSuffix(".json") })?.data
+    }
+
+    private static func importExportedJSON(_ data: Data) async -> Int {
+        guard let payload = jsonPayload(fromImport: data),
+              let rows = try? JSONSerialization.jsonObject(with: payload) as? [[String: Any]] else { return 0 }
+        var count = 0
+        let iso = ISO8601DateFormatter()
+        for row in rows {
+            let messages = row["messages"] as? [[String: Any]] ?? []
+            var drafts: [(role: MessageRole, text: String, created: Date)] = []
+            for msg in messages {
+                let roleRaw = (msg["role"] as? String) ?? "user"
+                let role: MessageRole = roleRaw == "assistant" ? .assistant : .user
+                var texts: [String] = []
+                if let parts = msg["parts"] as? [[String: Any]] {
+                    for part in parts {
+                        if let text = part["text"] as? String { texts.append(text) }
+                    }
+                }
+                if texts.isEmpty, let content = msg["content"] as? String { texts = [content] }
+                let text = texts.joined(separator: "\n")
+                guard !text.isEmpty else { continue }
+                let created = (msg["createdAt"] as? String).flatMap { iso.date(from: $0) } ?? Date()
+                drafts.append((role, text, created))
+            }
+            guard !drafts.isEmpty else { continue }
+            let title = row["title"] as? String
+            let modelId = (row["modelId"] as? String) ?? "imported"
+            let session = ChatStore.shared.createSession(modelId: modelId, title: title, source: "import")
+            ChatStore.shared.appendMessages(drafts.map { draft in
+                RawMessage(
+                    id: UUID().uuidString,
+                    sessionId: session.id,
+                    role: draft.role,
+                    parts: [.text(draft.text)],
+                    createdAt: draft.created
+                )
+            })
+            count += 1
+        }
+        return count
+    }
 
     private func exportSessions(ids: Set<String>, format: ExportFormat) {
         let targetSessions = sessions.filter { ids.contains($0.id) }
@@ -4495,6 +4733,27 @@ private struct SessionContextMenu: View, Equatable {
             actions.send(.select(key.sid))
         } label: {
             Label("Select", systemImage: "checkmark.circle")
+        }
+        if SessionListExtras.shared.isArchived(key.sid) {
+            Button {
+                actions.send(.unarchive(key.sid))
+            } label: {
+                Label("取消归档", systemImage: "tray.and.arrow.up")
+            }
+        } else {
+            Button {
+                actions.send(.archive(key.sid))
+            } label: {
+                Label("归档", systemImage: "archivebox")
+            }
+        }
+        Menu {
+            Button("收件箱") { actions.send(.moveToFolder(key.sid, nil)) }
+            ForEach(SessionListExtras.shared.folderNames, id: \.self) { name in
+                Button(name) { actions.send(.moveToFolder(key.sid, name)) }
+            }
+        } label: {
+            Label("移到分组", systemImage: "folder")
         }
         Button {
             let title = (key.title ?? "Untitled").prefix(60)

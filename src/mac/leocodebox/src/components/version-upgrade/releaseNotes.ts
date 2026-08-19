@@ -17,6 +17,15 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '1.74.0',
+    date: '2026-08-19',
+    items: [
+      '舰队页改叫「已连接的机器」，统计用「进行中 / 审批」；每台机器可以复制配对码（中继根 + 机器名，不含钥匙），给 iPhone 扫码加入。',
+      '本机日志卡片不再写成用量中心。Android 身体上线后会出现在同一份 /machines 列表里。',
+      '与 iOS 1.24.0 / Android alpha.6 同一波：远程任务带推理档，配对码和身体发现走现有中继。',
+    ],
+  },
+  {
     version: '1.73.0',
     date: '2026-08-18',
     items: [

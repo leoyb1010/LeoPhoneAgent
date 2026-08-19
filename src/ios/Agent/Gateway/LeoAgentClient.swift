@@ -157,7 +157,7 @@ enum GatewayError: LocalizedError {
             return String(localized: "That Mac address is not a valid URL.")
         case .unauthorized:
             // Deliberately no key echo — this string reaches logs and UI.
-            return String(localized: "密钥被拒绝。三台 Mac 与中继共用同一把钥匙:在 cortex 终端运行 cat ~/.leoagent/key,把结果重新粘贴到「设置 → 我的 Mac」。")
+            return String(localized: "密钥被拒绝。机器与中继共用同一把钥匙:在 cortex 终端运行 cat ~/.leoagent/key,把结果重新粘贴到「设置 → 远程机器」。")
         case .http(let status, let message):
             if let message, !message.isEmpty {
                 return String(localized: "LeoAgent error \(status): \(message)")

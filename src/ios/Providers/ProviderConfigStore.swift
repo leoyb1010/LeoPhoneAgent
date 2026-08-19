@@ -179,6 +179,10 @@ final class ProviderConfigStore: ObservableObject {
     /// half-migrated state from being read or pushed.
     private(set) var compositeKeyMigrationInFlight = false
 
+    /// File existed but JSON decode failed. `save()` must not overwrite the
+    /// on-disk file with an empty config.
+    private var jsonLoadFailed = false
+
     init() {
         let libraryURL = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first!
         let baseURL = libraryURL.appendingPathComponent("MinisChat", isDirectory: true)
@@ -191,7 +195,9 @@ final class ProviderConfigStore: ObservableObject {
         // group members verbatim — so the JSON's (potentially member-truncated
         // from an older build) snapshot never becomes the persisted/pushed
         // source of truth. [T-icloud-modelgroup-member-loss]
-        self.config = Self.load(from: fileURL)
+        let loaded = Self.load(from: fileURL)
+        self.config = loaded.config
+        self.jsonLoadFailed = loaded.failed
         self.lastSavedSnapshot = self.config
         ensureVoiceTemplateModels()
         Self.setupDBAndMigrate(jsonURL: fileURL) { [weak self] db in
@@ -239,6 +245,9 @@ final class ProviderConfigStore: ObservableObject {
                 let (deduped, prunedAtLoad) = Self.dedupeEntriesByModel(fresh)
                 self.config = deduped
                 self.lastSavedSnapshot = deduped
+                // JSON may have been corrupt; the DB is now authoritative, so
+                // later edits must be allowed to persist (and rewrite JSON).
+                self.jsonLoadFailed = false
                 // [T-provider-entry-composite-key] Build the legacyUuid map from
                 // the local entries (each entry's random uuid → its composite
                 // key), then normalize any group/binding/agent-loop reference
@@ -304,7 +313,9 @@ final class ProviderConfigStore: ObservableObject {
     /// Test-only initializer.
     init(fileURL: URL) {
         self.fileURL = fileURL
-        self.config = Self.load(from: fileURL)
+        let loaded = Self.load(from: fileURL)
+        self.config = loaded.config
+        self.jsonLoadFailed = loaded.failed
         self.lastSavedSnapshot = self.config
         // Tests don't open the DB by default.
     }
@@ -340,10 +351,14 @@ final class ProviderConfigStore: ObservableObject {
 
     // MARK: - Persistence
 
-    private static func load(from url: URL) -> ProviderConfig {
+    private static func load(from url: URL) -> (config: ProviderConfig, failed: Bool) {
+        if !FileManager.default.fileExists(atPath: url.path) {
+            return (.empty, false)
+        }
         guard let data = try? Data(contentsOf: url),
               var config = try? JSONDecoder().decode(ProviderConfig.self, from: data) else {
-            return .empty
+            logger.error("[B6] provider-config.json exists but decode failed — refusing to treat as empty")
+            return (.empty, true)
         }
         // Migrate group memberEntryIds from legacy composite keys to stable UUIDs.
         //
@@ -436,10 +451,14 @@ final class ProviderConfigStore: ObservableObject {
                 }
             }
         }
-        return config
+        return (config, false)
     }
 
     private func save() {
+        if jsonLoadFailed {
+            logger.error("[B6] skip save — last JSON load failed; writing now would wipe provider-config.json")
+            return
+        }
         // Any config mutation funnels through here — bump the L1 cache epoch so
         // resolveCurrentEntry re-resolves. [T-new-session-hang-credential-cache]
         configRevision &+= 1
@@ -614,12 +633,15 @@ final class ProviderConfigStore: ObservableObject {
             let freshMembers = fresh.modelGroups.reduce(0) { $0 + $1.memberEntryIds.count }
             config = fresh
             lastSavedSnapshot = fresh
+            jsonLoadFailed = false
             logger.info("[GroupLoad] reloadFromDisk: V3 DB dump — groups=\(fresh.modelGroups.count) groupMembers(\(priorMembers)→\(freshMembers))")
             objectWillChange.send()
             return
         }
         logger.info("[GroupLoad] reloadFromDisk: V2 JSON path (no DB / v3 disabled / not migrated)")
-        config = Self.load(from: fileURL)
+        let loaded = Self.load(from: fileURL)
+        config = loaded.config
+        jsonLoadFailed = loaded.failed
         objectWillChange.send()
     }
 

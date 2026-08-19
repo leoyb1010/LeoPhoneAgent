@@ -2200,6 +2200,10 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         if interceptModelCommand(inputText) { return }
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         let pendingAttachments = attachments
+        if pendingAttachments.contains(where: { $0.kind == .image }) {
+            let note = visionPolicyNote()
+            if !note.isEmpty { appendSystemInfo(note, icon: "eye") }
+        }
         logger.info("🔑DRAFT [vm=\(self.vmInstanceId)] send() text=\(text.count)ch attachments=\(pendingAttachments.count) isProcessing=\(self.isProcessing) sessionId=\(self.sessionId ?? "nil") draftId=\(self.draftId ?? "nil")")
         guard !text.isEmpty || !pendingAttachments.isEmpty, !isProcessing else {
             logger.warning("🔑DRAFT [vm=\(self.vmInstanceId)] send() GUARD FAILED — text.isEmpty=\(text.isEmpty) attachments.isEmpty=\(pendingAttachments.isEmpty) isProcessing=\(self.isProcessing)")
@@ -5843,12 +5847,14 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     func setThinkingLevel(_ level: ThinkingLevel) {
         let maxLevel = resolveCurrentEntry()?.effectiveMaxThinkingLevel ?? .xhigh
         let clamped = level == .off ? level : min(level, maxLevel)
+        ThinkingRuleStore.rememberCarried(level)
         if let sid = sessionId {
             var cfg = ProviderConfigStore.shared.inferenceConfig(for: sid) ?? SessionInferenceConfig()
+            cfg.preferredThinkingLevel = level
             cfg.thinkingLevel = clamped
             ProviderConfigStore.shared.setInferenceConfig(cfg, for: sid)
         } else {
-            pendingThinkingLevel = clamped
+            pendingThinkingLevel = level
         }
         if !transitionSuspended { objectWillChange.send() }
     }
@@ -5873,13 +5879,22 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// effective (and wire-sent) level is really "Max". Clamp on read so the
     /// displayed level always matches what will actually be requested (the request
     /// path re-clamps per-model too — AgentProvider: min(level, catalogMax)).
+    var preferredThinkingLevel: ThinkingLevel {
+        if let sid = sessionId, let cfg = ProviderConfigStore.shared.inferenceConfig(for: sid) {
+            return cfg.preferredOrStored
+        }
+        return pendingThinkingLevel ?? defaultGroupThinkingLevel
+    }
+
+    var thinkingWasClamped: Bool {
+        let preferred = preferredThinkingLevel
+        guard preferred.isEnabled else { return false }
+        let maxLevel = resolveCurrentEntry()?.effectiveMaxThinkingLevel ?? .xhigh
+        return preferred > maxLevel
+    }
+
     var currentThinkingLevel: ThinkingLevel {
-        let stored: ThinkingLevel = {
-            if let sid = sessionId, let cfg = ProviderConfigStore.shared.inferenceConfig(for: sid) {
-                return cfg.thinkingLevel
-            }
-            return pendingThinkingLevel ?? defaultGroupThinkingLevel
-        }()
+        let stored = preferredThinkingLevel
         guard stored.isEnabled else { return stored }
         let maxLevel = resolveCurrentEntry()?.effectiveMaxThinkingLevel ?? .xhigh
         return min(stored, maxLevel)
@@ -5898,10 +5913,23 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     func flushPendingThinkingLevel() -> Bool {
         guard let pending = pendingThinkingLevel, pending != .off, let sid = sessionId else { return false }
         var cfg = ProviderConfigStore.shared.inferenceConfig(for: sid) ?? SessionInferenceConfig()
+        cfg.preferredThinkingLevel = pending
         cfg.thinkingLevel = pending
         ProviderConfigStore.shared.setInferenceConfig(cfg, for: sid)
+        ThinkingRuleStore.rememberCarried(pending)
         pendingThinkingLevel = nil
         return true
+    }
+
+    /// Non-vision models: name the delegate or say we cannot see.
+    func visionPolicyNote() -> String {
+        let canSee = resolveCurrentEntry()?.model.capabilities.supportedModalities.contains(.imageInput) ?? false
+        if canSee { return "" }
+        if let id = AgentModelSlots.visionEntryId,
+           let entry = ProviderConfigStore.shared.entry(for: id) {
+            return "图是由 \(entry.model.id) 看的。当前对话模型本身没有读图能力。"
+        }
+        return "当前模型看不了图。到设置 → 推理与模型 指定读图委托。"
     }
 
     /// Append an ephemeral system info message (not sent to LLM).

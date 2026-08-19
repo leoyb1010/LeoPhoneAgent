@@ -56,6 +56,24 @@ final class ThinkingLevelTests: XCTestCase {
         XCTAssertEqual(group.defaultThinkingLevel, .xhigh)
     }
 
+    func testCustomThinkingRuleBeatsBuiltinCatalog() {
+        let key = ThinkingRuleStore.defaultsKey
+        let previous = UserDefaults.standard.data(forKey: key)
+        defer {
+            if let previous {
+                UserDefaults.standard.set(previous, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+        ThinkingRuleStore.save([
+            ThinkingRule(prefix: "gpt-5.7-new", maxLevel: .medium, defaultLevel: .low)
+        ])
+        XCTAssertEqual(ThinkingLevelCatalog.declaredMaxLevel(for: "gpt-5.7-new-preview"), .medium)
+        XCTAssertTrue(ThinkingLevelCatalog.isKnownFamily(for: "gpt-5.7-new-preview"))
+        XCTAssertNil(ThinkingLevelCatalog.declaredMaxLevel(for: "totally-unknown-model-xyz"))
+    }
+
     func testSessionInferenceConfigDecodeWithUnknownLevel() throws {
         let json = """
         { "thinkingLevel": "hyper-future" }

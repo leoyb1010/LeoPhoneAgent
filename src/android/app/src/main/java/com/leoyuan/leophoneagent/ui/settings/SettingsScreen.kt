@@ -177,7 +177,7 @@ fun SettingsScreen(
                 SettingsItem(
                     icon = Icons.Outlined.Computer,
                     iconColor = Color(0xFF30B0C7),
-                    title = "我的 Mac",
+                    title = "远程机器",
                     subtitle = "远程发任务、看进度、审批和停止",
                     onClick = onFleetClick,
                     showDivider = false,

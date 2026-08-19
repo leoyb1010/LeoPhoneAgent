@@ -94,7 +94,7 @@ export default function UsageCenterCard({ usage, quota, quotaLoading, loading, e
   return (
     <DashCard delay={delay} className="dash-card-glow p-4">
       <DashCardTitle
-        title={t('dashboard.usageTitle', { defaultValue: '用量中心' })}
+        title={t('dashboard.usageTitle', { defaultValue: '本机日志' })}
         action={<span className="text-[12px] text-muted-foreground">{t('dashboard.today', { defaultValue: '今天' })}</span>}
       />
 

@@ -134,11 +134,6 @@ struct SessionModelPicker: View {
                 subModelSource: existing?.subModelSource
             )
             store.setBinding(binding, for: sid)
-            if let thinkLevel = group.defaultThinkingLevel {
-                var cfg = store.inferenceConfig(for: sid) ?? SessionInferenceConfig()
-                cfg.thinkingLevel = thinkLevel
-                store.setInferenceConfig(cfg, for: sid)
-            }
             NotificationCenter.default.post(
                 name: .sessionModelBindingChanged,
                 object: nil,
@@ -169,11 +164,6 @@ struct SessionModelPicker: View {
             )
             store.setBinding(binding, for: sid)
             ModelSwitcher.remember(entry.compositeKey)
-            if let group, let thinkLevel = group.defaultThinkingLevel {
-                var cfg = store.inferenceConfig(for: sid) ?? SessionInferenceConfig()
-                cfg.thinkingLevel = thinkLevel
-                store.setInferenceConfig(cfg, for: sid)
-            }
             var info: [String: Any] = ["sessionId": sid]
             if let group { info["groupId"] = group.id }
             NotificationCenter.default.post(

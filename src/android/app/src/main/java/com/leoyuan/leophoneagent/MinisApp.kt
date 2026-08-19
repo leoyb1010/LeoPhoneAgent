@@ -648,6 +648,10 @@ class MinisApp : Application(), ImageLoaderFactory {
         // unexpected prefs shape never blocks app launch.
         runCatching { migrateGhostAlarms() }
             .onFailure { Log.w("MinisApp", "ghost alarm migration failed: ${it.message}") }
+
+        // A1: when a fleet key is saved, this device also registers as a body.
+        runCatching { com.leoyuan.leophoneagent.relay.RelayBodyService.start(this) }
+            .onFailure { Log.w("MinisApp", "RelayBodyService start failed: ${it.message}") }
     }
 
     /**

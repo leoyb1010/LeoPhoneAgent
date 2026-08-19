@@ -22,14 +22,26 @@ class RelayFleetStore(context: Context) {
         val normalizedBase = normalizeBase(base)
         val key = rawKey.trim().trimEnd('%').trim()
         require(key.length >= 16) { "中继密钥至少需要 16 个字符" }
-        val next = RelayFleetConfig(normalizedBase, key)
-        prefs.edit().putString(KEY_CONFIG, json.encodeToString(next)).apply()
-        _config.value = next
+        val next = _config.value.copy(relayApiBase = normalizedBase, accessKey = key)
+        persist(next)
+    }
+
+    fun ensureMachineName(fallback: String): String {
+        val current = _config.value.machineName.trim()
+        if (current.isNotEmpty()) return current
+        val name = fallback.trim().ifBlank { "android-body" }
+        persist(_config.value.copy(machineName = name))
+        return name
     }
 
     fun clear() {
         prefs.edit().remove(KEY_CONFIG).apply()
         _config.value = RelayFleetConfig()
+    }
+
+    private fun persist(next: RelayFleetConfig) {
+        prefs.edit().putString(KEY_CONFIG, json.encodeToString(next)).apply()
+        _config.value = next
     }
 
     private fun load(): RelayFleetConfig {

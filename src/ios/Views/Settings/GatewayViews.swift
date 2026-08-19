@@ -46,6 +46,7 @@ struct GatewaySettingsView: View {
     @ObservedObject private var editor = GatewayEditorCoordinator.shared
     @State private var reachable: [String: Bool] = [:]
     @State private var showQuickSetup = false
+    @State private var scanMessage: String?
 
     var body: some View {
         List {
@@ -63,9 +64,9 @@ struct GatewaySettingsView: View {
                         .accessibilityHidden(true)
 
                         VStack(spacing: LeoTheme.Spacing.xs) {
-                            Text("把三台 Mac 装进口袋")
+                            Text("把已在线的机器装进口袋")
                                 .font(.title3.bold())
-                            Text("一把密钥连接 MacBook Pro、Mac mini 和 Mac Studio。之后在手机上就能发任务、看进度、审批和叫停。")
+                            Text("一把密钥读取中继 /machines。Mac 与已装本 App 的 Android 都会出现；三台 Mac 仍可作为快捷填充。")
                                 .font(.subheadline)
                                 .foregroundStyle(LeoTheme.ColorToken.secondaryText)
                                 .multilineTextAlignment(.center)
@@ -75,7 +76,7 @@ struct GatewaySettingsView: View {
                         Button {
                             showQuickSetup = true
                         } label: {
-                            Label("一键连接我的三台 Mac", systemImage: "link.badge.plus")
+                            Label("连接中继并发现机器", systemImage: "link.badge.plus")
                                 .frame(maxWidth: .infinity, minHeight: LeoTheme.TouchTarget.minimum)
                         }
                         .buttonStyle(.borderedProminent)
@@ -83,7 +84,14 @@ struct GatewaySettingsView: View {
                         Button {
                             editor.beginNew()
                         } label: {
-                            Label("手动添加其他 Mac", systemImage: "plus")
+                            Label("手动添加机器", systemImage: "plus")
+                                .frame(maxWidth: .infinity, minHeight: LeoTheme.TouchTarget.minimum)
+                        }
+                        .buttonStyle(.bordered)
+                        Button {
+                            scanPairCode()
+                        } label: {
+                            Label("扫码加身体", systemImage: "qrcode.viewfinder")
                                 .frame(maxWidth: .infinity, minHeight: LeoTheme.TouchTarget.minimum)
                         }
                         .buttonStyle(.bordered)
@@ -94,12 +102,12 @@ struct GatewaySettingsView: View {
                 }
 
                 Section("连接后可以") {
-                    Label("远程运行 Codex、Claude Code 和 Grok", systemImage: "terminal")
+                    Label("远程运行 Codex、Claude Code、Grok，或指挥 Android 本机 Agent", systemImage: "terminal")
                     Label("直接审批、转向或停止正在跑的任务", systemImage: "checkmark.shield")
-                    Label("手机休眠后，Mac 上的任务继续执行", systemImage: "moon.zzz")
+                    Label("这台 iPhone 或 iPad 休眠后，对面的机器继续执行", systemImage: "moon.zzz")
                 }
             } else {
-                Section("已连接的 Mac") {
+                Section("已连接的机器") {
                     ForEach(store.hosts) { host in
                         Button {
                             editor.beginEdit(host)
@@ -117,26 +125,35 @@ struct GatewaySettingsView: View {
                     Button {
                         editor.beginNew()
                     } label: {
-                        Label("添加 Mac", systemImage: "plus.circle")
+                        Label("添加机器", systemImage: "plus.circle")
+                    }
+                    Button {
+                        scanPairCode()
+                    } label: {
+                        Label("扫码加身体", systemImage: "qrcode.viewfinder")
                     }
                 } footer: {
-                    Text("Mac 端可由 leocodebox 或 leoagent 承载，协议、地址和访问密钥保持一致。")
+                    Text("码里只有中继根和机器名，钥匙不进码。Mac 端可由 leocodebox 或 leoagent 承载。")
                 }
             }
         }
-        .navigationTitle(Text("我的 Mac"))
+        .navigationTitle(Text("远程机器"))
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await refresh() }
         .sheet(isPresented: $showQuickSetup) {
-            QuickFleetSetupSheet { key in
-                for preset in FLEET_PRESETS {
-                    let host = GatewayHost(
-                        id: preset.machine.lowercased(),
-                        name: preset.name,
-                        baseURL: "",
-                        harnessURL: RELAY_BASE + preset.machine)
-                    GatewayHostStore.saveAccessKey(key, hostId: host.id)
-                    store.upsert(host)
+            QuickFleetSetupSheet { key, machines in
+                if machines.isEmpty {
+                    for preset in FLEET_PRESETS {
+                        let host = GatewayHost(
+                            id: preset.machine.lowercased(),
+                            name: preset.name,
+                            baseURL: "",
+                            harnessURL: RELAY_BASE + preset.machine)
+                        GatewayHostStore.saveAccessKey(key, hostId: host.id)
+                        store.upsert(host)
+                    }
+                } else {
+                    store.upsertDiscovered(machines, key: key)
                 }
                 showQuickSetup = false
                 Task { await refresh() }
@@ -163,9 +180,55 @@ struct GatewaySettingsView: View {
             }
         }
         .task { await refresh() }
+        .alert("扫码", isPresented: Binding(
+            get: { scanMessage != nil },
+            set: { if !$0 { scanMessage = nil } }
+        )) {
+            Button("好", role: .cancel) { scanMessage = nil }
+        } message: {
+            Text(scanMessage ?? "")
+        }
+    }
+
+    private func scanPairCode() {
+        CameraOffloadBridge.scanCode { data, error in
+            Task { @MainActor in
+                if let error {
+                    scanMessage = error as String
+                    return
+                }
+                let raw = (data?["payload"] as? String) ?? ""
+                guard let pair = RelayPairPayload.parse(raw) else {
+                    scanMessage = "不是本 App 的配对码。码里应是中继根和机器名。"
+                    return
+                }
+                guard let key = store.hosts.compactMap({ GatewayHostStore.accessKey(hostId: $0.id) }).first else {
+                    scanMessage = "先粘贴中继密钥，再扫这台身体的配对码。"
+                    return
+                }
+                let trusted = store.hosts.compactMap { RelayMachinesClient.apiRoot(fromHarnessURL: $0.harnessURL) }.first
+                    ?? RelayMachinesClient.defaultApiRoot
+                guard RelayMachinesClient.sameApiRoot(pair.apiRoot, trusted) else {
+                    scanMessage = "配对码里的中继不是你已经在用的那台。钥匙不会发到别的地址。"
+                    return
+                }
+                store.upsertDiscovered([
+                    RelayDiscoveredMachine(name: pair.machine, online: false, platform: nil, server: nil, version: nil)
+                ], key: key, apiRoot: trusted)
+                scanMessage = "已加入 \(pair.machine)"
+                Task { await refresh() }
+            }
+        }
     }
 
     private func refresh() async {
+        if let first = store.hosts.first, let key = GatewayHostStore.accessKey(hostId: first.id) {
+            let apiRoot = store.hosts.compactMap { RelayMachinesClient.apiRoot(fromHarnessURL: $0.harnessURL) }.first
+                ?? RelayMachinesClient.defaultApiRoot
+            if let live = try? await RelayMachinesClient.list(apiRoot: apiRoot, key: key) {
+                store.upsertDiscovered(live, key: key, apiRoot: apiRoot)
+            }
+        }
         for host in store.hosts {
             // 编辑期间不做后台探测:探测回写会触发整页重算。
             if editor.draft != nil { return }
@@ -178,12 +241,13 @@ struct GatewaySettingsView: View {
 
 /// 一键添加:三台机器内置,只收一次密钥。
 private struct QuickFleetSetupSheet: View {
-    let onDone: (String) -> Void
+    let onDone: (String, [RelayDiscoveredMachine]) -> Void
     let onCancel: () -> Void
     @State private var key = ""
     @State private var testing = false
     @State private var result: String?
     @State private var copiedCommand = false
+    @State private var discovered: [RelayDiscoveredMachine] = []
 
     var body: some View {
         NavigationStack {
@@ -193,9 +257,9 @@ private struct QuickFleetSetupSheet: View {
                         Label(preset.name, systemImage: "desktopcomputer")
                     }
                 } header: {
-                    Text("将添加这三台 Mac")
+                    Text("找不到中继列表时，可一键填这三台 Mac")
                 } footer: {
-                    Text("它们经你自己的中继(跑在常开的 Mac mini 上)连接,手机蜂窝或任意 WiFi 都能连,不需要 VPN。")
+                    Text("优先读 /machines。预设只是快捷填充，新 Android 上线不用改仓库字符串。")
                 }
                 Section {
                     SecureField("粘贴密钥", text: $key)
@@ -222,16 +286,22 @@ private struct QuickFleetSetupSheet: View {
                     Button {
                         testing = true
                         Task {
-                            let probe = GatewayHost(id: "probe", name: "probe", baseURL: "",
-                                                    harnessURL: RELAY_BASE + FLEET_PRESETS[0].machine)
-                            let ok = await GatewayHostStore.probe(probe)
-                            result = ok ? "中继连接成功" :
-                                "连不上中继。若手机开着代理,把 *.ts.net 加直连或暂时关闭代理再试。"
+                            do {
+                                let rows = try await RelayMachinesClient.list(key: key)
+                                discovered = rows
+                                result = rows.isEmpty
+                                    ? "中继已通，但现在没有在线机器。仍可一键填三台 Mac。"
+                                    : "发现 \(rows.count) 台：\(rows.map(\.name).joined(separator: "、"))"
+                            } catch {
+                                discovered = []
+                                result = "连不上中继。若手机开着代理,把 *.ts.net 加直连或暂时关闭代理再试。"
+                            }
                             testing = false
                         }
                     } label: {
-                        HStack { Text("测试中继连通"); Spacer(); if testing { ProgressView() } }
+                        HStack { Text("从中继发现机器"); Spacer(); if testing { ProgressView() } }
                     }
+                    .disabled(key.trimmingCharacters(in: .whitespaces).count < 16)
                     if let result {
                         Text(result).font(.system(size: 13)).foregroundStyle(.secondary)
                     }
@@ -242,8 +312,10 @@ private struct QuickFleetSetupSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { onCancel() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("添加三台") { onDone(key) }
-                        .disabled(key.trimmingCharacters(in: .whitespaces).count < 16)
+                    Button(discovered.isEmpty ? "添加三台 Mac" : "添加发现的机器") {
+                        onDone(key, discovered)
+                    }
+                    .disabled(key.trimmingCharacters(in: .whitespaces).count < 16)
                 }
             }
         }
@@ -746,7 +818,7 @@ struct GatewayEntryView: View {
                     Label {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(host.name)
-                            Text("缺访问密钥,去「设置 → 我的 Mac」补上").font(.system(size: 12)).foregroundStyle(.secondary)
+                            Text("缺访问密钥,去「设置 → 远程机器」补上").font(.system(size: 12)).foregroundStyle(.secondary)
                         }
                     } icon: {
                         Image(systemName: "desktopcomputer.trianglebadge.exclamationmark")
@@ -923,6 +995,7 @@ struct HarnessConsoleView: View {
     let firstPrompt: String
     /// 非空 = 接管 Mac 上已存在的会话(回放 + 跟随),而不是新建。
     var attachSessionId: String? = nil
+    var thinking: String? = nil
     @State private var input = ""
     @State private var started = false
 
@@ -1015,7 +1088,7 @@ struct HarnessConsoleView: View {
                 if let attachSessionId {
                     driver.attach(existingSessionId: attachSessionId)
                 } else {
-                    driver.start(prompt: firstPrompt)
+                    driver.start(prompt: firstPrompt, thinking: thinking)
                 }
             } else { driver.resumeIfNeeded() }
         }
@@ -1060,7 +1133,7 @@ struct ComposerMacChatCover: View {
             } else {
                 VStack(spacing: 12) {
                     Text("缺少访问密钥").font(.headline)
-                    Text("去 设置 → 我的 Mac 里补上这台 Mac 的密钥。")
+                    Text("去 设置 → 远程机器 里补上这台机器的密钥。")
                         .font(.footnote).foregroundStyle(.secondary)
                     Button("关闭", action: onClose)
                 }

@@ -34,6 +34,12 @@ struct GatewayHost: Codable, Identifiable, Hashable {
     var isEnabled: Bool = true
     /// Last successful contact, for the reachability dot.
     var lastSeenAt: Date?
+    /// From relay `/machines` `info.platform` (android / leoagent).
+    var platform: String? = nil
+    /// From relay `/machines` `info.server` (minis / leocodebox).
+    var server: String? = nil
+
+    var isAndroidBody: Bool { platform == "android" || server == "minis" }
 
     var url: URL? { URL(string: baseURL) }
     var harnessBase: URL? {
@@ -72,6 +78,42 @@ final class GatewayHostStore: ObservableObject {
 
     var activeHosts: [GatewayHost] { hosts.filter(\.isEnabled) }
 
+    func upsertDiscovered(_ machines: [RelayDiscoveredMachine], key: String, apiRoot: String = RelayMachinesClient.defaultApiRoot) {
+        var changed = false
+        for machine in machines {
+            guard let name = RelayMachinesClient.sanitizeMachine(machine.name) else { continue }
+            let id = name.lowercased()
+            let harness = RelayMachinesClient.harnessURL(for: name, apiRoot: apiRoot)
+            Self.saveAccessKey(key, hostId: id)
+            if let index = hosts.firstIndex(where: { $0.id == id }) {
+                let before = hosts[index]
+                if before.harnessURL != harness {
+                    hosts[index].harnessURL = harness
+                    clients.removeValue(forKey: id)
+                    changed = true
+                }
+                if hosts[index].platform == nil { hosts[index].platform = machine.platform; changed = true }
+                if hosts[index].server == nil { hosts[index].server = machine.server; changed = true }
+                // Keep isEnabled, display name, and engine URL — refresh must
+                // not turn a disabled machine back on or wipe a rename.
+            } else {
+                hosts.append(GatewayHost(
+                    id: id,
+                    name: machine.isAndroidBody ? name : RelayMachinesClient.displayName(for: name),
+                    baseURL: "",
+                    harnessURL: harness,
+                    platform: machine.platform,
+                    server: machine.server
+                ))
+                changed = true
+            }
+        }
+        if changed {
+            persist()
+            PushRegistrar.shared.reregisterIfPossible()
+        }
+    }
+
     func upsert(_ host: GatewayHost) {
         if let index = hosts.firstIndex(where: { $0.id == host.id }) {
             hosts[index] = host
@@ -80,6 +122,7 @@ final class GatewayHostStore: ObservableObject {
         }
         clients.removeValue(forKey: host.id)   // address or key may have changed
         persist()
+        PushRegistrar.shared.reregisterIfPossible()
     }
 
     func delete(id: String) {

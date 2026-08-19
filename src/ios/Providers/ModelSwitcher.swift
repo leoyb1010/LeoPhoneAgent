@@ -213,11 +213,8 @@ enum ModelSwitcher {
                 sessionId: sessionId,
                 primarySource: .group(groupId: group.id, resolvedEntryId: resolvedEntryId),
                 subModelSource: existing?.subModelSource), for: sessionId)
-            if let level = group.defaultThinkingLevel {
-                var cfg = store.inferenceConfig(for: sessionId) ?? SessionInferenceConfig()
-                cfg.thinkingLevel = level
-                store.setInferenceConfig(cfg, for: sessionId)
-            }
+            // Keep the user's preferred thinking level across model switches.
+            // Group default only seeds a session that has never picked a level.
             NotificationCenter.default.post(name: .sessionModelBindingChanged, object: nil,
                                             userInfo: ["groupId": group.id, "sessionId": sessionId])
             if let entry = store.entry(for: resolvedEntryId) {

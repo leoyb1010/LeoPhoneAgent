@@ -1894,7 +1894,9 @@ struct AIChatView: View {
             hasBinding: vm.sessionId != nil && configStore.binding(for: vm.sessionId!) != nil,
             hasProviders: !configStore.instances.isEmpty,
             showThinkingBadge: !vm.availableThinkingLevels.isEmpty && vm.currentThinkingLevel.isEnabled,
-            thinkingLevelName: vm.currentThinkingLevel.displayName,
+            thinkingLevelName: vm.thinkingWasClamped
+                ? "\(vm.currentThinkingLevel.displayName) · 已夹到此档"
+                : vm.currentThinkingLevel.displayName,
             fallbackTrigger: vm.fallbackTrigger,
             fallbackPulse: fallbackPulseOpacity,
             titleLocked: titleIsVisuallyLocked
@@ -2216,7 +2218,7 @@ struct AIChatView: View {
             Image("ThinkingIcon")
                 .resizable()
                 .frame(width: 6, height: 6)
-            Text(level.displayName)
+            Text(vm.thinkingWasClamped ? "\(level.displayName)·夹" : level.displayName)
                 .font(.system(size: 8, weight: .medium))
         }
         .foregroundStyle(ChatColors.secondaryText)

@@ -12,6 +12,17 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.24.0",
+            date: "2026-08-19",
+            title: "Android 也能当身体，舰队和推理补完",
+            highlights: [
+                "已装本 App 的 Android 会作为身体注册到中继；iPhone / iPad 远程机器列表读 /machines，不再只靠写死的三台 Mac。",
+                "扫码加身体：码里只有中继根和机器名，钥匙不进码。杀 App 后审批走已有 APNs 登记，主机出现时会重登记 token。",
+                "推理强度可在设置里按模型家族改最高档；换模型会夹到对方能用的档并看得见，切回来恢复原来的档；远程任务和 Siri 指挥会带上当前档。",
+                "读图委托、压缩/标题便宜模型、压缩开关、写文件/终端默认询问、会话归档与分组、JSON 导入，以及「新任务 / 本机 / 远程 / 进行中 / 审批」用词对齐。"
+            ]
+        ),
+        LeoRelease(
             version: "1.23.1",
             date: "2026-08-12",
             title: "交付门禁与更新体验收口",

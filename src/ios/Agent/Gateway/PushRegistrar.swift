@@ -43,9 +43,19 @@ final class PushRegistrar {
     /// AppDelegate 的 didRegisterForRemoteNotificationsWithDeviceToken 转进来。
     func handleDeviceToken(_ data: Data) {
         let token = data.map { String(format: "%02x", $0) }.joined()
-        guard token != lastDeviceToken else { return }
         lastDeviceToken = token
         Task { await register(kind: "device", token: token) }
+    }
+
+    /// Hosts appeared after the first token — send it again so APNs is not
+    /// stuck on "no relay client yet".
+    func reregisterIfPossible() {
+        if let token = lastDeviceToken {
+            Task { await register(kind: "device", token: token) }
+        }
+        if let token = lastPushToStartToken {
+            Task { await register(kind: "push_to_start", token: token) }
+        }
     }
 
     /// [T-live-mission] push-to-start token:iOS 17.2+ 才有。拿到后中继

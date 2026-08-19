@@ -788,9 +788,14 @@ extension LLMModel {
 /// Per-session inference settings (thinking toggle, etc.).
 struct SessionInferenceConfig: Codable, Hashable {
     var thinkingLevel: ThinkingLevel = .off
+    /// User's last explicit pick. Survives a clamp when switching to a
+    /// weaker model so switching back restores High instead of the clamped Medium.
+    var preferredThinkingLevel: ThinkingLevel?
 
     /// Convenience — true when thinking is enabled at any level.
     var thinkingEnabled: Bool { thinkingLevel.isEnabled }
+
+    var preferredOrStored: ThinkingLevel { preferredThinkingLevel ?? thinkingLevel }
 
     // Backward-compatible decode: handle both old `thinkingEnabled: Bool` and new `thinkingLevel` key.
     init(from decoder: Decoder) throws {
@@ -802,6 +807,11 @@ struct SessionInferenceConfig: Codable, Hashable {
         } else {
             thinkingLevel = .off
         }
+        if let raw = try container.decodeIfPresent(String.self, forKey: .preferredThinkingLevel) {
+            preferredThinkingLevel = ThinkingLevel.decoded(raw)
+        } else {
+            preferredThinkingLevel = nil
+        }
     }
 
     init() { thinkingLevel = .off }
@@ -809,10 +819,11 @@ struct SessionInferenceConfig: Codable, Hashable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(thinkingLevel, forKey: .thinkingLevel)
+        try container.encodeIfPresent(preferredThinkingLevel, forKey: .preferredThinkingLevel)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case thinkingLevel, thinkingEnabled
+        case thinkingLevel, thinkingEnabled, preferredThinkingLevel
     }
 }
 

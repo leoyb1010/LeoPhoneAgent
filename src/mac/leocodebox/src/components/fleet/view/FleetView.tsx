@@ -43,6 +43,11 @@ type Approval = {
 
 const POLL_MS = 15_000;
 const RELAY_CONFIG_PATH = '~/.leoagent/relay.json';
+const RELAY_API_ROOT = 'https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api';
+
+function encodePair(machine: string): string {
+  return `leoagent-body:v1|${JSON.stringify({ apiRoot: RELAY_API_ROOT, machine })}`;
+}
 
 function approvalChoiceLabel(choice: string): string {
   switch (choice.toLowerCase()) {
@@ -95,6 +100,7 @@ export default function FleetView() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<Map<string, string>>(() => new Map());
   const [copied, setCopied] = useState(false);
+  const [copiedPair, setCopiedPair] = useState<string | null>(null);
   const inFlight = useRef(false);
   const hasLoaded = useRef(false);
   const busyApprovals = useRef(new Set<string>());
@@ -186,6 +192,16 @@ export default function FleetView() {
     }
   };
 
+  const copyPair = async (machine: string) => {
+    try {
+      await navigator.clipboard.writeText(encodePair(machine));
+      setCopiedPair(machine);
+      window.setTimeout(() => setCopiedPair(null), 1800);
+    } catch {
+      setError('无法复制配对码');
+    }
+  };
+
   const onlineCount = useMemo(() => machines.filter((machine) => machine.online && machine.reachable).length, [machines]);
   const activeCount = useMemo(() => machines.reduce((sum, machine) => sum + machine.activeCount, 0), [machines]);
   const onlineProgress = machines.length > 0 ? Math.round((onlineCount / machines.length) * 100) : 0;
@@ -231,11 +247,11 @@ export default function FleetView() {
               </div>
             </div>
             <div className="rounded-xl bg-secondary/65 px-4 py-3">
-              <p className="text-xs text-muted-foreground">正在执行</p>
+              <p className="text-xs text-muted-foreground">进行中</p>
               <p className="mt-1 text-xl font-semibold text-foreground">{activeCount}</p>
             </div>
             <div className="rounded-xl bg-secondary/65 px-4 py-3">
-              <p className="text-xs text-muted-foreground">等待拍板</p>
+              <p className="text-xs text-muted-foreground">审批</p>
               <p className="mt-1 text-xl font-semibold text-foreground">{approvals.length}</p>
             </div>
           </div>
@@ -290,7 +306,7 @@ export default function FleetView() {
                     <ShieldCheck className="h-5 w-5" />
                   </span>
                   <div>
-                    <h2 className="text-base font-semibold text-foreground">等你拍板 · {approvals.length}</h2>
+                    <h2 className="text-base font-semibold text-foreground">审批 · {approvals.length}</h2>
                     <p className="text-xs text-muted-foreground">批准或拒绝后，结果会立即送回对应 Mac。</p>
                   </div>
                 </div>
@@ -337,7 +353,7 @@ export default function FleetView() {
             <section className="rounded-[22px] border border-border bg-card p-5 shadow-elevation-1">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <h2 className="text-base font-semibold text-foreground">已连接的 Mac</h2>
+                  <h2 className="text-base font-semibold text-foreground">已连接的机器</h2>
                   <p className="mt-0.5 text-xs text-muted-foreground">每 15 秒自动刷新 · 上次同步 {lastUpdatedLabel}</p>
                 </div>
                 <span className="rounded-full bg-success/10 px-2.5 py-1 text-xs font-medium text-success">{onlineCount} 在线</span>
@@ -346,8 +362,8 @@ export default function FleetView() {
               {machines.length === 0 ? (
                 <div className="py-10 text-center">
                   <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-secondary text-muted-foreground"><Monitor className="h-6 w-6" /></span>
-                  <h3 className="mt-3 text-base font-semibold text-foreground">中继已配置，正在等 Mac 上线</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">确认三台 Mac 都启动了 LeoAgent，然后刷新此页。</p>
+                  <h3 className="mt-3 text-base font-semibold text-foreground">中继已配置，正在等机器上线</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">确认 Mac 工作台或 Android 本机 Agent 已注册到中继，然后刷新此页。</p>
                 </div>
               ) : (
                 <div className="mt-4 grid gap-3 lg:grid-cols-3">
@@ -360,6 +376,14 @@ export default function FleetView() {
                           <span className="inline-flex items-center gap-1.5 rounded-full bg-secondary px-2 py-1 text-xs text-muted-foreground"><span className={`h-2 w-2 rounded-full ${status.tone}`} />{status.label}</span>
                         </div>
                         <h3 className="mt-3 text-base font-semibold text-foreground">{machine.name}</h3>
+                        <button
+                          type="button"
+                          onClick={() => void copyPair(machine.name)}
+                          className="mt-2 inline-flex min-h-9 items-center gap-1.5 text-xs font-medium text-primary"
+                        >
+                          {copiedPair === machine.name ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                          {copiedPair === machine.name ? '已复制配对码' : '复制配对码'}
+                        </button>
                         {machine.sessions.length === 0 ? (
                           <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"><Clock3 className="h-3.5 w-3.5" />当前没有任务</p>
                         ) : (

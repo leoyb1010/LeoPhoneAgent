@@ -42,6 +42,7 @@ struct AppearanceSettingsView: View {
     /// [T-tldr-experiment] One-line summary above very long replies. OFF by
     /// default -- graduate only if it proves non-intrusive.
     @AppStorage("leo.tldrEnabled") private var tldrEnabled: Bool = false
+    @AppStorage("autoCompactOnThreshold") private var autoCompactOnThreshold: Bool = false
     @ObservedObject private var fontSettings = FontSettings.shared
 
     private let iconOptions: [AppIconOption] = [
@@ -133,6 +134,14 @@ struct AppearanceSettingsView: View {
                 Text("Long Reply Summary")
             } footer: {
                 Text("Experimental: show a one-line TL;DR above very long replies.")
+            }
+
+            Section {
+                Toggle("到阈值自动压缩", isOn: $autoCompactOnThreshold)
+            } header: {
+                Text("压缩")
+            } footer: {
+                Text("关掉后不再自动压。对话菜单里仍可「现在压缩」；压完会留下一条可见说明。")
             }
 
             Section {

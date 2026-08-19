@@ -159,7 +159,7 @@ struct CommandMacIntent: AppIntent {
         let text = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let host = GatewayHostStore.shared.activeHosts.first(where: { $0.id == mac.id }),
               let client = GatewayHostStore.shared.client(for: host) else {
-            return .result(dialog: "找不到 \(mac.name) 的访问密钥,去 app 里「设置 → 我的 Mac」补上。",
+            return .result(dialog: "找不到 \(mac.name) 的访问密钥,去 app 里「设置 → 远程机器」补上。",
                            view: MacDispatchSnippet(machine: mac.name, cli: cli.displayName, task: "缺少访问密钥"))
         }
         guard !text.isEmpty else {
@@ -190,7 +190,9 @@ struct CommandMacIntent: AppIntent {
         }
         let dispatch = structured.map { "\($0.title)\n\n\($0.detail)" } ?? text
         do {
-            _ = try await client.createHarnessSession(harness: cli.rawValue, cwd: "~", prompt: dispatch)
+            _ = try await client.createHarnessSession(
+                harness: cli.rawValue, cwd: "~", prompt: dispatch,
+                thinking: ThinkingRuleStore.lastCarriedRaw())
             return .result(dialog: "已让 \(mac.name) 的 \(cli.displayName) 开工。",
                            view: MacDispatchSnippet(machine: mac.name, cli: cli.displayName,
                                                     task: structured?.title ?? text))
@@ -214,7 +216,7 @@ struct MacFleetStatusIntent: AppIntent {
     func perform() async throws -> some IntentResult & ProvidesDialog & ShowsSnippetView {
         let hosts = GatewayHostStore.shared.activeHosts
         guard !hosts.isEmpty else {
-            return .result(dialog: "还没有配置任何 Mac。去 app 里「设置 → 我的 Mac」一键添加。",
+            return .result(dialog: "还没有配置任何机器。去 app 里「设置 → 远程机器」一键添加。",
                            view: FleetStatusSnippet(rows: []))
         }
         let scan = await MacFleetScan.scan()

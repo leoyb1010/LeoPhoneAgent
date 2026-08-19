@@ -57,7 +57,7 @@ struct SettingsHomeView: View {
     private var groups: [SettingsGroup] {
         [
             SettingsGroup(id: "device", title: "我的设备", entries: [
-                SettingsEntry("我的 Mac", keywords: "mac 舰队 中继 relay 密钥 macbook cortex studio",
+                SettingsEntry("远程机器", keywords: "mac android 舰队 中继 relay 密钥 macbook cortex studio fold ipad",
                               icon: "desktopcomputer", color: .teal) { GatewaySettingsView() },
                 SettingsEntry("Mac 控制台", keywords: "控制台 console 编码 任务 遥控",
                               icon: "terminal.fill", color: .teal) { GatewayEntryView() },
@@ -73,6 +73,8 @@ struct SettingsHomeView: View {
                               icon: "key.circle.fill", color: .indigo) { ProviderInstancesView() },
                 SettingsEntry("模型分组", keywords: "model group 回退 负载",
                               icon: "gearshape.circle.fill", color: .indigo) { ModelGroupsView() },
+                SettingsEntry("推理与模型", keywords: "thinking 推理 读图 压缩 标题 vision compact",
+                              icon: "brain.head.profile", color: .indigo) { ThinkingAndModelSlotsView() },
                 SettingsEntry("快速任务", keywords: "quick task 捷径",
                               icon: "bolt.fill", color: .indigo) { QuickTaskSettingsView() },
                 SettingsEntry("能力中心", keywords: "capabilities 权限 能干什么",
@@ -389,5 +391,79 @@ private struct SettingsRow: View {
         }
         .buttonStyle(.plain)
         .hoverEffect(.highlight)
+    }
+}
+
+struct ThinkingAndModelSlotsView: View {
+    @State private var rules: [ThinkingRule] = ThinkingRuleStore.load()
+    @State private var newPrefix = ""
+    @State private var newMax: ThinkingLevel = .high
+    @ObservedObject private var store = ProviderConfigStore.shared
+    @AppStorage(AgentModelSlots.visionKey) private var visionId = ""
+    @AppStorage(AgentModelSlots.compactKey) private var compactId = ""
+
+    var body: some View {
+        List {
+            Section {
+                ForEach($rules) { $rule in
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextField("模型 id 前缀", text: $rule.prefix)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        Picker("最高档", selection: $rule.maxLevel) {
+                            ForEach(ThinkingLevel.allCases.filter { $0 != .off }, id: \.self) { level in
+                                Text(level.displayName).tag(level)
+                            }
+                        }
+                        Picker("默认档", selection: $rule.defaultLevel) {
+                            ForEach(ThinkingLevel.allCases.filter { $0 != .off && $0 <= rule.maxLevel }, id: \.self) { level in
+                                Text(level.displayName).tag(level)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+                .onDelete { rules.remove(atOffsets: $0); ThinkingRuleStore.save(rules) }
+                HStack {
+                    TextField("新前缀，如 gpt-5.7", text: $newPrefix)
+                        .textInputAutocapitalization(.never)
+                    Button("添加") {
+                        let prefix = newPrefix.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !prefix.isEmpty else { return }
+                        rules.append(ThinkingRule(prefix: prefix, maxLevel: newMax, defaultLevel: min(.medium, newMax)))
+                        ThinkingRuleStore.save(rules)
+                        newPrefix = ""
+                    }
+                }
+            } header: {
+                Text("推理强度规则")
+            } footer: {
+                Text("一行一个模型家族。读不到内置档时在这里写最高档，否则界面显示未知，不会默默降级。")
+            }
+
+            Section {
+                Picker("读图委托", selection: $visionId) {
+                    Text("不委托").tag("")
+                    ForEach(store.modelEntries.filter { !$0.isHidden }, id: \.id) { entry in
+                        Text(entry.model.id).tag(entry.id)
+                    }
+                }
+            } footer: {
+                Text("非视觉模型收到图时，回复会写明图是谁看的。没指定就明说看不了。")
+            }
+
+            Section {
+                Picker("压缩 / 标题", selection: $compactId) {
+                    Text("跟当前会话模型").tag("")
+                    ForEach(store.modelEntries.filter { !$0.isHidden }, id: \.id) { entry in
+                        Text(entry.model.id).tag(entry.id)
+                    }
+                }
+            } footer: {
+                Text("只给压缩和标题用一个便宜模型。对话仍走当前会话模型。")
+            }
+        }
+        .navigationTitle("推理与模型")
+        .onChange(of: rules) { _ in ThinkingRuleStore.save(rules) }
     }
 }

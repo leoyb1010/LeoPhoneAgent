@@ -10,6 +10,7 @@ import com.leoyuan.leophoneagent.ui.chat.InputAttachment
 import com.leoyuan.leophoneagent.ui.chat.addAttachment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -244,6 +245,67 @@ internal object HeadlessChatRunner {
             responseText = responseText,
             timedOut = !finished,
         )
+    }
+
+    /**
+     * Same as [prompt] but yields assistant-text suffixes as they grow so a
+     * remote harness can emit `message.delta` instead of one lump at the end.
+     */
+    suspend fun streamPrompt(
+        context: Context,
+        sessionId: String,
+        text: String,
+        thinkingLevel: ThinkingLevel? = null,
+        timeoutMs: Long = 10 * 60 * 1000L,
+        onDelta: (String) -> Unit,
+    ): PromptResult = withContext(Dispatchers.Main) {
+        val vm = viewModel(context, sessionId)
+        if (thinkingLevel != null) {
+            withContext(Dispatchers.Default) {
+                withTimeoutOrNull(3000L) { vm.activeEntryId.first { it != null } }
+            }
+            vm.setThinkingLevel(thinkingLevel)
+        }
+        val ready = withContext(Dispatchers.Default) {
+            withTimeoutOrNull(5000L) { vm.activeEntryId.first { it != null } }
+        }
+        if (ready == null) {
+            return@withContext PromptResult(
+                status = "Error",
+                responseText = "no_provider_resolved_in_5s",
+                timedOut = false,
+            )
+        }
+        var last = ""
+        val collector = launch(Dispatchers.Default) {
+            vm.messages.collect { msgs -> // collect assistant deltas for remote minis harness
+                val assistant = msgs.lastOrNull { it.role == "assistant" }?.content.orEmpty()
+                if (assistant.length > last.length && assistant.startsWith(last)) {
+                    onDelta(assistant.removePrefix(last))
+                    last = assistant
+                } else if (assistant.isNotEmpty() && assistant != last) {
+                    onDelta(assistant)
+                    last = assistant
+                }
+            }
+        }
+        try {
+            vm.sendMessage(text)
+            val finished = withTimeoutOrNull(timeoutMs) {
+                if (vm.isStreaming.value) vm.isStreaming.first { !it }
+                true
+            } ?: false
+            val app = app(context)
+            val msgs = app.chatRepository.dao.loadMessages(sessionId)
+            val responseText = msgs.lastOrNull { it.role == "assistant" }?.let { extractText(it.partsJson) }
+            PromptResult(
+                status = if (finished) "Completed" else "Timeout",
+                responseText = responseText,
+                timedOut = !finished,
+            )
+        } finally {
+            collector.cancel()
+        }
     }
 
     suspend fun retry(

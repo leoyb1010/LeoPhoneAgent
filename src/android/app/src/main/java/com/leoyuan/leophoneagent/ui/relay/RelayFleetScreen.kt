@@ -46,10 +46,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.os.Build
 import androidx.compose.ui.platform.LocalContext
+import com.leoyuan.leophoneagent.relay.RelayPairCodec
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.leoyuan.leophoneagent.relay.FleetListMerge
 import com.leoyuan.leophoneagent.relay.LeoFleetPresets
 import com.leoyuan.leophoneagent.relay.RelayApproval
 import com.leoyuan.leophoneagent.relay.RelayFleetClient
@@ -105,7 +110,7 @@ fun RelayFleetScreen(onBack: () -> Unit) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("我的 Mac") },
+                title = { Text("远程机器") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -124,9 +129,9 @@ fun RelayFleetScreen(onBack: () -> Unit) {
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text("把 Mac 装进口袋", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text("把已装本 App 的机器装进口袋", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Text(
-                "通过你自己的 Leo Relay 远程运行 Codex、Claude Code、Cursor 和 Grok，手机休眠后 Mac 继续工作。",
+                "列表来自中继 /machines。三台 Mac 仍可作为快捷入口；新上线的 Android 身体不用改仓库字符串。本机保存密钥后也会作为身体注册。",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
@@ -175,6 +180,22 @@ fun RelayFleetScreen(onBack: () -> Unit) {
                 }
             }
 
+            if (config.accessKey.length >= 16) {
+                val machineName = remember { store.ensureMachineName(Build.MODEL) }
+                val pair = RelayPairCodec.encode(config.relayApiBase, machineName)
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("出示配对码", fontWeight = FontWeight.SemiBold)
+                        Text("码里只有中继根和本机名，钥匙不在里面。用 iPhone 扫或粘贴即可加入列表。")
+                        Text(pair, style = MaterialTheme.typography.bodySmall)
+                        OutlinedButton(onClick = {
+                            val clipboard = context.getSystemService(ClipboardManager::class.java)
+                            clipboard?.setPrimaryClip(ClipData.newPlainText("leoagent-pair", pair))
+                        }) { Text("复制配对码") }
+                    }
+                }
+            }
+
             error?.let {
                 Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
             }
@@ -211,20 +232,21 @@ fun RelayFleetScreen(onBack: () -> Unit) {
                     }
                 }
 
-                LeoFleetPresets.forEach { preset ->
-                    val live = machines.firstOrNull { it.name == preset.machine }
+                FleetListMerge.displayMachines(machines, LeoFleetPresets).forEach { row ->
+                    val startHarness = if (row.isAndroidBody) "minis" else harness
                     MachineCard(
-                        label = preset.label,
-                        machine = preset.machine,
-                        online = live?.online == true,
-                        sessions = sessions[preset.machine].orEmpty(),
-                        canStart = prompt.isNotBlank() && live?.online == true && !loading,
+                        label = row.label,
+                        machine = row.machine,
+                        online = row.online,
+                        isAndroidBody = row.isAndroidBody,
+                        sessions = sessions[row.machine].orEmpty(),
+                        canStart = prompt.isNotBlank() && row.online && !loading,
                         onStart = {
                             scope.launch {
                                 loading = true
                                 error = null
                                 runCatching {
-                                    RelayFleetClient(config).startTask(preset.machine, prompt, harness, cwd)
+                                    RelayFleetClient(config).startTask(row.machine, prompt, startHarness, cwd)
                                     prompt = ""
                                 }.onFailure { error = it.message }
                                 loading = false
@@ -234,7 +256,7 @@ fun RelayFleetScreen(onBack: () -> Unit) {
                         onStop = { sessionId ->
                             scope.launch {
                                 loading = true
-                                runCatching { RelayFleetClient(config).stop(preset.machine, sessionId) }
+                                runCatching { RelayFleetClient(config).stop(row.machine, sessionId) }
                                     .onFailure { error = it.message }
                                 loading = false
                                 refresh()
@@ -259,8 +281,8 @@ private fun TaskComposer(
 ) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.42f))) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("新建 Mac 任务", fontWeight = FontWeight.SemiBold)
-            OutlinedTextField(prompt, onPromptChange, label = { Text("让 Mac 完成什么？") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
+            Text("新建远程任务", fontWeight = FontWeight.SemiBold)
+            OutlinedTextField(prompt, onPromptChange, label = { Text("让这台机器完成什么？") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(harness, onHarnessChange, label = { Text("CLI") }, modifier = Modifier.weight(1f), singleLine = true)
                 OutlinedTextField(cwd, onCwdChange, label = { Text("工作目录") }, modifier = Modifier.weight(1f), singleLine = true)
@@ -274,6 +296,7 @@ private fun TaskComposer(
                     "claude" to "Claude Code",
                     "cursor" to "Cursor",
                     "grok" to "Grok",
+                    "minis" to "Android Agent",
                 ).forEach { (key, label) ->
                     FilterChip(
                         selected = harness == key,
@@ -282,7 +305,7 @@ private fun TaskComposer(
                     )
                 }
             }
-            Text("在下方选择目标 Mac 启动。", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("在下方选择目标机器启动。Android 身体会自动走 minis。", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -292,6 +315,7 @@ private fun MachineCard(
     label: String,
     machine: String,
     online: Boolean,
+    isAndroidBody: Boolean = false,
     sessions: List<RelaySession>,
     canStart: Boolean,
     onStart: () -> Unit,
@@ -316,7 +340,7 @@ private fun MachineCard(
                 Text(if (online) "在线" else "离线", style = MaterialTheme.typography.labelMedium)
             }
             Button(onClick = onStart, enabled = canStart, modifier = Modifier.fillMaxWidth()) {
-                Text("在这台 Mac 启动任务")
+                Text(if (isAndroidBody) "在这台 Android 启动任务" else "在这台 Mac 启动任务")
             }
             sessions.take(6).forEach { session ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
