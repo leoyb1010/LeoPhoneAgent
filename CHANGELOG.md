@@ -25,10 +25,17 @@
 - Android 流式首包超时 30s → 120s。iOS OpenAI/Anthropic 请求超时已是 600s，未改。
 - 供应商 JSON 读失败时拒绝再保存，避免空配置覆盖原文件。
 
-### 验证（本机写代码机）
+### Android 发布前修复
+
+- 移除 `StateFlow.distinctUntilChanged()` 无效操作；Kotlin 在双 flavor 中把该过时用法判为编译错误。
+- minis harness 会话事件回放改为锁内快照、锁外发射，修复异步写入时遍历可变列表引发的 `ConcurrentModificationException`。
+
+### 验证（Android 发布机）
 
 - iOS 源码与版本门禁字段已对齐 1.24.0 / 94，并写了本次更新条目。
-- Android 单元测试与 Fold8 装机需在有 SDK 的机器上跑；此仓库机没有 Android SDK。
+- Standard/Power 中文资源门禁、各 440 个 JVM 测试（0 失败、各 1 个既有跳过）、双 Release lint（`0 errors`）和 R8 构建全部通过。
+- APK 包名、versionCode `100006`、versionName、v2 签名与固定 Alpha 证书指纹均通过 `verify_android_alpha_release.sh`。
+- Fold8 API 35 从 GitHub alpha.5 原地升级 alpha.6，Standard/Power 均返回 `Success`；展开几何下普通入口与 `ACTION_ASSIST` 冷启动、`1080×1728` 封面几何冷启动均为 `Status: ok`，进程存活，Logcat 无本 App `FATAL EXCEPTION`。
 
 ## macOS leocodebox 1.69.0 - 2026-08-18
 

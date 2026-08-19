@@ -238,9 +238,13 @@ private class MinisHarnessSession(
         live.tryEmit(enriched)
     }
 
-    @Synchronized
-    fun replay(after: Int): Flow<JSONObject> = flow {
-        events.filter { it.optInt("seq") > after }.forEach { emit(it) }
+    fun replay(after: Int): Flow<JSONObject> {
+        val snapshot = synchronized(this) {
+            events.filter { it.optInt("seq") > after }
+        }
+        return flow {
+            snapshot.forEach { emit(it) }
+        }
     }
 
     fun subscribe(after: Int): Flow<JSONObject> = flow {
