@@ -471,19 +471,16 @@ fun SystemPermissionsScreen(onBack: () -> Unit) {
 }
 
 private fun currentOverlayGranted(context: Context): Boolean =
-    SystemPermissionHub.overlayGranted(
-        Build.VERSION.SDK_INT,
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(context),
-    )
+    SystemPermissionHub.overlayGranted(Build.VERSION.SDK_INT, Settings.canDrawOverlays(context))
 
-private fun currentAllFilesGranted(context: Context): Boolean =
-    SystemPermissionHub.allFilesGranted(
-        Build.VERSION.SDK_INT,
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager(),
-    )
+private fun currentAllFilesGranted(context: Context): Boolean {
+    val isManager = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+        Environment.isExternalStorageManager()
+    return SystemPermissionHub.allFilesGranted(Build.VERSION.SDK_INT, isManager)
+}
 
 private fun currentExactAlarmGranted(context: Context): Boolean {
-    if (!SystemPermissionHub.exactAlarmNeedsRuntimeGrant(Build.VERSION.SDK_INT)) return true
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
     val alarm = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
     val canSchedule = try {
         alarm?.canScheduleExactAlarms() == true
