@@ -27,7 +27,7 @@ struct SiriCommandCenterView: View {
 
     private let chatPhrases: [Phrase] = [
         Phrase(say: "问LPA", does: "打开 app 进入对话"),
-        Phrase(say: "让LPA干活", does: "在这台手机上后台跑,不上 Mac"),
+        Phrase(say: "让LPA干活", does: "在\(LeoDeviceNouns.thisDevice())上后台跑,不上 Mac"),
         Phrase(say: "给LPA发送提示", does: "后台跑一个任务,Siri 念结果"),
         Phrase(say: "运行LPA快捷任务", does: "执行你配置的快捷任务"),
         Phrase(say: "查看LPA任务", does: "播报会话状态"),
@@ -38,7 +38,7 @@ struct SiriCommandCenterView: View {
         List {
             Section {
                 Label {
-                    Text("以下每一句都可以直接对 Siri 说。前面加「嘿 Siri」,或长按侧键唤起后直接说。\n\n默认在这台手机上做;只有明确说到「Mac」,任务才会派到远端机器。")
+                    Text("以下每一句都可以直接对 Siri 说。前面加「嘿 Siri」,或长按侧键 / 顶部按钮唤起后直接说。\n\n默认在\(LeoDeviceNouns.thisDevice())上做;只有明确说到「Mac」,任务才会派到远端机器。")
                         .font(.footnote).foregroundStyle(.secondary)
                 } icon: {
                     Image(systemName: "mic.badge.plus").foregroundStyle(.purple)
@@ -53,9 +53,9 @@ struct SiriCommandCenterView: View {
                 ForEach(chatPhrases) { phraseRow($0) }
             }
 
-            Section("审批不掏手机") {
+            Section("审批不用打开 App") {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Mac 任务需要审批时,手机会收到时效性通知:")
+                    Text("Mac 任务需要审批时,本机会收到时效性通知:")
                     Text("• 锁屏/横幅上直接按「批准一次」(需 Face ID)或「拒绝」")
                     Text("• 戴 AirPods 时开启「Siri 播报通知」,Siri 会念出来,回一句「批准」即可")
                     Text("• 手表上也有同款审批卡")
@@ -65,7 +65,7 @@ struct SiriCommandCenterView: View {
 
             Section("一键收藏剪贴板(小红书神器)") {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("小红书这类 app 只给「复制链接」,没有系统分享。配一条快捷指令后,复制完按一下侧键就存进收藏:")
+                    Text("小红书这类 app 只给「复制链接」,没有系统分享。配一条快捷指令后,复制完按一下侧键或顶部按钮就存进收藏:")
                     Text("1. 快捷指令 App → 新建快捷指令")
                     Text("2. 加动作「获取剪贴板」")
                     Text("3. 加动作「收藏到 LPA」(搜 LeoPhoneAgent)")
@@ -76,11 +76,11 @@ struct SiriCommandCenterView: View {
                 .font(.footnote).foregroundStyle(.secondary)
             }
 
-            Section("把「问 Leo」绑到侧边 Action Button") {
+            Section("把「问 Leo」绑到操作按钮(本机有的话)") {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("1. 系统设置 → 操作按钮")
+                    Text("1. 系统设置 → 操作按钮(部分机型才有)")
                     Text("2. 滑到「快捷指令」,选「Ask LeoPhoneAgent」")
-                    Text("3. 之后实体键一按即语音下任务——比嘿 Siri 更快")
+                    Text("3. 之后实体键一按即语音下任务——比嘿 Siri 更快。没有操作按钮时用嘿 Siri 或快捷指令即可。")
                 }
                 .font(.footnote).foregroundStyle(.secondary)
             }

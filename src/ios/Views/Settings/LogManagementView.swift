@@ -148,7 +148,7 @@ struct LogManagementView: View {
                 } header: {
                     Text("问题反馈记录")
                 } footer: {
-                    Text("通过 设置 → About → Feedback 创建，长期保留，不参与日志自动清理。")
+                    Text("通过设置首页的「反馈与建议」创建，长期保留，不参与日志自动清理。")
                 }
             }
 
