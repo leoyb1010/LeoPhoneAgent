@@ -74,6 +74,37 @@ final class ThinkingLevelTests: XCTestCase {
         XCTAssertNil(ThinkingLevelCatalog.declaredMaxLevel(for: "totally-unknown-model-xyz"))
     }
 
+    /// [T-thinking-rules-hot-path] declaredMaxLevel 现在缓存 decode 结果。
+    /// 缓存判据必须是「UserDefaults 里那份 Data」,不能靠 save() 主动失效 ——
+    /// 否则任何绕过 save() 的写入(测试、配置下发、另一个进程)都会读到陈旧值。
+    func testThinkingRuleCacheFollowsRawDefaultsWrites() throws {
+        let key = ThinkingRuleStore.defaultsKey
+        let previous = UserDefaults.standard.data(forKey: key)
+        defer {
+            if let previous {
+                UserDefaults.standard.set(previous, forKey: key)
+            } else {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
+        }
+
+        ThinkingRuleStore.save([
+            ThinkingRule(prefix: "cache-probe", maxLevel: .medium, defaultLevel: .low)
+        ])
+        XCTAssertEqual(ThinkingLevelCatalog.declaredMaxLevel(for: "cache-probe-1"), .medium)
+
+        // 绕过 save(),直接改 UserDefaults —— 必须立刻被看到。
+        let raw = try JSONEncoder().encode([
+            ThinkingRule(prefix: "cache-probe", maxLevel: .low, defaultLevel: .low)
+        ])
+        UserDefaults.standard.set(raw, forKey: key)
+        XCTAssertEqual(ThinkingLevelCatalog.declaredMaxLevel(for: "cache-probe-1"), .low)
+
+        // 删掉键之后也不能继续吐旧规则。
+        UserDefaults.standard.removeObject(forKey: key)
+        XCTAssertNil(ThinkingLevelCatalog.declaredMaxLevel(for: "cache-probe-1"))
+    }
+
     func testSessionInferenceConfigDecodeWithUnknownLevel() throws {
         let json = """
         { "thinkingLevel": "hyper-future" }

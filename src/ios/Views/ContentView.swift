@@ -1,3 +1,4 @@
+import CryptoKit
 import SwiftUI
 import UniformTypeIdentifiers
 import WidgetKit
@@ -238,6 +239,7 @@ struct ContentView: View {
     /// observe them — SessionRow observes this store for its own badges, but
     /// the aggregate lives on ContentView and needs its own subscription.
     @ObservedObject private var badgeStore = SessionBadgeStore.shared
+    @ObservedObject private var relayCatchUp = RelayEventCatchUp.shared
     @State private var sessions: [ChatSession] = []
     /// [T-ios-session-list-equatable-jank] id → ChatSession lookup backing the
     /// sidebar rows. Held in @State (not a per-body-eval computed `[String:
@@ -1693,7 +1695,9 @@ struct ContentView: View {
         .modifier(ScrollPhaseProbe())
         #endif
         .opacity(didInitialLoad ? 1 : 0)
-        .overlay { if didInitialLoad, filteredSessions.isEmpty, !isSearching { emptyState } }
+        // [T-session-filter-trap] 只有"库里真的没有会话"才铺满屏的空状态。
+        // 筛选筛空时铺这层会把上面刚恢复的 chips 整个盖住,等于没修。
+        .overlay { if didInitialLoad, sessions.isEmpty, !isSearching { emptyState } }
         .safeAreaInset(edge: .bottom) { if isSelecting { selectionToolbar } else { fabRow } }
         // [T-home-fab-keyboard-inset] Mirror of the voice panel's structural
         // immunity (604a9947 / T-voice-bg-fg-gap): with the inline search bar
@@ -1816,7 +1820,8 @@ struct ContentView: View {
         .listStyle(.plain)
         .navigationSplitViewColumnWidth(min: 340, ideal: 380, max: 500)
         .opacity(didInitialLoad ? 1 : 0)
-        .overlay { if didInitialLoad, displaySessions.isEmpty, !isSearching { emptyState } }
+        // [T-session-filter-trap] 同 stackList:筛空 ≠ 没有会话。
+        .overlay { if didInitialLoad, sessions.isEmpty, !isSearching { emptyState } }
         .safeAreaInset(edge: .bottom) { if isSelecting { selectionToolbar } else { fabRow } }
         // [T-home-fab-keyboard-inset] Same structural immunity as the compact
         // list above — see that call site for the full rationale. On iPad the
@@ -2655,18 +2660,53 @@ struct ContentView: View {
     /// default identity.
     @ViewBuilder
     private func agentHomeListSection(hasSessions: Bool) -> some View {
-        if hasSessions, !isSelecting, !isSearching {
+        if !isSelecting, !isSearching, hasSessions || shouldShowFilterChips {
             Section {
-                agentHomeCard(compact: true)
-                    .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
-                sessionFilterChips
-                    .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 8, trailing: 12))
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
+                if hasSessions {
+                    agentHomeCard(compact: true)
+                        .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                }
+                if shouldShowFilterChips {
+                    sessionFilterChips
+                        .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 8, trailing: 12))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                }
+                if hasSessions == false, shouldShowFilterChips {
+                    emptyFilterHint
+                        .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                }
             }
         }
+    }
+
+    /// [T-session-filter-trap] 筛选 chips 的显示**不能**跟着"筛选结果是否为空"走。
+    ///
+    /// 原来 chips 和首页卡片一起挂在 `hasSessions`(= 过滤后列表非空)上,于是:
+    ///   · 点「归档」而一条归档会话都没有 → 列表空 → 整行 chips 消失 → 界面上
+    ///     再没有任何控件能切回「全部」,而 filter 只存在内存里,只能杀进程;
+    ///   · 把唯一一个会话归档掉 → 「全部」视图也空 → 同样丢失 chips,连
+    ///     「归档」都点不进去,那条会话等于消失了。
+    /// 所以判据换成"库里到底有没有会话"(未过滤的 `sessions`),外加"当前不是
+    /// 默认筛选"这个兜底 —— 后者保证任何非 .all 状态下都一定有路可退。
+    private var shouldShowFilterChips: Bool {
+        !sessions.isEmpty || sessionExtras.filter != .all
+    }
+
+    /// 有会话、但当前筛选下一条都不剩时的占位。没有它,用户看到的是
+    /// 一排 chips 下面空空如也,分不清是"筛没了"还是"加载失败"。
+    private var emptyFilterHint: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+            Text("这个筛选下没有会话。点上面的「全部」看全部对话。")
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // 返回 AnyView 是刻意的,不是偷懒:这张卡片是 200+ 行的单表达式泛型
@@ -3182,22 +3222,23 @@ struct ContentView: View {
     @ViewBuilder
     private var attentionBar: some View {
         let pending = attentionSessions
-        if !pending.isEmpty {
+        let missed = relayCatchUp.missedApprovals
+        if !pending.isEmpty || !missed.isEmpty {
             Button {
-                // Jump to the oldest one — working a backlog front-to-back is
-                // the behaviour people expect from an inbox.
-                if let target = pending.last {
+                if let item = missed.first {
+                    openMissedRelayApproval(item)
+                } else if let target = pending.last {
                     jumpToSession(target.id)
                 }
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "tray.full.fill")
+                    Image(systemName: missed.isEmpty ? "tray.full.fill" : "hand.raised.fill")
                         .font(.caption)
                         .foregroundStyle(.white)
                         .frame(width: 22, height: 22)
                         .background(Color.orange, in: Circle())
                         .leoPulse(active: true)
-                    Text("\(pending.count) sessions need you")
+                    Text(attentionBarTitle(sessionCount: pending.count, approvalCount: missed.count))
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(.primary)
                     Spacer(minLength: 0)
@@ -3216,6 +3257,44 @@ struct ContentView: View {
             .buttonStyle(.plain)
             .hoverEffect(.highlight)
             .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
+    private func attentionBarTitle(sessionCount: Int, approvalCount: Int) -> String {
+        if approvalCount > 0 && sessionCount > 0 {
+            return "\(approvalCount) 条远程审批 · \(sessionCount) 个会话待处理"
+        }
+        if approvalCount > 0 {
+            return approvalCount == 1 ? "远程机器等你审批" : "\(approvalCount) 条远程审批待处理"
+        }
+        return "\(sessionCount) sessions need you"
+    }
+
+    private func openMissedRelayApproval(_ item: RelayEventItem) {
+        let host = GatewayHostStore.shared.hostMatching(machine: item.machine)
+        if let host, let sid = item.sessionId,
+           let live = macLive.rows.first(where: { $0.hostId == host.id && $0.session.id == sid }) {
+            macAttachTarget = live
+            relayCatchUp.clearMissedApprovals()
+            return
+        }
+        if let host, let sid = item.sessionId {
+            macAttachTarget = MacLiveSessionsStore.Row(
+                hostId: host.id,
+                hostName: host.name,
+                session: HarnessSessionSummary(
+                    id: sid,
+                    harness: "claude",
+                    name: "远程会话",
+                    cwd: "~",
+                    status: "running",
+                    seq: item.seq,
+                    waitingForApproval: true,
+                    pendingApprovalId: item.approvalId,
+                    pendingApprovalCommand: item.command
+                )
+            )
+            relayCatchUp.clearMissedApprovals()
         }
     }
 
@@ -3805,11 +3884,22 @@ struct ContentView: View {
 
     enum ExportFormat { case json, plainText }
 
+    /// [T-import-offmain] 读文件和建库写入都不在主线程上做。
+    ///
+    /// 原来 `Data(contentsOf:)` 直接在主线程读(iCloud/「文件」里的大导出包会
+    /// 触发下载 + 整包读入,几十 MB 时界面直接冻住),随后的 JSON 解析和
+    /// 逐条 SQLite 写入也一并跑在主线程的 `Task { @MainActor in }` 里。
+    /// 现在:读文件丢到 detached 任务;解析与写库在 nonisolated 的
+    /// `importExportedJSON` 里跑;只有最后刷新列表回主线程。
     private func importSessions(from url: URL) {
-        let scoped = url.startAccessingSecurityScopedResource()
-        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-        guard let data = try? Data(contentsOf: url) else { return }
-        Task { @MainActor in
+        Task {
+            let data = await Task.detached(priority: .userInitiated) { () -> Data? in
+                // security-scoped 资源的开/关必须和读在同一段里成对出现。
+                let scoped = url.startAccessingSecurityScopedResource()
+                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                return try? Data(contentsOf: url)
+            }.value
+            guard let data else { return }
             let imported = await Self.importExportedJSON(data)
             if imported > 0 {
                 refreshSessionList()
@@ -3826,16 +3916,26 @@ struct ContentView: View {
         return entries.first(where: { $0.name.lowercased().hasSuffix(".json") })?.data
     }
 
-    private static func importExportedJSON(_ data: Data) async -> Int {
+    /// [T-import-offmain] `nonisolated` —— 解析和写库明确不占主线程。
+    /// [T-import-dedupe] 每条会话按内容指纹去重,重复导入同一份文件不再
+    /// 无限复制:指纹写进 `source`(`import:<fp>`),导入前先读一遍现有
+    /// 会话的 source。同一份 payload 内部的重复行也一并去掉。
+    private nonisolated static func importExportedJSON(_ data: Data) async -> Int {
         guard let payload = jsonPayload(fromImport: data),
               let rows = try? JSONSerialization.jsonObject(with: payload) as? [[String: Any]] else { return 0 }
         var count = 0
         let iso = ISO8601DateFormatter()
+        var seenSources = Set(await ChatStore.shared.listSessions().compactMap(\.source))
         for row in rows {
             let messages = row["messages"] as? [[String: Any]] ?? []
             var drafts: [(role: MessageRole, text: String, created: Date)] = []
             for msg in messages {
-                let roleRaw = (msg["role"] as? String) ?? "user"
+                let roleRaw = ((msg["role"] as? String) ?? "user").lowercased()
+                // [T-import-role] ChatStore 的 MessageRole 只有 user / assistant
+                // 两种,没有 system。原来「非 assistant 一律折成 .user」会把
+                // system / developer / tool 这些条目**冒充成用户说的话**,
+                // 之后它们会原样进上下文、也会显示成用户气泡。既然存不下这个
+                // 角色,至少要留下痕迹:标出原始角色,不做无声改写。
                 let role: MessageRole = roleRaw == "assistant" ? .assistant : .user
                 var texts: [String] = []
                 if let parts = msg["parts"] as? [[String: Any]] {
@@ -3844,16 +3944,23 @@ struct ContentView: View {
                     }
                 }
                 if texts.isEmpty, let content = msg["content"] as? String { texts = [content] }
-                let text = texts.joined(separator: "\n")
+                var text = texts.joined(separator: "\n")
                 guard !text.isEmpty else { continue }
+                if roleRaw != "user", roleRaw != "assistant" {
+                    text = "[\(roleRaw)] " + text
+                }
                 let created = (msg["createdAt"] as? String).flatMap { iso.date(from: $0) } ?? Date()
                 drafts.append((role, text, created))
             }
             guard !drafts.isEmpty else { continue }
             let title = row["title"] as? String
             let modelId = (row["modelId"] as? String) ?? "imported"
-            let session = ChatStore.shared.createSession(modelId: modelId, title: title, source: "import")
-            ChatStore.shared.appendMessages(drafts.map { draft in
+            let source = "import:" + importFingerprint(
+                title: title, modelId: modelId, drafts: drafts.map { ($0.role, $0.text) })
+            guard seenSources.insert(source).inserted else { continue }
+            let session = await ChatStore.shared.createSession(
+                modelId: modelId, title: title, source: source)
+            await ChatStore.shared.appendMessages(drafts.map { draft in
                 RawMessage(
                     id: UUID().uuidString,
                     sessionId: session.id,
@@ -3865,6 +3972,23 @@ struct ContentView: View {
             count += 1
         }
         return count
+    }
+
+    /// 导入去重指纹:标题 + 模型 + 全部消息(角色 + 正文)的 SHA-256 前 16 位。
+    /// 不含时间戳——同一份导出重复导入时 createdAt 解析结果相同,但即便导出
+    /// 工具重打了时间,内容一样就该算同一条。
+    private nonisolated static func importFingerprint(
+        title: String?, modelId: String, drafts: [(MessageRole, String)]
+    ) -> String {
+        var material = (title ?? "") + "\u{0}" + modelId
+        for (role, text) in drafts {
+            material += "\u{0}" + role.rawValue + "\u{1}" + text
+        }
+        return SHA256.hash(data: Data(material.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+            .prefix(16)
+            .description
     }
 
     private func exportSessions(ids: Set<String>, format: ExportFormat) {

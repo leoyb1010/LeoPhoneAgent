@@ -6,6 +6,50 @@ extension AIChatViewModel {
 
     // MARK: - Tool Definitions (Canonical)
 
+    /// Binding-resolved model, not the leftover Haiku default on `selectedModel`.
+    var currentModelSupportsImageInput: Bool {
+        (resolveCurrentEntry()?.model ?? selectedModel)
+            .capabilities.supportedModalities.contains(.imageInput)
+    }
+
+    /// [T-vision-gate-copy] 读图被拦时给用户的话。
+    ///
+    /// 拦截本身方向是对的(模型真看不见图时,把图塞进去只会让它编),但原来
+    /// 那句「请切换到支持图像输入的模型」把用户指错了方向:大量误判来自
+    /// **能力表缺条目**,而不是模型真不能读图 ——
+    ///   · LLMTypes.knownCapabilities 只有 5 个 provider key,不在表里的一律
+    ///     落到 defaultCapabilities = .textOnly(实测被误杀的内置模型:
+    ///     grok-4-fast、grok-3-mini-fast、grok-composer-2.5-fast、kimi-k3);
+    ///   · 更大头是 OpenAI 兼容自定义端点 —— OpenAIModelsAPI 在端点不返回
+    ///     modalities 时直接写死 text-only。
+    /// 这些情况下正确的补救是去「设置 → 供应商 → 该模型 → Image input」
+    /// 把开关打开(写进 overrides.modalityOverride),而不是换模型。所以文案
+    /// 改成指向那个开关,并附一个直达该供应商详情页的深链。
+    var imageUnsupportedNotice: String {
+        let entry = resolveCurrentEntry()
+        let modelName = entry?.model.displayName ?? entry?.model.id ?? selectedModel.id
+        var text = "当前模型「\(modelName)」没有被标成支持读图,附件已保留。"
+            + "如果它其实能看图,去「设置 → 供应商 → \(modelName) → Image input」把开关打开"
+        if let instanceId = entry?.providerInstanceId, !instanceId.isEmpty,
+           let encoded = instanceId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) {
+            text += ":[打开该供应商设置](leophoneagent://settings/providers/\(encoded))"
+        } else {
+            text += ":[打开供应商列表](leophoneagent://settings/providers)"
+        }
+        text += "。确实不支持时再换一个能读图的模型。"
+        return text
+    }
+
+    private var shellCommandToolDescription: String {
+        var text = "The shell command to execute. Supports multi-line commands directly — no special escaping needed. Keep under 1000 chars; for longer scripts, write to a file with file_write first, then run it."
+        if AgentChatCorrectness.shouldRegisterReadImage(supportsImageInput: currentModelSupportsImageInput) {
+            text += " If a command GENERATES an image or chart for the user (matplotlib, ImageMagick, screenshots…), save it under /var/minis/workspace/ and then call read_image on it so the user actually SEES it in the chat — never just claim it was generated."
+        } else {
+            text += " If a command GENERATES an image or chart, save it under /var/minis/workspace/ so the user can open the file. This model cannot view image pixels — do not claim you inspected the image."
+        }
+        return text
+    }
+
     func makeAgentTools() -> [AgentToolDefinition] {
         // [T-memory-toggle-gates-injection-and-tools-ios] memory_get and
         // memory_write are conditionally registered. When the per-session
@@ -20,7 +64,7 @@ extension AIChatViewModel {
                 description: "Execute a command in an isolated Linux process (iSH/Alpine Linux). The command runs via /bin/sh -c with stdout and stderr captured separately via pipes. Each invocation spawns a fresh process — there is no shared terminal session. Default timeout is 15 minutes.",
                 parameters: [
                     "tool_title": AgentToolParam(type: .string, description: "A concise 5-10 word summary of what this tool call does, shown to the user (e.g. 'Install Python data analysis packages', 'List files in home directory'). Use the same language as the user."),
-                    "command": AgentToolParam(type: .string, description: "The shell command to execute. Supports multi-line commands directly — no special escaping needed. Keep under 1000 chars; for longer scripts, write to a file with file_write first, then run it. If a command GENERATES an image or chart for the user (matplotlib, ImageMagick, screenshots…), save it under /var/minis/workspace/ and then call read_image on it so the user actually SEES it in the chat — never just claim it was generated."),
+                    "command": AgentToolParam(type: .string, description: shellCommandToolDescription),
                     "timeout": AgentToolParam(type: .integer, description: "Timeout in seconds (default: 900). Use a larger value for long-running commands like package installs."),
                     "delay": AgentToolParam(type: .integer, description: "Delay in seconds before execution begins. The tool blocks the agent flow during this wait WITHOUT occupying the iSH shell, so other concurrent tasks can use it. Use this instead of sleep commands to avoid resource contention."),
                 ],
@@ -135,8 +179,10 @@ extension AIChatViewModel {
             ))
         }
 
-        // Only include read_image when the model supports image input
-        if selectedModel.capabilities.supportedModalities.contains(.imageInput) {
+        // Only include read_image when the *active* model supports image input.
+        // `selectedModel` is a leftover default (Haiku) and is not kept in sync
+        // with session bindings — using it here handed vision tools to text-only models.
+        if AgentChatCorrectness.shouldRegisterReadImage(supportsImageInput: currentModelSupportsImageInput) {
             tools.append(AgentToolDefinition(
                 name: "read_image",
                 description: "Read an image file from the Linux filesystem and return it for visual analysis. Supports PNG, JPEG, GIF, WEBP, and other common image formats. Use this to inspect generated charts, downloaded images, screenshots, or any visual output. The image is returned directly for your analysis along with metadata (dimensions, file size).",

@@ -262,6 +262,15 @@ extension AIChatViewModel {
     /// the no-config/no-credential path is itself moderately expensive to re-walk.
     private static let resolveNilSentinel = "\u{0}nil"
 
+    /// Keep `selectedModel` aligned with the binding that send/loop actually use.
+    /// Inspector, intents, and new-session modelId all read this field.
+    func syncSelectedModelFromBinding() {
+        guard let model = resolveCurrentEntry()?.model else { return }
+        guard selectedModel.id != model.id else { return }
+        logger.info("🔀 selectedModel sync \(self.selectedModel.id) → \(model.id)")
+        selectedModel = model
+    }
+
     func resolveCurrentEntry() -> ModelEntry? {
         let store = ProviderConfigStore.shared
         let key = ResolveCacheKey(
@@ -421,17 +430,24 @@ extension AIChatViewModel {
         return nil
     }
 
-    /// Resolve a sub-model entry for lightweight tasks (title gen, etc.).
+    /// Resolve a sub-model entry for lightweight tasks (compaction, title gen).
+    ///
+    /// [T-compact-slot] 设置里那个「压缩 / 标题」便宜模型槽
+    /// (`AgentModelSlots.compactEntryId`)现在两处都作用:标题生成走
+    /// `+TitleGeneration`,压缩摘要走 `+Compaction.generateCompactSummary`。
+    /// 之前它只被标题生成调用,压缩自己走 `resolveCurrentEntry()` —— 设置文案
+    /// 和 release notes 都写着"压缩",实际压缩根本没用上,属于"看起来做了但
+    /// 没生效"。修的方向选"让它真的作用于压缩"而不是改文案:用户配这个槽的
+    /// 动机就是省钱,而压缩才是这两件事里烧 token 的那一件。
     func resolveSubEntry() -> ModelEntry? {
         let store = ProviderConfigStore.shared
-        if let compactId = AgentModelSlots.compactEntryId,
-           let cheap = store.entry(for: compactId),
-           !cheap.isHidden {
-            return cheap
-        }
 
         // 1. Session-specific sub model binding takes precedence — user
         //    explicitly picked a sub model for this conversation.
+        //    [T-compact-slot] 全局的便宜模型槽必须排在它**后面**:槽是全局默认,
+        //    会话级绑定是用户对这一个会话的明确指定,后者更具体。原来槽写在
+        //    最前面,和紧跟着的注释「Session-specific sub model binding takes
+        //    precedence」直接矛盾,会话级绑定永远轮不到。
         if let sid = sessionId, let binding = store.binding(for: sid),
            let sub = binding.subModelSource {
             switch sub {
@@ -452,7 +468,20 @@ extension AIChatViewModel {
             }
         }
 
-        // 2. No session-level sub binding — use the current session's primary
+        // 2. 全局「压缩 / 标题」便宜模型槽。
+        //    [T-compact-slot] 和下面 group 分支同样校验 provider 是否 enabled /
+        //    有凭据:槽里存的只是一个 entryId,用户事后把那个供应商停用或删掉
+        //    凭据后,原来的写法会照样返回它,压缩/标题必然 401。校验不过就当
+        //    没配,落到第 3 步的当前会话模型——宁可贵一点,也不能直接失败。
+        if let compactId = AgentModelSlots.compactEntryId,
+           let cheap = store.entry(for: compactId),
+           !cheap.isHidden,
+           let inst = store.instance(for: cheap.providerInstanceId),
+           inst.isEnabled, inst.hasAnyCredential {
+            return cheap
+        }
+
+        // 3. No session-level sub binding — use the current session's primary
         //    model (NOT the global defaultSubGroup). This keeps title gen +
         //    other lightweight LLM calls on the same provider/model the user
         //    is actively chatting with, instead of silently jumping to a

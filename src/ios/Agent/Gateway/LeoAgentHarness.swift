@@ -354,7 +354,14 @@ final class HarnessSessionDriver: ObservableObject {
                 for try await item in client.harnessEvents(sessionId: sessionId, after: lastSeq) {
                     if Task.isCancelled { return }
                     await MainActor.run {
-                        self.lastSeq = max(self.lastSeq, item.seq)
+                        // Skip a replay of the last applied seq when `after` is inclusive.
+                        // messageDelta concatenates; applying seq N twice doubles the last chunk.
+                        // 说明:Android 那条 harness 路径(MinisHarnessRouter)对 `after`
+                        // 是严格大于,这个分支在那边永远不会命中——保留它是为了 Mac /
+                        // 未来实现真按 inclusive 处理时不至于把最后一段文字重复一遍,
+                        // 属于纯防御,不改变已知实现的行为。
+                        if item.seq > 0, item.seq <= self.lastSeq { return }
+                        if item.seq > 0 { self.lastSeq = item.seq }
                         self.apply(item.event)
                     }
                     // run.completed / run.failed are TURN boundaries here — the

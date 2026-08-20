@@ -377,7 +377,12 @@ extension AIChatViewModel {
             let result = try await processStreamEvents(
                 stream: fbStream,
                 msgIdx: msgIdx,
-                provider: provider
+                provider: provider,
+                // 这里的 `messages` 是函数入参 `[AgentMessage]`(发给模型的历史),
+                // 不是 VM 上那条 `[ChatMessage]` UI 列表。取 id 必须走 `self.messages`,
+                // 否则既编译不过,也拿不到本轮 assistant 气泡的身份。
+                runMsgId: chatMessage?.id
+                    ?? (msgIdx >= 0 && msgIdx < self.messages.count ? self.messages[msgIdx].id : UUID())
             )
 
             // Empty-response detection: HTTP 200 + stream finished, but no text,

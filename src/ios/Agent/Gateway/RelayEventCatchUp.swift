@@ -52,8 +52,10 @@ final class RelayEventCatchUp: ObservableObject {
         }
     }
 
-    /// 启动时调一次即可(注册前台观察者)。
-    func activate() {}
+    /// 启动时调一次:观察者已在 init 装好,这里补一轮冷启动对账。
+    func activate() {
+        Task { await catchUp() }
+    }
 
     func catchUp() async {
         guard !inFlight else { return }
@@ -113,10 +115,7 @@ final class RelayEventCatchUp: ObservableObject {
         // [T-catchup-hostid] 中继报的 machine 名与用户在「我的 Mac」里自取的
         // 名字未必一致;精确匹配失败就退到"唯一一台中继主机",再退到首台。
         // 匹配不上会导致通知按钮回调找不到 host,批准静默失败。
-        let hosts = GatewayHostStore.shared.activeHosts
-        let hostId = (hosts.first { $0.name == hostName }
-            ?? hosts.first { hostName.contains($0.name) || $0.name.contains(hostName) }
-            ?? hosts.first)?.id
+        let hostId = GatewayHostStore.shared.hostMatching(machine: hostName)?.id
         let approval = GatewayApprovalRequest(
             approvalId: approvalId, runId: sessionId,
             choices: ["once", "deny"], command: item.command,

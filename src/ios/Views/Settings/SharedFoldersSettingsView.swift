@@ -20,7 +20,7 @@ struct SharedFoldersSettingsView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Label("Shared folders", systemImage: "info.circle")
                         .font(.subheadline.weight(.semibold))
-                    Text("These directories appear in iOS Files under On My iPhone → LeoPhoneAgent. Tap a row to see details, browse, or toggle visibility.")
+                    Text("这些目录会出现在「文件」App 的「\(LeoDeviceNouns.filesBrowsePath())」下。点一行可查看详情、浏览或开关可见性。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

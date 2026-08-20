@@ -23,9 +23,6 @@
 + (NSDictionary * _Nonnull)disabledErrorEnvelope;
 + (NSArray<NSString *> * _Nonnull)allTopics;
 + (NSArray<NSDictionary *> * _Nonnull)fieldsForTopic:(NSString * _Nonnull)topic;
-+ (NSDictionary * _Nonnull)readFieldWithPath:(NSString * _Nonnull)path;
-+ (NSDictionary * _Nonnull)readFieldWithPath:(NSString * _Nonnull)path
-                                       filter:(NSString * _Nullable)filter;
 + (NSDictionary * _Nonnull)readFieldWithPath:(NSString * _Nonnull)path
                                        filter:(NSString * _Nullable)filter
                                          page:(NSInteger)page

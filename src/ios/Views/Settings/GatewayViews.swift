@@ -219,8 +219,16 @@ struct GatewaySettingsView: View {
     }
 
     private func refresh() async {
+        // [T-relay-key-fallback] 同一个中继根下可能存着好几把密钥(每台主机一把)。
+        // 逐把试,第一把成功就不再重复列举;第一把失效时后面的还有机会,
+        // 而不是像以前那样整条发现链跟着 hosts[0] 一起死。
+        var succeededRoots: [String] = []
         for credential in RelayMachinesClient.credentials(from: relayCredentialCandidates()) {
+            if succeededRoots.contains(where: { RelayMachinesClient.sameApiRoot($0, credential.apiRoot) }) {
+                continue
+            }
             if let live = try? await RelayMachinesClient.list(apiRoot: credential.apiRoot, key: credential.key) {
+                succeededRoots.append(credential.apiRoot)
                 store.upsertDiscovered(live, key: credential.key, apiRoot: credential.apiRoot)
             }
         }
@@ -282,7 +290,7 @@ private struct QuickFleetSetupSheet: View {
                 } footer: {
                     VStack(alignment: .leading, spacing: LeoTheme.Spacing.xs) {
                         Text("把复制的命令粘贴到 Mac 终端，再把返回的密钥粘贴到上方。")
-                        Label("如果手机开着 Shadowrocket 等代理，请将 *.ts.net 设为直连。",
+                        Label("如果本机开着 Shadowrocket 等代理，请将 *.ts.net 设为直连。",
                               systemImage: "exclamationmark.triangle.fill")
                     }
                 }
@@ -298,7 +306,7 @@ private struct QuickFleetSetupSheet: View {
                                     : "发现 \(rows.count) 台：\(rows.map(\.name).joined(separator: "、"))"
                             } catch {
                                 discovered = []
-                                result = "连不上中继。若手机开着代理,把 *.ts.net 加直连或暂时关闭代理再试。"
+                                result = "连不上中继。若本机开着代理,把 *.ts.net 加直连或暂时关闭代理再试。"
                             }
                             testing = false
                         }
@@ -519,7 +527,7 @@ private struct GatewayHostEditor: View {
             GatewayHost(id: host.id, name: host.name, baseURL: $0.absoluteString)
         }
         guard await GatewayHostStore.probe(harnessProbe ?? host) else {
-            testResult = "连不上这台 Mac。检查地址拼写,以及手机上的 Tailscale 是否已打开。"
+            testResult = "连不上这台 Mac。检查地址拼写,以及本机上的 Tailscale 是否已打开。"
             return
         }
         guard !draft.accessKey.isEmpty else {

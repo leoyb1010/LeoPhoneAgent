@@ -357,6 +357,7 @@ extension AIChatViewModel {
         // only `[image omitted ...]`, falls back to OCR or refuses to answer.
         let inlineBudget = Self.kImageContextKeepCount
         var inlinedImages = 0
+        let canSeeImages = currentModelSupportsImageInput
 
         for (i, attachment) in attachments.enumerated() {
             let fileExists = fm.fileExists(atPath: attachment.cacheURL.path)
@@ -402,7 +403,7 @@ extension AIChatViewModel {
             }
 
             if attachment.kind == .image {
-                if inlinedImages < inlineBudget {
+                if canSeeImages, inlinedImages < inlineBudget {
                     let resized = Self.resizedImageData(data, maxLongEdge: 2000) ?? data
                     let ext = attachment.cacheURL.pathExtension.lowercased()
                     let mime: String
@@ -419,7 +420,11 @@ extension AIChatViewModel {
                 } else {
                     let placeholder = Self.imagePlaceholderText(data: data, originalPath: linuxPath, snapshotPath: nil)
                     parts.append(.text(placeholder))
-                    logger.info("📎[QUEUE-DRAIN]   image not inlined (budget \(inlineBudget) exhausted), placeholder added for \(linuxPath)")
+                    if !canSeeImages {
+                        logger.info("📎[QUEUE-DRAIN]   image not inlined (active model has no vision), path-only placeholder for \(linuxPath)")
+                    } else {
+                        logger.info("📎[QUEUE-DRAIN]   image not inlined (budget \(inlineBudget) exhausted), placeholder added for \(linuxPath)")
+                    }
                 }
             }
         }
@@ -434,17 +439,15 @@ extension AIChatViewModel {
             parts.append(.text(xml))
         }
 
-        // When some images were omitted, add a tip so the model knows to batch-read
+        // When some images were omitted, tell the model how to proceed without
+        // lying about vision on text-only bindings.
         let totalImageAttachments = attachments.filter { $0.kind == .image }.count
-        if totalImageAttachments > inlinedImages {
-            let omitted = totalImageAttachments - inlinedImages
-            parts.append(.text(
-                "<system-reminder>Only \(inlinedImages) of \(totalImageAttachments) images are inlined above."
-                + " The remaining \(omitted) are saved to disk — use read_image to view them."
-                + " To stay within the context image limit (\(Self.kImageContextKeepCount)),"
-                + " process images in batches: read a batch, analyze, then summarize your findings"
-                + " before reading the next batch.</system-reminder>"
-            ))
+        if let reminder = AgentChatCorrectness.omittedImageReminder(
+            inlined: inlinedImages,
+            total: totalImageAttachments,
+            supportsImageInput: canSeeImages
+        ) {
+            parts.append(.text(reminder))
         }
 
         return (parts, metas)

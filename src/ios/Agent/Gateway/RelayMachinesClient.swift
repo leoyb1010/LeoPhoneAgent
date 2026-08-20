@@ -37,12 +37,15 @@ enum RelayMachinesClient {
         let rows = obj["machines"] as? [[String: Any]] ?? []
         return rows.compactMap { row in
             guard let name = row["name"] as? String, !name.isEmpty else { return nil }
+            // Relay rows historically put platform/server at the top level.
+            // Current leocodebox `/machines` nests them under `info`.
+            // Read both so Android-as-body still classifies when either shape arrives.
             return RelayDiscoveredMachine(
                 name: name,
                 online: row["online"] as? Bool ?? true,
-                platform: row["platform"] as? String,
-                server: row["server"] as? String,
-                version: row["version"] as? String
+                platform: nestedOrTop(row, "platform"),
+                server: nestedOrTop(row, "server"),
+                version: nestedOrTop(row, "version")
             )
         }
     }
@@ -109,13 +112,20 @@ enum RelayMachinesClient {
         }
     }
 
+    /// [T-relay-key-fallback] 去重判据是「中继根 + 密钥」,不再是「中继根」。
+    ///
+    /// 原来只按 apiRoot 去重,同一个中继根下只保留第一台主机的密钥。于是
+    /// hosts[0] 的密钥一旦过期/写坏,整条发现链就 401 到底,即使 hosts[1]
+    /// 存着一把好的也永远轮不到——没有任何回退。改成保留同一根下的多把
+    /// 不同密钥(顺序不变),调用方可以逐把试。
+    /// `credential(matching:)` 仍然取第一条匹配,行为不变。
     static func credentials(from candidates: [RelayCredentialCandidate]) -> [RelayCredential] {
         var seen = Set<String>()
         return candidates.compactMap { candidate in
             guard let root = apiRoot(fromHarnessURL: candidate.harnessURL),
                   let key = candidate.key?.trimmingCharacters(in: .whitespacesAndNewlines),
                   key.count >= 16 else { return nil }
-            let normalized = normalizeApiRoot(root).lowercased()
+            let normalized = normalizeApiRoot(root).lowercased() + "\u{0}" + key
             guard seen.insert(normalized).inserted else { return nil }
             return RelayCredential(apiRoot: root, key: key)
         }
@@ -126,6 +136,49 @@ enum RelayMachinesClient {
         from candidates: [RelayCredentialCandidate]
     ) -> RelayCredential? {
         credentials(from: candidates).first { sameApiRoot($0.apiRoot, apiRoot) }
+    }
+
+    /// `platform` / `server` / `version` may sit at the row root or under `info`.
+    static func nestedOrTop(_ row: [String: Any], _ key: String) -> String? {
+        if let direct = row[key] as? String, !direct.isEmpty { return direct }
+        if let info = row["info"] as? [String: Any],
+           let nested = info[key] as? String, !nested.isEmpty {
+            return nested
+        }
+        return nil
+    }
+
+    /// Match a stored host to a relay machine id. Display names like
+    /// "MacBook Pro" must not win over the real hostname `LeoyuandeMacBook-Pro-2`.
+    static func hostMatches(hostId: String, displayName: String, machine: String) -> Bool {
+        let needle = machine.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !needle.isEmpty else { return false }
+        let lower = needle.lowercased()
+        if hostId.lowercased() == lower { return true }
+        if let sanitized = sanitizeMachine(needle), sanitized.lowercased() == hostId.lowercased() {
+            return true
+        }
+        if displayName == needle || displayName.lowercased() == lower { return true }
+        if Self.displayName(for: needle) == displayName { return true }
+        return false
+    }
+
+    static func pickHostIndex(
+        hostIds: [String],
+        displayNames: [String],
+        hostId: String,
+        machine: String
+    ) -> Int? {
+        if !hostId.isEmpty, let i = hostIds.firstIndex(where: { $0 == hostId }) {
+            return i
+        }
+        for i in hostIds.indices {
+            if hostMatches(hostId: hostIds[i], displayName: displayNames[i], machine: machine) {
+                return i
+            }
+        }
+        if hostIds.count == 1 { return 0 }
+        return nil
     }
 }
 

@@ -11,6 +11,23 @@ private struct StreamStallError: Error, LocalizedError {
     }
 }
 
+extension AgentStreamEvent {
+    /// [T-stream-mainthread] 这条事件是否值得为它上一次主线程重新定位 msgIdx。
+    ///
+    /// 三个 delta 事件是热路径(每 ~30ms 一条),它们的 UI 写回本来就被节流到
+    /// 300–500ms 一次,并且写回时会用 expectedMessageId 再校验一次身份;为它们
+    /// 每条都 hop 一次主线程,收益为零、代价是把节流设计整个抵消掉。
+    /// 其余事件都是每轮个位数次,顺手重定位不影响吞吐。
+    var needsMessageIdentityResync: Bool {
+        switch self {
+        case .textDelta, .thinkingDelta, .toolInputDelta:
+            return false
+        default:
+            return true
+        }
+    }
+}
+
 private final class StreamIteratorBox<T: Sendable>: @unchecked Sendable {
     private var iterator: AsyncThrowingStream<T, Error>.AsyncIterator
     init(_ stream: AsyncThrowingStream<T, Error>) {
@@ -215,9 +232,11 @@ extension AIChatViewModel {
     /// This keeps CFNetwork HTTP/2 HPACK decoding and JSON parsing off the main thread.
     nonisolated func processStreamEvents(
         stream: AsyncThrowingStream<AgentStreamEvent, Error>,
-        msgIdx: Int,
-        provider: any AgentProvider
+        msgIdx initialMsgIdx: Int,
+        provider: any AgentProvider,
+        runMsgId: UUID
     ) async throws -> StreamResult {
+        var mutableMsgIdx = initialMsgIdx
         var result = StreamResult()
         var currentTextBlockIdx: Int? = nil
         var currentThinkingBlockIdx: Int? = nil
@@ -285,6 +304,42 @@ extension AIChatViewModel {
             }
             guard let event = maybeEvent else { break }
             try Task.checkCancellation()
+            // [T-stream-mainthread] msgIdx 重定位只挂在**低频**事件上。
+            //
+            // 本函数显式标了 nonisolated,文件头也写着「keeps HPACK decoding and
+            // JSON parsing off the main thread」——把 SSE 解码留在后台线程、只按
+            // 300–500ms 节流往主线程刷一次,是这里的核心设计。textDelta /
+            // thinkingDelta / toolInputDelta 每 ~30ms 就来一条,如果每条事件都
+            // `await MainActor.run` 查一次身份,主线程同步频率会从「每 300ms 一次」
+            // 变成「每个 SSE chunk 两次」,上面那套节流就等于没写。
+            //
+            // 高频 delta 路径不需要在这里重定位:它们的写回都走
+            // setStreamingTextBlockContent(expectedMessageId:),身份对不上时会在
+            // 主线程那一侧直接丢弃(见 AgentChatCorrectness.shouldApplyStreamDelta);
+            // 真正的重定位交给紧随其后的低频事件(block start / tool complete /
+            // usage / done)完成,最多晚一个 chunk。
+            if event.needsMessageIdentityResync {
+                let current = mutableMsgIdx
+                if let resolved = await MainActor.run(body: { () -> Int? in
+                    if self.userDidCancel { return nil }
+                    if current >= 0, current < self.messages.count, self.messages[current].id == runMsgId {
+                        return current
+                    }
+                    return self.messages.firstIndex(where: { $0.id == runMsgId })
+                }) {
+                    mutableMsgIdx = resolved
+                } else {
+                    // 只有两种落到这里的情况:用户按了停止,或这条 assistant 行
+                    // 已经不在列表里。两种都该结束本轮,不该继续往一个错的下标写。
+                    throw CancellationError()
+                }
+            }
+            // 本轮事件里所有闭包捕获的都是这个**不可变**快照。
+            // 直接捕获上面那个 `var` 会触发 77 处
+            // "reference to captured var in concurrently-executing code"
+            // (Swift 6 语言模式下是错误),而且语义上也不该让闭包看见
+            // 一个可能被下一轮改写的下标。
+            let msgIdx = mutableMsgIdx
 
             switch event {
             case .contentBlockStart(let start):
@@ -507,7 +562,8 @@ extension AIChatViewModel {
                                 text: snapshot,
                                 parsedMarkdown: parsed,
                                 cacheAttributedString: false,
-                                requestScroll: true
+                                requestScroll: true,
+                                expectedMessageId: runMsgId
                             )
                         }
                     }
@@ -757,7 +813,8 @@ extension AIChatViewModel {
                             text: assistantText,
                             parsedMarkdown: freshParsedMarkdown,
                             cacheAttributedString: true,
-                            requestScroll: false
+                            requestScroll: false,
+                            expectedMessageId: runMsgId
                         )
                     }
                     return blockIdx
@@ -864,6 +921,7 @@ extension AIChatViewModel {
         } catch is CancellationError {
             // Flush any throttled text to the block before propagating cancellation,
             // so handleUserCancelledCleanup sees the full streamed content.
+            let msgIdx = mutableMsgIdx
             if let blockIdx = currentTextBlockIdx, !result.assistantText.isEmpty {
                 await MainActor.run {
                     guard msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count else { return }
@@ -873,7 +931,9 @@ extension AIChatViewModel {
                         text: result.assistantText,
                         parsedMarkdown: MarkdownContent(prepareMarkdownForRender(result.assistantText)),
                         cacheAttributedString: true,
-                        requestScroll: false
+                        requestScroll: false,
+                        expectedMessageId: runMsgId,
+                        ignoreUserCancel: true
                     )
                 }
             }
@@ -1209,13 +1269,6 @@ extension AIChatViewModel {
         if kb < 1024 { return String(format: "%.1f KB", kb) }
         let mb = kb / 1024.0
         return String(format: "%.1f MB", mb)
-    }
-
-    /// Parse a single string parameter from tool JSON.
-    private func parseStringParam(_ key: String, from json: String) -> String? {
-        guard let data = json.data(using: .utf8),
-              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-        return dict[key] as? String
     }
 
     /// Parse tool use JSON into command, optional timeout, and optional delay.

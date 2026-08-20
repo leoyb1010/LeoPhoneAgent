@@ -114,13 +114,6 @@ struct GatewayRunStatus: Sendable {
     var isWaitingForApproval: Bool { status == "waiting_for_approval" }
 }
 
-struct GatewaySessionSummary: Sendable, Identifiable {
-    let id: String
-    let title: String?
-    let updatedAt: Double?
-    let messageCount: Int?
-}
-
 /// What the gateway says it can do. Read once per connection so the UI can
 /// hide actions an older gateway does not implement instead of failing on use.
 struct GatewayCapabilities: Sendable {
@@ -300,16 +293,6 @@ actor LeoAgentClient {
 
     // MARK: Probes
 
-    /// Unauthenticated liveness check — /health needs no key, so this also
-    /// distinguishes "host unreachable" from "key wrong".
-    func health() async throws -> Bool {
-        guard let url = URL(string: "/health", relativeTo: baseURL) else { throw GatewayError.badURL }
-        let (data, response) = try await session.data(from: url)
-        try Self.validate(response: response, data: data)
-        let obj = try Self.json(data)
-        return (obj["status"] as? String) == "ok"
-    }
-
     func capabilities() async throws -> GatewayCapabilities {
         let obj = try Self.json(try await send(try request("/v1/capabilities")))
         var features: [String: Bool] = [:]
@@ -362,21 +345,6 @@ actor LeoAgentClient {
     func respondToApproval(runId: String, choice: String) async throws {
         let body = try JSONSerialization.data(withJSONObject: ["choice": choice])
         _ = try await send(try request("/v1/runs/\(runId)/approval", method: "POST", body: body))
-    }
-
-    // MARK: Sessions
-
-    func listSessions() async throws -> [GatewaySessionSummary] {
-        let obj = try Self.json(try await send(try request("/api/sessions")))
-        let rows = (obj["sessions"] as? [[String: Any]]) ?? (obj["data"] as? [[String: Any]]) ?? []
-        return rows.compactMap { row in
-            guard let id = (row["session_id"] as? String) ?? (row["id"] as? String) else { return nil }
-            return GatewaySessionSummary(
-                id: id,
-                title: row["title"] as? String,
-                updatedAt: row["updated_at"] as? Double,
-                messageCount: row["message_count"] as? Int)
-        }
     }
 
     // MARK: Event stream

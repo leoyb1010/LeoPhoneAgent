@@ -157,3 +157,16 @@ struct SteppedSlider: View {
         return Int((clamped * CGFloat(steps - 1)).rounded())
     }
 }
+
+/// iPad must not inherit iPhone Files / Siri nouns.
+enum LeoDeviceNouns {
+    static var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+
+    static func filesBrowsePath(isPad: Bool = isPad) -> String {
+        isPad ? "我的 iPad → LeoPhoneAgent" : "我的 iPhone → LeoPhoneAgent"
+    }
+
+    static func thisDevice(isPad: Bool = isPad) -> String {
+        isPad ? "这台 iPad" : "这台 iPhone"
+    }
+}

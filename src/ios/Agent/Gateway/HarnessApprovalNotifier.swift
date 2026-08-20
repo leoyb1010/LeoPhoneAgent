@@ -85,10 +85,15 @@ enum HarnessApprovalNotifier {
     static func handle(response: UNNotificationResponse,
                        completion: @escaping () -> Void) -> Bool {
         let info = response.notification.request.content.userInfo
-        guard info["harnessApproval"] as? Bool == true,
-              let sessionId = info["harnessSessionId"] as? String,
-              let approvalId = info["approvalId"] as? String else { return false }
+        let approvalId = (info["approvalId"] as? String) ?? (info["approval_id"] as? String)
+        let hintedSession = (info["harnessSessionId"] as? String)
+            ?? (info["session_id"] as? String)
+            ?? (info["sessionId"] as? String)
         let hostId = info["hostId"] as? String ?? ""
+        let machine = (info["machine"] as? String) ?? ""
+        let isHarness = (info["harnessApproval"] as? Bool) == true
+            || approvalId != nil && !machine.isEmpty
+        guard isHarness, let approvalId, !approvalId.isEmpty else { return false }
 
         let choice: String?
         switch response.actionIdentifier {
@@ -98,22 +103,40 @@ enum HarnessApprovalNotifier {
         }
         guard let choice else { return false }
 
-        // APNs 路径的推送里只有 machine(机器名),没有 hostId ——
-        // 只按 id 精确匹配的话,锁屏按「批准一次」什么都不会发生,
-        // Mac 上的任务永远挂着。逐级回退:id → 名字全等 → 名字包含 →
-        // 唯一主机兜底(与 catch-up 路径同一套解析)。
-        let machine = info["machine"] as? String ?? ""
+        // APNs 路径的推送里往往只有 machine + approval_id,没有 session_id。
+        // 逐级补齐,顺序刻意如此:
+        //   1. payload 里带了就直接用(中继以后补上 session_id 时零成本生效);
+        //   2. 内存里的 MacLiveSessionsStore —— 只有 app 已经在跑并拉过列表时才有;
+        //   3. **现场向该主机拉一次 /harness/sessions** 。
+        //
+        // 第 3 步是这条路径能不能用的关键。APNs 审批要覆盖的场景恰恰是「app 没在
+        // 运行」:锁屏点「批准一次」时进程是被系统冷起来处理这一次 action 的,
+        // MacLiveSessionsStore 必然是空的。只查内存 store 的写法在冷启动下会直接
+        // 走 `guard let sessionId else { return }` 静默返回 —— 看起来修了、实际
+        // 和没修一样。这里用一次真实网络查询把 approvalId 反查成 sessionId;
+        // 通知 action 的后台执行窗口(~30s)足够跑完一个 JSON 请求。
         Task { @MainActor in
             defer { completion() }
-            let hosts = GatewayHostStore.shared.hosts
-            let host = hosts.first { $0.id == hostId }
-                ?? hosts.first { !machine.isEmpty && $0.name == machine }
-                ?? hosts.first { !machine.isEmpty
-                    && (machine.contains($0.name) || $0.name.contains(machine)) }
-                ?? (hosts.count == 1 ? hosts.first : nil)
+            let host = GatewayHostStore.shared.hostMatching(hostId: hostId, machine: machine)
+                ?? (GatewayHostStore.shared.hosts.count == 1 ? GatewayHostStore.shared.hosts.first : nil)
             guard let host, let client = GatewayHostStore.shared.client(for: host) else { return }
+            var sessionId = hintedSession.flatMap { $0.isEmpty ? nil : $0 }
+                ?? MacLiveSessionsStore.shared.rows.first(where: {
+                    $0.hostId == host.id && $0.session.pendingApprovalId == approvalId
+                })?.session.id
+            if sessionId == nil, let live = try? await client.harnessSessions() {
+                sessionId = live.first(where: { $0.pendingApprovalId == approvalId })?.id
+                    // 中继只报「有一条在等」而没给 approval_id 时的兜底:
+                    // 全机只有一个 waiting 会话就按它寻址,多于一个则宁可不猜。
+                    ?? {
+                        let waiting = live.filter(\.waitingForApproval)
+                        return waiting.count == 1 ? waiting[0].id : nil
+                    }()
+            }
+            guard let sessionId else { return }
             try? await client.approveHarness(sessionId: sessionId, choice: choice,
                                              approvalId: approvalId)
+            HarnessApprovalNotifier.clear(sessionId: sessionId, approvalId: approvalId)
         }
         return true
     }

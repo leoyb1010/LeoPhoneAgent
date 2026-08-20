@@ -215,11 +215,14 @@ extension AIChatViewModel {
 
         if let category = SensitiveToolGate.Category.forToolName(tu.name) {
             let host = SensitiveToolGate.Category.hostHint(tool: tu.name, args: toolArgs)
-            let allowed = await SensitiveToolGate.shared.authorize(category, host: host)
-            if !allowed {
-                let modelMessage = UIApplication.shared.applicationState == .active
-                    ? "用户拒绝了「\(category.humanName)」（\(host)）。不要重试同一动作，改用人话说明需要许可。"
-                    : SensitiveToolGate.backgroundDeniedMessage
+            // [T-gate-scope] 展示用的 host 和授权用的 scope 分开传:本机 shell /
+            // 文件写按会话授权一次,remote_* 按「主机 + 完整参数的 SHA-256」逐条授权。
+            let scope = SensitiveToolGate.Category.grantScope(tool: tu.name, args: toolArgs)
+            let outcome = await SensitiveToolGate.shared.authorize(category, host: host, grantScope: scope)
+            if !outcome.isAllowed {
+                // 拒绝原因决定话术:后台硬拒 / 等待超时 / 用户真的说了不。
+                // 之前是按"当前是不是前台"猜的,分级策略下必须按实际结果来。
+                let modelMessage = SensitiveToolGate.denialMessage(outcome, category: category, host: host)
                 let uiMessage = String(localized: "需要确认")
                 if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
                     messages[msgIdx].blocks[blockIdx].content = uiMessage
@@ -617,6 +620,11 @@ extension AIChatViewModel {
             }
 
         case "read_image":
+            if !currentModelSupportsImageInput {
+                toolOutput = "Error: the current model cannot view images. Do not describe this file's pixels. Tell the user to switch to a vision model, or refer only to the path they provided."
+                toolSuccess = false
+                break
+            }
             let pathArg = toolArgs["path"] as? String ?? ""
             let resolvedURL = await resolveMinisPath(pathArg)
             ctLogger.info("[read_image] pathArg=\(pathArg) resolvedURL=\(resolvedURL?.path ?? "nil") exists=\(resolvedURL.map { FileManager.default.fileExists(atPath: $0.path) } ?? false)")

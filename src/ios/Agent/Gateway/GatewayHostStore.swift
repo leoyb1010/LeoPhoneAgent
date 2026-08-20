@@ -84,7 +84,13 @@ final class GatewayHostStore: ObservableObject {
             guard let name = RelayMachinesClient.sanitizeMachine(machine.name) else { continue }
             let id = name.lowercased()
             let harness = RelayMachinesClient.harnessURL(for: name, apiRoot: apiRoot)
-            Self.saveAccessKey(key, hostId: id)
+            // [T-relay-keychain-churn] 只在密钥真的变了时才写 Keychain。
+            // 原来每台机器无条件写一次:下拉刷新一下就把每台主机的
+            // Keychain 项重写一遍(SecItemUpdate/Add 是同步系统调用),
+            // 机器多时下拉手感直接被拖住,而绝大多数刷新密钥根本没变。
+            if Self.accessKey(hostId: id) != Self.normalizedAccessKey(key) {
+                Self.saveAccessKey(key, hostId: id)
+            }
             if let index = hosts.firstIndex(where: { $0.id == id }) {
                 let before = hosts[index]
                 if before.harnessURL != harness {
@@ -92,8 +98,14 @@ final class GatewayHostStore: ObservableObject {
                     clients.removeValue(forKey: id)
                     changed = true
                 }
-                if hosts[index].platform == nil { hosts[index].platform = machine.platform; changed = true }
-                if hosts[index].server == nil { hosts[index].server = machine.server; changed = true }
+                if let platform = machine.platform, hosts[index].platform != platform {
+                    hosts[index].platform = platform
+                    changed = true
+                }
+                if let server = machine.server, hosts[index].server != server {
+                    hosts[index].server = server
+                    changed = true
+                }
                 // Keep isEnabled, display name, and engine URL — refresh must
                 // not turn a disabled machine back on or wipe a rename.
             } else {
@@ -130,6 +142,16 @@ final class GatewayHostStore: ObservableObject {
         clients.removeValue(forKey: id)
         Self.deleteKey(hostId: id)
         persist()
+    }
+
+    func hostMatching(hostId: String = "", machine: String) -> GatewayHost? {
+        guard let index = RelayMachinesClient.pickHostIndex(
+            hostIds: hosts.map(\.id),
+            displayNames: hosts.map(\.name),
+            hostId: hostId,
+            machine: machine
+        ) else { return nil }
+        return hosts[index]
     }
 
     func markSeen(id: String) {
@@ -180,13 +202,19 @@ final class GatewayHostStore: ObservableObject {
         return String(data: data, encoding: .utf8)
     }
 
-    @discardableResult
-    nonisolated static func saveAccessKey(_ rawKey: String, hostId: String) -> Bool {
-        // 清洗复制残渣:终端复制常带上 zsh 行尾标记 % 或换行,密钥本身
-        // 不含这些字符。中继侧同样容错,这里洗干净是双保险。
-        let key = rawKey.trimmingCharacters(in: .whitespacesAndNewlines)
+    /// 清洗复制残渣:终端复制常带上 zsh 行尾标记 % 或换行,密钥本身
+    /// 不含这些字符。中继侧同样容错,这里洗干净是双保险。
+    /// 抽成函数是为了让「要不要写 Keychain」的比较用的是同一套规范化,
+    /// 否则每次刷新都会因为 raw 与已存值差一个空白字符而重复落盘。
+    nonisolated static func normalizedAccessKey(_ rawKey: String) -> String {
+        rawKey.trimmingCharacters(in: .whitespacesAndNewlines)
             .trimmingCharacters(in: CharacterSet(charactersIn: "%"))
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    @discardableResult
+    nonisolated static func saveAccessKey(_ rawKey: String, hostId: String) -> Bool {
+        let key = normalizedAccessKey(rawKey)
         let base: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: keychainService,

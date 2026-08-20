@@ -944,10 +944,15 @@ extension AIChatViewModel {
 
     /// Call the current LLM to generate a compact summary.
     private func generateCompactSummary(conversationText: String, statusMsg: ChatMessage? = nil) async throws -> String {
-        // Resolve the model entry the same way the chat path does — this falls back to the
-        // default group when the session has no binding (e.g. sessions synced from iCloud on
-        // another device, whose provider binding doesn't travel with the CloudKit record).
-        guard let entry = resolveCurrentEntry() else {
+        // [T-compact-slot] 压缩这一步用 sub 模型解析,不再用 resolveCurrentEntry()。
+        // 设置里「压缩 / 标题」那个便宜模型槽的文案写着压缩也算,之前却只有标题
+        // 生成调 resolveSubEntry(),压缩照旧烧主模型的钱。resolveSubEntry() 自身
+        // 会在没配槽 / 槽不可用时回落到 resolveCurrentEntry(),所以行为对没配过
+        // 的人完全不变(仍然会 fall back 到默认 group,覆盖 iCloud 同步来的、
+        // 没有本地 provider 绑定的会话)。
+        // 注意:判断"要不要压"的 checkContextBeforeSend() 仍然用当前会话模型 ——
+        // 容量阈值必须按真正服务对话的那个模型的上下文窗口算。
+        guard let entry = resolveSubEntry() else {
             throw NSError(domain: "Compact", code: -1, userInfo: [NSLocalizedDescriptionKey: "No model available for summarization"])
         }
 

@@ -839,12 +839,22 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// from the confirm dialog's "Compact & Enable Auto-Compact" button or
     /// the "..." menu's Auto Compact toggle; persisted in UserDefaults so
     /// future conversations inherit it.
-    @Published var autoCompactEnabled: Bool = UserDefaults.standard.bool(forKey: "autoCompactOnThreshold") {
-        didSet {
-            guard autoCompactEnabled != oldValue else { return }
-            UserDefaults.standard.set(autoCompactEnabled, forKey: "autoCompactOnThreshold")
+    /// [T-auto-compact-live] 每次读都去问 UserDefaults,**不再**在 VM init 时
+    /// 快照一次。原来是 `@Published var ... = UserDefaults...bool(...)`:VM 被
+    /// ViewModelCache 缓存并跨设置页存活,用户在「外观 → 压缩 → 到阈值自动压缩」
+    /// 里翻开关(那边是 @AppStorage,直接写 UserDefaults),已经打开的会话到下次
+    /// 冷启动前都还按老值走,开关看起来没生效。
+    /// 写入这一侧仍然回写 UserDefaults,并手动发一次 objectWillChange,让绑到
+    /// 它的界面照常刷新。
+    var autoCompactEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: Self.autoCompactDefaultsKey) }
+        set {
+            guard newValue != autoCompactEnabled else { return }
+            objectWillChange.send()
+            UserDefaults.standard.set(newValue, forKey: Self.autoCompactDefaultsKey)
         }
     }
+    static let autoCompactDefaultsKey = "autoCompactOnThreshold"
     /// When true, shows a prompt telling user to start a new session or clear chat.
     @Published var showContextExhaustedPrompt = false
     /// Message text held back while the compact-before-send prompt is shown.
@@ -1820,7 +1830,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // is preserved inside SystemPromptBuilder.identityTemplate so we
         // don't regress model behavior that depended on it.
         SystemPromptBuilder.identitySection()
-            + "DELIVERY RULE: never tell the user a file/image/document was generated unless a tool result in THIS conversation confirmed its path. Images must be made visible (file_write and generate_image show them inline automatically; for shell-generated images call read_image). If you cannot show or link an artifact, say so plainly instead of claiming success.\n\n"
+            + "DELIVERY RULE: never tell the user a file/image/document was generated unless a tool result in THIS conversation confirmed its path. Images written via file_write or generate_image are shown to the user inline automatically. If the read_image tool is available, call it for shell-generated images so you can verify them; if it is not available, do not claim you inspected an image. If you cannot show or link an artifact, say so plainly instead of claiming success.\n\n"
             + "You should proactively use shell commands to accomplish the user's tasks — installing packages (apk add), "
             + "writing and running scripts, managing files, networking, and any other operations a Linux terminal can perform.\n\n"
             + "Available tools:\n"
@@ -2198,14 +2208,15 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
         // [T-model-quickswitch] "/model kimi" 是命令不是提问,在这里截住。
         if interceptModelCommand(inputText) { return }
+        syncSelectedModelFromBinding()
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         let pendingAttachments = attachments
-        if pendingAttachments.contains(where: { $0.kind == .image }) {
-            let canSee = resolveCurrentEntry()?.model.capabilities.supportedModalities.contains(.imageInput) ?? false
-            guard canSee else {
-                appendSystemInfo("当前模型不支持读图。请切换到支持图像输入的模型后重试；附件已保留。", icon: "eye.slash")
-                return
-            }
+        if AgentChatCorrectness.shouldBlockImageAttachments(
+            hasImages: pendingAttachments.contains(where: { $0.kind == .image }),
+            supportsImageInput: currentModelSupportsImageInput
+        ) {
+            appendSystemInfo(imageUnsupportedNotice, icon: "eye.slash")
+            return
         }
         logger.info("🔑DRAFT [vm=\(self.vmInstanceId)] send() text=\(text.count)ch attachments=\(pendingAttachments.count) isProcessing=\(self.isProcessing) sessionId=\(self.sessionId ?? "nil") draftId=\(self.draftId ?? "nil")")
         guard !text.isEmpty || !pendingAttachments.isEmpty, !isProcessing else {
@@ -2686,7 +2697,14 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// keeping all previously completed tool blocks and conversation history).
     func retry() {
         guard !isProcessing else { return }
+        // [T-retry-target] 这里刻意保留 `messages.last`,不跟 resume() 一起换成
+        // lastAssistantIndex。retry 会就地重生成这条 assistant 的内容;当队列形态
+        // 是 […, assistant, user(排队中)] 时,用 lastAssistantIndex 会去重写那条
+        // 更早的 assistant,新文本就出现在用户刚发的消息**上方**,时间线错乱。
+        // resume() 不同:它是"把中断的循环接着跑完",目标本来就该是最后一条
+        // assistant,所以那边用新规则是对的。
         guard let lastMsg = messages.last, lastMsg.role == .assistant else { return }
+        let candidateIdx = messages.count - 1
 
         autoRetryAttempt = 0
         autoRetryCountdown = 0
@@ -2746,7 +2764,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             }
         }
 
-        let existingMsgIdx = messages.count - 1
+        let existingMsgIdx = candidateIdx
         let existingBlockCount = lastMsg.blocks.count
         errorMessage = nil
         isProcessing = true
@@ -2837,7 +2855,12 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// into agentHistory so the model knows to pick up where it left off.
     func resume() {
         guard !isProcessing, canResume else { return }
-        guard let lastMsg = messages.last, lastMsg.role == .assistant else { return }
+        // Same candidate rule as Stop: a queued user row can sit after the
+        // assistant bubble. `messages.last` would then make Resume a silent no-op.
+        guard let candidateIdx = AgentChatCorrectness.lastAssistantIndex(
+            isAssistant: messages.map { $0.role == .assistant }
+        ) else { return }
+        let lastMsg = messages[candidateIdx]
 
         canResume = false
         userDidCancel = false
@@ -2879,7 +2902,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             }
         }
 
-        let existingMsgIdx = messages.count - 1
+        let existingMsgIdx = candidateIdx
         let existingBlockCount = lastMsg.blocks.count
         errorMessage = nil
         isProcessing = true
@@ -4433,6 +4456,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 activeGroupId = gid
             }
         }
+        syncSelectedModelFromBinding()
         let tools = makeAgentTools()
 
         let activeModel = ProviderConfigStore.shared.entry(for: entry.id)?.model ?? selectedModel
@@ -4831,7 +4855,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 let result = try await processStreamEvents(
                     stream: stream,
                     msgIdx: msgIdx,
-                    provider: provider
+                    provider: provider,
+                    runMsgId: runMsgId
                 )
                 // Detect empty responses — the stream completed without producing any
                 // content blocks or a stop reason.  This happens when the Anthropic API
@@ -4865,7 +4890,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     let reminderResult = try await processStreamEvents(
                         stream: reminderStream,
                         msgIdx: msgIdx,
-                        provider: provider
+                        provider: provider,
+                        runMsgId: runMsgId
                     )
                     if isEmptyResponse(reminderResult) {
                         // Still empty after the nudge — a genuine failure, not a
@@ -4958,7 +4984,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                         let retryResult = try await processStreamEvents(
                             stream: retryStream,
                             msgIdx: msgIdx,
-                            provider: provider
+                            provider: provider,
+                            runMsgId: runMsgId
                         )
                         // If the retried stream is also empty, the provider is persistently
                         // failing (e.g. Anthropic overloaded).  Trigger group fallback.
@@ -5055,7 +5082,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     text: assistantText,
                     parsedMarkdown: MarkdownContent(prepareMarkdownForRender(assistantText)),
                     cacheAttributedString: true,
-                    requestScroll: true
+                    requestScroll: true,
+                    expectedMessageId: runMsgId
                 )
             } else if !assistantText.isEmpty, msgIdx >= 0, msgIdx < messages.count {
                 // [DIAG-FINAL-2] Text already matches — no flush needed.
@@ -5704,8 +5732,16 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         text: String,
         parsedMarkdown: MarkdownContent?,
         cacheAttributedString shouldCacheAttributedString: Bool,
-        requestScroll: Bool
+        requestScroll: Bool,
+        expectedMessageId: UUID? = nil,
+        ignoreUserCancel: Bool = false
     ) {
+        let hintedId = (msgIdx >= 0 && msgIdx < messages.count) ? messages[msgIdx].id : nil
+        guard AgentChatCorrectness.shouldApplyStreamDelta(
+            userDidCancel: ignoreUserCancel ? false : userDidCancel,
+            messageId: hintedId,
+            expectedMessageId: expectedMessageId
+        ) else { return }
         guard msgIdx >= 0, msgIdx < messages.count,
               blockIdx >= 0, blockIdx < messages[msgIdx].blocks.count else { return }
         let message = messages[msgIdx]

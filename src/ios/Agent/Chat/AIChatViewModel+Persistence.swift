@@ -142,6 +142,7 @@ extension AIChatViewModel {
 
         let sinceAppear = (CFAbsoluteTimeGetCurrent() - Self.onAppearTimestamp) * 1000
         logger.info("[SessionLoad] loadSession START T+\(String(format: "%.0f", sinceAppear))ms session=\(sessionId) msgs=\(self.messages.count)")
+        syncSelectedModelFromBinding()
 
         // [T-ios-scroll-suspend-leak] This vm may be re-entered via a cached VM
         // (ViewModelCache HIT) that still carries `messages` from a prior view of
@@ -819,12 +820,14 @@ extension AIChatViewModel {
             // [T-ios-session-status-mismatch] Cross-check the tracker before
             // declaring "interrupted" — a live loop's DB tail looks identical
             // to a stopped one.
-            if SessionActivityTracker.shared.isActive(sessionId) {
+                if SessionActivityTracker.shared.isActive(sessionId) {
                 logger.info("[SessionLoad] \(sessionId.prefix(8)) — tail looks interrupted but tracker says active, skipping canResume=true")
             } else if !canResume {
                 canResume = true
-                if let lastAssistant = messages.last, lastAssistant.role == .assistant {
-                    self.committedBlockCount = lastAssistant.blocks.count
+                if let idx = AgentChatCorrectness.lastAssistantIndex(
+                    isAssistant: messages.map { $0.role == .assistant }
+                ) {
+                    self.committedBlockCount = messages[idx].blocks.count
                 }
                 let source = hasPersistedInterruption ? "durable run state" : "message tail"
                 logger.info("[SessionLoad] \(sessionId.prefix(8)) — detected interrupted agent loop from \(source), canResume=true, committedBlocks=\(self.committedBlockCount)")
@@ -961,6 +964,7 @@ extension AIChatViewModel {
             logger.info("🔑DRAFT [vm=\(self.vmInstanceId)] ensureSession already has sessionId=\(sid)")
             return sid
         }
+        syncSelectedModelFromBinding()
         let model = selectedModel
         let session = await ChatStore.shared.createSession(modelId: model.id, source: sessionSource)
         sessionId = session.id

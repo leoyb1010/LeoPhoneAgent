@@ -720,12 +720,12 @@ final class BrowserTabPool: ObservableObject {
         // 一律安全拒绝而不是挂死。
         if let credCategory = Self.sensitiveCategory(for: input.action) {
             let host = gateHost(for: input.tabId)
-            let ok = await SensitiveToolGate.shared.authorize(credCategory, host: host)
-            if !ok {
-                let denied = UIApplication.shared.applicationState == .active
-                    ? "用户拒绝了这次\(credCategory.humanName)。"
-                    : SensitiveToolGate.backgroundDeniedMessage
-                return .error(denied)
+            let outcome = await SensitiveToolGate.shared.authorize(credCategory, host: host)
+            if !outcome.isAllowed {
+                // Cookie 读写属于后台硬拒类别,拒绝原因由闸自己回,不再靠
+                // "当前是不是前台"去猜(切后台的一瞬间两边判断会打架)。
+                return .error(SensitiveToolGate.denialMessage(
+                    outcome, category: credCategory, host: host))
             }
         }
 

@@ -71,8 +71,16 @@ extension AIChatViewModel {
         // [T-model-pin] 排队路径同样要拦 /model:agent 正在跑时打
         // "/model kimi" 回车,不拦的话它会作为字面提问进队列发给模型。
         if interceptModelCommand(inputText) { return }
+        syncSelectedModelFromBinding()
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !attachments.isEmpty, isProcessing else { return }
+        if AgentChatCorrectness.shouldBlockImageAttachments(
+            hasImages: attachments.contains(where: { $0.kind == .image }),
+            supportsImageInput: currentModelSupportsImageInput
+        ) {
+            appendSystemInfo(imageUnsupportedNotice, icon: "eye.slash")
+            return
+        }
         LeoHaptics.impact(.light)
         let pendingAttachments = attachments
         let prompt = QueuedPrompt(text: text, attachments: pendingAttachments)

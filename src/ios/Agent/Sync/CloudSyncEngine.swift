@@ -889,7 +889,7 @@ final class CloudSyncEngine: ObservableObject {
     /// never touched. After the wipe, the engine restarts and re-uploads this
     /// device's local content into a fresh zone.
     ///
-    /// Guarded by two UI confirmations — see CloudSyncSettingsView.
+    /// Guarded by two UI confirmations — see CloudSyncSettingsV2View.
     func deleteAllCloudData() async throws {
         logger.warning("[CloudSync] Delete iCloud Data: STARTING destructive wipe")
         syncStatus = .syncing

@@ -233,6 +233,21 @@ struct ChatMessageRow: View {
     // MARK: System Divider Row
 
     /// Shared divider-style row for system info messages.
+    /// [T-vision-gate-copy] systemInfo 行按行内 Markdown 渲染。
+    ///
+    /// 这类提示需要给用户一个**能点的**去处(例如"去打开该模型的 Image input
+    /// 开关"),而 `Text(someString)` 不解析 Markdown —— 只有字面量才解析。
+    /// 走 AttributedString 之后 `[文案](leophoneagent://settings/...)` 变成
+    /// 可点链接,交给 DeepLinkRouter 落到具体设置页。解析失败就退回纯文本,
+    /// 历史里那些不含链接的 systemInfo 行显示不受影响。
+    static func systemInfoAttributed(_ text: String) -> AttributedString {
+        (try? AttributedString(
+            markdown: text,
+            options: AttributedString.MarkdownParsingOptions(
+                interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        )) ?? AttributedString(text)
+    }
+
     private func systemDividerRow(icon: String?, loading: Bool, compact: Bool) -> some View {
         HStack(spacing: 10) {
             VStack { Divider() }
@@ -245,7 +260,7 @@ struct ChatMessageRow: View {
                     Image(systemName: icon)
                         .font(.system(size: 10))
                 }
-                Text(message.content)
+                Text(Self.systemInfoAttributed(message.content))
                     .font(.system(size: 12, weight: .medium))
                     .multilineTextAlignment(.center)
             }

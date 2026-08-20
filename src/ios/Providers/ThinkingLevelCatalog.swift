@@ -14,11 +14,35 @@ enum ThinkingRuleStore {
     static let defaultsKey = "leo.thinkingRules.v1"
     static let lastCarriedKey = "leo.lastCarriedThinking"
 
+    /// [T-thinking-rules-hot-path] 解码结果按「原始 Data」缓存。
+    ///
+    /// `ThinkingLevelCatalog.declaredMaxLevel(for:)` 会调这里,而它被
+    /// AIChatView 在 body 里读(模型标签、思考档位菜单等好几处),流式期间
+    /// 每帧都命中。原来每次都新建一个 JSONDecoder 再 decode 一遍——纯浪费,
+    /// 而且发生在主线程上。
+    /// 缓存刻意用「上次读到的 Data」做判据,而不是靠 save() 主动失效:
+    /// UserDefaults 可能被别处(测试、配置下发、另一个进程)直接改写,
+    /// 基于 Data 比较不会读到陈旧值;读 UserDefaults 本身是进程内缓存,
+    /// 省掉的是 decode。没配过自定义规则时 data 为 nil,直接返回空数组,
+    /// 连比较都不用做。
+    private static let cacheLock = NSLock()
+    nonisolated(unsafe) private static var cachedRaw: Data?
+    nonisolated(unsafe) private static var cachedRules: [ThinkingRule] = []
+
     static func load() -> [ThinkingRule] {
-        guard let data = UserDefaults.standard.data(forKey: defaultsKey),
-              let rows = try? JSONDecoder().decode([ThinkingRule].self, from: data) else {
+        guard let data = UserDefaults.standard.data(forKey: defaultsKey) else {
+            cacheLock.lock()
+            cachedRaw = nil
+            cachedRules = []
+            cacheLock.unlock()
             return []
         }
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        if cachedRaw == data { return cachedRules }
+        let rows = (try? JSONDecoder().decode([ThinkingRule].self, from: data)) ?? []
+        cachedRaw = data
+        cachedRules = rows
         return rows
     }
 
