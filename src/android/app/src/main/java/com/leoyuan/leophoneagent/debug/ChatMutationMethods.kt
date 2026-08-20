@@ -5,6 +5,8 @@ import androidx.core.content.FileProvider
 import com.leoyuan.leophoneagent.MinisApp
 import com.leoyuan.leophoneagent.data.model.ThinkingLevel
 import com.leoyuan.leophoneagent.ui.chat.InputAttachment
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 
@@ -400,7 +402,13 @@ internal object ChatMutationMethods {
         // writing into a deleted session row.
         HeadlessChatRunner.cancel(context, sessionId)
         app.chatRepository.deleteSession(sessionId)
-        HeadlessChatRunner.forget(sessionId)
+        // why forgetAndRelease + 主线程：只 forget 会把 ViewModelProvider 缓存丢掉，
+        // 但 ChatViewModelStore 里的 ViewModelStore 还在，ChatViewModel 与它的
+        // viewModelScope 继续存活 —— 会话已删、工具还在跑。clear() 会触发
+        // onCleared()，必须在主线程执行。
+        withContext(Dispatchers.Main) {
+            HeadlessChatRunner.forgetAndRelease(sessionId)
+        }
         return JSONObject().apply {
             put("sessionId", sessionId)
             put("deleted", true)

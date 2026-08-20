@@ -80,7 +80,9 @@ class MinisHarnessRouterTest {
         val stopped = r.handle("POST", "/harness/sessions/$id/stop", JSONObject())
         assertEquals(200, stopped.status)
         assertEquals("cancelled", stopped.body.getString("status"))
-        assertEquals(listOf(id), engine.stopped)
+        // engine.stop 现在是 suspend 且由 router 的 scope 异步执行（P0#9：
+        // 不能再阻塞 OkHttp WS reader 线程），所以断言要等它落地。
+        engine.awaitStopped(id)
     }
 
     @Test
@@ -105,7 +107,7 @@ class MinisHarnessRouterTest {
         val id = created.body.getString("session_id")
         val sent = r.handle("POST", "/harness/sessions/$id/send", JSONObject().put("text", "steer"))
         assertEquals(200, sent.status)
-        assertEquals(listOf(id), engine.stopped)
+        engine.awaitStopped(id)
     }
 
     @Test
@@ -119,7 +121,7 @@ class MinisHarnessRouterTest {
                 release.await()
                 emit(EngineChunk.Completed("stale completion"))
             }
-            override fun stop(sessionId: String) = Unit
+            override suspend fun stop(sessionId: String) = Unit
         }
         val r = router(engine)
         val id = r.handle("POST", "/harness/sessions", JSONObject().put("prompt", "go"))
@@ -133,6 +135,106 @@ class MinisHarnessRouterTest {
         val cancelledAt = events.indexOfFirst { it.optString("event") == "run.cancelled" }
         assertTrue(cancelledAt >= 0)
         assertFalse(events.drop(cancelledAt + 1).any { it.optString("event") == "run.completed" })
+    }
+
+    /**
+     * P0#7 回归：steer 必须"先作废旧 turn 的 generation → 再 stop 引擎 →
+     * 最后起新 turn"。原来是 `engine.stop()` 然后 `startTurn()`，
+     * turnGeneration 直到 startTurn 里才自增，中间那段窗口里旧 turn 发出的
+     * Completed 会通过校验，于是控制端收到一条带着旧输出的 run.completed。
+     *
+     * 顺序日志同时证明了新 turn 不会先于 stop 起跑。
+     */
+    @Test
+    fun steerStopsPreviousTurnBeforeStartingTheNextOne() = runBlocking {
+        val log = java.util.Collections.synchronizedList(mutableListOf<String>())
+        val engine = object : MinisSessionEngine {
+            override fun runTurn(sessionId: String, text: String, thinking: String?): Flow<EngineChunk> =
+                flow {
+                    log += "run:$text"
+                    emit(EngineChunk.Completed(text))
+                }
+
+            override suspend fun stop(sessionId: String) {
+                log += "stop"
+            }
+        }
+        val r = router(engine)
+        val id = r.handle("POST", "/harness/sessions", JSONObject().put("prompt", "first"))
+            .body.getString("session_id")
+        waitForCompleted(r, id)
+        assertEquals(200, r.handle("POST", "/harness/sessions/$id/send", JSONObject().put("text", "steer")).status)
+
+        var completions = emptyList<String>()
+        var spins = 0
+        while (spins < 200) {
+            completions = r.eventsAfter(id, 0).toList()
+                .filter { ev -> ev.optString("event") == "run.completed" }
+                .map { ev -> ev.optString("output") }
+            if (completions.size >= 2) break
+            Thread.sleep(10)
+            spins += 1
+        }
+
+        assertEquals(listOf("run:first", "stop", "run:steer"), synchronized(log) { log.toList() })
+        // 终态事件里只能有两轮各自的输出，不能出现旧 turn 重复发出的终态。
+        assertEquals(listOf("first", "steer"), completions)
+    }
+
+    /**
+     * P0#9 回归：`handle()` 跑在 OkHttp WebSocket 的 reader 线程上，
+     * 绝不能同步等待 engine.stop（原实现是 runBlocking → withContext(Main)）。
+     * 这里让 stop 慢 2 秒，断言 stop/send 两条路由都立刻返回。
+     */
+    @Test
+    fun stopAndSteerDoNotBlockTheCallingThread() = runBlocking {
+        val engine = object : MinisSessionEngine {
+            override fun runTurn(sessionId: String, text: String, thinking: String?): Flow<EngineChunk> =
+                flow { emit(EngineChunk.Completed(text)) }
+
+            override suspend fun stop(sessionId: String) {
+                delay(2_000)
+            }
+        }
+        val r = router(engine)
+        val id = r.handle("POST", "/harness/sessions", JSONObject().put("prompt", "go"))
+            .body.getString("session_id")
+        val startedAt = System.nanoTime()
+        assertEquals(200, r.handle("POST", "/harness/sessions/$id/send", JSONObject().put("text", "steer")).status)
+        assertEquals(200, r.handle("POST", "/harness/sessions/$id/stop", JSONObject()).status)
+        val elapsedMs = (System.nanoTime() - startedAt) / 1_000_000
+        assertTrue("router blocked on engine.stop for ${elapsedMs}ms", elapsedMs < 1_000)
+    }
+
+    /**
+     * P0#5 回归：事件表是有界环形缓冲，被丢弃区段的 after 必须显式回 410，
+     * 而不是静默地少发一段（控制端会拼出残缺输出）。
+     */
+    @Test
+    fun evictedEventsAreReportedInsteadOfSilentlySkipped() = runBlocking {
+        val chunks = (1..3000).map { EngineChunk.Delta("d$it") } + EngineChunk.Completed("done")
+        val r = router(FakeEngine(chunks))
+        val id = r.handle("POST", "/harness/sessions", JSONObject().put("prompt", "flood"))
+            .body.getString("session_id")
+        waitForCompleted(r, id)
+
+        val stale = r.handle("GET", "/harness/sessions/$id/events?after=0", null)
+        assertEquals(410, stale.status)
+        val minAfter = stale.body.getInt("min_after")
+        assertTrue("nothing was evicted; ring buffer did not engage", minAfter > 0)
+
+        // 按 410 给出的水位重新订阅就能正常开流（这条是 live stream，
+        // 只断言状态，不 collect —— 它要等到订阅方主动断开才结束）。
+        assertEquals(200, r.handle("GET", "/harness/sessions/$id/events?after=$minAfter", null).status)
+
+        // 保留区段本身必须是连续的：环形缓冲不能在中间挖洞。
+        val replayed = r.eventsAfter(id, minAfter).toList()
+        assertTrue(replayed.isNotEmpty())
+        assertEquals(minAfter + 1, replayed.first().getInt("seq"))
+        replayed.zipWithNext().forEach { (a, b) ->
+            assertEquals(a.getInt("seq") + 1, b.getInt("seq"))
+        }
+        assertTrue(replayed.any { it.optString("event") == "run.completed" })
     }
 
     @Test
@@ -161,7 +263,7 @@ private class FakeEngine(
 ) : MinisSessionEngine {
     val prompts = mutableListOf<String>()
     val thinking = mutableListOf<String?>()
-    val stopped = mutableListOf<String>()
+    val stopped = java.util.Collections.synchronizedList(mutableListOf<String>())
     @Volatile private var turns = 0
 
     override fun runTurn(sessionId: String, text: String, thinking: String?): Flow<EngineChunk> = flow {
@@ -171,8 +273,8 @@ private class FakeEngine(
         chunks.forEach { emit(it) }
     }
 
-    override fun stop(sessionId: String) {
-        stopped += sessionId
+    override suspend fun stop(sessionId: String) {
+        synchronized(stopped) { stopped += sessionId }
     }
 
     fun awaitTurn() {
@@ -182,6 +284,17 @@ private class FakeEngine(
             spins += 1
         }
         assertTrue("engine never started a turn", turns > 0)
+    }
+
+    /** stop 变成 suspend 之后由 router scope 异步执行，断言需要轮询等待。 */
+    fun awaitStopped(sessionId: String) {
+        var spins = 0
+        while (spins < 200) {
+            if (synchronized(stopped) { stopped.contains(sessionId) }) return
+            Thread.sleep(10)
+            spins += 1
+        }
+        assertTrue("engine.stop was never called for $sessionId", false)
     }
 }
 

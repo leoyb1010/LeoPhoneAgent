@@ -14,6 +14,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.Immutable
 import com.leoyuan.leophoneagent.agent.Level
 import com.leoyuan.leophoneagent.agent.ToolLoopDetector
 import com.leoyuan.leophoneagent.browser.BrowserActionInput
@@ -250,6 +251,21 @@ data class SlashCommand(
     val isMcp: Boolean = false,
 )
 
+/**
+ * [Compose 稳定性] @Immutable 是可以严格证明的：
+ * 全部字段都是 val，且类型只有 String / Long / 可空 String / 枚举
+ * （ToolBlockStatus），没有任何集合或可变引用 —— 构造之后任何字段都不可能改变。
+ *
+ * why: 不加注解时 Compose 编译器只按字段类型推断，enum 与 String 都稳定，
+ * 这个类其实已经会被推断为 stable；显式标注的价值在于把这个事实**锁死**：
+ * 将来有人往里加一个 List<> 或 var 字段时，@Immutable 的契约就被破坏了，
+ * 这个注解会让 review 时立刻看见（Compose 会无条件相信注解并据此跳过重组）。
+ *
+ * 与之相对，ChatMessage 没有加 @Immutable —— 它带 5 个 List<> 字段，
+ * 要证明"构造后永不就地修改"需要审完整个 ChatViewModel 的所有写入路径，
+ * 证不了就不能加：加错了会让 UI 停在旧内容上。
+ */
+@Immutable
 data class AssistantBlock(
     val id: String,
     val kind: String,       // "text", "tool_use", "thinking", "info"

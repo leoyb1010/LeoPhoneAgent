@@ -11,7 +11,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
+import com.leoyuan.leophoneagent.ui.theme.ChatColors
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -75,7 +75,10 @@ fun WebPreviewFullscreenScreen(
 ) {
     val context = LocalContext.current
     val view = LocalView.current
-    val darkTheme = isSystemInDarkTheme()
+    // [主题一致性] 状态栏图标的明暗必须跟应用内主题：WebView 下面铺的是
+    // colorScheme.surface（已跟应用内主题），用系统主题算图标反色会出现
+    // 浅底浅图标 / 深底深图标看不见的情况。
+    val darkTheme = ChatColors.isDark
 
     LaunchedEffect(holder) {
         holder.startIfNeeded()

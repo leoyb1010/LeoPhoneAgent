@@ -22,8 +22,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
@@ -45,6 +47,15 @@ class AgentForegroundService : Service() {
         private const val OVERLAY_NUDGE_CHANNEL_ID = "overlay_permission_nudge"
         private const val OVERLAY_NUDGE_NOTIFICATION_ID = 9002
 
+        // [T-android-fgs-start-not-allowed] 降级通知（FGS 被系统拒绝时）。
+        private const val DEGRADED_NOTIFICATION_ID = 9003
+
+        /** wake lock 超时兜底（进程异常退出时最多多持有这么久）。 */
+        private const val WAKELOCK_TIMEOUT_MS = 6L * 60L * 60L * 1000L
+
+        /** wake lock 续期间隔，取超时的一半。 */
+        private const val WAKELOCK_RENEW_INTERVAL_MS = 3L * 60L * 60L * 1000L
+
         private const val EXTRA_SESSION_COUNT = "session_count"
         private const val EXTRA_TOOL_STATUS = "tool_status"
 
@@ -56,18 +67,102 @@ class AgentForegroundService : Service() {
         private const val ACTION_STOP = "com.leoyuan.leophoneagent.STOP_AGENT_SERVICE"
 
         /**
-         * Starts or updates the foreground service with current status.
+         * [T-android-fgs-start-not-allowed] 后台启动前台服务被系统拒绝时的降级
+         * 状态。true 表示"这一轮 agent 正在跑，但没有前台服务在保命"。
          */
-        fun startService(context: Context, sessionCount: Int, toolStatus: String) {
+        private val _startDegraded = kotlinx.coroutines.flow.MutableStateFlow(false)
+        val startDegraded: kotlinx.coroutines.flow.StateFlow<Boolean> = _startDegraded
+
+        /**
+         * Starts or updates the foreground service with current status.
+         *
+         * why try/catch（review P0#1）：这是全仓唯一一处
+         * `context.startForegroundService(...)`，之前没有任何保护。
+         * Android 12+ 起，进程在后台时启动前台服务会抛
+         * `ForegroundServiceStartNotAllowedException`（一个
+         * RemoteServiceException 的子类，普通 RuntimeException 分支抓不到，
+         * `MinisApp` 的 UncaughtExceptionHandler 也只特判了
+         * ForegroundServiceDidNotStopInTimeException）。
+         *
+         * 而"手机在后台、Mac 通过中继下发任务"恰恰是主场景：
+         *   relay http 帧 → MinisHarnessRouter.startTurn → AndroidMinisSessionEngine
+         *   → HeadlessChatRunner.streamPrompt → ChatViewModel
+         *   → SessionActivityTracker.setActive → startServiceIfNeeded → 这里。
+         * 用户没授「忽略电池优化」时就没有豁免，整个 App 直接崩。
+         *
+         * 降级策略：吞掉异常，改发一条普通（非前台）通知让用户知道任务在跑、
+         * 并提示去开电池优化豁免。turn 本身继续执行 —— 只是失去了 FGS 的保命
+         * 能力，可能被系统在中途回收。
+         *
+         * @return true 表示系统接受了这次前台服务启动。
+         */
+        fun startService(context: Context, sessionCount: Int, toolStatus: String): Boolean {
             val intent = Intent(context, AgentForegroundService::class.java).apply {
                 putExtra(EXTRA_SESSION_COUNT, sessionCount)
                 putExtra(EXTRA_TOOL_STATUS, toolStatus)
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
+            return try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+                _startDegraded.value = false
+                true
+            } catch (t: Throwable) {
+                Log.w(
+                    TAG,
+                    "startForegroundService refused: ${t.javaClass.name}: ${t.message}",
+                )
+                _startDegraded.value = true
+                postDegradedNotification(context)
+                false
             }
+        }
+
+        /**
+         * 降级通知：FGS 起不来时至少让用户看见"任务在后台跑"，并指路电池优化
+         * 豁免。用独立 id，不与 FGS 的常驻行冲突。
+         */
+        private fun postDegradedNotification(context: Context) {
+            runCatching {
+                val manager = context.getSystemService(NotificationManager::class.java) ?: return
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    // createNotificationChannel 幂等；服务的 onCreate 没跑过，
+                    // 这里必须自己保证渠道存在。
+                    manager.createNotificationChannel(
+                        NotificationChannel(
+                            CHANNEL_ID,
+                            context.getString(R.string.bg_service_channel_name),
+                            NotificationManager.IMPORTANCE_LOW,
+                        ).apply {
+                            description = context.getString(R.string.bg_service_channel_description)
+                            setShowBadge(false)
+                        },
+                    )
+                }
+                val open = PendingIntent.getActivity(
+                    context,
+                    0,
+                    Intent(context, com.leoyuan.leophoneagent.MainActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                )
+                val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+                    .setSmallIcon(android.R.drawable.stat_sys_warning)
+                    .setContentTitle(context.getString(R.string.agent_service_degraded_title))
+                    .setContentText(context.getString(R.string.agent_service_degraded_text))
+                    .setStyle(
+                        NotificationCompat.BigTextStyle()
+                            .bigText(context.getString(R.string.agent_service_degraded_text)),
+                    )
+                    .setContentIntent(open)
+                    .setAutoCancel(true)
+                    .setOnlyAlertOnce(true)
+                    .setPriority(NotificationCompat.PRIORITY_LOW)
+                    .build()
+                manager.notify(DEGRADED_NOTIFICATION_ID, notification)
+            }.onFailure { Log.w(TAG, "degraded notification failed: ${it.message}") }
         }
 
         /**
@@ -92,6 +187,9 @@ class AgentForegroundService : Service() {
      * never leak across orientation changes or process restarts.
      */
     private var wakeLock: PowerManager.WakeLock? = null
+
+    /** 周期续期 wake lock 的协程（见 [startWakeLockRenewal]）。 */
+    private var wakeLockRenewJob: Job? = null
 
     /**
      * T-bg-overlay phase 2: floating tool-status overlay manager + its
@@ -564,15 +662,45 @@ class AgentForegroundService : Service() {
                 setReferenceCounted(false)
                 // onDestroy still releases deterministically; the timeout is a
                 // final safety net if the service/process lifecycle misbehaves.
-                acquire(6L * 60L * 60L * 1000L)
+                acquire(WAKELOCK_TIMEOUT_MS)
             }
             Log.d(TAG, "WakeLock acquired (PARTIAL_WAKE_LOCK)")
         } catch (e: Exception) {
             Log.w(TAG, "WakeLock acquire failed: ${e.message}")
         }
+        startWakeLockRenewal()
+    }
+
+    /**
+     * why 要续期（review P1#13）：`acquire(timeout)` 到期后锁会自动释放，而且
+     * **不会**自己续 —— 原来这个 6 小时的锁只在 onCreate 调了一次。而 manifest
+     * 从 dataSync 换成 mediaPlayback 的**全部理由**就是"要跑超过 6 小时"：
+     * 第 6 小时之后前台服务还活着，CPU 却可以随时被 Doze / OEM 省电策略停掉，
+     * 长 shell 任务在那一刻静默卡死。
+     *
+     * 保留超时（而不是无限期 acquire）是因为：一旦服务/进程异常终止而
+     * onDestroy 没跑到，无限期的锁会一直耗电；带超时 + 周期续期两者兼得。
+     * 续期间隔取超时的一半，留足重叠窗口。
+     */
+    private fun startWakeLockRenewal() {
+        wakeLockRenewJob?.cancel()
+        wakeLockRenewJob = overlayScope.launch {
+            while (isActive) {
+                delay(WAKELOCK_RENEW_INTERVAL_MS)
+                val lock = wakeLock ?: break
+                try {
+                    lock.acquire(WAKELOCK_TIMEOUT_MS)
+                    Log.d(TAG, "WakeLock renewed")
+                } catch (e: Exception) {
+                    Log.w(TAG, "WakeLock renew failed: ${e.message}")
+                }
+            }
+        }
     }
 
     private fun releaseWakeLock() {
+        wakeLockRenewJob?.cancel()
+        wakeLockRenewJob = null
         try {
             wakeLock?.let {
                 if (it.isHeld) {

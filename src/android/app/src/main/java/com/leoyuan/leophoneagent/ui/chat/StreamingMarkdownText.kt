@@ -14,7 +14,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.appendInlineContent
@@ -1960,7 +1959,13 @@ private fun rememberKatexInlineContent(
 @Composable
 private fun RenderInlineMath(latex: String, fontSize: TextUnit) {
     val context = LocalContext.current
-    val isDark = isSystemInDarkTheme()
+    // [主题一致性] 公式底色/字色必须跟应用内主题走，不能跟系统走。
+    // why: isSystemInDarkTheme() 只反映系统的 UI mode，完全无视应用内的
+    // 浅色/深色覆盖设置。系统深色 + 应用内选浅色时，这里会算出 isDark=true，
+    // 于是 KaTeX 渲白字，而周围 Compose 背景是浅色 —— 聊天里的公式白字白底看不见。
+    // ChatColors.isDark 来自 MinisTheme 注入的 LocalChatPalette，是应用内真实主题。
+    // 同文件同仓的 ChatToolDetailUI.kt:616-618 已经写下了这条结论，这里补齐。
+    val isDark = ChatColors.isDark
     // T208-5: pass the sp value as CSS px so the rendered glyph height
     // matches the surrounding body text. KaTeX's HTML sets
     // `el.style.fontSize = fontSize + 'px'` and the WebView viewport runs
@@ -2027,7 +2032,10 @@ private fun RenderInlineMath(latex: String, fontSize: TextUnit) {
 @Composable
 private fun RenderMathDisplay(latex: String) {
     val context = LocalContext.current
-    val isDark = isSystemInDarkTheme()
+    // [主题一致性] 同 RenderInlineMath：跟应用内主题，不跟系统主题。
+    // 见上方注释；produceState 的 key2 = isDark 保持不变，
+    // 应用内切主题时依旧会重渲一次，语义不变。
+    val isDark = ChatColors.isDark
     // T208-5: render at sp.value (CSS px = dp) so glyph height matches the
     // surrounding 16-sp body text. See RenderInlineMath comment for the
     // full reasoning.
@@ -2138,7 +2146,48 @@ private fun BrokenImagePlaceholder(alt: String?) {
  * attach-path resolution which walks the session cache when the primary
  * lookup misses.
  */
+/**
+ * [perf/丝滑度] 记忆表：已解析成功的 (sessionId, url) 到 File 的映射。
+ *
+ * why: 未加缓存前，聊天列表里每个媒体节点在**每次组合**时都会同步跑一遍
+ * [resolveMdMediaFileUncached]：命中主路径要 1-2 次 stat；未命中还要对
+ * `minis-sessions` 做 listFiles() 再逐 session 目录 stat。一个有 200 个
+ * 会话目录的用户，一次组合就是 400+ 次主线程 syscall。而三个调用点都是
+ * `remember(url, sessionId)` —— LazyColumn 回收后再滚回来 remember 就失效，
+ * 于是滚动来回会反复触发主线程磁盘遍历，这正是"滚动不丝滑"的直接来源之一。
+ *
+ * 只缓存"解析成功"的结果，不缓存 null：附件有可能在消息渲染之后才落盘
+ * （流式写入 / 后台下载），缓存负结果会让它们永远解析不出来。
+ * 命中后仍做一次 isFile 复核（File.isFile 对不存在的路径返回 false，
+ * 一次调用同时覆盖"被删了"和"还在"两种情况），文件没了就丢弃缓存并回落到
+ * 完整解析 —— 对外可观察行为与未加缓存时完全一致，代价从 400+ 次 syscall
+ * 降到 1 次。
+ *
+ * 用 ConcurrentHashMap：解析既发生在组合（主线程），也发生在
+ * ChatScreen.kt 的引用解析路径，用并发容器避免竞态。
+ */
+private val mdMediaResolveMemo = java.util.concurrent.ConcurrentHashMap<String, File>()
+
 internal fun resolveMdMediaFile(context: Context, url: String, sessionId: String? = null): File? {
+    if (url.isBlank()) return null
+    // 分隔符用换行：sessionId 是 UUID / __new__ 前缀，url 是单行，都不含换行。
+    val memoKey = (sessionId ?: "") + "\n" + url
+    mdMediaResolveMemo[memoKey]?.let { hit ->
+        if (hit.isFile) return hit
+        mdMediaResolveMemo.remove(memoKey)
+    }
+    return resolveMdMediaFileUncached(context, url, sessionId)?.also {
+        // 上限护栏：这张表是进程级的，键的数量等于用户看过的不同媒体 URL 数。
+        // 正常使用远达不到 2048，但长时间不退出的会话里没有上限终归不妥；
+        // 超了直接整表清空（比实现一套 LRU 简单，且代价只是下一次重新 stat 一遍）。
+        if (mdMediaResolveMemo.size > MD_MEDIA_MEMO_MAX) mdMediaResolveMemo.clear()
+        mdMediaResolveMemo[memoKey] = it
+    }
+}
+
+private const val MD_MEDIA_MEMO_MAX = 2048
+
+private fun resolveMdMediaFileUncached(context: Context, url: String, sessionId: String? = null): File? {
     if (url.isBlank()) return null
     // Strip a real query (`?`), but NOT `#` — attachment filenames legitimately
     // contain '#' (hashtags). `minis://` URLs don't carry fragments anyway,
@@ -2162,7 +2211,9 @@ internal fun resolveMdMediaFile(context: Context, url: String, sessionId: String
         else -> null
     }
     if (primary?.let { it.exists() && it.isFile } == true) {
-        android.util.Log.d("MdStream", "resolveMdMediaFile url=$url sid=$sessionId -> primary=${primary.absolutePath}")
+        // [perf] 这里原本有一条 Log.d。字符串插值（含 absolutePath 分配）在
+        // 调用 Log.d 之前就已经发生，与日志级别无关；而这是聊天列表滚动时
+        // 每个媒体节点都会走的路径，属于纯浪费，删掉。下同。
         return primary
     }
 
@@ -2172,7 +2223,6 @@ internal fun resolveMdMediaFile(context: Context, url: String, sessionId: String
     // where `resolveHostPath`'s global bindMounts map points at a different
     // session than the one owning this message.
     if (!stripped.startsWith("minis://")) {
-        android.util.Log.d("MdStream", "resolveMdMediaFile primary miss url=$url (non-minis scheme, no fallback)")
         return null
     }
     val decoded = java.net.URLDecoder.decode(stripped.removePrefix("minis://"), "UTF-8")
@@ -2183,7 +2233,6 @@ internal fun resolveMdMediaFile(context: Context, url: String, sessionId: String
         root.listFiles()?.forEach { sessionDir ->
             val candidate = File(sessionDir, "$subdir/$basename")
             if (candidate.exists() && candidate.isFile) {
-                android.util.Log.d("MdStream", "resolveMdMediaFile url=$url -> fallback=${candidate.absolutePath}")
                 return candidate
             }
         }
@@ -2191,7 +2240,6 @@ internal fun resolveMdMediaFile(context: Context, url: String, sessionId: String
     // Also probe `minis-global/<subdir>` for shared/memory/skills buckets.
     val globalCandidate = File(context.filesDir, "minis-global/$subdir/$basename")
     if (globalCandidate.exists() && globalCandidate.isFile) {
-        android.util.Log.d("MdStream", "resolveMdMediaFile url=$url -> global=${globalCandidate.absolutePath}")
         return globalCandidate
     }
     android.util.Log.w("MdStream", "resolveMdMediaFile url=$url -> NOT FOUND (primary=${primary?.absolutePath})")

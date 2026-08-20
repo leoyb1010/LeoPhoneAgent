@@ -585,6 +585,12 @@ class MinisApp : Application(), ImageLoaderFactory {
 
         // Initialize offload permission manager
         OffloadPermissionManager.init(this)
+        // review P1#11：权限弹窗唯一的渲染方是 ChatScreen 里的
+        // OffloadPermissionDialog。App 不在前台时没有任何 Composable 会收到
+        // pendingRequest，挂起会一直等到上游超时（最长 10 分钟），期间还占着
+        // 全局互斥锁，把用户自己在前台触发的 ASK_ONCE 一起卡死。把"有没有
+        // UI 宿主"这一事实喂给权限管理器，让它在没人能弹窗时立刻 fail-closed。
+        OffloadPermissionManager.setPromptHostProbe(::isAppForeground)
 
         // Initialize speech-recognition adapter layer (system + provider engines).
         com.leoyuan.leophoneagent.speech.SpeechRecognitionManager.init(this)
@@ -740,6 +746,12 @@ class MinisApp : Application(), ImageLoaderFactory {
                 add(MinisImageFetcher.MtimeKeyer())
                 add(MinisImageFetcher.StringMtimeKeyer())
             }
+            // [丝滑度] 全 App 图片加载淡入。原先没开 crossfade，缩略图/附件图是
+            // 硬切上屏，是"不丝滑"最直观的一处。
+            // Coil 2 的 CrossfadeTransition.Factory 会主动跳过 dataSource ==
+            // MEMORY_CACHE 的结果，所以滚动时命中内存缓存的图仍然是瞬时出现，
+            // 不会出现"每次滚回来都闪一下"的倒退。150ms 与 M3 的 short4 时长同级。
+            .crossfade(150)
             .build()
 
     override fun onTerminate() {

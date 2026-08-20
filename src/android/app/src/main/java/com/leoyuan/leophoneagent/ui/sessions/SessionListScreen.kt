@@ -14,7 +14,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -316,7 +315,9 @@ fun SessionListScreen(
     // doesn't flash the "add a provider" onboarding before the real config emits.
     val configLoaded by providerRepository.configLoaded.collectAsState()
     val scope = rememberCoroutineScope()
-    val isDark = isSystemInDarkTheme()
+    // [主题一致性] 跟应用内主题，不跟系统主题。应用内浅/深覆盖设置下，
+    // isSystemInDarkTheme() 会和同屏其它用 MaterialTheme/ChatColors 的元素反色。
+    val isDark = ChatColors.isDark
 
     // [T-android-search-focus-sticky] When the user opens search but types
     // nothing (or only whitespace) and then navigates into a chat, the
@@ -608,37 +609,56 @@ fun SessionListScreen(
                         // header buckets over the filtered set.
                         groupedSessions.forEach { (period, periodSessions) ->
                             item(key = "header_${period.name}") {
-                                SectionHeader(title = stringResource(when (period) {
-                                    DatePeriod.PINNED -> R.string.sessionlist_section_pinned
-                                    DatePeriod.TODAY -> R.string.sessionlist_section_today
-                                    DatePeriod.YESTERDAY -> R.string.sessionlist_section_yesterday
-                                    DatePeriod.THIS_WEEK -> R.string.sessionlist_section_this_week
-                                    DatePeriod.THIS_MONTH -> R.string.sessionlist_section_this_month
-                                    DatePeriod.EARLIER -> R.string.sessionlist_section_earlier
-                                }))
+                                // [丝滑度] 分组标题也参与位移/淡入淡出：删掉某天最后一个
+                                // 会话时，标题随之淡出、下方分组平滑上移，而不是整块硬跳。
+                                Box(Modifier.animateItem()) {
+                                    SectionHeader(title = stringResource(when (period) {
+                                        DatePeriod.PINNED -> R.string.sessionlist_section_pinned
+                                        DatePeriod.TODAY -> R.string.sessionlist_section_today
+                                        DatePeriod.YESTERDAY -> R.string.sessionlist_section_yesterday
+                                        DatePeriod.THIS_WEEK -> R.string.sessionlist_section_this_week
+                                        DatePeriod.THIS_MONTH -> R.string.sessionlist_section_this_month
+                                        DatePeriod.EARLIER -> R.string.sessionlist_section_earlier
+                                    }))
+                                }
                             }
                             items(periodSessions, key = { it.id }) { session ->
                                 val activeQuery = if (isSearchActive && searchQuery.isNotBlank()) searchQuery else ""
-                                SessionItemContent(
-                                    session = session,
-                                    isSelecting = isSelecting,
-                                    selectedIds = selectedIds,
-                                    onSessionClick = onSessionClickGuarded,
-                                    onToggleSelect = { viewModel.toggleSelect(it) },
-                                    onEnterSelect = { viewModel.enterSelection(it) },
-                                    onPinToggle = { viewModel.togglePin(it) },
-                                    onEditRequest = { editSession = it },
-                                    onExportRequest = { session, fmt -> exportSession(context, session, chatRepository, scope, fmt) },
-                                    onRegenerateTitle = { viewModel.regenerateTitle(it) },
-                                    onDuplicate = { viewModel.duplicateSession(it) },
-                                    onDeleteRequest = { id ->
-                                        deleteTargetId = id
-                                        showDeleteDialog = true
-                                    },
-                                    isRegenerating = session.id in regeneratingIds,
-                                    searchQuery = activeQuery,
-                                    searchSnippet = searchSnippets[session.id],
-                                )
+                                // [丝滑度] 新建 / 删除 / 置顶重排此前全是硬切。
+                                // animateItem() 给的是默认 fadeIn + 位移 + fadeOut：
+                                // 删除时该行淡出、下方各行平滑补位；置顶时行滑进 Pinned
+                                // 分组而不是瞬移。
+                                //
+                                // 前提是稳定 key —— 这个 LazyColumn 本来就有
+                                // `key = { it.id }`（分组标题也带 key），所以
+                                // animateItem 能正确把同一行的新旧位置对上。
+                                //
+                                // SessionItemContent 没有 modifier 形参，用 Box 承接。
+                                // Box 把 maxWidth 约束原样传给子项（子项 fillMaxWidth
+                                // 就铺满，否则收缩到内容），与原先直接放在 item 槽里的
+                                // 测量结果一致，无视觉变化。
+                                Box(Modifier.animateItem()) {
+                                    SessionItemContent(
+                                        session = session,
+                                        isSelecting = isSelecting,
+                                        selectedIds = selectedIds,
+                                        onSessionClick = onSessionClickGuarded,
+                                        onToggleSelect = { viewModel.toggleSelect(it) },
+                                        onEnterSelect = { viewModel.enterSelection(it) },
+                                        onPinToggle = { viewModel.togglePin(it) },
+                                        onEditRequest = { editSession = it },
+                                        onExportRequest = { session, fmt -> exportSession(context, session, chatRepository, scope, fmt) },
+                                        onRegenerateTitle = { viewModel.regenerateTitle(it) },
+                                        onDuplicate = { viewModel.duplicateSession(it) },
+                                        onDeleteRequest = { id ->
+                                            deleteTargetId = id
+                                            showDeleteDialog = true
+                                        },
+                                        isRegenerating = session.id in regeneratingIds,
+                                        searchQuery = activeQuery,
+                                        searchSnippet = searchSnippets[session.id],
+                                    )
+                                }
                             }
                         }
                     }
@@ -1715,7 +1735,13 @@ private fun SetupStepCard(
         }
 
         Column(
-            modifier = Modifier.weight(1f).height(52.dp),
+            // [大字号适配] 原来是 height(52.dp) —— 固定高度。
+            // 里面是 bodyLarge 标题 + bodySmall 副标题两行；系统字体缩放
+            // 叠上应用内字号滑杆（最高 1.21x）后两行的总高度会超过 52dp，
+            // Column 是固定高度就直接把副标题裁掉。
+            // 换成 heightIn(min = 52.dp)：不足时仍撑到 52dp（默认布局完全不变），
+            // 超出时按内容长高，不再裁切。
+            modifier = Modifier.weight(1f).heightIn(min = 52.dp),
             verticalArrangement = Arrangement.Center,
         ) {
             Text(

@@ -340,31 +340,55 @@ private class LazyLogFile private constructor(
 ) {
     val lineCount: Int get() = lineOffsets.size
 
+    /** 文件总长度，用于算最后一行的长度。open() 时取一次即可 —— 日志文件在
+     *  详情页打开期间不会被本进程改写（写入走 AppLogger 的另一个句柄，追加
+     *  写只会让末尾变长，读旧长度最多少显示最后几个字节，不会越界）。 */
+    private val fileLength: Long = try { raf.length() } catch (_: Exception) { 0L }
+
+    /**
+     * [perf] 复用的读缓冲。原实现每调一次 readLine 就 `ByteArray(8 * 1024)`，
+     * 而 readLine 是在 LazyColumn 的 item 里同步调的 —— 每个可见行、每次重组
+     * 都要新分配 8KB 并读满 8KB。滚动 33MB 日志时这是持续的 GC 压力来源。
+     * readLine 已经是 @Synchronized，共用一个实例字段缓冲是安全的。
+     */
+    private var scratch = ByteArray(4 * 1024)
+
+    /**
+     * [perf] 已读行的 LRU 缓存。LazyColumn 的行在重组时会重新调用 readLine
+     * （滚动回来、主题变化、任何上层 state 变化都会），有了缓存这些重复调用
+     * 变成一次 map 查找，零 I/O。512 行 × 平均 150 字节 ≈ 75KB，可忽略。
+     */
+    private val lineCache = object : LinkedHashMap<Int, String>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Int, String>?): Boolean =
+            size > LINE_CACHE_ENTRIES
+    }
+
     @Synchronized
     fun readLine(index: Int): String {
         if (index !in 0 until lineCount) return ""
+        lineCache[index]?.let { return it }
         return try {
-            raf.seek(lineOffsets[index])
-            // RAF.readLine reads bytes, so non-ASCII (CJK) gets mangled
-            // — log files are ASCII timestamp + UTF-8 message bodies,
-            // so read raw bytes up to the next newline and decode UTF-8.
-            val buf = ByteArray(8 * 1024)
-            val sb = StringBuilder()
-            while (true) {
-                val n = raf.read(buf)
-                if (n <= 0) break
-                var done = false
-                for (i in 0 until n) {
-                    if (buf[i] == '\n'.code.toByte()) {
-                        sb.append(String(buf, 0, i, Charsets.UTF_8))
-                        done = true
-                        break
-                    }
-                }
-                if (done) break
-                sb.append(String(buf, 0, n, Charsets.UTF_8))
-            }
-            sb.toString()
+            // [perf] 行长度可以直接从 lineOffsets 算出来：offsets[i+1] 落在
+            // 第 i 行的换行符之后，所以第 i 行的内容是
+            // [offsets[i], offsets[i+1] - 1)。最后一行到文件末尾。
+            // 原实现不用这个信息，而是每次读 8KB 再线性扫 '\n'，一条 120 字节
+            // 的日志行要付 8KB 的读 + 分配 + StringBuilder + 两次 String 拷贝。
+            // 现在一次 readFully 精确长度即可，语义完全一致（同样不含换行符、
+            // 同样保留 CRLF 里的 '\r'、同样按 UTF-8 解码）。
+            val start = lineOffsets[index]
+            val rawEnd = if (index + 1 < lineCount) lineOffsets[index + 1] - 1 else fileLength
+            // 上限保护：畸形的超长单行不会再无限增长 StringBuilder 直到 OOM。
+            var len = (rawEnd - start).coerceIn(0L, MAX_LINE_BYTES.toLong()).toInt()
+            if (len == 0) return ""
+            if (scratch.size < len) scratch = ByteArray(len)
+            raf.seek(start)
+            raf.readFully(scratch, 0, len)
+            // 末行没有后继 offset，rawEnd 取的是文件长度，会把结尾的换行符一起
+            // 读进来；剥掉它，与非末行（rawEnd = offsets[i+1] - 1 天然排除换行符）
+            // 以及原实现（扫到 '\n' 就停）保持一致。
+            if (scratch[len - 1] == '\n'.code.toByte()) len--
+            if (len == 0) return ""
+            String(scratch, 0, len, Charsets.UTF_8).also { lineCache[index] = it }
         } catch (e: Exception) {
             ""
         }
@@ -373,6 +397,10 @@ private class LazyLogFile private constructor(
     fun close() = try { raf.close() } catch (_: Exception) {}
 
     companion object {
+        private const val LINE_CACHE_ENTRIES = 512
+        /** 单行读取上限 256KB —— 真实日志行远低于此，纯粹是 OOM 护栏。 */
+        private const val MAX_LINE_BYTES = 256 * 1024
+
         fun open(file: File): LazyLogFile {
             val raf = RandomAccessFile(file, "r")
             // First-line offset is always 0; subsequent offsets sit
@@ -501,8 +529,13 @@ fun LogDetailScreen(
                         .padding(horizontal = 12.dp, vertical = 12.dp),
                 ) {
                     items(log.lineCount) { i ->
+                        // [perf] remember(i)：行内容对同一个 LazyLogFile + 行号
+                        // 是不变的，用 remember 挡掉重组时的重复读取（缓存命中也
+                        // 要走一次 synchronized + map 查找）。key 带上 log 实例，
+                        // 切换日志文件时会重新读。
+                        val lineText = remember(log, i) { log.readLine(i) }
                         Text(
-                            text = log.readLine(i),
+                            text = lineText,
                             style = TextStyle(
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 11.sp,

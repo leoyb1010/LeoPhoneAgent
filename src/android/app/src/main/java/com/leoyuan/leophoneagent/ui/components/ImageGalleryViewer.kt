@@ -338,12 +338,21 @@ private fun GalleryPage(
             contentScale = ContentScale.Fit,
             modifier = Modifier
                 .fillMaxSize()
-                .graphicsLayer(
-                    scaleX = scale,
-                    scaleY = scale,
-                    translationX = offsetX,
-                    translationY = offsetY,
-                )
+                // [perf/丝滑度] 用 lambda 版 graphicsLayer { }，不用具名参数版。
+                //
+                // why: 具名参数重载 graphicsLayer(scaleX = ..., ...) 会在**组合期**
+                // 读 scale/offsetX/offsetY 这三个 state，于是每一帧捏合都触发
+                // 一次重组 → 重新布局 → 重绘。
+                // lambda 重载把这三次读推迟到**绘制期**（GraphicsLayerScope 的
+                // block 在 layer 更新时才执行），state 变化只让这一层 layer 失效，
+                // 不产生重组、不重新测量。这正是官方对"高频动画值"的推荐写法。
+                // 视觉结果完全一致 —— 同样的 scaleX/scaleY/translation 语义。
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    translationX = offsetX
+                    translationY = offsetY
+                }
                 // When zoomed, this pointerInput intercepts horizontal pan
                 // so the parent pager doesn't change pages while the user
                 // is panning around inside a magnified image. Mirrors iOS

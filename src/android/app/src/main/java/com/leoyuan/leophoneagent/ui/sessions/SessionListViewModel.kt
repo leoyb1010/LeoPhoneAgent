@@ -10,8 +10,8 @@ import com.leoyuan.leophoneagent.data.model.LLMMessage
 import com.leoyuan.leophoneagent.data.model.ThinkingLevel
 import com.leoyuan.leophoneagent.data.repository.ChatRepository
 import com.leoyuan.leophoneagent.data.repository.ProviderRepository
+import com.leoyuan.leophoneagent.debug.HeadlessChatRunner
 import com.leoyuan.leophoneagent.provider.ProviderFactory
-import com.leoyuan.leophoneagent.ui.chat.ChatViewModelStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -232,7 +232,12 @@ class SessionListViewModel(
         viewModelScope.launch {
             ids.forEach {
                 chatRepository.deleteSession(it)
-                ChatViewModelStore.release(it)
+                // why forgetAndRelease 而不是只 release：HeadlessChatRunner 里
+                // 还缓存着这个会话的 ViewModelProvider。只 release 会 clear 掉
+                // 背后的 ViewModelStore，但缓存仍在，下一次 headless/relay 调用
+                // 命中缓存拿到的是一个 onCleared() 过的 ChatViewModel
+                // （viewModelScope 已取消，sendMessage 起不来任何协程）。
+                HeadlessChatRunner.forgetAndRelease(it)
                 // [T-android-session-paused-badge] Drop badges for the
                 // deleted session so persisted PAUSED entries don't leak
                 // forever in SharedPreferences.
@@ -245,7 +250,8 @@ class SessionListViewModel(
     fun deleteSession(id: String) {
         viewModelScope.launch {
             chatRepository.deleteSession(id)
-            ChatViewModelStore.release(id)
+            // 同 deleteSelected：缓存与 ViewModelStore 必须成对释放。
+            HeadlessChatRunner.forgetAndRelease(id)
             com.leoyuan.leophoneagent.service.SessionBadgeStore.clear(id)
         }
     }

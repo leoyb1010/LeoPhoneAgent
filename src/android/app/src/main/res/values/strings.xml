@@ -1663,4 +1663,17 @@
     <string name="system_permissions_shizuku_not_running">Installed — start the manager</string>
     <string name="system_permissions_shizuku_not_installed">Not installed</string>
     <string name="system_permissions_shizuku_standard">Power edition only</string>
+
+    <!-- T-relay-body-alive: resident foreground service that keeps the Android
+         relay body reachable while "accept remote tasks" is on. -->
+    <string name="relay_body_channel_name">Remote Body</string>
+    <string name="relay_body_channel_description">Keeps this phone reachable for remote tasks from your other machines.</string>
+    <string name="relay_body_notification_title">Remote body online</string>
+    <string name="relay_body_notification_text">Ready to accept tasks from your fleet.</string>
+    <string name="relay_body_notification_offline">Reconnecting to the relay…</string>
+    <!-- Degraded path when Android refuses a background foreground-service start. -->
+    <string name="agent_service_degraded_title">Agent running in the background</string>
+    <string name="agent_service_degraded_text">Android blocked the persistent service. Allow \"ignore battery optimisations\" so long tasks are not killed.</string>
+    <!-- Relay fleet toggle: spell out what remote control can reach. -->
+    <string name="relay_body_toggle_caption">Off: this phone only controls other machines. On: remote machines can drive this phone\'s agent, including tools that touch contacts, location, photos, calendar and the clipboard. While it is on, those privacy tools always ask for confirmation on this phone first.</string>
 </resources>

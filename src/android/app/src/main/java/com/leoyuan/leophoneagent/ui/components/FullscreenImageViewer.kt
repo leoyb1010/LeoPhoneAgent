@@ -197,12 +197,18 @@ fun FullscreenImageViewer(
                 contentScale = ContentScale.Fit,
                 modifier = Modifier
                     .fillMaxSize()
-                    .graphicsLayer(
-                        scaleX = scale,
-                        scaleY = scale,
-                        translationX = offsetX,
-                        translationY = offsetY,
-                    )
+                    // [perf/丝滑度] 用 lambda 版 graphicsLayer { }，不用具名参数版。
+                    //
+                    // why: 具名参数重载会在**组合期**读 scale/offsetX/offsetY，
+                    // 于是每一帧捏合都触发重组 → 重新布局 → 重绘。
+                    // lambda 重载把这三次读推迟到**绘制期**，state 变化只让这一层
+                    // layer 失效，不产生重组、不重新测量。视觉结果完全一致。
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        translationX = offsetX
+                        translationY = offsetY
+                    }
                     .pointerInput(Unit) {
                         detectTransformGestures { _, pan, zoom, _ ->
                             scale = (scale * zoom).coerceIn(1f, 8f)

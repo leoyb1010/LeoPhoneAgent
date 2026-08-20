@@ -9366,7 +9366,11 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
                 )
                 chatRepository.deleteSession(sid)
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                    ChatViewModelStore.release(sid)
+                    // why forgetAndRelease：只 release 会留下 HeadlessChatRunner
+                    // 里那份 ViewModelProvider 缓存，它指向的 ViewModelStore 已被
+                    // clear，下一次 headless/relay 调用命中缓存后拿到的是一个
+                    // onCleared() 过的 ChatViewModel。两者必须成对释放。
+                    com.leoyuan.leophoneagent.debug.HeadlessChatRunner.forgetAndRelease(sid)
                 }
             } catch (t: Throwable) {
                 AppLogger.warning(TAG, "cleanupIfEmptyOnExit failed for $sid: ${t.message}")

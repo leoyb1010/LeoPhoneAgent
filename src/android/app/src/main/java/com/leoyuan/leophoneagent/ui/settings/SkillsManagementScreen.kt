@@ -56,6 +56,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -707,10 +708,19 @@ fun SkillDetailScreen(
                     Spacer(Modifier.width(4.dp))
                     Icon(
                         Icons.Default.Edit, contentDescription = stringResource(R.string.skill_detail_edit_name_title),
-                        modifier = Modifier.size(14.dp).clickable {
-                            editName = skill.name
-                            showEditNameDialog = true
-                        },
+                        // [可达性] 14dp 的可点区远低于 48dp 下限。
+                        // minimumInteractiveComponentSize() 只放大**布局与触控**边界
+                        // 到 48dp 并把子项居中，不改变图标本身的 14dp 绘制尺寸
+                        // （这正是 M3 IconButton 自己的写法：min-interactive → size → clickable）。
+                        // 所在的 DetailRow 本来就有多行文本，行高已 >= 48dp，
+                        // 所以纵向不变；横向多出的宽度由同行的 Spacer(weight(1f)) 吸收。
+                        modifier = Modifier
+                            .minimumInteractiveComponentSize()
+                            .size(14.dp)
+                            .clickable {
+                                editName = skill.name
+                                showEditNameDialog = true
+                            },
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                     )
                 }

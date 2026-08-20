@@ -1,6 +1,6 @@
 package com.leoyuan.leophoneagent.ui.chat.voice
 
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -439,12 +439,30 @@ fun InlineVoiceInputPanel(
 
     val screenH = LocalConfiguration.current.screenHeightDp.dp
     val maxPanel = screenH * 0.6f
+    // 见下方 heightIn 处的注释：只对"展开/收起"这一个离散切换做动画。
+    val animatedPanelMinHeight by animateDpAsState(
+        targetValue = if (expanded) ExpandedBase else CompactHeight,
+        animationSpec = tween(280),
+        label = "voice-panel-min-height",
+    )
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = if (expanded) ExpandedBase else CompactHeight, max = maxPanel)
-            .animateContentSize(animationSpec = tween(280))
+            // [perf/丝滑度] 原来是 heightIn(...) + animateContentSize(tween(280))。
+            //
+            // why: animateContentSize 会在**内容尺寸每次变化**时重新起一段动画，
+            // 而这个 Column 里包着持续增长的实时转写文本 —— 每多识别出一行，
+            // 面板高度就变一次，于是整块面板在整段语音输入期间被反复重新测量，
+            // 是这个界面唯一也是最贵的一处每帧重测量。
+            //
+            // 而这里真正想要动画的只有"展开 / 收起"这一个离散切换。
+            // 改成用 animateDpAsState 只动画 heightIn 的 min 值：
+            // - 展开/收起仍有 280ms 过渡（视觉目标不变）；
+            // - 转写文本增长时 min/max 都不变，只是内容自然撑高，不再触发
+            //   animateContentSize 的重复起停。
+            // max = maxPanel 仍然封顶，超出后由内部滚动承接，行为不变。
+            .heightIn(min = animatedPanelMinHeight, max = maxPanel)
             .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {

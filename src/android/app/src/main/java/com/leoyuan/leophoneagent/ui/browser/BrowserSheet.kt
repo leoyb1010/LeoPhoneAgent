@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -229,7 +230,11 @@ fun BrowserSheet(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(36.dp)
+                        // [大字号适配] 原来是 height(36.dp)。地址栏里是
+                        // BasicTextField，大字号下文本被 36dp 的固定高度裁掉。
+                        // heightIn(min) 让默认外观保持一致，只在需要时长高；
+                        // background / border 排在后面，会按最终解析出的尺寸绘制。
+                        .heightIn(min = 36.dp)
                         .background(tertiaryBg, RoundedCornerShape(10.dp))
                         .border(
                             0.5.dp,

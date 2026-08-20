@@ -1594,4 +1594,16 @@
     <string name="system_permissions_shizuku_not_running">已安装，请先启动管理器</string>
     <string name="system_permissions_shizuku_not_installed">未安装</string>
     <string name="system_permissions_shizuku_standard">仅 Power 版</string>
+
+    <!-- T-relay-body-alive: 常驻前台服务，"允许本机接受远程任务"打开时保持可达。 -->
+    <string name="relay_body_channel_name">远程身体</string>
+    <string name="relay_body_channel_description">保持本机可被其他机器下发远程任务。</string>
+    <string name="relay_body_notification_title">远程身体在线</string>
+    <string name="relay_body_notification_text">可接受来自你其他机器的任务。</string>
+    <string name="relay_body_notification_offline">正在重连中继…</string>
+    <!-- 系统拒绝后台拉起前台服务时的降级通知。 -->
+    <string name="agent_service_degraded_title">Agent 正在后台运行</string>
+    <string name="agent_service_degraded_text">系统拦下了常驻服务。请授予"忽略电池优化"，否则长任务可能被杀。</string>
+    <!-- 舰队开关：写清能力边界。 -->
+    <string name="relay_body_toggle_caption">关闭：只用手机控制其他机器。开启：远程机器可以驱动本机 Agent，包括会读取通讯录、定位、相册、日历、剪贴板的工具。开启期间，这些隐私工具在本机一律先弹确认。</string>
 </resources>

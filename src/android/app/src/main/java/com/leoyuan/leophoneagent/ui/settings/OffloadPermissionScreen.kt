@@ -259,7 +259,9 @@ private fun AgentPolicyRow(
     toolName: String,
     showDivider: Boolean,
 ) {
-    var currentLevel by remember { mutableStateOf(OffloadPermissionManager.getLevel(toolName)) }
+    // 显示用户实际选择的等级，而不是“远程身体在线”提级后的有效等级；
+    // 否则开着远程身体时，UI 会把一个用户从没选过的 ASK_ONCE 显示成已选中。
+    var currentLevel by remember { mutableStateOf(OffloadPermissionManager.getConfiguredLevel(toolName)) }
     var expanded by remember { mutableStateOf(false) }
 
     Box {
@@ -305,7 +307,7 @@ private fun PermissionRow(
     tool: OffloadPermissionManager.ToolPermissionInfo,
     showDivider: Boolean,
 ) {
-    var currentLevel by remember { mutableStateOf(OffloadPermissionManager.getLevel(tool.toolName)) }
+    var currentLevel by remember { mutableStateOf(OffloadPermissionManager.getConfiguredLevel(tool.toolName)) }
     var expanded by remember { mutableStateOf(false) }
 
     Box {

@@ -364,7 +364,12 @@ private fun FileItemRow(
 
         // Delete button for non-directory items
         if (!item.isDirectory) {
-            IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+            // [可达性] 原来是 `Modifier.size(32.dp)`。IconButton 内部本来就带
+            // minimumInteractiveComponentSize()（48dp 触控目标），但显式 .size(32.dp)
+            // 排在它后面，直接把最小值覆盖掉了 —— 于是这个**删除**按钮的实际可点区
+            // 只有 32dp，低于 Material / WCAG 的 48dp 下限，误触代价是删文件。
+            // 去掉尺寸覆盖，回到 M3 默认：图标仍是下面显式的 18dp，只有触控区变大。
+            IconButton(onClick = onDelete) {
                 Icon(
                     Icons.Filled.Delete,
                     contentDescription = stringResource(R.string.delete),

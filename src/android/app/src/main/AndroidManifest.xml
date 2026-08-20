@@ -20,6 +20,11 @@
          policy, not an OS runtime check, and Minis ships as a sideload.
     -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- T-relay-body-alive: RelayBodyForegroundService runs with
+         foregroundServiceType="remoteMessaging"; Android 14+ requires the
+         matching per-type permission or startForeground throws
+         SecurityException / MissingForegroundServiceTypeException. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
     <!-- T50: PARTIAL_WAKE_LOCK held by AgentForegroundService while sessions
          are streaming so Doze + OEM CPU throttling don't stall long shell
          tools after screen-off. -->
@@ -455,6 +460,20 @@
             android:name=".service.AgentForegroundService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+
+        <!-- T-relay-body-alive: resident foreground service that keeps the
+             Android relay body reachable while "accept remote tasks" is on.
+             type=remoteMessaging because (a) it is the honest semantic — the
+             process is holding a connection open for tasks pushed from the
+             user's other machines, (b) it carries no dataSync-style 6h/24h
+             cumulative cap, and (c) Android 14 restricts which FGS types a
+             BOOT_COMPLETED receiver may launch, and remoteMessaging is on the
+             allowed list (mediaPlayback / dataSync / microphone are not),
+             which is what makes the boot revival path work. -->
+        <service
+            android:name=".service.RelayBodyForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="remoteMessaging" />
 
         <service
             android:name=".assistant.LeoVoiceInteractionService"

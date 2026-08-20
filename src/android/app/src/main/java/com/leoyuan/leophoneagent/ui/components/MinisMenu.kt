@@ -9,7 +9,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.isSystemInDarkTheme
+import com.leoyuan.leophoneagent.ui.theme.ChatColors
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -66,13 +66,20 @@ fun MinisMenu(
     // in dark, a subtle shade in light) so the menu pops out — same fix already
     // validated on the text-selection toolbar (T-android-text-toolbar-dark-
     // visibility). The dark-mode `border` below adds the extra edge definition.
-    containerColor: Color = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.surfaceContainerHigh else Color.White,
+    // [主题一致性] 跟应用内主题，不跟系统主题。isSystemInDarkTheme() 无视
+    // 应用内的浅/深覆盖设置：系统深色 + 应用内浅色时这里会给出深色容器色，
+    // 而菜单项文字用的是 MaterialTheme.colorScheme（已经跟应用内主题）→ 深底深字。
+    // ChatColors.isDark 读的是 MinisTheme 注入的 LocalChatPalette，即应用内真实主题。
+    // 注：@Composable 函数的默认参数表达式在函数体内求值，调用 @Composable /
+    // @ReadOnlyComposable 的 ChatColors 与原先调用 isSystemInDarkTheme() 同样合法。
+    containerColor: Color = if (ChatColors.isDark) MaterialTheme.colorScheme.surfaceContainerHigh else Color.White,
     tonalElevation: Dp = 3.dp,
     // Lower than Material's default 8dp — at 12dp the drop shadow read as
     // much heavier on the light theme than the iOS context menu we're
     // mirroring. 4dp keeps a clear pop-out without the dark halo.
     shadowElevation: Dp = 4.dp,
-    border: BorderStroke? = if (isSystemInDarkTheme()) {
+    // [主题一致性] 同上，深色描边要跟应用内主题。
+    border: BorderStroke? = if (ChatColors.isDark) {
         BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
     } else {
         null
@@ -191,7 +198,9 @@ fun MinisMenu(
  */
 @Composable
 fun MinisMenuDivider(modifier: Modifier = Modifier) {
-    val tint = if (isSystemInDarkTheme()) Color.White else Color.Black
+    // [主题一致性] 分隔线的黑/白反色也要跟应用内主题，否则应用内浅色 +
+    // 系统深色时会画白线在白底上（等于没有分隔线）。
+    val tint = if (ChatColors.isDark) Color.White else Color.Black
     HorizontalDivider(
         modifier = modifier.padding(horizontal = 14.dp, vertical = 4.dp),
         thickness = 1.dp,

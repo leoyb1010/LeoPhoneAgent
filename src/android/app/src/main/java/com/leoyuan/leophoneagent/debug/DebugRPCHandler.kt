@@ -1000,7 +1000,8 @@ class DebugRPCHandler(private val context: Context) {
                 .put("displayName", tool.displayName)
                 .put("category", tool.category.name)
                 .put("defaultLevel", tool.defaultLevel.name)
-                .put("currentLevel", com.leoyuan.leophoneagent.offload.OffloadPermissionManager.getLevel(tool.toolName).name)
+                .put("currentLevel", com.leoyuan.leophoneagent.offload.OffloadPermissionManager.getConfiguredLevel(tool.toolName).name)
+                .put("effectiveLevel", com.leoyuan.leophoneagent.offload.OffloadPermissionManager.getLevel(tool.toolName).name)
                 .put("showInSettings", tool.showInSettings))
         }
         return JSONObject().put("tools", arr).put("count", arr.length())

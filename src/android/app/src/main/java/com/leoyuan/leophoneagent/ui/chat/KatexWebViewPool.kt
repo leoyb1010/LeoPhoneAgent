@@ -55,7 +55,19 @@ internal object KatexWebViewPool {
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val mutex = Mutex()
-    private val cache = LruCache<String, KatexRenderResult>(150)
+    // [内存] LruCache 的 maxSize 单位由 sizeOf 决定；不重写 sizeOf 时它按"条数"算，
+    // 于是 150 是"150 条"而不是"150 字节"，等于对位图完全不设内存上限。
+    // 一条宽公式在 density=3 时可以是 3000×160×4 ≈ 1.9MB，150 条就能吃掉几百 MB。
+    // 改成按字节预算（12MB），与同仓 MarkdownParseCaches 的按字符预算做法一致。
+    private const val CACHE_BUDGET_BYTES = 12 * 1024 * 1024
+
+    private val cache: LruCache<String, KatexRenderResult> =
+        object : LruCache<String, KatexRenderResult>(CACHE_BUDGET_BYTES) {
+            // 至少记 1 字节：sizeOf 返回 0 会让 LruCache 的内部计数漂移并抛
+            // "counter inconsistency" IllegalStateException。
+            override fun sizeOf(key: String, value: KatexRenderResult): Int =
+                value.bitmap.allocationByteCount.coerceAtLeast(1)
+        }
 
     @Volatile
     private var webView: WebView? = null

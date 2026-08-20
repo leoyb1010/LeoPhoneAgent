@@ -59,6 +59,24 @@ object MarkdownParser {
     /** Regex for a standalone `![alt](url)` node on its own line. */
     private val standaloneImageRegex = Regex("""^\s*!\[([^\]]*)\]\(([^)\s]+)\)\s*$""")
 
+    // [perf] 下面这些 Regex 原本写在 parse() 的**逐行循环体内部**（其中
+    // bulletItemRegex / numberedItemRegex 还在内层 while 里），每处理一行就要
+    // 走一次 Pattern.compile —— 一篇 500 行的 Markdown 单次解析就是数千次
+    // 正则编译。而这条旧解析路径（SkillDetailScreen 在用）是在**组合期同步**
+    // 跑的，没有缓存。
+    // Regex 实例本身是不可变且线程安全的（java.util.regex.Pattern 不可变，
+    // Matcher 每次 find/matches 都新建），提到 object 级别做常量共享是安全的。
+    // 模式串一字未改，匹配行为完全一致。
+    private val thematicBreakRegex = Regex("^\\s{0,3}([-*_])\\s*\\1\\s*\\1(\\s*\\1)*\\s*$")
+    private val headingRegex = Regex("^(#{1,6})\\s+(.+)$")
+    private val bulletItemRegex = Regex("^\\s{0,3}[-*+]\\s+(.*)$")
+    private val bulletMarkerRegex = Regex("^\\s{0,3}[-*+]\\s")
+    private val bulletMarkerLooseRegex = Regex("^\\s{0,3}[-*+]\\s+")
+    private val numberedItemRegex = Regex("^\\s{0,3}(\\d{1,2})[.)\\s]\\s*(.*)$")
+    private val numberedMarkerRegex = Regex("^\\s{0,3}\\d{1,2}[.)\\s]\\s")
+    private val tableSeparatorCellRegex = Regex("^:?-+:?$")
+    private val mathPlaceholderRegex = Regex("$ORC" + "MATH(\\d+)" + "$ORC")
+
     /**
      * Classify a media URL by file extension. Extracts the extension from the
      * *last path segment only* so filenames that contain '#' or '?' (either
@@ -95,7 +113,9 @@ object MarkdownParser {
     }
 
     fun parse(markdown: String): List<Block> {
-        android.util.Log.d("MdParser", "parse() len=${markdown.length} preview=${markdown.take(160).replace("\n","\\n")}")
+        // [perf] 原来这里有一条 Log.d，会对每次解析都做一次 take(160)+replace
+        // 的字符串构造（插值先于 Log.d 求值，与日志级别无关）。
+        // 这条路径在组合期同步跑，删掉。下面循环里的两条同理。
         val lines = markdown.lines()
         val blocks = mutableListOf<Block>()
         var i = 0
@@ -124,14 +144,14 @@ object MarkdownParser {
             }
 
             // Thematic break
-            if (line.matches(Regex("^\\s{0,3}([-*_])\\s*\\1\\s*\\1(\\s*\\1)*\\s*$"))) {
+            if (line.matches(thematicBreakRegex)) {
                 blocks.add(Block.ThematicBreak)
                 i++
                 continue
             }
 
             // ATX Heading
-            val headingMatch = Regex("^(#{1,6})\\s+(.+)$").find(line)
+            val headingMatch = headingRegex.find(line)
             if (headingMatch != null) {
                 val level = headingMatch.groupValues[1].length
                 val content = headingMatch.groupValues[2].trimEnd().removeSuffix("#").trimEnd()
@@ -164,17 +184,17 @@ object MarkdownParser {
             }
 
             // Bullet list (-, *, +)
-            val bulletMatch = Regex("^\\s{0,3}[-*+]\\s+(.*)$").find(line)
+            val bulletMatch = bulletItemRegex.find(line)
             if (bulletMatch != null) {
                 val items = mutableListOf<ListItem>()
                 while (i < lines.size) {
-                    val bm = Regex("^\\s{0,3}[-*+]\\s+(.*)$").find(lines[i])
+                    val bm = bulletItemRegex.find(lines[i])
                     if (bm == null) break
                     val content = bm.groupValues[1]
                     items.add(parseListItem(content))
                     i++
                     // Collect continuation lines (indented)
-                    while (i < lines.size && lines[i].startsWith("  ") && !Regex("^\\s{0,3}[-*+]\\s").matches(lines[i])) {
+                    while (i < lines.size && lines[i].startsWith("  ") && !bulletMarkerRegex.matches(lines[i])) {
                         items[items.lastIndex] = items.last().copy(
                             content = items.last().content + "\n" + lines[i].trimStart()
                         )
@@ -190,12 +210,12 @@ object MarkdownParser {
             // misparsed as ordered-list item #2020 (user report). Real lists
             // rarely exceed 99 items; CommonMark itself caps markers at 9
             // digits, we deliberately go tighter.
-            val numMatch = Regex("^\\s{0,3}(\\d{1,2})[.)\\s]\\s*(.*)$").find(line)
+            val numMatch = numberedItemRegex.find(line)
             if (numMatch != null) {
                 val startNum = numMatch.groupValues[1].toIntOrNull() ?: 1
                 val items = mutableListOf<ListItem>()
                 while (i < lines.size) {
-                    val nm = Regex("^\\s{0,3}(\\d{1,2})[.)\\s]\\s*(.*)$").find(lines[i])
+                    val nm = numberedItemRegex.find(lines[i])
                     if (nm == null) break
                     items.add(ListItem(nm.groupValues[2]))
                     i++
@@ -212,12 +232,9 @@ object MarkdownParser {
                 val alt = mediaMatch.groupValues[1]
                 val url = mediaMatch.groupValues[2]
                 val blk = mediaBlockFor(alt, url)
-                android.util.Log.d("MdParser", "media match: alt=\"$alt\" url=$url -> ${blk::class.simpleName}")
                 blocks.add(blk)
                 i++
                 continue
-            } else if (line.contains("![") && line.contains("](")) {
-                android.util.Log.d("MdParser", "image-like line did NOT match standalone regex: ${line.take(160)}")
             }
 
             // Blank line — skip
@@ -233,10 +250,10 @@ object MarkdownParser {
                 val pl = lines[i]
                 if (pl.isBlank() || pl.trimStart().startsWith("```") ||
                     pl.trimStart().startsWith("# ") || pl.trimStart().startsWith("> ") ||
-                    Regex("^\\s{0,3}[-*+]\\s+").containsMatchIn(pl) ||
+                    bulletMarkerLooseRegex.containsMatchIn(pl) ||
                     // Keep in sync with the numbered-list marker above (≤2 digits).
-                    Regex("^\\s{0,3}\\d{1,2}[.)\\s]\\s").containsMatchIn(pl) ||
-                    pl.matches(Regex("^\\s{0,3}([-*_])\\s*\\1\\s*\\1(\\s*\\1)*\\s*$")) ||
+                    numberedMarkerRegex.containsMatchIn(pl) ||
+                    pl.matches(thematicBreakRegex) ||
                     standaloneImageRegex.containsMatchIn(pl)
                 ) break
                 paraLines.add(pl)
@@ -263,7 +280,7 @@ object MarkdownParser {
         val trimmed = line.trim()
         if (!trimmed.contains('-')) return false
         val cells = trimmed.split('|').filter { it.isNotBlank() }
-        return cells.all { it.trim().matches(Regex("^:?-+:?$")) }
+        return cells.all { it.trim().matches(tableSeparatorCellRegex) }
     }
 
     private fun parseTable(lines: List<String>, startIdx: Int): Pair<Block.Table, Int>? {
@@ -590,9 +607,8 @@ object MarkdownParser {
 
         val out = mutableListOf<Block>()
         val buf = StringBuilder()
-        val regex = Regex("$ORC" + "MATH(\\d+)" + "$ORC")
         var lastEnd = 0
-        for (match in regex.findAll(content)) {
+        for (match in mathPlaceholderRegex.findAll(content)) {
             val full = match.value
             val span = map[full] ?: continue
             // Append text before this placeholder.

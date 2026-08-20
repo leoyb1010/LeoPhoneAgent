@@ -49,7 +49,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import android.content.ClipData
 import android.content.ClipboardManager
-import android.os.Build
 import androidx.compose.ui.platform.LocalContext
 import com.leoyuan.leophoneagent.relay.RelayPairCodec
 import androidx.compose.ui.text.font.FontWeight
@@ -85,13 +84,40 @@ fun RelayFleetScreen(onBack: () -> Unit) {
     var cwd by remember { mutableStateOf("~") }
     var eventWatermark by remember { mutableStateOf(0.0) }
 
+    // P2#18：原来 refresh / 审批 / 启动 / 停止 四处各自 `RelayFleetClient(config)`，
+    // 而它的默认构造会 new 一个全新的 OkHttpClient —— 每次点击都新建一份连接池
+    // 和线程池，连接无法复用。按 config 记忆一个实例即可（RelayFleetClient 是
+    // 无状态的，只读 config）。config 变化时自然重建。
+    val fleetClient = remember(config.relayApiBase, config.accessKey) {
+        runCatching { RelayFleetClient(config) }.getOrNull()
+    }
+
+    // P2#16/#17：机器名此前有两个来源 —— 这里用裸 `Build.MODEL`，
+    // `RelayBodyService` 用 `defaultMachineName()`（做过空格归一化）。
+    // 谁先跑到谁写进存储，而这个名字会进 `/m/<machine>` 路径，两边不一致
+    // 就是两台机器。统一走 defaultMachineName。
+    // 另外 `remember { store.ensureMachineName(...) }` 会在**组合期**写
+    // SharedPreferences 并改 StateFlow（副作用写在组合里，重组时机不受控），
+    // 改到 LaunchedEffect 里做。
+    var machineName by remember { mutableStateOf(config.machineName) }
+    LaunchedEffect(config.accessKey, config.bodyEnabled) {
+        if (config.accessKey.length >= 16 && config.bodyEnabled) {
+            // ensureMachineName 会写加密存储（AES + 磁盘），别放主线程。
+            machineName = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                store.ensureMachineName(
+                    com.leoyuan.leophoneagent.relay.RelayBodyService.defaultMachineName(context),
+                )
+            }
+        }
+    }
+
     fun refresh() {
         if (config.accessKey.length < 16 || loading) return
         scope.launch {
             loading = true
             error = null
             runCatching {
-                val client = RelayFleetClient(config)
+                val client = requireNotNull(fleetClient) { "未配置中继密钥" }
                 val currentMachines = client.machines()
                 machines = currentMachines
                 currentMachines.filter { it.online }.map { machine ->
@@ -184,8 +210,14 @@ fun RelayFleetScreen(onBack: () -> Unit) {
                     ) {
                         Column(Modifier.weight(1f)) {
                             Text("允许本机接受远程任务", fontWeight = FontWeight.Medium)
+                            // review P0#2：原文案只说"远程可驱动本机 Agent"，
+                            // 没说清远程能碰到哪些数据。这里明确列出隐私工具，
+                            // 并说明开启期间它们一律先在本机弹确认
+                            // （OffloadPermissionManager.setRemoteBodyEnabled）。
                             Text(
-                                "关闭时只用手机控制其他机器；开启后远程可驱动本机 Agent。",
+                                androidx.compose.ui.res.stringResource(
+                                    com.leoyuan.leophoneagent.R.string.relay_body_toggle_caption,
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -199,8 +231,9 @@ fun RelayFleetScreen(onBack: () -> Unit) {
                 }
             }
 
-            if (config.accessKey.length >= 16 && config.bodyEnabled) {
-                val machineName = remember { store.ensureMachineName(Build.MODEL) }
+            // machineName 现在由上面的 LaunchedEffect 异步落地，未就绪时先不
+            // 出示配对码 —— 名字为空的码扫出来会指向一台不存在的机器。
+            if (config.accessKey.length >= 16 && config.bodyEnabled && machineName.isNotBlank()) {
                 val pair = RelayPairCodec.encode(config.relayApiBase, machineName)
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -241,7 +274,7 @@ fun RelayFleetScreen(onBack: () -> Unit) {
                         scope.launch {
                             loading = true
                             runCatching {
-                                RelayFleetClient(config).approve(
+                                requireNotNull(fleetClient) { "未配置中继密钥" }.approve(
                                     approval.machine, approval.sessionId, approval.approvalId, choice,
                                 )
                                 approvals = approvals.filterNot { it.approvalId == approval.approvalId }
@@ -265,7 +298,8 @@ fun RelayFleetScreen(onBack: () -> Unit) {
                                 loading = true
                                 error = null
                                 runCatching {
-                                    RelayFleetClient(config).startTask(row.machine, prompt, startHarness, cwd)
+                                    requireNotNull(fleetClient) { "未配置中继密钥" }
+                                        .startTask(row.machine, prompt, startHarness, cwd)
                                     prompt = ""
                                 }.onFailure { error = it.message }
                                 loading = false
@@ -275,7 +309,7 @@ fun RelayFleetScreen(onBack: () -> Unit) {
                         onStop = { sessionId ->
                             scope.launch {
                                 loading = true
-                                runCatching { RelayFleetClient(config).stop(row.machine, sessionId) }
+                                runCatching { requireNotNull(fleetClient) { "未配置中继密钥" }.stop(row.machine, sessionId) }
                                     .onFailure { error = it.message }
                                 loading = false
                                 refresh()

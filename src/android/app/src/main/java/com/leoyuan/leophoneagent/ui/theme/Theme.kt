@@ -12,6 +12,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.sp
 
 // Teal accent matching iOS visual appearance
@@ -153,8 +154,32 @@ fun MinisTheme(
     }
 }
 
-private fun TextStyle.scale(factor: Float): TextStyle =
-    if (factor == 1f) this else copy(fontSize = fontSize * factor)
+/**
+ * [大字号适配] 缩放字号时必须同步缩放 lineHeight。
+ *
+ * why: Material3 的 `Typography()` 默认给每个槽都写死了 lineHeight
+ * （例如 bodyLarge = 16sp / 24sp）。只 copy(fontSize = ...) 会让字变大而
+ * 行高不动：应用内字号滑杆开到 1.21x 时 bodyLarge 变成 19.36sp，行高仍是
+ * 24sp，多行文本的上下伸部（й、g、Q、中文的竖钩）直接被行盒切掉。
+ * 这就是"1.21x 时字撑破行高"的根因。
+ *
+ * lineHeight 用 isSpecified 守卫：TextUnit 的 `times` 会对
+ * Unspecified 调 checkArithmetic 并抛 IllegalArgumentException。
+ * M3 默认 typography 每个槽都指定了 lineHeight，所以实际不会走到 else，
+ * 但这个守卫让这个函数对任何 TextStyle 都安全（将来若换成自定义 Typography
+ * 或某个槽留空，不会在主题构建期崩掉整个 App）。fontSize 同理。
+ *
+ * letterSpacing 有意不缩放：M3 的字距是按每个字号档位单独调过的光学值，
+ * 等比放大反而会让大字号显得过松。
+ */
+// internal（而非 private）以便 src/test 里的 MinisTypographyScaleTest 直接验证。
+internal fun TextStyle.scale(factor: Float): TextStyle {
+    if (factor == 1f) return this
+    return copy(
+        fontSize = if (fontSize.isSpecified) fontSize * factor else fontSize,
+        lineHeight = if (lineHeight.isSpecified) lineHeight * factor else lineHeight,
+    )
+}
 
 private fun scaledTypography(factor: Float): Typography {
     val base = Typography()

@@ -723,7 +723,10 @@ internal fun ToolCallPill(
                     } else null,
                 )
                 .padding(horizontal = 12.dp)
-                .height(36.dp),
+                // [大字号适配] 原来是 height(36.dp)。这一行里有工具名文本，
+                // 大字号下 36dp 装不下就会被裁。heightIn(min) 保证默认外观
+                // 完全不变（内容矮于 36dp 时仍是 36dp），只在需要时长高。
+                .heightIn(min = 36.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // Status icon — always the typed tool icon. Color shifts to

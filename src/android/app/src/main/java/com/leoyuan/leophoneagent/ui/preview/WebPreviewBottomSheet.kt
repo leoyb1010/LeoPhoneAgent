@@ -10,7 +10,7 @@ import android.app.Activity
 import android.view.MotionEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
+import com.leoyuan.leophoneagent.ui.theme.ChatColors
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -104,7 +104,9 @@ fun WebPreviewBottomSheet(
     val context = LocalContext.current
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val view = LocalView.current
-    val darkTheme = isSystemInDarkTheme()
+    // [主题一致性] 同 WebPreviewFullscreenScreen：sheet 容器色是
+    // colorScheme.surface（跟应用内主题），状态栏图标反色也必须跟同一个源。
+    val darkTheme = ChatColors.isDark
 
     LaunchedEffect(holder) {
         holder.startIfNeeded()

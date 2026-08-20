@@ -149,6 +149,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -1522,9 +1523,28 @@ fun ChatScreen(
     // users who had scrolled up to read history and then opened the keyboard
     // to send a follow-up — auto-follow then yanked them away from where
     // they were reading.
-    val imeBottomPx = WindowInsets.ime.getBottom(LocalDensity.current)
-    LaunchedEffect(imeBottomPx) {
-        if (userScrolledAway && isNearBottom.value) userScrolledAway = false
+    // [perf/丝滑度] IME inset 的"数值"只在协程里读，不在 ChatScreen 的组合作用域里读。
+    //
+    // why: WindowInsets.ime.getBottom(density) 读的是一条每帧都会被 inset 动画
+    // 更新的 snapshot state。把它写在这个 ~5500 行 composable 的顶层作用域里，
+    // 等于键盘每弹一帧都让整个 ChatScreen 失效并重组一次 —— 而 ChatScreen 内部
+    // 没有 restartable 子组边界，一次失效就是整棵子树重跑。
+    // 这个值唯一的用途只是下面这个 LaunchedEffect 翻一个布尔。
+    //
+    // 修法：WindowInsets.ime 返回的 holder 对象跨帧是同一个实例（它由
+    // WindowInsetsHolder.current() 从 LocalView 取，组合期读它本身并不订阅数值），
+    // 所以把 holder 留在组合期，真正的数值读 getBottom() 挪进 snapshotFlow：
+    // 快照订阅从此落在协程上，不再产生重组失效。
+    // distinctUntilChanged 保留原先 LaunchedEffect(key) 的"值变了才跑一次 body"语义，
+    // 首次收集也会立刻发一次当前值，和 LaunchedEffect 的首次执行等价。
+    val imeInsets = WindowInsets.ime
+    val imeDensity = LocalDensity.current
+    LaunchedEffect(imeInsets, imeDensity) {
+        snapshotFlow { imeInsets.getBottom(imeDensity) }
+            .distinctUntilChanged()
+            .collect {
+                if (userScrolledAway && isNearBottom.value) userScrolledAway = false
+            }
     }
     // [T-android-tool-autoscroll] Start-of-turn edge from ViewModel: resume() /
     // retryLast() / retryFromMessage() / rerunFromToolBlock() emit Unit on
@@ -5451,6 +5471,14 @@ fun ChatScreen(
                         if (showStop) {
                             Box(
                                 modifier = Modifier
+                                    // [可达性] 停止流式是这个界面上最需要点得中的按钮之一，
+                                    // 原先可点区只有 38dp。minimumInteractiveComponentSize()
+                                    // 把布局与触控边界抬到 48dp 并居中子项，红色圆点仍然按
+                                    // 下面的 .size(38.dp) 绘制 —— 视觉尺寸不变，只是这颗按钮
+                                    // 在行内占的槽位由 38dp 变成 48dp（圆点因此比原来靠内 5dp）。
+                                    // 顺序 min-interactive → size → clip → clickable 与
+                                    // M3 IconButton 内部写法一致，可点区即整个 48dp。
+                                    .minimumInteractiveComponentSize()
                                     .size(38.dp)
                                     .background(Color(0xFFFF3B30), CircleShape)
                                     .clip(CircleShape)
@@ -5470,6 +5498,10 @@ fun ChatScreen(
                             val canActivate = hasContent
                             Box(
                                 modifier = Modifier
+                                    // [可达性] 同上：发送按钮触控目标抬到 48dp，
+                                    // 绘制尺寸仍是 38dp。与 STOP 分支保持一致，
+                                    // 两个状态切换时按钮槽位宽度不会跳变。
+                                    .minimumInteractiveComponentSize()
                                     .size(38.dp)
                                     .background(
                                         if (canActivate) ChatColors.sendButton

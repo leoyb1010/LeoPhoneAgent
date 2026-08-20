@@ -7,7 +7,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -46,23 +45,64 @@ class RelayOutboundClient(
     private val _online = MutableStateFlow(false)
     val online: StateFlow<Boolean> = _online.asStateFlow()
 
+    /**
+     * 重连退避（秒）。
+     *
+     * why 提到字段并且由 `registered` 帧复位：原来 `backoff` 是 [start] 循环里的
+     * 局部变量，靠 `connectOnce()` 正常返回来复位。但 `connectOnce` 在 `onClosed`
+     * **和** `onFailure` 里都写 `failure[0]` 然后抛出 —— 服务端优雅关闭同样走抛
+     * 异常路径，于是 `backoff = 1L` 那行只有 stop 路径可达。结果是：切几次网之后
+     * 退避永久卡在 30 秒，叠加 25 秒的 pingInterval，一次切网最长 55–80 秒不可达。
+     * 现在只要真正握手成功（收到 registered）就复位。
+     */
+    private val backoffSeconds = java.util.concurrent.atomic.AtomicLong(1L)
+
+    /**
+     * 外部"立刻重连"信号（网络恢复时由 [RelayBodyService] 触发）。CONFLATED：
+     * 短时间内多次网络回调只需要唤醒一次。
+     */
+    private val reconnectSignal = kotlinx.coroutines.channels.Channel<Unit>(
+        kotlinx.coroutines.channels.Channel.CONFLATED,
+    )
+
     fun start(scope: CoroutineScope) {
         if (loopJob?.isActive == true) return
         stopped.set(false)
+        backoffSeconds.set(1L)
         loopJob = scope.launch(Dispatchers.IO) {
-            var backoff = 1L
             while (!stopped.get()) {
                 try {
                     connectOnce()
-                    backoff = 1L
                 } catch (error: Throwable) {
                     Log.w(TAG, "disconnected: ${error.message}")
                     _online.value = false
                 }
                 if (stopped.get()) break
-                delay(backoff * 1000)
-                backoff = (backoff * 2).coerceAtMost(30)
+                val waitMs = backoffSeconds.get() * 1000
+                // 退避期间可被 retryNow() 提前唤醒；否则睡满再翻倍。
+                val woken = kotlinx.coroutines.withTimeoutOrNull(waitMs) {
+                    reconnectSignal.receive()
+                } != null
+                if (!woken) {
+                    backoffSeconds.set((backoffSeconds.get() * 2).coerceAtMost(MAX_BACKOFF_SECONDS))
+                }
             }
+        }
+    }
+
+    /**
+     * 网络恢复（或用户手动重试）时立刻重连：复位退避、打断当前退避等待，并把
+     * 一条已经死掉的 socket 掐断，让 [connectOnce] 从 `latch.await()` 里返回。
+     *
+     * why：Android 侧本来就有 `network/NetworkMonitor`，但 relay 一直没用它。
+     * 切网后只能干等退避，最坏 30 秒。
+     */
+    fun retryNow() {
+        if (stopped.get()) return
+        backoffSeconds.set(1L)
+        reconnectSignal.trySend(Unit)
+        if (!_online.value) {
+            synchronized(this) { socket?.cancel() }
         }
     }
 
@@ -116,6 +156,8 @@ class RelayOutboundClient(
                 when (frame.optString("type")) {
                     "registered" -> {
                         _online.value = true
+                        // 真正握手成功才复位退避（见 backoffSeconds 的注释）。
+                        backoffSeconds.set(1L)
                         flushOutbox(webSocket)
                         Log.i(TAG, "registered with relay as ${config.name}")
                     }
@@ -238,6 +280,7 @@ class RelayOutboundClient(
     companion object {
         private const val TAG = "RelayOutbound"
         private const val OUTBOX_LIMIT = 200
+        private const val MAX_BACKOFF_SECONDS = 30L
         private fun defaultClient() = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(0, TimeUnit.SECONDS)

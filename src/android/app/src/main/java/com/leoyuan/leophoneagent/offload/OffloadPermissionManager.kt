@@ -83,6 +83,16 @@ object OffloadPermissionManager {
         ToolPermissionInfo("weather", "Weather", PermissionCategory.SYSTEM, PermissionLevel.BYPASS, showInSettings = false),
         ToolPermissionInfo("notification", "Notifications", PermissionCategory.SYSTEM, PermissionLevel.BYPASS, showInSettings = false),
         ToolPermissionInfo("device_info", "Device Info", PermissionCategory.SYSTEM, PermissionLevel.BYPASS, showInSettings = false),
+        // review P0#3: `android-open` 过去**根本没有注册**，于是
+        //   (a) OffloadGate 无从校验（handler 里也确实没调 enforce），
+        //   (b) 设置页看不见、用户关不掉。
+        // 归 SYSTEM 而不是 PRIVACY：它不读取任何个人数据，注册进来主要是为了
+        // 给用户一个可见的总开关；真正的注入面（`intent:` URI 里编码显式
+        // component 去拉起任意 exported activity）已经在
+        // OpenOffloadHandler 里按 URI 形状直接拒绝掉了，不该靠"每次弹窗"来兜。
+        // showInSettings = true：这是唯一一个能把用户带出 App 的工具，
+        // 值得在权限页露面。
+        ToolPermissionInfo("open", "Open Links & Apps", PermissionCategory.SYSTEM, PermissionLevel.BYPASS),
         // T330: integrations — opt-in by default. These tools can drive
         // other apps and read on-screen content, so the safer posture is
         // NOT_ALLOWED until the user picks otherwise even when the
@@ -309,20 +319,94 @@ object OffloadPermissionManager {
             .edit().putBoolean(permission, true).apply()
     }
 
+    // ── 远程身体在线时的隐私提级 ────────────────────────────────────────────
+
+    /**
+     * 「允许本机接受远程任务」是否打开（由 `RelayBodyService.restart` 写入）。
+     *
+     * why（review P0#2）：这三件事叠在一起，等于远程可以零确认读走通讯录 /
+     * 定位 / 相册 / 剪贴板 / 日历：
+     *   1. `MinisHarnessRouter` 声明 `approval_events: false`，任何 `/approval`
+     *      一律 409（`PUSH_EVENTS` 里虽然列了 `approval.request`，但全仓没有
+     *      任何地方 emit 它 —— 是死代码）；
+     *   2. PRIVACY 组五个工具的默认等级全是 BYPASS；
+     *   3. 于是远程调这些工具时，手机上什么都不弹、什么都不留痕。
+     *
+     * 本地单机时 BYPASS 是合理的（用户自己在用自己的 Agent）；一旦本机变成
+     * 可被远程驱动的"身体"，同一个 BYPASS 就变成了远程无声取数。这里在
+     * bodyEnabled 打开期间，把 PRIVACY 组的**有效**等级强制提到 ASK_ONCE，
+     * 用户在设置里存的值不动（见 [getConfiguredLevel]）。
+     *
+     * 注意：INTEGRATIONS 组（a11y / shizuku）默认就是 NOT_ALLOWED，
+     * 未注册工具 fail-closed —— 那两处本来就是对的，不动。
+     */
+    @Volatile
+    private var remoteBodyEnabled: Boolean = false
+
+    fun setRemoteBodyEnabled(enabled: Boolean) {
+        remoteBodyEnabled = enabled
+    }
+
+    fun isRemoteBodyEnabled(): Boolean = remoteBodyEnabled
+
+    /**
+     * 判断"现在还有没有 UI 能把权限弹窗画出来"。
+     *
+     * 由 `MinisApp` 在 init 时注入（`::isAppForeground`）。为 null 时按
+     * "未知 → 走超时路径"处理，避免测试/未接线场景下把所有 ASK_ONCE 全拒。
+     */
+    @Volatile
+    private var promptHostProbe: (() -> Boolean)? = null
+
+    fun setPromptHostProbe(probe: (() -> Boolean)?) {
+        promptHostProbe = probe
+    }
+
     fun init(context: Context) {
         prefs = context.getSharedPreferences("offload_permissions", Context.MODE_PRIVATE)
     }
 
-    fun getLevel(toolName: String): PermissionLevel {
+    /**
+     * 用户在设置里实际选择（或默认）的等级 —— 不含远程提级。
+     * 设置页 / 调试 RPC 要显示的是这个值，否则开着远程身体时 UI 会显示成
+     * 用户从没选过的 ASK_ONCE。
+     */
+    fun getConfiguredLevel(toolName: String): PermissionLevel {
         val info = toolRegistry.find { it.toolName == toolName }
             ?: return PermissionLevel.NOT_ALLOWED
-
         val stored = prefs.getString("level_$toolName", null)
         return if (stored != null) {
             try { PermissionLevel.valueOf(stored) } catch (_: Exception) { info.defaultLevel }
         } else {
             info.defaultLevel
         }
+    }
+
+    /** 实际执行时生效的等级（含远程身体在线时的 PRIVACY 提级）。 */
+    fun getLevel(toolName: String): PermissionLevel {
+        val info = toolRegistry.find { it.toolName == toolName }
+            ?: return PermissionLevel.NOT_ALLOWED
+        return effectiveLevel(info.category, getConfiguredLevel(toolName), remoteBodyEnabled)
+    }
+
+    /**
+     * 提级规则本体，抽成纯函数以便单测（本仓 JVM 单测没有 Robolectric，
+     * 走不到需要 Context 的 [getConfiguredLevel]）。
+     *
+     * 规则：只提级，不降级 —— 用户显式选了 NOT_ALLOWED 就仍然是 NOT_ALLOWED；
+     * 已经是 ASK_ONCE 的不变；只有 PRIVACY 组的 BYPASS 会在远程身体在线时
+     * 被抬到 ASK_ONCE。MEDIA / SYSTEM 不动（不含个人数据），
+     * INTEGRATIONS 本来就默认 NOT_ALLOWED。
+     */
+    internal fun effectiveLevel(
+        category: PermissionCategory,
+        configured: PermissionLevel,
+        remoteBody: Boolean,
+    ): PermissionLevel = when {
+        remoteBody &&
+            category == PermissionCategory.PRIVACY &&
+            configured == PermissionLevel.BYPASS -> PermissionLevel.ASK_ONCE
+        else -> configured
     }
 
     fun setLevel(toolName: String, level: PermissionLevel) {
@@ -387,42 +471,77 @@ object OffloadPermissionManager {
         }
     }
 
+    /**
+     * 弹一次权限确认，等用户回答。
+     *
+     * why 加超时 + 无宿主快速失败（review P1#11）：原来这里持有一把**全局**
+     * 互斥锁并无限期挂起，唯一的渲染方是 `ChatScreen` 里的
+     * `OffloadPermissionDialog`。App 在后台 / Activity 已销毁时根本没人收
+     * `pendingRequest`，于是：
+     *   * 这次调用一直挂到 `streamPrompt` 的 10 分钟超时；
+     *   * 这 10 分钟里，用户自己在前台碰任何 ASK_ONCE 工具，也一起卡在
+     *     `permissionPromptMutex` 上 —— 一个远程会话锁死了全 App 的敏感工具。
+     * 对比 [requestAndroidPermission] 早就有 120 秒超时，这里是漏的。
+     *
+     * 现在：
+     *   1. 探到"没有 UI 宿主"就立刻 fail-closed（拒绝），不占锁、不等待；
+     *   2. 有宿主时也只等 [PROMPT_TIMEOUT_MS]，超时按拒绝处理；
+     *   3. 超时逻辑放在 `withLock` **内部**，保证锁的持有时长有上界。
+     */
     private suspend fun promptForPermission(
         toolName: String,
         toolTitle: String,
         sessionId: String,
         description: String?,
         singleUseOnly: Boolean,
-    ): Boolean = permissionPromptMutex.withLock {
-        val denials = sessionDenials.getOrPut(sessionId) { mutableSetOf() }
-        if (toolName in denials) return@withLock false
-        val info = toolRegistry.find { it.toolName == toolName }
-        val response = suspendCancellableCoroutine<Response> { cont ->
-            pendingContinuation = cont
-            _pendingRequest.value = PermissionRequest(
-                toolName = toolName,
-                toolTitle = toolTitle,
-                description = description ?: "Allow ${info?.displayName ?: toolName} access?",
-                sessionId = sessionId,
-                singleUseOnly = singleUseOnly,
-            )
-            cont.invokeOnCancellation {
+    ): Boolean {
+        // 先于取锁判断：没有宿主时连锁都不该碰。
+        if (promptHostProbe?.invoke() == false) return false
+        return permissionPromptMutex.withLock {
+            val denials = sessionDenials.getOrPut(sessionId) { mutableSetOf() }
+            if (toolName in denials) return@withLock false
+            // 排队等锁期间 App 可能已经切到后台，取到锁后再探一次。
+            if (promptHostProbe?.invoke() == false) return@withLock false
+            val info = toolRegistry.find { it.toolName == toolName }
+            val response = withTimeoutOrNull(PROMPT_TIMEOUT_MS) {
+                suspendCancellableCoroutine<Response> { cont ->
+                    pendingContinuation = cont
+                    _pendingRequest.value = PermissionRequest(
+                        toolName = toolName,
+                        toolTitle = toolTitle,
+                        description = description ?: "Allow ${info?.displayName ?: toolName} access?",
+                        sessionId = sessionId,
+                        singleUseOnly = singleUseOnly,
+                    )
+                    cont.invokeOnCancellation {
+                        _pendingRequest.value = null
+                        pendingContinuation = null
+                    }
+                }
+            }
+            if (response == null) {
+                // 超时：清掉悬空的 pending 请求，免得稍后又弹一个陈旧弹窗。
+                // （invokeOnCancellation 通常已经清过，这里是防御性兜底。）
                 _pendingRequest.value = null
                 pendingContinuation = null
+                return@withLock false
             }
-        }
-        when (response) {
-            Response.ALLOW_SESSION -> {
-                if (!singleUseOnly) sessionGrants.getOrPut(sessionId) { mutableSetOf() }.add(toolName)
-                true
-            }
-            Response.ALLOW_ONCE -> true
-            Response.DENY_SESSION -> {
-                denials.add(toolName)
-                false
+            when (response) {
+                Response.ALLOW_SESSION -> {
+                    if (!singleUseOnly) sessionGrants.getOrPut(sessionId) { mutableSetOf() }.add(toolName)
+                    true
+                }
+                Response.ALLOW_ONCE -> true
+                Response.DENY_SESSION -> {
+                    denials.add(toolName)
+                    false
+                }
             }
         }
     }
+
+    /** 单次权限确认弹窗的最长等待时间，与 [SYSTEM_DIALOG_TIMEOUT_MS] 对齐。 */
+    const val PROMPT_TIMEOUT_MS: Long = 120_000L
 
     /** Called from UI when user responds to the permission dialog. */
     fun respondToRequest(response: Response) {

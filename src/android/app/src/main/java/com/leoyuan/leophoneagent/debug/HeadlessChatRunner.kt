@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Headless wrapper around [ChatViewModel] for the debug RPC layer.
@@ -31,8 +32,19 @@ import kotlinx.coroutines.withTimeoutOrNull
  */
 internal object HeadlessChatRunner {
 
-    /** sessionId → ViewModelProvider that owns its single ChatViewModel. */
-    private val providers = mutableMapOf<String, ViewModelProvider>()
+    /**
+     * sessionId → ViewModelProvider that owns its single ChatViewModel.
+     *
+     * why ConcurrentHashMap：原来是普通 `mutableMapOf`（HashMap）。只有
+     * [providerFor] 带 `@Synchronized`，而 [forget] 的写和 [cancel] 的读都没有锁。
+     * [forget] 由 `AndroidMinisSessionEngine.release` 在 relay router 的淘汰协程
+     * 上调用，[providerFor] 在主线程上调用 —— 并发的 put/remove 会把 HashMap 的
+     * 桶链写坏，轻则 ConcurrentModificationException，重则 get 死循环。
+     * ConcurrentHashMap 让每个单独操作都是线程安全的；[providerFor] 保留
+     * `@Synchronized` 是为了"查不到才创建"这一步的原子性（避免同一 session
+     * 建出两个 ViewModelProvider）。
+     */
+    private val providers = ConcurrentHashMap<String, ViewModelProvider>()
 
     private fun app(context: Context): MinisApp =
         context.applicationContext as? MinisApp
@@ -75,17 +87,29 @@ internal object HeadlessChatRunner {
      * automation we materialize it eagerly so subsequent reads can resolve
      * the id.
      */
-    suspend fun ensureSession(context: Context, modelId: String? = null): String =
+    suspend fun ensureSession(
+        context: Context,
+        modelId: String? = null,
+        /**
+         * 会话来源标签。默认 "debug"（调试 RPC）。relay 建的会话传 "relay"，
+         * 否则远程任务和本地调试会话在会话列表里完全分不开（P2）。
+         * `ScheduledAgentRunner` 已有 "scheduled" 的先例。
+         */
+        source: String = SOURCE_DEBUG,
+    ): String =
         withContext(Dispatchers.IO) {
             val app = app(context)
             val resolvedModel = modelId
                 ?: app.providerRepository.allVisibleEntries().firstOrNull()?.baseModel?.id
                 ?: "unknown"
             val s = app.chatRepository.createSession(modelId = resolvedModel, title = null)
-            // Mark source so the UI session list shows it came from RPC.
-            app.chatRepository.dao.updateSource(s.id, "debug")
+            // Mark source so the UI session list shows where it came from.
+            app.chatRepository.dao.updateSource(s.id, source)
             s.id
         }
+
+    /** 调试 RPC 建的会话来源标签。 */
+    const val SOURCE_DEBUG = "debug"
 
     /**
      * Apply a model-entry / model-group override to a session before send.
@@ -594,10 +618,44 @@ internal object HeadlessChatRunner {
         vm.modelName.value to vm.thinkingLevel.value.name
     }
 
-    /** Drop the cached ViewModel for [sessionId] (used after delete). */
+    /**
+     * Drop the cached ViewModel for [sessionId] (used after delete).
+     *
+     * why `@Synchronized`：与 [providerFor] 用同一把 object monitor，保证
+     * "查不到→创建→登记" 与 "移除" 不会交错。map 本身已是 ConcurrentHashMap，
+     * 这把锁只解决复合操作的原子性。
+     *
+     * 注意：本方法只丢缓存的 ViewModelProvider，不会 clear 背后的
+     * [ChatViewModelStore]。两者必须成对调用，否则要么 ViewModel 泄漏
+     * （只 forget 不 release），要么下一次 providerFor 会拿到一个已经
+     * onCleared 的 ViewModel（只 release 不 forget）。见 [forgetAndRelease]。
+     */
     @Synchronized
     fun forget(sessionId: String) {
         providers.remove(sessionId)
+    }
+
+    /**
+     * 同时丢掉 headless 侧的 provider 缓存和进程级 [ChatViewModelStore] 里的
+     * ViewModelStore。
+     *
+     * why：review 指出这两者的调用点长期失配 —— `SessionListViewModel` 和
+     * `ChatViewModel` 删除会话时只 `ChatViewModelStore.release()`，
+     * `ChatMutationMethods` 只 `HeadlessChatRunner.forget()`，只有
+     * `AndroidMinisSessionEngine` 是成对的。
+     *  * 只 release 不 forget：`providers` 里还留着旧 ViewModelProvider，它指向
+     *    的 ViewModelStore 已被 clear，下一次 `providerFor` 命中缓存后返回的是
+     *    一个 `onCleared()` 过的 ChatViewModel（viewModelScope 已取消，
+     *    sendMessage 起不来任何协程）。
+     *  * 只 forget 不 release：ViewModelStore 仍持有 ChatViewModel 与其
+     *    viewModelScope，流式 Job 继续跑，会话已删但工具还在执行。
+     *
+     * 必须在主线程调用（ViewModelStore.clear() → onCleared()）。
+     */
+    @Synchronized
+    fun forgetAndRelease(sessionId: String) {
+        providers.remove(sessionId)
+        ChatViewModelStore.release(sessionId)
     }
 
     private fun extractText(partsJson: String): String? {

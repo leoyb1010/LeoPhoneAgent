@@ -364,7 +364,16 @@ class MainActivity : ComponentActivity() {
             }
             val fontScale = fontScaleForLevel(appBaseLevel)
 
-            SideEffect {
+            // [perf] 原来是无 key 的 SideEffect：SideEffect 在**每一次**成功重组
+            // 之后都会重跑，而 enableEdgeToEdge() 不是纯赋值 —— 它会改
+            // decorView 的 fitsSystemWindows、装配 WindowInsetsController、
+            // 并按 SystemBarStyle 往 decor 里加/换一层 scrim view。
+            // 于是每次重组都在窗口层做一次真实工作。
+            // barStyle 只由 darkTheme 决定，用 DisposableEffect(darkTheme) 换掉：
+            // DisposableEffect 的 block 与 SideEffect 一样在 apply 阶段执行
+            // （时序不变），但只在 key 变化时重跑。没有需要撤销的资源，
+            // 所以 onDispose 为空 —— 主题切回去时下一次 block 会重新设置。
+            DisposableEffect(darkTheme) {
                 val barStyle = if (darkTheme) {
                     SystemBarStyle.dark(Color.TRANSPARENT)
                 } else {
@@ -382,6 +391,7 @@ class MainActivity : ComponentActivity() {
                     SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT)
                 }
                 enableEdgeToEdge(statusBarStyle = barStyle, navigationBarStyle = barStyle)
+                onDispose {}
             }
 
             MinisTheme(darkTheme = darkTheme, fontScale = fontScale) {

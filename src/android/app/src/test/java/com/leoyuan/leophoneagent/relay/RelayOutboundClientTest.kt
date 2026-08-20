@@ -75,7 +75,7 @@ class RelayOutboundClientTest {
                 emit(EngineChunk.Delta("hi"))
                 emit(EngineChunk.Completed("hi"))
             }
-            override fun stop(sessionId: String) = Unit
+            override suspend fun stop(sessionId: String) = Unit
         }
         val router = MinisHarnessRouter("test", engine)
         val wsUrl = server.url("/relay/agent").toString().replace("http://", "ws://")
@@ -132,7 +132,7 @@ class RelayOutboundClientTest {
         )
         val router = MinisHarnessRouter("test", object : MinisSessionEngine {
             override fun runTurn(sessionId: String, text: String, thinking: String?): Flow<EngineChunk> = flow { }
-            override fun stop(sessionId: String) = Unit
+            override suspend fun stop(sessionId: String) = Unit
         })
         val client = RelayOutboundClient(
             RelayOutboundConfig(

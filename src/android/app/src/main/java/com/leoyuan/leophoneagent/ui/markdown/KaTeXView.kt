@@ -8,7 +8,7 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.isSystemInDarkTheme
+
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.leoyuan.leophoneagent.logging.AppLogger
+import com.leoyuan.leophoneagent.ui.theme.ChatColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -58,10 +59,27 @@ object KaTeXRendererCache {
         val cssHeight: Int,
     )
 
-    val cache = LruCache<String, CacheEntry>(200)
+    // [内存] LruCache 的 maxSize 默认按"条数"算，200 条 ARGB_8888 位图完全不设上限：
+    // 一条宽公式在 3x 密度下可以是 2000×200×4 ≈ 1.6MB，200 条就是几百 MB。
+    // 重写 sizeOf 改成按字节预算（8MB），和同仓 MarkdownParseCaches 的按预算做法一致。
+    // 注：sizeOf 返回值的单位由 maxSize 的单位决定，两者都用字节即可自洽。
+    private const val CACHE_BUDGET_BYTES = 8 * 1024 * 1024
 
-    fun cacheKey(latex: String, displayMode: Boolean): String =
-        (if (displayMode) "D:" else "I:") + latex
+    // 显式标注超类型：public val 不能暴露匿名对象类型。
+    val cache: LruCache<String, CacheEntry> = object : LruCache<String, CacheEntry>(CACHE_BUDGET_BYTES) {
+        override fun sizeOf(key: String, value: CacheEntry): Int =
+            // allocationByteCount 在 API 19+ 可用（本项目 minSdk 远高于此），
+            // 它算的是底层分配，比 byteCount 更接近真实占用。至少记 1 字节，
+            // 避免 sizeOf 返回 0 导致 LruCache 抛 "counter inconsistency"。
+            value.bitmap.allocationByteCount.coerceAtLeast(1)
+    }
+
+    // [主题] cacheKey 必须带 isDark：位图里已经烤死了字色。
+    // 原来只按 (latex, displayMode) 做 key —— 深色下渲过一次的白字公式，
+    // 切到浅色后会命中同一条缓存，直接在白底上画白字。
+    // 聊天那条路径的 KatexWebViewPool.cacheKey 早就带了 isDark，这里补齐。
+    fun cacheKey(latex: String, displayMode: Boolean, isDark: Boolean): String =
+        (if (displayMode) "D:" else "I:") + (if (isDark) "1:" else "0:") + latex
 }
 
 /**
@@ -95,10 +113,13 @@ fun KaTeXRenderView(
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
-    val isDark = isSystemInDarkTheme()
+    // [主题一致性] 跟应用内主题，不跟系统主题。isSystemInDarkTheme() 无视
+    // 应用内的浅/深覆盖：系统深色 + 应用内浅色时 KaTeX 会渲白字，
+    // 而周围 Compose 背景是浅色 —— 公式白字白底，等于看不见。
+    val isDark = ChatColors.isDark
     val fontSize = 16f
-    val cacheKey = remember(latex, displayMode) {
-        KaTeXRendererCache.cacheKey(latex, displayMode)
+    val cacheKey = remember(latex, displayMode, isDark) {
+        KaTeXRendererCache.cacheKey(latex, displayMode, isDark)
     }
 
     // Check cache first

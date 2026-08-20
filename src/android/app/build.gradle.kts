@@ -138,6 +138,29 @@ android {
 
 }
 
+// [perf/丝滑度] Compose 编译器报告。
+//
+// why: 判断"某个 composable 为什么不跳过重组"，唯一可靠的依据是编译器自己
+// 输出的 stability / skippability 报告；靠读代码猜参数稳定性会漏。
+// 之前这个模块完全没开过，所以谁 restartable、谁 skippable、哪些形参被判为
+// unstable 全是盲区。
+//
+// 默认关闭：只有显式传 -PcomposeMetrics 时才生成，普通构建（含 CI）零影响，
+// 不会多产出文件、不会改变编译产物。
+//
+// 用法：
+//   ./gradlew :app:assembleStandardRelease -PcomposeMetrics
+//   报告落在 app/build/compose-metrics 与 app/build/compose-reports，
+//   看 *-composables.txt 里 `restartable skippable` 的比例，
+//   以及 *-classes.txt 里被判为 unstable 的类。
+composeCompiler {
+    val enabled = project.findProperty("composeMetrics") != null
+    if (enabled) {
+        metricsDestination.set(layout.buildDirectory.dir("compose-metrics"))
+        reportsDestination.set(layout.buildDirectory.dir("compose-reports"))
+    }
+}
+
 // [T-bash-on-demand] Keep the shared bashism rule table / test vectors as a
 // SINGLE source of truth (src/shared/bashism) — copy into assets at build
 // time instead of committing duplicate JSON. iOS references the same files as
