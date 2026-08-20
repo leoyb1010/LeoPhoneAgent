@@ -99,16 +99,6 @@ private let logger = AppLogger(category: "ConfigOffload")
     /// Read a single field's current value. Returns
     ///   { ok: true, value: <ConfigValue JSON>, schema: ... }
     /// or { ok: false, error: ..., reason: ..., user_message: ... }.
-    @objc public static func readField(path: String) -> NSDictionary {
-        return readField(path: path, filter: nil, page: 0, pageSize: 0)
-    }
-
-    /// 2-arg compatibility shim — filter only, no pagination.
-    @objc public static func readField(path: String,
-                                       filter: String?) -> NSDictionary {
-        return readField(path: path, filter: filter, page: 0, pageSize: 0)
-    }
-
     /// Default page size used when the caller passes 0 (unset).
     private static let defaultPageSize: Int = 20
     /// Cap so a curious agent doesn't request the whole table in one
@@ -256,9 +246,8 @@ private let logger = AppLogger(category: "ConfigOffload")
     }
 
     /// The unfiltered read implementation. Pulled out so the public
-    /// `readField(path:)` and `readField(path:filter:)` entry points
-    /// share the same semaphore-blocking + permission + access-check
-    /// path without duplication.
+    /// 4-arg `readField` shares the same semaphore-blocking + permission
+    /// + access-check path without duplication.
     @MainActor
     private static func readFieldSync(path: String) -> NSDictionary {
         ConfigRegistry.shared.registerBuiltinsIfNeeded()
