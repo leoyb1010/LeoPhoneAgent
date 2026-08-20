@@ -37,6 +37,7 @@ import com.leoyuan.leophoneagent.sandbox.PRootKernel
 import com.leoyuan.leophoneagent.sandbox.RootfsManager
 import com.leoyuan.leophoneagent.sandbox.offload.AccessibilityOffloadHandler
 import com.leoyuan.leophoneagent.sandbox.offload.AlarmOffloadHandler
+import com.leoyuan.leophoneagent.sandbox.offload.AppsOffloadHandler
 import com.leoyuan.leophoneagent.sandbox.offload.BrowserUseOffloadHandler
 import com.leoyuan.leophoneagent.sandbox.offload.CalendarOffloadHandler
 import com.leoyuan.leophoneagent.sandbox.offload.ClipboardOffloadHandler
@@ -373,6 +374,7 @@ class MinisApp : Application(), ImageLoaderFactory {
         NativeOffloadServer.register("android-clipboard", ClipboardOffloadHandler(this))
         NativeOffloadServer.register("android-contacts", ContactsOffloadHandler(this))
         NativeOffloadServer.register("android-device", DeviceOffloadHandler(this))
+        NativeOffloadServer.register("android-apps", AppsOffloadHandler(this))
         NativeOffloadServer.register("android-location", LocationOffloadHandler(this))
         NativeOffloadServer.register("android-notification", NotificationOffloadHandler(this))
         NativeOffloadServer.register("android-open", OpenOffloadHandler(this))

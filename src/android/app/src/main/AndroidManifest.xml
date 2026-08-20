@@ -108,6 +108,13 @@
          checks that we *requested* it. -->
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
 
+    <!-- Sideload personal agent (not a Play Store build): QUERY_ALL_PACKAGES
+         lets android-open / launcher resolution see installed apps on
+         Android 11+. Play specialUse / QUERY_ALL policy does not apply here. -->
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+
     <!-- Package visibility for speech recognition services + Custom Tabs
          (Android 11+ scoped queries). -->
     <queries>
@@ -156,6 +163,12 @@
             <action android:name="android.intent.action.SENDTO" />
             <data android:scheme="mailto" />
         </intent>
+        <!-- Fallback if an OEM ignores QUERY_ALL_PACKAGES: still resolve
+             home-screen activities so the agent can list/open launcher apps. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
     </queries>
 
     <application
@@ -181,7 +194,13 @@
             android:exported="true"
             android:launchMode="singleTask"
             android:theme="@style/Theme.Minis"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|uiMode">
+            <!-- Fold / unfold / rotation / split-screen on Fold8-class API 35
+                 devices send the flags above. Handling them here keeps
+                 MainActivity alive so ChatViewModelStore, IME, scroll and
+                 composer state do not flash-reset. Two-pane still flips live
+                 via BoxWithConstraints + workspaceLayoutOf. -->
             <!-- T-android-dynamic-app-icon: LAUNCHER intent-filter moved
                  to the <activity-alias> entries below so the user can pick
                  an alternate icon. Exactly one alias is enabled at a time

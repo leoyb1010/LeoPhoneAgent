@@ -570,6 +570,11 @@ fun ChatScreen(
      *  management screen — wired to the "Edit" button on the model picker's
      *  Model Groups section header. */
     onModelGroupsClick: () -> Unit = {},
+    /** Cover / phone / split: tighter chrome so the composer survives 200% font. */
+    compactChrome: Boolean = false,
+    /** Tabletop: fraction of the column above the hinge (messages). Null = no split. */
+    tabletopSplitFraction: Float? = null,
+    onOpenSystemPermissions: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -2298,7 +2303,7 @@ fun ChatScreen(
                                 // navbar is narrow; the badge has no weight, so it
                                 // keeps its intrinsic width and always renders in
                                 // full — the level label never gets clipped.
-                                if (providerName.isNotEmpty() || modelName.isNotEmpty()) {
+                                if (!compactChrome && (providerName.isNotEmpty() || modelName.isNotEmpty())) {
                                     val thinkingLevelBadgeState by viewModel.thinkingLevel.collectAsState()
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
@@ -2628,7 +2633,7 @@ fun ChatScreen(
                 // user-configured font scale on xhdpi/xxhdpi without
                 // re-clipping (T-topbar-model-row-clip regression check).
                 // Font sizes + lineHeights stay untouched per spec.
-                expandedHeight = 68.dp,
+                expandedHeight = if (compactChrome) 52.dp else 68.dp,
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -2642,6 +2647,12 @@ fun ChatScreen(
         Column(
             modifier = Modifier.fillMaxSize(),
         ) {
+            MissingOsGrantBanner(
+                sessionId = sessionId,
+                runActive = isStreaming,
+                messages = messages,
+                onOpenSystemPermissions = onOpenSystemPermissions,
+            )
             // Dismiss keyboard when the USER scrolls the messages. Gated on
             // `isUserDragging` (a real finger drag) rather than
             // `listState.isScrollInProgress` — the latter is also true during
@@ -2657,7 +2668,12 @@ fun ChatScreen(
             }
 
             // Messages + scroll-to-bottom button
-            Box(modifier = Modifier.weight(1f)) {
+            val messagesWeight = if (tabletopSplitFraction != null) {
+                tabletopSplitFraction.coerceIn(0.25f, 0.75f)
+            } else {
+                1f
+            }
+            Box(modifier = Modifier.weight(messagesWeight)) {
                 var toolBarHeightPx by remember { mutableStateOf(0) }
                 val density = LocalDensity.current
                 val toolBarHeightDp = with(density) { toolBarHeightPx.toDp() }
@@ -3976,6 +3992,13 @@ fun ChatScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .then(
+                        if (tabletopSplitFraction != null) {
+                            Modifier.weight((1f - tabletopSplitFraction).coerceIn(0.25f, 0.75f))
+                        } else {
+                            Modifier
+                        },
+                    )
                     .navigationBarsPadding()
                     .padding(horizontal = 12.dp)
                     .padding(top = 2.dp, bottom = 8.dp),
@@ -4997,7 +5020,7 @@ fun ChatScreen(
                                 },
                             textStyle = mergedTextStyle,
                             cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
-                            maxLines = 6,
+                            maxLines = if (compactChrome) 1 else 6,
                             // [T-android-enter-to-send-broken] When the
                             // user has Return-Key=Send turned on, ask the
                             // IME for the Send action so it (a) shows the
@@ -5019,7 +5042,7 @@ fun ChatScreen(
                                     value = inputText,
                                     innerTextField = innerTextField,
                                     enabled = true,
-                                    singleLine = false,
+                                    singleLine = compactChrome,
                                     visualTransformation = androidx.compose.ui.text.input.VisualTransformation.None,
                                     interactionSource = interactionSource,
                                     placeholder = {
@@ -5147,23 +5170,25 @@ fun ChatScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.width(8.dp))
+                        if (!compactChrome) {
+                            Spacer(modifier = Modifier.width(8.dp))
 
-                        // Left: "/" slash command button (iOS: italic /, bold)
-                        InputCircleButton(onClick = {
-                            if (viewModel.showSlashMenu.value) {
-                                viewModel.setInputText(viewModel.dismissSlashMenu(inputText))
-                            } else {
-                                viewModel.setInputText(viewModel.showSlashMenuOverInput(inputText))
+                            // Left: "/" slash command button (iOS: italic /, bold)
+                            InputCircleButton(onClick = {
+                                if (viewModel.showSlashMenu.value) {
+                                    viewModel.setInputText(viewModel.dismissSlashMenu(inputText))
+                                } else {
+                                    viewModel.setInputText(viewModel.showSlashMenuOverInput(inputText))
+                                }
+                            }) {
+                                Text(
+                                    "/",
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontStyle = FontStyle.Italic,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
                             }
-                        }) {
-                            Text(
-                                "/",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontStyle = FontStyle.Italic,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
                         }
 
                         // T187: Exit Edit Mode pill, only while editingMessageId

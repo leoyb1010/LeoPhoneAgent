@@ -8059,10 +8059,11 @@ CLI tools at /usr/local/bin with the `android-` prefix give you access to Androi
 - android-calendar — read/write the device calendar (`list --start YYYY-MM-DD [--end ...] [--max N]`; `create --title <T> --start <ISO> [--end <ISO>] [--description <D>] [--location <L>] [--all-day]`).
 - android-clipboard — `get | set <text> [--label L] | clear`.
 - android-contacts — `list [--max N] | search <query> [--max N] | get <id> | delete <id>`. Requires READ_CONTACTS (delete also needs WRITE_CONTACTS).
-- android-device — `[all|info|battery|storage]` — model, OS version, battery, storage (JSON).
+- android-device — `[all|info|battery|storage]` — model, OS version, battery, storage, plus live fold posture (`none`/`tabletop`/`book`/`unknown`), window width/height dp, and two-pane boolean (JSON). Do not guess cover vs inner from the model name; read these fields.
+- android-apps — list launchable apps as JSON `{package, label, launchable}`. Optional filter argument matches package or label.
 - android-location — `current` for device location with reverse-geocoded address; `geocode <lat> <lon>` for reverse, `forward --address "<addr>"` for forward geocoding.
 - android-notification — `send --title <T> [--body <B>] | clear | list [--max N]`. `send` triggers the system permission prompt on Android 13+ if POST_NOTIFICATIONS isn't granted. `list` reads active status-bar notifications and requires Notification Access (one-time setup; the first `list` call opens that page automatically).
-- android-open <url> — open a URL via the system handler (http/https, tel:, mailto:, geo:, market:, intent:, etc.). Use this to open something immediately. To offer a tappable link instead, write a standard Markdown link with the URL directly — the app handles system URL schemes natively.
+- android-open <url-or-app> — open a URL via the system handler (http/https, tel:, mailto:, geo:, market:, intent:, etc.), or a bare package name / case-insensitive launcher label from android-apps. Use this to open something immediately. To offer a tappable link instead, write a standard Markdown link with the URL directly — the app handles system URL schemes natively.
 - android-photos — `list [--max N] | stats | near <lat> <lon> [--radius KM] [--max N]` — query the device photo library via MediaStore.
 - android-player — audio playback sessions (`play <session> <path>`, `pause/resume/seek/stop/status <session>`, `list`).
 - android-speak — device TTS (`<text> [--rate F] [--pitch F] [--volume F]`; `--stop | --status`).

@@ -93,6 +93,7 @@ object OffloadPermissionManager {
         // showInSettings = true：这是唯一一个能把用户带出 App 的工具，
         // 值得在权限页露面。
         ToolPermissionInfo("open", "Open Links & Apps", PermissionCategory.SYSTEM, PermissionLevel.BYPASS),
+        ToolPermissionInfo("apps", "Installed Apps", PermissionCategory.SYSTEM, PermissionLevel.BYPASS, showInSettings = false),
         // T330: integrations — opt-in by default. These tools can drive
         // other apps and read on-screen content, so the safer posture is
         // NOT_ALLOWED until the user picks otherwise even when the

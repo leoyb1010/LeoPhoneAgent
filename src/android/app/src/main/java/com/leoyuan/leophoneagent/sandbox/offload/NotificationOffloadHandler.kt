@@ -135,11 +135,11 @@ class NotificationOffloadHandler(private val context: Context) : NativeOffloadHa
                     r = OffloadPermissionManager.requestSettingsGate(
                         OffloadPermissionManager.SettingsGateRequest(
                             id = Manifest.permission.POST_NOTIFICATIONS,
-                            title = "Notifications are off",
-                            message = "LeoPhoneAgent needs notification permission to send notifications. Open Settings to allow it.",
+                            title = context.getString(R.string.offload_gate_notifications_title),
+                            message = context.getString(R.string.offload_gate_notifications_message),
                             settingsAction = Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                             requiresPackageUri = true,
-                            positiveLabel = "Open Settings",
+                            positiveLabel = context.getString(R.string.offload_gate_open_settings),
                         ),
                         check = {
                             ContextCompat.checkSelfPermission(
@@ -447,11 +447,11 @@ class NotificationOffloadHandler(private val context: Context) : NativeOffloadHa
                 OffloadPermissionManager.requestSettingsGate(
                     OffloadPermissionManager.SettingsGateRequest(
                         id = "notification_access",
-                        title = "Notification access needed",
-                        message = "LeoPhoneAgent needs Notification access to read the status-bar notifications. Open Settings and enable \"LeoPhoneAgent\" under Notification access.",
+                        title = context.getString(R.string.offload_gate_notification_access_title),
+                        message = context.getString(R.string.offload_gate_notification_access_message),
                         settingsAction = MinisNotificationListenerService.SETTINGS_ACTION,
                         requiresPackageUri = false,
-                        positiveLabel = "Open Settings",
+                        positiveLabel = context.getString(R.string.offload_gate_open_settings),
                     ),
                     check = { MinisNotificationListenerService.isEnabled(context) },
                 )

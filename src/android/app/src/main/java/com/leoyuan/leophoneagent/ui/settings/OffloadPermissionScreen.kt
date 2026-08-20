@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Accessibility
+import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
@@ -42,6 +43,7 @@ fun OffloadPermissionScreen(
     // [T-android-privileged-backend] Navigate to the multi-backend
     // (Shizuku + AXManager) screen from the privileged-backend integration row.
     onOpenPrivilegedBackend: () -> Unit = {},
+    onOpenSystemPermissions: () -> Unit = {},
 ) {
     val grouped = OffloadPermissionManager.toolRegistry
         .filter { it.showInSettings }
@@ -78,6 +80,19 @@ fun OffloadPermissionScreen(
             }
         },
     ) {
+        SettingsSection(
+            header = stringResource(R.string.perm_cross_header),
+        ) {
+            SettingsRow(
+                icon = Icons.Outlined.PhoneAndroid,
+                iconColor = Color(0xFF007AFF),
+                title = stringResource(R.string.perm_open_system_permissions),
+                subtitle = stringResource(R.string.perm_open_system_permissions_sub),
+                onClick = onOpenSystemPermissions,
+                showDivider = false,
+            )
+        }
+
         // T-config: master switch for the minis-config CLI surface.
         SettingsSection(
             header = stringResource(R.string.perm_section_config_tool),

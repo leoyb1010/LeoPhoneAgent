@@ -130,11 +130,11 @@ class LocationOffloadHandler(private val context: Context) : NativeOffloadHandle
                     r = OffloadPermissionManager.requestSettingsGate(
                         OffloadPermissionManager.SettingsGateRequest(
                             id = Manifest.permission.ACCESS_FINE_LOCATION,
-                            title = "Location permission needed",
-                            message = "LeoPhoneAgent needs location permission to get your current location. Open Settings to allow it.",
+                            title = context.getString(com.leoyuan.leophoneagent.R.string.offload_gate_location_title),
+                            message = context.getString(com.leoyuan.leophoneagent.R.string.offload_gate_location_message),
                             settingsAction = android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                             requiresPackageUri = true,
-                            positiveLabel = "Open Settings",
+                            positiveLabel = context.getString(com.leoyuan.leophoneagent.R.string.offload_gate_open_settings),
                         ),
                         check = { hasPermission() },
                     )

@@ -1,5 +1,6 @@
 package com.leoyuan.leophoneagent.ui.settings
 
+import android.content.pm.PackageManager
 import android.widget.Toast
 import android.app.Activity
 import android.app.StatusBarManager
@@ -8,10 +9,13 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Icon
+import android.app.AlarmManager
 import android.os.Build
+import android.os.Environment
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -29,7 +33,19 @@ import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.Widgets
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.Layers
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material.icons.outlined.Contacts
+import androidx.compose.material.icons.outlined.Event
+import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.PhotoCamera
+import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
@@ -51,6 +67,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.leoyuan.leophoneagent.R
 import com.leoyuan.leophoneagent.accessibility.MinisAccessibilityService
+import com.leoyuan.leophoneagent.offload.MinisNotificationListenerService
 import com.leoyuan.leophoneagent.power.PowerOptimizationManager
 import kotlinx.coroutines.delay
 
@@ -63,7 +80,10 @@ import kotlinx.coroutines.delay
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SystemPermissionsScreen(onBack: () -> Unit) {
+fun SystemPermissionsScreen(
+    onBack: () -> Unit,
+    onOpenOffloadPermissions: () -> Unit = {},
+) {
     val context = LocalContext.current
     val roleLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -83,7 +103,22 @@ fun SystemPermissionsScreen(onBack: () -> Unit) {
     var batteryExempt by remember {
         mutableStateOf(PowerOptimizationManager.isIgnoringBatteryOptimizations(context))
     }
+    var overlayGranted by remember { mutableStateOf(currentOverlayGranted(context)) }
+    var listenerGranted by remember { mutableStateOf(MinisNotificationListenerService.isEnabled(context)) }
+    var listenerConnected by remember { mutableStateOf(MinisNotificationListenerService.isConnected()) }
+    var contactsGranted by remember { mutableStateOf(runtimeGranted(context, SystemPermissionHub.RuntimeGrant.CONTACTS)) }
+    var calendarGranted by remember { mutableStateOf(runtimeGranted(context, SystemPermissionHub.RuntimeGrant.CALENDAR)) }
+    var locationGranted by remember { mutableStateOf(runtimeGranted(context, SystemPermissionHub.RuntimeGrant.LOCATION)) }
+    var micGranted by remember { mutableStateOf(runtimeGranted(context, SystemPermissionHub.RuntimeGrant.MICROPHONE)) }
+    var cameraGranted by remember { mutableStateOf(runtimeGranted(context, SystemPermissionHub.RuntimeGrant.CAMERA)) }
+    var photosGranted by remember { mutableStateOf(runtimeGranted(context, SystemPermissionHub.RuntimeGrant.PHOTOS)) }
+    val runtimeLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { /* poll refreshes rows */ }
+    var allFilesGranted by remember { mutableStateOf(currentAllFilesGranted(context)) }
+    var exactAlarmGranted by remember { mutableStateOf(currentExactAlarmGranted(context)) }
     var shizukuLabel by remember { mutableStateOf(shizukuStatusLabel(context)) }
+    val vendor = remember { PowerOptimizationManager.Vendor.current() }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -94,6 +129,17 @@ fun SystemPermissionsScreen(onBack: () -> Unit) {
             a11yDegraded = inSettings && !connected
             notificationsOn = areNotificationsEnabled(context)
             batteryExempt = PowerOptimizationManager.isIgnoringBatteryOptimizations(context)
+            overlayGranted = currentOverlayGranted(context)
+            listenerGranted = MinisNotificationListenerService.isEnabled(context)
+            listenerConnected = MinisNotificationListenerService.isConnected()
+            contactsGranted = runtimeGranted(context, SystemPermissionHub.RuntimeGrant.CONTACTS)
+            calendarGranted = runtimeGranted(context, SystemPermissionHub.RuntimeGrant.CALENDAR)
+            locationGranted = runtimeGranted(context, SystemPermissionHub.RuntimeGrant.LOCATION)
+            micGranted = runtimeGranted(context, SystemPermissionHub.RuntimeGrant.MICROPHONE)
+            cameraGranted = runtimeGranted(context, SystemPermissionHub.RuntimeGrant.CAMERA)
+            photosGranted = runtimeGranted(context, SystemPermissionHub.RuntimeGrant.PHOTOS)
+            allFilesGranted = currentAllFilesGranted(context)
+            exactAlarmGranted = currentExactAlarmGranted(context)
             shizukuLabel = shizukuStatusLabel(context)
             delay(1000)
         }
@@ -117,6 +163,51 @@ fun SystemPermissionsScreen(onBack: () -> Unit) {
                 .padding(padding)
                 .verticalScroll(rememberScrollState()),
         ) {
+            val setupMissing = SystemPermissionHub.setupMissingCount(
+                assistantHeld = assistantHeld,
+                notificationsOn = notificationsOn,
+                batteryExempt = batteryExempt,
+                overlayGranted = overlayGranted,
+                listenerGranted = listenerGranted && !SystemPermissionHub.listenerDegraded(
+                    listenerGranted,
+                    listenerConnected,
+                ),
+                allFilesGranted = allFilesGranted,
+            )
+            SettingsSection(
+                header = stringResource(R.string.system_permissions_setup_header),
+                footer = if (vendor == PowerOptimizationManager.Vendor.SAMSUNG) {
+                    stringResource(R.string.system_permissions_setup_samsung_note)
+                } else {
+                    stringResource(R.string.system_permissions_setup_footer)
+                },
+            ) {
+                SettingsRow(
+                    icon = Icons.Outlined.Checklist,
+                    iconColor = Color(0xFF007AFF),
+                    title = if (setupMissing == 0) {
+                        stringResource(R.string.system_permissions_setup_complete)
+                    } else {
+                        stringResource(R.string.system_permissions_setup_missing, setupMissing)
+                    },
+                    subtitle = stringResource(R.string.system_permissions_setup_sub),
+                    showDivider = false,
+                )
+            }
+
+            SettingsSection(
+                header = stringResource(R.string.system_permissions_cross_header),
+            ) {
+                SettingsRow(
+                    icon = Icons.Outlined.Shield,
+                    iconColor = Color(0xFF5856D6),
+                    title = stringResource(R.string.system_permissions_open_offload),
+                    subtitle = stringResource(R.string.system_permissions_open_offload_sub),
+                    onClick = onOpenOffloadPermissions,
+                    showDivider = false,
+                )
+            }
+
             SettingsSection(
                 header = stringResource(R.string.system_permissions_section_assistant),
                 footer = stringResource(R.string.system_permissions_assistant_footer),
@@ -203,6 +294,80 @@ fun SystemPermissionsScreen(onBack: () -> Unit) {
                     title = stringResource(R.string.system_permissions_shortcuts_row),
                     subtitle = stringResource(R.string.system_permissions_shortcuts_sub),
                     onClick = { openAppDetails(context) },
+                )
+                SettingsRow(
+                    icon = Icons.Outlined.Layers,
+                    iconColor = Color(0xFF5856D6),
+                    title = stringResource(R.string.system_permissions_overlay_row),
+                    subtitle = if (overlayGranted) {
+                        stringResource(R.string.system_permissions_overlay_on)
+                    } else {
+                        stringResource(R.string.system_permissions_overlay_off)
+                    },
+                    onClick = {
+                        SystemPermissionHub.openLink(
+                            context,
+                            SystemPermissionHub.overlayLink(context.packageName),
+                        )
+                    },
+                )
+                SettingsRow(
+                    icon = Icons.Outlined.NotificationsActive,
+                    iconColor = Color(0xFFFF9500),
+                    title = stringResource(R.string.system_permissions_listener_row),
+                    subtitle = when {
+                        SystemPermissionHub.listenerDegraded(listenerGranted, listenerConnected) ->
+                            stringResource(R.string.system_permissions_listener_degraded)
+                        listenerGranted ->
+                            stringResource(R.string.system_permissions_listener_on)
+                        else ->
+                            stringResource(R.string.system_permissions_listener_off)
+                    },
+                    onClick = {
+                        SystemPermissionHub.openLink(
+                            context,
+                            SystemPermissionHub.notificationListenerLink(),
+                        )
+                    },
+                )
+                SettingsRow(
+                    icon = Icons.Outlined.Folder,
+                    iconColor = Color(0xFF007AFF),
+                    title = stringResource(R.string.system_permissions_all_files_row),
+                    subtitle = if (allFilesGranted) {
+                        stringResource(R.string.system_permissions_all_files_on)
+                    } else {
+                        stringResource(R.string.system_permissions_all_files_off)
+                    },
+                    onClick = {
+                        SystemPermissionHub.openLink(
+                            context,
+                            SystemPermissionHub.allFilesLink(context.packageName),
+                        )
+                    },
+                )
+                SettingsRow(
+                    icon = Icons.Outlined.Schedule,
+                    iconColor = Color(0xFF34C759),
+                    title = stringResource(R.string.system_permissions_exact_alarm_row),
+                    subtitle = when {
+                        !SystemPermissionHub.exactAlarmNeedsRuntimeGrant(Build.VERSION.SDK_INT) ->
+                            stringResource(R.string.system_permissions_exact_alarm_na)
+                        exactAlarmGranted ->
+                            stringResource(R.string.system_permissions_exact_alarm_on)
+                        else ->
+                            stringResource(R.string.system_permissions_exact_alarm_off)
+                    },
+                    onClick = {
+                        if (SystemPermissionHub.exactAlarmNeedsRuntimeGrant(Build.VERSION.SDK_INT)) {
+                            SystemPermissionHub.openLink(
+                                context,
+                                SystemPermissionHub.exactAlarmLink(context.packageName),
+                            )
+                        } else {
+                            openAppDetails(context)
+                        }
+                    },
                     showDivider = !com.leoyuan.leophoneagent.BuildConfig.POWER_FEATURES_ENABLED,
                 )
                 if (com.leoyuan.leophoneagent.BuildConfig.POWER_FEATURES_ENABLED) {
@@ -215,6 +380,49 @@ fun SystemPermissionsScreen(onBack: () -> Unit) {
                         showDivider = false,
                     )
                 }
+            }
+
+            SettingsSection(
+                header = stringResource(R.string.system_permissions_runtime_header),
+                footer = stringResource(R.string.system_permissions_runtime_footer),
+            ) {
+                RuntimeGrantRow(
+                    icon = Icons.Outlined.Contacts,
+                    title = stringResource(R.string.system_permissions_runtime_contacts),
+                    granted = contactsGranted,
+                    onClick = { requestRuntime(context, runtimeLauncher, SystemPermissionHub.RuntimeGrant.CONTACTS) },
+                )
+                RuntimeGrantRow(
+                    icon = Icons.Outlined.Event,
+                    title = stringResource(R.string.system_permissions_runtime_calendar),
+                    granted = calendarGranted,
+                    onClick = { requestRuntime(context, runtimeLauncher, SystemPermissionHub.RuntimeGrant.CALENDAR) },
+                )
+                RuntimeGrantRow(
+                    icon = Icons.Outlined.LocationOn,
+                    title = stringResource(R.string.system_permissions_runtime_location),
+                    granted = locationGranted,
+                    onClick = { requestRuntime(context, runtimeLauncher, SystemPermissionHub.RuntimeGrant.LOCATION) },
+                )
+                RuntimeGrantRow(
+                    icon = Icons.Outlined.Mic,
+                    title = stringResource(R.string.system_permissions_runtime_mic),
+                    granted = micGranted,
+                    onClick = { requestRuntime(context, runtimeLauncher, SystemPermissionHub.RuntimeGrant.MICROPHONE) },
+                )
+                RuntimeGrantRow(
+                    icon = Icons.Outlined.PhotoCamera,
+                    title = stringResource(R.string.system_permissions_runtime_camera),
+                    granted = cameraGranted,
+                    onClick = { requestRuntime(context, runtimeLauncher, SystemPermissionHub.RuntimeGrant.CAMERA) },
+                )
+                RuntimeGrantRow(
+                    icon = Icons.Outlined.PhotoLibrary,
+                    title = stringResource(R.string.system_permissions_runtime_photos),
+                    granted = photosGranted,
+                    onClick = { requestRuntime(context, runtimeLauncher, SystemPermissionHub.RuntimeGrant.PHOTOS) },
+                    showDivider = false,
+                )
             }
 
             SettingsSection(
@@ -241,12 +449,15 @@ fun SystemPermissionsScreen(onBack: () -> Unit) {
             // two canonical remediations through the existing
             // PowerOptimizationManager (which already catches a missing Activity
             // and falls back). Stays hidden on Pixel / stock Android (Vendor.OTHER).
+            // Samsung is excluded here — One UI sleeping-apps / cover-screen
+            // guidance is always shown below, not gated on a11y-degraded.
             val activity = context as? Activity
-            if (a11yDegraded && activity != null && PowerOptimizationManager.needsOemAutostartGuidance()) {
-                val vendor = PowerOptimizationManager.Vendor.current().displayName
+            if (activity != null &&
+                SystemPermissionHub.shouldShowDegradedOemGuidance(vendor, a11yDegraded)
+            ) {
                 SettingsSection(
                     header = stringResource(R.string.system_permissions_a11y_oem_header),
-                    footer = stringResource(R.string.system_permissions_a11y_oem_footer, vendor),
+                    footer = stringResource(R.string.system_permissions_a11y_oem_footer, vendor.displayName),
                 ) {
                     SettingsRow(
                         icon = Icons.Outlined.RestartAlt,
@@ -268,6 +479,40 @@ fun SystemPermissionsScreen(onBack: () -> Unit) {
                             if (!PowerOptimizationManager.requestBatteryOptimizationExemption(activity)) {
                                 PowerOptimizationManager.openAppDetailsSettings(activity)
                             }
+                        },
+                        showDivider = false,
+                    )
+                }
+            }
+
+            if (SystemPermissionHub.shouldShowSamsungKeepAlive(vendor)) {
+                SettingsSection(
+                    header = stringResource(R.string.system_permissions_samsung_header),
+                    footer = stringResource(R.string.system_permissions_samsung_footer),
+                ) {
+                    SettingsRow(
+                        icon = Icons.Outlined.PhoneAndroid,
+                        iconColor = Color(0xFFFF9500),
+                        title = stringResource(R.string.system_permissions_samsung_sleeping_row),
+                        subtitle = stringResource(R.string.system_permissions_samsung_sleeping_sub),
+                        onClick = {
+                            if (activity != null) {
+                                SystemPermissionHub.openSamsungDeviceCare(activity)
+                            } else {
+                                openAppDetails(context)
+                            }
+                        },
+                    )
+                    SettingsRow(
+                        icon = Icons.Outlined.PhoneAndroid,
+                        iconColor = Color(0xFF007AFF),
+                        title = stringResource(R.string.system_permissions_samsung_cover_row),
+                        subtitle = stringResource(R.string.system_permissions_samsung_cover_sub),
+                        onClick = {
+                            SystemPermissionHub.openLink(
+                                context,
+                                SystemPermissionHub.coverScreenLink(context.packageName),
+                            )
                         },
                         showDivider = false,
                     )
@@ -342,6 +587,69 @@ fun SystemPermissionsScreen(onBack: () -> Unit) {
             }
         }
     }
+}
+
+@Composable
+private fun RuntimeGrantRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    granted: Boolean,
+    onClick: () -> Unit,
+    showDivider: Boolean = true,
+) {
+    SettingsRow(
+        icon = icon,
+        iconColor = Color(0xFF007AFF),
+        title = title,
+        subtitle = if (granted) {
+            stringResource(R.string.system_permissions_runtime_on)
+        } else {
+            stringResource(R.string.system_permissions_runtime_off)
+        },
+        onClick = onClick,
+        showDivider = showDivider,
+    )
+}
+
+private fun runtimeGranted(context: Context, grant: SystemPermissionHub.RuntimeGrant): Boolean {
+    val names = SystemPermissionHub.runtimePermissions(grant, Build.VERSION.SDK_INT)
+    val granted = names.associateWith {
+        ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
+    }
+    return SystemPermissionHub.anyPermissionGranted(granted, names)
+}
+
+private fun requestRuntime(
+    context: Context,
+    launcher: androidx.activity.result.ActivityResultLauncher<Array<String>>,
+    grant: SystemPermissionHub.RuntimeGrant,
+) {
+    val names = SystemPermissionHub.runtimePermissions(grant, Build.VERSION.SDK_INT)
+    if (names.any { ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED }) {
+        launcher.launch(names.toTypedArray())
+    } else {
+        openAppDetails(context)
+    }
+}
+
+private fun currentOverlayGranted(context: Context): Boolean =
+    SystemPermissionHub.overlayGranted(Build.VERSION.SDK_INT, Settings.canDrawOverlays(context))
+
+private fun currentAllFilesGranted(context: Context): Boolean {
+    val isManager = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+        Environment.isExternalStorageManager()
+    return SystemPermissionHub.allFilesGranted(Build.VERSION.SDK_INT, isManager)
+}
+
+private fun currentExactAlarmGranted(context: Context): Boolean {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
+    val alarm = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+    val canSchedule = try {
+        alarm?.canScheduleExactAlarms() == true
+    } catch (_: Throwable) {
+        false
+    }
+    return SystemPermissionHub.exactAlarmGranted(Build.VERSION.SDK_INT, canSchedule)
 }
 
 private fun isAccessibilityEnabled(context: Context): Boolean {

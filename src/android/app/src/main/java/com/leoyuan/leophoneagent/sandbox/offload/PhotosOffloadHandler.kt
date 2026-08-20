@@ -11,6 +11,7 @@ import android.os.Environment
 import android.provider.MediaStore
 import androidx.core.content.ContextCompat
 import androidx.exifinterface.media.ExifInterface
+import com.leoyuan.leophoneagent.R
 import com.leoyuan.leophoneagent.logging.AppLogger
 import com.leoyuan.leophoneagent.offload.OffloadPermissionManager
 import com.leoyuan.leophoneagent.sandbox.NativeOffloadHandler
@@ -241,11 +242,11 @@ class PhotosOffloadHandler(private val context: Context) : NativeOffloadHandler 
                 r = OffloadPermissionManager.requestSettingsGate(
                     OffloadPermissionManager.SettingsGateRequest(
                         id = "photos_media",
-                        title = "Photos permission needed",
-                        message = "LeoPhoneAgent needs media permission to read your photo library. Open Settings to allow it.",
+                        title = context.getString(R.string.offload_gate_photos_title),
+                        message = context.getString(R.string.offload_gate_photos_message),
                         settingsAction = android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                         requiresPackageUri = true,
-                        positiveLabel = "Open Settings",
+                        positiveLabel = context.getString(R.string.offload_gate_open_settings),
                     ),
                     check = { hasMediaPermission() },
                 )
@@ -304,11 +305,11 @@ class PhotosOffloadHandler(private val context: Context) : NativeOffloadHandler 
                 r = OffloadPermissionManager.requestSettingsGate(
                     OffloadPermissionManager.SettingsGateRequest(
                         id = "ACCESS_MEDIA_LOCATION",
-                        title = "Photo location needed",
-                        message = "LeoPhoneAgent needs photo-location permission to read GPS EXIF for the `near` query. Open Settings to allow it.",
+                        title = context.getString(R.string.offload_gate_photos_location_title),
+                        message = context.getString(R.string.offload_gate_photos_location_message),
                         settingsAction = android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                         requiresPackageUri = true,
-                        positiveLabel = "Open Settings",
+                        positiveLabel = context.getString(R.string.offload_gate_open_settings),
                     ),
                     check = { hasMediaLocationPermission() },
                 )

@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.provider.ContactsContract
 import androidx.core.content.ContextCompat
+import com.leoyuan.leophoneagent.R
 import com.leoyuan.leophoneagent.logging.AppLogger
 import com.leoyuan.leophoneagent.offload.OffloadPermissionManager
 import com.leoyuan.leophoneagent.sandbox.NativeOffloadHandler
@@ -107,15 +108,17 @@ class ContactsOffloadHandler(private val context: Context) : NativeOffloadHandle
                 r = OffloadPermissionManager.requestSettingsGate(
                     OffloadPermissionManager.SettingsGateRequest(
                         id = if (needsWrite) "CONTACTS_RW" else Manifest.permission.READ_CONTACTS,
-                        title = "Contacts permission needed",
-                        message = if (needsWrite) {
-                            "LeoPhoneAgent needs read + write contacts permission to delete entries. Open Settings to allow it."
-                        } else {
-                            "LeoPhoneAgent needs contacts permission to read your address book. Open Settings to allow it."
-                        },
+                        title = context.getString(R.string.offload_gate_contacts_title),
+                        message = context.getString(
+                            if (needsWrite) {
+                                R.string.offload_gate_contacts_message_write
+                            } else {
+                                R.string.offload_gate_contacts_message
+                            },
+                        ),
                         settingsAction = android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                         requiresPackageUri = true,
-                        positiveLabel = "Open Settings",
+                        positiveLabel = context.getString(R.string.offload_gate_open_settings),
                     ),
                     check = { hasPermission(needsWrite) },
                 )

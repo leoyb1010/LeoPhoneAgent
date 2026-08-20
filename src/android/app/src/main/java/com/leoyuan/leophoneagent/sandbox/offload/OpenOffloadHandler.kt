@@ -36,12 +36,36 @@ class OpenOffloadHandler(private val context: Context) : NativeOffloadHandler {
         // 有一个能把"让 Agent 拉起别的 App"整体关掉的开关。
         OffloadGate.enforce("open", "android-open", args, request)?.let { return it }
 
-        val url = args.positional.firstOrNull()
-        if (url.isNullOrBlank()) {
+        val url = args.positional.joinToString(" ").trim()
+        if (url.isBlank()) {
             return NativeOffloadResult(2, "android-open: missing <url>\n$HELP")
+        }
+        if (!looksLikeUri(url)) {
+            val app = InstalledLauncherApps.resolve(context.packageManager, url)
+            val launch = app?.let { InstalledLauncherApps.launchIntent(context.packageManager, it.packageName) }
+            if (launch != null) {
+                return try {
+                    context.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    NativeOffloadResult(0, OffloadOutput.formatBody("Opened: ${app.packageName}", args) + "\n")
+                } catch (e: ActivityNotFoundException) {
+                    maybeFallback(url, e, args)
+                }
+            }
         }
 
         return tryOpen(url, args)
+    }
+
+    private fun looksLikeUri(value: String): Boolean {
+        val lower = value.lowercase()
+        return lower.contains("://") ||
+            lower.startsWith("intent:") ||
+            lower.startsWith("android-app:") ||
+            lower.startsWith("tel:") ||
+            lower.startsWith("mailto:") ||
+            lower.startsWith("sms:") ||
+            lower.startsWith("geo:") ||
+            lower.startsWith("market:")
     }
 
     private fun tryOpen(url: String, args: OffloadArgs): NativeOffloadResult {
@@ -91,9 +115,19 @@ class OpenOffloadHandler(private val context: Context) : NativeOffloadHandler {
                 Intent(Intent.ACTION_VIEW, Uri.parse(url))
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            val resolved = intent.resolveActivity(context.packageManager)
-            Log.d(TAG, "startActivity url='$url' action=${intent.action} resolved=${resolved?.flattenToShortString()}")
-            context.startActivity(intent)
+            val pm = context.packageManager
+            val resolved = intent.resolveActivity(pm)
+            // Android 11+ hid most packages from resolveActivity. QUERY_ALL
+            // + MAIN/LAUNCHER <queries> restore visibility; if an OEM still
+            // hides the named package, fall back to the launcher activity.
+            val launch = if (resolved == null) {
+                intent.`package`?.let { InstalledLauncherApps.launchIntent(pm, it) }
+            } else {
+                null
+            }
+            val toStart = launch ?: intent
+            Log.d(TAG, "startActivity url='$url' action=${toStart.action} resolved=${toStart.resolveActivity(pm)?.flattenToShortString()}")
+            context.startActivity(toStart)
             NativeOffloadResult(0, OffloadOutput.formatBody("Opened: $url", args) + "\n")
         } catch (e: ActivityNotFoundException) {
             Log.w(TAG, "no handler for '$url'")
@@ -183,9 +217,11 @@ class OpenOffloadHandler(private val context: Context) : NativeOffloadHandler {
 
 Usage:
   android-open <url>
+  android-open <package-or-label>
   android-open --help
 
-Supports https://, tel:, mailto:, geo:, market:, intent:, and any other
+Supports https://, tel:, mailto:, geo:, market:, intent:, a launcher
+package name, or a case-insensitive app label. Also any other
 scheme a device app can handle. On Huawei devices without Play Store,
 market:// URLs automatically fall back to AppGallery.
 

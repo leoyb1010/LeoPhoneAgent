@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Environment
 import android.os.StatFs
 import com.leoyuan.leophoneagent.sandbox.NativeOffloadHandler
+import com.leoyuan.leophoneagent.ui.navigation.WorkspaceLayoutStore
 import com.leoyuan.leophoneagent.sandbox.NativeOffloadRequest
 import com.leoyuan.leophoneagent.sandbox.NativeOffloadResult
 import org.json.JSONObject
@@ -72,6 +73,11 @@ class DeviceOffloadHandler(private val context: Context) : NativeOffloadHandler 
             .put("total_memory_mb", runtime.totalMemory() / (1024 * 1024))
             .put("free_memory_mb", runtime.freeMemory() / (1024 * 1024))
             .put("max_memory_mb", runtime.maxMemory() / (1024 * 1024))
+            .put("fold_posture", WorkspaceLayoutStore.postureName)
+            .put("window_width_dp", WorkspaceLayoutStore.widthDp)
+            .put("window_height_dp", WorkspaceLayoutStore.heightDp)
+            .put("two_pane", WorkspaceLayoutStore.twoPane)
+            .put("arrangement", WorkspaceLayoutStore.arrangementName)
     }
 
     private fun batteryInfo(): JSONObject {
@@ -147,7 +153,7 @@ class DeviceOffloadHandler(private val context: Context) : NativeOffloadHandler 
 
 Usage:
   android-device [all]       Everything (default)
-  android-device info        Model, OS, memory
+  android-device info        Model, OS, memory, fold posture, window dp
   android-device battery     Battery level, charging state, temperature
   android-device storage     Internal storage, app data/cache size
 """
