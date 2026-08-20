@@ -1,6 +1,8 @@
 package com.leoyuan.leophoneagent.ui.navigation
 
 import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.produceState
@@ -51,6 +53,20 @@ internal fun foldPostureOf(halfOpened: Boolean, horizontalHinge: Boolean): FoldP
     return if (horizontalHinge) FoldPosture.TABLETOP else FoldPosture.BOOK
 }
 
+/**
+ * Compose [LocalContext] is almost never a raw [Activity] — it is a
+ * [ContextThemeWrapper] / [ContextWrapper]. A direct `as? Activity` cast
+ * therefore misses the host and leaves fold posture stuck at [FoldPosture.NONE].
+ */
+internal fun Context.findActivity(): Activity? {
+    var current: Context? = this
+    while (current != null) {
+        if (current is Activity) return current
+        current = (current as? ContextWrapper)?.baseContext
+    }
+    return null
+}
+
 internal fun foldPostureFromLayoutInfo(info: WindowLayoutInfo?): FoldPosture {
     val feature = info?.displayFeatures?.filterIsInstance<FoldingFeature>()?.firstOrNull()
         ?: return FoldPosture.NONE
@@ -64,7 +80,7 @@ internal fun foldPostureFromLayoutInfo(info: WindowLayoutInfo?): FoldPosture {
 internal fun rememberFoldPosture(): State<FoldPosture> {
     val context = LocalContext.current
     return produceState(initialValue = FoldPosture.NONE, context) {
-        val activity = context as? Activity
+        val activity = context.findActivity()
         if (activity == null) {
             value = FoldPosture.NONE
             return@produceState
