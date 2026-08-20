@@ -59,7 +59,7 @@ type ClaudeRuntimeOptions = {
 };
 type MutableClaudeOptions = Options & { allowedTools: string[]; disallowedTools: string[] };
 type ApprovalDecision = { cancelled?: boolean; allow?: boolean; rememberEntry?: unknown; updatedInput?: unknown; message?: string };
-type ApprovalMetadata = { _sessionId?: string | null; _toolName?: string; _input?: unknown; _context?: unknown; _receivedAt?: Date };
+type ApprovalMetadata = { _sessionId?: string | null; _appSessionId?: string | null; _toolName?: string; _input?: unknown; _context?: unknown; _receivedAt?: Date };
 type ApprovalResolver = ((decision: ApprovalDecision | null) => void) & ApprovalMetadata;
 type WaitApprovalOptions = { timeoutMs?: number; signal?: AbortSignal; onCancel?: (reason: string) => void; metadata?: ApprovalMetadata };
 type ActiveClaudeSession = { instance: Query; startTime: number; status: 'active' | 'aborted'; writer: RuntimeWriter | null };
@@ -317,14 +317,6 @@ function removeSession(sessionId: string): void {
  */
 function getSession(sessionId: string): ActiveClaudeSession | undefined {
   return activeSessions.get(sessionId);
-}
-
-/**
- * Gets all active session IDs
- * @returns {Array<string>} Array of active session IDs
- */
-function getAllSessions(): string[] {
-  return Array.from(activeSessions.keys());
 }
 
 /**
@@ -619,24 +611,25 @@ async function queryClaudeSDK(command: string, options: ClaudeRuntimeOptions = {
         }
       }
 
-      const requestId = createRequestId();
-      ws.send(createNormalizedMessage({ kind: 'permission_request', requestId, toolName, input, sessionId: capturedSessionId || sessionId || null, provider: 'claude' }));
+      const approvalSessionId = capturedSessionId || sessionId || appSessionId || null;
+      ws.send(createNormalizedMessage({ kind: 'permission_request', requestId, toolName, input, sessionId: approvalSessionId, provider: 'claude' }));
       emitNotification(createNotificationEvent({
         provider: 'claude',
-        sessionId: capturedSessionId || sessionId || null,
+        sessionId: approvalSessionId,
         kind: 'action_required',
         code: 'permission.required',
         meta: { toolName, sessionName: sessionSummary },
         severity: 'warning',
         requiresUserAction: true,
-        dedupeKey: `claude:permission:${capturedSessionId || sessionId || 'none'}:${requestId}`
+        dedupeKey: `claude:permission:${approvalSessionId || 'none'}:${requestId}`
       }));
 
       const decision = await waitForToolApproval(requestId, {
         timeoutMs: requiresInteraction ? 0 : undefined,
         signal: context?.signal,
         metadata: {
-          _sessionId: capturedSessionId || sessionId || null,
+          _sessionId: approvalSessionId,
+          _appSessionId: appSessionId || null,
           _toolName: toolName,
           _input: input,
           _receivedAt: new Date(),
@@ -879,33 +872,10 @@ async function abortClaudeSDKSession(sessionId: string): Promise<boolean> {
   }
 }
 
-/**
- * Checks if an SDK session is currently active
- * @param {string} sessionId - Session identifier
- * @returns {boolean} True if session is active
- */
-function isClaudeSDKSessionActive(sessionId: string): boolean {
-  const session = getSession(sessionId);
-  return session?.status === 'active';
-}
-
-/**
- * Gets all active SDK session IDs
- * @returns {Array<string>} Array of active session IDs
- */
-function getActiveClaudeSDKSessions(): string[] {
-  return getAllSessions();
-}
-
-/**
- * Get pending tool approvals for a specific session.
- * @param {string} sessionId - The session ID
- * @returns {Array} Array of pending permission request objects
- */
 function getPendingApprovalsForSession(sessionId: string): PendingApproval[] {
   const pending: PendingApproval[] = [];
   for (const [requestId, resolver] of pendingToolApprovals.entries()) {
-    if (resolver._sessionId === sessionId) {
+    if (resolver._sessionId === sessionId || resolver._appSessionId === sessionId) {
       pending.push({
         requestId,
         toolName: resolver._toolName || 'UnknownTool',
@@ -919,28 +889,10 @@ function getPendingApprovalsForSession(sessionId: string): PendingApproval[] {
   return pending;
 }
 
-/**
- * Reconnect a session's WebSocketWriter to a new raw WebSocket.
- * Called when client reconnects (e.g. page refresh) while SDK is still running.
- * @param {string} sessionId - The session ID
- * @param {Object} newRawWs - The new raw WebSocket connection
- * @returns {boolean} True if writer was successfully reconnected
- */
-function reconnectSessionWriter(sessionId: string, newRawWs: unknown): boolean {
-  const session = getSession(sessionId);
-  if (!session?.writer?.updateWebSocket) return false;
-  session.writer.updateWebSocket(newRawWs);
-  logger.info(`[RECONNECT] Writer swapped for session ${sessionId}`);
-  return true;
-}
-
 // Export public API
 export {
   queryClaudeSDK,
   abortClaudeSDKSession,
-  isClaudeSDKSessionActive,
-  getActiveClaudeSDKSessions,
   resolveToolApproval,
   getPendingApprovalsForSession,
-  reconnectSessionWriter
 };

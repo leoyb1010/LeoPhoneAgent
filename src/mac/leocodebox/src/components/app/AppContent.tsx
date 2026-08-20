@@ -13,7 +13,7 @@ import SessionRail from '../workbench/SessionRail';
 import ProjectDrawer from '../workbench/ProjectDrawer';
 import RemoteSessionPanel, { type RemoteTarget } from '../workbench/RemoteSessionPanel';
 import VersionUpgradeModal from '../version-upgrade/view';
-import { harnessForMachine, useFleetSnapshot, type FleetMachine } from '../workbench/useFleetSnapshot';
+import { remoteLaunchFields, useFleetSnapshot, type FleetMachine } from '../workbench/useFleetSnapshot';
 import type { NewTaskLaunch } from '../dashboard/newTask';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { PaletteOpsProvider, usePaletteOpsRegister } from '../../contexts/PaletteOpsContext';
@@ -373,9 +373,14 @@ function AppContentInner() {
           sessionId: created.session_id,
           harness: created.harness ?? options.harness,
         });
+        await refreshProjectsSilently();
+        return true;
       }
-      await refreshProjectsSilently();
-      return true;
+      window.alert(t('workbench.remoteRunFailed', {
+        machine: machineName,
+        defaultValue: `无法在 ${machineName} 上创建会话,请检查中继连接。`,
+      }));
+      return false;
     } catch (error) {
       console.error('[AppContent] Remote run failed:', error);
       window.alert(t('workbench.remoteRunFailed', {
@@ -402,11 +407,10 @@ function AppContentInner() {
     }
     if (launch.machine) {
       const remote = remotes.find((machine) => machine.name === launch.machine);
-      void startRemoteRun(launch.machine, launch.prompt, {
-        harness: harnessForMachine(remote, launch.provider),
+      void startRemoteRun(launch.machine, launch.prompt, remoteLaunchFields(remote, launch.provider, {
         cwd: project.fullPath || project.path,
         thinking: localStorage.getItem(`${launch.provider}-effort`) || undefined,
-      });
+      }));
       return;
     }
     closeOverlays();
@@ -425,11 +429,16 @@ function AppContentInner() {
       ? machine.sessions?.find((item) => item.session_id === remoteSessionId)
       : machine.sessions?.[0];
     const sessionId = remoteSessionId ?? session?.session_id;
-    if (!sessionId) return;
+    if (!sessionId) {
+      window.alert(t('workbench.remoteTakeOverFailed', {
+        defaultValue: '这台机器上暂时没有可接管的会话。',
+      }));
+      return;
+    }
     withViewTransition(() => {
       setRemoteTarget({ machine: machine.name, sessionId, harness: session?.harness });
     });
-  }, [closeOverlays]);
+  }, [closeOverlays, t]);
 
   const selectRailSession = useCallback((session: ProjectSession, project: Project) => {
     closeOverlays();
@@ -514,11 +523,10 @@ function AppContentInner() {
           onOpenAgentSettings={() => openSettingsTab('agents')}
           onStartLocalRun={startLocalRun}
           onStartRemoteRun={(machine, prompt, provider, effort) => {
-            return startRemoteRun(machine.name, prompt, {
-              harness: harnessForMachine(machine, provider),
+            return startRemoteRun(machine.name, prompt, remoteLaunchFields(machine, provider, {
               cwd: selectedProject?.fullPath || selectedProject?.path,
               thinking: effort,
-            });
+            }));
           }}
           /*
            * 主控台在屏幕上时,芯片就是"给下一个新会话选 Agent"的选择器 —— 哪怕

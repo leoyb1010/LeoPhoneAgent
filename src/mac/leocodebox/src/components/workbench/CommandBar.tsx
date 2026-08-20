@@ -15,7 +15,7 @@ import type { LLMProvider, Project } from '../../types/app';
 import ChipMenu from './ChipMenu';
 import { announceAgentIntent, commitAgentForNewSession, resolveCommandBarAgent } from './agentIntent';
 import { useLocalAgents } from './useLocalAgents';
-import type { FleetMachine } from './useFleetSnapshot';
+import { isMinisBody, type FleetMachine } from './useFleetSnapshot';
 
 type PermissionMode = 'default' | 'plan' | 'acceptEdits' | 'auto' | 'bypassPermissions';
 
@@ -118,10 +118,7 @@ export default function CommandBar({
     [localLabel, remotes],
   );
   const selectedRemote = targetOptions.find((option) => option.value === target)?.machine ?? null;
-  const remoteSupportsThinking = selectedRemote == null
-    || selectedRemote.platform === 'android'
-    || selectedRemote.platform === 'harmony'
-    || selectedRemote.server === 'minis';
+  const remoteSupportsThinking = selectedRemote == null || isMinisBody(selectedRemote);
 
   // 远程机器掉线时把选择收回本机。
   useEffect(() => {
@@ -255,7 +252,7 @@ export default function CommandBar({
           value={target}
           onSelect={setTarget}
           align="right"
-          tooltip={t('workbench.targetTooltip', { defaultValue: '任务目标:本机或远程 Mac' })}
+          tooltip={t('workbench.targetTooltip', { defaultValue: '任务目标:本机或远程机器' })}
           ariaLabel={t('workbench.targetTooltip', { defaultValue: '任务目标' })}
           className="h-[26px] rounded-lg px-2.5 font-mono text-[10.5px] text-primary"
           options={targetOptions.map(({ value, label, desc }) => ({ value, label, desc }))}

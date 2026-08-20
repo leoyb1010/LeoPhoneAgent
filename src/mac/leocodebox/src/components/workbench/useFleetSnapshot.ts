@@ -22,10 +22,25 @@ export type FleetMachine = {
   sessions: FleetSession[];
 };
 
+export function isMinisBody(machine: FleetMachine | undefined): boolean {
+  return machine?.platform === 'android' || machine?.platform === 'harmony' || machine?.server === 'minis';
+}
+
 export function harnessForMachine(machine: FleetMachine | undefined, selected: string): string {
-  return machine?.platform === 'android' || machine?.platform === 'harmony' || machine?.server === 'minis'
-    ? 'minis'
-    : selected;
+  return isMinisBody(machine) ? 'minis' : selected;
+}
+
+/** 指挥条 / 主控台开远程任务时的字段。minis 身体不吃 Mac 本地 cwd。 */
+export function remoteLaunchFields(
+  machine: FleetMachine | undefined,
+  selected: string,
+  extras: { cwd?: string; thinking?: string } = {},
+): { harness: string; cwd?: string; thinking?: string } {
+  const harness = harnessForMachine(machine, selected);
+  const thinking = extras.thinking && extras.thinking !== 'default' ? extras.thinking : undefined;
+  return harness === 'minis'
+    ? { harness, thinking }
+    : { harness, cwd: extras.cwd, thinking };
 }
 
 type FleetPayload = {

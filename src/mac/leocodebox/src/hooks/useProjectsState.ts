@@ -298,20 +298,23 @@ export function useProjectsState({
     }
   }, [isLoadingProjects, projects, selectedProject, sessionId]);
 
-  // 原地站回: reopen the last visited session on boot. Only fires once, and
-  // only when the app was opened at `/` (a deep link keeps its own session).
+  // 原地站回: reopen the last visited session on boot. 主控台落地(含升级后
+  // 第一次强制落在主控台)时不要同时把 URL 改成会话,否则列表高亮会话、主区
+  // 却还在主控台。
   const sessionRestoreAttempted = useRef(false);
   const restoredSessionId = useRef<string | null>(null);
   useEffect(() => {
     if (sessionRestoreAttempted.current) return;
     sessionRestoreAttempted.current = true;
     if (sessionId) return;
+    if (activeTab === 'dashboard') return;
     const lastSessionId = readLastSessionId();
     if (lastSessionId) {
       restoredSessionId.current = lastSessionId;
+      setActiveTab('chat');
       navigate(`/session/${lastSessionId}`, { replace: true });
     }
-  }, [sessionId, navigate]);
+  }, [sessionId, navigate, activeTab]);
 
   // Remember every session the user lands on so the next boot returns there.
   useEffect(() => {

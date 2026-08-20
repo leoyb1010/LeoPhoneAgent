@@ -179,7 +179,19 @@ function MainContent({
   // 空态是个死胡同:它既开不了任务,也换不了 Agent。
   // 移动端例外:那里没有指挥条/会话列表,选项目全靠抽屉的汉堡按钮,所以保留
   // 带菜单入口的空态,否则没项目的手机会被困在一个开不了抽屉的页面上。
-  if (activeTab === 'dashboard' || (!isLoading && !selectedProject && !isMobile)) {
+  // fleet / missions 不绑项目也能用。主控台仍是「没项目时」的落点,但不能
+  // 把这两处入口吞回仪表盘。
+  if (activeTab === 'fleet') {
+    return (
+      <div className="leocodebox-workspace-enter h-full overflow-hidden">
+        <ErrorBoundary showDetails>
+          <FleetView />
+        </ErrorBoundary>
+      </div>
+    );
+  }
+
+  if (activeTab === 'dashboard' || (!isLoading && !selectedProject && !isMobile && activeTab !== 'missions')) {
     return (
       <div className="leocodebox-workspace-enter h-full overflow-hidden">
         <ErrorBoundary showDetails>
@@ -196,16 +208,6 @@ function MainContent({
               onStartTask={onStartConsoleTask}
             />
           </React.Suspense>
-        </ErrorBoundary>
-      </div>
-    );
-  }
-
-  if (activeTab === 'fleet') {
-    return (
-      <div className="leocodebox-workspace-enter h-full overflow-hidden">
-        <ErrorBoundary showDetails>
-          <FleetView />
         </ErrorBoundary>
       </div>
     );

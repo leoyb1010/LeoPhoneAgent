@@ -33,7 +33,7 @@ export type OpenMissionSession = (opts: {
 }) => void;
 
 type MissionsViewProps = {
-  selectedProject: Project;
+  selectedProject: Project | null;
   onOpenMissionSession?: OpenMissionSession;
 };
 
@@ -46,7 +46,7 @@ const COLUMNS: { status: MissionStatus; labelKey: string; label: string }[] = [
 
 export default function MissionsView({ selectedProject, onOpenMissionSession }: MissionsViewProps) {
   const { t } = useTranslation('chat');
-  const projectPath = selectedProject.fullPath || selectedProject.path || '';
+  const projectPath = selectedProject?.fullPath || selectedProject?.path || '';
   const [cards, setCards] = useState<MissionCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);

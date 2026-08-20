@@ -344,17 +344,7 @@ function abortCursorSession(sessionId: string): boolean {
   return false;
 }
 
-function isCursorSessionActive(sessionId: string): boolean {
-  return activeCursorProcesses.has(sessionId);
-}
-
-function getActiveCursorSessions(): string[] {
-  return Array.from(activeCursorProcesses.keys());
-}
-
 export {
   spawnCursor,
   abortCursorSession,
-  isCursorSessionActive,
-  getActiveCursorSessions
 };

@@ -4,7 +4,13 @@ import { useTranslation } from 'react-i18next';
 
 import { apiClient } from '../../utils/apiClient';
 
-import { describeRemoteEvent, readRemoteSse, type RemoteLogLine } from './remoteSessionEvents';
+import {
+  applyApprovalFrame,
+  describeRemoteEvent,
+  readRemoteSse,
+  type PendingApproval,
+  type RemoteLogLine,
+} from './remoteSessionEvents';
 
 export type RemoteTarget = { machine: string; sessionId: string; harness?: string };
 
@@ -12,9 +18,6 @@ type RemoteSessionPanelProps = {
   target: RemoteTarget;
   onClose: () => void;
 };
-
-/** 待答复的审批。choices 由远端方言给出,标签沿用舰队视图的中文映射。 */
-type PendingApproval = { approvalId: string; command: string; choices: string[] };
 
 function approvalChoiceLabel(choice: string): string {
   const normalized = choice.toLowerCase();
@@ -35,7 +38,8 @@ function approvalChoiceLabel(choice: string): string {
 export default function RemoteSessionPanel({ target, onClose }: RemoteSessionPanelProps) {
   const { t } = useTranslation();
   const [lines, setLines] = useState<RemoteLogLine[]>([]);
-  const [approval, setApproval] = useState<PendingApproval | null>(null);
+  const [approvals, setApprovals] = useState<PendingApproval[]>([]);
+  const approval = approvals[0] ?? null;
   const [connected, setConnected] = useState(false);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
@@ -49,7 +53,7 @@ export default function RemoteSessionPanel({ target, onClose }: RemoteSessionPan
     let closed = false;
     lastSeqRef.current = 0;
     setLines([]);
-    setApproval(null);
+    setApprovals([]);
     setConnected(false);
     setDraft('');
     setError('');
@@ -69,14 +73,7 @@ export default function RemoteSessionPanel({ target, onClose }: RemoteSessionPan
           const seq = Number(frame.seq ?? 0);
           if (seq > 0 && seq <= lastSeqRef.current) return;
           if (seq > lastSeqRef.current) lastSeqRef.current = seq;
-          if (String(frame.event) === 'approval.request') {
-            setApproval({
-              approvalId: String(frame.approval_id ?? frame.approvalId ?? ''),
-              command: String(frame.command ?? ''),
-              choices: Array.isArray(frame.choices) ? frame.choices.map(String) : ['once', 'always', 'deny'],
-            });
-          }
-          if (String(frame.event) === 'approval.responded') setApproval(null);
+          setApprovals((current) => applyApprovalFrame(current, frame));
           const line = describeRemoteEvent(frame);
           if (line) setLines((previous) => previous.concat(line).slice(-400));
         });
@@ -112,7 +109,7 @@ export default function RemoteSessionPanel({ target, onClose }: RemoteSessionPan
         approval_id: approval.approvalId,
         choice,
       });
-      setApproval(null);
+      setApprovals((current) => current.filter((item) => item.approvalId !== approval.approvalId));
     } catch (error) {
       setError(error instanceof Error ? error.message : '审批发送失败');
     } finally {

@@ -561,6 +561,17 @@ function registerIpcHandlers() {
   trustedHandle('leocodebox-desktop:switch-tab', async (_event, tabId) => desktopWindow.switchDesktopTab(tabId));
   trustedHandle('leocodebox-desktop:close-tab', async (_event, tabId) => desktopWindow.closeDesktopTab(tabId));
   trustedHandle('leocodebox-desktop:update-setting', async (_event, key, value) => updateDesktopSetting(key, value));
+  // Cloud IPC channels stay registered so older launcher pages and preload
+  // wrappers do not throw "No handler registered". Local-only mode is a no-op.
+  const disabledCloudIpc = async () => getDesktopState();
+  trustedHandle('leocodebox-desktop:connect-cloud', disabledCloudIpc);
+  trustedHandle('leocodebox-desktop:disconnect-cloud', disabledCloudIpc);
+  trustedHandle('leocodebox-desktop:open-cloud-dashboard', disabledCloudIpc);
+  trustedHandle('leocodebox-desktop:open-environment', disabledCloudIpc);
+  trustedHandle('leocodebox-desktop:run-active-environment-action', disabledCloudIpc);
+  trustedHandle('leocodebox-desktop:refresh-environments', disabledCloudIpc);
+  trustedHandle('leocodebox-desktop:show-active-environment-actions-menu', disabledCloudIpc);
+  trustedHandle('leocodebox-desktop:show-environment-actions-menu', disabledCloudIpc);
   ipcMain.handle('leocodebox-desktop:update-get-state', (event) => {
     requireTrustedLocalIpcSender(event);
     return desktopUpdater.getState();

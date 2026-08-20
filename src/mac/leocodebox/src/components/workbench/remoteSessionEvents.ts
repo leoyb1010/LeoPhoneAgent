@@ -1,5 +1,30 @@
 export type RemoteLogLine = { seq: number; text: string; tone: 'info' | 'warn' | 'approval' };
 
+export type PendingApproval = { approvalId: string; command: string; choices: string[] };
+
+/** 按 approval_id 维护待批队列:并发两条时答一条不能把另一条卡片清掉。 */
+export function applyApprovalFrame(
+  pending: PendingApproval[],
+  frame: Record<string, unknown>,
+): PendingApproval[] {
+  const type = String(frame.event ?? '');
+  const approvalId = String(frame.approval_id ?? frame.approvalId ?? '');
+  if (type === 'approval.request') {
+    if (!approvalId) return pending;
+    const next = pending.filter((item) => item.approvalId !== approvalId);
+    next.push({
+      approvalId,
+      command: String(frame.command ?? ''),
+      choices: Array.isArray(frame.choices) ? frame.choices.map(String) : ['once', 'always', 'deny'],
+    });
+    return next;
+  }
+  if (type === 'approval.responded' && approvalId) {
+    return pending.filter((item) => item.approvalId !== approvalId);
+  }
+  return pending;
+}
+
 export function describeRemoteEvent(frame: Record<string, unknown>): RemoteLogLine | null {
   const seq = Number(frame.seq ?? 0);
   const type = String(frame.event ?? '');

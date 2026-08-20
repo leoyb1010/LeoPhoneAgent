@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { describeRemoteEvent, readRemoteSse } from './remoteSessionEvents';
+import { applyApprovalFrame, describeRemoteEvent, readRemoteSse } from './remoteSessionEvents';
 
 test('remote event parser follows the harness event contract', () => {
   assert.deepEqual(
@@ -29,4 +29,17 @@ test('authenticated fetch SSE reader handles split frames and skips malformed JS
   await readRemoteSse(stream, (frame) => frames.push(frame));
   assert.deepEqual(frames.map((frame) => frame.event), ['message.delta', 'run.completed']);
   assert.deepEqual(frames.map((frame) => frame.seq), [1, 2]);
+});
+
+test('answering one approval does not drop a second pending request', () => {
+  const first = applyApprovalFrame([], {
+    event: 'approval.request', approval_id: 'ap_1', command: 'rm a', choices: ['once', 'deny'],
+  });
+  const both = applyApprovalFrame(first, {
+    event: 'approval.request', approval_id: 'ap_2', command: 'rm b', choices: ['once', 'deny'],
+  });
+  assert.deepEqual(both.map((item) => item.approvalId), ['ap_1', 'ap_2']);
+  const remaining = applyApprovalFrame(both, { event: 'approval.responded', approval_id: 'ap_1' });
+  assert.deepEqual(remaining.map((item) => item.approvalId), ['ap_2']);
+  assert.equal(remaining[0]?.command, 'rm b');
 });

@@ -12,7 +12,8 @@ import {
 } from './harness-dialects.js';
 import { buildDigest, buildReceipt, isTerminal } from './harness-digest.service.js';
 import { listArtifacts, readArtifact } from './harness-artifacts.service.js';
-import { HarnessManager, HarnessSession } from './harness-session.service.js';
+import { HarnessManager, HarnessSession, isLiveHarnessStatus } from './harness-session.service.js';
+import { buildRemoteCreateBody, parseEventsAfter } from './fleet.routes.js';
 import { HARNESSES, type HarnessSpec } from './harness-specs.js';
 
 // 协议保真是本模块的全部意义:手机端(LeoAgentHarness.swift)按字段名
@@ -273,6 +274,57 @@ test('session subscribe: replay-then-follow without gap or repeat; terminal even
 
   // after=1 → 回放 2,实时 3、4(run.cancelled)后流结束
   assert.deepEqual(seen, [2, 3, 4]);
+});
+
+test('stop emits run.cancelled immediately and rejects later steer', async () => {
+  const session = new HarnessSession({
+    sessionId: 'hs_stop', spec: FAKE_SPEC, cwd: '/tmp', logPath: tempLog(),
+  });
+  session.emit({ event: 'session.created', harness: 'claude', name: 'Claude Code', cwd: '/tmp' });
+  session.status = 'running';
+
+  const seen: string[] = [];
+  const consumer = (async () => {
+    for await (const event of session.subscribe(0)) {
+      seen.push(String(event.event));
+    }
+  })();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  await session.stop();
+  await consumer;
+
+  assert.equal(session.status, 'cancelled');
+  assert.ok(seen.includes('run.cancelled'));
+  assert.equal(isLiveHarnessStatus(session.status), false);
+  await assert.rejects(() => session.send('steer after stop'), /not running/);
+  // 二次 stop 必须幂等,不能再写一条 cancelled
+  await session.stop();
+  assert.equal(session.replay(0).filter((event) => event.event === 'run.cancelled').length, 1);
+});
+
+test('stop on an already-completed session does not rewrite the outcome', async () => {
+  const session = new HarnessSession({
+    sessionId: 'hs_done', spec: FAKE_SPEC, cwd: '/tmp', logPath: tempLog(),
+  });
+  session.status = 'completed';
+  session.emit({ event: 'run.completed', output: 'ok', usage: {} });
+  await session.stop();
+  assert.equal(session.status, 'completed');
+  assert.equal(session.replay(0).some((event) => event.event === 'run.cancelled'), false);
+});
+
+test('fleet helpers: after=N and minis create body drop Mac cwd', () => {
+  assert.equal(parseEventsAfter('7'), 7);
+  assert.equal(parseEventsAfter('-1'), 0);
+  assert.equal(parseEventsAfter('nope'), 0);
+  assert.deepEqual(
+    buildRemoteCreateBody({ harness: 'minis', cwd: '/Users/leo/proj', thinking: 'high' }, 'go'),
+    { harness: 'minis', prompt: 'go', thinking: 'high' },
+  );
+  assert.deepEqual(
+    buildRemoteCreateBody({ harness: 'claude', cwd: '/tmp/proj' }, 'go'),
+    { harness: 'claude', prompt: 'go', cwd: '/tmp/proj' },
+  );
 });
 
 test('manager rehydrate: previous-boot logs surface as orphaned sessions with exact seq', () => {

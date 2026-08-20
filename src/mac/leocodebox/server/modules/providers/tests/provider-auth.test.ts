@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { resolveCursorPermissionArgs } from '../list/cursor/cursor-runtime.js';
+import { mapPermissionModeToCodexOptions } from '../list/codex/codex-runtime.js';
 import type { CliCommandRunner } from '../services/cli-version.util.js';
 import {
   ClaudeProviderAuth,
@@ -169,4 +170,13 @@ test('maps every advertised Cursor permission mode to a real CLI control', () =>
   assert.deepEqual(resolveCursorPermissionArgs('plan'), ['--plan']);
   assert.deepEqual(resolveCursorPermissionArgs('acceptEdits'), ['--auto-review']);
   assert.deepEqual(resolveCursorPermissionArgs('bypassPermissions'), ['-f']);
+});
+
+test('Codex acceptEdits auto-allows workspace writes but still asks for commands', () => {
+  assert.deepEqual(mapPermissionModeToCodexOptions('acceptEdits'), {
+    sandboxMode: 'workspace-write',
+    approvalPolicy: 'on-request',
+  });
+  assert.equal(mapPermissionModeToCodexOptions('default').approvalPolicy, 'untrusted');
+  assert.equal(mapPermissionModeToCodexOptions('bypassPermissions').approvalPolicy, 'never');
 });

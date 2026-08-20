@@ -362,18 +362,15 @@ router.post('/', validateExternalApiKey, async (req, res) => {
   const createBranch = branchName ? true : (req.body.createBranch === true || req.body.createBranch === 'true');
   const createPR = req.body.createPR === true || req.body.createPR === 'true';
 
-  // Permission mode for the headless run. A caller may explicitly request any
-  // allowed mode (including bypassPermissions when they knowingly need it), but
-  // when none is specified we fall back to acceptEdits rather than a full
-  // permission bypass: acceptEdits keeps file edits flowing without an
-  // interactive prompt (which would hang a headless run) while still refusing
-  // unbounded, unreviewed actions by default. ALLOWED_PERMISSION_MODES is
-  // unchanged so explicit bypassPermissions requests still work.
+  // Permission mode for the headless run. Omit → default-ask (files and
+  // commands both prompt), matching the desktop CommandBar contract. Callers
+  // that need unattended file edits must send permissionMode: 'acceptEdits'
+  // explicitly; 'auto' is not a Claude/Codex SDK mode so it is rejected.
   const ALLOWED_PERMISSION_MODES = new Set(['default', 'plan', 'acceptEdits', 'bypassPermissions']);
   const requestedPermissionMode = typeof req.body.permissionMode === 'string' ? req.body.permissionMode.trim() : '';
   const permissionMode = ALLOWED_PERMISSION_MODES.has(requestedPermissionMode)
     ? requestedPermissionMode
-    : 'acceptEdits';
+    : 'default';
   const skipPermissions = permissionMode === 'bypassPermissions';
 
   // Validate inputs
@@ -488,7 +485,7 @@ router.post('/', validateExternalApiKey, async (req, res) => {
         sessionId: sessionId || null,
         model: model,
         effort,
-        permissionMode // Defaults to bypassPermissions for headless; caller-overridable
+        permissionMode
       }, writer);
 
     } else if (provider === 'cursor') {
@@ -499,7 +496,8 @@ router.post('/', validateExternalApiKey, async (req, res) => {
         cwd: finalProjectPath!,
         sessionId: sessionId || null,
         model: model || undefined,
-        skipPermissions // Bypass permissions for Cursor unless caller chose a safer mode
+        permissionMode,
+        skipPermissions
       }, writer);
     } else if (provider === 'codex') {
       logger.info('🤖 Starting Codex SDK session');
@@ -521,7 +519,7 @@ router.post('/', validateExternalApiKey, async (req, res) => {
         sessionId: sessionId || null,
         model: model || opencodeModels.DEFAULT,
         effort,
-        permissionMode // Defaults to bypassPermissions for headless; caller-overridable
+        permissionMode
       }, writer);
     } else if (provider === 'grok') {
       logger.info('Starting Grok Build CLI session');
@@ -532,7 +530,7 @@ router.post('/', validateExternalApiKey, async (req, res) => {
         sessionId: sessionId || null,
         model: model || undefined,
         effort,
-        permissionMode // Defaults to bypassPermissions for headless; caller-overridable
+        permissionMode
       }, writer);
     }
 

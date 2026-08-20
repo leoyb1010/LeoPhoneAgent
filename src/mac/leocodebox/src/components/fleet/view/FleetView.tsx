@@ -43,10 +43,9 @@ type Approval = {
 
 const POLL_MS = 15_000;
 const RELAY_CONFIG_PATH = '~/.leoagent/relay.json';
-const RELAY_API_ROOT = 'https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api';
 
-function encodePair(machine: string): string {
-  return `leoagent-body:v1|${JSON.stringify({ apiRoot: RELAY_API_ROOT, machine })}`;
+function encodePair(apiRoot: string, machine: string): string {
+  return `leoagent-body:v1|${JSON.stringify({ apiRoot, machine })}`;
 }
 
 function approvalChoiceLabel(choice: string): string {
@@ -101,6 +100,7 @@ export default function FleetView() {
   const [busy, setBusy] = useState<Map<string, string>>(() => new Map());
   const [copied, setCopied] = useState(false);
   const [copiedPair, setCopiedPair] = useState<string | null>(null);
+  const [relayApiRoot, setRelayApiRoot] = useState('');
   const inFlight = useRef(false);
   const hasLoaded = useRef(false);
   const busyApprovals = useRef(new Set<string>());
@@ -111,13 +111,14 @@ export default function FleetView() {
     if (hasLoaded.current) setRefreshing(true);
     try {
       const [fleetResult, pendingResult] = await Promise.allSettled([
-        apiClient.get<{ configured?: boolean; machines?: Machine[] }>('/api/leophone/fleet'),
+        apiClient.get<{ configured?: boolean; machines?: Machine[]; relayApiRoot?: string }>('/api/leophone/fleet'),
         apiClient.get<{ approvals?: Approval[] }>('/api/leophone/approvals'),
       ]);
       const failures: string[] = [];
       if (fleetResult.status === 'fulfilled') {
         setConfigured(fleetResult.value?.configured !== false);
         setMachines(fleetResult.value?.machines ?? []);
+        if (typeof fleetResult.value?.relayApiRoot === 'string') setRelayApiRoot(fleetResult.value.relayApiRoot);
       } else {
         failures.push(`Mac 状态：${fleetResult.reason instanceof Error ? fleetResult.reason.message : '读取失败'}`);
       }
@@ -193,8 +194,12 @@ export default function FleetView() {
   };
 
   const copyPair = async (machine: string) => {
+    if (!relayApiRoot) {
+      setError('中继地址未知，请先确认 ~/.leoagent/relay.json 已配置');
+      return;
+    }
     try {
-      await navigator.clipboard.writeText(encodePair(machine));
+      await navigator.clipboard.writeText(encodePair(relayApiRoot, machine));
       setCopiedPair(machine);
       window.setTimeout(() => setCopiedPair(null), 1800);
     } catch {
@@ -220,9 +225,9 @@ export default function FleetView() {
               </span>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">LeoPhoneAgent · 跨端执行</p>
-                <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-foreground">我的 Mac</h1>
+                <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-foreground">我的机器</h1>
                 <p className="mt-1 max-w-[680px] text-sm leading-6 text-muted-foreground">
-                  这里只管理三台 Mac 的任务、待审批操作与手机收藏。iPhone 本身可以独立完成工作；只有主动选择 Mac 的任务才会出现在这里。
+                  这里管理舰队里的 Mac 与作为身体的 Android / 鸿蒙：进行中的任务、待审批操作，以及手机收藏镜像。
                 </p>
               </div>
             </div>
@@ -240,7 +245,7 @@ export default function FleetView() {
 
           <div className="mt-5 grid gap-2.5 sm:grid-cols-3">
             <div className="rounded-xl bg-secondary/65 px-4 py-3">
-              <p className="text-xs text-muted-foreground">在线 Mac</p>
+              <p className="text-xs text-muted-foreground">在线机器</p>
               <p className="mt-1 text-xl font-semibold text-foreground">{onlineCount} / {machines.length}</p>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-border/70" aria-hidden="true">
                 <div className="leo-elastic-progress h-full rounded-full bg-success" style={{ width: `${onlineProgress}%` }} />
@@ -272,7 +277,7 @@ export default function FleetView() {
                 <LoaderCircle className="h-5 w-5 animate-spin" />
               </span>
               <div>
-                <h2 className="text-base font-semibold text-foreground">正在同步三台 Mac</h2>
+                <h2 className="text-base font-semibold text-foreground">正在同步舰队</h2>
                 <p className="mt-0.5 text-sm text-muted-foreground">读取在线状态、进行中任务和待审批操作。</p>
               </div>
             </div>
@@ -307,7 +312,7 @@ export default function FleetView() {
                   </span>
                   <div>
                     <h2 className="text-base font-semibold text-foreground">审批 · {approvals.length}</h2>
-                    <p className="text-xs text-muted-foreground">批准或拒绝后，结果会立即送回对应 Mac。</p>
+                    <p className="text-xs text-muted-foreground">批准或拒绝后，结果会立即送回对应机器。</p>
                   </div>
                 </div>
                 <div className="mt-4 space-y-3">
