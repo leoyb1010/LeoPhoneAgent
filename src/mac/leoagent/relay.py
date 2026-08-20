@@ -176,6 +176,16 @@ class Relay:
                     if fut is not None and not fut.done():
                         fut.set_result(frame)
 
+                elif kind == "stream_keepalive":
+                    # Mac 转过来的 SSE 注释帧。它只为保活,丢一两个无所谓,
+                    # 绝不能因为它把队列挤满而触发下面的"慢消费者关流"。
+                    queue = machine.streams.get(str(frame.get("id")))
+                    if queue is not None:
+                        try:
+                            queue.put_nowait(frame)
+                        except asyncio.QueueFull:
+                            pass
+
                 elif kind in ("stream_data", "stream_close"):
                     queue = machine.streams.get(str(frame.get("id")))
                     if queue is not None:
@@ -396,8 +406,12 @@ class Relay:
     async def list_machines(self, request: web.Request) -> web.Response:
         if not self._authorized(request):
             return self._unauthorized()
+        # info 是**注册方**给的,必须先展开、再由中继的权威字段覆盖它。
+        # 反过来写(固定字段在前)的话,一台机器只要在 info 里带个 name,
+        # 列表里显示的名字就和真正的路由 key 不一致 —— 配对码里塞的是那个
+        # 假名字,手机拿着它去 /m/{name}/... 永远路由不到。
         return web.json_response({"machines": [
-            {"name": m.name, "online": True, "connected_at": m.connected_at, **m.info}
+            {**m.info, "name": m.name, "online": True, "connected_at": m.connected_at}
             for m in self.machines.values()
         ]})
 
@@ -426,7 +440,7 @@ class Relay:
             except Exception:  # noqa: BLE001
                 body = None
         request_id = uuid.uuid4().hex
-        fut: asyncio.Future = asyncio.get_event_loop().create_future()
+        fut: asyncio.Future = asyncio.get_running_loop().create_future()
         machine.pending[request_id] = fut
         await machine.ws.send_json({"type": "http", "id": request_id,
                                     "method": request.method, "path": tail,
@@ -456,6 +470,11 @@ class Relay:
                 frame = await queue.get()
                 if frame.get("type") == "stream_close":
                     break
+                if frame.get("type") == "stream_keepalive":
+                    # SSE 注释帧:客户端(iOS / 中继 / 网页)都只认 `data:` 前缀,
+                    # 会安全跳过它,但它足以让中间的代理和 NAT 知道这条连接还活着。
+                    await response.write(b": keep-alive\n\n")
+                    continue
                 data = frame.get("data")
                 if data:
                     await response.write(f"data: {data}\n\n".encode("utf-8"))
@@ -463,9 +482,16 @@ class Relay:
             pass  # 手机走了;通知 Mac 停推
         finally:
             machine.streams.pop(stream_id, None)
+            # 手机断开时 aiohttp 是**取消**这个 handler 任务的,于是这里的
+            # await 会立刻抛 CancelledError —— 而 `except Exception` 接不住它
+            # (CancelledError 在 3.8+ 直接继承 BaseException)。结果就是
+            # stream_cancel 根本发不出去:Mac 那边的上游连接没人叫停,一直挂着
+            # 读到 sock_read 超时为止。shield 让这次发送独立于本任务的取消跑完,
+            # 外层的 BaseException 只是把"本任务已被取消"这件事咽掉。
             try:
-                await machine.ws.send_json({"type": "stream_cancel", "id": stream_id})
-            except Exception:  # noqa: BLE001
+                await asyncio.shield(
+                    machine.ws.send_json({"type": "stream_cancel", "id": stream_id}))
+            except BaseException:  # noqa: BLE001
                 pass
         return response
 

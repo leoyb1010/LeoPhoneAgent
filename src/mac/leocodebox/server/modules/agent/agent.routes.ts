@@ -369,6 +369,12 @@ router.post('/', validateExternalApiKey, async (req, res) => {
   // interactive prompt (which would hang a headless run) while still refusing
   // unbounded, unreviewed actions by default. ALLOWED_PERMISSION_MODES is
   // unchanged so explicit bypassPermissions requests still work.
+  //
+  // 千万别改成 'default':审批的唯一回传通道是 WebSocket
+  // (chat-websocket.service.ts 的 resolveToolApproval),而 POST /api/agent
+  // 走的是 SSE / ResponseCollector,压根没有回传通道。'default' 下每次文件
+  // 编辑都会挂在 claude-runtime 的 55 秒审批超时上,然后被判 deny——headless
+  // 任务表面上"跑完了",实际一个字都没改。
   const ALLOWED_PERMISSION_MODES = new Set(['default', 'plan', 'acceptEdits', 'bypassPermissions']);
   const requestedPermissionMode = typeof req.body.permissionMode === 'string' ? req.body.permissionMode.trim() : '';
   const permissionMode = ALLOWED_PERMISSION_MODES.has(requestedPermissionMode)
@@ -488,7 +494,7 @@ router.post('/', validateExternalApiKey, async (req, res) => {
         sessionId: sessionId || null,
         model: model,
         effort,
-        permissionMode // Defaults to bypassPermissions for headless; caller-overridable
+        permissionMode
       }, writer);
 
     } else if (provider === 'cursor') {
@@ -499,7 +505,8 @@ router.post('/', validateExternalApiKey, async (req, res) => {
         cwd: finalProjectPath!,
         sessionId: sessionId || null,
         model: model || undefined,
-        skipPermissions // Bypass permissions for Cursor unless caller chose a safer mode
+        permissionMode,
+        skipPermissions
       }, writer);
     } else if (provider === 'codex') {
       logger.info('🤖 Starting Codex SDK session');
@@ -521,7 +528,7 @@ router.post('/', validateExternalApiKey, async (req, res) => {
         sessionId: sessionId || null,
         model: model || opencodeModels.DEFAULT,
         effort,
-        permissionMode // Defaults to bypassPermissions for headless; caller-overridable
+        permissionMode
       }, writer);
     } else if (provider === 'grok') {
       logger.info('Starting Grok Build CLI session');
@@ -532,7 +539,7 @@ router.post('/', validateExternalApiKey, async (req, res) => {
         sessionId: sessionId || null,
         model: model || undefined,
         effort,
-        permissionMode // Defaults to bypassPermissions for headless; caller-overridable
+        permissionMode
       }, writer);
     }
 

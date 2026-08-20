@@ -223,7 +223,19 @@ export class DesktopUpdaterController {
     }
 
     this.setState({ status: 'installing', error: null });
-    await beforeInstall?.();
+    try {
+      await beforeInstall?.();
+    } catch (error) {
+      // beforeInstall 会停本机服务;它一抛异常,quitAndInstall 就永远不会执行。
+      // 旧代码不接这个异常,状态就永久停在 'installing':界面一直显示"正在
+      // 安装",而 UI 只在 'downloaded' 时给「重启并安装」按钮,用户既装不上
+      // 也点不了重试。退回 'downloaded' 并把原因写进 error,按钮就还在。
+      this.setState({
+        status: 'downloaded',
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
     this.updater.quitAndInstall(false, true);
   }
 

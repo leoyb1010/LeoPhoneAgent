@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { LocalServerController } from './localServer.js';
+import { LocalServerController, terminateStaleServer } from './localServer.js';
 
 async function makeScratchDir() {
   return fs.mkdtemp(path.join(os.tmpdir(), 'leocodebox-localserver-test-'));
@@ -258,4 +258,44 @@ test('stopLocalServer leaves an unrelated server alone', async (t) => {
   await controller.stopLocalServer();
 
   assert.doesNotThrow(() => process.kill(bystander.pid, 0), '端口对不上的服务不该被停掉');
+});
+
+function pidAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+test('terminateStaleServer takes down the whole process group, not just the leader', { skip: process.platform === 'win32' }, async () => {
+  // 组长 + 一个后台孙子进程,正好复现真实形态:leocodebox server 会自己拉
+  // npm/tsx/CLI。旧实现只 SIGTERM 组长,孙子进程会被 init 收养后继续跑,
+  // 下次启动又被"接管",看起来就像退出后服务自己重启了。
+  //
+  // 孙子进程的 stdout 指向 /dev/null,组长报完 pid 就关掉自己的 stdout:
+  // 否则那根管子会一直被某个后代握着,node --test 要等它关闭才肯退出。
+  const leader = spawn('/bin/sh', ['-c', 'sleep 30 >/dev/null 2>&1 & echo $!; exec 1>&-; sleep 30'], {
+    detached: true,
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+  const grandchildPid = await new Promise((resolve, reject) => {
+    leader.stdout.once('data', (chunk) => resolve(Number(String(chunk).trim())));
+    leader.once('error', reject);
+  });
+  leader.stdout.destroy();
+  assert.ok(Number.isInteger(grandchildPid) && grandchildPid > 1);
+  assert.equal(pidAlive(grandchildPid), true);
+
+  const exited = new Promise((resolve) => leader.once('exit', resolve));
+  await terminateStaleServer(leader.pid);
+  await exited;
+
+  assert.equal(pidAlive(grandchildPid), false);
+});
+
+test('terminateStaleServer is a no-op for a pid that is already gone', async () => {
+  await terminateStaleServer(0);
+  await terminateStaleServer(-1);
 });

@@ -27,6 +27,7 @@ test('legacy migration unloads and preserves the old plist as a disabled backup'
   const calls = [];
 
   const result = await disableConflictingLegacyLaunchAgent({
+    platform: 'darwin',
     homeDir,
     uid: 501,
     execFileImpl: async (command, args) => { calls.push([command, args]); },

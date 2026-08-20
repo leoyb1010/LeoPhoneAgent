@@ -274,8 +274,4 @@ function abortGrokSession(sessionId: string): boolean {
   return false;
 }
 
-function isGrokSessionActive(sessionId: string): boolean {
-  return activeGrokProcesses.has(sessionId);
-}
-
-export { spawnGrok, abortGrokSession, isGrokSessionActive };
+export { spawnGrok, abortGrokSession };

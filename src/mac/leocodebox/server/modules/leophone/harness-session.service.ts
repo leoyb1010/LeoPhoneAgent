@@ -70,8 +70,14 @@ function pushHarnessEvent(event: Record<string, unknown>): void {
   eventSink?.(event);
 }
 const MAX_LIVE_SESSIONS = 16;
-const LIVE_STATUSES = new Set(['starting', 'running', 'idle', 'waiting_for_approval']);
+/** 进程仍在、可续聊或可审批。`idle` 是 stream-json 回合结束后的活会话,不是终态。 */
+export const LIVE_HARNESS_STATUSES = ['starting', 'running', 'idle', 'waiting_for_approval'] as const;
+const LIVE_STATUSES = new Set<string>(LIVE_HARNESS_STATUSES);
 const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled', 'orphaned']);
+
+export function isLiveHarnessStatus(status: string): boolean {
+  return LIVE_STATUSES.has(status);
+}
 
 function expandUser(input: string): string {
   return input.replace(/^~(?=$|\/)/, os.homedir());
@@ -285,6 +291,11 @@ export class HarnessSession {
       cwd: this.cwd,
       env: env as NodeJS.ProcessEnv,
       stdio: ['pipe', 'pipe', 'pipe'],
+      // 自成进程组。托管的 CLI 会自己拉 `npm test`、dev server 这类长命子进程;
+      // 只 kill 组长的话它们全变孤儿继续跑(还继续占端口),而这边的状态早已
+      // 写成 cancelled。detached + kill(-pid) 是同仓 electron/localServer.js
+      // 收本机服务时用的同一套做法。
+      detached: process.platform !== 'win32',
     });
     this.proc = proc;
 
@@ -362,7 +373,7 @@ export class HarnessSession {
     if (this.spec.promptInArgs) {
       throw new Error(`${this.spec.displayName} remote sessions are one-shot; start a new task to continue`);
     }
-    if (!this.proc || !this.proc.stdin || this.proc.stdin.destroyed || this.proc.exitCode !== null) {
+    if (!this.isLive || !this.proc || !this.proc.stdin || this.proc.stdin.destroyed || this.proc.exitCode !== null) {
       throw new Error('session is not running');
     }
     const result = this.dialect.userMessage(text);
@@ -391,7 +402,7 @@ export class HarnessSession {
       resolvedId = first[0];
       pending = first[1];
     }
-    if (!pending || !this.proc || !this.proc.stdin || this.proc.stdin.destroyed) return false;
+    if (!pending || !this.isLive || !this.proc || !this.proc.stdin || this.proc.stdin.destroyed) return false;
     const payload = this.dialect.approvalPayload(pending, choice);
     // 铸造的 id 客户端可寻址,但路由不回 CLI;假装可以只会清掉卡片而让
     // CLI 干等(approvalPayload 对缺 request_id 的 pending 返回 null)。
@@ -401,43 +412,61 @@ export class HarnessSession {
     return true;
   }
 
-  async stop(): Promise<void> {
+  /**
+   * 杀整个进程组,而不是只杀组长。
+   *
+   * CLI 自己会拉起 `npm test`、dev server 之类的长命子进程。旧实现只对
+   * `this.proc.pid` 发信号,组长一走那些孙子进程就成了孤儿,继续跑、继续占端口,
+   * 而这边的会话状态已经写成 cancelled —— 用户点了「停止」,机器上却什么都没停。
+   * `spawn(..., { detached: true })` 让 pid 同时是组 id,这里用 `-pid` 一次收干净。
+   */
+  private killProcessGroup(signal: NodeJS.Signals): void {
     const proc = this.proc;
-    if (!proc) return;
-    this.status = 'cancelled';
-    if (proc.exitCode === null) {
+    if (!proc?.pid) return;
+    if (process.platform === 'win32') {
       try {
-        proc.kill('SIGTERM');
+        proc.kill(signal);
       } catch {
         // already gone
       }
-      // 有清理逻辑的 CLI 可能无视 SIGTERM;不补刀的话状态写着 cancelled
-      // 而进程永远跑下去。
-      const exited = await new Promise<boolean>((resolve) => {
-        const timer = setTimeout(() => resolve(false), 5000);
-        proc.once('close', () => { clearTimeout(timer); resolve(true); });
-      });
-      if (!exited) {
-        try {
-          proc.kill('SIGKILL');
-        } catch {
-          // already gone
-        }
+      return;
+    }
+    try {
+      process.kill(-proc.pid, signal);
+    } catch {
+      // ESRCH:组已经没了;或者这个 pid 压根不是组长(win32 之外理论上不该
+      // 发生,但别让它变成"漏杀")—— 退回单 pid 再来一次。
+      try {
+        proc.kill(signal);
+      } catch {
+        // already gone
       }
     }
-    this.emit({ event: EVENT_RUN_CANCELLED });
   }
 
-  /** 进程级兜底:daemon 收到终止信号时同步补刀,绝不留孤儿 CLI。 */
+  async stop(): Promise<void> {
+    if (TERMINAL_STATUSES.has(this.status)) return;
+    // 先落盘 cancelled 再等进程退出:否则这 5 秒窗口里 status 已是终态,
+    // 新 SSE 订阅会回放完就关流,永远看不到 run.cancelled;同时 send/steer
+    // 仍能写进正在被杀掉的 stdin。
+    this.status = 'cancelled';
+    this.emit({ event: EVENT_RUN_CANCELLED });
+    const proc = this.proc;
+    if (!proc || proc.exitCode !== null) return;
+    this.killProcessGroup('SIGTERM');
+    // 有清理逻辑的 CLI 可能无视 SIGTERM;不补刀的话状态写着 cancelled
+    // 而进程永远跑下去。
+    const exited = await new Promise<boolean>((resolve) => {
+      const timer = setTimeout(() => resolve(false), 5000);
+      proc.once('close', () => { clearTimeout(timer); resolve(true); });
+    });
+    if (!exited) this.killProcessGroup('SIGKILL');
+  }
+
+  /** 进程级兜底:daemon 收到终止信号时同步补刀,绝不留孤儿 CLI(含孙子进程)。 */
   killSync(): void {
     const proc = this.proc;
-    if (proc && proc.exitCode === null) {
-      try {
-        proc.kill('SIGTERM');
-      } catch {
-        // already gone
-      }
-    }
+    if (proc && proc.exitCode === null) this.killProcessGroup('SIGTERM');
   }
 
   summary(): Record<string, unknown> {

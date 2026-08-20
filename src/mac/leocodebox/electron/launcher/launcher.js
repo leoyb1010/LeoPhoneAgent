@@ -36,18 +36,6 @@ window.__MOCK_STATE__ = {
     },
     copyLocalWebUrl: function () { return Promise.resolve(clone(mockState)); },
     openSwitch: function () { return Promise.resolve(clone(mockState)); },
-	    connectCloud: function () {
-	      return Promise.resolve(clone(mockState));
-	    },
-    disconnectCloud: function () {
-      mockState.account = { connected: false, email: null };
-      mockState.environments = [];
-      mockState.tabs = (mockState.tabs || []).filter(function (tab) { return tab.kind !== 'remote'; });
-      mockState.activeTabId = 'home';
-      mockState.activeTarget = { kind: 'launcher', name: '启动台', url: null };
-      return Promise.resolve(clone(mockState));
-    },
-    refreshEnvironments: function () { return Promise.resolve(clone(mockState)); },
     refreshActiveTab: function () { return Promise.resolve(clone(mockState)); },
     copyDiagnostics: function () { return Promise.resolve(clone(mockState)); },
     showEnvironmentPicker: function () { return Promise.resolve(clone(mockState)); },
@@ -55,9 +43,6 @@ window.__MOCK_STATE__ = {
     showLocalSettings: function () { return Promise.resolve(clone(mockState)); },
     showDesktopSettings: function () { return Promise.resolve(clone(mockState)); },
     closeSettingsWindow: function () { return Promise.resolve(clone(mockState)); },
-    showActiveEnvironmentActionsMenu: function () { return Promise.resolve(clone(mockState)); },
-    openCloudDashboard: function () { return Promise.resolve(clone(mockState)); },
-    runActiveEnvironmentAction: function () { return Promise.resolve(clone(mockState)); },
     switchTab: function (id) { mockState.activeTabId = id; return Promise.resolve(clone(mockState)); },
     closeTab: function (id) {
       mockState.tabs = (mockState.tabs || []).filter(function (tab) { return tab.id === 'home' || tab.id !== id; });
@@ -67,17 +52,6 @@ window.__MOCK_STATE__ = {
     updateSetting: function (key, value) {
       mockState.desktopSettings = mockState.desktopSettings || {};
       mockState.desktopSettings[key] = key === 'themeMode' ? value : !!value;
-      return Promise.resolve(clone(mockState));
-    },
-    openEnvironment: function (id) {
-      var env = (mockState.environments || []).filter(function (item) { return item.id === id; })[0];
-      if (env) {
-        env.status = 'starting';
-        setTimeout(function () {
-          env.status = 'running';
-          mockState.activeTarget = { kind: 'remote', id: id, name: env.name, url: env.access_url };
-        }, 1700);
-      }
       return Promise.resolve(clone(mockState));
     },
   };
@@ -244,73 +218,15 @@ window.__MOCK_STATE__ = {
       });
   };
 
-  CC.startPolling = function () {
-    if (CC._poll) return;
-    var ticks = 0;
-    CC._poll = setInterval(function () {
-      ticks += 1;
-      Promise.resolve(bridge.getState()).then(function (state) {
-        CC.setState(state);
-        var anyStarting = (state.environments || []).some(function (environment) { return environment.status === 'starting'; });
-        if (!anyStarting || ticks > 16) {
-          clearInterval(CC._poll);
-          CC._poll = null;
-          if (!anyStarting) {
-            CC._status = { msg: '', tone: '' };
-            CC.render(CC.state);
-          }
-        }
-      });
-    }, 1500);
-  };
-
-  CC.openEnv = function (id) {
-    var env = (CC.state.environments || []).filter(function (environment) { return environment.id === id; })[0];
-    var meta = statusMeta(env ? env.status : '');
-    CC._busyEnv = id;
-    CC._status = { msg: (meta.verb || 'Opening') + ' ' + ((env && (env.name || env.subdomain)) || 'environment') + '...', tone: 'progress' };
-    if (env) {
-      var tabId = 'remote:' + env.id;
-      var tabs = CC.state.tabs && CC.state.tabs.length ? CC.state.tabs : [{ id: 'home', title: '启动台', kind: 'launcher', closable: false }];
-      tabs = tabs.map(function (tab) {
-        tab.active = false;
-        return tab;
-      });
-      var existing = tabs.filter(function (tab) { return tab.id === tabId; })[0];
-      if (existing) {
-        existing.active = true;
-        existing.title = env.name || env.subdomain;
-      } else {
-        tabs.push({ id: tabId, title: env.name || env.subdomain, kind: 'remote', closable: true, active: true });
-      }
-      CC.state.tabs = tabs;
-      CC.state.activeTabId = tabId;
-    }
-    if (env && env.status !== 'running') env.status = 'starting';
-    CC.render(CC.state);
-    return Promise.resolve(bridge.openEnvironment(id)).then(function (state) {
-      if (state && state.environments) CC.setState(state);
-      CC.startPolling();
-    }).catch(function (error) {
-      CC._busyEnv = null;
-      if (env) env.status = 'stopped';
-      CC._status = { msg: errMsg(error), tone: 'error' };
-      CC.render(CC.state);
-    });
-  };
-
+  // 云端分支(connect / logout / dashboard / refresh-environments / env-*)
+  // 已随 1.73.0 的云能力一起删除:preload 不再暴露对应的 bridge 方法,
+  // 留着这些 case 只会在某天有人渲染出按钮时抛 TypeError。
   CC.act = function (name, node) {
     switch (name) {
       case 'local':
 	        return CC.run('正在打开本地 leocodebox...', function () { return bridge.openLocal(); });
       case 'cc-switch':
         return CC.run('正在打开 Leoapi...', function () { return bridge.openSwitch(); });
-	      case 'connect':
-	        if (CC.localOnly(CC.state)) return;
-	        return CC.run('Opening account connection...', function () { return bridge.connectCloud(); });
-	      case 'logout':
-	        if (CC.localOnly(CC.state)) return;
-	        return CC.run('Logging out...', function () { return bridge.disconnectCloud(); });
       case 'open-web':
         return CC.run('正在浏览器中打开本机工作台...', function () { return bridge.openLocalWebUi(); });
       case 'copy-web':
@@ -329,20 +245,8 @@ window.__MOCK_STATE__ = {
         return CC.run('正在打开本机设置...', function () { return bridge.showLocalSettings(); });
       case 'settings-close':
         return CC.closeSheet();
-	      case 'dashboard':
-	        if (CC.localOnly(CC.state)) return;
-	        return CC.run('正在打开 leocodebox 仪表盘...', function () { return bridge.openCloudDashboard(); });
-	      case 'refresh-environments':
-	        if (CC.localOnly(CC.state)) return;
-	        return CC.run('Refreshing cloud environments...', function () { return bridge.refreshEnvironments(); });
       case 'refresh-tab':
         return CC.run('正在刷新...', function () { return bridge.refreshActiveTab(); });
-      case 'env-action':
-        return CC.run('Opening environment...', function () { return bridge.runActiveEnvironmentAction(node.getAttribute('data-cc-env-action')); });
-      case 'env-menu':
-        return CC.run('Opening environment actions...', function () { return bridge.showActiveEnvironmentActionsMenu(); });
-      case 'env-row-menu':
-        return CC.run('Opening environment actions...', function () { return bridge.showEnvironmentActionsMenu(node.getAttribute('data-cc-environment-id')); });
       default:
         return;
     }
@@ -555,11 +459,6 @@ window.__MOCK_STATE__ = {
       var action = event.target.closest('[data-cc-action]');
       if (action) {
         CC.act(action.getAttribute('data-cc-action'), action);
-        return;
-      }
-      var env = event.target.closest('[data-cc-env]');
-      if (env) {
-        CC.openEnv(env.getAttribute('data-cc-env'));
         return;
       }
       if (overlay.classList.contains('open') && !event.target.closest('.cc-sheet')) {

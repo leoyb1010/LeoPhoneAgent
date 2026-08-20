@@ -112,7 +112,7 @@ export default function SessionRail({
             || session.session_id,
           meta: [machine.name, session.harness, session.status].filter(Boolean).join(' · '),
           provider: session.harness,
-          live: ['starting', 'running'].includes(String(session.status)),
+          live: ['starting', 'running', 'idle'].includes(String(session.status)),
           needsApproval: session.waiting_for_approval === true || session.status === 'waiting_for_approval',
           remote: machine,
           duration: '',

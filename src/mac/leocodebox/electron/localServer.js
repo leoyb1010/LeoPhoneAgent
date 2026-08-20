@@ -242,17 +242,55 @@ function isProcessAlive(pid) {
   }
 }
 
+/**
+ * 按进程组发信号,发不出去再退回单 pid。
+ *
+ * 本机服务是 `detached: true` 起的(见 startLocalServer),pid 就是进程组组长,
+ * 它拉起来的 npm/tsx/CLI 全在同一个组里。只 kill 组长的话那些子进程会变成
+ * 孤儿继续占端口 —— shutdownOwnedServer 一直用的是 `-pid`,这里对齐。
+ *
+ * @returns {boolean} 信号是否送出去了(false 表示进程已经不在了)
+ */
+function signalProcessGroup(pid, signal) {
+  if (process.platform === 'win32') {
+    try {
+      process.kill(pid, signal);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  try {
+    process.kill(-pid, signal);
+    return true;
+  } catch {
+    // 这个 pid 不是组长(比如服务是别的方式起的)时按单 pid 再来一次,
+    // 别因为组不存在就放它继续跑。
+    try {
+      process.kill(pid, signal);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+/**
+ * 收掉「接管来的」服务(marker pid,不是本进程 spawn 的 child)。
+ *
+ * 旧实现只发一次 SIGTERM、轮询 3 秒就 return,既不补 SIGKILL 也不杀进程组:
+ * 带清理逻辑或已经卡死的服务无视 SIGTERM 就一直活着,下次启动又被接管 ——
+ * 表现出来正是 1.73.0 想根治的「退出后它自己又重启」。
+ */
 async function terminateStaleServer(pid) {
   if (!isProcessAlive(pid)) return;
-  try {
-    process.kill(pid, 'SIGTERM');
-  } catch {
-    return;
-  }
+  if (!signalProcessGroup(pid, 'SIGTERM')) return;
   const deadline = Date.now() + 3000;
   while (Date.now() < deadline && isProcessAlive(pid)) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
+  if (!isProcessAlive(pid)) return;
+  signalProcessGroup(pid, 'SIGKILL');
 }
 
 async function waitForLeocodeboxServer(baseUrl, timeoutMs) {
@@ -797,4 +835,6 @@ export class LocalServerController {
   }
 }
 
-export { DEFAULT_PORT, HOST };
+// terminateStaleServer 导出仅供测试:它是「退出后服务自己重启」这条老 bug
+// 的收口点,值得被单测直接盯住(见 localServer.test.js)。
+export { DEFAULT_PORT, HOST, terminateStaleServer };

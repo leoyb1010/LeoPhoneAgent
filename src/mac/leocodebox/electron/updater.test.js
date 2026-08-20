@@ -146,3 +146,37 @@ test('current releases use normal semver updates', async () => {
 test('release metadata preserves the current product version', () => {
   assert.equal(getUpdateMetadataVersion('1.38.0'), '1.38.0');
 });
+
+test('a failed pre-install step never leaves the app stuck on "installing"', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'leocodebox-updater-install-fail-'));
+  const updater = new FakeUpdater();
+  const controller = new DesktopUpdaterController({
+    appVersion: '1.39.0',
+    isPackaged: true,
+    settingsPath: path.join(root, 'updater.json'),
+    updater,
+    storage: fakeStorage,
+  });
+  try {
+    await controller.load();
+    await controller.checkForUpdates();
+    await controller.downloadUpdate();
+    assert.equal(controller.getState().status, 'downloaded');
+
+    await assert.rejects(
+      () => controller.installUpdate(async () => { throw new Error('本机服务停不掉'); }),
+      /本机服务停不掉/,
+    );
+    // quitAndInstall 没被调用,所以状态必须退回可重试的 'downloaded' —— UI 只在
+    // 这个状态下给「重启并安装」按钮;停在 'installing' 就等于永久卡死。
+    assert.equal(updater.didInstall, undefined);
+    assert.equal(controller.getState().status, 'downloaded');
+    assert.match(controller.getState().error, /本机服务停不掉/);
+
+    // 退回之后还能真的重试成功。
+    await controller.installUpdate(async () => {});
+    assert.equal(updater.didInstall, true);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});

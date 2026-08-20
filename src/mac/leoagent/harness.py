@@ -36,6 +36,7 @@ import asyncio
 import json
 import os
 import shutil
+import signal
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -767,6 +768,11 @@ class HarnessSession:
             # (完整 thread 对象)轻松超限,readline 会抛 LimitOverrunError
             # 直接杀死读循环——症状是会话建了却永远没有第一条回复。
             limit=16 * 1024 * 1024,
+            # 自成进程组(setsid)。托管的 CLI 会自己拉 `npm test`、dev server
+            # 这类长命子进程;只 terminate() 组长的话它们全变孤儿继续跑、继续
+            # 占端口,而这边的状态已经写成 cancelled ——「点了停止,机器上却
+            # 什么都没停」。有了独立进程组,stop() 才能用 killpg 一次收干净。
+            start_new_session=True,
         )
         self.status = "running"
         # Hold strong references: an un-referenced Task can be garbage
@@ -990,25 +996,52 @@ class HarnessSession:
         self._emit({"event": EVENT_APPROVAL_RESPONDED, "choice": choice, "approval_id": approval_id})
         return True
 
-    async def stop(self) -> None:
-        if not self.process:
+    def _signal_process_group(self, sig: int) -> None:
+        """给整个进程组发信号,发不出去再退回单进程。
+
+        进程是 ``start_new_session=True`` 起的,pid 同时就是进程组 id,
+        ``killpg`` 能把 CLI 拉起来的 ``npm test`` / dev server 一并带走。
+        旧实现只对组长调 ``terminate()``,孙子进程会变成孤儿继续跑。
+        """
+        proc = self.process
+        if proc is None or proc.returncode is not None:
             return
-        self.status = "cancelled"
         try:
-            self.process.terminate()
-        except ProcessLookupError:
+            # 只在这个 pid 确实是组长时才 killpg。start_new_session 万一没生效,
+            # getpgid() 会返回**守护进程自己**的组 —— 那一下就把整个 leoagent
+            # 连同其他所有会话一起杀了。宁可只杀单进程。
+            if os.getpgid(proc.pid) == proc.pid:
+                os.killpg(proc.pid, sig)
+                return
+        except (ProcessLookupError, PermissionError, OSError):
             pass
-        else:
-            # A CLI with cleanup logic may ignore SIGTERM; without this the
-            # status says "cancelled" while the process runs on forever.
-            try:
-                await asyncio.wait_for(self.process.wait(), timeout=5)
-            except asyncio.TimeoutError:
-                try:
-                    self.process.kill()
-                except ProcessLookupError:
-                    pass
+        try:
+            proc.send_signal(sig)
+        except (ProcessLookupError, OSError):
+            pass
+
+    async def stop(self) -> None:
+        # 幂等:已经是终态就别再写一条 run.cancelled,也别再去杀一遍。
+        if self.status in ("completed", "failed", "cancelled", "orphaned"):
+            return
+        # 顺序必须是「先落终态事件,再去杀进程」——这是 TS 端
+        # (harness-session.service.ts 的 stop())已经修好的那个 bug 的孪生体:
+        # 反过来写的话,status 在 terminate + 最长 5 秒的 wait 之前就已是
+        # "cancelled",这 5 秒窗口里新接上来的 SSE 订阅会因为
+        # `status in TERMINAL` 回放完直接 return,永远收不到 run.cancelled ——
+        # 手机上点了停止,界面就一直卡在 running。
+        self.status = "cancelled"
         self._emit({"event": EVENT_RUN_CANCELLED})
+        proc = self.process
+        if proc is None or proc.returncode is not None:
+            return
+        self._signal_process_group(signal.SIGTERM)
+        # 有清理逻辑的 CLI 可能无视 SIGTERM;不补刀的话状态写着 cancelled
+        # 而进程永远跑下去。
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=5)
+        except asyncio.TimeoutError:
+            self._signal_process_group(signal.SIGKILL)
 
 
 class HarnessManager:

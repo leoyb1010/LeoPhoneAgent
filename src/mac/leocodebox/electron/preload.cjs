@@ -99,26 +99,22 @@ if (isLocalHttpOrigin(window.location)) {
 
 if (isFirstPartyShellLocation(window.location)) {
   contextBridge.exposeInMainWorld('leocodeboxDesktop', {
-    connectCloud: () => ipcRenderer.invoke('leocodebox-desktop:connect-cloud'),
-    disconnectCloud: () => ipcRenderer.invoke('leocodebox-desktop:disconnect-cloud'),
+    // 1.73.0 产品收缩删掉了云能力,主进程不再注册 connect-cloud /
+    // open-environment / refresh-environments 等 8 个通道。这里也别再往
+    // window 上挂它们的包装函数:挂着只会在被调用时抛
+    // "No handler registered",比直接没有这个方法更难排查。
     copyDiagnostics: () => ipcRenderer.invoke('leocodebox-desktop:copy-diagnostics'),
     copyLocalWebUrl: () => ipcRenderer.invoke('leocodebox-desktop:copy-local-web-url'),
     getState: () => ipcRenderer.invoke('leocodebox-desktop:get-state'),
-    openCloudDashboard: () => ipcRenderer.invoke('leocodebox-desktop:open-cloud-dashboard'),
-    openEnvironment: (environmentId) => ipcRenderer.invoke('leocodebox-desktop:open-environment', environmentId),
-    runActiveEnvironmentAction: (action) => ipcRenderer.invoke('leocodebox-desktop:run-active-environment-action', action),
     openLocal: () => ipcRenderer.invoke('leocodebox-desktop:open-local'),
     openSwitch: () => ipcRenderer.invoke('leocodebox-desktop:open-switch'),
     openLocalWebUi: () => ipcRenderer.invoke('leocodebox-desktop:open-local-web-ui'),
-    refreshEnvironments: () => ipcRenderer.invoke('leocodebox-desktop:refresh-environments'),
     refreshActiveTab: () => ipcRenderer.invoke('leocodebox-desktop:reload-active-tab'),
     showEnvironmentPicker: () => ipcRenderer.invoke('leocodebox-desktop:show-environment-picker'),
     showLauncher: () => ipcRenderer.invoke('leocodebox-desktop:show-launcher'),
     showLocalSettings: () => ipcRenderer.invoke('leocodebox-desktop:show-local-settings'),
     showDesktopSettings: () => ipcRenderer.invoke('leocodebox-desktop:show-desktop-settings'),
     closeSettingsWindow: () => ipcRenderer.invoke('leocodebox-desktop:close-settings-window'),
-    showActiveEnvironmentActionsMenu: () => ipcRenderer.invoke('leocodebox-desktop:show-active-environment-actions-menu'),
-    showEnvironmentActionsMenu: (environmentId) => ipcRenderer.invoke('leocodebox-desktop:show-environment-actions-menu', environmentId),
     switchTab: (tabId) => ipcRenderer.invoke('leocodebox-desktop:switch-tab', tabId),
     closeTab: (tabId) => ipcRenderer.invoke('leocodebox-desktop:close-tab', tabId),
     updateSetting: (key, value) => ipcRenderer.invoke('leocodebox-desktop:update-setting', key, value),

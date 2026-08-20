@@ -4,7 +4,14 @@ import { useTranslation } from 'react-i18next';
 
 import { apiClient } from '../../utils/apiClient';
 
-import { describeRemoteEvent, readRemoteSse, type RemoteLogLine } from './remoteSessionEvents';
+import {
+  applyApprovalFrame,
+  describeRemoteEvent,
+  isTerminalRemoteEvent,
+  readRemoteSse,
+  type PendingApproval,
+  type RemoteLogLine,
+} from './remoteSessionEvents';
 
 export type RemoteTarget = { machine: string; sessionId: string; harness?: string };
 
@@ -12,9 +19,6 @@ type RemoteSessionPanelProps = {
   target: RemoteTarget;
   onClose: () => void;
 };
-
-/** 待答复的审批。choices 由远端方言给出,标签沿用舰队视图的中文映射。 */
-type PendingApproval = { approvalId: string; command: string; choices: string[] };
 
 function approvalChoiceLabel(choice: string): string {
   const normalized = choice.toLowerCase();
@@ -35,8 +39,10 @@ function approvalChoiceLabel(choice: string): string {
 export default function RemoteSessionPanel({ target, onClose }: RemoteSessionPanelProps) {
   const { t } = useTranslation();
   const [lines, setLines] = useState<RemoteLogLine[]>([]);
-  const [approval, setApproval] = useState<PendingApproval | null>(null);
+  const [approvals, setApprovals] = useState<PendingApproval[]>([]);
+  const approval = approvals[0] ?? null;
   const [connected, setConnected] = useState(false);
+  const [finished, setFinished] = useState(false);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -47,10 +53,14 @@ export default function RemoteSessionPanel({ target, onClose }: RemoteSessionPan
     const abort = new AbortController();
     let retryTimer: number | undefined;
     let closed = false;
+    // 这条流里有没有出现过终态帧。服务端一到终态就主动 res.end(),
+    // 所以「流结束了」本身不代表出错 —— 得看最后收到的是不是 run.*。
+    let sawTerminal = false;
     lastSeqRef.current = 0;
     setLines([]);
-    setApproval(null);
+    setApprovals([]);
     setConnected(false);
+    setFinished(false);
     setDraft('');
     setError('');
 
@@ -69,18 +79,22 @@ export default function RemoteSessionPanel({ target, onClose }: RemoteSessionPan
           const seq = Number(frame.seq ?? 0);
           if (seq > 0 && seq <= lastSeqRef.current) return;
           if (seq > lastSeqRef.current) lastSeqRef.current = seq;
-          if (String(frame.event) === 'approval.request') {
-            setApproval({
-              approvalId: String(frame.approval_id ?? frame.approvalId ?? ''),
-              command: String(frame.command ?? ''),
-              choices: Array.isArray(frame.choices) ? frame.choices.map(String) : ['once', 'always', 'deny'],
-            });
-          }
-          if (String(frame.event) === 'approval.responded') setApproval(null);
+          if (isTerminalRemoteEvent(frame)) sawTerminal = true;
+          setApprovals((current) => applyApprovalFrame(current, frame));
           const line = describeRemoteEvent(frame);
           if (line) setLines((previous) => previous.concat(line).slice(-400));
         });
-        if (!closed) throw new Error('远程事件流已结束');
+        if (closed || abort.signal.aborted) return;
+        setConnected(false);
+        if (sawTerminal) {
+          // 正常收尾:会话已经是终态,再连也只会回放完立刻被关流。
+          // 旧代码把这条路和出错混成一条,于是每个远程任务跑完都变成
+          // 红字报错 + 每 2 秒一次的永久重连。
+          setFinished(true);
+          setApprovals([]);
+          return;
+        }
+        throw new Error('远程事件流已结束');
       } catch (streamError) {
         if (closed || abort.signal.aborted) return;
         setConnected(false);
@@ -112,7 +126,7 @@ export default function RemoteSessionPanel({ target, onClose }: RemoteSessionPan
         approval_id: approval.approvalId,
         choice,
       });
-      setApproval(null);
+      setApprovals((current) => current.filter((item) => item.approvalId !== approval.approvalId));
     } catch (error) {
       setError(error instanceof Error ? error.message : '审批发送失败');
     } finally {
@@ -151,13 +165,15 @@ export default function RemoteSessionPanel({ target, onClose }: RemoteSessionPan
           <span className={`h-1.5 w-1.5 rounded-full ${connected ? 'bg-primary' : 'bg-wb-faint'}`} />
           {connected
             ? t('workbench.following', { defaultValue: '正在跟随' })
-            : t('workbench.reconnecting', { defaultValue: '重连中' })}
+            : finished
+              ? t('workbench.remoteFinished', { defaultValue: '已结束' })
+              : t('workbench.reconnecting', { defaultValue: '重连中' })}
         </span>
         <span className="ml-auto flex items-center gap-2">
           <button
             type="button"
             onClick={() => void drive('stop', {})}
-            disabled={busy}
+            disabled={busy || finished}
             title={t('workbench.stopRun', { defaultValue: '停止运行' })}
             aria-label={t('workbench.stopRun', { defaultValue: '停止运行' })}
             className="wb-chip-button h-[26px] w-[26px] text-destructive"
@@ -225,9 +241,13 @@ export default function RemoteSessionPanel({ target, onClose }: RemoteSessionPan
               if (ok) setDraft('');
             });
           }}
+          // 会话已终态就别再让人往里打字了:那边的进程早没了,send 只会 4xx。
+          disabled={finished}
           aria-label={t('workbench.remoteReply', { defaultValue: '追问远程会话' })}
-          placeholder={t('workbench.remoteReplyPlaceholder', { defaultValue: '继续驾驶这台机器上的会话…' })}
-          className="min-w-0 flex-1 border-none bg-transparent font-sans text-[13px] text-foreground outline-none placeholder:text-wb-faint"
+          placeholder={finished
+            ? t('workbench.remoteFinishedHint', { defaultValue: '这个会话已经结束' })
+            : t('workbench.remoteReplyPlaceholder', { defaultValue: '继续驾驶这台机器上的会话…' })}
+          className="min-w-0 flex-1 border-none bg-transparent font-sans text-[13px] text-foreground outline-none placeholder:text-wb-faint disabled:cursor-not-allowed"
         />
       </div>
     </section>

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Tooltip } from '../../shared/view/ui';
 import { cn } from '../../lib/utils';
 
-import type { FleetMachine } from './useFleetSnapshot';
+import { isMachineOnline, type FleetMachine } from './useFleetSnapshot';
 
 type RemotePopoverProps = {
   open: boolean;
@@ -75,19 +75,22 @@ export default function RemotePopover({
             </p>
           ) : (
             remotes.map((machine) => {
-              const takeable = machine.online && machine.reachable && machine.activeCount > 0;
+              // 胶囊上的 onlineCount 与这里的圆点、文案必须是同一个判断,
+              // 否则会出现「胶囊说 2 台在线,列表里两台都写着离线」。
+              const online = isMachineOnline(machine);
+              const takeable = online && machine.activeCount > 0;
               return (
                 <div
                   key={machine.name}
                   className="flex items-center gap-2.5 rounded-[9px] px-2.5 py-2.5 transition-colors hover:bg-muted"
                 >
                   <span
-                    className={cn('h-[7px] w-[7px] flex-none rounded-full', machine.online ? 'bg-primary' : 'bg-wb-faint')}
+                    className={cn('h-[7px] w-[7px] flex-none rounded-full', online ? 'bg-primary' : 'bg-wb-faint')}
                   />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-xs font-semibold text-foreground">{machine.name}</span>
                     <span className="mt-px block truncate text-[10px] text-wb-faint">
-                      {machine.online
+                      {online
                         ? t('workbench.remoteActive', {
                           count: machine.activeCount,
                           defaultValue: `${machine.activeCount} 个会话运行中`,
@@ -105,7 +108,7 @@ export default function RemotePopover({
                     </button>
                   ) : (
                     <span className="font-mono text-[9.5px] text-muted-foreground">
-                      {machine.online
+                      {online
                         ? t('workbench.remoteIdle', { defaultValue: '空闲' })
                         : t('workbench.remoteOffline', { defaultValue: '离线' })}
                     </span>

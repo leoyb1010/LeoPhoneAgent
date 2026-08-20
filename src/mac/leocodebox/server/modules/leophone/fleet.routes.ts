@@ -1,5 +1,6 @@
 import express from 'express';
 
+import { isLiveHarnessStatus } from './harness-session.service.js';
 import { localMachineName, resolveRelayConfig } from './relay-client.service.js';
 
 /**
@@ -86,6 +87,35 @@ type SnapshotCache = {
 
 let snapshotCache: SnapshotCache | null = null;
 
+/** SSE `?after=N`：非法或负数按 0 回放，与本机 harness 路由同一语义。 */
+export function parseEventsAfter(raw: unknown): number {
+  const parsed = Number.parseInt(String(raw ?? '0'), 10);
+  return Number.isNaN(parsed) || parsed < 0 ? 0 : parsed;
+}
+
+/**
+ * 远程开会话的中继体。Android/Harmony minis 不要带上这台 Mac 的项目路径
+ * 当 cwd——那边没有这份目录,长路径还会被 400。thinking 原样转发,minis
+ * 按大小写不敏感解析。
+ */
+export function buildRemoteCreateBody(body: Record<string, unknown> | undefined, prompt: string): Record<string, unknown> {
+  const harness = String(body?.harness ?? 'claude').trim() || 'claude';
+  const payload: Record<string, unknown> = { harness, prompt };
+  const thinking = typeof body?.thinking === 'string' ? body.thinking.trim() : '';
+  if (thinking && thinking !== 'default') payload.thinking = thinking;
+  if (harness !== 'minis' && typeof body?.cwd === 'string' && body.cwd.trim()) {
+    payload.cwd = body.cwd;
+  }
+  return payload;
+}
+
+function sendBody(body: unknown): { text: string } | null {
+  const text = typeof body === 'object' && body && 'text' in body
+    ? String((body as { text?: unknown }).text ?? '').trim()
+    : '';
+  return text ? { text } : null;
+}
+
 /**
  * Fleet 与 approvals 是同屏并发请求。旧实现会各自拉一次 /machines，
  * 再把每台 Mac 的 sessions 也各拉一次；三台机器就是一次刷新 8 个中继
@@ -149,15 +179,13 @@ router.get('/leophone/fleet', async (_req, res) => {
   const target = relayTarget();
   const localName = localMachineName();
   if (!target) {
-    res.json({ configured: false, localName, machines: [] });
+    res.json({ configured: false, localName, relayApiRoot: '', machines: [] });
     return;
   }
   try {
     const snapshot = await loadFleetSnapshot(target);
     const rows: MachineRow[] = snapshot.map((machine) => {
-      const active = machine.sessions.filter((session) =>
-        ['starting', 'running', 'waiting_for_approval'].includes(String(session.status)),
-      );
+      const active = machine.sessions.filter((session) => isLiveHarnessStatus(String(session.status)));
       return {
         name: machine.name,
         online: machine.online,
@@ -169,7 +197,7 @@ router.get('/leophone/fleet', async (_req, res) => {
         sessions: active,
       };
     });
-    res.json({ configured: true, localName, machines: rows });
+    res.json({ configured: true, localName, relayApiRoot: target.base, machines: rows });
   } catch (error) {
     res.status(502).json({
       error: { message: error instanceof Error ? error.message : 'relay unreachable' },
@@ -286,13 +314,9 @@ router.post('/leophone/fleet/sessions', async (req, res) => {
     const created = await relayPost(
       `/m/${encodeURIComponent(machine)}/harness/sessions`,
       target,
-      {
-        harness: String(req.body?.harness ?? 'claude'),
-        cwd: typeof req.body?.cwd === 'string' ? req.body.cwd : undefined,
-        prompt,
-        thinking: typeof req.body?.thinking === 'string' ? req.body.thinking : undefined,
-      },
+      buildRemoteCreateBody((req.body ?? {}) as Record<string, unknown>, prompt),
     );
+    snapshotCache = null;
     res.status(202).json(created);
   } catch (error) {
     res.status(502).json({
@@ -309,7 +333,7 @@ router.get('/leophone/fleet/machines/:machine/sessions/:sessionId/events', async
     return;
   }
   const { machine, sessionId } = req.params;
-  const after = Number.parseInt(String(req.query.after ?? '0'), 10) || 0;
+  const after = parseEventsAfter(req.query.after);
   const upstream = new AbortController();
   // 客户端断开时一并掐掉上游,别把中继连接泄漏在那儿。
   req.on('close', () => upstream.abort());
@@ -360,11 +384,17 @@ for (const action of ['send', 'stop'] as const) {
     }
     const { machine, sessionId } = req.params;
     try {
+      const forwarded = action === 'send' ? sendBody(req.body) : {};
+      if (action === 'send' && !forwarded) {
+        res.status(400).json({ error: { message: 'text is required' } });
+        return;
+      }
       const result = await relayPost(
         `/m/${encodeURIComponent(machine)}/harness/sessions/${encodeURIComponent(sessionId)}/${action}`,
         target,
-        req.body ?? {},
+        forwarded ?? {},
       );
+      snapshotCache = null;
       res.json(result);
     } catch (error) {
       res.status(502).json({

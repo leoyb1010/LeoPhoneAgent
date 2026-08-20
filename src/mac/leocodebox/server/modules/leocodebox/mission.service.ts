@@ -110,7 +110,7 @@ export async function startMissionCard(userId: number, cardId: string): Promise<
 }
 
 /** review → running with a fresh session bound to the existing worktree. */
-export function retryMissionCard(userId: number, cardId: string, opts: { slot?: string } = {}): MissionCard {
+export async function retryMissionCard(userId: number, cardId: string, opts: { slot?: string } = {}): Promise<MissionCard> {
   const card = missionCardsDb.get(userId, cardId);
   if (!card) throw fail('Unknown mission card.', 404);
   if (!canTransition(card.status, 'running')) throw fail(`Cannot retry a card in status "${card.status}".`, 409);
@@ -119,7 +119,13 @@ export function retryMissionCard(userId: number, cardId: string, opts: { slot?: 
   const sessionId = randomUUID();
   sessionsDb.createAppSession(sessionId, card.provider, card.projectPath);
   sessionsDb.setWorktreeId(sessionId, card.worktreeId);
-  const slot = opts.slot ?? card.slot ?? undefined;
+  let slot = opts.slot ?? card.slot ?? undefined;
+  if (!slot && (card.provider === 'claude' || card.provider === 'codex')) {
+    slot = await resolveSlotForSession({
+      target: card.provider,
+      estimatedTokens: Math.ceil((card.goal || '').length / 4),
+    }) ?? undefined;
+  }
   if (slot) sessionsDb.setRoutingSlot(sessionId, slot);
 
   return missionCardsDb.patch(userId, cardId, { status: 'running', sessionId, slot: slot ?? null })!;

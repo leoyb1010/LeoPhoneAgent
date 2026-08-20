@@ -80,6 +80,14 @@ class RelayClient:
                     await ws.send_json(frame)
                 except asyncio.CancelledError:
                     raise
+                except (TypeError, ValueError) as exc:
+                    # 序列化失败(帧里混进了不可 JSON 化的东西)。这跟"连接坏了"
+                    # 完全不是一回事:留在队首的话它永远发不出去,而它后面的
+                    # **所有**审批请求、任务终态、APNs 推送就此永久堵死,而且
+                    # 全程静默。丢掉这一帧、记一条日志,继续发后面的。
+                    self._outbox.pop(0)
+                    print(f"[relay-client] dropped unserializable frame: {exc}", flush=True)
+                    continue
                 except Exception:  # noqa: BLE001
                     return  # 连接坏了:留在队列里,重连后继续
                 self._outbox.pop(0)
@@ -117,6 +125,12 @@ class RelayClient:
                     await self._consume(ws, session)
                 finally:
                     sender.cancel()
+                    # cancel() 只是"排了个取消",不 await 的话任务还在飞:
+                    # 解释器退出时会甩一条 "Task was destroyed but it is
+                    # pending",更糟的是它可能还往一个正在关闭的 ws 上写。
+                    # 用 asyncio.wait 而不是 `await sender`:前者不会把
+                    # 被取消任务的 CancelledError 冒到这里。
+                    await asyncio.wait({sender})
                     self._wake = None
                 # relay 主动关连接时(如 key 校验失败的 4001),async for 会
                 # "正常"结束——不抛错的话 run_forever 会把退避重置回 1 秒,
@@ -186,22 +200,41 @@ class RelayClient:
         path = str(frame.get("path") or "/")
         cancel = asyncio.Event()
         self._stream_cancels[stream_id] = cancel
+        cancel_wait = asyncio.ensure_future(cancel.wait())
         try:
             async with session.get(
                 self.local_base + path, headers=self._headers(),
                 timeout=aiohttp.ClientTimeout(total=None, sock_read=3600),
             ) as resp:
-                async for raw in resp.content:
-                    if cancel.is_set():
+                while True:
+                    # 不能写成 `async for raw in resp.content`。那样 cancel 只在
+                    # "下一行到达之后"才被看见,而 SSE 空闲流可能几十分钟不出一行
+                    # ——sock_read=3600 意味着手机关掉面板后,这条上游连接最长还要
+                    # 挂一个小时。这里让读和 cancel 赛跑,取消立刻生效。
+                    read = asyncio.ensure_future(resp.content.readline())
+                    done, _ = await asyncio.wait(
+                        {read, cancel_wait}, return_when=asyncio.FIRST_COMPLETED)
+                    if read not in done:
+                        read.cancel()
+                        break
+                    raw = read.result()
+                    if not raw:
                         break
                     line = raw.decode("utf-8", errors="replace").strip()
                     # 本机是 SSE 帧("data: {...}"),剥前缀转纯数据帧
                     if line.startswith("data: "):
                         await ws.send_json({"type": "stream_data", "id": stream_id,
                                             "data": line[6:]})
+                    elif line.startswith(":"):
+                        # 本机每 25 秒发一个 `: keep-alive` 注释帧。旧代码只转
+                        # `data:`,把它整个丢了 —— 于是"中继→手机"这一段完全没有
+                        # 保活,长时间无事件的会话会被中间的代理/NAT 静默掐断,
+                        # 表现成手机端莫名其妙掉线。转成保活帧继续往下传。
+                        await ws.send_json({"type": "stream_keepalive", "id": stream_id})
         except Exception as exc:  # noqa: BLE001
             print(f"[relay-client] stream {stream_id} error: {exc}", flush=True)
         finally:
+            cancel_wait.cancel()
             self._stream_cancels.pop(stream_id, None)
             try:
                 await ws.send_json({"type": "stream_close", "id": stream_id})

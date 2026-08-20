@@ -561,6 +561,10 @@ function registerIpcHandlers() {
   trustedHandle('leocodebox-desktop:switch-tab', async (_event, tabId) => desktopWindow.switchDesktopTab(tabId));
   trustedHandle('leocodebox-desktop:close-tab', async (_event, tabId) => desktopWindow.closeDesktopTab(tabId));
   trustedHandle('leocodebox-desktop:update-setting', async (_event, key, value) => updateDesktopSetting(key, value));
+  // 云端 IPC 通道(connect-cloud / open-environment / refresh-environments ...)
+  // 在 1.73.0 产品收缩时随云能力一起删掉了,这里不补空 handler:补了等于留下
+  // 一个"调了什么都不发生"的接口,以后只会让人以为云还在。preload 与启动台
+  // 里对应的调用方已经一并删除。
   ipcMain.handle('leocodebox-desktop:update-get-state', (event) => {
     requireTrustedLocalIpcSender(event);
     return desktopUpdater.getState();
@@ -580,9 +584,19 @@ function registerIpcHandlers() {
   ipcMain.handle('leocodebox-desktop:update-install', async (event) => {
     requireTrustedLocalIpcSender(event);
     await desktopUpdater.installUpdate(async () => {
+      // isQuitting 必须是可回滚的。旧代码在 stopLocalServer() 之前就把它置成
+      // true,一旦停服抛异常,quitAndInstall 不会执行,应用却永远留在
+      // isQuitting=true:点 Dock 的 activate 直接 return 不开窗,⌘Q 的
+      // before-quit 也 return 不再收服务 —— 成了一个既开不出窗、又退不干净
+      // 的僵尸态,只能强杀。收尾失败就把它复位,让应用回到可用状态。
       isQuitting = true;
-      desktopNotifications?.stop();
-      await localServer?.stopLocalServer();
+      try {
+        desktopNotifications?.stop();
+        await localServer?.stopLocalServer();
+      } catch (error) {
+        isQuitting = false;
+        throw error;
+      }
     });
     return desktopUpdater.getState();
   });

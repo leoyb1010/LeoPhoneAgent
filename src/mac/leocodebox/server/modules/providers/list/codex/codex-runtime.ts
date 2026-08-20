@@ -231,12 +231,14 @@ function transformCodexEvent(event: ThreadEvent) {
  * @param {string} permissionMode - 'default', 'acceptEdits', or 'bypassPermissions'
  * @returns {object} - { sandboxMode, approvalPolicy }
  */
-function mapPermissionModeToCodexOptions(permissionMode: string | undefined): { sandboxMode: SandboxMode; approvalPolicy: ApprovalMode } {
+export function mapPermissionModeToCodexOptions(permissionMode: string | undefined): { sandboxMode: SandboxMode; approvalPolicy: ApprovalMode } {
   switch (permissionMode) {
     case 'acceptEdits':
       return {
         sandboxMode: 'workspace-write',
-        approvalPolicy: 'never'
+        // Files in the workspace may write; command/exec still asks. 'never'
+        // used to auto-approve shell too, which is not what the UI promises.
+        approvalPolicy: 'on-request'
       };
     case 'bypassPermissions':
       return {

@@ -57,9 +57,9 @@ router.post('/:id/start', requireLocalOnly, async (req, res, next) => {
   }
 });
 
-router.post('/:id/retry', requireLocalOnly, (req, res, next) => {
+router.post('/:id/retry', requireLocalOnly, async (req, res, next) => {
   try {
-    res.json({ success: true, card: retryMissionCard(readUserId(req), req.params.id, { slot: req.body?.slot ? String(req.body.slot) : undefined }) });
+    res.json({ success: true, card: await retryMissionCard(readUserId(req), req.params.id, { slot: req.body?.slot ? String(req.body.slot) : undefined }) });
   } catch (error) {
     next(error);
   }

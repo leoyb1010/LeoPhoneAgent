@@ -315,16 +315,21 @@ function handleChatSubscribe(
       chatRunRegistry.attachConnection(sessionId, ws);
     }
 
-    // Pending approvals are tracked under the provider-native id inside the
-    // Claude runtime; remap their sessionId so the client only sees app ids.
-    const pendingPermissions = (run?.providerSessionId
-      ? dependencies.getPendingApprovalsForSession(run.providerSessionId)
-      : []
-    ).map((approval) =>
-      approval && typeof approval === 'object'
-        ? { ...(approval as AnyRecord), sessionId }
-        : approval,
-    );
+    // Pending approvals are keyed by provider-native id once captured, and by
+    // the app session id before that. Reconnect between start and session_created
+    // must still surface the banner.
+    const pendingIds = [sessionId, run?.providerSessionId].filter((id): id is string => Boolean(id));
+    const seenRequestIds = new Set<string>();
+    const pendingPermissions: unknown[] = [];
+    for (const pendingId of pendingIds) {
+      for (const approval of dependencies.getPendingApprovalsForSession(pendingId)) {
+        const record = approval && typeof approval === 'object' ? approval as AnyRecord : null;
+        const requestId = typeof record?.requestId === 'string' ? record.requestId : '';
+        if (requestId && seenRequestIds.has(requestId)) continue;
+        if (requestId) seenRequestIds.add(requestId);
+        pendingPermissions.push(record ? { ...record, sessionId } : approval);
+      }
+    }
 
     sendJson(ws, {
       kind: 'chat_subscribed',
