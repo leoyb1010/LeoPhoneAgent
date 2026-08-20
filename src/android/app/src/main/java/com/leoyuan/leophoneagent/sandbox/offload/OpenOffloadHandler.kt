@@ -58,9 +58,19 @@ class OpenOffloadHandler(private val context: Context) : NativeOffloadHandler {
                 Intent(Intent.ACTION_VIEW, Uri.parse(url))
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            val resolved = intent.resolveActivity(context.packageManager)
-            Log.d(TAG, "startActivity url='$url' action=${intent.action} resolved=${resolved?.flattenToShortString()}")
-            context.startActivity(intent)
+            val pm = context.packageManager
+            val resolved = intent.resolveActivity(pm)
+            // Android 11+ hid most packages from resolveActivity. QUERY_ALL
+            // + MAIN/LAUNCHER <queries> restore visibility; if an OEM still
+            // hides the named package, fall back to the launcher activity.
+            val launch = if (resolved == null) {
+                intent.`package`?.let { InstalledLauncherApps.launchIntent(pm, it) }
+            } else {
+                null
+            }
+            val toStart = launch ?: intent
+            Log.d(TAG, "startActivity url='$url' action=${toStart.action} resolved=${toStart.resolveActivity(pm)?.flattenToShortString()}")
+            context.startActivity(toStart)
             NativeOffloadResult(0, OffloadOutput.formatBody("Opened: $url", args) + "\n")
         } catch (e: ActivityNotFoundException) {
             Log.w(TAG, "no handler for '$url'")

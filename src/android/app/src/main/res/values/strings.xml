@@ -1298,7 +1298,7 @@
     <!-- T323: System Permissions screen + AccessibilityService -->
     <string name="system_permissions_title">System Permissions</string>
     <string name="system_permissions_subtitle">OS-level permissions granted from system Settings</string>
-    <string name="system_permissions_shortcut_subtitle">Assistant, tile, widget, notifications, battery, and shortcuts</string>
+    <string name="system_permissions_shortcut_subtitle">Assistant, tile, widget, notifications, overlay, files, alarms, and shortcuts</string>
     <string name="system_permissions_section_assistant">System assistant and shortcuts</string>
     <string name="system_permissions_assistant_row">Default digital assistant</string>
     <string name="system_permissions_assistant_enabled">LeoPhoneAgent is the current system assistant</string>
@@ -1663,4 +1663,23 @@
     <string name="system_permissions_shizuku_not_running">Installed — start the manager</string>
     <string name="system_permissions_shizuku_not_installed">Not installed</string>
     <string name="system_permissions_shizuku_standard">Power edition only</string>
+    <string name="system_permissions_overlay_row">Display over other apps</string>
+    <string name="system_permissions_overlay_on">Allowed — background task overlay can appear</string>
+    <string name="system_permissions_overlay_off">Off — tap to grant in system Settings</string>
+    <string name="system_permissions_listener_row">Notification access</string>
+    <string name="system_permissions_listener_on">Allowed — android-notification can read other apps</string>
+    <string name="system_permissions_listener_off">Off — tap to grant notification listener access</string>
+    <string name="system_permissions_all_files_row">All files access</string>
+    <string name="system_permissions_all_files_on">Allowed — mounted folders can see the full tree</string>
+    <string name="system_permissions_all_files_off">Off — tap to grant all-files access</string>
+    <string name="system_permissions_exact_alarm_row">Exact alarms</string>
+    <string name="system_permissions_exact_alarm_on">Allowed — scheduled tasks can fire on time</string>
+    <string name="system_permissions_exact_alarm_off">Off — tap to allow exact alarms</string>
+    <string name="system_permissions_exact_alarm_na">This Android version does not need a separate grant</string>
+    <string name="system_permissions_samsung_header">Samsung Device care</string>
+    <string name="system_permissions_samsung_footer">Sleeping-apps and cover-screen-apps state cannot be read. Open Device care to confirm this app is not sleeping, and allow it on the cover screen if you want to use it folded.</string>
+    <string name="system_permissions_samsung_sleeping_row">Device care / sleeping apps</string>
+    <string name="system_permissions_samsung_sleeping_sub">Open Device care so this app is not put to sleep. Current sleeping-apps state cannot be queried.</string>
+    <string name="system_permissions_samsung_cover_row">Cover screen apps</string>
+    <string name="system_permissions_samsung_cover_sub">To use LeoPhoneAgent on the cover, allow it in the cover-screen apps list</string>
 </resources>

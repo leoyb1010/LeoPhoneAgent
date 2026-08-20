@@ -578,7 +578,14 @@ fun AppNavigation(
                 // boundary, while the unfolded 4:3 workspace clears it. Use
                 // the live app window (not device identity) so split-screen,
                 // freeform windows, rotation and future foldables adapt too.
-                val useTwoPane = shouldUseFoldableTwoPane(maxWidth.value, maxHeight.value)
+                // Tabletop HALF_OPENED is forced to one pane so the hinge
+                // does not cut through the composer / message list.
+                val foldPosture by rememberFoldPosture()
+                val useTwoPane = shouldUseTwoPaneWorkspace(
+                    maxWidth.value,
+                    maxHeight.value,
+                    foldPosture,
+                )
 
                 val chatContent: @Composable (Boolean) -> Unit = { showBack ->
                     ChatScreen(

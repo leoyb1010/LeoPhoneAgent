@@ -12,6 +12,11 @@ import androidx.lifecycle.ViewModelStoreOwner
  *
  * Without this, scoping the ChatViewModel to a NavBackStackEntry means
  * `popBackStack()` would cancel `viewModelScope` and kill the streaming job.
+ *
+ * Fold / unfold no longer recreates [com.leoyuan.leophoneagent.MainActivity]
+ * (`android:configChanges` on the activity). The process-level store still
+ * keeps the agent loop and composer draft if a configuration *does* recreate
+ * the activity (process death restore is a separate saved-state path).
  */
 object ChatViewModelStore {
 

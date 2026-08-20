@@ -1421,7 +1421,7 @@
     <string name="soul_over_limit_english">超过上限：%1$d / %2$d 个单词。中文不超过 %3$d 个字符，英文不超过 %2$d 个单词。</string>
     <string name="system_permissions_title">系统权限</string>
     <string name="system_permissions_subtitle">需要在系统设置中授予的权限</string>
-    <string name="system_permissions_shortcut_subtitle">默认助手、磁贴、小组件、通知、电池与快捷方式</string>
+    <string name="system_permissions_shortcut_subtitle">默认助手、磁贴、小组件、通知、悬浮窗、文件、闹钟与快捷方式</string>
     <string name="system_permissions_section_assistant">系统助手与快捷入口</string>
     <string name="system_permissions_assistant_row">设为默认数字助手</string>
     <string name="system_permissions_assistant_enabled">LeoPhoneAgent 已是当前系统助手</string>
@@ -1594,4 +1594,23 @@
     <string name="system_permissions_shizuku_not_running">已安装，请先启动管理器</string>
     <string name="system_permissions_shizuku_not_installed">未安装</string>
     <string name="system_permissions_shizuku_standard">仅 Power 版</string>
+    <string name="system_permissions_overlay_row">显示在其他应用上层</string>
+    <string name="system_permissions_overlay_on">已允许，后台任务悬浮窗可用</string>
+    <string name="system_permissions_overlay_off">未允许，点击前往系统设置</string>
+    <string name="system_permissions_listener_row">通知访问</string>
+    <string name="system_permissions_listener_on">已允许，可读取其他应用通知</string>
+    <string name="system_permissions_listener_off">未允许，android-notification 无法读取其他应用</string>
+    <string name="system_permissions_all_files_row">所有文件访问</string>
+    <string name="system_permissions_all_files_on">已允许，外置目录可以被完整挂载</string>
+    <string name="system_permissions_all_files_off">未允许，点击前往系统设置</string>
+    <string name="system_permissions_exact_alarm_row">精确闹钟</string>
+    <string name="system_permissions_exact_alarm_on">已允许，计划任务可以准时触发</string>
+    <string name="system_permissions_exact_alarm_off">未允许，点击前往系统设置</string>
+    <string name="system_permissions_exact_alarm_na">当前系统版本无需单独授权</string>
+    <string name="system_permissions_samsung_header">三星设备关怀</string>
+    <string name="system_permissions_samsung_footer">无法读取睡眠应用或封面应用的开关状态。请在设备关怀中确认本应用未被休眠，并在需要封面使用时允许本应用。</string>
+    <string name="system_permissions_samsung_sleeping_row">设备关怀 / 睡眠应用</string>
+    <string name="system_permissions_samsung_sleeping_sub">打开设备关怀，避免本应用被自动休眠（无法检测当前状态）</string>
+    <string name="system_permissions_samsung_cover_row">封面屏幕应用</string>
+    <string name="system_permissions_samsung_cover_sub">折叠后要在封面使用本应用，请在封面应用列表中允许 LeoPhoneAgent</string>
 </resources>

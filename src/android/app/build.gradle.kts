@@ -242,6 +242,9 @@ dependencies {
     // Recoverable scheduled work after process death / boot / timezone change.
     implementation("androidx.work:work-runtime-ktx:2.9.1")
 
+    // Fold posture (HALF_OPENED tabletop / book) for the chat workspace.
+    implementation("androidx.window:window:1.3.0")
+
     // T283: ACRA — local crash report capture. acra-core only (no http
     // sender, no network permission). CrashFileSender writes reports to
     // filesDir/logs/ where LogManagementScreen surfaces them.
