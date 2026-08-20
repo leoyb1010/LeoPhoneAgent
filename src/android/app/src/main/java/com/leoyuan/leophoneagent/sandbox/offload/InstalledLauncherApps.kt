@@ -15,8 +15,11 @@ import android.content.pm.PackageManager
  */
 object InstalledLauncherApps {
 
+    const val LAUNCHER_ACTION: String = Intent.ACTION_MAIN
+    const val LAUNCHER_CATEGORY: String = Intent.CATEGORY_LAUNCHER
+
     fun launcherQueryIntent(): Intent =
-        Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        Intent(LAUNCHER_ACTION).addCategory(LAUNCHER_CATEGORY)
 
     fun launchIntent(packageManager: PackageManager, packageName: String): Intent? {
         if (packageName.isBlank()) return null
@@ -25,8 +28,8 @@ object InstalledLauncherApps {
             .firstOrNull { it.activityInfo?.packageName == packageName }
             ?: return null
         val activity = match.activityInfo ?: return null
-        return Intent(Intent.ACTION_MAIN)
-            .addCategory(Intent.CATEGORY_LAUNCHER)
+        return Intent(LAUNCHER_ACTION)
+            .addCategory(LAUNCHER_CATEGORY)
             .setClassName(activity.packageName, activity.name)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }

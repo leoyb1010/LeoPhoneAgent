@@ -38,6 +38,6 @@ class MainActivityManifestPolicyTest {
         assertTrue(manifest.contains("android.permission.QUERY_ALL_PACKAGES"))
         assertTrue(manifest.contains("android.intent.action.MAIN"))
         assertTrue(manifest.contains("android.intent.category.LAUNCHER"))
-        assertTrue(manifest.contains("sideload personal agent"))
+        assertTrue(manifest.contains("Sideload personal agent"))
     }
 }
