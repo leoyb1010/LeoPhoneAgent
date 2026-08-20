@@ -6,6 +6,22 @@ extension AIChatViewModel {
 
     // MARK: - Tool Definitions (Canonical)
 
+    /// Binding-resolved model, not the leftover Haiku default on `selectedModel`.
+    var currentModelSupportsImageInput: Bool {
+        (resolveCurrentEntry()?.model ?? selectedModel)
+            .capabilities.supportedModalities.contains(.imageInput)
+    }
+
+    private var shellCommandToolDescription: String {
+        var text = "The shell command to execute. Supports multi-line commands directly — no special escaping needed. Keep under 1000 chars; for longer scripts, write to a file with file_write first, then run it."
+        if AgentChatCorrectness.shouldRegisterReadImage(supportsImageInput: currentModelSupportsImageInput) {
+            text += " If a command GENERATES an image or chart for the user (matplotlib, ImageMagick, screenshots…), save it under /var/minis/workspace/ and then call read_image on it so the user actually SEES it in the chat — never just claim it was generated."
+        } else {
+            text += " If a command GENERATES an image or chart, save it under /var/minis/workspace/ so the user can open the file. This model cannot view image pixels — do not claim you inspected the image."
+        }
+        return text
+    }
+
     func makeAgentTools() -> [AgentToolDefinition] {
         // [T-memory-toggle-gates-injection-and-tools-ios] memory_get and
         // memory_write are conditionally registered. When the per-session
@@ -20,7 +36,7 @@ extension AIChatViewModel {
                 description: "Execute a command in an isolated Linux process (iSH/Alpine Linux). The command runs via /bin/sh -c with stdout and stderr captured separately via pipes. Each invocation spawns a fresh process — there is no shared terminal session. Default timeout is 15 minutes.",
                 parameters: [
                     "tool_title": AgentToolParam(type: .string, description: "A concise 5-10 word summary of what this tool call does, shown to the user (e.g. 'Install Python data analysis packages', 'List files in home directory'). Use the same language as the user."),
-                    "command": AgentToolParam(type: .string, description: "The shell command to execute. Supports multi-line commands directly — no special escaping needed. Keep under 1000 chars; for longer scripts, write to a file with file_write first, then run it. If a command GENERATES an image or chart for the user (matplotlib, ImageMagick, screenshots…), save it under /var/minis/workspace/ and then call read_image on it so the user actually SEES it in the chat — never just claim it was generated."),
+                    "command": AgentToolParam(type: .string, description: shellCommandToolDescription),
                     "timeout": AgentToolParam(type: .integer, description: "Timeout in seconds (default: 900). Use a larger value for long-running commands like package installs."),
                     "delay": AgentToolParam(type: .integer, description: "Delay in seconds before execution begins. The tool blocks the agent flow during this wait WITHOUT occupying the iSH shell, so other concurrent tasks can use it. Use this instead of sleep commands to avoid resource contention."),
                 ],
@@ -135,8 +151,10 @@ extension AIChatViewModel {
             ))
         }
 
-        // Only include read_image when the model supports image input
-        if selectedModel.capabilities.supportedModalities.contains(.imageInput) {
+        // Only include read_image when the *active* model supports image input.
+        // `selectedModel` is a leftover default (Haiku) and is not kept in sync
+        // with session bindings — using it here handed vision tools to text-only models.
+        if AgentChatCorrectness.shouldRegisterReadImage(supportsImageInput: currentModelSupportsImageInput) {
             tools.append(AgentToolDefinition(
                 name: "read_image",
                 description: "Read an image file from the Linux filesystem and return it for visual analysis. Supports PNG, JPEG, GIF, WEBP, and other common image formats. Use this to inspect generated charts, downloaded images, screenshots, or any visual output. The image is returned directly for your analysis along with metadata (dimensions, file size).",

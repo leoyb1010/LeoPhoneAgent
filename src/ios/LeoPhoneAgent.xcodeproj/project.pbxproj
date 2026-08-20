@@ -377,6 +377,7 @@
 		E5LEO0008 /* AgentToolDefinition.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LEO0017 /* AgentToolDefinition.swift */; };
 		E5LEO0009 /* AgentToolDefinition.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LEO0017 /* AgentToolDefinition.swift */; };
 		E5LEO0010 /* AIChatViewModel+ToolPreflight.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5VMA0018 /* AIChatViewModel+ToolPreflight.swift */; };
+		E5R1C0013 /* AgentChatCorrectness.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5R1C0011 /* AgentChatCorrectness.swift */; };
 		E5QA0001 /* QuickActionRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5QA0101 /* QuickActionRouter.swift */; };
 		E5QA0002 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5QA0102 /* AppDelegate.swift */; };
 		E5QA0003 /* QuickActionWorkflow.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5QA0103 /* QuickActionWorkflow.swift */; };
@@ -501,6 +502,7 @@
 		E5VMA0006 /* AIChatViewModel+ProviderFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5VMA0016 /* AIChatViewModel+ProviderFactory.swift */; };
 		E5VMA0007 /* AIChatViewModel+ToolDefinitions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5VMA0017 /* AIChatViewModel+ToolDefinitions.swift */; };
 		E5VMA0008 /* AIChatViewModel+ToolPreflight.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5VMA0018 /* AIChatViewModel+ToolPreflight.swift */; };
+		E5R1C0012 /* AgentChatCorrectness.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5R1C0011 /* AgentChatCorrectness.swift */; };
 		E5VMB0001 /* AIChatViewModel+Compaction.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5VMB0011 /* AIChatViewModel+Compaction.swift */; };
 		E5VMB0002 /* AIChatViewModel+Fallback.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5VMB0012 /* AIChatViewModel+Fallback.swift */; };
 		E5VMB0003 /* AIChatViewModel+Misc.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5VMB0013 /* AIChatViewModel+Misc.swift */; };
@@ -1221,6 +1223,7 @@
 		E5VMA0016 /* AIChatViewModel+ProviderFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIChatViewModel+ProviderFactory.swift"; sourceTree = "<group>"; };
 		E5VMA0017 /* AIChatViewModel+ToolDefinitions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIChatViewModel+ToolDefinitions.swift"; sourceTree = "<group>"; };
 		E5VMA0018 /* AIChatViewModel+ToolPreflight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIChatViewModel+ToolPreflight.swift"; sourceTree = "<group>"; };
+		E5R1C0011 /* AgentChatCorrectness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentChatCorrectness.swift; sourceTree = "<group>"; };
 		E5VMB0011 /* AIChatViewModel+Compaction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIChatViewModel+Compaction.swift"; sourceTree = "<group>"; };
 		E5VMB0012 /* AIChatViewModel+Fallback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIChatViewModel+Fallback.swift"; sourceTree = "<group>"; };
 		E5VMB0013 /* AIChatViewModel+Misc.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AIChatViewModel+Misc.swift"; sourceTree = "<group>"; };
@@ -2132,6 +2135,7 @@
 				E5VMA0016 /* AIChatViewModel+ProviderFactory.swift */,
 				E5VMA0017 /* AIChatViewModel+ToolDefinitions.swift */,
 				E5VMA0018 /* AIChatViewModel+ToolPreflight.swift */,
+				E5R1C0011 /* AgentChatCorrectness.swift */,
 				E5VMB0011 /* AIChatViewModel+Compaction.swift */,
 				E5VMB0012 /* AIChatViewModel+Fallback.swift */,
 				E5VMB0013 /* AIChatViewModel+Misc.swift */,
@@ -2836,6 +2840,7 @@
 				E5LEO0007 /* AgentActivityModels.swift in Sources */,
 				E5LEO0009 /* AgentToolDefinition.swift in Sources */,
 				E5LEO0010 /* AIChatViewModel+ToolPreflight.swift in Sources */,
+				E5R1C0013 /* AgentChatCorrectness.swift in Sources */,
 				E5GWF0004 /* GeminiWireFormat.swift in Sources */,
 				E5JB10001 /* JiebaWrapper.mm in Sources */,
 				E5JB10002 /* TextSegmenter.swift in Sources */,
@@ -2938,6 +2943,7 @@
 				E5VMA0006 /* AIChatViewModel+ProviderFactory.swift in Sources */,
 				E5VMA0007 /* AIChatViewModel+ToolDefinitions.swift in Sources */,
 				E5VMA0008 /* AIChatViewModel+ToolPreflight.swift in Sources */,
+				E5R1C0012 /* AgentChatCorrectness.swift in Sources */,
 				E5VMB0001 /* AIChatViewModel+Compaction.swift in Sources */,
 				E5VMB0002 /* AIChatViewModel+Fallback.swift in Sources */,
 				E5VMB0003 /* AIChatViewModel+Misc.swift in Sources */,

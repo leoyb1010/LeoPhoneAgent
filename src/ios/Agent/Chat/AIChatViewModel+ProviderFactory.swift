@@ -262,6 +262,15 @@ extension AIChatViewModel {
     /// the no-config/no-credential path is itself moderately expensive to re-walk.
     private static let resolveNilSentinel = "\u{0}nil"
 
+    /// Keep `selectedModel` aligned with the binding that send/loop actually use.
+    /// Inspector, intents, and new-session modelId all read this field.
+    func syncSelectedModelFromBinding() {
+        guard let model = resolveCurrentEntry()?.model else { return }
+        guard selectedModel.id != model.id else { return }
+        logger.info("🔀 selectedModel sync \(self.selectedModel.id) → \(model.id)")
+        selectedModel = model
+    }
+
     func resolveCurrentEntry() -> ModelEntry? {
         let store = ProviderConfigStore.shared
         let key = ResolveCacheKey(

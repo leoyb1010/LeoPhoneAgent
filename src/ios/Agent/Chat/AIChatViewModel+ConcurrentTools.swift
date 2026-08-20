@@ -617,6 +617,11 @@ extension AIChatViewModel {
             }
 
         case "read_image":
+            if !currentModelSupportsImageInput {
+                toolOutput = "Error: the current model cannot view images. Do not describe this file's pixels. Tell the user to switch to a vision model, or refer only to the path they provided."
+                toolSuccess = false
+                break
+            }
             let pathArg = toolArgs["path"] as? String ?? ""
             let resolvedURL = await resolveMinisPath(pathArg)
             ctLogger.info("[read_image] pathArg=\(pathArg) resolvedURL=\(resolvedURL?.path ?? "nil") exists=\(resolvedURL.map { FileManager.default.fileExists(atPath: $0.path) } ?? false)")

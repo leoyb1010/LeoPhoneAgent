@@ -215,9 +215,11 @@ extension AIChatViewModel {
     /// This keeps CFNetwork HTTP/2 HPACK decoding and JSON parsing off the main thread.
     nonisolated func processStreamEvents(
         stream: AsyncThrowingStream<AgentStreamEvent, Error>,
-        msgIdx: Int,
-        provider: any AgentProvider
+        msgIdx initialMsgIdx: Int,
+        provider: any AgentProvider,
+        runMsgId: UUID
     ) async throws -> StreamResult {
+        var msgIdx = initialMsgIdx
         var result = StreamResult()
         var currentTextBlockIdx: Int? = nil
         var currentThinkingBlockIdx: Int? = nil
@@ -285,6 +287,17 @@ extension AIChatViewModel {
             }
             guard let event = maybeEvent else { break }
             try Task.checkCancellation()
+            if let resolved = await MainActor.run(body: { () -> Int? in
+                if self.userDidCancel { return nil }
+                if msgIdx >= 0, msgIdx < self.messages.count, self.messages[msgIdx].id == runMsgId {
+                    return msgIdx
+                }
+                return self.messages.firstIndex(where: { $0.id == runMsgId })
+            }) {
+                msgIdx = resolved
+            } else if await MainActor.run(body: { self.userDidCancel }) {
+                throw CancellationError()
+            }
 
             switch event {
             case .contentBlockStart(let start):
@@ -507,7 +520,8 @@ extension AIChatViewModel {
                                 text: snapshot,
                                 parsedMarkdown: parsed,
                                 cacheAttributedString: false,
-                                requestScroll: true
+                                requestScroll: true,
+                                expectedMessageId: runMsgId
                             )
                         }
                     }
@@ -757,7 +771,8 @@ extension AIChatViewModel {
                             text: assistantText,
                             parsedMarkdown: freshParsedMarkdown,
                             cacheAttributedString: true,
-                            requestScroll: false
+                            requestScroll: false,
+                            expectedMessageId: runMsgId
                         )
                     }
                     return blockIdx
@@ -873,7 +888,9 @@ extension AIChatViewModel {
                         text: result.assistantText,
                         parsedMarkdown: MarkdownContent(prepareMarkdownForRender(result.assistantText)),
                         cacheAttributedString: true,
-                        requestScroll: false
+                        requestScroll: false,
+                        expectedMessageId: runMsgId,
+                        ignoreUserCancel: true
                     )
                 }
             }
@@ -1209,13 +1226,6 @@ extension AIChatViewModel {
         if kb < 1024 { return String(format: "%.1f KB", kb) }
         let mb = kb / 1024.0
         return String(format: "%.1f MB", mb)
-    }
-
-    /// Parse a single string parameter from tool JSON.
-    private func parseStringParam(_ key: String, from json: String) -> String? {
-        guard let data = json.data(using: .utf8),
-              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-        return dict[key] as? String
     }
 
     /// Parse tool use JSON into command, optional timeout, and optional delay.

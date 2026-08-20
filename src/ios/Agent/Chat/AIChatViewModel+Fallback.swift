@@ -377,7 +377,8 @@ extension AIChatViewModel {
             let result = try await processStreamEvents(
                 stream: fbStream,
                 msgIdx: msgIdx,
-                provider: provider
+                provider: provider,
+                runMsgId: chatMessage?.id ?? (msgIdx < messages.count ? messages[msgIdx].id : UUID())
             )
 
             // Empty-response detection: HTTP 200 + stream finished, but no text,
