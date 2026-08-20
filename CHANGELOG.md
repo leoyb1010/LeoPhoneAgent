@@ -4,6 +4,189 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## HarmonyOS 0.3.0-alpha.14 (100019) - 2026-08-20
+
+- Kimi 登录直接打开带设备码的确认页，登录后不用再手抄顶栏那串码。
+- 覆盖安装必须弹出「本次更新 · Kimi 确认页带设备码」。
+
+### 验证
+
+- `bash src/harmony/scripts/verify_harmony_release_notes.sh`
+- `node --test src/harmony/protocol/protocol.test.mjs`
+
+## HarmonyOS 0.3.0-alpha.13 (100018) - 2026-08-20
+
+- Kimi 设备码登录直接打开确认页，不再先停在空白再超时。打不开时仍显示设备码，可复制链接。
+- 覆盖安装必须弹出「本次更新 · Kimi 确认页能打开」。
+
+### 验证
+
+- `bash src/harmony/scripts/verify_harmony_release_notes.sh`
+
+## HarmonyOS 0.3.0-alpha.12 (100017) - 2026-08-20
+
+- 供应商详情里「从上游拉取」和「用作当前」不再被长模型列表顶出屏幕。切换供应商先点名字再展开模型。
+- 覆盖安装必须弹出「本次更新 · 详情页能拉到按钮」。
+
+### 验证
+
+- `bash src/harmony/scripts/verify_harmony_release_notes.sh`
+
+## HarmonyOS 0.3.0-alpha.11 (100016) - 2026-08-20
+
+- 本机对话吐字时，列表跟着滚到最新一句，不用再手滑下去看。
+- 覆盖安装必须弹出「本次更新 · 吐字跟着滚」。
+
+### 验证
+
+- `bash src/harmony/scripts/verify_harmony_release_notes.sh`
+
+## HarmonyOS 0.3.0-alpha.10 (100015) - 2026-08-20
+
+- 登录页停在空白时不再当成已经打开。八秒后出现「页面打不开」和复制链接，不跳系统浏览器。
+- 覆盖安装必须弹出「本次更新 · 登录打不开会说明」。
+
+### 验证
+
+- `bash src/harmony/scripts/verify_harmony_release_notes.sh`
+
+## HarmonyOS 0.3.0-alpha.9 (100014) - 2026-08-20
+
+- 设置、会话、说话、识图、朗读不再用单个汉字当图标，改成系统图标。
+- 本机对话按帧往气泡上刷字。供应商没配完也能点切换。
+- 覆盖安装必须弹出「本次更新 · 图标和逐字回复」。
+
+### 验证
+
+- `node --experimental-strip-types src/harmony/protocol/protocol.test.mjs`
+- `bash src/harmony/scripts/verify_harmony_release_notes.sh`
+
+## HarmonyOS 0.3.0-alpha.8 (100013) - 2026-08-20
+
+- 竖屏不再按内屏宽度强行左右分栏。会话改成卡片，设置分区改成中文。
+- 对话气泡不再切掉左边的字，发送键不再挤成省略号。供应商详情的模型列表可点选，保存钉在底部。
+- 覆盖安装必须弹出「本次更新 · 排版不再切字」。
+
+### 验证
+
+- `node --experimental-strip-types src/harmony/protocol/protocol.test.mjs`
+- `bash src/harmony/scripts/verify_harmony_release_notes.sh`
+
+## HarmonyOS 0.3.0-alpha.7 (100012) - 2026-08-20
+
+- 在详情页换完模型回到首页，「选择执行模型」会显示刚选的那个，不再停在上一份名字。
+- 覆盖安装必须弹出「本次更新 · 当前模型会跟着变」。
+
+### 验证
+
+- `node --experimental-strip-types src/harmony/protocol/protocol.test.mjs`
+- `bash src/harmony/scripts/verify_harmony_release_notes.sh`
+
+## HarmonyOS 0.3.0-alpha.6 (100011) - 2026-08-20
+
+- 加完供应商回到首页，「选择执行模型」会解锁，点进去就能换当前模型。
+- 登录授权不再跳系统浏览器。打不开就停在本页中文说明并可复制链接。
+- 覆盖安装必须弹出「本次更新 · 选模型能点进去」。
+
+### 验证
+
+- `node --experimental-strip-types src/harmony/protocol/protocol.test.mjs`
+- `bash src/harmony/scripts/verify_harmony_release_notes.sh`
+
+## HarmonyOS 0.3.0-alpha.5 (100010) - 2026-08-20
+
+- OpenAI 登录被地区拦截时，不再把 403 JSON 和「美观输出」铺满屏幕。改成中文说明，并给出复制链接、系统浏览器。
+- 登录页一打开就提示需要境外网络。8 秒打不开也会收掉网页。
+- 覆盖安装必须弹出「本次更新 · 登录页不再白屏」。
+
+### 验证
+
+- `node --experimental-strip-types src/harmony/protocol/protocol.test.mjs`
+- `bash src/harmony/scripts/verify_harmony_release_notes.sh`
+
+## HarmonyOS 0.3.0-alpha.4 (100009) - 2026-08-20
+
+- 添加供应商保存后进入详情页选模型，新实例自动设为当前。本机聊天顶栏可切换供应商和模型。
+- OAuth 登录页打不开会写出错误，可复制链接或用系统浏览器。OpenAI / Claude / xAI / Gemini 会提示需要境外网络。
+- 冷启动后本机引擎先加载供应商档案，当身体和定时任务不再误报「还没配供应商」。
+- 定时任务结果写入「定时·标题」会话，失败原因留在定时页；失败当天不标记已跑。仅前台执行。
+- Anthropic / Kimi / xAI OAuth 会存 refresh token。拉模型按类型带认证头，失败时走 models.dev / 内置列表。
+- 覆盖安装必须弹出「本次更新 · 供应商贯通」。
+
+### 验证
+
+- `node --experimental-strip-types src/harmony/protocol/protocol.test.mjs`
+- `bash src/harmony/scripts/verify_harmony_release_notes.sh`
+
+## HarmonyOS 0.3.0-alpha.3 (100008) - 2026-08-20
+
+- OpenAI OAuth 登录后本机对话走 `chatgpt.com/backend-api/codex/responses`，和 Fold8 同一条后端。
+- 刷新 token、账号头、Responses 工具调用都接上。覆盖安装必须弹出「本次更新 · Codex 能聊」。
+
+### 验证
+
+- `node --experimental-strip-types src/harmony/protocol/protocol.test.mjs`
+- `bash src/harmony/scripts/verify_harmony_release_notes.sh`
+
+## HarmonyOS 0.3.0-alpha.2 (100007) - 2026-08-20
+
+- 添加供应商按 Fold8 列出这一家真能用的登录：OpenAI / Anthropic / OpenRouter 有 OAuth，Kimi / xAI 设备码排前面，Gemini 只有 API Key。
+- 点 OAuth 在本页打开登录网页，拦 localhost 回调换 token；不再灰一行「设备码」，打开网页也不会把轮询取消。
+- OpenAI Codex 登录后本机对话仍走 Chat Completions；Codex Responses 后端这一版还没接。
+- 覆盖安装必须弹出「本次更新 · 供应商 OAuth」。
+
+### 验证
+
+- `node --experimental-strip-types src/harmony/protocol/protocol.test.mjs`
+- `bash src/harmony/scripts/verify_harmony_release_notes.sh`
+
+## HarmonyOS 0.3.0-alpha.1 (100006) - 2026-08-20
+
+- 鸿蒙当身体：向中继注册 `platform=harmony` / `server=minis`，iPhone 可开会话并走本机工具循环。
+- 本机补齐：Kimi/xAI 设备码、语音说/读、Push Kit 要 token、Markdown、识图落盘、模型组失败换、用量 token、浏览器标签、HTTP MCP、前台定时。
+- 鸿蒙 NEXT 跑不了 Android 那份 PRoot。Push 没配 AGC 时杀进程后仍收不到。
+- 覆盖安装必须弹出「本次更新 · 鸿蒙当身体」。
+
+### 验证
+
+- `node --experimental-strip-types src/harmony/protocol/protocol.test.mjs`
+- `bash src/harmony/scripts/verify_harmony_release_notes.sh`
+
+## HarmonyOS 0.2.0-alpha.3 (100005) - 2026-08-20
+
+- 本机对话走工具循环：file_list / file_read / file_write / file_edit / memory_write / memory_get / open_url / web_fetch。
+- 写文件仍默认询问。没有 Linux 命令，也不做无障碍跨应用。
+- 覆盖安装必须弹出「本次更新 · 本机工具循环」。
+
+### 验证
+
+- `node --experimental-strip-types src/harmony/protocol/protocol.test.mjs`
+- `bash src/harmony/scripts/verify_harmony_release_notes.sh`
+
+## HarmonyOS 0.2.0-alpha.2 (100004) - 2026-08-19
+
+- 供应商按 Fold8：类型 → 凭证 → 身份/接口，多实例、拉 /models、模型组。
+- 外观跟随系统或锁浅色 / 深色，状态栏一起变；启动会话、回车发送、常亮可配。
+- 设置分区对齐 Fold8：远程机器、中继、Soul、环境变量、用量。
+- 覆盖安装必须弹出「本次更新 · 供应商和深浅色对齐 Fold8」。
+
+### 验证
+
+- `node --experimental-strip-types src/harmony/protocol/protocol.test.mjs`
+- `bash src/harmony/scripts/verify_harmony_release_notes.sh`
+
+## HarmonyOS 0.2.0-alpha.1 (100003) - 2026-08-19
+
+- 本机 Agent：OpenAI 兼容对话、会话落盘/搜索/置顶/日期分组、长按归档删除、记忆、技能、藏宝阁、沙箱文件、应用内打开链接。
+- Pura X Max 内屏按 Fold8：左栏自带 Leo 顶栏，会话行 44 图标 + 13 相对时间，左右 56 新任务/搜索，气泡 80%。
+- 写沙箱文件默认询问。没有 Linux 沙箱，也不做无障碍跨应用。
+- 覆盖安装必须弹出「本次更新 · 本机 Agent 对齐 Fold8」。
+
+### 验证
+
+- `node --experimental-strip-types src/harmony/protocol/protocol.test.mjs`
+- `bash src/harmony/scripts/verify_harmony_release_notes.sh`
+
 ## Android v1.0.0-alpha.7 - 2026-08-19
 
 ### 核心修复
@@ -22,6 +205,18 @@
 - Fold8 API 35 从 alpha.6 原地覆盖 alpha.7，Standard/Power 均返回 `Success`；普通冷启动与 `ACTION_ASSIST` 均为 `Status: ok`，进程存活，Logcat 无本 App `FATAL EXCEPTION`。
 - Standard SHA-256 `ff9257c23ce865e2edaf53bf02dd32fada9783ac7fbd0f46de1b51ef7aad44ba`；Power SHA-256 `89db6ec66fc7fd1bb2845bff23d653a28922b4b12a9d4466d4aab103ea617abb`。
 
+## HarmonyOS 0.1.0-alpha.2 (100002) - 2026-08-19
+
+- 做成完整远程控制面：产品图标、启动窗、深色界面，首页直接是远程机器而不是空架子。
+- 适配 Pura X Max 阔折叠：外屏单栏，展开内屏左右分栏（舰队 + 新任务）。
+- 中继钥匙、刷新、配对、新任务、续传、审批保留；本机 Agent / 鸿蒙身体仍未开，设置页写明。
+- 覆盖安装必须弹出「本次更新 · Pura X Max 完整控制面」。
+
+### 验证
+
+- `node --experimental-strip-types src/harmony/protocol/protocol.test.mjs`
+- `bash src/harmony/scripts/verify_harmony_release_notes.sh`
+
 ## HarmonyOS 0.1.0-alpha.1 (100001) - 2026-08-19
 
 - 首个鸿蒙瘦控制面：填中继钥匙后读 `/machines`，可对在线 Mac 或 Android 身体开新任务。
@@ -38,7 +233,7 @@
 
 - Android 可作为中继身体（`platform=android` / harness `minis`）；三端机器列表改读 `/machines`。
 - 配对码只含中继根和机器名；iPhone 可扫码加入。APNs 在主机出现时重登记。
-- 推理规则可编辑、换模型夹档可见、远程/Siri 带走当前档。读图委托、压缩/标题便宜模型、压缩开关。
+- 推理规则可编辑、换模型夹档可见；Android 身体的远程任务会带走当前档，Mac CLI 暂用各自默认档。压缩/标题便宜模型、压缩开关。非视觉模型不再假报已读图。
 - 写文件/终端默认询问。会话可归档、分组、导入 JSON。系列用语：新任务 / 本机 / 远程 / 进行中 / 审批。
 - Android 流式首包超时 30s → 120s。iOS OpenAI/Anthropic 请求超时已是 600s，未改。
 - 供应商 JSON 读失败时拒绝再保存，避免空配置覆盖原文件。

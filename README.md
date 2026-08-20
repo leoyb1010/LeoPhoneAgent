@@ -1,9 +1,9 @@
 # LeoPhoneAgent
 
-[![iOS](https://img.shields.io/badge/iOS-1.24.0%20(94)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![iOS](https://img.shields.io/badge/iOS-1.24.1%20(95)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.7-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.7)
 [![macOS](https://img.shields.io/badge/macOS-1.74.0-7C3AED.svg)](src/mac/leocodebox/package.json)
-[![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.1.0--alpha.1-D94B16.svg)](src/harmony/app/AppScope/app.json5)
+[![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.14-D94B16.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Mobile](https://img.shields.io/badge/mobile-iOS%20%2B%20Android-black.svg)](#系统架构)
 
@@ -31,17 +31,22 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
   `src/mac/leocodebox/`。`src/mac/leoagent/` 是协议兼容/灰度回退，不是 Android UI 工程。
   鸿蒙 7 交付计划：
   [`docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md`](docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md)；
-  工程落地在 `src/harmony/`。Ship 1 瘦控制面是 `0.1.0-alpha.1`，只走 `hdc install`，
-  本机 Agent / 身体注册还没交付。
+  工程落地在 `src/harmony/`。当前船是 `0.3.0-alpha.14`，只走 `hdc install`。
+  没有 Linux 沙箱，也不做无障碍跨应用。杀进程后审批不可用。
 - Android 同时交付 Standard 和 Power；修改 `main` 公共源码后必须同时验证两个 flavor。
 - 不得把「能编译」、「CI 是绿的」或「APK 已上传」当成可发布证据。
   可升级签名、覆盖安装、冷启动、发布附件哈希都必须单独校验。
 - 任务开始先读 `git status`并获取最新 `origin/main`；未知本地改动默认属于用户，
   不得 `reset --hard`、覆盖或删除。
 
-## HarmonyOS 0.1.0-alpha.1
+## HarmonyOS 0.3.0-alpha.14
 
 个人 hdc 安装，不上应用市场。包名 `com.leoyuan.leophoneagent.harmony`。
+Kimi 登录直接打开带设备码的确认页。供应商详情里「从上游拉取」和「用作当前」不再被长模型列表顶出屏幕。本机对话吐字时列表跟着滚到最新一句。
+设置、会话、说话、识图、朗读改成系统图标。本机对话按帧往气泡上刷字。供应商没配完也能切换回已配好的那一家。
+适配 Pura X Max：竖屏单列，横屏/宽屏才左右分栏。添加供应商保存后进入选模型，新实例自动当前。OpenAI OAuth 走 Codex Responses。冷启动后当身体和定时任务会读供应商档案。设置里打开「当身体」后 iPhone 能指挥这台机。
+
+OpenAI / Anthropic / Gemini / xAI 登录和官方接口大陆直连通常不通，需要可访问境外的网络。OpenRouter 通常可达，Kimi 和多数国内兼容根可直连。登录被地区拦截时不再跳系统浏览器，停在本页中文说明并可复制链接。
 
 ```bash
 bash src/harmony/scripts/verify_harmony_release_notes.sh
@@ -50,7 +55,7 @@ bash src/harmony/scripts/build_hap.sh
 # 在 DevEco 里对工程签一次名后再 hdc install。仓库路径含中文，hvigor 必须在 /tmp 舞台目录构建。
 ```
 
-这一版只做瘦控制面：钥匙、`/machines`、远程开聊、续传、审批。本机 Agent 和鸿蒙当身体还没开。
+鸿蒙 NEXT 跑不了 Android 那份 PRoot。远程机器仍是第二个入口。Push 没配 AGC 时杀进程后仍收不到。
 
 ## 直接下载 Android APK
 
@@ -60,7 +65,7 @@ bash src/harmony/scripts/build_hap.sh
 
 - [下载 Standard alpha.7](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.7/LeoPhoneAgent-Standard-1.0.0-alpha.7.apk)
 - [下载 Power alpha.7](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.7/LeoPhoneAgent-Power-1.0.0-alpha.7.apk)
-- [查看本次更新记录](CHANGELOG.md#android-v100-alpha7---2026-08-19)
+- [查看本次更新记录](CHANGELOG.md#ios-1240-94--macos-leocodebox-1740--android-100-alpha6---2026-08-19)
 - [查看完整五轮审计与交付报告](docs/ANDROID_DELIVERY_1.0.0_ALPHA1.md)
 
 SHA-256：
@@ -130,7 +135,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 版本/构建:`1.24.0 (94)`;Bundle ID `com.leoyuan.leophoneagent`
+- 版本/构建:`1.24.1 (95)`;Bundle ID `com.leoyuan.leophoneagent`
 - 主对话框直达 Mac:「指挥一台 Mac」选机 + 选 CLI 即开聊;发送在会话建立
   期间自动排队,永不吞点击
 - 会话接管:进入任意 Mac 先列进行中任务,一键接管(全量回放 + 实时跟随)
