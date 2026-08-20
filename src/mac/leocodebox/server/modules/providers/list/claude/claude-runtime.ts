@@ -611,6 +611,7 @@ async function queryClaudeSDK(command: string, options: ClaudeRuntimeOptions = {
         }
       }
 
+      const requestId = createRequestId();
       const approvalSessionId = capturedSessionId || sessionId || appSessionId || null;
       ws.send(createNormalizedMessage({ kind: 'permission_request', requestId, toolName, input, sessionId: approvalSessionId, provider: 'claude' }));
       emitNotification(createNotificationEvent({

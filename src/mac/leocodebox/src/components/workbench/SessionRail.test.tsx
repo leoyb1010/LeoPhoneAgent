@@ -79,7 +79,7 @@ test('idle 远程会话仍在进行中,能被接管', () => {
             session_id: 'hs_idle',
             harness: 'minis',
             status: 'idle',
-            cwd: '~',
+            cwd: '/tmp/hs_idle',
           }],
         }]}
         localName="本机"

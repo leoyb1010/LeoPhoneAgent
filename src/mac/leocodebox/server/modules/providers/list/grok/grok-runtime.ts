@@ -274,4 +274,4 @@ function abortGrokSession(sessionId: string): boolean {
   return false;
 }
 
-export { spawnGrok, abortGrokSession, resolveGrokPermissionMode };
+export { spawnGrok, abortGrokSession };
