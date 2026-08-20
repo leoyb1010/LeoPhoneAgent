@@ -1,6 +1,8 @@
 import AVFoundation
+import Contacts
 import CoreBluetooth
 import CoreLocation
+import CoreMotion
 import CoreNFC
 import EventKit
 import HealthKit
@@ -199,13 +201,18 @@ private final class NativeCapabilityProbe: ObservableObject {
         next["apple-weather"] = .ready
         next["apple-nlp"] = .ready
         next["apple-vision"] = .ready
+        next["apple-contacts"] = contactsState(CNContactStore.authorizationStatus(for: .contacts))
+        next["apple-camera"] = captureState(AVCaptureDevice.authorizationStatus(for: .video))
+        next["apple-files"] = .unknown
+        next["apple-motion"] = CMMotionActivityManager.isActivityAvailable() ? .ready : .unavailable
+        next["apple-shortcuts"] = .ready
 
         let notificationSettings = await UNUserNotificationCenter.current().notificationSettings()
         next["apple-notification"] = notificationState(notificationSettings.authorizationStatus)
 
-        next["camera"] = captureState(AVCaptureDevice.authorizationStatus(for: .video))
+        next["camera"] = next["apple-camera"] ?? captureState(AVCaptureDevice.authorizationStatus(for: .video))
         next["microphone"] = captureState(AVCaptureDevice.authorizationStatus(for: .audio))
-        next["shortcuts"] = .ready
+        next["shortcuts"] = next["apple-shortcuts"] ?? .ready
         next["widget"] = .ready
         next["icloud"] = FileManager.default.ubiquityIdentityToken == nil ? .limited : .ready
         next["files-share"] = .ready
@@ -279,6 +286,16 @@ private final class NativeCapabilityProbe: ObservableObject {
     private func captureState(_ status: AVAuthorizationStatus) -> CapabilityAuthorizationState {
         switch status {
         case .authorized: return .authorized
+        case .notDetermined: return .notDetermined
+        case .restricted, .denied: return .denied
+        @unknown default: return .limited
+        }
+    }
+
+    private func contactsState(_ status: CNAuthorizationStatus) -> CapabilityAuthorizationState {
+        switch status {
+        case .authorized: return .authorized
+        case .limited: return .limited
         case .notDetermined: return .notDetermined
         case .restricted, .denied: return .denied
         @unknown default: return .limited
@@ -387,11 +404,11 @@ private struct NativeCapabilitiesCenterView: View {
             }
 
             Section {
-                Text("Contacts is not currently implemented. Background location and audio are used only for their declared experiences; they are not presented as a guarantee that arbitrary work can run forever.")
+                Text("通讯录已接入。后台定位与音频只用于已声明的体验，不保证任意任务能一直在后台跑。")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             } header: {
-                Text("Known Boundaries")
+                Text("已知边界")
             }
         }
         .navigationTitle("Apple Capabilities")

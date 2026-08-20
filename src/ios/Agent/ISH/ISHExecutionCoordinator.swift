@@ -60,9 +60,6 @@ actor ISHExecutionCoordinator {
     private struct InflightExec {
         let id: UUID
         var pid: Int32 = 0
-        let startTime: Date
-        var preempted: Bool = false
-        var waiterContinuation: CheckedContinuation<Void, Error>?
     }
     private var perSessionInflight: [String: [InflightExec]] = [:]
 
@@ -80,7 +77,6 @@ actor ISHExecutionCoordinator {
 
     // MARK: - Constants
 
-    private let preemptTimeout: TimeInterval = 600 // 10 minutes
 
     // MARK: - Public API
 
@@ -104,7 +100,7 @@ actor ISHExecutionCoordinator {
         // Register ourselves in the in-flight table purely for
         // stop/preempt visibility — we do NOT wait for prior entries.
         let myId = UUID()
-        let head = InflightExec(id: myId, startTime: Date())
+        let head = InflightExec(id: myId)
         perSessionInflight[sessionId, default: []].append(head)
 
         try Task.checkCancellation()
@@ -236,31 +232,6 @@ actor ISHExecutionCoordinator {
     }
 
     // MARK: - Private
-
-    /// Kill the head command in `sessionId`'s queue if it has exceeded the
-    /// preempt timeout AND has at least one waiter queued behind it.
-    @discardableResult
-    private func preemptIfNeeded(sessionId: String) -> Bool {
-        guard let queue = perSessionInflight[sessionId],
-              queue.count >= 2,
-              let head = queue.first,
-              head.pid > 0,
-              Date().timeIntervalSince(head.startTime) >= preemptTimeout
-        else { return false }
-        logger.warning("Preempting command (pid \(head.pid), sid \(sessionId)) — exceeded \(self.preemptTimeout)s with \(queue.count - 1) waiter(s)")
-        ISHShellExecutor.killProcess(head.pid, withSignal: 15)
-        return true
-    }
-
-    /// Remove a cancelled waiter from its session queue.
-    private func cancelInflightWaiter(sessionId: String, id: UUID) {
-        guard var queue = perSessionInflight[sessionId],
-              let idx = queue.firstIndex(where: { $0.id == id })
-        else { return }
-        let entry = queue.remove(at: idx)
-        perSessionInflight[sessionId] = queue.isEmpty ? nil : queue
-        entry.waiterContinuation?.resume(throwing: CancellationError())
-    }
 
     /// Bridge ISHShellExecutor's callback API to async/await.
     private func runCommand(

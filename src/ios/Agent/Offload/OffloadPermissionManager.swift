@@ -287,6 +287,9 @@ final class OffloadPermissionManager: ObservableObject {
     ]
 
     @Published var pendingRequest: PermissionRequest?
+    /// Extra ask-once prompts waiting behind `pendingRequest`. A second
+    /// concurrent `shell_execute` used to overwrite the first continuation.
+    private var pendingQueue: [PermissionRequest] = []
 
     /// Per-session "Ask Once" grants: [sessionId: Set<commandName>]
     private var sessionGrants: [String: Set<String>] = [:]
@@ -303,8 +306,11 @@ final class OffloadPermissionManager: ObservableObject {
     }
 
     func permissionLevel(for command: String) -> OffloadPermissionLevel {
-        let raw = defaults.integer(forKey: defaultsKey(for: command))
-        return OffloadPermissionLevel(rawValue: raw) ?? .bypass
+        let key = defaultsKey(for: command)
+        let stored = defaults.object(forKey: key) as? Int
+        let isPrivacy = Self.allCommands.first(where: { $0.name == command })?.category == .privacy
+        let raw = OffloadPermissionPolicy.resolvedLevel(stored: stored, isPrivacy: isPrivacy)
+        return OffloadPermissionLevel(rawValue: raw) ?? (isPrivacy ? .askOnce : .bypass)
     }
 
     func setPermissionLevel(_ level: OffloadPermissionLevel, for command: String) {
@@ -321,13 +327,10 @@ final class OffloadPermissionManager: ObservableObject {
     // MARK: - Command Extraction
 
     static func extractOffloadCommand(from shellCommand: String) -> String? {
-        let trimmed = shellCommand.trimmingCharacters(in: .whitespacesAndNewlines)
-        let firstToken = trimmed.split(separator: " ", maxSplits: 1).first.map(String.init) ?? trimmed
-        // Check if this token matches a known offload command
-        if allCommands.contains(where: { $0.name == firstToken }) {
-            return firstToken
-        }
-        return nil
+        OffloadPermissionPolicy.extractOffloadCommand(
+            from: shellCommand,
+            known: allCommands.map(\.name)
+        )
     }
 
     // MARK: - Permission Check
@@ -347,7 +350,7 @@ final class OffloadPermissionManager: ObservableObject {
 
         case .notAllowed:
             logger.info("Permission denied (Not Allowed): \(command)")
-            return .denied("Permission denied: the user has disabled '\(command)'. To enable it, go to Settings > Permissions or tap: [Open Permissions](leophoneagent://settings/permissions)")
+            return .denied(OffloadPermissionPolicy.disabledDenial(command: command))
 
         case .askOnce:
             // Check session grant
@@ -374,13 +377,21 @@ final class OffloadPermissionManager: ObservableObject {
                     fullCommand: fullCommand,
                     continuation: continuation
                 )
-                self.pendingRequest = request
+                if self.pendingRequest == nil {
+                    self.pendingRequest = request
+                } else {
+                    self.pendingQueue.append(request)
+                }
 
                 // 30s timeout
                 Task { @MainActor in
                     try? await Task.sleep(nanoseconds: 30_000_000_000)
                     if self.pendingRequest?.id == request.id {
                         self.pendingRequest = nil
+                        continuation.resume(returning: false)
+                        self.promoteNextPermissionRequest()
+                    } else if let idx = self.pendingQueue.firstIndex(where: { $0.id == request.id }) {
+                        self.pendingQueue.remove(at: idx)
                         continuation.resume(returning: false)
                     }
                 }
@@ -401,9 +412,9 @@ final class OffloadPermissionManager: ObservableObject {
                 logger.info("Permission denied (Ask Once): \(command)")
                 if sessionGrants[sessionId]?.contains(command) == true {
                     // Was granted via timeout race — treat as denied
-                    return .denied("Permission denied: authorization for '\(command)' timed out. To change permissions: [Open Permissions](leophoneagent://settings/permissions)")
+                    return .denied(OffloadPermissionPolicy.timeoutDenial(command: command))
                 }
-                return .denied("Permission denied: the user declined '\(command)' for this session. To change permissions: [Open Permissions](leophoneagent://settings/permissions)")
+                return .denied(OffloadPermissionPolicy.declinedDenial(command: command))
             }
         }
     }
@@ -414,6 +425,12 @@ final class OffloadPermissionManager: ObservableObject {
         guard let request = pendingRequest, request.id == requestId else { return }
         pendingRequest = nil
         request.continuation.resume(returning: allowed)
+        promoteNextPermissionRequest()
+    }
+
+    private func promoteNextPermissionRequest() {
+        guard pendingRequest == nil, !pendingQueue.isEmpty else { return }
+        pendingRequest = pendingQueue.removeFirst()
     }
 
     // MARK: - Session Reset

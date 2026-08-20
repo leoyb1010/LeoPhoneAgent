@@ -552,6 +552,8 @@
 		E7A000001 /* OpenRouterModelsAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A000011 /* OpenRouterModelsAPI.swift */; };
 		E7A000002 /* OpenRouterOAuthManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7A000012 /* OpenRouterOAuthManager.swift */; };
 		E8A000001 /* OffloadPermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8A000011 /* OffloadPermissionManager.swift */; };
+		E5R3P0012 /* OffloadPermissionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5R3P0011 /* OffloadPermissionPolicy.swift */; };
+		E5R3P0013 /* OffloadPermissionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5R3P0011 /* OffloadPermissionPolicy.swift */; };
 		E5CAP001 /* CapabilityAuthorizationProbe.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CAP011 /* CapabilityAuthorizationProbe.swift */; };
 		E8A000002 /* OffloadPermissionDialog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8A000012 /* OffloadPermissionDialog.swift */; };
 		E8A000003 /* OffloadPermissionSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8A000013 /* OffloadPermissionSettingsView.swift */; };
@@ -1265,6 +1267,7 @@
 		E7A000011 /* OpenRouterModelsAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterModelsAPI.swift; sourceTree = "<group>"; };
 		E7A000012 /* OpenRouterOAuthManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenRouterOAuthManager.swift; sourceTree = "<group>"; };
 		E8A000011 /* OffloadPermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OffloadPermissionManager.swift; sourceTree = "<group>"; };
+		E5R3P0011 /* OffloadPermissionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OffloadPermissionPolicy.swift; sourceTree = "<group>"; };
 		E5CAP011 /* CapabilityAuthorizationProbe.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CapabilityAuthorizationProbe.swift; sourceTree = "<group>"; };
 		E8A000012 /* OffloadPermissionDialog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OffloadPermissionDialog.swift; sourceTree = "<group>"; };
 		E8A000013 /* OffloadPermissionSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OffloadPermissionSettingsView.swift; sourceTree = "<group>"; };
@@ -2235,6 +2238,7 @@
 			isa = PBXGroup;
 			children = (
 				E8A000011 /* OffloadPermissionManager.swift */,
+				E5R3P0011 /* OffloadPermissionPolicy.swift */,
 				E5CAP011 /* CapabilityAuthorizationProbe.swift */,
 			);
 			path = Offload;
@@ -2841,6 +2845,7 @@
 				E5LEO0009 /* AgentToolDefinition.swift in Sources */,
 				E5LEO0010 /* AIChatViewModel+ToolPreflight.swift in Sources */,
 				E5R1C0013 /* AgentChatCorrectness.swift in Sources */,
+				E5R3P0013 /* OffloadPermissionPolicy.swift in Sources */,
 				E5GWF0004 /* GeminiWireFormat.swift in Sources */,
 				E5JB10001 /* JiebaWrapper.mm in Sources */,
 				E5JB10002 /* TextSegmenter.swift in Sources */,
@@ -3308,6 +3313,7 @@
 				E5W00000D /* ChatStoreSyncHydrators.swift in Sources */,
 				E5W00003A /* SessionFileChangeTracker.swift in Sources */,
 				E8A000001 /* OffloadPermissionManager.swift in Sources */,
+				E5R3P0012 /* OffloadPermissionPolicy.swift in Sources */,
 				E5CAP001 /* CapabilityAuthorizationProbe.swift in Sources */,
 				E8A000002 /* OffloadPermissionDialog.swift in Sources */,
 				E8A000003 /* OffloadPermissionSettingsView.swift in Sources */,
