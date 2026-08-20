@@ -6,52 +6,55 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AdaptiveLayoutPolicyTest {
+    private fun arrangement(widthDp: Float, heightDp: Float, posture: FoldPosture) =
+        workspaceLayoutOf(widthDp, heightDp, posture).arrangement
+
     @Test
     fun `Fold inner display uses two panes`() {
         assertTrue(shouldUseFoldableTwoPane(widthDp = 674f, heightDp = 841f))
-        assertTrue(shouldUseTwoPaneWorkspace(674f, 841f, FoldPosture.NONE))
+        assertEquals(WorkspaceArrangement.LEFT_RIGHT, arrangement(674f, 841f, FoldPosture.NONE))
     }
 
     @Test
     fun `Fold cover display uses one pane`() {
         assertFalse(shouldUseFoldableTwoPane(widthDp = 344f, heightDp = 760f))
-        assertFalse(shouldUseTwoPaneWorkspace(344f, 760f, FoldPosture.NONE))
-        assertFalse(shouldUseTwoPaneWorkspace(344f, 760f, FoldPosture.TABLETOP))
-        assertFalse(shouldUseTwoPaneWorkspace(344f, 760f, FoldPosture.BOOK))
+        assertEquals(WorkspaceArrangement.SINGLE, arrangement(344f, 760f, FoldPosture.NONE))
+        assertEquals(WorkspaceArrangement.SINGLE, arrangement(344f, 760f, FoldPosture.TABLETOP))
+        assertEquals(WorkspaceArrangement.SINGLE, arrangement(344f, 760f, FoldPosture.BOOK))
     }
 
     @Test
     fun `split screen and shallow landscape remain one pane`() {
         assertFalse(shouldUseFoldableTwoPane(widthDp = 599f, heightDp = 841f))
         assertFalse(shouldUseFoldableTwoPane(widthDp = 800f, heightDp = 479f))
-        assertFalse(shouldUseTwoPaneWorkspace(599f, 841f, FoldPosture.NONE))
-        assertFalse(shouldUseTwoPaneWorkspace(800f, 479f, FoldPosture.BOOK))
+        assertEquals(WorkspaceArrangement.SINGLE, arrangement(599f, 841f, FoldPosture.NONE))
+        assertEquals(WorkspaceArrangement.SINGLE, arrangement(800f, 479f, FoldPosture.BOOK))
     }
 
     @Test
-    fun `HALF_OPENED tabletop stays one pane so the hinge does not cut the composer`() {
+    fun `HALF_OPENED tabletop is top-bottom not left-right`() {
         assertEquals(FoldPosture.TABLETOP, foldPostureOf(halfOpened = true, horizontalHinge = true))
-        assertFalse(shouldUseTwoPaneWorkspace(674f, 841f, FoldPosture.TABLETOP))
+        assertEquals(WorkspaceArrangement.TOP_BOTTOM, arrangement(674f, 841f, FoldPosture.TABLETOP))
     }
 
     @Test
     fun `HALF_OPENED book keeps two panes when the window is wide enough`() {
         assertEquals(FoldPosture.BOOK, foldPostureOf(halfOpened = true, horizontalHinge = false))
-        assertTrue(shouldUseTwoPaneWorkspace(674f, 841f, FoldPosture.BOOK))
+        assertEquals(WorkspaceArrangement.LEFT_RIGHT, arrangement(674f, 841f, FoldPosture.BOOK))
     }
 
     @Test
     fun `FLAT hinge does not override the window-size rule`() {
         assertEquals(FoldPosture.NONE, foldPostureOf(halfOpened = false, horizontalHinge = true))
         assertEquals(FoldPosture.NONE, foldPostureOf(halfOpened = false, horizontalHinge = false))
-        assertTrue(shouldUseTwoPaneWorkspace(674f, 841f, FoldPosture.NONE))
+        assertEquals(WorkspaceArrangement.LEFT_RIGHT, arrangement(674f, 841f, FoldPosture.NONE))
     }
 
     @Test
     fun `unknown posture stays single pane so tabletop cannot flash left-right`() {
         val decision = workspaceLayoutOf(674f, 841f, FoldPosture.UNKNOWN)
         assertEquals(WorkspaceArrangement.SINGLE, decision.arrangement)
-        assertFalse(shouldUseTwoPaneWorkspace(674f, 841f, FoldPosture.UNKNOWN))
+        assertEquals(WorkspaceArrangement.SINGLE, arrangement(674f, 841f, FoldPosture.UNKNOWN))
     }
 
     @Test
@@ -70,7 +73,6 @@ class AdaptiveLayoutPolicyTest {
         assertEquals(WorkspaceArrangement.TOP_BOTTOM, hinged.arrangement)
         assertEquals(0.42f, hinged.hinge?.startFraction)
         assertEquals(0.47f, hinged.hinge?.endFraction)
-        assertFalse(shouldUseTwoPaneWorkspace(674f, 841f, FoldPosture.TABLETOP))
     }
 
     @Test
@@ -85,7 +87,6 @@ class AdaptiveLayoutPolicyTest {
         assertEquals(0.48f, hinged.hinge?.startFraction)
         assertEquals(0.52f, hinged.hinge?.endFraction)
         assertEquals(0.5f, hinged.hinge?.midFraction)
-        assertTrue(shouldUseTwoPaneWorkspace(674f, 841f, FoldPosture.BOOK))
     }
 
     @Test

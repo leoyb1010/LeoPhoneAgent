@@ -508,7 +508,12 @@ fun SystemPermissionsScreen(
                         iconColor = Color(0xFF007AFF),
                         title = stringResource(R.string.system_permissions_samsung_cover_row),
                         subtitle = stringResource(R.string.system_permissions_samsung_cover_sub),
-                        onClick = { openAppDetails(context) },
+                        onClick = {
+                            SystemPermissionHub.openLink(
+                                context,
+                                SystemPermissionHub.coverScreenLink(context.packageName),
+                            )
+                        },
                         showDivider = false,
                     )
                 }
@@ -608,9 +613,10 @@ private fun RuntimeGrantRow(
 
 private fun runtimeGranted(context: Context, grant: SystemPermissionHub.RuntimeGrant): Boolean {
     val names = SystemPermissionHub.runtimePermissions(grant, Build.VERSION.SDK_INT)
-    return names.any {
+    val granted = names.associateWith {
         ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
     }
+    return SystemPermissionHub.anyPermissionGranted(granted, names)
 }
 
 private fun requestRuntime(

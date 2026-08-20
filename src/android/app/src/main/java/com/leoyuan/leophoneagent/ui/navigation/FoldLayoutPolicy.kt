@@ -48,10 +48,9 @@ data class WorkspaceLayoutDecision(
 data class FoldObservation(
     val posture: FoldPosture,
     val hinge: HingeBand? = null,
-    val ready: Boolean = false,
 ) {
     companion object {
-        val Unknown = FoldObservation(FoldPosture.UNKNOWN, ready = false)
+        val Unknown = FoldObservation(FoldPosture.UNKNOWN)
     }
 }
 
@@ -98,14 +97,6 @@ internal fun shouldFallbackFromCrampedTwoPane(
     return false
 }
 
-/** True only for the session|chat left-right workspace. */
-internal fun shouldUseTwoPaneWorkspace(
-    widthDp: Float,
-    heightDp: Float,
-    posture: FoldPosture,
-): Boolean = workspaceLayoutOf(widthDp, heightDp, posture).arrangement ==
-    WorkspaceArrangement.LEFT_RIGHT
-
 internal fun foldPostureOf(halfOpened: Boolean, horizontalHinge: Boolean): FoldPosture {
     if (!halfOpened) return FoldPosture.NONE
     return if (horizontalHinge) FoldPosture.TABLETOP else FoldPosture.BOOK
@@ -141,7 +132,7 @@ internal fun foldObservationFromLayoutInfo(
     if (info == null) return FoldObservation.Unknown
     val feature = info.displayFeatures.filterIsInstance<FoldingFeature>().firstOrNull()
     if (feature == null) {
-        return FoldObservation(FoldPosture.NONE, hinge = null, ready = true)
+        return FoldObservation(FoldPosture.NONE, hinge = null)
     }
     val halfOpened = feature.state == FoldingFeature.State.HALF_OPENED
     val horizontal = feature.orientation == FoldingFeature.Orientation.HORIZONTAL
@@ -152,7 +143,7 @@ internal fun foldObservationFromLayoutInfo(
     } else {
         hingeBandFromPixels(bounds.left, bounds.right, windowWidthPx)
     }
-    return FoldObservation(posture, hinge, ready = true)
+    return FoldObservation(posture, hinge)
 }
 
 @Composable

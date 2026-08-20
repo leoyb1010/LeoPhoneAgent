@@ -15,6 +15,7 @@ class AppsOffloadHandler(private val context: Context) : NativeOffloadHandler {
     override fun handle(request: NativeOffloadRequest): NativeOffloadResult {
         val args = OffloadArgs(request.argv.drop(1))
         if (args.hasFlag("h", "help")) return NativeOffloadResult(0, HELP)
+        OffloadGate.enforce("apps", "android-apps", args, request)?.let { return it }
         val filter = args.positional.firstOrNull()?.trim().orEmpty()
         val apps = InstalledLauncherApps.list(context.packageManager)
             .filter { app ->

@@ -69,11 +69,11 @@ fun detectMissingOsGrant(
         (hint.contains("notif") || hint.contains("android-notification")) &&
             !listenerGranted -> MissingOsGrant.LISTENER
         (hint.contains("a11y") || hint.contains("accessib")) && !a11yGranted -> MissingOsGrant.A11Y
-        (hint.contains("speech") || hint.contains("mic") || hint.contains("record")) &&
-            !micGranted -> MissingOsGrant.MIC
+        (hint.contains("speech") || hint.contains("mic") || hint.contains("record_audio") ||
+            hint.contains("microphone")) && !micGranted -> MissingOsGrant.MIC
         hint.contains("overlay") && !overlayGranted -> MissingOsGrant.OVERLAY
-        (hint.contains("photo") || hint.contains("storage") || hint.contains("file") ||
-            hint.contains("all-files")) && !allFilesGranted -> MissingOsGrant.ALL_FILES
+        (hint.contains("android-photos") || hint.contains("all-files") ||
+            hint.contains("all_files")) && !allFilesGranted -> MissingOsGrant.ALL_FILES
         hint.contains("shizuku") && powerEdition && !shizukuReady -> MissingOsGrant.SHIZUKU
         else -> null
     }

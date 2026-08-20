@@ -195,7 +195,7 @@
                  devices send the flags above. Handling them here keeps
                  MainActivity alive so ChatViewModelStore, IME, scroll and
                  composer state do not flash-reset. Two-pane still flips live
-                 via BoxWithConstraints + shouldUseTwoPaneWorkspace. -->
+                 via BoxWithConstraints + workspaceLayoutOf. -->
             <!-- T-android-dynamic-app-icon: LAUNCHER intent-filter moved
                  to the <activity-alias> entries below so the user can pick
                  an alternate icon. Exactly one alias is enabled at a time

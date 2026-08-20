@@ -121,7 +121,13 @@ class SystemPermissionHubTest {
 
     @Test
     fun `cover screen row opens app details not Device Care`() {
-        assertTrue(SystemPermissionHub.coverScreenOpensAppDetails())
+        val link = SystemPermissionHub.coverScreenLink("com.leoyuan.leophoneagent")
+        assertEquals(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, link.action)
+        assertEquals("package:com.leoyuan.leophoneagent", link.dataUri)
+        assertEquals(
+            SystemPermissionHub.appDetailsLink("com.leoyuan.leophoneagent").action,
+            link.action,
+        )
     }
 
     @Test

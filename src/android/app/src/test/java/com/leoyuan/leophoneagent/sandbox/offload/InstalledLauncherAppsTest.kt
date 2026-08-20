@@ -2,6 +2,8 @@ package com.leoyuan.leophoneagent.sandbox.offload
 
 import android.content.Intent
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class InstalledLauncherAppsTest {
@@ -29,5 +31,11 @@ class InstalledLauncherAppsTest {
         )
         assertEquals(null, InstalledLauncherApps.resolveFromCatalog(apps, "Chrome"))
         assertEquals(null, InstalledLauncherApps.resolveFromCatalog(apps, "  "))
+    }
+
+    @Test
+    fun `launchable follows launch intent not exported flag`() {
+        assertTrue(InstalledLauncherApps.launchableOf(hasLaunchIntent = true))
+        assertFalse(InstalledLauncherApps.launchableOf(hasLaunchIntent = false))
     }
 }

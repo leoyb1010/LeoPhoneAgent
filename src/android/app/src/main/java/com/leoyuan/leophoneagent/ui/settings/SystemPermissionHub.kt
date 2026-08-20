@@ -75,7 +75,7 @@ object SystemPermissionHub {
     fun listenerDegraded(settingsEnabled: Boolean, connected: Boolean): Boolean =
         settingsEnabled && !connected
 
-    fun coverScreenOpensAppDetails(): Boolean = true
+    fun coverScreenLink(packageName: String): SettingsDeepLink = appDetailsLink(packageName)
 
     fun overlayLink(packageName: String): SettingsDeepLink = SettingsDeepLink(
         action = Settings.ACTION_MANAGE_OVERLAY_PERMISSION,

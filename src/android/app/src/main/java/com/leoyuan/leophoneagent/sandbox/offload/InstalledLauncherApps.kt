@@ -29,9 +29,18 @@ object InstalledLauncherApps {
             val info = resolve.activityInfo ?: return@mapNotNull null
             val pkg = info.packageName ?: return@mapNotNull null
             val label = resolve.loadLabel(packageManager)?.toString()?.ifBlank { pkg } ?: pkg
-            LauncherApp(packageName = pkg, label = label, launchable = info.exported)
+            LauncherApp(
+                packageName = pkg,
+                label = label,
+                launchable = launchableOf(
+                    packageManager.getLaunchIntentForPackage(pkg) != null,
+                ),
+            )
         }.distinctBy { it.packageName }.sortedBy { it.label.lowercase() }
     }
+
+    /** Launchable means a launch intent exists, not `ActivityInfo.exported`. */
+    fun launchableOf(hasLaunchIntent: Boolean): Boolean = hasLaunchIntent
 
     fun resolveFromCatalog(apps: List<LauncherApp>, query: String): LauncherApp? {
         val q = query.trim()

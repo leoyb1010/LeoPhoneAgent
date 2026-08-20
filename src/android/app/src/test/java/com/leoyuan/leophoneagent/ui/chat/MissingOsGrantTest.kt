@@ -76,6 +76,23 @@ class MissingOsGrantTest {
     }
 
     @Test
+    fun `generic file mention does not claim all-files grant`() {
+        assertNull(
+            detectMissingOsGrant(
+                runActive = true,
+                toolHint = "shell_execute cat /var/minis/workspace/note.md",
+                overlayGranted = true,
+                listenerGranted = true,
+                allFilesGranted = false,
+                a11yGranted = true,
+                shizukuReady = true,
+                micGranted = true,
+                powerEdition = true,
+            ),
+        )
+    }
+
+    @Test
     fun `tool hint is taken from the latest assistant tool blocks`() {
         val messages = listOf(
             ChatMessage("1", "user", "open wechat"),

@@ -33,8 +33,7 @@ class OffloadSettingsGateStringsTest {
         assertTrue(zhXml.contains("需要日历权限"))
         assertTrue(zhXml.contains("需要位置权限"))
         assertTrue(zhXml.contains("封面屏幕应用"))
-        assertTrue(!defaultXml.contains("Contacts permission needed</string>") ||
-            defaultXml.contains("offload_gate_contacts_title"))
+        assertTrue(defaultXml.contains("name=\"offload_gate_contacts_title\""))
     }
 
     private fun readStrings(relative: String): String {
