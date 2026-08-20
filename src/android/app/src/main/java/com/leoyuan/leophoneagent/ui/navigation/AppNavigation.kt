@@ -1,8 +1,11 @@
 package com.leoyuan.leophoneagent.ui.navigation
 
 import androidx.compose.animation.AnimatedContentTransitionScope
-import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -85,12 +88,6 @@ import com.leoyuan.leophoneagent.ui.terminal.TerminalScreen
 import com.leoyuan.leophoneagent.ui.onboarding.OnboardingModelSelectionScreen
 import com.leoyuan.leophoneagent.ui.relay.RelayFleetScreen
 
-// T342: Material 3 motion easing curves. Compose-Material3 (1.3.x) ships
-// `MotionScheme` only in 1.4-alpha; mirror the spec values directly so we
-// don't take a dependency-bump tax just for two CubicBezierEasing instances.
-// Source: m3.material.io/styles/motion/easing-and-duration/tokens-specs
-private val EmphasizedDecelerate = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1.0f)
-private val EmphasizedAccelerate = CubicBezierEasing(0.3f, 0.0f, 0.8f, 0.15f)
 
 /**
  * Chooses the persistent session + chat workspace from the live app window.
@@ -515,26 +512,26 @@ fun AppNavigation(
         enterTransition = {
             slideIntoContainer(
                 AnimatedContentTransitionScope.SlideDirection.Start,
-                animationSpec = tween(300, easing = EmphasizedDecelerate),
-            ) + fadeIn(animationSpec = tween(300, easing = EmphasizedDecelerate))
+                animationSpec = tween(LeoMotion.EnterMs, easing = LeoMotion.EmphasizedDecelerate),
+            ) + fadeIn(animationSpec = tween(LeoMotion.EnterMs, easing = LeoMotion.EmphasizedDecelerate))
         },
         exitTransition = {
             slideOutOfContainer(
                 AnimatedContentTransitionScope.SlideDirection.Start,
-                animationSpec = tween(200, easing = EmphasizedAccelerate),
-            ) + fadeOut(animationSpec = tween(200, easing = EmphasizedAccelerate))
+                animationSpec = tween(LeoMotion.ExitMs, easing = LeoMotion.EmphasizedAccelerate),
+            ) + fadeOut(animationSpec = tween(LeoMotion.ExitMs, easing = LeoMotion.EmphasizedAccelerate))
         },
         popEnterTransition = {
             slideIntoContainer(
                 AnimatedContentTransitionScope.SlideDirection.End,
-                animationSpec = tween(300, easing = EmphasizedDecelerate),
-            ) + fadeIn(animationSpec = tween(300, easing = EmphasizedDecelerate))
+                animationSpec = tween(LeoMotion.EnterMs, easing = LeoMotion.EmphasizedDecelerate),
+            ) + fadeIn(animationSpec = tween(LeoMotion.EnterMs, easing = LeoMotion.EmphasizedDecelerate))
         },
         popExitTransition = {
             slideOutOfContainer(
                 AnimatedContentTransitionScope.SlideDirection.End,
-                animationSpec = tween(200, easing = EmphasizedAccelerate),
-            ) + fadeOut(animationSpec = tween(200, easing = EmphasizedAccelerate))
+                animationSpec = tween(LeoMotion.ExitMs, easing = LeoMotion.EmphasizedAccelerate),
+            ) + fadeOut(animationSpec = tween(LeoMotion.ExitMs, easing = LeoMotion.EmphasizedAccelerate))
         },
     ) {
         composable(Routes.SESSION_LIST) {
@@ -578,14 +575,28 @@ fun AppNavigation(
                 // boundary, while the unfolded 4:3 workspace clears it. Use
                 // the live app window (not device identity) so split-screen,
                 // freeform windows, rotation and future foldables adapt too.
-                // Tabletop HALF_OPENED is forced to one pane so the hinge
-                // does not cut through the composer / message list.
-                val foldPosture by rememberFoldPosture()
-                val useTwoPane = shouldUseTwoPaneWorkspace(
+                val foldObservation by rememberFoldObservation()
+                val fontScale = LocalDensity.current.fontScale
+                val reduceMotion = rememberReduceMotion()
+                val decision = workspaceLayoutOf(
                     maxWidth.value,
                     maxHeight.value,
-                    foldPosture,
+                    foldObservation.posture,
+                    foldObservation.hinge,
+                    fontScale,
                 )
+                WorkspaceLayoutStore.update(
+                    foldObservation.posture,
+                    maxWidth.value,
+                    maxHeight.value,
+                    decision,
+                )
+                val compactChrome = decision.arrangement == WorkspaceArrangement.SINGLE
+                val tabletopFraction = if (decision.arrangement == WorkspaceArrangement.TOP_BOTTOM) {
+                    decision.hinge?.startFraction ?: 0.5f
+                } else {
+                    null
+                }
 
                 val chatContent: @Composable (Boolean) -> Unit = { showBack ->
                     ChatScreen(
@@ -624,50 +635,79 @@ fun AppNavigation(
                             navController.safeNavigate(Routes.FILE_PREVIEW)
                         },
                         onModelGroupsClick = { navController.safeNavigate(Routes.MODEL_GROUPS) },
+                        compactChrome = compactChrome,
+                        tabletopSplitFraction = tabletopFraction,
+                        onOpenSystemPermissions = {
+                            navController.safeNavigate(Routes.SYSTEM_PERMISSIONS)
+                        },
                     )
                 }
 
-                if (useTwoPane) {
-                    Row(Modifier.fillMaxSize()) {
-                        SessionListScreen(
-                            chatRepository = chatRepository,
-                            providerRepository = providerRepository,
-                            onSessionClick = { targetId ->
-                                navController.safeNavigate(Routes.chat(targetId)) {
-                                    popUpTo(Routes.SESSION_LIST) { inclusive = false }
-                                    launchSingleTop = true
-                                }
-                            },
-                            onNewChat = { targetId ->
-                                navController.safeNavigate(Routes.chat(targetId)) {
-                                    popUpTo(Routes.SESSION_LIST) { inclusive = false }
-                                    launchSingleTop = true
-                                }
-                            },
-                            onSettingsClick = { navController.safeNavigate(Routes.SETTINGS) },
-                            onAddProviderClick = { navController.safeNavigate(Routes.ADD_PROVIDER) },
-                            onSelectModelsClick = { navController.safeNavigate(Routes.ONBOARDING_MODELS) },
-                            onTerminalClick = { navController.safeNavigate(Routes.terminal()) },
-                            onRootfsClick = { navController.safeNavigate(Routes.ROOTFS_MANAGEMENT) },
-                            onScheduledTasksClick = { navController.safeNavigate(Routes.SCHEDULED_TASKS) },
-                            // Equal weights keep the navigation/content seam on
-                            // the Fold's physical center hinge instead of
-                            // letting either pane render underneath it.
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
-                            compactHeader = true,
+                val sessionList: @Composable (androidx.compose.ui.Modifier) -> Unit = { listMod ->
+                    SessionListScreen(
+                        chatRepository = chatRepository,
+                        providerRepository = providerRepository,
+                        onSessionClick = { targetId ->
+                            navController.safeNavigate(Routes.chat(targetId)) {
+                                popUpTo(Routes.SESSION_LIST) { inclusive = false }
+                                launchSingleTop = true
+                            }
+                        },
+                        onNewChat = { targetId ->
+                            navController.safeNavigate(Routes.chat(targetId)) {
+                                popUpTo(Routes.SESSION_LIST) { inclusive = false }
+                                launchSingleTop = true
+                            }
+                        },
+                        onSettingsClick = { navController.safeNavigate(Routes.SETTINGS) },
+                        onAddProviderClick = { navController.safeNavigate(Routes.ADD_PROVIDER) },
+                        onSelectModelsClick = { navController.safeNavigate(Routes.ONBOARDING_MODELS) },
+                        onTerminalClick = { navController.safeNavigate(Routes.terminal()) },
+                        onRootfsClick = { navController.safeNavigate(Routes.ROOTFS_MANAGEMENT) },
+                        onScheduledTasksClick = { navController.safeNavigate(Routes.SCHEDULED_TASKS) },
+                        modifier = listMod,
+                        compactHeader = true,
+                    )
+                }
+
+                AnimatedContent(
+                    targetState = decision.arrangement,
+                    modifier = Modifier.fillMaxSize(),
+                    transitionSpec = {
+                        val spec = tween<Float>(
+                            durationMillis = LeoMotion.LayoutMorphMs,
+                            easing = LeoMotion.EmphasizedDecelerate,
                         )
-                        Box(
-                            Modifier
-                                .width(1.dp)
-                                .fillMaxHeight()
-                                .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)),
-                        )
-                        Box(Modifier.weight(1f).fillMaxHeight()) {
-                            chatContent(false)
+                        if (reduceMotion) {
+                            fadeIn(spec) togetherWith fadeOut(spec)
+                        } else {
+                            fadeIn(spec) togetherWith fadeOut(spec) using SizeTransform(clip = false)
                         }
+                    },
+                    label = "workspace-arrangement",
+                ) { arrangement ->
+                    when (arrangement) {
+                        WorkspaceArrangement.LEFT_RIGHT -> {
+                            val hingeStart = decision.hinge?.midFraction
+                            val leftWeight = hingeStart?.coerceIn(0.25f, 0.75f) ?: 0.5f
+                            val rightWeight = 1f - leftWeight
+                            Row(Modifier.fillMaxSize()) {
+                                sessionList(Modifier.weight(leftWeight).fillMaxHeight())
+                                Box(
+                                    Modifier
+                                        .width(1.dp)
+                                        .fillMaxHeight()
+                                        .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)),
+                                )
+                                Box(Modifier.weight(rightWeight).fillMaxHeight()) {
+                                    chatContent(false)
+                                }
+                            }
+                        }
+                        WorkspaceArrangement.TOP_BOTTOM,
+                        WorkspaceArrangement.SINGLE,
+                        -> chatContent(true)
                     }
-                } else {
-                    chatContent(true)
                 }
             }
         }
@@ -1245,6 +1285,7 @@ fun AppNavigation(
                 // surface (the two managers share one binder slot, so a
                 // multi-backend abstraction was misleading).
                 onOpenPrivilegedBackend = { navController.safeNavigate(Routes.SHIZUKU) },
+                onOpenSystemPermissions = { navController.safeNavigate(Routes.SYSTEM_PERMISSIONS) },
             )
         }
 
@@ -1257,6 +1298,7 @@ fun AppNavigation(
         composable(Routes.SYSTEM_PERMISSIONS) {
             SystemPermissionsScreen(
                 onBack = { navController.safePopBackStack() },
+                onOpenOffloadPermissions = { navController.safeNavigate(Routes.PERMISSIONS) },
             )
         }
 

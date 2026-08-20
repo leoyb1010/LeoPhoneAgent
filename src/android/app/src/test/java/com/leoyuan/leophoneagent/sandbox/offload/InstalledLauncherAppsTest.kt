@@ -12,4 +12,22 @@ class InstalledLauncherAppsTest {
         assertEquals(Intent.ACTION_MAIN, InstalledLauncherApps.LAUNCHER_ACTION)
         assertEquals(Intent.CATEGORY_LAUNCHER, InstalledLauncherApps.LAUNCHER_CATEGORY)
     }
+
+    @Test
+    fun `resolve prefers exact package then case-insensitive label`() {
+        val apps = listOf(
+            InstalledLauncherApps.LauncherApp("com.android.settings", "Settings", true),
+            InstalledLauncherApps.LauncherApp("com.tencent.mm", "WeChat", true),
+        )
+        assertEquals(
+            "com.android.settings",
+            InstalledLauncherApps.resolveFromCatalog(apps, "com.android.settings")?.packageName,
+        )
+        assertEquals(
+            "com.tencent.mm",
+            InstalledLauncherApps.resolveFromCatalog(apps, "wechat")?.packageName,
+        )
+        assertEquals(null, InstalledLauncherApps.resolveFromCatalog(apps, "Chrome"))
+        assertEquals(null, InstalledLauncherApps.resolveFromCatalog(apps, "  "))
+    }
 }

@@ -8,18 +8,41 @@ import android.content.pm.PackageManager
  * change. The manifest declares both `QUERY_ALL_PACKAGES` (sideload personal
  * agent) and a `MAIN`+`LAUNCHER` `<queries>` entry so OEMs that ignore the
  * install-time permission can still see home-screen activities.
- *
- * This is not a new LLM tool — [OpenOffloadHandler] uses it when an
- * `intent:` / `android-app:` URI names a package that `resolveActivity`
- * cannot see.
  */
 object InstalledLauncherApps {
 
     const val LAUNCHER_ACTION: String = Intent.ACTION_MAIN
     const val LAUNCHER_CATEGORY: String = Intent.CATEGORY_LAUNCHER
 
+    data class LauncherApp(
+        val packageName: String,
+        val label: String,
+        val launchable: Boolean,
+    )
+
     fun launcherQueryIntent(): Intent =
         Intent(LAUNCHER_ACTION).addCategory(LAUNCHER_CATEGORY)
+
+    fun list(packageManager: PackageManager): List<LauncherApp> {
+        val matches = packageManager.queryIntentActivities(launcherQueryIntent(), 0)
+        return matches.mapNotNull { resolve ->
+            val info = resolve.activityInfo ?: return@mapNotNull null
+            val pkg = info.packageName ?: return@mapNotNull null
+            val label = resolve.loadLabel(packageManager)?.toString()?.ifBlank { pkg } ?: pkg
+            LauncherApp(packageName = pkg, label = label, launchable = info.exported)
+        }.distinctBy { it.packageName }.sortedBy { it.label.lowercase() }
+    }
+
+    fun resolveFromCatalog(apps: List<LauncherApp>, query: String): LauncherApp? {
+        val q = query.trim()
+        if (q.isEmpty()) return null
+        apps.firstOrNull { it.packageName.equals(q, ignoreCase = false) }?.let { return it }
+        apps.firstOrNull { it.packageName.equals(q, ignoreCase = true) }?.let { return it }
+        return apps.firstOrNull { it.label.equals(q, ignoreCase = true) }
+    }
+
+    fun resolve(packageManager: PackageManager, query: String): LauncherApp? =
+        resolveFromCatalog(list(packageManager), query)
 
     fun launchIntent(packageManager: PackageManager, packageName: String): Intent? {
         if (packageName.isBlank()) return null

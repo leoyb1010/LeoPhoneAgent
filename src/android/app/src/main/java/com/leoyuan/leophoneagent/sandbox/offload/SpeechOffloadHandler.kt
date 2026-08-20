@@ -14,6 +14,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import androidx.core.content.ContextCompat
+import com.leoyuan.leophoneagent.R
 import com.leoyuan.leophoneagent.logging.AppLogger
 import com.leoyuan.leophoneagent.offload.OffloadPermissionManager
 import com.leoyuan.leophoneagent.sandbox.NativeOffloadHandler
@@ -264,11 +265,11 @@ class SpeechOffloadHandler(private val context: Context) : NativeOffloadHandler 
                 r = OffloadPermissionManager.requestSettingsGate(
                     OffloadPermissionManager.SettingsGateRequest(
                         id = Manifest.permission.RECORD_AUDIO,
-                        title = "Microphone permission needed",
-                        message = "LeoPhoneAgent needs microphone permission to transcribe speech. Open Settings to allow it.",
+                        title = context.getString(R.string.offload_gate_mic_title),
+                        message = context.getString(R.string.offload_gate_mic_message),
                         settingsAction = android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                         requiresPackageUri = true,
-                        positiveLabel = "Open Settings",
+                        positiveLabel = context.getString(R.string.offload_gate_open_settings),
                     ),
                     check = { hasMic() },
                 )

@@ -12,8 +12,9 @@ import com.leoyuan.leophoneagent.power.PowerOptimizationManager
  * Testable status + deep-link helpers for [SystemPermissionsScreen].
  *
  * Each link reuses an already-declared / already-implemented OS grant
- * (overlay, notification listener, all-files, exact alarm). The hub does
- * not invent SMS, call-log, contacts, or Bluetooth surfaces.
+ * (overlay, notification listener, all-files, exact alarm, plus the
+ * runtime grants the agent already uses). The hub does not invent SMS,
+ * call-log, or Bluetooth surfaces.
  */
 object SystemPermissionHub {
 
@@ -33,6 +34,48 @@ object SystemPermissionHub {
 
     fun exactAlarmNeedsRuntimeGrant(sdk: Int): Boolean =
         sdk >= Build.VERSION_CODES.S
+
+    enum class RuntimeGrant { CONTACTS, CALENDAR, LOCATION, MICROPHONE, CAMERA, PHOTOS }
+
+    fun runtimePermissions(grant: RuntimeGrant, sdk: Int): List<String> = when (grant) {
+        RuntimeGrant.CONTACTS -> listOf(android.Manifest.permission.READ_CONTACTS)
+        RuntimeGrant.CALENDAR -> listOf(android.Manifest.permission.READ_CALENDAR)
+        RuntimeGrant.LOCATION -> listOf(
+            android.Manifest.permission.ACCESS_FINE_LOCATION,
+            android.Manifest.permission.ACCESS_COARSE_LOCATION,
+        )
+        RuntimeGrant.MICROPHONE -> listOf(android.Manifest.permission.RECORD_AUDIO)
+        RuntimeGrant.CAMERA -> listOf(android.Manifest.permission.CAMERA)
+        RuntimeGrant.PHOTOS -> if (sdk >= 33) {
+            listOf(android.Manifest.permission.READ_MEDIA_IMAGES)
+        } else {
+            listOf(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+    }
+
+    fun anyPermissionGranted(granted: Map<String, Boolean>, names: List<String>): Boolean =
+        names.any { granted[it] == true }
+
+    fun setupMissingCount(
+        assistantHeld: Boolean,
+        notificationsOn: Boolean,
+        batteryExempt: Boolean,
+        overlayGranted: Boolean,
+        listenerGranted: Boolean,
+        allFilesGranted: Boolean,
+    ): Int = listOf(
+        assistantHeld,
+        notificationsOn,
+        batteryExempt,
+        overlayGranted,
+        listenerGranted,
+        allFilesGranted,
+    ).count { !it }
+
+    fun listenerDegraded(settingsEnabled: Boolean, connected: Boolean): Boolean =
+        settingsEnabled && !connected
+
+    fun coverScreenOpensAppDetails(): Boolean = true
 
     fun overlayLink(packageName: String): SettingsDeepLink = SettingsDeepLink(
         action = Settings.ACTION_MANAGE_OVERLAY_PERMISSION,

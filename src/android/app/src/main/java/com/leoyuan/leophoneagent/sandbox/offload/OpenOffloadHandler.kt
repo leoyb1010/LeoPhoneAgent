@@ -29,12 +29,36 @@ class OpenOffloadHandler(private val context: Context) : NativeOffloadHandler {
         val args = OffloadArgs(request.argv.drop(1))
         if (args.hasFlag("h", "help")) return NativeOffloadResult(0, HELP)
 
-        val url = args.positional.firstOrNull()
-        if (url.isNullOrBlank()) {
+        val url = args.positional.joinToString(" ").trim()
+        if (url.isBlank()) {
             return NativeOffloadResult(2, "android-open: missing <url>\n$HELP")
+        }
+        if (!looksLikeUri(url)) {
+            val app = InstalledLauncherApps.resolve(context.packageManager, url)
+            val launch = app?.let { InstalledLauncherApps.launchIntent(context.packageManager, it.packageName) }
+            if (launch != null) {
+                return try {
+                    context.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    NativeOffloadResult(0, OffloadOutput.formatBody("Opened: ${app.packageName}", args) + "\n")
+                } catch (e: ActivityNotFoundException) {
+                    maybeFallback(url, e, args)
+                }
+            }
         }
 
         return tryOpen(url, args)
+    }
+
+    private fun looksLikeUri(value: String): Boolean {
+        val lower = value.lowercase()
+        return lower.contains("://") ||
+            lower.startsWith("intent:") ||
+            lower.startsWith("android-app:") ||
+            lower.startsWith("tel:") ||
+            lower.startsWith("mailto:") ||
+            lower.startsWith("sms:") ||
+            lower.startsWith("geo:") ||
+            lower.startsWith("market:")
     }
 
     private fun tryOpen(url: String, args: OffloadArgs): NativeOffloadResult {
@@ -140,9 +164,11 @@ class OpenOffloadHandler(private val context: Context) : NativeOffloadHandler {
 
 Usage:
   android-open <url>
+  android-open <package-or-label>
   android-open --help
 
-Supports https://, tel:, mailto:, geo:, market:, intent:, and any other
+Supports https://, tel:, mailto:, geo:, market:, intent:, a launcher
+package name, or a case-insensitive app label. Also any other
 scheme a device app can handle. On Huawei devices without Play Store,
 market:// URLs automatically fall back to AppGallery.
 Errors are returned as JSON: {"error":"no_handler","message":"...","url":"..."}.

@@ -85,4 +85,86 @@ class SystemPermissionHubTest {
             ),
         )
     }
+
+    @Test
+    fun `setup checklist counts missing of the six OS grants`() {
+        assertEquals(
+            0,
+            SystemPermissionHub.setupMissingCount(
+                assistantHeld = true,
+                notificationsOn = true,
+                batteryExempt = true,
+                overlayGranted = true,
+                listenerGranted = true,
+                allFilesGranted = true,
+            ),
+        )
+        assertEquals(
+            3,
+            SystemPermissionHub.setupMissingCount(
+                assistantHeld = false,
+                notificationsOn = true,
+                batteryExempt = false,
+                overlayGranted = true,
+                listenerGranted = false,
+                allFilesGranted = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `listener is degraded when Settings says on but service is disconnected`() {
+        assertTrue(SystemPermissionHub.listenerDegraded(settingsEnabled = true, connected = false))
+        assertFalse(SystemPermissionHub.listenerDegraded(settingsEnabled = true, connected = true))
+        assertFalse(SystemPermissionHub.listenerDegraded(settingsEnabled = false, connected = false))
+    }
+
+    @Test
+    fun `cover screen row opens app details not Device Care`() {
+        assertTrue(SystemPermissionHub.coverScreenOpensAppDetails())
+    }
+
+    @Test
+    fun `runtime grant permission names stay on already-declared surfaces`() {
+        assertEquals(
+            listOf(android.Manifest.permission.READ_CONTACTS),
+            SystemPermissionHub.runtimePermissions(SystemPermissionHub.RuntimeGrant.CONTACTS, 35),
+        )
+        assertEquals(
+            listOf(android.Manifest.permission.READ_CALENDAR),
+            SystemPermissionHub.runtimePermissions(SystemPermissionHub.RuntimeGrant.CALENDAR, 35),
+        )
+        assertTrue(
+            SystemPermissionHub.runtimePermissions(SystemPermissionHub.RuntimeGrant.LOCATION, 35)
+                .contains(android.Manifest.permission.ACCESS_FINE_LOCATION),
+        )
+        assertEquals(
+            listOf(android.Manifest.permission.RECORD_AUDIO),
+            SystemPermissionHub.runtimePermissions(SystemPermissionHub.RuntimeGrant.MICROPHONE, 35),
+        )
+        assertEquals(
+            listOf(android.Manifest.permission.CAMERA),
+            SystemPermissionHub.runtimePermissions(SystemPermissionHub.RuntimeGrant.CAMERA, 35),
+        )
+        assertEquals(
+            listOf(android.Manifest.permission.READ_MEDIA_IMAGES),
+            SystemPermissionHub.runtimePermissions(SystemPermissionHub.RuntimeGrant.PHOTOS, 33),
+        )
+        assertEquals(
+            listOf(android.Manifest.permission.READ_EXTERNAL_STORAGE),
+            SystemPermissionHub.runtimePermissions(SystemPermissionHub.RuntimeGrant.PHOTOS, 28),
+        )
+        assertTrue(
+            SystemPermissionHub.anyPermissionGranted(
+                mapOf(android.Manifest.permission.CAMERA to true),
+                listOf(android.Manifest.permission.CAMERA),
+            ),
+        )
+        assertFalse(
+            SystemPermissionHub.anyPermissionGranted(
+                mapOf(android.Manifest.permission.CAMERA to false),
+                listOf(android.Manifest.permission.CAMERA),
+            ),
+        )
+    }
 }

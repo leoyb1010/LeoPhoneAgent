@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.provider.CalendarContract
 import androidx.core.content.ContextCompat
+import com.leoyuan.leophoneagent.R
 import com.leoyuan.leophoneagent.logging.AppLogger
 import com.leoyuan.leophoneagent.offload.OffloadPermissionManager
 import com.leoyuan.leophoneagent.sandbox.NativeOffloadHandler
@@ -104,11 +105,17 @@ class CalendarOffloadHandler(private val context: Context) : NativeOffloadHandle
                 r = OffloadPermissionManager.requestSettingsGate(
                     OffloadPermissionManager.SettingsGateRequest(
                         id = settingsId,
-                        title = "Calendar permission needed",
-                        message = "LeoPhoneAgent needs $humanLabel permission to $humanLabel your calendar. Open Settings to allow it.",
+                        title = context.getString(R.string.offload_gate_calendar_title),
+                        message = context.getString(
+                            if (humanLabel == "write") {
+                                R.string.offload_gate_calendar_message_write
+                            } else {
+                                R.string.offload_gate_calendar_message_read
+                            },
+                        ),
                         settingsAction = android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                         requiresPackageUri = true,
-                        positiveLabel = "Open Settings",
+                        positiveLabel = context.getString(R.string.offload_gate_open_settings),
                     ),
                     check = { satisfied() },
                 )

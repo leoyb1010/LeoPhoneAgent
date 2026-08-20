@@ -83,6 +83,7 @@ object OffloadPermissionManager {
         ToolPermissionInfo("weather", "Weather", PermissionCategory.SYSTEM, PermissionLevel.BYPASS, showInSettings = false),
         ToolPermissionInfo("notification", "Notifications", PermissionCategory.SYSTEM, PermissionLevel.BYPASS, showInSettings = false),
         ToolPermissionInfo("device_info", "Device Info", PermissionCategory.SYSTEM, PermissionLevel.BYPASS, showInSettings = false),
+        ToolPermissionInfo("apps", "Installed Apps", PermissionCategory.SYSTEM, PermissionLevel.BYPASS, showInSettings = false),
         // T330: integrations — opt-in by default. These tools can drive
         // other apps and read on-screen content, so the safer posture is
         // NOT_ALLOWED until the user picks otherwise even when the
