@@ -238,6 +238,7 @@ struct ContentView: View {
     /// observe them — SessionRow observes this store for its own badges, but
     /// the aggregate lives on ContentView and needs its own subscription.
     @ObservedObject private var badgeStore = SessionBadgeStore.shared
+    @ObservedObject private var relayCatchUp = RelayEventCatchUp.shared
     @State private var sessions: [ChatSession] = []
     /// [T-ios-session-list-equatable-jank] id → ChatSession lookup backing the
     /// sidebar rows. Held in @State (not a per-body-eval computed `[String:
@@ -3182,22 +3183,23 @@ struct ContentView: View {
     @ViewBuilder
     private var attentionBar: some View {
         let pending = attentionSessions
-        if !pending.isEmpty {
+        let missed = relayCatchUp.missedApprovals
+        if !pending.isEmpty || !missed.isEmpty {
             Button {
-                // Jump to the oldest one — working a backlog front-to-back is
-                // the behaviour people expect from an inbox.
-                if let target = pending.last {
+                if let item = missed.first {
+                    openMissedRelayApproval(item)
+                } else if let target = pending.last {
                     jumpToSession(target.id)
                 }
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "tray.full.fill")
+                    Image(systemName: missed.isEmpty ? "tray.full.fill" : "hand.raised.fill")
                         .font(.caption)
                         .foregroundStyle(.white)
                         .frame(width: 22, height: 22)
                         .background(Color.orange, in: Circle())
                         .leoPulse(active: true)
-                    Text("\(pending.count) sessions need you")
+                    Text(attentionBarTitle(sessionCount: pending.count, approvalCount: missed.count))
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(.primary)
                     Spacer(minLength: 0)
@@ -3216,6 +3218,44 @@ struct ContentView: View {
             .buttonStyle(.plain)
             .hoverEffect(.highlight)
             .transition(.move(edge: .top).combined(with: .opacity))
+        }
+    }
+
+    private func attentionBarTitle(sessionCount: Int, approvalCount: Int) -> String {
+        if approvalCount > 0 && sessionCount > 0 {
+            return "\(approvalCount) 条远程审批 · \(sessionCount) 个会话待处理"
+        }
+        if approvalCount > 0 {
+            return approvalCount == 1 ? "远程机器等你审批" : "\(approvalCount) 条远程审批待处理"
+        }
+        return "\(sessionCount) sessions need you"
+    }
+
+    private func openMissedRelayApproval(_ item: RelayEventItem) {
+        let host = GatewayHostStore.shared.hostMatching(machine: item.machine)
+        if let host, let sid = item.sessionId,
+           let live = macLive.rows.first(where: { $0.hostId == host.id && $0.session.id == sid }) {
+            macAttachTarget = live
+            relayCatchUp.clearMissedApprovals()
+            return
+        }
+        if let host, let sid = item.sessionId {
+            macAttachTarget = MacLiveSessionsStore.Row(
+                hostId: host.id,
+                hostName: host.name,
+                session: HarnessSessionSummary(
+                    id: sid,
+                    harness: "claude",
+                    name: "远程会话",
+                    cwd: "~",
+                    status: "running",
+                    seq: item.seq,
+                    waitingForApproval: true,
+                    pendingApprovalId: item.approvalId,
+                    pendingApprovalCommand: item.command
+                )
+            )
+            relayCatchUp.clearMissedApprovals()
         }
     }
 

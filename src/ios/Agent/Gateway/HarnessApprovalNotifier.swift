@@ -85,10 +85,15 @@ enum HarnessApprovalNotifier {
     static func handle(response: UNNotificationResponse,
                        completion: @escaping () -> Void) -> Bool {
         let info = response.notification.request.content.userInfo
-        guard info["harnessApproval"] as? Bool == true,
-              let sessionId = info["harnessSessionId"] as? String,
-              let approvalId = info["approvalId"] as? String else { return false }
+        let approvalId = (info["approvalId"] as? String) ?? (info["approval_id"] as? String)
+        let hintedSession = (info["harnessSessionId"] as? String)
+            ?? (info["session_id"] as? String)
+            ?? (info["sessionId"] as? String)
         let hostId = info["hostId"] as? String ?? ""
+        let machine = (info["machine"] as? String) ?? ""
+        let isHarness = (info["harnessApproval"] as? Bool) == true
+            || approvalId != nil && !machine.isEmpty
+        guard isHarness, let approvalId, !approvalId.isEmpty else { return false }
 
         let choice: String?
         switch response.actionIdentifier {
@@ -98,22 +103,21 @@ enum HarnessApprovalNotifier {
         }
         guard let choice else { return false }
 
-        // APNs 路径的推送里只有 machine(机器名),没有 hostId ——
-        // 只按 id 精确匹配的话,锁屏按「批准一次」什么都不会发生,
-        // Mac 上的任务永远挂着。逐级回退:id → 名字全等 → 名字包含 →
-        // 唯一主机兜底(与 catch-up 路径同一套解析)。
-        let machine = info["machine"] as? String ?? ""
+        // APNs 路径的推送里往往只有 machine + approval_id。
+        // 用机器 id / 显示名匹配主机;会话 id 缺失时从进行中列表补。
         Task { @MainActor in
             defer { completion() }
-            let hosts = GatewayHostStore.shared.hosts
-            let host = hosts.first { $0.id == hostId }
-                ?? hosts.first { !machine.isEmpty && $0.name == machine }
-                ?? hosts.first { !machine.isEmpty
-                    && (machine.contains($0.name) || $0.name.contains(machine)) }
-                ?? (hosts.count == 1 ? hosts.first : nil)
+            let host = GatewayHostStore.shared.hostMatching(hostId: hostId, machine: machine)
+                ?? (GatewayHostStore.shared.hosts.count == 1 ? GatewayHostStore.shared.hosts.first : nil)
             guard let host, let client = GatewayHostStore.shared.client(for: host) else { return }
+            let sessionId = hintedSession.flatMap { $0.isEmpty ? nil : $0 }
+                ?? MacLiveSessionsStore.shared.rows.first(where: {
+                    $0.hostId == host.id && $0.session.pendingApprovalId == approvalId
+                })?.session.id
+            guard let sessionId else { return }
             try? await client.approveHarness(sessionId: sessionId, choice: choice,
                                              approvalId: approvalId)
+            HarnessApprovalNotifier.clear(sessionId: sessionId, approvalId: approvalId)
         }
         return true
     }

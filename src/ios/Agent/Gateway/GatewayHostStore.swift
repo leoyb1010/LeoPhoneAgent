@@ -92,8 +92,14 @@ final class GatewayHostStore: ObservableObject {
                     clients.removeValue(forKey: id)
                     changed = true
                 }
-                if hosts[index].platform == nil { hosts[index].platform = machine.platform; changed = true }
-                if hosts[index].server == nil { hosts[index].server = machine.server; changed = true }
+                if let platform = machine.platform, hosts[index].platform != platform {
+                    hosts[index].platform = platform
+                    changed = true
+                }
+                if let server = machine.server, hosts[index].server != server {
+                    hosts[index].server = server
+                    changed = true
+                }
                 // Keep isEnabled, display name, and engine URL — refresh must
                 // not turn a disabled machine back on or wipe a rename.
             } else {
@@ -130,6 +136,16 @@ final class GatewayHostStore: ObservableObject {
         clients.removeValue(forKey: id)
         Self.deleteKey(hostId: id)
         persist()
+    }
+
+    func hostMatching(hostId: String = "", machine: String) -> GatewayHost? {
+        guard let index = RelayMachinesClient.pickHostIndex(
+            hostIds: hosts.map(\.id),
+            displayNames: hosts.map(\.name),
+            hostId: hostId,
+            machine: machine
+        ) else { return nil }
+        return hosts[index]
     }
 
     func markSeen(id: String) {

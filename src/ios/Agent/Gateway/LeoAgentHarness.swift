@@ -354,7 +354,10 @@ final class HarnessSessionDriver: ObservableObject {
                 for try await item in client.harnessEvents(sessionId: sessionId, after: lastSeq) {
                     if Task.isCancelled { return }
                     await MainActor.run {
-                        self.lastSeq = max(self.lastSeq, item.seq)
+                        // Skip a replay of the last applied seq when `after` is inclusive.
+                        // messageDelta concatenates; applying seq N twice doubles the last chunk.
+                        if item.seq > 0, item.seq <= self.lastSeq { return }
+                        if item.seq > 0 { self.lastSeq = item.seq }
                         self.apply(item.event)
                     }
                     // run.completed / run.failed are TURN boundaries here — the

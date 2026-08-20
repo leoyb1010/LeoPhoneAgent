@@ -397,6 +397,7 @@ struct MinisApp: App {
                 await Task.yield()
 
                 ViewModelCache.shared.resumeAllStreamingUI()
+                PushRegistrar.shared.refreshAuthorizationAndRegister()
 
                 SessionLockStore.shared.evaluateAppLock()
 

@@ -17,6 +17,7 @@
 
 import Foundation
 import UIKit
+import UserNotifications
 #if canImport(ActivityKit)
 import ActivityKit
 #endif
@@ -26,18 +27,40 @@ final class PushRegistrar {
     static let shared = PushRegistrar()
     private init() {}
 
-    private var lastDeviceToken: String?
+    private var lastDeviceToken: String? {
+        get { UserDefaults.standard.string(forKey: "leo.push.lastDeviceToken") }
+        set { UserDefaults.standard.set(newValue, forKey: "leo.push.lastDeviceToken") }
+    }
     private var lastPushToStartToken: String?
 
     /// 启动时调用:请求通知权限并向 APNs 注册。
     func start() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
-            guard granted else { return }
+        refreshAuthorizationAndRegister()
+        observePushToStart()
+    }
+
+    /// Foreground / Settings-return: if the user granted notifications after
+    /// the first deny, actually register. Also re-POSTs a persisted token
+    /// once a relay host exists.
+    func refreshAuthorizationAndRegister() {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
             Task { @MainActor in
-                UIApplication.shared.registerForRemoteNotifications()
+                switch settings.authorizationStatus {
+                case .authorized, .provisional, .ephemeral:
+                    UIApplication.shared.registerForRemoteNotifications()
+                    self.reregisterIfPossible()
+                case .notDetermined:
+                    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+                        guard granted else { return }
+                        Task { @MainActor in
+                            UIApplication.shared.registerForRemoteNotifications()
+                        }
+                    }
+                default:
+                    break
+                }
             }
         }
-        observePushToStart()
     }
 
     /// AppDelegate 的 didRegisterForRemoteNotificationsWithDeviceToken 转进来。
