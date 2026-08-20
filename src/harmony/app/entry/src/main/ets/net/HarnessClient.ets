@@ -1,6 +1,6 @@
 import { http } from '@kit.NetworkKit';
 import { util } from '@kit.ArkTS';
-import { HarnessKind, harnessURL, parseHarnessKinds, parseSseData, sanitizeKey } from './Protocol';
+import { HarnessKind, harnessURL, parseHarnessKinds, parseSseData, requireHttpsRoot, sanitizeKey } from './Protocol';
 
 export class ChatLine {
   role: string = 'system';
@@ -25,7 +25,7 @@ export class HarnessClient {
   private readonly key: string;
 
   constructor(apiRoot: string, machine: string, key: string) {
-    this.base = harnessURL(apiRoot, machine);
+    this.base = harnessURL(requireHttpsRoot(apiRoot), machine);
     this.key = sanitizeKey(key);
   }
 
@@ -59,11 +59,11 @@ export class HarnessClient {
     if (thinking.length > 0) {
       body['thinking'] = thinking;
     }
-    await this.postJson(`/harness/sessions/${sessionId}/send`, body);
+    await this.postJson(`/harness/sessions/${encodeURIComponent(sessionId)}/send`, body);
   }
 
   async stop(sessionId: string): Promise<void> {
-    await this.postJson(`/harness/sessions/${sessionId}/stop`, new EmptyJson());
+    await this.postJson(`/harness/sessions/${encodeURIComponent(sessionId)}/stop`, new EmptyJson());
   }
 
   async approve(sessionId: string, choice: string, approvalId: string): Promise<void> {
@@ -73,7 +73,7 @@ export class HarnessClient {
     const body = new ApprovalBody();
     body.choice = choice;
     body.approval_id = approvalId;
-    await this.postJson(`/harness/sessions/${sessionId}/approval`, body);
+    await this.postJson(`/harness/sessions/${encodeURIComponent(sessionId)}/approval`, body);
   }
 
   startEvents(sessionId: string, after: number, onEvent: (obj: Record<string, Object>) => void,
@@ -81,8 +81,8 @@ export class HarnessClient {
     const req = http.createHttp();
     let leftover = '';
     const decoder = util.TextDecoder.create('utf-8', { ignoreBOM: true });
-    req.on('dataReceive', (chunk: ArrayBuffer) => {
-      leftover += decoder.decodeWithStream(new Uint8Array(chunk), { stream: true });
+    const consume = (chunk: string): void => {
+      leftover += chunk;
       const parts = leftover.split('\n');
       leftover = parts.pop() ?? '';
       for (let i = 0; i < parts.length; i++) {
@@ -96,8 +96,25 @@ export class HarnessClient {
           // skip malformed frames
         }
       }
+    };
+    let finished = false;
+    const fail = (message: string): void => {
+      if (finished) {
+        return;
+      }
+      finished = true;
+      onError(message);
+    };
+    req.on('dataReceive', (chunk: ArrayBuffer) => {
+      consume(decoder.decodeToString(new Uint8Array(chunk), { stream: true }));
     });
-    req.requestInStream(`${this.base}/harness/sessions/${sessionId}/events?after=${after}`, {
+    req.on('dataEnd', () => {
+      consume(decoder.decodeToString(new Uint8Array(), { stream: false }));
+      if (leftover.length > 0) {
+        consume('\n');
+      }
+    });
+    req.requestInStream(`${this.base}/harness/sessions/${encodeURIComponent(sessionId)}/events?after=${after}`, {
       method: http.RequestMethod.GET,
       header: {
         'Authorization': `Bearer ${this.key}`,
@@ -105,8 +122,18 @@ export class HarnessClient {
       },
       connectTimeout: 12000,
       readTimeout: 3600000
+    }).then((code: number) => {
+      if (code === 401 || code === 403) {
+        fail('unauthorized');
+        return;
+      }
+      if (code < 200 || code >= 300) {
+        fail(`http ${code}`);
+        return;
+      }
+      fail('已断开');
     }).catch((err: Error) => {
-      onError(err.message);
+      fail(err.message);
     });
     return req;
   }
@@ -123,7 +150,7 @@ export class HarnessClient {
         connectTimeout: 12000,
         readTimeout: 20000
       });
-      this.throwIfBad(resp.responseCode);
+      this.throwIfBad(resp.responseCode, `${resp.result ?? ''}`);
       return typeof resp.result === 'string' ? JSON.parse(resp.result) as object : resp.result as object;
     } finally {
       req.destroy();
@@ -144,7 +171,7 @@ export class HarnessClient {
         connectTimeout: 12000,
         readTimeout: 20000
       });
-      this.throwIfBad(resp.responseCode);
+      this.throwIfBad(resp.responseCode, `${resp.result ?? ''}`);
       if (!resp.result) {
         return new EmptyJson();
       }
@@ -154,12 +181,38 @@ export class HarnessClient {
     }
   }
 
-  private throwIfBad(code: number): void {
+  /**
+   * 全链路的错误体都是 `{"error":{"message": "..."}}` —— 中继(relay.py)、
+   * Mac harness(leophone.routes.ts 的 jsonError)、Android 和本端 body 都一样。
+   *
+   * 原来只抛 `http 502`,把中继写好的「这台 Mac 当前不在线(它会自动重连,
+   * 稍后再试)」整个吞掉,用户看到的是一个裸状态码。iOS(LeoAgentClient)和
+   * Android(RelayFleetClient)都会把 message 抽出来,这里对齐。
+   */
+  static messageFrom(raw: string, code: number): string {
+    try {
+      const obj = JSON.parse(raw) as Record<string, Object>;
+      const err = obj['error'] as Record<string, Object> | undefined;
+      const nested = err ? `${err['message'] ?? ''}`.trim() : '';
+      if (nested.length > 0) {
+        return nested;
+      }
+      const flat = `${obj['message'] ?? ''}`.trim();
+      if (flat.length > 0) {
+        return flat;
+      }
+    } catch (_err) {
+      // 非 JSON 响应体,退回状态码
+    }
+    return `http ${code}`;
+  }
+
+  private throwIfBad(code: number, raw: string = ''): void {
     if (code === 401 || code === 403) {
       throw new Error('unauthorized');
     }
     if (code < 200 || code >= 300) {
-      throw new Error(`http ${code}`);
+      throw new Error(HarnessClient.messageFrom(raw, code));
     }
   }
 }

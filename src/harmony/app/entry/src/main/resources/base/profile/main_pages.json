@@ -3,7 +3,26 @@
     "pages/HomePage",
     "pages/FleetPage",
     "pages/RemoteChatPage",
+    "pages/LocalChatPage",
+    "pages/WebPage",
+    "pages/MemoryPage",
+    "pages/SkillsPage",
+    "pages/CollectionsPage",
+    "pages/WorkspacePage",
     "pages/SettingsPage",
-    "pages/ReleaseNotesPage"
+    "pages/ReleaseNotesPage",
+    "pages/ProviderListPage",
+    "pages/AddProviderPage",
+    "pages/ProviderDetailPage",
+    "pages/ModelGroupsPage",
+    "pages/AppearancePage",
+    "pages/SoulPage",
+    "pages/UsagePage",
+    "pages/EnvPage",
+    "pages/RelayPage",
+    "pages/BodyPage",
+    "pages/McpPage",
+    "pages/SchedulePage",
+    "pages/RuntimePage"
   ]
 }

@@ -2,8 +2,8 @@ import { http } from '@kit.NetworkKit';
 import {
   DEFAULT_API_ROOT,
   RelayDiscoveredMachine,
-  normalizeApiRoot,
   parseMachines,
+  requireHttpsRoot,
   sanitizeKey
 } from './Protocol';
 
@@ -13,10 +13,7 @@ export class MachinesClient {
     if (trimmed.length < 16) {
       throw new Error('unauthorized');
     }
-    const root = normalizeApiRoot(apiRoot.length > 0 ? apiRoot : DEFAULT_API_ROOT);
-    if (!root.toLowerCase().startsWith('https://')) {
-      throw new Error('badURL');
-    }
+    const root = requireHttpsRoot(apiRoot.length > 0 ? apiRoot : DEFAULT_API_ROOT);
     const url = root + '/machines';
     const req = http.createHttp();
     try {

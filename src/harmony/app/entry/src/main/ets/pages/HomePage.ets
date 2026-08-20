@@ -1,53 +1,80 @@
 import { router } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
+import display from '@ohos.display';
 import { ReleaseCatalog } from '../release/ReleaseCatalog';
 import { ReleaseNotesStore } from '../store/ReleaseNotesStore';
+import { ChatLaunch } from '../net/HarnessClient';
+import { FoldLayout } from '../layout/FoldLayout';
+import { FleetPane } from '../panes/FleetPane';
+import { ChatPane } from '../panes/ChatPane';
+import { SettingsPane } from '../panes/SettingsPane';
+import { LocalAgentPane } from '../panes/LocalAgentPane';
+import { themeStore } from '../store/ThemeStore';
+import { Tokens } from '../theme/Tokens';
 
 @Entry
 @Component
 struct HomePage {
+  @StorageProp('themeTick') tick: number = 0;
   @State showNotes: boolean = false;
   @State notesTitle: string = '';
   @State notesLines: string[] = [];
+  @State wide: boolean = false;
+  @State tab: number = 0;
+  @State chatMachine: string = '';
+  private foldCb: ((status: display.FoldStatus) => void) | null = null;
 
   aboutToAppear(): void {
     const first = ReleaseCatalog.all()[0];
     this.notesTitle = first.title;
     this.notesLines = first.highlights;
     const ctx = getContext(this) as common.UIAbilityContext;
+    themeStore.load(ctx);
     ReleaseNotesStore.shouldShow(ctx).then((show: boolean) => {
       this.showNotes = show;
     });
+    this.syncWide(0, 0);
+    this.foldCb = (_status: display.FoldStatus) => {
+      this.syncWide(0, 0);
+    };
+    try {
+      display.on('foldStatusChange', this.foldCb);
+    } catch (_err) {
+      // non-fold devices
+    }
+  }
+
+  onPageShow(): void {
+    AppStorage.setOrCreate('providerTick', Date.now());
+  }
+
+  aboutToDisappear(): void {
+    if (this.foldCb) {
+      try {
+        display.off('foldStatusChange', this.foldCb);
+      } catch (_err) {
+        // ignore
+      }
+    }
   }
 
   build() {
     Column() {
-      Column() {
-        Text('LeoPhoneAgent')
-          .fontSize(28)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#F2F2F4')
-        Text(`${ReleaseCatalog.currentVersion}  ·  瘦控制面`)
-          .fontSize(14)
-          .fontColor('#8E8E93')
-          .margin({ top: 6 })
+      if (!this.wide) {
+        this.coverBar()
       }
-      .alignItems(HorizontalAlign.Start)
-      .width('100%')
-      .padding({ left: 20, right: 20, top: 28, bottom: 20 })
-
-      this.card('远程机器', '指挥在线的 Mac 或 Android 身体', () => {
-        router.pushUrl({ url: 'pages/FleetPage' });
-      })
-      this.card('本机 Agent', '第二船，这版还没开', () => {
-      }, true)
-      this.card('设置', '中继根、钥匙、关于', () => {
-        router.pushUrl({ url: 'pages/SettingsPage' });
-      })
+      if (this.wide) {
+        this.wideBody()
+      } else {
+        this.narrowBody()
+      }
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#121214')
+    .backgroundColor(Tokens.bg)
+    .onAreaChange((_old: Area, now: Area) => {
+      this.syncWide(Number(now.width), Number(now.height));
+    })
     .bindSheet($$this.showNotes, this.notesSheet(), {
       height: SheetSize.MEDIUM,
       dragBar: true
@@ -55,27 +82,98 @@ struct HomePage {
   }
 
   @Builder
-  card(title: string, subtitle: string, action: () => void, disabled: boolean = false) {
-    Column() {
-      Text(title)
-        .fontSize(18)
-        .fontColor(disabled ? '#6E6E73' : '#F2F2F4')
-      Text(subtitle)
-        .fontSize(13)
-        .fontColor('#8E8E93')
-        .margin({ top: 6 })
+  coverBar() {
+    Row() {
+      this.tabLabel('本机', 0)
+      this.tabLabel('远程', 1)
+      Blank()
+      Text('设置')
+        .fontSize(15)
+        .fontColor(Tokens.accent)
+        .fontWeight(FontWeight.Medium)
+        .onClick(() => {
+          router.pushUrl({ url: 'pages/SettingsPage' });
+        })
     }
     .width('100%')
-    .alignItems(HorizontalAlign.Start)
-    .padding(18)
-    .margin({ left: 16, right: 16, bottom: 12 })
-    .backgroundColor('#1C1C1E')
-    .borderRadius(14)
-    .onClick(() => {
-      if (!disabled) {
-        action();
+    .height(Tokens.topBar)
+    .alignItems(VerticalAlign.Center)
+    .padding({ left: Tokens.pagePad, right: Tokens.pagePad })
+  }
+
+  @Builder
+  tabLabel(title: string, index: number) {
+    Text(title)
+      .fontSize(this.tab === index ? Tokens.title : 16)
+      .fontColor(this.tab === index ? Tokens.text : Tokens.muted)
+      .fontWeight(this.tab === index ? FontWeight.Bold : FontWeight.Regular)
+      .margin({ right: 18 })
+      .onClick(() => {
+        this.tab = index;
+      })
+  }
+
+  @Builder
+  wideBody() {
+    if (this.tab === 2) {
+      SettingsPane()
+    } else if (this.tab === 1) {
+      Row() {
+        FleetPane({
+          wide: true,
+          onOpen: () => {
+            this.chatMachine = ChatLaunch.machine;
+          },
+          onLocal: () => {
+            this.tab = 0;
+          },
+          onSettings: () => {
+            this.tab = 2;
+          }
+        })
+          .layoutWeight(1)
+        Column()
+          .width(Tokens.divider)
+          .height('100%')
+          .backgroundColor(Tokens.surface2)
+        ChatPane({ machine: this.chatMachine })
+          .layoutWeight(1)
       }
-    })
+      .width('100%')
+      .layoutWeight(1)
+    } else {
+      LocalAgentPane({
+        wide: true,
+        onRemote: () => {
+          this.tab = 1;
+        },
+        onSettings: () => {
+          this.tab = 2;
+        }
+      })
+        .layoutWeight(1)
+    }
+  }
+
+  @Builder
+  narrowBody() {
+    if (this.tab === 1) {
+      FleetPane({
+        onOpen: () => {
+          this.chatMachine = ChatLaunch.machine;
+          router.pushUrl({ url: 'pages/RemoteChatPage' });
+        }
+      })
+        .layoutWeight(1)
+    } else {
+      LocalAgentPane({
+        wide: false,
+        onSettings: () => {
+          router.pushUrl({ url: 'pages/SettingsPage' });
+        }
+      })
+        .layoutWeight(1)
+    }
   }
 
   @Builder
@@ -83,22 +181,22 @@ struct HomePage {
     Column() {
       Text('本次更新')
         .fontSize(13)
-        .fontColor('#8E8E93')
+        .fontColor(Tokens.muted)
       Text(this.notesTitle)
         .fontSize(22)
-        .fontColor('#F2F2F4')
+        .fontColor(Tokens.text)
         .margin({ top: 8, bottom: 16 })
       ForEach(this.notesLines, (line: string) => {
         Text(line)
           .fontSize(15)
-          .fontColor('#D1D1D6')
+          .fontColor(Tokens.muted)
           .margin({ bottom: 10 })
       }, (line: string) => line)
       Button('知道了')
         .width('100%')
         .height(44)
         .margin({ top: 12 })
-        .backgroundColor('#E85030')
+        .backgroundColor(Tokens.accent)
         .fontColor('#FFFFFF')
         .onClick(() => {
           const ctx = getContext(this) as common.UIAbilityContext;
@@ -109,6 +207,10 @@ struct HomePage {
     }
     .padding(20)
     .width('100%')
-    .backgroundColor('#1C1C1E')
+    .backgroundColor(Tokens.surface)
+  }
+
+  private syncWide(width: number, height: number): void {
+    this.wide = FoldLayout.isWide(width, height);
   }
 }

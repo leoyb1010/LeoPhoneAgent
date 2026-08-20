@@ -24,6 +24,18 @@ export function normalizeApiRoot(raw: string): string {
   return raw.trim().replace(/\/+$/, '');
 }
 
+export function requireHttpsRoot(raw: string): string {
+  const root = normalizeApiRoot(raw);
+  if (!root.toLowerCase().startsWith('https://')) {
+    throw new Error('中继根必须是 https://');
+  }
+  const rest = root.substring('https://'.length);
+  if (!rest || rest.indexOf('@') >= 0 || rest.indexOf(' ') >= 0 || rest.indexOf('#') >= 0) {
+    throw new Error('中继根不合法');
+  }
+  return root;
+}
+
 export function sameApiRoot(lhs: string, rhs: string): boolean {
   return normalizeApiRoot(lhs).toLowerCase() === normalizeApiRoot(rhs).toLowerCase();
 }
@@ -92,7 +104,7 @@ export function parseMachines(json: object): RelayDiscoveredMachine[] {
   const out: RelayDiscoveredMachine[] = [];
   for (let i = 0; i < rows.length; i++) {
     const item = rows[i] as Record<string, Object>;
-    const name = `${item['name'] ?? ''}`.trim();
+    const name = sanitizeMachine(`${item['name'] ?? ''}`);
     if (!name) {
       continue;
     }

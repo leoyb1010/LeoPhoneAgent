@@ -9,7 +9,15 @@
     "installationFree": false,
     "pages": "$profile:main_pages",
     "requestPermissions": [
-      { "name": "ohos.permission.INTERNET" }
+      { "name": "ohos.permission.INTERNET" },
+      {
+        "name": "ohos.permission.MICROPHONE",
+        "reason": "$string:module_desc",
+        "usedScene": {
+          "abilities": ["EntryAbility"],
+          "when": "inuse"
+        }
+      }
     ],
     "abilities": [
       {
@@ -20,6 +28,7 @@
         "label": "$string:EntryAbility_label",
         "startWindowIcon": "$media:startIcon",
         "startWindowBackground": "$color:start_window_background",
+        "orientation": "auto_rotation",
         "exported": true,
         "skills": [
           {

@@ -40,3 +40,43 @@ export function parseSseData(line: string): string | null {
   const payload = trimmed.slice("data:".length).trim()
   return payload.length > 0 ? payload : null
 }
+
+export type AgentHttpFrame = {
+  type: string
+  id: string
+  method: string
+  path: string
+  body: unknown
+}
+
+export function parseAgentFrame(raw: string): AgentHttpFrame | null {
+  try {
+    const obj = JSON.parse(raw) as Record<string, unknown>
+    if (!obj || typeof obj.type !== "string") return null
+    return {
+      type: obj.type,
+      id: obj.id === undefined || obj.id === null ? "" : `${obj.id}`,
+      method: typeof obj.method === "string" ? obj.method : "GET",
+      path: typeof obj.path === "string" ? obj.path : "/",
+      body: obj.body ?? null,
+    }
+  } catch {
+    return null
+  }
+}
+
+export function respFrame(id: string, status: number, body: unknown): object {
+  return { type: "resp", id, status, body }
+}
+
+export function streamDataFrame(id: string, data: string): object {
+  return { type: "stream_data", id, data }
+}
+
+export function streamCloseFrame(id: string): object {
+  return { type: "stream_close", id }
+}
+
+export function eventFrame(machine: string, event: unknown): object {
+  return { type: "event", machine, event }
+}

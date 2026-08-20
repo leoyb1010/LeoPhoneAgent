@@ -13,6 +13,40 @@ export function normalizeApiRoot(raw: string): string {
   return raw.trim().replace(/\/+$/, "")
 }
 
+export function sanitizeKey(raw: string): string {
+  return raw.trim().replace(/%+$/g, "").replace(/[\r\n]+/g, "")
+}
+
+export function requireHttpsRoot(raw: string): string {
+  const root = normalizeApiRoot(raw)
+  if (!root.toLowerCase().startsWith("https://")) {
+    throw new Error("中继根必须是 https://")
+  }
+  const rest = root.slice("https://".length)
+  if (!rest || rest.includes("@") || rest.includes(" ") || rest.includes("#")) {
+    throw new Error("中继根不合法")
+  }
+  return root
+}
+
+export type SavedHostState = {
+  name: string
+  online: boolean
+}
+
+export function applyDiscovery(existing: SavedHostState[], live: RelayDiscoveredMachine[]): SavedHostState[] {
+  const next: SavedHostState[] = existing.map((host) => ({ name: host.name, online: false }))
+  for (const incoming of live) {
+    const found = next.find((host) => host.name === incoming.name)
+    if (found) {
+      found.online = incoming.online
+    } else {
+      next.push({ name: incoming.name, online: incoming.online })
+    }
+  }
+  return next
+}
+
 export function sameApiRoot(lhs: string, rhs: string): boolean {
   return normalizeApiRoot(lhs).toLowerCase() === normalizeApiRoot(rhs).toLowerCase()
 }
@@ -44,7 +78,7 @@ export function parseMachines(json: unknown): RelayDiscoveredMachine[] {
   for (const row of rows) {
     const item = asRecord(row)
     if (!item) continue
-    const name = typeof item.name === "string" ? item.name.trim() : ""
+    const name = typeof item.name === "string" ? sanitizeMachine(item.name) : null
     if (!name) continue
     out.push({
       name,
