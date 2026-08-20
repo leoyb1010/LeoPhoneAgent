@@ -89,8 +89,7 @@ fun MissingOsGrantBanner(
     val context = LocalContext.current
     var dismissed by remember(sessionId) { mutableStateOf<MissingOsGrant?>(null) }
     val toolHint = remember(messages) { toolHintFromMessages(messages) }
-    val overlayGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
-        Settings.canDrawOverlays(context)
+    val overlayGranted = Settings.canDrawOverlays(context)
     val listenerGranted = MinisNotificationListenerService.isEnabled(context)
     val allFilesGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.R ||
         Environment.isExternalStorageManager()
