@@ -239,13 +239,18 @@ class MinisHarnessRouterTest {
 
     @Test
     fun slowSubscriberFailsClosedInsteadOfSilentlySkippingSequences() = runBlocking {
-        val chunks = (1..100).map { EngineChunk.Delta("$it") } + EngineChunk.Completed("done")
+        // Keep this above MinisHarnessSession.LIVE_BUFFER (currently 512),
+        // otherwise the deliberately slow collector never overflows and the
+        // test waits forever instead of exercising the fail-closed path.
+        val chunks = (1..5_000).map { EngineChunk.Delta("$it") } + EngineChunk.Completed("done")
         val r = router(FakeEngine(chunks))
         val id = r.handle("POST", "/harness/sessions", JSONObject()).body.getString("session_id")
         val stream = r.handle("GET", "/harness/sessions/$id/events?after=0", null).stream!!
         val result = async {
             runCatching {
-                stream.collect { delay(20) }
+                // Slow enough to overflow while still draining the already
+                // buffered items quickly enough to observe the close cause.
+                stream.collect { delay(1) }
             }.exceptionOrNull()
         }
         delay(50)

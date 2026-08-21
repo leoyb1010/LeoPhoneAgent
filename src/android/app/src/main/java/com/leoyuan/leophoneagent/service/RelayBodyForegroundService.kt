@@ -114,10 +114,10 @@ class RelayBodyForegroundService : Service() {
 
     private fun startForegroundCompat(notification: Notification) {
         try {
-            // FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING 是 API 30 (R) 才有的常量，
-            // minSdk 是 26，所以低版本走不带 type 的两参重载 —— 那些版本上系统
-            // 直接采用 manifest 里声明的类型，本来也没有 Android 14 的类型校验。
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING 是 API 34 才加入的常量。
+            // Android 13 及以下必须走两参重载；若把这个 type 位传给旧系统，
+            // 会被当成未知前台服务类型并拒绝启动。Android 14+ 才显式传入。
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                 startForeground(
                     NOTIFICATION_ID,
                     notification,

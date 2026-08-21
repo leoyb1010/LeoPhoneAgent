@@ -187,6 +187,23 @@
 - `node --experimental-strip-types src/harmony/protocol/protocol.test.mjs`
 - `bash src/harmony/scripts/verify_harmony_release_notes.sh`
 
+## Android v1.0.0-alpha.8 - 2026-08-21
+
+### Fold8 与系统操控
+
+- 完整合入 Android PR #3：Fold8 封面、展开、书本与桌面模式采用统一姿态策略，折叠切换时保留当前会话、草稿、滚动位置和输入法状态。
+- 新增系统权限中心，集中展示默认助手、通知、电池优化、悬浮窗、通知访问、所有文件、精确闹钟和运行时权限，并为三星封面屏与休眠策略提供明确入口。
+- 新增已安装应用枚举与按包名/应用名启动；`android-open` 继续经过产品权限闸门，并拒绝带显式 component 的危险 Intent。
+- 聊天页对缺失的系统授权给出可操作提示；Fold8 大小屏布局、运动降级和关键触控目标补充回归测试。
+
+### 编译与稳定性修复
+
+- 修复 Relay 慢订阅压力测试低于 512 条生产缓冲、导致测试永远等不到 fail-closed 的问题；压力场景提升到 5000 条并真实覆盖溢出断流。
+- 修正 `FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING` 的 API 守卫：仅 Android 14/API 34+ 传入该类型，Android 8–13 走兼容重载，避免旧系统拒绝启动远程身体常驻服务。
+- Standard/Power 各 497 个 JVM 测试，0 失败（各 1 个既有跳过）；中文资源门禁、Standard Debug lint、双 Release lint 均通过（0 error）。
+- Fold8 API 35 从 alpha.7 原地覆盖 alpha.8，Standard/Power 均返回 `Success`；普通冷启动与 `ACTION_ASSIST` 均为 `Status: ok`，两进程存活，AndroidRuntime 无崩溃。
+- Standard SHA-256 `29b80c5b0a7d2263afad0594286d5336218545e033004c8bf947675a358f3b83`；Power SHA-256 `df96694e6efe7c1343f8c6b1ac7cb0ef7285664aa0d0d24f442606455769c3a5`。
+
 ## Android v1.0.0-alpha.7 - 2026-08-19
 
 ### 核心修复
