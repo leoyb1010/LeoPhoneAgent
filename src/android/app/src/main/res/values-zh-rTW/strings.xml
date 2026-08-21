@@ -797,5 +797,5 @@
     <string name="terminal_cli_booting_hint">首次啟動約需 30–60 秒。點擊螢幕即可喚起鍵盤。</string>
     <string name="whats_new_title">本次更新（%1$s）</string>
     <string name="whats_new_confirm">知道了</string>
-    <string name="whats_new_current">• 已安裝的 CLI 一鍵啟動：命令立即執行，啟動期間有進度提示\n• 終端工具列新增「貼上」鍵，方便貼上 OAuth 授權碼\n• 安裝失敗可檢視完整日誌，支援複製與一鍵重試\n• 支援解除安裝 CLI（保留登入與設定檔）\n• 四個 CLI 的狀態偵測更快\n• 安裝完成後可直接點「啟動」進入工具</string>
+    <string name="whats_new_current">• 修復：剛設定好 API Key、還沒發過訊息時，CLI「使用 LeoPhoneAgent 目前 API Key」啟動會誤報「還沒有目前模型」——現在與聊天頂部顯示的目前模型保持一致\n• 提示：Claude 首次啟動偵測到 API Key 時預設選「No」，需選「Yes」才會使用——開關說明已註明\n• 錯誤文案更準確：未設定任何服務商時指引到「設定 → LLM 提供商」</string>
 </resources>

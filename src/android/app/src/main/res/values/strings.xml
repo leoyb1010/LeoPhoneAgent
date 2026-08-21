@@ -1802,5 +1802,5 @@
     <string name="terminal_cli_booting_hint">First launch may take 30–60 seconds. Tap the screen to bring up the keyboard.</string>
     <string name="whats_new_title">What\'s new in %1$s</string>
     <string name="whats_new_confirm">OK</string>
-    <string name="whats_new_current">• Installed CLIs now launch with one tap — the command runs immediately and a startup hint shows while the CLI boots\n• New Paste key in the terminal toolbar for OAuth authorization codes\n• Install failures now show the full installer log with copy and retry\n• CLIs can be uninstalled (login and config files are kept)\n• Faster status detection for all four CLIs\n• After installing, a Launch button takes you straight into the tool</string>
+    <string name="whats_new_current">• Fix: launching a CLI with \"Use LeoPhoneAgent API key\" right after configuring a provider (before sending any message) no longer fails with \"no current model\" — the CLI now agrees with the chat header\n• Hint: Claude\'s first-launch prompt defaults to \"No\" for a detected API key — choose \"Yes\"; the switch subtitle now says so\n• Clearer error copy: with no provider configured, the dialog now points to Settings → LLM Providers</string>
 </resources>

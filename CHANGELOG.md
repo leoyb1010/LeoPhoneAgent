@@ -187,6 +187,19 @@
 - `node --experimental-strip-types src/harmony/protocol/protocol.test.mjs`
 - `bash src/harmony/scripts/verify_harmony_release_notes.sh`
 
+## Android v1.0.0-alpha.11 - 2026-08-21
+
+### 修复：CLI 借用 LeoPhoneAgent API Key 在新配置下即可用
+
+- 复现:配好 Anthropic API Key、聊天顶部已显示当前模型,但只要还没发过一条消息,CLI 的「使用 LeoPhoneAgent 当前 API Key」启动就弹「还没有当前模型」——resolver 只认"最后使用过"的模型条目,与聊天头部显示的当前模型不一致。
+- 修复:resolver 复用聊天同款回退链(最后使用 → 最新服务商的最新文本模型),两处对"当前模型"的答案保持一致。
+- 文案:未配置任何服务商时的错误指引到「设置 → LLM 提供商」;「使用 LeoPhoneAgent 当前 API Key」开关说明补充 Claude 首启确认屏指引(Claude 检测到 API Key 默认选「No」,需选「Yes」才会使用)。
+
+### 验证
+
+- Fold8 API 35 实机:alpha.10 → alpha.11 双 flavor 覆盖安装 `Success`;升级首启弹出中文「本次更新」;修复路径复验——配好假 Key 不发消息直接「启动」,不再弹错、直达终端,Claude 显示 `Detected a custom API key … sk-ant-…-0001` 确认屏(内存注入链路铁证);`ACTION_ASSIST` 与 Power 冷启动 `mCurrentFocus` 正确;Logcat `FATAL EXCEPTION` 0 条。
+- Standard/Power JVM 测试各 516 项 0 失败;中文资源门禁;双 Release lint 0 error;`--max-workers=1` 双 flavor 构建;固定个人 Alpha 签名校验。
+
 ## Android v1.0.0-alpha.10 - 2026-08-21
 
 ### 开发 CLI 使用体验重做（对话可达性 P0 的第一步）
