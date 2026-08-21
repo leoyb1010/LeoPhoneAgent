@@ -30,7 +30,12 @@ import java.util.concurrent.CopyOnWriteArrayList
  * Output is delivered as raw bytes through [outputBytes]; a TerminalEmulator
  * should consume these and parse ANSI sequences.
  */
-class TerminalSession(private val context: Context) {
+class TerminalSession(
+    private val context: Context,
+    initialEnvironment: Map<String, String> = emptyMap(),
+) {
+
+    private val initialEnvironment = initialEnvironment.toMutableMap()
 
     companion object {
         private const val TAG = "TerminalSession"
@@ -127,6 +132,7 @@ class TerminalSession(private val context: Context) {
                 // Environment in KEY=VALUE form
                 val envMap = LinkedHashMap<String, String>()
                 envMap["PROOT_TMP_DIR"] = PRootKernel.getProotTmpDir(context).absolutePath
+                envMap["TMPDIR"] = "/tmp"
                 if (PRootKernel.nativeLibDir.isNotEmpty())
                     envMap["LD_LIBRARY_PATH"] = PRootKernel.nativeLibDir
                 if (PRootKernel.prootLoaderPath.isNotEmpty())
@@ -143,8 +149,13 @@ class TerminalSession(private val context: Context) {
                 envMap["TZ"] = PRootKernel.posixTz()
                 for ((k, v) in PRootKernel.customEnvironment) envMap[k] = v
                 ExecutionCoordinator.envVarRepository?.allAsDict()?.forEach { (k, v) -> envMap[k] = v }
+                // CLI manager hands API keys across memory only. They enter this
+                // one child process environment, never the nav route or shell history.
+                for ((k, v) in initialEnvironment) envMap[k] = v
 
                 val envp = envMap.map { (k, v) -> "$k=$v" }.toTypedArray()
+                // The child now owns its environment copy; drop our key references.
+                initialEnvironment.clear()
                 val cwd = File(cmd).parentFile?.absolutePath
 
                 val outPid = IntArray(1)

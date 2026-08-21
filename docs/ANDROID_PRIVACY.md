@@ -1,6 +1,6 @@
 # LeoPhoneAgent Android Privacy / Android 隐私说明
 
-Last updated: 2026-08-20
+Last updated: 2026-08-21
 
 LeoPhoneAgent is a personal, local-first Agent. Chat sessions, terminal files,
 settings, permission decisions and Relay configuration are stored on the
@@ -51,6 +51,23 @@ the in-app Agent permission are granted. Accessibility events are captured only
 during an explicitly approved watch request; password-field events are ignored.
 Privileged destructive commands require confirmation for each call.
 
+### Developer CLIs
+
+Android alpha.9 can download and run Claude Code, Codex CLI, Grok Build and
+Cursor CLI inside the app-private Alpine Linux sandbox. Each install is an
+explicit user action and uses a fixed official HTTPS source. Those CLIs send
+prompts, source files and tool results to their own providers under the
+provider's terms. A CLI's own login may persist its login files inside the
+private Linux rootfs; those third-party files are app-private but are not
+stored in LeoPhoneAgent's Android Keystore preferences.
+
+If you explicitly enable “Use LeoPhoneAgent's current API key”, only a matching
+Anthropic/OpenAI/xAI API key is handed to that one terminal child process in
+memory. The key is not placed in a navigation route, command line, shell
+history or Linux config file. OAuth/subscription tokens, custom endpoints and
+Azure credentials are never exported to an external CLI. Cursor uses its own
+login or `CURSOR_API_KEY`.
+
 You can delete conversations, provider credentials, memories, mounted folders,
 logs and application data from the app or Android system settings. Uninstalling
 the app removes its private local data.
@@ -91,3 +108,16 @@ Relay 配置保存在 Android 设备上，并已禁用 Android 云备份。API K
 Standard 版不注册无障碍或 Shizuku 执行工具。Power 版只在 Android 系统授权和应用内
 Agent 权限都通过后才可调用。无障碍事件只在你明确批准的监听请求期间采集，密码
 字段事件会被忽略；高权限破坏性命令每次调用都需确认。
+
+### 开发 CLI
+
+Android alpha.9 可以在应用私有的 Alpine Linux 沙箱中下载并运行 Claude Code、
+Codex CLI、Grok Build 和 Cursor CLI。每次安装都由用户明确发起，并只使用固定的
+官方 HTTPS 来源。这些 CLI 会按照各自提供商的条款发送提示词、源文件和工具结果。
+CLI 自己的登录可能把登录文件保存在私有 Linux rootfs 内；这些第三方文件属于应用
+私有数据，但不使用 LeoPhoneAgent 的 Android Keystore 加密偏好存储。
+
+只有当你明确打开「使用 LeoPhoneAgent 当前 API Key」时，匹配的 Anthropic、OpenAI
+或 xAI API Key 才会通过内存交给当前这一个终端子进程。密钥不会进入导航参数、
+命令行、Shell 历史或 Linux 配置文件。OAuth/订阅令牌、自定义地址和 Azure 凭据
+不会导出给外部 CLI；Cursor 使用自己的登录或 `CURSOR_API_KEY`。

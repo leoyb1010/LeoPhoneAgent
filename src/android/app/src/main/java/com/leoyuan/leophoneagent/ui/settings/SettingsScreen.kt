@@ -78,6 +78,7 @@ fun SettingsScreen(
     onRootfsClick: () -> Unit = {},
     onEnvVarsClick: () -> Unit = {},
     onSkillsClick: () -> Unit = {},
+    onCliToolsClick: () -> Unit = {},
     onTerminalClick: () -> Unit = {},
     onMemoryClick: () -> Unit = {},
     // [T-mcp-integration-android] MCP Integrations page, listed directly below
@@ -218,6 +219,13 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_mcp),
                     subtitle = stringResource(R.string.settings_mcp_subtitle),
                     onClick = onMcpClick,
+                )
+                SettingsItem(
+                    icon = Icons.Outlined.Terminal,
+                    iconColor = Color(0xFF34C759),
+                    title = stringResource(R.string.cli_tools_title),
+                    subtitle = stringResource(R.string.cli_tools_settings_subtitle),
+                    onClick = onCliToolsClick,
                 )
                 SettingsItem(
                     icon = Icons.Outlined.Terminal,

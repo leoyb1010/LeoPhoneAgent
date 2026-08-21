@@ -59,6 +59,7 @@ object ShellExecutor {
         // Set required environment for PRoot
         val env = processBuilder.environment()
         env["PROOT_TMP_DIR"] = PRootKernel.getProotTmpDir(context).absolutePath
+        env["TMPDIR"] = "/tmp"
         if (PRootKernel.nativeLibDir.isNotEmpty()) {
             env["LD_LIBRARY_PATH"] = PRootKernel.nativeLibDir
         }

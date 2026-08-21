@@ -120,6 +120,10 @@ class PersistentShell(
 
         val env = processBuilder.environment()
         env["PROOT_TMP_DIR"] = PRootKernel.getProotTmpDir(context).absolutePath
+        // Android's inherited TMPDIR points at a host-only /data/user/... path.
+        // Inside PRoot that path does not exist, so installers using bare
+        // `mktemp -d` fail. Guest programs must use the guest /tmp instead.
+        env["TMPDIR"] = "/tmp"
         if (PRootKernel.nativeLibDir.isNotEmpty()) {
             env["LD_LIBRARY_PATH"] = PRootKernel.nativeLibDir
         }

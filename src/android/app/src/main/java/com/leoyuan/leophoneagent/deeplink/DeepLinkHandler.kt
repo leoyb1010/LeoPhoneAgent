@@ -188,6 +188,7 @@ object DeepLinkHandler {
             "usage", "usage-stats", "usage_stats" ->
                 DeepLinkAction.OpenSettingsScreen(Routes.USAGE_STATS)
             "skills" -> DeepLinkAction.OpenSettingsScreen(Routes.SKILLS)
+            "cli-tools", "cli_tools" -> DeepLinkAction.OpenSettingsScreen(Routes.CLI_TOOLS)
             "memory" -> DeepLinkAction.OpenSettingsScreen(Routes.MEMORY)
             "storage" -> DeepLinkAction.OpenSettingsScreen(Routes.STORAGE)
             "mount-external", "mount_external", "mounts", "mounted-folders", "mounted_folders" ->

@@ -187,6 +187,30 @@
 - `node --experimental-strip-types src/harmony/protocol/protocol.test.mjs`
 - `bash src/harmony/scripts/verify_harmony_release_notes.sh`
 
+## Android v1.0.0-alpha.9 - 2026-08-21
+
+### 本机开发 CLI
+
+- 设置新增「开发 CLI」，可在 App 私有 Alpine ARM64 沙箱中安装、更新、检测并打开 Claude Code、Codex CLI、Grok Build 和 Cursor CLI。
+- 四个安装入口只允许固定官方 HTTPS 地址；安装脚本限制协议、跳转协议、连接时间和最大体积。Cursor 所需 `node-addon-api 8.9.2` 固定 SHA-512 后才解包。
+- 每个 CLI 可设置模型 ID，打开终端时通过安全 shell quoting 传入 `--model`；超长和控制字符会被拒绝。
+- 可选择使用 LeoPhoneAgent 当前、同供应商、API-Key 类型的模型授权：Anthropic → Claude、OpenAI → Codex、xAI → Grok。密钥只通过一次性内存交给新终端进程，不进入导航参数、命令行、Shell 历史或磁盘；OAuth、订阅令牌、自定义地址和 Azure 凭据拒绝导出。Cursor 继续使用自己的官方登录或 `CURSOR_API_KEY`。
+
+### Alpine 兼容与更新安全
+
+- 修复 Android 宿主 `TMPDIR=/data/user/...` 泄漏到 PRoot，导致 Codex 官方安装器 `mktemp -d` 静默失败；所有持久 Shell、一次性 Shell 和终端统一使用 guest `/tmp`。
+- 状态探测不再用会吞掉前序错误码的管道；二进制存在但不能运行时显示「未安装」，不再假绿。
+- Cursor 官方 Linux ARM64 包内含 glibc Node/原生模块。alpha.9 自动切换 Alpine Node、从源码重建模块，并对缺失的 GNU Merkle 绑定应用最小兼容层；已在 Fold8 API 35 上从 App 内真实更新并回读 `2026.08.11-e8db854`。
+- Cursor 更新前由 Android 宿主原子备份整个 versions 目录；下载、重建、补丁或验证任一步失败都会恢复旧版本，成功才清理备份。
+
+### 验证
+
+- Fold8 API 35 的真实 Alpine ARM64：Claude Code `2.1.238`、Codex CLI `0.149.0`、Grok Build `1.0.5`、Cursor CLI `2026.08.11-e8db854`，四个严格版本命令退出码均为 0。
+- 简体中文现场验证安装/更新/打开终端/模型与授权/确认弹窗全部为中文；Cursor 通过产品 UI 完成一次真实更新并显示「已经就绪」。
+- Standard/Power 各 `507` 个 JVM 测试，0 失败（各 1 个既有跳过）；中文资源门禁、Standard Debug lint、双 Release lint 均为 0 error。
+- Fold8 API 35 从 alpha.8 原地覆盖 alpha.9，Standard/Power 均 `Success`；普通冷启动与 `ACTION_ASSIST` 均 `Status: ok`，两进程存活且 AndroidRuntime 无崩溃。
+- Standard SHA-256 `b88c9149cdf064da2d7fc6e41194847c40794209cd10b5454a99e72e39c127c4`；Power SHA-256 `a5497eab796960f4ed871c624283152e2b57b83c3fe630410477dce67465fc20`。
+
 ## Android v1.0.0-alpha.8 - 2026-08-21
 
 ### Fold8 与系统操控

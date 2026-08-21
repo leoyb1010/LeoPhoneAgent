@@ -45,6 +45,7 @@ import com.leoyuan.leophoneagent.ui.settings.AddAgentLoopGroupsScreen
 import com.leoyuan.leophoneagent.ui.settings.AddAgentLoopModelsScreen
 import com.leoyuan.leophoneagent.ui.settings.AddCustomModelScreen
 import com.leoyuan.leophoneagent.ui.settings.BackgroundSettingsScreen
+import com.leoyuan.leophoneagent.ui.settings.CliToolsScreen
 import com.leoyuan.leophoneagent.ui.settings.AddModelsToGroupScreen
 import com.leoyuan.leophoneagent.ui.settings.ShadowVoiceDetailScreen
 import com.leoyuan.leophoneagent.ui.settings.AddProviderScreen
@@ -84,6 +85,10 @@ import com.leoyuan.leophoneagent.ui.settings.OffloadPermissionScreen
 import com.leoyuan.leophoneagent.ui.settings.ShizukuPermissionScreen
 import com.leoyuan.leophoneagent.sandbox.RootfsManager
 import com.leoyuan.leophoneagent.sandbox.TerminalSession
+import com.leoyuan.leophoneagent.sandbox.CliLaunchEnvironment
+import com.leoyuan.leophoneagent.sandbox.CliLaunchResolution
+import com.leoyuan.leophoneagent.sandbox.CliToolCatalog
+import com.leoyuan.leophoneagent.sandbox.CliToolLaunchResolver
 import com.leoyuan.leophoneagent.ui.terminal.TerminalScreen
 import com.leoyuan.leophoneagent.ui.onboarding.OnboardingModelSelectionScreen
 import com.leoyuan.leophoneagent.ui.relay.RelayFleetScreen
@@ -130,6 +135,7 @@ object Routes {
     const val FILE_BROWSER = "file_browser"
     const val FILE_PREVIEW = "file_preview"
     const val ENV_VARS = "env_vars"
+    const val CLI_TOOLS = "cli_tools"
     const val SKILLS = "skills"
     const val SKILL_DETAIL = "skill/{skillId}"
     const val SKILL_FILE = "skill_file/{skillId}/{relativePath}"
@@ -720,6 +726,7 @@ fun AppNavigation(
                 onRootfsClick = { navController.safeNavigate(Routes.STORAGE) },
                 onEnvVarsClick = { navController.safeNavigate(Routes.ENV_VARS) },
                 onSkillsClick = { navController.safeNavigate(Routes.SKILLS) },
+                onCliToolsClick = { navController.safeNavigate(Routes.CLI_TOOLS) },
                 onTerminalClick = { navController.safeNavigate(Routes.terminal()) },
                 onMemoryClick = { navController.safeNavigate(Routes.MEMORY) },
                 onMcpClick = { navController.safeNavigate(Routes.MCP) },
@@ -1143,6 +1150,27 @@ fun AppNavigation(
             }
         }
 
+        composable(Routes.CLI_TOOLS) {
+            CliToolsScreen(
+                onBack = { navController.safePopBackStack() },
+                onOpenRootfs = { navController.safeNavigate(Routes.ROOTFS_MANAGEMENT) },
+                onOpenTerminal = { toolId, preference ->
+                    when (val resolved = CliToolLaunchResolver.resolve(
+                        CliToolCatalog.get(toolId),
+                        preference,
+                        providerRepository,
+                    )) {
+                        is CliLaunchResolution.Failed -> resolved.error
+                        is CliLaunchResolution.Ready -> {
+                            CliLaunchEnvironment.prepare(resolved.request.environment)
+                            navController.safeNavigate(Routes.terminal(initCommand = resolved.request.command))
+                            null
+                        }
+                    }
+                },
+            )
+        }
+
         composable(Routes.SKILLS) {
             if (skillRepository != null) {
                 SkillsManagementScreen(
@@ -1218,7 +1246,12 @@ fun AppNavigation(
             val context = androidx.compose.ui.platform.LocalContext.current
             val initCommand = backStackEntry.arguments?.getString("initCommand")
             val sessionId = backStackEntry.arguments?.getString("sessionId")
-            val session = remember { TerminalSession(context.applicationContext) }
+            val session = remember {
+                TerminalSession(
+                    context.applicationContext,
+                    initialEnvironment = CliLaunchEnvironment.consume(),
+                )
+            }
             TerminalScreen(
                 terminalSession = session,
                 onBack = { navController.safePopBackStack() },
