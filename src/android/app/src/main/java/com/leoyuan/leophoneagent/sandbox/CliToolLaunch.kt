@@ -57,7 +57,15 @@ object CliToolLaunchResolver {
             return CliLaunchResolution.Ready(CliLaunchRequest(spec.launchCommand(preference.model)))
         }
 
+        // [T-cli-key-current-model] Same tier chain the chat composer uses:
+        // last-used entry first, else the newest provider's newest text model.
+        // Requiring a *used* entry meant a freshly configured provider (key
+        // saved, model visible in the chat header, but no message sent yet)
+        // still failed with NO_CURRENT_MODEL — the exact "开了开关也不能用"
+        // report. The chat header and this resolver must agree on what the
+        // current model is.
         val entry = providers.lastUsedVisibleEntry()
+            ?: providers.newestProviderNewestTextEntry()
             ?: return CliLaunchResolution.Failed(CliLaunchError.NO_CURRENT_MODEL)
         val instance = providers.config.value.instances.firstOrNull { it.id == entry.providerInstanceId }
             ?: return CliLaunchResolution.Failed(CliLaunchError.NO_CURRENT_MODEL)

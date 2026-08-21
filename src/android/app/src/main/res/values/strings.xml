@@ -1774,12 +1774,12 @@
     <string name="cli_tools_model_label">CLI model ID</string>
     <string name="cli_tools_model_hint">Leave blank to use the CLI default. The value is passed with --model.</string>
     <string name="cli_tools_use_leo_key">Use LeoPhoneAgent’s current API key</string>
-    <string name="cli_tools_use_leo_key_subtitle">One-session memory handoff only. OAuth and subscription tokens are never exported.</string>
+    <string name="cli_tools_use_leo_key_subtitle">One-session memory handoff only. OAuth and subscription tokens are never exported. On first launch Claude asks whether to use the detected API key — choose "Yes".</string>
     <string name="cli_tools_cursor_key_boundary">Cursor uses its own login or CURSOR_API_KEY; LeoPhoneAgent has no matching Cursor provider credential.</string>
     <string name="cli_tools_save">Save</string>
     <string name="cli_tools_auth_unavailable">Cannot use current authorization</string>
     <string name="cli_tools_auth_unsupported">This CLI has no compatible LeoPhoneAgent provider credential. Use the CLI’s own login.</string>
-    <string name="cli_tools_auth_no_model">LeoPhoneAgent does not have a current model yet. Select and use a model first.</string>
+    <string name="cli_tools_auth_no_model">No AI provider is configured yet. Add one in Settings → LLM Providers first.</string>
     <string name="cli_tools_auth_provider_mismatch">The current LeoPhoneAgent model belongs to a different provider. Choose a matching Anthropic, OpenAI, or xAI model.</string>
     <string name="cli_tools_auth_oauth_boundary">The current provider uses OAuth. Subscription and OAuth tokens are not exported to external CLIs; use the CLI’s own official login.</string>
     <string name="cli_tools_auth_custom_endpoint">The current provider uses a custom or Azure endpoint. Its key cannot be safely passed to an official CLI endpoint.</string>

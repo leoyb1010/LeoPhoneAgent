@@ -1704,12 +1704,12 @@
     <string name="cli_tools_model_label">CLI 模型 ID</string>
     <string name="cli_tools_model_hint">留空则使用 CLI 默认模型；填写后通过 --model 传入。</string>
     <string name="cli_tools_use_leo_key">使用 LeoPhoneAgent 当前 API Key</string>
-    <string name="cli_tools_use_leo_key_subtitle">只在本次终端进程中通过内存传递；绝不导出 OAuth 或订阅令牌。</string>
+    <string name="cli_tools_use_leo_key_subtitle">只在本次终端进程中通过内存传递；绝不导出 OAuth 或订阅令牌。Claude 首次启动会询问是否使用检测到的 API Key，请选「Yes」。</string>
     <string name="cli_tools_cursor_key_boundary">Cursor 使用自己的登录或 CURSOR_API_KEY；LeoPhoneAgent 中没有对应的 Cursor 供应商凭据。</string>
     <string name="cli_tools_save">保存</string>
     <string name="cli_tools_auth_unavailable">无法使用当前授权</string>
     <string name="cli_tools_auth_unsupported">这个 CLI 没有可兼容的 LeoPhoneAgent 供应商凭据，请使用 CLI 自己的官方登录。</string>
-    <string name="cli_tools_auth_no_model">LeoPhoneAgent 还没有当前模型，请先选择并使用一个模型。</string>
+    <string name="cli_tools_auth_no_model">还没有配置任何 AI 服务商，请先到「设置 → LLM 提供商」添加一个。</string>
     <string name="cli_tools_auth_provider_mismatch">当前 LeoPhoneAgent 模型属于其他供应商，请选择匹配的 Anthropic、OpenAI 或 xAI 模型。</string>
     <string name="cli_tools_auth_oauth_boundary">当前供应商使用 OAuth。订阅和 OAuth 令牌不会导出给外部 CLI，请使用 CLI 自己的官方登录。</string>
     <string name="cli_tools_auth_custom_endpoint">当前供应商使用自定义或 Azure 地址，不能把它的密钥安全地传给官方 CLI 地址。</string>
