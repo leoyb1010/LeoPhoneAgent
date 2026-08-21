@@ -148,8 +148,8 @@ object Routes {
         val encoded = java.net.URLEncoder.encode(relativePath, "UTF-8").replace("+", "%20")
         return "skill_file/$skillId/$encoded"
     }
-    const val TERMINAL = "terminal?initCommand={initCommand}&sessionId={sessionId}"
-    fun terminal(initCommand: String? = null, sessionId: String? = null): String {
+    const val TERMINAL = "terminal?initCommand={initCommand}&sessionId={sessionId}&autoRun={autoRun}"
+    fun terminal(initCommand: String? = null, sessionId: String? = null, autoRun: Boolean = false): String {
         // URLEncoder follows application/x-www-form-urlencoded — spaces become `+`.
         // Nav library only %-decodes the route, so `+` would reach the screen literally.
         // Replace `+` with `%20` so Nav decodes it back to a space.
@@ -157,6 +157,9 @@ object Routes {
         val params = buildList {
             if (initCommand != null) add("initCommand=${enc(initCommand)}")
             if (sessionId != null) add("sessionId=${enc(sessionId)}")
+            // [T-cli-autorun] CLI launches execute immediately; other callers
+            // keep the review-then-Enter behavior.
+            if (autoRun) add("autoRun=true")
         }
         return if (params.isEmpty()) "terminal" else "terminal?${params.joinToString("&")}"
     }
@@ -483,6 +486,9 @@ fun AppNavigation(
         quickActionStart != null -> quickActionStart
         else -> Routes.SESSION_LIST
     }
+    // [T-whats-new-gate] 装机后「本次更新」弹窗 — 发版铁律第一条。
+    com.leoyuan.leophoneagent.ui.components.WhatsNewDialogHost()
+
     NavHost(
         navController = navController,
         startDestination = startDestination,
@@ -1163,7 +1169,9 @@ fun AppNavigation(
                         is CliLaunchResolution.Failed -> resolved.error
                         is CliLaunchResolution.Ready -> {
                             CliLaunchEnvironment.prepare(resolved.request.environment)
-                            navController.safeNavigate(Routes.terminal(initCommand = resolved.request.command))
+                            navController.safeNavigate(
+                                Routes.terminal(initCommand = resolved.request.command, autoRun = true),
+                            )
                             null
                         }
                     }
@@ -1241,11 +1249,16 @@ fun AppNavigation(
                     nullable = true
                     defaultValue = null
                 },
+                androidx.navigation.navArgument("autoRun") {
+                    type = androidx.navigation.NavType.BoolType
+                    defaultValue = false
+                },
             ),
         ) { backStackEntry ->
             val context = androidx.compose.ui.platform.LocalContext.current
             val initCommand = backStackEntry.arguments?.getString("initCommand")
             val sessionId = backStackEntry.arguments?.getString("sessionId")
+            val autoRun = backStackEntry.arguments?.getBoolean("autoRun") ?: false
             val session = remember {
                 TerminalSession(
                     context.applicationContext,
@@ -1257,6 +1270,7 @@ fun AppNavigation(
                 onBack = { navController.safePopBackStack() },
                 initCommand = initCommand,
                 sessionId = sessionId,
+                autoRun = autoRun,
             )
         }
 

@@ -1784,4 +1784,23 @@
     <string name="cli_tools_auth_oauth_boundary">The current provider uses OAuth. Subscription and OAuth tokens are not exported to external CLIs; use the CLI’s own official login.</string>
     <string name="cli_tools_auth_custom_endpoint">The current provider uses a custom or Azure endpoint. Its key cannot be safely passed to an official CLI endpoint.</string>
     <string name="cli_tools_auth_no_key">No API key was found for the current provider.</string>
+    <string name="cli_tools_launch">Launch</string>
+    <string name="cli_tools_done">Done</string>
+    <string name="cli_tools_more_actions">More actions</string>
+    <string name="cli_tools_uninstall">Uninstall</string>
+    <string name="cli_tools_uninstall_title">Uninstall %1$s?</string>
+    <string name="cli_tools_uninstall_message">Only the launcher binary is removed. Login state and configuration files are kept, so reinstalling restores the tool without signing in again.</string>
+    <string name="cli_tools_uninstalled_title">Uninstalled</string>
+    <string name="cli_tools_uninstalled_message">%1$s has been removed. Login and configuration files were kept.</string>
+    <string name="cli_tools_show_log">Show log</string>
+    <string name="cli_tools_hide_log">Hide log</string>
+    <string name="cli_tools_copy_log">Copy log</string>
+    <string name="cli_tools_retry">Retry</string>
+    <string name="cli_tools_failure_hint">The installer output below shows what went wrong. You can copy it or retry.</string>
+    <string name="terminal_paste">Paste</string>
+    <string name="terminal_cli_booting">Starting the CLI…</string>
+    <string name="terminal_cli_booting_hint">First launch may take 30–60 seconds. Tap the screen to bring up the keyboard.</string>
+    <string name="whats_new_title">What\'s new in %1$s</string>
+    <string name="whats_new_confirm">OK</string>
+    <string name="whats_new_current">• Installed CLIs now launch with one tap — the command runs immediately and a startup hint shows while the CLI boots\n• New Paste key in the terminal toolbar for OAuth authorization codes\n• Install failures now show the full installer log with copy and retry\n• CLIs can be uninstalled (login and config files are kept)\n• Faster status detection for all four CLIs\n• After installing, a Launch button takes you straight into the tool</string>
 </resources>

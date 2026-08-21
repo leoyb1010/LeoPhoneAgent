@@ -1,7 +1,7 @@
 # LeoPhoneAgent
 
 [![iOS](https://img.shields.io/badge/iOS-1.24.1%20(95)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
-[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.9-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.9)
+[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.10-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.10)
 [![macOS](https://img.shields.io/badge/macOS-1.74.0-7C3AED.svg)](src/mac/leocodebox/package.json)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.14-D94B16.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
@@ -63,16 +63,16 @@ bash src/harmony/scripts/build_hap.sh
 > 同一台手机上同时安装。Power 版只有在用户完成产品内授权以及 Android
 > 无障碍/Shizuku 系统授权后，才会开放更深的跨应用操控。
 
-- [下载 Standard alpha.9](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.9/LeoPhoneAgent-Standard-1.0.0-alpha.9.apk)
-- [下载 Power alpha.9](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.9/LeoPhoneAgent-Power-1.0.0-alpha.9.apk)
-- [查看本次更新记录](CHANGELOG.md#android-v100-alpha9---2026-08-21)
+- [下载 Standard alpha.10](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.10/LeoPhoneAgent-Standard-1.0.0-alpha.10.apk)
+- [下载 Power alpha.10](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.10/LeoPhoneAgent-Power-1.0.0-alpha.10.apk)
+- [查看本次更新记录](CHANGELOG.md#android-v100-alpha10---2026-08-21)
 - [查看完整五轮审计与交付报告](docs/ANDROID_DELIVERY_1.0.0_ALPHA1.md)
 
 SHA-256：
 
 ```text
-Standard  b88c9149cdf064da2d7fc6e41194847c40794209cd10b5454a99e72e39c127c4
-Power     a5497eab796960f4ed871c624283152e2b57b83c3fe630410477dce67465fc20
+Standard  a49133ebdf3a951a93c4cc1c560adfd70b56b09d1d964430e1616ae88bb4a441
+Power     9762c33dac7730b0cfc5c2738cf632d8dc57a9690436c2b4caf81805a68fd3ab
 ```
 
 本次公开附件使用显式开启的个人 Alpha 调试证书签名，不应作为应用商店的
@@ -146,7 +146,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 Android 版本
 
-- 开发/发布版本：`1.0.0-alpha.9`（versionCode `100009`），`minSdk 26`、`targetSdk 35`、`compileSdk 36`、仅 ARM64。
+- 开发/发布版本：`1.0.0-alpha.10`（versionCode `100010`），`minSdk 26`、`targetSdk 35`、`compileSdk 36`、仅 ARM64。
 - Standard 包名：`com.leoyuan.leophoneagent`
 - Power 包名：`com.leoyuan.leophoneagent.power`
 - 两个版本共享本机 Agent、Provider、Skills、MCP、Memory、PRoot 与浏览器底座；
@@ -199,7 +199,7 @@ Fold8 是 Android 主验收设备：封面屏 `1080×1728`、展开屏 `1768×22
 
 ### 3. 个人 Alpha 签名链不可更换
 
-当前 alpha.1–alpha.3、alpha.5–alpha.9 的可升级证书 SHA-256 是：
+当前 alpha.1–alpha.3、alpha.5–alpha.10 的可升级证书 SHA-256 是：
 
 ```text
 f325bc65f4f6ba456938c7d88c96ad2ef418197d1204cfd2bd881aa145bf11df
@@ -284,8 +284,9 @@ adb logcat -d | rg 'FATAL EXCEPTION|AndroidRuntime'
 
 | 版本 | 状态 | 处理 |
 |---|---|---|
-| alpha.9 | 当前可用 | alpha.1–alpha.3 / alpha.5–alpha.8 可直接覆盖安装 |
-| alpha.8 | 上一可用版 | alpha.9 的升级验证基线 |
+| alpha.10 | 当前可用 | alpha.1–alpha.3 / alpha.5–alpha.9 可直接覆盖安装 |
+| alpha.9 | 上一可用版 | alpha.10 的升级验证基线 |
+| alpha.8 | 旧版 | 可直接升级到 alpha.10 |
 | alpha.7 | 旧版 | 可直接升级到 alpha.9 |
 | alpha.6 | 旧版 | 可直接升级到 alpha.9 |
 | alpha.4 | **损坏/禁用** | 签名链错误，不得作为测试或发布基线 |

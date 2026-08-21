@@ -4,6 +4,9 @@ import com.leoyuan.leophoneagent.R
 import androidx.compose.ui.res.stringResource
 
 import androidx.compose.foundation.background
+import androidx.compose.material.icons.outlined.ContentPaste
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -86,6 +89,13 @@ fun TerminalScreen(
      * session's env vars (mirrors iOS "Open Terminal" from chat).
      */
     sessionId: String? = null,
+    /**
+     * [T-cli-autorun] true when launched from the CLI manager: the init
+     * command is executed immediately (CR appended) instead of being left at
+     * the prompt for review, and a boot hint overlay shows until the CLI
+     * paints its TUI (alternate screen) or the user dismisses it.
+     */
+    autoRun: Boolean = false,
 ) {
     val emulator = remember { TerminalEmulator() }
     val inputController = rememberTerminalInputController()
@@ -114,12 +124,40 @@ fun TerminalScreen(
     }
 
     // Start session + optional initCommand.
+    var bootHintVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         if (!terminalSession.isRunning) terminalSession.start(sessionId = sessionId)
         if (!initCommand.isNullOrBlank()) {
-            // Pre-fill at the prompt without newline so the user can review.
             kotlinx.coroutines.delay(500)
-            terminalSession.sendText(initCommand)
+            if (autoRun) {
+                // CLI launch: run it. The old review-then-Enter behavior left
+                // users staring at a black screen with a pre-filled line and
+                // no hint that Enter (after summoning the IME) was required.
+                bootHintVisible = true
+                terminalSession.sendText(initCommand + "\n")
+            } else {
+                // Other callers keep pre-fill-for-review semantics.
+                terminalSession.sendText(initCommand)
+            }
+        }
+    }
+
+    // Dismiss the boot hint once the CLI is clearly painting: either it
+    // switched to the alternate screen (full TUIs) or the emulator has taken
+    // a burst of updates well beyond the initial command echo (Claude Code's
+    // onboarding wizard renders on the PRIMARY buffer, so alternate-screen
+    // alone would leave the hint hanging until timeout). Ceiling as backstop.
+    if (bootHintVisible) {
+        val version by emulator.version
+        val baseline = remember { version }
+        LaunchedEffect(version) {
+            // version 按 feed 批次 +1(一批 PTY 字节 = 1),命令回显约 1–3 批;
+            // CLI 一旦开始真正输出,批次数立刻越过这个门槛。
+            if (emulator.isAlternateActive || version - baseline > 8) bootHintVisible = false
+        }
+        LaunchedEffect(Unit) {
+            kotlinx.coroutines.delay(90_000)
+            bootHintVisible = false
         }
     }
 
@@ -276,7 +314,41 @@ fun TerminalScreen(
                     else byteArrayOf(0x1B, '['.code.toByte())
                     terminalSession.sendRawBytes(prefix + byteArrayOf(dir.code.toByte()))
                 },
+                onPaste = { text ->
+                    emulator.scrollOffset = 0
+                    terminalSession.sendText(text)
+                },
             )
+        }
+
+        if (bootHintVisible) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .background(Color(0xE6202124), RoundedCornerShape(14.dp))
+                    .clickable { bootHintVisible = false }
+                    .padding(horizontal = 22.dp, vertical = 18.dp),
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        strokeWidth = 2.dp,
+                        color = Color(0xFF34C759),
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        stringResource(R.string.terminal_cli_booting),
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        stringResource(R.string.terminal_cli_booting_hint),
+                        color = Color(0xB3FFFFFF),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
         }
 
         previewUrl?.let { url ->
@@ -368,6 +440,7 @@ private fun KeyboardAccessoryBar(
     onCtrlToggle: () -> Unit,
     onToggleKeyboard: () -> Unit,
     onSendRaw: (ByteArray) -> Unit,
+    onPaste: (String) -> Unit,
     onArrow: (Char) -> Unit,
 ) {
     val scrollState = rememberScrollState()
@@ -398,6 +471,14 @@ private fun KeyboardAccessoryBar(
         // This writes CR (0x0D) on the same raw-PTY path as Esc/Tab/C-c.
         // Placed right after Tab, mirroring iOS fa3d2f8c.
         QuickCommandButton("⏎", iconText = "⏎") { onSendRaw(byteArrayOf(0x0D)) }
+        // [T-terminal-paste] OAuth 授权码全靠粘贴;长按选区粘贴不可发现。
+        val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+        QuickCommandButton(
+            label = stringResource(R.string.terminal_paste),
+            icon = Icons.Outlined.ContentPaste,
+        ) {
+            clipboard.getText()?.text?.takeIf { it.isNotEmpty() }?.let(onPaste)
+        }
         QuickCommandButton("Ctrl", iconText = "^", isActive = ctrlActive, onClick = onCtrlToggle)
         QuickCommandButton("\u2191", icon = Icons.Default.KeyboardArrowUp) { onArrow('A') }
         QuickCommandButton("\u2193", icon = Icons.Default.KeyboardArrowDown) { onArrow('B') }

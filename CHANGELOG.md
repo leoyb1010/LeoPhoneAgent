@@ -187,6 +187,35 @@
 - `node --experimental-strip-types src/harmony/protocol/protocol.test.mjs`
 - `bash src/harmony/scripts/verify_harmony_release_notes.sh`
 
+## Android v1.0.0-alpha.10 - 2026-08-21
+
+### 开发 CLI 使用体验重做（对话可达性 P0 的第一步）
+
+- 「打开终端」改为「启动」：命令**立即自动执行**，不再把裸命令留在黑屏提示符上等用户自己发现要按回车；启动期间显示中文进度提示（首次约 30–60 秒 + 唤起键盘指引），CLI 开始输出或切入 TUI 后自动消失。
+- 安装成功弹窗新增「启动」主按钮：装完 → 一键进入工具，入口深度从 4 层降为 0。
+- 终端快捷键栏新增「粘贴」键：OAuth 授权码可直接粘贴进 CLI 登录流程（此前只能长按选区，不可发现）。
+- 安装过程日志可见：进行中可展开完整滚动日志；失败弹窗显示安装器完整输出，支持「复制日志」与「一键重试」——不再只有 180 字符截尾。
+- CLI 卡片层级重排：已安装 =「启动」（填充主按钮）+「更新」（描边次按钮）+ 溢出菜单（模型与授权 / 更新 / 卸载）；未安装 = 单一「安装」主按钮。
+- 新增卸载：只删启动器本体，保留登录态与配置文件，重装免再登录。
+- CLI 状态检测从四次串行 proot 往返合并为**单趟探测**（`___LEO_CLI___` 标记逐工具带真实退出码），进页明显更快；探测失败保留上次状态，不出假红。
+- Cursor 安装超时上调至 20 分钟（源码重建原生模块在低端机可能超过统一的 10 分钟上限）。
+
+### 装机后「本次更新」提示（发版铁律第一条，Android 首次落地）
+
+- 每次覆盖升级后首启弹出「本次更新」对话框，内容即本版真实变更（简体/繁体/英文）；从无此机制的旧版（≤ alpha.9）升级上来通过安装时间戳识别，同样会弹出。
+
+### 内部质量
+
+- 安装/卸载结果改为 sealed 模型（成功/失败/已卸载），不再用一个字符串字段按布尔翻转语义。
+- `launchCommand` 支持受限工作目录参数（仅 `/root`、`/var/minis/**`，拒绝穿越与控制字符，完整 shell quoting）——为下一版「在挂载文件夹中启动」铺路。
+- 新增定向测试：状态标记解析（真实退出码、缺行补齐、垃圾行容错）、卸载命令边界（禁止 rm -rf、保留登录）、工作目录白名单与引号转义、超时分级、失败日志拼装、What's New 资源门禁。
+
+### 验证
+
+- Standard/Power JVM 测试各 516 项，0 失败（含新增 9 项定向测试）；中文资源门禁通过；双 Release lint 0 error；`--max-workers=1` 双 flavor 构建通过；固定个人 Alpha 签名校验通过。
+- Fold8 API 35 展开态实机：alpha.9 → alpha.10 双 flavor 覆盖安装 `Success`；升级首启弹出中文「本次更新」；完整闭环实测——装 rootfs → 装 Claude Code 2.1.238（滚动日志可见）→ 成功弹窗点「启动」→ 终端自动执行 → 启动提示自动消失 → 快捷键栏含「粘贴」；Standard `ACTION_ASSIST` 冷启动、Power 冷启动均 `mCurrentFocus` 正确；全程 Logcat `FATAL EXCEPTION` 0 条。
+- 发布链修复：干净 worktree 首次构建缺 `assets/alpine-minirootfs.tar.gz` 与 `proot-aarch64`（构建期资产，不入库），装机后 rootfs 安装报 `Installation failed`——已按 `scripts/prepare_android_sandbox.sh` 固定 SHA-256 重新供应并重建，最终 APK 已含全部沙箱资产并复验。
+
 ## Android v1.0.0-alpha.9 - 2026-08-21
 
 ### 本机开发 CLI

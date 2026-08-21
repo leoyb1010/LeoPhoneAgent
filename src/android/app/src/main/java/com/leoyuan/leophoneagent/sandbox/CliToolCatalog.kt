@@ -27,11 +27,30 @@ data class CliToolSpec(
         printf '%s\n' "${'$'}output" | head -n 1
     """.trimIndent()
 
-    fun launchCommand(model: String?): String {
+    fun launchCommand(model: String?, workdir: String? = null): String {
         val clean = model?.trim()?.takeIf { it.isNotEmpty() }
         require(clean == null || (clean.length <= 200 && clean.none { it.isISOControl() }))
-        return if (clean == null) terminalCommand else "$terminalCommand --model ${shellQuote(clean)}"
+        val base = if (clean == null) terminalCommand else "$terminalCommand --model ${shellQuote(clean)}"
+        val cwd = workdir?.trim()?.takeIf { it.isNotEmpty() } ?: return base
+        // [T-cli-workdir] Launch inside a mounted project folder. Only guest
+        // paths the sandbox already owns are accepted; anything else (host
+        // paths, traversal) is rejected before it can reach the shell line.
+        require(cwd.length <= 500 && cwd.none { it.isISOControl() })
+        require(!cwd.contains(".."))
+        require(cwd == "/root" || cwd.startsWith("/root/") || cwd.startsWith("/var/minis/"))
+        return "cd ${shellQuote(cwd)} && $base"
     }
+
+    /**
+     * [T-cli-uninstall] Remove the launcher binary only. Login state and user
+     * data under HOME survive deliberately, so a re-install restores the tool
+     * without a fresh OAuth round trip.
+     */
+    fun uninstallCommand(): String = """
+        rm -f '$binaryPath'
+        hash -r 2>/dev/null || true
+        test ! -e '$binaryPath'
+    """.trimIndent()
 
     /**
      * All values are catalog constants. No user text is ever interpolated into this shell program.
@@ -100,6 +119,30 @@ object CliToolCatalog {
     )
 
     fun get(id: CliToolId): CliToolSpec = tools.first { it.id == id }
+
+    /**
+     * [T-cli-status-single-pass] Probe all four CLIs in ONE shell invocation.
+     * The previous per-tool loop paid a proot round trip per CLI (4 spawns,
+     * serial); this emits one machine-parseable line per tool instead:
+     *
+     *     ___LEO_CLI___ <id> <exit-code> <first version line>
+     *
+     * Real exit codes are preserved per tool — a broken binary reports its own
+     * code, never a piped-away fake zero (same discipline as statusCommand).
+     */
+    const val STATUS_MARKER = "___LEO_CLI___"
+
+    fun combinedStatusCommand(): String = buildString {
+        appendLine("export PATH=\"/root/.local/bin:/root/.grok/bin:${'$'}PATH\"")
+        tools.forEach { tool ->
+            appendLine("if [ -x '${tool.binaryPath}' ]; then")
+            appendLine("  out=\"${'$'}('${tool.binaryPath}' ${tool.versionArgument} 2>&1)\"; rc=${'$'}?")
+            appendLine("  printf '%s %s %s %s\\n' '$STATUS_MARKER' '${tool.id.name}' \"${'$'}rc\" \"${'$'}(printf '%s' \"${'$'}out\" | head -n 1)\"")
+            appendLine("else")
+            appendLine("  printf '%s %s 127 \\n' '$STATUS_MARKER' '${tool.id.name}'")
+            appendLine("fi")
+        }
+    }.trimEnd()
 
     /** Cursor ships a glibc Node + GNU-only Merkle addon; adapt both to Alpine ARM64. */
     private fun cursorAlpineCompatibility(): String = """

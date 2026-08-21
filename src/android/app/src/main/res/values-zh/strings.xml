@@ -1714,4 +1714,23 @@
     <string name="cli_tools_auth_oauth_boundary">当前供应商使用 OAuth。订阅和 OAuth 令牌不会导出给外部 CLI，请使用 CLI 自己的官方登录。</string>
     <string name="cli_tools_auth_custom_endpoint">当前供应商使用自定义或 Azure 地址，不能把它的密钥安全地传给官方 CLI 地址。</string>
     <string name="cli_tools_auth_no_key">当前供应商没有可用的 API Key。</string>
+    <string name="cli_tools_launch">启动</string>
+    <string name="cli_tools_done">完成</string>
+    <string name="cli_tools_more_actions">更多操作</string>
+    <string name="cli_tools_uninstall">卸载</string>
+    <string name="cli_tools_uninstall_title">卸载 %1$s？</string>
+    <string name="cli_tools_uninstall_message">只移除启动器本体，登录状态与配置文件会保留；重新安装即可恢复使用，无需再次登录。</string>
+    <string name="cli_tools_uninstalled_title">已卸载</string>
+    <string name="cli_tools_uninstalled_message">%1$s 已移除。登录与配置文件已保留。</string>
+    <string name="cli_tools_show_log">查看日志</string>
+    <string name="cli_tools_hide_log">收起日志</string>
+    <string name="cli_tools_copy_log">复制日志</string>
+    <string name="cli_tools_retry">重试</string>
+    <string name="cli_tools_failure_hint">下方是安装器的完整输出，可以从中看到失败原因；也可以复制日志或直接重试。</string>
+    <string name="terminal_paste">粘贴</string>
+    <string name="terminal_cli_booting">正在启动 CLI…</string>
+    <string name="terminal_cli_booting_hint">首次启动约需 30–60 秒。点击屏幕即可唤起键盘。</string>
+    <string name="whats_new_title">本次更新（%1$s）</string>
+    <string name="whats_new_confirm">知道了</string>
+    <string name="whats_new_current">• 已安装的 CLI 一键启动：命令立即执行，启动期间有进度提示\n• 终端工具栏新增「粘贴」键，方便粘贴 OAuth 授权码\n• 安装失败可查看完整日志，支持复制与一键重试\n• 支持卸载 CLI（保留登录与配置文件）\n• 四个 CLI 的状态检测更快\n• 安装完成后可直接点「启动」进入工具</string>
 </resources>
