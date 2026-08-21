@@ -55,13 +55,47 @@ export class OutboundClient {
    */
   private pushEvent(frame: string): void {
     if (this.sock && bodyStore.online) {
-      this.send(frame);
+      this.sendEvent(frame);
       return;
     }
+    this.queueEvent(frame);
+  }
+
+  /**
+   * 满了丢最老的。
+   *
+   * why 不学中继那套"挤掉一帧改塞 stream_close 逼客户端重连补齐"(relay.py 的
+   * 慢消费者分支):那是 live 流,一旦有洞就只能靠重连补;这条队列不是。手机真正
+   * 的对账路径是 `GET /harness/sessions/{id}/events?after=N`(replay,权威且完整),
+   * 这些 event 帧只喂中继那个"最近事件"环 —— 而它自己也只留 200 条
+   * (relay.py 的 MAX_EVENTS),补发更老的本来就会被它丢掉。所以丢最老的没有
+   * 制造新的信息缺口,不需要额外通知对端。
+   */
+  private queueEvent(frame: string): void {
     this.outbox.push(frame);
     while (this.outbox.length > OUTBOX_LIMIT) {
       this.outbox.shift();
     }
+  }
+
+  /**
+   * 外推帧专用的发送:发失败就放回队列,等下次注册成功再补。
+   *
+   * why 不直接用 send():send() 是 fire-and-forget,拒绝了只记一条 lastError。
+   * 对 stream_data 那种"过期即无用"的帧没问题,但 outbox 的全部意义就是不丢这
+   * 四条关键事件,在出口再丢一次等于白排队。Mac(relay-client.service.ts 的 flush)
+   * 同样会把发失败的帧放回去。
+   */
+  private sendEvent(frame: string): void {
+    const sock = this.sock;
+    if (!sock) {
+      this.queueEvent(frame);
+      return;
+    }
+    sock.send(frame).catch((err: Error) => {
+      bodyStore.lastError = `${err}`;
+      this.queueEvent(frame);
+    });
   }
 
   private flushOutbox(): void {
@@ -71,7 +105,7 @@ export class OutboundClient {
     const pending = this.outbox;
     this.outbox = [];
     for (let i = 0; i < pending.length; i++) {
-      this.send(pending[i]);
+      this.sendEvent(pending[i]);
     }
   }
 
@@ -139,7 +173,7 @@ export class OutboundClient {
       this.onMessage(text);
     });
     sock.on('close', () => {
-      if (mine !== this.gen) {
+      if (!this.retire(mine)) {
         return;
       }
       bodyStore.online = false;
@@ -147,7 +181,7 @@ export class OutboundClient {
       this.schedule();
     });
     sock.on('error', (err: Error) => {
-      if (mine !== this.gen) {
+      if (!this.retire(mine)) {
         return;
       }
       bodyStore.lastError = `${err}`;
@@ -156,12 +190,29 @@ export class OutboundClient {
       this.schedule();
     });
     sock.connect(url).catch((err: Error) => {
-      if (mine !== this.gen) {
+      if (!this.retire(mine)) {
         return;
       }
       bodyStore.lastError = `${err}`;
       this.schedule();
     });
+  }
+
+  /**
+   * 一次断线会连着触发好几个回调:connect() 的 reject、'error'、'close' 往往
+   * 一起来。它们各调一次 schedule(),而 schedule() 每次都把 backoff 翻倍 ——
+   * 一次失败翻两三倍,第二次就跳到 8s、第三次直接封顶 30s,和"1→2→4→8"的
+   * 意图对不上(clearTimer 只保证了不会有多个定时器,拦不住重复翻倍)。
+   *
+   * 这里复用已有的分代号:第一个到达的回调把代号推进一格,后面的自然被
+   * `mine !== this.gen` 挡掉。gen 只要单调递增就行,多加几次没有副作用。
+   */
+  private retire(mine: number): boolean {
+    if (mine !== this.gen) {
+      return false;
+    }
+    this.gen += 1;
+    return true;
   }
 
   private onMessage(text: string): void {

@@ -25,6 +25,25 @@ export const PROTOCOL_VERSION: string = '0.4.0';
  */
 const PUSH_EVENTS: string[] = ['approval.request', 'run.completed', 'run.failed', 'run.cancelled'];
 
+/**
+ * 会话表与事件表的上限。
+ *
+ * why:这台身体是长驻进程。iPhone 每开一个回合就往 `sessions` push 一条,而
+ * `emit()` 每条 `message.delta` 又往 `row.events` 追加一条 —— 一轮长回答几百上千条。
+ * 两个数组之前都没有任何回收路径,只增不减,跑久了就是一条确定的 OOM。
+ * Android 的同形状问题已经确认会 OOM(见 `MinisHarnessRouter` 的 MAX_SESSIONS
+ * 与 `MinisHarnessSession` 的环形缓冲),这里用同一组数字对齐。
+ */
+const MAX_SESSIONS: number = 64;
+const MAX_RETAINED_EVENTS: number = 2000;
+const MAX_RETAINED_CHARS: number = 2 * 1024 * 1024;
+/** 事件信封(seq/session_id/timestamp)的固定开销。只为记账,不求精确。 */
+const EVENT_OVERHEAD_CHARS: number = 96;
+/** 这么久没产生过任何事件就算僵死,会话表打满时可以被回收(与 Android 一致)。 */
+const STALE_SESSION_MS: number = 15 * 60 * 1000;
+/** 终态会话优先淘汰。 */
+const TERMINAL_STATUSES: string[] = ['idle', 'cancelled', 'completed', 'failed'];
+
 export class RouterResult {
   status: number = 200;
   body: string = '{}';
@@ -39,6 +58,15 @@ class BodySession {
   status: string = 'idle';
   seq: number = 0;
   events: string[] = [];
+  /**
+   * 已被环形缓冲丢掉的最大 seq。
+   * 不变式:`events[i]` 的 seq === evictedThrough + 1 + i —— replay() 靠它换算下标。
+   */
+  evictedThrough: number = 0;
+  /** events 的粗略字符数。增量维护,免得每次裁剪都重新量一遍整张表。 */
+  retainedChars: number = 0;
+  /** 最后一次产生事件的时刻,僵死会话淘汰用。 */
+  lastTouched: number = Date.now();
 }
 
 class LiveStream {
@@ -141,11 +169,15 @@ export class HarmonyMinisRouter {
     this.lives = [];
   }
 
-  replay(sessionId: string, after: number): string[] {
+  replay(sessionId: string, afterSeq: number): string[] {
     const row = this.find(sessionId);
     if (!row) {
       return [];
     }
+    // 事件表被裁剪过之后下标不再等于 seq-1:events[i] 的 seq 是 evictedThrough + 1 + i。
+    // 先把请求的 after 换算到当前数组的下标域,判断式仍然是"严格大于"——
+    // 这是四端一致的补齐语义,不能因为加了环形缓冲就漂掉。
+    const after = afterSeq - row.evictedThrough;
     const out: string[] = [];
     for (let i = 0; i < row.events.length; i++) {
       if (i + 1 > after) {
@@ -169,6 +201,9 @@ export class HarmonyMinisRouter {
     } catch (_err) {
       return HarmonyMinisRouter.json(400, errorBody('bad json'));
     }
+    if (this.sessions.length >= MAX_SESSIONS && !this.evictOne()) {
+      return HarmonyMinisRouter.json(429, errorBody('too many active sessions'));
+    }
     const row = new BodySession();
     // 只用 Date.now() 会在同一毫秒内建两个会话时撞 id —— find() 取第一个匹配,
     // 两条会话的事件就串了,stop 一条会连带取消另一条(LocalAgentEngine 按 id 分代)。
@@ -182,6 +217,48 @@ export class HarmonyMinisRouter {
     }
     return HarmonyMinisRouter.json(202,
       `{"session_id":${JSON.stringify(row.id)},"harness":"minis","status":${JSON.stringify(row.status)}}`);
+  }
+
+  /**
+   * 会话表满了时腾一个位置,腾不出来返回 false(调用方回 429)。
+   *
+   * 两级:先挑终态会话里最老的;都还在跑就挑"很久没有产生过任何事件"的僵死会话。
+   * 真正在流式输出的会话每条 delta 都会刷新 lastTouched,不会被误伤。
+   * why 要第二级:只淘汰终态的话,64 条全 running 时会变成永久 429 而且一条事件
+   * 都不释放 —— 那正是 Android 踩过的 OOM 形状。
+   */
+  private evictOne(): boolean {
+    let idx = -1;
+    for (let i = 0; i < this.sessions.length; i++) {
+      if (TERMINAL_STATUSES.indexOf(this.sessions[i].status) < 0) {
+        continue;
+      }
+      if (idx < 0 || this.sessions[i].lastTouched < this.sessions[idx].lastTouched) {
+        idx = i;
+      }
+    }
+    if (idx < 0) {
+      const now = Date.now();
+      for (let i = 0; i < this.sessions.length; i++) {
+        if (now - this.sessions[i].lastTouched < STALE_SESSION_MS) {
+          continue;
+        }
+        if (idx < 0 || this.sessions[i].lastTouched < this.sessions[idx].lastTouched) {
+          idx = i;
+        }
+      }
+    }
+    if (idx < 0) {
+      return false;
+    }
+    const victimId = this.sessions[idx].id;
+    // 在飞的回合先分代作废,再把 LocalAgentEngine 那两张按 sessionId 存的 Map
+    // 里的死键清掉 —— 否则会话虽然没了,gen/reqs 仍然跟着 id 无限长。
+    LocalAgentEngine.stop(victimId);
+    LocalAgentEngine.forget(victimId);
+    this.streams.delete(victimId);
+    this.sessions.splice(idx, 1);
+    return true;
   }
 
   private send(id: string, bodyText: string): RouterResult {
@@ -221,6 +298,15 @@ export class HarmonyMinisRouter {
     const row = this.find(id);
     if (!row) {
       return HarmonyMinisRouter.json(404, errorBody('No such session'));
+    }
+    // 要的区段已经被环形缓冲丢掉了。静默地"从还剩下的最老一条开始发"会让控制端
+    // 以为中间本来就没有事件,拼出来的正文是残缺的且它毫无感知 —— 显式回 410 +
+    // 水位,让它按新的 after 重新订阅。与 Android(MinisHarnessRouter 的 410)一致。
+    if (after < row.evictedThrough) {
+      const oldest = row.evictedThrough;
+      const message = `events up to seq=${oldest} were evicted; re-subscribe with after=${oldest}`;
+      return HarmonyMinisRouter.json(410,
+        `{"error":{"message":${JSON.stringify(message)}},"evicted_through":${oldest},"min_after":${oldest}}`);
     }
     const out = new RouterResult();
     out.status = 200;
@@ -311,6 +397,16 @@ export class HarmonyMinisRouter {
       event = raw;
     }
     row.events.push(event);
+    row.retainedChars += event.length + EVENT_OVERHEAD_CHARS;
+    row.lastTouched = Date.now();
+    // 环形裁剪。留 `length > 1` 是为了单条事件自己就超预算时(比如一条超大的
+    // run.completed)不要把最新的这条也一起丢掉。
+    while (row.events.length > 1 &&
+      (row.events.length > MAX_RETAINED_EVENTS || row.retainedChars > MAX_RETAINED_CHARS)) {
+      const dropped = row.events.shift() ?? '';
+      row.retainedChars -= dropped.length + EVENT_OVERHEAD_CHARS;
+      row.evictedThrough += 1;
+    }
     const sink = this.onLive;
     if (sink) {
       for (let i = 0; i < this.lives.length; i++) {

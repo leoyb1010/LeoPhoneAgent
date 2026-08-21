@@ -204,11 +204,26 @@ export class ProviderStore {
     if (legacy.length === 0) {
       return;
     }
+    // 档案读坏时 instances 被清成空数组，active() 必然是 null，原来的写法照样往下
+    // 走到 removeProviderKey() —— 等于把用户唯一的那把钥匙永久销毁，而且这一轮
+    // 刚把 readProviderKeyFor 的全局回落删掉，销毁之后再也找不回来。
+    // save() 在同样的情况下会 assertWritable() 拒绝落盘（「避免覆盖」），这里保持
+    // 同一个态度：什么都不动，等下次启动（或用户修好档案）再认领。
+    if (this.jsonLoadFailed) {
+      return;
+    }
     const target = this.active();
-    if (target && this.keyFor(target.id).length === 0) {
+    if (!target) {
+      // 一个供应商都没有（全新安装，或老档案迁移没迁出实例）。别名留着不会再被
+      // 任何实例读到（readProviderKeyFor 已经不回落了），但删掉就找不回来 —— 留着。
+      return;
+    }
+    if (this.keyFor(target.id).length === 0) {
       this.keys.set(target.id, legacy);
       await SecretStore.writeProviderKeyFor(target.id, legacy);
     }
+    // 到这里要么刚认领完，要么目标本来就有自己的钥匙（别名确实冗余了）。
+    // 顺序是「先写 per-instance 再删别名」：写失败会抛出去，别名还在，下次启动重来。
     await SecretStore.removeProviderKey();
   }
 
