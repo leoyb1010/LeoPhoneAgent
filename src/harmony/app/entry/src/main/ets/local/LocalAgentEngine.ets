@@ -53,6 +53,15 @@ export class LocalAgentEngine {
     LocalAgentEngine.bump(sessionKey);
   }
 
+  /**
+   * 会话被淘汰时把这两张按 sessionId 存的 Map 里的死键一起清掉。
+   * 它们之前只写不删,会话表加了上限之后如果不清,键还是会跟着 sessionId 无限长。
+   */
+  static forget(sessionKey: string): void {
+    LocalAgentEngine.release(sessionKey);
+    LocalAgentEngine.gen.delete(sessionKey);
+  }
+
   static run(context: common.UIAbilityContext, sessionKey: string, mine: number, text: string,
     thinking: string, onDelta: (delta: string) => void, onDone: (output: string) => void,
     onError: (message: string) => void): http.HttpRequest | null {
