@@ -48,6 +48,10 @@ import com.leoyuan.leophoneagent.agent.shell.BashismDetector
 import com.leoyuan.leophoneagent.agent.shell.BashismReminder
 import com.leoyuan.leophoneagent.agent.shell.OnDemandBash
 import com.leoyuan.leophoneagent.sandbox.ExecutionCoordinator
+import com.leoyuan.leophoneagent.sandbox.CliChatChunk
+import com.leoyuan.leophoneagent.sandbox.CliChatEngine
+import com.leoyuan.leophoneagent.sandbox.CliToolCatalog
+import com.leoyuan.leophoneagent.sandbox.CliToolId
 import com.leoyuan.leophoneagent.terminal.MinisOpenUrlBroker
 import com.leoyuan.leophoneagent.terminal.MinisUrlMarker
 import com.leoyuan.leophoneagent.tools.AgentTools
@@ -605,6 +609,11 @@ class ChatViewModel(
 
     private val _modelName = MutableStateFlow("")
     val modelName: StateFlow<String> = _modelName.asStateFlow()
+
+    /** Null means the normal direct-API engine; non-null binds this chat to an
+     * installed developer CLI running locally inside PRoot. */
+    private val _activeCliToolId = MutableStateFlow<CliToolId?>(null)
+    val activeCliToolId: StateFlow<CliToolId?> = _activeCliToolId.asStateFlow()
 
     /** T201: gate the init-time `config.collect` re-resolver so the StateFlow's
      *  replay cache can't beat [loadSession] to setting `_modelName`. Without
@@ -2693,7 +2702,7 @@ class ChatViewModel(
                         currentProvider = null
                     }
                 }
-                if (currentProvider == null && config.modelEntries.isNotEmpty()) {
+                if (_activeCliToolId.value == null && currentProvider == null && config.modelEntries.isNotEmpty()) {
                     // T306: re-attempt the persisted binding now that config
                     // has entries. For an existing session whose loadSession
                     // ran before config finished (so restoreFromBinding fell
@@ -2768,7 +2777,10 @@ class ChatViewModel(
     /** Ensure the session exists in the database. Called before first message. */
     private suspend fun ensureSession(): String {
         if (realSessionId.isNotEmpty()) return realSessionId
-        val modelId = currentModel?.id ?: providerRepository.allVisibleEntries().firstOrNull()?.model?.id ?: "unknown"
+        val modelId = _activeCliToolId.value?.let { "cli:${it.name.lowercase()}" }
+            ?: currentModel?.id
+            ?: providerRepository.allVisibleEntries().firstOrNull()?.model?.id
+            ?: "unknown"
         // [T-memory-global-toggle-settings-ui-android] Snapshot the
         // current in-memory `_memoryEnabled` into the new row. For a
         // draft VM this matches the global default we seeded at
@@ -2813,6 +2825,8 @@ class ChatViewModel(
         val groupId = _selectedGroupId.value
         val entryId = _activeEntryId.value
         val binding = when {
+            _activeCliToolId.value != null ->
+                """{"type":"cli","toolId":"${_activeCliToolId.value!!.name}"}"""
             groupId != null && entryId != null -> """{"type":"group","groupId":"$groupId","lastEntryId":"$entryId"}"""
             groupId != null -> """{"type":"group","groupId":"$groupId"}"""
             entryId != null -> """{"type":"entry","entryId":"$entryId"}"""
@@ -3526,7 +3540,15 @@ class ChatViewModel(
                     _selectedGroupId.value = null
                     _selectedGroupName.value = ""
                     _activeEntryId.value = entry.id
+                    _activeCliToolId.value = null
                     currentProvider = ProviderFactory.create(instance, apiKey, entry.model, context)
+                    true
+                }
+                "cli" -> {
+                    val toolId = obj.optString("toolId")
+                        .let { raw -> runCatching { CliToolId.valueOf(raw) }.getOrNull() }
+                        ?: return false
+                    applyCliSelection(toolId)
                     true
                 }
                 else -> false
@@ -3560,6 +3582,7 @@ class ChatViewModel(
         val apiKey = providerRepository.loadApiKey(instance.id) ?: return false
 
         currentModel = targetEntry.model
+        _activeCliToolId.value = null
         _modelName.value = targetEntry.model.displayName
         _providerName.value = instance.label.ifEmpty { targetEntry.model.provider }
         _selectedGroupName.value = group.name
@@ -3640,6 +3663,7 @@ class ChatViewModel(
             ?: return false
         val instance = providerRepository.instance(entry.providerInstanceId) ?: return false
         currentModel = entry.model
+        _activeCliToolId.value = null
         _modelName.value = entry.model.displayName
         _activeEntryId.value = entry.id
         _providerName.value = instance.label.ifEmpty { entry.model.provider }
@@ -3658,6 +3682,7 @@ class ChatViewModel(
         val apiKey = providerRepository.loadApiKey(instance.id) ?: return
 
         currentModel = entry.model
+        _activeCliToolId.value = null
         _modelName.value = entry.model.displayName
         _providerName.value = instance.label.ifEmpty { entry.model.provider }
         _selectedGroupId.value = null
@@ -3669,6 +3694,34 @@ class ChatViewModel(
         // global last-used model so the NEXT new chat (when no default group
         // is set) defaults back to it. Tier 2 of the new-chat fallback chain.
         providerRepository.lastUsedEntryId = entryId
+    }
+
+    fun selectCliTool(toolId: CliToolId) {
+        applyCliSelection(toolId)
+        persistCliBinding(toolId)
+    }
+
+    private fun applyCliSelection(toolId: CliToolId) {
+        val spec = CliToolCatalog.get(toolId)
+        _activeCliToolId.value = toolId
+        _modelName.value = spec.displayName
+        _providerName.value = context.getString(R.string.cli_chat_local_provider)
+        _selectedGroupId.value = null
+        _selectedGroupName.value = ""
+        _activeEntryId.value = null
+        currentModel = null
+        currentProvider = null
+    }
+
+    private fun persistCliBinding(toolId: CliToolId) {
+        val sid = realSessionId.takeIf { it.isNotEmpty() } ?: return
+        viewModelScope.launch {
+            chatRepository.updateSessionBinding(
+                sid,
+                """{"type":"cli","toolId":"${toolId.name}"}""",
+                "cli:${toolId.name.lowercase()}",
+            )
+        }
     }
 
     /** Persist the model binding to the DB session (no-op for draft sessions). */
@@ -4833,12 +4886,12 @@ class ChatViewModel(
         // inside the send button's tap closure).
         if (_hasInjectedShareContent.value) _hasInjectedShareContent.value = false
 
+        val cliToolId = _activeCliToolId.value
         val initialProvider = currentProvider
-        if (initialProvider == null) {
+        if (cliToolId == null && initialProvider == null) {
             _error.value = "No provider configured"
             return
         }
-        var provider: LLMProvider = initialProvider
 
         _error.value = null
 
@@ -4926,6 +4979,32 @@ class ChatViewModel(
                 contentParts = userContentParts,
                 dbMessageId = persistedUser.id,
             ))
+
+            if (cliToolId != null) {
+                streamLaunched = true
+                streamJob = launch(Dispatchers.IO) {
+                    try {
+                        SessionConcurrencyManager.acquireSlot(activeSessionId)
+                        SessionActivityTracker.setActive(activeSessionId, onStop = { cancelStream() })
+                        runCliTurn(activeSessionId, cliToolId, cliPrompt(trimmed, prepared))
+                        drainQueuedCliPrompts(cliToolId)
+                    } catch (error: CancellationException) {
+                        Log.d(TAG, "Local CLI turn cancelled")
+                    } catch (error: Throwable) {
+                        setInlineError(error.message ?: "Local CLI failed")
+                        SessionActivityTracker.markStreamError(activeSessionId)
+                    } finally {
+                        publishOverlayReplyExcerpt(activeSessionId)
+                        SessionActivityTracker.setInactive(activeSessionId)
+                        SessionConcurrencyManager.releaseSlot(activeSessionId)
+                    }
+                    if (streamJob === coroutineContext[Job]) _isStreaming.value = false
+                }
+                return@launch
+            }
+
+            var provider: LLMProvider = initialProvider
+                ?: error("Provider disappeared before the API turn started")
 
             // Refresh OAuth token if needed before sending (mirrors iOS validAccessToken)
             if ((provider as? com.leoyuan.leophoneagent.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
@@ -5039,6 +5118,113 @@ class ChatViewModel(
                     _isStreaming.value = false
                 }
             }
+        }
+    }
+
+    private fun cliPrompt(text: String, prepared: PreparedAttachments): String = buildString {
+        if (text.isNotBlank()) append(text.trim())
+        prepared.imageUploadPaths.forEach { path ->
+            if (isNotEmpty()) append('\n')
+            append("[attached image: ").append(path).append(']')
+        }
+        prepared.attachedFilesXml?.let { xml ->
+            if (isNotEmpty()) append("\n\n")
+            append(xml)
+        }
+    }
+
+    /** Render and persist one local CLI turn through the normal chat surface. */
+    private suspend fun runCliTurn(
+        activeSessionId: String,
+        toolId: CliToolId,
+        prompt: String,
+    ) {
+        val assistantId = "assistant_cli_${System.currentTimeMillis()}"
+        val output = StringBuilder()
+        withContext(Dispatchers.Main) {
+            _messages.value = _messages.value + ChatMessage(
+                id = assistantId,
+                role = "assistant",
+                content = "",
+                isStreaming = true,
+                isAwaitingModelResponse = true,
+            )
+            _forceScrollToBottom.tryEmit(Unit)
+        }
+
+        CliChatEngine(context, providerRepository)
+            .runTurn(activeSessionId, toolId, prompt)
+            .collect { chunk ->
+                when (chunk) {
+                    is CliChatChunk.Delta -> {
+                        output.append(chunk.text)
+                        withContext(Dispatchers.Main) {
+                            updateAssistantMessage(
+                                assistantId,
+                                output.toString(),
+                                true,
+                                emptyList(),
+                                isAwaitingModelResponse = false,
+                            )
+                        }
+                    }
+                    is CliChatChunk.Completed -> {
+                        if (output.isEmpty() && chunk.output.isNotBlank()) output.append(chunk.output)
+                    }
+                    is CliChatChunk.Failed -> throw IllegalStateException(chunk.message)
+                }
+            }
+
+        val finalText = output.toString().trimEnd().ifBlank {
+            context.getString(R.string.cli_chat_empty_response)
+        }
+        withContext(Dispatchers.Main) {
+            updateAssistantMessage(
+                assistantId,
+                finalText,
+                false,
+                emptyList(),
+                isAwaitingModelResponse = false,
+            )
+        }
+        val parts = listOf<AgentContentPart>(AgentContentPart.Text(finalText))
+        persistAssistantTurn(parts, usage = null)
+        agentHistory.add(
+            LLMMessage(
+                role = LLMMessage.Role.ASSISTANT,
+                content = finalText,
+                contentParts = parts,
+            ),
+        )
+    }
+
+    /** Same queue semantics as API-backed chats: prompts sent mid-turn become
+     * subsequent CLI turns instead of remaining as dashed bubbles forever. */
+    private suspend fun drainQueuedCliPrompts(toolId: CliToolId) {
+        while (_promptQueue.value.isNotEmpty()) {
+            val queued = _promptQueue.value
+            _promptQueue.value = emptyList()
+            val ids = queued.map { it.id }.toSet()
+            withContext(Dispatchers.Main) {
+                _messages.value = _messages.value.map { message ->
+                    if (message.queuedPromptId != null && message.queuedPromptId in ids) {
+                        message.copy(isQueued = false, queuedPromptId = null)
+                    } else {
+                        message
+                    }
+                }
+            }
+            val sid = ensureSession()
+            val prepared = prepareUserAttachments(queued.flatMap { it.attachments }, sid)
+            val text = queued.joinToString("\n\n") { it.text }.trim()
+            val prompt = cliPrompt(text, prepared)
+            if (prompt.isBlank()) continue
+            chatRepository.appendMessage(
+                sid,
+                "user",
+                buildUserPartsJson(text, prepared.mediaRefPartsJson, prepared.attachedFilesXml),
+            )
+            runCliTurn(sid, toolId, prompt)
         }
     }
 

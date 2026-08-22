@@ -17,6 +17,15 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '1.74.2',
+    date: '2026-08-22',
+    items: [
+      '开发与打包供应链漏洞清零：升级 node-gyp、PostCSS、Sharp 及其传递依赖，npm audit（含开发依赖）从 9 项降为 0 项；正式运行依赖仍保持 0 漏洞。',
+      '修好主仓目录里的 npm install 钩子：Husky 现在从 LeoPhoneAgent 仓库根安装到正确的 hooksPath，不再报“.git can’t be found”后静默跳过提交门禁。',
+      '源码、测试与本机安装版本统一到 1.74.2；未取得 Developer ID 私钥与公证票据前，不会把临时签名包冒充公开热更新。'
+    ],
+  },
+  {
     version: '1.74.1',
     date: '2026-08-21',
     items: [

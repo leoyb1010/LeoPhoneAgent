@@ -1,1 +1,9 @@
-npx --no -- commitlint --edit "$1"
+#!/usr/bin/env sh
+set -eu
+repo_root="$(git rev-parse --show-toplevel)"
+case "$1" in
+  /*) message_file="$1" ;;
+  *) message_file="$repo_root/$1" ;;
+esac
+cd "$repo_root/src/mac/leocodebox"
+npx --no-install commitlint --edit "$message_file"

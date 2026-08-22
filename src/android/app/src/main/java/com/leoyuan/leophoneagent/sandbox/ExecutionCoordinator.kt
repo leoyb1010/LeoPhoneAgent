@@ -77,7 +77,14 @@ object ExecutionCoordinator {
         sessionId: String,
         command: String,
         timeout: Long = 600_000L,
-        lineCallback: ((String) -> Unit)? = null
+        lineCallback: ((String) -> Unit)? = null,
+        /**
+         * Values visible only to this command. Used by the in-chat CLI engine
+         * for API-key handoff: secrets never enter command text, navigation,
+         * shell history, or disk and are restored/unset before the mutex is
+         * released to the next command.
+         */
+        transientEnvironment: Map<String, String> = emptyMap(),
     ): CommandResult {
         // ConcurrentHashMap.getOrPut is not atomic, use putIfAbsent pattern
         val mutex = mutexes.getOrPut(sessionId) { Mutex() }
@@ -103,17 +110,33 @@ object ExecutionCoordinator {
             // can `unset` anything the user has since removed from settings;
             // otherwise the long-lived shell would keep stale values.
             val envVars = envVarRepository?.allAsDict() ?: emptyMap()
+            require(transientEnvironment.keys.all(::isValidEnvironmentKey)) {
+                "Invalid transient environment variable name"
+            }
             val previousKeys = lastInjectedKeys[sessionId] ?: emptySet()
-            if (envVars.isNotEmpty() || previousKeys.isNotEmpty()) {
-                shell.applyEnvironment(envVars, previousKeys = previousKeys)
+            val effectiveEnvironment = envVars + transientEnvironment
+            if (effectiveEnvironment.isNotEmpty() || previousKeys.isNotEmpty()) {
+                shell.applyEnvironment(effectiveEnvironment, previousKeys = previousKeys)
                 lastInjectedKeys[sessionId] = envVars.keys.toSet()
             }
 
-            val (rawOutput, exitCode) = shell.executeCommand(
-                command = command,
-                timeout = timeout,
-                lineCallback = lineCallback,
-            )
+            val (rawOutput, exitCode) = try {
+                shell.executeCommand(
+                    command = command,
+                    timeout = timeout,
+                    lineCallback = lineCallback,
+                )
+            } finally {
+                if (transientEnvironment.isNotEmpty() && shell.isAlive) {
+                    // Restore a colliding user value, and unset transient-only
+                    // keys. Include both key sets in previousKeys so the shell
+                    // receives explicit unsets instead of retaining a secret.
+                    shell.applyEnvironment(
+                        envVars,
+                        previousKeys = envVars.keys + transientEnvironment.keys,
+                    )
+                }
+            }
 
             val durationMs = System.currentTimeMillis() - startTime
             val sanitized = TerminalSanitizer.sanitize(rawOutput)
@@ -127,6 +150,9 @@ object ExecutionCoordinator {
             CommandResult(output = output, exitCode = exitCode, durationMs = durationMs)
         }
     }
+
+    internal fun isValidEnvironmentKey(key: String): Boolean =
+        key.matches(Regex("[A-Za-z_][A-Za-z0-9_]*"))
 
     /**
      * Get the existing shell for this session, or create a new one.

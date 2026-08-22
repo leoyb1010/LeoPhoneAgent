@@ -187,6 +187,28 @@
 - `node --experimental-strip-types src/harmony/protocol/protocol.test.mjs`
 - `bash src/harmony/scripts/verify_harmony_release_notes.sh`
 
+## Android v1.0.0-alpha.12 - 2026-08-22
+
+### 对话即本机 CLI
+
+- Claude Code、Codex CLI、Grok Build、Cursor CLI 进入聊天模型选择器；已安装工具显示真实版本，未安装工具直接跳开发 CLI 管理页。
+- 选中后在 PRoot 工作区以 JSONL 非交互模式执行并流式回写普通聊天气泡；同一聊天持续复用 CLI 会话，发送中的追加消息会排队到下一轮。
+- Prompt 先写入会话私有临时文件，命令只引用固定路径；LeoPhoneAgent API Key 通过一次性环境变量注入，执行后恢复或清除，不进入命令文本、导航、Shell 历史或磁盘。
+- 四种 CLI JSON 方言都走容错解码，未知帧忽略、文本单调去重、失败保留真实尾部日志；停止按钮会同时取消 CLI 与对应 PRoot Shell。
+
+### 交付物与远程工作台
+
+- `file_write` 成功生成 HTML、Markdown、SVG、CSV、PDF、图片、音视频后，聊天流出现一等交付物卡片；点击直接进入现有 HTML、图片或文件预览，不再埋在工具详情里。
+- 远程 Mac/Android 会话改用带 `after=seq` 的 SSE 回放 + 实时跟随；网络切换后从最后序号续传，任务状态、输出摘要和审批请求实时更新，替代手动刷新才能看见进度。
+- SSE Bearer 鉴权、410 过期、断线重连、重复序号和终态收流均 fail-closed；重连采用 0.75–8 秒有界退避。
+
+### 验证
+
+- 新增 CLI 命令边界、Prompt 路径穿越、瞬时环境变量名、四家流式方言去重、交付物判定、Relay SSE 鉴权/续传测试。
+- JDK 17 下 Standard/Power JVM 测试各 530 项（0 失败、0 error、各 1 个既有跳过）；中文资源门禁；双 Release lint 0 error；双 flavor Release 构建与固定个人 Alpha 签名校验通过。
+- Fold8 API 35（1768×2208 展开态）从 alpha.11 原地覆盖 alpha.12，Standard/Power 均 `Success`；两包普通冷启动与 `ACTION_ASSIST` 均 `Status: ok` 且进程存活，Logcat 无本 App `FATAL EXCEPTION`。
+- 简体中文实屏确认升级弹窗和「本机开发 CLI」模型选择区；真实识别已安装 Claude Code 2.1.238。发起本机 CLI 对话后进入流式等待并把模拟器里遗留的无效 Anthropic Key 以可重试内联错误呈现，未泄露 Key 值、未闪退。
+
 ## Android v1.0.0-alpha.11 - 2026-08-21
 
 ### 修复：CLI 借用 LeoPhoneAgent API Key 在新配置下即可用

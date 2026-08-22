@@ -570,6 +570,8 @@ fun ChatScreen(
      *  management screen — wired to the "Edit" button on the model picker's
      *  Model Groups section header. */
     onModelGroupsClick: () -> Unit = {},
+    /** Opens the local developer CLI manager from the model picker. */
+    onCliToolsClick: () -> Unit = {},
     /** Cover / phone / split: tighter chrome so the composer survives 200% font. */
     compactChrome: Boolean = false,
     /** Tabletop: fraction of the column above the hinge (messages). Null = no split. */
@@ -3588,23 +3590,24 @@ fun ChatScreen(
                                     )
                                 }
                             }
-                            is FlatChatItem.AssistantToolUse -> ToolCallPill(
-                                block = item.block,
-                                allToolBlocks = item.allToolBlocks,
-                                onRetry = if (item.isLastCancelled && !isStreaming && !canResume) ({ safeMutate { viewModel.retryLast() } }) else null,
+                            is FlatChatItem.AssistantToolUse -> Column {
+                                ToolCallPill(
+                                    block = item.block,
+                                    allToolBlocks = item.allToolBlocks,
+                                    onRetry = if (item.isLastCancelled && !isStreaming && !canResume) ({ safeMutate { viewModel.retryLast() } }) else null,
                                 // T14: route per-card stop to the global
                                 // cancelStream(). The button only renders
                                 // when the block is RUNNING/STREAMING — see
                                 // ToolCallPill `isRunning && onStop != null`
                                 // — so passing it unconditionally is safe.
-                                onStop = { viewModel.cancelStream() },
-                                onOpenTerminalWithCommand = onOpenTerminalWithCommand,
+                                    onStop = { viewModel.cancelStream() },
+                                    onOpenTerminalWithCommand = onOpenTerminalWithCommand,
                                 // T261: route detail open through ViewModel so
                                 // the sheet is hoisted out of LazyColumn item
                                 // scope (otherwise the sheet snaps shut when
                                 // the pill scrolls off-screen and Compose
                                 // disposes the item).
-                                onOpenDetail = { viewModel.openToolDetail(it) },
+                                    onOpenDetail = { viewModel.openToolDetail(it) },
                                 // [T-android-rerun-from-tool-block-position]
                                 // Re-run cuts at THIS tool_use block: keep the
                                 // blocks before it in the same turn, drop it +
@@ -3615,23 +3618,64 @@ fun ChatScreen(
                                 // state, same rule as Retry on the user bubble).
                                 // safeMutate tears down the selection toolbar
                                 // before the truncation reshuffles the list.
-                                onRerunFromHere = if (!isStreaming) ({
-                                    coroutineScope.launch {
-                                        tracedScrollToItem("RERUN-FROM-TOOL", 0, 0)
-                                    }
-                                    safeMutate { viewModel.rerunFromToolBlock(item.messageId, item.block.id) }
-                                }) else null,
-                                onCopyDetails = {
-                                    val text = formatToolDetailsForClipboard(item.block)
-                                    val cb = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                    cb.setPrimaryClip(android.content.ClipData.newPlainText("tool", text))
-                                    android.widget.Toast.makeText(
-                                        context,
-                                        context.getString(R.string.tool_longpress_copied_toast),
-                                        android.widget.Toast.LENGTH_SHORT,
-                                    ).show()
-                                },
-                            )
+                                    onRerunFromHere = if (!isStreaming) ({
+                                        coroutineScope.launch {
+                                            tracedScrollToItem("RERUN-FROM-TOOL", 0, 0)
+                                        }
+                                        safeMutate { viewModel.rerunFromToolBlock(item.messageId, item.block.id) }
+                                    }) else null,
+                                    onCopyDetails = {
+                                        val text = formatToolDetailsForClipboard(item.block)
+                                        val cb = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                        cb.setPrimaryClip(android.content.ClipData.newPlainText("tool", text))
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            context.getString(R.string.tool_longpress_copied_toast),
+                                            android.widget.Toast.LENGTH_SHORT,
+                                        ).show()
+                                    },
+                                )
+                                artifactFromToolBlock(item.block)?.let { artifact ->
+                                    ArtifactCard(
+                                        artifact = artifact,
+                                        onOpen = {
+                                            val file = com.leoyuan.leophoneagent.sandbox.PRootKernel
+                                                .resolveSessionHostPath(
+                                                    viewModel.currentSessionId,
+                                                    artifact.path,
+                                                    context,
+                                                )
+                                            if (file == null || !file.isFile) {
+                                                android.widget.Toast.makeText(
+                                                    context,
+                                                    context.getString(R.string.artifact_missing),
+                                                    android.widget.Toast.LENGTH_SHORT,
+                                                ).show()
+                                            } else if (artifact.extension == "html" || artifact.extension == "htm") {
+                                                openHtmlPreview(file, artifact.fileName)
+                                            } else if (artifact.extension in setOf("png", "jpg", "jpeg", "webp", "gif")) {
+                                                previewImageGallery = listOf(
+                                                    com.leoyuan.leophoneagent.ui.components.ImageGalleryItem(
+                                                        model = file,
+                                                        caption = artifact.fileName,
+                                                    ),
+                                                ) to 0
+                                            } else {
+                                                onPreviewAttachment(
+                                                    com.leoyuan.leophoneagent.ui.sandbox.FileItem(
+                                                        file = file,
+                                                        name = artifact.fileName,
+                                                        isDirectory = false,
+                                                        isSymlink = false,
+                                                        size = file.length(),
+                                                        modifiedMs = file.lastModified(),
+                                                    ),
+                                                )
+                                            }
+                                        },
+                                    )
+                                }
+                            }
                             is FlatChatItem.AssistantInfo -> FallbackInfoBlock(
                                 block = item.block,
                                 // Only the compact-divider info block should
@@ -5732,6 +5776,31 @@ fun ChatScreen(
     if (showModelPicker) {
         val config by providerRepository.config.collectAsState()
         val activeEntryId by viewModel.activeEntryId.collectAsState()
+        val activeCliToolId by viewModel.activeCliToolId.collectAsState()
+        var cliStatuses by remember {
+            mutableStateOf<Map<com.leoyuan.leophoneagent.sandbox.CliToolId, com.leoyuan.leophoneagent.sandbox.CliStatusEntry>>(emptyMap())
+        }
+        var cliStatusLoading by remember { mutableStateOf(true) }
+        LaunchedEffect(Unit) {
+            val managerId = "cli-model-picker-probe"
+            try {
+                val rootfsReady = com.leoyuan.leophoneagent.sandbox.RootfsManager
+                    .getInstance(context.applicationContext).isInstalled
+                if (rootfsReady) {
+                    val probe = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        com.leoyuan.leophoneagent.sandbox.ExecutionCoordinator.execute(
+                            sessionId = managerId,
+                            command = com.leoyuan.leophoneagent.sandbox.CliToolCatalog.combinedStatusCommand(),
+                            timeout = 30_000L,
+                        )
+                    }
+                    cliStatuses = com.leoyuan.leophoneagent.sandbox.CliStatusReport.parse(probe.output)
+                }
+            } finally {
+                com.leoyuan.leophoneagent.sandbox.ExecutionCoordinator.sessionDidTerminate(managerId)
+                cliStatusLoading = false
+            }
+        }
 
         // When the user picks a model whose output is image/audio/video, defer
         // the actual binding behind a confirmation dialog — those models can't
@@ -5806,6 +5875,17 @@ fun ChatScreen(
                     viewModel.selectEntry(entryId)
                     showModelPicker = false
                 }
+            },
+            cliStatuses = cliStatuses,
+            cliStatusLoading = cliStatusLoading,
+            selectedCliToolId = activeCliToolId,
+            onSelectCli = { toolId ->
+                viewModel.selectCliTool(toolId)
+                showModelPicker = false
+            },
+            onManageCli = {
+                showModelPicker = false
+                onCliToolsClick()
             },
             onDismiss = { showModelPicker = false },
             // [T-android-modelpicker-group-edit] Close the picker first, then

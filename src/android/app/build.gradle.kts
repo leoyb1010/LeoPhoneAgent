@@ -37,8 +37,8 @@ android {
         applicationId = "com.leoyuan.leophoneagent"
         minSdk = 26
         targetSdk = 35
-        versionCode = 100011
-        versionName = "1.0.0-alpha.11"
+        versionCode = 100012
+        versionName = "1.0.0-alpha.12"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -117,6 +117,13 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    packaging {
+        // PRoot and its loader are executed from nativeLibraryDir. Express
+        // extraction through AGP's supported packaging API instead of the
+        // deprecated manifest attribute so Release packaging stays explicit.
+        jniLibs.useLegacyPackaging = true
     }
 
     androidResources {

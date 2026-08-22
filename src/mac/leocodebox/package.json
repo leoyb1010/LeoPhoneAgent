@@ -1,6 +1,6 @@
 {
   "name": "leocodebox",
-  "version": "1.74.1",
+  "version": "1.74.2",
   "productName": "leocodebox",
   "description": "LeoPhoneAgent Mac workstation for local coding agents",
   "type": "module",
@@ -65,7 +65,7 @@
     "release": "npm run desktop:dist:mac:signed && npm run desktop:notarize:mac",
     "prepublishOnly": "npm run build",
     "postinstall": "node scripts/fix-node-pty.js",
-    "prepare": "husky",
+    "prepare": "cd ../../.. && src/mac/leocodebox/node_modules/.bin/husky src/mac/leocodebox/.husky",
     "verify:release-notes": "node --test src/components/version-upgrade/releaseNotes.test.ts"
   },
   "build": {
@@ -233,8 +233,8 @@
     "katex": "^0.16.25",
     "lint-staged": "^16.3.2",
     "lucide-react": "^0.515.0",
-    "node-gyp": "^10.0.0",
-    "postcss": "^8.4.32",
+    "node-gyp": "^13.0.1",
+    "postcss": "^8.5.26",
     "react-dropzone": "^14.2.3",
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^16.1.1",
@@ -243,7 +243,7 @@
     "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.0",
     "remark-math": "^6.0.0",
-    "sharp": "^0.34.2",
+    "sharp": "^0.35.3",
     "tailwindcss": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",
     "tsc-alias": "^1.8.16",

@@ -59,11 +59,13 @@ import com.leoyuan.leophoneagent.relay.LeoFleetPresets
 import com.leoyuan.leophoneagent.relay.RelayApproval
 import com.leoyuan.leophoneagent.relay.RelayFleetClient
 import com.leoyuan.leophoneagent.relay.RelayFleetStore
+import com.leoyuan.leophoneagent.relay.RelayEventsExpiredException
 import com.leoyuan.leophoneagent.relay.RelayMachine
 import com.leoyuan.leophoneagent.relay.RelaySession
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,6 +85,7 @@ fun RelayFleetScreen(onBack: () -> Unit) {
     var harness by remember { mutableStateOf("codex") }
     var cwd by remember { mutableStateOf("~") }
     var eventWatermark by remember { mutableStateOf(0.0) }
+    val sessionEventSeq = remember { mutableStateMapOf<String, Int>() }
 
     // P2#18：原来 refresh / 审批 / 启动 / 停止 四处各自 `RelayFleetClient(config)`，
     // 而它的默认构造会 new 一个全新的 OkHttpClient —— 每次点击都新建一份连接池
@@ -133,6 +136,74 @@ fun RelayFleetScreen(onBack: () -> Unit) {
     }
 
     LaunchedEffect(config.accessKey) { refresh() }
+
+    // Live-follow every non-terminal session. The key intentionally excludes
+    // status/lastEvent so an arriving delta updates the row without tearing
+    // down and rebuilding the EventSource. A terminal event removes the key,
+    // which cancels the collector cleanly.
+    val liveSessionKeys = sessions.entries
+        .flatMap { (machine, rows) -> rows.filterNot { it.isTerminal }.map { machine to it.id } }
+        .sortedBy { "${it.first}|${it.second}" }
+    LaunchedEffect(fleetClient, liveSessionKeys) {
+        val client = fleetClient ?: return@LaunchedEffect
+        liveSessionKeys.forEach { (machine, sessionId) ->
+            launch {
+                val key = "$machine|$sessionId"
+                var retryDelayMs = 750L
+                while (true) {
+                    val current = sessions[machine].orEmpty().firstOrNull { it.id == sessionId }
+                    if (current == null || current.isTerminal) break
+                    val outcome = runCatching {
+                        client.sessionEvents(machine, sessionId, sessionEventSeq[key] ?: 0)
+                            .collect { event ->
+                                if (event.seq <= (sessionEventSeq[key] ?: 0)) return@collect
+                                sessionEventSeq[key] = event.seq
+                                val newStatus = when (event.event) {
+                                    "run.completed" -> "completed"
+                                    "run.failed" -> "failed"
+                                    "run.cancelled" -> "cancelled"
+                                    "message.delta", "tool.started", "tool.completed" -> "running"
+                                    else -> null
+                                }
+                                val preview = event.delta?.takeLast(180)
+                                    ?: event.output?.takeLast(180)
+                                    ?: event.event
+                                sessions[machine] = sessions[machine].orEmpty().map { row ->
+                                    if (row.id == sessionId) row.copy(
+                                        status = newStatus ?: row.status,
+                                        lastEvent = preview,
+                                    ) else row
+                                }
+                                if (event.event == "approval.request" && event.approvalId != null) {
+                                    approvals = (approvals + RelayApproval(
+                                        machine = machine,
+                                        sessionId = sessionId,
+                                        approvalId = event.approvalId,
+                                        command = event.command,
+                                        description = event.description,
+                                        choices = event.choices.ifEmpty { listOf("once", "deny") },
+                                        seq = event.seq,
+                                    )).distinctBy { "${it.machine}|${it.sessionId}|${it.approvalId}" }
+                                }
+                                retryDelayMs = 750L
+                            }
+                    }
+                    val latest = sessions[machine].orEmpty().firstOrNull { it.id == sessionId }
+                    if (latest == null || latest.isTerminal) break
+                    // A normal close before a terminal event is still a lost
+                    // network edge. Resume from seq with bounded backoff.
+                    outcome.exceptionOrNull()?.let { failure ->
+                        if (failure is RelayEventsExpiredException) {
+                            sessionEventSeq[key] = failure.minAfter
+                        }
+                        android.util.Log.w("RelayFleetSSE", "session stream reconnect: ${failure.message}")
+                    }
+                    delay(retryDelayMs)
+                    retryDelayMs = (retryDelayMs * 2).coerceAtMost(8_000L)
+                }
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -400,6 +471,14 @@ private fun MachineCard(
                     Column(Modifier.weight(1f)) {
                         Text("${session.harness} · ${session.status}", style = MaterialTheme.typography.bodyMedium)
                         Text(session.id.take(12), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        session.lastEvent?.takeIf { it.isNotBlank() }?.let { last ->
+                            Text(
+                                last,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                            )
+                        }
                     }
                     if (!session.isTerminal) {
                         OutlinedButton(onClick = { onStop(session.id) }) { Text("停止") }

@@ -647,6 +647,7 @@ fun AppNavigation(
                             navController.safeNavigate(Routes.FILE_PREVIEW)
                         },
                         onModelGroupsClick = { navController.safeNavigate(Routes.MODEL_GROUPS) },
+                        onCliToolsClick = { navController.safeNavigate(Routes.CLI_TOOLS) },
                         compactChrome = compactChrome,
                         tabletopSplitFraction = tabletopFraction,
                         onOpenSystemPermissions = {

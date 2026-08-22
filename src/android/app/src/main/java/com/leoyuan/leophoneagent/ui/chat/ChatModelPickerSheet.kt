@@ -55,6 +55,9 @@ import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.leoyuan.leophoneagent.sandbox.CliStatusEntry
+import com.leoyuan.leophoneagent.sandbox.CliToolCatalog
+import com.leoyuan.leophoneagent.sandbox.CliToolId
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -302,6 +305,11 @@ internal fun ModelPickerSheet(
     onSelectGroup: (String) -> Unit,
     onSelectGroupEntry: (String, String) -> Unit,
     onSelectEntry: (String) -> Unit,
+    cliStatuses: Map<CliToolId, CliStatusEntry> = emptyMap(),
+    cliStatusLoading: Boolean = false,
+    selectedCliToolId: CliToolId? = null,
+    onSelectCli: (CliToolId) -> Unit = {},
+    onManageCli: () -> Unit = {},
     onDismiss: () -> Unit,
     /** [T-android-modelpicker-group-edit] "Edit" affordance on the Model Groups
      *  section header — dismisses the sheet and navigates to the Model Groups
@@ -368,6 +376,13 @@ internal fun ModelPickerSheet(
         val ms = (System.nanoTime() - t0) / 1_000_000.0
         AppLogger.info("ModelPicker", "[ModelPicker] all providers loaded: total $totalCount items, ${"%.1f".format(ms)}ms")
         result
+    }
+    val filteredCliTools = remember(searchText) {
+        CliToolCatalog.tools.filter { spec ->
+            searchText.isEmpty() ||
+                fuzzyMatch(spec.displayName, searchText) ||
+                fuzzyMatch(spec.id.name, searchText)
+        }
     }
 
     ModalBottomSheet(
@@ -763,6 +778,114 @@ internal fun ModelPickerSheet(
                     }
                 }
 
+                // ── Local developer CLIs ──
+                // This is the zero-terminal path: an installed CLI behaves as
+                // another chat engine, while an unavailable one takes the user
+                // directly to the manager instead of presenting a dead row.
+                if (filteredCliTools.isNotEmpty()) {
+                    item(key = "local_cli_section") {
+                        Column(
+                            modifier = Modifier
+                                .padding(horizontal = 16.dp, vertical = 6.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    RoundedCornerShape(14.dp),
+                                ),
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        stringResource(R.string.model_picker_local_cli_section),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    Text(
+                                        stringResource(R.string.model_picker_local_cli_hint),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f),
+                                    )
+                                }
+                                MinisTextButton(onClick = onManageCli) {
+                                    Text(stringResource(R.string.model_picker_local_cli_manage))
+                                }
+                            }
+                            filteredCliTools.forEachIndexed { index, spec ->
+                                val status = cliStatuses[spec.id]
+                                val installed = status?.installed == true
+                                val selected = installed && selectedCliToolId == spec.id
+                                val subtitle = when {
+                                    cliStatusLoading -> stringResource(R.string.model_picker_local_cli_checking)
+                                    installed -> status?.version ?: stringResource(R.string.model_picker_local_cli_installed)
+                                    else -> stringResource(R.string.model_picker_local_cli_not_installed)
+                                }
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 54.dp)
+                                        .clickable {
+                                            if (installed) onSelectCli(spec.id) else onManageCli()
+                                        }
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        if (selected) Icons.Default.CheckCircle else Icons.Default.Terminal,
+                                        contentDescription = null,
+                                        tint = when {
+                                            selected -> Color(0xFF34C759)
+                                            installed -> MaterialTheme.colorScheme.primary
+                                            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                                        },
+                                        modifier = Modifier.size(21.dp),
+                                    )
+                                    Spacer(Modifier.width(11.dp))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            spec.displayName,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (installed || cliStatusLoading) {
+                                                MaterialTheme.colorScheme.onSurface
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.58f)
+                                            },
+                                        )
+                                        Text(
+                                            subtitle,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                    Text(
+                                        stringResource(
+                                            if (installed) R.string.model_picker_local_cli_local_badge
+                                            else R.string.model_picker_local_cli_install,
+                                        ),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (installed) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                if (index < filteredCliTools.lastIndex) {
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(start = 48.dp, end = 16.dp),
+                                        thickness = 0.5.dp,
+                                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // ── Individual Models by Provider (one section card per provider) ──
                 // Each provider becomes a single grouped card containing: an
                 // embedded header row with the collapse chevron, then either
@@ -994,7 +1117,7 @@ internal fun ModelPickerSheet(
                 }
 
                 // ── Empty / No Results ──
-                if (filteredGroups.isEmpty() && allInstancesWithEntries.isEmpty()) {
+                if (filteredGroups.isEmpty() && allInstancesWithEntries.isEmpty() && filteredCliTools.isEmpty()) {
                     item {
                         Column(
                             modifier = Modifier

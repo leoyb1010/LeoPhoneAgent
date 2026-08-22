@@ -189,7 +189,7 @@ class TerminalNativeView @JvmOverloads constructor(
                 actionMode?.finish()
                 return true
             }
-            onTap()
+            performClick()
             return true
         }
 
@@ -217,8 +217,17 @@ class TerminalNativeView @JvmOverloads constructor(
         }
     })
 
+    // GestureDetector routes a real single-tap to performClick() above; lint
+    // cannot follow that callback edge and otherwise reports a false positive.
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         return gestureDetector.onTouchEvent(event) || super.onTouchEvent(event)
+    }
+
+    override fun performClick(): Boolean {
+        super.performClick()
+        onTap()
+        return true
     }
 
     // ── Selection lifecycle ───────────────────────────────────────────────

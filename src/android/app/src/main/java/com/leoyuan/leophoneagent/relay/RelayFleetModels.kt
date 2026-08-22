@@ -48,6 +48,19 @@ data class RelayEventBatch(
     val now: Double,
 )
 
+data class RelayHarnessEvent(
+    val machine: String,
+    val sessionId: String,
+    val seq: Int,
+    val event: String,
+    val delta: String? = null,
+    val output: String? = null,
+    val approvalId: String? = null,
+    val command: String? = null,
+    val description: String? = null,
+    val choices: List<String> = emptyList(),
+)
+
 data class FleetPreset(val label: String, val machine: String)
 
 val LeoFleetPresets = listOf(
@@ -56,4 +69,7 @@ val LeoFleetPresets = listOf(
     FleetPreset("Mac Studio", "LeoMac-Studio-2"),
 )
 
-class RelayException(message: String) : Exception(message)
+open class RelayException(message: String) : Exception(message)
+
+class RelayEventsExpiredException(val minAfter: Int) :
+    RelayException("远程事件已过期，将从可用水位 $minAfter 重新同步")

@@ -599,6 +599,7 @@ class ToolOverlayController(private val context: Context) {
         var startParamX = 0
         var startParamY = 0
         var dragging = false
+        target.setOnClickListener { onTap() }
         target.setOnTouchListener { _, ev ->
             when (ev.action) {
                 MotionEvent.ACTION_DOWN -> {
@@ -628,7 +629,7 @@ class ToolOverlayController(private val context: Context) {
                     if (dragging) {
                         backgroundRepo.setOverlayPosition(params.x, params.y)
                     } else {
-                        onTap()
+                        target.performClick()
                     }
                     true
                 }

@@ -2,10 +2,17 @@ package com.leoyuan.leophoneagent.relay
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import okhttp3.sse.EventSource
+import okhttp3.sse.EventSourceListener
+import okhttp3.sse.EventSources
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
@@ -112,6 +119,51 @@ class RelayFleetClient(
         RelayEventBatch(approvals, highWater)
     }
 
+    /**
+     * Resumable live session stream. Every reconnect supplies the last observed
+     * seq through `after`, so a Fold8 sleep/network handoff replays missed
+     * frames before following live instead of silently dropping output.
+     */
+    fun sessionEvents(machine: String, sessionId: String, after: Int): Flow<RelayHarnessEvent> = callbackFlow {
+        require(after >= 0) { "after must be non-negative" }
+        val request = Request.Builder()
+            .url(resolve(machinePath(machine, "/harness/sessions/${enc(sessionId)}/events?after=$after")))
+            .get()
+            .authorized()
+            .header("Accept", "text/event-stream")
+            .build()
+        val source = EventSources.createFactory(http).newEventSource(
+            request,
+            object : EventSourceListener() {
+                override fun onEvent(eventSource: EventSource, id: String?, type: String?, data: String) {
+                    parseHarnessEvent(machine, sessionId, data)?.let { trySend(it) }
+                }
+
+                override fun onClosed(eventSource: EventSource) {
+                    close()
+                }
+
+                override fun onFailure(eventSource: EventSource, t: Throwable?, response: Response?) {
+                    if (response?.code == 410) {
+                        val body = runCatching { response.body?.string().orEmpty() }.getOrDefault("")
+                        val minAfter = runCatching { JSONObject(body).optInt("min_after", 0) }
+                            .getOrDefault(0)
+                            .coerceAtLeast(0)
+                        close(RelayEventsExpiredException(minAfter))
+                        return
+                    }
+                    val message = when (response?.code) {
+                        401, 403 -> "中继密钥被拒绝"
+                        null -> t?.message ?: "远程事件流已断开"
+                        else -> "远程事件流 HTTP ${response.code}"
+                    }
+                    close(RelayException(message))
+                }
+            },
+        )
+        awaitClose { source.cancel() }
+    }
+
     private fun machinePath(machine: String, tail: String) = "/m/${enc(machine)}$tail"
 
     private fun get(path: String): JSONObject = execute(
@@ -157,6 +209,29 @@ class RelayFleetClient(
 
         internal fun forTest(config: RelayFleetConfig, http: OkHttpClient): RelayFleetClient =
             RelayFleetClient(config, http, validateHttps = false)
+
+        internal fun parseHarnessEvent(
+            machine: String,
+            sessionId: String,
+            data: String,
+        ): RelayHarnessEvent? {
+            val obj = runCatching { JSONObject(data) }.getOrNull() ?: return null
+            val event = obj.optString("event").takeIf { it.isNotBlank() } ?: return null
+            val seq = obj.optInt("seq", -1)
+            if (seq < 0) return null
+            return RelayHarnessEvent(
+                machine = machine,
+                sessionId = sessionId,
+                seq = seq,
+                event = event,
+                delta = obj.optStringOrNull("delta"),
+                output = obj.optStringOrNull("output"),
+                approvalId = obj.optStringOrNull("approval_id") ?: obj.optStringOrNull("request_id"),
+                command = obj.optStringOrNull("command"),
+                description = obj.optStringOrNull("description"),
+                choices = obj.optJSONArray("choices").strings(),
+            )
+        }
     }
 }
 

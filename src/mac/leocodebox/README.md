@@ -2,7 +2,7 @@
 
 ![leocodebox 本地 Agent 工作台](public/visuals/release/readme-hero.webp)
 
-![version](https://img.shields.io/badge/source-1.74.0-blue)
+![version](https://img.shields.io/badge/source-1.74.2-blue)
 ![platform](https://img.shields.io/badge/platform-macOS%20arm64-lightgrey)
 ![signed](https://img.shields.io/badge/signed-Developer%20ID-blue)
 ![license](https://img.shields.io/badge/license-AGPL--3.0-orange)
@@ -18,12 +18,12 @@
 [![下载 DMG](https://img.shields.io/badge/下载-LeoPhoneAgent%20Mac%201.73.0%20(arm64)-brightgreen?style=for-the-badge)](https://github.com/leoyb1010/leocodebox-updates/releases/latest)
 
 - **最新版本**：<https://github.com/leoyb1010/leocodebox-updates/releases/latest>
-- **当前源码版本**：`1.74.0`
+- **当前源码版本**：`1.74.2`
 - **当前公开可安装版**：`1.73.0`
 - **源码**：<https://github.com/leoyb1010/LeoPhoneAgent/tree/main/src/mac/leocodebox>
 - **Issues**：<https://github.com/leoyb1010/LeoPhoneAgent/issues>
 
-1.74.0 目前是待验收源码，**尚未签名、未公证、未发布到更新仓**——更新仓里的最新可安装版本是 1.73.0。发布 1.74.0 需要在装有 Developer ID Application 证书的机器上执行 `desktop:dist:mac:signed` + `desktop:notarize:mac`（见 [docs/SIGNING.md](docs/SIGNING.md)），并等待全部质量门禁通过。未公证的本地验证包不会冒充公开发布资产。
+1.74.2 已通过 typecheck、lint、全量测试、生产构建、0 漏洞审计和本机运行态验证，**尚未以 Developer ID 签名、公证或发布到更新仓**——更新仓里的最新公开可安装版本仍是 1.73.0。公开发布必须在持有原 Developer ID Application 私钥的机器上执行 `desktop:dist:mac:signed` + `desktop:notarize:mac`（见 [docs/SIGNING.md](docs/SIGNING.md)）。本机 ad-hoc 验证包不会冒充热更新资产。
 
 ---
 

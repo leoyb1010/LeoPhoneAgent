@@ -1,8 +1,8 @@
 # LeoPhoneAgent
 
 [![iOS](https://img.shields.io/badge/iOS-1.24.1%20(95)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
-[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.11-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.11)
-[![macOS](https://img.shields.io/badge/macOS-1.74.0-7C3AED.svg)](src/mac/leocodebox/package.json)
+[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.12-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.12)
+[![macOS](https://img.shields.io/badge/macOS-1.74.2-7C3AED.svg)](src/mac/leocodebox/package.json)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.14-D94B16.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Mobile](https://img.shields.io/badge/mobile-iOS%20%2B%20Android-black.svg)](#系统架构)
@@ -63,16 +63,16 @@ bash src/harmony/scripts/build_hap.sh
 > 同一台手机上同时安装。Power 版只有在用户完成产品内授权以及 Android
 > 无障碍/Shizuku 系统授权后，才会开放更深的跨应用操控。
 
-- [下载 Standard alpha.11](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.11/LeoPhoneAgent-Standard-1.0.0-alpha.11.apk)
-- [下载 Power alpha.11](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.11/LeoPhoneAgent-Power-1.0.0-alpha.11.apk)
-- [查看本次更新记录](CHANGELOG.md#android-v100-alpha11---2026-08-21)
+- [下载 Standard alpha.12](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.12/LeoPhoneAgent-Standard-1.0.0-alpha.12.apk)
+- [下载 Power alpha.12](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.12/LeoPhoneAgent-Power-1.0.0-alpha.12.apk)
+- [查看本次更新记录](CHANGELOG.md#android-v100-alpha12---2026-08-22)
 - [查看完整五轮审计与交付报告](docs/ANDROID_DELIVERY_1.0.0_ALPHA1.md)
 
 SHA-256：
 
 ```text
-Standard  e37b6b32240e0b97c852e8f000f13ee5a0ed4411c22c925aa52fac27798737b3
-Power     43cab8c6b07ba70efbf3c4aba875fc2c0d5565693282dbb5d6616bd668d6d5dc
+Standard  5d947a554eae3a2eee4bc133c8542d735f9331dcea3c9fc853e342fb8da8f1cb
+Power     bbd9a60b091d382c936a787daf3bcd6dd95dd1d8206595f842996f43adf0fc63
 ```
 
 本次公开附件使用显式开启的个人 Alpha 调试证书签名，不应作为应用商店的
@@ -146,7 +146,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 Android 版本
 
-- 开发/发布版本：`1.0.0-alpha.11`（versionCode `100011`），`minSdk 26`、`targetSdk 35`、`compileSdk 36`、仅 ARM64。
+- 开发/发布版本：`1.0.0-alpha.12`（versionCode `100012`），`minSdk 26`、`targetSdk 35`、`compileSdk 36`、仅 ARM64。
 - Standard 包名：`com.leoyuan.leophoneagent`
 - Power 包名：`com.leoyuan.leophoneagent.power`
 - 两个版本共享本机 Agent、Provider、Skills、MCP、Memory、PRoot 与浏览器底座；
@@ -160,9 +160,12 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
   200% 系统字体可用性验证
 - 简体中文设置、列表、按钮、弹窗与主操作 TalkBack 标签已资源化，并加入
   中文资源完整性与设置页英文硬编码构建门禁
-- 设置 → 开发 CLI 可在本机 Alpine ARM64 沙箱安装、更新并启动 Claude Code、
-  Codex CLI、Grok Build 与 Cursor CLI；可为每个 CLI 设置模型 ID。匹配供应商的
-  用户 API Key 可仅通过单次终端进程内存传递，OAuth/订阅令牌不会导出。
+- Claude Code、Codex CLI、Grok Build 与 Cursor CLI 可在本机 Alpine ARM64
+  沙箱安装、更新，也可直接从聊天模型选择器作为本机执行引擎运行，不必进入终端。
+  Prompt 走会话私有临时文件，匹配供应商的 API Key 只通过单轮瞬时环境传递；
+  OAuth/订阅令牌不会导出。成功写出的网页、文档、表格、PDF 与媒体会显示交付物卡片。
+- 远程机器工作台使用 `after=seq` 的 SSE 回放 + 实时跟随；网络切换后续传输出、
+  完成状态与审批请求，不再依赖手动刷新。
 
 ## Android Agent 交接与发布铁律
 
@@ -199,7 +202,7 @@ Fold8 是 Android 主验收设备：封面屏 `1080×1728`、展开屏 `1768×22
 
 ### 3. 个人 Alpha 签名链不可更换
 
-当前 alpha.1–alpha.3、alpha.5–alpha.11 的可升级证书 SHA-256 是：
+当前 alpha.1–alpha.3、alpha.5–alpha.12 的可升级证书 SHA-256 是：
 
 ```text
 f325bc65f4f6ba456938c7d88c96ad2ef418197d1204cfd2bd881aa145bf11df
@@ -284,9 +287,10 @@ adb logcat -d | rg 'FATAL EXCEPTION|AndroidRuntime'
 
 | 版本 | 状态 | 处理 |
 |---|---|---|
-| alpha.11 | 当前可用 | alpha.1–alpha.3 / alpha.5–alpha.10 可直接覆盖安装 |
-| alpha.10 | 上一可用版 | alpha.11 的升级验证基线 |
-| alpha.9 | 旧版 | 可直接升级到 alpha.11 |
+| alpha.12 | 当前可用 | alpha.1–alpha.3 / alpha.5–alpha.11 可直接覆盖安装 |
+| alpha.11 | 上一可用版 | alpha.12 的升级验证基线 |
+| alpha.10 | 旧版 | 可直接升级到 alpha.12 |
+| alpha.9 | 旧版 | 可直接升级到 alpha.12 |
 | alpha.7 | 旧版 | 可直接升级到 alpha.9 |
 | alpha.6 | 旧版 | 可直接升级到 alpha.9 |
 | alpha.4 | **损坏/禁用** | 签名链错误，不得作为测试或发布基线 |

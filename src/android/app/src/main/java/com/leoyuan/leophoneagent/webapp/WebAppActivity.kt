@@ -262,6 +262,7 @@ class WebAppActivity : ComponentActivity() {
         finish()
     }
 
+    @SuppressLint("ClickableViewAccessibility")
     @Composable
     private fun WebAppHost(
         file: File,

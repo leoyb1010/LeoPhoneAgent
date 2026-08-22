@@ -181,7 +181,6 @@
         android:preserveLegacyExternalStorage="true"
         android:networkSecurityConfig="@xml/network_security_config"
         android:usesCleartextTraffic="false"
-        android:extractNativeLibs="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_display_name"
         android:localeConfig="@xml/locales_config"

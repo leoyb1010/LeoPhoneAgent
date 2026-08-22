@@ -1,6 +1,8 @@
 package com.leoyuan.leophoneagent.relay
 
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.flow.catch
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -76,6 +78,45 @@ class RelayFleetClientTest {
         }
         assertEquals("中继密钥被拒绝", error.message)
         assertTrue(!error.message.orEmpty().contains("1234567890abcdef"))
+    }
+
+    @Test fun sessionEventsUseSseBearerAndParseResumableFrames() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setHeader("Content-Type", "text/event-stream")
+                .setBody(
+                    "data: {\"seq\":8,\"event\":\"message.delta\",\"delta\":\"hi\"}\n\n" +
+                        "data: {\"seq\":9,\"event\":\"run.completed\",\"output\":\"hi\"}\n\n",
+                ),
+        )
+        val events = client.sessionEvents("cortex", "s-1", after = 7).toList()
+        assertEquals(listOf(8, 9), events.map { it.seq })
+        assertEquals("hi", events.first().delta)
+        assertEquals("run.completed", events.last().event)
+
+        val request = server.takeRequest()
+        assertEquals("/relay/api/m/cortex/harness/sessions/s-1/events?after=7", request.path)
+        assertEquals("Bearer 1234567890abcdef", request.getHeader("Authorization"))
+        assertEquals("text/event-stream", request.getHeader("Accept"))
+    }
+
+    @Test fun malformedSsePayloadFailsClosed() {
+        assertEquals(null, RelayFleetClient.parseHarnessEvent("m", "s", "not-json"))
+        assertEquals(null, RelayFleetClient.parseHarnessEvent("m", "s", "{\"event\":\"message.delta\"}"))
+    }
+
+    @Test fun expiredSessionStreamCarriesServerRecoveryWatermark() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(410)
+                .setBody("""{"error":{"message":"evicted"},"min_after":41}"""),
+        )
+        var failure: Throwable? = null
+        client.sessionEvents("cortex", "s-old", after = 1)
+            .catch { failure = it }
+            .toList()
+        assertTrue(failure is RelayEventsExpiredException)
+        assertEquals(41, (failure as RelayEventsExpiredException).minAfter)
     }
 
     @Test fun productionBaseRequiresHttps() {

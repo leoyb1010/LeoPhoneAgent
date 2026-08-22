@@ -1,5 +1,6 @@
 package com.leoyuan.leophoneagent.ui.preview
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
@@ -66,6 +67,7 @@ import kotlinx.coroutines.delay
  * Distinct from WebAppActivity: that path is the standalone WebApp
  * shortcut launcher; this is the in-chat attachment preview.
  */
+@SuppressLint("ClickableViewAccessibility")
 @Composable
 fun WebPreviewFullscreenScreen(
     holder: WebViewHolder,
