@@ -212,9 +212,9 @@ OpenRouter（`openrouter.ai`）与 Kimi（`auth.kimi.com`）一般可直连，�
 | 2 | 已有 A 再加 B | B 新建即当前；聊天顶栏可切换。alpha.12 先点供应商名再展开模型。 | 通过 |
 | 3 | 无代理 OpenAI 登录报错+复制；有代理走通 | 无代理：`about:blank` 后 8 秒「页面打不开」+ 已复制。有代理换 token 未验。 | 部分（缺境外代理） |
 | 4 | 登录→关闭→再登录 ×3 | 三次重开都有关闭登录/复制链接/Web，未崩。 | 通过 |
-| 5 | Kimi 设备码全流程无代理 | alpha.13：Web 打开 `https://www.kimi.com/code/authorize_device`，设备码 `JVAE-0KUT`，手机号登录页渲染。alpha.14 改为优先带 `user_code` 的完整确认 URL；包已装上，锁屏未能冷启动核对弹窗和带码页。换 token 仍需你登录确认。 | 部分（确认页已开，带码 URL 与 token 待解锁后验） |
+| 5 | Kimi 设备码全流程无代理 | alpha.13：确认页能打开。alpha.14：Web 打开 `https://www.kimi.com/code/authorize_device?user_code=P1MM-A4OX`，顶栏设备码 `P1MM-A4OX`，KIMI 手机号登录页已渲染。换 token 仍需你登录并确认。 | 部分（带码确认页已开，token 待你点） |
 | 6 | 杀进程冷启动首页，iPhone 指挥 | 首页冷启动后会话「只回一个字：身」→「身」。中继 events 曾 502，本机已落地。 | 通过 |
 | 7 | 2 分钟前台定时有结果；断网见失败 | 成功：「定时·审计两分钟」→「到」。失败：关掉当前供应商后「定时·审计失败」→「这台鸿蒙还没配供应商」，失败不 mark。不是拔网。 | 通过（失败用关供应商代替断网） |
 | 8 | Gemini/Anthropic 详情拉模型（认证头） | 假钥匙点「从上游拉取」得「已拉取 39/13 个模型」（兜底，非上游 200）。`modelsAuthHeaders` 有单测。真钥匙未验。 | 部分 |
 
-P0–P2 源码均在。当前船 **0.3.0-alpha.14 / 100019** 已覆盖安装。alpha.13 确认页已打开（`JVAE-0KUT`）；本版改为优先 `verification_uri_complete`，登录后不用手抄设备码。装机后因锁屏未能冷启动核对「本次更新」，解锁后再验 Kimi 带码确认页。
+P0–P2 源码均在。当前船 **0.3.0-alpha.14 / 100019**。`last_seen_version` 已是本版。2026-08-21 真机打开 Kimi 带码确认页 `...?user_code=P1MM-A4OX`。换 token 仍需你在页上登录确认。
