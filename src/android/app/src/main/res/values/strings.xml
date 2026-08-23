@@ -1802,6 +1802,10 @@
     <string name="terminal_cli_booting_hint">First launch may take 30–60 seconds. Tap the screen to bring up the keyboard.</string>
     <string name="whats_new_title">What\'s new in %1$s</string>
     <string name="whats_new_confirm">OK</string>
+    <!-- 发版铁律:每次改 versionName 都必须同步改这里,并重写下面的
+         whats_new_current 文案。WhatsNewGateTest 会比对这两个值,
+         对不上就构建失败 —— 防止弹出的是上一版的更新内容。 -->
+    <string name="whats_new_version" translatable="false">1.0.0-alpha.12</string>
     <string name="whats_new_current">• Chat with Claude Code, Codex CLI, Grok Build, or Cursor CLI directly from the model picker — no terminal required\n• Successful HTML, document, table, PDF, image, video, and audio writes now appear as tappable artifact cards\n• Remote sessions now follow resumable SSE streams, so output, completion, and approvals update live after network handoffs\n• Prompts and reused API keys stay out of commands and are removed from the PRoot environment after each turn</string>
     <string name="artifact_ready">ARTIFACT READY</string>
     <string name="artifact_open">Open artifact</string>
