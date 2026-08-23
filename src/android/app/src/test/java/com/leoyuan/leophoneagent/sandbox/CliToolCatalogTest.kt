@@ -51,7 +51,7 @@ class CliToolCatalogTest {
     fun modelOverrideIsShellQuotedAndBounded() {
         val codex = CliToolCatalog.get(CliToolId.CODEX)
         val command = codex.launchCommand("gpt-test'; rm -rf /")
-        assertTrue(command.endsWith("--model 'gpt-test'\\''; rm -rf /'"))
+        assertTrue(command.endsWith("'--model' 'gpt-test'\\''; rm -rf /'"))
         runCatching { codex.launchCommand("x".repeat(201)) }
             .onSuccess { throw AssertionError("oversized model id was accepted") }
         runCatching { codex.launchCommand("bad\nmodel") }

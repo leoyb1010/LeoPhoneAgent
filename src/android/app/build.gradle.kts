@@ -37,8 +37,8 @@ android {
         applicationId = "com.leoyuan.leophoneagent"
         minSdk = 26
         targetSdk = 35
-        versionCode = 100012
-        versionName = "1.0.0-alpha.12"
+        versionCode = 100013
+        versionName = "1.0.0-alpha.13"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -327,7 +327,10 @@ val verifyChineseResources by tasks.registering {
             return (0 until document.documentElement.childNodes.length)
                 .map { document.documentElement.childNodes.item(it) }
                 .filterIsInstance<org.w3c.dom.Element>()
-                .mapNotNull { it.getAttribute("name").takeIf(String::isNotBlank) }
+                .mapNotNull { element ->
+                    element.getAttribute("name")
+                        .takeIf { it.isNotBlank() && element.getAttribute("translatable") != "false" }
+                }
                 .toSet()
         }
         val missing = names(defaults) - names(chinese)

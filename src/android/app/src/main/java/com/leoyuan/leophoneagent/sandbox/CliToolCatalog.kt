@@ -11,6 +11,9 @@ data class CliToolSpec(
     val binaryPath: String,
     val versionArgument: String,
     val terminalCommand: String,
+    val loginCommand: String,
+    val authStatusCommand: String,
+    val authHosts: Set<String>,
     val postInstallCommand: String = "",
 ) {
     val sourceHost: String = URI(installerUrl).host.orEmpty()
@@ -19,6 +22,7 @@ data class CliToolSpec(
         require(URI(installerUrl).scheme == "https")
         require(sourceHost in CliToolCatalog.OFFICIAL_HOSTS)
         require(binaryPath.startsWith("/root/") && !binaryPath.contains(".."))
+        require(authHosts.isNotEmpty() && authHosts.all { it == it.lowercase() && '.' in it })
     }
 
     fun statusCommand(): String = """
@@ -27,10 +31,19 @@ data class CliToolSpec(
         printf '%s\n' "${'$'}output" | head -n 1
     """.trimIndent()
 
-    fun launchCommand(model: String?, workdir: String? = null): String {
+    fun launchCommand(
+        model: String?,
+        workdir: String? = null,
+        extraArguments: List<String> = emptyList(),
+    ): String {
         val clean = model?.trim()?.takeIf { it.isNotEmpty() }
         require(clean == null || (clean.length <= 200 && clean.none { it.isISOControl() }))
-        val base = if (clean == null) terminalCommand else "$terminalCommand --model ${shellQuote(clean)}"
+        require(extraArguments.all { it.length <= 500 && it.none(Char::isISOControl) })
+        val suffix = buildList {
+            if (clean != null) addAll(listOf("--model", clean))
+            addAll(extraArguments)
+        }.joinToString(" ") { shellQuote(it) }
+        val base = if (suffix.isEmpty()) terminalCommand else "$terminalCommand $suffix"
         val cwd = workdir?.trim()?.takeIf { it.isNotEmpty() } ?: return base
         // [T-cli-workdir] Launch inside a mounted project folder. Only guest
         // paths the sandbox already owns are accepted; anything else (host
@@ -90,6 +103,9 @@ object CliToolCatalog {
             binaryPath = "/root/.local/bin/claude",
             versionArgument = "--version",
             terminalCommand = "export PATH=\"/root/.local/bin:/root/.grok/bin:${'$'}PATH\"; claude",
+            loginCommand = "export PATH=\"/root/.local/bin:/root/.grok/bin:${'$'}PATH\"; claude auth login",
+            authStatusCommand = "timeout 12 claude auth status --text 2>&1",
+            authHosts = setOf("claude.ai", "console.anthropic.com", "auth.anthropic.com"),
         ),
         CliToolSpec(
             id = CliToolId.CODEX,
@@ -98,6 +114,9 @@ object CliToolCatalog {
             binaryPath = "/root/.local/bin/codex",
             versionArgument = "--version",
             terminalCommand = "export PATH=\"/root/.local/bin:/root/.grok/bin:${'$'}PATH\"; codex",
+            loginCommand = "export PATH=\"/root/.local/bin:/root/.grok/bin:${'$'}PATH\"; codex login",
+            authStatusCommand = "timeout 12 codex login status 2>&1",
+            authHosts = setOf("auth.openai.com", "chatgpt.com"),
         ),
         CliToolSpec(
             id = CliToolId.GROK,
@@ -106,6 +125,9 @@ object CliToolCatalog {
             binaryPath = "/root/.grok/bin/grok",
             versionArgument = "version",
             terminalCommand = "export PATH=\"/root/.local/bin:/root/.grok/bin:${'$'}PATH\"; grok",
+            loginCommand = "export PATH=\"/root/.local/bin:/root/.grok/bin:${'$'}PATH\"; grok login --device-auth",
+            authStatusCommand = "test -s /root/.grok/auth.json && printf '%s\\n' 'signed-in'",
+            authHosts = setOf("accounts.x.ai", "auth.x.ai", "x.ai"),
         ),
         CliToolSpec(
             id = CliToolId.CURSOR,
@@ -114,6 +136,9 @@ object CliToolCatalog {
             binaryPath = "/root/.local/bin/agent",
             versionArgument = "--version",
             terminalCommand = "export PATH=\"/root/.local/bin:/root/.grok/bin:${'$'}PATH\"; agent",
+            loginCommand = "export PATH=\"/root/.local/bin:/root/.grok/bin:${'$'}PATH\"; unset NO_OPEN_BROWSER; agent login",
+            authStatusCommand = "timeout 12 agent status 2>&1",
+            authHosts = setOf("cursor.com"),
             postInstallCommand = cursorAlpineCompatibility(),
         ),
     )
@@ -131,6 +156,7 @@ object CliToolCatalog {
      * code, never a piped-away fake zero (same discipline as statusCommand).
      */
     const val STATUS_MARKER = "___LEO_CLI___"
+    const val AUTH_MARKER = "___LEO_CLI_AUTH___"
 
     fun combinedStatusCommand(): String = buildString {
         appendLine("export PATH=\"/root/.local/bin:/root/.grok/bin:${'$'}PATH\"")
@@ -142,6 +168,20 @@ object CliToolCatalog {
             appendLine("  printf '%s %s 127 \\n' '$STATUS_MARKER' '${tool.id.name}'")
             appendLine("fi")
         }
+        // Account probes may touch the network. Run them concurrently so a
+        // dead provider costs one 12-second ceiling, not four in series.
+        tools.forEach { tool ->
+            appendLine("(")
+            appendLine("  if [ -x '${tool.binaryPath}' ]; then")
+            appendLine("    auth_out=\"${'$'}(${tool.authStatusCommand})\"; auth_rc=${'$'}?")
+            appendLine("    printf '%s %s %s %s\\n' '$AUTH_MARKER' '${tool.id.name}' \"${'$'}auth_rc\" \"${'$'}(printf '%s' \"${'$'}auth_out\" | head -n 1)\"")
+            appendLine("  else")
+            appendLine("    printf '%s %s 127 \\n' '$AUTH_MARKER' '${tool.id.name}'")
+            appendLine("  fi")
+            appendLine(") &")
+        }
+        appendLine("wait")
+        appendLine(":")
     }.trimEnd()
 
     /** Cursor ships a glibc Node + GNU-only Merkle addon; adapt both to Alpine ARM64. */
@@ -184,4 +224,18 @@ object CliToolCatalog {
           rm -rf /root/.cache/cursor-compile-cache
         )
     """.trimIndent()
+}
+
+/** Detects only official HTTPS authorization URLs during catalog login flows. */
+object CliAuthLinkDetector {
+    private val URL = Regex("""https://[^\s\u0007\u001B]+""")
+
+    fun firstAllowed(text: String, allowedHosts: Set<String>): String? =
+        URL.findAll(text).map { it.value.trimEnd('.', ',', ')', ']', '"', '\'') }.firstOrNull { candidate ->
+            runCatching {
+                val uri = URI(candidate)
+                uri.scheme == "https" && uri.host?.lowercase() in allowedHosts &&
+                    uri.userInfo == null && uri.fragment == null
+            }.getOrDefault(false)
+        }
 }

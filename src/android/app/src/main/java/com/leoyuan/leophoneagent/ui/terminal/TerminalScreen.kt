@@ -62,6 +62,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.leoyuan.leophoneagent.sandbox.TerminalSession
+import com.leoyuan.leophoneagent.sandbox.CliAuthLinkDetector
+import com.leoyuan.leophoneagent.sandbox.CliToolCatalog
 import com.leoyuan.leophoneagent.terminal.MinisOpenUrlBroker
 import com.leoyuan.leophoneagent.ui.terminal.canvas.TerminalNativeViewCompose
 import com.leoyuan.leophoneagent.ui.terminal.canvas.TerminalInputView
@@ -101,11 +103,24 @@ fun TerminalScreen(
     val inputController = rememberTerminalInputController()
     val scope = rememberCoroutineScope()
     var ctrlActive by remember { mutableStateOf(false) }
+    val loginAuthHosts = remember(initCommand) {
+        CliToolCatalog.tools.firstOrNull { it.loginCommand == initCommand }?.authHosts.orEmpty()
+    }
+    val authOutput = remember(initCommand) { StringBuilder() }
+    var authLinkOpened by remember(initCommand) { mutableStateOf(false) }
 
     // Pipe PTY output → emulator.
-    LaunchedEffect(terminalSession) {
+    LaunchedEffect(terminalSession, loginAuthHosts) {
         terminalSession.outputBytes.collect { bytes ->
             emulator.feed(bytes)
+            if (!authLinkOpened && loginAuthHosts.isNotEmpty()) {
+                authOutput.append(bytes.toString(Charsets.UTF_8))
+                if (authOutput.length > 16_384) authOutput.delete(0, authOutput.length - 8_192)
+                CliAuthLinkDetector.firstAllowed(authOutput.toString(), loginAuthHosts)?.let { url ->
+                    authLinkOpened = true
+                    MinisOpenUrlBroker.offer(url)
+                }
+            }
         }
     }
 
@@ -145,8 +160,9 @@ fun TerminalScreen(
     // Dismiss the boot hint once the CLI is clearly painting: either it
     // switched to the alternate screen (full TUIs) or the emulator has taken
     // a burst of updates well beyond the initial command echo (Claude Code's
-    // onboarding wizard renders on the PRIMARY buffer, so alternate-screen
-    // alone would leave the hint hanging until timeout). Ceiling as backstop.
+    // onboarding wizard renders on the PRIMARY buffer). The short ceiling is
+    // intentional: this hint must never cover an interactive trust/login
+    // prompt just because the CLI painted it in one large PTY batch.
     if (bootHintVisible) {
         val version by emulator.version
         val baseline = remember { version }
@@ -156,7 +172,7 @@ fun TerminalScreen(
             if (emulator.isAlternateActive || version - baseline > 8) bootHintVisible = false
         }
         LaunchedEffect(Unit) {
-            kotlinx.coroutines.delay(90_000)
+            kotlinx.coroutines.delay(3_000)
             bootHintVisible = false
         }
     }

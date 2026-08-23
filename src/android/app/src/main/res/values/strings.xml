@@ -1769,8 +1769,8 @@
     <string name="cli_tools_codex_description">OpenAI Codex CLI for Linux ARM64 musl</string>
     <string name="cli_tools_grok_description">xAI Grok Build CLI for Linux ARM64</string>
     <string name="cli_tools_cursor_description">Cursor Agent CLI for Linux ARM64</string>
-    <string name="cli_tools_model_and_auth">Model and authorization</string>
-    <string name="cli_tools_model_title">Configure %1$s</string>
+    <string name="cli_tools_model_and_auth">Connection and model</string>
+    <string name="cli_tools_model_title">Connect %1$s</string>
     <string name="cli_tools_model_label">CLI model ID</string>
     <string name="cli_tools_model_hint">Leave blank to use the CLI default. The value is passed with --model.</string>
     <string name="cli_tools_use_leo_key">Use LeoPhoneAgent’s current API key</string>
@@ -1799,14 +1799,14 @@
     <string name="cli_tools_failure_hint">The installer output below shows what went wrong. You can copy it or retry.</string>
     <string name="terminal_paste">Paste</string>
     <string name="terminal_cli_booting">Starting the CLI…</string>
-    <string name="terminal_cli_booting_hint">First launch may take 30–60 seconds. Tap the screen to bring up the keyboard.</string>
+    <string name="terminal_cli_booting_hint">Follow any safety confirmation or sign-in prompt shown by the CLI.</string>
     <string name="whats_new_title">What\'s new in %1$s</string>
     <string name="whats_new_confirm">OK</string>
     <!-- 发版铁律:每次改 versionName 都必须同步改这里,并重写下面的
          whats_new_current 文案。WhatsNewGateTest 会比对这两个值,
          对不上就构建失败 —— 防止弹出的是上一版的更新内容。 -->
-    <string name="whats_new_version" translatable="false">1.0.0-alpha.12</string>
-    <string name="whats_new_current">• Chat with Claude Code, Codex CLI, Grok Build, or Cursor CLI directly from the model picker — no terminal required\n• Successful HTML, document, table, PDF, image, video, and audio writes now appear as tappable artifact cards\n• Remote sessions now follow resumable SSE streams, so output, completion, and approvals update live after network handoffs\n• Prompts and reused API keys stay out of commands and are removed from the PRoot environment after each turn</string>
+    <string name="whats_new_version" translatable="false">1.0.0-alpha.13</string>
+    <string name="whats_new_current">• Each developer CLI now clearly separates its official account from a compatible LeoPhoneAgent model\n• Claude Code, Codex CLI, and Grok Build can use compatible Leo models without exporting OAuth or subscription credentials\n• Official Claude, Codex, Grok, and Cursor sign-in links now open directly inside the app\n• Account status, first-run guidance, and the Fold8 connection screen now report the real state instead of a generic authorization error</string>
     <string name="artifact_ready">ARTIFACT READY</string>
     <string name="artifact_open">Open artifact</string>
     <string name="artifact_missing">This artifact is no longer available on this device.</string>
@@ -1829,4 +1829,19 @@
     <string name="model_picker_local_cli_not_installed">Not installed</string>
     <string name="model_picker_local_cli_local_badge">LOCAL</string>
     <string name="model_picker_local_cli_install">INSTALL</string>
+    <string name="cli_tools_official_account">CLI account</string>
+    <string name="cli_tools_leo_model">Leo model</string>
+    <string name="cli_tools_official_account_hint">Use this CLI’s official browser login or API key. Subscription-only features stay with the official account.</string>
+    <string name="cli_tools_no_compatible_leo_model">No compatible API-key model is configured in LeoPhoneAgent for this CLI.</string>
+    <string name="cli_tools_leo_model_security_hint">The endpoint and model are written to an app-private CLI profile. The API key is injected for one run and is never written to the profile, command, navigation, or log.</string>
+    <string name="cli_tools_connection_leo_model">Leo model · %1$s · %2$s</string>
+    <string name="cli_tools_connection_auto_model">Auto-select</string>
+    <string name="cli_tools_auth_signed_in">Official account signed in</string>
+    <string name="cli_tools_auth_signed_out">Official account not signed in</string>
+    <string name="cli_tools_auth_unknown">Official account status unavailable</string>
+    <string name="cli_tools_login">Sign in</string>
+    <string name="cli_tools_relogin">Sign in again</string>
+    <string name="cli_tools_auth_incompatible_protocol">This endpoint does not support the protocol required by this CLI. Codex requires a Responses-compatible endpoint; choose another model or use the CLI account.</string>
+    <string name="cli_tools_auth_unsafe_endpoint">The configured endpoint must be HTTPS, or HTTP on localhost/127.0.0.1.</string>
+    <string name="cli_tools_auth_config_failed">Could not prepare the app-private CLI model profile. Check the Linux runtime and try again.</string>
 </resources>

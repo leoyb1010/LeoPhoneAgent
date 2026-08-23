@@ -187,6 +187,29 @@
 - `node --experimental-strip-types src/harmony/protocol/protocol.test.mjs`
 - `bash src/harmony/scripts/verify_harmony_release_notes.sh`
 
+## Android v1.0.0-alpha.13 - 2026-08-23
+
+### 开发 CLI 连接模型重做
+
+- 根因：alpha.12 只有一个「使用 LeoPhoneAgent API Key」开关，启动解析器又将 Claude/Codex/Grok 硬绑定到各家默认官方端点。自定义端点、Responses/Messages 协议、OAuth 边界和 CLI 自身登录被混在一起，所以用户明明已在 LeoPhoneAgent 选模型，CLI 仍会要求官方授权。
+- 设置页改为显式的「CLI 官方账号 / Leo 模型」两模式；Leo 模型会列出真正兼容的 Provider + Model，旧版「自动选择 · 自动选择」也会迁移到真实回退条目。
+- Claude Code 使用独立 `CLAUDE_CONFIG_DIR` 和不含密钥的初始状态，直接进入目录信任确认，不再弹「检测到自定义 API Key，是否使用」并默认 No。Codex 使用独立 Responses provider profile，Grok 按 Provider 生成 `messages` / `responses` / `chat_completions` 模型配置。
+- 模型、端点和协议只写入 `/root/.leophone-cli/`；API Key 仍从加密存储单次注入环境，不进入配置、命令、导航或日志。OAuth/订阅令牌不导出；Cursor 继续只允许官方账号。
+
+### 登录与 Fold8 可见体验
+
+- Claude、Codex、Grok、Cursor 每张卡片都有「登录/重新登录」和官方账号状态。某些 CLI 在「未登录/已过期」时仍返回退出码 0，现在会结合官方文本判定，不再假绿。
+- 登录输出中的官方 HTTPS 授权地址会经严格 host 白名单自动打开 App 内浏览器；Codex 直达 OpenAI 登录，Cursor 直达 Continue to sign in，Grok 直达已带 device code 的 `accounts.x.ai` 页，不再让用户对着一串码找输入口。
+- CLI 启动遮罩最多显示 3 秒，不会再覆盖已经出现的信任/登录交互。宽屏卡片、配置对话框和全屏终端继续按 Fold8 1768×2208 展开态验证。
+
+### 验证
+
+- 定向单测覆盖 Provider/协议兼容、OAuth 禁导出、HTTPS/回环端点、托管配置路径、密钥不落盘、官方授权 host 白名单、过期/未登录零退出码。
+- Fold8 API 35 真实安装 Claude Code 2.1.238、Codex CLI 0.149.0、Grok Build 1.0.5 和 Cursor CLI 2026.08.11；Claude Leo 模式直达目录信任，Grok 实屏显示 `LeoPhoneAgent · Anthropic` 与 `Logged in with API key`，Codex/Cursor 官方登录页已在 App 内自动打开。
+- JDK 17 下 Standard/Power 完整 JVM 测试均 0 失败（各 1 个既有跳过）；中文资源/设置门禁通过；双 Release lint 均 0 error；同一次 8m30s 双 flavor Release 构建成功，固定个人 Alpha 签名、包名、versionCode `100013` 与 versionName 均通过校验。
+- Fold8 API 35 上 Standard/Power 先回退到远程 alpha.12 附件，再用本次 APK 原地覆盖，两次均 `Success`；冷启动与 `ACTION_ASSIST` 均 `Status: ok`、进程存活，Logcat 无本 App `FATAL EXCEPTION`。实屏复验 1768×2208 展开态、1080×1728 封面态、alpha.13 中文更新弹窗、真实账号状态与 Grok device-code App 内页。
+- 发布 APK SHA-256：Standard `8b8cfcda6e4709627dabaf92150adecafbb7a8f9f580bb418ef44a0bfcccd124`；Power `ca6aae2b457318adbfd8c40c76dc54211eb056556e074b1093bf01c468a2b2de`。
+
 ## Android v1.0.0-alpha.12 - 2026-08-22
 
 ### 对话即本机 CLI

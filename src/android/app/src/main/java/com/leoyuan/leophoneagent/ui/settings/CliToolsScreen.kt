@@ -21,6 +21,8 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
@@ -28,6 +30,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -66,6 +69,9 @@ import com.leoyuan.leophoneagent.sandbox.CliToolId
 import com.leoyuan.leophoneagent.sandbox.CliLaunchError
 import com.leoyuan.leophoneagent.sandbox.CliToolPreference
 import com.leoyuan.leophoneagent.sandbox.CliToolPreferences
+import com.leoyuan.leophoneagent.sandbox.CliAuthState
+import com.leoyuan.leophoneagent.sandbox.CliToolLaunchResolver
+import com.leoyuan.leophoneagent.data.repository.ProviderRepository
 import com.leoyuan.leophoneagent.ui.components.SettingsSection
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -74,6 +80,8 @@ fun CliToolsScreen(
     onBack: () -> Unit,
     onOpenRootfs: () -> Unit,
     onOpenTerminal: (CliToolId, CliToolPreference) -> CliLaunchError?,
+    onLogin: (CliToolId) -> Unit,
+    providerRepository: ProviderRepository,
     viewModel: CliToolsViewModel = viewModel(),
 ) {
     val context = LocalContext.current
@@ -85,12 +93,15 @@ fun CliToolsScreen(
     var menuFor by remember { mutableStateOf<CliToolId?>(null) }
     var draftModel by remember { mutableStateOf("") }
     var draftUseLeoKey by remember { mutableStateOf(false) }
+    var draftProviderEntryId by remember { mutableStateOf<String?>(null) }
+    var providerMenuExpanded by remember { mutableStateOf(false) }
     var launchError by remember { mutableStateOf<CliLaunchError?>(null) }
     var logExpanded by remember { mutableStateOf(false) }
     val preferenceStore = remember { CliToolPreferences(context) }
     var preferences by remember {
         mutableStateOf(CliToolId.entries.associateWith(preferenceStore::get))
     }
+    val providerConfig by providerRepository.config.collectAsState()
     val groupedBg = MaterialTheme.colorScheme.surfaceContainerLowest
 
     LaunchedEffect(Unit) { viewModel.refresh(context) }
@@ -162,7 +173,55 @@ fun CliToolsScreen(
                             )
                         },
                         supportingContent = {
-                            Text(status.version ?: stringResource(descriptionFor(tool.id)))
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(status.version ?: stringResource(descriptionFor(tool.id)))
+                                if (status.installed) {
+                                    val preference = preferences.getValue(tool.id)
+                                    val compatibleEntries = if (preference.useLeoApiKey) {
+                                        CliToolLaunchResolver.compatibleEntries(tool.id, providerRepository)
+                                    } else {
+                                        emptyList()
+                                    }
+                                    val selectedEntry = preference.providerEntryId
+                                        ?.let { id -> compatibleEntries.firstOrNull { it.id == id } }
+                                        ?: providerRepository.lastUsedVisibleEntry()?.takeIf { last ->
+                                            compatibleEntries.any { it.id == last.id }
+                                        }
+                                        ?: compatibleEntries.firstOrNull()
+                                    val selectedInstance = selectedEntry?.let { entry ->
+                                        providerConfig.instances.firstOrNull { it.id == entry.providerInstanceId }
+                                    }
+                                    Text(
+                                        text = if (preference.useLeoApiKey && selectedEntry != null) {
+                                            stringResource(
+                                                R.string.cli_tools_connection_leo_model,
+                                                selectedInstance?.let { instance ->
+                                                    instance.label.ifBlank { instance.providerType.displayName }
+                                                }
+                                                    ?: stringResource(R.string.cli_tools_connection_auto_model),
+                                                preference.model.ifBlank { selectedEntry.model.displayName },
+                                            )
+                                        } else if (preference.useLeoApiKey) {
+                                            stringResource(R.string.cli_tools_no_compatible_leo_model)
+                                        } else {
+                                            stringResource(
+                                                when (status.authState) {
+                                                    CliAuthState.SIGNED_IN -> R.string.cli_tools_auth_signed_in
+                                                    CliAuthState.SIGNED_OUT -> R.string.cli_tools_auth_signed_out
+                                                    CliAuthState.UNAVAILABLE -> R.string.cli_tools_auth_unknown
+                                                },
+                                            )
+                                        },
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = when {
+                                            preference.useLeoApiKey && selectedEntry == null -> MaterialTheme.colorScheme.error
+                                            preference.useLeoApiKey -> MaterialTheme.colorScheme.primary
+                                            status.authState == CliAuthState.SIGNED_IN -> Color(0xFF218A52)
+                                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                        },
+                                    )
+                                }
+                            }
                         },
                         leadingContent = {
                             Icon(
@@ -196,6 +255,8 @@ fun CliToolsScreen(
                                             val saved = preferences.getValue(tool.id)
                                             draftModel = saved.model
                                             draftUseLeoKey = saved.useLeoApiKey
+                                            draftProviderEntryId = saved.providerEntryId
+                                            providerMenuExpanded = false
                                             configuring = tool.id
                                         },
                                     )
@@ -268,10 +329,20 @@ fun CliToolsScreen(
                                 Text(stringResource(R.string.cli_tools_launch))
                             }
                             OutlinedButton(
-                                onClick = { pending = tool.id },
+                                onClick = { onLogin(tool.id) },
                                 enabled = state.busyTool == null,
                                 modifier = Modifier.weight(1f),
-                            ) { Text(stringResource(R.string.cli_tools_update)) }
+                            ) {
+                                Icon(Icons.Default.AccountCircle, null, Modifier.size(18.dp))
+                                Spacer(Modifier.size(6.dp))
+                                Text(
+                                    stringResource(
+                                        if (status.authState == CliAuthState.SIGNED_IN)
+                                            R.string.cli_tools_relogin
+                                        else R.string.cli_tools_login,
+                                    ),
+                                )
+                            }
                         } else {
                             Button(
                                 onClick = { pending = tool.id },
@@ -346,47 +417,130 @@ fun CliToolsScreen(
     configuring?.let { id ->
         val tool = CliToolCatalog.get(id)
         val bridgeSupported = id != CliToolId.CURSOR
+        val compatibleEntries = CliToolLaunchResolver.compatibleEntries(id, providerRepository)
+        val selectedEntry = draftProviderEntryId
+            ?.let { selected -> compatibleEntries.firstOrNull { it.id == selected } }
+            ?: providerRepository.lastUsedVisibleEntry()?.takeIf { last ->
+                compatibleEntries.any { it.id == last.id }
+            }
+            ?: compatibleEntries.firstOrNull()
+        val selectedInstance = selectedEntry?.let { entry ->
+            providerConfig.instances.firstOrNull { it.id == entry.providerInstanceId }
+        }
         AlertDialog(
             onDismissRequest = { configuring = null },
             title = { Text(stringResource(R.string.cli_tools_model_title, tool.displayName)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OutlinedTextField(
-                        value = draftModel,
-                        onValueChange = { value ->
-                            if (value.length <= 200 && value.none(Char::isISOControl)) draftModel = value
-                        },
-                        label = { Text(stringResource(R.string.cli_tools_model_label)) },
-                        supportingText = { Text(stringResource(R.string.cli_tools_model_hint)) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(stringResource(R.string.cli_tools_use_leo_key))
-                            Text(
-                                stringResource(
-                                    if (bridgeSupported) R.string.cli_tools_use_leo_key_subtitle
-                                    else R.string.cli_tools_cursor_key_boundary,
-                                ),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Switch(
-                            checked = draftUseLeoKey && bridgeSupported,
-                            onCheckedChange = { draftUseLeoKey = it },
+                        FilterChip(
+                            selected = !draftUseLeoKey,
+                            onClick = { draftUseLeoKey = false },
+                            label = { Text(stringResource(R.string.cli_tools_official_account)) },
+                            leadingIcon = { Icon(Icons.Default.AccountCircle, null, Modifier.size(17.dp)) },
+                            modifier = Modifier.weight(1f),
+                        )
+                        FilterChip(
+                            selected = draftUseLeoKey && bridgeSupported,
+                            onClick = { if (bridgeSupported) draftUseLeoKey = true },
                             enabled = bridgeSupported,
+                            label = { Text(stringResource(R.string.cli_tools_leo_model)) },
+                            leadingIcon = { Icon(Icons.Default.Hub, null, Modifier.size(17.dp)) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    if (!draftUseLeoKey || !bridgeSupported) {
+                        Text(
+                            stringResource(
+                                if (bridgeSupported) R.string.cli_tools_official_account_hint
+                                else R.string.cli_tools_cursor_key_boundary,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else if (compatibleEntries.isEmpty()) {
+                        Text(
+                            stringResource(R.string.cli_tools_no_compatible_leo_model),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    } else {
+                        Box(Modifier.fillMaxWidth()) {
+                            OutlinedButton(
+                                onClick = { providerMenuExpanded = true },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        selectedInstance?.let { instance ->
+                                            instance.label.ifBlank { instance.providerType.displayName }
+                                        } ?: stringResource(R.string.cli_tools_connection_auto_model),
+                                        style = MaterialTheme.typography.labelMedium,
+                                    )
+                                    Text(
+                                        selectedEntry?.model?.displayName.orEmpty(),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
+                                }
+                            }
+                            DropdownMenu(
+                                expanded = providerMenuExpanded,
+                                onDismissRequest = { providerMenuExpanded = false },
+                            ) {
+                                compatibleEntries.forEach { entry ->
+                                    val instance = providerConfig.instances.firstOrNull {
+                                        it.id == entry.providerInstanceId
+                                    }
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column {
+                                                Text(entry.model.displayName)
+                                                Text(
+                                                    instance?.let { it.label.ifBlank { it.providerType.displayName } }.orEmpty(),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                            }
+                                        },
+                                        onClick = {
+                                            draftProviderEntryId = entry.id
+                                            draftModel = entry.model.id
+                                            providerMenuExpanded = false
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                        OutlinedTextField(
+                            value = draftModel.ifBlank { selectedEntry?.model?.id.orEmpty() },
+                            onValueChange = { value ->
+                                if (value.length <= 200 && value.none(Char::isISOControl)) draftModel = value
+                            },
+                            label = { Text(stringResource(R.string.cli_tools_model_label)) },
+                            supportingText = { Text(stringResource(R.string.cli_tools_model_hint)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Text(
+                            stringResource(R.string.cli_tools_leo_model_security_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
             },
             confirmButton = {
                 TextButton(onClick = {
-                    val saved = CliToolPreference(draftModel.trim(), draftUseLeoKey && bridgeSupported)
+                    val useLeo = draftUseLeoKey && bridgeSupported && compatibleEntries.isNotEmpty()
+                    val effectiveEntry = selectedEntry.takeIf { useLeo }
+                    val saved = CliToolPreference(
+                        model = draftModel.trim().ifBlank { effectiveEntry?.model?.id.orEmpty() },
+                        useLeoApiKey = useLeo,
+                        providerEntryId = effectiveEntry?.id,
+                    )
                     preferenceStore.save(id, saved)
                     preferences = preferences.toMutableMap().apply { put(id, saved) }
                     configuring = null
@@ -419,13 +573,17 @@ fun CliToolsScreen(
                 text = { Text(stringResource(R.string.cli_tools_ready, tool.displayName)) },
                 confirmButton = {
                     // [T-cli-zero-depth] Installed → straight into the tool.
-                    TextButton(onClick = {
-                        viewModel.clearResult()
-                        launchError = onOpenTerminal(result.toolId, preferences.getValue(result.toolId))
-                    }) { Text(stringResource(R.string.cli_tools_launch)) }
+                TextButton(onClick = {
+                    viewModel.clearResult()
+                    viewModel.refresh(context)
+                    launchError = onOpenTerminal(result.toolId, preferences.getValue(result.toolId))
+                }) { Text(stringResource(R.string.cli_tools_launch)) }
                 },
                 dismissButton = {
-                    TextButton(onClick = viewModel::clearResult) {
+                    TextButton(onClick = {
+                        viewModel.clearResult()
+                        viewModel.refresh(context)
+                    }) {
                         Text(stringResource(R.string.cli_tools_done))
                     }
                 },
@@ -523,5 +681,8 @@ private fun errorMessage(error: CliLaunchError): Int = when (error) {
     CliLaunchError.PROVIDER_MISMATCH -> R.string.cli_tools_auth_provider_mismatch
     CliLaunchError.OAUTH_NOT_EXPORTABLE -> R.string.cli_tools_auth_oauth_boundary
     CliLaunchError.CUSTOM_ENDPOINT_UNSUPPORTED -> R.string.cli_tools_auth_custom_endpoint
+    CliLaunchError.INCOMPATIBLE_PROTOCOL -> R.string.cli_tools_auth_incompatible_protocol
+    CliLaunchError.UNSAFE_ENDPOINT -> R.string.cli_tools_auth_unsafe_endpoint
+    CliLaunchError.CONFIG_WRITE_FAILED -> R.string.cli_tools_auth_config_failed
     CliLaunchError.NO_API_KEY -> R.string.cli_tools_auth_no_key
 }

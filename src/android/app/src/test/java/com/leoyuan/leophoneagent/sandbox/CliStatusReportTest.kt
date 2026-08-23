@@ -16,6 +16,9 @@ class CliStatusReportTest {
             ___LEO_CLI___ CODEX 127
             ___LEO_CLI___ GROK 0 grok 1.0.5 (5115b46bc9)
             ___LEO_CLI___ CURSOR 1 some error text
+            ___LEO_CLI_AUTH___ CLAUDE 0 Logged in as leo@example.com
+            ___LEO_CLI_AUTH___ CODEX 1 Not logged in
+            ___LEO_CLI_AUTH___ GROK 0 signed-in
         """.trimIndent()
 
         val parsed = CliStatusReport.parse(output)
@@ -23,6 +26,9 @@ class CliStatusReportTest {
         assertEquals("2.1.238 (Claude Code)", parsed.getValue(CliToolId.CLAUDE).version)
         assertFalse(parsed.getValue(CliToolId.CODEX).installed)
         assertTrue(parsed.getValue(CliToolId.GROK).installed)
+        assertEquals(CliAuthState.SIGNED_IN, parsed.getValue(CliToolId.CLAUDE).authState)
+        assertEquals("Logged in as leo@example.com", parsed.getValue(CliToolId.CLAUDE).authDetail)
+        assertEquals(CliAuthState.SIGNED_IN, parsed.getValue(CliToolId.GROK).authState)
         // Non-zero exit must never read as installed — no piped fake green.
         assertFalse(parsed.getValue(CliToolId.CURSOR).installed)
         assertNull(parsed.getValue(CliToolId.CURSOR).version)
@@ -51,6 +57,16 @@ class CliStatusReportTest {
             assertTrue(command.contains(tool.id.name))
         }
         assertTrue(command.contains("rc=${'$'}?"))
+        assertTrue(command.contains(CliToolCatalog.AUTH_MARKER))
+        assertTrue(command.contains("auth_rc=${'$'}?"))
         assertFalse(command.contains("|| true"))
+    }
+
+    @Test
+    fun zeroExitSignedOutAndExpiredMessagesDoNotBecomeFalseGreen() {
+        assertEquals(CliAuthState.SIGNED_OUT, CliStatusReport.classifyAuth(0, "Not logged in"))
+        assertEquals(CliAuthState.SIGNED_OUT, CliStatusReport.classifyAuth(0, "Login: Expired — log in again"))
+        assertEquals(CliAuthState.SIGNED_IN, CliStatusReport.classifyAuth(0, "Logged in using ChatGPT"))
+        assertEquals(CliAuthState.UNAVAILABLE, CliStatusReport.classifyAuth(127, null))
     }
 }

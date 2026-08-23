@@ -1,6 +1,7 @@
 package com.leoyuan.leophoneagent.sandbox
 
 import android.content.Context
+import com.leoyuan.leophoneagent.R
 import com.leoyuan.leophoneagent.data.repository.ProviderRepository
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -44,11 +45,17 @@ class CliChatEngine(
         val preference = CliToolPreferences(context).get(toolId)
         val launch = CliToolLaunchResolver.resolve(spec, preference, providers)
         if (launch is CliLaunchResolution.Failed) {
-            trySend(CliChatChunk.Failed(launch.error.userMessage()))
+            trySend(CliChatChunk.Failed(launch.error.userMessage(context)))
             close()
             return@callbackFlow
         }
         launch as CliLaunchResolution.Ready
+        val configResult = CliManagedConfigWriter.prepare(context, launch.request.managedConfig)
+        if (configResult.isFailure) {
+            trySend(CliChatChunk.Failed(CliLaunchError.CONFIG_WRITE_FAILED.userMessage(context)))
+            close()
+            return@callbackFlow
+        }
 
         val workspace = File(context.filesDir, "minis-sessions/$safeSessionId/workspace")
         val privateDir = File(workspace, ".leo-cli").apply { mkdirs() }
@@ -73,6 +80,7 @@ class CliChatEngine(
             sessionUuid = UUID.nameUUIDFromBytes(
                 "leo-cli:${toolId.name}:$safeSessionId".toByteArray(StandardCharsets.UTF_8),
             ).toString(),
+            extraArguments = launch.request.managedConfig?.arguments.orEmpty(),
         )
 
         try {
@@ -120,11 +128,15 @@ internal object CliChatCommand {
         preference: CliToolPreference,
         promptFile: String,
         sessionUuid: String,
+        extraArguments: List<String> = emptyList(),
     ): String {
         require(promptFile.startsWith("/var/minis/workspace/.leo-cli/"))
         require(!promptFile.contains("..") && promptFile.none { it.isISOControl() })
         require(runCatching { UUID.fromString(sessionUuid) }.isSuccess)
         val binary = shellQuote(spec.binaryPath)
+        require(extraArguments.all { it.length <= 500 && it.none(Char::isISOControl) })
+        val extra = extraArguments.joinToString("") { " ${shellQuote(it)}" }
+        val invocation = "$binary$extra"
         val prompt = shellQuote(promptFile)
         val model = preference.model.trim().takeIf { it.isNotEmpty() }
             ?.also { require(it.length <= 200 && it.none(Char::isISOControl)) }
@@ -135,19 +147,19 @@ internal object CliChatCommand {
         val body = when (spec.id) {
             CliToolId.CLAUDE -> """
                 if [ -f $state ]; then
-                  $binary -p --verbose --output-format stream-json --include-partial-messages --resume $session$model "${'$'}(cat $prompt)"
+                  $invocation -p --verbose --output-format stream-json --include-partial-messages --resume $session$model "${'$'}(cat $prompt)"
                 else
-                  $binary -p --verbose --output-format stream-json --include-partial-messages --session-id $session$model "${'$'}(cat $prompt)"
+                  $invocation -p --verbose --output-format stream-json --include-partial-messages --session-id $session$model "${'$'}(cat $prompt)"
                 fi
             """.trimIndent()
             CliToolId.CODEX -> """
                 cd /var/minis/workspace
                 if [ -f $state ]; then
                   codex_session="${'$'}(cat $state)"
-                  $binary exec resume --json --skip-git-repo-check$model "${'$'}codex_session" - < $prompt
+                  $invocation exec resume --json --skip-git-repo-check$model "${'$'}codex_session" - < $prompt
                 else
                   transcript=/var/minis/workspace/.leo-cli/codex-first.jsonl
-                  bash -o pipefail -c "$binary exec --json --skip-git-repo-check --sandbox workspace-write$model - < $prompt | tee /var/minis/workspace/.leo-cli/codex-first.jsonl"
+                  bash -o pipefail -c "$invocation exec --json --skip-git-repo-check --sandbox workspace-write$model - < $prompt | tee /var/minis/workspace/.leo-cli/codex-first.jsonl"
                   codex_session="${'$'}(sed -n 's/.*\"thread_id\"[ ]*:[ ]*\"\([^\"]*\)\".*/\1/p' "${'$'}transcript" | head -n 1)"
                   if [ -z "${'$'}codex_session" ]; then
                     codex_session="${'$'}(sed -n 's/.*\"threadId\"[ ]*:[ ]*\"\([^\"]*\)\".*/\1/p' "${'$'}transcript" | head -n 1)"
@@ -159,18 +171,18 @@ internal object CliChatCommand {
             """.trimIndent()
             CliToolId.GROK -> """
                 if [ -f $state ]; then
-                  $binary --cwd /var/minis/workspace --output-format streaming-messages-json --include-partial-messages --resume $session$model --single "${'$'}(cat $prompt)"
+                  $invocation --cwd /var/minis/workspace --output-format streaming-messages-json --include-partial-messages --resume $session$model --single "${'$'}(cat $prompt)"
                 else
-                  $binary --cwd /var/minis/workspace --output-format streaming-messages-json --include-partial-messages --session-id $session$model --single "${'$'}(cat $prompt)"
+                  $invocation --cwd /var/minis/workspace --output-format streaming-messages-json --include-partial-messages --session-id $session$model --single "${'$'}(cat $prompt)"
                 fi
             """.trimIndent()
             CliToolId.CURSOR -> """
                 if [ ! -s $state ]; then
-                  $binary create-chat | grep -Eo '[0-9a-fA-F-]{36}' | head -n 1 > $state
+                  $invocation create-chat | grep -Eo '[0-9a-fA-F-]{36}' | head -n 1 > $state
                 fi
                 cursor_session="${'$'}(cat $state)"
                 test -n "${'$'}cursor_session"
-                $binary --print --output-format stream-json --stream-partial-output --workspace /var/minis/workspace --resume "${'$'}cursor_session"$model "${'$'}(cat $prompt)"
+                $invocation --print --output-format stream-json --stream-partial-output --workspace /var/minis/workspace --resume "${'$'}cursor_session"$model "${'$'}(cat $prompt)"
             """.trimIndent()
         }
         return """
@@ -310,11 +322,16 @@ internal class CliStreamDecoder(private val toolId: CliToolId) {
     private data class TextPiece(val text: String, val isDelta: Boolean)
 }
 
-private fun CliLaunchError.userMessage(): String = when (this) {
-    CliLaunchError.UNSUPPORTED -> "This CLI cannot use the selected LeoPhoneAgent credential."
-    CliLaunchError.NO_CURRENT_MODEL -> "Configure a compatible provider or turn off LeoPhoneAgent API-key reuse."
-    CliLaunchError.PROVIDER_MISMATCH -> "The selected provider does not match this CLI."
-    CliLaunchError.OAUTH_NOT_EXPORTABLE -> "OAuth credentials stay private. Sign in inside this CLI instead."
-    CliLaunchError.CUSTOM_ENDPOINT_UNSUPPORTED -> "Custom endpoints cannot be handed to this CLI yet."
-    CliLaunchError.NO_API_KEY -> "No reusable API key is configured for this CLI."
-}
+private fun CliLaunchError.userMessage(context: Context): String = context.getString(
+    when (this) {
+        CliLaunchError.UNSUPPORTED -> R.string.cli_tools_auth_unsupported
+        CliLaunchError.NO_CURRENT_MODEL -> R.string.cli_tools_auth_no_model
+        CliLaunchError.PROVIDER_MISMATCH -> R.string.cli_tools_auth_provider_mismatch
+        CliLaunchError.OAUTH_NOT_EXPORTABLE -> R.string.cli_tools_auth_oauth_boundary
+        CliLaunchError.CUSTOM_ENDPOINT_UNSUPPORTED -> R.string.cli_tools_auth_custom_endpoint
+        CliLaunchError.INCOMPATIBLE_PROTOCOL -> R.string.cli_tools_auth_incompatible_protocol
+        CliLaunchError.UNSAFE_ENDPOINT -> R.string.cli_tools_auth_unsafe_endpoint
+        CliLaunchError.CONFIG_WRITE_FAILED -> R.string.cli_tools_auth_config_failed
+        CliLaunchError.NO_API_KEY -> R.string.cli_tools_auth_no_key
+    },
+)

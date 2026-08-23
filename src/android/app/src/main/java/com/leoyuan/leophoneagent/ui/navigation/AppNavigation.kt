@@ -89,6 +89,7 @@ import com.leoyuan.leophoneagent.sandbox.CliLaunchEnvironment
 import com.leoyuan.leophoneagent.sandbox.CliLaunchResolution
 import com.leoyuan.leophoneagent.sandbox.CliToolCatalog
 import com.leoyuan.leophoneagent.sandbox.CliToolLaunchResolver
+import com.leoyuan.leophoneagent.sandbox.CliManagedConfigWriter
 import com.leoyuan.leophoneagent.ui.terminal.TerminalScreen
 import com.leoyuan.leophoneagent.ui.onboarding.OnboardingModelSelectionScreen
 import com.leoyuan.leophoneagent.ui.relay.RelayFleetScreen
@@ -1161,6 +1162,16 @@ fun AppNavigation(
             CliToolsScreen(
                 onBack = { navController.safePopBackStack() },
                 onOpenRootfs = { navController.safeNavigate(Routes.ROOTFS_MANAGEMENT) },
+                providerRepository = providerRepository,
+                onLogin = { toolId ->
+                    CliLaunchEnvironment.prepare(emptyMap())
+                    navController.safeNavigate(
+                        Routes.terminal(
+                            initCommand = CliToolCatalog.get(toolId).loginCommand,
+                            autoRun = true,
+                        ),
+                    )
+                },
                 onOpenTerminal = { toolId, preference ->
                     when (val resolved = CliToolLaunchResolver.resolve(
                         CliToolCatalog.get(toolId),
@@ -1169,11 +1180,19 @@ fun AppNavigation(
                     )) {
                         is CliLaunchResolution.Failed -> resolved.error
                         is CliLaunchResolution.Ready -> {
-                            CliLaunchEnvironment.prepare(resolved.request.environment)
-                            navController.safeNavigate(
-                                Routes.terminal(initCommand = resolved.request.command, autoRun = true),
-                            )
-                            null
+                            val configReady = CliManagedConfigWriter.prepare(
+                                    context.applicationContext,
+                                    resolved.request.managedConfig,
+                                ).isSuccess
+                            if (!configReady) {
+                                com.leoyuan.leophoneagent.sandbox.CliLaunchError.CONFIG_WRITE_FAILED
+                            } else {
+                                CliLaunchEnvironment.prepare(resolved.request.environment)
+                                navController.safeNavigate(
+                                    Routes.terminal(initCommand = resolved.request.command, autoRun = true),
+                                )
+                                null
+                            }
                         }
                     }
                 },

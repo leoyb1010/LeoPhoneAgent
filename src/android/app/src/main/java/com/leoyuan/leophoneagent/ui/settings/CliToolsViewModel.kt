@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.leoyuan.leophoneagent.sandbox.CliStatusReport
+import com.leoyuan.leophoneagent.sandbox.CliAuthState
 import com.leoyuan.leophoneagent.sandbox.CliToolCatalog
 import com.leoyuan.leophoneagent.sandbox.CliToolId
 import com.leoyuan.leophoneagent.sandbox.CursorInstallTransaction
@@ -19,6 +20,8 @@ import kotlinx.coroutines.launch
 data class CliToolStatus(
     val installed: Boolean = false,
     val version: String? = null,
+    val authState: CliAuthState = CliAuthState.UNAVAILABLE,
+    val authDetail: String? = null,
 )
 
 /**
@@ -82,7 +85,12 @@ class CliToolsViewModel : ViewModel() {
                 val parsed = CliStatusReport.parse(probe.output)
                 val statuses = CliToolId.entries.associateWith { id ->
                     val entry = parsed.getValue(id)
-                    CliToolStatus(installed = entry.installed, version = entry.version)
+                    CliToolStatus(
+                        installed = entry.installed,
+                        version = entry.version,
+                        authState = entry.authState,
+                        authDetail = entry.authDetail,
+                    )
                 }
                 _uiState.value = _uiState.value.copy(refreshing = false, statuses = statuses)
             } catch (_: CancellationException) {

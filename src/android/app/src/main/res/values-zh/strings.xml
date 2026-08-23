@@ -1699,8 +1699,8 @@
     <string name="cli_tools_codex_description">适用于 Linux ARM64 musl 的 OpenAI Codex CLI</string>
     <string name="cli_tools_grok_description">适用于 Linux ARM64 的 xAI Grok Build CLI</string>
     <string name="cli_tools_cursor_description">适用于 Linux ARM64 的 Cursor Agent CLI</string>
-    <string name="cli_tools_model_and_auth">模型与授权</string>
-    <string name="cli_tools_model_title">配置 %1$s</string>
+    <string name="cli_tools_model_and_auth">连接与模型</string>
+    <string name="cli_tools_model_title">连接 %1$s</string>
     <string name="cli_tools_model_label">CLI 模型 ID</string>
     <string name="cli_tools_model_hint">留空则使用 CLI 默认模型；填写后通过 --model 传入。</string>
     <string name="cli_tools_use_leo_key">使用 LeoPhoneAgent 当前 API Key</string>
@@ -1729,10 +1729,10 @@
     <string name="cli_tools_failure_hint">下方是安装器的完整输出，可以从中看到失败原因；也可以复制日志或直接重试。</string>
     <string name="terminal_paste">粘贴</string>
     <string name="terminal_cli_booting">正在启动 CLI…</string>
-    <string name="terminal_cli_booting_hint">首次启动约需 30–60 秒。点击屏幕即可唤起键盘。</string>
+    <string name="terminal_cli_booting_hint">如出现安全确认或登录提示，请按屏幕指引继续。</string>
     <string name="whats_new_title">本次更新（%1$s）</string>
     <string name="whats_new_confirm">知道了</string>
-    <string name="whats_new_current">• Claude Code、Codex CLI、Grok Build、Cursor CLI 已进入模型选择器，可直接在聊天里运行，不再必须打开终端\n• HTML、文档、表格、PDF、图片、音视频写入成功后会出现可点击的交付物卡片\n• 远程会话改为可续传 SSE，切换网络后仍会实时更新输出、完成状态与审批\n• Prompt 与借用的 API Key 不进入命令，单轮结束后会从 PRoot 环境恢复或清除</string>
+    <string name="whats_new_current">• 每个开发 CLI 都明确分为「CLI 官方账号」和「Leo 模型」两种连接\n• Claude Code、Codex CLI 和 Grok Build 可使用兼容的 LeoPhoneAgent 模型，不导出 OAuth 或订阅凭据\n• Claude、Codex、Grok 和 Cursor 的官方授权页现在会直接在 App 内打开\n• 账号状态、首次启动指引和 Fold8 连接界面改为显示真实状态，不再统一报「无法使用当前授权」</string>
     <string name="artifact_ready">交付物已就绪</string>
     <string name="artifact_open">打开交付物</string>
     <string name="artifact_missing">这份交付物已不在本机。</string>
@@ -1755,4 +1755,19 @@
     <string name="model_picker_local_cli_not_installed">未安装</string>
     <string name="model_picker_local_cli_local_badge">本机</string>
     <string name="model_picker_local_cli_install">安装</string>
+    <string name="cli_tools_official_account">CLI 官方账号</string>
+    <string name="cli_tools_leo_model">Leo 模型</string>
+    <string name="cli_tools_official_account_hint">使用该 CLI 自己的浏览器登录或 API Key。订阅专属能力仍由官方账号提供。</string>
+    <string name="cli_tools_no_compatible_leo_model">LeoPhoneAgent 里还没有适合这个 CLI 的 API-Key 模型。</string>
+    <string name="cli_tools_leo_model_security_hint">端点和模型写入 App 私有的 CLI 配置；API Key 只在单次运行时注入，不进入配置文件、命令、导航或日志。</string>
+    <string name="cli_tools_connection_leo_model">Leo 模型 · %1$s · %2$s</string>
+    <string name="cli_tools_connection_auto_model">自动选择</string>
+    <string name="cli_tools_auth_signed_in">官方账号已登录</string>
+    <string name="cli_tools_auth_signed_out">官方账号未登录</string>
+    <string name="cli_tools_auth_unknown">暂时无法读取官方账号状态</string>
+    <string name="cli_tools_login">登录</string>
+    <string name="cli_tools_relogin">重新登录</string>
+    <string name="cli_tools_auth_incompatible_protocol">这个端点不支持该 CLI 所需的协议。Codex 必须使用兼容 Responses API 的端点；请选择其他模型或改用 CLI 官方账号。</string>
+    <string name="cli_tools_auth_unsafe_endpoint">模型端点必须使用 HTTPS；只有 localhost/127.0.0.1 可以使用 HTTP。</string>
+    <string name="cli_tools_auth_config_failed">无法生成 App 私有的 CLI 模型配置，请检查本机 Linux 运行时后重试。</string>
 </resources>

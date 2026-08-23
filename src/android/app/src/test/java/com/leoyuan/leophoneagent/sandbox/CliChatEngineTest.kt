@@ -54,6 +54,19 @@ class CliChatEngineTest {
     }
 
     @Test
+    fun `managed profile arguments are shell quoted and never include credentials`() {
+        val command = CliChatCommand.build(
+            CliToolCatalog.get(CliToolId.CLAUDE),
+            CliToolPreference(model = "model-x"),
+            "/var/minis/workspace/.leo-cli/prompt.txt",
+            sessionUuid,
+            extraArguments = listOf("--settings", "/root/.leophone-cli/claude-settings.json"),
+        )
+        assertTrue(command.contains("'--settings' '/root/.leophone-cli/claude-settings.json'"))
+        assertFalse(command.contains("secret"))
+    }
+
+    @Test
     fun `claude partial frames are monotonic and whole message is deduplicated`() {
         val decoder = CliStreamDecoder(CliToolId.CLAUDE)
         assertEquals(
