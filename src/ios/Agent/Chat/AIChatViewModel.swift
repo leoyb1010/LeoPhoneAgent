@@ -1821,6 +1821,11 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // Authoritative memory-status footer (overrides any earlier
         // baseSystemPrompt mentions when memory is disabled).
         volatileTail += memoryStatusFragment
+        if let sid = sessionId, let name = SessionWorkspaceBind.mountName(for: sid) {
+            volatileTail += "\n\nThis session's Workspace is the authorized folder '\(name)' "
+                + "(also at \(SessionWorkspaceBind.linuxHint(for: sid))). "
+                + "/var/minis/workspace/ reads and writes that folder."
+        }
 
         return stable + SystemPromptCacheBoundary.marker + volatileTail
     }
@@ -2057,6 +2062,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
     /// Source tag written to the session record on creation (e.g. "shortcut").
     var sessionSource: String?
+
+    /// Draft-time Workspace bind; written when the session row is created.
+    var pendingWorkspaceMountId: UUID?
 
     /// Model group to bind when creating a new session (from long-press FAB).
     var initialGroupId: String?

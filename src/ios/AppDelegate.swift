@@ -38,6 +38,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         // the wrong (new) session. The .onAppear registration in MinisApp
         // remains as an idempotent backstop.
         ShortcutNotificationDelegate.shared.register()
+        // Bookmark scopes must be live before a shortcut-only wake touches mounts.
+        Task { @MainActor in
+            MountedFoldersManager.shared.activateAll()
+        }
         // [T-leophone-push] 回到前台时对账 Mac 上错过的审批/终态事件。
         RelayEventCatchUp.shared.activate()
         // [T-live-mission] 向 APNs 注册,把 token 登记到中继——app 完全

@@ -577,7 +577,7 @@ enum DebugRPCProvider {
         guard let instance = store.instance(for: id) else {
             throw DebugRPCErr(-32602, "Unknown instanceId: \(id)")
         }
-        guard let raw = store.exportInstanceJSON(id) else {
+        guard let raw = store.exportInstanceJSON(id, includeSecrets: true) else {
             throw DebugRPCErr(-32000, "Export failed for instance \(id)")
         }
         guard let data = raw.data(using: .utf8),

@@ -213,6 +213,48 @@ private let logger = AppLogger(category: "ModelUseOffload")
         }
     }
 
+    /// Light text-only summarize. No iSH, no tools. Any failure → open the app.
+    static func summarizeText(_ text: String, modelIdOrName: String?) async -> (ok: Bool, text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return (false, "没有可摘要的文本。") }
+        let model: String
+        if let modelIdOrName, !modelIdOrName.isEmpty {
+            model = modelIdOrName
+        } else if let fallback = await MainActor.run(body: {
+            ProviderConfigStore.shared.resolvedAgentLoopEntries.first?.model.id
+        }) {
+            model = fallback
+        } else {
+            return (false, "此命令需打开 App")
+        }
+        let payload: [String: Any] = [
+            "messages": [["role": "user", "content": trimmed]],
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: payload),
+              let inputJSON = String(data: data, encoding: .utf8) else {
+            return (false, "此命令需打开 App")
+        }
+        do {
+            let result = try await performRun(
+                modelIdOrName: model,
+                providerFilter: nil,
+                inputJSON: inputJSON,
+                systemPrompt: "用原文语言写一段简短摘要。只输出摘要，不要开场白。",
+                maxTokens: 400,
+                temperature: 0.2,
+                outputHostPath: nil,
+                streamFd: -1
+            )
+            if let out = result["output_text"] as? String {
+                let summary = out.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !summary.isEmpty { return (true, summary) }
+            }
+            return (false, "此命令需打开 App")
+        } catch {
+            return (false, "此命令需打开 App")
+        }
+    }
+
     /// If the target model is an image_output model, return a one-paragraph hint
     /// listing the params it actually accepts. Empty string for non-image models
     /// (or when resolution fails — we don't want to mask the original error).

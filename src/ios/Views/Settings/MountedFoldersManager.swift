@@ -12,8 +12,8 @@
 //    for the entire app lifetime
 //  - ensureMinisSymlinks() creates /var/minis/mounts/<name> symlinks in fakefs
 //
-//  Note: iSH shell cannot follow these symlinks (no scope in kernel thread).
-//  Only FileBrowserView and the Swift app process can read/write through them.
+//  iSH bind-mounts these to /var/minis/mounts/<name>. A session can also
+//  bind one mount as its Workspace (see SessionWorkspaceBind).
 //
 
 import Foundation
@@ -134,12 +134,18 @@ final class MountedFoldersManager {
     /// Resolved URL for each active mount (key = entry.id). Nil if activation failed.
     private var activeURLs: [UUID: URL] = [:]
 
+    /// Thread-safe snapshots for iSH/file-tool hot paths (those are not on MainActor).
+    private static let snapshotLock = NSLock()
+    nonisolated(unsafe) private static var hostPathByMountId: [UUID: String] = [:]
+    nonisolated(unsafe) private static var nameByMountId: [UUID: String] = [:]
+
     /// State per mount, published so UI can reflect reauth needs.
     private(set) var activationStates: [UUID: MountActivationState] = [:]
 
     private init() {
         migrateStoreFileIfNeeded()
         load()
+        publishAccessSnapshot()
     }
 
     // MARK: - Persistence
@@ -737,8 +743,28 @@ final class MountedFoldersManager {
         // Synchronous write to the thread-safe shared storage — visible to
         // performMount immediately, no actor hop required.
         ISHExecutionCoordinator.setExternalMountSnapshot(snapshot)
+        publishAccessSnapshot()
         // Also ask the coordinator to reconcile now (async, no-op if not booted).
         Task { await ISHExecutionCoordinator.shared.applyExternalMountSnapshot() }
+    }
+
+    private func publishAccessSnapshot() {
+        let paths = Dictionary(uniqueKeysWithValues: activeURLs.map { ($0.key, $0.value.path) })
+        let names = Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0.name) })
+        Self.snapshotLock.lock()
+        Self.hostPathByMountId = paths
+        Self.nameByMountId = names
+        Self.snapshotLock.unlock()
+    }
+
+    nonisolated static func snapshotHostPath(for id: UUID) -> String? {
+        snapshotLock.lock(); defer { snapshotLock.unlock() }
+        return hostPathByMountId[id]
+    }
+
+    nonisolated static func snapshotName(for id: UUID) -> String? {
+        snapshotLock.lock(); defer { snapshotLock.unlock() }
+        return nameByMountId[id]
     }
 
     /// Re-activate a single entry (used on add and manual reauth).
@@ -887,4 +913,73 @@ final class MountedFoldersManager {
             unlink(linkPath.path)
         }
     }
+}
+
+/// Session → authorized folder as Workspace. Survives launch; does not touch ChatStore schema.
+enum SessionWorkspaceBind {
+    private static let lock = NSLock()
+    private static var sidToMount: [String: String] = [:]
+    private static var loaded = false
+    #if DEBUG
+    static var testStoreURL: URL?
+    #endif
+
+    private static var storeURL: URL {
+        #if DEBUG
+        if let testStoreURL { return testStoreURL }
+        #endif
+        return AIChatViewModel.minisConfigRoot.appendingPathComponent("session-workspace-binds.json")
+    }
+
+    static func loadIfNeeded() {
+        lock.lock(); defer { lock.unlock() }
+        guard !loaded else { return }
+        loaded = true
+        sidToMount = SessionWorkspaceBindStore.load(from: storeURL)
+    }
+
+    static func mountId(for sid: String) -> UUID? {
+        loadIfNeeded()
+        lock.lock(); defer { lock.unlock() }
+        return sidToMount[sid].flatMap(UUID.init(uuidString:))
+    }
+
+    static func setMount(_ mountId: UUID?, for sid: String) {
+        loadIfNeeded()
+        lock.lock()
+        if let mountId {
+            sidToMount[sid] = mountId.uuidString
+        } else {
+            sidToMount.removeValue(forKey: sid)
+        }
+        let snapshot = sidToMount
+        lock.unlock()
+        SessionWorkspaceBindStore.save(snapshot, to: storeURL)
+    }
+
+    static func boundHostPath(for sid: String) -> String? {
+        guard let id = mountId(for: sid) else { return nil }
+        return MountedFoldersManager.snapshotHostPath(for: id)
+    }
+
+    static func mountName(for sid: String) -> String? {
+        guard let id = mountId(for: sid) else { return nil }
+        return MountedFoldersManager.snapshotName(for: id)
+    }
+
+    static func linuxHint(for sid: String) -> String {
+        if let name = mountName(for: sid) {
+            return "\(AIChatViewModel.minisMountsLinuxDir)/\(name)"
+        }
+        return AIChatViewModel.minisWorkspaceLinuxDir
+    }
+
+    #if DEBUG
+    static func resetForTests() {
+        lock.lock()
+        sidToMount = [:]
+        loaded = false
+        lock.unlock()
+    }
+    #endif
 }

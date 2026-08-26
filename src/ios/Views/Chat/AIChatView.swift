@@ -926,7 +926,12 @@ struct AIChatView: View {
         .sheet(isPresented: $showFileBrowser) {
             NavigationStack {
                 let base = RootfsManager.shared.dataPath
-                FileBrowserView(rootPath: base, initialPath: base.appendingPathComponent("var/minis"), rootLabel: "/")
+                FileBrowserView(
+                    rootPath: base,
+                    initialPath: base.appendingPathComponent("var/minis"),
+                    rootLabel: "/",
+                    bindSessionId: vm.sessionId
+                )
             }
         }
         .task(id: vm.sessionId) { refreshArtifactCount() }
@@ -2482,12 +2487,18 @@ struct AIChatView: View {
                 && vm.messages.isEmpty
                 && !vm.isLoadingSession {
                 EmptyChatWorkspaceCard(
+                    mounts: MountedFoldersManager.shared.entries.map { ($0.id, $0.name) },
+                    selectedMountId: vm.pendingWorkspaceMountId,
                     onPrompt: { prompt in
                         vm.inputText = prompt
                         inputFocused = true
                         LeoHaptics.selection()
                     },
-                    onBrowse: { showFileBrowser = true }
+                    onBrowse: { showFileBrowser = true },
+                    onUseMount: { id in
+                        vm.pendingWorkspaceMountId = id
+                        LeoHaptics.selection()
+                    }
                 )
                     .padding(.horizontal, 24)
             }
@@ -6067,8 +6078,11 @@ private struct StatRow: View {
 /// Mac controller. This keeps the local-device execution boundary explicit and moves
 /// file-system detail behind the real browser action.
 private struct EmptyChatWorkspaceCard: View {
+    var mounts: [(id: UUID, name: String)] = []
+    var selectedMountId: UUID?
     var onPrompt: (String) -> Void
     var onBrowse: () -> Void
+    var onUseMount: (UUID) -> Void = { _ in }
     private let isIPad = UIDevice.current.userInterfaceIdiom == .pad
 
     private let prompts = [
@@ -6144,6 +6158,31 @@ private struct EmptyChatWorkspaceCard: View {
                     .overlay(Capsule().stroke(ChatColors.toolBorder, lineWidth: 0.5))
             }
             .buttonStyle(.plain)
+
+            if !mounts.isEmpty {
+                Text("用已授权的文件夹当工作区，重启后仍可用")
+                    .font(.caption)
+                    .foregroundStyle(ChatColors.secondaryText)
+                ForEach(mounts, id: \.id) { mount in
+                    Button { onUseMount(mount.id) } label: {
+                        HStack(spacing: 9) {
+                            Image(systemName: selectedMountId == mount.id ? "checkmark.circle.fill" : "externaldrive")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.tint)
+                                .frame(width: 20)
+                            Text(mount.name)
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(ChatColors.primaryText)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 10)
+                        .frame(minHeight: LeoTheme.TouchTarget.minimum)
+                        .background(ChatColors.secondaryBg.opacity(0.72), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("把 \(mount.name) 设为工作区")
+                }
+            }
         }
         .padding(16)
         .frame(maxWidth: 460, alignment: .leading)

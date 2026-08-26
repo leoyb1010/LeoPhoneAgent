@@ -968,6 +968,10 @@ extension AIChatViewModel {
         let model = selectedModel
         let session = await ChatStore.shared.createSession(modelId: model.id, source: sessionSource)
         sessionId = session.id
+        if let mount = pendingWorkspaceMountId {
+            SessionWorkspaceBind.setMount(mount, for: session.id)
+            pendingWorkspaceMountId = nil
+        }
         Self.activeSessionId = session.id
         // [T-memory-enabled-new-session-bug] Sync the @Published memoryEnabled
         // to the value createSession just persisted from the global default.

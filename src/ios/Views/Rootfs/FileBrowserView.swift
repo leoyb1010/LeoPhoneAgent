@@ -61,10 +61,13 @@ struct FileBrowserView: View {
 
     enum MoveOrCopyMode { case move, copy }
 
+    var bindSessionId: String? = nil
+
     init(rootPath: URL? = nil, initialPath: URL? = nil, rootLabel: String? = nil,
-         highlightFileName: String? = nil) {
+         highlightFileName: String? = nil, bindSessionId: String? = nil) {
         let path = rootPath ?? RootfsManager.shared.rootfsPath
         self.highlightFileName = highlightFileName
+        self.bindSessionId = bindSessionId
         _viewModel = StateObject(wrappedValue: FileBrowserViewModel(rootPath: path, initialPath: initialPath, rootLabel: rootLabel))
     }
 
@@ -319,6 +322,22 @@ struct FileBrowserView: View {
                 showImportPicker = true
             } label: {
                 Label("Import File", systemImage: "plus")
+            }
+            if let sid = bindSessionId {
+                let mounts = MountedFoldersManager.shared.entries
+                if !mounts.isEmpty {
+                    Divider()
+                    Menu("设为工作区") {
+                        ForEach(mounts) { entry in
+                            Button(entry.name) {
+                                SessionWorkspaceBind.setMount(entry.id, for: sid)
+                            }
+                        }
+                        Button("恢复默认工作区", role: .destructive) {
+                            SessionWorkspaceBind.setMount(nil, for: sid)
+                        }
+                    }
+                }
             }
             Divider()
             Picker(selection: $sortKeyRaw) {

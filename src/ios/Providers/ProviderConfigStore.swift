@@ -914,8 +914,8 @@ final class ProviderConfigStore: ObservableObject {
         config.instances.filter { $0.providerType == providerType && $0.isEnabled }
     }
 
-    /// Export an instance as shareable JSON (includes API key if present).
-    func exportInstanceJSON(_ instanceId: String) -> String? {
+    /// Export an instance as shareable JSON. Safe by default: no API keys or OAuth blobs.
+    func exportInstanceJSON(_ instanceId: String, includeSecrets: Bool = false) -> String? {
         guard let instance = instance(for: instanceId) else { return nil }
         let entries = entries(for: instanceId)
         var dict: [String: Any] = [
@@ -1022,6 +1022,10 @@ final class ProviderConfigStore: ObservableObject {
         // (default UA). No credential exposure — UA is not secret.
         if let ua = instance.effectiveCustomUserAgent {
             dict["customUserAgent"] = ua
+        }
+        if !includeSecrets {
+            dict = ProviderExportSecrets.stripped(dict)
+            dict["secretsOmitted"] = true
         }
         guard let data = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys]),
               let json = String(data: data, encoding: .utf8) else { return nil }

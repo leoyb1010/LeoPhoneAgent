@@ -12,6 +12,16 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.26.0",
+            date: "2026-08-26",
+            title: "授权文件夹能当工作区，捷径能直接出摘要",
+            highlights: [
+                "已经授权过的文件夹，重启后还能用，并且可以设成这一次对话的工作区。",
+                "快捷指令里的「摘要」把文本收成摘要就返回，不打开 App。需要模型或浏览器时会说明要打开 App。",
+                "导出供应商配置默认不含 API Key 和登录凭证。终端可以从会话列表切换当前 Shell。",
+            ]
+        ),
+        LeoRelease(
             version: "1.25.2",
             date: "2026-08-26",
             title: "接管 Mac 任务能看见窗口",

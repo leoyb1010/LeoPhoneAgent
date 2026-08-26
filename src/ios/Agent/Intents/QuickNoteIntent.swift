@@ -77,3 +77,42 @@ struct QuickNoteIntent: AppIntent {
         return .result(dialog: IntentDialog("记下了:\(note.title ?? String(raw.prefix(20)))"))
     }
 }
+
+/// Light Shortcuts path: 文本 → 摘要 → 返回，不打开 App，不走 iSH。
+@available(iOS 17.0, *)
+struct SummarizeTextIntent: AppIntent {
+    static var title: LocalizedStringResource = "摘要"
+    static var description = IntentDescription("把一段文本收成摘要并返回，不打开 App。需要模型或浏览器时会说明要打开 App。")
+    static var openAppWhenRun: Bool = false
+
+    @Parameter(title: "文本", requestValueDialog: "要摘要什么?")
+    var text: String
+
+    @Parameter(title: "模型", description: "留空则用默认 Agent 模型。")
+    var model: ModelSelectionEntity?
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("摘要 \(\.$text)")
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog {
+        let modelId = resolvedModelId()
+        let outcome = await ModelUseOffloadBridge.summarizeText(text, modelIdOrName: modelId)
+        return .result(value: outcome.text, dialog: IntentDialog(stringLiteral: outcome.text))
+    }
+
+    @MainActor
+    private func resolvedModelId() -> String? {
+        guard let model else { return nil }
+        let store = ProviderConfigStore.shared
+        if model.kind == .entry {
+            let key = String(model.id.dropFirst("entry:".count))
+            return store.entry(for: key)?.model.id
+        }
+        let groupId = String(model.id.dropFirst("group:".count))
+        guard let group = store.group(for: groupId),
+              let first = group.memberEntryIds.first else { return nil }
+        return store.entry(for: first)?.model.id
+    }
+}

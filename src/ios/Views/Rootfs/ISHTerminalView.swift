@@ -27,6 +27,8 @@ struct ISHTerminalView: View {
     /// URL captured from an OSC `MinisOpenURL` marker emitted by
     /// /usr/local/bin/minis-open — presented in an in-app WKWebView sheet.
     @State private var linkPreviewURL: URL?
+    @State private var shellSessions: [ChatSession] = []
+    @State private var activeShellSessionId: String?
     /// Track whether a sheet is presented so we can resign first responder
     /// and stop fighting with text fields inside the sheet.
     private var isSheetPresented: Bool { showFileBrowser || showRootfsManagement }
@@ -93,7 +95,7 @@ struct ISHTerminalView: View {
             )
         }
         .background(Color.black)
-        .navigationTitle("LeoPhoneAgent Shell")
+        .navigationTitle(shellTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if showCloseButton {
@@ -104,6 +106,20 @@ struct ISHTerminalView: View {
                 }
             }
             ToolbarItem(placement: .navigationBarTrailing) {
+                Menu {
+                    ForEach(Array(shellSessions.prefix(12))) { session in
+                        Button {
+                            switchShell(to: session)
+                        } label: {
+                            Label(session.title ?? String(session.id.prefix(8)), systemImage: activeShellSessionId == session.id ? "checkmark" : "terminal")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "rectangle.stack")
+                }
+                .accessibilityLabel("切换 Shell 会话")
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
                     viewModel.clearScreen()
                 } label: {
@@ -112,7 +128,9 @@ struct ISHTerminalView: View {
             }
         }
         .onAppear {
+            activeShellSessionId = sessionId
             viewModel.startShell(sessionId: sessionId, initCommand: initCommand)
+            Task { shellSessions = await ChatStore.shared.listSessions() }
             // Claim the broker so AIChatView (which sits beneath our
             // fullScreenCover) stops presenting web URLs on top — otherwise
             // its .sheet(item: $safariURL) tries to present while the
@@ -183,6 +201,27 @@ struct ISHTerminalView: View {
             // user agent match the rest of the app. `browserPool: nil`
             // is fine — the preview view doesn't actually use it.
             MinisLinkPreviewView(url: url, browserPool: nil)
+        }
+    }
+
+    private var shellTitle: String {
+        if let sid = activeShellSessionId,
+           let session = shellSessions.first(where: { $0.id == sid }) {
+            return session.title ?? "Shell"
+        }
+        return "LeoPhoneAgent Shell"
+    }
+
+    private func switchShell(to session: ChatSession) {
+        activeShellSessionId = session.id
+        Task.detached {
+            await ISHExecutionCoordinator.shared.mountForSession(session.id)
+            await MainActor.run {
+                let dest = SessionWorkspaceBind.linuxHint(for: session.id)
+                if let data = "cd \(dest) && clear\n".data(using: .utf8) {
+                    viewModel.sendInput(data)
+                }
+            }
         }
     }
 }

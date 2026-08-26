@@ -104,6 +104,10 @@ final class MinisFsRouter: @unchecked Sendable {
                 continue
             }
             let tail = String(guestPath[prefixEnd...])
+            if bucket.hostSubdir == "workspace",
+               let bound = SessionWorkspaceBind.boundHostPath(for: sid) {
+                return bound + tail
+            }
             return minisBaseURL
                 .appendingPathComponent(sid, isDirectory: true)
                 .appendingPathComponent(bucket.hostSubdir, isDirectory: true)
@@ -117,6 +121,9 @@ final class MinisFsRouter: @unchecked Sendable {
     /// Returns nil if the path doesn't live under any per-session bucket
     /// (caller falls back to the static bind_mount_resolve table).
     private func reverse(hostPath: String) -> String? {
+        if let guest = reverseBoundWorkspace(hostPath: hostPath) {
+            return guest
+        }
         let basePath = minisBaseURL.path
         // F_GETPATH on iOS may resolve /var → /private/var; normalize that
         // so a single prefix compare suffices.
@@ -143,5 +150,19 @@ final class MinisFsRouter: @unchecked Sendable {
         else { return nil }
         let tail = parts.count == 3 ? "/" + parts[2] : ""
         return bucket.linuxPrefix + tail
+    }
+
+    private func reverseBoundWorkspace(hostPath: String) -> String? {
+        lock.lock()
+        let sids = Array(sidToContext.keys)
+        lock.unlock()
+        for sid in sids {
+            guard let bound = SessionWorkspaceBind.boundHostPath(for: sid) else { continue }
+            if hostPath == bound || hostPath.hasPrefix(bound + "/") {
+                let tail = String(hostPath.dropFirst(bound.count))
+                return AIChatViewModel.minisWorkspaceLinuxDir + tail
+            }
+        }
+        return nil
     }
 }

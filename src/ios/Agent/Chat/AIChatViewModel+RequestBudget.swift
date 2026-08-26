@@ -231,7 +231,10 @@ extension AIChatViewModel {
 
     /// Persistent storage directory for a specific session's workspace.
     nonisolated static func minisWorkspacePersistentDir(for sid: String) -> URL {
-        minisPersistentBase.appendingPathComponent(sid, isDirectory: true)
+        if let bound = SessionWorkspaceBind.boundHostPath(for: sid) {
+            return URL(fileURLWithPath: bound, isDirectory: true)
+        }
+        return minisPersistentBase.appendingPathComponent(sid, isDirectory: true)
             .appendingPathComponent("workspace", isDirectory: true)
     }
 

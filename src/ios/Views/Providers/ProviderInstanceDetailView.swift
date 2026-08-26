@@ -49,6 +49,7 @@ struct ProviderInstanceDetailView: View {
                 } label: {
                     Image(systemName: "square.and.arrow.up")
                 }
+                .accessibilityLabel("导出配置（不含密钥）")
             }
         }
         .sheet(isPresented: $showAddCustomModel) {
@@ -343,7 +344,7 @@ struct ProviderInstanceDetailView: View {
         .sheet(isPresented: $showExportShare) {
             if let json = store.exportInstanceJSON(instanceId) {
                 let label = store.instance(for: instanceId).map(\.label) ?? "provider"
-                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(label).json")
+                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(label)-safe.json")
                 let _ = try? json.write(to: tempURL, atomically: true, encoding: .utf8)
                 ProviderShareSheet(url: tempURL)
                     .presentationDetents([.medium])

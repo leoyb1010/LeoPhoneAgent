@@ -4,6 +4,24 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## iOS 1.26.0 (100) - 2026-08-26
+
+### 用户可见
+
+- 授权过的文件夹跨启动仍可用，并能设成当前会话工作区（文件工具 / iSH `/var/minis/workspace` 都指向它）。
+- 快捷指令「摘要」：文本 → 摘要 → 返回，不打开 App；失败时写明「此命令需打开 App」。
+- 供应商配置导出默认不含 API Key / OAuth。终端可切换到最近会话的工作目录。
+
+### 验证
+
+- MinisTests `T5ShellBridgeTests` 通过；iOS Debug 编译通过。
+- `IOSReleaseReadinessAudit` 1.26.0 (100) 通过；`InstallIOSRelease.sh` 装到 iPhone 17 Pro Max 成功。
+
+### 停损
+
+- 没有换 iSH，也没有第二套终端 / Mosh。摘要走现有 `ModelUseOffloadBridge`，不新开 Agent 循环。
+- 本船只发 iOS。
+
 ## Mac 1.75.0 / iOS 1.25.2 (99) - 2026-08-26
 
 ### 用户可见
@@ -14,7 +32,7 @@
 ### 验证
 
 - `npm run verify:release-notes`、exact-window 单测、`npm run typecheck` 通过。
-- iOS `IOSReleaseReadinessAudit` 1.25.2 (99) 通过；Release 构建成功。装机因 iPhone 离线/锁屏失败，解锁后再跑 `./scripts/InstallIOSRelease.sh`。
+- iOS `IOSReleaseReadinessAudit` 1.25.2 (99) 通过；`InstallIOSRelease.sh` 装到 iPhone 17 Pro Max（`2A6E7C6F-…`）成功。
 
 ### 停损
 
