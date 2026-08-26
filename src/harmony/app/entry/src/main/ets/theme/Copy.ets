@@ -21,6 +21,13 @@ export class Copy {
   static readonly stepDone: string = '已完成';
   static readonly stepLocked: string = '请先完成上一步';
   static readonly searchPlaceholder: string = '搜索会话…';
+  static readonly settingsSearch: string = '搜索设置…';
+  static readonly cardTorchOn: string = '打开手电筒';
+  static readonly cardTorchOff: string = '关掉手电筒';
+  static readonly cardRunning: string = '正在执行';
+  static readonly cardPending: string = '等待审批';
+  static readonly homeCardsTitle: string = '显示家页主动卡';
+  static readonly homeCardsFooter: string = '会话列表最多三张：正在执行、等待审批、最可能需要的动作。关掉后一张都不显示。';
   static readonly noLinux: string = '鸿蒙 NEXT 跑不了 Android 那份 PRoot ELF。写文件只在应用沙箱，并默认询问。';
   static readonly pushB: string = '正在向 Push Kit 要 token。没配 AGC 时杀进程后仍然收不到审批。';
   static readonly sectionDevice: string = '我的设备';

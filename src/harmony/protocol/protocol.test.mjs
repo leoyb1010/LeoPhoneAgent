@@ -47,6 +47,7 @@ import {
   formatFileReadOutput,
 } from "./localChat.ts";
 import { enrichEvent, nowSeconds, replayAfter, dueTasks, dayKey, scheduleSessionTitle, lastRunLabel } from "./bodyRuntime.ts";
+import { decide, parseTime, spokenOf } from "./actionRouter.ts";
 import {
   skipUpstreamModels,
   modelsAuthHeaders,
@@ -634,6 +635,65 @@ function wireShape(source, startsWith) {
   const formatted = formatFileReadOutput("/tmp/x", 4, { showStart: 1, showEnd: 2, totalLines: 10, content: "a\nb", truncated: false, nextOffset: 3 });
   assert.match(formatted, /next_offset: 3/);
   assert.match(formatted, /showing 1-2 of 10/);
+}
+
+{
+  const hit = decide("把这张图存进相册", 1);
+  assert.equal(hit.path, "native");
+  assert.equal(hit.kind, "savePhoto");
+  assert.equal(decide("把这张图存进相册", 0).path, "agent");
+
+  const alarm = decide("定个明早 8 点闹钟", 0);
+  assert.equal(alarm.kind, "setAlarm");
+  assert.equal(alarm.hour, 8);
+  assert.equal(alarm.minute, 0);
+  assert.equal(alarm.tomorrow, true);
+  assert.match(spokenOf(alarm), /08:00/);
+
+  const colon = decide("set alarm for 7:30", 0);
+  assert.equal(colon.hour, 7);
+  assert.equal(colon.minute, 30);
+
+  const cal = decide("把明早 9:00 开会加到日历", 0);
+  assert.equal(cal.kind, "createCalendar");
+  assert.equal(cal.hour, 9);
+  assert.equal(cal.tomorrow, true);
+
+  const enPhoto = decide("Save this photo to the album", 1);
+  assert.equal(enPhoto.kind, "savePhoto");
+  const enCal = decide("add to calendar tomorrow 10:00 standup", 0);
+  assert.equal(enCal.kind, "createCalendar");
+  assert.equal(enCal.hour, 10);
+  const zhCal = decide("create calendar event 明天 15:00 复盘", 0);
+  assert.equal(zhCal.kind, "createCalendar");
+  assert.equal(zhCal.hour, 15);
+  const dawn = decide("明早 6:30 闹钟", 0);
+  assert.equal(dawn.kind, "setAlarm");
+  assert.equal(dawn.hour, 6);
+  assert.equal(dawn.minute, 30);
+  const tonight = decide("定个今晚 22:00 闹钟 吃药", 0);
+  assert.equal(tonight.kind, "setAlarm");
+  assert.equal(tonight.hour, 22);
+  assert.equal(tonight.tomorrow, false);
+
+  assert.equal(decide("帮我看看这张图", 1).path, "agent");
+  assert.equal(decide("设个闹钟", 0).path, "agent");
+  assert.equal(parseTime("没有时间"), null);
+
+  const on = decide("打开手电筒", 0);
+  assert.equal(on.kind, "toggleFlashlight");
+  assert.equal(on.label, "on");
+  assert.match(spokenOf(on), /打开/);
+  const off = decide("turn off flashlight", 0);
+  assert.equal(off.label, "off");
+  const todo = decide("记个待办 买牛奶", 0);
+  assert.equal(todo.kind, "createTodo");
+  assert.equal(todo.label, "买牛奶");
+  const enTodo = decide("remind me to call mom", 0);
+  assert.equal(enTodo.kind, "createTodo");
+  assert.equal(enTodo.label, "call mom");
+  assert.equal(decide("手电筒坏了怎么办", 0).path, "agent");
+  assert.equal(decide("帮我记一下今天的会", 0).path, "agent");
 }
 
 console.log("PROTOCOL_MACHINES_OK");

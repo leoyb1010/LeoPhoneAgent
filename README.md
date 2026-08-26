@@ -3,7 +3,7 @@
 [![iOS](https://img.shields.io/badge/iOS-1.28.0%20(102)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.19-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.19)
 [![macOS](https://img.shields.io/badge/macOS-1.76.0-7C3AED.svg)](src/mac/leocodebox/package.json)
-[![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.16-D94B16.svg)](src/harmony/app/AppScope/app.json5)
+[![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.17-D94B16.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Mobile](https://img.shields.io/badge/mobile-iOS%20%2B%20Android-black.svg)](#系统架构)
 
@@ -31,7 +31,7 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
   `src/mac/leocodebox/`。`src/mac/leoagent/` 是协议兼容/灰度回退，不是 Android UI 工程。
   鸿蒙 7 交付计划：
   [`docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md`](docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md)；
-  工程落地在 `src/harmony/`。当前船是 `0.3.0-alpha.16`，只走 `hdc install`。
+  工程落地在 `src/harmony/`。当前船是 `0.3.0-alpha.17`，只走 `hdc install`。
   没有 Linux 沙箱，也不做无障碍跨应用。杀进程后审批不可用。
 - Android 同时交付 Standard 和 Power；修改 `main` 公共源码后必须同时验证两个 flavor。
 - 不得把「能编译」、「CI 是绿的」或「APK 已上传」当成可发布证据。
@@ -39,11 +39,11 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
 - 任务开始先读 `git status`并获取最新 `origin/main`；未知本地改动默认属于用户，
   不得 `reset --hard`、覆盖或删除。
 
-## HarmonyOS 0.3.0-alpha.16
+## HarmonyOS 0.3.0-alpha.17
 
 个人 hdc 安装，不上应用市场。包名 `com.leoyuan.leophoneagent.harmony`。
-强调色对齐青绿。设置改成同一四组：我的设备 / Agent / 外观与通用 / 数据与关于。
-Kimi 登录直接打开带设备码的确认页。竖屏单列，横屏/宽屏才左右分栏。
+没网也能听懂「打开手电筒」「记个待办」并直接做。家页最多三张主动卡，可在外观关掉。
+设置能搜。强调色对齐青绿。竖屏单列，横屏/宽屏才左右分栏。
 
 OpenAI / Anthropic / Gemini / xAI 登录和官方接口大陆直连通常不通，需要可访问境外的网络。OpenRouter 通常可达，Kimi 和多数国内兼容根可直连。登录被地区拦截时不再跳系统浏览器，停在本页中文说明并可复制链接。
 

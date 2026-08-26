@@ -1,5 +1,6 @@
 import { common } from '@kit.AbilityKit';
 import { themeStore } from '../store/ThemeStore';
+import { Copy } from '../theme/Copy';
 import { IconCircle } from '../theme/Widgets';
 import { Tokens } from '../theme/Tokens';
 
@@ -14,6 +15,7 @@ struct AppearancePage {
   @State toolPreview: boolean = true;
   @State expandThinking: boolean = true;
   @State showTitle: boolean = true;
+  @State homeCards: boolean = true;
 
   aboutToAppear(): void {
     const ctx = getContext(this) as common.UIAbilityContext;
@@ -116,6 +118,22 @@ struct AppearancePage {
         .width('100%')
         .backgroundColor(Tokens.surface)
         .borderRadius(Tokens.settingsRadius)
+
+        this.section('主动卡')
+        Text(Copy.homeCardsFooter)
+          .fontSize(12)
+          .fontColor(Tokens.muted)
+          .width('100%')
+          .padding({ bottom: 8 })
+        Column() {
+          this.toggle(Copy.homeCardsTitle, this.homeCards, (on: boolean) => {
+            this.homeCards = on;
+            this.persist();
+          })
+        }
+        .width('100%')
+        .backgroundColor(Tokens.surface)
+        .borderRadius(Tokens.settingsRadius)
       }
       .width('100%')
       .alignItems(HorizontalAlign.Start)
@@ -194,6 +212,7 @@ struct AppearancePage {
     this.toolPreview = themeStore.toolPreview;
     this.expandThinking = themeStore.expandThinking;
     this.showTitle = themeStore.showTitle;
+    this.homeCards = themeStore.homeCards;
   }
 
   private persist(): void {
@@ -205,6 +224,7 @@ struct AppearancePage {
     themeStore.toolPreview = this.toolPreview;
     themeStore.expandThinking = this.expandThinking;
     themeStore.showTitle = this.showTitle;
+    themeStore.homeCards = this.homeCards;
     themeStore.save(ctx);
     this.sync();
   }

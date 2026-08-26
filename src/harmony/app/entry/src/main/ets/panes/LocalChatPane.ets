@@ -18,7 +18,9 @@ import {
   thinkingLabel
 } from '../local/LocalProtocol';
 import { usageStore } from '../store/UsageStore';
+import { FastLocalActions } from '../local/FastLocalActions';
 import { LocalTools, ToolResult } from '../local/LocalTools';
+import { taskStatus } from '../store/TaskStatus';
 import { OpenAICompatClient, StreamTurn } from '../local/OpenAICompatClient';
 import { SensitiveToolGate } from '../local/SensitiveToolGate';
 import { memoryStore } from '../store/MemoryStore';
@@ -104,6 +106,7 @@ export struct LocalChatPane {
     // 于是上一个会话没答完的「允许写这次」横条和它挂着的 pendingCalls 会留到新会话里，
     // 用户在新会话点允许，跑的是旧会话的工具调用。
     this.askWrite = false;
+    taskStatus.setPendingWrite(false);
     this.pendingCalls = [];
     this.loopTurns = [];
     this.rounds = 0;
@@ -244,6 +247,7 @@ export struct LocalChatPane {
               // 授权带上本会话 id，避免被同时在跑的远程/定时回合抢走（见 SensitiveToolGate 注释）
               SensitiveToolGate.grantWriteOnce(this.grantOwner());
               this.askWrite = false;
+              taskStatus.setPendingWrite(false);
               this.status = '已允许写这次';
               if (this.pendingCalls.length > 0) {
                 const ctx = getContext(this) as common.UIAbilityContext;
@@ -255,7 +259,7 @@ export struct LocalChatPane {
         .padding({ left: Tokens.pagePad, right: Tokens.pagePad, bottom: 8 })
       }
 
-      if (this.configured && this.currentId.length > 0) {
+      if (this.currentId.length > 0) {
         if (this.imageHint.length > 0) {
           Text(this.imageHint)
             .fontSize(12)
@@ -313,6 +317,7 @@ export struct LocalChatPane {
               .fontColor(Tokens.text)
               .onClick(() => {
                 this.stopStream();
+                taskStatus.setRunning(false);
                 this.status = '已停止';
               })
           } else {
@@ -653,7 +658,23 @@ export struct LocalChatPane {
 
   private async send(): Promise<void> {
     const text = this.draft.trim();
-    if ((!text && this.imageB64.length === 0) || !this.configured) {
+    if (!text && this.imageB64.length === 0) {
+      return;
+    }
+    const ctxEarly = getContext(this) as common.UIAbilityContext;
+    if (text.length > 0) {
+      const spoken = await FastLocalActions.tryRoute(ctxEarly, text, this.imageB64.length > 0 ? 1 : 0);
+      if (spoken.length > 0) {
+        this.draft = '';
+        this.imageB64 = '';
+        this.imageMime = 'image/jpeg';
+        this.imagePath = '';
+        this.imageHint = '';
+        await this.finishNative(ctxEarly, text, spoken);
+        return;
+      }
+    }
+    if (!this.configured) {
       return;
     }
     this.draft = '';
@@ -688,6 +709,7 @@ export struct LocalChatPane {
         this.title = session.title;
       }
       this.status = '进行中';
+      taskStatus.setRunning(true);
       this.rounds = 0;
       this.failIndex = 0;
       this.loopTurns = this.historyTurns();
@@ -697,6 +719,32 @@ export struct LocalChatPane {
         last.imageMime = attachMime;
       }
       this.startModel(ctx);
+    } catch (err) {
+      this.status = `${err}`;
+    }
+  }
+
+  private async finishNative(ctx: common.UIAbilityContext, text: string, spoken: string): Promise<void> {
+    if (!this.currentId) {
+      try {
+        const session = await sessionStore.create(ctx);
+        this.currentId = session.id;
+        LocalChatLaunch.sessionId = session.id;
+      } catch (err) {
+        this.status = `${err}`;
+        return;
+      }
+    }
+    try {
+      await sessionStore.append(ctx, this.currentId, 'user', text);
+      this.push('user', text);
+      await sessionStore.append(ctx, this.currentId, 'assistant', spoken);
+      this.push('assistant', spoken);
+      const session = await sessionStore.get(ctx, this.currentId);
+      if (session) {
+        this.title = session.title;
+      }
+      this.status = '空闲';
     } catch (err) {
       this.status = `${err}`;
     }
@@ -809,6 +857,7 @@ export struct LocalChatPane {
           this.runTools(ctx, turn.calls);
           return;
         }
+        taskStatus.setRunning(false);
         this.persistAssistant(ctx, turn.text, turn.promptTokens, turn.completionTokens);
         if (this.streamBuf.length === 0) {
           this.assistantOpen = false;
@@ -827,6 +876,7 @@ export struct LocalChatPane {
           this.startModel(ctx);
           return;
         }
+        taskStatus.setRunning(false);
         this.push('system', message);
         this.status = message;
       });
@@ -842,6 +892,7 @@ export struct LocalChatPane {
       }
       if (result.needWrite) {
         this.askWrite = true;
+        taskStatus.setPendingWrite(true);
         this.pendingCalls = calls.slice(i);
         this.status = '等待写文件';
         return;

@@ -6,15 +6,23 @@ export class LeoRelease {
 }
 
 export class ReleaseCatalog {
-  static readonly currentVersion: string = '0.3.0-alpha.16';
-  static readonly currentBuild: number = 100021;
+  static readonly currentVersion: string = '0.3.0-alpha.17';
+  static readonly currentBuild: number = 100022;
 
   static all(): LeoRelease[] {
     const first = new LeoRelease();
-    first.version = '0.3.0-alpha.16';
+    first.version = '0.3.0-alpha.17';
     first.date = '2026-08-26';
-    first.title = '扫短码入列';
+    first.title = '没网也能开手电、记待办';
     first.highlights = [
+      '飞行模式下说「打开手电筒」或「记个待办」会直接做，不走模型。闹钟和日程也走本机提醒。',
+      '会话列表最多三张卡：正在执行、等待审批、最可能需要的动作。可在外观里整组关掉。设置能搜到每一项。'
+    ];
+    const t6 = new LeoRelease();
+    t6.version = '0.3.0-alpha.16';
+    t6.date = '2026-08-26';
+    t6.title = '扫短码入列';
+    t6.highlights = [
       '扫或粘贴带短码的配对码即可加入舰队，不用再手抄长密钥。',
       '断线续传会明确说是接着跑还是中间缺了一段。旧密钥这一轮仍能用。'
     ];
@@ -181,6 +189,6 @@ export class ReleaseCatalog {
       '填中继钥匙后读取 /machines，不再写死三台 Mac。',
       '可对在线 Mac 或 Android 身体开新任务，断线按序号续上。'
     ];
-    return [first, face, prev, kimi, detail, scroll, login, icons, layout, model, pick, blank, chain, codex, oauth, body, tools, providers, local, previous, firstShip];
+    return [first, t6, face, prev, kimi, detail, scroll, login, icons, layout, model, pick, blank, chain, codex, oauth, body, tools, providers, local, previous, firstShip];
   }
 }

@@ -2,6 +2,7 @@ import { fileIo } from '@kit.CoreFileKit';
 import { common } from '@kit.AbilityKit';
 import { window } from '@kit.ArkUI';
 import { Tokens } from '../theme/Tokens';
+import { taskStatus } from './TaskStatus';
 
 export class ThemeStore {
   mode: string = 'system';
@@ -11,6 +12,7 @@ export class ThemeStore {
   toolPreview: boolean = true;
   expandThinking: boolean = true;
   showTitle: boolean = true;
+  homeCards: boolean = true;
   systemDark: boolean = false;
   private loaded: boolean = false;
   private win: window.Window | null = null;
@@ -58,11 +60,13 @@ export class ThemeStore {
         this.toolPreview = obj['toolPreview'] !== false;
         this.expandThinking = obj['expandThinking'] !== false;
         this.showTitle = obj['showTitle'] !== false;
+        this.homeCards = obj['homeCards'] !== false;
       } catch (_err) {
         this.mode = 'system';
       }
     }
     this.loaded = true;
+    taskStatus.setCardsEnabled(this.homeCards);
     this.apply();
   }
 
@@ -75,6 +79,7 @@ export class ThemeStore {
     body.toolPreview = this.toolPreview;
     body.expandThinking = this.expandThinking;
     body.showTitle = this.showTitle;
+    body.homeCards = this.homeCards;
     const path = context.filesDir + '/appearance.json';
     const file = fileIo.openSync(path,
       fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE | fileIo.OpenMode.TRUNC);
@@ -83,6 +88,7 @@ export class ThemeStore {
     } finally {
       fileIo.closeSync(file);
     }
+    taskStatus.setCardsEnabled(this.homeCards);
     this.apply();
   }
 
@@ -109,6 +115,7 @@ class ThemeFile {
   toolPreview: boolean = true;
   expandThinking: boolean = true;
   showTitle: boolean = true;
+  homeCards: boolean = true;
 }
 
 export const themeStore: ThemeStore = new ThemeStore();

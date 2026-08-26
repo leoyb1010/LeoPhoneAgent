@@ -1,10 +1,12 @@
 import { common } from '@kit.AbilityKit';
 import { http } from '@kit.NetworkKit';
 import { OpenAICompatClient, StreamTurn } from './OpenAICompatClient';
+import { FastLocalActions } from './FastLocalActions';
 import { LocalTools, ToolResult } from './LocalTools';
 import { FailoverSlot, LoopTurn, ToolCall, shouldFailover } from './LocalProtocol';
 import { providerStore } from '../store/ProviderStore';
 import { usageStore } from '../store/UsageStore';
+import { taskStatus } from '../store/TaskStatus';
 
 export class LocalAgentEngine {
   private static gen: Map<string, number> = new Map();
@@ -51,6 +53,7 @@ export class LocalAgentEngine {
 
   static stop(sessionKey: string): void {
     LocalAgentEngine.bump(sessionKey);
+    taskStatus.setRunning(false);
   }
 
   /**
@@ -68,12 +71,26 @@ export class LocalAgentEngine {
     if (!LocalAgentEngine.alive(sessionKey, mine)) {
       return null;
     }
-    const turns: LoopTurn[] = [];
-    const user = new LoopTurn();
-    user.role = 'user';
-    user.content = text;
-    turns.push(user);
-    LocalAgentEngine.loop(context, sessionKey, mine, turns, thinking, 0, 0, onDelta, onDone, onError);
+    taskStatus.setRunning(true);
+    FastLocalActions.tryRoute(context, text, 0).then((spoken: string) => {
+      if (!LocalAgentEngine.alive(sessionKey, mine)) {
+        return;
+      }
+      if (spoken.length > 0) {
+        taskStatus.setRunning(false);
+        onDone(spoken);
+        return;
+      }
+      const turns: LoopTurn[] = [];
+      const user = new LoopTurn();
+      user.role = 'user';
+      user.content = text;
+      turns.push(user);
+      LocalAgentEngine.loop(context, sessionKey, mine, turns, thinking, 0, 0, onDelta, onDone, onError);
+    }).catch((err: Error) => {
+      taskStatus.setRunning(false);
+      onError(err.message);
+    });
     return LocalAgentEngine.reqs.get(sessionKey) ?? null;
   }
 
@@ -83,6 +100,7 @@ export class LocalAgentEngine {
     onError: (message: string) => void): void {
     LocalAgentEngine.begin(context, sessionKey, mine, turns, thinking, rounds, failIndex,
       onDelta, onDone, onError).catch((err: Error) => {
+      taskStatus.setRunning(false);
       onError(err.message);
     });
   }
@@ -99,15 +117,18 @@ export class LocalAgentEngine {
       return;
     }
     if (!providerStore.configured()) {
+      taskStatus.setRunning(false);
       onError('这台鸿蒙还没配供应商');
       return;
     }
     if (rounds >= 8) {
+      taskStatus.setRunning(false);
       onError('工具轮次用完了');
       return;
     }
     const queue: FailoverSlot[] = providerStore.queue();
     if (failIndex >= queue.length) {
+      taskStatus.setRunning(false);
       onError('供应商都试过了');
       return;
     }
@@ -134,6 +155,7 @@ export class LocalAgentEngine {
         usageStore.add(context, turn.promptTokens, turn.completionTokens).catch(() => {
           // keep chatting
         });
+        taskStatus.setRunning(false);
         onDone(turn.text);
         return;
       }
@@ -149,6 +171,7 @@ export class LocalAgentEngine {
           onDelta, onDone, onError);
         return;
       }
+      taskStatus.setRunning(false);
       onError(message);
     });
     LocalAgentEngine.reqs.set(sessionKey, req);

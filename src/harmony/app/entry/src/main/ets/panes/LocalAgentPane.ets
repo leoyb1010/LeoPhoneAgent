@@ -1,9 +1,11 @@
 import { common } from '@kit.AbilityKit';
 import { router } from '@kit.ArkUI';
 import { LocalChatLaunch, LocalChatPane } from './LocalChatPane';
+import { FastLocalActions } from '../local/FastLocalActions';
 import { relativeTime } from '../local/LocalProtocol';
 import { sessionStore, LocalSession, LocalSessionSummary, SessionGroup } from '../store/SessionStore';
 import { providerStore, ProviderLaunch } from '../store/ProviderStore';
+import { taskStatus } from '../store/TaskStatus';
 import { themeStore } from '../store/ThemeStore';
 import { Copy } from '../theme/Copy';
 import { IconBtn, IconCircle, SysIcon } from '../theme/Widgets';
@@ -13,6 +15,7 @@ import { Tokens } from '../theme/Tokens';
 export struct LocalAgentPane {
   @StorageProp('themeTick') tick: number = 0;
   @StorageProp('providerTick') @Watch('onProviderTick') providerTick: number = 0;
+  @StorageProp('taskTick') taskTick: number = 0;
   @Prop wide: boolean = false;
   onRemote: () => void = () => {};
   onSettings: () => void = () => {};
@@ -77,6 +80,7 @@ export struct LocalAgentPane {
         }
         Scroll() {
           Column() {
+            this.homeCards()
             if (this.groups.length === 0) {
               this.emptyState()
             } else {
@@ -323,6 +327,55 @@ export struct LocalAgentPane {
     .onClick(() => {
       this.openSession(row.id);
     })
+  }
+
+  @Builder
+  homeCards() {
+    if (taskStatus.cardsEnabled) {
+      Column() {
+        if (taskStatus.running) {
+          this.cardLine(Copy.cardRunning, () => {
+            const id = this.lastSessionId();
+            if (id.length > 0) {
+              this.openSession(id);
+            }
+          })
+        }
+        if (taskStatus.pendingWrite) {
+          this.cardLine(Copy.cardPending, () => {
+            const id = this.lastSessionId();
+            if (id.length > 0) {
+              this.openSession(id);
+            }
+          })
+        }
+        this.cardLine(taskStatus.torchOn ? Copy.cardTorchOff : Copy.cardTorchOn, () => {
+          const ctx = getContext(this) as common.UIAbilityContext;
+          FastLocalActions.setTorch(ctx, !taskStatus.torchOn).catch(() => {
+            // keep the card
+          });
+        })
+      }
+      .width('100%')
+      .alignItems(HorizontalAlign.Start)
+      .padding({ left: Tokens.pagePad, right: Tokens.pagePad, top: 8, bottom: 4 })
+    }
+  }
+
+  @Builder
+  cardLine(title: string, onTap: () => void) {
+    Text(title)
+      .fontSize(15)
+      .fontWeight(FontWeight.Medium)
+      .fontColor(Tokens.text)
+      .width('100%')
+      .padding({ left: 14, right: 14, top: 12, bottom: 12 })
+      .backgroundColor(Tokens.surface)
+      .borderRadius(Tokens.cardRadius)
+      .margin({ bottom: 8 })
+      .onClick(() => {
+        onTap();
+      })
   }
 
   @Builder

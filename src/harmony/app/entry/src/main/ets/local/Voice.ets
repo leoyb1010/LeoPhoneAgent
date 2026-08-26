@@ -103,9 +103,30 @@ class RecoHook {
 
 export class Voice {
   private static capturing: boolean = false;
+  private static speaker: textToSpeech.TextToSpeechEngine | null = null;
+  private static speakId: string = '';
+
+  static stopSpeak(): void {
+    if (!Voice.speaker) {
+      return;
+    }
+    try {
+      Voice.speaker.stop();
+    } catch (_err) {
+      // already closed
+    }
+    try {
+      Voice.speaker.shutdown();
+    } catch (_err) {
+      // already closed
+    }
+    Voice.speaker = null;
+    Voice.speakId = '';
+  }
 
   static async listen(context: common.UIAbilityContext, onText: (text: string, last: boolean) => void,
     onError: (message: string) => void): Promise<() => void> {
+    Voice.stopSpeak();
     const at = abilityAccessCtrl.createAtManager();
     const perm: Permissions = 'ohos.permission.MICROPHONE';
     const grant = await at.requestPermissionsFromUser(context, [perm]);
@@ -143,11 +164,18 @@ export class Voice {
     if (text.trim().length === 0) {
       return;
     }
+    Voice.stopSpeak();
     const engine = await textToSpeech.createEngine(new SpeakCreate());
     const spec = new SpeakSpec();
     spec.requestId = `tts_${Date.now()}`;
+    Voice.speaker = engine;
+    Voice.speakId = spec.requestId;
     const hook = new SpeakHook();
     hook.onDone = () => {
+      if (Voice.speaker === engine) {
+        Voice.speaker = null;
+        Voice.speakId = '';
+      }
       try {
         engine.shutdown();
       } catch (_err) {

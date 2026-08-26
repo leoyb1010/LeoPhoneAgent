@@ -4,6 +4,24 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## Harmony 0.3.0-alpha.17 · 对齐 T2/T7 - 2026-08-26
+
+### 用户可见
+
+- 没网也能听懂「打开手电筒」「记个待办」并直接做。闹钟和日程走本机提醒，不打开别人的界面。
+- 会话列表最多三张卡：正在执行、等待审批、最可能需要的动作。可在外观里整组关掉。
+- 设置顶上能搜到每一项。录音时停掉正在播的朗读。
+
+### 验证
+
+- `node --experimental-strip-types src/harmony/protocol/protocol.test.mjs` 覆盖 T2 相册/闹钟/日历与 T7 手电/待办决策，与 Android `ActionRouterTest` 同一组短语。
+- `src/harmony/scripts/verify_harmony_release_notes.sh`：`0.3.0-alpha.17` / `100022` 通过。
+- 真机 `hdc install` 按用户指令推迟到明天公司机。相册落盘明天真机再接（路由已对齐，执行仍回落到 Agent）。
+
+### 停损
+
+- 没有下发 GGUF / 第二套 Agent。T3 Power、T4 窗口、T5 捷径/Bookmark 鸿蒙做不了，不装成已齐。
+
 ## T8 · 旁路评测 + Mac 单份 1.76.0 - 2026-08-26
 
 ### 内部
