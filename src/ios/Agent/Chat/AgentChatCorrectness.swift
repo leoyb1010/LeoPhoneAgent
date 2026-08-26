@@ -53,7 +53,7 @@ enum AgentChatCorrectness {
 /// Fast native intents. Same contract as Android `ActionRouter`.
 enum ActionRouter {
     enum Path { case native, agent }
-    enum Kind { case savePhoto, setAlarm, createCalendar }
+    enum Kind { case savePhoto, setAlarm, createCalendar, toggleFlashlight, createTodo }
 
     struct Decision {
         var path: Path
@@ -68,6 +68,8 @@ enum ActionRouter {
             case .savePhoto: return "系统相册"
             case .setAlarm: return "系统闹钟"
             case .createCalendar: return "系统日历"
+            case .toggleFlashlight: return "手电筒"
+            case .createTodo: return "待办"
             case nil: return ""
             }
         }
@@ -80,6 +82,8 @@ enum ActionRouter {
                 let mm = String(format: "%02d", minute ?? 0)
                 return "已用系统闹钟设定 \(hh):\(mm)，未打开界面。"
             case .createCalendar: return "已用系统日历创建日程，未打开界面。"
+            case .toggleFlashlight: return label == "off" ? "已关掉手电筒。" : "已打开手电筒。"
+            case .createTodo: return "已记下待办：\(label.isEmpty ? "待办" : label)。"
             case nil: return ""
             }
         }
@@ -90,6 +94,12 @@ enum ActionRouter {
         let lower = raw.lowercased()
         if imageCount > 0 && isSavePhoto(lower) {
             return Decision(path: .native, kind: .savePhoto, hour: nil, minute: nil, tomorrow: false, label: "")
+        }
+        if let on = flashlightOn(lower) {
+            return Decision(path: .native, kind: .toggleFlashlight, hour: nil, minute: nil, tomorrow: false, label: on ? "on" : "off")
+        }
+        if isTodo(lower) {
+            return Decision(path: .native, kind: .createTodo, hour: nil, minute: nil, tomorrow: false, label: todoTitle(raw))
         }
         if isAlarm(raw, lower: lower), let time = parseTime(raw, lower: lower) {
             return Decision(path: .native, kind: .setAlarm, hour: time.0, minute: time.1, tomorrow: isTomorrow(lower), label: alarmLabel(raw))
@@ -115,6 +125,23 @@ enum ActionRouter {
 
     static func isCalendar(_ lower: String) -> Bool {
         ["加到日历", "写入日历", "添加到日历", "加进日历", "add to calendar", "create calendar event", "创建日程"]
+            .contains { lower.contains($0) }
+    }
+
+    static func flashlightOn(_ lower: String) -> Bool? {
+        let off = ["关掉手电筒", "关闭手电筒", "关手电筒", "关上手电筒",
+                   "turn off flashlight", "turn off the flashlight", "turn off torch",
+                   "flashlight off", "torch off"]
+        let on = ["打开手电筒", "开手电筒", "打开手电", "开手电",
+                  "turn on flashlight", "turn on the flashlight", "turn on torch",
+                  "flashlight on", "torch on"]
+        if off.contains(where: { lower.contains($0) }) { return false }
+        if on.contains(where: { lower.contains($0) }) { return true }
+        return nil
+    }
+
+    static func isTodo(_ lower: String) -> Bool {
+        ["记个待办", "记一条待办", "添加待办", "写个待办", "add a todo", "add todo", "remind me to"]
             .contains { lower.contains($0) }
     }
 
@@ -178,5 +205,16 @@ enum ActionRouter {
             .replacingOccurrences(of: #"\d{1,2}\s*点\s*\d{0,2}\s*分?"#, with: "", options: .regularExpression)
             .trimmingCharacters(in: CharacterSet(charactersIn: " ，,。.:："))
         return stripped.isEmpty ? "日程" : stripped
+    }
+
+    private static func todoTitle(_ raw: String) -> String {
+        let stripped = raw
+            .replacingOccurrences(
+                of: #"记个待办|记一条待办|添加待办|写个待办|add a todo|add todo|remind me to"#,
+                with: "",
+                options: [.regularExpression, .caseInsensitive]
+            )
+            .trimmingCharacters(in: CharacterSet(charactersIn: " ，,。.:："))
+        return stripped.isEmpty ? "待办" : stripped
     }
 }

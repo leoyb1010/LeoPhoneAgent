@@ -94,7 +94,7 @@ struct SettingsHomeView: View {
                               icon: "chevron.left.forwardslash.chevron.right", color: .gray) { EnvironmentVariablesView() },
             ]),
             SettingsGroup(id: "general", title: "外观与通用", entries: [
-                SettingsEntry("外观", keywords: "appearance 深色 浅色 主题",
+                SettingsEntry("外观", keywords: "appearance 深色 浅色 主题 主动卡 手电筒 待办",
                               icon: "paintbrush.fill", color: .blue) { AppearanceSettingsView() },
                 SettingsEntry("权限", keywords: "permission 审批 offload",
                               icon: "hand.raised.fill", color: .red) { OffloadPermissionSettingsView() },

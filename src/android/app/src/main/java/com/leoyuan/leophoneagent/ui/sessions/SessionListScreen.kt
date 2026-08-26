@@ -310,7 +310,12 @@ fun SessionListScreen(
     val runningSessions by SessionActivityTracker.activeSessions.collectAsState()
     val pendingApprovals by SessionTaskStatus.pendingApprovals.collectAsState()
     val remoteSessions by SessionTaskStatus.remoteSessions.collectAsState()
+    val homeCardsEnabled by SessionTaskStatus.cardsEnabled.collectAsState()
+    val torchOn by SessionTaskStatus.torchOn.collectAsState()
     LaunchedEffect(Unit) {
+        SessionTaskStatus.setCardsEnabled(
+            com.leoyuan.leophoneagent.ui.settings.homeCardsEnabled(context),
+        )
         val store = com.leoyuan.leophoneagent.relay.RelayFleetStore.get(context)
         while (true) {
             val config = store.config.value
@@ -676,13 +681,13 @@ fun SessionListScreen(
                                 }
                             }
                         }
-                        if (runningSessions.isNotEmpty() || pendingApprovals > 0) {
-                            item(key = "task_status") {
-                                Row(
+                        if (homeCardsEnabled) {
+                            item(key = "home_cards") {
+                                Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = 16.dp, vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
                                     if (runningSessions.isNotEmpty()) {
                                         Text(
@@ -692,6 +697,11 @@ fun SessionListScreen(
                                             ),
                                             style = MaterialTheme.typography.labelLarge,
                                             color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    runningSessions.firstOrNull()?.let(onSessionClick)
+                                                },
                                         )
                                     }
                                     if (pendingApprovals > 0) {
@@ -702,8 +712,27 @@ fun SessionListScreen(
                                             ),
                                             style = MaterialTheme.typography.labelLarge,
                                             color = MaterialTheme.colorScheme.tertiary,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable(onClick = onFleetClick),
                                         )
                                     }
+                                    Text(
+                                        text = stringResource(
+                                            if (torchOn) R.string.sessionlist_card_torch_off
+                                            else R.string.sessionlist_card_torch_on,
+                                        ),
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                com.leoyuan.leophoneagent.agent.FastLocalActions.setTorch(
+                                                    context,
+                                                    !torchOn,
+                                                )
+                                            },
+                                    )
                                 }
                             }
                         }

@@ -1,3 +1,4 @@
+import AVFoundation
 import EventKit
 import Foundation
 import Photos
@@ -355,6 +356,10 @@ extension AIChatViewModel {
         case .createCalendar:
             guard let hour = route.hour, let minute = route.minute else { return false }
             return await createNativeEvent(hour: hour, minute: minute, tomorrow: route.tomorrow, title: route.label)
+        case .toggleFlashlight:
+            return FastLocalActions.setTorch(route.label != "off")
+        case .createTodo:
+            return await FastLocalActions.addTodo(route.label.isEmpty ? "待办" : route.label)
         case nil:
             return false
         }
@@ -444,4 +449,45 @@ extension AIChatViewModel {
         }
     }
 
+}
+
+enum FastLocalActions {
+    static func setTorch(_ on: Bool) -> Bool {
+        guard let device = AVCaptureDevice.default(for: .video), device.hasTorch else { return false }
+        do {
+            try device.lockForConfiguration()
+            if on {
+                try device.setTorchModeOn(level: AVCaptureDevice.maxAvailableTorchLevel)
+            } else {
+                device.torchMode = .off
+            }
+            device.unlockForConfiguration()
+            UserDefaults.standard.set(on, forKey: "leo.torchOn")
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    static func addTodo(_ title: String) async -> Bool {
+        let store = EKEventStore()
+        let granted: Bool
+        if #available(iOS 17.0, *) {
+            granted = (try? await store.requestFullAccessToReminders()) ?? false
+        } else {
+            granted = await withCheckedContinuation { cont in
+                store.requestAccess(to: .reminder) { ok, _ in cont.resume(returning: ok) }
+            }
+        }
+        guard granted else { return false }
+        let reminder = EKReminder(eventStore: store)
+        reminder.title = title
+        reminder.calendar = store.defaultCalendarForNewReminders()
+        do {
+            try store.save(reminder, commit: true)
+            return true
+        } catch {
+            return false
+        }
+    }
 }

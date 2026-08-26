@@ -12,6 +12,15 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.28.0",
+            date: "2026-08-26",
+            title: "没网也能开手电、记待办",
+            highlights: [
+                "飞行模式下说「打开手电筒」或「记个待办」会直接做，不走模型。",
+                "会话列表最多三张卡：正在执行、等待审批、最可能需要的动作。可在外观里整组关掉。",
+            ]
+        ),
+        LeoRelease(
             version: "1.27.0",
             date: "2026-08-26",
             title: "断线接着跑，扫短码入列",

@@ -4,6 +4,24 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## T7 · Android 1.0.0-alpha.19 / iOS 1.28.0 (102) - 2026-08-26
+
+### 用户可见
+
+- 没网也能听懂「打开手电筒」「记个待办」并原生执行，聊天里一句人话说明走了哪条路。
+- 家页最多三张主动卡：正在执行、等待审批、最可能需要的动作（手电筒）。可在外观里整组关掉。
+
+### 验证
+
+- Android `ActionRouterTest`、iOS `AgentChatCorrectnessTests` 覆盖手电/待办短语。
+- `scripts/verify_android_alpha_release.sh`：固定个人 Alpha 签名、包名、versionCode `100019`、versionName `1.0.0-alpha.19` 通过。
+- SHA-256：Standard `ab76c82ac9e96129bf9cf3821e8045faf477f52a5b5753a6a93aa620539ac933`；Power `7edb1427d1c77b7e8bb752f0e04d3f3824a15999760b4f5a32bea97a3bd3256c`。
+- 本船不发 Mac / Harmony。装机与首启弹窗按用户指令推迟到 T8。
+
+### 停损
+
+- 没有下发 GGUF / model-weights，也没有第二套 Agent。路由仍是 T2 正则，快脑记入 D 档。
+
 ## T6 · Android 1.0.0-alpha.18 / iOS 1.27.0 (101) / Mac 1.76.0 / Harmony 0.3.0-alpha.16 - 2026-08-26
 
 ### 用户可见

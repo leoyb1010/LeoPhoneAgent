@@ -83,6 +83,7 @@
     <!-- "Take Photo" composer entry. We never use the camera background; the
          permission is requested at the moment the user taps the menu item. -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.FLASHLIGHT" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
     <!-- T262-1: required to dispatch AlarmClock.ACTION_SET_ALARM to

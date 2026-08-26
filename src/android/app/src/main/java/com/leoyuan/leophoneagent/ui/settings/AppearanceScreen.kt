@@ -81,6 +81,7 @@ const val KEY_LAUNCH_SESSION = "launch_session"    // 0=Auto, 1=LastSession, 2=N
 // future cross-platform sync (if it ever lands) reads the same values.
 const val KEY_RETURN_KEY_BEHAVIOR = "returnKeyBehavior"  // Int 0=Newline (default), 1=Send
 const val KEY_KEEP_SCREEN_AWAKE = "keepScreenAwakeDuringTasks"  // Boolean, default false
+const val KEY_HOME_CARDS = "leo.homeCardsEnabled"  // Boolean, default true
 const val KEY_TOOL_PREVIEW = "tool_preview"        // Boolean, default true
 // [T-keyboard-auto-pop default flip] Default ON — most users want the
 // composer ready for a follow-up immediately after the model finishes.
@@ -111,6 +112,9 @@ fun returnKeySendsMessage(context: Context): Boolean =
 
 fun keepScreenAwakeEnabled(context: Context): Boolean =
     getAppearancePrefs(context).getBoolean(KEY_KEEP_SCREEN_AWAKE, false)
+
+fun homeCardsEnabled(context: Context): Boolean =
+    getAppearancePrefs(context).getBoolean(KEY_HOME_CARDS, true)
 
 /** Default ON — pill shows up on scroll for everyone unless explicitly disabled. */
 fun showChatTitleEnabled(context: Context): Boolean =
@@ -168,6 +172,7 @@ fun AppearanceScreen(
     var launchSession by remember { mutableIntStateOf(prefs.getInt(KEY_LAUNCH_SESSION, 0)) }
     var returnKeyBehavior by remember { mutableIntStateOf(prefs.getInt(KEY_RETURN_KEY_BEHAVIOR, 0)) }
     var keepScreenAwake by remember { mutableStateOf(prefs.getBoolean(KEY_KEEP_SCREEN_AWAKE, false)) }
+    var homeCards by remember { mutableStateOf(prefs.getBoolean(KEY_HOME_CARDS, true)) }
     var toolPreview by remember { mutableStateOf(prefs.getBoolean(KEY_TOOL_PREVIEW, true)) }
     var autoFocusAfterReply by remember { mutableStateOf(prefs.getBoolean(KEY_AUTO_FOCUS_AFTER_REPLY, true)) }
     var autoExpandThinking by remember { mutableStateOf(prefs.getBoolean(KEY_AUTO_EXPAND_THINKING, true)) }
@@ -317,6 +322,24 @@ fun AppearanceScreen(
                 onCheckedChange = {
                     keepScreenAwake = it
                     prefs.edit().putBoolean(KEY_KEEP_SCREEN_AWAKE, it).apply()
+                },
+                showDivider = false,
+            )
+        }
+
+        SettingsSection(
+            header = stringResource(R.string.appearance_section_home_cards),
+            footer = stringResource(R.string.appearance_home_cards_footer),
+        ) {
+            SettingsSwitchRow(
+                icon = Icons.Outlined.Home,
+                iconColor = tileGreen,
+                title = stringResource(R.string.appearance_home_cards_title),
+                checked = homeCards,
+                onCheckedChange = {
+                    homeCards = it
+                    prefs.edit().putBoolean(KEY_HOME_CARDS, it).apply()
+                    com.leoyuan.leophoneagent.service.SessionTaskStatus.setCardsEnabled(it)
                 },
                 showDivider = false,
             )

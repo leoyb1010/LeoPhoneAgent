@@ -76,4 +76,27 @@ class ActionRouterTest {
         assertEquals(ActionRouter.Path.Agent, ActionRouter.decide("设个闹钟", 0).path)
         assertNull(ActionRouter.parseTime("没有时间"))
     }
+
+    @Test
+    fun flashlightAndTodoStayNativeOffline() {
+        val on = ActionRouter.decide("打开手电筒", 0)
+        assertEquals(ActionRouter.Kind.ToggleFlashlight, on.kind)
+        assertEquals("on", on.label)
+        assertTrue(on.spoken().contains("打开"))
+
+        val off = ActionRouter.decide("turn off flashlight", 0)
+        assertEquals(ActionRouter.Kind.ToggleFlashlight, off.kind)
+        assertEquals("off", off.label)
+
+        val todo = ActionRouter.decide("记个待办 买牛奶", 0)
+        assertEquals(ActionRouter.Kind.CreateTodo, todo.kind)
+        assertEquals("买牛奶", todo.label)
+
+        val enTodo = ActionRouter.decide("remind me to call mom", 0)
+        assertEquals(ActionRouter.Kind.CreateTodo, enTodo.kind)
+        assertEquals("call mom", enTodo.label)
+
+        assertEquals(ActionRouter.Path.Agent, ActionRouter.decide("手电筒坏了怎么办", 0).path)
+        assertEquals(ActionRouter.Path.Agent, ActionRouter.decide("帮我记一下今天的会", 0).path)
+    }
 }

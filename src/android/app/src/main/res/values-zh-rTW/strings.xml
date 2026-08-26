@@ -157,6 +157,8 @@
     <string name="sessionlist_remote_section">遠端進行中</string>
     <string name="sessionlist_remote_row">%1$s · %2$s</string>
     <string name="sessionlist_remote_waiting">等你審批</string>
+    <string name="sessionlist_card_torch_on">打開手電筒</string>
+    <string name="sessionlist_card_torch_off">關掉手電筒</string>
     <string name="settings_search_hint">搜尋設定</string>
     <string name="settings_section_devices">連接的裝置</string>
     <string name="settings_remote_machines">遠端機器</string>
@@ -753,7 +755,7 @@
     <string name="terminal_cli_booting_hint">若出現安全確認或登入提示，請依螢幕指引繼續。</string>
     <string name="whats_new_title">本次更新（%1$s）</string>
     <string name="whats_new_confirm">知道了</string>
-    <string name="whats_new_current">• 斷線後任務從上次位置接著跑。新裝置掃短碼就能加入艦隊，不用再手抄長金鑰。遠端正在跑的任務會出現在本機會話列表裡。</string>
+    <string name="whats_new_current">• 沒網也能聽懂「打開手電筒」「記個待辦」並直接做。工作階段列表最多三張卡：正在執行、等待審批、最可能需要的動作。可在外觀裡整組關掉。</string>
     <string name="artifact_ready">交付物已就緒</string>
     <string name="artifact_open">開啟交付物</string>
     <string name="artifact_missing">這份交付物已不在本機。</string>
@@ -902,7 +904,7 @@
     <string name="settings_token_usage">Token 用量</string>
     <string name="settings_token_usage_subtitle">跨提供商追踪 API 使用情况</string>
     <string name="settings_section_appearance">外觀</string>
-    <string name="settings_appearance_subtitle">主题、字號與显示</string>
+    <string name="settings_appearance_subtitle">主题、字號、显示與主動卡</string>
     <string name="settings_section_agent_runtime">Agent 執行階段</string>
     <string name="settings_section_my_device">我的裝置</string>
     <string name="settings_section_agent">Agent</string>
@@ -1017,6 +1019,9 @@
     <string name="appearance_section_keep_awake">屏幕常亮</string>
     <string name="appearance_keep_awake_footer">有工作階段任務執行階段保持屏幕不熄灭，可能增加电量损耗。</string>
     <string name="appearance_keep_awake_title">屏幕常亮</string>
+    <string name="appearance_section_home_cards">主動卡</string>
+    <string name="appearance_home_cards_title">顯示首頁主動卡</string>
+    <string name="appearance_home_cards_footer">工作階段列表最多三張卡：正在執行、等待審批、最可能需要的動作。關掉後一張都不顯示。</string>
     <string name="appearance_section_chat_title">工作階段标题</string>
     <string name="appearance_show_chat_title">显示工作階段标题</string>
     <string name="appearance_show_chat_title_subtitle">滚动時显示目前工作階段标题</string>

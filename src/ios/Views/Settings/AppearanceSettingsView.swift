@@ -23,6 +23,7 @@ struct AppearanceSettingsView: View {
     /// When true, holds `UIApplication.isIdleTimerDisabled` while any session
     /// is running a task. See `KeepScreenAwakeController`.
     @AppStorage("keepScreenAwakeDuringTasks") private var keepScreenAwakeDuringTasks: Bool = false
+    @AppStorage("leo.homeCardsEnabled") private var homeCardsEnabled: Bool = true
     /// [T-keyboard-auto-pop default flip] When true, the input field becomes
     /// the first responder ~1.5 s after the model finishes a reply (the
     /// historical behavior). ON by default — most users want the composer
@@ -150,6 +151,14 @@ struct AppearanceSettingsView: View {
                 Text("Keep Screen Awake")
             } footer: {
                 Text("Prevent the screen from sleeping while any session is running a task. May increase battery drain.")
+            }
+
+            Section {
+                Toggle("显示家页主动卡", isOn: $homeCardsEnabled)
+            } header: {
+                Text("主动卡")
+            } footer: {
+                Text("会话列表最多三张：正在执行、等待审批、最可能需要的动作。关掉后一张都不显示。")
             }
 
             Section {

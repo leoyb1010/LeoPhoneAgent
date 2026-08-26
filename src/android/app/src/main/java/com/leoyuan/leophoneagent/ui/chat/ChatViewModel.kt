@@ -1487,6 +1487,10 @@ class ChatViewModel(
                     sessionId,
                 ).exitCode == 0
             }
+            com.leoyuan.leophoneagent.agent.ActionRouter.Kind.ToggleFlashlight ->
+                com.leoyuan.leophoneagent.agent.FastLocalActions.setTorch(context, route.label != "off")
+            com.leoyuan.leophoneagent.agent.ActionRouter.Kind.CreateTodo ->
+                com.leoyuan.leophoneagent.agent.FastLocalActions.addTodo(context, route.label)
             null -> false
         }
     }

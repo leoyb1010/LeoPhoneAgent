@@ -345,6 +345,8 @@ struct ContentView: View {
 
     /// Launch screen preference: 0=Auto, 1=Last Session, 2=New Chat.
     @AppStorage("launchScreen") private var launchScreen: Int = 0
+    @AppStorage("leo.homeCardsEnabled") private var homeCardsEnabled = true
+    @AppStorage("leo.torchOn") private var torchOn = false
     /// FAB position preference: false = right (default), true = left.
     @AppStorage("fabOnLeft") private var fabOnLeft = false
     /// Mirror of `SyncV2Bootstrap.isEnabled` so SwiftUI re-evaluates
@@ -1580,7 +1582,7 @@ struct ContentView: View {
     /// 这是每天要看好几次的东西,不该埋那么深。没有在跑的就整节不出现。
     @ViewBuilder
     private var macLiveSection: some View {
-        if !isSelecting, !macLive.rows.isEmpty {
+        if homeCardsEnabled, !isSelecting, !macLive.rows.isEmpty {
             Section("进行中") {
                 ForEach(macLive.rows) { row in
                     Button {
@@ -1613,11 +1615,35 @@ struct ContentView: View {
         }
     }
 
+    @ViewBuilder
+    private var homeLikelySection: some View {
+        if homeCardsEnabled, !isSelecting {
+            Section {
+                Button {
+                    if FastLocalActions.setTorch(!torchOn) {
+                        torchOn.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: torchOn ? "flashlight.off.fill" : "flashlight.on.fill")
+                            .foregroundStyle(.tint)
+                        Text(torchOn ? "关掉手电筒" : "打开手电筒")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(.primary)
+                        Spacer(minLength: 0)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
     /// Plain List with NavigationLink for stack (iPhone) layout.
     private var stackList: some View {
         List {
             agentHomeListSection(hasSessions: !filteredSessions.isEmpty)
             macLiveSection
+            homeLikelySection
             // [T-ios-session-list-equatable-jank] id-list projection — see splitList.
             let groups = groupedSessionIDs(filteredSessions)
             ForEach(groups, id: \.label) { group in
@@ -1716,6 +1742,7 @@ struct ContentView: View {
         List(selection: $selectedSessionId) {
             agentHomeListSection(hasSessions: !displaySessions.isEmpty)
             macLiveSection
+            homeLikelySection
             // [T-ios-session-list-equatable-jank] Diff a (label, ids) projection
             // so SwiftUI compares a [String] id list, not a [ChatSession] value
             // array. Rows resolve the model via displaySessionsById.

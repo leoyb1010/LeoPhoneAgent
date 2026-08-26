@@ -9,7 +9,7 @@ package com.leoyuan.leophoneagent.agent
  */
 object ActionRouter {
     enum class Path { Native, Agent }
-    enum class Kind { SavePhoto, SetAlarm, CreateCalendar }
+    enum class Kind { SavePhoto, SetAlarm, CreateCalendar, ToggleFlashlight, CreateTodo }
 
     data class Decision(
         val path: Path,
@@ -24,6 +24,8 @@ object ActionRouter {
                 Kind.SavePhoto -> "系统相册"
                 Kind.SetAlarm -> "系统闹钟"
                 Kind.CreateCalendar -> "系统日历"
+                Kind.ToggleFlashlight -> "手电筒"
+                Kind.CreateTodo -> "待办"
                 null -> ""
             }
 
@@ -35,6 +37,8 @@ object ActionRouter {
                 "已用系统闹钟设定 $hh:$mm，未打开界面。"
             }
             Kind.CreateCalendar -> "已用系统日历创建日程，未打开界面。"
+            Kind.ToggleFlashlight -> if (label == "off") "已关掉手电筒。" else "已打开手电筒。"
+            Kind.CreateTodo -> "已记下待办：${label.ifBlank { "待办" }}。"
             null -> ""
         }
     }
@@ -44,6 +48,12 @@ object ActionRouter {
         val lower = raw.lowercase()
         if (imageCount > 0 && isSavePhoto(lower)) {
             return Decision(Path.Native, Kind.SavePhoto)
+        }
+        flashlightOn(lower)?.let { on ->
+            return Decision(Path.Native, Kind.ToggleFlashlight, label = if (on) "on" else "off")
+        }
+        if (isTodo(lower)) {
+            return Decision(Path.Native, Kind.CreateTodo, label = todoTitle(raw))
         }
         if (isAlarm(raw, lower)) {
             val time = parseTime(raw, lower) ?: return Decision(Path.Agent)
@@ -90,6 +100,30 @@ object ActionRouter {
         val needles = listOf(
             "加到日历", "写入日历", "添加到日历", "加进日历",
             "add to calendar", "create calendar event", "创建日程",
+        )
+        return needles.any { lower.contains(it) }
+    }
+
+    internal fun flashlightOn(lower: String): Boolean? {
+        val off = listOf(
+            "关掉手电筒", "关闭手电筒", "关手电筒", "关上手电筒",
+            "turn off flashlight", "turn off the flashlight", "turn off torch",
+            "flashlight off", "torch off",
+        )
+        val on = listOf(
+            "打开手电筒", "开手电筒", "打开手电", "开手电",
+            "turn on flashlight", "turn on the flashlight", "turn on torch",
+            "flashlight on", "torch on",
+        )
+        if (off.any { lower.contains(it) }) return false
+        if (on.any { lower.contains(it) }) return true
+        return null
+    }
+
+    internal fun isTodo(lower: String): Boolean {
+        val needles = listOf(
+            "记个待办", "记一条待办", "添加待办", "写个待办",
+            "add a todo", "add todo", "remind me to",
         )
         return needles.any { lower.contains(it) }
     }
@@ -147,5 +181,16 @@ object ActionRouter {
             .replace(Regex("""\d{1,2}\s*点\s*\d{0,2}\s*分?"""), "")
             .trim(' ', '，', ',', '。', '.', '：', ':')
         return stripped.ifBlank { "日程" }
+    }
+
+    private fun todoTitle(raw: String): String {
+        val stripped = raw.replace(
+            Regex(
+                """记个待办|记一条待办|添加待办|写个待办|add a todo|add todo|remind me to""",
+                RegexOption.IGNORE_CASE,
+            ),
+            "",
+        ).trim(' ', '，', ',', '。', '.', '：', ':')
+        return stripped.ifBlank { "待办" }
     }
 }

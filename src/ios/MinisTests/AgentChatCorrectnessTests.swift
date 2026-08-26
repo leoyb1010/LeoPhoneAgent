@@ -54,6 +54,16 @@ final class AgentChatCorrectnessTests: XCTestCase {
         XCTAssertEqual(ActionRouter.decide(text: "帮我看看这张图", imageCount: 1).path, .agent)
         XCTAssertEqual(ActionRouter.decide(text: "设个闹钟", imageCount: 0).path, .agent)
 
+        let torch = ActionRouter.decide(text: "打开手电筒", imageCount: 0)
+        XCTAssertEqual(torch.kind, .toggleFlashlight)
+        XCTAssertEqual(torch.label, "on")
+        let torchOff = ActionRouter.decide(text: "turn off flashlight", imageCount: 0)
+        XCTAssertEqual(torchOff.label, "off")
+        let todo = ActionRouter.decide(text: "记个待办 买牛奶", imageCount: 0)
+        XCTAssertEqual(todo.kind, .createTodo)
+        XCTAssertEqual(todo.label, "买牛奶")
+        XCTAssertEqual(ActionRouter.decide(text: "手电筒坏了怎么办", imageCount: 0).path, .agent)
+
         let enPhoto = ActionRouter.decide(text: "Save this photo to the album", imageCount: 1)
         XCTAssertEqual(enPhoto.path, .native)
         let enCal = ActionRouter.decide(text: "add to calendar tomorrow 10:00 standup", imageCount: 0)

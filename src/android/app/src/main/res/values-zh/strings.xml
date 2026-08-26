@@ -120,7 +120,7 @@
     <string name="settings_token_usage">Token 用量</string>
     <string name="settings_token_usage_subtitle">跨提供商追踪 API 使用情况</string>
     <string name="settings_section_appearance">外观</string>
-    <string name="settings_appearance_subtitle">主题、字号与显示</string>
+    <string name="settings_appearance_subtitle">主题、字号、显示与主动卡</string>
     <string name="settings_section_agent_runtime">Agent 运行时</string>
     <string name="settings_section_my_device">我的设备</string>
     <string name="settings_section_agent">Agent</string>
@@ -258,6 +258,9 @@
     <string name="appearance_section_keep_awake">屏幕常亮</string>
     <string name="appearance_keep_awake_footer">有会话任务运行时保持屏幕不熄灭，可能增加电量损耗。</string>
     <string name="appearance_keep_awake_title">屏幕常亮</string>
+    <string name="appearance_section_home_cards">主动卡</string>
+    <string name="appearance_home_cards_title">显示家页主动卡</string>
+    <string name="appearance_home_cards_footer">会话列表最多三张卡：正在执行、等待审批、最可能需要的动作。关掉后一张都不显示。</string>
     <string name="appearance_section_chat_title">会话标题</string>
     <string name="appearance_show_chat_title">显示会话标题</string>
     <string name="appearance_show_chat_title_subtitle">滚动时显示当前会话标题</string>
@@ -668,6 +671,8 @@
     <string name="sessionlist_remote_section">远程进行中</string>
     <string name="sessionlist_remote_row">%1$s · %2$s</string>
     <string name="sessionlist_remote_waiting">等你审批</string>
+    <string name="sessionlist_card_torch_on">打开手电筒</string>
+    <string name="sessionlist_card_torch_off">关掉手电筒</string>
     <string name="sessionlist_dismiss">关闭</string>
     <string name="sessionlist_delete_one_title">删除该对话？</string>
     <string name="sessionlist_delete_n_title">删除 %1$d 个对话？</string>
@@ -1748,7 +1753,7 @@
     <string name="terminal_cli_booting_hint">如出现安全确认或登录提示，请按屏幕指引继续。</string>
     <string name="whats_new_title">本次更新（%1$s）</string>
     <string name="whats_new_confirm">知道了</string>
-    <string name="whats_new_current">• 断线后任务从上次位置接着跑。新设备扫短码就能加入舰队，不用再手抄长密钥。远程正在跑的任务会出现在本机会话列表里。</string>
+    <string name="whats_new_current">• 没网也能听懂「打开手电筒」「记个待办」并直接做。会话列表最多三张卡：正在执行、等待审批、最可能需要的动作。可在外观里整组关掉。</string>
     <string name="artifact_ready">交付物已就绪</string>
     <string name="artifact_open">打开交付物</string>
     <string name="artifact_missing">这份交付物已不在本机。</string>

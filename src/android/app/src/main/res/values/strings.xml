@@ -143,7 +143,7 @@
     <string name="settings_token_usage">Token Usage</string>
     <string name="settings_token_usage_subtitle">Track API usage across providers</string>
     <string name="settings_section_appearance">Appearance</string>
-    <string name="settings_appearance_subtitle">Theme, font size, and display</string>
+    <string name="settings_appearance_subtitle">Theme, font size, display, and home cards</string>
     <string name="settings_section_agent_runtime">Agent Runtime</string>
     <string name="settings_section_my_device">My device</string>
     <string name="settings_section_agent">Agent</string>
@@ -491,6 +491,8 @@
     <string name="sessionlist_remote_section">Remote in progress</string>
     <string name="sessionlist_remote_row">%1$s · %2$s</string>
     <string name="sessionlist_remote_waiting">Waiting for you</string>
+    <string name="sessionlist_card_torch_on">Turn on flashlight</string>
+    <string name="sessionlist_card_torch_off">Turn off flashlight</string>
     <string name="sessionlist_dismiss">Dismiss</string>
     <string name="sessionlist_delete_one_title">Delete conversation?</string>
     <string name="sessionlist_delete_n_title">Delete %1$d conversations?</string>
@@ -577,6 +579,9 @@
     <string name="appearance_section_keep_awake">Keep Screen Awake</string>
     <string name="appearance_keep_awake_footer">Prevent the screen from sleeping while any session is running a task. May increase battery drain.</string>
     <string name="appearance_keep_awake_title">Keep Screen Awake</string>
+    <string name="appearance_section_home_cards">Home cards</string>
+    <string name="appearance_home_cards_title">Show home cards</string>
+    <string name="appearance_home_cards_footer">Up to three cards on the session list: running, waiting for approval, and the most likely next action. Turn off to hide all of them.</string>
     <string name="appearance_section_chat_title">Chat Title</string>
     <string name="appearance_show_chat_title">Show chat title</string>
     <string name="appearance_show_chat_title_subtitle">Show a sticky title pill while scrolling</string>
@@ -1821,8 +1826,8 @@
     <!-- 发版铁律:每次改 versionName 都必须同步改这里,并重写下面的
          whats_new_current 文案。WhatsNewGateTest 会比对这两个值,
          对不上就构建失败 —— 防止弹出的是上一版的更新内容。 -->
-    <string name="whats_new_version" translatable="false">1.0.0-alpha.18</string>
-    <string name="whats_new_current">• After a disconnect the task continues from where it left off. A new device can join the fleet by scanning a short code—no long key to paste. Remote running tasks now appear in this phone\'s session list.</string>
+    <string name="whats_new_version" translatable="false">1.0.0-alpha.19</string>
+    <string name="whats_new_current">• Offline, \"turn on the flashlight\" and \"add a todo\" run as native actions. The session list shows at most three cards—running, waiting for approval, and the most likely next action. You can hide all of them in Appearance.</string>
     <string name="artifact_ready">ARTIFACT READY</string>
     <string name="artifact_open">Open artifact</string>
     <string name="artifact_missing">This artifact is no longer available on this device.</string>

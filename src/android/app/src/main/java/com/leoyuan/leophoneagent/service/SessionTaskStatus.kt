@@ -24,11 +24,32 @@ object SessionTaskStatus {
     private val _remoteSessions = MutableStateFlow<List<RemoteSessionRow>>(emptyList())
     val remoteSessions: StateFlow<List<RemoteSessionRow>> = _remoteSessions.asStateFlow()
 
+    private val _cardsEnabled = MutableStateFlow(true)
+    val cardsEnabled: StateFlow<Boolean> = _cardsEnabled.asStateFlow()
+
+    private val _torchOn = MutableStateFlow(false)
+    val torchOn: StateFlow<Boolean> = _torchOn.asStateFlow()
+
+    private val _lastTodo = MutableStateFlow<String?>(null)
+    val lastTodo: StateFlow<String?> = _lastTodo.asStateFlow()
+
     fun setPendingApprovals(count: Int) {
         _pendingApprovals.value = count.coerceAtLeast(0)
     }
 
     fun setRemoteSessions(rows: List<RemoteSessionRow>) {
         _remoteSessions.value = rows
+    }
+
+    fun setCardsEnabled(on: Boolean) {
+        _cardsEnabled.value = on
+    }
+
+    fun setTorchOn(on: Boolean) {
+        _torchOn.value = on
+    }
+
+    fun setLastTodo(title: String) {
+        _lastTodo.value = title
     }
 }
