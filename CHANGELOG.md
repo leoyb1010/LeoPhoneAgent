@@ -4,6 +4,25 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## Android v1.0.0-alpha.17 - 2026-08-26
+
+### 用户可见
+
+- Power 版可以把冻结、卸载、清理做成一次确认的事务：只读扫描 → 计划 → 风险确认 → 逐项结果 → 回滚。对话里说「冻结这 3 个 App com.a com.b com.c」，回复「确认」执行，再回复「回滚」恢复。
+- Standard 没有这条入口，也没有 Power 特权类。
+
+### 验证
+
+- JDK 17：`verifyChineseResources` / `verifyChineseSettingsStrings` 通过；双 flavor Debug 单测通过；双 Release lint 0 error；双 flavor Release 组装通过。
+- `scripts/verify_android_alpha_release.sh`：固定个人 Alpha 签名、包名、versionCode `100017`、versionName `1.0.0-alpha.17` 通过；Standard dex 无 `ShizukuPackageActor`，Power dex 有。
+- SHA-256：Standard `2036e2190f711c42fcc9e53df7fc8ad5df6acb6a1cf0b0ff54b3fd5e4e082d31`；Power `218a90a19da15c32e330672227b8d5b860a710057f76fa1752d9153552924f60`。
+- Fold8 API 35 模拟器：alpha.16 Standard/Power 原地覆盖本次 APK，两次 `Success`；冷启动与 `ACTION_ASSIST` 均为 `Status: ok`；Logcat 无本 App `FATAL EXCEPTION`；首启弹出「本次更新（1.0.0-alpha.17）」/「本次更新（1.0.0-alpha.17-power）」，正文是本版事务文案。
+
+### 停损
+
+- Selector 引擎未做。本船 5 条手写规则（冻结/解冻/卸载/清理/撤权）+ 热更新管道（allowlist / sha256 / staging / LKG / 用户可关）。泛化留 T3.5。
+- 真机 Fold8 仍由用户自装。未做真实冻结 3 个 App 的 Shizuku 事务（模拟器无 Shizuku）。
+
 ## Android v1.0.0-alpha.16 / iOS 1.25.1 (98) / Mac 1.74.3 / Harmony 0.3.0-alpha.15 - 2026-08-26
 
 ### 用户可见

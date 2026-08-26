@@ -1745,7 +1745,7 @@
     <string name="terminal_cli_booting_hint">如出现安全确认或登录提示，请按屏幕指引继续。</string>
     <string name="whats_new_title">本次更新（%1$s）</string>
     <string name="whats_new_confirm">知道了</string>
-    <string name="whats_new_current">• 设置改成和其他端同一四组：我的设备 / Agent / 外观与通用 / 数据与关于\n• 语言可以选择繁体中文。点了没反应的死按钮已清掉</string>
+    <string name="whats_new_current">• Power 版可以把冻结、卸载、清理做成一次确认的事务：先扫描再计划，逐项出结果，还能回滚</string>
     <string name="artifact_ready">交付物已就绪</string>
     <string name="artifact_open">打开交付物</string>
     <string name="artifact_missing">这份交付物已不在本机。</string>

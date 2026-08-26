@@ -750,7 +750,7 @@
     <string name="terminal_cli_booting_hint">若出現安全確認或登入提示，請依螢幕指引繼續。</string>
     <string name="whats_new_title">本次更新（%1$s）</string>
     <string name="whats_new_confirm">知道了</string>
-    <string name="whats_new_current">• 設定改成和其他端同一四組：我的裝置 / Agent / 外觀與通用 / 資料與關於\n• 語言可以選擇繁體中文。點了沒反應的死按鈕已清掉</string>
+    <string name="whats_new_current">• Power 版可以把凍結、解除安裝、清理做成一次確認的事務：先掃描再計劃，逐項出結果，還能回滾</string>
     <string name="artifact_ready">交付物已就緒</string>
     <string name="artifact_open">開啟交付物</string>
     <string name="artifact_missing">這份交付物已不在本機。</string>

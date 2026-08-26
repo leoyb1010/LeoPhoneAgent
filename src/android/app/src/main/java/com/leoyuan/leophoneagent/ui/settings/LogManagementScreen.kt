@@ -227,6 +227,8 @@ private fun LogsBody(
             )
         }
 
+        com.leoyuan.leophoneagent.power.ui.PowerLogsInspector.Section()
+
         // While the IO load is in flight (single frame in practice, but the
         // dir scan + 100×stat can spike on slow eMMC), show a centered
         // spinner instead of the empty-state row — otherwise the screen

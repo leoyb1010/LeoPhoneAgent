@@ -569,6 +569,8 @@ class ChatViewModel(
 
     private val _actionRouteChip = MutableStateFlow("")
     val actionRouteChip: StateFlow<String> = _actionRouteChip.asStateFlow()
+    private var powerTxn: com.leoyuan.leophoneagent.power.txn.PowerTxnSession? = null
+    private var powerTxnSid: String? = null
 
     /**
      * T261: tool detail sheet visibility, persistent across LazyColumn
@@ -5033,6 +5035,42 @@ class ChatViewModel(
                 contentParts = userContentParts,
                 dbMessageId = persistedUser.id,
             ))
+
+            if (com.leoyuan.leophoneagent.BuildConfig.POWER_FEATURES_ENABLED &&
+                com.leoyuan.leophoneagent.power.txn.PowerTxnBridge.available
+            ) {
+                if (powerTxnSid != activeSessionId || powerTxn == null) {
+                    powerTxn = com.leoyuan.leophoneagent.power.txn.PowerTxnSession(
+                        com.leoyuan.leophoneagent.power.txn.PowerTxnBridge.rules(context),
+                    )
+                    powerTxnSid = activeSessionId
+                }
+                val powerReply = powerTxn!!.handle(
+                    trimmed,
+                    com.leoyuan.leophoneagent.power.txn.PowerTxnBridge.actor(context, activeSessionId),
+                )
+                if (powerReply != null) {
+                    _actionRouteChip.value = powerReply.chip
+                    val partsJson = """[{"type":"text","value":${escapeJson(powerReply.spoken)}}]"""
+                    val persisted = chatRepository.appendMessage(activeSessionId, "assistant", partsJson)
+                    _messages.value = _messages.value + ChatMessage(
+                        id = persisted.id,
+                        role = "assistant",
+                        content = powerReply.spoken,
+                    )
+                    agentHistory.add(
+                        LLMMessage(
+                            role = LLMMessage.Role.ASSISTANT,
+                            content = powerReply.spoken,
+                            dbMessageId = persisted.id,
+                        ),
+                    )
+                    if (!powerReply.degradeToModel) {
+                        _isStreaming.value = false
+                        return@launch
+                    }
+                }
+            }
 
             val fastRoute = com.leoyuan.leophoneagent.agent.ActionRouter.decide(
                 trimmed,

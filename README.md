@@ -1,7 +1,7 @@
 # LeoPhoneAgent
 
 [![iOS](https://img.shields.io/badge/iOS-1.25.1%20(98)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
-[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.16-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.16)
+[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.17-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.17)
 [![macOS](https://img.shields.io/badge/macOS-1.74.3-7C3AED.svg)](src/mac/leocodebox/package.json)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.15-D94B16.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
@@ -62,18 +62,18 @@ bash src/harmony/scripts/build_hap.sh
 > 同一台手机上同时安装。Power 版只有在用户完成产品内授权以及 Android
 > 无障碍/Shizuku 系统授权后，才会开放更深的跨应用操控。
 
-- [下载 Standard alpha.16](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.16/LeoPhoneAgent-Standard-1.0.0-alpha.16.apk)
-- [下载 Power alpha.16](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.16/LeoPhoneAgent-Power-1.0.0-alpha.16.apk)
-- [查看本次更新记录](CHANGELOG.md#android-v100-alpha16--ios-1251-98--mac-1743--harmony-030-alpha15---2026-08-26)
+- [下载 Standard alpha.17](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.17/LeoPhoneAgent-Standard-1.0.0-alpha.17.apk)
+- [下载 Power alpha.17](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.17/LeoPhoneAgent-Power-1.0.0-alpha.17.apk)
+- [查看本次更新记录](CHANGELOG.md#android-v100-alpha17---2026-08-26)
 
-> 本机 Fold8 API 35 模拟器已从 alpha.15 覆盖安装，冷启动 / `ACTION_ASSIST` / Logcat 过门，首启弹出「本次更新（1.0.0-alpha.16）」。附件挂上后 digest 与下方 SHA-256 一致。真机请自行下载覆盖安装。
+> 本机 Fold8 API 35 模拟器已从 alpha.16 覆盖安装，冷启动 / `ACTION_ASSIST` / Logcat 过门，首启弹出「本次更新（1.0.0-alpha.17）」。附件挂上后 digest 与下方 SHA-256 一致。真机请自行下载覆盖安装。
 - [查看完整五轮审计与交付报告](docs/ANDROID_DELIVERY_1.0.0_ALPHA1.md)
 
 SHA-256：
 
 ```text
-Standard  8864f7bb5ea830ee23fb333f45eacd45ec7a95df15f6fee68bbef55c0b15243b
-Power     f327230c443d9318e2454bda0fb503f38f1277b7a8217d9a4f437878927f8ce1
+Standard  2036e2190f711c42fcc9e53df7fc8ad5df6acb6a1cf0b0ff54b3fd5e4e082d31
+Power     218a90a19da15c32e330672227b8d5b860a710057f76fa1752d9153552924f60
 ```
 
 本次公开附件使用显式开启的个人 Alpha 调试证书签名，不应作为应用商店的
@@ -147,7 +147,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 Android 版本
 
-- 开发/发布版本：`1.0.0-alpha.16`（versionCode `100016`），`minSdk 26`、`targetSdk 35`、`compileSdk 36`、仅 ARM64。
+- 开发/发布版本：`1.0.0-alpha.17`（versionCode `100017`），`minSdk 26`、`targetSdk 35`、`compileSdk 36`、仅 ARM64。
 - Standard 包名：`com.leoyuan.leophoneagent`
 - Power 包名：`com.leoyuan.leophoneagent.power`
 - 两个版本共享本机 Agent、Provider、Skills、MCP、Memory、PRoot 与浏览器底座；
@@ -290,7 +290,8 @@ adb logcat -d | rg 'FATAL EXCEPTION|AndroidRuntime'
 
 | 版本 | 状态 | 处理 |
 |---|---|---|
-| alpha.16 | 当前公开附件 | Fold8 API 35 模拟器 alpha.15→16 覆盖安装已过；真机由用户自装 |
+| alpha.17 | 当前公开附件 | Fold8 API 35 模拟器 alpha.16→17 覆盖安装已过；真机由用户自装 |
+| alpha.16 | 上一公开附件 | Fold8 API 35 模拟器覆盖安装已过 |
 | alpha.15 | 上一公开附件 | Fold8 API 35 模拟器覆盖安装已过 |
 | alpha.13 | 旧可用版 | 可直接升级到 alpha.15 / 16 |
 | alpha.11 | 旧版 | 可直接升级到 alpha.13 |

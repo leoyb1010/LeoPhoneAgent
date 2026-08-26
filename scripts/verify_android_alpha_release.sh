@@ -54,3 +54,22 @@ verify_apk() {
 
 verify_apk "$1" "com.leoyuan.leophoneagent" "$expected_version"
 verify_apk "$2" "com.leoyuan.leophoneagent.power" "$expected_version-power"
+
+# T3: Standard must not ship the Power privileged actor or bundled rules.
+standard_dex="$(mktemp)"
+power_dex="$(mktemp)"
+unzip -p "$1" classes.dex >"$standard_dex"
+unzip -p "$2" classes.dex >"$power_dex"
+if grep -a -q "ShizukuPackageActor" "$standard_dex"; then
+  echo "Standard APK leaked ShizukuPackageActor" >&2
+  exit 67
+fi
+if unzip -l "$1" | grep -q "power-rules"; then
+  echo "Standard APK leaked power-rules assets" >&2
+  exit 67
+fi
+if ! grep -a -q "ShizukuPackageActor" "$power_dex"; then
+  echo "Power APK missing ShizukuPackageActor" >&2
+  exit 67
+fi
+rm -f "$standard_dex" "$power_dex"

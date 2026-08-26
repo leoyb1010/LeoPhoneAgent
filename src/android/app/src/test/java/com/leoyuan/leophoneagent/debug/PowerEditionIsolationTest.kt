@@ -10,4 +10,12 @@ class PowerEditionIsolationTest {
         val exposed = DebugMethodRegistry.methods.any { it.name == "debug.shizuku.exec" }
         assertEquals(BuildConfig.POWER_FEATURES_ENABLED, exposed)
     }
+
+    @Test
+    fun powerTxnBridgeMatchesEdition() {
+        assertEquals(
+            BuildConfig.POWER_FEATURES_ENABLED,
+            com.leoyuan.leophoneagent.power.txn.PowerTxnBridge.available,
+        )
+    }
 }
