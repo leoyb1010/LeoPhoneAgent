@@ -67,7 +67,7 @@ bash src/harmony/scripts/build_hap.sh
 - [下载 Power alpha.15](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.15/LeoPhoneAgent-Power-1.0.0-alpha.15.apk)
 - [查看本次更新记录](CHANGELOG.md#android-v100-alpha15--ios-1250-97---2026-08-26)
 
-> 本机已构建并过签名门禁。GitHub 附件要等 Fold8 覆盖安装、冷启动和 Logcat 过门后再挂；链接在挂上之前会 404。
+> 本机 Fold8 API 35 模拟器已从 alpha.13 覆盖安装，冷启动 / `ACTION_ASSIST` / Logcat 过门，首启弹出「本次更新（1.0.0-alpha.15）」。附件已挂上，digest 与下方 SHA-256 一致。真机 Fold8 请自行下载覆盖安装。
 - [查看完整五轮审计与交付报告](docs/ANDROID_DELIVERY_1.0.0_ALPHA1.md)
 
 SHA-256：
@@ -291,8 +291,8 @@ adb logcat -d | rg 'FATAL EXCEPTION|AndroidRuntime'
 
 | 版本 | 状态 | 处理 |
 |---|---|---|
-| alpha.15 | 当前源码 | 待 Fold8 覆盖安装后才算公开可用；alpha.14 起可直接覆盖 |
-| alpha.14 | 上一源码船 | alpha.15 的升级验证基线（APK 仍 HOLD，未上 GitHub） |
+| alpha.15 | 当前公开附件 | Fold8 API 35 模拟器 alpha.13→15 覆盖安装已过；真机由用户自装 |
+| alpha.14 | 上一源码船 | 未单独上 GitHub；本机模拟器升级基线是已装的 alpha.13 |
 | alpha.13 | 上一可用版 | 可直接升级到 alpha.15 |
 | alpha.11 | 旧版 | 可直接升级到 alpha.13 |
 | alpha.10 | 旧版 | 可直接升级到 alpha.13 |

@@ -19,9 +19,8 @@
 - `scripts/verify_android_alpha_release.sh`：固定个人 Alpha 签名、包名、versionCode `100015`、versionName `1.0.0-alpha.15` 通过。
 - SHA-256：Standard `ed65279b42bd9e108840b42ee577aab01a84aac6fae18b02c3324ae9f6c8a4e4`；Power `4d5ab0f6b4d1955a5d524a6a568d47899bfa5f6ecdc74a19a72809d5d033f7a9`。
 
-### HOLD
-
-- Fold8 / 在线 iPhone 仍缺。覆盖安装、冷启动、Logcat、首启弹窗、30 题步数 ≥25% 待真机。APK 不上传。
+- Fold8 API 35 模拟器：已装 alpha.13 Standard/Power 原地覆盖本次 APK，两次 `Success`；冷启动与 `ACTION_ASSIST` 均为 `Status: ok`、进程存活，Logcat 无本 App `FATAL EXCEPTION`；首启弹出「本次更新（1.0.0-alpha.15）」。附件已挂到 `android-v1.0.0-alpha.15`，GitHub digest 与上列 SHA-256 一致。
+- 真机 Fold8 与 30 题步数 ≥25% 仍待用户本地下载安装后复验。
 
 ## Android v1.0.0-alpha.14 / iOS 1.24.2 (96) - 2026-08-26
 
