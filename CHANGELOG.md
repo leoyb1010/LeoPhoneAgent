@@ -4,6 +4,31 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## Android v1.0.0-alpha.16 / iOS 1.25.1 (98) / Mac 1.74.3 / Harmony 0.3.0-alpha.15 - 2026-08-26
+
+### 用户可见
+
+- 四端设置改成同一四组：我的设备 / Agent / 外观与通用 / 数据与关于。
+- Harmony 强调色从橙红对齐青绿（`#2E8B8B` / `#4DD9D9`）。对照表在 `docs/DESIGN-TOKENS.md`。
+- Android / iOS 语言选择可以切繁体中文。Android `values-zh-rTW` 补到与默认词表同键。
+- 清掉点了没反应的死控件：Android 隐藏的 WebApp 入口删码；iOS 17 以下 Live Activity 喇叭不再假装能点；Mac 没有 GitHub 正文时改读随包更新记录。
+
+### 验证
+
+- Android JDK 17：`verifyChineseResources`（含 zh-TW）/ `verifyChineseSettingsStrings` 通过；双 flavor Debug 单测与双 Release lint 通过（0 error）。
+- `scripts/verify_android_alpha_release.sh`：签名、包名、versionCode `100016`、versionName `1.0.0-alpha.16` 通过。
+- SHA-256：Standard `8864f7bb5ea830ee23fb333f45eacd45ec7a95df15f6fee68bbef55c0b15243b`；Power `f327230c443d9318e2454bda0fb503f38f1277b7a8217d9a4f437878927f8ce1`。
+- Fold8 API 35 模拟器：alpha.15 Standard/Power 原地覆盖本次 APK，两次 `Success`；冷启动与 `ACTION_ASSIST` 均为 `Status: ok`，Logcat 无本 App `FATAL EXCEPTION`；首启弹出「本次更新（1.0.0-alpha.16）」。
+- iOS：`IOSReleaseReadinessAudit` 1.25.1 (98) 通过；无障碍 / 可见控件审计通过。
+- Mac：`npm run verify:release-notes` 通过。
+- Harmony：`verify_harmony_release_notes.sh` 0.3.0-alpha.15 / 100020 通过。
+
+### 停损
+
+- Harmony 全文 `$r()` 抽取未做（设置标题走 `Copy.ets`）。T3 结束前若还要繁中资源层，另开一船。
+- T3 Android 版本顺延为 `alpha.17`。
+- Mac 未打 Developer ID 签名包；桌面端本次更新随下次本机安装弹出。
+
 ## Android v1.0.0-alpha.15 / iOS 1.25.0 (97) - 2026-08-26
 
 ### 用户可见

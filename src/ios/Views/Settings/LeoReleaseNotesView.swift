@@ -12,6 +12,16 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.25.1",
+            date: "2026-08-26",
+            title: "四端同一张脸",
+            highlights: [
+                "设置改成同一四组：我的设备 / Agent / 外观与通用 / 数据与关于。",
+                "语言里可以选繁体中文。",
+                "iOS 17 以下锁屏 Live Activity 不再显示点了没反应的喇叭。"
+            ]
+        ),
+        LeoRelease(
             version: "1.25.0",
             date: "2026-08-26",
             title: "相册、闹钟、日历不再先截图",

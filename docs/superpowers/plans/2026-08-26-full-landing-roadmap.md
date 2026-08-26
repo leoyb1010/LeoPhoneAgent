@@ -36,7 +36,7 @@ DEVICE_TARGETS   = Fold8 / iPhone / 指定 Mac / Harmony 真机
 | T1 | Phase 1 | 对话/读文件/语音更稳，配置不再被抹掉 | Android+iOS 主，Mac/Harmony 对账 | Android alpha.14、iOS 1.24.2 |
 | T2 | Phase 2 | 能用系统 API 办的事不再打开别人的界面，步数明显变少 | Android+iOS | Android alpha.15、iOS 1.25.0 |
 | T2.5 | UI 合同 | 四端看起来、说起来是同一个产品；设置能搜到一切 | 全 | 四端各 bump 一次 |
-| T3 | Phase 3 | Power：先扫描、再计划、确认、逐项结果、可回滚 | Android | Android alpha.16（或 beta.1） |
+| T3 | Phase 3 | Power：先扫描、再计划、确认、逐项结果、可回滚 | Android | Android alpha.17（T2.5 已占用 alpha.16） |
 | T4 | Phase 4 | Mac 操作绑精确窗口，后台不误点；手机接管不重启任务 | Mac 主，iOS/Android 消费 | Mac 1.75.0、iOS 小版本 |
 | T5 | Phase 5 | iOS 文件夹授权跨启动保留；捷径丢文件进来直接出结果 | iOS | iOS 1.26.0 |
 | T6 | Phase 6 | 断线续上不丢不重；新设备扫码即配，不再理解共享 Key | 全 | 四端各 bump |

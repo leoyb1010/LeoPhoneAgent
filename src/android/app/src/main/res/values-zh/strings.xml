@@ -122,6 +122,10 @@
     <string name="settings_section_appearance">外观</string>
     <string name="settings_appearance_subtitle">主题、字号与显示</string>
     <string name="settings_section_agent_runtime">Agent 运行时</string>
+    <string name="settings_section_my_device">我的设备</string>
+    <string name="settings_section_agent">Agent</string>
+    <string name="settings_section_appearance_general">外观与通用</string>
+    <string name="settings_section_data_about">数据与关于</string>
     <string name="settings_search_hint">搜索设置</string>
     <string name="settings_section_devices">连接的设备</string>
     <string name="settings_remote_machines">远程机器</string>
@@ -1518,6 +1522,9 @@
     <string name="content_desc_voice_input">语音输入</string>
     <string name="content_desc_stop_recording">停止录音</string>
     <string name="content_desc_switch_keyboard">切换到键盘</string>
+    <string name="content_desc_scroll_top">回到第一条消息</string>
+    <string name="content_desc_scroll_bottom">滚到最新消息</string>
+    <string name="content_desc_stop">停止</string>
     <string name="provider_list_imported">已导入提供商“%1$s”</string>
     <string name="provider_list_invalid_file">提供商配置文件无效</string>
     <string name="provider_list_read_failed">读取文件失败</string>
@@ -1738,7 +1745,7 @@
     <string name="terminal_cli_booting_hint">如出现安全确认或登录提示，请按屏幕指引继续。</string>
     <string name="whats_new_title">本次更新（%1$s）</string>
     <string name="whats_new_confirm">知道了</string>
-    <string name="whats_new_current">• 「把这张图存进相册」「定个明早 8 点闹钟」「加到日历」说清楚时直接走系统接口，聊天里会写走了哪条路，不再先截图乱点\n• 没附图或没说清时刻的请求仍走原来的 Agent</string>
+    <string name="whats_new_current">• 设置改成和其他端同一四组：我的设备 / Agent / 外观与通用 / 数据与关于\n• 语言可以选择繁体中文。点了没反应的死按钮已清掉</string>
     <string name="artifact_ready">交付物已就绪</string>
     <string name="artifact_open">打开交付物</string>
     <string name="artifact_missing">这份交付物已不在本机。</string>

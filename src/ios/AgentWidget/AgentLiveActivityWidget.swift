@@ -558,7 +558,9 @@ struct AudioTogglePill: View {
             }
             .buttonStyle(.plain)
         } else {
-            glyph
+            // Pre-17 has no interactive Live Activity; a tappable-looking
+            // glyph would be a dead control.
+            EmptyView()
         }
     }
 }

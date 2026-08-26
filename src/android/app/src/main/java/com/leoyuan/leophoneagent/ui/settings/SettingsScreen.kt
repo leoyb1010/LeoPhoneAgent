@@ -110,9 +110,6 @@ fun SettingsScreen(
     // OEM autostart guidance). Default no-op so older callers/tests
     // don't need to be retrofitted.
     onBackgroundClick: () -> Unit = {},
-    // Hook accepted for forward-compat with AppNavigation's About route. The
-    // About row below still has a TODO onClick in HEAD; future settings-bucket
-    // work will wire this through.
     onAboutClick: () -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -152,9 +149,19 @@ fun SettingsScreen(
                 },
             )
             CompositionLocalProvider(LocalSettingsQuery provides searchQuery) {
-            // -- LLM Providers --
+            SettingsSection(title = stringResource(R.string.settings_section_my_device)) {
+                SettingsItem(
+                    icon = Icons.Outlined.Computer,
+                    iconColor = Color(0xFF30B0C7),
+                    title = stringResource(R.string.settings_remote_machines),
+                    subtitle = stringResource(R.string.settings_remote_machines_subtitle),
+                    onClick = onFleetClick,
+                    showDivider = false,
+                )
+            }
+
             SettingsSection(
-                title = stringResource(R.string.settings_section_llm_providers),
+                title = stringResource(R.string.settings_section_agent),
                 footer = stringResource(R.string.settings_section_llm_providers_footer),
             ) {
                 SettingsItem(
@@ -177,35 +184,7 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_token_usage),
                     subtitle = stringResource(R.string.settings_token_usage_subtitle),
                     onClick = onUsageClick,
-                    showDivider = false,
                 )
-            }
-
-            // -- Appearance --
-            SettingsSection(title = stringResource(R.string.settings_section_appearance)) {
-                SettingsItem(
-                    icon = Icons.Outlined.Palette,
-                    iconColor = Color(0xFF5856D6),
-                    title = stringResource(R.string.settings_section_appearance),
-                    subtitle = stringResource(R.string.settings_appearance_subtitle),
-                    onClick = onAppearanceClick,
-                    showDivider = false,
-                )
-            }
-
-            SettingsSection(title = stringResource(R.string.settings_section_devices)) {
-                SettingsItem(
-                    icon = Icons.Outlined.Computer,
-                    iconColor = Color(0xFF30B0C7),
-                    title = stringResource(R.string.settings_remote_machines),
-                    subtitle = stringResource(R.string.settings_remote_machines_subtitle),
-                    onClick = onFleetClick,
-                    showDivider = false,
-                )
-            }
-
-            // -- Agent Runtime --
-            SettingsSection(title = stringResource(R.string.settings_section_agent_runtime)) {
                 SettingsItem(
                     icon = Icons.Outlined.Extension,
                     iconColor = Color(0xFF007AFF),
@@ -213,10 +192,9 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.settings_skills_subtitle),
                     onClick = onSkillsClick,
                 )
-                // [T-soul-md] insertion between Skills and Memory per spec.
                 SettingsItem(
                     icon = Icons.Outlined.AutoAwesome,
-                    iconColor = Color(0xFFFF9500),
+                    iconColor = Color(0xFF2E8B8B),
                     title = stringResource(R.string.settings_soul),
                     subtitle = stringResource(R.string.settings_soul_subtitle),
                     onClick = onSoulClick,
@@ -228,10 +206,6 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.settings_memory_subtitle),
                     onClick = onMemoryClick,
                 )
-                // [T-mcp-integration-android] MCP Integrations — directly below Memory.
-                // [T-android-mcp-icon-distinct] Dashboard (2x2 block grid) instead of
-                // Extension so MCP no longer shares the Skills row's puzzle-piece icon —
-                // the grid reads as "multiple composed blocks/servers". teal unchanged.
                 SettingsItem(
                     icon = Icons.Outlined.Dashboard,
                     iconColor = Color(0xFF30B0C7),
@@ -256,8 +230,42 @@ fun SettingsScreen(
                 )
             }
 
-            // -- Storage --
-            SettingsSection(title = stringResource(R.string.settings_section_storage)) {
+            SettingsSection(
+                title = stringResource(R.string.settings_section_appearance_general),
+                footer = stringResource(R.string.bg_section_footer),
+            ) {
+                SettingsItem(
+                    icon = Icons.Outlined.Palette,
+                    iconColor = Color(0xFF5856D6),
+                    title = stringResource(R.string.settings_section_appearance),
+                    subtitle = stringResource(R.string.settings_appearance_subtitle),
+                    onClick = onAppearanceClick,
+                )
+                SettingsItem(
+                    icon = Icons.Outlined.Shield,
+                    iconColor = Color(0xFF007AFF),
+                    title = stringResource(R.string.settings_section_permissions),
+                    subtitle = stringResource(R.string.settings_permissions_subtitle),
+                    onClick = onPermissionsClick,
+                )
+                SettingsItem(
+                    icon = Icons.Outlined.AutoAwesome,
+                    iconColor = Color(0xFF5856D6),
+                    title = stringResource(R.string.system_permissions_title),
+                    subtitle = stringResource(R.string.system_permissions_shortcut_subtitle),
+                    onClick = onSystemPermissionsClick,
+                )
+                SettingsItem(
+                    icon = Icons.Outlined.BatteryFull,
+                    iconColor = Color(0xFF2E8B8B),
+                    title = stringResource(R.string.bg_section_header),
+                    subtitle = stringResource(R.string.bg_section_subtitle),
+                    onClick = onBackgroundClick,
+                    showDivider = false,
+                )
+            }
+
+            SettingsSection(title = stringResource(R.string.settings_section_data_about)) {
                 SettingsItem(
                     icon = Icons.Outlined.Inventory2,
                     iconColor = Color(0xFF007AFF),
@@ -274,62 +282,18 @@ fun SettingsScreen(
                 )
                 SettingsItem(
                     icon = Icons.Outlined.FolderShared,
-                    iconColor = Color(0xFFFF9500),
+                    iconColor = Color(0xFF2E8B8B),
                     title = stringResource(R.string.settings_mount_external_folders),
                     subtitle = stringResource(R.string.settings_mount_external_folders_subtitle),
                     onClick = onMountedFoldersClick,
-                    showDivider = false,
                 )
-            }
-
-            // -- Permissions --
-            SettingsSection(title = stringResource(R.string.settings_section_permissions)) {
-                SettingsItem(
-                    icon = Icons.Outlined.Shield,
-                    iconColor = Color(0xFF007AFF),
-                    title = stringResource(R.string.settings_section_permissions),
-                    subtitle = stringResource(R.string.settings_permissions_subtitle),
-                    onClick = onPermissionsClick,
-                )
-                SettingsItem(
-                    icon = Icons.Outlined.AutoAwesome,
-                    iconColor = Color(0xFF5856D6),
-                    title = stringResource(R.string.system_permissions_title),
-                    subtitle = stringResource(R.string.system_permissions_shortcut_subtitle),
-                    onClick = onSystemPermissionsClick,
-                    showDivider = false,
-                )
-            }
-
-            // -- Background & Notifications (T50) --
-            SettingsSection(
-                title = stringResource(R.string.bg_section_header),
-                footer = stringResource(R.string.bg_section_footer),
-            ) {
-                SettingsItem(
-                    icon = Icons.Outlined.BatteryFull,
-                    iconColor = Color(0xFFFF9500),
-                    title = stringResource(R.string.bg_section_header),
-                    subtitle = stringResource(R.string.bg_section_subtitle),
-                    onClick = onBackgroundClick,
-                    showDivider = false,
-                )
-            }
-
-            // -- Logs --
-            SettingsSection(title = stringResource(R.string.settings_section_logs)) {
                 SettingsItem(
                     icon = Icons.Outlined.Description,
                     iconColor = Color(0xFF007AFF),
                     title = stringResource(R.string.settings_section_logs),
                     subtitle = stringResource(R.string.settings_logs_subtitle),
                     onClick = onLogsClick,
-                    showDivider = false,
                 )
-            }
-
-            // -- About --
-            SettingsSection(title = stringResource(R.string.settings_section_about)) {
                 SettingsItem(
                     icon = Icons.Outlined.Info,
                     iconColor = Color(0xFF007AFF),

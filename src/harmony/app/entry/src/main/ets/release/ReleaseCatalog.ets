@@ -6,15 +6,23 @@ export class LeoRelease {
 }
 
 export class ReleaseCatalog {
-  static readonly currentVersion: string = '0.3.0-alpha.14';
-  static readonly currentBuild: number = 100019;
+  static readonly currentVersion: string = '0.3.0-alpha.15';
+  static readonly currentBuild: number = 100020;
 
   static all(): LeoRelease[] {
     const first = new LeoRelease();
-    first.version = '0.3.0-alpha.14';
-    first.date = '2026-08-20';
-    first.title = 'Kimi 确认页带设备码';
+    first.version = '0.3.0-alpha.15';
+    first.date = '2026-08-26';
+    first.title = '青绿脸 + 四组设置';
     first.highlights = [
+      '强调色从橙红改成和其他端一样的青绿。',
+      '设置改成同一四组：我的设备 / Agent / 外观与通用 / 数据与关于。'
+    ];
+    const prev = new LeoRelease();
+    prev.version = '0.3.0-alpha.14';
+    prev.date = '2026-08-20';
+    prev.title = 'Kimi 确认页带设备码';
+    prev.highlights = [
       'Kimi 登录直接打开带设备码的确认页，登录后不用再手抄顶栏那串码。'
     ];
     const kimi = new LeoRelease();
@@ -165,6 +173,6 @@ export class ReleaseCatalog {
       '填中继钥匙后读取 /machines，不再写死三台 Mac。',
       '可对在线 Mac 或 Android 身体开新任务，断线按序号续上。'
     ];
-    return [first, kimi, detail, scroll, login, icons, layout, model, pick, blank, chain, codex, oauth, body, tools, providers, local, previous, firstShip];
+    return [first, prev, kimi, detail, scroll, login, icons, layout, model, pick, blank, chain, codex, oauth, body, tools, providers, local, previous, firstShip];
   }
 }

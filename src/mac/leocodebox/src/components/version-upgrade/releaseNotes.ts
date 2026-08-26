@@ -17,6 +17,15 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '1.74.3',
+    date: '2026-08-26',
+    items: [
+      '设置分组与手机端对齐：我的设备 / Agent / 外观与通用 / 数据与关于。强调色继续用青绿。',
+      '没有 GitHub Release 正文时，「版本更新」弹窗会改读随包更新记录，不再空白。',
+      '工作台、舰队、首页主按钮补了 aria-label。',
+    ],
+  },
+  {
     version: '1.74.2',
     date: '2026-08-22',
     items: [

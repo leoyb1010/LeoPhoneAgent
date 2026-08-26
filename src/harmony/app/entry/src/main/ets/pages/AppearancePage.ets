@@ -43,7 +43,7 @@ struct AppearancePage {
             () => {
               this.pickMode('system');
             })
-          this.choice('light', this.mode, '浅色', '白底、系统灰分层', '#FF9500', 'albums',
+          this.choice('light', this.mode, '浅色', '白底、系统灰分层', '#2E8B8B', 'albums',
             () => {
               this.pickMode('light');
             })

@@ -1,9 +1,9 @@
 # LeoPhoneAgent
 
-[![iOS](https://img.shields.io/badge/iOS-1.25.0%20(97)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
-[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.15-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.15)
-[![macOS](https://img.shields.io/badge/macOS-1.74.2-7C3AED.svg)](src/mac/leocodebox/package.json)
-[![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.14-D94B16.svg)](src/harmony/app/AppScope/app.json5)
+[![iOS](https://img.shields.io/badge/iOS-1.25.1%20(98)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.16-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.16)
+[![macOS](https://img.shields.io/badge/macOS-1.74.3-7C3AED.svg)](src/mac/leocodebox/package.json)
+[![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.15-D94B16.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Mobile](https://img.shields.io/badge/mobile-iOS%20%2B%20Android-black.svg)](#系统架构)
 
@@ -31,7 +31,7 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
   `src/mac/leocodebox/`。`src/mac/leoagent/` 是协议兼容/灰度回退，不是 Android UI 工程。
   鸿蒙 7 交付计划：
   [`docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md`](docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md)；
-  工程落地在 `src/harmony/`。当前船是 `0.3.0-alpha.14`，只走 `hdc install`。
+  工程落地在 `src/harmony/`。当前船是 `0.3.0-alpha.15`，只走 `hdc install`。
   没有 Linux 沙箱，也不做无障碍跨应用。杀进程后审批不可用。
 - Android 同时交付 Standard 和 Power；修改 `main` 公共源码后必须同时验证两个 flavor。
 - 不得把「能编译」、「CI 是绿的」或「APK 已上传」当成可发布证据。
@@ -39,12 +39,11 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
 - 任务开始先读 `git status`并获取最新 `origin/main`；未知本地改动默认属于用户，
   不得 `reset --hard`、覆盖或删除。
 
-## HarmonyOS 0.3.0-alpha.14
+## HarmonyOS 0.3.0-alpha.15
 
 个人 hdc 安装，不上应用市场。包名 `com.leoyuan.leophoneagent.harmony`。
-Kimi 登录直接打开带设备码的确认页。供应商详情里「从上游拉取」和「用作当前」不再被长模型列表顶出屏幕。本机对话吐字时列表跟着滚到最新一句。
-设置、会话、说话、识图、朗读改成系统图标。本机对话按帧往气泡上刷字。供应商没配完也能切换回已配好的那一家。
-适配 Pura X Max：竖屏单列，横屏/宽屏才左右分栏。添加供应商保存后进入选模型，新实例自动当前。OpenAI OAuth 走 Codex Responses。冷启动后当身体和定时任务会读供应商档案。设置里打开「当身体」后 iPhone 能指挥这台机。
+强调色对齐青绿。设置改成同一四组：我的设备 / Agent / 外观与通用 / 数据与关于。
+Kimi 登录直接打开带设备码的确认页。竖屏单列，横屏/宽屏才左右分栏。
 
 OpenAI / Anthropic / Gemini / xAI 登录和官方接口大陆直连通常不通，需要可访问境外的网络。OpenRouter 通常可达，Kimi 和多数国内兼容根可直连。登录被地区拦截时不再跳系统浏览器，停在本页中文说明并可复制链接。
 
@@ -63,18 +62,18 @@ bash src/harmony/scripts/build_hap.sh
 > 同一台手机上同时安装。Power 版只有在用户完成产品内授权以及 Android
 > 无障碍/Shizuku 系统授权后，才会开放更深的跨应用操控。
 
-- [下载 Standard alpha.15](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.15/LeoPhoneAgent-Standard-1.0.0-alpha.15.apk)
-- [下载 Power alpha.15](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.15/LeoPhoneAgent-Power-1.0.0-alpha.15.apk)
-- [查看本次更新记录](CHANGELOG.md#android-v100-alpha15--ios-1250-97---2026-08-26)
+- [下载 Standard alpha.16](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.16/LeoPhoneAgent-Standard-1.0.0-alpha.16.apk)
+- [下载 Power alpha.16](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.16/LeoPhoneAgent-Power-1.0.0-alpha.16.apk)
+- [查看本次更新记录](CHANGELOG.md#android-v100-alpha16--ios-1251-98--mac-1743--harmony-030-alpha15---2026-08-26)
 
-> 本机 Fold8 API 35 模拟器已从 alpha.13 覆盖安装，冷启动 / `ACTION_ASSIST` / Logcat 过门，首启弹出「本次更新（1.0.0-alpha.15）」。附件已挂上，digest 与下方 SHA-256 一致。真机 Fold8 请自行下载覆盖安装。
+> 本机 Fold8 API 35 模拟器已从 alpha.15 覆盖安装，冷启动 / `ACTION_ASSIST` / Logcat 过门，首启弹出「本次更新（1.0.0-alpha.16）」。附件挂上后 digest 与下方 SHA-256 一致。真机请自行下载覆盖安装。
 - [查看完整五轮审计与交付报告](docs/ANDROID_DELIVERY_1.0.0_ALPHA1.md)
 
 SHA-256：
 
 ```text
-Standard  ed65279b42bd9e108840b42ee577aab01a84aac6fae18b02c3324ae9f6c8a4e4
-Power     4d5ab0f6b4d1955a5d524a6a568d47899bfa5f6ecdc74a19a72809d5d033f7a9
+Standard  8864f7bb5ea830ee23fb333f45eacd45ec7a95df15f6fee68bbef55c0b15243b
+Power     f327230c443d9318e2454bda0fb503f38f1277b7a8217d9a4f437878927f8ce1
 ```
 
 本次公开附件使用显式开启的个人 Alpha 调试证书签名，不应作为应用商店的
@@ -137,7 +136,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 版本/构建:`1.25.0 (97)`;Bundle ID `com.leoyuan.leophoneagent`
+- 版本/构建:`1.25.1 (98)`;Bundle ID `com.leoyuan.leophoneagent`
 - 主对话框直达 Mac:「指挥一台 Mac」选机 + 选 CLI 即开聊;发送在会话建立
   期间自动排队,永不吞点击
 - 会话接管:进入任意 Mac 先列进行中任务,一键接管(全量回放 + 实时跟随)
@@ -148,7 +147,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 Android 版本
 
-- 开发/发布版本：`1.0.0-alpha.15`（versionCode `100015`），`minSdk 26`、`targetSdk 35`、`compileSdk 36`、仅 ARM64。
+- 开发/发布版本：`1.0.0-alpha.16`（versionCode `100016`），`minSdk 26`、`targetSdk 35`、`compileSdk 36`、仅 ARM64。
 - Standard 包名：`com.leoyuan.leophoneagent`
 - Power 包名：`com.leoyuan.leophoneagent.power`
 - 两个版本共享本机 Agent、Provider、Skills、MCP、Memory、PRoot 与浏览器底座；
@@ -291,9 +290,9 @@ adb logcat -d | rg 'FATAL EXCEPTION|AndroidRuntime'
 
 | 版本 | 状态 | 处理 |
 |---|---|---|
-| alpha.15 | 当前公开附件 | Fold8 API 35 模拟器 alpha.13→15 覆盖安装已过；真机由用户自装 |
-| alpha.14 | 上一源码船 | 未单独上 GitHub；本机模拟器升级基线是已装的 alpha.13 |
-| alpha.13 | 上一可用版 | 可直接升级到 alpha.15 |
+| alpha.16 | 当前公开附件 | Fold8 API 35 模拟器 alpha.15→16 覆盖安装已过；真机由用户自装 |
+| alpha.15 | 上一公开附件 | Fold8 API 35 模拟器覆盖安装已过 |
+| alpha.13 | 旧可用版 | 可直接升级到 alpha.15 / 16 |
 | alpha.11 | 旧版 | 可直接升级到 alpha.13 |
 | alpha.10 | 旧版 | 可直接升级到 alpha.13 |
 | alpha.9 | 旧版 | 可直接升级到 alpha.13 |

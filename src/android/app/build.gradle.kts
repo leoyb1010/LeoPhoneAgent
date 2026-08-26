@@ -37,8 +37,8 @@ android {
         applicationId = "com.leoyuan.leophoneagent"
         minSdk = 26
         targetSdk = 35
-        versionCode = 100015
-        versionName = "1.0.0-alpha.15"
+        versionCode = 100016
+        versionName = "1.0.0-alpha.16"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -318,7 +318,8 @@ val verifyChineseResources by tasks.registering {
     description = "Fails when a default Android string resource has no Simplified Chinese entry."
     val defaults = file("src/main/res/values/strings.xml")
     val chinese = file("src/main/res/values-zh/strings.xml")
-    inputs.files(defaults, chinese)
+    val traditional = file("src/main/res/values-zh-rTW/strings.xml")
+    inputs.files(defaults, chinese, traditional)
     doLast {
         fun names(source: File): Set<String> {
             val document = javax.xml.parsers.DocumentBuilderFactory.newInstance()
@@ -333,9 +334,14 @@ val verifyChineseResources by tasks.registering {
                 }
                 .toSet()
         }
-        val missing = names(defaults) - names(chinese)
-        check(missing.isEmpty()) {
-            "Missing Simplified Chinese resources: ${missing.sorted().joinToString()}"
+        val defaultNames = names(defaults)
+        val missingZh = defaultNames - names(chinese)
+        check(missingZh.isEmpty()) {
+            "Missing Simplified Chinese resources: ${missingZh.sorted().joinToString()}"
+        }
+        val missingTw = defaultNames - names(traditional)
+        check(missingTw.isEmpty()) {
+            "Missing Traditional Chinese resources: ${missingTw.sorted().joinToString()}"
         }
     }
 }

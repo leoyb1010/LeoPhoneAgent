@@ -20,6 +20,7 @@ let supportedLanguages: [LanguageOption] = [
     LanguageOption(id: "",       name: "System", flag: ""),
     LanguageOption(id: "en",     name: "English", flag: "🇺🇸"),
     LanguageOption(id: "zh-Hans", name: "简体中文", flag: "🇨🇳"),
+    LanguageOption(id: "zh-Hant", name: "繁體中文", flag: "🇹🇼"),
     LanguageOption(id: "ja",     name: "日本語", flag: "🇯🇵"),
     LanguageOption(id: "ko",     name: "한국어", flag: "🇰🇷"),
     LanguageOption(id: "fr",     name: "Français", flag: "🇫🇷"),

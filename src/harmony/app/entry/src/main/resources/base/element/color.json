@@ -2,6 +2,6 @@
   "color": [
     { "name": "start_window_background", "value": "#FFFFFF" },
     { "name": "app_bg", "value": "#FFFFFF" },
-    { "name": "app_accent", "value": "#E85030" }
+    { "name": "app_accent", "value": "#2E8B8B" }
   ]
 }

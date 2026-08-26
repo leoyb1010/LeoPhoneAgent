@@ -237,6 +237,7 @@ export default function FleetView() {
               onClick={() => void load()}
               disabled={loading || refreshing}
               data-state={loading || refreshing ? 'loading' : 'idle'}
+              aria-label="刷新舰队"
               className="leo-status-pill leo-squish inline-flex min-h-10 items-center gap-2 rounded-xl border border-border bg-background px-3 py-2 text-sm font-medium text-foreground hover:bg-accent disabled:cursor-wait disabled:opacity-70"
             >
               <RefreshCw className={`h-4 w-4 ${loading || refreshing ? 'animate-spin' : ''}`} />

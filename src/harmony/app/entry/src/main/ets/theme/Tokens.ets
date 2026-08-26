@@ -3,7 +3,7 @@ export class Tokens {
   static surface: string = '#F2F2F7';
   static surface2: string = '#E5E5EA';
   static input: string = '#FFFFFF';
-  static accent: string = '#E85030';
+  static accent: string = '#2E8B8B';
   static fab: string = '#B7AF96';
   static heroA: string = '#6157F5';
   static heroB: string = '#18BFD0';
@@ -65,6 +65,7 @@ export class Tokens {
       Tokens.surface = '#26262A';
       Tokens.surface2 = '#2C2C30';
       Tokens.input = '#2C2C30';
+      Tokens.accent = '#4DD9D9';
       Tokens.fab = '#504C42';
       Tokens.text = '#FFFFFF';
       Tokens.muted = '#8E8E93';
@@ -80,6 +81,7 @@ export class Tokens {
     Tokens.surface = '#F2F2F7';
     Tokens.surface2 = '#E5E5EA';
     Tokens.input = '#FFFFFF';
+    Tokens.accent = '#2E8B8B';
     Tokens.fab = '#B7AF96';
     Tokens.text = '#000000';
     Tokens.muted = '#8E8E93';

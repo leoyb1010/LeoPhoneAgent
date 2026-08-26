@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { useTranslation } from 'react-i18next';
 
 import { useVersionCheck } from '../../../hooks/useVersionCheck';
+import { currentReleaseNote } from '../releaseNotes';
 
 interface VersionUpgradeModalProps {
   isOpen: boolean;
@@ -27,6 +28,7 @@ export function VersionUpgradeModal({ isOpen, onClose }: VersionUpgradeModalProp
 
   const status = desktopUpdate?.status;
   const busy = status === 'checking' || status === 'downloading' || status === 'installing';
+  const bundledNote = currentReleaseNote();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -47,6 +49,15 @@ export function VersionUpgradeModal({ isOpen, onClose }: VersionUpgradeModalProp
         {releaseInfo?.body ? (
           <div className="prose prose-sm mt-5 max-w-none rounded-md border border-border bg-muted/30 p-4 dark:prose-invert">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{releaseInfo.body}</ReactMarkdown>
+          </div>
+        ) : bundledNote ? (
+          <div className="mt-5 rounded-md border border-border bg-muted/30 p-4">
+            <p className="text-sm font-medium text-foreground">{bundledNote.version}</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+              {bundledNote.items.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
           </div>
         ) : (
           <p className="mt-5 rounded-md border border-border bg-muted/30 p-4 text-sm text-muted-foreground">{t('about.noReleaseNotes')}</p>

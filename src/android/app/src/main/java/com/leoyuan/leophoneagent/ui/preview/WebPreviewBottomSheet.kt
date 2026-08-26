@@ -83,11 +83,6 @@ import com.leoyuan.leophoneagent.logging.AppLogger
  * dismisses every preview surface, so a sheet → fullscreen → close
  * sequence still routes through one teardown.
  */
-// TODO(webapp-hidden): flip to `true` to restore the WebApp "Pin to Home
-// Screen" entry in the web preview "..." menu. Feature is intentionally
-// hidden until validation/development completes.
-private const val WEBAPP_PIN_ENTRY_ENABLED = false
-
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("ClickableViewAccessibility")
 @Composable
@@ -208,21 +203,7 @@ fun WebPreviewBottomSheet(
                     openExternalFromSheet(context, holder.currentUrl)
                 },
                 onToggleDesktop = { holder.toggleDesktopMode() },
-                // TODO(webapp-hidden): WebApp "Pin to Home Screen" entry
-                // temporarily hidden — feature not yet validated/complete.
-                // Re-enable by removing the `@Suppress` block and restoring
-                // the original `if (pinSessionId != null && …)` guard.
-                onPinToHome = if (pinSessionId != null && holder.currentUrl.startsWith("file://") && WEBAPP_PIN_ENTRY_ENABLED) {
-                    {
-                        com.leoyuan.leophoneagent.ui.preview.WebPreviewShortcut.pin(
-                            context = context,
-                            sessionId = pinSessionId,
-                            url = holder.currentUrl,
-                            title = displayTitle,
-                            favicon = holder.pageFavicon,
-                        )
-                    }
-                } else null,
+                onPinToHome = null,
                 onExpand = onExpandFullscreen?.let { expandCb ->
                     {
                         AppLogger.info("WebPreviewSheet", "expand → fullscreen")

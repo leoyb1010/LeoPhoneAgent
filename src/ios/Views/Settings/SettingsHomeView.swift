@@ -2,7 +2,7 @@
 //  SettingsHomeView.swift
 //  MinisApp
 //
-//  [T-settings-ia] 设置首页:5 组折叠 + 搜索。
+//  [T-settings-ia] 设置首页:4 组折叠 + 搜索。
 //
 //  为什么是独立文件 + 数据驱动:旧设置页是 ContentView 里 400 行的单体
 //  List,三次尝试就地加分层折叠都撞了 SwiftUI 类型检查超时(巨型表达式)。
@@ -50,7 +50,6 @@ struct SettingsHomeView: View {
     @AppStorage("settings.group.agent") private var openAgent = true
     @AppStorage("settings.group.general") private var openGeneral = false
     @AppStorage("settings.group.data") private var openData = false
-    @AppStorage("settings.group.advanced") private var openAdvanced = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     // ── 分组数据(个人版信息架构)────────────────────────────────────────
@@ -91,12 +90,18 @@ struct SettingsHomeView: View {
                               icon: "bolt.badge.clock", color: .orange) { AutomationSettingsView() },
                 SettingsEntry("定时任务", keywords: "schedule cron 定时",
                               icon: "clock.badge", color: .orange) { ScheduledTaskSettingsView() },
+                SettingsEntry("环境变量", keywords: "environment env 变量",
+                              icon: "chevron.left.forwardslash.chevron.right", color: .gray) { EnvironmentVariablesView() },
             ]),
             SettingsGroup(id: "general", title: "外观与通用", entries: [
                 SettingsEntry("外观", keywords: "appearance 深色 浅色 主题",
                               icon: "paintbrush.fill", color: .blue) { AppearanceSettingsView() },
+                SettingsEntry("权限", keywords: "permission 审批 offload",
+                              icon: "hand.raised.fill", color: .red) { OffloadPermissionSettingsView() },
+                SettingsEntry("生物识别保护", keywords: "face id touch id 解锁 保护",
+                              icon: "faceid", color: .red) { FaceIDProtectionSettingsView() },
             ]),
-            SettingsGroup(id: "data", title: "数据", entries: [
+            SettingsGroup(id: "data", title: "数据与关于", entries: [
                 SettingsEntry("Leo藏宝阁", keywords: "藏宝阁 收藏 笔记 note collect 分享 小红书 favorite 星标 附件 扫描",
                               icon: "star.square.on.square", color: .yellow) { CollectionsView() },
                 SettingsEntry("存储", keywords: "storage 空间 清理",
@@ -117,14 +122,6 @@ struct SettingsHomeView: View {
                 },
                 SettingsEntry("日志", keywords: "logs 日志 反馈 诊断",
                               icon: "doc.text.fill", color: .gray) { LogManagementView() },
-            ]),
-            SettingsGroup(id: "advanced", title: "高级", entries: [
-                SettingsEntry("环境变量", keywords: "environment env 变量",
-                              icon: "chevron.left.forwardslash.chevron.right", color: .gray) { EnvironmentVariablesView() },
-                SettingsEntry("权限", keywords: "permission 审批 offload",
-                              icon: "hand.raised.fill", color: .red) { OffloadPermissionSettingsView() },
-                SettingsEntry("生物识别保护", keywords: "face id touch id 解锁 保护",
-                              icon: "faceid", color: .red) { FaceIDProtectionSettingsView() },
                 SettingsEntry("隐私与数据", keywords: "privacy 隐私",
                               icon: "lock.shield.fill", color: .blue) { LeoPrivacyView() },
                 SettingsEntry("关于", keywords: "about 版本 version",
@@ -155,7 +152,6 @@ struct SettingsHomeView: View {
                     orchestrationCard
                     groupCard(groups[2], isOpen: $openGeneral, index: 2)
                     groupCard(groups[3], isOpen: $openData, index: 3)
-                    groupCard(groups[4], isOpen: $openAdvanced, index: 4)
                     feedbackCard
                 }
             }
@@ -206,7 +202,7 @@ struct SettingsHomeView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("控制中心")
                     .font(.headline.weight(.bold))
-                Text("设备、Agent、数据与权限，按使用场景收纳在一处。")
+                Text("我的设备、Agent、外观与通用、数据与关于，按使用场景收纳在一处。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

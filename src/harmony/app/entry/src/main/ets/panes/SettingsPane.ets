@@ -38,57 +38,7 @@ export struct SettingsPane {
           .width('100%')
           .padding({ bottom: 18 })
 
-        this.section('模型供应商')
-        Column() {
-          SettingsRow({
-            icon: 'web',
-            color: '#007AFF',
-            title: '管理供应商',
-            subtitle: this.providerLine,
-            onOpen: () => {
-              router.pushUrl({ url: 'pages/ProviderListPage' });
-            }
-          })
-          SettingsRow({
-            icon: 'copy',
-            color: '#007AFF',
-            title: '模型组',
-            subtitle: '一组模型，失败按顺序换',
-            onOpen: () => {
-              router.pushUrl({ url: 'pages/ModelGroupsPage' });
-            }
-          })
-          SettingsRow({
-            icon: 'text',
-            color: '#007AFF',
-            title: '用量',
-            subtitle: '本机会话统计',
-            onOpen: () => {
-              router.pushUrl({ url: 'pages/UsagePage' });
-            }
-          })
-        }
-        .width('100%')
-        .backgroundColor(Tokens.surface)
-        .borderRadius(Tokens.settingsRadius)
-
-        this.section('外观')
-        Column() {
-          SettingsRow({
-            icon: 'albums',
-            color: '#5856D6',
-            title: '外观',
-            subtitle: '跟随系统 / 浅色 / 深色',
-            onOpen: () => {
-              router.pushUrl({ url: 'pages/AppearancePage' });
-            }
-          })
-        }
-        .width('100%')
-        .backgroundColor(Tokens.surface)
-        .borderRadius(Tokens.settingsRadius)
-
-        this.section('连接的设备')
+        this.section(Copy.sectionDevice)
         Column() {
           SettingsRow({
             icon: 'laptop',
@@ -122,8 +72,26 @@ export struct SettingsPane {
         .backgroundColor(Tokens.surface)
         .borderRadius(Tokens.settingsRadius)
 
-        this.section('本机运行时')
+        this.section(Copy.sectionAgent)
         Column() {
+          SettingsRow({
+            icon: 'web',
+            color: '#007AFF',
+            title: '管理供应商',
+            subtitle: this.providerLine,
+            onOpen: () => {
+              router.pushUrl({ url: 'pages/ProviderListPage' });
+            }
+          })
+          SettingsRow({
+            icon: 'copy',
+            color: '#007AFF',
+            title: '模型组',
+            subtitle: '一组模型，失败按顺序换',
+            onOpen: () => {
+              router.pushUrl({ url: 'pages/ModelGroupsPage' });
+            }
+          })
           SettingsRow({
             icon: 'ok',
             color: '#007AFF',
@@ -135,7 +103,7 @@ export struct SettingsPane {
           })
           SettingsRow({
             icon: 'voice',
-            color: '#FF9500',
+            color: Tokens.accent,
             title: '人格',
             subtitle: 'SOUL.md，写给本机 Agent 的性格',
             onOpen: () => {
@@ -149,15 +117,6 @@ export struct SettingsPane {
             subtitle: 'GLOBAL.md 与今日记忆',
             onOpen: () => {
               router.pushUrl({ url: 'pages/MemoryPage' });
-            }
-          })
-          SettingsRow({
-            icon: 'albums',
-            color: Tokens.warn,
-            title: '藏宝阁',
-            subtitle: '笔记和摘录',
-            onOpen: () => {
-              router.pushUrl({ url: 'pages/CollectionsPage' });
             }
           })
           SettingsRow({
@@ -187,6 +146,22 @@ export struct SettingsPane {
               router.pushUrl({ url: 'pages/SchedulePage' });
             }
           })
+        }
+        .width('100%')
+        .backgroundColor(Tokens.surface)
+        .borderRadius(Tokens.settingsRadius)
+
+        this.section(Copy.sectionAppearance)
+        Column() {
+          SettingsRow({
+            icon: 'albums',
+            color: '#5856D6',
+            title: '外观',
+            subtitle: '跟随系统 / 浅色 / 深色',
+            onOpen: () => {
+              router.pushUrl({ url: 'pages/AppearancePage' });
+            }
+          })
           SettingsRow({
             icon: 'restore',
             color: '#34C759',
@@ -201,7 +176,7 @@ export struct SettingsPane {
         .backgroundColor(Tokens.surface)
         .borderRadius(Tokens.settingsRadius)
 
-        this.section('存储')
+        this.section(Copy.sectionData)
         Column() {
           SettingsRow({
             icon: 'more',
@@ -210,6 +185,24 @@ export struct SettingsPane {
             subtitle: '只读列举应用沙箱，写文件默认询问',
             onOpen: () => {
               router.pushUrl({ url: 'pages/WorkspacePage' });
+            }
+          })
+          SettingsRow({
+            icon: 'albums',
+            color: Tokens.warn,
+            title: '藏宝阁',
+            subtitle: '笔记和摘录',
+            onOpen: () => {
+              router.pushUrl({ url: 'pages/CollectionsPage' });
+            }
+          })
+          SettingsRow({
+            icon: 'text',
+            color: '#007AFF',
+            title: '用量',
+            subtitle: '本机会话统计',
+            onOpen: () => {
+              router.pushUrl({ url: 'pages/UsagePage' });
             }
           })
         }
@@ -221,7 +214,6 @@ export struct SettingsPane {
           .fontColor(Tokens.muted)
           .padding({ left: 14, right: 14, bottom: 8 })
 
-        this.section('关于')
         Column() {
           Text(`版本 ${ReleaseCatalog.currentVersion}  ·  ${ReleaseCatalog.currentBuild}`)
             .fontSize(14)

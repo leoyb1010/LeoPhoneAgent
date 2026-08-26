@@ -23,4 +23,8 @@ export class Copy {
   static readonly searchPlaceholder: string = '搜索会话…';
   static readonly noLinux: string = '鸿蒙 NEXT 跑不了 Android 那份 PRoot ELF。写文件只在应用沙箱，并默认询问。';
   static readonly pushB: string = '正在向 Push Kit 要 token。没配 AGC 时杀进程后仍然收不到审批。';
+  static readonly sectionDevice: string = '我的设备';
+  static readonly sectionAgent: string = 'Agent';
+  static readonly sectionAppearance: string = '外观与通用';
+  static readonly sectionData: string = '数据与关于';
 }

@@ -2006,9 +2006,6 @@ fun ChatScreen(
     // auto-starts on prepared, has a built-in scrubber + play/pause, and an
     // onError listener so failures actually log instead of silently blanking.
     var previewVideoFile by remember { mutableStateOf<java.io.File?>(null) }
-    // T-pwa-2: long-press on an HTML attachment chip opens the
-    // "Add to Home Screen" sheet for that attachment.
-    var webAppSheetTarget by remember { mutableStateOf<InputAttachment?>(null) }
     val urlClickHandler = remember<(String) -> Unit>(viewModel) {
         { url ->
             // Pass the current session id so `minis://attachments/...` resolves
@@ -3965,7 +3962,7 @@ fun ChatScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowUp,
-                            contentDescription = "Scroll to first message",
+                            contentDescription = stringResource(R.string.content_desc_scroll_top),
                             modifier = Modifier.size(20.dp),
                         )
                     }
@@ -4009,7 +4006,7 @@ fun ChatScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = "Scroll to bottom",
+                            contentDescription = stringResource(R.string.content_desc_scroll_bottom),
                             modifier = Modifier.size(20.dp),
                         )
                     }
@@ -4674,27 +4671,11 @@ fun ChatScreen(
                             horizontalArrangement = Arrangement.spacedBy(0.dp),
                         ) {
                             items(attachments, key = { it.id }) { attachment ->
-                                // T-pwa-2: long-press menu only appears for
-                                // .html / .htm attachments. The menu lives in
-                                // a Box that anchors to the chip; the sheet
-                                // itself is hosted at screen level (see
-                                // webAppSheetTarget).
-                                val isHtmlAttachment = attachment.fileName
-                                    .substringAfterLast('.', "")
-                                    .lowercase()
-                                    .let { it == "html" || it == "htm" }
-                                var webAppMenuExpanded by remember(attachment.id) { mutableStateOf(false) }
                                 Box {
                                 AttachmentChip(
                                     attachment = attachment,
                                     onRemove = { viewModel.removeAttachment(attachment.id) },
-                                    // TODO(webapp-hidden): long-press opened
-                                    // the WebApp "Add to Home Screen" menu —
-                                    // disabled while entry point is hidden.
-                                    // Re-enable by restoring `if (isHtmlAttachment)`.
-                                    onLongClick = if (false && isHtmlAttachment) {
-                                        { webAppMenuExpanded = true }
-                                    } else null,
+                                    onLongClick = null,
                                     onClick = {
                                         // Mirror iOS InputAttachmentTile
                                         // (AIChatView.swift:3699) which
@@ -4777,30 +4758,6 @@ fun ChatScreen(
                                         }
                                     },
                                 )
-                                // TODO(webapp-hidden): WebApp / "Add to Home
-                                // Screen" entry point temporarily hidden —
-                                // feature not yet validated/complete. Re-enable
-                                // by removing `false &&` from the guard below.
-                                if (false && isHtmlAttachment) {
-                                    com.leoyuan.leophoneagent.ui.components.MinisMenu(
-                                        expanded = webAppMenuExpanded,
-                                        onDismissRequest = { webAppMenuExpanded = false },
-                                    ) {
-                                        DropdownMenuItem(
-                                            text = { Text(stringResource(R.string.webapp_add_to_home)) },
-                                            leadingIcon = {
-                                                Icon(
-                                                    Icons.Default.AppShortcut,
-                                                    contentDescription = null,
-                                                )
-                                            },
-                                            onClick = {
-                                                webAppMenuExpanded = false
-                                                webAppSheetTarget = attachment
-                                            },
-                                        )
-                                    }
-                                }
                                 }
                             }
                         }
@@ -5566,7 +5523,7 @@ fun ChatScreen(
                             ) {
                                 Icon(
                                     Icons.Default.Stop,
-                                    contentDescription = "Stop",
+                                    contentDescription = stringResource(R.string.content_desc_stop),
                                     tint = Color.White,
                                     modifier = Modifier.size(20.dp),
                                 )
@@ -6009,20 +5966,6 @@ fun ChatScreen(
         )
     }
 
-    // T-pwa-2: Add-to-Home-Screen sheet, hosted at screen level so it can
-    // outlive the chip that triggered it (the chip Box may scroll out of
-    // composition while the sheet is up).
-    webAppSheetTarget?.let { target ->
-        com.leoyuan.leophoneagent.webapp.AddToHomeSheet(
-            source = com.leoyuan.leophoneagent.webapp.WebAppSource.ChatAttachment(
-                uri = target.uri,
-                fileName = target.fileName,
-                sessionId = sessionId,
-                sessionTitle = null,
-            ),
-            onDismiss = { webAppSheetTarget = null },
-        )
-    }
     } // CompositionLocalProvider
 }
 

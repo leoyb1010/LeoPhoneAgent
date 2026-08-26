@@ -64,6 +64,9 @@ export default function WorkspaceStatusBar({
             title={updateBadge.tone === 'update'
               ? t('workspaceShell.updateReady', { version: latestVersion ?? '' })
               : t('workspaceShell.restartRequired')}
+            aria-label={updateBadge.tone === 'update'
+              ? t('workspaceShell.updateReady', { version: latestVersion ?? '' })
+              : t('workspaceShell.restartRequired')}
           >
             <span
               className={`h-1.5 w-1.5 animate-pulse rounded-full ${updateBadge.tone === 'update' ? 'bg-info' : 'bg-warning'}`}

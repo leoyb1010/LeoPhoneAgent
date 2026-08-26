@@ -80,9 +80,6 @@ fun FileBrowserScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     var deleteTarget by remember { mutableStateOf<FileItem?>(null) }
-    // T-pwa-3: long-press → "Add to Home Screen" sheet, hosted at screen
-    // scope so the dropdown can dismiss before the bottom-sheet appears.
-    var webAppSheetSource by remember { mutableStateOf<com.leoyuan.leophoneagent.webapp.WebAppSource.HostFile?>(null) }
 
     // When navigated into a subdirectory, the top-bar back button and the
     // system back gesture both pop one directory level first. The
@@ -187,7 +184,6 @@ fun FileBrowserScreen(
                                     }
                                 },
                                 onDelete = { deleteTarget = item },
-                                onAddToHome = { source -> webAppSheetSource = source },
                             )
                             HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
                         }
@@ -216,16 +212,6 @@ fun FileBrowserScreen(
                     Text(stringResource(R.string.cancel))
                 }
             },
-        )
-    }
-
-    // T-pwa-3: Add-to-Home-Screen sheet, hosted at screen scope so it
-    // outlives the row that triggered it (rows scroll out of composition
-    // and the menu dismisses before the sheet animates in).
-    webAppSheetSource?.let { src ->
-        com.leoyuan.leophoneagent.webapp.AddToHomeSheet(
-            source = src,
-            onDismiss = { webAppSheetSource = null },
         )
     }
 
@@ -283,14 +269,7 @@ private fun FileItemRow(
     currentLinuxPath: String?,
     onClick: () -> Unit,
     onDelete: () -> Unit,
-    onAddToHome: (com.leoyuan.leophoneagent.webapp.WebAppSource.HostFile) -> Unit,
 ) {
-    // T-pwa-3: long-press menu for .html / .htm files whose host path
-    // sits under a recognised PRoot bind mount (`/var/minis/shared` or
-    // `/var/minis/mounts/<n>`). Computed lazily because the bindMounts
-    // map can change while the screen is open (mount add/remove).
-    val ext = item.file.extension.lowercase()
-    val isHtml = !item.isDirectory && (ext == "html" || ext == "htm")
     var menuExpanded by remember(item.file.absolutePath) { mutableStateOf(false) }
 
     // [T-android-file-context-copy-abs-path] The file's Linux (PRoot) absolute
@@ -391,9 +370,7 @@ private fun FileItemRow(
     }
 
     // [T-android-file-context-copy-abs-path] File context menu, anchored to
-    // the row's bounding Box. Always offers "Copy Absolute Path"; the
-    // HTML-only "Add to Home" item below stays gated behind the unvalidated
-    // WebApp entry point (TODO webapp-hidden).
+    // the row's bounding Box. Always offers "Copy Absolute Path".
     run {
         val context = LocalContext.current
         com.leoyuan.leophoneagent.ui.components.MinisMenu(
@@ -421,36 +398,6 @@ private fun FileItemRow(
                     ).show()
                 },
             )
-            // TODO(webapp-hidden): WebApp / "Add to Home Screen" item temporarily
-            // hidden — feature not yet validated/complete. Re-enable by removing
-            // `false &&` from the guard below.
-            if (false && isHtml) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.webapp_add_to_home)) },
-                leadingIcon = {
-                    Icon(Icons.Filled.AppShortcut, contentDescription = null)
-                },
-                onClick = {
-                    menuExpanded = false
-                    val triple = com.leoyuan.leophoneagent.webapp.WebAppPathResolver.inferScope(item.file)
-                    if (triple != null) {
-                        val (scope, ctx, linuxPath) = triple
-                        onAddToHome(
-                            com.leoyuan.leophoneagent.webapp.WebAppSource.HostFile(
-                                file = item.file,
-                                fileName = item.name,
-                                pathScope = scope,
-                                scopeContext = ctx,
-                                linuxPath = linuxPath,
-                            ),
-                        )
-                    }
-                    // No matching scope → silently no-op (chip is rare and
-                    // only appears for files that do live under a bind mount;
-                    // future T-pwa-4 may surface a toast).
-                },
-            )
-            } // end HTML-only Add-to-Home gate
         }
     }
     } // anchoring Box
