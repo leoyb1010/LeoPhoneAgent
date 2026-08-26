@@ -12,6 +12,7 @@ import { availableHarnesses } from './harness-specs.js';
 import { fetchGrokToken } from './grok-token.service.js';
 import { buildDigest, buildReceipt, isTerminal } from './harness-digest.service.js';
 import { listArtifacts, readArtifact } from './harness-artifacts.service.js';
+import { resumeEnvelope } from './resume-envelope.js';
 
 // LeoPhoneAgent harness 协议的 HTTP/SSE 面——与 leoagent(Python server.py)
 // 的路由表逐条同构,手机端(LeoAgentClient/LeoAgentHarness.swift)零改动。
@@ -123,6 +124,9 @@ router.get('/harness/sessions/:sessionId/events', requireHarnessKey, async (req,
   }, 25_000);
 
   try {
+    // First frame names the watermark so a reconnect can say resume=ok/gap
+    // instead of silently skipping a hole. Mac log is unbounded → always ok.
+    res.write(`data: ${JSON.stringify(resumeEnvelope(after, 0))}\n\n`);
     for await (const event of session.subscribe(after)) {
       if (closed) break;
       res.write(`data: ${JSON.stringify(event)}\n\n`);

@@ -50,6 +50,33 @@ enum RelayMachinesClient {
         }
     }
 
+    static func join(apiRoot: String, token: String) async throws -> (key: String, machine: String) {
+        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw RelayDiscoveryError.malformed }
+        guard var parts = URLComponents(string: normalizeApiRoot(apiRoot)) else {
+            throw RelayDiscoveryError.badURL
+        }
+        let basePath = parts.path.hasSuffix("/") ? String(parts.path.dropLast()) : parts.path
+        parts.path = basePath + "/join"
+        guard let url = parts.url, url.scheme?.lowercased() == "https" else { throw RelayDiscoveryError.badURL }
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: ["token": trimmed])
+        req.timeoutInterval = 12
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse else { throw RelayDiscoveryError.malformed }
+        if http.statusCode == 401 || http.statusCode == 403 { throw RelayDiscoveryError.unauthorized }
+        guard (200..<300).contains(http.statusCode) else { throw RelayDiscoveryError.http(http.statusCode) }
+        guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let key = obj["accessKey"] as? String,
+              key.count >= 16 else {
+            throw RelayDiscoveryError.malformed
+        }
+        return (key, obj["machine"] as? String ?? "")
+    }
+
     static func list(apiRoot: String = defaultApiRoot, key: String) async throws -> [RelayDiscoveredMachine] {
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 16 else { throw RelayDiscoveryError.unauthorized }
@@ -185,30 +212,39 @@ enum RelayMachinesClient {
 /// QR / paste payload for adding a body. Key never goes in the code.
 struct RelayPairPayload: Equatable, Sendable {
     static let prefix = "leoagent-body:v1|"
+    static let prefixV2 = "leoagent-body:v2|"
 
     let apiRoot: String
     let machine: String
+    let join: String?
+    let exp: Double?
 
     var harnessURL: String {
         RelayMachinesClient.harnessURL(for: machine, apiRoot: apiRoot)
     }
 
     func encode() -> String {
-        let obj: [String: String] = [
+        var obj: [String: Any] = [
             "apiRoot": apiRoot.trimmingCharacters(in: CharacterSet(charactersIn: "/")),
             "machine": machine,
         ]
+        if let join, !join.isEmpty {
+            obj["join"] = join
+            if let exp { obj["exp"] = exp }
+        }
         guard let data = try? JSONSerialization.data(withJSONObject: obj),
               let json = String(data: data, encoding: .utf8) else {
             return Self.prefix + "{\"apiRoot\":\"\",\"machine\":\"\"}"
         }
-        return Self.prefix + json
+        return (join?.isEmpty == false ? Self.prefixV2 : Self.prefix) + json
     }
 
     static func parse(_ raw: String) -> RelayPairPayload? {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         let jsonText: String
-        if text.hasPrefix(prefix) {
+        if text.hasPrefix(prefixV2) {
+            jsonText = String(text.dropFirst(prefixV2.count))
+        } else if text.hasPrefix(prefix) {
             jsonText = String(text.dropFirst(prefix.count))
         } else if text.hasPrefix("{") {
             jsonText = text
@@ -225,6 +261,13 @@ struct RelayPairPayload: Equatable, Sendable {
         let machine = RelayMachinesClient.sanitizeMachine(obj["machine"] as? String ?? "") ?? ""
         guard !apiRoot.isEmpty, !machine.isEmpty else { return nil }
         guard apiRoot.lowercased().hasPrefix("https://") else { return nil }
-        return RelayPairPayload(apiRoot: apiRoot, machine: machine)
+        let join = (obj["join"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let exp = obj["exp"] as? Double ?? (obj["exp"] as? Int).map(Double.init)
+        return RelayPairPayload(
+            apiRoot: apiRoot,
+            machine: machine,
+            join: join?.isEmpty == false ? join : nil,
+            exp: exp
+        )
     }
 }

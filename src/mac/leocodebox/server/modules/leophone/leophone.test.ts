@@ -15,6 +15,7 @@ import { listArtifacts, readArtifact } from './harness-artifacts.service.js';
 import { HarnessManager, HarnessSession, isLiveHarnessStatus } from './harness-session.service.js';
 import { buildRemoteCreateBody, parseEventsAfter } from './fleet.routes.js';
 import { HARNESSES, type HarnessSpec } from './harness-specs.js';
+import { resumeEnvelope } from './resume-envelope.js';
 
 // 协议保真是本模块的全部意义:手机端(LeoAgentHarness.swift)按字段名
 // 渲染,这里的断言以 leoagent(Python harness.py)的输出为准。
@@ -468,4 +469,9 @@ test('artifacts: 只列 cwd 内真实存在的文件,越界一律拒绝', () => 
   assert.ok(readArtifact(session, 'report.md'), 'cwd 内的产物可读');
   assert.equal(readArtifact(session, '../../etc/passwd'), null, '路径穿越必须被拒');
   assert.equal(readArtifact(session, '/etc/passwd'), null, '绝对路径必须被拒');
+});
+
+test('resume envelope: ok when after is at or past the watermark, gap otherwise', () => {
+  assert.deepEqual(resumeEnvelope(5, 0), { type: 'resume', status: 'ok', after: 5, min_after: 0 });
+  assert.deepEqual(resumeEnvelope(5, 41), { type: 'resume', status: 'gap', after: 5, min_after: 41 });
 });

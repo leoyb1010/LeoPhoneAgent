@@ -62,6 +62,10 @@ data class RelayHarnessEvent(
     val choices: List<String> = emptyList(),
 )
 
+data class RelayJoinToken(val token: String, val exp: Long? = null)
+
+data class RelayJoinResult(val accessKey: String, val machine: String)
+
 data class FleetPreset(val label: String, val machine: String)
 
 val LeoFleetPresets = listOf(

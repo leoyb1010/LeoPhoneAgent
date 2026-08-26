@@ -665,6 +665,9 @@
     <string name="sessionlist_search_action">搜索</string>
     <string name="sessionlist_running_count">进行中 · %1$d</string>
     <string name="sessionlist_approval_count">审批 · %1$d</string>
+    <string name="sessionlist_remote_section">远程进行中</string>
+    <string name="sessionlist_remote_row">%1$s · %2$s</string>
+    <string name="sessionlist_remote_waiting">等你审批</string>
     <string name="sessionlist_dismiss">关闭</string>
     <string name="sessionlist_delete_one_title">删除该对话？</string>
     <string name="sessionlist_delete_n_title">删除 %1$d 个对话？</string>
@@ -1745,7 +1748,7 @@
     <string name="terminal_cli_booting_hint">如出现安全确认或登录提示，请按屏幕指引继续。</string>
     <string name="whats_new_title">本次更新（%1$s）</string>
     <string name="whats_new_confirm">知道了</string>
-    <string name="whats_new_current">• Power 版可以把冻结、卸载、清理做成一次确认的事务：先扫描再计划，逐项出结果，还能回滚</string>
+    <string name="whats_new_current">• 断线后任务从上次位置接着跑。新设备扫短码就能加入舰队，不用再手抄长密钥。远程正在跑的任务会出现在本机会话列表里。</string>
     <string name="artifact_ready">交付物已就绪</string>
     <string name="artifact_open">打开交付物</string>
     <string name="artifact_missing">这份交付物已不在本机。</string>

@@ -404,6 +404,28 @@ for (const action of ['send', 'stop'] as const) {
   });
 }
 
+/** Mint a short join token so a new phone can enter without pasting RELAY_KEY. */
+router.post('/leophone/join-token', async (req, res) => {
+  const target = relayTarget();
+  if (!target) {
+    res.status(409).json({ error: { message: 'relay not configured' } });
+    return;
+  }
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const machine = String(body.machine ?? localMachineName());
+  try {
+    const minted = await relayPost('/join-tokens', target, { machine }) as {
+      token?: string;
+      exp?: number;
+    };
+    res.json({ token: minted.token, exp: minted.exp, machine });
+  } catch (error) {
+    res.status(502).json({
+      error: { message: error instanceof Error ? error.message : 'relay unreachable' },
+    });
+  }
+});
+
 /** [T-collections-fleet] 手机上传的收藏索引(只读镜像)。 */
 router.get('/leophone/collections', async (_req, res) => {
   const target = relayTarget();

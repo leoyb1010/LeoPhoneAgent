@@ -9,6 +9,7 @@ import {
   sanitizeKey
 } from '../net/Protocol';
 import { SecretStore } from './SecretStore';
+import { MachinesClient } from '../net/MachinesClient';
 
 const STORE = 'leo.harmony.gateway';
 
@@ -138,13 +139,27 @@ export class GatewayStore {
     }
   }
 
-  scanPairCode(raw: string): string {
-    if (sanitizeKey(this.key).length < 16) {
-      return '先粘贴中继密钥，再加入这台身体。';
-    }
+  async scanPairCode(raw: string): Promise<string> {
     const pair = decodePair(raw);
     if (!pair) {
       return '不是本 App 的配对码。码里应是中继根和机器名。';
+    }
+    if (pair.join.length > 0) {
+      try {
+        const joined = await MachinesClient.join(pair.apiRoot, pair.join);
+        this.key = joined.accessKey;
+        this.apiRoot = pair.apiRoot;
+        const machine = new RelayDiscoveredMachine();
+        machine.name = pair.machine;
+        machine.online = false;
+        this.upsertDiscovered([machine], false);
+        return `已加入 ${pair.machine}`;
+      } catch (_err) {
+        return '短码已过期或无效，请让对端重新出示。';
+      }
+    }
+    if (sanitizeKey(this.key).length < 16) {
+      return '这是旧码。请让对端出示带短码的新配对码，或先粘贴中继密钥。';
     }
     if (!sameApiRoot(pair.apiRoot, this.apiRoot)) {
       return '配对码里的中继不是你已经在用的那台。钥匙不会发到别的地址。';

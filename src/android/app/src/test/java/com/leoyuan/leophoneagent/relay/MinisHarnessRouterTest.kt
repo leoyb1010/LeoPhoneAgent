@@ -5,6 +5,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
@@ -211,6 +212,17 @@ class MinisHarnessRouterTest {
      * 而不是静默地少发一段（控制端会拼出残缺输出）。
      */
     @Test
+    fun subscribeStartsWithResumeOk() = runBlocking {
+        val r = router()
+        val id = r.handle("POST", "/harness/sessions", JSONObject().put("prompt", "go"))
+            .body.getString("session_id")
+        val first = r.handle("GET", "/harness/sessions/$id/events?after=0", null).stream!!
+            .take(1).toList().single()
+        assertEquals("resume", first.getString("type"))
+        assertEquals("ok", first.getString("status"))
+    }
+
+    @Test
     fun evictedEventsAreReportedInsteadOfSilentlySkipped() = runBlocking {
         val chunks = (1..3000).map { EngineChunk.Delta("d$it") } + EngineChunk.Completed("done")
         val r = router(FakeEngine(chunks))
@@ -220,6 +232,8 @@ class MinisHarnessRouterTest {
 
         val stale = r.handle("GET", "/harness/sessions/$id/events?after=0", null)
         assertEquals(410, stale.status)
+        assertEquals("gap", stale.body.getString("status"))
+        assertEquals("resume", stale.body.getString("type"))
         val minAfter = stale.body.getInt("min_after")
         assertTrue("nothing was evicted; ring buffer did not engage", minAfter > 0)
 

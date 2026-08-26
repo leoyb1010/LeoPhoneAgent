@@ -4,6 +4,27 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## T6 · Android 1.0.0-alpha.18 / iOS 1.27.0 (101) / Mac 1.76.0 / Harmony 0.3.0-alpha.16 - 2026-08-26
+
+### 用户可见
+
+- 断线重连后事件续上：首帧 `resume=ok/gap`。水位不够会明确说中间缺了一段，并从可用水位接着跑，不会丢一段、重复一段或把状态倒回去。
+- 新设备扫/粘贴短码即可入列，不用再手抄长共享密钥。旧密钥这一轮仍能用（双栈，不停旧签）。
+- Android 远程进行中的任务出现在本机会话列表；iOS 本来就在列表的「进行中」里。点进去跟的是同一条会话。
+
+### 验证
+
+- 共享协议 fixture（乱序 / 重放 / 断线）与 `resumeEnvelope` 单测通过。
+- Android 双 flavor 门禁、iOS 审计 / MinisLogicTests、Mac `verify:release-notes` + leophone 单测、Harmony 发版闸门：见本船交付记录。
+- `scripts/verify_android_alpha_release.sh`：固定个人 Alpha 签名、包名、versionCode `100018`、versionName `1.0.0-alpha.18` 通过。
+- SHA-256：Standard `121b1105c70119ec7f48712785e3f3122e7bbf330496215f8059234a31162542`；Power `bac98af2e39590d6822d9820754218cc5c48dd70794368ce3084167afafc4f0a`。
+- 真机断网 2 分钟续传、hdc 装鸿蒙、Mac 签名包、Fold8 覆盖安装：按用户指令推迟到 T8 一并验收。
+
+### 停损
+
+- 没有做密文-only 中继、持久 Outbox、JWT 单飞、第二套 Runtime。停在双栈：旧 `RELAY_KEY` 本周期继续有效。
+- 没有做 T7 本地快脑 / 主动卡。
+
 ## iOS 1.26.0 (100) - 2026-08-26
 
 ### 用户可见

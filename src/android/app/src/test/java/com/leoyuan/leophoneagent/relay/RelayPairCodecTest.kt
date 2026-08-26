@@ -33,4 +33,24 @@ class RelayPairCodecTest {
         assert(!encoded.contains("key"))
         assert(!encoded.contains("secret"))
     }
+
+    @Test
+    fun v2RoundTripKeepsJoinTokenAndNeverEncodesKey() {
+        val encoded = RelayPairCodec.encode(
+            "https://example.ts.net/relay/api",
+            "phone",
+            "join-short",
+            1_800_000_000L,
+        )
+        assert(encoded.startsWith(RelayPairCodec.PREFIX_V2))
+        assert(!encoded.contains("key"))
+        val parsed = RelayPairCodec.decode(encoded)
+        assertEquals("https://example.ts.net/relay/api", parsed?.apiRoot)
+        assertEquals("phone", parsed?.machine)
+        assertEquals("join-short", parsed?.join)
+        assertEquals(1_800_000_000L, parsed?.exp)
+        assertEquals("LeoFold8", RelayPairCodec.decode(
+            RelayPairCodec.encode("https://ok.example/relay/api", "LeoFold8"),
+        )?.machine)
+    }
 }

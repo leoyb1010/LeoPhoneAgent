@@ -258,7 +258,7 @@ export struct FleetPane {
   private async joinPair(): Promise<void> {
     const ctx = getContext(this) as common.UIAbilityContext;
     await gatewayStore.ensureLoaded(ctx);
-    this.message = gatewayStore.scanPairCode(this.pairDraft);
+    this.message = await gatewayStore.scanPairCode(this.pairDraft);
     this.hosts = gatewayStore.hosts.slice();
     await gatewayStore.save(ctx);
   }

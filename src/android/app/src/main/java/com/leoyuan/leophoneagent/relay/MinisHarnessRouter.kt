@@ -88,7 +88,8 @@ class MinisHarnessRouter(
                             .put("session_steering", true)
                             .put("session_digest", false)
                             .put("task_receipts", false)
-                            .put("artifacts", false),
+                            .put("artifacts", false)
+                            .put("exact_window", false),
                     )
                     .put(
                         "harnesses",
@@ -114,9 +115,10 @@ class MinisHarnessRouter(
                 // 端知道要按新的 after 重新订阅（或整体重拉一次快照）。
                 val oldest = session.oldestRetainedWatermark()
                 if (after < oldest) {
+                    val gap = ResumeEnvelopes.of(after, oldest)
                     return HarnessHttpResult(
                         410,
-                        JSONObject()
+                        ResumeEnvelopes.toJson(gap)
                             .put(
                                 "error",
                                 JSONObject().put(
@@ -480,6 +482,7 @@ private class MinisHarnessSession(
             val startIdx = (after - evictedThrough).coerceAtLeast(0)
             if (startIdx >= events.size) emptyList() else events.drop(startIdx)
         }
+        emit(ResumeEnvelopes.toJson(ResumeEnvelopes.of(after, oldestRetainedWatermark())))
         var seen = after
         try {
             snapshot.forEach { event ->

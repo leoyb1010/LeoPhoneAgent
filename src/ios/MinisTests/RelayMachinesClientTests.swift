@@ -79,7 +79,9 @@ final class RelayMachinesClientTests: XCTestCase {
     func testPairPayloadRoundTripOmitsKey() throws {
         let payload = RelayPairPayload(
             apiRoot: "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api/",
-            machine: "LeoFold8")
+            machine: "LeoFold8",
+            join: nil,
+            exp: nil)
         let encoded = payload.encode()
         XCTAssertTrue(encoded.hasPrefix(RelayPairPayload.prefix))
         let jsonText = String(encoded.dropFirst(RelayPairPayload.prefix.count))
@@ -96,6 +98,17 @@ final class RelayMachinesClientTests: XCTestCase {
         XCTAssertNil(RelayPairPayload.parse("leoagent-body:v1|{\"apiRoot\":\"http://x\",\"machine\":\"y\"}"))
         XCTAssertNil(RelayPairPayload.parse("leoagent-body:v1|{\"apiRoot\":\"https://ok\",\"machine\":\"../etc\"}"))
         XCTAssertNil(RelayPairPayload.parse("leoagent-body:v1|{\"apiRoot\":\"https://ok\",\"machine\":\"a/b\"}"))
+        let v2 = RelayPairPayload(
+            apiRoot: "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api",
+            machine: "LeoFold8",
+            join: "join-short",
+            exp: 1_800_000_000
+        ).encode()
+        XCTAssertTrue(v2.hasPrefix(RelayPairPayload.prefixV2))
+        XCTAssertFalse(v2.contains("key"))
+        let parsedV2 = RelayPairPayload.parse(v2)
+        XCTAssertEqual(parsedV2?.join, "join-short")
+        XCTAssertEqual(parsedV2?.machine, "LeoFold8")
     }
 
     func testApiRootPinningAndMachineSanitize() {

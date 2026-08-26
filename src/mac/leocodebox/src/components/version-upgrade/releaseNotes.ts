@@ -17,6 +17,14 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '1.76.0',
+    date: '2026-08-26',
+    items: [
+      '断线重连后任务从上次位置继续，并明确告诉你是接着跑还是中间缺了一段。',
+      '复制配对码会带上短码，新设备扫码即可加入，不用再手抄长密钥。旧密钥这一轮仍能用。',
+    ],
+  },
+  {
     version: '1.75.0',
     date: '2026-08-26',
     items: [

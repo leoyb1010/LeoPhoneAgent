@@ -9,6 +9,8 @@ export class RelayDiscoveredMachine {
 export class PairPayload {
   apiRoot: string = '';
   machine: string = '';
+  join: string = '';
+  exp: number = 0;
 }
 
 export class HarnessKind {
@@ -19,6 +21,7 @@ export class HarnessKind {
 export const DEFAULT_API_ROOT =
   'https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api';
 export const PAIR_PREFIX = 'leoagent-body:v1|';
+export const PAIR_PREFIX_V2 = 'leoagent-body:v2|';
 
 export function normalizeApiRoot(raw: string): string {
   return raw.trim().replace(/\/+$/, '');
@@ -119,17 +122,28 @@ export function parseMachines(json: object): RelayDiscoveredMachine[] {
   return out;
 }
 
-export function encodePair(apiRoot: string, machine: string): string {
-  return PAIR_PREFIX + JSON.stringify({
+export function encodePair(apiRoot: string, machine: string, join?: string, exp?: number): string {
+  const body: Record<string, Object> = {
     'apiRoot': normalizeApiRoot(apiRoot),
     'machine': machine.trim()
-  });
+  };
+  const token = (join ?? '').trim();
+  if (token.length > 0) {
+    body['join'] = token;
+    if (exp !== undefined && exp > 0) {
+      body['exp'] = exp;
+    }
+    return PAIR_PREFIX_V2 + JSON.stringify(body);
+  }
+  return PAIR_PREFIX + JSON.stringify(body);
 }
 
 export function decodePair(raw: string): PairPayload | null {
   const text = raw.trim();
   let jsonText = '';
-  if (text.startsWith(PAIR_PREFIX)) {
+  if (text.startsWith(PAIR_PREFIX_V2)) {
+    jsonText = text.substring(PAIR_PREFIX_V2.length);
+  } else if (text.startsWith(PAIR_PREFIX)) {
     jsonText = text.substring(PAIR_PREFIX.length);
   } else if (text.startsWith('{')) {
     jsonText = text;
@@ -146,6 +160,8 @@ export function decodePair(raw: string): PairPayload | null {
     const payload = new PairPayload();
     payload.apiRoot = apiRoot;
     payload.machine = machine;
+    payload.join = `${obj['join'] ?? ''}`.trim();
+    payload.exp = Number(obj['exp'] ?? 0);
     return payload;
   } catch (_err) {
     return null;

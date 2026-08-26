@@ -28,6 +28,13 @@ class RelayFleetClient(
         require(config.accessKey.length >= 16) { "未配置中继密钥" }
     }
 
+    suspend fun createJoinToken(machine: String): RelayJoinToken = withContext(Dispatchers.IO) {
+        val obj = post("/join-tokens", JSONObject().put("machine", machine))
+        val token = obj.optString("token").trim()
+        if (token.isEmpty()) throw RelayException("中继没有返回短码")
+        RelayJoinToken(token = token, exp = if (obj.has("exp")) obj.optLong("exp") else null)
+    }
+
     suspend fun machines(): List<RelayMachine> = withContext(Dispatchers.IO) {
         val obj = get("/machines")
         obj.optJSONArray("machines").objects().mapNotNull { row ->
@@ -143,6 +150,10 @@ class RelayFleetClient(
             request,
             object : EventSourceListener() {
                 override fun onEvent(eventSource: EventSource, id: String?, type: String?, data: String) {
+                    ResumeEnvelopes.parse(data)?.let { resume ->
+                        if (resume.isGap) close(RelayEventsExpiredException(resume.minAfter))
+                        return
+                    }
                     parseHarnessEvent(machine, sessionId, data)?.let { trySend(it) }
                 }
 
@@ -216,6 +227,41 @@ class RelayFleetClient(
 
         internal fun forTest(config: RelayFleetConfig, http: OkHttpClient): RelayFleetClient =
             RelayFleetClient(config, http, validateHttps = false)
+
+        fun join(
+            apiRoot: String,
+            token: String,
+            http: OkHttpClient = defaultClient(),
+            validateHttps: Boolean = true,
+        ): RelayJoinResult {
+            val root = apiRoot.trim().trimEnd('/')
+            if (validateHttps) {
+                require(root.startsWith("https://", ignoreCase = true)) { "中继根必须是 https://" }
+            }
+            require(token.isNotBlank()) { "短码不能为空" }
+            val request = Request.Builder()
+                .url("$root/join")
+                .post(JSONObject().put("token", token.trim()).toString().toRequestBody(JSON))
+                .header("Accept", "application/json")
+                .build()
+            http.newCall(request).execute().use { response ->
+                val raw = response.body?.string().orEmpty()
+                val obj = runCatching { JSONObject(raw) }.getOrDefault(JSONObject())
+                if (!response.isSuccessful) {
+                    throw RelayException(
+                        obj.optJSONObject("error")?.optString("message")
+                            ?.takeUnless { it.isNullOrBlank() }
+                            ?: "短码已过期或无效",
+                    )
+                }
+                val accessKey = obj.optString("accessKey").trim()
+                if (accessKey.length < 16) throw RelayException("中继没有返回设备钥匙")
+                return RelayJoinResult(
+                    accessKey = accessKey,
+                    machine = obj.optString("machine").trim(),
+                )
+            }
+        }
 
         internal fun parseHarnessEvent(
             machine: String,

@@ -6,15 +6,23 @@ export class LeoRelease {
 }
 
 export class ReleaseCatalog {
-  static readonly currentVersion: string = '0.3.0-alpha.15';
-  static readonly currentBuild: number = 100020;
+  static readonly currentVersion: string = '0.3.0-alpha.16';
+  static readonly currentBuild: number = 100021;
 
   static all(): LeoRelease[] {
     const first = new LeoRelease();
-    first.version = '0.3.0-alpha.15';
+    first.version = '0.3.0-alpha.16';
     first.date = '2026-08-26';
-    first.title = '青绿脸 + 四组设置';
+    first.title = '扫短码入列';
     first.highlights = [
+      '扫或粘贴带短码的配对码即可加入舰队，不用再手抄长密钥。',
+      '断线续传会明确说是接着跑还是中间缺了一段。旧密钥这一轮仍能用。'
+    ];
+    const face = new LeoRelease();
+    face.version = '0.3.0-alpha.15';
+    face.date = '2026-08-26';
+    face.title = '青绿脸 + 四组设置';
+    face.highlights = [
       '强调色从橙红改成和其他端一样的青绿。',
       '设置改成同一四组：我的设备 / Agent / 外观与通用 / 数据与关于。'
     ];
@@ -173,6 +181,6 @@ export class ReleaseCatalog {
       '填中继钥匙后读取 /machines，不再写死三台 Mac。',
       '可对在线 Mac 或 Android 身体开新任务，断线按序号续上。'
     ];
-    return [first, prev, kimi, detail, scroll, login, icons, layout, model, pick, blank, chain, codex, oauth, body, tools, providers, local, previous, firstShip];
+    return [first, face, prev, kimi, detail, scroll, login, icons, layout, model, pick, blank, chain, codex, oauth, body, tools, providers, local, previous, firstShip];
   }
 }

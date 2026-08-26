@@ -1,0 +1,18 @@
+{
+  "out_of_order": {
+    "lastSeq": 0,
+    "incoming": [3, 1, 2, 4],
+    "applied": [3, 3, 3, 4]
+  },
+  "replay": {
+    "after": 2,
+    "events": [1, 2, 3, 4],
+    "replayed": [3, 4]
+  },
+  "disconnect": {
+    "lastSeq": 5,
+    "ok": { "type": "resume", "status": "ok", "after": 5, "min_after": 0 },
+    "gap": { "type": "resume", "status": "gap", "after": 5, "min_after": 41 },
+    "afterGap": 41
+  }
+}

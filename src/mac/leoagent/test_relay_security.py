@@ -179,5 +179,64 @@ class HarnessStopTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(len(cancelled), 1)
 
 
+class RelayJoinTests(unittest.IsolatedAsyncioTestCase):
+    async def test_join_token_mints_device_key_and_keeps_shared_key(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            relay = Relay(
+                "server-key-0123456789",
+                device_keys_path=os.path.join(tmp, "device-keys.json"),
+            )
+            captured = {}
+
+            def fake_json_response(payload, **kwargs):
+                captured["payload"] = payload
+                captured["status"] = kwargs.get("status", 200)
+                return payload
+
+            mint_req = types.SimpleNamespace(
+                headers={"Authorization": "Bearer server-key-0123456789"},
+                path="/relay/api/join-tokens",
+                json=lambda: asyncio.sleep(0, result={"machine": "LeoFold8"}),
+            )
+            with unittest.mock.patch.object(
+                    relay_module.web, "json_response", fake_json_response, create=True):
+                await relay.create_join_token(mint_req)
+            token = captured["payload"]["token"]
+            self.assertTrue(token)
+
+            join_req = types.SimpleNamespace(
+                headers={},
+                path="/relay/api/join",
+                json=lambda: asyncio.sleep(0, result={"token": token}),
+            )
+            with unittest.mock.patch.object(
+                    relay_module.web, "json_response", fake_json_response, create=True):
+                await relay.join(join_req)
+            access = captured["payload"]["accessKey"]
+            self.assertGreaterEqual(len(access), 16)
+            self.assertEqual(captured["payload"]["machine"], "LeoFold8")
+
+            ok = types.SimpleNamespace(
+                headers={"Authorization": f"Bearer {access}"},
+                path="/relay/api/machines",
+            )
+            self.assertTrue(relay._authorized(ok))
+            shared = types.SimpleNamespace(
+                headers={"Authorization": "Bearer server-key-0123456789"},
+                path="/relay/api/machines",
+            )
+            self.assertTrue(relay._authorized(shared))
+
+            reused = types.SimpleNamespace(
+                headers={},
+                path="/relay/api/join",
+                json=lambda: asyncio.sleep(0, result={"token": token}),
+            )
+            with unittest.mock.patch.object(
+                    relay_module.web, "json_response", fake_json_response, create=True):
+                await relay.join(reused)
+            self.assertEqual(captured["status"], 409)
+
+
 if __name__ == "__main__":
     unittest.main()

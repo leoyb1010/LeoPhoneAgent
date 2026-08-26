@@ -135,6 +135,7 @@ enum GatewayError: LocalizedError {
     case badURL
     case unauthorized
     case http(status: Int, message: String?)
+    case resumeGap(minAfter: Int)
     case malformedResponse(String)
 
     var errorDescription: String? {
@@ -156,6 +157,8 @@ enum GatewayError: LocalizedError {
                 return String(localized: "LeoAgent error \(status): \(message)")
             }
             return String(localized: "LeoAgent error \(status)")
+        case .resumeGap:
+            return String(localized: "Remote events expired; resyncing from the available watermark.")
         case .malformedResponse(let detail):
             return String(localized: "Unexpected response from LeoAgent: \(detail)")
         }

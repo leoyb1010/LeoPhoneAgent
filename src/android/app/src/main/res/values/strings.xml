@@ -488,6 +488,9 @@
     <string name="sessionlist_search_action">Search</string>
     <string name="sessionlist_running_count">In progress · %1$d</string>
     <string name="sessionlist_approval_count">Approvals · %1$d</string>
+    <string name="sessionlist_remote_section">Remote in progress</string>
+    <string name="sessionlist_remote_row">%1$s · %2$s</string>
+    <string name="sessionlist_remote_waiting">Waiting for you</string>
     <string name="sessionlist_dismiss">Dismiss</string>
     <string name="sessionlist_delete_one_title">Delete conversation?</string>
     <string name="sessionlist_delete_n_title">Delete %1$d conversations?</string>
@@ -1818,8 +1821,8 @@
     <!-- 发版铁律:每次改 versionName 都必须同步改这里,并重写下面的
          whats_new_current 文案。WhatsNewGateTest 会比对这两个值,
          对不上就构建失败 —— 防止弹出的是上一版的更新内容。 -->
-    <string name="whats_new_version" translatable="false">1.0.0-alpha.17</string>
-    <string name="whats_new_current">• Power edition can scan, plan, and confirm a batch of system ops (freeze, uninstall, clear), then show per-app results and roll them back</string>
+    <string name="whats_new_version" translatable="false">1.0.0-alpha.18</string>
+    <string name="whats_new_current">• After a disconnect the task continues from where it left off. A new device can join the fleet by scanning a short code—no long key to paste. Remote running tasks now appear in this phone\'s session list.</string>
     <string name="artifact_ready">ARTIFACT READY</string>
     <string name="artifact_open">Open artifact</string>
     <string name="artifact_missing">This artifact is no longer available on this device.</string>

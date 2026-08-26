@@ -1,9 +1,9 @@
 # LeoPhoneAgent
 
-[![iOS](https://img.shields.io/badge/iOS-1.26.0%20(100)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
-[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.17-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.17)
-[![macOS](https://img.shields.io/badge/macOS-1.75.0-7C3AED.svg)](src/mac/leocodebox/package.json)
-[![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.15-D94B16.svg)](src/harmony/app/AppScope/app.json5)
+[![iOS](https://img.shields.io/badge/iOS-1.27.0%20(101)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.18-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.18)
+[![macOS](https://img.shields.io/badge/macOS-1.76.0-7C3AED.svg)](src/mac/leocodebox/package.json)
+[![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.16-D94B16.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Mobile](https://img.shields.io/badge/mobile-iOS%20%2B%20Android-black.svg)](#系统架构)
 
@@ -31,7 +31,7 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
   `src/mac/leocodebox/`。`src/mac/leoagent/` 是协议兼容/灰度回退，不是 Android UI 工程。
   鸿蒙 7 交付计划：
   [`docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md`](docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md)；
-  工程落地在 `src/harmony/`。当前船是 `0.3.0-alpha.15`，只走 `hdc install`。
+  工程落地在 `src/harmony/`。当前船是 `0.3.0-alpha.16`，只走 `hdc install`。
   没有 Linux 沙箱，也不做无障碍跨应用。杀进程后审批不可用。
 - Android 同时交付 Standard 和 Power；修改 `main` 公共源码后必须同时验证两个 flavor。
 - 不得把「能编译」、「CI 是绿的」或「APK 已上传」当成可发布证据。
@@ -39,7 +39,7 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
 - 任务开始先读 `git status`并获取最新 `origin/main`；未知本地改动默认属于用户，
   不得 `reset --hard`、覆盖或删除。
 
-## HarmonyOS 0.3.0-alpha.15
+## HarmonyOS 0.3.0-alpha.16
 
 个人 hdc 安装，不上应用市场。包名 `com.leoyuan.leophoneagent.harmony`。
 强调色对齐青绿。设置改成同一四组：我的设备 / Agent / 外观与通用 / 数据与关于。
@@ -62,18 +62,18 @@ bash src/harmony/scripts/build_hap.sh
 > 同一台手机上同时安装。Power 版只有在用户完成产品内授权以及 Android
 > 无障碍/Shizuku 系统授权后，才会开放更深的跨应用操控。
 
-- [下载 Standard alpha.17](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.17/LeoPhoneAgent-Standard-1.0.0-alpha.17.apk)
-- [下载 Power alpha.17](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.17/LeoPhoneAgent-Power-1.0.0-alpha.17.apk)
-- [查看本次更新记录](CHANGELOG.md#android-v100-alpha17---2026-08-26)
+- [下载 Standard alpha.18](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.18/LeoPhoneAgent-Standard-1.0.0-alpha.18.apk)
+- [下载 Power alpha.18](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.18/LeoPhoneAgent-Power-1.0.0-alpha.18.apk)
+- [查看本次更新记录](CHANGELOG.md#t6--android-100-alpha18--ios-1270-101--mac-1760--harmony-030-alpha16---2026-08-26)
 
-> 本机 Fold8 API 35 模拟器已从 alpha.16 覆盖安装，冷启动 / `ACTION_ASSIST` / Logcat 过门，首启弹出「本次更新（1.0.0-alpha.17）」。附件挂上后 digest 与下方 SHA-256 一致。真机请自行下载覆盖安装。
+> 本机覆盖安装与首启弹窗按用户指令推迟到 T8 一并验收。真机请自行下载覆盖安装。
 - [查看完整五轮审计与交付报告](docs/ANDROID_DELIVERY_1.0.0_ALPHA1.md)
 
 SHA-256：
 
 ```text
-Standard  2036e2190f711c42fcc9e53df7fc8ad5df6acb6a1cf0b0ff54b3fd5e4e082d31
-Power     218a90a19da15c32e330672227b8d5b860a710057f76fa1752d9153552924f60
+Standard  121b1105c70119ec7f48712785e3f3122e7bbf330496215f8059234a31162542
+Power     bac98af2e39590d6822d9820754218cc5c48dd70794368ce3084167afafc4f0a
 ```
 
 本次公开附件使用显式开启的个人 Alpha 调试证书签名，不应作为应用商店的
@@ -136,7 +136,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 版本/构建:`1.26.0 (100)`;Bundle ID `com.leoyuan.leophoneagent`
+- 版本/构建:`1.27.0 (101)`;Bundle ID `com.leoyuan.leophoneagent`
 - 主对话框直达 Mac:「指挥一台 Mac」选机 + 选 CLI 即开聊;发送在会话建立
   期间自动排队,永不吞点击
 - 会话接管:进入任意 Mac 先列进行中任务,一键接管(全量回放 + 实时跟随)
@@ -147,7 +147,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 Android 版本
 
-- 开发/发布版本：`1.0.0-alpha.17`（versionCode `100017`），`minSdk 26`、`targetSdk 35`、`compileSdk 36`、仅 ARM64。
+- 开发/发布版本：`1.0.0-alpha.18`（versionCode `100018`），`minSdk 26`、`targetSdk 35`、`compileSdk 36`、仅 ARM64。
 - Standard 包名：`com.leoyuan.leophoneagent`
 - Power 包名：`com.leoyuan.leophoneagent.power`
 - 两个版本共享本机 Agent、Provider、Skills、MCP、Memory、PRoot 与浏览器底座；
@@ -290,7 +290,8 @@ adb logcat -d | rg 'FATAL EXCEPTION|AndroidRuntime'
 
 | 版本 | 状态 | 处理 |
 |---|---|---|
-| alpha.17 | 当前公开附件 | Fold8 API 35 模拟器 alpha.16→17 覆盖安装已过；真机由用户自装 |
+| alpha.18 | 当前公开附件 | T6 断线续上 / 短码入列 / 远程会话进列表；覆盖安装推迟到 T8 |
+| alpha.17 | 上一公开附件 | Fold8 API 35 模拟器 alpha.16→17 覆盖安装已过；真机由用户自装 |
 | alpha.16 | 上一公开附件 | Fold8 API 35 模拟器覆盖安装已过 |
 | alpha.15 | 上一公开附件 | Fold8 API 35 模拟器覆盖安装已过 |
 | alpha.13 | 旧可用版 | 可直接升级到 alpha.15 / 16 |

@@ -2,8 +2,8 @@
   "app": {
     "bundleName": "com.leoyuan.leophoneagent.harmony",
     "vendor": "leoyuan",
-    "versionCode": 100020,
-    "versionName": "0.3.0-alpha.15",
+    "versionCode": 100021,
+    "versionName": "0.3.0-alpha.16",
     "icon": "$media:layered_image",
     "label": "$string:app_name",
     "minAPIVersion": 12,

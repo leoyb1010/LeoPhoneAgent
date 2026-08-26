@@ -46,7 +46,10 @@ type Approval = {
 const POLL_MS = 15_000;
 const RELAY_CONFIG_PATH = '~/.leoagent/relay.json';
 
-function encodePair(apiRoot: string, machine: string): string {
+function encodePair(apiRoot: string, machine: string, join?: string, exp?: number): string {
+  if (join) {
+    return `leoagent-body:v2|${JSON.stringify({ apiRoot, machine, join, exp })}`;
+  }
   return `leoagent-body:v1|${JSON.stringify({ apiRoot, machine })}`;
 }
 
@@ -201,7 +204,14 @@ export default function FleetView() {
       return;
     }
     try {
-      await navigator.clipboard.writeText(encodePair(relayApiRoot, machine));
+      let code = encodePair(relayApiRoot, machine);
+      try {
+        const minted = await apiClient.post<{ token?: string; exp?: number }>('/api/leophone/join-token', { machine });
+        if (minted.token) code = encodePair(relayApiRoot, machine, minted.token, minted.exp);
+      } catch {
+        // Old relay without join-tokens still copies a v1 code.
+      }
+      await navigator.clipboard.writeText(code);
       setCopiedPair(machine);
       window.setTimeout(() => setCopiedPair(null), 1800);
     } catch {

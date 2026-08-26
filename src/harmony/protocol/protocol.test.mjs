@@ -12,6 +12,7 @@ import {
   applyDiscovery,
 } from "./relayMachines.ts";
 import { encodePair, decodePair } from "./relayPair.ts";
+import { resumeEnvelope, parseResumeEnvelope, applySeq, nextAfter } from "./resumeEnvelope.ts";
 import { agentWsUrl, registerFrame, parseSseData, parseAgentFrame, respFrame } from "./relayOutbound.ts";
 import { capabilitiesFromJson, sessionSummaryFromJson } from "./harnessTypes.ts";
 import {
@@ -121,6 +122,40 @@ const ROOT = "https://mac-mini-cortex.tail23de22.ts.net/leoagent-relay/relay/api
   assert.ok(!code.includes("key"));
   const evil = decodePair(`leoagent-body:v1|{"apiRoot":"https://evil.example/relay/api","machine":"LeoMate"}`);
   assert.equal(evil && evil.apiRoot, "https://evil.example/relay/api");
+
+  const v2 = encodePair(ROOT + "/", "LeoMate", "join-short", 1_800_000_000);
+  assert.ok(v2.startsWith("leoagent-body:v2|"));
+  assert.ok(!v2.includes("key"));
+  assert.ok(!v2.includes("secret"));
+  const decodedV2 = decodePair(v2);
+  assert.equal(decodedV2 && decodedV2.machine, "LeoMate");
+  assert.equal(decodedV2 && decodedV2.join, "join-short");
+  assert.equal(decodedV2 && decodedV2.exp, 1_800_000_000);
+  assert.deepEqual(decodePair(code), { apiRoot: ROOT, machine: "LeoMate" });
+}
+
+{
+  const fixtures = JSON.parse(readFileSync(new URL("./fixtures/relay-t6.json", import.meta.url), "utf8"));
+  let last = fixtures.out_of_order.lastSeq;
+  const applied = [];
+  for (const seq of fixtures.out_of_order.incoming) {
+    last = applySeq(last, seq);
+    applied.push(last);
+  }
+  assert.deepEqual(applied, fixtures.out_of_order.applied);
+
+  const replayed = fixtures.replay.events.filter((seq) => seq > fixtures.replay.after);
+  assert.deepEqual(replayed, fixtures.replay.replayed);
+
+  const ok = parseResumeEnvelope(fixtures.disconnect.ok);
+  assert.equal(ok && ok.status, "ok");
+  assert.equal(nextAfter(fixtures.disconnect.lastSeq, ok), fixtures.disconnect.lastSeq);
+  const gap = parseResumeEnvelope(fixtures.disconnect.gap);
+  assert.equal(gap && gap.status, "gap");
+  assert.equal(nextAfter(fixtures.disconnect.lastSeq, gap), fixtures.disconnect.afterGap);
+  assert.equal(nextAfter(50, gap), 50, "gap must never rewind lastSeq");
+  assert.deepEqual(resumeEnvelope(5, 41), fixtures.disconnect.gap);
+  assert.equal(parseResumeEnvelope({ event: "message.delta", seq: 1 }), null);
 }
 
 {

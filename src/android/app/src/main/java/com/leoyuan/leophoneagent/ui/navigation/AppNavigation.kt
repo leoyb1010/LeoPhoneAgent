@@ -575,6 +575,7 @@ fun AppNavigation(
                 onScheduledTasksClick = {
                     navController.safeNavigate(Routes.SCHEDULED_TASKS)
                 },
+                onFleetClick = { navController.safeNavigate(Routes.RELAY_FLEET) },
             )
         }
 
@@ -679,6 +680,7 @@ fun AppNavigation(
                         onTerminalClick = { navController.safeNavigate(Routes.terminal()) },
                         onRootfsClick = { navController.safeNavigate(Routes.ROOTFS_MANAGEMENT) },
                         onScheduledTasksClick = { navController.safeNavigate(Routes.SCHEDULED_TASKS) },
+                        onFleetClick = { navController.safeNavigate(Routes.RELAY_FLEET) },
                         modifier = listMod,
                         compactHeader = true,
                     )

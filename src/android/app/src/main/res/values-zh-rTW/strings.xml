@@ -154,6 +154,9 @@
     <string name="sessionlist_search_action">搜尋</string>
     <string name="sessionlist_running_count">進行中 · %1$d</string>
     <string name="sessionlist_approval_count">審批 · %1$d</string>
+    <string name="sessionlist_remote_section">遠端進行中</string>
+    <string name="sessionlist_remote_row">%1$s · %2$s</string>
+    <string name="sessionlist_remote_waiting">等你審批</string>
     <string name="settings_search_hint">搜尋設定</string>
     <string name="settings_section_devices">連接的裝置</string>
     <string name="settings_remote_machines">遠端機器</string>
@@ -750,7 +753,7 @@
     <string name="terminal_cli_booting_hint">若出現安全確認或登入提示，請依螢幕指引繼續。</string>
     <string name="whats_new_title">本次更新（%1$s）</string>
     <string name="whats_new_confirm">知道了</string>
-    <string name="whats_new_current">• Power 版可以把凍結、解除安裝、清理做成一次確認的事務：先掃描再計劃，逐項出結果，還能回滾</string>
+    <string name="whats_new_current">• 斷線後任務從上次位置接著跑。新裝置掃短碼就能加入艦隊，不用再手抄長金鑰。遠端正在跑的任務會出現在本機會話列表裡。</string>
     <string name="artifact_ready">交付物已就緒</string>
     <string name="artifact_open">開啟交付物</string>
     <string name="artifact_missing">這份交付物已不在本機。</string>

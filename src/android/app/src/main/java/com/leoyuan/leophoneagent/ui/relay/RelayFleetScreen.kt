@@ -106,6 +106,8 @@ fun RelayFleetScreen(onBack: () -> Unit) {
     // SharedPreferences 并改 StateFlow（副作用写在组合里，重组时机不受控），
     // 改到 LaunchedEffect 里做。
     var machineName by remember { mutableStateOf(config.machineName) }
+    var pairCode by remember { mutableStateOf<String?>(null) }
+    var pairDraft by remember { mutableStateOf("") }
     LaunchedEffect(config.accessKey, config.bodyEnabled) {
         if (config.accessKey.length >= 16 && config.bodyEnabled) {
             // ensureMachineName 会写加密存储（AES + 磁盘），别放主线程。
@@ -115,6 +117,24 @@ fun RelayFleetScreen(onBack: () -> Unit) {
                 )
             }
         }
+    }
+
+    fun publishRemote() {
+        com.leoyuan.leophoneagent.service.SessionTaskStatus.setRemoteSessions(
+            sessions.flatMap { (machine, rows) ->
+                rows.filterNot { it.isTerminal }.map { session ->
+                    com.leoyuan.leophoneagent.service.RemoteSessionRow(
+                        machine = machine,
+                        sessionId = session.id,
+                        title = session.windowLabel ?: session.harness,
+                        status = session.status,
+                        waitingApproval = approvals.any {
+                            it.machine == machine && it.sessionId == session.id
+                        },
+                    )
+                }
+            },
+        )
     }
 
     fun refresh() {
@@ -134,11 +154,26 @@ fun RelayFleetScreen(onBack: () -> Unit) {
                 approvals = (approvals + batch.approvals)
                     .distinctBy { "${it.machine}|${it.sessionId}|${it.approvalId}" }
             }.onFailure { error = it.message ?: "刷新失败" }
+            publishRemote()
             loading = false
         }
     }
 
     LaunchedEffect(config.accessKey) { refresh() }
+    LaunchedEffect(config.accessKey, config.bodyEnabled, machineName, fleetClient) {
+        if (config.accessKey.length >= 16 && config.bodyEnabled && machineName.isNotBlank()) {
+            pairCode = runCatching {
+                val minted = fleetClient?.createJoinToken(machineName)
+                if (minted != null) {
+                    RelayPairCodec.encode(config.relayApiBase, machineName, minted.token, minted.exp)
+                } else {
+                    RelayPairCodec.encode(config.relayApiBase, machineName)
+                }
+            }.getOrElse { RelayPairCodec.encode(config.relayApiBase, machineName) }
+        } else {
+            pairCode = null
+        }
+    }
 
     // Live-follow every non-terminal session. The key intentionally excludes
     // status/lastEvent so an arriving delta updates the row without tearing
@@ -238,6 +273,47 @@ fun RelayFleetScreen(onBack: () -> Unit) {
 
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("短码入列", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "扫或粘贴对端出示的配对码即可加入，不必再手抄长密钥。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    OutlinedTextField(
+                        value = pairDraft,
+                        onValueChange = { pairDraft = it },
+                        label = { Text("粘贴配对码") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                loading = true
+                                error = null
+                                runCatching {
+                                    val pair = RelayPairCodec.decode(pairDraft)
+                                        ?: error("不是本 App 的配对码")
+                                    if (pair.join.isNullOrBlank()) {
+                                        error("这是旧码，请让对端出示带短码的新配对码。")
+                                    }
+                                    val joined = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                        RelayFleetClient.join(pair.apiRoot, pair.join!!)
+                                    }
+                                    store.save(pair.apiRoot, joined.accessKey)
+                                    base = pair.apiRoot
+                                    key = joined.accessKey
+                                }.onFailure { error = it.message ?: "加入失败" }
+                                loading = false
+                                refresh()
+                            }
+                        },
+                        enabled = !loading && pairDraft.isNotBlank(),
+                    ) { Text("加入舰队") }
+                }
+            }
+
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("安全连接", fontWeight = FontWeight.SemiBold)
                     OutlinedTextField(
                         value = base,
@@ -273,7 +349,12 @@ fun RelayFleetScreen(onBack: () -> Unit) {
                             enabled = !loading && key.trim().length >= 16,
                         ) { Text("测试并保存") }
                         if (config.accessKey.isNotEmpty()) {
-                            TextButton(onClick = { store.clear(); machines = emptyList(); sessions.clear() }) {
+                            TextButton(onClick = {
+                                store.clear()
+                                machines = emptyList()
+                                sessions.clear()
+                                com.leoyuan.leophoneagent.service.SessionTaskStatus.setRemoteSessions(emptyList())
+                            }) {
                                 Text("断开")
                             }
                         }
@@ -307,12 +388,12 @@ fun RelayFleetScreen(onBack: () -> Unit) {
 
             // machineName 现在由上面的 LaunchedEffect 异步落地，未就绪时先不
             // 出示配对码 —— 名字为空的码扫出来会指向一台不存在的机器。
-            if (config.accessKey.length >= 16 && config.bodyEnabled && machineName.isNotBlank()) {
-                val pair = RelayPairCodec.encode(config.relayApiBase, machineName)
+            if (config.accessKey.length >= 16 && config.bodyEnabled && machineName.isNotBlank() && pairCode != null) {
+                val pair = pairCode!!
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text("出示配对码", fontWeight = FontWeight.SemiBold)
-                        Text("码里只有中继根和本机名，钥匙不在里面。用 iPhone 扫或粘贴即可加入列表。")
+                        Text("短码里没有长密钥。对端扫或粘贴即可入列。旧版码仍能用，但新设备不用再粘贴密钥。")
                         Text(pair, style = MaterialTheme.typography.bodySmall)
                         OutlinedButton(onClick = {
                             val clipboard = context.getSystemService(ClipboardManager::class.java)

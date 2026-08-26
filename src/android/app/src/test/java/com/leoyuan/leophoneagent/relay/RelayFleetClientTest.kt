@@ -80,12 +80,13 @@ class RelayFleetClientTest {
         assertTrue(!error.message.orEmpty().contains("1234567890abcdef"))
     }
 
-    @Test fun sessionEventsUseSseBearerAndParseResumableFrames() = runBlocking {
+    @Test fun sessionEventsSkipResumeOkAndParseResumableFrames() = runBlocking {
         server.enqueue(
             MockResponse()
                 .setHeader("Content-Type", "text/event-stream")
                 .setBody(
-                    "data: {\"seq\":8,\"event\":\"message.delta\",\"delta\":\"hi\"}\n\n" +
+                    "data: {\"type\":\"resume\",\"status\":\"ok\",\"after\":7,\"min_after\":0}\n\n" +
+                        "data: {\"seq\":8,\"event\":\"message.delta\",\"delta\":\"hi\"}\n\n" +
                         "data: {\"seq\":9,\"event\":\"run.completed\",\"output\":\"hi\"}\n\n",
                 ),
         )
@@ -117,6 +118,30 @@ class RelayFleetClientTest {
             .toList()
         assertTrue(failure is RelayEventsExpiredException)
         assertEquals(41, (failure as RelayEventsExpiredException).minAfter)
+    }
+
+    @Test fun resumeGapOnSseJumpsToWatermark() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setHeader("Content-Type", "text/event-stream")
+                .setBody("data: {\"type\":\"resume\",\"status\":\"gap\",\"after\":1,\"min_after\":41}\n\n"),
+        )
+        var failure: Throwable? = null
+        client.sessionEvents("cortex", "s-gap", after = 1)
+            .catch { failure = it }
+            .toList()
+        assertTrue(failure is RelayEventsExpiredException)
+        assertEquals(41, (failure as RelayEventsExpiredException).minAfter)
+    }
+
+    @Test fun joinExchangesShortCodeWithoutBearer() {
+        server.enqueue(MockResponse().setBody("""{"accessKey":"device-key-01234567","machine":"LeoFold8"}"""))
+        val joined = RelayFleetClient.join(server.url("/relay/api").toString().trimEnd('/'), "join-short", OkHttpClient(), validateHttps = false)
+        assertEquals("device-key-01234567", joined.accessKey)
+        assertEquals("LeoFold8", joined.machine)
+        val request = server.takeRequest()
+        assertEquals("/relay/api/join", request.path)
+        assertEquals(null, request.getHeader("Authorization"))
     }
 
     @Test fun productionBaseRequiresHttps() {

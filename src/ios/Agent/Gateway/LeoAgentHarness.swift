@@ -150,6 +150,11 @@ extension LeoAgentClient {
             }
             guard (200..<300).contains(http.statusCode) else {
                 if http.statusCode == 401 || http.statusCode == 403 { throw GatewayError.unauthorized }
+                if http.statusCode == 410 {
+                    var raw = ""
+                    for try await line in bytes.lines { raw += line }
+                    throw GatewayError.resumeGap(minAfter: T6RelayLogic.minAfter(from: raw) ?? 0)
+                }
                 throw GatewayError.http(status: http.statusCode, message: nil)
             }
             for try await line in bytes.lines {
@@ -160,6 +165,12 @@ extension LeoAgentClient {
                       let data = raw.data(using: .utf8),
                       let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
                 else { continue }
+                if let resume = T6RelayLogic.parseResume(obj) {
+                    if resume.isGap {
+                        throw GatewayError.resumeGap(minAfter: resume.minAfter)
+                    }
+                    continue
+                }
                 continuation.yield(HarnessEvent(
                     seq: obj["seq"] as? Int ?? 0,
                     event: GatewayEvent.parse(obj)))
@@ -379,7 +390,13 @@ final class HarnessSessionDriver: ObservableObject {
                 }
                 cleanClose = true
             } catch {
-                await MainActor.run { self.lastError = error.localizedDescription }
+                if case GatewayError.resumeGap(let minAfter) = error {
+                    await MainActor.run {
+                        self.lastSeq = T6RelayLogic.advance(current: self.lastSeq, minAfter: minAfter)
+                    }
+                } else {
+                    await MainActor.run { self.lastError = error.localizedDescription }
+                }
             }
             if ended || Task.isCancelled { return }
 

@@ -283,6 +283,7 @@ fun SessionListScreen(
     onRootfsClick: () -> Unit = {},
     // [T-android-scheduled-tasks-design] Entry to the scheduled-tasks list.
     onScheduledTasksClick: () -> Unit = {},
+    onFleetClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     /** Compact chrome for the Fold8 inner-screen navigation pane. */
     compactHeader: Boolean = false,
@@ -308,6 +309,34 @@ fun SessionListScreen(
     val regeneratingIds by viewModel.regeneratingIds.collectAsState()
     val runningSessions by SessionActivityTracker.activeSessions.collectAsState()
     val pendingApprovals by SessionTaskStatus.pendingApprovals.collectAsState()
+    val remoteSessions by SessionTaskStatus.remoteSessions.collectAsState()
+    LaunchedEffect(Unit) {
+        val store = com.leoyuan.leophoneagent.relay.RelayFleetStore.get(context)
+        while (true) {
+            val config = store.config.value
+            if (config.accessKey.length >= 16) {
+                runCatching {
+                    val client = com.leoyuan.leophoneagent.relay.RelayFleetClient(config)
+                    val rows = client.machines().filter { it.online }.flatMap { machine ->
+                        client.sessions(machine.name).filterNot { it.isTerminal }.map { session ->
+                            com.leoyuan.leophoneagent.service.RemoteSessionRow(
+                                machine = machine.name,
+                                sessionId = session.id,
+                                title = session.windowLabel ?: session.harness,
+                                status = session.status,
+                                waitingApproval = session.status.contains("approval", ignoreCase = true) ||
+                                    session.status.contains("waiting", ignoreCase = true),
+                            )
+                        }
+                    }
+                    SessionTaskStatus.setRemoteSessions(rows)
+                }
+            } else {
+                SessionTaskStatus.setRemoteSessions(emptyList())
+            }
+            kotlinx.coroutines.delay(15_000)
+        }
+    }
     val providerConfig by providerRepository.config.collectAsState()
     val hasProviders = providerConfig.instances.isNotEmpty()
     val hasGroups = providerConfig.modelGroups.isNotEmpty()
@@ -604,6 +633,49 @@ fun SessionListScreen(
                         // Leave space for bottom FAB row
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp),
                     ) {
+                        if (remoteSessions.isNotEmpty()) {
+                            item(key = "remote_sessions") {
+                                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                                    Text(
+                                        text = stringResource(R.string.sessionlist_remote_section),
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                    remoteSessions.forEach { row ->
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable(onClick = onFleetClick)
+                                                .padding(vertical = 8.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                        ) {
+                                            Text(
+                                                text = stringResource(
+                                                    R.string.sessionlist_remote_row,
+                                                    row.machine,
+                                                    row.title,
+                                                ),
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                modifier = Modifier.weight(1f),
+                                            )
+                                            Text(
+                                                text = if (row.waitingApproval) {
+                                                    stringResource(R.string.sessionlist_remote_waiting)
+                                                } else {
+                                                    row.status
+                                                },
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = if (row.waitingApproval) {
+                                                    MaterialTheme.colorScheme.tertiary
+                                                } else {
+                                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                                },
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         if (runningSessions.isNotEmpty() || pendingApprovals > 0) {
                             item(key = "task_status") {
                                 Row(

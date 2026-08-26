@@ -202,11 +202,24 @@ struct GatewaySettingsView: View {
                     scanMessage = "不是本 App 的配对码。码里应是中继根和机器名。"
                     return
                 }
+                if let join = pair.join, !join.isEmpty {
+                    do {
+                        let joined = try await RelayMachinesClient.join(apiRoot: pair.apiRoot, token: join)
+                        store.upsertDiscovered([
+                            RelayDiscoveredMachine(name: pair.machine, online: false, platform: nil, server: nil, version: nil)
+                        ], key: joined.key, apiRoot: pair.apiRoot)
+                        scanMessage = "已加入 \(pair.machine)"
+                        Task { await refresh() }
+                    } catch {
+                        scanMessage = "短码已过期或无效，请让对端重新出示。"
+                    }
+                    return
+                }
                 guard let credential = RelayMachinesClient.credential(
                     matching: pair.apiRoot,
                     from: relayCredentialCandidates()
                 ) else {
-                    scanMessage = "先粘贴中继密钥，再扫这台身体的配对码。"
+                    scanMessage = "这是旧码。请让对端出示带短码的新配对码，或先粘贴中继密钥。"
                     return
                 }
                 store.upsertDiscovered([

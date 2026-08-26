@@ -12,6 +12,16 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.27.0",
+            date: "2026-08-26",
+            title: "断线接着跑，扫短码入列",
+            highlights: [
+                "断线重连后远程任务从上次位置继续，不会丢一段或倒回去。",
+                "新设备扫短码就能加入舰队，不用再手抄长密钥。旧密钥这一轮仍能用。",
+                "远程正在跑的任务会出现在本机会话列表里，点一下就能跟上去。",
+            ]
+        ),
+        LeoRelease(
             version: "1.26.0",
             date: "2026-08-26",
             title: "授权文件夹能当工作区，捷径能直接出摘要",

@@ -27,6 +27,7 @@ import hashlib
 import hmac
 import json
 import os
+import secrets
 import time
 import uuid
 from typing import Any, Dict, List, Optional
@@ -38,6 +39,9 @@ from .apns import build_pusher
 VERSION = "0.1.0"
 DEFAULT_PORT = 8650
 REQUEST_TIMEOUT_S = 60
+JOIN_TTL_S = 15 * 60
+DEVICE_KEY_TTL_S = 90 * 24 * 3600
+DEFAULT_DEVICE_KEYS_PATH = os.path.expanduser("~/.leoagent/device-keys.json")
 
 
 class Machine:
@@ -54,11 +58,17 @@ class Machine:
 
 class Relay:
     def __init__(self, key: str, extra_keys: Optional[list] = None,
-                 rejected_log: Optional[str] = None):
+                 rejected_log: Optional[str] = None,
+                 device_keys_path: Optional[str] = None):
         self.key = key
         # 多钥匙:手机端历史上可能存过任意一台 Mac 的旧钥匙,统一钥匙后
         # 旧钥匙会被拒。RELAY_KEYS 里列出的都放行,老用户无感迁移。
         self.keys = [key] + [k for k in (extra_keys or []) if len(k) >= 16]
+        # 短码入列签发的设备钥匙。旧 RELAY_KEY 本周期继续有效(双栈)。
+        self.device_keys_path = device_keys_path or DEFAULT_DEVICE_KEYS_PATH
+        self.device_keys: Dict[str, float] = {}
+        self.join_tokens: Dict[str, Dict[str, Any]] = {}
+        self._load_device_keys()
         # 被拒的钥匙落盘(0600,仅本机可读),便于把它收编进 RELAY_KEYS。
         self.rejected_log = rejected_log
         self._last_rejected_log_at = float("-inf")
@@ -93,9 +103,19 @@ class Relay:
         # 清洗复制残渣:从终端复制密钥时常带上 zsh 的行尾标记 % 或换行。
         # 我们生成的密钥不含这些字符,尾部剥掉是安全的。
         presented = header[7:].strip().rstrip("%").strip()
+        now = time.time()
         try:
             if any(hmac.compare_digest(presented, k) for k in self.keys):
                 return True
+            expired = [k for k, exp in self.device_keys.items() if exp < now]
+            for key in expired:
+                self.device_keys.pop(key, None)
+            for device_key in self.device_keys:
+                try:
+                    if hmac.compare_digest(presented, device_key):
+                        return True
+                except (TypeError, ValueError):
+                    continue
         except (TypeError, ValueError):
             return False
         self._record_rejected(presented, request.path)
@@ -127,12 +147,83 @@ class Relay:
         except OSError:
             pass
 
+    def _load_device_keys(self) -> None:
+        try:
+            with open(self.device_keys_path, encoding="utf-8") as f:
+                saved = json.load(f)
+            now = time.time()
+            rows = saved.get("keys") if isinstance(saved, dict) else None
+            if isinstance(rows, dict):
+                self.device_keys = {
+                    str(key): float(exp)
+                    for key, exp in rows.items()
+                    if isinstance(key, str) and len(key) >= 16 and float(exp) > now
+                }
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            self.device_keys = {}
+
+    def _save_device_keys(self) -> None:
+        directory = os.path.dirname(self.device_keys_path)
+        try:
+            os.makedirs(directory, mode=0o700, exist_ok=True)
+            tmp = self.device_keys_path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump({"keys": self.device_keys}, f)
+            os.replace(tmp, self.device_keys_path)
+            os.chmod(self.device_keys_path, 0o600)
+        except OSError:
+            pass
+
+    def _purge_join_tokens(self) -> None:
+        now = time.time()
+        stale = [token for token, rec in self.join_tokens.items() if rec.get("exp", 0) < now]
+        for token in stale:
+            self.join_tokens.pop(token, None)
+
     @staticmethod
     def _unauthorized() -> web.Response:
         return web.json_response(
             {"error": {"message": "Invalid relay key", "code": "relay_auth_failed"}},
             status=401,
         )
+
+    async def create_join_token(self, request: web.Request) -> web.Response:
+        """已入列的身体签发短码。新设备扫码换设备钥匙,不用再粘贴 RELAY_KEY。"""
+        if not self._authorized(request):
+            return self._unauthorized()
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001
+            body = {}
+        if not isinstance(body, dict):
+            body = {}
+        machine = str(body.get("machine") or "").strip()
+        self._purge_join_tokens()
+        token = secrets.token_urlsafe(16)
+        exp = time.time() + JOIN_TTL_S
+        self.join_tokens[token] = {"machine": machine, "exp": exp}
+        return web.json_response({"token": token, "exp": exp, "machine": machine})
+
+    async def join(self, request: web.Request) -> web.Response:
+        """新设备用短码换一把设备钥匙。旧共享 Key 本周期继续有效。"""
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001
+            return web.json_response({"error": {"message": "invalid json"}}, status=400)
+        token = str((body or {}).get("token") or "").strip()
+        self._purge_join_tokens()
+        rec = self.join_tokens.pop(token, None)
+        if not rec or rec.get("exp", 0) < time.time():
+            return web.json_response(
+                {"error": {"message": "join token expired or unknown"}}, status=409,
+            )
+        access_key = secrets.token_urlsafe(24)
+        self.device_keys[access_key] = time.time() + DEVICE_KEY_TTL_S
+        self._save_device_keys()
+        return web.json_response({
+            "accessKey": access_key,
+            "machine": rec.get("machine") or "",
+        })
 
     # -- Mac 侧:注册通道 ----------------------------------------------------
 
@@ -504,6 +595,8 @@ class Relay:
         app.router.add_get("/relay/api/machines", self.list_machines)
         app.router.add_get("/relay/api/events", self.list_events)
         app.router.add_post("/relay/api/device", self.register_device)
+        app.router.add_post("/relay/api/join-tokens", self.create_join_token)
+        app.router.add_post("/relay/api/join", self.join)
         app.router.add_get("/relay/api/push-status", self.push_status)
         app.router.add_put("/relay/api/collections", self.put_collections)
         app.router.add_get("/relay/api/collections", self.get_collections)
