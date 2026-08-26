@@ -195,6 +195,7 @@ object SpeechRecognitionManager {
             Log.d(TAG, "startRecording ignored; state=${_state.value}")
             return
         }
+        ReadAloudPlayer.hushActive()
         val engine = currentEngine()
         if (engine == null) {
             _lastError.value = RecognitionError.OEM_NO_SERVICE

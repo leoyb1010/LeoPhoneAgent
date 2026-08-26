@@ -268,6 +268,7 @@ final class SpeechRecognitionManager: ObservableObject {
 
     func startRecording() throws {
         guard state == .idle else { return }
+        VoiceOutputState.shared.stop()
 
         recognitionTask?.cancel()
         recognitionTask = nil

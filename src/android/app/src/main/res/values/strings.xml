@@ -145,6 +145,10 @@
     <string name="settings_section_appearance">Appearance</string>
     <string name="settings_appearance_subtitle">Theme, font size, and display</string>
     <string name="settings_section_agent_runtime">Agent Runtime</string>
+    <string name="settings_search_hint">Search settings</string>
+    <string name="settings_section_devices">Connected devices</string>
+    <string name="settings_remote_machines">Remote machines</string>
+    <string name="settings_remote_machines_subtitle">Send remote tasks, watch progress, approve and stop</string>
     <string name="settings_skills">Skills</string>
     <string name="settings_skills_subtitle">Manage AI agent skills and instructions</string>
     <string name="settings_memory">Memory</string>
@@ -478,6 +482,8 @@
     <string name="sessionlist_regenerating_title">Regenerating title…</string>
     <string name="sessionlist_duplicate">Duplicate</string>
     <string name="sessionlist_search_action">Search</string>
+    <string name="sessionlist_running_count">In progress · %1$d</string>
+    <string name="sessionlist_approval_count">Approvals · %1$d</string>
     <string name="sessionlist_dismiss">Dismiss</string>
     <string name="sessionlist_delete_one_title">Delete conversation?</string>
     <string name="sessionlist_delete_n_title">Delete %1$d conversations?</string>
@@ -1805,8 +1811,8 @@
     <!-- 发版铁律:每次改 versionName 都必须同步改这里,并重写下面的
          whats_new_current 文案。WhatsNewGateTest 会比对这两个值,
          对不上就构建失败 —— 防止弹出的是上一版的更新内容。 -->
-    <string name="whats_new_version" translatable="false">1.0.0-alpha.13</string>
-    <string name="whats_new_current">• Each developer CLI now clearly separates its official account from a compatible LeoPhoneAgent model\n• Claude Code, Codex CLI, and Grok Build can use compatible Leo models without exporting OAuth or subscription credentials\n• Official Claude, Codex, Grok, and Cursor sign-in links now open directly inside the app\n• Account status, first-run guidance, and the Fold8 connection screen now report the real state instead of a generic authorization error</string>
+    <string name="whats_new_version" translatable="false">1.0.0-alpha.14</string>
+    <string name="whats_new_current">• Long file reads now return next_offset so the agent can continue without guessing line numbers\n• Starting a voice message pauses read-aloud so the microphone is not fighting TTS\n• Settings is searchable; Connected devices and Remote machines use the same wording as other rows\n• The session list shows in-progress and pending-approval counts when they are known</string>
     <string name="artifact_ready">ARTIFACT READY</string>
     <string name="artifact_open">Open artifact</string>
     <string name="artifact_missing">This artifact is no longer available on this device.</string>

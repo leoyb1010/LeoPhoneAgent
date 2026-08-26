@@ -19,6 +19,15 @@ export class ToolResult {
   needWrite: boolean = false;
 }
 
+class FileReadPage {
+  showStart: number = 1;
+  showEnd: number = 0;
+  totalLines: number = 0;
+  content: string = '';
+  truncated: boolean = false;
+  nextOffset: number = 0;
+}
+
 export class LocalTools {
   static async hydrate(context: common.UIAbilityContext): Promise<void> {
     await Promise.all([
@@ -105,7 +114,16 @@ export class LocalTools {
       } else if (name === 'file_read') {
         const path = sandboxFileName(toolArg(args, 'path'));
         const body = LocalTools.readSandbox(context, path);
-        out.text = body.length > 80000 ? `${body.substring(0, 80000)}\n... (truncated)` : body;
+        const offsetRaw = toolArg(args, 'offset');
+        const linesRaw = toolArg(args, 'lines');
+        const maxRaw = toolArg(args, 'max_length');
+        const direction = toolArg(args, 'direction') || 'head';
+        const offset = offsetRaw.length > 0 ? Number(offsetRaw) : 1;
+        const hasLines = linesRaw.length > 0;
+        const requested = hasLines ? Number(linesRaw) : 0;
+        const maxLength = maxRaw.length > 0 ? Number(maxRaw) : 15000;
+        out.text = LocalTools.formatFileRead(path, body.length, LocalTools.pageFile(
+          body.split('\n'), offset, requested, hasLines, maxLength, direction));
       } else if (name === 'file_write') {
         const written = LocalTools.writeSandbox(context, toolArg(args, 'path'), toolArg(args, 'content'),
           owner);
@@ -216,5 +234,81 @@ export class LocalTools {
     } finally {
       req.destroy();
     }
+  }
+
+  /** Same pagination contract as Android FileReadPaging / protocol fileReadPage. */
+  private static pageFile(allLines: string[], offset: number, requestedLines: number,
+    hasLineLimit: boolean, maxLength: number, direction: string): FileReadPage {
+    const total = allLines.length;
+    const cap = Math.max(1, Math.min(maxLength, 80000));
+    const page = new FileReadPage();
+    page.totalLines = total;
+    if (total === 0) {
+      return page;
+    }
+    const isTail = direction.toLowerCase() === 'tail';
+    let selected: string[] = [];
+    let showStart = 1;
+    if (isTail) {
+      const count = hasLineLimit ? requestedLines : total;
+      const start = Math.max(0, total - count);
+      selected = allLines.slice(start, total);
+      showStart = start + 1;
+    } else {
+      const start = Math.min(Math.max(0, Math.max(offset, 1) - 1), total);
+      const end = hasLineLimit ? Math.min(start + Math.max(requestedLines, 0), total) : total;
+      selected = allLines.slice(start, end);
+      showStart = selected.length === 0 ? Math.max(offset, 1) : start + 1;
+    }
+    return LocalTools.clipFile(selected, showStart, total, cap, isTail);
+  }
+
+  private static clipFile(selected: string[], showStart: number, total: number, cap: number,
+    isTail: boolean): FileReadPage {
+    const page = new FileReadPage();
+    page.showStart = showStart;
+    page.totalLines = total;
+    if (selected.length === 0) {
+      page.showEnd = showStart - 1;
+      return page;
+    }
+    const joined = selected.join('\n');
+    if (joined.length <= cap) {
+      page.showEnd = showStart + selected.length - 1;
+      page.content = joined;
+      page.nextOffset = (!isTail && page.showEnd < total) ? page.showEnd + 1 : 0;
+      return page;
+    }
+    let used = 0;
+    let complete = 0;
+    for (let i = 0; i < selected.length; i++) {
+      const extra = complete === 0 ? 0 : 1;
+      if (used + extra + selected[i].length > cap) {
+        break;
+      }
+      used += extra + selected[i].length;
+      complete++;
+    }
+    page.truncated = true;
+    if (complete === 0) {
+      page.showEnd = showStart;
+      page.content = selected[0].substring(0, cap);
+      page.nextOffset = isTail ? 0 : showStart + 1;
+      return page;
+    }
+    page.showEnd = showStart + complete - 1;
+    page.content = selected.slice(0, complete).join('\n');
+    page.nextOffset = (!isTail && page.showEnd < total) ? page.showEnd + 1 : 0;
+    return page;
+  }
+
+  private static formatFileRead(path: string, size: number, page: FileReadPage): string {
+    const range = (page.totalLines === 0 || page.showEnd < page.showStart)
+      ? 'showing 0-0 of 0'
+      : `showing ${page.showStart}-${page.showEnd} of ${page.totalLines}`;
+    const trunc = page.truncated ? ' (truncated at 80000 chars or requested max_length)' : '';
+    const header = `[${path} | ${size} bytes | ${page.totalLines} lines | ${range}${trunc}]`;
+    const next = page.nextOffset > 0 ? `\nnext_offset: ${page.nextOffset}` : '';
+    return `${header}\n${page.content}${next}`;
   }
 }

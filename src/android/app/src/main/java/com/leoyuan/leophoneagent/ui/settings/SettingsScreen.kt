@@ -40,6 +40,7 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.automirrored.outlined.Send
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Terminal
@@ -48,10 +49,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -68,6 +72,8 @@ import androidx.compose.ui.res.stringResource
 import com.leoyuan.leophoneagent.BuildConfig
 import com.leoyuan.leophoneagent.R
 import com.leoyuan.leophoneagent.ui.components.openExternalUrl
+
+private val LocalSettingsQuery = compositionLocalOf { "" }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -111,6 +117,7 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     var showFeedbackSheet by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -132,6 +139,19 @@ fun SettingsScreen(
                 .padding(padding)
                 .verticalScroll(rememberScrollState()),
         ) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                singleLine = true,
+                placeholder = { Text(stringResource(R.string.settings_search_hint)) },
+                leadingIcon = {
+                    Icon(Icons.Outlined.Search, contentDescription = null)
+                },
+            )
+            CompositionLocalProvider(LocalSettingsQuery provides searchQuery) {
             // -- LLM Providers --
             SettingsSection(
                 title = stringResource(R.string.settings_section_llm_providers),
@@ -173,13 +193,12 @@ fun SettingsScreen(
                 )
             }
 
-            // -- Agent Runtime --
-            SettingsSection(title = "连接的设备") {
+            SettingsSection(title = stringResource(R.string.settings_section_devices)) {
                 SettingsItem(
                     icon = Icons.Outlined.Computer,
                     iconColor = Color(0xFF30B0C7),
-                    title = "远程机器",
-                    subtitle = "远程发任务、看进度、审批和停止",
+                    title = stringResource(R.string.settings_remote_machines),
+                    subtitle = stringResource(R.string.settings_remote_machines_subtitle),
                     onClick = onFleetClick,
                     showDivider = false,
                 )
@@ -336,6 +355,7 @@ fun SettingsScreen(
             }
 
             Spacer(Modifier.height(24.dp))
+            }
         }
     }
 
@@ -558,6 +578,7 @@ private fun SettingsItem(
     onClick: () -> Unit,
     showDivider: Boolean = true,
 ) {
+    if (!SettingsSearch.matches(LocalSettingsQuery.current, title, subtitle)) return
     Column {
         Row(
             modifier = Modifier

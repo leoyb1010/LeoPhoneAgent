@@ -160,6 +160,12 @@
     <string name="sessionlist_regenerating_title">正在重新生成標題…</string>
     <string name="sessionlist_duplicate">複製</string>
     <string name="sessionlist_search_action">搜尋</string>
+    <string name="sessionlist_running_count">進行中 · %1$d</string>
+    <string name="sessionlist_approval_count">審批 · %1$d</string>
+    <string name="settings_search_hint">搜尋設定</string>
+    <string name="settings_section_devices">連接的裝置</string>
+    <string name="settings_remote_machines">遠端機器</string>
+    <string name="settings_remote_machines_subtitle">遠端發任務、看進度、審批和停止</string>
     <string name="sessionlist_dismiss">關閉</string>
     <string name="sessionlist_delete_one_title">刪除此對話？</string>
     <string name="sessionlist_delete_n_title">刪除 %1$d 個對話？</string>
@@ -797,7 +803,7 @@
     <string name="terminal_cli_booting_hint">若出現安全確認或登入提示，請依螢幕指引繼續。</string>
     <string name="whats_new_title">本次更新（%1$s）</string>
     <string name="whats_new_confirm">知道了</string>
-    <string name="whats_new_current">• 每個開發 CLI 都明確分為「CLI 官方帳號」與「Leo 模型」兩種連線\n• Claude Code、Codex CLI 與 Grok Build 可使用相容的 LeoPhoneAgent 模型，不匯出 OAuth 或訂閱憑證\n• Claude、Codex、Grok 與 Cursor 的官方授權頁現在會直接在 App 內開啟\n• 帳號狀態、首次啟動指引與 Fold8 連線畫面改為顯示真實狀態，不再統一回報「無法使用目前授權」</string>
+    <string name="whats_new_current">• 長檔讀取現在會回傳 next_offset，Agent 不用再猜下一頁從哪一行開始\n• 開始語音輸入時會先停朗讀，麥克風不再和 TTS 搶聲音\n• 設定可搜尋；「連接的裝置 / 遠端機器」改走統一文案\n• 會話列表在知道數量時顯示進行中和待審批</string>
     <string name="artifact_ready">交付物已就緒</string>
     <string name="artifact_open">開啟交付物</string>
     <string name="artifact_missing">這份交付物已不在本機。</string>

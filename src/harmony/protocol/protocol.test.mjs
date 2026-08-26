@@ -42,6 +42,8 @@ import {
   resolveFailoverQueue,
   shouldFailover,
   usageFromJson,
+  fileReadPage,
+  formatFileReadOutput,
 } from "./localChat.ts";
 import { enrichEvent, nowSeconds, replayAfter, dueTasks, dayKey, scheduleSessionTitle, lastRunLabel } from "./bodyRuntime.ts";
 import {
@@ -576,6 +578,27 @@ function wireShape(source, startsWith) {
   assert.equal(isAndroidBody(harmonyMachine), false);
   assert.equal(isAndroidBody({ name: "Fold8", online: true, platform: "android", server: "minis", version: "1" }), true);
   assert.equal(isAndroidBody({ name: "Mac", online: true, platform: "leoagent", server: "leocodebox", version: "1" }), false);
+}
+
+{
+  const lines = Array.from({ length: 20 }, (_, i) => `L${i + 1}`);
+  const head = fileReadPage(lines, 1, 5, 15000, "head");
+  assert.equal(head.showStart, 1);
+  assert.equal(head.showEnd, 5);
+  assert.equal(head.nextOffset, 6);
+  assert.equal(head.content, "L1\nL2\nL3\nL4\nL5");
+  const last = fileReadPage(lines, 18, 10, 15000, "head");
+  assert.equal(last.nextOffset, null);
+  const clipped = fileReadPage(["aaaa", "bbbb", "cccc", "dddd"], 1, null, 9, "head");
+  assert.equal(clipped.content, "aaaa\nbbbb");
+  assert.equal(clipped.nextOffset, 3);
+  assert.equal(clipped.truncated, true);
+  const tail = fileReadPage(lines, 1, 3, 15000, "tail");
+  assert.equal(tail.showStart, 18);
+  assert.equal(tail.nextOffset, null);
+  const formatted = formatFileReadOutput("/tmp/x", 4, { showStart: 1, showEnd: 2, totalLines: 10, content: "a\nb", truncated: false, nextOffset: 3 });
+  assert.match(formatted, /next_offset: 3/);
+  assert.match(formatted, /showing 1-2 of 10/);
 }
 
 console.log("PROTOCOL_MACHINES_OK");

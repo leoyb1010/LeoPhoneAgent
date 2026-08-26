@@ -1,7 +1,7 @@
 # LeoPhoneAgent
 
-[![iOS](https://img.shields.io/badge/iOS-1.24.1%20(95)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
-[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.13-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.13)
+[![iOS](https://img.shields.io/badge/iOS-1.24.2%20(96)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.14-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.14)
 [![macOS](https://img.shields.io/badge/macOS-1.74.2-7C3AED.svg)](src/mac/leocodebox/package.json)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.14-D94B16.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
@@ -63,16 +63,18 @@ bash src/harmony/scripts/build_hap.sh
 > 同一台手机上同时安装。Power 版只有在用户完成产品内授权以及 Android
 > 无障碍/Shizuku 系统授权后，才会开放更深的跨应用操控。
 
-- [下载 Standard alpha.13](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.13/LeoPhoneAgent-Standard-1.0.0-alpha.13.apk)
-- [下载 Power alpha.13](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.13/LeoPhoneAgent-Power-1.0.0-alpha.13.apk)
-- [查看本次更新记录](CHANGELOG.md#android-v100-alpha13---2026-08-23)
+- [下载 Standard alpha.14](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.14/LeoPhoneAgent-Standard-1.0.0-alpha.14.apk)
+- [下载 Power alpha.14](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.14/LeoPhoneAgent-Power-1.0.0-alpha.14.apk)
+- [查看本次更新记录](CHANGELOG.md#android-v100-alpha14--ios-1242-96---2026-08-26)
+
+> 本机已构建并过签名门禁。GitHub 附件要等 Fold8 覆盖安装、冷启动和 Logcat 过门后再挂；链接在挂上之前会 404。
 - [查看完整五轮审计与交付报告](docs/ANDROID_DELIVERY_1.0.0_ALPHA1.md)
 
 SHA-256：
 
 ```text
-Standard  8b8cfcda6e4709627dabaf92150adecafbb7a8f9f580bb418ef44a0bfcccd124
-Power     ca6aae2b457318adbfd8c40c76dc54211eb056556e074b1093bf01c468a2b2de
+Standard  58e9ab63cf7da888c48ffebba0f93c1b767e246e73462f52591721d55fc8f6a3
+Power     817229262e0bdcfa66a08e562b28dec4f62e733b2436131140c3a516bde0cbf3
 ```
 
 本次公开附件使用显式开启的个人 Alpha 调试证书签名，不应作为应用商店的
@@ -135,7 +137,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 版本/构建:`1.24.1 (95)`;Bundle ID `com.leoyuan.leophoneagent`
+- 版本/构建:`1.24.2 (96)`;Bundle ID `com.leoyuan.leophoneagent`
 - 主对话框直达 Mac:「指挥一台 Mac」选机 + 选 CLI 即开聊;发送在会话建立
   期间自动排队,永不吞点击
 - 会话接管:进入任意 Mac 先列进行中任务,一键接管(全量回放 + 实时跟随)
@@ -146,7 +148,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 Android 版本
 
-- 开发/发布版本：`1.0.0-alpha.13`（versionCode `100013`），`minSdk 26`、`targetSdk 35`、`compileSdk 36`、仅 ARM64。
+- 开发/发布版本：`1.0.0-alpha.14`（versionCode `100014`），`minSdk 26`、`targetSdk 35`、`compileSdk 36`、仅 ARM64。
 - Standard 包名：`com.leoyuan.leophoneagent`
 - Power 包名：`com.leoyuan.leophoneagent.power`
 - 两个版本共享本机 Agent、Provider、Skills、MCP、Memory、PRoot 与浏览器底座；
@@ -289,8 +291,9 @@ adb logcat -d | rg 'FATAL EXCEPTION|AndroidRuntime'
 
 | 版本 | 状态 | 处理 |
 |---|---|---|
-| alpha.13 | 当前可用 | alpha.1–alpha.3 / alpha.5–alpha.12 可直接覆盖安装 |
-| alpha.12 | 上一可用版 | alpha.13 的升级验证基线 |
+| alpha.14 | 当前可用 | alpha.1–alpha.3 / alpha.5–alpha.13 可直接覆盖安装 |
+| alpha.13 | 上一可用版 | alpha.14 的升级验证基线 |
+| alpha.12 | 旧版 | 可直接升级到 alpha.14 |
 | alpha.11 | 旧版 | 可直接升级到 alpha.13 |
 | alpha.10 | 旧版 | 可直接升级到 alpha.13 |
 | alpha.9 | 旧版 | 可直接升级到 alpha.13 |

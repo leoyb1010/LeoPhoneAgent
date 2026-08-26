@@ -78,6 +78,9 @@ fun RelayFleetScreen(onBack: () -> Unit) {
     var key by remember(config.accessKey) { mutableStateOf(config.accessKey) }
     var machines by remember { mutableStateOf<List<RelayMachine>>(emptyList()) }
     var approvals by remember { mutableStateOf<List<RelayApproval>>(emptyList()) }
+    LaunchedEffect(approvals.size) {
+        com.leoyuan.leophoneagent.service.SessionTaskStatus.setPendingApprovals(approvals.size)
+    }
     val sessions = remember { mutableStateMapOf<String, List<RelaySession>>() }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }

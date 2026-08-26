@@ -4,6 +4,49 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## Android v1.0.0-alpha.14 / iOS 1.24.2 (96) - 2026-08-26
+
+### 用户可见
+
+- 长文件 `file_read` 连续分页：head 读完一页给出 `next_offset`，三端同一算法（Android / iOS / Harmony）。
+- 开始录音时先停朗读，麦克风不再和 TTS 抢声音。
+- Android 设置可搜索；「连接的设备 / 远程机器」改走 `stringResource`。
+- 会话列表头部显示进行中 / 待审批数量。审批数由舰队页发布；远程会话完整并入本机列表仍是后续船。
+
+### 对账（本版不发明已经存在的能力）
+
+- OpenAI 流式首包超时已经是 120s，本版不改。Anthropic / Gemini 读超时仍是 10 分钟。
+- 供应商配置读失败本来就不会清库（Android 保留 DB；iOS decode 失败跳过 save）。
+
+### 历史债
+
+- 补 iOS 1.24.1、macOS leocodebox 1.74.2 顶栏条目（这两版当时已发，CHANGELOG 顶栏漏写）。
+
+### 验证
+
+- Harmony `node --experimental-strip-types src/harmony/protocol/protocol.test.mjs` 通过（含 `fileReadPage` golden）。
+- iOS：`IOSReleaseReadinessAudit` / `IOSAccessibilityMotionAudit` / `IOSVisibleControlAudit` 通过；`MinisLogicTests` 模拟器 `** TEST SUCCEEDED **`。
+- Android JDK 17：中文资源/设置门禁通过；Standard/Power Debug 单测各 549、0 失败、1 既有跳过；双 Release lint 0 error；双 flavor Release 构建成功。
+- `scripts/verify_android_alpha_release.sh`：固定个人 Alpha 签名、包名、versionCode `100014`、versionName `1.0.0-alpha.14` 通过。
+- SHA-256：Standard `58e9ab63cf7da888c48ffebba0f93c1b767e246e73462f52591721d55fc8f6a3`；Power `817229262e0bdcfa66a08e562b28dec4f62e733b2436131140c3a516bde0cbf3`。
+- HOLD：本机当时没有 Fold8 / 没有在线 iPhone，覆盖安装、冷启动、Logcat、首启弹窗未在真机复验。APK 不上传到 GitHub，直到 Fold8 覆盖安装过门。
+
+## iOS 1.24.1 (95) - 2026-08-19
+
+- 远程 shell 和远程 Agent 必须在本机确认，并且按主机 + 这条命令/任务绑定。
+- 扫码加身体时钥匙只跟配对码里的同一条中继根走；刷新舰队按各自中继根对钥匙。
+- 当前模型不能读图时直接拦住并保留附件，不再假装已经看过。
+- 锁屏 / 切走后本机执行沿用本会话授权；「本会话允许」对本机终端只用点一次。
+- 会话筛选切到「归档」而没有归档会话时，筛选条不再消失。
+- 设置里的「压缩 / 标题」便宜模型现在真的作用于压缩；「到阈值自动压缩」对已打开对话立即生效。
+- 导入 JSON 会话不再卡界面，重复导入同一份文件会自动跳过。
+
+## macOS leocodebox 1.74.2 - 2026-08-22
+
+- 开发与打包供应链漏洞清零：npm audit（含开发依赖）从 9 项降为 0 项。
+- 修好主仓目录里的 npm install 钩子：Husky 从仓库根安装到正确的 hooksPath。
+- 源码、测试与本机安装版本统一到 1.74.2；未取得 Developer ID 私钥与公证票据前，不会把临时签名包冒充公开热更新。
+
 ## HarmonyOS 0.3.0-alpha.14 (100019) - 2026-08-20
 
 - Kimi 登录直接打开带设备码的确认页，登录后不用再手抄顶栏那串码。

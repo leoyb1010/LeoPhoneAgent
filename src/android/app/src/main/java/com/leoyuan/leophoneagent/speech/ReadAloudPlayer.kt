@@ -60,6 +60,10 @@ import kotlin.coroutines.resume
 class ReadAloudPlayer(context: Context) {
 
     private val appContext = context.applicationContext
+
+    init {
+        register(this)
+    }
     private val system = TextToSpeechManager().also { it.init(appContext) }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -167,6 +171,7 @@ class ReadAloudPlayer(context: Context) {
         queue.close()
         scope.cancel()
         system.shutdown()
+        unregister(this)
     }
 
     // -- internals --
@@ -290,5 +295,20 @@ class ReadAloudPlayer(context: Context) {
     companion object {
         private const val TAG = "ReadAloud"
         private const val POLL_MS = 80L
+        private val live = java.util.Collections.newSetFromMap(
+            java.util.WeakHashMap<ReadAloudPlayer, Boolean>(),
+        )
+
+        fun hushActive() {
+            synchronized(live) { live.toList() }.forEach { it.stop() }
+        }
+
+        private fun register(player: ReadAloudPlayer) {
+            synchronized(live) { live.add(player) }
+        }
+
+        private fun unregister(player: ReadAloudPlayer) {
+            synchronized(live) { live.remove(player) }
+        }
     }
 }

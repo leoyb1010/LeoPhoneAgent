@@ -12,6 +12,16 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.24.2",
+            date: "2026-08-26",
+            title: "长文件连续读，录音时先停朗读",
+            highlights: [
+                "长文件 file_read 读完一页会给出 next_offset，下一页从真实行号继续，不用再猜。",
+                "点麦克风开始录音时先停当前朗读，识别不再被自己的 TTS 打断。",
+                "JSON 传来的 offset / lines / max_length 按数字读取，分页参数不再被丢掉。"
+            ]
+        ),
+        LeoRelease(
             version: "1.24.1",
             date: "2026-08-19",
             title: "远程控制和身体配对更严",

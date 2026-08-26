@@ -114,6 +114,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.geometry.Size
 import com.leoyuan.leophoneagent.service.SessionActivityTracker
+import com.leoyuan.leophoneagent.service.SessionTaskStatus
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -305,6 +306,8 @@ fun SessionListScreen(
     val isSelecting by viewModel.isSelecting.collectAsState()
     val selectedIds by viewModel.selectedIds.collectAsState()
     val regeneratingIds by viewModel.regeneratingIds.collectAsState()
+    val runningSessions by SessionActivityTracker.activeSessions.collectAsState()
+    val pendingApprovals by SessionTaskStatus.pendingApprovals.collectAsState()
     val providerConfig by providerRepository.config.collectAsState()
     val hasProviders = providerConfig.instances.isNotEmpty()
     val hasGroups = providerConfig.modelGroups.isNotEmpty()
@@ -601,6 +604,37 @@ fun SessionListScreen(
                         // Leave space for bottom FAB row
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp),
                     ) {
+                        if (runningSessions.isNotEmpty() || pendingApprovals > 0) {
+                            item(key = "task_status") {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    if (runningSessions.isNotEmpty()) {
+                                        Text(
+                                            text = stringResource(
+                                                R.string.sessionlist_running_count,
+                                                runningSessions.size,
+                                            ),
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
+                                    if (pendingApprovals > 0) {
+                                        Text(
+                                            text = stringResource(
+                                                R.string.sessionlist_approval_count,
+                                                pendingApprovals,
+                                            ),
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.tertiary,
+                                        )
+                                    }
+                                }
+                            }
+                        }
                         // T25: search-active path used to flatten the list and skip
                         // section headers entirely. Now reuses the same grouped
                         // rendering — `displayedSessions` is already filtered by

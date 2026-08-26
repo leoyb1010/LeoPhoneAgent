@@ -267,18 +267,10 @@ extension AIChatViewModel {
             return FileToolResult(output: "Error: Invalid path: \(path)", success: false)
         }
 
-        let offset = max(1, (dict["offset"] as? Int) ?? 1)
-        let maxLines = dict["lines"] as? Int  // nil means no line limit
-        // T-FILEREAD-CAP: hard upper bound on returned content length.
-        // Pre-cap, the agent could ask for `max_length=1_000_000` and we'd
-        // happily inline a 400 KB base64 image into a tool_result —
-        // observed on Android as a 43 s StaticLayout / LineBreaker stall
-        // when that 800 KB string later renders as a single message bubble.
-        // Mirror the Android FileReadTool 80 KB cap so both platforms refuse
-        // the same oversized reads regardless of the agent-supplied value.
-        let kMaxFileReadChars = 80_000
-        let requested = (dict["max_length"] as? Int) ?? Self.kMaxToolResultChars
-        let maxLength = min(requested, kMaxFileReadChars)
+        let offset = max(1, FileReadPaging.intValue(dict, "offset") ?? 1)
+        let maxLines = FileReadPaging.intValue(dict, "lines")
+        let requested = FileReadPaging.intValue(dict, "max_length") ?? Self.kMaxToolResultChars
+        let maxLength = min(requested, FileReadPaging.hardCap)
         let direction = (dict["direction"] as? String)?.lowercased() ?? "head"
 
         guard FileManager.default.fileExists(atPath: hostURL.path) else {
@@ -308,44 +300,14 @@ extension AIChatViewModel {
         }
 
         let allLines = fullText.components(separatedBy: "\n")
-        let totalLines = allLines.count
-
-        // Apply offset/direction and line limit
-        let selectedLines: ArraySlice<String>
-        let displayStart: Int  // 1-based line number of first returned line
-        let displayEnd: Int    // 1-based line number of last returned line
-
-        if direction == "tail" {
-            let lineLimit = maxLines ?? allLines.count
-            let sliced = allLines.suffix(lineLimit)
-            selectedLines = sliced
-            displayStart = allLines.count - sliced.count + 1
-            displayEnd = allLines.count
-        } else {
-            let startIdx = min(offset - 1, allLines.count)
-            let lineLimit = maxLines ?? (allLines.count - startIdx)
-            let endIdx = min(startIdx + lineLimit, allLines.count)
-            selectedLines = allLines[startIdx..<endIdx]
-            displayStart = startIdx + 1
-            displayEnd = endIdx
-        }
-        var content = selectedLines.joined(separator: "\n")
-
-        // Apply max_length truncation
-        var wasTruncated = false
-        if content.count > maxLength {
-            content = String(content.prefix(maxLength))
-            wasTruncated = true
-        }
-
-        let rangeInfo = "showing lines \(displayStart)-\(displayEnd) of \(totalLines)"
-        var header = "[\(path) | \(fileData.count) bytes | \(totalLines) lines | \(rangeInfo)"
-        if wasTruncated {
-            header += " (truncated at \(maxLength) chars)"
-        }
-        header += "]"
-
-        var output = "\(header)\n\(content)"
+        let page = FileReadPaging.page(
+            allLines: allLines,
+            offset: offset,
+            requestedLines: maxLines,
+            maxLength: maxLength,
+            direction: direction
+        )
+        var output = FileReadPaging.formatOutput(path: path, size: fileData.count, page: page)
         if let minisURL = linuxPathToMinisURL(path) {
             output += "\nminis_url: \(minisURL)"
         }
@@ -836,4 +798,110 @@ extension AIChatViewModel {
         return "First 20 lines:\n\(preview)"
     }
 
+}
+
+/// Same pagination contract as Android `FileReadPaging` / Harmony `fileReadPage`.
+/// Length is UTF-16 so `next_offset` stays aligned across the three runtimes.
+enum FileReadPaging {
+    static let hardCap = 80_000
+
+    struct Page {
+        let showStart: Int
+        let showEnd: Int
+        let totalLines: Int
+        let content: String
+        let truncated: Bool
+        let nextOffset: Int?
+    }
+
+    static func intValue(_ dict: [String: Any], _ key: String) -> Int? {
+        if let n = dict[key] as? Int { return n }
+        if let n = dict[key] as? NSNumber { return n.intValue }
+        return nil
+    }
+
+    static func page(
+        allLines: [String],
+        offset: Int,
+        requestedLines: Int?,
+        maxLength: Int,
+        direction: String
+    ) -> Page {
+        let total = allLines.count
+        let cap = max(1, min(maxLength, hardCap))
+        if total == 0 {
+            return Page(showStart: 1, showEnd: 0, totalLines: 0, content: "", truncated: false, nextOffset: nil)
+        }
+        let isTail = direction.lowercased() == "tail"
+        let selected: [String]
+        let showStart: Int
+        if isTail {
+            let count = requestedLines ?? total
+            let start = max(0, total - count)
+            selected = Array(allLines[start..<total])
+            showStart = start + 1
+        } else {
+            let start = min(max(0, max(offset, 1) - 1), total)
+            let end: Int
+            if let requestedLines {
+                end = min(start + max(requestedLines, 0), total)
+            } else {
+                end = total
+            }
+            selected = Array(allLines[start..<end])
+            showStart = selected.isEmpty ? max(offset, 1) : start + 1
+        }
+        return clip(selected, showStart: showStart, total: total, cap: cap, isTail: isTail)
+    }
+
+    private static func clip(
+        _ selected: [String],
+        showStart: Int,
+        total: Int,
+        cap: Int,
+        isTail: Bool
+    ) -> Page {
+        if selected.isEmpty {
+            return Page(showStart: showStart, showEnd: showStart - 1, totalLines: total, content: "", truncated: false, nextOffset: nil)
+        }
+        let joined = selected.joined(separator: "\n")
+        let joinedLen = (joined as NSString).length
+        if joinedLen <= cap {
+            let showEnd = showStart + selected.count - 1
+            let next = (!isTail && showEnd < total) ? showEnd + 1 : nil
+            return Page(showStart: showStart, showEnd: showEnd, totalLines: total, content: joined, truncated: false, nextOffset: next)
+        }
+        var used = 0
+        var complete = 0
+        for line in selected {
+            let extra = complete == 0 ? 0 : 1
+            let lineLen = (line as NSString).length
+            if used + extra + lineLen > cap { break }
+            used += extra + lineLen
+            complete += 1
+        }
+        if complete == 0 {
+            let showEnd = showStart
+            let next = isTail ? nil : showStart + 1
+            let clipped = (selected[0] as NSString).substring(to: min(cap, (selected[0] as NSString).length))
+            return Page(showStart: showStart, showEnd: showEnd, totalLines: total, content: clipped, truncated: true, nextOffset: next)
+        }
+        let showEnd = showStart + complete - 1
+        let content = selected[0..<complete].joined(separator: "\n")
+        let next = (!isTail && showEnd < total) ? showEnd + 1 : nil
+        return Page(showStart: showStart, showEnd: showEnd, totalLines: total, content: content, truncated: true, nextOffset: next)
+    }
+
+    static func formatOutput(path: String, size: Int, page: Page) -> String {
+        let range: String
+        if page.totalLines == 0 || page.showEnd < page.showStart {
+            range = "showing 0-0 of 0"
+        } else {
+            range = "showing \(page.showStart)-\(page.showEnd) of \(page.totalLines)"
+        }
+        let trunc = page.truncated ? " (truncated at \(hardCap) chars or requested max_length)" : ""
+        let header = "[\(path) | \(size) bytes | \(page.totalLines) lines | \(range)\(trunc)]"
+        let next = page.nextOffset.map { "\nnext_offset: \($0)" } ?? ""
+        return "\(header)\n\(page.content)\(next)"
+    }
 }

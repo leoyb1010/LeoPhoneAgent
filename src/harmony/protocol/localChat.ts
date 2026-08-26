@@ -342,9 +342,13 @@ export function localToolSchema(): object[] {
     tool("file_list", "List files in the Harmony app sandbox workspace.", {
       tool_title: str("Short summary shown to the user"),
     }, ["tool_title"]),
-    tool("file_read", "Read a text file from the Harmony app sandbox. Path is a file name, not a Linux path.", {
+    tool("file_read", "Read a text file from the Harmony app sandbox. Path is a file name, not a Linux path. Head pages that still have unread lines append next_offset.", {
       tool_title: str("Short summary shown to the user"),
       path: str("Sandbox file name, e.g. notes.md"),
+      offset: { type: "integer", description: "1-based line number to start reading from (default: 1). Ignored when direction is tail." },
+      lines: { type: "integer", description: "Maximum number of lines to return" },
+      max_length: { type: "integer", description: "Maximum character length of returned content (default: 15000, hard cap 80000)" },
+      direction: str("head (default) or tail"),
     }, ["tool_title", "path"]),
     tool("file_write", "Write a text file in the Harmony app sandbox. User must approve writes.", {
       tool_title: str("Short summary shown to the user"),
@@ -523,6 +527,103 @@ export function shouldFailover(message: string): boolean {
  * 镜像,ArkTS 那边 import 不了它,两边只能靠人手对齐。之前镜像返回
  * `{prompt, completion}`,单测测的是一个线上根本不存在的形状。
  */
+export const FILE_READ_HARD_CAP = 80_000
+export const FILE_READ_DEFAULT_MAX = 15_000
+
+export type FileReadPage = {
+  showStart: number
+  showEnd: number
+  totalLines: number
+  content: string
+  truncated: boolean
+  nextOffset: number | null
+}
+
+/** Same pagination contract as Android FileReadPaging / iOS FileReadPaging. */
+export function fileReadPage(
+  allLines: string[],
+  offset: number,
+  requestedLines: number | null,
+  maxLength: number,
+  direction: string,
+): FileReadPage {
+  const total = allLines.length
+  const cap = Math.max(1, Math.min(maxLength, FILE_READ_HARD_CAP))
+  if (total === 0) {
+    return { showStart: 1, showEnd: 0, totalLines: 0, content: "", truncated: false, nextOffset: null }
+  }
+  const isTail = direction.toLowerCase() === "tail"
+  let selected: string[]
+  let showStart: number
+  if (isTail) {
+    const count = requestedLines ?? total
+    const start = Math.max(0, total - count)
+    selected = allLines.slice(start, total)
+    showStart = start + 1
+  } else {
+    const start = Math.min(Math.max(0, Math.max(offset, 1) - 1), total)
+    const end = requestedLines != null ? Math.min(start + Math.max(requestedLines, 0), total) : total
+    selected = allLines.slice(start, end)
+    showStart = selected.length === 0 ? Math.max(offset, 1) : start + 1
+  }
+  return clipFileRead(selected, showStart, total, cap, isTail)
+}
+
+function clipFileRead(
+  selected: string[],
+  showStart: number,
+  total: number,
+  cap: number,
+  isTail: boolean,
+): FileReadPage {
+  if (selected.length === 0) {
+    return { showStart, showEnd: showStart - 1, totalLines: total, content: "", truncated: false, nextOffset: null }
+  }
+  const joined = selected.join("\n")
+  if (joined.length <= cap) {
+    const showEnd = showStart + selected.length - 1
+    const next = !isTail && showEnd < total ? showEnd + 1 : null
+    return { showStart, showEnd, totalLines: total, content: joined, truncated: false, nextOffset: next }
+  }
+  let used = 0
+  let complete = 0
+  for (const line of selected) {
+    const extra = complete === 0 ? 0 : 1
+    if (used + extra + line.length > cap) break
+    used += extra + line.length
+    complete++
+  }
+  if (complete === 0) {
+    return {
+      showStart,
+      showEnd: showStart,
+      totalLines: total,
+      content: selected[0].slice(0, cap),
+      truncated: true,
+      nextOffset: isTail ? null : showStart + 1,
+    }
+  }
+  const showEnd = showStart + complete - 1
+  return {
+    showStart,
+    showEnd,
+    totalLines: total,
+    content: selected.slice(0, complete).join("\n"),
+    truncated: true,
+    nextOffset: !isTail && showEnd < total ? showEnd + 1 : null,
+  }
+}
+
+export function formatFileReadOutput(path: string, size: number, page: FileReadPage): string {
+  const range = page.totalLines === 0 || page.showEnd < page.showStart
+    ? "showing 0-0 of 0"
+    : `showing ${page.showStart}-${page.showEnd} of ${page.totalLines}`
+  const trunc = page.truncated ? ` (truncated at ${FILE_READ_HARD_CAP} chars or requested max_length)` : ""
+  const header = `[${path} | ${size} bytes | ${page.totalLines} lines | ${range}${trunc}]`
+  const next = page.nextOffset != null ? `\nnext_offset: ${page.nextOffset}` : ""
+  return `${header}\n${page.content}${next}`
+}
+
 export function usageFromJson(json: unknown): number[] {
   const obj = asRecord(json)
   if (!obj) return [0, 0]
