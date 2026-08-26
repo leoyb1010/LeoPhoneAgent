@@ -12,6 +12,16 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.25.0",
+            date: "2026-08-26",
+            title: "相册、闹钟、日历不再先截图",
+            highlights: [
+                "「把这张图存进相册」「定个明早 8 点闹钟」「加到日历」说清楚时直接走系统接口，聊天里会写走了哪条路，不再先截图乱点。",
+                "对话顶部会显示「系统相册 / 系统闹钟 / 系统日历」。没附图或没说清时刻的请求仍走原来的 Agent。",
+                "iOS 26 以下没有系统 AlarmKit，设闹钟会退回原来的对话。"
+            ]
+        ),
+        LeoRelease(
             version: "1.24.2",
             date: "2026-08-26",
             title: "长文件连续读，录音时先停朗读",

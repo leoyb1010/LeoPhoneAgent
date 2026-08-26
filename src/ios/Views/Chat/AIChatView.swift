@@ -407,6 +407,15 @@ struct AIChatView: View {
             // Messages — floating tool preview overlaid at bottom
             messagesArea
                 .safeAreaInset(edge: .top, spacing: 0) {
+                    // T2 path chip lives here, not in the navbar — extra
+                    // principal-stack height clips on iOS 16–18.
+                    if !vm.actionRouteChip.isEmpty {
+                        Text(vm.actionRouteChip)
+                            .font(.system(size: 11))
+                            .foregroundStyle(ChatColors.primaryText.opacity(0.65))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 4)
+                    }
                     // Error banner
                     if let error = vm.errorMessage {
                         errorBanner(error)

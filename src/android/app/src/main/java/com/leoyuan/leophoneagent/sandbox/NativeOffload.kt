@@ -79,6 +79,25 @@ object NativeOffloadServer {
         Log.d(TAG, "register '$name' (total=${handlers.size})")
     }
 
+    /** In-process dispatch for the Action Router Fast path. Same handlers as the guest CLI. */
+    fun invoke(name: String, argv: List<String>, sessionId: String? = null): NativeOffloadResult {
+        val handler = handlers[name]
+            ?: return NativeOffloadResult(127, "native_offload: no handler for '$name'\n")
+        return try {
+            handler.handle(
+                NativeOffloadRequest(
+                    pid = 0,
+                    argv = listOf(name) + argv,
+                    env = emptyMap(),
+                    cwd = "/",
+                    sessionId = sessionId,
+                ),
+            )
+        } catch (e: Exception) {
+            NativeOffloadResult(1, "native_offload: ${e.message}\n")
+        }
+    }
+
     @Synchronized
     fun start(rootfsDir: File) {
         rootfsTmpDir = File(rootfsDir, "tmp")

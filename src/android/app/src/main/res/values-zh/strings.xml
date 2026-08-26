@@ -1738,7 +1738,7 @@
     <string name="terminal_cli_booting_hint">如出现安全确认或登录提示，请按屏幕指引继续。</string>
     <string name="whats_new_title">本次更新（%1$s）</string>
     <string name="whats_new_confirm">知道了</string>
-    <string name="whats_new_current">• 长文件读取现在会返回 next_offset，Agent 不用再猜下一页从哪一行开始\n• 开始语音输入时会先停朗读，麦克风不再和 TTS 抢声音\n• 设置可搜索；「连接的设备 / 远程机器」改走统一文案\n• 会话列表在知道数量时显示进行中和待审批</string>
+    <string name="whats_new_current">• 「把这张图存进相册」「定个明早 8 点闹钟」「加到日历」说清楚时直接走系统接口，聊天里会写走了哪条路，不再先截图乱点\n• 没附图或没说清时刻的请求仍走原来的 Agent</string>
     <string name="artifact_ready">交付物已就绪</string>
     <string name="artifact_open">打开交付物</string>
     <string name="artifact_missing">这份交付物已不在本机。</string>

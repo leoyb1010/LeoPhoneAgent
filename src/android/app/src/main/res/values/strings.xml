@@ -1811,8 +1811,8 @@
     <!-- 发版铁律:每次改 versionName 都必须同步改这里,并重写下面的
          whats_new_current 文案。WhatsNewGateTest 会比对这两个值,
          对不上就构建失败 —— 防止弹出的是上一版的更新内容。 -->
-    <string name="whats_new_version" translatable="false">1.0.0-alpha.14</string>
-    <string name="whats_new_current">• Long file reads now return next_offset so the agent can continue without guessing line numbers\n• Starting a voice message pauses read-aloud so the microphone is not fighting TTS\n• Settings is searchable; Connected devices and Remote machines use the same wording as other rows\n• The session list shows in-progress and pending-approval counts when they are known</string>
+    <string name="whats_new_version" translatable="false">1.0.0-alpha.15</string>
+    <string name="whats_new_current">• Clear requests to save a photo, set an alarm, or add a calendar event now finish on the system APIs. Chat says which path. No screenshot-first.\n• Vague requests (no time, no attached photo) still go through the agent</string>
     <string name="artifact_ready">ARTIFACT READY</string>
     <string name="artifact_open">Open artifact</string>
     <string name="artifact_missing">This artifact is no longer available on this device.</string>

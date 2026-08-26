@@ -1,4 +1,6 @@
+import EventKit
 import Foundation
+import Photos
 import UIKit
 
 private let logger = AppLogger(category: "AIChatVM")
@@ -340,6 +342,106 @@ extension AIChatViewModel {
         // means the bound entry has no override — check WHICH entry they edited.
         logger.info("📐 maxTokens=\(result) src=\(model.maxOutputTokens != nil ? "model(\(model.maxOutputTokens!))" : "providerDefault(\(provider.defaultMaxTokens))") ceiling=\(Self.globalMaxTokensCeiling) model=\(model.id)")
         return result
+    }
+
+    func executeNativeRoute(_ route: ActionRouter.Decision, imageURL: URL?) async -> Bool {
+        switch route.kind {
+        case .savePhoto:
+            guard let imageURL else { return false }
+            return await saveImageToPhotos(imageURL)
+        case .setAlarm:
+            guard let hour = route.hour, let minute = route.minute else { return false }
+            return await scheduleNativeAlarm(hour: hour, minute: minute, tomorrow: route.tomorrow, label: route.label)
+        case .createCalendar:
+            guard let hour = route.hour, let minute = route.minute else { return false }
+            return await createNativeEvent(hour: hour, minute: minute, tomorrow: route.tomorrow, title: route.label)
+        case nil:
+            return false
+        }
+    }
+
+    func finishNativeRoute(_ route: ActionRouter.Decision) async {
+        actionRouteChip = route.chip
+        let spoken = route.spoken()
+        messages.append(ChatMessage(role: .assistant, content: spoken))
+        let agent = AgentMessage(role: .assistant, parts: [.text(spoken)])
+        let idx = agentHistory.count
+        agentHistory.append(agent)
+        if let id = await persistAgentMessage(agent), idx < agentHistory.count {
+            agentHistory[idx].dbMessageId = id
+        }
+        isProcessing = false
+        endBackgroundProcessing()
+    }
+
+    private func saveImageToPhotos(_ url: URL) async -> Bool {
+        let granted: Bool = await withCheckedContinuation { cont in
+            PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+                cont.resume(returning: status == .authorized || status == .limited)
+            }
+        }
+        guard granted else { return false }
+        return await withCheckedContinuation { cont in
+            PHPhotoLibrary.shared().performChanges({
+                PHAssetChangeRequest.creationRequestForAssetFromImage(atFileURL: url)
+            }, completionHandler: { ok, _ in
+                cont.resume(returning: ok)
+            })
+        }
+    }
+
+    private func scheduleNativeAlarm(hour: Int, minute: Int, tomorrow: Bool, label: String) async -> Bool {
+        if #available(iOS 26.0, *) {
+            var comps = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+            if tomorrow, let day = Calendar.current.date(byAdding: .day, value: 1, to: Date()) {
+                comps = Calendar.current.dateComponents([.year, .month, .day], from: day)
+            }
+            comps.hour = hour
+            comps.minute = minute
+            guard let fire = Calendar.current.date(from: comps) else { return false }
+            return await withCheckedContinuation { cont in
+                AlarmOffloadBridge.scheduleAlarm(
+                    withId: UUID().uuidString,
+                    fireDate: fire,
+                    label: label.isEmpty ? "闹钟" : label,
+                    repeatMode: "once"
+                ) { _, error in
+                    cont.resume(returning: error == nil)
+                }
+            }
+        }
+        return false
+    }
+
+    private func createNativeEvent(hour: Int, minute: Int, tomorrow: Bool, title: String) async -> Bool {
+        let store = EKEventStore()
+        let granted: Bool
+        if #available(iOS 17.0, *) {
+            granted = (try? await store.requestFullAccessToEvents()) ?? false
+        } else {
+            granted = await withCheckedContinuation { cont in
+                store.requestAccess(to: .event) { ok, _ in cont.resume(returning: ok) }
+            }
+        }
+        guard granted else { return false }
+        var comps = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        if tomorrow, let day = Calendar.current.date(byAdding: .day, value: 1, to: Date()) {
+            comps = Calendar.current.dateComponents([.year, .month, .day], from: day)
+        }
+        comps.hour = hour
+        comps.minute = minute
+        guard let start = Calendar.current.date(from: comps) else { return false }
+        let ev = EKEvent(eventStore: store)
+        ev.title = title.isEmpty ? "日程" : title
+        ev.startDate = start
+        ev.endDate = start.addingTimeInterval(3600)
+        ev.calendar = store.defaultCalendarForNewEvents
+        do {
+            try store.save(ev, span: .thisEvent)
+            return true
+        } catch {
+            return false
+        }
     }
 
 }

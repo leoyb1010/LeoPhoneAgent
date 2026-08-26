@@ -2224,6 +2224,16 @@ fun ChatScreen(
                                     }
                                     .padding(horizontal = 4.dp, vertical = 2.dp),
                             )
+                            val routeChip by viewModel.actionRouteChip.collectAsState()
+                            if (routeChip.isNotBlank()) {
+                                Text(
+                                    text = routeChip,
+                                    fontSize = 11.sp,
+                                    color = ChatColors.primaryText.copy(alpha = 0.65f),
+                                    maxLines = 1,
+                                    style = noFontPad,
+                                )
+                            }
                             // Model picker subtitle: green dot + group +
                             // provider/model. Tap opens the model picker —
                             // separated from the title above so tapping the

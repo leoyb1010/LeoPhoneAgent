@@ -567,6 +567,9 @@ class ChatViewModel(
     private val _isStreaming = MutableStateFlow(false)
     val isStreaming: StateFlow<Boolean> = _isStreaming.asStateFlow()
 
+    private val _actionRouteChip = MutableStateFlow("")
+    val actionRouteChip: StateFlow<String> = _actionRouteChip.asStateFlow()
+
     /**
      * T261: tool detail sheet visibility, persistent across LazyColumn
      * recomposition / item disposal so a streaming tool's sheet doesn't
@@ -1442,6 +1445,57 @@ class ChatViewModel(
             ?: return false
         executeSlashCommand(cmd)
         return true
+    }
+
+    private suspend fun tryNativeRoute(
+        route: com.leoyuan.leophoneagent.agent.ActionRouter.Decision,
+        prepared: PreparedAttachments,
+        sessionId: String,
+    ): Boolean = withContext(Dispatchers.IO) {
+        val offload = com.leoyuan.leophoneagent.sandbox.NativeOffloadServer
+        when (route.kind) {
+            com.leoyuan.leophoneagent.agent.ActionRouter.Kind.SavePhoto -> {
+                val linux = prepared.imageUploadPaths.firstOrNull() ?: return@withContext false
+                val host = java.io.File(
+                    context.filesDir,
+                    "minis-sessions/$sessionId/attachments/uploads/${linux.substringAfterLast('/')}",
+                )
+                if (!host.isFile) return@withContext false
+                offload.invoke("android-photos", listOf("import", "--path", host.absolutePath), sessionId).exitCode == 0
+            }
+            com.leoyuan.leophoneagent.agent.ActionRouter.Kind.SetAlarm -> {
+                val hh = route.hour ?: return@withContext false
+                val mm = route.minute ?: return@withContext false
+                // ponytail: SET_ALARM has no "tomorrow only". Clock fires at
+                // the next HH:MM. Morning "明早 8点" can land today.
+                val time = "%02d:%02d".format(hh, mm)
+                offload.invoke(
+                    "android-alarm",
+                    listOf("set", "--time", time, "--label", route.label.ifBlank { "闹钟" }),
+                    sessionId,
+                ).exitCode == 0
+            }
+            com.leoyuan.leophoneagent.agent.ActionRouter.Kind.CreateCalendar -> {
+                val hh = route.hour ?: return@withContext false
+                val mm = route.minute ?: return@withContext false
+                val start = calendarIso(hh, mm, route.tomorrow)
+                offload.invoke(
+                    "android-calendar",
+                    listOf("create", "--title", route.label.ifBlank { "日程" }, "--start", start),
+                    sessionId,
+                ).exitCode == 0
+            }
+            null -> false
+        }
+    }
+
+    private fun calendarIso(hour: Int, minute: Int, tomorrow: Boolean): String {
+        val cal = java.util.Calendar.getInstance()
+        if (tomorrow) cal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+        cal.set(java.util.Calendar.HOUR_OF_DAY, hour)
+        cal.set(java.util.Calendar.MINUTE, minute)
+        cal.set(java.util.Calendar.SECOND, 0)
+        return java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm", java.util.Locale.US).format(cal.time)
     }
 
     /**
@@ -4980,6 +5034,34 @@ class ChatViewModel(
                 dbMessageId = persistedUser.id,
             ))
 
+            val fastRoute = com.leoyuan.leophoneagent.agent.ActionRouter.decide(
+                trimmed,
+                prepared.imageUploadPaths.size,
+            )
+            if (fastRoute.path == com.leoyuan.leophoneagent.agent.ActionRouter.Path.Native) {
+                val ran = tryNativeRoute(fastRoute, prepared, activeSessionId)
+                if (ran) {
+                    _actionRouteChip.value = fastRoute.chip
+                    val spoken = fastRoute.spoken()
+                    val partsJson = """[{"type":"text","value":${escapeJson(spoken)}}]"""
+                    val persisted = chatRepository.appendMessage(activeSessionId, "assistant", partsJson)
+                    _messages.value = _messages.value + ChatMessage(
+                        id = persisted.id,
+                        role = "assistant",
+                        content = spoken,
+                    )
+                    agentHistory.add(
+                        LLMMessage(
+                            role = LLMMessage.Role.ASSISTANT,
+                            content = spoken,
+                            dbMessageId = persisted.id,
+                        ),
+                    )
+                    _isStreaming.value = false
+                    return@launch
+                }
+            }
+
             if (cliToolId != null) {
                 streamLaunched = true
                 streamJob = launch(Dispatchers.IO) {
@@ -8238,6 +8320,7 @@ Tool call style:
 Tone and style:
 - Reply in the language that best matches the user's input. Only switch languages when the user explicitly asks.
 - Be concise. Prefer action over explanation — when the user asks for something that can be done via shell, do it directly.
+- Native OS actions (save to the album, set an alarm, add a calendar event) are routed before this loop. Do not start those with browser_use screenshot or Accessibility clicks.
 
 Android-only tools (android-* CLIs):
 CLI tools at /usr/local/bin with the `android-` prefix give you access to Android framework capabilities and on-device control. Invoke them from shell_execute like any other binary — they are already on PATH. Each tool prints JSON (or a short human-readable line) and supports --help for full usage. Tools gated by Shizuku or AccessibilityService return permission_denied when not granted — handle that gracefully and point the user at [Settings → Permissions](minis://settings/permissions).

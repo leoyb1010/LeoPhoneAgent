@@ -34,6 +34,39 @@ final class AgentChatCorrectnessTests: XCTestCase {
         XCTAssertNil(AgentChatCorrectness.omittedImageReminder(inlined: 2, total: 2, supportsImageInput: true))
     }
 
+    func testActionRouterSavePhotoAndAlarm() {
+        let photo = ActionRouter.decide(text: "把这张图存进相册", imageCount: 1)
+        XCTAssertEqual(photo.path, .native)
+        XCTAssertEqual(photo.kind, .savePhoto)
+        XCTAssertEqual(ActionRouter.decide(text: "把这张图存进相册", imageCount: 0).path, .agent)
+
+        let alarm = ActionRouter.decide(text: "定个明早 8 点闹钟", imageCount: 0)
+        XCTAssertEqual(alarm.kind, .setAlarm)
+        XCTAssertEqual(alarm.hour, 8)
+        XCTAssertEqual(alarm.minute, 0)
+        XCTAssertTrue(alarm.tomorrow)
+
+        let cal = ActionRouter.decide(text: "把明早 9:00 开会加到日历", imageCount: 0)
+        XCTAssertEqual(cal.kind, .createCalendar)
+        XCTAssertEqual(cal.hour, 9)
+        XCTAssertTrue(cal.tomorrow)
+
+        XCTAssertEqual(ActionRouter.decide(text: "帮我看看这张图", imageCount: 1).path, .agent)
+        XCTAssertEqual(ActionRouter.decide(text: "设个闹钟", imageCount: 0).path, .agent)
+
+        let enPhoto = ActionRouter.decide(text: "Save this photo to the album", imageCount: 1)
+        XCTAssertEqual(enPhoto.path, .native)
+        let enCal = ActionRouter.decide(text: "add to calendar tomorrow 10:00 standup", imageCount: 0)
+        XCTAssertEqual(enCal.kind, .createCalendar)
+        XCTAssertEqual(enCal.hour, 10)
+        XCTAssertTrue(enCal.tomorrow)
+        let dawn = ActionRouter.decide(text: "明早 6:30 闹钟", imageCount: 0)
+        XCTAssertEqual(dawn.kind, .setAlarm)
+        XCTAssertEqual(dawn.hour, 6)
+        XCTAssertEqual(dawn.minute, 30)
+        XCTAssertTrue(dawn.tomorrow)
+    }
+
     func testStreamDeltaDroppedAfterCancelOrIdentityMismatch() {
         let expected = UUID()
         let other = UUID()

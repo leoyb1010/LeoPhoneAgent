@@ -803,7 +803,7 @@
     <string name="terminal_cli_booting_hint">若出現安全確認或登入提示，請依螢幕指引繼續。</string>
     <string name="whats_new_title">本次更新（%1$s）</string>
     <string name="whats_new_confirm">知道了</string>
-    <string name="whats_new_current">• 長檔讀取現在會回傳 next_offset，Agent 不用再猜下一頁從哪一行開始\n• 開始語音輸入時會先停朗讀，麥克風不再和 TTS 搶聲音\n• 設定可搜尋；「連接的裝置 / 遠端機器」改走統一文案\n• 會話列表在知道數量時顯示進行中和待審批</string>
+    <string name="whats_new_current">• 「把這張圖存進相簿」「定個明早 8 點鬧鐘」「加到日曆」說清楚時直接走系統介面，聊天裡會寫走了哪條路，不再先截圖亂點\n• 沒附圖或沒說清時刻的請求仍走原來的 Agent</string>
     <string name="artifact_ready">交付物已就緒</string>
     <string name="artifact_open">開啟交付物</string>
     <string name="artifact_missing">這份交付物已不在本機。</string>

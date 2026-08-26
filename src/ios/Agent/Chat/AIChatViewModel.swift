@@ -2,8 +2,10 @@ import AppIntents
 import AVFoundation
 import Combine
 import CryptoKit
+import EventKit
 import Foundation
 import ImageIO
+import Photos
 import SQLite3
 import UIKit
 import os.log
@@ -588,6 +590,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// (which is nonisolated and can't touch @Published MainActor properties).
     /// Updated on every isProcessing flip and on send entry.
     nonisolated(unsafe) var _deinitSnapshot: String = "isProcessing=false session=nil draft=nil"
+
+    @Published var actionRouteChip: String = ""
 
     @Published var isProcessing = false {
         didSet {
@@ -1939,7 +1943,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             + "- Use reasonable defaults and contextual inference to fill in missing details (e.g. 'tonight' means today, 'remind me' implies creating a reminder immediately). Only ask for clarification when genuinely ambiguous.\n\n"
             + "Tone and style:\n"
             + "- Reply in the language that best matches the user's input. Only switch languages when the user explicitly asks.\n"
-            + "- Be concise. Prefer action over explanation — when the user asks for something that can be done via shell, do it directly.\n\n"
+            + "- Be concise. Prefer action over explanation — when the user asks for something that can be done via shell, do it directly.\n"
+            + "- Native OS actions (save to the album, set an alarm, add a calendar event) are routed before this loop. Do not start those with a screenshot or GUI clicks.\n\n"
             + "Native Apple framework tools:\n"
             + "CLI tools at /usr/local/bin with the apple- prefix give you access to iOS frameworks (alarm, bluetooth, calendar, camera, clipboard, contacts, device, files, healthkit, homekit, location, maps, media, motion, nfc, nlp, notification, open, photos, player, reminders, shortcuts, speak, speech, vision, weather). "
             + "All output JSON (--compact to minify, -q for data-only). Run any tool with --help for full usage. "
@@ -2422,6 +2427,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             let isoFormatter = ISO8601DateFormatter()
             isoFormatter.formatOptions = [.withInternetDateTime]
             let now = Date()
+            var firstImageHost: URL?
             let nowStr = isoFormatter.string(from: now)
 
             var attachmentMetas: [AttachmentMeta] = []
@@ -2478,6 +2484,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 let linuxPath = "/var/minis/attachments/uploads/\(safeName)"
                 let meta = AttachmentMeta(path: linuxPath, size: fileSize, modified: fileDate)
                 attachmentMetas.append(meta)
+                if firstImageHost == nil && attachment.kind == .image {
+                    firstImageHost = destURL
+                }
                 logger.info("📎[SEND-ASYNC]   saved \(safeName): \(fileSize) bytes → \(linuxPath)")
 
                 // [T-ios-attachment-oom-bg-kill] Only IMAGES need the bytes in
@@ -2591,6 +2600,13 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             // compact can later resolve boundaries by id.
             if let persistedId = await self.persistAgentMessage(userMessage), userIdx < self.agentHistory.count {
                 self.agentHistory[userIdx].dbMessageId = persistedId
+            }
+
+            let imageCount = pendingAttachments.filter { $0.kind == .image }.count
+            let route = ActionRouter.decide(text: text, imageCount: imageCount)
+            if route.path == .native, await self.executeNativeRoute(route, imageURL: firstImageHost) {
+                await self.finishNativeRoute(route)
+                return
             }
 
             // Wait for kernel to finish booting

@@ -4,6 +4,25 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## Android v1.0.0-alpha.15 / iOS 1.25.0 (97) - 2026-08-26
+
+### 用户可见
+
+- 「把这张图存进相册」「定个明早 8 点闹钟」「加到日历」说清楚时直接走系统接口，聊天里写明走了哪条路，顶部芯片显示「系统相册 / 系统闹钟 / 系统日历」。不再先截图乱点。
+- 没附图或没说清时刻的请求仍走原来的 Agent。Phone UI / Mac Body 本船不抢 Fast。
+- Android 系统闹钟是 Clock 的「下一次该时刻」；当天该点之前说「明早」可能落在今天。iOS 26+ 用明确 fireDate；更旧系统设闹钟退回 Agent。
+
+### 验证
+
+- iOS：`IOSReleaseReadinessAudit` 1.25.0 (97) 通过；无障碍 / 可见控件审计通过；`AgentChatCorrectnessTests`（含 ActionRouter 题库短语）模拟器 **TEST SUCCEEDED**；主 scheme Debug `generic/platform=iOS` **BUILD SUCCEEDED**（本机补装 watchOS 26.5 Simulator 后）。
+- Android JDK 17：中文资源/设置门禁通过；Standard Debug 单测 563 / 0 失败 / 1 既有跳过；Power Debug 单测 1104 / 0 失败 / 2 跳过；双 Release lint 0 error；双 flavor Release 构建成功（6m47s）。
+- `scripts/verify_android_alpha_release.sh`：固定个人 Alpha 签名、包名、versionCode `100015`、versionName `1.0.0-alpha.15` 通过。
+- SHA-256：Standard `ed65279b42bd9e108840b42ee577aab01a84aac6fae18b02c3324ae9f6c8a4e4`；Power `4d5ab0f6b4d1955a5d524a6a568d47899bfa5f6ecdc74a19a72809d5d033f7a9`。
+
+### HOLD
+
+- Fold8 / 在线 iPhone 仍缺。覆盖安装、冷启动、Logcat、首启弹窗、30 题步数 ≥25% 待真机。APK 不上传。
+
 ## Android v1.0.0-alpha.14 / iOS 1.24.2 (96) - 2026-08-26
 
 ### 用户可见
