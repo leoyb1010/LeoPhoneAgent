@@ -4,6 +4,7 @@ import path from 'node:path';
 import express from 'express';
 
 import { findAppRoot, getModuleDir } from '../../utils/runtime-paths.js';
+import { bindFrontmostToSession, exactWindows } from '../leocodebox/index.js';
 
 import { requireHarnessKey } from './harness-auth.js';
 import { HarnessRequestError, getHarnessManager } from './harness-session.service.js';
@@ -56,6 +57,7 @@ router.get('/v1/capabilities', requireHarnessKey, (_req, res) => {
       session_digest: true,
       task_receipts: true,
       artifacts: true,
+      exact_window: true,
     },
     harnesses: availableHarnesses(),
   });
@@ -77,7 +79,15 @@ router.post('/harness/sessions', requireHarnessKey, async (req, res) => {
   const prompt = body.prompt == null ? null : String(body.prompt);
   try {
     const session = await getHarnessManager().create({ harness, cwd, prompt });
-    res.status(202).json({ session_id: session.sessionId, harness, status: session.status });
+    try {
+      const snap = bindFrontmostToSession(session.sessionId);
+      if (snap) {
+        session.emit({ event: 'window.bound', ...(exactWindows.summary(session.sessionId) ?? {}) });
+      }
+    } catch {
+      // Accessibility off → session still runs; fleet just has no window line.
+    }
+    res.status(202).json({ session_id: session.sessionId, harness, status: session.status, window: session.summary().window });
   } catch (error) {
     if (error instanceof HarnessRequestError) {
       jsonError(res, 400, error.message);

@@ -17,6 +17,14 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '1.75.0',
+    date: '2026-08-26',
+    items: [
+      'Mac 操作绑到精确窗口：机器 + 应用 + pid + window_id + snapshot_id。后台窗口快照过期会拒绝执行，并要求先重观察。',
+      '舰队任务会显示正在操作的窗口（应用 · 标题），手机接管同一会话，不新开任务。',
+    ],
+  },
+  {
     version: '1.74.3',
     date: '2026-08-26',
     items: [

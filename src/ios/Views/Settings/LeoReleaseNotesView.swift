@@ -12,6 +12,15 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.25.2",
+            date: "2026-08-26",
+            title: "接管 Mac 任务能看见窗口",
+            highlights: [
+                "远程机器上进行中的会话会显示它绑着的窗口（应用 · 标题）。点进去仍是同一条会话，不会新开任务。",
+                "Mac 后台窗口快照过期时会拒绝乱点，需要先重观察。",
+            ]
+        ),
+        LeoRelease(
             version: "1.25.1",
             date: "2026-08-26",
             title: "四端同一张脸",

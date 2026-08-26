@@ -18,6 +18,7 @@ import missionRoutes from './mission.routes.js';
 import kernelRoutes from './pi-kernel/kernel.routes.js';
 import providerRoutingRoutes from './provider-routing.routes.js';
 import providerSwitchRoutes from './provider-switch.routes.js';
+import exactWindowRoutes from './exact-window.routes.js';
 import worktreeRoutes from './worktree.routes.js';
 
 const router = express.Router();
@@ -26,6 +27,7 @@ router.use('/cli', cliToolsRoutes);
 router.use('/gateway', gatewayControlRoutes);
 router.use('/routing', providerRoutingRoutes);
 router.use('/worktrees', worktreeRoutes);
+router.use('/windows', exactWindowRoutes);
 router.use('/missions', missionRoutes);
 router.use('/kernel', kernelRoutes);
 router.use('/login-snapshots', loginSnapshotRoutes);

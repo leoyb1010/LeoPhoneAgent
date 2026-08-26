@@ -883,6 +883,12 @@ struct HarnessLauncherView: View {
                                     .foregroundStyle(session.waitingForApproval ? .orange : .secondary)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(session.name).font(.system(size: 15))
+                                    if let window = session.windowLabel, !window.isEmpty {
+                                        Text(window)
+                                            .font(.system(size: 12))
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                    }
                                     Text(session.cwd)
                                         .font(.system(size: 11, design: .monospaced))
                                         .foregroundStyle(.secondary)

@@ -46,13 +46,20 @@ class RelayFleetClient(
         val obj = get(machinePath(machine, "/harness/sessions"))
         obj.optJSONArray("sessions").objects().mapNotNull { row ->
             val id = row.optString("session_id", row.optString("id"))
-            if (id.isBlank()) null else RelaySession(
-                id = id,
-                harness = row.optString("harness", "unknown"),
-                status = row.optString("status", "unknown"),
-                cwd = row.optStringOrNull("cwd"),
-                lastEvent = row.optStringOrNull("last_event"),
-            )
+            if (id.isBlank()) null else {
+                val window = row.optJSONObject("window")
+                val app = window?.optString("app").orEmpty()
+                val title = window?.optString("title").orEmpty()
+                val label = listOf(app, title).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { null }
+                RelaySession(
+                    id = id,
+                    harness = row.optString("harness", "unknown"),
+                    status = row.optString("status", "unknown"),
+                    cwd = row.optStringOrNull("cwd"),
+                    lastEvent = row.optStringOrNull("last_event"),
+                    windowLabel = label,
+                )
+            }
         }
     }
 

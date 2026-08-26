@@ -29,6 +29,7 @@ data class RelaySession(
     val status: String,
     val cwd: String? = null,
     val lastEvent: String? = null,
+    val windowLabel: String? = null,
 ) {
     val isTerminal: Boolean get() = status in setOf("completed", "failed", "cancelled")
 }

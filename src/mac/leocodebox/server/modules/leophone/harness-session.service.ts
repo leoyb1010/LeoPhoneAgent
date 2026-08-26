@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
 
-import { applyActiveSwitchEnv } from '../leocodebox/index.js';
+import { applyActiveSwitchEnv, exactWindows } from '../leocodebox/index.js';
 
 import {
   EVENT_APPROVAL_REQUEST,
@@ -477,6 +477,7 @@ export class HarnessSession {
       cwd: this.cwd,
       status: this.status,
       seq: this.seq,
+      window: exactWindows.summary(this.sessionId),
       waiting_for_approval: this.pendingApprovals.size > 0,
       pending_approvals: [...this.pendingApprovals.entries()].map(([id, event]) => ({
         approval_id: id,

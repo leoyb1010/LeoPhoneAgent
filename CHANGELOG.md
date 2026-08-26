@@ -4,6 +4,23 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## Mac 1.75.0 / iOS 1.25.2 (99) - 2026-08-26
+
+### 用户可见
+
+- Mac 操作绑到精确窗口（机器 + 应用 + pid + window_id + snapshot_id）。后台窗口快照超过 3 秒会拒绝执行，并说明要先重观察。坐标点选后台窗口直接拦下。
+- 舰队（Mac / iOS / Android）进行中任务显示窗口「应用 · 标题」。手机点进去接管同一 `session_id`，不新开会话。
+
+### 验证
+
+- `npm run verify:release-notes`、exact-window 单测、`npm run typecheck` 通过。
+- iOS `IOSReleaseReadinessAudit` 1.25.2 (99) 通过；Release 构建成功。装机因 iPhone 离线/锁屏失败，解锁后再跑 `./scripts/InstallIOSRelease.sh`。
+
+### 停损
+
+- 没有做屏幕取图墙，也没有后台坐标点选（留 T4.5）。`src/mac/leoagent/` 重复 Harness 按计划再稳 14 天再删。
+- Android 舰队行已能读 `window` 字段，本船不发 Android APK。
+
 ## Android v1.0.0-alpha.17 - 2026-08-26
 
 ### 用户可见

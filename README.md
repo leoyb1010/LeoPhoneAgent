@@ -1,8 +1,8 @@
 # LeoPhoneAgent
 
-[![iOS](https://img.shields.io/badge/iOS-1.25.1%20(98)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![iOS](https://img.shields.io/badge/iOS-1.25.2%20(99)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.17-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.17)
-[![macOS](https://img.shields.io/badge/macOS-1.74.3-7C3AED.svg)](src/mac/leocodebox/package.json)
+[![macOS](https://img.shields.io/badge/macOS-1.75.0-7C3AED.svg)](src/mac/leocodebox/package.json)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.15-D94B16.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Mobile](https://img.shields.io/badge/mobile-iOS%20%2B%20Android-black.svg)](#系统架构)
@@ -136,7 +136,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 版本/构建:`1.25.1 (98)`;Bundle ID `com.leoyuan.leophoneagent`
+- 版本/构建:`1.25.2 (99)`;Bundle ID `com.leoyuan.leophoneagent`
 - 主对话框直达 Mac:「指挥一台 Mac」选机 + 选 CLI 即开聊;发送在会话建立
   期间自动排队,永不吞点击
 - 会话接管:进入任意 Mac 先列进行中任务,一键接管(全量回放 + 实时跟随)

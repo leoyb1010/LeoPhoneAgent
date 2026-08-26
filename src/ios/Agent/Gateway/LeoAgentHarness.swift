@@ -33,6 +33,7 @@ struct HarnessSessionSummary: Sendable, Identifiable, Hashable {
     /// 队首待审批(Siri「批准」与通知按钮按它寻址);无待审批为 nil。
     var pendingApprovalId: String? = nil
     var pendingApprovalCommand: String? = nil
+    var windowLabel: String? = nil
 }
 
 /// One event from a harness session. Same vocabulary as a gateway run, plus a
@@ -74,7 +75,14 @@ extension LeoAgentClient {
                 seq: row["seq"] as? Int ?? 0,
                 waitingForApproval: row["waiting_for_approval"] as? Bool ?? false,
                 pendingApprovalId: pending?["approval_id"] as? String,
-                pendingApprovalCommand: pending?["command"] as? String)
+                pendingApprovalCommand: pending?["command"] as? String,
+                windowLabel: {
+                    guard let window = row["window"] as? [String: Any] else { return nil }
+                    let app = window["app"] as? String ?? ""
+                    let title = window["title"] as? String ?? ""
+                    let parts = [app, title].filter { !$0.isEmpty }
+                    return parts.isEmpty ? nil : parts.joined(separator: " · ")
+                }())
         }
     }
 

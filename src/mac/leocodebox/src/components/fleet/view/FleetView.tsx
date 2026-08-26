@@ -23,6 +23,7 @@ type Session = {
   status: string;
   cwd: string;
   waiting_for_approval?: boolean;
+  window?: { app?: string; title?: string; window_id?: string; stale?: boolean };
 };
 
 type Machine = {
@@ -398,6 +399,12 @@ export default function FleetView() {
                             {machine.sessions.map((session) => (
                               <li key={session.session_id} className="rounded-lg bg-secondary/65 px-3 py-2 text-xs text-muted-foreground">
                                 <div className="flex items-center justify-between gap-2"><span className="font-medium text-foreground">{session.harness}</span><span>{session.status}</span></div>
+                                {session.window?.app && (
+                                  <p className="mt-1 truncate text-foreground/80" title={`${session.window.app} ${session.window.title ?? ''}`}>
+                                    {session.window.app}{session.window.title ? ` · ${session.window.title}` : ''}
+                                    {session.window.stale ? ' · 快照过期' : ''}
+                                  </p>
+                                )}
                                 <p className="mt-1 truncate opacity-75" title={session.cwd}>{session.cwd}</p>
                               </li>
                             ))}

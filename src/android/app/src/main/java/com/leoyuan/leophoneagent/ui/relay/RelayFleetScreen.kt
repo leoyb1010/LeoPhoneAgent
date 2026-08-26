@@ -473,6 +473,9 @@ private fun MachineCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("${session.harness} · ${session.status}", style = MaterialTheme.typography.bodyMedium)
+                        session.windowLabel?.let { window ->
+                            Text(window, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                        }
                         Text(session.id.take(12), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         session.lastEvent?.takeIf { it.isNotBlank() }?.let { last ->
                             Text(
