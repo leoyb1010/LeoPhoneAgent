@@ -1,3 +1,14 @@
+/** Transcript / stream payloads sometimes store structured content. */
+export function asDisplayText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value == null) return '';
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
 export function decodeHtmlEntities(text: string) {
   if (!text) return text;
   return text

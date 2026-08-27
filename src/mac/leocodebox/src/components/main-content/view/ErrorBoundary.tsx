@@ -53,6 +53,9 @@ function ErrorFallback({
         <CircleAlert className="mx-auto h-7 w-7 text-destructive" aria-hidden="true" />
         <h3 className="mt-3 text-sm font-semibold text-foreground">{t('errorBoundary.regionTitle')}</h3>
         <p className="mt-1 text-sm text-muted-foreground">{t('errorBoundary.regionDescription')}</p>
+        <pre className="mt-3 max-h-24 overflow-auto whitespace-pre-wrap break-words text-left font-mono text-[11px] text-muted-foreground">
+          {formatError(error)}
+        </pre>
         {canShowDetails && (
           <details className="mt-4 text-left">
             <summary className="cursor-pointer text-xs font-medium text-muted-foreground">{t('errorBoundary.details')}</summary>

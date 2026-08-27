@@ -8,7 +8,7 @@ import type {
   PermissionGrantResult,
   Provider,
 } from '../../types/types';
-import { formatUsageLimitText } from '../../utils/chatFormatting';
+import { asDisplayText, formatUsageLimitText } from '../../utils/chatFormatting';
 import type { Project } from '../../../../types/app';
 import { ToolRenderer, shouldHideToolResult } from '../../tools';
 import { Reasoning, ReasoningTrigger, ReasoningContent } from '../../../../shared/view/ui';
@@ -53,9 +53,9 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
       (prevMessage.type === 'tool') ||
       (prevMessage.type === 'error'));
   const messageRef = useRef<HTMLDivElement | null>(null);
-  const userCopyContent = String(message.content || '');
+  const userCopyContent = asDisplayText(message.content);
   const formattedMessageContent = useMemo(
-    () => formatUsageLimitText(String(message.content || '')),
+    () => formatUsageLimitText(asDisplayText(message.content)),
     [message.content]
   );
   const localizedMessageContent = message.type === 'error' && typeof message.errorCode === 'string'
@@ -65,7 +65,7 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
       }))
     : formattedMessageContent;
   const assistantCopyContent = message.isToolUse
-    ? String(message.displayText || message.content || '')
+    ? asDisplayText(message.displayText || message.content)
     : formattedMessageContent;
   const isCommandOrFileEditToolResponse = Boolean(
     message.isToolUse && COPY_HIDDEN_TOOL_NAMES.has(String(message.toolName || ''))
@@ -103,7 +103,7 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
             {userCopyContent.trim().length > 0 || !message.images?.length ? (
               <div className="group max-w-full rounded-xl rounded-br-md bg-info px-3 py-2 text-primary-foreground shadow-elevation-1 sm:px-4">
                 <div dir="auto" className="whitespace-pre-wrap break-words font-serif text-sm">
-                  {message.content}
+                  {userCopyContent}
                 </div>
                 <div className="mt-1 flex items-center justify-end gap-1 text-xs text-info">
                   {shouldShowUserCopyControl && (
@@ -130,7 +130,7 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
         <div className="w-full">
           <div className="flex items-center gap-2 py-0.5">
             <span className={`inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full ${message.taskStatus === 'completed' ? 'bg-success dark:bg-success' : 'bg-warning dark:bg-warning'}`} />
-            <span className="text-xs text-muted-foreground dark:text-muted-foreground">{message.content}</span>
+            <span className="text-xs text-muted-foreground dark:text-muted-foreground">{asDisplayText(message.content)}</span>
           </div>
         </div>
       ) : (
@@ -247,7 +247,7 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
                       {t('interactive.title')}
                     </h4>
                     {(() => {
-                      const lines = (message.content || '').split('\n').filter((line) => line.trim());
+                      const lines = asDisplayText(message.content).split('\n').filter((line) => line.trim());
                       const questionLine = lines.find((line) => line.includes('?')) || lines[0] || '';
                       const options: InteractiveOption[] = [];
 
@@ -320,10 +320,10 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
                 <ReasoningTrigger />
                 <ReasoningContent>
                   <Markdown className="prose prose-sm prose-gray max-w-none font-serif dark:prose-invert">
-                    {message.content}
+                    {asDisplayText(message.content)}
                   </Markdown>
                   <div className="mt-3 flex items-center text-[11px]">
-                    <MessageCopyControl content={String(message.content || '')} messageType="assistant" />
+                    <MessageCopyControl content={asDisplayText(message.content)} messageType="assistant" />
                   </div>
                 </ReasoningContent>
               </Reasoning>

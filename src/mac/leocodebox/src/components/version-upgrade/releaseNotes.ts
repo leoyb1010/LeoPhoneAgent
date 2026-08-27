@@ -17,6 +17,15 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '1.78.0',
+    date: '2026-08-27',
+    items: [
+      '原来那个对话还能打开：一条带 $ 的公式或坏消息不再把整栏换成「此区域暂时无法加载」。',
+      '点重新加载也不会再对着同一条消息立刻摔回去；只有坏掉的那一条会单独提示。',
+      'API Key 读出来的模型改完会真正用来发，不会再悄悄回到 sonnet / gpt-5.4。',
+    ],
+  },
+  {
     version: '1.77.0',
     date: '2026-08-27',
     items: [

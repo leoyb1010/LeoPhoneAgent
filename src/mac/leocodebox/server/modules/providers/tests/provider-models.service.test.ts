@@ -45,6 +45,7 @@ const createEphemeralCachePath = (): string => path.join(
 test('provider models service delegates to the resolved provider model adapter', async () => {
   const calls: LLMProvider[] = [];
   const service = createProviderModelsService({
+    skipLeoapiMerge: true,
     cachePath: createEphemeralCachePath(),
     resolveProvider: (provider) => {
       calls.push(provider);
@@ -75,6 +76,7 @@ test('provider models service returns each provider adapter result without rewri
   };
 
   const service = createProviderModelsService({
+    skipLeoapiMerge: true,
     cachePath: createEphemeralCachePath(),
     resolveProvider: () => ({
       models: {
@@ -97,6 +99,7 @@ test('provider models are cached for the three-day ttl', async () => {
 
   try {
     const service = createProviderModelsService({
+    skipLeoapiMerge: true,
       cachePath: path.join(tempRoot, 'models-cache.json'),
       now: () => currentTime,
       resolveProvider: (provider) => ({
@@ -136,6 +139,7 @@ test('claude provider models are always loaded directly from the provider', asyn
 
   try {
     const service = createProviderModelsService({
+    skipLeoapiMerge: true,
       cachePath: path.join(tempRoot, 'models-cache.json'),
       resolveProvider: (provider) => ({
         models: {
@@ -167,6 +171,7 @@ test('provider model cache is persisted across service instances', async () => {
 
   try {
     const writer = createProviderModelsService({
+      skipLeoapiMerge: true,
       cachePath,
       resolveProvider: () => ({
         models: {
@@ -179,6 +184,7 @@ test('provider model cache is persisted across service instances', async () => {
     await writer.getProviderModels('cursor');
 
     const reader = createProviderModelsService({
+      skipLeoapiMerge: true,
       cachePath,
       resolveProvider: () => ({
         models: {
@@ -204,6 +210,7 @@ test('concurrent provider model requests share one load operation', async () => 
 
   try {
     const service = createProviderModelsService({
+    skipLeoapiMerge: true,
       cachePath: path.join(tempRoot, 'models-cache.json'),
       resolveProvider: () => ({
         models: {
@@ -238,6 +245,7 @@ test('bypassCache forces a fresh provider fetch and updates cache metadata', asy
 
   try {
     const service = createProviderModelsService({
+    skipLeoapiMerge: true,
       cachePath: path.join(tempRoot, 'models-cache.json'),
       now: () => currentTime,
       resolveProvider: (provider) => ({
@@ -269,6 +277,7 @@ test('bypassCache forces a fresh provider fetch and updates cache metadata', asy
 test('provider models service delegates current active model lookups to the provider adapter', async () => {
   const calls: Array<{ provider: LLMProvider; sessionId?: string }> = [];
   const service = createProviderModelsService({
+    skipLeoapiMerge: true,
     resolveProvider: (provider) => ({
       models: {
         getSupportedModels: async () => createModels(`${provider}-models`),
@@ -290,6 +299,7 @@ test('provider models service delegates current active model lookups to the prov
 test('provider models service delegates active model change requests to the provider adapter', async () => {
   const calls: Array<{ provider: LLMProvider; input: ProviderChangeActiveModelInput }> = [];
   const service = createProviderModelsService({
+    skipLeoapiMerge: true,
     resolveProvider: (provider) => ({
       models: {
         getSupportedModels: async () => createModels(`${provider}-models`),
@@ -324,6 +334,7 @@ test('resolveResumeModel prefers a stored changed model over the requested one',
 
   try {
     const service = createProviderModelsService({
+    skipLeoapiMerge: true,
       activeModelChangesPath,
       resolveProvider: (provider) => ({
         models: {

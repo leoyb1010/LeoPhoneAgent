@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+import { readStore } from '@/modules/leocodebox/index.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
 import type { IProvider } from '@/shared/interfaces.js';
 import type {
@@ -15,6 +16,8 @@ import type {
 } from '@/shared/types.js';
 import { readProviderSessionActiveModelChange } from '@/shared/utils.js';
 
+import { extrasFromActiveLeoapi, mergeLeoapiOptions } from './leoapi-catalog.js';
+
 export const PROVIDER_MODELS_CACHE_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 const PROVIDER_MODELS_CACHE_VERSION = 2;
 const UNCACHED_PROVIDERS = new Set<LLMProvider>(['claude']);
@@ -24,6 +27,7 @@ type ProviderModelsServiceDependencies = {
   cachePath?: string;
   activeModelChangesPath?: string;
   now?: () => number;
+  skipLeoapiMerge?: boolean;
 };
 
 type ProviderModelsOptions = {
@@ -286,7 +290,7 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
     return request;
   };
 
-  const getProviderModels = async (
+  const getCliProviderModels = async (
     provider: LLMProvider,
     options: ProviderModelsOptions = {},
   ): Promise<ProviderModelsResult> => {
@@ -334,6 +338,23 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
     }
 
     return loadAndCacheModels(provider, modelsAdapter);
+  };
+
+  const getProviderModels = async (
+    provider: LLMProvider,
+    options: ProviderModelsOptions = {},
+  ): Promise<ProviderModelsResult> => {
+    const result = await getCliProviderModels(provider, options);
+    if (dependencies.skipLeoapiMerge) {
+      return result;
+    }
+    try {
+      const store = await readStore();
+      const { extras, label } = extrasFromActiveLeoapi(provider, store);
+      return { ...result, models: mergeLeoapiOptions(result.models, extras, label) };
+    } catch {
+      return result;
+    }
   };
 
   const getCurrentActiveModel = async (

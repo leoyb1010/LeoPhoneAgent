@@ -95,8 +95,8 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
     input: {
       type: 'collapsible',
       title: (input) => {
-        const filename = input.file_path?.split('/').pop() || input.file_path || 'file';
-        return `${filename}`;
+        const path = typeof input?.file_path === 'string' ? input.file_path : '';
+        return path.split('/').pop() || path || 'file';
       },
       defaultOpen: false,
       contentType: 'diff',
@@ -118,8 +118,8 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
     input: {
       type: 'collapsible',
       title: (input) => {
-        const filename = input.file_path?.split('/').pop() || input.file_path || 'file';
-        return `${filename}`;
+        const path = typeof input?.file_path === 'string' ? input.file_path : '';
+        return path.split('/').pop() || path || 'file';
       },
       defaultOpen: false,
       contentType: 'diff',
@@ -141,8 +141,8 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
     input: {
       type: 'collapsible',
       title: (input) => {
-        const filename = input.file_path?.split('/').pop() || input.file_path || 'file';
-        return `${filename}`;
+        const path = typeof input?.file_path === 'string' ? input.file_path : '';
+        return path.split('/').pop() || path || 'file';
       },
       defaultOpen: false,
       contentType: 'diff',
@@ -468,10 +468,12 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
     input: {
       type: 'collapsible',
       title: (input: any) => {
-        const count = input.questions?.length || 0;
-        const hasAnswers = input.answers && Object.keys(input.answers).length > 0;
+        const questions = Array.isArray(input?.questions) ? input.questions : [];
+        const count = questions.length;
+        const answers = input?.answers && typeof input.answers === 'object' ? input.answers : null;
+        const hasAnswers = Boolean(answers && Object.keys(answers).length > 0);
         if (count === 1) {
-          const header = input.questions[0]?.header || 'Question';
+          const header = questions[0]?.header || 'Question';
           return hasAnswers ? `${header} — answered` : header;
         }
         return hasAnswers ? `${count} questions — answered` : `${count} questions`;
@@ -479,8 +481,8 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
       defaultOpen: true,
       contentType: 'question-answer',
       getContentProps: (input: any) => ({
-        questions: input.questions || [],
-        answers: input.answers || {}
+        questions: Array.isArray(input?.questions) ? input.questions : [],
+        answers: input?.answers && typeof input.answers === 'object' ? input.answers : {},
       }),
     },
     result: {

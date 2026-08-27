@@ -20,6 +20,7 @@ export const FileListContent: React.FC<FileListContentProps> = ({
   onFileClick,
   title
 }) => {
+  const list = Array.isArray(files) ? files : [];
   return (
     <div>
       {title && (
@@ -28,7 +29,7 @@ export const FileListContent: React.FC<FileListContentProps> = ({
         </div>
       )}
       <div className="flex max-h-48 flex-wrap gap-x-1 gap-y-0.5 overflow-y-auto">
-        {files.map((file, index) => {
+        {list.map((file, index) => {
           const filePath = typeof file === 'string' ? file : file.path;
           const fileName = filePath.split('/').pop() || filePath;
           const handleClick = typeof file === 'string'
@@ -44,7 +45,7 @@ export const FileListContent: React.FC<FileListContentProps> = ({
               >
                 {fileName}
               </button>
-              {index < files.length - 1 && (
+              {index < list.length - 1 && (
                 <span className="ml-1 text-[10px] text-muted-foreground dark:text-muted-foreground">,</span>
               )}
             </span>

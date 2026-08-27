@@ -3,6 +3,7 @@ import { ChevronRight } from 'lucide-react';
 
 import type { ChatMessage, ClaudePermissionSuggestion, PermissionGrantResult, Provider } from '../../types/types';
 import type { Project } from '../../../../types/app';
+import ErrorBoundary from '../../../main-content/view/ErrorBoundary';
 import type { ToolGroupItem } from '../../utils/toolGrouping';
 import { getToolConfig } from '../../tools';
 
@@ -41,12 +42,15 @@ function parseToolInput(toolInput: unknown): unknown {
 }
 
 function getToolInputPreview(message: ChatMessage): string {
-  const config = getToolConfig(message.toolName || 'UnknownTool').input;
-  const parsedInput = parseToolInput(message.toolInput);
-  const title = typeof config.title === 'function' ? config.title(parsedInput) : config.title;
-  const value = config.getValue?.(parsedInput);
-
-  return String(value || title || message.displayText || message.content || '').trim();
+  try {
+    const config = getToolConfig(message.toolName || 'UnknownTool').input;
+    const parsedInput = parseToolInput(message.toolInput);
+    const title = typeof config.title === 'function' ? config.title(parsedInput) : config.title;
+    const value = config.getValue?.(parsedInput);
+    return String(value || title || message.displayText || message.content || '').trim();
+  } catch {
+    return String(message.displayText || message.content || message.toolName || '').trim();
+  }
 }
 
 function getToolGroupIcon(icon: string | undefined, toolName: string): string {
@@ -122,21 +126,25 @@ function ToolGroupContainer({
 
       {isExpanded && (
         <div className="mt-2 space-y-3 sm:space-y-4">
-          {group.messages.map((message, index) => (
-            <MessageComponent
-              key={getMessageKey(message)}
-              message={message}
-              prevMessage={index > 0 ? group.messages[index - 1] : prevMessage}
-              createDiff={createDiff}
-              onFileOpen={onFileOpen}
-              onShowSettings={onShowSettings}
-              onGrantToolPermission={onGrantToolPermission}
-              showRawParameters={showRawParameters}
-              showThinking={showThinking}
-              selectedProject={selectedProject}
-              provider={provider}
-            />
-          ))}
+          {group.messages.map((message, index) => {
+            const messageKey = getMessageKey(message);
+            return (
+              <ErrorBoundary key={messageKey} variant="inline" resetKeys={[messageKey]}>
+                <MessageComponent
+                  message={message}
+                  prevMessage={index > 0 ? group.messages[index - 1] : prevMessage}
+                  createDiff={createDiff}
+                  onFileOpen={onFileOpen}
+                  onShowSettings={onShowSettings}
+                  onGrantToolPermission={onGrantToolPermission}
+                  showRawParameters={showRawParameters}
+                  showThinking={showThinking}
+                  selectedProject={selectedProject}
+                  provider={provider}
+                />
+              </ErrorBoundary>
+            );
+          })}
         </div>
       )}
     </div>

@@ -18,6 +18,7 @@ import {
 // 兜底能力表搬到 constants,指挥条(在会话之外)也要读同一份。
 import { FALLBACK_PERMISSION_MODES } from '../constants/providerPermissions';
 
+import { pickStoredOrCurrent } from './providerModelPick';
 import { decideSessionProviderSync } from './sessionProviderSync';
 
 const FALLBACK_DEFAULT_MODEL: Record<LLMProvider, string> = {
@@ -326,21 +327,6 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
     return Boolean(FALLBACK_PROVIDER_EFFORT_VALUES[targetProvider]?.length);
   }, [providerCapabilities]);
 
-  const pickStoredOrCurrent = (
-    storageKey: string,
-    current: string,
-    def: ProviderModelsDefinition,
-  ): string => {
-    const stored = localStorage.getItem(storageKey);
-    if (stored && def.OPTIONS.some((o) => o.value === stored)) {
-      return stored;
-    }
-    if (current && def.OPTIONS.some((o) => o.value === current)) {
-      return current;
-    }
-    return def.DEFAULT;
-  };
-
   const getModelOption = useCallback((
     targetProvider: LLMProvider,
     model: string,
@@ -408,7 +394,7 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
   useEffect(() => {
     const claude = providerModelCatalog.claude;
     if (claude) {
-      const next = pickStoredOrCurrent('claude-model', claudeModel, claude);
+      const next = pickStoredOrCurrent(localStorage.getItem('claude-model'), claudeModel, claude);
       if (next !== claudeModel) {
         setClaudeModel(next);
       }
@@ -421,7 +407,7 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
   useEffect(() => {
     const cursor = providerModelCatalog.cursor;
     if (cursor) {
-      const next = pickStoredOrCurrent('cursor-model', cursorModel, cursor);
+      const next = pickStoredOrCurrent(localStorage.getItem('cursor-model'), cursorModel, cursor);
       if (next !== cursorModel) {
         setCursorModel(next);
       }
@@ -434,7 +420,7 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
   useEffect(() => {
     const codex = providerModelCatalog.codex;
     if (codex) {
-      const next = pickStoredOrCurrent('codex-model', codexModel, codex);
+      const next = pickStoredOrCurrent(localStorage.getItem('codex-model'), codexModel, codex);
       if (next !== codexModel) {
         setCodexModel(next);
       }
@@ -447,7 +433,7 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
   useEffect(() => {
     const opencode = providerModelCatalog.opencode;
     if (opencode) {
-      const next = pickStoredOrCurrent('opencode-model', opencodeModel, opencode);
+      const next = pickStoredOrCurrent(localStorage.getItem('opencode-model'), opencodeModel, opencode);
       if (next !== opencodeModel) {
         setOpenCodeModel(next);
       }
@@ -460,7 +446,7 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
   useEffect(() => {
     const grok = providerModelCatalog.grok;
     if (grok) {
-      const next = pickStoredOrCurrent('grok-model', grokModel, grok);
+      const next = pickStoredOrCurrent(localStorage.getItem('grok-model'), grokModel, grok);
       if (next !== grokModel) {
         setGrokModel(next);
       }
@@ -590,8 +576,8 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
     sessionId?: string | null,
   ) => {
     const normalizedSessionId = typeof sessionId === 'string' ? sessionId.trim() : '';
+    setStoredProviderModel(targetProvider, model);
     if (!normalizedSessionId) {
-      setStoredProviderModel(targetProvider, model);
       return {
         scope: 'default' as const,
         changed: false,
@@ -608,10 +594,15 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
       throw new Error('Unable to change the active model for this session.');
     }
 
+    const nextModel = body.data.model || model;
+    if (nextModel !== model) {
+      setStoredProviderModel(targetProvider, nextModel);
+    }
+
     return {
       scope: 'session' as const,
       changed: body.data.changed === true,
-      model: body.data.model || model,
+      model: nextModel,
     };
   }, [setStoredProviderModel]);
 

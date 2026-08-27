@@ -175,7 +175,11 @@ const markdownComponents = {
 export function Markdown({ children, className }: MarkdownProps) {
   const content = normalizeInlineCodeFences(String(children ?? ''));
   const remarkPlugins = useMemo(() => [remarkGfm, remarkMath], []);
-  const rehypePlugins = useMemo(() => [rehypeKatex], []);
+  // KaTeX defaults to throwOnError: true. Claude mid-task replies often
+  // contain `$PATH`, `$HOME`, or half-closed `$$` that remark-math treats as
+  // TeX; one ParseError used to blank the whole chat ErrorBoundary, and
+  // Reload remounted the same message so the session stayed dead.
+  const rehypePlugins = useMemo(() => [[rehypeKatex, { throwOnError: false }]], []);
   const { openFileInEditor } = usePaletteOps();
 
   const components = useMemo(

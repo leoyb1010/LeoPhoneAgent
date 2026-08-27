@@ -10,6 +10,7 @@ import type {
   LLMProvider,
   ProviderModelsDefinition,
 } from '../../../../types/app';
+import ErrorBoundary from '../../../main-content/view/ErrorBoundary';
 import { getIntrinsicMessageKey } from '../../utils/messageKeys';
 import { groupConsecutiveTools, isToolGroupItem } from '../../utils/toolGrouping';
 
@@ -176,13 +177,33 @@ function ChatMessagesPane({
   const renderMessageItem = useCallback((item: (typeof groupedVisibleMessages)[number], index: number): ReactNode => {
     const prevMessage = getLastMessage(groupedVisibleMessages[index - 1]);
     if (isToolGroupItem(item)) {
+      const groupKey = `tool-group-${getMessageKey(item.messages[0])}`;
       return (
-        <ToolGroupContainer
-          key={`tool-group-${getMessageKey(item.messages[0])}`}
-          group={item}
+        <ErrorBoundary key={groupKey} variant="inline" resetKeys={[groupKey]}>
+          <ToolGroupContainer
+            group={item}
+            prevMessage={prevMessage}
+            createDiff={createDiff}
+            getMessageKey={getMessageKey}
+            onFileOpen={onFileOpen}
+            onShowSettings={onShowSettings}
+            onGrantToolPermission={onGrantToolPermission}
+            showRawParameters={showRawParameters}
+            showThinking={showThinking}
+            selectedProject={selectedProject}
+            provider={provider}
+          />
+        </ErrorBoundary>
+      );
+    }
+
+    const messageKey = getMessageKey(item);
+    return (
+      <ErrorBoundary key={messageKey} variant="inline" resetKeys={[messageKey]}>
+        <MessageComponent
+          message={item}
           prevMessage={prevMessage}
           createDiff={createDiff}
-          getMessageKey={getMessageKey}
           onFileOpen={onFileOpen}
           onShowSettings={onShowSettings}
           onGrantToolPermission={onGrantToolPermission}
@@ -191,23 +212,7 @@ function ChatMessagesPane({
           selectedProject={selectedProject}
           provider={provider}
         />
-      );
-    }
-
-    return (
-      <MessageComponent
-        key={getMessageKey(item)}
-        message={item}
-        prevMessage={prevMessage}
-        createDiff={createDiff}
-        onFileOpen={onFileOpen}
-        onShowSettings={onShowSettings}
-        onGrantToolPermission={onGrantToolPermission}
-        showRawParameters={showRawParameters}
-        showThinking={showThinking}
-        selectedProject={selectedProject}
-        provider={provider}
-      />
+      </ErrorBoundary>
     );
   }, [
     createDiff,

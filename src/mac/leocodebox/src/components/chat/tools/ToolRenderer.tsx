@@ -157,8 +157,14 @@ export const ToolRenderer: React.FC<ToolRendererProps> = memo(({
   }
 
   if (displayConfig.type === 'one-line') {
-    const value = displayConfig.getValue?.(parsedData) || '';
-    const secondary = displayConfig.getSecondary?.(parsedData);
+    let value = '';
+    let secondary: string | undefined;
+    try {
+      value = displayConfig.getValue?.(parsedData) || '';
+      secondary = displayConfig.getSecondary?.(parsedData);
+    } catch {
+      value = '';
+    }
 
     return (
       <OneLineDisplay
@@ -181,15 +187,25 @@ export const ToolRenderer: React.FC<ToolRendererProps> = memo(({
   }
 
   if (displayConfig.type === 'plan') {
-    const title = typeof displayConfig.title === 'function'
-      ? displayConfig.title(parsedData)
-      : displayConfig.title || 'Plan';
+    let title = 'Plan';
+    try {
+      title = typeof displayConfig.title === 'function'
+        ? displayConfig.title(parsedData)
+        : displayConfig.title || 'Plan';
+    } catch {
+      title = 'Plan';
+    }
 
-    const contentProps = displayConfig.getContentProps?.(parsedData, {
-      selectedProject,
-      createDiff,
-      onFileOpen
-    }) || {};
+    let contentProps: Record<string, any> = {};
+    try {
+      contentProps = displayConfig.getContentProps?.(parsedData, {
+        selectedProject,
+        createDiff,
+        onFileOpen
+      }) || {};
+    } catch {
+      contentProps = {};
+    }
 
     const isStreaming = mode === 'input' && !toolResult;
 
@@ -208,19 +224,29 @@ export const ToolRenderer: React.FC<ToolRendererProps> = memo(({
   }
 
   if (displayConfig.type === 'collapsible') {
-    const title = typeof displayConfig.title === 'function'
-      ? displayConfig.title(parsedData)
-      : displayConfig.title || 'Details';
+    let title = 'Details';
+    try {
+      title = typeof displayConfig.title === 'function'
+        ? displayConfig.title(parsedData)
+        : displayConfig.title || 'Details';
+    } catch {
+      title = 'Details';
+    }
 
     const defaultOpen = displayConfig.defaultOpen !== undefined
       ? displayConfig.defaultOpen
       : false;
 
-    const contentProps = displayConfig.getContentProps?.(parsedData, {
-      selectedProject,
-      createDiff,
-      onFileOpen
-    }) || {};
+    let contentProps: Record<string, any> = {};
+    try {
+      contentProps = displayConfig.getContentProps?.(parsedData, {
+        selectedProject,
+        createDiff,
+        onFileOpen
+      }) || {};
+    } catch {
+      contentProps = {};
+    }
 
     let contentComponent: React.ReactNode = null;
 
