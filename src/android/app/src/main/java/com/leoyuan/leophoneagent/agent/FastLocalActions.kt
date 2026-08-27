@@ -45,7 +45,15 @@ object FastLocalActions {
             .setContentText(text)
             .setAutoCancel(true)
             .build()
-        runCatching { NotificationManagerCompat.from(context).notify(text.hashCode(), note) }
+        val nm = NotificationManagerCompat.from(context)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !nm.areNotificationsEnabled()) {
+            return true
+        }
+        try {
+            nm.notify(text.hashCode(), note)
+        } catch (_: SecurityException) {
+            // POST_NOTIFICATIONS denied — todo is still parked in SessionTaskStatus.
+        }
         return true
     }
 

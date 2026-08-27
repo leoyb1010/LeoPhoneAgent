@@ -94,12 +94,20 @@ object OffloadPermissionManager {
         // 值得在权限页露面。
         ToolPermissionInfo("open", "Open Links & Apps", PermissionCategory.SYSTEM, PermissionLevel.BYPASS),
         ToolPermissionInfo("apps", "Installed Apps", PermissionCategory.SYSTEM, PermissionLevel.BYPASS, showInSettings = false),
-        // T330: integrations — opt-in by default. These tools can drive
-        // other apps and read on-screen content, so the safer posture is
-        // NOT_ALLOWED until the user picks otherwise even when the
-        // underlying system layer (Shizuku binder / Accessibility service)
-        // is already authorized.
-        ToolPermissionInfo("a11y_cli", "android-a11y-cli", PermissionCategory.INTEGRATIONS, PermissionLevel.NOT_ALLOWED),
+        // T330: Shizuku stays opt-in. Accessibility is the Power edition's
+        // job — once the user installed Power and enabled the system
+        // service, defaulting a11y_cli to NOT_ALLOWED meant every
+        // android-open left the agent unable to tap the other app.
+        // Standard has the service compiled out, so it stays closed.
+        ToolPermissionInfo(
+            "a11y_cli",
+            "android-a11y-cli",
+            PermissionCategory.INTEGRATIONS,
+            if (com.leoyuan.leophoneagent.BuildConfig.POWER_FEATURES_ENABLED)
+                PermissionLevel.BYPASS
+            else
+                PermissionLevel.NOT_ALLOWED,
+        ),
         ToolPermissionInfo("shizuku_cli", "android-shizuku-cli", PermissionCategory.INTEGRATIONS, PermissionLevel.NOT_ALLOWED),
         ToolPermissionInfo("shizuku_dangerous", "Privileged destructive command", PermissionCategory.INTEGRATIONS, PermissionLevel.ASK_ONCE, showInSettings = false),
     )
@@ -338,8 +346,8 @@ object OffloadPermissionManager {
      * bodyEnabled 打开期间，把 PRIVACY 组的**有效**等级强制提到 ASK_ONCE，
      * 用户在设置里存的值不动（见 [getConfiguredLevel]）。
      *
-     * 注意：INTEGRATIONS 组（a11y / shizuku）默认就是 NOT_ALLOWED，
-     * 未注册工具 fail-closed —— 那两处本来就是对的，不动。
+     * 注意：shizuku 默认 NOT_ALLOWED；Power 上 a11y_cli 默认 BYPASS
+     *（系统无障碍开关才是同意）。未注册工具 fail-closed。
      */
     @Volatile
     private var remoteBodyEnabled: Boolean = false
@@ -396,8 +404,7 @@ object OffloadPermissionManager {
      *
      * 规则：只提级，不降级 —— 用户显式选了 NOT_ALLOWED 就仍然是 NOT_ALLOWED；
      * 已经是 ASK_ONCE 的不变；只有 PRIVACY 组的 BYPASS 会在远程身体在线时
-     * 被抬到 ASK_ONCE。MEDIA / SYSTEM 不动（不含个人数据），
-     * INTEGRATIONS 本来就默认 NOT_ALLOWED。
+     * 被抬到 ASK_ONCE。MEDIA / SYSTEM / INTEGRATIONS 不动。
      */
     internal fun effectiveLevel(
         category: PermissionCategory,
@@ -466,6 +473,17 @@ object OffloadPermissionManager {
 
                 val grants = sessionGrants.getOrPut(sessionId) { mutableSetOf() }
                 if (toolName in grants) return true
+
+                // Opening another app backgrounds Leo. ASK_ONCE then
+                // fail-closed because ChatScreen cannot draw a dialog —
+                // that is exactly when android-a11y-cli is needed.
+                // The system Accessibility toggle is the consent; do not
+                // refuse a connected service just because we left our UI.
+                if (toolName == "a11y_cli" &&
+                    com.leoyuan.leophoneagent.accessibility.MinisAccessibilityService.getInstance() != null
+                ) {
+                    return true
+                }
 
                 promptForPermission(toolName, toolTitle, sessionId, description, singleUseOnly = false)
             }

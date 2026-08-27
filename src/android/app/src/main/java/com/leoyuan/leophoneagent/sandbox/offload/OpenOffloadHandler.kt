@@ -45,8 +45,12 @@ class OpenOffloadHandler(private val context: Context) : NativeOffloadHandler {
             val launch = app?.let { InstalledLauncherApps.launchIntent(context.packageManager, it.packageName) }
             if (launch != null) {
                 return try {
+                    com.leoyuan.leophoneagent.service.SessionActivityTracker.ensureForegroundService()
                     context.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                    NativeOffloadResult(0, OffloadOutput.formatBody("Opened: ${app.packageName}", args) + "\n")
+                    NativeOffloadResult(
+                        0,
+                        OffloadOutput.formatBody(openedHint(app.packageName), args) + "\n",
+                    )
                 } catch (e: ActivityNotFoundException) {
                     maybeFallback(url, e, args)
                 }
@@ -127,8 +131,10 @@ class OpenOffloadHandler(private val context: Context) : NativeOffloadHandler {
             }
             val toStart = launch ?: intent
             Log.d(TAG, "startActivity url='$url' action=${toStart.action} resolved=${toStart.resolveActivity(pm)?.flattenToShortString()}")
+            com.leoyuan.leophoneagent.service.SessionActivityTracker.ensureForegroundService()
             context.startActivity(toStart)
-            NativeOffloadResult(0, OffloadOutput.formatBody("Opened: $url", args) + "\n")
+            val pkg = toStart.`package` ?: toStart.component?.packageName
+            NativeOffloadResult(0, OffloadOutput.formatBody(openedHint(pkg ?: url), args) + "\n")
         } catch (e: ActivityNotFoundException) {
             Log.w(TAG, "no handler for '$url'")
             maybeFallback(url, e, args)
@@ -209,6 +215,15 @@ class OpenOffloadHandler(private val context: Context) : NativeOffloadHandler {
             .put("detail", original.message ?: "ActivityNotFoundException")
             .toString()
         return NativeOffloadResult(1, OffloadOutput.formatBody(body, args) + "\n")
+    }
+
+    private fun openedHint(target: String): String {
+        val wait = if (target.contains('.')) {
+            "android-a11y-cli wait activity --package $target && android-a11y-cli ui dump"
+        } else {
+            "android-a11y-cli wait activity && android-a11y-cli ui dump"
+        }
+        return "Opened: $target. Continue in this turn with `$wait` then tap/input — do not stop."
     }
 
     companion object {

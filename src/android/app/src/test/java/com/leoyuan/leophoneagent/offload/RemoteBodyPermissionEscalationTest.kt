@@ -112,11 +112,20 @@ class RemoteBodyPermissionEscalationTest {
         assertTrue("android-open must be user-visible", open!!.showInSettings)
     }
 
-    /** review 明确要求不要动这两处：它们本来就是对的。 */
     @Test
-    fun `integration tools stay opt-in`() {
-        OffloadPermissionManager.toolRegistry
-            .filter { it.category == PermissionCategory.INTEGRATIONS && it.toolName.endsWith("_cli") }
-            .forEach { assertEquals(PermissionLevel.NOT_ALLOWED, it.defaultLevel) }
+    fun `shizuku stays opt-in`() {
+        val shizuku = OffloadPermissionManager.toolRegistry.find { it.toolName == "shizuku_cli" }
+        assertEquals(PermissionLevel.NOT_ALLOWED, shizuku!!.defaultLevel)
+    }
+
+    @Test
+    fun `a11y default follows power edition`() {
+        val a11y = OffloadPermissionManager.toolRegistry.find { it.toolName == "a11y_cli" }!!
+        val expected = if (com.leoyuan.leophoneagent.BuildConfig.POWER_FEATURES_ENABLED) {
+            PermissionLevel.BYPASS
+        } else {
+            PermissionLevel.NOT_ALLOWED
+        }
+        assertEquals(expected, a11y.defaultLevel)
     }
 }

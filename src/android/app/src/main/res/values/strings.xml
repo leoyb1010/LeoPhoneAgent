@@ -1826,8 +1826,8 @@
     <!-- 发版铁律:每次改 versionName 都必须同步改这里,并重写下面的
          whats_new_current 文案。WhatsNewGateTest 会比对这两个值,
          对不上就构建失败 —— 防止弹出的是上一版的更新内容。 -->
-    <string name="whats_new_version" translatable="false">1.0.0-alpha.19</string>
-    <string name="whats_new_current">• Offline, \"turn on the flashlight\" and \"add a todo\" run as native actions. The session list shows at most three cards—running, waiting for approval, and the most likely next action. You can hide all of them in Appearance.</string>
+    <string name="whats_new_version" translatable="false">1.0.0-alpha.20</string>
+    <string name="whats_new_current">• After opening another app, the agent can still tap, read, and swipe. Background work stays alive by default, and the floating capsule is on. Power no longer blocks Accessibility by default.</string>
     <string name="artifact_ready">ARTIFACT READY</string>
     <string name="artifact_open">Open artifact</string>
     <string name="artifact_missing">This artifact is no longer available on this device.</string>

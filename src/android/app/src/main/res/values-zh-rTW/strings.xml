@@ -755,7 +755,7 @@
     <string name="terminal_cli_booting_hint">若出現安全確認或登入提示，請依螢幕指引繼續。</string>
     <string name="whats_new_title">本次更新（%1$s）</string>
     <string name="whats_new_confirm">知道了</string>
-    <string name="whats_new_current">• 沒網也能聽懂「打開手電筒」「記個待辦」並直接做。工作階段列表最多三張卡：正在執行、等待審批、最可能需要的動作。可在外觀裡整組關掉。</string>
+    <string name="whats_new_current">• 打開別的 App 後還能繼續點、讀、滑。後台任務預設保活，懸浮窗預設開。Power 無障礙不再被產品門預設攔住。</string>
     <string name="artifact_ready">交付物已就緒</string>
     <string name="artifact_open">開啟交付物</string>
     <string name="artifact_missing">這份交付物已不在本機。</string>

@@ -452,7 +452,7 @@ internal object ConfigBuiltins {
                 description = "Keep agent tasks running when the app is backgrounded.",
                 prefs = prefs,
                 key = "enhanced_background_execution",
-                defaultValue = false,
+                defaultValue = true,
                 risk = ConfigRisk.SENSITIVE,
             )
         )

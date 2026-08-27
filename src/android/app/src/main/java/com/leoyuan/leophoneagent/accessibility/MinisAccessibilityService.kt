@@ -29,7 +29,11 @@ class MinisAccessibilityService : AccessibilityService() {
 
     companion object {
         private const val TAG = "MinisA11y"
-        const val SERVICE_ID = "com.leoyuan.leophoneagent/.accessibility.MinisAccessibilityService"
+        val SERVICE_ID: String
+            get() {
+                val pkg = _instance?.packageName ?: "com.leoyuan.leophoneagent"
+                return "$pkg/.accessibility.MinisAccessibilityService"
+            }
         private const val EVENT_RING_CAP = 1024
 
         @Volatile

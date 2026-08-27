@@ -1753,7 +1753,7 @@
     <string name="terminal_cli_booting_hint">如出现安全确认或登录提示，请按屏幕指引继续。</string>
     <string name="whats_new_title">本次更新（%1$s）</string>
     <string name="whats_new_confirm">知道了</string>
-    <string name="whats_new_current">• 没网也能听懂「打开手电筒」「记个待办」并直接做。会话列表最多三张卡：正在执行、等待审批、最可能需要的动作。可在外观里整组关掉。</string>
+    <string name="whats_new_current">• 打开别的 App 后还能继续点、读、滑。后台任务默认保活，悬浮窗默认开。Power 无障碍不再被产品门默认拦住。</string>
     <string name="artifact_ready">交付物已就绪</string>
     <string name="artifact_open">打开交付物</string>
     <string name="artifact_missing">这份交付物已不在本机。</string>

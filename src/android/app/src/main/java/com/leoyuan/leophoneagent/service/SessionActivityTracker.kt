@@ -505,6 +505,11 @@ object SessionActivityTracker {
         }
     }
 
+    /** Keep the FGS (and overlay observer) up before we leave our Activity. */
+    fun ensureForegroundService() {
+        if (shouldRunService()) startServiceIfNeeded()
+    }
+
     private fun startServiceIfNeeded() {
         val context = appContext ?: run {
             Log.w(TAG, "Context not initialized, cannot start service")

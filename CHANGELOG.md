@@ -4,6 +4,24 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## T9 · Android 1.0.0-alpha.20 - 2026-08-27
+
+### 用户可见
+
+- 打开别的 App 后还能继续点、读、滑：Power 无障碍默认放行，无障碍已开时后台不再卡在一次确认。
+- 后台任务默认保活，悬浮窗默认开；切走前会把前台服务先拉起来。
+
+### 验证
+
+- `scripts/verify_android_alpha_release.sh`：固定个人 Alpha 签名、包名、versionCode `100020`、versionName `1.0.0-alpha.20` 通过。
+- SHA-256：Standard `38e8b60cb856766e4a39f0d29041659d40e30938e049ae1095ca3b696b7994b6`；Power `5c9f193614ba28208bba57e72458b354bb5c376bb8cc78ecb8942fe91c36dbaa`。
+- Fold8 API 35 模拟器：alpha.19 → alpha.20 覆盖安装 `Success`；两包冷启动与 `ASSIST` 均为 `Status: ok`，无本 App `FATAL EXCEPTION`。
+
+### 停损
+
+- Standard 仍不带无障碍跨应用。Power 仍要系统无障碍授权；没给悬浮窗权限时只出已有提醒，不会自己开。
+- 本船不发 iOS / Mac / Harmony。
+
 ## Harmony 0.3.0-alpha.17 · 对齐 T2/T7 - 2026-08-26
 
 ### 用户可见

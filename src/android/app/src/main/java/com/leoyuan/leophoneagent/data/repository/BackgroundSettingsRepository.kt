@@ -39,12 +39,12 @@ class BackgroundSettingsRepository(context: Context) {
 
     /**
      * T-bg-overlay phase 2: "show floating tool-status overlay while the
-     * app is backgrounded" toggle. Defaults to OFF — the overlay needs
-     * SYSTEM_ALERT_WINDOW which is a separate system permission flow, so
-     * we won't surface anything until the user opts in.
+     * app is backgrounded" toggle. Defaults ON so switching to another app
+     * during a turn still shows the capsule. SYSTEM_ALERT_WINDOW is a
+     * separate grant — if it's missing the FGS posts the existing nudge.
      */
     private val _backgroundOverlayEnabled =
-        MutableStateFlow(prefs.getBoolean(KEY_BG_OVERLAY_ENABLED, false))
+        MutableStateFlow(prefs.getBoolean(KEY_BG_OVERLAY_ENABLED, true))
     val backgroundOverlayEnabled: StateFlow<Boolean> =
         _backgroundOverlayEnabled.asStateFlow()
 
