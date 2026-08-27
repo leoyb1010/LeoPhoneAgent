@@ -6,6 +6,7 @@ import { useTasksSettings } from '../../../contexts/TasksSettingsContext';
 import { useWebSocket } from '../../../contexts/WebSocketContext';
 import PermissionContext from '../../../contexts/PermissionContext';
 import { QuickSettingsPanel } from '../../quick-settings-panel';
+import ErrorBoundary from '../../main-content/view/ErrorBoundary';
 import type { ChatInterfaceProps, Provider  } from '../types/types';
 import { useChatProviderState } from '../hooks/useChatProviderState';
 import { useChatSessionState } from '../hooks/useChatSessionState';
@@ -336,6 +337,8 @@ function ChatInterface({
   return (
     <PermissionContext.Provider value={permissionContextValue}>
       <div className="flex h-full min-h-0 flex-col">
+        <div className="flex min-h-0 flex-1 flex-col">
+        <ErrorBoundary variant="inline" resetKeys={[selectedSession?.id]}>
         <ChatMessagesPane
           scrollContainerRef={scrollContainerRef}
           onWheel={handleScroll}
@@ -386,6 +389,8 @@ function ChatInterface({
           showThinking={showThinking}
           selectedProject={selectedProject}
         />
+        </ErrorBoundary>
+        </div>
 
         <div className="relative flex-shrink-0">
           {isUserScrolledUp && chatMessages.length > 0 && (
@@ -402,6 +407,7 @@ function ChatInterface({
             </div>
           )}
 
+          <ErrorBoundary variant="inline" resetKeys={[selectedSession?.id, pendingPermissionRequests.length]}>
           <ChatComposer
           pendingPermissionRequests={pendingPermissionRequests}
           handlePermissionDecision={handlePermissionDecision}
@@ -474,6 +480,7 @@ function ChatInterface({
           isTextareaExpanded={isTextareaExpanded}
           sendByCtrlEnter={sendByCtrlEnter}
         />
+          </ErrorBoundary>
         </div>
       </div>
 

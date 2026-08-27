@@ -2,7 +2,7 @@
 
 ![leocodebox 本地 Agent 工作台](public/visuals/release/readme-hero.webp)
 
-![version](https://img.shields.io/badge/source-1.76.0-blue)
+![version](https://img.shields.io/badge/source-1.77.0-blue)
 ![platform](https://img.shields.io/badge/platform-macOS%20arm64-lightgrey)
 ![signed](https://img.shields.io/badge/signed-Developer%20ID-blue)
 ![license](https://img.shields.io/badge/license-AGPL--3.0-orange)
@@ -15,15 +15,15 @@
 
 ## ⬇️ 下载
 
-[![下载 DMG](https://img.shields.io/badge/下载-LeoPhoneAgent%20Mac%201.76.0%20(arm64)-brightgreen?style=for-the-badge)](https://github.com/leoyb1010/leocodebox-updates/releases/latest)
+[![下载 DMG](https://img.shields.io/badge/下载-LeoPhoneAgent%20Mac%201.77.0%20(arm64)-brightgreen?style=for-the-badge)](https://github.com/leoyb1010/leocodebox-updates/releases/latest)
 
 - **最新版本**：<https://github.com/leoyb1010/leocodebox-updates/releases/latest>
-- **当前源码版本**：`1.76.0`
-- **当前公开可安装版**：`1.76.0`
+- **当前源码版本**：`1.77.0`
+- **当前公开可安装版**：`1.77.0`
 - **源码**：<https://github.com/leoyb1010/LeoPhoneAgent/tree/main/src/mac/leocodebox>
 - **Issues**：<https://github.com/leoyb1010/LeoPhoneAgent/issues>
 
-1.76.0 已用本机 `Developer ID Application: leo yuan (48H5Y3LNUK)` 签名，并发布到 `leocodebox-updates`（`v1.76.0` + `latest-mac.yml`）。本机 `/Applications` 只留这一份。公证钥匙串 profile `leocodebox` 本机不在，所以没有 stapler 钉章；热更新仍走同一 TeamIdentifier 的签名链。补公证：`xcrun notarytool store-credentials` 后跑 `npm run desktop:notarize:mac`。
+1.77.0 已用本机 `Developer ID Application: leo yuan (48H5Y3LNUK)` 签名，并发布到 `leocodebox-updates`（`v1.77.0` + `latest-mac.yml`）。本机 `/Applications` 只留这一份。公证钥匙串 profile `leocodebox` 本机不在，所以没有 stapler 钉章；热更新仍走同一 TeamIdentifier 的签名链。补公证：`xcrun notarytool store-credentials` 后跑 `npm run desktop:notarize:mac`。
 
 ---
 

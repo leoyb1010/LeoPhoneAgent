@@ -6,9 +6,12 @@ import {
   type FallbackProps,
 } from 'react-error-boundary';
 
+type ErrorBoundaryVariant = 'region' | 'inline';
+
 type ErrorFallbackProps = FallbackProps & {
   showDetails: boolean;
   componentStack: string | null;
+  variant: ErrorBoundaryVariant;
 };
 
 type ErrorBoundaryProps = {
@@ -16,6 +19,7 @@ type ErrorBoundaryProps = {
   showDetails?: boolean;
   onRetry?: () => void;
   resetKeys?: unknown[];
+  variant?: ErrorBoundaryVariant;
 };
 
 function formatError(error: unknown): string {
@@ -31,13 +35,21 @@ function ErrorFallback({
   resetErrorBoundary,
   showDetails,
   componentStack,
+  variant,
 }: ErrorFallbackProps) {
   const { t } = useTranslation();
   const canShowDetails = showDetails && import.meta.env.DEV;
+  const isInline = variant === 'inline';
 
   return (
-    <div className="flex h-full min-h-48 items-center justify-center p-6 text-center">
-      <div className="w-full max-w-md rounded-md border border-destructive/30 bg-card p-6 shadow-elevation-1">
+    <div className={isInline
+      ? 'flex min-h-0 items-center justify-center p-3 text-center'
+      : 'flex h-full min-h-48 items-center justify-center p-6 text-center'}
+    >
+      <div className={isInline
+        ? 'w-full max-w-md rounded-md border border-destructive/30 bg-card p-3 shadow-elevation-1'
+        : 'w-full max-w-md rounded-md border border-destructive/30 bg-card p-6 shadow-elevation-1'}
+      >
         <CircleAlert className="mx-auto h-7 w-7 text-destructive" aria-hidden="true" />
         <h3 className="mt-3 text-sm font-semibold text-foreground">{t('errorBoundary.regionTitle')}</h3>
         <p className="mt-1 text-sm text-muted-foreground">{t('errorBoundary.regionDescription')}</p>
@@ -68,6 +80,7 @@ function ErrorBoundary({
   showDetails = false,
   onRetry = undefined,
   resetKeys = undefined,
+  variant = 'region',
 }: ErrorBoundaryProps) {
   const [componentStack, setComponentStack] = useState<string | null>(null);
 
@@ -89,9 +102,10 @@ function ErrorBoundary({
         resetErrorBoundary={resetErrorBoundary}
         showDetails={showDetails}
         componentStack={componentStack}
+        variant={variant}
       />
     ),
-    [showDetails, componentStack]
+    [showDetails, componentStack, variant]
   );
 
   return (

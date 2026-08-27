@@ -499,7 +499,7 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
       defaultOpen: true,
       contentType: 'markdown',
       getContentProps: (input) => ({
-        content: input.plan?.replace(/\\n/g, '\n') || input.plan
+        content: typeof input.plan === 'string' ? input.plan.replace(/\\n/g, '\n') : ''
       })
     },
     result: {
@@ -515,7 +515,7 @@ export const TOOL_CONFIGS: Record<string, ToolDisplayConfig> = {
       defaultOpen: true,
       contentType: 'markdown',
       getContentProps: (input) => ({
-        content: input.plan?.replace(/\\n/g, '\n') || input.plan
+        content: typeof input.plan === 'string' ? input.plan.replace(/\\n/g, '\n') : ''
       })
     },
     result: {

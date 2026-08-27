@@ -13,6 +13,7 @@ import {
   ConfirmationActions,
   ConfirmationAction,
 } from '../../../../shared/view/ui';
+import ErrorBoundary from '../../../main-content/view/ErrorBoundary';
 
 registerPermissionPanel('AskUserQuestion', AskUserQuestionPanel);
 
@@ -45,11 +46,12 @@ export default function PermissionRequestsBanner({
         const CustomPanel = getPermissionPanel(request.toolName);
         if (CustomPanel) {
           return (
-            <CustomPanel
-              key={request.requestId}
-              request={request}
-              onDecision={handlePermissionDecision}
-            />
+            <ErrorBoundary key={request.requestId} variant="inline" resetKeys={[request.requestId]}>
+              <CustomPanel
+                request={request}
+                onDecision={handlePermissionDecision}
+              />
+            </ErrorBoundary>
           );
         }
 

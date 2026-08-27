@@ -243,7 +243,7 @@ function MainContent({
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className={`flex min-h-0 min-w-[200px] flex-col overflow-hidden ${editorExpanded ? 'hidden' : ''} flex-1`}>
           <div className={`workspace-tab-panel h-full ${activeTab === 'chat' ? 'block' : 'hidden'}`} data-active={activeTab === 'chat'}>
-            <ErrorBoundary showDetails>
+            <ErrorBoundary showDetails resetKeys={[selectedSession?.id, selectedProject?.projectId]}>
               <React.Suspense fallback={panelFallback}>
               <ChatInterface
                 selectedProject={selectedProject}

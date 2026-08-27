@@ -1,14 +1,28 @@
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 
 import type { PermissionPanelProps } from '../../configs/permissionPanelRegistry';
-import type { Question } from '../../../types/types';
+import type { Question, QuestionOption } from '../../../types/types';
+
+function normalizeQuestions(raw: unknown): Question[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (q): q is Question => !!q && typeof q === 'object' && typeof (q as Question).question === 'string',
+  );
+}
+
+function optionList(q: Question | undefined): QuestionOption[] {
+  if (!q || !Array.isArray(q.options)) return [];
+  return q.options.filter(
+    (opt): opt is QuestionOption => !!opt && typeof opt === 'object' && typeof opt.label === 'string',
+  );
+}
 
 export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
   request,
   onDecision,
 }) => {
   const input = request.input as { questions?: Question[] } | undefined;
-  const questions: Question[] = useMemo(() => input?.questions || [], [input?.questions]);
+  const questions: Question[] = useMemo(() => normalizeQuestions(input?.questions), [input?.questions]);
 
   const [currentStep, setCurrentStep] = useState(0);
   const [selections, setSelections] = useState<Map<number, Set<string>>>(() => new Map());
@@ -97,13 +111,14 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
     const q = questions[currentStep];
     if (!q) return;
     const multi = q.multiSelect || false;
-    const optCount = q.options.length;
+    const options = optionList(q);
+    const optCount = options.length;
 
     // Number keys 1-9 for options
     const num = parseInt(e.key);
     if (!isNaN(num) && num >= 1 && num <= optCount) {
       e.preventDefault();
-      toggleOption(currentStep, q.options[num - 1].label, multi);
+      toggleOption(currentStep, options[num - 1].label, multi);
       return;
     }
 
@@ -136,6 +151,8 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
   const total = questions.length;
   const isSingle = total === 1;
   const q = questions[currentStep];
+  if (!q) return null;
+  const options = optionList(q);
   const multi = q.multiSelect || false;
   const selected = selections.get(currentStep) || new Set<string>();
   const isOtherOn = otherActive.get(currentStep) || false;
@@ -220,7 +237,7 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
         {/* Options — tight spacing */}
         <div className="scrollbar-thin max-h-48 overflow-y-auto px-4 pb-2" role={multi ? 'group' : 'radiogroup'} aria-label={q.question}>
           <div className="space-y-1">
-            {q.options.map((opt, optIdx) => {
+            {options.map((opt, optIdx) => {
               const isSelected = selected.has(opt.label);
               return (
                 <button

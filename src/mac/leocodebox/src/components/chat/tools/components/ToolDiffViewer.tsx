@@ -34,10 +34,17 @@ export const ToolDiffViewer: React.FC<ToolDiffViewerProps> = ({
 
   const diffLines = useMemo(
     () => {
-      if (oldContent === undefined || newContent === undefined) {
+      // Streaming / transcript payloads often send `null` instead of a string.
+      // Treat missing sides as empty rather than skipping the other side, and
+      // never let a calculator throw take down the chat pane.
+      try {
+        return createDiff(
+          typeof oldContent === 'string' ? oldContent : oldContent == null ? '' : String(oldContent),
+          typeof newContent === 'string' ? newContent : newContent == null ? '' : String(newContent),
+        );
+      } catch {
         return [];
       }
-      return createDiff(oldContent, newContent)
     },
     [createDiff, oldContent, newContent]
   );

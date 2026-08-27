@@ -17,6 +17,14 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '1.77.0',
+    date: '2026-08-27',
+    items: [
+      'Claude Code 跑到一半，一张提问卡或缺内容的大文件 diff 不再把整块聊天换成「此区域暂时无法加载」。',
+      '消息区和输入框分开兜底；换会话会自动恢复，不用卡在这张提示上。',
+    ],
+  },
+  {
     version: '1.76.0',
     date: '2026-08-26',
     items: [

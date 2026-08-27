@@ -4,6 +4,23 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## Mac 1.77.0 - 2026-08-27
+
+### 用户可见
+
+- Claude Code 跑到一半，一张提问卡或缺内容的大文件 diff 不再把整块聊天换成「此区域暂时无法加载」。
+- 消息区和输入框分开兜底；换会话会自动恢复。
+
+### 验证
+
+- `npm run verify:release-notes` 通过。
+- 提问卡缺 options、diff 空/大文件单测通过。
+- Developer ID 签名后发布到 `leocodebox-updates`（`v1.77.0` + `latest-mac.yml`）。本机 `/Applications` 只留这一份。
+
+### 停损
+
+- 本船不发 iOS / Android / Harmony。
+
 ## T9 · Android 1.0.0-alpha.20 - 2026-08-27
 
 ### 用户可见
