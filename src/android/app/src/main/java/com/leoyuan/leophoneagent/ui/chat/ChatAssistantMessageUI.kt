@@ -665,7 +665,8 @@ internal fun ToolCallPill(
     // next to the iOS counterpart. The bottom FloatingToolStatusBar
     // still shows a CircularProgressIndicator (that is the running-tool
     // status surface, where a spinner reads correctly).
-    val shimmerTranslate = if (isRunning) {
+    val reduceMotion = com.leoyuan.leophoneagent.ui.navigation.rememberReduceMotion()
+    val shimmerTranslate = if (isRunning && !reduceMotion) {
         val transition = rememberInfiniteTransition(label = "toolPillShimmer")
         transition.animateFloat(
             initialValue = -1f,

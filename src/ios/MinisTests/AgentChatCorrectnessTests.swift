@@ -77,6 +77,29 @@ final class AgentChatCorrectnessTests: XCTestCase {
         XCTAssertTrue(dawn.tomorrow)
     }
 
+    func testActionRouterClipboardAndDeviceInfo() {
+        XCTAssertEqual(ActionRouter.decide(text: "剪贴板里有什么", imageCount: 0).kind, .readClipboard)
+
+        let write = ActionRouter.decide(text: "把发布说明复制到剪贴板", imageCount: 0)
+        XCTAssertEqual(write.kind, .writeClipboard)
+        XCTAssertEqual(write.label, "发布说明")
+
+        let english = ActionRouter.decide(text: "copy hello world to the clipboard", imageCount: 0)
+        XCTAssertEqual(english.kind, .writeClipboard)
+        XCTAssertEqual(english.label, "hello world")
+
+        XCTAssertEqual(ActionRouter.decide(text: "这台手机是什么型号", imageCount: 0).kind, .deviceInfo)
+        XCTAssertEqual(ActionRouter.decide(text: "怎么复制到剪贴板", imageCount: 0).path, .agent)
+    }
+
+    func testResizableWorkspaceLayoutPolicy() {
+        XCTAssertFalse(LeoWorkspaceLayoutPolicy.usesSplit(width: 700, height: 900, regularWidth: true))
+        XCTAssertTrue(LeoWorkspaceLayoutPolicy.usesSplit(width: 820, height: 1_100, regularWidth: true))
+        XCTAssertTrue(LeoWorkspaceLayoutPolicy.usesSplit(width: 980, height: 650, regularWidth: true))
+        XCTAssertFalse(LeoWorkspaceLayoutPolicy.usesSplit(width: 980, height: 650, regularWidth: false))
+        XCTAssertFalse(LeoWorkspaceLayoutPolicy.usesSplit(width: 1_000, height: 430, regularWidth: true))
+    }
+
     func testStreamDeltaDroppedAfterCancelOrIdentityMismatch() {
         let expected = UUID()
         let other = UUID()

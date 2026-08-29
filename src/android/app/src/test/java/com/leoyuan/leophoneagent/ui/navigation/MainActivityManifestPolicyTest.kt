@@ -15,6 +15,15 @@ class MainActivityManifestPolicyTest {
         file.readText()
     }
 
+    private fun flavorManifest(flavor: String): String {
+        val candidates = listOf(
+            File("src/$flavor/AndroidManifest.xml"),
+            File("app/src/$flavor/AndroidManifest.xml"),
+            File("src/android/app/src/$flavor/AndroidManifest.xml"),
+        )
+        return candidates.first { it.isFile }.readText()
+    }
+
     @Test
     fun `MainActivity handles fold and rotation without recreation`() {
         val required = listOf(
@@ -34,10 +43,21 @@ class MainActivityManifestPolicyTest {
     }
 
     @Test
-    fun `sideload package visibility declares QUERY_ALL and launcher queries`() {
-        assertTrue(manifest.contains("android.permission.QUERY_ALL_PACKAGES"))
+    fun `common manifest keeps launcher visibility without Power privileges`() {
+        assertTrue(!manifest.contains("android.permission.QUERY_ALL_PACKAGES"))
         assertTrue(manifest.contains("android.intent.action.MAIN"))
         assertTrue(manifest.contains("android.intent.category.LAUNCHER"))
-        assertTrue(manifest.contains("Sideload personal agent"))
+    }
+
+    @Test
+    fun `Power manifest alone declares privileged package visibility`() {
+        val power = flavorManifest("power")
+        val standard = flavorManifest("standard")
+        assertTrue(power.contains("android.permission.QUERY_ALL_PACKAGES"))
+        assertTrue(power.contains("android.permission.MANAGE_EXTERNAL_STORAGE"))
+        assertTrue(power.contains("moe.shizuku.privileged.api"))
+        assertTrue(power.contains(".accessibility.MinisAccessibilityService"))
+        assertTrue(standard.contains("moe.shizuku.manager.permission.API_V23"))
+        assertTrue(standard.contains("tools:node=\"remove\""))
     }
 }

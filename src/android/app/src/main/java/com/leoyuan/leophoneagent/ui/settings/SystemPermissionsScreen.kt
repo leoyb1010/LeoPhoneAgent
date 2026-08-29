@@ -65,6 +65,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import com.leoyuan.leophoneagent.BuildConfig
 import com.leoyuan.leophoneagent.R
 import com.leoyuan.leophoneagent.accessibility.MinisAccessibilityService
 import com.leoyuan.leophoneagent.offload.MinisNotificationListenerService
@@ -115,7 +116,9 @@ fun SystemPermissionsScreen(
     val runtimeLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { /* poll refreshes rows */ }
-    var allFilesGranted by remember { mutableStateOf(currentAllFilesGranted(context)) }
+    var allFilesGranted by remember {
+        mutableStateOf(!BuildConfig.POWER_FEATURES_ENABLED || currentAllFilesGranted(context))
+    }
     var exactAlarmGranted by remember { mutableStateOf(currentExactAlarmGranted(context)) }
     var shizukuLabel by remember { mutableStateOf(shizukuStatusLabel(context)) }
     val vendor = remember { PowerOptimizationManager.Vendor.current() }
@@ -138,7 +141,7 @@ fun SystemPermissionsScreen(
             micGranted = runtimeGranted(context, SystemPermissionHub.RuntimeGrant.MICROPHONE)
             cameraGranted = runtimeGranted(context, SystemPermissionHub.RuntimeGrant.CAMERA)
             photosGranted = runtimeGranted(context, SystemPermissionHub.RuntimeGrant.PHOTOS)
-            allFilesGranted = currentAllFilesGranted(context)
+            allFilesGranted = !BuildConfig.POWER_FEATURES_ENABLED || currentAllFilesGranted(context)
             exactAlarmGranted = currentExactAlarmGranted(context)
             shizukuLabel = shizukuStatusLabel(context)
             delay(1000)
@@ -178,6 +181,8 @@ fun SystemPermissionsScreen(
                 header = stringResource(R.string.system_permissions_setup_header),
                 footer = if (vendor == PowerOptimizationManager.Vendor.SAMSUNG) {
                     stringResource(R.string.system_permissions_setup_samsung_note)
+                } else if (!BuildConfig.POWER_FEATURES_ENABLED) {
+                    stringResource(R.string.system_permissions_setup_footer_standard)
                 } else {
                     stringResource(R.string.system_permissions_setup_footer)
                 },
@@ -330,22 +335,24 @@ fun SystemPermissionsScreen(
                         )
                     },
                 )
-                SettingsRow(
-                    icon = Icons.Outlined.Folder,
-                    iconColor = Color(0xFF007AFF),
-                    title = stringResource(R.string.system_permissions_all_files_row),
-                    subtitle = if (allFilesGranted) {
-                        stringResource(R.string.system_permissions_all_files_on)
-                    } else {
-                        stringResource(R.string.system_permissions_all_files_off)
-                    },
-                    onClick = {
-                        SystemPermissionHub.openLink(
-                            context,
-                            SystemPermissionHub.allFilesLink(context.packageName),
-                        )
-                    },
-                )
+                if (BuildConfig.POWER_FEATURES_ENABLED) {
+                    SettingsRow(
+                        icon = Icons.Outlined.Folder,
+                        iconColor = Color(0xFF007AFF),
+                        title = stringResource(R.string.system_permissions_all_files_row),
+                        subtitle = if (allFilesGranted) {
+                            stringResource(R.string.system_permissions_all_files_on)
+                        } else {
+                            stringResource(R.string.system_permissions_all_files_off)
+                        },
+                        onClick = {
+                            SystemPermissionHub.openLink(
+                                context,
+                                SystemPermissionHub.allFilesLink(context.packageName),
+                            )
+                        },
+                    )
+                }
                 SettingsRow(
                     icon = Icons.Outlined.Schedule,
                     iconColor = Color(0xFF34C759),

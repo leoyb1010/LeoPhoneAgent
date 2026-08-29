@@ -53,7 +53,10 @@ enum AgentChatCorrectness {
 /// Fast native intents. Same contract as Android `ActionRouter`.
 enum ActionRouter {
     enum Path { case native, agent }
-    enum Kind { case savePhoto, setAlarm, createCalendar, toggleFlashlight, createTodo }
+    enum Kind {
+        case savePhoto, setAlarm, createCalendar, toggleFlashlight, createTodo
+        case readClipboard, writeClipboard, deviceInfo
+    }
 
     struct Decision {
         var path: Path
@@ -70,6 +73,8 @@ enum ActionRouter {
             case .createCalendar: return "系统日历"
             case .toggleFlashlight: return "手电筒"
             case .createTodo: return "待办"
+            case .readClipboard, .writeClipboard: return "剪贴板"
+            case .deviceInfo: return "设备信息"
             case nil: return ""
             }
         }
@@ -84,6 +89,9 @@ enum ActionRouter {
             case .createCalendar: return "已用系统日历创建日程，未打开界面。"
             case .toggleFlashlight: return label == "off" ? "已关掉手电筒。" : "已打开手电筒。"
             case .createTodo: return "已记下待办：\(label.isEmpty ? "待办" : label)。"
+            case .readClipboard: return "已读取剪贴板。"
+            case .writeClipboard: return "已写入剪贴板。"
+            case .deviceInfo: return "已读取这台设备的信息。"
             case nil: return ""
             }
         }
@@ -94,6 +102,15 @@ enum ActionRouter {
         let lower = raw.lowercased()
         if imageCount > 0 && isSavePhoto(lower) {
             return Decision(path: .native, kind: .savePhoto, hour: nil, minute: nil, tomorrow: false, label: "")
+        }
+        if isReadClipboard(lower) {
+            return Decision(path: .native, kind: .readClipboard, hour: nil, minute: nil, tomorrow: false, label: "")
+        }
+        if let clipboardText = clipboardWriteText(raw, lower: lower) {
+            return Decision(path: .native, kind: .writeClipboard, hour: nil, minute: nil, tomorrow: false, label: clipboardText)
+        }
+        if isDeviceInfo(lower) {
+            return Decision(path: .native, kind: .deviceInfo, hour: nil, minute: nil, tomorrow: false, label: "")
         }
         if let on = flashlightOn(lower) {
             return Decision(path: .native, kind: .toggleFlashlight, hour: nil, minute: nil, tomorrow: false, label: on ? "on" : "off")
@@ -142,6 +159,41 @@ enum ActionRouter {
 
     static func isTodo(_ lower: String) -> Bool {
         ["记个待办", "记一条待办", "添加待办", "写个待办", "add a todo", "add todo", "remind me to"]
+            .contains { lower.contains($0) }
+    }
+
+    static func isReadClipboard(_ lower: String) -> Bool {
+        ["读取剪贴板", "读一下剪贴板", "剪贴板里有什么", "剪贴板有什么",
+         "read clipboard", "what's in the clipboard", "what is in the clipboard"]
+            .contains { lower.contains($0) }
+    }
+
+    static func clipboardWriteText(_ raw: String, lower: String? = nil) -> String? {
+        let low = lower ?? raw.lowercased()
+        let patterns = [
+            #"^把(.{1,4000})复制到剪贴板[。.]?$"#,
+            #"^复制到剪贴板[：:]?\s*(.{1,4000})$"#,
+        ]
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern),
+                  let match = regex.firstMatch(in: raw, range: NSRange(raw.startIndex..., in: raw)),
+                  match.numberOfRanges > 1,
+                  let range = Range(match.range(at: 1), in: raw) else { continue }
+            let value = raw[range].trimmingCharacters(in: .whitespacesAndNewlines)
+            if !value.isEmpty { return value }
+        }
+        guard let regex = try? NSRegularExpression(
+            pattern: #"^copy\s+(.{1,4000})\s+to\s+(?:the\s+)?clipboard[.!]?$"#,
+            options: [.caseInsensitive]
+        ), let match = regex.firstMatch(in: low, range: NSRange(low.startIndex..., in: low)),
+           let range = Range(match.range(at: 1), in: raw) else { return nil }
+        let value = raw[range].trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
+    }
+
+    static func isDeviceInfo(_ lower: String) -> Bool {
+        ["设备信息", "手机信息", "这台手机是什么型号", "这台设备是什么型号",
+         "device info", "phone model", "device model"]
             .contains { lower.contains($0) }
     }
 

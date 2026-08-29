@@ -29,6 +29,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.ui.navigation.rememberReduceMotion
 import com.leoyuan.leophoneagent.ui.theme.ChatColors
 
 // [T-android-split-chat] Self-contained "thinking / streaming" dot indicators
@@ -37,6 +38,12 @@ import com.leoyuan.leophoneagent.ui.theme.ChatColors
 
 @Composable
 internal fun BouncingDots(color: Color) {
+    if (rememberReduceMotion()) {
+        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            repeat(3) { Box(Modifier.size(4.dp).background(color.copy(alpha = 0.65f), CircleShape)) }
+        }
+        return
+    }
     val infiniteTransition = rememberInfiniteTransition(label = "bounce")
     Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         repeat(3) { i ->
@@ -62,6 +69,10 @@ internal fun BouncingDots(color: Color) {
 // iOS-style streaming "..." after tool title — 3 dots bouncing inline with text
 @Composable
 internal fun StreamingDotsText() {
+    if (rememberReduceMotion()) {
+        Text("...", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        return
+    }
     val infiniteTransition = rememberInfiniteTransition(label = "streamDots")
     Row {
         repeat(3) { i ->
@@ -89,7 +100,6 @@ internal fun StreamingDotsText() {
 
 @Composable
 internal fun TypingIndicator() {
-    val infiniteTransition = rememberInfiniteTransition(label = "typing")
     // Live Soul name → "<custom name> is thinking…" when the user renamed
     // the assistant in Soul settings. SoulStore.cachedMetadata is a StateFlow
     // that's updated on save (SoulSettingsScreen) and at app start
@@ -97,6 +107,8 @@ internal fun TypingIndicator() {
     // recompose the indicator immediately when it changes.
     val soulMeta by com.leoyuan.leophoneagent.agent.SoulStore.cachedMetadata.collectAsState()
     val soulName = soulMeta.name.trim().ifEmpty { "LeoPhoneAgent" }
+    val reduceMotion = rememberReduceMotion()
+    val infiniteTransition = if (reduceMotion) null else rememberInfiniteTransition(label = "typing")
 
     Row(
         modifier = Modifier.padding(top = 2.dp, bottom = 8.dp),
@@ -110,15 +122,18 @@ internal fun TypingIndicator() {
         // Animated bouncing dots
         val dots = listOf(".", ".", ".")
         dots.forEachIndexed { index, dot ->
-            val offsetY by infiniteTransition.animateFloat(
-                initialValue = 0f,
-                targetValue = -6f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(400, delayMillis = index * 150, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse,
-                ),
-                label = "dot_bounce_$index",
-            )
+            val offsetY = if (infiniteTransition == null) 0f else {
+                val value by infiniteTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = -6f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(400, delayMillis = index * 150, easing = LinearEasing),
+                        repeatMode = RepeatMode.Reverse,
+                    ),
+                    label = "dot_bounce_$index",
+                )
+                value
+            }
             Text(
                 text = dot,
                 fontSize = 15.sp,

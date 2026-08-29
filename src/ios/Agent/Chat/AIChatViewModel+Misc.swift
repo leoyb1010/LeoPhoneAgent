@@ -345,29 +345,42 @@ extension AIChatViewModel {
         return result
     }
 
-    func executeNativeRoute(_ route: ActionRouter.Decision, imageURL: URL?) async -> Bool {
+    func executeNativeRoute(_ route: ActionRouter.Decision, imageURL: URL?) async -> String? {
         switch route.kind {
         case .savePhoto:
-            guard let imageURL else { return false }
-            return await saveImageToPhotos(imageURL)
+            guard let imageURL, await saveImageToPhotos(imageURL) else { return nil }
+            return route.spoken()
         case .setAlarm:
-            guard let hour = route.hour, let minute = route.minute else { return false }
-            return await scheduleNativeAlarm(hour: hour, minute: minute, tomorrow: route.tomorrow, label: route.label)
+            guard let hour = route.hour, let minute = route.minute,
+                  await scheduleNativeAlarm(hour: hour, minute: minute, tomorrow: route.tomorrow, label: route.label) else { return nil }
+            return route.spoken()
         case .createCalendar:
-            guard let hour = route.hour, let minute = route.minute else { return false }
-            return await createNativeEvent(hour: hour, minute: minute, tomorrow: route.tomorrow, title: route.label)
+            guard let hour = route.hour, let minute = route.minute,
+                  await createNativeEvent(hour: hour, minute: minute, tomorrow: route.tomorrow, title: route.label) else { return nil }
+            return route.spoken()
         case .toggleFlashlight:
-            return FastLocalActions.setTorch(route.label != "off")
+            return FastLocalActions.setTorch(route.label != "off") ? route.spoken() : nil
         case .createTodo:
-            return await FastLocalActions.addTodo(route.label.isEmpty ? "待办" : route.label)
+            return await FastLocalActions.addTodo(route.label.isEmpty ? "待办" : route.label) ? route.spoken() : nil
+        case .readClipboard:
+            let text = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return text.isEmpty ? "剪贴板是空的。" : "剪贴板内容：\n\(String(text.prefix(4_000)))"
+        case .writeClipboard:
+            UIPasteboard.general.string = route.label
+            guard UIPasteboard.general.string == route.label else { return nil }
+            return "已写入剪贴板，并读回核对成功。"
+        case .deviceInfo:
+            let device = UIDevice.current
+            device.isBatteryMonitoringEnabled = true
+            let battery = device.batteryLevel >= 0 ? "\(Int(device.batteryLevel * 100))%" : "未知"
+            return "本机设备信息：\n型号：\(device.model)\n系统：\(device.systemName) \(device.systemVersion)\n电量：\(battery)"
         case nil:
-            return false
+            return nil
         }
     }
 
-    func finishNativeRoute(_ route: ActionRouter.Decision) async {
+    func finishNativeRoute(_ route: ActionRouter.Decision, spoken: String) async {
         actionRouteChip = route.chip
-        let spoken = route.spoken()
         messages.append(ChatMessage(role: .assistant, content: spoken))
         let agent = AgentMessage(role: .assistant, parts: [.text(spoken)])
         let idx = agentHistory.count

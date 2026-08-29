@@ -23,7 +23,7 @@ class ArtifactCardTest {
     }
 
     @Test
-    fun `source edit and unfinished write do not create noisy cards`() {
+    fun `code output is deliverable but unfinished write stays hidden`() {
         val source = AssistantBlock(
             id = "tool-2",
             kind = "tool_use",
@@ -36,8 +36,29 @@ class ArtifactCardTest {
             toolStatus = ToolBlockStatus.RUNNING,
         )
 
-        assertNull(artifactFromToolBlock(source))
+        assertEquals(
+            ChatArtifact("/var/minis/workspace/App.kt", "App.kt", "kt"),
+            artifactFromToolBlock(source),
+        )
         assertNull(artifactFromToolBlock(running))
+    }
+
+    @Test
+    fun `office json and archives are first class outputs`() {
+        val base = AssistantBlock(
+            id = "tool-output",
+            kind = "tool_use",
+            toolName = "file_write",
+            toolStatus = ToolBlockStatus.SUCCESS,
+        )
+        listOf("report.docx", "budget.xlsx", "deck.pptx", "data.json", "site.zip").forEach { name ->
+            assertEquals(
+                name.substringAfterLast('.'),
+                artifactFromToolBlock(
+                    base.copy(toolArgs = JSONObject().put("path", "/var/minis/workspace/$name").toString()),
+                )?.extension,
+            )
+        }
     }
 
     @Test

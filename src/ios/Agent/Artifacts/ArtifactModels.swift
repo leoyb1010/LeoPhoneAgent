@@ -25,7 +25,11 @@ enum ArtifactKind: String, Codable, CaseIterable, Sendable {
         if mime.hasPrefix("video/") { return .video }
         if mime == "application/zip" || mime.contains("archive") { return .archive }
         if mime.hasPrefix("text/") || mime.contains("json") || mime.contains("xml") {
-            let codeExtensions = Set(["swift", "m", "mm", "h", "py", "js", "ts", "tsx", "jsx", "html", "css", "sh", "json", "yaml", "yml"])
+            let codeExtensions = Set([
+                "swift", "m", "mm", "h", "kt", "java", "c", "cpp", "rs", "go",
+                "py", "rb", "php", "lua", "js", "ts", "tsx", "jsx", "html", "css", "sh",
+                "json", "xml", "yaml", "yml", "toml",
+            ])
             return codeExtensions.contains(URL(fileURLWithPath: fileName).pathExtension.lowercased()) ? .code : .document
         }
         if mime == "application/pdf" { return .document }
@@ -34,13 +38,15 @@ enum ArtifactKind: String, Codable, CaseIterable, Sendable {
 
     static func inferredMIMEType(fileName: String) -> String {
         switch URL(fileURLWithPath: fileName).pathExtension.lowercased() {
-        case "txt", "md", "csv": return "text/plain"
+        case "txt", "md", "csv", "tsv", "log": return "text/plain"
+        case "rtf": return "application/rtf"
         case "html", "htm": return "text/html"
         case "css": return "text/css"
         case "json": return "application/json"
         case "xml": return "application/xml"
         case "yaml", "yml": return "application/yaml"
-        case "swift", "m", "mm", "h", "py", "js", "ts", "tsx", "jsx", "sh": return "text/plain"
+        case "swift", "m", "mm", "h", "kt", "java", "c", "cpp", "rs", "go",
+             "py", "rb", "php", "lua", "js", "ts", "tsx", "jsx", "sh": return "text/plain"
         case "pdf": return "application/pdf"
         case "png": return "image/png"
         case "jpg", "jpeg": return "image/jpeg"
@@ -53,6 +59,15 @@ enum ArtifactKind: String, Codable, CaseIterable, Sendable {
         case "mp4", "m4v": return "video/mp4"
         case "mov": return "video/quicktime"
         case "zip": return "application/zip"
+        case "gz", "tgz": return "application/gzip"
+        case "tar": return "application/x-tar"
+        case "epub": return "application/epub+zip"
+        case "docx": return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        case "xlsx": return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        case "pptx": return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        case "doc": return "application/msword"
+        case "xls": return "application/vnd.ms-excel"
+        case "ppt": return "application/vnd.ms-powerpoint"
         default: return "application/octet-stream"
         }
     }

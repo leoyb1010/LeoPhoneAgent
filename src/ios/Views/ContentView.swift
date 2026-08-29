@@ -172,6 +172,19 @@ enum LeoSessionListDensity: Int, CaseIterable {
     }
 }
 
+/// Content-driven split decision for iPad multitasking and resizable iPhone
+/// windows (iPad hosting / iPhone Mirroring). A device-name check or one raw
+/// width threshold is not enough once the same scene can be continuously
+/// resized.
+enum LeoWorkspaceLayoutPolicy {
+    static func usesSplit(width: CGFloat, height: CGFloat, regularWidth: Bool) -> Bool {
+        guard regularWidth, width.isFinite, height.isFinite, height >= 480 else { return false }
+        let sidebar = min(max(width * 0.38, 300), 380)
+        let detail = width - sidebar
+        return sidebar >= 300 && detail >= 440
+    }
+}
+
 /// Sheets triggered from the toolbar menu, consolidated into a single `.sheet(item:)`.
 enum ToolSheet: String, Identifiable {
     case settings
@@ -408,9 +421,6 @@ struct ContentView: View {
     @State private var searchMatchSnippets: [String: String] = [:]
     @State private var searchTask: Task<Void, Never>?
 
-    /// Width floor below which the layout collapses to single-column, even
-    /// when the size class says "regular" (narrow iPad multitasking slices).
-    private let compactThreshold: CGFloat = 700
     /// Whether the device is an iPad. Retained for the handful of genuinely
     /// device-specific behaviours (draft-session proxying, Live Activity
     /// gating); the LAYOUT decision keys off the size class instead — see
@@ -471,12 +481,11 @@ struct ContentView: View {
 
     private var rootLayout: some View {
         GeometryReader { geo in
-            // [T-ipad-sizeclass-layout] Regular width AND a real minimum
-            // width. The size class alone would accept some multitasking
-            // slices that are too narrow for two usable columns; the floor
-            // alone would (wrongly) split a compact-class window that merely
-            // happens to be wide.
-            let wide = horizontalSizeClass == .regular && geo.size.width >= compactThreshold
+            let wide = LeoWorkspaceLayoutPolicy.usesSplit(
+                width: geo.size.width,
+                height: geo.size.height,
+                regularWidth: horizontalSizeClass == .regular
+            )
             // [T-conditional-onappear] ZStack, not Group: the lifecycle
             // modifiers below hang off this container, and a bare conditional's
             // structural identity follows its branch — a wide/compact flip

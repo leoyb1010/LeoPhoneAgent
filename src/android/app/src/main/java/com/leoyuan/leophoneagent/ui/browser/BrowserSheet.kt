@@ -547,12 +547,16 @@ private fun ToolbarIcon(
 /** Globe icon with a spinning arc border when loading. */
 @Composable
 private fun BrowserAddressBarIcon(isLoading: Boolean, accent: Color) {
-    val transition = rememberInfiniteTransition(label = "addrIcon")
-    val angle by transition.animateFloat(
-        initialValue = 0f, targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(1000, easing = LinearEasing)),
-        label = "angle",
-    )
+    val reduceMotion = com.leoyuan.leophoneagent.ui.navigation.rememberReduceMotion()
+    val transition = if (isLoading && !reduceMotion) rememberInfiniteTransition(label = "addrIcon") else null
+    val angle = if (transition == null) 0f else {
+        val value by transition.animateFloat(
+            initialValue = 0f, targetValue = 360f,
+            animationSpec = infiniteRepeatable(tween(1000, easing = LinearEasing)),
+            label = "angle",
+        )
+        value
+    }
     Box(
         modifier = Modifier.size(24.dp),
         contentAlignment = Alignment.Center,
@@ -563,7 +567,7 @@ private fun BrowserAddressBarIcon(isLoading: Boolean, accent: Color) {
             modifier = Modifier.size(14.dp),
             tint = if (isLoading) accent else MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        if (isLoading) {
+        if (isLoading && !reduceMotion) {
             CircularProgressIndicator(
                 modifier = Modifier
                     .size(22.dp)
@@ -578,12 +582,16 @@ private fun BrowserAddressBarIcon(isLoading: Boolean, accent: Color) {
 /** Breathing-light overlay shown when the agent is controlling the browser. */
 @Composable
 private fun AgentBrowsingOverlay(accent: Color, onTakeover: () -> Unit) {
-    val transition = rememberInfiniteTransition(label = "breathing")
-    val breathingAlpha by transition.animateFloat(
-        initialValue = 0.3f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(1500), RepeatMode.Reverse),
-        label = "breathingAlpha",
-    )
+    val reduceMotion = com.leoyuan.leophoneagent.ui.navigation.rememberReduceMotion()
+    val transition = if (reduceMotion) null else rememberInfiniteTransition(label = "breathing")
+    val breathingAlpha = if (transition == null) 0.85f else {
+        val value by transition.animateFloat(
+            initialValue = 0.3f, targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(1500), RepeatMode.Reverse),
+            label = "breathingAlpha",
+        )
+        value
+    }
 
     Box(
         modifier = Modifier

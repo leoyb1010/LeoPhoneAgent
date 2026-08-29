@@ -2,20 +2,21 @@
 
 ## Verification scope
 
-- Release level: Android `1.0.0-alpha.13` Standard + Power Release APK.
-- Routes / screens: 设置 → 开发 CLI；连接与模型对话框；全屏终端；官方授权页；本次更新弹窗。
-- Viewports / devices: Fold8 API 35，1768×2208 展开态与 1080×1728 封面态。
-- Browsers / simulators: Android Emulator 37.1.11；WebView 124；真实 PRoot Alpine ARM64 CLI。
+- Release level: Android `1.0.0-alpha.21` Standard + Power Release APK; iOS/iPad `1.29.0 (103)` source delivery.
+- Routes / screens: Fold8 onboarding/chat workspace, update dialog, compact top bar, system-permission settings, mounted folders, artifact cards.
+- Viewports / devices: Fold8 API 35 emulator at 1768×2208 expanded and 1080×1728 cover; cover repeated at 200% system font.
+- iOS form factors: content-driven iPhone/iPad single/split policy, iPad multitasking and resizable-window thresholds; generic iOS device build.
 
 ## Evidence
 
-- Screenshots / visual diffs: 展开态 alpha.13 中文更新弹窗、Claude/Grok 终端、Codex/Cursor 授权页；封面态 CLI 卡片和 Grok 配置对话框均完成截图检查。
-- Storybook stories and tests: N/A（原生 Compose）；Standard/Power JVM 完整测试均 0 失败。
-- End-to-end interactions: alpha.12 → alpha.13 双包覆盖 `Success`；Claude Leo 模式直达目录信任；Grok Leo 模式显示 `Logged in with API key`；Codex/Cursor/Grok 登录链接自动打开。
-- Accessibility checks: UIAutomator 树确认所有主操作有中文文本/内容描述；按钮保持 Material 48dp 触控目标。
-- Console / network checks: 官方 auth host 严格 HTTPS 白名单回归测试；Logcat 无本 App `FATAL EXCEPTION`；密钥未出现在托管配置。
-- Performance checks: Standard 冷启动 587ms / Assist 556ms；Power 启动 781ms / Assist 517ms。
-- Reduced-motion check: 新界面不依赖动画传达状态；CLI 启动遮罩硬上限 3 秒。
+- Screenshots / visual diffs: expanded two-pane, cover single-pane, alpha.21 update dialog, and cover 200% font captured from the final source. The first 200% capture exposed a top-bar/status-bar collision; the post-fix capture separates them while preserving full body scaling.
+- Storybook stories and tests: N/A (native Compose/SwiftUI). Android Standard/Power each passed 581 JVM tests with one device-conditional skip. iOS layout/action/MIME contracts compile in the device test target; simulator execution remains unavailable because the checked-in iSH static library is device-only.
+- End-to-end interactions: published alpha.20 Standard/Power were installed first, then the final alpha.21 APKs covered both with `Success`. Both packages passed cold launch and Android `ASSIST` entry with live PIDs.
+- Accessibility checks: 1080×1728 at 200% font produced zero UIAutomator nodes outside the viewport. Compact navigation chrome is capped at 130%, while page content, cards and composer continue to follow the full system scale. Reduce Motion disables bouncing, shimmer, browser breathing/spinners and transcription-ring motion.
+- Permission truthfulness: final Standard APK contains none of MANAGE_EXTERNAL_STORAGE, QUERY_ALL_PACKAGES, Shizuku provider/permission/metadata, or the Accessibility service. Power contains them behind its existing product and OS gates. Standard UI no longer links to impossible Power-only grants.
+- Console / runtime checks: final APK verification fixed the signer fingerprint, package IDs, versionCode and versionName. Logcat after both cold/assistant launches contained zero app `FATAL EXCEPTION` entries.
+- Performance checks: final emulator cold starts were Standard 584 ms and Power 322 ms; assistant entry was Standard 660 ms and Power 242 ms on the same Fold8 API 35 AVD.
+- iOS/iPad checks: Xcode 26.6 with iPhoneOS 26.5 SDK completed `generic/platform=iOS` build. Split mode requires regular width, at least 480 pt height, 300 pt sidebar and 440 pt detail, so Stage Manager/split-view resizing does not rely on device-name detection.
 
 ## Originality gate
 
@@ -23,26 +24,26 @@ Use for net-new or overhauled work. Maintenance inside an established system may
 
 | Axis | Score (0-2) | Rendered evidence |
 |---|---:|---|
-| Product specificity | 2 | 同卡表达官方账号与 Leo 模型两条真实路径 |
-| Hierarchy | 2 | 安装/连接状态 → 启动主操作 → 登录次操作 |
-| Composition | 2 | Fold8 展开/封面态均无水平溢出 |
-| Material and assets | 1 | 延续原生 Material 3，无新图片负担 |
-| Typography and color | 2 | 状态色仅用于成功/错误/选中，中文长文案可读 |
-| Interaction and motion | 2 | 授权链接自动打开，遮罩不再占用交互 |
-| Feasibility | 2 | 四个真实 CLI 安装与链路验证 |
+| Product specificity | 2 | 本机 Agent、Power 能力和真实执行回执保持同一产品语义 |
+| Hierarchy | 2 | 展开态工作区/对话双栏，封面态单栏，更新说明与主动作层级清楚 |
+| Composition | 2 | Fold8 两尺寸与 200% 字体均无 UI 树越界 |
+| Material and assets | 1 | 延续原生 Material 3 / SwiftUI，无新图片和依赖负担 |
+| Typography and color | 2 | 只限制紧凑顶栏的极端缩放，正文与状态语义保持可访问 |
+| Interaction and motion | 2 | 减少动态效果有真实静态替代，不靠动画传达唯一状态 |
+| Feasibility | 2 | 双 APK 覆盖、冷启动、ASSIST、签名、lint 与设备构建均有证据 |
 | **Total** | **13/14** | 通过 11/14 门槛，无零分 |
 
 - Threshold: 11/14, no zero, product specificity = 2, hierarchy = 2.
-- Category-interchangeable regions still visible: 安装卡的 Material 列表外壳沿用项目既有系统。
-- Direction correction required, if any: 无；本轮是已有设置表面的产品化重构。
+- Category-interchangeable regions still visible: 设置项与系统授权说明继续使用项目既有 Material 列表外壳。
+- Direction correction required, if any: 无；200% 顶栏碰撞已在本轮截图反馈环中修正。
 
 ## Snapshot decisions
 
-- Intentional baseline changes: 「使用 LeoPhoneAgent API Key」单开关替换为「CLI 官方账号 / Leo 模型」；安装后显示真实 auth 状态。
-- Rejected changes: 导出 OAuth/订阅令牌；伪造 Cursor 自定义 provider；对任意终端 URL 自动打开。
+- Intentional baseline changes: Standard/Power 能力入口按真实 Manifest 分开；本机动作显示执行回执；更多产物格式复用已有预览器；iPad/Fold8 按实际内容空间自适应。
+- Rejected changes: 用媒体播放类型伪装 Agent 前台任务；在 compileSdk 36 / AGP 8.13 上强接要求 SDK 37 / AGP 9.1 的 AppFunctions；为视觉升级引入新 UI 框架。
 
 ## Remaining risk
 
-- Known issues: xAI device-code 页在模拟器 WebView 124 返回标题但页体为空，日志指向第三方页脚本/WebRTC 能力；授权 URL 与 code 已正确传入，预览菜单保留系统浏览器退路。
-- Deferred work: 真实 Fold8 的 xAI 账号完整 OAuth 回调需用户本人凭据，本轮不代登。
-- Visual verification outstanding: 无代码内 UI 阻断项。
+- Known issues: Android lint 仍报告仓库既有警告，但 Standard/Power Release 均为 0 error。iOS 仍有既有 Swift 6 隔离和 Objective-C nullability 警告，不是本轮新增。
+- Deferred work: iOS 27 专属 API 等 Xcode 27 SDK 后再接入；本次不伪造不可编译声明。真实 Fold8 与 iPad 装机由用户继续做硬件终验。
+- Visual verification outstanding: iOS/iPad 本轮没有可运行模拟器截图，因为当前 iSH 静态库仅含 device slice；已用通用真机构建和纯布局契约覆盖代码门。

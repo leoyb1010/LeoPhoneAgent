@@ -69,6 +69,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.leoyuan.leophoneagent.R
+import com.leoyuan.leophoneagent.BuildConfig
 import com.leoyuan.leophoneagent.data.MountedFoldersStore
 import com.leoyuan.leophoneagent.data.SafMountHelper
 import com.leoyuan.leophoneagent.ui.components.DialogTextField
@@ -161,7 +162,7 @@ fun MountedFoldersScreen(
                     }
                 },
                 actions = {
-                    IconButton(
+                    if (BuildConfig.POWER_FEATURES_ENABLED) IconButton(
                         onClick = {
                             // On Android 10, a folder can readdir but still EACCES on
                             // write unless WRITE_EXTERNAL_STORAGE is granted at runtime
@@ -196,6 +197,11 @@ fun MountedFoldersScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
+            if (!BuildConfig.POWER_FEATURES_ENABLED) {
+                PowerOnlyMountNotice()
+                return@Column
+            }
+
             InfoBanner()
 
             if (!hasAllFilesAccess) {
@@ -321,6 +327,36 @@ fun MountedFoldersScreen(
                 }
             },
             text = { Text(msg) },
+        )
+    }
+}
+
+@Composable
+private fun PowerOnlyMountNotice() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.FolderShared,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(48.dp),
+        )
+        Spacer(Modifier.height(12.dp))
+        Text(
+            text = stringResource(R.string.mount_power_only_title),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = stringResource(R.string.mount_power_only_description),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

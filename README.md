@@ -1,7 +1,7 @@
 # LeoPhoneAgent
 
-[![iOS](https://img.shields.io/badge/iOS-1.28.0%20(102)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
-[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.20-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.20)
+[![iOS](https://img.shields.io/badge/iOS-1.29.0%20(103)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.21-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.21)
 [![macOS](https://img.shields.io/badge/macOS-1.78.0-7C3AED.svg)](src/mac/leocodebox/package.json)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.17-D94B16.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
@@ -62,16 +62,16 @@ bash src/harmony/scripts/build_hap.sh
 > 同一台手机上同时安装。Power 版只有在用户完成产品内授权以及 Android
 > 无障碍/Shizuku 系统授权后，才会开放更深的跨应用操控。
 
-- [下载 Standard alpha.20](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.20/LeoPhoneAgent-Standard-1.0.0-alpha.20.apk)
-- [下载 Power alpha.20](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.20/LeoPhoneAgent-Power-1.0.0-alpha.20.apk)
-- [查看本次更新记录](CHANGELOG.md#t9--android-100-alpha20---2026-08-27)
+- [下载 Standard alpha.21](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.21/LeoPhoneAgent-Standard-1.0.0-alpha.21.apk)
+- [下载 Power alpha.21](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.21/LeoPhoneAgent-Power-1.0.0-alpha.21.apk)
+- [查看本次更新记录](CHANGELOG.md#t10-alpha21)
 - [查看完整五轮审计与交付报告](docs/ANDROID_DELIVERY_1.0.0_ALPHA1.md)
 
 SHA-256：
 
 ```text
-Standard  38e8b60cb856766e4a39f0d29041659d40e30938e049ae1095ca3b696b7994b6
-Power     5c9f193614ba28208bba57e72458b354bb5c376bb8cc78ecb8942fe91c36dbaa
+Standard  e23638684fa1bb14c99db7dc6d3b8974938cdd0439cdf530e4b2f661f3f7706f
+Power     5321469d3df839f187b901b59097aceaf67b82f36c27aa77123e671e69f9c016
 ```
 
 本次公开附件使用显式开启的个人 Alpha 调试证书签名，不应作为应用商店的
@@ -134,7 +134,11 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 版本/构建:`1.28.0 (102)`;Bundle ID `com.leoyuan.leophoneagent`
+- 版本/构建:`1.29.0 (103)`;Bundle ID `com.leoyuan.leophoneagent`
+- iPhone / iPad 本机动作：剪贴板读写和设备信息直接走系统能力，写入后读回核对；
+  支持 Foundation Models 的设备用结构化生成整理收藏与语音任务
+- iPad 工作区：分屏、台前调度和窗口缩放按正文/侧栏实际可用空间切换单双栏，
+  保留多窗口、拖放附件与外接键盘快捷键
 - 主对话框直达 Mac:「指挥一台 Mac」选机 + 选 CLI 即开聊;发送在会话建立
   期间自动排队,永不吞点击
 - 会话接管:进入任意 Mac 先列进行中任务,一键接管(全量回放 + 实时跟随)
@@ -145,11 +149,14 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 Android 版本
 
-- 开发/发布版本：`1.0.0-alpha.20`（versionCode `100020`），`minSdk 26`、`targetSdk 35`、`compileSdk 36`、仅 ARM64。
+- 开发/发布版本：`1.0.0-alpha.21`（versionCode `100021`），`minSdk 26`、`targetSdk 35`、`compileSdk 36`、仅 ARM64。
 - Standard 包名：`com.leoyuan.leophoneagent`
 - Power 包名：`com.leoyuan.leophoneagent.power`
 - 两个版本共享本机 Agent、Provider、Skills、MCP、Memory、PRoot 与浏览器底座；
   Power 高权限能力通过独立构建标志和逐次危险命令确认隔离
+- Standard 不再声明所有文件、无障碍、Shizuku 或应用列表高权限；完整目录挂载和
+  跨应用操控只在 Power 出现。两版的用户发起 Agent 前台服务都使用真实的
+  `dataSync|specialUse` 类型，不再伪装成媒体播放
 - 系统表面：可替换默认数字助手、快捷设置磁贴（新对话 / 语音）、任务状态桌面小组件、
   App Shortcuts、通知继续/暂停/打开、WorkManager 计划任务补队列、悬浮窗、
   Android 16 Live Updates 状态胶囊、前台服务、忽略电池优化、预测性返回、16KB 页对齐
@@ -288,7 +295,8 @@ adb logcat -d | rg 'FATAL EXCEPTION|AndroidRuntime'
 
 | 版本 | 状态 | 处理 |
 |---|---|---|
-| alpha.20 | 当前公开附件 | 打开其他 App 后继续操控；悬浮窗默认开；Power 无障碍默认放行 |
+| alpha.21 | 当前公开附件 | 本机动作回执、产物格式、权限隔离、减少动态效果与 Fold8 200% 字体修正 |
+| alpha.20 | 上一公开附件 | 打开其他 App 后继续操控；悬浮窗默认开；Power 无障碍默认放行 |
 | alpha.19 | 上一公开附件 | T7 手电筒/待办快路径 + 家页主动卡 |
 | alpha.18 | 上一公开附件 | T6 断线续上 / 短码入列 / 远程会话进列表 |
 | alpha.17 | 上一公开附件 | Fold8 API 35 模拟器 alpha.16→17 覆盖安装已过；真机由用户自装 |

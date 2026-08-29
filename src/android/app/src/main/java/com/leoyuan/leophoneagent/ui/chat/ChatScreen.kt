@@ -2155,6 +2155,14 @@ fun ChatScreen(
                         modifier = Modifier.fillMaxWidth(),
                         contentAlignment = Alignment.Center,
                     ) {
+                        // The top bar has a fixed navigation role and height. At
+                        // 200% system text, scaling all three title rows without
+                        // a ceiling makes the centered title grow upward into the
+                        // status bar on narrow Fold covers. Keep the full text and
+                        // accessibility semantics, but cap this compact chrome at
+                        // 130%; conversation content remains fully scalable.
+                        val systemFontScale = LocalDensity.current.fontScale
+                        val chromeFontFactor = minOf(1f, 1.3f / systemFontScale)
                         val noFontPad = androidx.compose.ui.text.TextStyle(
                             platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false),
                         )
@@ -2205,8 +2213,8 @@ fun ChatScreen(
                             }
                             Text(
                                 text = displayTitle,
-                                fontSize = 16.sp,
-                                lineHeight = 19.sp,
+                                fontSize = (16 * chromeFontFactor).sp,
+                                lineHeight = (19 * chromeFontFactor).sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = ChatColors.primaryText,
                                 maxLines = 1,
@@ -2225,7 +2233,7 @@ fun ChatScreen(
                             if (routeChip.isNotBlank()) {
                                 Text(
                                     text = routeChip,
-                                    fontSize = 11.sp,
+                                    fontSize = (11 * chromeFontFactor).sp,
                                     color = ChatColors.primaryText.copy(alpha = 0.65f),
                                     maxLines = 1,
                                     style = noFontPad,
@@ -2276,8 +2284,8 @@ fun ChatScreen(
                                     }
                                     Text(
                                         text = groupNameDisplay,
-                                        fontSize = 12.sp,
-                                        lineHeight = 14.sp,
+                                        fontSize = (12 * chromeFontFactor).sp,
+                                        lineHeight = (14 * chromeFontFactor).sp,
                                         fontWeight = FontWeight.Medium,
                                         color = ChatColors.secondaryText,
                                         maxLines = 1,
@@ -2347,8 +2355,8 @@ fun ChatScreen(
                                             } else {
                                                 modelName.ifEmpty { providerName }
                                             },
-                                            fontSize = 11.sp,
-                                            lineHeight = 13.sp,
+                                            fontSize = (11 * chromeFontFactor).sp,
+                                            lineHeight = (13 * chromeFontFactor).sp,
                                             color = ChatColors.tertiaryText,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis,

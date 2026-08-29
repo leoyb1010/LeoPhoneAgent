@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Power-only privileges. The Standard APK must not request these. -->
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+
+    <queries>
+        <!-- Privileged backends are detectable only in the Power edition. -->
+        <package android:name="moe.shizuku.privileged.api" />
+        <package android:name="frb.axeron.manager" />
+    </queries>
+
+    <application>
+        <!-- Repeat the shared FGS contracts at the flavor boundary so AGP lint
+             evaluates Power against the same types present in the merged APK. -->
+        <service
+            android:name=".service.AgentForegroundService"
+            android:foregroundServiceType="dataSync|specialUse"
+            tools:node="merge" />
+        <service
+            android:name=".service.RelayBodyForegroundService"
+            android:foregroundServiceType="remoteMessaging"
+            tools:node="merge" />
+
+        <!-- Shizuku/AXManager binder receiver. Power only. -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:multiprocess="false"
+            android:exported="true"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+
+        <!-- Cross-app UI control. Android requires the user to enable this
+             service manually; LeoPhoneAgent never toggles it itself. -->
+        <service
+            android:name=".accessibility.MinisAccessibilityService"
+            android:exported="true"
+            android:label="@string/a11y_service_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/minis_accessibility_service" />
+        </service>
+    </application>
+</manifest>

@@ -1,5 +1,6 @@
 import AppIntents
 import Foundation
+import UniformTypeIdentifiers
 
 /// Retries (re-runs) from a specific user message in a session.
 /// At runtime, shows a picker of user messages from the selected session,
@@ -9,6 +10,7 @@ struct RetryRunIntent: AppIntent {
     static var title: LocalizedStringResource = "Retry Run"
     static var description = IntentDescription("Re-runs the AI agent from a specific user message in a session. Presents a list of user messages to choose from, then retries from that point.")
     static var openAppWhenRun = false
+    static var supportedModes: IntentModes = [.background, .foreground(.deferred)]
 
     @Parameter(title: "Session")
     var session: SessionEntity
@@ -17,7 +19,7 @@ struct RetryRunIntent: AppIntent {
     var message: UserMessageEntity?
 
     @Parameter(title: "Attachments", description: "Images, videos, or files to replace existing attachments. Accepts output from previous Shortcuts actions. If empty, keeps original attachments.",
-               supportedTypeIdentifiers: ["public.image", "public.movie", "public.data"],
+               supportedContentTypes: [.image, .movie, .data],
                inputConnectionBehavior: .connectToPreviousIntentResult)
     var files: [IntentFile]?
 

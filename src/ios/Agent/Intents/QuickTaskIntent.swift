@@ -1,5 +1,6 @@
 import AppIntents
 import Foundation
+import UniformTypeIdentifiers
 
 import UserNotifications
 
@@ -23,12 +24,13 @@ struct QuickTaskIntent: AppIntent {
     static var title: LocalizedStringResource = "Quick Task (Compatibility)"
     static var description = IntentDescription("Runs a quick task saved by an earlier LeoPhoneAgent version. New shortcuts should use Quick Task.")
     static var openAppWhenRun = false
+    static var supportedModes: IntentModes = [.background, .foreground(.deferred)]
 
     @Parameter(title: "Task")
     var task: QuickTask
 
     @Parameter(title: "Attachments", description: "Images, videos, or files to attach to the task. Accepts output from previous Shortcuts actions (e.g. filtered photos or documents).",
-               supportedTypeIdentifiers: ["public.image", "public.movie", "public.data"],
+               supportedContentTypes: [.image, .movie, .data],
                inputConnectionBehavior: .connectToPreviousIntentResult)
     var files: [IntentFile]?
 
@@ -250,12 +252,13 @@ struct RunQuickTaskIntent: AppIntent {
     static var title: LocalizedStringResource = "Quick Task"
     static var description = IntentDescription("Runs a LeoPhoneAgent quick task from your editable task library.")
     static var openAppWhenRun = false
+    static var supportedModes: IntentModes = [.background, .foreground(.deferred)]
 
     @Parameter(title: "Task")
     var task: QuickTaskEntity
 
     @Parameter(title: "Attachments", description: "Images, videos, or files to attach to the task. Accepts output from previous Shortcuts actions.",
-               supportedTypeIdentifiers: ["public.image", "public.movie", "public.data"],
+               supportedContentTypes: [.image, .movie, .data],
                inputConnectionBehavior: .connectToPreviousIntentResult)
     var files: [IntentFile]?
 

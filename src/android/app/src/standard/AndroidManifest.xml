@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- The Shizuku provider dependency is compiled for shared source
+         compatibility, but Standard must not request its binder permission or
+         advertise its client metadata. -->
+    <uses-permission
+        android:name="moe.shizuku.manager.permission.API_V23"
+        tools:node="remove" />
+
+    <application>
+        <meta-data
+            android:name="moe.shizuku.client.V3_SUPPORT"
+            tools:node="remove" />
+    </application>
+</manifest>

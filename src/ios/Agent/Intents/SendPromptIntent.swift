@@ -9,12 +9,13 @@ struct SendPromptIntent: AppIntent {
     static var title: LocalizedStringResource = "Send Prompt"
     static var description = IntentDescription("Sends a prompt to the LeoPhoneAgent AI agent. Returns session info immediately while the task runs in the background.")
     static var openAppWhenRun = false
+    static var supportedModes: IntentModes = [.background, .foreground(.deferred)]
 
     @Parameter(title: "Prompt", requestValueDialog: "What would you like to ask LeoPhoneAgent?")
     var prompt: String
 
     @Parameter(title: "Attachments", description: "Images, videos, or files to attach to the prompt. Accepts output from previous Shortcuts actions (e.g. filtered photos or documents).",
-               supportedTypeIdentifiers: ["public.image", "public.movie", "public.data"],
+               supportedContentTypes: [.image, .movie, .data],
                inputConnectionBehavior: .connectToPreviousIntentResult)
     var files: [IntentFile]?
 

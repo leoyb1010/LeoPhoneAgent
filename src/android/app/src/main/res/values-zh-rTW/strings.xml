@@ -427,6 +427,8 @@
     <string name="shared_folder_browse_files">瀏覽檔案</string>
     <string name="settings_mount_external_folders">掛載外部資料夾</string>
     <string name="settings_mount_external_folders_subtitle">將選取的資料夾繫結到 /var/minis/mounts/</string>
+    <string name="mount_power_only_title">外部資料夾掛載僅限 Power 版</string>
+    <string name="mount_power_only_description">Standard 版透過 Android 系統檔案選擇器與分享面板匯入、匯出。完整外部資料夾掛載僅在 Power 版提供。</string>
     <string name="mount_folders_title">已掛載資料夾</string>
     <string name="mount_folders_info_banner">選取的資料夾會被繫結到 /var/minis/mounts/&lt;name&gt;。最多可同時掛載 10 個資料夾。</string>
     <string name="mount_folders_empty_title">尚未掛載任何資料夾</string>
@@ -755,7 +757,7 @@
     <string name="terminal_cli_booting_hint">若出現安全確認或登入提示，請依螢幕指引繼續。</string>
     <string name="whats_new_title">本次更新（%1$s）</string>
     <string name="whats_new_confirm">知道了</string>
-    <string name="whats_new_current">• 打開別的 App 後還能繼續點、讀、滑。後台任務預設保活，懸浮窗預設開。Power 無障礙不再被產品門預設攔住。</string>
+    <string name="whats_new_current">• 剪貼簿與裝置資訊要求會在本機直接執行並回傳核對結果；更多產生檔案可作為成品開啟。Standard 不再申請 Power 專屬的所有檔案、輔助使用、Shizuku 與應用程式清單權限。</string>
     <string name="artifact_ready">交付物已就緒</string>
     <string name="artifact_open">開啟交付物</string>
     <string name="artifact_missing">這份交付物已不在本機。</string>
@@ -1654,6 +1656,7 @@
     <string name="system_permissions_samsung_cover_sub">這裡只開啟应用详情，不是封面应用列表。請到系统「封面屏幕应用」中允许本应用。</string>
     <string name="system_permissions_setup_header">安装检查</string>
     <string name="system_permissions_setup_footer">助手、通知、电池、悬浮窗、通知访問和所有檔案，是多数任務會用到的系统授权。</string>
+    <string name="system_permissions_setup_footer_standard">助手、通知、電池、懸浮窗和通知存取，是多數任務會用到的系統授權。Standard 版不會申請所有檔案存取權限。</string>
     <string name="system_permissions_setup_samsung_note">三星裝置若要用封面屏，還請在「封面屏幕应用」中允许本应用。</string>
     <string name="system_permissions_setup_complete">必要授权看起来已齐</string>
     <string name="system_permissions_setup_missing">還缺 %1$d / 6 项必要授权</string>

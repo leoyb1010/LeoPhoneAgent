@@ -68,8 +68,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.res.stringResource
 import com.leoyuan.leophoneagent.BuildConfig
+import androidx.compose.ui.res.stringResource
 import com.leoyuan.leophoneagent.R
 import com.leoyuan.leophoneagent.ui.components.openExternalUrl
 
@@ -280,13 +280,15 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.settings_shared_folders_subtitle),
                     onClick = onSharedFoldersClick,
                 )
-                SettingsItem(
-                    icon = Icons.Outlined.FolderShared,
-                    iconColor = Color(0xFF2E8B8B),
-                    title = stringResource(R.string.settings_mount_external_folders),
-                    subtitle = stringResource(R.string.settings_mount_external_folders_subtitle),
-                    onClick = onMountedFoldersClick,
-                )
+                if (BuildConfig.POWER_FEATURES_ENABLED) {
+                    SettingsItem(
+                        icon = Icons.Outlined.FolderShared,
+                        iconColor = Color(0xFF2E8B8B),
+                        title = stringResource(R.string.settings_mount_external_folders),
+                        subtitle = stringResource(R.string.settings_mount_external_folders_subtitle),
+                        onClick = onMountedFoldersClick,
+                    )
+                }
                 SettingsItem(
                     icon = Icons.Outlined.Description,
                     iconColor = Color(0xFF007AFF),

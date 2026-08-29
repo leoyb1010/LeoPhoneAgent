@@ -9,17 +9,11 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <!-- T-android-fgs-timeout-crash: switched from dataSync to mediaPlayback.
-         dataSync has a hard 6h/24h cumulative cap on Android 14+, after
-         which the system throws ForegroundServiceDidNotStopInTimeException
-         and force-kills the process. Long-running novel-writing / shell /
-         iSH sessions reliably hit this on OnePlus PJZ110 / Android 16.
-         mediaPlayback has no such cap and AOSP's foreground-service-type
-         validation accepts it as long as the permission is held; the
-         "must use MediaStyle / play actual media" rule is Play Store
-         policy, not an OS runtime check, and Minis ships as a sideload.
-    -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- AgentForegroundService uses dataSync on Android 10-13 and the honest
+         specialUse type on Android 14+. Never claim media playback for a
+         non-media task merely to evade runtime limits. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- T-relay-body-alive: RelayBodyForegroundService runs with
          foregroundServiceType="remoteMessaging"; Android 14+ requires the
          matching per-type permission or startForeground throws
@@ -70,16 +64,6 @@
          ungrantable there; legacy storage is the only path that lets proot
          readdir a mounted external folder. Capped at API 29 — ignored on 11+. -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
-    <!-- T219: Mount External Folders bind-mounts SAF-picked tree URIs into
-         /var/minis/mounts/ via PRoot. PRoot's bind translates `readdir(/var/minis/mounts/X)`
-         into a host-side `readdir(/storage/emulated/0/...)` running as the app uid.
-         Without MANAGE_EXTERNAL_STORAGE, FuseDaemon (MediaProvider) silently filters
-         out files owned by other packages from getdents64 results — so an Obsidian
-         vault mounted into Minis would only show files Minis itself wrote, not the
-         vault's actual notes. This permission grants the app uid full POSIX access
-         (read + write + readdir) to /storage/emulated/0/, matching the user's mental
-         model of "the folder they picked is the folder Minis sees". -->
-    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
     <!-- "Take Photo" composer entry. We never use the camera background; the
          permission is requested at the moment the user taps the menu item. -->
     <uses-permission android:name="android.permission.CAMERA" />
@@ -96,25 +80,6 @@
          doesn't unblock the call — the permission does. -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
 
-    <!-- [T-android-privileged-backend] AXManager only pushes its binder to
-         apps whose requestedPermissions list contains one of three sentinels
-         (see AxManager BinderSender#sendBinder). Without one of these
-         declared, AXManager skips us and Shizuku.pingBinder() stays false
-         even though AXManager's service is running. Shizuku itself does NOT
-         need this permission — it discovers clients via its ContentProvider
-         + INTERACT_ACROSS_USERS_FULL gating — but declaring it is the
-         standard Shizuku-client manifest practice (used by Magisk Manager,
-         Brevent, etc.) and unlocks the AXManager push path. The permission
-         is normal-protection and isn't actually granted; AXManager only
-         checks that we *requested* it. -->
-    <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
-
-    <!-- Sideload personal agent (not a Play Store build): QUERY_ALL_PACKAGES
-         lets android-open / launcher resolution see installed apps on
-         Android 11+. Play specialUse / QUERY_ALL policy does not apply here. -->
-    <uses-permission
-        android:name="android.permission.QUERY_ALL_PACKAGES"
-        tools:ignore="QueryAllPackagesPermission" />
 
     <!-- Package visibility for speech recognition services + Custom Tabs
          (Android 11+ scoped queries). -->
@@ -148,13 +113,6 @@
         <intent>
             <action android:name="android.intent.action.SET_TIMER" />
         </intent>
-        <!-- T322: Shizuku — package-visibility entry so we can detect whether the
-             user has the Shizuku Manager app installed and report accurate state
-             in Settings (NOT_INSTALLED vs NOT_RUNNING vs RUNNING_NEED_PERM …). -->
-        <package android:name="moe.shizuku.privileged.api" />
-        <!-- [T-android-privileged-backend] AXManager — same package-visibility
-             need so PrivilegedBackend can detect/launch it under Android 11+. -->
-        <package android:name="frb.axeron.manager" />
         <!-- Crash-share dialog: ACTION_SENDTO mailto: needs explicit
              visibility under Android 11+ before resolveActivity / startActivity
              will return a real email-app candidate. Without it the
@@ -471,14 +429,16 @@
             </intent-filter>
         </activity>
 
-        <!-- Agent foreground service -->
-        <!-- T-android-fgs-timeout-crash: type=mediaPlayback to escape the
-             dataSync 6h cap. See FOREGROUND_SERVICE_MEDIA_PLAYBACK
-             permission comment above. -->
+        <!-- User-visible, user-initiated agent work. Android 10-13 runs it as
+             dataSync; Android 14+ starts it with specialUse at runtime. -->
         <service
             android:name=".service.AgentForegroundService"
             android:exported="false"
-            android:foregroundServiceType="mediaPlayback" />
+            android:foregroundServiceType="dataSync|specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="user_initiated_ai_agent_task_with_visible_progress_and_stop" />
+        </service>
 
         <!-- T-relay-body-alive: resident foreground service that keeps the
              Android relay body reachable while "accept remote tasks" is on.
@@ -596,27 +556,6 @@
             </intent-filter>
         </service>
 
-        <!-- T322: Shizuku in-process content provider. Required by Shizuku
-             SDK >=12 to host the binder receiver inside our process. Marked
-             multiprocess=false so :acra reporter process doesn't try to host
-             a second copy. -->
-        <provider
-            android:name="rikka.shizuku.ShizukuProvider"
-            android:authorities="${applicationId}.shizuku"
-            android:multiprocess="false"
-            android:enabled="${powerFeaturesEnabled}"
-            android:exported="true"
-            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
-
-        <!-- [T-android-privileged-backend] AXManager (Axeron) reuses this
-             same `<applicationId>.shizuku` ShizukuProvider — its
-             AxeronService#sendBinderToUserApp() resolves
-             "$packageName.shizuku" and calls Shizuku's "sendBinder" provider
-             method with extra "moe.shizuku.privileged.api.intent.extra.BINDER"
-             (verified in fahrez182/AxManager server/AxeronService.kt). The
-             only client-side requirement is the API_V23 uses-permission
-             above; no separate provider or AIDL surface is needed. -->
-
         <!-- FileProvider for sharing exported JSON (provider config, etc.)
              to other apps. Paths exposed are under app-scoped cache. -->
         <provider
@@ -628,23 +567,6 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_provider_paths" />
         </provider>
-
-        <!-- T323: AccessibilityService backing `android-a11y-cli`. The user
-             must enable this manually under Settings → Accessibility; we
-             never start it programmatically (Android forbids that). -->
-        <service
-            android:name=".accessibility.MinisAccessibilityService"
-            android:enabled="${powerFeaturesEnabled}"
-            android:exported="true"
-            android:label="@string/a11y_service_label"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/minis_accessibility_service" />
-        </service>
 
     </application>
 </manifest>

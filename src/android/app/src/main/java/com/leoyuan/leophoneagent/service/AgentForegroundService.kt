@@ -260,7 +260,7 @@ class AgentForegroundService : Service() {
                     startForeground(
                         NOTIFICATION_ID,
                         stub,
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
+                        agentForegroundServiceType(),
                     )
                 } else {
                     startForeground(NOTIFICATION_ID, stub)
@@ -299,7 +299,7 @@ class AgentForegroundService : Service() {
             startForeground(
                 NOTIFICATION_ID,
                 notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                agentForegroundServiceType()
             )
         } else {
             startForeground(NOTIFICATION_ID, notification)
@@ -309,6 +309,20 @@ class AgentForegroundService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    /**
+     * Match the declared work instead of borrowing mediaPlayback. Android
+     * 14+ has specialUse for user-visible work that has no narrower type;
+     * older releases use dataSync, where the modern cumulative timeout does
+     * not apply.
+     */
+    @Suppress("NewApi")
+    private fun agentForegroundServiceType(): Int =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+        } else {
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+        }
 
     /**
      * Swipe-from-recents handler. Default Service behaviour on some OEM
@@ -347,7 +361,7 @@ class AgentForegroundService : Service() {
             startForeground(
                 NOTIFICATION_ID,
                 notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
+                agentForegroundServiceType(),
             )
         } else {
             startForeground(NOTIFICATION_ID, notification)

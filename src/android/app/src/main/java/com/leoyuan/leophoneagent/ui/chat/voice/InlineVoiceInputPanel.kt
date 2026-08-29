@@ -944,16 +944,20 @@ private fun TranscribingRing(
     color: Color,
 ) {
     val stroke = 2.5.dp
-    val transition = rememberInfiniteTransition(label = "transcribing")
-    val angle by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 900, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "sweep",
-    )
+    val reduceMotion = com.leoyuan.leophoneagent.ui.navigation.rememberReduceMotion()
+    val transition = if (reduceMotion) null else rememberInfiniteTransition(label = "transcribing")
+    val angle = if (transition == null) 0f else {
+        val value by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 900, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
+            label = "sweep",
+        )
+        value
+    }
     Canvas(modifier = Modifier.size(diameter)) {
         val strokePx = stroke.toPx()
         // Inset by half the stroke so the stroke's centreline sits on the rim.

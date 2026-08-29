@@ -20,6 +20,22 @@ import Foundation
 import FoundationModels
 #endif
 
+#if canImport(FoundationModels)
+@available(iOS 26.0, *)
+@Generable
+private struct CollectionInsightPayload {
+    let summary: String
+    let tags: [String]
+}
+
+@available(iOS 26.0, *)
+@Generable
+private struct StructuredTaskPayload {
+    let title: String
+    let detail: String
+}
+#endif
+
 @MainActor
 final class LocalBrain: ObservableObject {
     static let shared = LocalBrain()
@@ -85,18 +101,23 @@ final class LocalBrain: ObservableObject {
             .joined(separator: "\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard material.count >= 12 else { return nil }
-        let prompt = """
-        为下面这条收藏写一句话中文摘要(不超过 40 字),再给最多 3 个中文标签。
-        严格按这个格式回答,不要多余的话:
-        摘要: <一句话>
-        标签: <标签1>、<标签2>、<标签3>
-
-        内容:
-        \(String(material.prefix(2000)))
-        """
-        guard let raw = await respond(to: prompt, instructions:
-            "你是一个内容归档助手。只输出要求的两行,不解释、不寒暄。") else { return nil }
-        return Self.parseInsight(raw)
+        do {
+            let session = LanguageModelSession(
+                instructions: "你是一个内容归档助手。摘要不超过 40 个中文字符，标签最多 3 个。"
+            )
+            let response = try await session.respond(
+                to: "为下面的收藏生成一句话摘要和标签：\n\(String(material.prefix(2000)))",
+                generating: CollectionInsightPayload.self
+            )
+            let summary = response.content.summary.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !summary.isEmpty else { return nil }
+            let tags = response.content.tags
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            return CollectionInsight(summary: String(summary.prefix(80)), tags: Array(tags.prefix(3)))
+        } catch {
+            return nil
+        }
         #else
         return nil
         #endif
@@ -191,29 +212,24 @@ final class LocalBrain: ObservableObject {
         guard #available(iOS 26.0, *), isReady else { return nil }
         let trimmed = speech.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 8 else { return nil }
-        let prompt = """
-        把下面这段口述整理成一个可执行任务。严格按格式回答:
-        标题: <不超过 20 字>
-        要点: <一到三句话,说清要做什么>
-
-        口述内容:
-        \(String(trimmed.prefix(3000)))
-        """
-        guard let raw = await respond(to: prompt, instructions:
-            "你把口语化的表述整理成清晰的任务描述。只输出要求的两行。") else { return nil }
-        var title = ""
-        var detail = ""
-        for line in raw.split(separator: "\n") {
-            let s = line.trimmingCharacters(in: .whitespaces)
-            if s.hasPrefix("标题:") || s.hasPrefix("标题:") {
-                title = String(s.dropFirst(3)).trimmingCharacters(in: .whitespaces)
-            } else if s.hasPrefix("要点:") || s.hasPrefix("要点:") {
-                detail = String(s.dropFirst(3)).trimmingCharacters(in: .whitespaces)
-            }
+        do {
+            let session = LanguageModelSession(
+                instructions: "把口语化表述整理成可执行任务。标题不超过 20 个中文字符，要点用一到三句话。"
+            )
+            let response = try await session.respond(
+                to: "整理下面这段口述：\n\(String(trimmed.prefix(3000)))",
+                generating: StructuredTaskPayload.self
+            )
+            let title = response.content.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            let detail = response.content.detail.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !title.isEmpty else { return nil }
+            return StructuredTask(
+                title: String(title.prefix(40)),
+                detail: detail.isEmpty ? trimmed : detail
+            )
+        } catch {
+            return nil
         }
-        guard !title.isEmpty else { return nil }
-        return StructuredTask(title: String(title.prefix(40)),
-                              detail: detail.isEmpty ? trimmed : detail)
         #else
         return nil
         #endif

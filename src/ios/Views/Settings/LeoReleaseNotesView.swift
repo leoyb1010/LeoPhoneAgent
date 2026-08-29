@@ -12,6 +12,17 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.29.0",
+            date: "2026-08-29",
+            title: "本机动作有回执，iPad 工作区更稳",
+            highlights: [
+                "读取或写入剪贴板、查看设备信息会直接走系统能力；写入后会读回核对，再把真实结果写进对话。",
+                "支持本机模型的设备会用结构化生成整理收藏和语音任务，字段不再依赖脆弱的逐行解析。",
+                "iPad 分屏、台前调度和窗口缩放按实际可用空间切换单双栏；拖放附件与外接键盘快捷键继续在同一工作区可用。",
+                "产物识别补齐 Office、压缩包、JSON、代码与更多媒体格式，生成后可继续预览、分享或交给系统应用。",
+            ]
+        ),
+        LeoRelease(
             version: "1.28.0",
             date: "2026-08-26",
             title: "没网也能开手电、记待办",

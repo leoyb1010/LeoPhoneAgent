@@ -99,4 +99,22 @@ class ActionRouterTest {
         assertEquals(ActionRouter.Path.Agent, ActionRouter.decide("手电筒坏了怎么办", 0).path)
         assertEquals(ActionRouter.Path.Agent, ActionRouter.decide("帮我记一下今天的会", 0).path)
     }
+
+    @Test
+    fun clipboardAndDeviceInfoUseStrictNativeRoutes() {
+        assertEquals(
+            ActionRouter.Kind.ReadClipboard,
+            ActionRouter.decide("剪贴板里有什么", 0).kind,
+        )
+        val write = ActionRouter.decide("把发布说明复制到剪贴板", 0)
+        assertEquals(ActionRouter.Kind.WriteClipboard, write.kind)
+        assertEquals("发布说明", write.label)
+
+        val english = ActionRouter.decide("copy hello world to the clipboard", 0)
+        assertEquals(ActionRouter.Kind.WriteClipboard, english.kind)
+        assertEquals("hello world", english.label)
+
+        assertEquals(ActionRouter.Kind.DeviceInfo, ActionRouter.decide("这台手机是什么型号", 0).kind)
+        assertEquals(ActionRouter.Path.Agent, ActionRouter.decide("怎么复制到剪贴板", 0).path)
+    }
 }

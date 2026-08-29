@@ -69,9 +69,14 @@ internal fun artifactFromToolBlock(block: AssistantBlock): ChatArtifact? {
 }
 
 private val PREVIEWABLE_ARTIFACT_EXTENSIONS = setOf(
-    "html", "htm", "md", "markdown", "svg", "csv", "tsv", "pdf",
+    "html", "htm", "md", "markdown", "txt", "rtf",
+    "json", "xml", "yaml", "yml", "toml", "log",
+    "swift", "kt", "java", "py", "js", "ts", "tsx", "jsx", "css", "sh",
+    "svg", "csv", "tsv", "pdf",
     "png", "jpg", "jpeg", "webp", "gif", "mp4", "webm", "mov",
     "mp3", "m4a", "wav", "ogg",
+    "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp",
+    "zip", "jar", "apk", "aar", "epub",
 )
 
 private val ARTIFACT_ROOTS = listOf(
@@ -91,12 +96,22 @@ private data class ArtifactVisual(
 private fun artifactVisual(extension: String): ArtifactVisual = when (extension) {
     "html", "htm" -> ArtifactVisual(Icons.Default.Code, R.string.artifact_type_web, Color(0xFF7C3AED))
     "md", "markdown" -> ArtifactVisual(Icons.AutoMirrored.Filled.Article, R.string.artifact_type_document, Color(0xFF2563EB))
+    "txt", "rtf", "xml", "yaml", "yml", "toml", "log" ->
+        ArtifactVisual(Icons.AutoMirrored.Filled.Article, R.string.artifact_type_document, Color(0xFF2563EB))
+    "json" -> ArtifactVisual(Icons.Default.DataObject, R.string.artifact_type_document, Color(0xFF0891B2))
+    "swift", "kt", "java", "py", "js", "ts", "tsx", "jsx", "css", "sh" ->
+        ArtifactVisual(Icons.Default.Code, R.string.artifact_type_file, Color(0xFF4F46E5))
     "svg" -> ArtifactVisual(Icons.Default.DataObject, R.string.artifact_type_vector, Color(0xFFDB2777))
     "csv", "tsv" -> ArtifactVisual(Icons.Default.TableChart, R.string.artifact_type_table, Color(0xFF059669))
+    "xls", "xlsx", "ods" -> ArtifactVisual(Icons.Default.TableChart, R.string.artifact_type_table, Color(0xFF059669))
+    "doc", "docx", "odt", "ppt", "pptx", "odp" ->
+        ArtifactVisual(Icons.AutoMirrored.Filled.Article, R.string.artifact_type_document, Color(0xFF2563EB))
     "pdf" -> ArtifactVisual(Icons.Default.PictureAsPdf, R.string.artifact_type_pdf, Color(0xFFDC2626))
     "png", "jpg", "jpeg", "webp", "gif" -> ArtifactVisual(Icons.Default.Image, R.string.artifact_type_image, Color(0xFF0D9488))
     "mp4", "webm", "mov" -> ArtifactVisual(Icons.Default.VideoFile, R.string.artifact_type_video, Color(0xFFEA580C))
     "mp3", "m4a", "wav", "ogg" -> ArtifactVisual(Icons.Default.AudioFile, R.string.artifact_type_audio, Color(0xFF9333EA))
+    "zip", "jar", "apk", "aar", "epub" ->
+        ArtifactVisual(Icons.AutoMirrored.Filled.InsertDriveFile, R.string.artifact_type_file, Color(0xFF64748B))
     else -> ArtifactVisual(Icons.AutoMirrored.Filled.InsertDriveFile, R.string.artifact_type_file, MaterialTheme.colorScheme.primary)
 }
 

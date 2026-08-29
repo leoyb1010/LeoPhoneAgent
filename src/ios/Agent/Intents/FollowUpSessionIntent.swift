@@ -9,6 +9,7 @@ struct FollowUpSessionIntent: AppIntent {
     static var title: LocalizedStringResource = "Follow Up Session"
     static var description = IntentDescription("Sends a follow-up prompt to an existing LeoPhoneAgent session, continuing the conversation with the AI agent.")
     static var openAppWhenRun = false
+    static var supportedModes: IntentModes = [.background, .foreground(.deferred)]
 
     @Parameter(title: "Session")
     var session: SessionEntity
@@ -17,7 +18,7 @@ struct FollowUpSessionIntent: AppIntent {
     var prompt: String
 
     @Parameter(title: "Attachments", description: "Images, videos, or files to attach to the prompt. Accepts output from previous Shortcuts actions (e.g. filtered photos or documents).",
-               supportedTypeIdentifiers: ["public.image", "public.movie", "public.data"],
+               supportedContentTypes: [.image, .movie, .data],
                inputConnectionBehavior: .connectToPreviousIntentResult)
     var files: [IntentFile]?
 

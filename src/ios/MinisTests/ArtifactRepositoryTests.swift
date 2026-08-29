@@ -3,6 +3,23 @@ import CryptoKit
 import XCTest
 
 final class ArtifactRepositoryTests: XCTestCase {
+    func testArtifactMIMETypeCoversOfficeCodeAndArchives() {
+        XCTAssertEqual(
+            ArtifactKind.inferredMIMEType(fileName: "report.docx"),
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+        XCTAssertEqual(
+            ArtifactKind.inferredMIMEType(fileName: "budget.xlsx"),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        XCTAssertEqual(
+            ArtifactKind.inferredMIMEType(fileName: "deck.pptx"),
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        )
+        XCTAssertEqual(ArtifactKind.infer(mimeType: "text/plain", fileName: "Main.kt"), .code)
+        XCTAssertEqual(ArtifactKind.inferredMIMEType(fileName: "site.epub"), "application/epub+zip")
+    }
+
     func testVersionTrashRestoreAndPurgeLifecycle() async throws {
         let baseURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: baseURL) }

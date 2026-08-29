@@ -4,6 +4,36 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+<a id="t10-alpha21"></a>
+## T10 · iOS 1.29.0 (103) / Android 1.0.0-alpha.21 - 2026-08-29
+
+### 用户可见
+
+- iPhone、iPad 和 Android 可以直接读取/写入剪贴板、查看设备信息；写剪贴板后会读回核对，聊天里返回真实结果，不再只显示固定成功话术。
+- iOS 收藏整理和语音任务在支持 Apple Intelligence 的设备上改用 Foundation Models 结构化生成；iPad 分屏、台前调度和连续缩放按实际内容空间切换单双栏。
+- 两端产物识别补齐 Office、压缩包、JSON、代码和更多媒体格式。Android 的输入/流式/浏览器/语音动效在系统“减少动态效果”开启时会静止。
+- Android Standard 不再申请 Power 专属的所有文件、无障碍、Shizuku 和应用列表权限；设置里也不再展示无法完成的授权入口。Power 保留受系统授权和产品确认保护的能力。
+- Fold8 1080×1728 封面在 200% 字体下，聊天顶栏不再与状态栏相撞；正文、任务卡和输入区仍完整放大。
+
+### 工程根因
+
+- 原公共 Manifest 把高权限声明和组件泄漏给两个 flavor；前台 Agent 还沿用了与任务语义不符的媒体播放类型。现在能力声明下沉到 Power，Agent 前台服务使用 `dataSync|specialUse`，Relay 继续使用 `remoteMessaging`。
+- 原生动作路由只返回固定文案，产物卡的可打开格式集合也小于现有预览器真实能力；本次统一按执行结果和已有预览能力收口。
+- Android 固定高度三行顶栏在 200% 字体下会向上挤进状态栏；现在只给紧凑导航字体设置 130% 上限，聊天内容仍遵循完整系统字体比例。
+
+### 验证
+
+- Android：Standard/Power 各 581 项单测（各 1 项设备条件用例跳过）；`verifyChineseResources`、`verifyChineseSettingsStrings`、双 Release lint（0 error）和双 Release APK 构建通过。
+- 固定个人 Alpha 签名、包名、versionCode `100021`、versionName `1.0.0-alpha.21` / `1.0.0-alpha.21-power` 通过；Standard APK 不含 Power 四类权限/组件。
+- SHA-256：Standard `e23638684fa1bb14c99db7dc6d3b8974938cdd0439cdf530e4b2f661f3f7706f`；Power `5321469d3df839f187b901b59097aceaf67b82f36c27aa77123e671e69f9c016`。
+- Fold8 API 35 模拟器：alpha.20 → alpha.21 两包覆盖安装均为 `Success`；两包冷启动、`ASSIST`、PID 和 Logcat 通过。1768×2208 展开双栏、1080×1728 封面单栏、封面 200% 字体均截图复验，UI 树无越界节点。
+- iOS/iPad：Xcode 26.6 / iPhoneOS 26.5 SDK 的 `generic/platform=iOS` 无签名设备构建成功；iOS 27 专属 API 等 Xcode 27 工具链后再启用，不伪造不可编译代码。
+
+### 停损
+
+- 本次公开附件只发布 Android；iOS 代码和版本已到 `1.29.0 (103)`，由用户用身边设备装机。未重新构建或发布 Mac/Harmony。
+- Standard 继续不提供无障碍跨应用与完整目录挂载；Power 仍需用户在系统中授权。Android 16 AppFunctions 需要 compileSdk 37 / AGP 9.1，当前工具链不强行接入。
+
 ## Mac 1.78.0 - 2026-08-27
 
 ### 用户可见

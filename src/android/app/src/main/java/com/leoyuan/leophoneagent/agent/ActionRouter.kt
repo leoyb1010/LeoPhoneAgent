@@ -9,7 +9,10 @@ package com.leoyuan.leophoneagent.agent
  */
 object ActionRouter {
     enum class Path { Native, Agent }
-    enum class Kind { SavePhoto, SetAlarm, CreateCalendar, ToggleFlashlight, CreateTodo }
+    enum class Kind {
+        SavePhoto, SetAlarm, CreateCalendar, ToggleFlashlight, CreateTodo,
+        ReadClipboard, WriteClipboard, DeviceInfo,
+    }
 
     data class Decision(
         val path: Path,
@@ -26,6 +29,8 @@ object ActionRouter {
                 Kind.CreateCalendar -> "系统日历"
                 Kind.ToggleFlashlight -> "手电筒"
                 Kind.CreateTodo -> "待办"
+                Kind.ReadClipboard, Kind.WriteClipboard -> "剪贴板"
+                Kind.DeviceInfo -> "设备信息"
                 null -> ""
             }
 
@@ -39,6 +44,9 @@ object ActionRouter {
             Kind.CreateCalendar -> "已用系统日历创建日程，未打开界面。"
             Kind.ToggleFlashlight -> if (label == "off") "已关掉手电筒。" else "已打开手电筒。"
             Kind.CreateTodo -> "已记下待办：${label.ifBlank { "待办" }}。"
+            Kind.ReadClipboard -> "已读取剪贴板。"
+            Kind.WriteClipboard -> "已写入剪贴板。"
+            Kind.DeviceInfo -> "已读取这台设备的信息。"
             null -> ""
         }
     }
@@ -48,6 +56,15 @@ object ActionRouter {
         val lower = raw.lowercase()
         if (imageCount > 0 && isSavePhoto(lower)) {
             return Decision(Path.Native, Kind.SavePhoto)
+        }
+        if (isReadClipboard(lower)) {
+            return Decision(Path.Native, Kind.ReadClipboard)
+        }
+        clipboardWriteText(raw, lower)?.let { text ->
+            return Decision(Path.Native, Kind.WriteClipboard, label = text)
+        }
+        if (isDeviceInfo(lower)) {
+            return Decision(Path.Native, Kind.DeviceInfo)
         }
         flashlightOn(lower)?.let { on ->
             return Decision(Path.Native, Kind.ToggleFlashlight, label = if (on) "on" else "off")
@@ -127,6 +144,30 @@ object ActionRouter {
         )
         return needles.any { lower.contains(it) }
     }
+
+    internal fun isReadClipboard(lower: String): Boolean = listOf(
+        "读取剪贴板", "读一下剪贴板", "剪贴板里有什么", "剪贴板有什么",
+        "read clipboard", "what's in the clipboard", "what is in the clipboard",
+    ).any { lower.contains(it) }
+
+    internal fun clipboardWriteText(raw: String, lower: String = raw.lowercase()): String? {
+        Regex("""^把(.{1,4000})复制到剪贴板[。.]?$""").matchEntire(raw)?.let {
+            return it.groupValues[1].trim().takeIf(String::isNotEmpty)
+        }
+        Regex("""^复制到剪贴板[：:]?\s*(.{1,4000})$""").matchEntire(raw)?.let {
+            return it.groupValues[1].trim().takeIf(String::isNotEmpty)
+        }
+        Regex("""^copy\s+(.{1,4000})\s+to\s+(?:the\s+)?clipboard[.!]?$""", RegexOption.IGNORE_CASE)
+            .matchEntire(lower)?.let {
+                return raw.substring(it.groups[1]!!.range).trim().takeIf(String::isNotEmpty)
+            }
+        return null
+    }
+
+    internal fun isDeviceInfo(lower: String): Boolean = listOf(
+        "设备信息", "手机信息", "这台手机是什么型号", "这台设备是什么型号",
+        "device info", "phone model", "device model",
+    ).any { lower.contains(it) }
 
     internal fun isTomorrow(lower: String): Boolean =
         lower.contains("明早") || lower.contains("明天") ||

@@ -1036,6 +1036,8 @@
     <string name="mount_only_on_device_supported">仅支持设备本地文件夹（不支持 Google Drive 等云端提供方）。</string>
     <string name="mount_all_files_access_required">未授予「所有文件访问权限」</string>
     <string name="mount_all_files_access_required_desc">未开启时，shell 只能看到本应用创建的文件——其他应用（如 Obsidian）写入的文件会被隐藏。点此前往系统设置授权。</string>
+    <string name="mount_power_only_title">外部目录挂载仅限 Power 版</string>
+    <string name="mount_power_only_description">Standard 版通过 Android 系统文件选择器和分享面板导入、导出。完整外部目录挂载仅在 Power 版提供。</string>
     <string name="mount_detail_title">编辑挂载</string>
     <string name="mount_detail_browse_files">浏览文件</string>
     <string name="mount_detail_browse_files_toast">在聊天中通过 @ 提及访问此挂载。</string>
@@ -1648,6 +1650,7 @@
     <string name="system_permissions_samsung_cover_sub">这里只打开应用详情，不是封面应用列表。请到系统「封面屏幕应用」中允许本应用。</string>
     <string name="system_permissions_setup_header">安装检查</string>
     <string name="system_permissions_setup_footer">助手、通知、电池、悬浮窗、通知访问和所有文件，是多数任务会用到的系统授权。</string>
+    <string name="system_permissions_setup_footer_standard">助手、通知、电池、悬浮窗和通知访问，是多数任务会用到的系统授权。Standard 版不会申请所有文件访问权限。</string>
     <string name="system_permissions_setup_samsung_note">三星设备若要用封面屏，还请在「封面屏幕应用」中允许本应用。</string>
     <string name="system_permissions_setup_complete">必要授权看起来已齐</string>
     <string name="system_permissions_setup_missing">还缺 %1$d / 6 项必要授权</string>
@@ -1753,7 +1756,7 @@
     <string name="terminal_cli_booting_hint">如出现安全确认或登录提示，请按屏幕指引继续。</string>
     <string name="whats_new_title">本次更新（%1$s）</string>
     <string name="whats_new_confirm">知道了</string>
-    <string name="whats_new_current">• 打开别的 App 后还能继续点、读、滑。后台任务默认保活，悬浮窗默认开。Power 无障碍不再被产品门默认拦住。</string>
+    <string name="whats_new_current">• 剪贴板和设备信息请求会在本机直接执行并返回核对结果；更多生成文件可作为产物打开。Standard 不再申请 Power 专属的所有文件、无障碍、Shizuku 和应用列表权限。</string>
     <string name="artifact_ready">交付物已就绪</string>
     <string name="artifact_open">打开交付物</string>
     <string name="artifact_missing">这份交付物已不在本机。</string>

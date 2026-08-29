@@ -1449,49 +1449,83 @@ class ChatViewModel(
         return true
     }
 
+    private data class NativeRouteResult(
+        val spoken: String,
+        val verified: Boolean = true,
+    )
+
     private suspend fun tryNativeRoute(
         route: com.leoyuan.leophoneagent.agent.ActionRouter.Decision,
         prepared: PreparedAttachments,
         sessionId: String,
-    ): Boolean = withContext(Dispatchers.IO) {
+    ): NativeRouteResult? = withContext(Dispatchers.IO) {
         val offload = com.leoyuan.leophoneagent.sandbox.NativeOffloadServer
         when (route.kind) {
             com.leoyuan.leophoneagent.agent.ActionRouter.Kind.SavePhoto -> {
-                val linux = prepared.imageUploadPaths.firstOrNull() ?: return@withContext false
+                val linux = prepared.imageUploadPaths.firstOrNull() ?: return@withContext null
                 val host = java.io.File(
                     context.filesDir,
                     "minis-sessions/$sessionId/attachments/uploads/${linux.substringAfterLast('/')}",
                 )
-                if (!host.isFile) return@withContext false
-                offload.invoke("android-photos", listOf("import", "--path", host.absolutePath), sessionId).exitCode == 0
+                if (!host.isFile) return@withContext null
+                val ok = offload.invoke("android-photos", listOf("import", "--path", host.absolutePath), sessionId).exitCode == 0
+                if (ok) NativeRouteResult(route.spoken()) else null
             }
             com.leoyuan.leophoneagent.agent.ActionRouter.Kind.SetAlarm -> {
-                val hh = route.hour ?: return@withContext false
-                val mm = route.minute ?: return@withContext false
+                val hh = route.hour ?: return@withContext null
+                val mm = route.minute ?: return@withContext null
                 // ponytail: SET_ALARM has no "tomorrow only". Clock fires at
                 // the next HH:MM. Morning "明早 8点" can land today.
                 val time = "%02d:%02d".format(hh, mm)
-                offload.invoke(
+                val ok = offload.invoke(
                     "android-alarm",
                     listOf("set", "--time", time, "--label", route.label.ifBlank { "闹钟" }),
                     sessionId,
                 ).exitCode == 0
+                if (ok) NativeRouteResult(route.spoken()) else null
             }
             com.leoyuan.leophoneagent.agent.ActionRouter.Kind.CreateCalendar -> {
-                val hh = route.hour ?: return@withContext false
-                val mm = route.minute ?: return@withContext false
+                val hh = route.hour ?: return@withContext null
+                val mm = route.minute ?: return@withContext null
                 val start = calendarIso(hh, mm, route.tomorrow)
-                offload.invoke(
+                val ok = offload.invoke(
                     "android-calendar",
                     listOf("create", "--title", route.label.ifBlank { "日程" }, "--start", start),
                     sessionId,
                 ).exitCode == 0
+                if (ok) NativeRouteResult(route.spoken()) else null
             }
-            com.leoyuan.leophoneagent.agent.ActionRouter.Kind.ToggleFlashlight ->
-                com.leoyuan.leophoneagent.agent.FastLocalActions.setTorch(context, route.label != "off")
-            com.leoyuan.leophoneagent.agent.ActionRouter.Kind.CreateTodo ->
-                com.leoyuan.leophoneagent.agent.FastLocalActions.addTodo(context, route.label)
-            null -> false
+            com.leoyuan.leophoneagent.agent.ActionRouter.Kind.ToggleFlashlight -> {
+                if (com.leoyuan.leophoneagent.agent.FastLocalActions.setTorch(context, route.label != "off")) {
+                    NativeRouteResult(route.spoken())
+                } else null
+            }
+            com.leoyuan.leophoneagent.agent.ActionRouter.Kind.CreateTodo -> {
+                if (com.leoyuan.leophoneagent.agent.FastLocalActions.addTodo(context, route.label)) {
+                    NativeRouteResult(route.spoken())
+                } else null
+            }
+            com.leoyuan.leophoneagent.agent.ActionRouter.Kind.ReadClipboard -> {
+                val result = offload.invoke("android-clipboard", listOf("get"), sessionId)
+                if (result.exitCode != 0) null else NativeRouteResult(
+                    if (result.output.isBlank()) "剪贴板是空的。" else "剪贴板内容：\n${result.output.trim().take(4_000)}",
+                )
+            }
+            com.leoyuan.leophoneagent.agent.ActionRouter.Kind.WriteClipboard -> {
+                val write = offload.invoke("android-clipboard", listOf("set", "--text", route.label), sessionId)
+                if (write.exitCode != 0) return@withContext null
+                val read = offload.invoke("android-clipboard", listOf("get"), sessionId)
+                if (read.exitCode == 0 && read.output.trimEnd() == route.label) {
+                    NativeRouteResult("已写入剪贴板，并读回核对成功。")
+                } else null
+            }
+            com.leoyuan.leophoneagent.agent.ActionRouter.Kind.DeviceInfo -> {
+                val result = offload.invoke("android-device", listOf("all"), sessionId)
+                if (result.exitCode != 0) null else NativeRouteResult(
+                    "本机设备信息：\n${result.output.trim().take(6_000)}",
+                )
+            }
+            null -> null
         }
     }
 
@@ -5081,10 +5115,10 @@ class ChatViewModel(
                 prepared.imageUploadPaths.size,
             )
             if (fastRoute.path == com.leoyuan.leophoneagent.agent.ActionRouter.Path.Native) {
-                val ran = tryNativeRoute(fastRoute, prepared, activeSessionId)
-                if (ran) {
+                val nativeResult = tryNativeRoute(fastRoute, prepared, activeSessionId)
+                if (nativeResult != null) {
                     _actionRouteChip.value = fastRoute.chip
-                    val spoken = fastRoute.spoken()
+                    val spoken = nativeResult.spoken
                     val partsJson = """[{"type":"text","value":${escapeJson(spoken)}}]"""
                     val persisted = chatRepository.appendMessage(activeSessionId, "assistant", partsJson)
                     _messages.value = _messages.value + ChatMessage(
