@@ -172,19 +172,6 @@ enum LeoSessionListDensity: Int, CaseIterable {
     }
 }
 
-/// Content-driven split decision for iPad multitasking and resizable iPhone
-/// windows (iPad hosting / iPhone Mirroring). A device-name check or one raw
-/// width threshold is not enough once the same scene can be continuously
-/// resized.
-enum LeoWorkspaceLayoutPolicy {
-    static func usesSplit(width: CGFloat, height: CGFloat, regularWidth: Bool) -> Bool {
-        guard regularWidth, width.isFinite, height.isFinite, height >= 480 else { return false }
-        let sidebar = min(max(width * 0.38, 300), 380)
-        let detail = width - sidebar
-        return sidebar >= 300 && detail >= 440
-    }
-}
-
 /// Sheets triggered from the toolbar menu, consolidated into a single `.sheet(item:)`.
 enum ToolSheet: String, Identifiable {
     case settings

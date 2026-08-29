@@ -1,5 +1,17 @@
 import Foundation
 
+/// Content-driven split decision shared by the iPhone/iPad workspace and the
+/// lightweight logic-test target. Device names are deliberately irrelevant:
+/// Stage Manager, Split View and mirrored windows can all resize continuously.
+enum LeoWorkspaceLayoutPolicy {
+    static func usesSplit(width: CGFloat, height: CGFloat, regularWidth: Bool) -> Bool {
+        guard regularWidth, width.isFinite, height.isFinite, height >= 480 else { return false }
+        let sidebar = min(max(width * 0.38, 300), 380)
+        let detail = width - sidebar
+        return sidebar >= 300 && detail >= 440
+    }
+}
+
 /// Pure helpers for agent-loop correctness that MinisTests can compile
 /// without UIKit or the full chat view-model.
 enum AgentChatCorrectness {
