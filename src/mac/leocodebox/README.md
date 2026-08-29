@@ -23,7 +23,7 @@
 - **源码**：<https://github.com/leoyb1010/LeoPhoneAgent/tree/main/src/mac/leocodebox>
 - **Issues**：<https://github.com/leoyb1010/LeoPhoneAgent/issues>
 
-1.79.0 已用本机 `Developer ID Application: leo yuan (48H5Y3LNUK)` 签名，待发布到 `leocodebox-updates`（`v1.79.0` + `latest-mac.yml`）。公证钥匙串 profile `leocodebox` 本机不在，所以没有 stapler 钉章；热更新继续走同一 TeamIdentifier 的签名链。补公证：`xcrun notarytool store-credentials` 后跑 `npm run desktop:notarize:mac`。
+1.79.0 已用本机 `Developer ID Application: leo yuan (48H5Y3LNUK)` 签名，并发布到 `leocodebox-updates`（`v1.79.0` + `latest-mac.yml`）。公证钥匙串 profile `leocodebox` 本机不在，所以没有 stapler 钉章；热更新继续走同一 TeamIdentifier 的签名链。补公证：`xcrun notarytool store-credentials` 后跑 `npm run desktop:notarize:mac`。
 
 ---
 
