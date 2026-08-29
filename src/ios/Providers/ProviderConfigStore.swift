@@ -2453,15 +2453,20 @@ final class ProviderConfigStore: ObservableObject {
             // Custom UA applies only to the manual-token (relay) sub-case; the xAI
             // OAuth-login token keeps the default UA, matching the other OAuth paths.
             var xaiUA: String? = nil
-            if let manualToken = ProviderKeychainHelper.loadOAuthString(instanceId: instance.id, account: "manual-oauth-token") {
+            if GrokViaMacBroker.hostMarker(instanceId: instance.id) != nil {
+                token = try await GrokViaMacBroker.shared.token(instanceId: instance.id)
+            } else if let manualToken = ProviderKeychainHelper.loadOAuthString(instanceId: instance.id, account: "manual-oauth-token") {
                 token = manualToken
                 xaiUA = ua
             } else {
                 token = try await XAIOAuthManager.shared.validAccessToken(instanceId: instance.id)
             }
-            let xaiBase = customBase ?? "https://api.x.ai/v1"
-            let xaiAppendV1 = customBase == nil ? false : appendV1
-            return try await OpenAIModelsAPI.fetchModels(apiKey: token, baseURL: xaiBase, appendV1Suffix: xaiAppendV1, forceRefresh: forceRefresh, userAgent: xaiUA)
+            _ = xaiUA // OAuth credentials intentionally ignore custom endpoints and user agents.
+            return try await XAIModelsAPI.fetchOAuthModels(
+                accessToken: token,
+                userID: XAIOAuthManager.shared.userId(instanceId: instance.id),
+                email: XAIOAuthManager.shared.email(instanceId: instance.id)
+            )
         case (.kimiCode, .apiKey):
             guard let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) else {
                 throw ModelRefreshError.noCredential
@@ -2555,7 +2560,8 @@ final class ProviderConfigStore: ObservableObject {
             tokenEndpoint: json["token_endpoint"] as? String,
             email: json["email"] as? String,
             displayName: json["display_name"] as? String ?? json["displayName"] as? String,
-            accountId: json["account_id"] as? String
+            accountId: json["account_id"] as? String,
+            userId: json["user_id"] as? String
         )
     }
 

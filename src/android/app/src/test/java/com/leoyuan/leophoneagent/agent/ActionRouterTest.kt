@@ -117,4 +117,25 @@ class ActionRouterTest {
         assertEquals(ActionRouter.Kind.DeviceInfo, ActionRouter.decide("这台手机是什么型号", 0).kind)
         assertEquals(ActionRouter.Path.Agent, ActionRouter.decide("怎么复制到剪贴板", 0).path)
     }
+
+    @Test
+    fun incompleteTravelRecordAsksOnceInsteadOfGuessing() {
+        val result = ActionRouter.decide("帮我记录明天下午19:00要去北京的高铁，车次是，座位是", 0)
+        assertEquals(ActionRouter.Path.Clarify, result.path)
+        assertEquals(ActionRouter.Kind.CreateTravel, result.kind)
+        assertEquals("北京", result.location)
+        assertEquals(listOf("车次", "座位"), result.missingFields)
+        assertTrue(result.spoken().contains("车次、座位"))
+    }
+
+    @Test
+    fun completeTravelRecordCompilesToNativeCalendarAndTodo() {
+        val result = ActionRouter.decide("记录明天下午19:00去北京的高铁 G1234，座位12A", 0)
+        assertEquals(ActionRouter.Path.Native, result.path)
+        assertEquals(ActionRouter.Kind.CreateTravel, result.kind)
+        assertEquals(19, result.hour)
+        assertEquals("北京", result.location)
+        assertTrue(result.notes.contains("G1234"))
+        assertTrue(result.notes.contains("12A"))
+    }
 }

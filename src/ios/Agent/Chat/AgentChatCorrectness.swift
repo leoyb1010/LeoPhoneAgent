@@ -64,9 +64,9 @@ enum AgentChatCorrectness {
 
 /// Fast native intents. Same contract as Android `ActionRouter`.
 enum ActionRouter {
-    enum Path { case native, agent }
+    enum Path { case native, clarify, agent }
     enum Kind {
-        case savePhoto, setAlarm, createCalendar, toggleFlashlight, createTodo
+        case savePhoto, setAlarm, createCalendar, createTravel, toggleFlashlight, createTodo
         case readClipboard, writeClipboard, deviceInfo
     }
 
@@ -77,12 +77,16 @@ enum ActionRouter {
         var minute: Int?
         var tomorrow: Bool
         var label: String
+        var location = ""
+        var notes = ""
+        var missingFields: [String] = []
 
         var chip: String {
             switch kind {
             case .savePhoto: return "系统相册"
             case .setAlarm: return "系统闹钟"
             case .createCalendar: return "系统日历"
+            case .createTravel: return "出行记录"
             case .toggleFlashlight: return "手电筒"
             case .createTodo: return "待办"
             case .readClipboard, .writeClipboard: return "剪贴板"
@@ -99,6 +103,10 @@ enum ActionRouter {
                 let mm = String(format: "%02d", minute ?? 0)
                 return "已用系统闹钟设定 \(hh):\(mm)，未打开界面。"
             case .createCalendar: return "已用系统日历创建日程，未打开界面。"
+            case .createTravel:
+                return path == .clarify
+                    ? "我已识别为出行记录，还需要：\(missingFields.joined(separator: "、"))。补充后我会同时写入日历和提醒事项。"
+                    : "已把出行信息写入系统日历和提醒事项，并设置提前提醒。"
             case .toggleFlashlight: return label == "off" ? "已关掉手电筒。" : "已打开手电筒。"
             case .createTodo: return "已记下待办：\(label.isEmpty ? "待办" : label)。"
             case .readClipboard: return "已读取剪贴板。"
@@ -127,6 +135,7 @@ enum ActionRouter {
         if let on = flashlightOn(lower) {
             return Decision(path: .native, kind: .toggleFlashlight, hour: nil, minute: nil, tomorrow: false, label: on ? "on" : "off")
         }
+        if let travel = parseTravel(raw, lower: lower) { return travel }
         if isTodo(lower) {
             return Decision(path: .native, kind: .createTodo, hour: nil, minute: nil, tomorrow: false, label: todoTitle(raw))
         }
@@ -137,6 +146,49 @@ enum ActionRouter {
             return Decision(path: .native, kind: .createCalendar, hour: time.0, minute: time.1, tomorrow: isTomorrow(lower), label: calendarTitle(raw))
         }
         return Decision(path: .agent, kind: nil, hour: nil, minute: nil, tomorrow: false, label: "")
+    }
+
+    static func parseTravel(_ raw: String, lower: String? = nil) -> Decision? {
+        let low = lower ?? raw.lowercased()
+        guard ["高铁", "动车", "火车", "train"].contains(where: low.contains),
+              ["记录", "记下", "提醒", "行程", "日历", "record", "remind"].contains(where: low.contains) else { return nil }
+
+        let time = parseTime(raw, lower: low)
+        let destination = firstCapture(in: raw, pattern: #"(?:去|到)\s*([\p{L}]{2,16}?)(?:的)?(?:高铁|动车|火车|[，,。\s])"#) ?? ""
+        let train = (firstCapture(in: raw, pattern: #"\b([GDCZTK]\s*\d{1,4})\b"#, options: [.caseInsensitive]) ?? "")
+            .replacingOccurrences(of: " ", with: "").uppercased()
+        let seat = firstCapture(in: raw, pattern: #"座位(?:是|号|[：:])?\s*([0-9]{1,2}[A-Fa-f]|[0-9]{1,2}车(?:厢)?[0-9]{1,3}[A-Fa-f]?号?)"#) ?? ""
+        var missing: [String] = []
+        if destination.isEmpty { missing.append("目的地") }
+        if time == nil { missing.append("开车时间") }
+        if train.isEmpty { missing.append("车次") }
+        if seat.isEmpty { missing.append("座位") }
+        let details = [train.isEmpty ? nil : "车次：\(train)", seat.isEmpty ? nil : "座位：\(seat)"]
+            .compactMap { $0 }
+            .joined(separator: "\n") + "\n由 LeoPhoneAgent 记录；未提供到达时间，不做推断。"
+        return Decision(
+            path: missing.isEmpty ? .native : .clarify,
+            kind: .createTravel,
+            hour: time?.0,
+            minute: time?.1,
+            tomorrow: isTomorrow(low),
+            label: [destination, "高铁", train].filter { !$0.isEmpty }.joined(separator: " "),
+            location: destination,
+            notes: details,
+            missingFields: missing
+        )
+    }
+
+    private static func firstCapture(
+        in text: String,
+        pattern: String,
+        options: NSRegularExpression.Options = []
+    ) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: options),
+              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              match.numberOfRanges > 1,
+              let range = Range(match.range(at: 1), in: text) else { return nil }
+        return String(text[range]).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     static func isSavePhoto(_ lower: String) -> Bool {

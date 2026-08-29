@@ -254,9 +254,9 @@ enum LLMProviderFactory {
     }
 
     static func makeXAIProvider(instance: ProviderInstance, model: LLMModel) -> OpenAIProvider {
-        let customBase = instance.effectiveCustomBaseURL ?? "https://api.x.ai/v1"
-        // Custom base ships with /v1 — never re-append.
-        let appendV1 = instance.effectiveCustomBaseURL == nil ? false : instance.appendV1Suffix
+        let customBase = instance.credentialType == .oauth ? XAIModelsAPI.oauthAPIBase : (instance.effectiveCustomBaseURL ?? "https://api.x.ai/v1")
+        // OAuth is pinned to xAI's first-party proxy; API-key custom bases keep their existing suffix policy.
+        let appendV1 = instance.credentialType == .oauth ? false : (instance.effectiveCustomBaseURL == nil ? false : instance.appendV1Suffix)
         switch instance.credentialType {
         case .apiKey:
             let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) ?? ""

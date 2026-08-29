@@ -1490,10 +1490,42 @@ class ChatViewModel(
                 val start = calendarIso(hh, mm, route.tomorrow)
                 val ok = offload.invoke(
                     "android-calendar",
-                    listOf("create", "--title", route.label.ifBlank { "日程" }, "--start", start),
+                    buildList {
+                        addAll(listOf("create", "--title", route.label.ifBlank { "日程" }, "--start", start, "--alarm", "30"))
+                        if (route.notes.isNotBlank()) addAll(listOf("--notes", route.notes))
+                        if (route.location.isNotBlank()) addAll(listOf("--location", route.location))
+                    },
                     sessionId,
                 ).exitCode == 0
                 if (ok) NativeRouteResult(route.spoken()) else null
+            }
+            com.leoyuan.leophoneagent.agent.ActionRouter.Kind.CreateTravel -> {
+                val hh = route.hour ?: return@withContext null
+                val mm = route.minute ?: return@withContext null
+                val start = calendarIso(hh, mm, route.tomorrow)
+                val calendar = offload.invoke(
+                    "android-calendar",
+                    buildList {
+                        addAll(listOf("create", "--title", route.label, "--start", start, "--notes", route.notes, "--alarm", "30"))
+                        if (route.location.isNotBlank()) addAll(listOf("--location", route.location))
+                    },
+                    sessionId,
+                )
+                if (calendar.exitCode != 0) return@withContext null
+                com.leoyuan.leophoneagent.agent.FastLocalActions.addTodo(
+                    context,
+                    route.label,
+                    calendarEpochMs(hh, mm, route.tomorrow),
+                    route.notes,
+                )
+                // Android has no universal Tasks provider; the app owns the
+                // durable task and mirrors its due signal as a system notice.
+                offload.invoke(
+                    "android-notification",
+                    listOf("schedule", "--title", "出行提醒", "--body", route.label, "--at", start),
+                    sessionId,
+                )
+                NativeRouteResult(route.spoken())
             }
             com.leoyuan.leophoneagent.agent.ActionRouter.Kind.ToggleFlashlight -> {
                 if (com.leoyuan.leophoneagent.agent.FastLocalActions.setTorch(context, route.label != "off")) {
@@ -1536,6 +1568,16 @@ class ChatViewModel(
         cal.set(java.util.Calendar.MINUTE, minute)
         cal.set(java.util.Calendar.SECOND, 0)
         return java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm", java.util.Locale.US).format(cal.time)
+    }
+
+    private fun calendarEpochMs(hour: Int, minute: Int, tomorrow: Boolean): Long {
+        val cal = java.util.Calendar.getInstance()
+        if (tomorrow) cal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+        cal.set(java.util.Calendar.HOUR_OF_DAY, hour)
+        cal.set(java.util.Calendar.MINUTE, minute)
+        cal.set(java.util.Calendar.SECOND, 0)
+        cal.set(java.util.Calendar.MILLISECOND, 0)
+        return cal.timeInMillis
     }
 
     /**
@@ -5114,6 +5156,16 @@ class ChatViewModel(
                 trimmed,
                 prepared.imageUploadPaths.size,
             )
+            if (fastRoute.path == com.leoyuan.leophoneagent.agent.ActionRouter.Path.Clarify) {
+                _actionRouteChip.value = fastRoute.chip
+                val spoken = fastRoute.spoken()
+                val partsJson = """[{"type":"text","value":${escapeJson(spoken)}}]"""
+                val persisted = chatRepository.appendMessage(activeSessionId, "assistant", partsJson)
+                _messages.value = _messages.value + ChatMessage(id = persisted.id, role = "assistant", content = spoken)
+                agentHistory.add(LLMMessage(role = LLMMessage.Role.ASSISTANT, content = spoken, dbMessageId = persisted.id))
+                _isStreaming.value = false
+                return@launch
+            }
             if (fastRoute.path == com.leoyuan.leophoneagent.agent.ActionRouter.Path.Native) {
                 val nativeResult = tryNativeRoute(fastRoute, prepared, activeSessionId)
                 if (nativeResult != null) {

@@ -111,7 +111,11 @@ object ProviderFactory {
                 //   - Manual API key: passed through verbatim. Some users
                 //     prefer this when their tier doesn't expose OAuth API
                 //     access (the spec's known-issue 403 case).
-                val base = basePath ?: "https://api.x.ai/v1"
+                val base = if (instance.credentialType == ProviderCredential.oauth) {
+                    com.leoyuan.leophoneagent.provider.xai.XAIModelsApi.OAUTH_API_BASE
+                } else {
+                    basePath ?: "https://api.x.ai/v1"
+                }
                 val manualBearer = if (context != null &&
                     instance.credentialType == ProviderCredential.oauth) {
                     com.leoyuan.leophoneagent.auth.OAuthManager.forInstance(context, instance)?.loadManualBearerToken()

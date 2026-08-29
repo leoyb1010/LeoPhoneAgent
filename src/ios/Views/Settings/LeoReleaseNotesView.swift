@@ -12,6 +12,17 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.30.0",
+            date: "2026-08-29",
+            title: "Grok 新模型可见，出行记录不再靠猜",
+            highlights: [
+                "Grok OAuth 改走 xAI 官方 CLI 代理和账号动态模型目录；Grok 4.6 可直接选择，有 Composer 权益时也会自动出现。OAuth 令牌不会再发往自定义地址。",
+                "说高铁行程时会先核对目的地、开车时间、车次和座位；缺什么只问什么，完整后同时写入系统日历和提醒事项。",
+                "日历事件与提醒事项补齐地点、备注和提前 30 分钟提醒；未提供到达时间时明确不做推断。",
+                "iPhone 与 iPad 共用同一套结构化意图规则；本次未启动易异常退出的模拟器，代码与无签名设备构建已在本机校验。",
+            ]
+        ),
+        LeoRelease(
             version: "1.29.0",
             date: "2026-08-29",
             title: "本机动作有回执，iPad 工作区更稳",

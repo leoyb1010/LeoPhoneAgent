@@ -14,8 +14,8 @@ import java.util.concurrent.atomic.AtomicLong
  * Entries expire after [TTL_MS] or when [clear] is called (e.g. on
  * service destroy).
  */
-class NodeRegistry {
-    private data class Entry(val node: AccessibilityNodeInfo, val createdAt: Long)
+class NodeRegistry(private val snapshotProvider: () -> String? = { null }) {
+    private data class Entry(val node: AccessibilityNodeInfo, val createdAt: Long, val snapshot: String?)
 
     private val map = ConcurrentHashMap<String, Entry>()
     private val seq = AtomicLong(0)
@@ -23,7 +23,7 @@ class NodeRegistry {
     fun put(node: AccessibilityNodeInfo): String {
         evictExpired()
         val id = nextId()
-        map[id] = Entry(node, System.currentTimeMillis())
+        map[id] = Entry(node, System.currentTimeMillis(), snapshotProvider())
         return id
     }
 
@@ -33,7 +33,15 @@ class NodeRegistry {
             map.remove(id)
             return null
         }
+        val current = snapshotProvider()
+        if (e.snapshot != null && current != null && e.snapshot != current) return null
         return e.node
+    }
+
+    fun isStale(id: String): Boolean {
+        val entry = map[id] ?: return false
+        val current = snapshotProvider()
+        return entry.snapshot != null && current != null && entry.snapshot != current
     }
 
     fun clear() { map.clear() }

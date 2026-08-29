@@ -8,9 +8,9 @@ package com.leoyuan.leophoneagent.agent
  * paraphrases the regex misses — those fall through to Reasoning.
  */
 object ActionRouter {
-    enum class Path { Native, Agent }
+    enum class Path { Native, Clarify, Agent }
     enum class Kind {
-        SavePhoto, SetAlarm, CreateCalendar, ToggleFlashlight, CreateTodo,
+        SavePhoto, SetAlarm, CreateCalendar, CreateTravel, ToggleFlashlight, CreateTodo,
         ReadClipboard, WriteClipboard, DeviceInfo,
     }
 
@@ -21,12 +21,16 @@ object ActionRouter {
         val minute: Int? = null,
         val tomorrow: Boolean = false,
         val label: String = "",
+        val location: String = "",
+        val notes: String = "",
+        val missingFields: List<String> = emptyList(),
     ) {
         val chip: String
             get() = when (kind) {
                 Kind.SavePhoto -> "系统相册"
                 Kind.SetAlarm -> "系统闹钟"
                 Kind.CreateCalendar -> "系统日历"
+                Kind.CreateTravel -> "出行记录"
                 Kind.ToggleFlashlight -> "手电筒"
                 Kind.CreateTodo -> "待办"
                 Kind.ReadClipboard, Kind.WriteClipboard -> "剪贴板"
@@ -42,6 +46,11 @@ object ActionRouter {
                 "已用系统闹钟设定 $hh:$mm，未打开界面。"
             }
             Kind.CreateCalendar -> "已用系统日历创建日程，未打开界面。"
+            Kind.CreateTravel -> if (path == Path.Clarify) {
+                "我已识别为出行记录，还需要：${missingFields.joinToString("、")}。补充后我会同时写入日历和待办提醒。"
+            } else {
+                "已把出行信息写入系统日历和本机待办，并设置提前提醒。"
+            }
             Kind.ToggleFlashlight -> if (label == "off") "已关掉手电筒。" else "已打开手电筒。"
             Kind.CreateTodo -> "已记下待办：${label.ifBlank { "待办" }}。"
             Kind.ReadClipboard -> "已读取剪贴板。"
@@ -69,6 +78,7 @@ object ActionRouter {
         flashlightOn(lower)?.let { on ->
             return Decision(Path.Native, Kind.ToggleFlashlight, label = if (on) "on" else "off")
         }
+        parseTravel(raw, lower)?.let { return it }
         if (isTodo(lower)) {
             return Decision(Path.Native, Kind.CreateTodo, label = todoTitle(raw))
         }
@@ -95,6 +105,45 @@ object ActionRouter {
             )
         }
         return Decision(Path.Agent)
+    }
+
+    /** High-precision travel record compiler; incomplete fields never reach an LLM to guess. */
+    internal fun parseTravel(raw: String, lower: String = raw.lowercase()): Decision? {
+        if (listOf("高铁", "动车", "火车", "train").none { lower.contains(it) }) return null
+        if (listOf("记录", "记下", "提醒", "行程", "日历", "record", "remind").none { lower.contains(it) }) return null
+
+        val time = parseTime(raw, lower)
+        val destination = Regex("""(?:去|到)\s*([\p{L}]{2,16}?)(?:的)?(?:高铁|动车|火车|[，,。\s])""")
+            .find(raw)?.groupValues?.getOrNull(1)?.trim().orEmpty()
+        val train = Regex("""\b([GDCZTK]\s*\d{1,4})\b""", RegexOption.IGNORE_CASE)
+            .find(raw)?.groupValues?.getOrNull(1)?.replace(" ", "")?.uppercase().orEmpty()
+        val seat = Regex("""座位(?:是|号|[：:])?\s*([0-9]{1,2}[A-Fa-f]|[0-9]{1,2}车(?:厢)?[0-9]{1,3}[A-Fa-f]?号?)""")
+            .find(raw)?.groupValues?.getOrNull(1)?.trim().orEmpty()
+        val missing = buildList {
+            if (destination.isBlank()) add("目的地")
+            if (time == null) add("开车时间")
+            if (train.isBlank()) add("车次")
+            if (seat.isBlank()) add("座位")
+        }
+        val notes = buildString {
+            if (train.isNotBlank()) append("车次：$train")
+            if (seat.isNotBlank()) {
+                if (isNotEmpty()) append("\n")
+                append("座位：$seat")
+            }
+            append("\n由 LeoPhoneAgent 记录；未提供到达时间，不做推断。")
+        }.trim()
+        return Decision(
+            path = if (missing.isEmpty()) Path.Native else Path.Clarify,
+            kind = Kind.CreateTravel,
+            hour = time?.first,
+            minute = time?.second,
+            tomorrow = isTomorrow(lower),
+            label = listOf(destination, "高铁", train).filter(String::isNotBlank).joinToString(" "),
+            location = destination,
+            notes = notes,
+            missingFields = missing,
+        )
     }
 
     internal fun isSavePhoto(lower: String): Boolean {

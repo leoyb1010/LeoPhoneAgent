@@ -1,7 +1,7 @@
 # LeoPhoneAgent
 
-[![iOS](https://img.shields.io/badge/iOS-1.29.0%20(103)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
-[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.21-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.21)
+[![iOS](https://img.shields.io/badge/iOS-1.30.0%20(104)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.22-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.22)
 [![macOS](https://img.shields.io/badge/macOS-1.78.0-7C3AED.svg)](src/mac/leocodebox/package.json)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.17-D94B16.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
@@ -62,16 +62,16 @@ bash src/harmony/scripts/build_hap.sh
 > 同一台手机上同时安装。Power 版只有在用户完成产品内授权以及 Android
 > 无障碍/Shizuku 系统授权后，才会开放更深的跨应用操控。
 
-- [下载 Standard alpha.21](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.21/LeoPhoneAgent-Standard-1.0.0-alpha.21.apk)
-- [下载 Power alpha.21](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.21/LeoPhoneAgent-Power-1.0.0-alpha.21.apk)
-- [查看本次更新记录](CHANGELOG.md#t10-alpha21)
+- [下载 Standard alpha.22](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.22/LeoPhoneAgent-Standard-1.0.0-alpha.22.apk)
+- [下载 Power alpha.22](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.22/LeoPhoneAgent-Power-1.0.0-alpha.22.apk)
+- [查看本次更新记录](CHANGELOG.md#t11-alpha22)
 - [查看完整五轮审计与交付报告](docs/ANDROID_DELIVERY_1.0.0_ALPHA1.md)
 
 SHA-256：
 
 ```text
-Standard  e23638684fa1bb14c99db7dc6d3b8974938cdd0439cdf530e4b2f661f3f7706f
-Power     5321469d3df839f187b901b59097aceaf67b82f36c27aa77123e671e69f9c016
+Standard  c2fdca85aa73940383a5f467444266c7d72aa85aea56b85d2c883fb9ed282853
+Power     e54ec4fe8379a4ed28971cd437fe51987c96e7481cd1520a4a3498f5737118a1
 ```
 
 本次公开附件使用显式开启的个人 Alpha 调试证书签名，不应作为应用商店的
@@ -134,7 +134,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 版本/构建:`1.29.0 (103)`;Bundle ID `com.leoyuan.leophoneagent`
+- 版本/构建:`1.30.0 (104)`;Bundle ID `com.leoyuan.leophoneagent`
 - iPhone / iPad 本机动作：剪贴板读写和设备信息直接走系统能力，写入后读回核对；
   支持 Foundation Models 的设备用结构化生成整理收藏与语音任务
 - iPad 工作区：分屏、台前调度和窗口缩放按正文/侧栏实际可用空间切换单双栏，
@@ -149,11 +149,15 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 Android 版本
 
-- 开发/发布版本：`1.0.0-alpha.21`（versionCode `100021`），`minSdk 26`、`targetSdk 35`、`compileSdk 36`、仅 ARM64。
+- 开发/发布版本：`1.0.0-alpha.22`（versionCode `100022`），`minSdk 26`、`targetSdk 35`、`compileSdk 36`、仅 ARM64。
 - Standard 包名：`com.leoyuan.leophoneagent`
 - Power 包名：`com.leoyuan.leophoneagent.power`
 - 两个版本共享本机 Agent、Provider、Skills、MCP、Memory、PRoot 与浏览器底座；
   Power 高权限能力通过独立构建标志和逐次危险命令确认隔离
+- Grok OAuth 固定使用 xAI 第一方 CLI 代理并读取账号动态模型目录；API Key 继续走
+  `api.x.ai`。OAuth bearer 不接受自定义根地址或跨域重定向，4.6 与权益模型不再靠静态猜测
+- 出行语句先编译成结构化意图并核对目的地/时间/车次/座位；信息完整后写系统日历、
+  30 分钟提醒和产品自有持久待办。Android 没有统一 Tasks Provider，因此不虚报“系统待办”
 - Standard 不再声明所有文件、无障碍、Shizuku 或应用列表高权限；完整目录挂载和
   跨应用操控只在 Power 出现。两版的用户发起 Agent 前台服务都使用真实的
   `dataSync|specialUse` 类型，不再伪装成媒体播放
@@ -164,6 +168,8 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 - 兼容既有 `minis://` 内部资源协议，同时新增 `leophoneagent://` 导航入口
 - Fold8 宽折叠适配：1080×1728 封面单栏、1768×2208 展开双栏，并通过
   200% 系统字体可用性验证
+- Power 无障碍节点绑定当前界面快照，换页后的旧节点无法继续点击；空闲时事件订阅归零，
+  只有明确观察期间才收必要事件。强制停止撤销授权后，已授权 Shizuku 可只恢复本服务
 - 简体中文设置、列表、按钮、弹窗与主操作 TalkBack 标签已资源化，并加入
   中文资源完整性与设置页英文硬编码构建门禁
 - Claude Code、Codex CLI、Grok Build 与 Cursor CLI 可在本机 Alpine ARM64
@@ -295,7 +301,8 @@ adb logcat -d | rg 'FATAL EXCEPTION|AndroidRuntime'
 
 | 版本 | 状态 | 处理 |
 |---|---|---|
-| alpha.21 | 当前公开附件 | 本机动作回执、产物格式、权限隔离、减少动态效果与 Fold8 200% 字体修正 |
+| alpha.22 | 当前公开附件 | Grok OAuth 动态模型、出行双写、无障碍快照与省电恢复 |
+| alpha.21 | 上一公开附件 | 本机动作回执、产物格式、权限隔离、减少动态效果与 Fold8 200% 字体修正 |
 | alpha.20 | 上一公开附件 | 打开其他 App 后继续操控；悬浮窗默认开；Power 无障碍默认放行 |
 | alpha.19 | 上一公开附件 | T7 手电筒/待办快路径 + 家页主动卡 |
 | alpha.18 | 上一公开附件 | T6 断线续上 / 短码入列 / 远程会话进列表 |

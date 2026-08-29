@@ -1,6 +1,7 @@
 package com.leoyuan.leophoneagent.accessibility
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.accessibilityservice.GestureDescription
 import android.graphics.Bitmap
 import android.graphics.ColorSpace
@@ -19,6 +20,7 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.security.MessageDigest
 
 /**
  * MinisAccessibilityService — host-side AccessibilityService backing the
@@ -53,7 +55,7 @@ class MinisAccessibilityService : AccessibilityService() {
     private val eventRing = ConcurrentLinkedQueue<RecordedEvent>()
     private val eventListeners = CopyOnWriteArrayList<(RecordedEvent) -> Unit>()
 
-    val nodeRegistry: NodeRegistry = NodeRegistry()
+    val nodeRegistry: NodeRegistry = NodeRegistry(::snapshotToken)
 
     override fun onCreate() {
         super.onCreate()
@@ -71,6 +73,8 @@ class MinisAccessibilityService : AccessibilityService() {
         // remediation is the user whitelisting autostart + battery (see
         // SystemPermissionsScreen OEM guidance).
         AppLogger.info(TAG, "service connected (manufacturer=${android.os.Build.MANUFACTURER})")
+        AccessibilityRecoveryManager.markGranted(this)
+        updateEventSubscription()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -110,11 +114,48 @@ class MinisAccessibilityService : AccessibilityService() {
 
     fun addEventListener(listener: (RecordedEvent) -> Unit) {
         eventListeners.add(listener)
+        updateEventSubscription()
     }
 
     fun removeEventListener(listener: (RecordedEvent) -> Unit) {
         eventListeners.remove(listener)
+        updateEventSubscription()
     }
+
+    /** Subscribe only while an approved watch operation is active. */
+    private fun updateEventSubscription() {
+        val info = serviceInfo ?: return
+        if (eventListeners.isEmpty()) {
+            info.eventTypes = 0
+            info.flags = info.flags and AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS.inv()
+        } else {
+            info.eventTypes = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
+                AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED or
+                AccessibilityEvent.TYPE_VIEW_CLICKED or
+                AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED or
+                AccessibilityEvent.TYPE_VIEW_SCROLLED
+        }
+        serviceInfo = info
+    }
+
+    /** Stable-enough token binding node handles to the current package/window/tree. */
+    fun snapshotToken(): String? = runCatching {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val roots = rootNodes()
+        if (roots.isEmpty()) return@runCatching null
+        var remaining = 160
+        fun visit(node: AccessibilityNodeInfo?, depth: Int) {
+            if (node == null || depth > 12 || remaining-- <= 0) return
+            digest.update((node.packageName?.toString().orEmpty() + "|" +
+                node.className?.toString().orEmpty() + "|" +
+                node.viewIdResourceName.orEmpty() + "|" +
+                node.text?.toString().orEmpty().take(80) + "|" +
+                node.childCount).toByteArray())
+            for (index in 0 until node.childCount) visit(node.getChild(index), depth + 1)
+        }
+        roots.forEach { visit(it, 0) }
+        digest.digest().take(12).joinToString("") { "%02x".format(it) }
+    }.getOrNull()
 
     fun rootNodes(): List<AccessibilityNodeInfo> {
         val out = ArrayList<AccessibilityNodeInfo>()

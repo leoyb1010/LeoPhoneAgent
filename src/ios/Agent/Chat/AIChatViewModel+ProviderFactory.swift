@@ -197,8 +197,8 @@ extension AIChatViewModel {
                 return respProvider
             }
         case .xAI:
-            let xaiBase = customBase ?? "https://api.x.ai/v1"
-            let xaiAppendV1 = customBase == nil ? false : appendV1
+            let xaiBase = instance.credentialType == .oauth ? XAIModelsAPI.oauthAPIBase : (customBase ?? "https://api.x.ai/v1")
+            let xaiAppendV1 = instance.credentialType == .oauth ? false : (customBase == nil ? false : appendV1)
             switch instance.credentialType {
             case .apiKey:
                 guard let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) else {

@@ -116,4 +116,25 @@ final class AgentChatCorrectnessTests: XCTestCase {
             userDidCancel: false, messageId: nil, expectedMessageId: nil
         ))
     }
+
+    func testTravelIntentClarifiesMissingFieldsAndNeverGuesses() {
+        let partial = ActionRouter.decide(
+            text: "帮我记录明天下午19:00要去北京的高铁，车次是，座位是",
+            imageCount: 0
+        )
+        XCTAssertEqual(partial.path, .clarify)
+        XCTAssertEqual(partial.kind, .createTravel)
+        XCTAssertEqual(partial.location, "北京")
+        XCTAssertEqual(partial.missingFields, ["车次", "座位"])
+
+        let complete = ActionRouter.decide(
+            text: "记录明天下午19:00去北京的高铁 G1234，座位12A",
+            imageCount: 0
+        )
+        XCTAssertEqual(complete.path, .native)
+        XCTAssertEqual(complete.kind, .createTravel)
+        XCTAssertEqual(complete.hour, 19)
+        XCTAssertTrue(complete.notes.contains("G1234"))
+        XCTAssertTrue(complete.notes.contains("12A"))
+    }
 }

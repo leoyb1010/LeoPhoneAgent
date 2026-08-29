@@ -2612,6 +2612,10 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
             let imageCount = pendingAttachments.filter { $0.kind == .image }.count
             let route = ActionRouter.decide(text: text, imageCount: imageCount)
+            if route.path == .clarify {
+                await self.finishNativeRoute(route, spoken: route.spoken())
+                return
+            }
             if route.path == .native,
                let nativeSpoken = await self.executeNativeRoute(route, imageURL: firstImageHost) {
                 await self.finishNativeRoute(route, spoken: nativeSpoken)

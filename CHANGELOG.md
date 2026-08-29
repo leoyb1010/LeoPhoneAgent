@@ -4,6 +4,35 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+<a id="t11-alpha22"></a>
+## T11 · iOS 1.30.0 (104) / Android 1.0.0-alpha.22 - 2026-08-29
+
+### 用户可见
+
+- Grok OAuth 改为读取 xAI 第一方 CLI 代理的账号动态目录：Grok 4.6 作为可靠 fallback，有 Composer 权益时由实时目录显示，不再把 API Key 与 OAuth 混在同一个地址。
+- “记录明天下午 19:00 去北京的高铁”会先核对目的地、时间、车次和座位；缺字段时不让模型猜，完整后 iOS 同时写系统日历和提醒事项，Android 同时写系统日历与产品自有持久待办。
+- 日历/待办补齐地点、备注和提前 30 分钟提醒；未提供到达时间时明确不推断。
+- Android Power 的节点 ID 绑定当前界面快照，换页后旧节点不能继续点击；无障碍被强制停止撤销时，可在 Shizuku 已授权的前提下恢复本服务且不覆盖 TalkBack 等其他服务。
+- 无障碍空闲时不再订阅全量系统事件，只有用户明确启动事件观察时才临时订阅必要事件类型。
+
+### 工程根因
+
+- 原 xAI OAuth 与 API Key 都走 `api.x.ai/v1` 且共用静态模型表，导致 OAuth 权益模型不可见，也存在把 OAuth bearer 发往自定义根地址的风险。现在 OAuth 固定走 `cli-chat-proxy.grok.com/v1`，禁止重定向并按 OIDC `sub` 发送 `x-userid`。
+- 原双端本机动作只识别显式“日历/待办”关键词，复杂出行语句直接交给模型猜；本次加入相同语义的双端结构化意图编译和缺字段闸门。
+- 原 Android 无障碍使用 `typeAllMask`，节点句柄只靠 60 秒 TTL；本次改为运行时最小事件订阅和界面快照绑定。
+
+### 已执行验证
+
+- Android：Standard/Power 各 586 项单测（各 1 项设备条件用例跳过）；中文资源/设置闸门、双 Release lint（0 error）和双 Release APK 构建通过。
+- 固定个人 Alpha 签名、包名、versionCode `100022`、versionName `1.0.0-alpha.22` / `1.0.0-alpha.22-power` 通过。SHA-256：Standard `c2fdca85aa73940383a5f467444266c7d72aa85aea56b85d2c883fb9ed282853`；Power `e54ec4fe8379a4ed28971cd437fe51987c96e7481cd1520a4a3498f5737118a1`。
+- Fold8 API 35 模拟器：alpha.21 → alpha.22 两包覆盖安装均为 `Success`；两包冷启动、`ASSIST`、PID 与 Logcat 通过。1080×1728 封面、1768×2208 展开和 200% 字体截图复验，UI 树无越界节点；“本次更新”实际弹出且内容为 alpha.22。
+- iOS/iPad：MinisLogicTests 测试产物无启动模拟器构建成功；`generic/platform=iOS` 无签名设备构建成功；`IOSReleaseReadinessAudit` 对 1.30.0 (104) 与首启更新说明校验通过。真机安装由用户在另一台机器执行。
+
+### 边界
+
+- Android 没有跨厂商统一 Tasks Provider，因此持久待办由 LeoPhoneAgent 自己保存并用系统通知到期提醒；不冒充已写入不存在的“系统待办”。
+- OAuth 动态目录不可用时只回退到公开确认模型；Composer 不会在无权益账号上被静态伪造。
+
 <a id="t10-alpha21"></a>
 ## T10 · iOS 1.29.0 (103) / Android 1.0.0-alpha.21 - 2026-08-29
 

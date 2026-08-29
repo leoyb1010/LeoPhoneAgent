@@ -356,7 +356,14 @@ extension AIChatViewModel {
             return route.spoken()
         case .createCalendar:
             guard let hour = route.hour, let minute = route.minute,
-                  await createNativeEvent(hour: hour, minute: minute, tomorrow: route.tomorrow, title: route.label) else { return nil }
+                  await createNativeEvent(hour: hour, minute: minute, tomorrow: route.tomorrow, title: route.label, notes: route.notes, location: route.location) else { return nil }
+            return route.spoken()
+        case .createTravel:
+            guard let hour = route.hour, let minute = route.minute else { return nil }
+            let due = nativeDate(hour: hour, minute: minute, tomorrow: route.tomorrow)
+            guard let due,
+                  await createNativeEvent(hour: hour, minute: minute, tomorrow: route.tomorrow, title: route.label, notes: route.notes, location: route.location),
+                  await FastLocalActions.addTodo(route.label, dueDate: due, notes: route.notes) else { return nil }
             return route.spoken()
         case .toggleFlashlight:
             return FastLocalActions.setTorch(route.label != "off") ? route.spoken() : nil
@@ -431,7 +438,24 @@ extension AIChatViewModel {
         return false
     }
 
-    private func createNativeEvent(hour: Int, minute: Int, tomorrow: Bool, title: String) async -> Bool {
+    private func nativeDate(hour: Int, minute: Int, tomorrow: Bool) -> Date? {
+        var comps = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        if tomorrow, let day = Calendar.current.date(byAdding: .day, value: 1, to: Date()) {
+            comps = Calendar.current.dateComponents([.year, .month, .day], from: day)
+        }
+        comps.hour = hour
+        comps.minute = minute
+        return Calendar.current.date(from: comps)
+    }
+
+    private func createNativeEvent(
+        hour: Int,
+        minute: Int,
+        tomorrow: Bool,
+        title: String,
+        notes: String = "",
+        location: String = ""
+    ) async -> Bool {
         let store = EKEventStore()
         let granted: Bool
         if #available(iOS 17.0, *) {
@@ -442,17 +466,14 @@ extension AIChatViewModel {
             }
         }
         guard granted else { return false }
-        var comps = Calendar.current.dateComponents([.year, .month, .day], from: Date())
-        if tomorrow, let day = Calendar.current.date(byAdding: .day, value: 1, to: Date()) {
-            comps = Calendar.current.dateComponents([.year, .month, .day], from: day)
-        }
-        comps.hour = hour
-        comps.minute = minute
-        guard let start = Calendar.current.date(from: comps) else { return false }
+        guard let start = nativeDate(hour: hour, minute: minute, tomorrow: tomorrow) else { return false }
         let ev = EKEvent(eventStore: store)
         ev.title = title.isEmpty ? "日程" : title
         ev.startDate = start
         ev.endDate = start.addingTimeInterval(3600)
+        ev.notes = notes.isEmpty ? nil : notes
+        ev.location = location.isEmpty ? nil : location
+        ev.addAlarm(EKAlarm(relativeOffset: -30 * 60))
         ev.calendar = store.defaultCalendarForNewEvents
         do {
             try store.save(ev, span: .thisEvent)
@@ -482,7 +503,7 @@ enum FastLocalActions {
         }
     }
 
-    static func addTodo(_ title: String) async -> Bool {
+    static func addTodo(_ title: String, dueDate: Date? = nil, notes: String = "") async -> Bool {
         let store = EKEventStore()
         let granted: Bool
         if #available(iOS 17.0, *) {
@@ -495,6 +516,14 @@ enum FastLocalActions {
         guard granted else { return false }
         let reminder = EKReminder(eventStore: store)
         reminder.title = title
+        reminder.notes = notes.isEmpty ? nil : notes
+        if let dueDate {
+            reminder.dueDateComponents = Calendar.current.dateComponents(
+                [.year, .month, .day, .hour, .minute],
+                from: dueDate
+            )
+            reminder.addAlarm(EKAlarm(absoluteDate: dueDate.addingTimeInterval(-30 * 60)))
+        }
         reminder.calendar = store.defaultCalendarForNewReminders()
         do {
             try store.save(reminder, commit: true)

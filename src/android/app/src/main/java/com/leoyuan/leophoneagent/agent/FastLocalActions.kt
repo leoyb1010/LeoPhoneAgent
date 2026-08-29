@@ -10,10 +10,13 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.leoyuan.leophoneagent.R
 import com.leoyuan.leophoneagent.service.SessionTaskStatus
+import org.json.JSONArray
+import org.json.JSONObject
+import java.util.UUID
 
 /**
  * Offline native actions for T7. Regex routing lives in [ActionRouter];
- * this object only flips the torch and parks a todo notice.
+ * this object only flips the torch and persists a lightweight local todo.
  *
  * ponytail: no GGUF, no second loop. Ceiling is OEM torch quirks —
  * setTorchMode throwing falls through to the existing agent path.
@@ -35,8 +38,9 @@ object FastLocalActions {
         }
     }
 
-    fun addTodo(context: Context, title: String): Boolean {
+    fun addTodo(context: Context, title: String, dueAtMs: Long? = null, notes: String = ""): Boolean {
         val text = title.ifBlank { "待办" }
+        LocalTodoStore(context).add(text, dueAtMs, notes)
         SessionTaskStatus.setLastTodo(text)
         ensureChannel(context)
         val note = NotificationCompat.Builder(context, CHANNEL)
@@ -65,4 +69,28 @@ object FastLocalActions {
             NotificationChannel(CHANNEL, "待办", NotificationManager.IMPORTANCE_DEFAULT),
         )
     }
+}
+
+/** Product-owned durable reminders for Android, which has no universal Tasks provider. */
+internal class LocalTodoStore(context: Context) {
+    private val prefs = context.getSharedPreferences("leo_local_todos", Context.MODE_PRIVATE)
+
+    @Synchronized
+    fun add(title: String, dueAtMs: Long?, notes: String): String {
+        val id = UUID.randomUUID().toString()
+        val entries = load()
+        entries.put(JSONObject()
+            .put("id", id)
+            .put("title", title)
+            .put("notes", notes)
+            .put("created_at_ms", System.currentTimeMillis())
+            .apply { dueAtMs?.let { put("due_at_ms", it) } }
+            .put("completed", false))
+        prefs.edit().putString("entries", entries.toString()).commit()
+        return id
+    }
+
+    fun load(): JSONArray = runCatching {
+        JSONArray(prefs.getString("entries", "[]") ?: "[]")
+    }.getOrDefault(JSONArray())
 }

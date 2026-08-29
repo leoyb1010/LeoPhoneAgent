@@ -10,6 +10,7 @@ import android.view.Display
 import android.view.accessibility.AccessibilityNodeInfo
 import com.leoyuan.leophoneagent.accessibility.MinisAccessibilityService
 import com.leoyuan.leophoneagent.accessibility.NodeRegistry
+import com.leoyuan.leophoneagent.accessibility.AccessibilityRecoveryManager
 import com.leoyuan.leophoneagent.logging.AppLogger
 import com.leoyuan.leophoneagent.sandbox.NativeOffloadHandler
 import com.leoyuan.leophoneagent.sandbox.NativeOffloadRequest
@@ -104,6 +105,19 @@ First-run: enable "LeoPhoneAgent" under Settings → Accessibility, then `servic
                     "PERMISSION_DENIED",
                     "Agent is not allowed to use android-a11y-cli. Open Settings → Permissions → Integrations to change.",
                 )
+            }
+            if (MinisAccessibilityService.getInstance() == null) {
+                val recovered = kotlinx.coroutines.runBlocking {
+                    AccessibilityRecoveryManager.ensureUsable(context)
+                }
+                if (!recovered) {
+                    return err(
+                        args,
+                        "SERVICE_NOT_RUNNING",
+                        "Accessibility is not connected. If the app was force-stopped, re-enable LeoPhoneAgent in Settings → Accessibility; Power can restore it automatically when Shizuku is authorized.",
+                        exit = 77,
+                    )
+                }
             }
         }
         // [T-bg-overlay phase 2 fix] Surface a11y sub-action progress to
