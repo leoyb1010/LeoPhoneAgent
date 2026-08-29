@@ -9,6 +9,7 @@ import express from 'express';
 
 import {
   CLI_TOOLS,
+  bundledCodexHostExecutable,
   classifyInstallSource,
   clearCliLatestVersionCache,
   deriveNpmPrefixFromCopyPath,
@@ -31,6 +32,17 @@ const opencode = {
   npmPackage: 'opencode-ai',
   updateArgs: null,
 };
+
+test('bundled CodexHost payload is the exact runnable upstream release', async () => {
+  const executable = bundledCodexHostExecutable();
+  assert.equal((await fs.stat(executable)).isFile(), true);
+  const status = await getCliToolStatus(CLI_TOOLS.codexhost, { checkLatest: false });
+  assert.equal(status.installed, true);
+  assert.equal(status.runnable, true);
+  assert.equal(status.currentVersion, '0.3.5');
+  assert.equal(status.installSource, 'app-bundled');
+  assert.equal(status.canLaunch, true);
+});
 
 test('CLI install source detection uses strict known path segments', async () => {
   assert.equal((await detectCliInstallSource(opencode, async () => '/opt/homebrew/Cellar/opencode/1/bin/opencode')).source, 'homebrew');

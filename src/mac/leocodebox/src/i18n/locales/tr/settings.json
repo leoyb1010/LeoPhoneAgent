@@ -351,6 +351,8 @@
       "commandMissing": "Local command {{command}} was not found",
       "update": "Güncelle",
       "install": "Yükle",
+      "launch": "CodexHost'u Aç",
+      "launchSuccess": "CodexHost başlatıldı. LeoAPI ve telefon aktarımı arka planda çalışmaya devam ediyor.",
       "installationGuide": "Kurulum rehberi",
       "loadFailed": "Yerel ajan durumu okunamadı",
       "installSuccess": "{{tool}} installed ({{version}}).",

@@ -353,6 +353,8 @@
       "commandMissing": "找不到本機指令 {{command}}",
       "update": "更新",
       "install": "安裝",
+      "launch": "開啟 CodexHost",
+      "launchSuccess": "CodexHost 已啟動；LeoAPI 與手機中繼會繼續在背景運作。",
       "installationGuide": "安裝說明",
       "loadFailed": "無法讀取本機代理狀態",
       "installSuccess": "{{tool}} 已安裝（{{version}}）。",

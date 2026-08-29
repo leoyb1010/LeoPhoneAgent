@@ -351,6 +351,8 @@
       "commandMissing": "Local command {{command}} was not found",
       "update": "Обновить",
       "install": "Установить",
+      "launch": "Открыть CodexHost",
+      "launchSuccess": "CodexHost запущен. LeoAPI и мобильный ретранслятор продолжают работать в фоне.",
       "installationGuide": "Инструкция",
       "loadFailed": "Не удалось прочитать состояние локальных агентов",
       "installSuccess": "{{tool}} installed ({{version}}).",

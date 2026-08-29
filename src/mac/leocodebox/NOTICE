@@ -27,3 +27,7 @@ formatting (electron/trayQuota.js) follow the layout and information design of
 CodexBar by Peter Steinberger — https://github.com/steipete/CodexBar — which is
 distributed under the MIT License. Data acquisition in leocodebox is its own
 implementation reading local CLI state; no CodexBar source is bundled.
+CodexHost 0.3.5
+Copyright (c) BytePioneer-AI contributors
+Licensed under the MIT License. Source: https://github.com/BytePioneer-AI/codex-host
+The bundled @codexhost/cli package carries its own THIRD_PARTY_NOTICES and license texts.

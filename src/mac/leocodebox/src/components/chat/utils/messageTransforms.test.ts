@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { calculateDiff, createCachedDiffCalculator } from './messageTransforms';
+import { calculateDiff, createCachedDiffCalculator, type DiffLine } from './messageTransforms';
 
 test('calculateDiff treats null/undefined/non-string sides as empty', () => {
   assert.deepEqual(calculateDiff(null as never, 'hello'), [
@@ -21,7 +21,7 @@ test('calculateDiff aligns a small insertion without rewriting the rest', () => 
 test('calculateDiff does not allocate an LCS table for huge files', () => {
   const oldStr = Array.from({ length: 1200 }, (_, i) => `old-${i}`).join('\n');
   const newStr = `header\n${oldStr}`;
-  let diff;
+  let diff: DiffLine[] | undefined;
   assert.doesNotThrow(() => {
     diff = calculateDiff(oldStr, newStr);
   });

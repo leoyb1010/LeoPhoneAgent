@@ -17,6 +17,15 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '1.79.0',
+    date: '2026-08-30',
+    items: [
+      '内置 CodexHost 0.3.5：可把 Pi、Oh My Pi、Claude Code、Grok Build 和 DeepSeek Harness 作为 Codex Desktop 里的原生任务运行，保留流式输出、工具状态、Diff、审批、Usage、Fork 与压缩。',
+      '设置 → Agent → 本机智能体新增 CodexHost 状态与「打开 CodexHost」按钮；使用随包固定版本，不依赖另一份全局安装。',
+      'LeoAPI、手机中继、模型快捷配置和现有 leocodebox 工作台继续运行；CodexHost 只接管 Codex Desktop 的 Harness 投影，不读取或替换 LeoAPI 凭据。',
+    ],
+  },
+  {
     version: '1.78.0',
     date: '2026-08-27',
     items: [

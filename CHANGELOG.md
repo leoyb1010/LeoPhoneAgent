@@ -4,6 +4,27 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## Mac 1.79.0 · CodexHost 原生 Harness 工作台 - 2026-08-30
+
+### 用户可见
+
+- 随包内置 BytePioneer-AI/codex-host 0.3.5 官方完整载荷；在「设置 → Agent → 本机智能体」可直接看到固定版本并打开 CodexHost。
+- Codex Desktop 里可把 Pi、Oh My Pi、Claude Code、Grok Build 与 DeepSeek Harness 当作原生任务，保留流式输出、工具状态、Edit Diff、审批、Usage、Fork、压缩、斜杠命令和上一轮修订等上游能力。
+- LeoAPI、手机中继、模型快捷配置、Fleet 和原 leocodebox 工作区保留。CodexHost 不接触 LeoAPI 密钥，只负责 Codex Desktop 的 Harness 投影。
+
+### 工程与安全边界
+
+- 直接依赖精确版本 `@codexhost/cli@0.3.5` 及平台签名载荷，避免复制几十个适配器后与指定仓库漂移；MIT 来源与第三方许可写入 NOTICE 并随包分发。
+- 启动接口仅允许本机认证请求，不接受任意命令、路径或参数；随包二进制路径由 Node 模块解析并验证为普通文件。
+- CodexHost 会重启/接管 Codex Desktop，因此当前 Codex 开发任务内只执行 `--version`、路径和契约测试，不现场点击启动造成自杀式中断。
+
+### 验证
+
+- `verify:release-notes`、TypeScript 类型检查、零警告 ESLint、0 漏洞 npm audit 与生产构建通过；桌面 37、客户端 158、服务端 368，共 563 项测试通过。
+- 精确载荷单测确认随包 CodexHost 为 0.3.5 且 launcher 可执行；DMG 只读挂载后再次核对 App 1.79.0、CodexHost 0.3.5、36 个嵌套 Mach-O 与主 App Developer ID 签名。
+- DMG SHA-256 `012688f15295ea2833f10db98501d635a1ef3b92f064c4cda687bc2e7554ab4b`；热更新 ZIP SHA-256 `fd3b40e037664c9de0003f47d9f2bb6b297eda1d9c4974eabba11125bb2c9c19`。
+- 本机缺少 notarytool profile，Gatekeeper 明确报告 `Unnotarized Developer ID`；不把未完成公证写成已完成。既有同 TeamIdentifier 热更新链可用，首次下载安装仍需用户确认。
+
 <a id="t11-alpha22"></a>
 ## T11 · iOS 1.30.0 (104) / Android 1.0.0-alpha.22 - 2026-08-29
 

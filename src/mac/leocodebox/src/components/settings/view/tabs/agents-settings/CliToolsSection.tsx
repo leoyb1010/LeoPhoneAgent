@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowDownToLine, ArrowUpCircle, CheckCircle2, CircleHelp, Copy, FileDown, Loader2, RefreshCw } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpCircle, CheckCircle2, CircleHelp, Copy, FileDown, Loader2, Play, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { apiClient, apiRequest  } from '../../../../../utils/apiClient';
@@ -35,6 +35,7 @@ export type CliToolStatus = {
   newestCopyVersion?: string | null;
   canInstall: boolean;
   canSelfUpdate: boolean;
+  canLaunch?: boolean;
   mutationsAllowed: boolean;
   manualHint?: string | null;
   docsUrl?: string;
@@ -172,6 +173,19 @@ export default function CliToolsSection({ onToolsChange }: CliToolsSectionProps)
     for (const tool of updateable) await runAction(tool, 'update');
   }, [runAction, updateable]);
 
+  const launchCodexHost = useCallback(async () => {
+    setUpdating('codexhost-launch');
+    setMessage(null);
+    try {
+      const data = await apiRequest('/api/leocodebox/cli/codexhost/launch', { method: 'POST' }) as CliActionResponse;
+      setMessage(data?.success ? t('agents.cliTools.launchSuccess') : (data?.error ?? t('agents.cliTools.unknownError')));
+    } catch (error) {
+      setMessage(t('agents.cliTools.actionFailed', { tool: 'CodexHost', action: t('agents.cliTools.launch'), error: error instanceof Error ? error.message : t('agents.cliTools.unknownError') }));
+    } finally {
+      setUpdating(null);
+    }
+  }, [t]);
+
   return (
     <div className="border-b border-border/60 bg-muted/20 px-4 py-3 md:px-6">
       <div className="mb-2 flex items-center justify-between">
@@ -284,6 +298,16 @@ export default function CliToolsSection({ onToolsChange }: CliToolsSectionProps)
               >
                 {updating === tool.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <ArrowUpCircle className="h-3 w-3" />}
                 {tool.updateAvailable ? t('agents.cliTools.update') : t('agents.cliTools.checkAndUpdate')}
+              </button>
+            )}
+            {tool.id === 'codexhost' && tool.canLaunch && (
+              <button
+                onClick={() => void launchCodexHost()}
+                disabled={updating !== null || !mutationsAllowed}
+                className="inline-flex flex-shrink-0 items-center gap-1 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+              >
+                {updating === 'codexhost-launch' ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}
+                {t('agents.cliTools.launch')}
               </button>
             )}
             {tool.installed && tool.runnable && !tool.canSelfUpdate && tool.manualHint && (

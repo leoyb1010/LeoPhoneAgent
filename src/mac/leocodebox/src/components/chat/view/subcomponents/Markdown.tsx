@@ -15,6 +15,7 @@ type MarkdownProps = {
   children: React.ReactNode;
   className?: string;
 };
+type ReactMarkdownProps = React.ComponentProps<typeof ReactMarkdown>;
 
 // Links to the wider web (or in-page anchors) keep normal browser navigation;
 // everything else is treated as a workspace file reference.
@@ -174,12 +175,15 @@ const markdownComponents = {
 
 export function Markdown({ children, className }: MarkdownProps) {
   const content = normalizeInlineCodeFences(String(children ?? ''));
-  const remarkPlugins = useMemo(() => [remarkGfm, remarkMath], []);
+  const remarkPlugins = useMemo<NonNullable<ReactMarkdownProps['remarkPlugins']>>(() => [remarkGfm, remarkMath], []);
   // KaTeX defaults to throwOnError: true. Claude mid-task replies often
   // contain `$PATH`, `$HOME`, or half-closed `$$` that remark-math treats as
   // TeX; one ParseError used to blank the whole chat ErrorBoundary, and
   // Reload remounted the same message so the session stayed dead.
-  const rehypePlugins = useMemo(() => [[rehypeKatex, { throwOnError: false }]], []);
+  const rehypePlugins = useMemo<NonNullable<ReactMarkdownProps['rehypePlugins']>>(
+    () => [[rehypeKatex, { throwOnError: false }]],
+    [],
+  );
   const { openFileInEditor } = usePaletteOps();
 
   const components = useMemo(

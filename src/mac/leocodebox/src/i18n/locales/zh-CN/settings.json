@@ -354,6 +354,8 @@
       "commandMissing": "未找到本机命令 {{command}}",
       "update": "更新",
       "install": "安装",
+      "launch": "打开 CodexHost",
+      "launchSuccess": "CodexHost 已启动；LeoAPI 与手机中继继续在后台工作。",
       "installationGuide": "安装说明",
       "loadFailed": "无法读取本机智能体状态",
       "installSuccess": "{{tool}} 已安装（{{version}}）。",

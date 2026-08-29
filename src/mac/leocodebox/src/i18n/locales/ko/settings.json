@@ -351,6 +351,8 @@
       "commandMissing": "Local command {{command}} was not found",
       "update": "업데이트",
       "install": "설치",
+      "launch": "CodexHost 열기",
+      "launchSuccess": "CodexHost가 시작되었습니다. LeoAPI와 휴대폰 릴레이는 백그라운드에서 계속 실행됩니다.",
       "installationGuide": "설치 안내",
       "loadFailed": "로컬 에이전트 상태를 읽을 수 없습니다",
       "installSuccess": "{{tool}} installed ({{version}}).",

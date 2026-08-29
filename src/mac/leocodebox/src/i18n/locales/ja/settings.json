@@ -351,6 +351,8 @@
       "commandMissing": "Local command {{command}} was not found",
       "update": "更新",
       "install": "インストール",
+      "launch": "CodexHost を開く",
+      "launchSuccess": "CodexHost を起動しました。LeoAPI とスマートフォン中継はバックグラウンドで動作し続けます。",
       "installationGuide": "インストール手順",
       "loadFailed": "ローカルエージェントの状態を取得できません",
       "installSuccess": "{{tool}} installed ({{version}}).",

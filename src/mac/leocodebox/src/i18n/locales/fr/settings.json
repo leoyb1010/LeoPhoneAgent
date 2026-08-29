@@ -351,6 +351,8 @@
       "commandMissing": "Local command {{command}} was not found",
       "update": "Mettre à jour",
       "install": "Installer",
+      "launch": "Ouvrir CodexHost",
+      "launchSuccess": "CodexHost est lancé. LeoAPI et le relais mobile restent actifs en arrière-plan.",
       "installationGuide": "Guide d’installation",
       "loadFailed": "Impossible de lire l’état des agents locaux",
       "installSuccess": "{{tool}} installed ({{version}}).",

@@ -15,7 +15,7 @@
 
 ## ⬇️ 下载
 
-[![下载 DMG](https://img.shields.io/badge/下载-LeoPhoneAgent%20Mac%201.78.0%20(arm64)-brightgreen?style=for-the-badge)](https://github.com/leoyb1010/leocodebox-updates/releases/latest)
+[![下载 DMG](https://img.shields.io/badge/下载-LeoPhoneAgent%20Mac%201.79.0%20(arm64)-brightgreen?style=for-the-badge)](https://github.com/leoyb1010/leocodebox-updates/releases/latest)
 
 - **最新版本**：<https://github.com/leoyb1010/leocodebox-updates/releases/latest>
 - **当前源码版本**：`1.78.0`
@@ -23,7 +23,7 @@
 - **源码**：<https://github.com/leoyb1010/LeoPhoneAgent/tree/main/src/mac/leocodebox>
 - **Issues**：<https://github.com/leoyb1010/LeoPhoneAgent/issues>
 
-1.78.0 已用本机 `Developer ID Application: leo yuan (48H5Y3LNUK)` 签名，并发布到 `leocodebox-updates`（`v1.78.0` + `latest-mac.yml`）。本机 `/Applications` 只留这一份。公证钥匙串 profile `leocodebox` 本机不在，所以没有 stapler 钉章；热更新仍走同一 TeamIdentifier 的签名链。补公证：`xcrun notarytool store-credentials` 后跑 `npm run desktop:notarize:mac`。
+1.79.0 已用本机 `Developer ID Application: leo yuan (48H5Y3LNUK)` 签名，待发布到 `leocodebox-updates`（`v1.79.0` + `latest-mac.yml`）。公证钥匙串 profile `leocodebox` 本机不在，所以没有 stapler 钉章；热更新继续走同一 TeamIdentifier 的签名链。补公证：`xcrun notarytool store-credentials` 后跑 `npm run desktop:notarize:mac`。
 
 ---
 
@@ -154,3 +154,13 @@ dist/ dist-server/  构建产物（不入库）
 leocodebox 以 **AGPL-3.0-or-later** 分发。
 
 本项目基于 CloudCLI UI（`https://github.com/siteboon/claudecodeui`），并在 `LICENSE` 与 `NOTICE` 中保留所需的法律声明与第三方归属。请勿移除这些声明。
+
+### CodexHost 原生 Harness 模式
+
+1.79.0 起随包内置 [CodexHost 0.3.5](https://github.com/BytePioneer-AI/codex-host) 的官方完整载荷。
+在「设置 → Agent → 本机智能体」点「打开 CodexHost」，即可在 Codex Desktop 中使用 Pi、
+Oh My Pi、Claude Code、Grok Build 与 DeepSeek Harness；流式输出、工具状态、Diff、审批、
+Usage、Fork、上下文压缩和斜杠命令由各 Harness 原生适配器投影，不退化成通用聊天协议。
+
+CodexHost 与本工作台职责分离：它增强 Codex Desktop；LeoAPI、本机 Provider、手机中继、
+Fleet 与热更新仍由 leocodebox 提供。随包版本固定并参与构建/测试，用户无需额外全局安装。

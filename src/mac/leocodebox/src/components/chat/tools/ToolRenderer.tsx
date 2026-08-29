@@ -256,6 +256,9 @@ export const ToolRenderer: React.FC<ToolRendererProps> = memo(({
           contentComponent = (
             <ToolDiffViewer
               {...contentProps}
+              oldContent={typeof contentProps.oldContent === 'string' ? contentProps.oldContent : ''}
+              newContent={typeof contentProps.newContent === 'string' ? contentProps.newContent : ''}
+              filePath={typeof contentProps.filePath === 'string' ? contentProps.filePath : ''}
               createDiff={createDiff}
               onFileClick={() => onFileOpen?.(contentProps.filePath)}
             />

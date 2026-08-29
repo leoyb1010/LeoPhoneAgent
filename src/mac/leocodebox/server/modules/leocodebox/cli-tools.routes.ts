@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 
 import express from 'express';
 
@@ -10,6 +11,7 @@ import { mutationsAllowed, requireLocalOnly } from '../../shared/local-only.js';
 import { compareSemver, fetchJson } from './version-network.utils.js';
 
 const router = express.Router();
+const require = createRequire(import.meta.url);
 
 type CliInstallSource = 'unknown' | 'homebrew' | 'pnpm' | 'volta' | 'bun' | 'npm-global' | 'app-bundled' | 'standalone' | 'shim' | 'not-installed';
 type CliTool = {
@@ -111,7 +113,32 @@ export const CLI_TOOLS: Record<string, CliTool> = {
     npmPackage: null,
     docsUrl: 'https://grok.com/build',
   },
+  codexhost: {
+    id: 'codexhost',
+    label: 'CodexHost',
+    cmd: 'codexhost',
+    updateArgs: null,
+    install: { command: 'npm', args: ['install', '--global', '@codexhost/cli@latest'] },
+    npmPackage: '@codexhost/cli',
+    docsUrl: 'https://github.com/BytePioneer-AI/codex-host',
+  },
 };
+
+export function bundledCodexHostExecutable(
+  platform = process.platform,
+  arch = process.arch,
+): string {
+  const suffix = platform === 'darwin' ? 'darwin' : platform === 'win32' ? 'win32' : 'linux';
+  const pkg = `@codexhost/cli-${suffix}-${arch}`;
+  const manifest = require.resolve(`${pkg}/package.json`);
+  return path.join(path.dirname(manifest), 'bin', platform === 'win32' ? 'codexhost.exe' : 'codexhost');
+}
+
+export function bundledCodexHostVersion(): string {
+  const manifest = require('@codexhost/cli/package.json') as { version?: string };
+  if (!manifest.version) throw new Error('Bundled CodexHost version metadata is missing.');
+  return manifest.version;
+}
 
 function parseCliVersionText(output: unknown): string | null {
   if (!output) return null;
@@ -173,7 +200,7 @@ export function classifyInstallSource(executablePath: string): CliInstallSource 
   if (/(^|\/)(Cellar|Caskroom)(\/|$)/i.test(normalized)) {
     return 'homebrew';
   }
-  if (normalized.includes('.app/Contents/')) {
+  if (normalized.includes('.app/Contents/') || normalized.includes('/node_modules/@codexhost/cli-')) {
     return 'app-bundled';
   }
   if (/(^|\/)(\.asdf|\.local\/share\/mise|mise)\/shims(\/|$)/i.test(normalized)) {
@@ -236,6 +263,10 @@ export async function discoverCliCopies(tool: CliTool): Promise<CliCopy[]> {
     throw new TransientProbeError(`which ${tool.cmd}: ${lookup.error}`);
   }
   const rawPaths = lookup.ok ? lookup.stdout.trim().split(/\r?\n/).map((line) => line.trim()).filter(Boolean) : [];
+  if (tool.id === 'codexhost') {
+    const bundled = bundledCodexHostExecutable();
+    if (!rawPaths.includes(bundled)) rawPaths.unshift(bundled);
+  }
 
   const copies: CliCopy[] = [];
   const seenRealPaths = new Set<string>();
@@ -258,6 +289,10 @@ export async function discoverCliCopies(tool: CliTool): Promise<CliCopy[]> {
   }
 
   await Promise.all(copies.map(async (copy) => {
+    if (tool.id === 'codexhost' && copy.source === 'app-bundled') {
+      copy.version = bundledCodexHostVersion();
+      return;
+    }
     const probe = await runCliCommand(copy.path, ['--version'], 5000);
     copy.version = probe.ok ? parseCliVersionText(`${probe.stdout}\n${probe.stderr}`) : null;
   }));
@@ -528,7 +563,9 @@ export async function getCliToolStatus(tool: CliTool, { checkLatest = true, forc
   const installSource: CliInstallSource = active ? active.source : 'not-installed';
   const updateCommand = runnable ? await resolveCliUpdateCommand(tool, installSource, active) : null;
   const allowMutations = mutationsAllowed();
-  const manualHint = updateCommand
+  const manualHint = tool.id === 'codexhost' && installSource === 'app-bundled'
+    ? null
+    : updateCommand
     ? [updateCommand.command, ...updateCommand.args].join(' ')
     : tool.npmPackage ? `npm install --global ${tool.npmPackage}@latest` : null;
   return {
@@ -550,6 +587,7 @@ export async function getCliToolStatus(tool: CliTool, { checkLatest = true, forc
     newestCopyVersion,
     canInstall: !installed && Boolean(tool.install),
     canSelfUpdate: runnable && Boolean(updateCommand),
+    canLaunch: tool.id === 'codexhost' && runnable,
     mutationsAllowed: allowMutations,
     manualHint,
     docsUrl: tool.docsUrl,
@@ -601,6 +639,7 @@ function transientPlaceholderTool(tool: CliTool): CliToolStatusEntry {
     newestCopyVersion: null,
     canInstall: false,
     canSelfUpdate: false,
+    canLaunch: false,
     mutationsAllowed: mutationsAllowed(),
     manualHint: tool.npmPackage ? `npm install --global ${tool.npmPackage}@latest` : null,
     docsUrl: tool.docsUrl,
@@ -813,6 +852,28 @@ router.post('/:id/update', requireLocalOnly, async (req, res, next) => {
     // next panel load shows the new version immediately.
     void refreshCliStatusSnapshot(false).catch(() => {});
     res.json(payload);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/codexhost/launch', requireLocalOnly, async (_req, res, next) => {
+  try {
+    const executable = bundledCodexHostExecutable();
+    const metadata = await fs.stat(executable);
+    if (!metadata.isFile()) throw new Error('Bundled CodexHost launcher is missing.');
+    const child = spawn(executable, [], {
+      detached: true,
+      stdio: 'ignore',
+      env: {
+        ...process.env,
+        // CodexHost owns the Codex Desktop Harness projection. LeoAPI stays
+        // in this process as the phone/relay control plane.
+        LEOPHONEAGENT_LEOAPI_ACTIVE: '1',
+      },
+    });
+    child.unref();
+    res.json({ success: true, pid: child.pid, version: bundledCodexHostVersion() });
   } catch (error) {
     next(error);
   }
