@@ -2,7 +2,7 @@
 
 ![leocodebox 本地 Agent 工作台](public/visuals/release/readme-hero.webp)
 
-![version](https://img.shields.io/badge/source-1.78.0-blue)
+![version](https://img.shields.io/badge/source-1.80.0-blue)
 ![platform](https://img.shields.io/badge/platform-macOS%20arm64-lightgrey)
 ![signed](https://img.shields.io/badge/signed-Developer%20ID-blue)
 ![license](https://img.shields.io/badge/license-AGPL--3.0-orange)
@@ -15,15 +15,15 @@
 
 ## ⬇️ 下载
 
-[![下载 DMG](https://img.shields.io/badge/下载-LeoPhoneAgent%20Mac%201.79.0%20(arm64)-brightgreen?style=for-the-badge)](https://github.com/leoyb1010/leocodebox-updates/releases/latest)
+[![下载 DMG](https://img.shields.io/badge/下载-LeoPhoneAgent%20Mac%201.80.0%20(arm64)-brightgreen?style=for-the-badge)](https://github.com/leoyb1010/leocodebox-updates/releases/latest)
 
 - **最新版本**：<https://github.com/leoyb1010/leocodebox-updates/releases/latest>
-- **当前源码版本**：`1.78.0`
-- **当前公开可安装版**：`1.78.0`
+- **当前源码版本**：`1.80.0`
+- **当前公开可安装版**：`1.80.0`
 - **源码**：<https://github.com/leoyb1010/LeoPhoneAgent/tree/main/src/mac/leocodebox>
 - **Issues**：<https://github.com/leoyb1010/LeoPhoneAgent/issues>
 
-1.79.0 已用本机 `Developer ID Application: leo yuan (48H5Y3LNUK)` 签名，并发布到 `leocodebox-updates`（`v1.79.0` + `latest-mac.yml`）。公证钥匙串 profile `leocodebox` 本机不在，所以没有 stapler 钉章；热更新继续走同一 TeamIdentifier 的签名链。补公证：`xcrun notarytool store-credentials` 后跑 `npm run desktop:notarize:mac`。
+1.80.0 已用本机 `Developer ID Application: leo yuan (48H5Y3LNUK)` 签名，并发布到 `leocodebox-updates`（`v1.80.0` + `latest-mac.yml`）。公证钥匙串 profile `leocodebox` 本机不在，所以没有 stapler 钉章；热更新继续走同一 TeamIdentifier 的签名链。补公证：`xcrun notarytool store-credentials` 后跑 `npm run desktop:notarize:mac`。
 
 ---
 
@@ -43,7 +43,7 @@
 - **桌面模式完全免登录**：本地能力 token 由 Electron 自动注入，只允许本机应用访问；从 App 打开浏览器时使用两分钟、单次有效的临时授权链接，不显示 leocodebox 账号密码页。
 - **内置浏览器运行环境**：正式包自带 Playwright headless Chromium，安装后可直接交给 Agent 使用；修复运行环境只写入 `~/.leocodebox/runtime`，不会修改已签名 App。
 - **应用内热更新**：1.39.1 起默认使用公开签名资产源，在“设置 → 关于”即可检查、下载并重启安装，无需 GitHub Token；源码仓库仍保持私有。
-- **签名 + 公证发布**：提供 Apple Developer ID 签名并经 Apple 公证的 DMG，别人下载双击即可运行，无 Gatekeeper 警告。
+- **签名发布、公证就绪**：当前 DMG 已做 Apple Developer ID 签名；配置 notarytool profile 后可走同一发布脚本补 Apple 公证与 stapler 钉章。
 
 ## 🖥️ 支持的 Agent
 
@@ -87,10 +87,10 @@
 
 ## 📦 安装
 
-从 Releases 下载已签名并公证的 DMG（macOS Apple 芯片）：
+从 Releases 下载 Developer ID 已签名的 DMG（macOS Apple 芯片；1.80.0 尚未公证）：
 
 1. 双击 DMG，把 **leocodebox** 拖入「应用程序」。
-2. 双击运行——已 Developer ID 签名 + Apple 公证，无需 `xattr` 去隔离。
+2. 双击运行；1.80.0 尚未公证，首次打开如遇 Gatekeeper 提示，请在“系统设置 → 隐私与安全性”确认打开，不要用 `xattr` 全局移除隔离。
 3. 首次打开自动启动本地服务，直接进入界面。
 
 ## 🔧 从源码构建
@@ -157,8 +157,8 @@ leocodebox 以 **AGPL-3.0-or-later** 分发。
 
 ### CodexHost 原生 Harness 模式
 
-1.79.0 起随包内置 [CodexHost 0.3.5](https://github.com/BytePioneer-AI/codex-host) 的官方完整载荷。
-在「设置 → Agent → 本机智能体」点「打开 CodexHost」，即可在 Codex Desktop 中使用 Pi、
+1.79.0 起随包内置 [CodexHost 0.3.5](https://github.com/BytePioneer-AI/codex-host) 的官方完整载荷；
+1.80.0 起主控台直接显示独立 CodexHost 工作台卡片。点「打开 CodexHost」，即可在 Codex Desktop 中使用 Pi、
 Oh My Pi、Claude Code、Grok Build 与 DeepSeek Harness；流式输出、工具状态、Diff、审批、
 Usage、Fork、上下文压缩和斜杠命令由各 Harness 原生适配器投影，不退化成通用聊天协议。
 

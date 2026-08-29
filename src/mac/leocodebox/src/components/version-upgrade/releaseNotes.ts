@@ -17,6 +17,16 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '1.80.0',
+    date: '2026-08-30',
+    items: [
+      'CodexHost 从隐藏在设置里的工具提升为主控台一级工作台：启动状态、版本、Pi / Oh My Pi / Claude Code / Grok Build / DeepSeek 和原生能力现在打开 App 就能看见。',
+      '主控台可直接打开 CodexHost 或进入本机 Agent 管理；明确说明它增强 Codex Desktop，而 LeoAPI、手机中继和 leocodebox 工作台继续独立运行。',
+      'Mac 自带的 Grok Build 模型列表改读官方 `grok models`，并保留 4.6 / 4.5 / Composer 2.5 离线兜底，不再停在旧的两项静态表。',
+      '修正 1.79.0 “已经彻底改造”的误导：本版交付的是可见、可操作、边界明确的 CodexHost 工作台，不再把仅内置运行载荷当作完整产品改造。',
+    ],
+  },
+  {
     version: '1.79.0',
     date: '2026-08-30',
     items: [

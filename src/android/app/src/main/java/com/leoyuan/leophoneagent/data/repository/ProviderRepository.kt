@@ -1603,24 +1603,7 @@ class ProviderRepository(private val context: Context) {
                     // [T-provider-custom-user-agent] models-list UA override.
                     ProviderType.openAI -> OpenAIModelsApi.fetchModels(apiKey, baseURL, customUserAgent = instance.customUserAgent)
                     ProviderType.openRouter -> OpenRouterModelsApi.fetchModels(apiKey)
-                    ProviderType.xAI -> if (instance.credentialType == ProviderCredential.oauth) {
-                        val manager = com.leoyuan.leophoneagent.auth.XAIOAuthManager(context, instance.id)
-                        com.leoyuan.leophoneagent.provider.xai.XAIModelsApi.fetchModelsOAuth(
-                            accessToken = apiKey,
-                            userId = manager.userId,
-                            email = manager.email,
-                            context = context,
-                            forceRefresh = true,
-                        )
-                    } else {
-                        OpenAIModelsApi.fetchModels(
-                            apiKey,
-                            instance.effectiveBaseURL ?: "https://api.x.ai/v1",
-                            context = context,
-                            forceRefresh = true,
-                            customUserAgent = instance.customUserAgent,
-                        )
-                    }
+                    ProviderType.xAI -> com.leoyuan.leophoneagent.provider.xai.XAIModelsApi.fetchModelsOAuth()
                     // [T-kimi-oauth] Kimi Code: unlike Codex OAuth, the Kimi
                     // OAuth token CAN call the models endpoint — real fetch
                     // from GET /coding/v1/models (OpenAI-compatible shape).

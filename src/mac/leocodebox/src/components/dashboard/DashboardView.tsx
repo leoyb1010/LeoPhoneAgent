@@ -8,6 +8,7 @@ import { useFleetSnapshot } from '../workbench/useFleetSnapshot';
 
 import type { ConsoleMachineOption, NewTaskLaunch } from './newTask';
 import AgentGridCard from './cards/AgentGridCard';
+import CodexHostCard from './cards/CodexHostCard';
 import NewTaskCard from './cards/NewTaskCard';
 import DashboardHero from './cards/DashboardHero';
 import GatewayCard from './cards/GatewayCard';
@@ -124,6 +125,10 @@ export default function DashboardView({
     () => Object.values(data.providerAuth.data ?? {}).filter((provider) => provider.authenticated).length,
     [data.providerAuth.data],
   );
+  const codexHost = useMemo(
+    () => data.cliTools.data?.find((tool) => tool.id === 'codexhost') ?? null,
+    [data.cliTools.data],
+  );
 
   return (
     <div className="h-full overflow-y-auto bg-background">
@@ -157,6 +162,13 @@ export default function DashboardView({
             delay={20}
           />
         )}
+
+        <CodexHostCard
+          tool={codexHost}
+          loading={data.cliTools.loading}
+          onOpenSettings={() => onShowSettings('agents')}
+          delay={35}
+        />
 
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
           <div className="flex flex-col gap-3 lg:col-span-7">

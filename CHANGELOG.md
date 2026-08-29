@@ -4,6 +4,35 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+<a id="t12-alpha23"></a>
+## T12 · iOS 1.30.1 (105) / Android 1.0.0-alpha.23 / Mac 1.80.0 - 2026-08-30
+
+### 用户可见
+
+- iOS 与 Android 撤销 alpha.22 的自定义 Grok CLI 代理实验，恢复 OpenMinis 已验证的 OAuth/对话路径；完整模型目录始终可见，包含 Grok 4.6、4.5、Composer 2.5 与快速/代码变体。
+- Mac 主控台新增可见的 CodexHost 0.3.5 工作台卡片，明确展示就绪状态、可接入 Harness、原生能力和两个真实入口；不再把仅内置载荷描述成已经完成的产品改造。
+- Mac Grok Build 模型目录改为读取官方 `grok models`，并保留 4.6/4.5/Composer 2.5 离线底座；1.80 首启会定向失效旧模型缓存。
+- Android Fold8 封面 200% 字体下的更新说明改为两级标题、可滚动正文和始终可见的确认按钮；iOS 审批动效遵循系统“减少动态效果”。
+
+### 两轮审计与修复
+
+- 第一轮覆盖能力、产品结构、OAuth 边界、Provider 工厂一致性、缓存、签名和三端构建：修复移动端错误代理、iOS 两套工厂行为不一致、在线目录失败时模型列表缩水/重复崩溃、Mac Grok 旧静态目录和 CodexHost 隐藏入口。
+- 第二轮覆盖设计、UI、动效、Fold8/iPad/macOS 布局、中文语义与可访问性：修复 Android 大字体弹窗裁切、Mac Harness 芯片被误读为已安装、iOS 审批转场忽略 Reduce Motion。
+- 最终产物实测又发现 Mac 仍可能命中 1.79 三天旧缓存；加入 Grok 目录指纹后，安装 1.80 首次请求立即返回 4.6/4.5/Composer 2.5。
+
+### 已执行验证
+
+- Android：JDK 17 下 Standard/Power 编译、各 585 项单测（0 失败、各 1 跳过）、双 lint（0 error）、双 Release 构建通过；补齐 Gradle 8.13 lint 与 debug 资产生产任务的显式依赖。
+- Android 固定 Alpha 签名、包名、versionCode `100023`、versionName `1.0.0-alpha.23` / `1.0.0-alpha.23-power` 与能力隔离通过。SHA-256：Standard `1b38a978647481afb2aca7a5830c515b3129dbc01d33784105d4a542c8837898`；Power `867edbfe1ce9c87a032b4aa9a189e3644cfdeaaec7a186f8166cdafee6997bb5`。
+- Fold8 API 35 模拟器：alpha.22 → alpha.23 覆盖安装已通过；最终 Release 两包再次覆盖安装，冷启动、`ACTION_ASSIST`、PID 与 AndroidRuntime 通过。1080×1728 封面大字体更新弹窗 UI 树无越界。
+- iOS/iPad：`IOSReleaseReadinessAudit` 1.30.1 (105)、MinisLogicTests 测试编译和 `generic/platform=iOS` 无签名构建通过；按既定边界不启动异常退出的模拟器，真机安装由用户执行。
+- Mac：typecheck、lint、0 漏洞 npm audit、生产构建和 565 项测试通过；Developer ID 签名链、36 个嵌套 Mach-O、CodexHost 0.3.5、本机 1.80 后端、动态 Grok 目录均通过。DMG SHA-256 `585f2d86276032e7c8d1c36287c5d2f51dd22e2017cdf396a3c369150b6ae6e1`；ZIP SHA-256 `76cabb658eecb61bb4e24c58d865ee7ddbc204435919388f64a38bb7e1f48e64`。
+
+### 边界
+
+- 本机没有 notarytool profile，Mac 1.80 是 Developer ID 已签名但未公证；Gatekeeper 仍会报告 `Unnotarized Developer ID`，不写成已公证。
+- 本地没有可用于移动端的真实 Grok OAuth 账号会话；已验证的是 OpenMinis 路径对齐、模型目录、单测与构建，账号级真实对话仍需用户在 Android/iPhone 实机确认。
+
 ## Mac 1.79.0 · CodexHost 原生 Harness 工作台 - 2026-08-30
 
 ### 用户可见

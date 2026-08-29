@@ -12,6 +12,7 @@ export type CliToolStatus = {
   installSource?: string;
   active?: boolean;
   error?: string | null;
+  canLaunch?: boolean;
 };
 
 export type CliToolsStatusPayload = {

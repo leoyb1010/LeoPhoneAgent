@@ -2,6 +2,7 @@ package com.leoyuan.leophoneagent.ui.components
 
 import android.content.Context
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -14,6 +15,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.leoyuan.leophoneagent.BuildConfig
@@ -67,14 +69,37 @@ fun WhatsNewDialogHost() {
             visible = false
         },
         title = {
-            Text(stringResource(R.string.whats_new_title, BuildConfig.VERSION_NAME))
+            Column {
+                Text(
+                    stringResource(R.string.whats_new_heading),
+                    style = MaterialTheme.typography.titleLarge,
+                )
+                Text(
+                    "${BuildConfig.VERSION_NAME.removeSuffix("-power")} · " +
+                        stringResource(if (BuildConfig.POWER_FEATURES_ENABLED) R.string.whats_new_power else R.string.whats_new_standard),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
+            val scrollState = rememberScrollState()
+            Column(
+                Modifier
+                    .heightIn(max = 360.dp)
+                    .verticalScroll(scrollState),
+            ) {
                 Text(
                     stringResource(R.string.whats_new_current),
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodySmall,
                 )
+                if (scrollState.canScrollForward) {
+                    Text(
+                        stringResource(R.string.whats_new_scroll_hint),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
             }
         },
         confirmButton = {

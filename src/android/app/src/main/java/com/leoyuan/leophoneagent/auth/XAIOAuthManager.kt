@@ -107,11 +107,6 @@ class XAIOAuthManager(context: Context, instanceId: String) : OAuthManager(conte
         get() = loadOAuthString("account_id")
         private set(value) { value?.let { saveOAuthString("account_id", it) } }
 
-    /** OIDC subject used by Grok's first-party CLI proxy as `x-userid`. */
-    var userId: String?
-        get() = loadOAuthString("user_id")
-        private set(value) { value?.let { saveOAuthString("user_id", it) } }
-
     var email: String?
         get() = loadOAuthString("email")
         private set(value) { value?.let { saveOAuthString("email", it) } }
@@ -417,11 +412,8 @@ class XAIOAuthManager(context: Context, instanceId: String) : OAuthManager(conte
             val json = JSONObject(payload)
             json.optString("email").takeIf { it.isNotEmpty() }?.let { email = it }
             json.optString("name").takeIf { it.isNotEmpty() }?.let { displayName = it }
-            // Keep the OIDC subject and workspace separate: the first-party
-            // CLI proxy requires `sub` as x-userid, while account_id is only
-            // a workspace identifier shown in the UI.
-            json.optString("sub").takeIf { it.isNotEmpty() }?.let { userId = it }
-            json.optString("account_id").takeIf { it.isNotEmpty() }?.let { accountId = it }
+            (json.optString("sub").takeIf { it.isNotEmpty() }
+                ?: json.optString("account_id").takeIf { it.isNotEmpty() })?.let { accountId = it }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse xAI id_token: ${e.message}")
         }

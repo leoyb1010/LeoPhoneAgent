@@ -11,8 +11,6 @@ struct XAITokenStorage: Codable {
     let email: String?
     let displayName: String?
     let accountId: String?
-    /// OIDC `sub`, kept separate because Grok's CLI proxy uses it as x-userid.
-    let userId: String?
 
     var isExpired: Bool {
         guard let expire = expireDate else { return false }

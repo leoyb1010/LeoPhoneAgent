@@ -1825,12 +1825,16 @@
     <string name="terminal_cli_booting">Starting the CLI…</string>
     <string name="terminal_cli_booting_hint">Follow any safety confirmation or sign-in prompt shown by the CLI.</string>
     <string name="whats_new_title">What\'s new in %1$s</string>
+    <string name="whats_new_heading">What\'s new</string>
+    <string name="whats_new_standard" translatable="false">Standard</string>
+    <string name="whats_new_power" translatable="false">Power</string>
     <string name="whats_new_confirm">OK</string>
     <!-- 发版铁律:每次改 versionName 都必须同步改这里,并重写下面的
          whats_new_current 文案。WhatsNewGateTest 会比对这两个值,
          对不上就构建失败 —— 防止弹出的是上一版的更新内容。 -->
-    <string name="whats_new_version" translatable="false">1.0.0-alpha.22</string>
-    <string name="whats_new_current">• Grok OAuth now loads the live entitled model catalog, including Grok 4.6 and Composer when available. Travel requests are compiled into verified calendar and durable reminder actions. Power rejects stale UI nodes, restores revoked Accessibility through authorized Shizuku, and idles without broad event capture.</string>
+    <string name="whats_new_version" translatable="false">1.0.0-alpha.23</string>
+    <string name="whats_new_current">• Grok OAuth is restored to the OpenMinis path: the full built-in catalog stays available, including Grok 4.6 and Composer 2.5, and chat requests use api.x.ai again. This release removes the incompatible CLI-proxy routing introduced in alpha.22.</string>
+    <string name="whats_new_scroll_hint">Swipe up to read the complete update</string>
     <string name="artifact_ready">ARTIFACT READY</string>
     <string name="artifact_open">Open artifact</string>
     <string name="artifact_missing">This artifact is no longer available on this device.</string>

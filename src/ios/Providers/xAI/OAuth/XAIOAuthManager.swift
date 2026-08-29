@@ -64,10 +64,6 @@ final class XAIOAuthManager: NSObject, ObservableObject {
         ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: XAITokenStorage.self)?.accountId
     }
 
-    func userId(instanceId: String) -> String? {
-        ProviderKeychainHelper.loadOAuthToken(instanceId: instanceId, as: XAITokenStorage.self)?.userId
-    }
-
     func login(instanceId: String) async throws {
         // Re-entrancy guard. SwiftUI button taps + sheet onAppear / onChange
         // hooks can fire the same Task twice in rapid succession; without
@@ -384,13 +380,11 @@ final class XAIOAuthManager: NSObject, ObservableObject {
         var email: String?
         var displayName: String?
         var accountId: String?
-        var userId: String?
         if let idToken {
             let claims = Self.decodeJWTPayload(idToken)
             email = claims?["email"] as? String
             displayName = (claims?["name"] as? String) ?? (claims?["preferred_username"] as? String)
-            userId = claims?["sub"] as? String
-            accountId = claims?["account_id"] as? String
+            accountId = (claims?["sub"] as? String) ?? (claims?["account_id"] as? String)
             if let e = email { logger.info("Extracted email: \(e)") }
             if let aid = accountId { logger.info("Extracted accountId: \(aid)") }
         }
@@ -404,8 +398,7 @@ final class XAIOAuthManager: NSObject, ObservableObject {
             tokenEndpoint: tokenEndpoint,
             email: email,
             displayName: displayName,
-            accountId: accountId,
-            userId: userId
+            accountId: accountId
         )
     }
 

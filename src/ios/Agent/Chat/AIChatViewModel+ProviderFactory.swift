@@ -197,8 +197,8 @@ extension AIChatViewModel {
                 return respProvider
             }
         case .xAI:
-            let xaiBase = instance.credentialType == .oauth ? XAIModelsAPI.oauthAPIBase : (customBase ?? "https://api.x.ai/v1")
-            let xaiAppendV1 = instance.credentialType == .oauth ? false : (customBase == nil ? false : appendV1)
+            let xaiBase = customBase ?? "https://api.x.ai/v1"
+            let xaiAppendV1 = customBase == nil ? false : appendV1
             switch instance.credentialType {
             case .apiKey:
                 guard let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) else {
@@ -211,7 +211,12 @@ extension AIChatViewModel {
                 }
                 let iid = instance.id
                 let provider = OpenAIProvider(
-                    oauthTokenProvider: { try await XAIOAuthManager.shared.validAccessToken(instanceId: iid) },
+                    oauthTokenProvider: {
+                        if GrokViaMacBroker.hostMarker(instanceId: iid) != nil {
+                            return try await GrokViaMacBroker.shared.token(instanceId: iid)
+                        }
+                        return try await XAIOAuthManager.shared.validAccessToken(instanceId: iid)
+                    },
                     model: entry.model
                 )
                 provider.customBaseURL = xaiBase

@@ -37,8 +37,8 @@ android {
         applicationId = "com.leoyuan.leophoneagent"
         minSdk = 26
         targetSdk = 35
-        versionCode = 100022
-        versionName = "1.0.0-alpha.22"
+        versionCode = 100023
+        versionName = "1.0.0-alpha.23"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -204,6 +204,11 @@ val stageDebugSkillAssets by tasks.registering(Exec::class) {
     commandLine("bash", script.absolutePath)
 }
 tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") && it.name.contains("Debug") }
+    .configureEach { dependsOn(stageDebugSkillAssets) }
+// Lint models read the debug asset source set directly, before mergeAssets.
+// Declare the producer explicitly so Gradle 8.13 can build a deterministic
+// task graph when lint and assemble run together.
+tasks.matching { it.name.contains("Lint", ignoreCase = true) && it.name.contains("Debug") }
     .configureEach { dependsOn(stageDebugSkillAssets) }
 
 dependencies {

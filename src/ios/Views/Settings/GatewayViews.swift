@@ -574,6 +574,7 @@ private struct GatewayHostEditor: View {
 
 struct GatewayConsoleView: View {
     let host: GatewayHost
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var driver: GatewayRunDriver
     @State private var input = ""
     @FocusState private var inputFocused: Bool
@@ -590,7 +591,7 @@ struct GatewayConsoleView: View {
                 GatewayApprovalCard(approval: approval) { choice in
                     driver.respond(to: approval, choice: choice)
                 }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
             composer
         }
@@ -608,7 +609,7 @@ struct GatewayConsoleView: View {
                 }
             }
         }
-        .animation(LeoMotion.smooth(reduceMotion: false), value: driver.pendingApproval?.runId)
+        .animation(LeoMotion.smooth(reduceMotion: reduceMotion), value: driver.pendingApproval?.runId)
         .onAppear { driver.reattachIfNeeded() }
         .onDisappear { driver.cancelLocalStream() }
     }

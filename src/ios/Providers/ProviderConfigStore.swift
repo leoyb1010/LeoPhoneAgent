@@ -2461,12 +2461,16 @@ final class ProviderConfigStore: ObservableObject {
             } else {
                 token = try await XAIOAuthManager.shared.validAccessToken(instanceId: instance.id)
             }
-            _ = xaiUA // OAuth credentials intentionally ignore custom endpoints and user agents.
-            return try await XAIModelsAPI.fetchOAuthModels(
-                accessToken: token,
-                userID: XAIOAuthManager.shared.userId(instanceId: instance.id),
-                email: XAIOAuthManager.shared.email(instanceId: instance.id)
-            )
+            let xaiBase = customBase ?? "https://api.x.ai/v1"
+            let xaiAppendV1 = customBase == nil ? false : appendV1
+            let fetched = (try? await OpenAIModelsAPI.fetchModels(apiKey: token, baseURL: xaiBase, appendV1Suffix: xaiAppendV1, forceRefresh: forceRefresh, userAgent: xaiUA)) ?? []
+            // OpenMinis keeps the complete built-in OAuth catalog available;
+            // live /models entries enrich it but never shrink the picker.
+            var liveById: [String: LLMModel] = [:]
+            for model in fetched where liveById[model.id] == nil { liveById[model.id] = model }
+            return ModelsDevAPI.enrichModels(XAIModelsAPI.allModels.map { liveById[$0.id] ?? $0 } + fetched.filter { live in
+                !XAIModelsAPI.allModels.contains(where: { $0.id == live.id })
+            })
         case (.kimiCode, .apiKey):
             guard let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) else {
                 throw ModelRefreshError.noCredential
@@ -2560,8 +2564,7 @@ final class ProviderConfigStore: ObservableObject {
             tokenEndpoint: json["token_endpoint"] as? String,
             email: json["email"] as? String,
             displayName: json["display_name"] as? String ?? json["displayName"] as? String,
-            accountId: json["account_id"] as? String,
-            userId: json["user_id"] as? String
+            accountId: json["account_id"] as? String
         )
     }
 

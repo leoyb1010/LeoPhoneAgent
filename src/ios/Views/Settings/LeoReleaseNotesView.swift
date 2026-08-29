@@ -12,6 +12,16 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.30.1",
+            date: "2026-08-30",
+            title: "Grok OAuth 恢复 OpenMinis 稳定链路",
+            highlights: [
+                "撤回 1.30.0 把 Grok OAuth 改到 CLI 代理的错误：授权、刷新和对话重新对齐 OpenMinis，使用 api.x.ai。",
+                "模型选择保留完整内置目录并吸收在线结果，不会再被缩成两个；包含 Grok 4.6、Composer 2.5 和原有 Grok 系列。",
+                "移除多余的代理模型解析、代理重定向和用户标识扩展，恢复已经过实际使用验证的最小实现。",
+            ]
+        ),
+        LeoRelease(
             version: "1.30.0",
             date: "2026-08-29",
             title: "Grok 新模型可见，出行记录不再靠猜",

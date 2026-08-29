@@ -1755,8 +1755,10 @@
     <string name="terminal_cli_booting">正在启动 CLI…</string>
     <string name="terminal_cli_booting_hint">如出现安全确认或登录提示，请按屏幕指引继续。</string>
     <string name="whats_new_title">本次更新（%1$s）</string>
+    <string name="whats_new_heading">本次更新</string>
     <string name="whats_new_confirm">知道了</string>
-    <string name="whats_new_current">• Grok OAuth 会读取账号真实可用的动态模型，包含 Grok 4.6 与有权限时的 Composer。出行记录会先补齐缺失字段，再同时写入日历和持久待办。Power 会拒绝旧界面节点、用已授权 Shizuku 修复被撤销的无障碍，并在空闲时停止广泛事件采集。</string>
+    <string name="whats_new_current">• Grok OAuth 已恢复 OpenMinis 的稳定路径：完整内置模型目录始终可见，包含 Grok 4.6 与 Composer 2.5；对话重新使用 api.x.ai。本版移除了 alpha.22 引入的不兼容 CLI 代理路由。</string>
+    <string name="whats_new_scroll_hint">向上滑动查看完整更新内容</string>
     <string name="artifact_ready">交付物已就绪</string>
     <string name="artifact_open">打开交付物</string>
     <string name="artifact_missing">这份交付物已不在本机。</string>
