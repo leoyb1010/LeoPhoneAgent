@@ -35,6 +35,36 @@ enum SharedContainerStore {
         return directory.appendingPathComponent(name, isDirectory: false)
     }
 
+    /// Stage original bytes for the main app. A pending attachment may only be
+    /// published after this returns true; failures clean up any partial target.
+    static func stageFile(from source: URL, to directory: URL, named name: String) -> Bool {
+        guard source.isFileURL, isSafeFileName(name) else { return false }
+        let destination = directory.appendingPathComponent(name, isDirectory: false)
+        do {
+            try FileManager.default.createDirectory(at: directory,
+                                                    withIntermediateDirectories: true)
+            try FileManager.default.copyItem(at: source, to: destination)
+            return true
+        } catch {
+            try? FileManager.default.removeItem(at: destination)
+            return false
+        }
+    }
+
+    static func stageData(_ data: Data, to directory: URL, named name: String) -> Bool {
+        guard isSafeFileName(name) else { return false }
+        let destination = directory.appendingPathComponent(name, isDirectory: false)
+        do {
+            try FileManager.default.createDirectory(at: directory,
+                                                    withIntermediateDirectories: true)
+            try data.write(to: destination, options: .atomic)
+            return true
+        } catch {
+            try? FileManager.default.removeItem(at: destination)
+            return false
+        }
+    }
+
     // MARK: - Write (called by Share Extension)
 
     static func savePendingShare(_ share: PendingShare) {

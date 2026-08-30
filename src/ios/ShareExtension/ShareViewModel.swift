@@ -101,28 +101,13 @@ final class ShareViewModel {
         let accessed = url.startAccessingSecurityScopedResource()
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
 
-        // If it's an image, process through image pipeline for JPEG conversion
-        let ext = url.pathExtension.lowercased()
-        if ["jpg", "jpeg", "png", "gif", "webp", "heic"].contains(ext),
-           let data = try? Data(contentsOf: url),
-           let image = UIImage(data: data) {
-            let fileName = "shared-image-\(UUID().uuidString.prefix(8)).jpg"
-            if let dir = SharedContainerStore.sharedFileDirectory,
-               let jpegData = image.jpegData(compressionQuality: 0.85) {
-                let fileURL = dir.appendingPathComponent(fileName)
-                try? jpegData.write(to: fileURL)
-                pendingItems.append(.init(kind: .attachment, value: fileName))
-            }
-            return
-        }
-
-        // General file copy
-        let fileName = "shared-\(UUID().uuidString.prefix(8))_\(url.lastPathComponent)"
-        if let dir = SharedContainerStore.sharedFileDirectory {
-            let destURL = dir.appendingPathComponent(fileName)
-            try? FileManager.default.copyItem(at: url, to: destURL)
-            pendingItems.append(.init(kind: .attachment, value: fileName))
-        }
+        // Preserve original bytes and format. Re-encoding before the raw save
+        // can lose animation/metadata and makes a successful capture depend on
+        // UIKit decoding.
+        let originalName = url.lastPathComponent.isEmpty ? "file" : url.lastPathComponent
+        let prefix = url.pathExtension.isEmpty ? "shared" : "shared-file"
+        let fileName = "\(prefix)-\(UUID().uuidString.prefix(8))_\(originalName)"
+        copyItemIfPossible(from: url, fileName: fileName)
     }
 
     private func processText(_ provider: NSItemProvider) async {
@@ -133,33 +118,32 @@ final class ShareViewModel {
             pendingItems.append(.init(kind: .inlineText, value: text))
         } else {
             let fileName = "shared-text-\(UUID().uuidString.prefix(8)).txt"
-            if let dir = SharedContainerStore.sharedFileDirectory {
-                let fileURL = dir.appendingPathComponent(fileName)
-                try? text.write(to: fileURL, atomically: true, encoding: .utf8)
-                pendingItems.append(.init(kind: .attachment, value: fileName))
+            if let dir = SharedContainerStore.sharedFileDirectory,
+               let data = text.data(using: .utf8),
+               SharedContainerStore.stageData(data, to: dir, named: fileName) {
+                    pendingItems.append(.init(kind: .attachment, value: fileName))
             }
         }
     }
 
     private func processImage(_ provider: NSItemProvider) async {
         if let item = try? await provider.loadItem(forTypeIdentifier: UTType.image.identifier) {
-            var image: UIImage?
-            if let uiImage = item as? UIImage {
-                image = uiImage
-            } else if let imageData = item as? Data {
-                image = UIImage(data: imageData)
-            } else if let url = item as? URL, let data = try? Data(contentsOf: url) {
-                image = UIImage(data: data)
+            if let url = item as? URL {
+                await copyFileToShared(from: url)
+                return
             }
-
-            if let image {
-                let fileName = "shared-image-\(UUID().uuidString.prefix(8)).jpg"
-                if let dir = SharedContainerStore.sharedFileDirectory,
-                   let jpegData = image.jpegData(compressionQuality: 0.85) {
-                    let fileURL = dir.appendingPathComponent(fileName)
-                    try? jpegData.write(to: fileURL)
-                    pendingItems.append(.init(kind: .attachment, value: fileName))
-                }
+            if let imageData = item as? Data {
+                let ext = preferredImageExtension(for: provider) ?? "img"
+                writeDataIfPossible(imageData,
+                                    fileName: "shared-image-\(UUID().uuidString.prefix(8)).\(ext)")
+                return
+            }
+            // Some share sources expose only a decoded UIImage. PNG is the
+            // lossless fallback; raw URL/Data representations above are always
+            // preferred when the provider supplies them.
+            if let image = item as? UIImage, let pngData = image.pngData() {
+                writeDataIfPossible(pngData,
+                                    fileName: "shared-image-\(UUID().uuidString.prefix(8)).png")
             }
         }
     }
@@ -174,11 +158,7 @@ final class ShareViewModel {
         let ext = url.pathExtension.lowercased()
         let suffix = ext.isEmpty ? "mov" : ext
         let fileName = "shared-video-\(UUID().uuidString.prefix(8)).\(suffix)"
-        if let dir = SharedContainerStore.sharedFileDirectory {
-            let destURL = dir.appendingPathComponent(fileName)
-            try? FileManager.default.copyItem(at: url, to: destURL)
-            pendingItems.append(.init(kind: .attachment, value: fileName))
-        }
+        copyItemIfPossible(from: url, fileName: fileName)
     }
 
     private func processFile(_ provider: NSItemProvider) async {
@@ -189,10 +169,33 @@ final class ShareViewModel {
         defer { if accessed { url.stopAccessingSecurityScopedResource() } }
 
         let fileName = "shared-\(UUID().uuidString.prefix(8))_\(url.lastPathComponent)"
-        if let dir = SharedContainerStore.sharedFileDirectory {
-            let destURL = dir.appendingPathComponent(fileName)
-            try? FileManager.default.copyItem(at: url, to: destURL)
+        copyItemIfPossible(from: url, fileName: fileName)
+    }
+
+    private func copyItemIfPossible(from sourceURL: URL, fileName: String) {
+        guard SharedContainerStore.isSafeFileName(fileName),
+              let directory = SharedContainerStore.sharedFileDirectory else { return }
+        if SharedContainerStore.stageFile(from: sourceURL, to: directory, named: fileName) {
             pendingItems.append(.init(kind: .attachment, value: fileName))
         }
+    }
+
+    private func writeDataIfPossible(_ data: Data, fileName: String) {
+        guard SharedContainerStore.isSafeFileName(fileName),
+              let directory = SharedContainerStore.sharedFileDirectory else { return }
+        if SharedContainerStore.stageData(data, to: directory, named: fileName) {
+            pendingItems.append(.init(kind: .attachment, value: fileName))
+        }
+    }
+
+    private func preferredImageExtension(for provider: NSItemProvider) -> String? {
+        provider.registeredTypeIdentifiers.compactMap { identifier -> String? in
+            guard let type = UTType(identifier), type.conforms(to: .image),
+                  let ext = type.preferredFilenameExtension?.lowercased(),
+                  ext.range(of: #"^[a-z0-9]{1,10}$"#, options: .regularExpression) != nil else {
+                return nil
+            }
+            return ext
+        }.first
     }
 }

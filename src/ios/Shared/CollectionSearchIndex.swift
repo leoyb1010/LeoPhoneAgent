@@ -232,9 +232,8 @@ actor CollectionSearchIndex {
     func publishToSpotlight(_ items: [CollectedItem]) {
         let attributes = items.map { item -> CSSearchableItem in
             let attrs = CSSearchableItemAttributeSet(contentType: .content)
-            attrs.title = item.title ?? item.value
-            attrs.contentDescription = [item.summary, item.sourceLabel]
-                .compactMap { $0 }.joined(separator: " · ")
+            attrs.title = Self.spotlightTitle(for: item)
+            attrs.contentDescription = Self.spotlightContentDescription(for: item)
             attrs.keywords = item.tags + [item.sourceLabel, "收藏", "藏宝阁"]
             attrs.contentCreationDate = item.createdAt
             return CSSearchableItem(uniqueIdentifier: "collection:\(item.id)",
@@ -243,6 +242,24 @@ actor CollectionSearchIndex {
         }
         guard !attributes.isEmpty else { return }
         CSSearchableIndex.default().indexSearchableItems(attributes)
+    }
+
+    /// Never fall back to `value`: for text/note items it can be the complete
+    /// private body, and for links it can contain a sensitive query string.
+    static func spotlightTitle(for item: CollectedItem) -> String {
+        if let title = item.title?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !title.isEmpty {
+            return String(title.prefix(200))
+        }
+        let source = item.sourceLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+        return source.isEmpty ? "藏宝阁条目" : String(source.prefix(200))
+    }
+
+    /// Spotlight receives only user-visible metadata, never extracted or
+    /// generated summaries that may contain private body text.
+    static func spotlightContentDescription(for item: CollectedItem) -> String? {
+        let source = item.sourceLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+        return source.isEmpty ? nil : String(source.prefix(200))
     }
 
     func unpublishFromSpotlight(ids: Set<String>) {
