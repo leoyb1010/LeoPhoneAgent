@@ -61,10 +61,36 @@ data class TreasureSearchRow(
     @ColumnInfo(name = "tags_json") val tagsJson: String,
     val pinned: Boolean,
     val archived: Boolean,
+    @ColumnInfo(name = "reading_state") val readingState: String,
+    @ColumnInfo(name = "reading_progress") val readingProgress: Double,
+    @ColumnInfo(name = "last_opened_at") val lastOpenedAt: Long?,
     @ColumnInfo(name = "processing_state") val processingState: String,
     @ColumnInfo(name = "processing_error_code") val processingErrorCode: String?,
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
+)
+
+@Entity(
+    tableName = "treasure_highlights",
+    foreignKeys = [ForeignKey(
+        entity = TreasureItemEntity::class,
+        parentColumns = ["stable_id"], childColumns = ["item_id"],
+        onDelete = ForeignKey.CASCADE,
+    )],
+    indices = [Index("item_id"), Index(value = ["item_id", "updated_at"])],
+)
+data class TreasureHighlightEntity(
+    @PrimaryKey val id: String,
+    @ColumnInfo(name = "item_id") val itemId: String,
+    @ColumnInfo(name = "quote_text") val quoteText: String,
+    val note: String? = null,
+    @ColumnInfo(name = "start_offset") val startOffset: Int,
+    @ColumnInfo(name = "end_offset") val endOffset: Int,
+    @ColumnInfo(name = "page_number") val pageNumber: Int? = null,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "updated_at") val updatedAt: Long,
+    @ColumnInfo(name = "origin_device_id") val originDeviceId: String,
+    @ColumnInfo(name = "deleted_at") val deletedAt: Long? = null,
 )
 
 @Entity(tableName = "treasure_collections")

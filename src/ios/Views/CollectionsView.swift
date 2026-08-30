@@ -23,6 +23,21 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
+private enum TreasuryView: String, CaseIterable, Identifiable {
+    case inbox, processing, failed, unread, recent, all
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .inbox: "收件箱"
+        case .processing: "处理中"
+        case .failed: "失败"
+        case .unread: "待读"
+        case .recent: "最近使用"
+        case .all: "全部"
+        }
+    }
+}
+
 struct CollectionsView: View {
     @State private var items: [CollectedItem] = []
     @State private var query = ""
@@ -35,9 +50,11 @@ struct CollectionsView: View {
     @State private var editingNote: CollectedItem?
     /// [T-notes] 正在写批注的条目
     @State private var annotating: CollectedItem?
+    @State private var readingItem: CollectedItem?
     @State private var annotationDraft = ""
     /// [T-notes] 显示归档的条目(默认收起)
     @State private var showArchived = false
+    @State private var treasuryView = TreasuryView.inbox
     // [T-attachments] 三条导入入口
     @State private var showFileImporter = false
     @State private var showScanner = false
@@ -65,10 +82,33 @@ struct CollectionsView: View {
     }
 
     private var visible: [CollectedItem] {
+        let spec = TreasuryLocalQuery.parse(query)
         // [T-notes] 归档的默认不出现在主列表 —— 归档就是"收起来但不删"
-        var out = showArchived ? items.filter(\.archived) : items.filter { !$0.archived }
+        var out = (showArchived || spec.archived) ? items.filter(\.archived) : items.filter { !$0.archived }
+        out = out.filter { item in
+            switch treasuryView {
+            case .inbox: item.lastOpenedAt == nil
+            case .processing: ["saved", "queued", "processing"].contains(item.processingState)
+            case .failed: ["partial", "failed"].contains(item.processingState)
+            case .unread: item.readingState == "unread"
+            case .recent: item.lastOpenedAt != nil
+            case .all: true
+            }
+        }
+        if !spec.kinds.isEmpty { out = out.filter { spec.kinds.contains($0.treasuryKind) } }
+        if !spec.processingStates.isEmpty { out = out.filter { spec.processingStates.contains($0.processingState) } }
+        if !spec.readingStates.isEmpty { out = out.filter { spec.readingStates.contains($0.readingState) } }
+        if !spec.tags.isEmpty {
+            out = out.filter { item in
+                let tags = Set(item.tags.map { $0.lowercased() })
+                return spec.tags.isSubset(of: tags)
+            }
+        }
+        if let pinned = spec.pinned { out = out.filter { $0.pinned == pinned } }
+        if let after = spec.after { out = out.filter { $0.createdAt >= after } }
+        if let before = spec.before { out = out.filter { $0.createdAt < before } }
         if let filterSource { out = out.filter { $0.sourceLabel == filterSource } }
-        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        let q = spec.textQuery.lowercased()
         if !q.isEmpty {
             // [T-collections-fulltext] 元数据没命中,再问全文索引——
             // "上周存的那篇讲 X 的" 靠的就是这一步。
@@ -84,6 +124,9 @@ struct CollectionsView: View {
         }
         return out.sorted { a, b in
             if a.pinned != b.pinned { return a.pinned }
+            if treasuryView == .recent || spec.recent {
+                return (a.lastOpenedAt ?? .distantPast) > (b.lastOpenedAt ?? .distantPast)
+            }
             // 笔记会被反复编辑,按最后改动排;收藏类 updatedAt 等于创建时间
             return a.updatedAt > b.updatedAt
         }
@@ -94,6 +137,7 @@ struct CollectionsView: View {
             if !editMode.isEditing {
                 treasuryHero
                 captureActions
+                treasuryViewPicker
                 importRow
             }
             if items.isEmpty {
@@ -151,7 +195,7 @@ struct CollectionsView: View {
             searchTask = Task {
                 try? await Task.sleep(nanoseconds: 250_000_000)
                 guard !Task.isCancelled else { return }
-                let hits = await CollectionSearchIndex.shared.search(newValue)
+                let hits = await CollectionSearchIndex.shared.search(TreasuryLocalQuery.parse(newValue).textQuery)
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
                     fullTextMatches = hits.map(\.itemId)
@@ -219,6 +263,9 @@ struct CollectionsView: View {
                 }
             }
             .presentationDetents([.medium])
+        }
+        .sheet(item: $readingItem) { item in
+            TreasuryReadingSheet(item: item) { reload() }
         }
         .fullScreenCover(item: $readerTarget) { target in
             LeoReaderView(url: target.url, preferReaderMode: target.preferReaderMode)
@@ -323,6 +370,34 @@ struct CollectionsView: View {
         .listRowBackground(Color.clear)
     }
 
+    private var treasuryViewPicker: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(TreasuryView.allCases) { view in
+                    Button {
+                        withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) {
+                            treasuryView = view
+                            if view != .all { showArchived = false }
+                        }
+                    } label: {
+                        Text(view.title)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(treasuryView == view ? Color.white : Color.primary)
+                            .padding(.horizontal, 12).padding(.vertical, 7)
+                            .background(treasuryView == view ? Color.orange : LeoTheme.ColorToken.surface,
+                                        in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(treasuryView == view ? .isSelected : [])
+                }
+            }
+            .padding(.horizontal, 14)
+        }
+        .listRowInsets(EdgeInsets())
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
+    }
+
     private func treasuryAction(
         _ title: String,
         icon: String,
@@ -380,6 +455,11 @@ struct CollectionsView: View {
             Button {
                 sendToAgent(item, prompt: nil)
             } label: { Label("发给 Agent", systemImage: "paperplane.fill") }
+            if item.kind != .file {
+                Button {
+                    readingItem = item
+                } label: { Label("阅读与高亮", systemImage: "highlighter") }
+            }
             Button {
                 sendToAgent(item, prompt: "用一两句话总结这条收藏的内容要点。")
             } label: { Label("让 Agent 总结", systemImage: "sparkles") }
@@ -755,8 +835,21 @@ struct CollectionsView: View {
                         title: article.title ?? item.title ?? "",
                         body: article.text)
                     attempts.removeValue(forKey: item.id)
+                    CollectionStore.mutate(id: item.id) { current in
+                        current.processingState = "ready"
+                        current.processingErrorCode = nil
+                        current.metadataFetched = true
+                        current.updatedAt = Date()
+                    }
                 } else {
                     attempts[item.id] = (attempts[item.id] ?? 0) + 1
+                    if attempts[item.id] == 3 {
+                        CollectionStore.mutate(id: item.id) { current in
+                            current.processingState = "partial"
+                            current.processingErrorCode = "article_extraction_unavailable"
+                            current.updatedAt = Date()
+                        }
+                    }
                 }
             }
             UserDefaults.standard.set(attempts, forKey: failKey)
@@ -786,8 +879,18 @@ struct CollectionsView: View {
     /// 其余一律**应用内阅读器**。以前的第三种去向(甩去外部 Safari)
     /// 已经取消 —— 公众号没有 deep-link 方案,每次都被甩出去的就是它。
     private func open(_ item: CollectedItem) {
+        CollectionStore.mutate(id: item.id) { current in
+            current.lastOpenedAt = Date()
+            if current.readingState == "unread" { current.readingState = "reading" }
+            current.updatedAt = Date()
+        }
+        reload()
         if item.kind == .note {
             editingNote = item
+            return
+        }
+        if item.kind == .text {
+            readingItem = CollectionStore.load().first(where: { $0.id == item.id }) ?? item
             return
         }
         guard item.kind == .link else {
@@ -911,6 +1014,257 @@ struct CollectionsView: View {
             // 循环尾统一刷一次:每条抓完就 reload 的话,十条 = 一分钟内
             // 十波全表解码 + Equatable 比较 + 列表动画。
             await MainActor.run { reload() }
+        }
+    }
+}
+
+// MARK: - 阅读、进度与定位高亮
+
+private struct TreasuryReadingSheet: View {
+    let item: CollectedItem
+    let onUpdate: () -> Void
+
+    @State private var bodyText = ""
+    @State private var bodyStatus = "loading"
+    @State private var readingState: String
+    @State private var progress: Double
+    @State private var selection = NSRange(location: NSNotFound, length: 0)
+    @State private var highlightNote = ""
+    @State private var highlights: [TreasureHighlight] = []
+    @State private var message: String?
+    @Environment(\.dismiss) private var dismiss
+
+    init(item: CollectedItem, onUpdate: @escaping () -> Void) {
+        self.item = item
+        self.onUpdate = onUpdate
+        _readingState = State(initialValue: item.readingState)
+        _progress = State(initialValue: item.readingProgress)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Picker("阅读状态", selection: $readingState) {
+                        Text("未读").tag("unread")
+                        Text("阅读中").tag("reading")
+                        Text("已读").tag("read")
+                    }
+                    .pickerStyle(.segmented)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("阅读进度")
+                            Spacer()
+                            Text(progress, format: .percent.precision(.fractionLength(0)))
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+                        Slider(value: $progress, in: 0...1, step: 0.01) { editing in
+                            if !editing { persistReadingState() }
+                        }
+                            .accessibilityLabel("阅读进度")
+                    }
+                }
+
+                Section("正文") {
+                    if bodyStatus == "loading" {
+                        ProgressView("正在读取…")
+                    } else if bodyText.isEmpty {
+                        ContentUnavailableView(
+                            bodyStatus == "missing" ? "正文文件缺失" : "正文尚未抽取",
+                            systemImage: "doc.text.magnifyingglass",
+                            description: Text("原始收藏仍然安全保留，增强失败不会删除内容。")
+                        )
+                    } else {
+                        SelectableTreasuryText(text: bodyText, selection: $selection)
+                            .frame(minHeight: 240)
+                            .accessibilityLabel("收藏正文，可选择文字添加高亮")
+                        if bodyStatus == "truncated" {
+                            Text("为保持阅读流畅，当前显示前 200,000 个字符；原始正文仍完整保留。")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                if !bodyText.isEmpty {
+                    Section {
+                        TextField("高亮批注（可选）", text: $highlightNote, axis: .vertical)
+                            .lineLimit(2...6)
+                        Button("保存所选文字为高亮", systemImage: "highlighter") {
+                            saveHighlight()
+                        }
+                        .disabled(selectedQuote == nil)
+                    } header: {
+                        Text("新建高亮")
+                    } footer: {
+                        if let quote = selectedQuote {
+                            Text("已选择：\(quote)").lineLimit(3)
+                        } else {
+                            Text("先在正文中选择一段文字；高亮会记录精确位置。")
+                        }
+                    }
+                }
+
+                if !highlights.isEmpty {
+                    Section("已保存高亮") {
+                        ForEach(highlights) { highlight in
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(highlight.quoteText)
+                                    .font(.callout)
+                                    .textSelection(.enabled)
+                                if let note = highlight.note, !note.isEmpty {
+                                    Text(note).font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                            .swipeActions {
+                                Button("删除", role: .destructive) {
+                                    CollectionStore.deleteHighlight(id: highlight.id)
+                                    reloadHighlights()
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if let message {
+                    Section { Text(message).foregroundStyle(.secondary) }
+                }
+            }
+            .navigationTitle(item.title?.isEmpty == false ? item.title! : "阅读")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("关闭") { persistReadingState(); dismiss() }
+                }
+            }
+            .task { await loadBody(); reloadHighlights() }
+            .onChange(of: readingState) { _, _ in persistReadingState() }
+            .onDisappear { persistReadingState() }
+        }
+    }
+
+    private var selectedQuote: String? {
+        guard selection.location != NSNotFound, selection.location >= 0,
+              selection.length > 0,
+              selection.location + selection.length <= (bodyText as NSString).length else { return nil }
+        let quote = (bodyText as NSString).substring(with: selection)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return quote.isEmpty ? nil : String(quote.prefix(20_000))
+    }
+
+    private func loadBody() async {
+        let resolution: (String, String)
+        switch item.kind {
+        case .text:
+            resolution = (item.value, "available")
+        case .note:
+            guard let bodyFile = item.bodyFile else {
+                resolution = ("", "missing"); break
+            }
+            let value = await NoteBodyStore.load(bodyFile)
+            resolution = (value, value.isEmpty ? "missing" : "available")
+        case .link:
+            let indexed = await CollectionSearchIndex.shared.document(itemId: item.id)?.body ?? ""
+            resolution = (indexed, indexed.isEmpty ? "not_extracted" : "available")
+        case .file:
+            guard let bodyFile = item.bodyFile else {
+                resolution = ("", "not_extracted"); break
+            }
+            let value = await NoteBodyStore.load(bodyFile)
+            resolution = (value, value.isEmpty ? "missing" : "available")
+        }
+        guard !Task.isCancelled else { return }
+        let readerLimit = 200_000
+        bodyText = String(resolution.0.prefix(readerLimit))
+        bodyStatus = resolution.0.count > readerLimit ? "truncated" : resolution.1
+    }
+
+    private func persistReadingState() {
+        let requestedProgress = min(1, max(0, progress))
+        let safeProgress: Double
+        let effectiveState: String
+        switch readingState {
+        case "none", "unread":
+            safeProgress = 0
+            effectiveState = readingState
+        case "read":
+            safeProgress = 1
+            effectiveState = "read"
+        default:
+            safeProgress = requestedProgress
+            effectiveState = requestedProgress >= 1 ? "read" : "reading"
+        }
+        CollectionStore.mutate(id: item.id) { current in
+            current.readingState = effectiveState
+            current.readingProgress = safeProgress
+            current.lastOpenedAt = current.lastOpenedAt ?? Date()
+            current.updatedAt = Date()
+        }
+        if safeProgress != progress { progress = safeProgress }
+        if effectiveState != readingState { readingState = effectiveState }
+        onUpdate()
+    }
+
+    private func saveHighlight() {
+        guard let quote = selectedQuote else { return }
+        let rawRange = (bodyText as NSString).range(of: quote, options: [], range: selection)
+        guard rawRange.location != NSNotFound,
+              let saved = CollectionStore.addHighlight(
+                itemID: item.id, body: bodyText, quoteText: quote, note: highlightNote,
+                startOffset: rawRange.location, endOffset: rawRange.location + rawRange.length
+              ) else {
+            message = "高亮保存失败，请确认正文仍然可用后重试。"
+            return
+        }
+        highlights.append(saved)
+        highlights.sort {
+            let leftPage = $0.pageNumber ?? 0
+            let rightPage = $1.pageNumber ?? 0
+            return leftPage == rightPage ? $0.startOffset < $1.startOffset : leftPage < rightPage
+        }
+        highlightNote = ""
+        selection = NSRange(location: NSNotFound, length: 0)
+        message = "高亮已保存。"
+    }
+
+    private func reloadHighlights() {
+        highlights = CollectionStore.highlights(itemID: item.id)
+    }
+}
+
+private struct SelectableTreasuryText: UIViewRepresentable {
+    let text: String
+    @Binding var selection: NSRange
+
+    func makeCoordinator() -> Coordinator { Coordinator(selection: $selection) }
+
+    func makeUIView(context: Context) -> UITextView {
+        let view = UITextView()
+        view.delegate = context.coordinator
+        view.isEditable = false
+        view.isSelectable = true
+        view.isScrollEnabled = false
+        view.backgroundColor = .clear
+        view.adjustsFontForContentSizeCategory = true
+        view.font = .preferredFont(forTextStyle: .body)
+        view.textContainerInset = .zero
+        view.textContainer.lineFragmentPadding = 0
+        view.accessibilityTraits.insert(.staticText)
+        return view
+    }
+
+    func updateUIView(_ view: UITextView, context: Context) {
+        if view.text != text { view.text = text }
+        context.coordinator.selection = $selection
+    }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var selection: Binding<NSRange>
+        init(selection: Binding<NSRange>) { self.selection = selection }
+
+        func textViewDidChangeSelection(_ textView: UITextView) {
+            selection.wrappedValue = textView.selectedRange
         }
     }
 }

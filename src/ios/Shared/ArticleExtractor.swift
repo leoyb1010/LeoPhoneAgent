@@ -18,7 +18,94 @@
 //
 
 import Foundation
+import CFNetwork
 import WebKit
+
+enum TreasuryURLPolicy {
+    static func isCandidate(_ url: URL) -> Bool {
+        guard ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
+              url.user == nil, url.password == nil,
+              let host = url.host?.lowercased(), !host.isEmpty else { return false }
+        if host == "localhost" || host.hasSuffix(".localhost") || host.hasSuffix(".local") ||
+            host.hasSuffix(".internal") || host.hasSuffix(".lan") || host.hasSuffix(".home") ||
+            host.hasSuffix(".arpa") { return false }
+        return true
+    }
+
+    static func allows(_ url: URL) async -> Bool {
+        guard isCandidate(url), let host = url.host else { return false }
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                continuation.resume(returning: resolvedAddressesArePublic(host))
+            }
+        }
+    }
+
+    private static func resolvedAddressesArePublic(_ host: String) -> Bool {
+        let target = CFHostCreateWithName(nil, host as CFString).takeRetainedValue()
+        var error = CFStreamError()
+        guard CFHostStartInfoResolution(target, .addresses, &error) else { return false }
+        var resolved = DarwinBoolean(false)
+        guard let raw = CFHostGetAddressing(target, &resolved)?.takeUnretainedValue(),
+              resolved.boolValue,
+              let addresses = raw as? [Data], !addresses.isEmpty else { return false }
+        return addresses.allSatisfy(isPublicSocketAddress)
+    }
+
+    private static func isPublicSocketAddress(_ data: Data) -> Bool {
+        guard data.count >= MemoryLayout<sockaddr>.size else { return false }
+        return data.withUnsafeBytes { bytes in
+            guard let base = bytes.baseAddress?.assumingMemoryBound(to: sockaddr.self) else { return false }
+            switch Int32(base.pointee.sa_family) {
+            case AF_INET:
+                guard data.count >= MemoryLayout<sockaddr_in>.size else { return false }
+                var address = sockaddr_in()
+                _ = withUnsafeMutableBytes(of: &address) { data.copyBytes(to: $0) }
+                let value = UInt32(bigEndian: address.sin_addr.s_addr)
+                return isPublicIPv4([
+                    Int((value >> 24) & 0xff), Int((value >> 16) & 0xff),
+                    Int((value >> 8) & 0xff), Int(value & 0xff)
+                ])
+            case AF_INET6:
+                guard data.count >= MemoryLayout<sockaddr_in6>.size else { return false }
+                var address = sockaddr_in6()
+                _ = withUnsafeMutableBytes(of: &address) { data.copyBytes(to: $0) }
+                let octets = withUnsafeBytes(of: address.sin6_addr) { Array($0) }
+                return isPublicIPv6(octets)
+            default:
+                return false
+            }
+        }
+    }
+
+    private static func isPublicIPv4(_ b: [Int]) -> Bool {
+        guard b.count == 4 else { return false }
+        return !(
+            b[0] == 0 || b[0] == 10 || b[0] == 127 || b[0] >= 224 ||
+            (b[0] == 100 && (64...127).contains(b[1])) ||
+            (b[0] == 169 && b[1] == 254) ||
+            (b[0] == 172 && (16...31).contains(b[1])) ||
+            (b[0] == 192 && b[1] == 168) ||
+            (b[0] == 192 && b[1] == 0 && (0...2).contains(b[2])) ||
+            (b[0] == 198 && (18...19).contains(b[1])) ||
+            (b[0] == 198 && b[1] == 51 && b[2] == 100) ||
+            (b[0] == 203 && b[1] == 0 && b[2] == 113)
+        )
+    }
+
+    private static func isPublicIPv6(_ b: [UInt8]) -> Bool {
+        guard b.count == 16 else { return false }
+        if b.allSatisfy({ $0 == 0 }) || b == Array(repeating: 0, count: 15) + [1] { return false }
+        if (b[0] & 0xfe) == 0xfc || (b[0] == 0xfe && (b[1] & 0xc0) == 0x80) || b[0] == 0xff {
+            return false
+        }
+        if b[0...3].elementsEqual([0x20, 0x01, 0x0d, 0xb8]) { return false }
+        if b[0..<10].allSatisfy({ $0 == 0 }) && b[10] == 0xff && b[11] == 0xff {
+            return isPublicIPv4(b[12...15].map(Int.init))
+        }
+        return true
+    }
+}
 
 @MainActor
 final class ArticleExtractor: NSObject {
@@ -38,11 +125,15 @@ final class ArticleExtractor: NSObject {
     func extract(url: URL, timeout: TimeInterval = 20) async -> Article? {
         // 已有任务在跑就直接拒绝,不排队不并发(WebView 很重)
         guard continuation == nil else { return nil }
+        guard await TreasuryURLPolicy.allows(url) else { return nil }
+        let blocker = await Self.subresourceBlocker()
 
         let raw: String? = await withCheckedContinuation { cont in
             self.continuation = cont
             let config = WKWebViewConfiguration()
-            config.defaultWebpagePreferences.allowsContentJavaScript = true
+            // 页面脚本和网络子资源都不执行；正文抽取脚本由 App 自己注入。
+            config.defaultWebpagePreferences.allowsContentJavaScript = false
+            if let blocker { config.userContentController.add(blocker) }
             // 不要媒体自动播放,省电省流量
             config.allowsInlineMediaPlayback = false
             let web = WKWebView(frame: .init(x: 0, y: 0, width: 390, height: 844),
@@ -118,9 +209,36 @@ final class ArticleExtractor: NSObject {
       }
     })();
     """
+
+    private static func subresourceBlocker() async -> WKContentRuleList? {
+        let rules = """
+        [{"trigger":{"url-filter":".*","resource-type":["image","style-sheet","script","font","media","svg-document","raw"]},"action":{"type":"block"}}]
+        """
+        return await withCheckedContinuation { continuation in
+            WKContentRuleListStore.default().compileContentRuleList(
+                forIdentifier: "LeoTreasuryNoSubresources", encodedContentRuleList: rules
+            ) { list, _ in
+                continuation.resume(returning: list)
+            }
+        }
+    }
 }
 
 extension ArticleExtractor: WKNavigationDelegate {
+    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
+                 decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        guard navigationAction.targetFrame?.isMainFrame != false,
+              let url = navigationAction.request.url else {
+            decisionHandler(.cancel)
+            return
+        }
+        Task {
+            let allowed = await TreasuryURLPolicy.allows(url)
+            decisionHandler(allowed ? .allow : .cancel)
+            if !allowed { await MainActor.run { self.finish(nil) } }
+        }
+    }
+
     nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         Task { @MainActor in
             // 让首屏 JS 渲染一拍再抽,单页应用的正文常常是后填的

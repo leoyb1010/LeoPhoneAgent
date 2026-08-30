@@ -24,7 +24,8 @@ interface TreasureDao {
     @Query("""
         SELECT stable_id, kind, title, source_uri, source_label,
                substr(COALESCE(NULLIF(summary, ''), NULLIF(original_text, ''), source_uri, processing_error_code, ''), 1, 400) AS snippet,
-               '' AS match_offsets, tags_json, pinned, archived, processing_state, processing_error_code, created_at, updated_at
+               '' AS match_offsets, tags_json, pinned, archived, reading_state, reading_progress,
+               last_opened_at, processing_state, processing_error_code, created_at, updated_at
         FROM treasure_items
         WHERE deleted_at IS NULL
         ORDER BY pinned DESC, updated_at DESC
@@ -40,6 +41,21 @@ interface TreasureDao {
 
     @Query("SELECT * FROM treasure_items WHERE stable_id = :id AND deleted_at IS NULL LIMIT 1")
     suspend fun getById(id: String): TreasureItemEntity?
+
+    @Query("SELECT * FROM treasure_highlights WHERE item_id = :itemId AND deleted_at IS NULL ORDER BY page_number, start_offset, created_at")
+    fun observeHighlights(itemId: String): Flow<List<TreasureHighlightEntity>>
+
+    @Query("SELECT * FROM treasure_highlights WHERE id = :id AND deleted_at IS NULL LIMIT 1")
+    suspend fun getHighlight(id: String): TreasureHighlightEntity?
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertHighlight(highlight: TreasureHighlightEntity)
+
+    @Query("UPDATE treasure_highlights SET deleted_at = :now, updated_at = :now WHERE id = :id AND deleted_at IS NULL")
+    suspend fun softDeleteHighlight(id: String, now: Long): Int
+
+    @Query("UPDATE treasure_items SET updated_at = :now, sync_state = 'pending' WHERE stable_id = :itemId AND deleted_at IS NULL")
+    suspend fun touchItem(itemId: String, now: Long): Int
 
     @Query("SELECT * FROM treasure_items WHERE normalized_url_key = :key AND deleted_at IS NULL LIMIT 1")
     suspend fun findByNormalizedUrl(key: String): TreasureItemEntity?
@@ -95,8 +111,30 @@ interface TreasureDao {
     @Query("UPDATE treasure_items SET title = COALESCE(:title, title), original_text = COALESCE(:originalText, original_text), processing_state = :state, processing_error_code = NULL, updated_at = :now, sync_state = 'pending' WHERE stable_id = :itemId AND deleted_at IS NULL")
     suspend fun applyEnhancementRaw(itemId: String, title: String?, originalText: String?, state: String, now: Long): Int
 
+    @Query("DELETE FROM treasure_chunks WHERE item_id = :itemId")
+    suspend fun deleteChunks(itemId: String)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertChunks(chunks: List<TreasureChunkEntity>)
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertChange(change: TreasureChangeEntity)
+
+    @Transaction
+    suspend fun addHighlight(highlight: TreasureHighlightEntity, change: TreasureChangeEntity): Boolean {
+        val touched = touchItem(highlight.itemId, highlight.updatedAt)
+        if (touched <= 0) return false
+        insertHighlight(highlight)
+        insertChange(change)
+        return true
+    }
+
+    @Transaction
+    suspend fun deleteHighlight(id: String, itemId: String, now: Long, change: TreasureChangeEntity): Boolean {
+        val deleted = softDeleteHighlight(id, now)
+        if (deleted > 0 && touchItem(itemId, now) > 0) insertChange(change)
+        return deleted > 0
+    }
 
     @Transaction
     suspend fun updateProcessingState(
@@ -129,6 +167,23 @@ interface TreasureDao {
     ): Int {
         val count = applyEnhancementRaw(itemId, title, originalText, state, now)
         if (count > 0) insertChange(change)
+        return count
+    }
+
+    @Transaction
+    suspend fun applyDocumentExtraction(
+        itemId: String,
+        originalText: String,
+        chunks: List<TreasureChunkEntity>,
+        now: Long,
+        change: TreasureChangeEntity,
+    ): Int {
+        val count = applyEnhancementRaw(itemId, null, originalText, "ready", now)
+        if (count > 0) {
+            deleteChunks(itemId)
+            insertChunks(chunks)
+            insertChange(change)
+        }
         return count
     }
 

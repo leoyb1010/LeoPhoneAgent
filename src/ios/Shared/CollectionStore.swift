@@ -18,6 +18,92 @@ import CryptoKit
 import Foundation
 import SQLite3
 
+struct TreasuryLocalQuery: Equatable {
+    let textQuery: String
+    let kinds: Set<String>
+    let processingStates: Set<String>
+    let readingStates: Set<String>
+    let tags: Set<String>
+    let pinned: Bool?
+    let archived: Bool
+    let recent: Bool
+    let after: Date?
+    let before: Date?
+
+    private static let allowedKinds = Set([
+        "link", "text", "note", "image", "document", "audio", "video", "artifact"
+    ])
+    private static let allowedProcessing = Set([
+        "saved", "queued", "processing", "ready", "partial", "failed"
+    ])
+    private static let allowedReading = Set(["none", "unread", "reading", "read"])
+
+    static func parse(_ raw: String) -> TreasuryLocalQuery {
+        var text: [String] = []
+        var kinds = Set<String>()
+        var processingStates = Set<String>()
+        var readingStates = Set<String>()
+        var tags = Set<String>()
+        var pinned: Bool?
+        var archived = false
+        var recent = false
+        var after: Date?
+        var before: Date?
+
+        for token in raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            .prefix(512).split(whereSeparator: \.isWhitespace).map(String.init) {
+            let pair = token.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+            guard pair.count == 2 else { text.append(token); continue }
+            let name = pair[0].lowercased()
+            let value = pair[1].trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let values = value.split(separator: ",").map(String.init).filter { !$0.isEmpty }
+            var consumed = false
+            switch name {
+            case "type", "kind":
+                let valid = values.filter(allowedKinds.contains)
+                kinds.formUnion(valid); consumed = !valid.isEmpty
+            case "state", "process":
+                let valid = values.filter(allowedProcessing.contains)
+                processingStates.formUnion(valid); consumed = !valid.isEmpty
+            case "read", "reading":
+                let valid = values.filter(allowedReading.contains)
+                readingStates.formUnion(valid); consumed = !valid.isEmpty
+            case "tag":
+                let valid = values.map { String($0.prefix(100)) }
+                tags.formUnion(valid); consumed = !valid.isEmpty
+            case "is":
+                switch value {
+                case "pinned": pinned = true; consumed = true
+                case "unpinned": pinned = false; consumed = true
+                case "archived": archived = true; consumed = true
+                case "recent": recent = true; consumed = true
+                default: break
+                }
+            case "after": after = parseDay(value); consumed = after != nil
+            case "before": before = parseDay(value); consumed = before != nil
+            default: break
+            }
+            if !consumed { text.append(token) }
+        }
+        return TreasuryLocalQuery(
+            textQuery: text.joined(separator: " "), kinds: kinds,
+            processingStates: processingStates, readingStates: readingStates,
+            tags: tags, pinned: pinned, archived: archived, recent: recent,
+            after: after, before: before
+        )
+    }
+
+    private static func parseDay(_ value: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.isLenient = false
+        return formatter.date(from: value)
+    }
+}
+
 struct CollectedItem: Codable, Identifiable, Equatable {
     enum Kind: String, Codable {
         case link, text, file
@@ -57,6 +143,11 @@ struct CollectedItem: Codable, Identifiable, Equatable {
     var archived: Bool
     /// 最后修改时间(笔记排序用;收藏类等于创建时间)。
     var updatedAt: Date
+    var readingState: String
+    var readingProgress: Double
+    var lastOpenedAt: Date?
+    var processingState: String
+    var processingErrorCode: String?
 
     init(kind: Kind, value: String, sourceLabel: String) {
         self.id = UUID().uuidString
@@ -75,12 +166,20 @@ struct CollectedItem: Codable, Identifiable, Equatable {
         self.annotation = nil
         self.archived = false
         self.updatedAt = Date()
+        self.readingState = kind == .link ? "unread" : "none"
+        self.readingProgress = 0
+        self.lastOpenedAt = nil
+        self.processingState = (kind == .text || kind == .note) ? "ready" : "saved"
+        self.processingErrorCode = nil
     }
 
     init(id: String, kind: Kind, value: String, resolvedURL: String?, title: String?,
          thumbnailFile: String?, sourceLabel: String, createdAt: Date, tags: [String],
          pinned: Bool, summary: String?, metadataFetched: Bool, bodyFile: String?,
-         annotation: String?, archived: Bool, updatedAt: Date) {
+         annotation: String?, archived: Bool, updatedAt: Date,
+         readingState: String = "none", readingProgress: Double = 0,
+         lastOpenedAt: Date? = nil, processingState: String = "saved",
+         processingErrorCode: String? = nil) {
         self.id = id
         self.kind = kind
         self.value = value
@@ -97,6 +196,11 @@ struct CollectedItem: Codable, Identifiable, Equatable {
         self.annotation = annotation
         self.archived = archived
         self.updatedAt = updatedAt
+        self.readingState = readingState
+        self.readingProgress = readingProgress
+        self.lastOpenedAt = lastOpenedAt
+        self.processingState = processingState
+        self.processingErrorCode = processingErrorCode
     }
 
     /// 新建一条空笔记。
@@ -118,7 +222,8 @@ struct CollectedItem: Codable, Identifiable, Equatable {
     enum CodingKeys: String, CodingKey {
         case id, kind, value, resolvedURL, title, thumbnailFile, sourceLabel
         case createdAt, tags, pinned, summary, metadataFetched
-        case bodyFile, annotation, archived, updatedAt
+        case bodyFile, annotation, archived, updatedAt, readingState, readingProgress
+        case lastOpenedAt, processingState, processingErrorCode
     }
 
     init(from decoder: Decoder) throws {
@@ -139,7 +244,39 @@ struct CollectedItem: Codable, Identifiable, Equatable {
         annotation = try c.decodeIfPresent(String.self, forKey: .annotation)
         archived = (try? c.decode(Bool.self, forKey: .archived)) ?? false
         updatedAt = (try? c.decode(Date.self, forKey: .updatedAt)) ?? createdAt
+        readingState = (try? c.decode(String.self, forKey: .readingState))
+            ?? (kind == .link ? "unread" : "none")
+        readingProgress = min(1, max(0, (try? c.decode(Double.self, forKey: .readingProgress)) ?? 0))
+        lastOpenedAt = try c.decodeIfPresent(Date.self, forKey: .lastOpenedAt)
+        processingState = (try? c.decode(String.self, forKey: .processingState))
+            ?? (metadataFetched ? "ready" : "saved")
+        processingErrorCode = try c.decodeIfPresent(String.self, forKey: .processingErrorCode)
     }
+}
+
+extension CollectedItem {
+    var treasuryKind: String {
+        guard kind == .file else { return kind.rawValue }
+        if sourceLabel.localizedCaseInsensitiveContains("artifact") { return "artifact" }
+        let ext = (value as NSString).pathExtension.lowercased()
+        if ["jpg", "jpeg", "png", "gif", "webp", "heic"].contains(ext) { return "image" }
+        if ["mp3", "m4a", "wav", "aac"].contains(ext) { return "audio" }
+        if ["mp4", "mov", "m4v"].contains(ext) { return "video" }
+        return "document"
+    }
+}
+
+struct TreasureHighlight: Codable, Identifiable, Equatable {
+    let id: String
+    let itemID: String
+    let quoteText: String
+    let note: String?
+    let startOffset: Int
+    let endOffset: Int
+    let pageNumber: Int?
+    let createdAt: Date
+    let updatedAt: Date
+    let originDeviceID: String
 }
 
 /// Wire/import/export contract shared with Android and Mac. This is separate
@@ -267,7 +404,11 @@ struct TreasureItemContract: Codable, Equatable {
             sourceLabel: sourceLabel, createdAt: created, tags: tags, pinned: pinned,
             summary: summary, metadataFetched: processingState == "ready",
             bodyFile: legacyKind == .note ? bodyRef.flatMap(Self.safeLastPathComponent) : nil,
-            annotation: annotation, archived: archived, updatedAt: updated
+            annotation: annotation, archived: archived, updatedAt: updated,
+            readingState: readingState, readingProgress: readingProgress,
+            lastOpenedAt: lastOpenedAt.flatMap(Self.date),
+            processingState: processingState,
+            processingErrorCode: processingErrorCode
         )
     }
 
@@ -478,6 +619,49 @@ enum CollectionStore {
         }
     }
 
+    static func highlights(itemID: String) -> [TreasureHighlight] {
+        ioQueue.sync {
+            guard let directory else { return [] }
+            return (try? TreasurySQLiteStore(directory: directory).highlights(itemID: itemID)) ?? []
+        }
+    }
+
+    @discardableResult
+    static func addHighlight(itemID: String, body: String, quoteText: String, note: String?,
+                             startOffset: Int, endOffset: Int,
+                             pageNumber: Int? = nil) -> TreasureHighlight? {
+        ioQueue.sync {
+            guard let directory else { return nil }
+            let utf16Body = body as NSString
+            guard startOffset >= 0, endOffset > startOffset,
+                  endOffset <= utf16Body.length,
+                  utf16Body.substring(with: NSRange(
+                    location: startOffset, length: endOffset - startOffset
+                  )) == quoteText else { return nil }
+            let cleanNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let highlight = TreasureHighlight(
+                id: UUID().uuidString, itemID: itemID, quoteText: String(quoteText.prefix(20_000)),
+                note: cleanNote.flatMap { $0.isEmpty ? nil : String($0.prefix(20_000)) },
+                startOffset: startOffset, endOffset: endOffset,
+                pageNumber: pageNumber.flatMap { $0 > 0 ? $0 : nil },
+                createdAt: Date(), updatedAt: Date(), originDeviceID: TreasurySQLiteStore.originDeviceID()
+            )
+            do {
+                try TreasurySQLiteStore(directory: directory).addHighlight(highlight, body: body)
+                return highlight
+            } catch {
+                return nil
+            }
+        }
+    }
+
+    static func deleteHighlight(id: String) {
+        ioQueue.sync {
+            guard let directory else { return }
+            try? TreasurySQLiteStore(directory: directory).deleteHighlight(id: id)
+        }
+    }
+
     static func delete(ids: Set<String>) {
         ioQueue.sync {
             guard let directory else { return }
@@ -666,7 +850,9 @@ final class TreasurySQLiteStore {
             let sql = """
             SELECT id, kind, legacy_value, resolved_url, title, preview_ref,
                    source_label, created_at, tags_json, pinned, summary,
-                   metadata_fetched, body_ref, annotation, archived, updated_at
+                   metadata_fetched, body_ref, annotation, archived, updated_at,
+                   reading_state, reading_progress, last_opened_at,
+                   processing_state, processing_error_code
             FROM treasure_items \(predicate)
             ORDER BY pinned DESC, updated_at DESC, created_at DESC
             \(pagination)
@@ -721,6 +907,95 @@ final class TreasurySQLiteStore {
         }
     }
 
+    func highlights(itemID: String) throws -> [TreasureHighlight] {
+        try withDatabase { db in
+            var stmt: OpaquePointer?
+            try Self.prepare(db, """
+                SELECT id,item_id,quote_text,note,start_offset,end_offset,page_number,
+                       created_at,updated_at,origin_device_id
+                FROM treasure_highlights
+                WHERE item_id=? AND deleted_at IS NULL
+                ORDER BY COALESCE(page_number,0),start_offset,created_at
+                """, &stmt)
+            defer { sqlite3_finalize(stmt) }
+            Self.bind(itemID, stmt, 1)
+            var values: [TreasureHighlight] = []
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                values.append(TreasureHighlight(
+                    id: Self.text(stmt, 0), itemID: Self.text(stmt, 1),
+                    quoteText: Self.text(stmt, 2), note: Self.optionalText(stmt, 3),
+                    startOffset: Int(sqlite3_column_int64(stmt, 4)),
+                    endOffset: Int(sqlite3_column_int64(stmt, 5)),
+                    pageNumber: sqlite3_column_type(stmt, 6) == SQLITE_NULL ? nil
+                        : Int(sqlite3_column_int64(stmt, 6)),
+                    createdAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 7)),
+                    updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 8)),
+                    originDeviceID: Self.text(stmt, 9)
+                ))
+            }
+            return values
+        }
+    }
+
+    func addHighlight(_ highlight: TreasureHighlight, body: String) throws {
+        guard highlight.startOffset >= 0, highlight.endOffset > highlight.startOffset,
+              !highlight.quoteText.isEmpty else { throw StoreError.invalidImport }
+        let utf16Body = body as NSString
+        guard highlight.endOffset <= utf16Body.length,
+              utf16Body.substring(with: NSRange(
+                location: highlight.startOffset,
+                length: highlight.endOffset - highlight.startOffset
+              )) == highlight.quoteText else { throw StoreError.invalidImport }
+        try withDatabase { db in
+            try Self.transaction(db) {
+                guard try Self.scalarInt(
+                    db, sql: "SELECT COUNT(*) FROM treasure_items WHERE id=? AND deleted_at IS NULL",
+                    bindings: [highlight.itemID]
+                ) > 0 else { throw StoreError.invalidImport }
+                var stmt: OpaquePointer?
+                try Self.prepare(db, """
+                    INSERT INTO treasure_highlights(
+                      id,item_id,quote_text,note,start_offset,end_offset,page_number,
+                      created_at,updated_at,origin_device_id,deleted_at
+                    ) VALUES(?,?,?,?,?,?,?,?,?,?,NULL)
+                    """, &stmt)
+                defer { sqlite3_finalize(stmt) }
+                Self.bind(highlight.id, stmt, 1); Self.bind(highlight.itemID, stmt, 2)
+                Self.bind(highlight.quoteText, stmt, 3); Self.bind(highlight.note, stmt, 4)
+                sqlite3_bind_int64(stmt, 5, Int64(highlight.startOffset))
+                sqlite3_bind_int64(stmt, 6, Int64(highlight.endOffset))
+                if let pageNumber = highlight.pageNumber { sqlite3_bind_int(stmt, 7, Int32(pageNumber)) }
+                else { sqlite3_bind_null(stmt, 7) }
+                sqlite3_bind_double(stmt, 8, highlight.createdAt.timeIntervalSince1970)
+                sqlite3_bind_double(stmt, 9, highlight.updatedAt.timeIntervalSince1970)
+                Self.bind(highlight.originDeviceID, stmt, 10)
+                try Self.stepDone(db, stmt)
+                try Self.touchItemAndAppendChange(highlight.itemID, at: highlight.updatedAt, db: db)
+            }
+        }
+    }
+
+    func deleteHighlight(id: String) throws {
+        try withDatabase { db in
+            try Self.transaction(db) {
+                var lookup: OpaquePointer?
+                try Self.prepare(db, "SELECT item_id FROM treasure_highlights WHERE id=? AND deleted_at IS NULL", &lookup)
+                Self.bind(id, lookup, 1)
+                guard sqlite3_step(lookup) == SQLITE_ROW else { sqlite3_finalize(lookup); return }
+                let itemID = Self.text(lookup, 0)
+                sqlite3_finalize(lookup)
+                let now = Date()
+                var stmt: OpaquePointer?
+                try Self.prepare(db, "UPDATE treasure_highlights SET deleted_at=?,updated_at=? WHERE id=? AND deleted_at IS NULL", &stmt)
+                sqlite3_bind_double(stmt, 1, now.timeIntervalSince1970)
+                sqlite3_bind_double(stmt, 2, now.timeIntervalSince1970)
+                Self.bind(id, stmt, 3)
+                try Self.stepDone(db, stmt)
+                try Self.touchItemAndAppendChange(itemID, at: now, db: db)
+            }
+        }
+    }
+
     func mutate(id: String, _ transform: (inout CollectedItem) -> Void) throws {
         try withDatabase { db in
             try Self.transaction(db) {
@@ -729,7 +1004,9 @@ final class TreasurySQLiteStore {
                     sql: """
                     SELECT id, kind, legacy_value, resolved_url, title, preview_ref,
                            source_label, created_at, tags_json, pinned, summary,
-                           metadata_fetched, body_ref, annotation, archived, updated_at
+                           metadata_fetched, body_ref, annotation, archived, updated_at,
+                           reading_state, reading_progress, last_opened_at,
+                           processing_state, processing_error_code
                     FROM treasure_items WHERE id = ? AND deleted_at IS NULL
                     """,
                     bindings: [id]
@@ -1286,6 +1563,15 @@ final class TreasurySQLiteStore {
           PRIMARY KEY(item_id, chunk_index),
           FOREIGN KEY(item_id) REFERENCES treasure_items(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS treasure_highlights (
+          id TEXT PRIMARY KEY, item_id TEXT NOT NULL, quote_text TEXT NOT NULL,
+          note TEXT, start_offset INTEGER NOT NULL, end_offset INTEGER NOT NULL,
+          page_number INTEGER, created_at REAL NOT NULL, updated_at REAL NOT NULL,
+          origin_device_id TEXT NOT NULL, deleted_at REAL,
+          FOREIGN KEY(item_id) REFERENCES treasure_items(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_treasure_highlights_item
+          ON treasure_highlights(item_id, deleted_at, updated_at);
         CREATE TABLE IF NOT EXISTS treasure_jobs (
           id TEXT PRIMARY KEY, item_id TEXT NOT NULL, job_type TEXT NOT NULL,
           state TEXT NOT NULL, attempt_count INTEGER NOT NULL DEFAULT 0,
@@ -1376,9 +1662,10 @@ final class TreasurySQLiteStore {
           id, kind, legacy_value, source_uri, normalized_url_key, resolved_url,
           title, source_label, original_text, body_ref, preview_ref, mime_type,
           byte_count, content_digest, summary, annotation, tags_json, pinned,
-          archived, created_at, updated_at, processing_state, sync_state,
+          archived, reading_state, reading_progress, created_at, updated_at,
+          last_opened_at, processing_state, processing_error_code, sync_state,
           origin_device_id, deleted_at, metadata_fetched
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?)
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL,?)
         ON CONFLICT(id) DO UPDATE SET
           kind=excluded.kind, legacy_value=excluded.legacy_value,
           source_uri=excluded.source_uri, normalized_url_key=excluded.normalized_url_key,
@@ -1389,7 +1676,12 @@ final class TreasurySQLiteStore {
           content_digest=COALESCE(excluded.content_digest, treasure_items.content_digest),
           summary=excluded.summary, annotation=excluded.annotation,
           tags_json=excluded.tags_json, pinned=excluded.pinned,
-          archived=excluded.archived, updated_at=excluded.updated_at,
+          archived=excluded.archived, reading_state=excluded.reading_state,
+          reading_progress=excluded.reading_progress,
+          last_opened_at=excluded.last_opened_at,
+          processing_state=excluded.processing_state,
+          processing_error_code=excluded.processing_error_code,
+          updated_at=excluded.updated_at,
           metadata_fetched=excluded.metadata_fetched
         WHERE treasure_items.deleted_at IS NULL
         """
@@ -1408,12 +1700,20 @@ final class TreasurySQLiteStore {
         bind(tags, stmt, 17)
         sqlite3_bind_int(stmt, 18, item.pinned ? 1 : 0)
         sqlite3_bind_int(stmt, 19, item.archived ? 1 : 0)
-        sqlite3_bind_double(stmt, 20, item.createdAt.timeIntervalSince1970)
-        sqlite3_bind_double(stmt, 21, item.updatedAt.timeIntervalSince1970)
-        bind("saved", stmt, 22)
-        bind("local", stmt, 23)
-        bind(originDeviceID(), stmt, 24)
-        sqlite3_bind_int(stmt, 25, item.metadataFetched ? 1 : 0)
+        bind(item.readingState, stmt, 20)
+        sqlite3_bind_double(stmt, 21, min(1, max(0, item.readingProgress)))
+        sqlite3_bind_double(stmt, 22, item.createdAt.timeIntervalSince1970)
+        sqlite3_bind_double(stmt, 23, item.updatedAt.timeIntervalSince1970)
+        if let lastOpenedAt = item.lastOpenedAt {
+            sqlite3_bind_double(stmt, 24, lastOpenedAt.timeIntervalSince1970)
+        } else {
+            sqlite3_bind_null(stmt, 24)
+        }
+        bind(item.processingState, stmt, 25)
+        bind(item.processingErrorCode, stmt, 26)
+        bind("local", stmt, 27)
+        bind(originDeviceID(), stmt, 28)
+        sqlite3_bind_int(stmt, 29, item.metadataFetched ? 1 : 0)
         try stepDone(db, stmt)
     }
 
@@ -1439,7 +1739,13 @@ final class TreasurySQLiteStore {
                 bodyFile: optionalText(stmt, 12).flatMap(TreasureItemContract.safeLastPathComponent),
                 annotation: optionalText(stmt, 13),
                 archived: sqlite3_column_int(stmt, 14) != 0,
-                updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 15))
+                updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 15)),
+                readingState: text(stmt, 16),
+                readingProgress: sqlite3_column_double(stmt, 17),
+                lastOpenedAt: sqlite3_column_type(stmt, 18) == SQLITE_NULL ? nil
+                    : Date(timeIntervalSince1970: sqlite3_column_double(stmt, 18)),
+                processingState: text(stmt, 19),
+                processingErrorCode: optionalText(stmt, 20)
             ))
         }
         return items
@@ -1464,6 +1770,29 @@ final class TreasurySQLiteStore {
     private static func appendChange(for item: CollectedItem, operation: String,
                                      db: OpaquePointer?) throws {
         try appendChange(itemID: item.id, item: item, operation: operation, db: db)
+    }
+
+    private static func touchItemAndAppendChange(_ itemID: String, at date: Date,
+                                                 db: OpaquePointer?) throws {
+        var touch: OpaquePointer?
+        try prepare(db, "UPDATE treasure_items SET updated_at=?,sync_state='pending' WHERE id=? AND deleted_at IS NULL", &touch)
+        sqlite3_bind_double(touch, 1, date.timeIntervalSince1970)
+        bind(itemID, touch, 2)
+        try stepDone(db, touch)
+        sqlite3_finalize(touch)
+        guard let item = try queryItems(
+            db,
+            sql: """
+            SELECT id, kind, legacy_value, resolved_url, title, preview_ref,
+                   source_label, created_at, tags_json, pinned, summary,
+                   metadata_fetched, body_ref, annotation, archived, updated_at,
+                   reading_state, reading_progress, last_opened_at,
+                   processing_state, processing_error_code
+            FROM treasure_items WHERE id=? AND deleted_at IS NULL
+            """,
+            bindings: [itemID]
+        ).first else { return }
+        try appendChange(for: item, operation: "upsert", db: db)
     }
 
     private static func appendChange(itemID: String, item: CollectedItem, operation: String,
@@ -1579,7 +1908,7 @@ final class TreasurySQLiteStore {
         }
     }
 
-    private static func originDeviceID() -> String {
+    static func originDeviceID() -> String {
         let key = "leo.treasury.originDeviceID"
         let defaults = UserDefaults(suiteName: SharedContainerStore.appGroupID) ?? .standard
         if let existing = defaults.string(forKey: key), !existing.isEmpty { return existing }

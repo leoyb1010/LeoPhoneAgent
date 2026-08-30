@@ -9,6 +9,10 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.leoyuan.leophoneagent.MinisApp
 import com.leoyuan.leophoneagent.data.db.TreasureItemEntity
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
+import com.tom_roush.pdfbox.io.MemoryUsageSetting
+import com.tom_roush.pdfbox.pdmodel.PDDocument
+import com.tom_roush.pdfbox.text.PDFTextStripper
 import java.io.File
 import java.net.InetAddress
 import java.net.URI
@@ -159,16 +163,38 @@ class TreasuryEnrichmentWorker(
 
     private suspend fun extractText(item: TreasureItemEntity) {
         val mime = item.mimeType.orEmpty().lowercase(Locale.ROOT)
-        if (!(mime.startsWith("text/") || mime.contains("json") || mime.contains("xml") || mime.contains("markdown"))) {
-            (applicationContext as MinisApp).treasureRepository.markPartial(item.id, "text_extractor_unavailable")
-            return
-        }
         val file = resolveBodyFile(item) ?: run {
             (applicationContext as MinisApp).treasureRepository.markProcessingFailed(item.id, "attachment_missing")
             return
         }
+        if (mime == "application/pdf" || file.extension.equals("pdf", ignoreCase = true)) {
+            extractPdf(item, file)
+            return
+        }
+        if (!(mime.startsWith("text/") || mime.contains("json") || mime.contains("xml") || mime.contains("markdown"))) {
+            (applicationContext as MinisApp).treasureRepository.markPartial(item.id, "text_extractor_unavailable")
+            return
+        }
         val text = TreasuryFilePolicy.readUtf8TextLimited(file, 2_000_000)
         (applicationContext as MinisApp).treasureRepository.applyEnhancement(item.id, originalText = text, state = "ready")
+    }
+
+    private suspend fun extractPdf(item: TreasureItemEntity, file: File) {
+        PDFBoxResourceLoader.init(applicationContext)
+        val pages = mutableListOf<String>()
+        PDDocument.load(file, MemoryUsageSetting.setupTempFileOnly()).use { document ->
+            val count = minOf(document.numberOfPages, 500)
+            val stripper = PDFTextStripper()
+            for (page in 1..count) {
+                stripper.startPage = page
+                stripper.endPage = page
+                pages += stripper.getText(document).trim()
+                if (pages.sumOf(String::length) >= 2_000_000) break
+            }
+        }
+        if (!(applicationContext as MinisApp).treasureRepository.applyDocumentExtraction(item.id, pages)) {
+            (applicationContext as MinisApp).treasureRepository.markPartial(item.id, "pdf_text_unavailable")
+        }
     }
 
     private fun resolveBodyFile(item: TreasureItemEntity): File? {

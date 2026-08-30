@@ -284,6 +284,11 @@ dependencies {
     // Fold posture (HALF_OPENED tabletop / book) for the chat workspace.
     implementation("androidx.window:window:1.3.0")
 
+    // PDF text extraction for offline Treasury indexing. Apache-2.0;
+    // no service process or network dependency. The worker caps pages/text and
+    // uses temp-file-backed parsing to bound heap pressure on large documents.
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+
     // T283: ACRA — local crash report capture. acra-core only (no http
     // sender, no network permission). CrashFileSender writes reports to
     // filesDir/logs/ where LogManagementScreen surfaces them.

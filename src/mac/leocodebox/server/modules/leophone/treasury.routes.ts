@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -29,6 +30,23 @@ const upload = multer({
   limits: { fileSize: MAX_FILE_BYTES, files: MAX_FILES },
 });
 
+const PDF_JXA = `
+ObjC.import('PDFKit');
+function run(argv) {
+  const document = $.PDFDocument.alloc.initWithURL($.NSURL.fileURLWithPath(argv[0]));
+  if (!document) return '[]';
+  const pages = [];
+  const count = Math.min(Number(document.pageCount), 500);
+  let total = 0;
+  for (let index = 0; index < count && total < 2000000; index += 1) {
+    const page = document.pageAtIndex(index);
+    const text = page && page.string ? ObjC.unwrap(page.string) : '';
+    pages.push(text || '');
+    total += (text || '').length;
+  }
+  return JSON.stringify(pages);
+}`;
+
 function userId(req: express.Request): number {
   const value = Number((req as express.Request & { user?: { id?: unknown } }).user?.id);
   if (!Number.isInteger(value) || value <= 0) throw new Error('Authenticated user is missing');
@@ -57,7 +75,8 @@ function baseItem(input: Partial<TreasureItem> & Pick<TreasureItem, 'kind' | 'so
     annotation: input.annotation ?? null, tags: input.tags ?? [], collection_ids: [],
     pinned: false, archived: false, reading_state: input.kind === 'link' ? 'unread' : 'none',
     reading_progress: 0, created_at: now, updated_at: now, last_opened_at: null,
-    processing_state: input.processing_state ?? 'queued', processing_error_code: null,
+    processing_state: input.processing_state ?? (input.kind === 'text' || input.kind === 'note' ? 'ready' : 'queued'),
+    processing_error_code: input.processing_error_code ?? null,
     sync_state: 'pending', origin_device_id: 'mac-local', deleted_at: null,
   };
 }
@@ -92,8 +111,13 @@ function persistFile(user: number, sourcePath: string, originalName: string, mim
     fs.closeSync(input);
     if (output !== null) fs.closeSync(output);
   }
+  const kind = sourceApp === 'chat.artifact' ? 'artifact' : treasuryCaptureKindForMime(mime);
+  const isPdf = mime === 'application/pdf' || extension === '.pdf';
+  const unsupportedError = !isPdf && kind === 'image' ? 'ocr_engine_unavailable'
+    : !isPdf && kind === 'document' ? 'text_extractor_unavailable'
+      : !isPdf && kind === 'audio' ? 'transcription_not_authorized' : null;
   const item = baseItem({
-    kind: sourceApp === 'chat.artifact' ? 'artifact' : treasuryCaptureKindForMime(mime),
+    kind,
     title: path.basename(originalName).slice(0, 500),
     source_app: sourceApp,
     source_label: sourceApp === 'chat.artifact' ? '聊天 Artifact' : 'Mac 文件',
@@ -101,10 +125,15 @@ function persistFile(user: number, sourcePath: string, originalName: string, mim
     mime_type: mime || 'application/octet-stream',
     byte_count: byteCount,
     content_digest: digest.digest('hex'),
+    processing_state: isPdf ? 'queued' : unsupportedError ? 'partial' : 'ready',
+    processing_error_code: unsupportedError,
   });
   try {
     const saved = treasuryDb.save(user, { ...item, id }).item;
     if (saved.id !== id) fs.rmSync(destination, { force: true });
+    if (saved.id === id && process.platform === 'darwin' && isPdf) {
+      setImmediate(() => enrichPdfInBackground(user, saved, destination));
+    }
     return saved;
   } catch (error) {
     fs.rmSync(destination, { force: true });
@@ -112,15 +141,135 @@ function persistFile(user: number, sourcePath: string, originalName: string, mim
   }
 }
 
+function enrichPdfInBackground(user: number, item: TreasureItem, absolutePath: string): void {
+  const pendingJob = treasuryDb.readyJobForItem(item.id, 'extract_text');
+  const jobId = pendingJob && treasuryDb.claimJob(pendingJob.id) ? pendingJob.id : null;
+  const processingItem = treasuryDb.get(user, [item.id])[0];
+  if (processingItem) {
+    treasuryDb.update(user, {
+      ...processingItem, processing_state: 'processing', processing_error_code: null,
+      updated_at: new Date().toISOString(), sync_state: 'pending',
+    });
+  }
+  execFile('/usr/bin/osascript', ['-l', 'JavaScript', '-e', PDF_JXA, absolutePath], {
+    timeout: 30_000, maxBuffer: 16 * 1024 * 1024, encoding: 'utf8',
+  }, (error, stdout) => {
+    const current = treasuryDb.get(user, [item.id])[0];
+    if (!current) return;
+    if (error) {
+      treasuryDb.update(user, {
+        ...current, processing_state: 'partial', processing_error_code: 'pdf_text_unavailable',
+        updated_at: new Date().toISOString(), sync_state: 'pending',
+      });
+      if (jobId) treasuryDb.failJob(jobId, 'pdf_text_unavailable');
+      return;
+    }
+    try {
+      const parsed: unknown = JSON.parse(stdout.trim() || '[]');
+      const pages = Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === 'string') : [];
+      if (!treasuryDb.applyDocumentExtraction(user, item.id, pages)) {
+        treasuryDb.update(user, {
+          ...current, processing_state: 'partial', processing_error_code: 'pdf_text_unavailable',
+          updated_at: new Date().toISOString(), sync_state: 'pending',
+        });
+        if (jobId) treasuryDb.failJob(jobId, 'pdf_text_unavailable');
+      } else if (jobId) {
+        treasuryDb.completeJob(jobId);
+      }
+    } catch {
+      treasuryDb.update(user, {
+        ...current, processing_state: 'partial', processing_error_code: 'pdf_text_unavailable',
+        updated_at: new Date().toISOString(), sync_state: 'pending',
+      });
+      if (jobId) treasuryDb.failJob(jobId, 'pdf_text_unavailable');
+    }
+  });
+}
+
 router.get('/', (req, res) => {
   try {
     const query = safeText(req.query.q, 512);
     const limit = Math.max(1, Math.min(Number(req.query.limit) || 100, 500));
-    const items = query ? treasuryDb.search(userId(req), query, limit) : treasuryDb.list(userId(req), limit, 0);
+    const items = treasuryDb.query(userId(req), query, limit);
     return res.json({ items: items.map(treasuryCaptureCompactItem) });
   } catch (error) {
     console.error('Treasury query failed:', error instanceof Error ? error.name : 'unknown');
     return res.status(400).json({ error: 'Treasury query failed' });
+  }
+});
+
+router.get('/:id/highlights', (req, res) => {
+  try {
+    return res.json({ highlights: treasuryDb.highlights(userId(req), safeText(req.params.id, 200)) });
+  } catch (error) {
+    console.error('Treasury highlights failed:', error instanceof Error ? error.name : 'unknown');
+    return res.status(400).json({ error: 'Treasury highlights failed' });
+  }
+});
+
+router.post('/:id/highlights', (req, res) => {
+  try {
+    const highlight = treasuryDb.addHighlight(userId(req), {
+      itemId: safeText(req.params.id, 200),
+      quoteText: typeof req.body?.quote_text === 'string' ? req.body.quote_text : '',
+      note: typeof req.body?.note === 'string' ? req.body.note : null,
+      startOffset: Number(req.body?.start_offset),
+      endOffset: Number(req.body?.end_offset),
+      pageNumber: req.body?.page_number == null ? null : Number(req.body.page_number),
+    });
+    return res.status(201).json({ highlight });
+  } catch (error) {
+    console.error('Treasury highlight save failed:', error instanceof Error ? error.name : 'unknown');
+    return res.status(400).json({ error: 'Treasury highlight save failed' });
+  }
+});
+
+router.delete('/:id/highlights/:highlightId', (req, res) => {
+  try {
+    const deleted = treasuryDb.deleteHighlight(
+      userId(req), safeText(req.params.id, 200), safeText(req.params.highlightId, 200),
+    );
+    return deleted ? res.status(204).end() : res.status(404).json({ error: 'Highlight not found' });
+  } catch (error) {
+    console.error('Treasury highlight delete failed:', error instanceof Error ? error.name : 'unknown');
+    return res.status(400).json({ error: 'Treasury highlight delete failed' });
+  }
+});
+
+router.get('/:id', (req, res) => {
+  try {
+    const item = treasuryDb.get(userId(req), [safeText(req.params.id, 200)])[0];
+    if (!item) return res.status(404).json({ error: 'Treasury item not found' });
+    const maxChars = Math.max(500, Math.min(Number(req.query.max_chars) || 100_000, 200_000));
+    const availableBody = item.original_text;
+    const body = availableBody?.slice(0, maxChars) ?? null;
+    return res.json({
+      item: { ...treasuryCaptureCompactItem(item), annotation: item.annotation },
+      body,
+      body_status: availableBody === null ? (item.body_ref ? 'not_extracted' : 'unavailable') : 'available',
+      truncated: availableBody !== null && availableBody.length > maxChars,
+    });
+  } catch (error) {
+    console.error('Treasury detail failed:', error instanceof Error ? error.name : 'unknown');
+    return res.status(400).json({ error: 'Treasury detail failed' });
+  }
+});
+
+router.patch('/:id/reading', (req, res) => {
+  try {
+    const rawState = safeText(req.body?.reading_state, 20);
+    const state = ['none', 'unread', 'reading', 'read'].includes(rawState)
+      ? rawState as 'none' | 'unread' | 'reading' | 'read' : null;
+    const progress = Number(req.body?.reading_progress);
+    if (!state || !Number.isFinite(progress)) return res.status(400).json({ error: 'Invalid reading update' });
+    const item = treasuryDb.updateReading(
+      userId(req), safeText(req.params.id, 200), state, progress, req.body?.opened !== false,
+    );
+    return item ? res.json({ item: treasuryCaptureCompactItem(item) })
+      : res.status(404).json({ error: 'Treasury item not found' });
+  } catch (error) {
+    console.error('Treasury reading update failed:', error instanceof Error ? error.name : 'unknown');
+    return res.status(400).json({ error: 'Treasury reading update failed' });
   }
 });
 

@@ -266,6 +266,23 @@ CREATE TABLE IF NOT EXISTS treasure_chunks (
     FOREIGN KEY (item_id) REFERENCES treasure_items(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS treasure_highlights (
+    id TEXT PRIMARY KEY NOT NULL,
+    item_id TEXT NOT NULL,
+    quote_text TEXT NOT NULL,
+    note TEXT,
+    start_offset INTEGER NOT NULL,
+    end_offset INTEGER NOT NULL,
+    page_number INTEGER,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    origin_device_id TEXT NOT NULL,
+    deleted_at TEXT,
+    FOREIGN KEY (item_id) REFERENCES treasure_items(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_treasure_highlights_item
+    ON treasure_highlights(item_id, deleted_at, updated_at);
+
 CREATE TABLE IF NOT EXISTS treasure_jobs (
     id TEXT PRIMARY KEY NOT NULL,
     item_id TEXT NOT NULL,
@@ -312,6 +329,12 @@ END;
 CREATE TRIGGER IF NOT EXISTS treasure_search_delete AFTER DELETE ON treasure_items BEGIN
     DELETE FROM treasure_search_fts WHERE rowid=old.rowid;
 END;
+
+-- Mac FTS triggers index synchronously, so an index job is already complete.
+-- This also repairs queued index rows created by earlier Treasury builds.
+UPDATE treasure_jobs SET state='completed', next_attempt_at=NULL,
+    updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now'), last_error_code=NULL
+WHERE job_type='index' AND state IN ('queued','failed','processing');
 `;
 
 export const WORKTREES_TABLE_SCHEMA_SQL = `

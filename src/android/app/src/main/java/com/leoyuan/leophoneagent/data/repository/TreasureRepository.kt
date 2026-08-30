@@ -3,10 +3,13 @@ package com.leoyuan.leophoneagent.data.repository
 import androidx.sqlite.db.SimpleSQLiteQuery
 import com.leoyuan.leophoneagent.data.db.TreasureChangeEntity
 import com.leoyuan.leophoneagent.data.db.TreasureCaptureBundle
+import com.leoyuan.leophoneagent.data.db.TreasureChunkEntity
 import com.leoyuan.leophoneagent.data.db.TreasureDao
 import com.leoyuan.leophoneagent.data.db.TreasureItemEntity
 import com.leoyuan.leophoneagent.data.db.TreasureJobEntity
+import com.leoyuan.leophoneagent.data.db.TreasureHighlightEntity
 import com.leoyuan.leophoneagent.data.db.TreasureSearchRow
+import com.leoyuan.leophoneagent.treasury.TreasuryQuery
 import java.io.File
 import java.net.URI
 import java.security.MessageDigest
@@ -21,6 +24,7 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.decodeFromJsonElement
+import org.json.JSONObject
 
 @Serializable
 data class TreasureItemRecord(
@@ -113,25 +117,110 @@ class TreasureRepository(
     }
 
     fun search(query: String, limit: Int = 50): Flow<List<TreasureSearchRow>> {
-        val expression = ftsExpression(query)
-        if (expression.isEmpty()) return dao.observeSearchRows(limit.coerceIn(1, 500), 0)
-        return dao.searchRows(
-            SimpleSQLiteQuery(
-                """
-                SELECT treasure_items.stable_id, treasure_items.kind, treasure_items.title,
-                       treasure_items.source_uri, treasure_items.source_label,
-                       snippet(treasure_search_fts, '', '', '…', -1, 48) AS snippet,
-                       offsets(treasure_search_fts) AS match_offsets,
-                       treasure_items.tags_json, treasure_items.pinned, treasure_items.archived,
-                       treasure_items.processing_state, treasure_items.processing_error_code,
-                       treasure_items.created_at, treasure_items.updated_at
-                FROM treasure_search_fts
-                JOIN treasure_items ON treasure_items.row_id = treasure_search_fts.rowid
-                WHERE treasure_search_fts MATCH ? AND treasure_items.deleted_at IS NULL
-                ORDER BY treasure_items.pinned DESC, treasure_items.updated_at DESC LIMIT ?
-                """.trimIndent(),
-                arrayOf<Any>(expression, limit.coerceIn(1, 500)),
-            )
+        val spec = TreasuryQuery.parse(query)
+        val expression = ftsExpression(spec.textQuery)
+        val args = mutableListOf<Any>()
+        val from = if (expression.isNotEmpty()) {
+            args += expression
+            "treasure_search_fts JOIN treasure_items ON treasure_items.row_id = treasure_search_fts.rowid"
+        } else {
+            "treasure_items"
+        }
+        val where = mutableListOf("treasure_items.deleted_at IS NULL")
+        if (expression.isNotEmpty()) where += "treasure_search_fts MATCH ?"
+        where += if (spec.archived) "treasure_items.archived = 1" else "treasure_items.archived = 0"
+        if (spec.kinds.isNotEmpty()) {
+            where += "treasure_items.kind IN (${spec.kinds.joinToString(",") { "?" }})"
+            args.addAll(spec.kinds)
+        }
+        if (spec.processingStates.isNotEmpty()) {
+            where += "treasure_items.processing_state IN (${spec.processingStates.joinToString(",") { "?" }})"
+            args.addAll(spec.processingStates)
+        }
+        if (spec.readingStates.isNotEmpty()) {
+            where += "treasure_items.reading_state IN (${spec.readingStates.joinToString(",") { "?" }})"
+            args.addAll(spec.readingStates)
+        }
+        spec.pinned?.let {
+            where += "treasure_items.pinned = ?"
+            args += if (it) 1 else 0
+        }
+        spec.tags.forEach { tag ->
+            where += "treasure_items.tags_json LIKE ? ESCAPE '\\'"
+            args += "%${escapeLike(JSONObject.quote(tag))}%"
+        }
+        spec.afterEpochMs?.let { where += "treasure_items.created_at >= ?"; args += it }
+        spec.beforeEpochMs?.let { where += "treasure_items.created_at < ?"; args += it }
+        val snippet = if (expression.isNotEmpty()) {
+            "snippet(treasure_search_fts, '', '', '…', -1, 48)"
+        } else {
+            "substr(COALESCE(NULLIF(treasure_items.summary, ''), NULLIF(treasure_items.original_text, ''), treasure_items.source_uri, treasure_items.processing_error_code, ''), 1, 400)"
+        }
+        val offsets = if (expression.isNotEmpty()) "offsets(treasure_search_fts)" else "''"
+        val order = if (spec.recent) {
+            "treasure_items.pinned DESC, COALESCE(treasure_items.last_opened_at, 0) DESC, treasure_items.updated_at DESC"
+        } else {
+            "treasure_items.pinned DESC, treasure_items.updated_at DESC"
+        }
+        args += limit.coerceIn(1, 500)
+        return dao.searchRows(SimpleSQLiteQuery(
+            """
+            SELECT treasure_items.stable_id, treasure_items.kind, treasure_items.title,
+                   treasure_items.source_uri, treasure_items.source_label,
+                   $snippet AS snippet, $offsets AS match_offsets,
+                   treasure_items.tags_json, treasure_items.pinned, treasure_items.archived,
+                   treasure_items.reading_state, treasure_items.reading_progress,
+                   treasure_items.last_opened_at, treasure_items.processing_state,
+                   treasure_items.processing_error_code, treasure_items.created_at,
+                   treasure_items.updated_at
+            FROM $from
+            WHERE ${where.joinToString(" AND ")}
+            ORDER BY $order LIMIT ?
+            """.trimIndent(),
+            args.toTypedArray(),
+        ))
+    }
+
+    fun observeHighlights(itemId: String): Flow<List<TreasureHighlightEntity>> =
+        dao.observeHighlights(itemId)
+
+    suspend fun addHighlight(
+        itemId: String,
+        startOffset: Int,
+        endOffset: Int,
+        quoteText: String,
+        note: String? = null,
+        pageNumber: Int? = null,
+    ): TreasureHighlightEntity {
+        val item = dao.getById(itemId) ?: throw IllegalArgumentException("Treasury item not found")
+        val body = item.originalText ?: throw IllegalArgumentException("Treasury body is unavailable")
+        require(startOffset >= 0 && endOffset > startOffset && endOffset <= body.length) { "Invalid highlight range" }
+        val normalizedQuote = quoteText.take(20_000)
+        require(body.substring(startOffset, endOffset) == normalizedQuote) { "Highlight quote no longer matches body" }
+        val now = System.currentTimeMillis()
+        val highlight = TreasureHighlightEntity(
+            id = UUID.randomUUID().toString(), itemId = itemId, quoteText = normalizedQuote,
+            note = note?.trim()?.takeIf(String::isNotEmpty)?.take(20_000),
+            startOffset = startOffset, endOffset = endOffset,
+            pageNumber = pageNumber?.takeIf { it > 0 }, createdAt = now, updatedAt = now,
+            originDeviceId = originDeviceId(),
+        )
+        check(dao.addHighlight(
+            highlight,
+            stateChange(
+                itemId, "highlight", null, now,
+                sha256("${highlight.id}\u0000$itemId\u0000$startOffset\u0000$endOffset\u0000$normalizedQuote\u0000${highlight.note.orEmpty()}"),
+            ),
+        )) { "Unable to save highlight" }
+        return highlight
+    }
+
+    suspend fun deleteHighlight(id: String): Boolean {
+        val highlight = dao.getHighlight(id) ?: return false
+        val now = System.currentTimeMillis()
+        return dao.deleteHighlight(
+            id, highlight.itemId, now,
+            stateChange(highlight.itemId, "highlight_deleted", null, now, sha256("highlight-delete:$id:$now")),
         )
     }
 
@@ -209,6 +298,33 @@ class TreasureRepository(
         ) > 0
     }
 
+    suspend fun applyDocumentExtraction(itemId: String, pages: List<String>): Boolean {
+        val boundedPages = pages.take(500)
+        val combined = StringBuilder()
+        val chunks = mutableListOf<TreasureChunkEntity>()
+        for ((index, raw) in boundedPages.withIndex()) {
+            val text = raw.trim().take(200_000)
+            if (text.isEmpty()) continue
+            val marker = "【第 ${index + 1} 页】\n"
+            if (combined.length + marker.length + text.length > 2_000_000) break
+            val start = combined.length
+            combined.append(marker).append(text).append('\n')
+            chunks += TreasureChunkEntity(
+                itemId = itemId, chunkIndex = chunks.size,
+                sectionLabel = "page:${index + 1}", text = text,
+                startOffset = start + marker.length,
+                endOffset = start + marker.length + text.length,
+            )
+        }
+        if (chunks.isEmpty()) return false
+        val body = combined.toString().trimEnd()
+        val now = System.currentTimeMillis()
+        return dao.applyDocumentExtraction(
+            itemId = itemId, originalText = body, chunks = chunks, now = now,
+            change = stateChange(itemId, "ready", null, now, sha256(body)),
+        ) > 0
+    }
+
     suspend fun changes(after: Long, limit: Int = 500) =
         dao.changes(after.coerceAtLeast(0), limit.coerceIn(1, 1_000))
 
@@ -221,16 +337,33 @@ class TreasureRepository(
         pinned: Boolean? = null,
         archived: Boolean? = null,
         readingState: String? = null,
+        readingProgress: Double? = null,
+        lastOpenedAt: Long? = null,
         annotation: String? = null,
     ): TreasureItemEntity? {
         val existing = dao.getIncludingDeleted(id) ?: return null
         if (existing.deletedAt != null) return null
+        val requestedReadingState = readingState?.takeIf { it in READING_STATES }
+        val normalizedReadingProgress = when (requestedReadingState) {
+            "none", "unread" -> 0.0
+            "read" -> 1.0
+            else -> readingProgress?.coerceIn(0.0, 1.0) ?: existing.readingProgress
+        }
+        val normalizedReadingState = when {
+            requestedReadingState == "reading" && normalizedReadingProgress >= 1.0 -> "read"
+            requestedReadingState != null -> requestedReadingState
+            readingProgress != null && normalizedReadingProgress >= 1.0 -> "read"
+            readingProgress != null -> "reading"
+            else -> existing.readingState
+        }
         val updated = existing.copy(
             title = title?.trim()?.take(500) ?: existing.title,
             tagsJson = tags?.let { json.encodeToString(normalizedTags(it).take(100)) } ?: existing.tagsJson,
             pinned = pinned ?: existing.pinned,
             archived = archived ?: existing.archived,
-            readingState = readingState?.takeIf { it in READING_STATES } ?: existing.readingState,
+            readingState = normalizedReadingState,
+            readingProgress = normalizedReadingProgress,
+            lastOpenedAt = lastOpenedAt ?: existing.lastOpenedAt,
             annotation = annotation?.take(20_000) ?: existing.annotation,
             updatedAt = System.currentTimeMillis(),
             syncState = "pending",
@@ -238,6 +371,23 @@ class TreasureRepository(
         val record = updated.toRecord()
         return if (dao.updateWithChange(updated, change(record, "upsert", updated.updatedAt))) updated else null
     }
+
+    suspend fun markOpened(id: String): TreasureItemEntity? {
+        val existing = dao.getById(id) ?: return null
+        return updateItem(
+            id = id,
+            readingState = if (existing.readingState == "unread") "reading" else existing.readingState,
+            lastOpenedAt = System.currentTimeMillis(),
+        )
+    }
+
+    suspend fun updateReadingProgress(id: String, progress: Double): TreasureItemEntity? =
+        updateItem(
+            id = id,
+            readingProgress = progress,
+            readingState = if (progress >= 1.0) "read" else "reading",
+            lastOpenedAt = System.currentTimeMillis(),
+        )
 
     fun record(entity: TreasureItemEntity): TreasureItemRecord = entity.toRecord()
 
@@ -519,6 +669,9 @@ class TreasureRepository(
             val seen = mutableSetOf<String>()
             return tags.map(String::trim).filter { it.isNotEmpty() && seen.add(it.lowercase(Locale.ROOT)) }
         }
+
+        private fun escapeLike(value: String): String = value
+            .replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
         fun ftsExpression(raw: String): String = raw.trim().take(512)
             .split(Regex("\\s+"))

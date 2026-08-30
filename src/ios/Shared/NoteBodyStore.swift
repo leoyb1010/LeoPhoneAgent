@@ -30,7 +30,8 @@ enum NoteBodyStore {
     static func load(_ fileName: String) async -> String {
         await withCheckedContinuation { cont in
             queue.async {
-                guard let dir = CollectionStore.notesDirectory,
+                guard SharedContainerStore.isSafeFileName(fileName),
+                      let dir = CollectionStore.notesDirectory,
                       let text = try? String(contentsOf: dir.appendingPathComponent(fileName),
                                              encoding: .utf8) else {
                     cont.resume(returning: "")
@@ -54,23 +55,34 @@ enum NoteBodyStore {
     // MARK: - 写
 
     /// 保存正文。写之前先给旧内容留一份快照。
-    static func save(_ text: String, to fileName: String) async {
+    @discardableResult
+    static func save(_ text: String, to fileName: String) async -> Bool {
         await withCheckedContinuation { cont in
             queue.async {
-                guard let dir = CollectionStore.notesDirectory else {
-                    cont.resume()
+                guard SharedContainerStore.isSafeFileName(fileName),
+                      let dir = CollectionStore.notesDirectory else {
+                    cont.resume(returning: false)
                     return
                 }
                 let target = dir.appendingPathComponent(fileName)
                 snapshotIfNeeded(existing: target, fileName: fileName)
                 // 原子写:写一半掉电不会留半截文件
-                try? text.data(using: .utf8)?.write(to: target, options: .atomic)
-                cont.resume()
+                guard let data = text.data(using: .utf8) else {
+                    cont.resume(returning: false)
+                    return
+                }
+                do {
+                    try data.write(to: target, options: .atomic)
+                    cont.resume(returning: true)
+                } catch {
+                    cont.resume(returning: false)
+                }
             }
         }
     }
 
     static func delete(_ fileName: String) {
+        guard SharedContainerStore.isSafeFileName(fileName) else { return }
         queue.async {
             if let dir = CollectionStore.notesDirectory {
                 try? FileManager.default.removeItem(at: dir.appendingPathComponent(fileName))
@@ -121,7 +133,8 @@ enum NoteBodyStore {
     // MARK: - 内部
 
     private static func versionURLs(of fileName: String) -> [URL] {
-        guard let dir = CollectionStore.versionsDirectory,
+        guard SharedContainerStore.isSafeFileName(fileName),
+              let dir = CollectionStore.versionsDirectory,
               let all = try? FileManager.default.contentsOfDirectory(
                 at: dir, includingPropertiesForKeys: [.contentModificationDateKey]) else { return [] }
         let stem = (fileName as NSString).deletingPathExtension

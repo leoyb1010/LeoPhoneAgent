@@ -57,6 +57,18 @@ export type TreasureChange = {
   updated_at: string; origin_device_id: string; payload_digest: string;
 };
 
+export type TreasureHighlight = {
+  id: string; item_id: string; quote_text: string; note: string | null;
+  start_offset: number; end_offset: number; page_number: number | null;
+  created_at: string; updated_at: string; origin_device_id: string;
+};
+
+export type TreasuryQuerySpec = {
+  textQuery: string; kinds: Set<string>; processingStates: Set<string>;
+  readingStates: Set<string>; tags: Set<string>; pinned: boolean | null;
+  archived: boolean; recent: boolean; after: string | null; before: string | null;
+};
+
 type ItemRow = Omit<TreasureItem, 'tags' | 'collection_ids' | 'pinned' | 'archived'> & {
   user_id: number; normalized_url_key: string | null; tags_json: string;
   collection_ids_json: string; pinned: number; archived: number;
@@ -192,17 +204,23 @@ const insertChange = (item: TreasureItem, operation: 'upsert' | 'delete'): void 
 };
 
 const enqueueDefaultJobs = (item: TreasureItem): void => {
-  const types: TreasureJobType[] = item.kind === 'link' ? ['metadata', 'index'] : ['index'];
+  const types: TreasureJobType[] = item.kind === 'link'
+    ? ['metadata', 'index']
+    : item.kind === 'document' && ['queued', 'processing'].includes(item.processing_state)
+      ? ['extract_text', 'index'] : ['index'];
   const now = isoNow();
   const statement = getConnection().prepare(
     `INSERT INTO treasure_jobs
      (id,item_id,job_type,state,attempt_count,created_at,updated_at)
-     SELECT ?,?,?,'queued',0,?,?
+     SELECT ?,?,?,?,0,?,?
      WHERE NOT EXISTS (
        SELECT 1 FROM treasure_jobs WHERE item_id=? AND job_type=? AND state IN ('queued','processing')
      )`,
   );
-  for (const type of types) statement.run(randomUUID(), item.id, type, now, now, item.id, type);
+  for (const type of types) {
+    statement.run(randomUUID(), item.id, type, type === 'index' ? 'completed' : 'queued',
+      now, now, item.id, type);
+  }
 };
 
 const upsertStatement = () => getConnection().prepare(`
@@ -240,6 +258,99 @@ const itemBindings = (userId: number, item: TreasureItem) => ({
 
 const ftsExpression = (raw: string): string => raw.trim().slice(0, 512).split(/\s+/)
   .filter(Boolean).map((term) => `"${term.replaceAll('"', '""')}"*`).join(' AND ');
+
+const QUERY_KINDS = new Set<string>(TREASURE_KINDS);
+const QUERY_PROCESSING = new Set(PROCESSING_STATES);
+const QUERY_READING = new Set(READING_STATES);
+const dayStart = (raw: string): string | null => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const value = new Date(`${raw}T00:00:00.000Z`);
+  return Number.isFinite(value.getTime()) && value.toISOString().startsWith(raw) ? value.toISOString() : null;
+};
+
+export const parseTreasuryQuery = (raw: string): TreasuryQuerySpec => {
+  const text: string[] = [];
+  const kinds = new Set<string>();
+  const processingStates = new Set<string>();
+  const readingStates = new Set<string>();
+  const tags = new Set<string>();
+  let pinned: boolean | null = null;
+  let archived = false;
+  let recent = false;
+  let after: string | null = null;
+  let before: string | null = null;
+  for (const token of raw.trim().slice(0, 512).split(/\s+/).filter(Boolean)) {
+    const separator = token.indexOf(':');
+    if (separator <= 0) { text.push(token); continue; }
+    const name = token.slice(0, separator).toLowerCase();
+    const value = token.slice(separator + 1).trim().toLowerCase();
+    const values = value.split(',').filter(Boolean);
+    let consumed = false;
+    if (name === 'type' || name === 'kind') {
+      const valid = values.filter((entry) => QUERY_KINDS.has(entry));
+      valid.forEach((entry) => kinds.add(entry)); consumed = valid.length > 0;
+    } else if (name === 'state' || name === 'process') {
+      const valid = values.filter((entry) => QUERY_PROCESSING.has(entry));
+      valid.forEach((entry) => processingStates.add(entry)); consumed = valid.length > 0;
+    } else if (name === 'read' || name === 'reading') {
+      const valid = values.filter((entry) => QUERY_READING.has(entry));
+      valid.forEach((entry) => readingStates.add(entry)); consumed = valid.length > 0;
+    } else if (name === 'tag' && values.length) {
+      values.forEach((entry) => tags.add(entry.slice(0, 100))); consumed = true;
+    } else if (name === 'is') {
+      if (value === 'pinned') { pinned = true; consumed = true; }
+      else if (value === 'unpinned') { pinned = false; consumed = true; }
+      else if (value === 'archived') { archived = true; consumed = true; }
+      else if (value === 'recent') { recent = true; consumed = true; }
+    } else if (name === 'after') {
+      after = dayStart(value); consumed = after !== null;
+    } else if (name === 'before') {
+      before = dayStart(value); consumed = before !== null;
+    }
+    if (!consumed) text.push(token);
+  }
+  return { textQuery: text.join(' '), kinds, processingStates, readingStates, tags,
+    pinned, archived, recent, after, before };
+};
+
+const queryItems = (userId: number, raw: string, limit: number): Array<TreasureItem & { score: number }> => {
+  const spec = parseTreasuryQuery(raw);
+  const expression = ftsExpression(spec.textQuery);
+  const parameters: Array<string | number> = [];
+  const from = expression
+    ? 'treasure_search_fts JOIN treasure_items ON treasure_items.rowid=treasure_search_fts.rowid'
+    : 'treasure_items';
+  const where = ['treasure_items.user_id=?', 'treasure_items.deleted_at IS NULL'];
+  parameters.push(userId);
+  if (expression) { where.push('treasure_search_fts MATCH ?'); parameters.push(expression); }
+  where.push(spec.archived ? 'treasure_items.archived=1' : 'treasure_items.archived=0');
+  const addSet = (column: string, values: Set<string>) => {
+    if (!values.size) return;
+    where.push(`${column} IN (${[...values].map(() => '?').join(',')})`);
+    parameters.push(...values);
+  };
+  addSet('treasure_items.kind', spec.kinds);
+  addSet('treasure_items.processing_state', spec.processingStates);
+  addSet('treasure_items.reading_state', spec.readingStates);
+  if (spec.pinned !== null) { where.push('treasure_items.pinned=?'); parameters.push(spec.pinned ? 1 : 0); }
+  for (const tag of spec.tags) {
+    where.push(`EXISTS (SELECT 1 FROM json_each(treasure_items.tags_json)
+      WHERE lower(CAST(json_each.value AS TEXT))=?)`);
+    parameters.push(tag.toLowerCase());
+  }
+  if (spec.after) { where.push('treasure_items.created_at>=?'); parameters.push(spec.after); }
+  if (spec.before) { where.push('treasure_items.created_at<?'); parameters.push(spec.before); }
+  const rank = expression ? 'bm25(treasure_search_fts)' : '0';
+  const order = spec.recent
+    ? 'treasure_items.pinned DESC, COALESCE(treasure_items.last_opened_at,\'\') DESC, treasure_items.updated_at DESC'
+    : expression ? 'rank, treasure_items.updated_at DESC' : 'treasure_items.pinned DESC, treasure_items.updated_at DESC';
+  parameters.push(Math.max(1, Math.min(limit, 500)));
+  const rows = getConnection().prepare(
+    `SELECT ${QUALIFIED_ITEM_COLUMNS}, ${rank} AS rank FROM ${from}
+     WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT ?`,
+  ).all(...parameters) as Array<ItemRow & { rank: number }>;
+  return rows.map((row) => ({ ...rowToItem(row), score: expression ? 1 / (1 + Math.max(0, row.rank)) : 0 }));
+};
 
 const listAll = (userId: number): TreasureItem[] => {
   const records: TreasureItem[] = [];
@@ -311,17 +422,151 @@ export const treasuryDb = {
     return rows.map(rowToItem);
   },
 
+  query(userId: number, query: string, limit = 50): Array<TreasureItem & { score: number }> {
+    return queryItems(userId, query, limit);
+  },
+
   search(userId: number, query: string, limit = 50): Array<TreasureItem & { score: number }> {
-    const expression = ftsExpression(query);
-    if (!expression) return this.list(userId, limit, 0).map((item) => ({ ...item, score: 0 }));
-    const rows = getConnection().prepare(
-      `SELECT ${QUALIFIED_ITEM_COLUMNS},
-              bm25(treasure_search_fts) AS rank
-       FROM treasure_search_fts JOIN treasure_items ON treasure_items.rowid=treasure_search_fts.rowid
-       WHERE treasure_search_fts MATCH ? AND treasure_items.user_id=? AND treasure_items.deleted_at IS NULL
-       ORDER BY rank, treasure_items.updated_at DESC LIMIT ?`,
-    ).all(expression, userId, Math.max(1, Math.min(limit, 100))) as Array<ItemRow & { rank: number }>;
-    return rows.map((row) => ({ ...rowToItem(row), score: 1 / (1 + Math.max(0, row.rank)) }));
+    return queryItems(userId, query, Math.min(limit, 100));
+  },
+
+  updateReading(userId: number, id: string, readingState: ReadingState,
+    readingProgress: number, opened = true): TreasureItem | null {
+    if (!READING_STATES.has(readingState) || !Number.isFinite(readingProgress) ||
+        readingProgress < 0 || readingProgress > 1) throw new Error('Invalid reading update');
+    const existing = this.get(userId, [id])[0];
+    if (!existing) return null;
+    const now = isoNow();
+    const normalizedProgress = readingState === 'read' ? 1
+      : readingState === 'none' || readingState === 'unread' ? 0 : readingProgress;
+    const normalizedState: ReadingState = readingState === 'reading' && normalizedProgress >= 1
+      ? 'read' : readingState;
+    const updated = validateItem({
+      ...existing,
+      reading_state: normalizedState,
+      reading_progress: normalizedProgress,
+      last_opened_at: opened ? now : existing.last_opened_at,
+      updated_at: now,
+      sync_state: 'pending',
+    });
+    getConnection().transaction(() => {
+      upsertStatement().run(itemBindings(userId, updated));
+      insertChange(updated, 'upsert');
+    })();
+    return updated;
+  },
+
+  applyDocumentExtraction(userId: number, id: string, pages: string[]): TreasureItem | null {
+    const existing = this.get(userId, [id])[0];
+    if (!existing) return null;
+    const chunks: Array<{
+      item_id: string; chunk_index: number; section_label: string;
+      text: string; start_offset: number; end_offset: number;
+    }> = [];
+    let body = '';
+    for (const [index, raw] of pages.slice(0, 500).entries()) {
+      const text = raw.trim().slice(0, 200_000);
+      if (!text) continue;
+      const marker = `【第 ${index + 1} 页】\n`;
+      if (body.length + marker.length + text.length > 2_000_000) break;
+      const start = body.length;
+      body += `${marker}${text}\n`;
+      chunks.push({
+        item_id: id, chunk_index: chunks.length, section_label: `page:${index + 1}`,
+        text, start_offset: start + marker.length, end_offset: start + marker.length + text.length,
+      });
+    }
+    body = body.trimEnd();
+    if (!body || !chunks.length) return null;
+    const now = isoNow();
+    const updated = validateItem({
+      ...existing, original_text: body, processing_state: 'ready', processing_error_code: null,
+      updated_at: now, sync_state: 'pending',
+    });
+    getConnection().transaction(() => {
+      upsertStatement().run(itemBindings(userId, updated));
+      getConnection().prepare('DELETE FROM treasure_chunks WHERE item_id=?').run(id);
+      const insert = getConnection().prepare(
+        `INSERT INTO treasure_chunks
+         (item_id,chunk_index,section_label,text,start_offset,end_offset)
+         VALUES(@item_id,@chunk_index,@section_label,@text,@start_offset,@end_offset)`,
+      );
+      for (const chunk of chunks) insert.run(chunk);
+      getConnection().prepare(
+        `UPDATE treasure_jobs SET state='completed',next_attempt_at=NULL,updated_at=?,last_error_code=NULL
+         WHERE item_id=? AND job_type='extract_text' AND state IN ('queued','failed','processing')`,
+      ).run(now, id);
+      insertChange(updated, 'upsert');
+    })();
+    return updated;
+  },
+
+  highlights(userId: number, itemId: string): TreasureHighlight[] {
+    return getConnection().prepare(
+      `SELECT h.id,h.item_id,h.quote_text,h.note,h.start_offset,h.end_offset,
+              h.page_number,h.created_at,h.updated_at,h.origin_device_id
+       FROM treasure_highlights h JOIN treasure_items i ON i.id=h.item_id
+       WHERE i.user_id=? AND i.id=? AND i.deleted_at IS NULL AND h.deleted_at IS NULL
+       ORDER BY COALESCE(h.page_number,0),h.start_offset,h.created_at`,
+    ).all(userId, itemId) as TreasureHighlight[];
+  },
+
+  addHighlight(userId: number, input: {
+    itemId: string; quoteText: string; note?: string | null;
+    startOffset: number; endOffset: number; pageNumber?: number | null;
+  }): TreasureHighlight {
+    const item = this.get(userId, [input.itemId])[0];
+    if (!item) throw new Error('Treasury item not found');
+    const body = item.original_text ?? '';
+    const quote = input.quoteText.slice(0, 20_000);
+    if (!Number.isSafeInteger(input.startOffset) || !Number.isSafeInteger(input.endOffset) ||
+        input.startOffset < 0 || input.endOffset <= input.startOffset ||
+        input.endOffset > body.length || body.slice(input.startOffset, input.endOffset) !== quote) {
+      throw new Error('Highlight does not match treasury body');
+    }
+    const pageNumber = input.pageNumber == null ? null : Number(input.pageNumber);
+    if (pageNumber !== null && (!Number.isSafeInteger(pageNumber) || pageNumber < 1)) {
+      throw new Error('Invalid highlight page');
+    }
+    const now = isoNow();
+    const highlight: TreasureHighlight = {
+      id: randomUUID(), item_id: item.id, quote_text: quote,
+      note: input.note?.trim().slice(0, 20_000) || null,
+      start_offset: input.startOffset, end_offset: input.endOffset,
+      page_number: pageNumber, created_at: now, updated_at: now,
+      origin_device_id: item.origin_device_id,
+    };
+    const updated = { ...item, updated_at: now, sync_state: 'pending' as const };
+    getConnection().transaction(() => {
+      getConnection().prepare(
+        `INSERT INTO treasure_highlights
+         (id,item_id,quote_text,note,start_offset,end_offset,page_number,
+          created_at,updated_at,origin_device_id,deleted_at)
+         VALUES(@id,@item_id,@quote_text,@note,@start_offset,@end_offset,@page_number,
+                @created_at,@updated_at,@origin_device_id,NULL)`,
+      ).run(highlight);
+      upsertStatement().run(itemBindings(userId, updated));
+      insertChange(updated, 'upsert');
+    })();
+    return highlight;
+  },
+
+  deleteHighlight(userId: number, itemId: string, highlightId: string): boolean {
+    const item = this.get(userId, [itemId])[0];
+    if (!item) return false;
+    const now = isoNow();
+    let changed = false;
+    getConnection().transaction(() => {
+      changed = getConnection().prepare(
+        `UPDATE treasure_highlights SET deleted_at=?,updated_at=?
+         WHERE id=? AND item_id=? AND deleted_at IS NULL`,
+      ).run(now, now, highlightId, itemId).changes > 0;
+      if (!changed) return;
+      const updated = { ...item, updated_at: now, sync_state: 'pending' as const };
+      upsertStatement().run(itemBindings(userId, updated));
+      insertChange(updated, 'upsert');
+    })();
+    return changed;
   },
 
   tombstone(userId: number, ids: string[]): number {
@@ -350,6 +595,14 @@ export const treasuryDb = {
        FROM treasure_jobs WHERE state IN ('queued','failed')
        AND (next_attempt_at IS NULL OR next_attempt_at<=?) ORDER BY created_at LIMIT ?`,
     ).all(now, Math.max(1, Math.min(limit, 500))) as TreasureJob[];
+  },
+
+  readyJobForItem(itemId: string, jobType: TreasureJobType, now = isoNow()): TreasureJob | null {
+    return (getConnection().prepare(
+      `SELECT id,item_id,job_type,state,attempt_count,next_attempt_at,created_at,updated_at,last_error_code
+       FROM treasure_jobs WHERE item_id=? AND job_type=? AND state IN ('queued','failed')
+       AND (next_attempt_at IS NULL OR next_attempt_at<=?) ORDER BY created_at LIMIT 1`,
+    ).get(itemId, jobType, now) as TreasureJob | undefined) ?? null;
   },
 
   claimJob(id: string, now = isoNow()): boolean {

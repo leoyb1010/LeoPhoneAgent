@@ -35,6 +35,11 @@ export function treasuryCaptureCompactItem(item: TreasureItem) {
     tags: item.tags,
     created_at: item.created_at,
     archived: item.archived,
+    pinned: item.pinned,
+    reading_state: item.reading_state,
+    reading_progress: item.reading_progress,
+    last_opened_at: item.last_opened_at,
     processing_state: item.processing_state,
+    processing_error_code: item.processing_error_code,
   };
 }

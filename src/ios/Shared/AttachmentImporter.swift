@@ -17,6 +17,7 @@
 //
 
 import Foundation
+import PDFKit
 import UIKit
 import Vision
 
@@ -37,6 +38,7 @@ enum AttachmentImporter {
 
         var item = CollectedItem(kind: .file, value: fileName, sourceLabel: sourceLabel)
         item.metadataFetched = true
+        item.processingState = "processing"
 
         // OCR:识别出的文字既当标题也进全文索引
         let text = await recognizeText(in: resized)
@@ -47,11 +49,19 @@ enum AttachmentImporter {
             // 靠它),所以识别出的文字不能塞进 value —— 走 bodyFile,
             // 这样点开能读全文,也能被检索命中。
             let bodyFile = "ocr-\(item.id).md"
-            await NoteBodyStore.save(text, to: bodyFile)
-            item.bodyFile = bodyFile
-            item.summary = String(text.prefix(120))
-            await CollectionSearchIndex.shared.index(
-                itemId: item.id, title: item.title ?? "", body: text)
+            if await NoteBodyStore.save(text, to: bodyFile) {
+                item.bodyFile = bodyFile
+                item.summary = String(text.prefix(120))
+                await CollectionSearchIndex.shared.index(
+                    itemId: item.id, title: item.title ?? "", body: text)
+                item.processingState = "ready"
+            } else {
+                item.processingState = "partial"
+                item.processingErrorCode = "body_write_failed"
+            }
+        } else {
+            item.processingState = "partial"
+            item.processingErrorCode = "ocr_text_unavailable"
         }
         return item
     }
@@ -74,20 +84,78 @@ enum AttachmentImporter {
         var item = CollectedItem(kind: .file, value: fileName, sourceLabel: "文件")
         item.title = url.lastPathComponent
         item.metadataFetched = true
+        item.processingState = "processing"
 
-        // 图片类顺手 OCR;PDF 等交给系统预览,不在这里解析
+        // 图片类走 Vision OCR；PDF 使用系统 PDFKit 逐页抽取文字。
+        if dest.pathExtension.lowercased() == "pdf" {
+            let pages = await extractPDFPages(at: dest)
+            let body = pages.enumerated().compactMap { index, text -> String? in
+                let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                return clean.isEmpty ? nil : "【第 \(index + 1) 页】\n\(clean)"
+            }.joined(separator: "\n\n")
+            if !body.isEmpty {
+                let bodyFile = "pdf-\(item.id).md"
+                let boundedBody = String(body.prefix(2_000_000))
+                if await NoteBodyStore.save(boundedBody, to: bodyFile) {
+                    item.bodyFile = bodyFile
+                    item.summary = String(boundedBody.prefix(120))
+                    item.processingState = "ready"
+                    await CollectionSearchIndex.shared.index(
+                        itemId: item.id, title: item.title ?? "", body: boundedBody)
+                } else {
+                    item.processingState = "partial"
+                    item.processingErrorCode = "body_write_failed"
+                }
+            } else {
+                item.processingState = "partial"
+                item.processingErrorCode = "pdf_text_unavailable"
+            }
+            return item
+        }
         if let image = UIImage(contentsOfFile: dest.path) {
             let text = await recognizeText(in: image)
             if !text.isEmpty {
                 let bodyFile = "ocr-\(item.id).md"
-                await NoteBodyStore.save(text, to: bodyFile)
-                item.bodyFile = bodyFile
-                item.summary = String(text.prefix(120))
-                await CollectionSearchIndex.shared.index(
-                    itemId: item.id, title: item.title ?? "", body: text)
+                if await NoteBodyStore.save(text, to: bodyFile) {
+                    item.bodyFile = bodyFile
+                    item.summary = String(text.prefix(120))
+                    await CollectionSearchIndex.shared.index(
+                        itemId: item.id, title: item.title ?? "", body: text)
+                    item.processingState = "ready"
+                } else {
+                    item.processingState = "partial"
+                    item.processingErrorCode = "body_write_failed"
+                }
+            } else {
+                item.processingState = "partial"
+                item.processingErrorCode = "ocr_text_unavailable"
             }
+        } else {
+            item.processingState = "partial"
+            item.processingErrorCode = "text_extractor_unavailable"
         }
         return item
+    }
+
+    static func extractPDFPages(at url: URL, maxPages: Int = 500) async -> [String] {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                guard let document = PDFDocument(url: url) else {
+                    continuation.resume(returning: [])
+                    return
+                }
+                let count = min(document.pageCount, max(1, maxPages))
+                var pages: [String] = []
+                var total = 0
+                for index in 0..<count {
+                    let text = document.page(at: index)?.string ?? ""
+                    pages.append(text)
+                    total += text.count
+                    if total >= 2_000_000 { break }
+                }
+                continuation.resume(returning: pages)
+            }
+        }
     }
 
     // MARK: - OCR

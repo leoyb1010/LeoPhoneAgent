@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -49,9 +50,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
@@ -68,11 +71,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.leoyuan.leophoneagent.R
 import com.leoyuan.leophoneagent.data.db.TreasureItemEntity
+import com.leoyuan.leophoneagent.data.db.TreasureHighlightEntity
 import com.leoyuan.leophoneagent.data.db.TreasureSearchRow
 import com.leoyuan.leophoneagent.data.repository.TreasureRepository
 import com.leoyuan.leophoneagent.treasury.TreasuryWorkScheduler
@@ -81,7 +86,8 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.io.File
 
-private enum class TreasuryFilter { ALL, LINKS, NOTES, FILES, FAILED }
+private enum class TreasuryFilter { INBOX, PROCESSING, FAILED, UNREAD, RECENT, ALL, LINKS, NOTES, FILES }
+private const val TREASURY_READER_MAX_CHARS = 200_000
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -92,15 +98,17 @@ fun TreasuryScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var query by rememberSaveable { mutableStateOf("") }
-    var filterName by rememberSaveable { mutableStateOf(TreasuryFilter.ALL.name) }
+    var filterName by rememberSaveable { mutableStateOf(TreasuryFilter.INBOX.name) }
     val filter = runCatching { TreasuryFilter.valueOf(filterName) }.getOrDefault(TreasuryFilter.ALL)
     var selectedItemId by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedIdsList by rememberSaveable { mutableStateOf(emptyList<String>()) }
     val selectedIds = remember(selectedIdsList) { selectedIdsList.toSet() }
     var rows by remember { mutableStateOf(emptyList<TreasureSearchRow>()) }
     var selected by remember { mutableStateOf<TreasureItemEntity?>(null) }
+    var highlights by remember { mutableStateOf(emptyList<TreasureHighlightEntity>()) }
     var annotationDraft by rememberSaveable(selectedItemId) { mutableStateOf("") }
     var showCapture by rememberSaveable { mutableStateOf(false) }
+    val listState = rememberLazyListState()
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) scope.launch {
             com.leoyuan.leophoneagent.treasury.TreasuryCaptureService.captureUris(context, uris)
@@ -113,20 +121,32 @@ fun TreasuryScreen(
     }
 
     LaunchedEffect(selectedItemId) {
-        selected = selectedItemId?.let { repository.get(listOf(it)).firstOrNull() }
+        val id = selectedItemId
+        if (id == null) {
+            selected = null
+            highlights = emptyList()
+            return@LaunchedEffect
+        }
+        selected = repository.markOpened(id)
         if (annotationDraft.isEmpty()) annotationDraft = selected?.annotation.orEmpty()
+        repository.observeHighlights(id).collectLatest { highlights = it }
     }
 
     val visible = remember(rows, filter) {
-        rows.filter { item ->
+        val filtered = rows.filter { item ->
             !item.archived && when (filter) {
+                TreasuryFilter.INBOX -> item.lastOpenedAt == null
+                TreasuryFilter.PROCESSING -> item.processingState in setOf("saved", "queued", "processing")
+                TreasuryFilter.FAILED -> item.processingState in setOf("partial", "failed")
+                TreasuryFilter.UNREAD -> item.readingState == "unread"
+                TreasuryFilter.RECENT -> item.lastOpenedAt != null
                 TreasuryFilter.ALL -> true
                 TreasuryFilter.LINKS -> item.kind == "link"
                 TreasuryFilter.NOTES -> item.kind in setOf("text", "note", "artifact")
                 TreasuryFilter.FILES -> item.kind in setOf("image", "document", "audio", "video")
-                TreasuryFilter.FAILED -> item.processingState in setOf("partial", "failed")
             }
         }
+        if (filter == TreasuryFilter.RECENT) filtered.sortedByDescending { it.lastOpenedAt } else filtered
     }
     val selectedItem = selected
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -143,6 +163,17 @@ fun TreasuryScreen(
                         selected = repository.updateItem(selectedItem.id, annotation = annotationDraft)
                     }
                 },
+                highlights = highlights,
+                onProgress = { progress ->
+                    scope.launch { selected = repository.updateReadingProgress(selectedItem.id, progress) }
+                },
+                onReadingState = { state ->
+                    scope.launch { selected = repository.updateItem(selectedItem.id, readingState = state) }
+                },
+                onAddHighlight = { start, end, quote, note ->
+                    scope.launch { repository.addHighlight(selectedItem.id, start, end, quote, note) }
+                },
+                onDeleteHighlight = { id -> scope.launch { repository.deleteHighlight(id) } },
                 onRetry = {
                     scope.launch {
                         repository.retryFailedJobs(selectedItem.id)
@@ -213,6 +244,7 @@ fun TreasuryScreen(
                         onOpen = { item ->
                             selectedItemId = item.id
                         },
+                        listState = listState,
                         modifier = if (wide) Modifier.width(380.dp).fillMaxHeight() else Modifier.fillMaxSize(),
                     )
                     if (wide) {
@@ -227,6 +259,17 @@ fun TreasuryScreen(
                                         selected = repository.updateItem(selectedItem.id, annotation = annotationDraft)
                                     }
                                 },
+                                highlights = highlights,
+                                onProgress = { progress ->
+                                    scope.launch { selected = repository.updateReadingProgress(selectedItem.id, progress) }
+                                },
+                                onReadingState = { state ->
+                                    scope.launch { selected = repository.updateItem(selectedItem.id, readingState = state) }
+                                },
+                                onAddHighlight = { start, end, quote, note ->
+                                    scope.launch { repository.addHighlight(selectedItem.id, start, end, quote, note) }
+                                },
+                                onDeleteHighlight = { id -> scope.launch { repository.deleteHighlight(id) } },
                                 onRetry = {
                                     scope.launch {
                                         repository.retryFailedJobs(selectedItem.id)
@@ -271,9 +314,9 @@ private fun TreasuryList(
     selectedIds: Set<String>,
     onToggleSelection: (String) -> Unit,
     onOpen: (TreasureSearchRow) -> Unit,
+    listState: LazyListState,
     modifier: Modifier = Modifier,
 ) {
-    val listState = rememberLazyListState()
     Column(modifier) {
         OutlinedTextField(
             value = query,
@@ -377,11 +420,17 @@ private fun TreasuryDetail(
     annotationDraft: String,
     onAnnotationChanged: (String) -> Unit,
     onSaveAnnotation: () -> Unit,
+    highlights: List<TreasureHighlightEntity>,
+    onProgress: (Double) -> Unit,
+    onReadingState: (String) -> Unit,
+    onAddHighlight: (Int, Int, String, String?) -> Unit,
+    onDeleteHighlight: (String) -> Unit,
     onRetry: () -> Unit,
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    var progressDraft by remember(item.id, item.readingProgress) { mutableStateOf(item.readingProgress.toFloat()) }
     Scaffold(
         modifier = modifier,
         topBar = {
@@ -412,11 +461,26 @@ private fun TreasuryDetail(
                     }) { Icon(Icons.Default.Link, null); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.treasury_open_source)) }
                 }
             }
-            val body = item.originalText ?: item.summary
+            val fullBody = item.originalText ?: item.summary
+            val body = fullBody?.take(TREASURY_READER_MAX_CHARS)
             if (!body.isNullOrBlank()) {
                 item {
                     Text(stringResource(R.string.treasury_content), style = MaterialTheme.typography.titleMedium)
-                    Text(body, modifier = Modifier.padding(top = 6.dp))
+                    TreasurySelectableBody(
+                        body = body,
+                        highlights = highlights,
+                        onAddHighlight = onAddHighlight,
+                        onDeleteHighlight = onDeleteHighlight,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                    if ((fullBody?.length ?: 0) > TREASURY_READER_MAX_CHARS) {
+                        Text(
+                            stringResource(R.string.treasury_body_truncated),
+                            modifier = Modifier.padding(top = 8.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
             if (item.bodyRef != null && body.isNullOrBlank()) {
@@ -430,6 +494,24 @@ private fun TreasuryDetail(
                                 Text(stringResource(R.string.treasury_open_attachment))
                             }
                         }
+                    }
+                }
+            }
+            item {
+                Text(stringResource(R.string.treasury_reading_progress), style = MaterialTheme.typography.titleMedium)
+                Text(stringResource(R.string.treasury_reading_percent, (progressDraft * 100).toInt()))
+                Slider(
+                    value = progressDraft,
+                    onValueChange = { progressDraft = it },
+                    onValueChangeFinished = { onProgress(progressDraft.toDouble()) },
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("unread", "reading", "read").forEach { state ->
+                        FilterChip(
+                            selected = item.readingState == state,
+                            onClick = { onReadingState(state) },
+                            label = { Text(readingStateLabel(state)) },
+                        )
                     }
                 }
             }
@@ -523,11 +605,76 @@ private fun TreasuryCaptureDialog(onDismiss: () -> Unit, onCapture: (String) -> 
 
 @Composable
 private fun filterLabel(filter: TreasuryFilter): String = when (filter) {
+    TreasuryFilter.INBOX -> stringResource(R.string.treasury_filter_inbox)
+    TreasuryFilter.PROCESSING -> stringResource(R.string.treasury_filter_processing)
+    TreasuryFilter.UNREAD -> stringResource(R.string.treasury_filter_unread)
+    TreasuryFilter.RECENT -> stringResource(R.string.treasury_filter_recent)
     TreasuryFilter.ALL -> stringResource(R.string.treasury_filter_all)
     TreasuryFilter.LINKS -> stringResource(R.string.treasury_filter_links)
     TreasuryFilter.NOTES -> stringResource(R.string.treasury_filter_notes)
     TreasuryFilter.FILES -> stringResource(R.string.treasury_filter_files)
     TreasuryFilter.FAILED -> stringResource(R.string.treasury_filter_failed)
+}
+
+@Composable
+private fun readingStateLabel(state: String): String = when (state) {
+    "unread" -> stringResource(R.string.treasury_reading_unread)
+    "reading" -> stringResource(R.string.treasury_reading_reading)
+    "read" -> stringResource(R.string.treasury_reading_read)
+    else -> state
+}
+
+@Composable
+private fun TreasurySelectableBody(
+    body: String,
+    highlights: List<TreasureHighlightEntity>,
+    onAddHighlight: (Int, Int, String, String?) -> Unit,
+    onDeleteHighlight: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var value by remember(body) { mutableStateOf(TextFieldValue(body)) }
+    var note by rememberSaveable(body.hashCode()) { mutableStateOf("") }
+    val range = value.selection
+    val hasSelection = !range.collapsed && range.min >= 0 && range.max <= body.length
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        TextField(
+            value = value,
+            onValueChange = { value = it.copy(text = body) },
+            readOnly = true,
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text(stringResource(R.string.treasury_select_highlight_hint)) },
+        )
+        OutlinedTextField(
+            value = note,
+            onValueChange = { note = it.take(20_000) },
+            label = { Text(stringResource(R.string.treasury_highlight_note)) },
+            modifier = Modifier.fillMaxWidth(),
+            minLines = 2,
+        )
+        Button(
+            enabled = hasSelection,
+            onClick = {
+                if (!hasSelection) return@Button
+                onAddHighlight(range.min, range.max, body.substring(range.min, range.max), note.trim().ifEmpty { null })
+                value = value.copy(selection = androidx.compose.ui.text.TextRange(range.max))
+                note = ""
+            },
+        ) { Text(stringResource(R.string.treasury_save_highlight)) }
+        if (highlights.isNotEmpty()) {
+            Text(stringResource(R.string.treasury_saved_highlights), style = MaterialTheme.typography.titleSmall)
+            highlights.forEach { highlight ->
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("“${highlight.quoteText}”")
+                        highlight.note?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        TextButton(onClick = { onDeleteHighlight(highlight.id) }) {
+                            Text(stringResource(R.string.treasury_delete_highlight))
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable

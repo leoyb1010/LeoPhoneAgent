@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { treasuryDb, type TreasureItem } from '@/modules/database/index.js';
+import { parseTreasuryQuery, treasuryDb, type TreasureItem } from '@/modules/database/index.js';
 
 export type TreasurySearchResult = Pick<
   TreasureItem,
@@ -12,24 +12,30 @@ export type TreasurySearchResult = Pick<
   match_sources: string[];
 };
 
+const queryTerms = (query: string): string[] => parseTreasuryQuery(query).textQuery
+  .toLowerCase().split(/\s+/).filter(Boolean);
+
 const compactSnippet = (item: TreasureItem, query: string, maxChars = 240): string => {
   const sources = [item.title, item.summary, item.annotation, item.original_text]
     .filter((value): value is string => Boolean(value));
-  const needle = query.trim().toLocaleLowerCase();
-  const matching = sources.find((value) => value.toLocaleLowerCase().includes(needle)) ?? sources[0] ?? '';
+  const terms = queryTerms(query);
+  const needle = terms[0] ?? '';
+  const matching = sources.find((value) => terms.some((term) => value.toLowerCase().includes(term)))
+    ?? sources[0] ?? '';
   if (matching.length <= maxChars) return matching;
-  const index = Math.max(0, matching.toLocaleLowerCase().indexOf(needle));
+  const index = Math.max(0, matching.toLowerCase().indexOf(needle));
   const start = Math.max(0, index - Math.floor(maxChars / 3));
   return `${start ? '…' : ''}${matching.slice(start, start + maxChars)}…`;
 };
 
 const matchSources = (item: TreasureItem, query: string): string[] => {
-  const needle = query.trim().toLocaleLowerCase();
-  if (!needle) return [];
+  const terms = queryTerms(query);
+  if (!terms.length) return [];
   return [
     ['title', item.title], ['summary', item.summary], ['annotation', item.annotation],
     ['body', item.original_text], ['tags', item.tags.join(' ')],
-  ].flatMap(([name, value]) => String(value ?? '').toLocaleLowerCase().includes(needle) ? [String(name)] : []);
+  ].flatMap(([name, value]) => terms.some((term) => String(value ?? '').toLowerCase().includes(term))
+    ? [String(name)] : []);
 };
 
 export const treasuryService = {
