@@ -39,8 +39,8 @@ const matchSources = (item: TreasureItem, query: string): string[] => {
 };
 
 export const treasuryService = {
-  search(userId: number, query: string, limit = 20): TreasurySearchResult[] {
-    return treasuryDb.search(userId, query, limit).map((item) => ({
+  search(userId: number, query: string, limit = 20, includeArchived = false): TreasurySearchResult[] {
+    return treasuryDb.search(userId, query, limit, includeArchived).map((item) => ({
       id: item.id,
       title: item.title,
       kind: item.kind,

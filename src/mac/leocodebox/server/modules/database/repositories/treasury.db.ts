@@ -336,7 +336,8 @@ export const parseTreasuryQuery = (raw: string): TreasuryQuerySpec => {
     pinned, archived, recent, after, before };
 };
 
-const queryItems = (userId: number, raw: string, limit: number): Array<TreasureItem & { score: number }> => {
+const queryItems = (userId: number, raw: string, limit: number,
+                    includeArchived = false): Array<TreasureItem & { score: number }> => {
   const spec = parseTreasuryQuery(raw);
   const expression = ftsExpression(spec.textQuery);
   const parameters: Array<string | number> = [];
@@ -346,7 +347,8 @@ const queryItems = (userId: number, raw: string, limit: number): Array<TreasureI
   const where = ['treasure_items.user_id=?', 'treasure_items.deleted_at IS NULL'];
   parameters.push(userId);
   if (expression) { where.push('treasure_search_fts MATCH ?'); parameters.push(expression); }
-  where.push(spec.archived ? 'treasure_items.archived=1' : 'treasure_items.archived=0');
+  if (spec.archived) where.push('treasure_items.archived=1');
+  else if (!includeArchived) where.push('treasure_items.archived=0');
   const addSet = (column: string, values: Set<string>) => {
     if (!values.size) return;
     where.push(`${column} IN (${[...values].map(() => '?').join(',')})`);
@@ -449,8 +451,9 @@ export const treasuryDb = {
     return queryItems(userId, query, limit);
   },
 
-  search(userId: number, query: string, limit = 50): Array<TreasureItem & { score: number }> {
-    return queryItems(userId, query, Math.min(limit, 100));
+  search(userId: number, query: string, limit = 50,
+         includeArchived = false): Array<TreasureItem & { score: number }> {
+    return queryItems(userId, query, Math.min(limit, 500), includeArchived);
   },
 
   updateReading(userId: number, id: string, readingState: ReadingState,
@@ -747,6 +750,19 @@ export const treasuryDb = {
     });
   },
 
+  remoteItemsAllScopes(limit = TREASURE_ITEM_REMOTE_LIMIT): Array<RemoteTreasureMetadata & { scope: string }> {
+    const rows = getConnection().prepare(
+      `SELECT scope,payload_json FROM treasure_remote_items
+       WHERE deleted_at IS NULL ORDER BY updated_at DESC LIMIT ?`,
+    ).all(Math.max(1, Math.min(limit, TREASURE_ITEM_REMOTE_LIMIT))) as Array<{
+      scope: string; payload_json: string;
+    }>;
+    return rows.flatMap((row) => {
+      try { return [{ ...JSON.parse(row.payload_json) as RemoteTreasureMetadata, scope: row.scope }]; }
+      catch { return []; }
+    });
+  },
+
   remoteAsset(scope: string, itemId: string, assetKind: 'body' | 'attachment'): RemoteTreasureAsset | null {
     return (getConnection().prepare(
       `SELECT scope,item_id,asset_kind,content_text,file_path,digest,byte_count,mime_type,updated_at
@@ -761,6 +777,13 @@ export const treasuryDb = {
     }
     if (asset.asset_kind === 'body' && (asset.content_text === null || asset.file_path !== null)) {
       throw new Error('Invalid remote treasury body cache');
+    }
+    if (asset.asset_kind === 'body') {
+      const bytes = Buffer.from(asset.content_text!, 'utf8');
+      if (asset.mime_type !== 'text/plain' || bytes.length !== asset.byte_count ||
+          createHash('sha256').update(bytes).digest('hex') !== asset.digest) {
+        throw new Error('Invalid remote treasury body integrity');
+      }
     }
     if (asset.asset_kind === 'attachment' && (!asset.file_path || asset.content_text !== null)) {
       throw new Error('Invalid remote treasury attachment cache');

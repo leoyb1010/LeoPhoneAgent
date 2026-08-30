@@ -9,6 +9,7 @@
  *   start         - Start the server
  *   sandbox       - Manage Docker sandbox environments
  *   browser-use-mcp - Run Browser MCP stdio server
+ *   treasury-mcp  - Run Treasury MCP stdio server
  *   status        - Show configuration and data locations
  *   help          - Show help information
  *   version       - Show version information
@@ -175,6 +176,7 @@ Commands:
   start            Start the leocodebox server (default)
   sandbox          Manage Docker sandbox environments
   browser-use-mcp  Run the Browser MCP stdio server
+  treasury-mcp     Run the Treasury MCP stdio server
   status           Show configuration and data locations
   update           Update to the latest version
   help             Show this help information
@@ -636,6 +638,10 @@ async function startBrowserUseMcp(): Promise<void> {
     await import('./browser-use-mcp.js');
 }
 
+async function startTreasuryMcp(): Promise<void> {
+    await import('./treasury-mcp.js');
+}
+
 // Parse CLI arguments
 function parseArgs(args: string[]): ParsedCliArgs {
     const parsed: ParsedCliArgs = { command: 'start', options: {} };
@@ -691,6 +697,9 @@ async function main(): Promise<void> {
             break;
         case 'browser-use-mcp':
             await startBrowserUseMcp();
+            break;
+        case 'treasury-mcp':
+            await startTreasuryMcp();
             break;
         case 'status':
         case 'info':

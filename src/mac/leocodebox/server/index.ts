@@ -40,6 +40,8 @@ import tokenUsageRoutes from './modules/usage/token-usage.routes.js';
 import usageRoutes from './modules/usage/usage.routes.js';
 import browserUseMcpRoutes from './modules/browser-use/browser-use-mcp.routes.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
+import treasuryMcpRoutes from './modules/leophone/treasury-mcp.routes.js';
+import { treasuryMcpService } from './modules/leophone/treasury-mcp.service.js';
 import { startServerLifecycle } from './runtime/server-lifecycle.js';
 import { attachWebSocketRuntime } from './runtime/websocket-runtime.js';
 import { validateApiKey, authenticateToken, IS_LOCAL_ONLY_AUTH } from './middleware/auth.js';
@@ -160,6 +162,7 @@ app.use('/api/leocodebox', authenticateToken, leocodeboxRoutes);
 
 // Browser MCP bridge API (local token protected)
 app.use('/api/browser-use-mcp', browserUseMcpRoutes);
+app.use('/api/treasury-mcp', treasuryMcpRoutes);
 
 // Browser API Routes (protected)
 app.use('/api/browser-use', authenticateToken, browserUseRoutes);
@@ -277,6 +280,9 @@ app.use(globalErrorHandler);
 
 void browserUseService.repairAgentMcpRegistration().catch((error) => {
     console.warn('[Browser] Failed to repair managed MCP registration:', error instanceof Error ? error.message : error);
+});
+void treasuryMcpService.repairAgentMcpRegistration().catch((error) => {
+    console.warn('[Treasury] Failed to repair managed MCP registration:', error instanceof Error ? error.message : error);
 });
 
 // Background Leoapi health monitor — same gate as the /switch routes it serves.
