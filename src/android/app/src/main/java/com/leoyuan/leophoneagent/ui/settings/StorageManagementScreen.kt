@@ -45,6 +45,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import com.leoyuan.leophoneagent.data.db.ChatDao
 import com.leoyuan.leophoneagent.data.db.ChatSessionEntity
+import com.leoyuan.leophoneagent.treasury.TreasuryStoragePolicy
+import com.leoyuan.leophoneagent.treasury.TreasuryStorageUsage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -58,6 +60,13 @@ private data class SessionStorageInfo(
 ) {
     val totalSize: Long get() = minisSize + mediaSize
 }
+
+private data class StorageSnapshot(
+    val shellSize: Long,
+    val dbSize: Long,
+    val sessions: List<SessionStorageInfo>,
+    val treasuryUsage: TreasuryStorageUsage,
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -74,30 +83,40 @@ fun StorageManagementScreen(
     var shellSize by remember { mutableLongStateOf(0L) }
     var dbSize by remember { mutableLongStateOf(0L) }
     var sessions by remember { mutableStateOf<List<SessionStorageInfo>>(emptyList()) }
+    var treasuryUsage by remember {
+        mutableStateOf(TreasuryStorageUsage(0L, 0L))
+    }
+    var isClearingTreasuryCache by remember { mutableStateOf(false) }
+    var showTreasuryClearDialog by remember { mutableStateOf(false) }
 
     fun reload() {
         scope.launch {
             isLoading = true
-            withContext(Dispatchers.IO) {
-                shellSize = directorySize(File(context.filesDir, "alpine-rootfs"))
-                dbSize = databaseSize(context)
-
+            val snapshot = withContext(Dispatchers.IO) {
                 val allSessions = chatDao.listSessions()
                 val sessionsDir = File(context.filesDir, "minis-sessions")
                 val mediaDir = File(context.filesDir, "media")
-
                 val mediaSizes = mediaSizesBySession(mediaDir, allSessions.map { it.id }.toSet())
 
-                sessions = allSessions.map { session ->
-                    val minisDir = File(sessionsDir, session.id)
-                    SessionStorageInfo(
-                        id = session.id,
-                        title = session.title,
-                        minisSize = directorySize(minisDir),
-                        mediaSize = mediaSizes[session.id] ?: 0L,
-                    )
-                }.sortedByDescending { it.totalSize }
+                StorageSnapshot(
+                    shellSize = directorySize(File(context.filesDir, "alpine-rootfs")),
+                    dbSize = databaseSize(context),
+                    treasuryUsage = TreasuryStoragePolicy.usage(File(context.filesDir, "treasury")),
+                    sessions = allSessions.map { session ->
+                        val minisDir = File(sessionsDir, session.id)
+                        SessionStorageInfo(
+                            id = session.id,
+                            title = session.title,
+                            minisSize = directorySize(minisDir),
+                            mediaSize = mediaSizes[session.id] ?: 0L,
+                        )
+                    }.sortedByDescending { it.totalSize },
+                )
             }
+            shellSize = snapshot.shellSize
+            dbSize = snapshot.dbSize
+            treasuryUsage = snapshot.treasuryUsage
+            sessions = snapshot.sessions
             isLoading = false
         }
     }
@@ -156,7 +175,88 @@ fun StorageManagementScreen(
             }
         }
 
+        SettingsSection(
+            header = stringResource(R.string.storage_treasury_section),
+            footer = stringResource(R.string.storage_treasury_footer),
+        ) {
+            StorageOverviewRow(
+                color = Color(0xFFFF9500),
+                label = stringResource(R.string.storage_treasury_originals),
+                value = Formatter.formatFileSize(context, treasuryUsage.originalAttachmentBytes),
+                showDivider = true,
+            )
+            StorageOverviewRow(
+                color = Color(0xFFAF52DE),
+                label = stringResource(R.string.storage_treasury_sync_cache),
+                value = Formatter.formatFileSize(context, treasuryUsage.syncTemporaryCacheBytes),
+                showDivider = true,
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        enabled = treasuryUsage.syncTemporaryCacheBytes > 0 && !isClearingTreasuryCache,
+                    ) { showTreasuryClearDialog = true }
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (isClearingTreasuryCache) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(10.dp))
+                }
+                Text(
+                    stringResource(
+                        if (isClearingTreasuryCache) R.string.storage_treasury_clearing
+                        else R.string.storage_treasury_clear_cache
+                    ),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (treasuryUsage.syncTemporaryCacheBytes > 0) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    Formatter.formatFileSize(context, treasuryUsage.syncTemporaryCacheBytes),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
         Spacer(Modifier.height(24.dp))
+    }
+
+    if (showTreasuryClearDialog) {
+        AlertDialog(
+            onDismissRequest = { showTreasuryClearDialog = false },
+            title = { Text(stringResource(R.string.storage_treasury_clear_confirm_title)) },
+            text = { Text(stringResource(R.string.storage_treasury_clear_confirm_text)) },
+            confirmButton = {
+                MinisTextButton(onClick = {
+                    showTreasuryClearDialog = false
+                    isClearingTreasuryCache = true
+                    scope.launch {
+                        val refreshed = withContext(Dispatchers.IO) {
+                            TreasuryStoragePolicy.clearSyncTemporaryCache(
+                                File(context.filesDir, "treasury")
+                            )
+                            TreasuryStoragePolicy.usage(File(context.filesDir, "treasury"))
+                        }
+                        treasuryUsage = refreshed
+                        isClearingTreasuryCache = false
+                    }
+                }) {
+                    Text(
+                        stringResource(R.string.storage_treasury_clear_cache),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                MinisTextButton(onClick = { showTreasuryClearDialog = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
+        )
     }
 }
 

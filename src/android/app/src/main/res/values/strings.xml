@@ -824,6 +824,14 @@
     <string name="storage_browse_files">Browse Files</string>
     <string name="storage_clearing_status">Clearing…</string>
     <string name="storage_clear_session_button">Clear Session Files</string>
+    <string name="storage_treasury_section">Treasury</string>
+    <string name="storage_treasury_originals">Original attachments</string>
+    <string name="storage_treasury_sync_cache">Sync temporary cache</string>
+    <string name="storage_treasury_clear_cache">Clear sync cache</string>
+    <string name="storage_treasury_clearing">Clearing…</string>
+    <string name="storage_treasury_footer">Only regenerable sync upload copies are cleared. Original attachments, extracted text, notes, and Treasury items are preserved.</string>
+    <string name="storage_treasury_clear_confirm_title">Clear Treasury sync cache?</string>
+    <string name="storage_treasury_clear_confirm_text">Original attachments and Treasury items will not be deleted. Upload copies are recreated when needed.</string>
     <string name="storage_clear_confirm_title">Clear Session Files?</string>
     <string name="storage_clear_confirm_text">This will delete %1$s of files. This action cannot be undone.</string>
     <string name="storage_clear_confirm_button">Clear %1$s</string>

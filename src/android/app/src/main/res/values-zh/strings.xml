@@ -498,6 +498,14 @@
     <string name="storage_browse_files">浏览文件</string>
     <string name="storage_clearing_status">清除中…</string>
     <string name="storage_clear_session_button">清除会话文件</string>
+    <string name="storage_treasury_section">藏宝阁</string>
+    <string name="storage_treasury_originals">原始附件</string>
+    <string name="storage_treasury_sync_cache">同步临时缓存</string>
+    <string name="storage_treasury_clear_cache">清理同步缓存</string>
+    <string name="storage_treasury_clearing">正在清理…</string>
+    <string name="storage_treasury_footer">只清理可重新生成的同步上传副本，不会删除原始附件、已提取正文、笔记或藏宝阁条目。</string>
+    <string name="storage_treasury_clear_confirm_title">清理藏宝阁同步缓存？</string>
+    <string name="storage_treasury_clear_confirm_text">原始附件和藏宝阁条目不会被删除；需要同步时会重新生成上传副本。</string>
     <string name="storage_clear_confirm_title">清除会话文件？</string>
     <string name="storage_clear_confirm_text">这将删除 %1$s 的文件。此操作无法撤销。</string>
     <string name="storage_clear_confirm_button">清除 %1$s</string>

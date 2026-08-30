@@ -1234,6 +1234,14 @@
     <string name="storage_browse_files">浏览檔案</string>
     <string name="storage_clearing_status">清除中…</string>
     <string name="storage_clear_session_button">清除工作階段檔案</string>
+    <string name="storage_treasury_section">藏寶閣</string>
+    <string name="storage_treasury_originals">原始附件</string>
+    <string name="storage_treasury_sync_cache">同步暫存快取</string>
+    <string name="storage_treasury_clear_cache">清理同步快取</string>
+    <string name="storage_treasury_clearing">正在清理…</string>
+    <string name="storage_treasury_footer">只清理可重新產生的同步上傳副本，不會刪除原始附件、已擷取正文、筆記或藏寶閣項目。</string>
+    <string name="storage_treasury_clear_confirm_title">清理藏寶閣同步快取？</string>
+    <string name="storage_treasury_clear_confirm_text">原始附件和藏寶閣項目不會被刪除；需要同步時會重新產生上傳副本。</string>
     <string name="storage_clear_confirm_title">清除工作階段檔案？</string>
     <string name="storage_clear_confirm_text">这將刪除 %1$s 的檔案。此操作无法撤销。</string>
     <string name="storage_clear_confirm_button">清除 %1$s</string>

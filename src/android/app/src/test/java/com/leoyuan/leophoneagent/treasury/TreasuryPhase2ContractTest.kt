@@ -9,7 +9,9 @@ import com.leoyuan.leophoneagent.ui.treasury.relatedTreasuryRows
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.net.InetAddress
+import java.nio.file.Files
 import java.time.Instant
+import kotlin.io.path.createTempDirectory
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -160,6 +162,75 @@ class TreasuryPhase2ContractTest {
             assertEquals(257, TreasuryFilePolicy.readUtf8TextLimited(file, 257).length)
         } finally {
             file.delete()
+        }
+    }
+
+    @Test
+    fun `storage cleanup deletes only regenerable sync copies`() {
+        val root = createTempDirectory("treasury-storage-").toFile()
+        try {
+            val originals = File(root, "files").apply { mkdirs() }
+            val cache = File(root, "sync-outbox").apply { mkdirs() }
+            File(originals, "original.pdf").writeBytes(ByteArray(31) { 1 })
+            File(cache, "body.txt").writeBytes(ByteArray(17) { 2 })
+
+            assertEquals(31L, TreasuryStoragePolicy.usage(root).originalAttachmentBytes)
+            assertEquals(17L, TreasuryStoragePolicy.usage(root).syncTemporaryCacheBytes)
+            assertEquals(17L, TreasuryStoragePolicy.clearSyncTemporaryCache(root))
+            assertTrue(File(originals, "original.pdf").isFile)
+            assertEquals(0L, TreasuryStoragePolicy.usage(root).syncTemporaryCacheBytes)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `storage accounting and cleanup never follow symbolic links`() {
+        val root = createTempDirectory("treasury-storage-links-").toFile()
+        val outside = createTempDirectory("treasury-storage-outside-").toFile()
+        try {
+            val originals = File(root, "files").apply { mkdirs() }
+            val cache = File(root, "sync-outbox").apply { mkdirs() }
+            val outsideOriginal = File(outside, "private.pdf").apply {
+                writeBytes(ByteArray(41) { 3 })
+            }
+            val outsideCache = File(outside, "upload.bin").apply {
+                writeBytes(ByteArray(29) { 4 })
+            }
+            Files.createSymbolicLink(File(originals, "linked.pdf").toPath(), outsideOriginal.toPath())
+            val cacheLink = File(cache, "linked-upload.bin")
+            Files.createSymbolicLink(cacheLink.toPath(), outsideCache.toPath())
+            File(cache, "owned-upload.bin").writeBytes(ByteArray(13) { 5 })
+
+            val usage = TreasuryStoragePolicy.usage(root)
+            assertEquals(0L, usage.originalAttachmentBytes)
+            assertEquals(13L, usage.syncTemporaryCacheBytes)
+            assertEquals(13L, TreasuryStoragePolicy.clearSyncTemporaryCache(root))
+            assertTrue(outsideOriginal.isFile)
+            assertTrue(outsideCache.isFile)
+            assertFalse(cacheLink.exists())
+        } finally {
+            root.deleteRecursively()
+            outside.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `storage cleanup refuses a symbolic link cache root`() {
+        val root = createTempDirectory("treasury-storage-root-link-").toFile()
+        val outside = createTempDirectory("treasury-storage-root-target-").toFile()
+        try {
+            val outsideCache = File(outside, "upload.bin").apply {
+                writeBytes(ByteArray(23) { 6 })
+            }
+            Files.createSymbolicLink(File(root, "sync-outbox").toPath(), outside.toPath())
+
+            assertEquals(0L, TreasuryStoragePolicy.usage(root).syncTemporaryCacheBytes)
+            assertEquals(0L, TreasuryStoragePolicy.clearSyncTemporaryCache(root))
+            assertTrue(outsideCache.isFile)
+        } finally {
+            root.deleteRecursively()
+            outside.deleteRecursively()
         }
     }
 
