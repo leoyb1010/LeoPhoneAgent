@@ -102,6 +102,7 @@ export default function CollectionsMirror({ refreshTick = 0 }: { refreshTick?: n
   const [attachmentBusy, setAttachmentBusy] = useState(false);
   const [attachmentStatus, setAttachmentStatus] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const detailPanel = useRef<HTMLElement>(null);
   const loadGeneration = useRef(0);
   const remoteGeneration = useRef(0);
   const detailGeneration = useRef(0);
@@ -164,6 +165,10 @@ export default function CollectionsMirror({ refreshTick = 0 }: { refreshTick?: n
     remoteGeneration.current += 1;
     detailGeneration.current += 1;
   }, []);
+
+  useEffect(() => {
+    if (selectedId) detailPanel.current?.focus();
+  }, [selectedId]);
 
   const visible = useMemo<DisplayItem[]>(() => {
     const local: DisplayItem[] = localItems.map((item) => ({
@@ -520,8 +525,10 @@ export default function CollectionsMirror({ refreshTick = 0 }: { refreshTick?: n
         <p className="mt-2 text-xs text-muted-foreground">也可以把文件拖到这里。单文件上限 100 MB；原文件保存不依赖网络、OCR 或模型。</p>
       </div>
 
+      {loading && <p className="sr-only" role="status">正在更新藏宝阁结果…</p>}
       {(remoteError || localError) && (
-        <div role="status" className="mt-2 space-y-1 rounded-lg border border-warning/35 bg-warning/10 px-3 py-2 text-xs text-warning">
+        <div role="alert" aria-live="assertive"
+          className="mt-2 space-y-1 rounded-lg border border-warning/35 bg-warning/10 px-3 py-2 text-xs text-warning">
           {remoteError && <p>手机暂时离线，以下手机条目是上次成功内容。{remoteError}</p>}
           {localError && <p>Mac 本机藏宝阁出现错误：{localError}</p>}
         </div>
@@ -533,9 +540,20 @@ export default function CollectionsMirror({ refreshTick = 0 }: { refreshTick?: n
           aria-label="藏宝阁智能视图与合集">
           <p className="px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">智能视图</p>
           <div className="flex gap-1 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible" role="tablist" aria-label="藏宝阁视图">
-            {VIEWS.map((view) => (
-              <button key={view.id} type="button" role="tab" aria-selected={libraryView === view.id}
+            {VIEWS.map((view, index) => (
+              <button key={view.id} id={`treasury-view-${view.id}`} type="button" role="tab"
+                aria-selected={libraryView === view.id} aria-controls="treasury-results"
+                tabIndex={libraryView === view.id ? 0 : -1}
                 onClick={() => setLibraryView(view.id)}
+                onKeyDown={(event) => {
+                  if (!['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+                  event.preventDefault();
+                  const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? VIEWS.length - 1
+                    : (index + (event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1 : -1) + VIEWS.length) % VIEWS.length;
+                  const next = VIEWS[nextIndex]!;
+                  setLibraryView(next.id);
+                  document.getElementById(`treasury-view-${next.id}`)?.focus();
+                }}
                 className={`shrink-0 rounded-lg px-2.5 py-2 text-left text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                   libraryView === view.id
                     ? 'bg-primary text-primary-foreground'
@@ -582,13 +600,14 @@ export default function CollectionsMirror({ refreshTick = 0 }: { refreshTick?: n
           </div>
         </nav>
 
-        <main className="min-w-0">
+        <main id="treasury-results" role="tabpanel" aria-labelledby={`treasury-view-${libraryView}`}
+          className="min-w-0">
           <input type="search" value={query} onChange={(event) => setQuery(event.target.value)}
             placeholder="搜索，支持 type:link read:unread tag:工作 is:pinned"
             aria-label="搜索 Mac 与手机藏宝阁"
             className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20" />
           <div className="mt-3 grid content-start gap-2 2xl:grid-cols-2">
-          {!visible.length && !localError && <p className="text-sm text-muted-foreground">当前视图还没有内容。</p>}
+          {!loading && !visible.length && !localError && <p className="text-sm text-muted-foreground">当前视图还没有内容。</p>}
           {visible.map((item) => (
             <article key={item.id} className="rounded-xl border border-border bg-background p-3">
               <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -629,7 +648,8 @@ export default function CollectionsMirror({ refreshTick = 0 }: { refreshTick?: n
         </main>
 
         {selectedId && (
-          <aside className="rounded-xl border border-border bg-background p-4 lg:col-start-2 xl:col-start-3 xl:row-start-1 xl:sticky xl:top-3 xl:max-h-[75vh] xl:overflow-y-auto"
+          <aside ref={detailPanel} tabIndex={-1}
+            className="rounded-xl border border-border bg-background p-4 outline-none lg:col-start-2 xl:col-start-3 xl:row-start-1 xl:sticky xl:top-3 xl:max-h-[75vh] xl:overflow-y-auto"
             aria-label="藏宝阁阅读详情" aria-busy={detailBusy}>
             <div className="flex items-start justify-between gap-3">
               <div><p className="text-xs text-muted-foreground">{remoteDetail ? '手机按需内容' : 'Mac 本机内容'}</p>
@@ -761,7 +781,9 @@ export default function CollectionsMirror({ refreshTick = 0 }: { refreshTick?: n
                     <blockquote key={highlight.id} className="rounded-lg border-l-2 border-primary bg-muted/20 p-2 text-xs text-foreground">
                       <p>{highlight.quote_text}</p>
                       {highlight.note && <p className="mt-1 text-muted-foreground">{highlight.note}</p>}
-                      <button type="button" onClick={() => void deleteHighlight(highlight.id)}
+                      <button type="button" onClick={() => {
+                        if (window.confirm('确认删除这条高亮和批注？此操作无法撤销。')) void deleteHighlight(highlight.id);
+                      }}
                         className="mt-2 text-warning hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">删除高亮</button>
                     </blockquote>
                   ))}

@@ -51,6 +51,12 @@ const ALLOWED_TREASURY_ASSET_MIMES = new Set([
   'video/mp4', 'video/mpeg', 'video/quicktime', 'video/webm',
 ]);
 
+export function publicTreasuryError(_error: unknown, fallback: string): string {
+  // Treasury failures can originate in fs/fetch and may contain absolute paths,
+  // relay URLs, or other machine-local details. Keep the HTTP/tool surface stable.
+  return fallback;
+}
+
 type RelayTarget = { base: string; key: string };
 
 function authenticatedUserId(req: express.Request): number {
@@ -784,7 +790,7 @@ router.get('/leophone/collections', async (req, res) => {
       updatedAt: state.lastSuccessAt ?? 0,
       cursor: state.cursor,
       stale: true,
-      error: { message: error instanceof Error ? error.message : 'relay unreachable' },
+      error: { message: publicTreasuryError(error, '手机同步暂时不可用') },
     });
   }
 });
@@ -1043,7 +1049,7 @@ router.get('/leophone/collections/:itemId/body', async (req, res) => {
         digest: cached.digest, byte_count: cached.byte_count });
       return;
     }
-    res.status(502).json({ error: { message: error instanceof Error ? error.message : '远端正文读取失败' } });
+    res.status(502).json({ error: { message: publicTreasuryError(error, '远端正文读取失败') } });
   }
 });
 
@@ -1067,7 +1073,7 @@ router.get('/leophone/collections/:itemId/attachment', async (req, res) => {
     }
   } catch (error) {
     if (!cached?.file_path) {
-      res.status(502).json({ error: { message: error instanceof Error ? error.message : '远端附件读取失败' } });
+      res.status(502).json({ error: { message: publicTreasuryError(error, '远端附件读取失败') } });
       return;
     }
   }

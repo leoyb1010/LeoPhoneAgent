@@ -10,6 +10,7 @@ import {
   isCachedAttachmentPath,
   isAllowedTreasuryAssetMime,
   isValidCachedBody,
+  publicTreasuryError,
   safeAssetHeaders,
 } from './fleet.routes.js';
 import type { RemoteTreasureMetadata } from '../database/repositories/treasury.db.js';
@@ -33,6 +34,12 @@ test('fleet treasury asset headers require bounded digest count and safe mime', 
     'x-treasury-digest': 'a'.repeat(64), 'x-treasury-byte-count': '4',
     'content-type': 'application/x-executable',
   } }), 10), /invalid treasury asset metadata/);
+});
+
+test('fleet treasury errors never expose machine-local paths or tokens', () => {
+  const hostile = new Error('/Users/private/Library/secret Relay-Key=do-not-return');
+  assert.equal(publicTreasuryError(hostile, '远端附件读取失败'), '远端附件读取失败');
+  assert.equal(publicTreasuryError(hostile, '远端附件读取失败').includes(hostile.message), false);
 });
 
 test('fleet treasury cached body is revalidated before offline reuse', () => {
