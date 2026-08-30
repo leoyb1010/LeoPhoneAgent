@@ -275,6 +275,8 @@ actor CollectionSearchIndex {
 /// This service deliberately sits above that store so Phase 0 can establish a
 /// stable Agent contract without prematurely doing the Phase 1 SQLite migration.
 enum TreasuryService {
+    typealias RemoteAssetFetcher = @Sendable (_ itemID: String, _ kind: String) async -> String
+
     struct SearchRequest {
         var query = ""
         var kinds: [String] = []
@@ -388,12 +390,32 @@ enum TreasuryService {
         return (renderUntrusted(response, element: "treasury_search_results"), true)
     }
 
-    static func executeGet(from json: String) async -> (output: String, success: Bool) {
+    static func executeGet(from json: String,
+                           remoteAssetFetcher: RemoteAssetFetcher? = nil)
+        async -> (output: String, success: Bool) {
         let request = parseGetRequest(json)
         guard !request.ids.isEmpty else {
             return ("Error: treasury_get requires at least one item id.", false)
         }
-        let response = await get(request)
+        var remoteStatuses: [String: String] = [:]
+        if request.includeBody, let remoteAssetFetcher {
+            var seen = Set<String>()
+            let candidates = request.ids.prefix(100).filter { id in
+                seen.insert(id).inserted && CollectionStore.isRemoteItem(itemID: id)
+                    && CollectionStore.cachedBody(itemID: id) == nil
+            }
+            for start in stride(from: 0, to: candidates.count, by: 4) {
+                let end = min(start + 4, candidates.count)
+                let batch = Array(candidates[start..<end])
+                await withTaskGroup(of: (String, String).self) { group in
+                    for id in batch {
+                        group.addTask { (id, await remoteAssetFetcher(id, "body")) }
+                    }
+                    for await (id, status) in group { remoteStatuses[id] = status }
+                }
+            }
+        }
+        let response = await get(request, remoteBodyStatuses: remoteStatuses)
         return (renderUntrusted(response, element: "treasury_items"), true)
     }
 
@@ -661,7 +683,8 @@ enum TreasuryService {
 
     static func get(_ request: GetRequest,
                     items: [CollectedItem]? = nil,
-                    index: CollectionSearchIndex = .shared) async -> GetResponse {
+                    index: CollectionSearchIndex = .shared,
+                    remoteBodyStatuses: [String: String] = [:]) async -> GetResponse {
         let cappedIDs = Array(request.ids.prefix(100))
         let all = items ?? CollectionStore.load()
         let byID = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
@@ -672,13 +695,23 @@ enum TreasuryService {
             guard let item = byID[id] else { missing.append(id); continue }
             let indexedDocument = request.includeBody ? await index.document(itemId: id) : nil
             let storedBody = request.includeBody ? await storedBody(for: item) : nil
-            let bodyFileExists = item.bodyFile.map { controlledFileExists($0, in: CollectionStore.notesDirectory) }
-                ?? false
-            let resolution = request.includeBody
+            let bodyFileExists = storedBody != nil || (item.bodyFile.map {
+                controlledFileExists($0, in: CollectionStore.notesDirectory)
+            } ?? false)
+            var resolution = request.includeBody
                 ? resolveBody(for: item, storedBody: storedBody,
                               indexedBody: indexedDocument?.body,
                               bodyFileExists: bodyFileExists)
                 : BodyResolution(body: nil, status: "not_requested")
+            if request.includeBody, resolution.body == nil,
+               let remoteStatus = remoteBodyStatuses[id] {
+                let normalized = ["ready", "pending", "unavailable", "failed"]
+                    .contains(remoteStatus) ? remoteStatus : "failed"
+                resolution = BodyResolution(
+                    body: nil,
+                    status: normalized == "ready" ? "remote_missing" : "remote_\(normalized)"
+                )
+            }
             let clipped = clipRelevant(
                 resolution.body,
                 limit: charLimit,
@@ -736,6 +769,9 @@ enum TreasuryService {
                             storedBody: String?,
                             indexedBody: String?,
                             bodyFileExists: Bool) -> BodyResolution {
+        if let storedBody {
+            return BodyResolution(body: storedBody, status: "available")
+        }
         switch item.kind {
         case .text:
             return BodyResolution(body: item.value, status: "available")
@@ -876,6 +912,7 @@ enum TreasuryService {
     }
 
     private static func storedBody(for item: CollectedItem) async -> String? {
+        if let cached = CollectionStore.cachedBody(itemID: item.id) { return cached }
         guard let ref = item.bodyFile, isControlledFileName(ref),
               controlledFileExists(ref, in: CollectionStore.notesDirectory) else { return nil }
         return await NoteBodyStore.load(ref)

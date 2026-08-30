@@ -15,7 +15,7 @@ class StorageManagementViewModel: ObservableObject {
     @Published var sessions: [SessionStorage] = []
     @Published var treasuryUsage = TreasuryStorageUsage(
         databaseBytes: 0, originalAttachmentBytes: 0, bodyBytes: 0,
-        recoveryVersionBytes: 0, thumbnailCacheBytes: 0
+        recoveryVersionBytes: 0, thumbnailCacheBytes: 0, syncCacheBytes: 0
     )
     @Published var isLoading = true
 
@@ -141,22 +141,29 @@ struct StorageManagementView: View {
                     icon: "photo.fill", color: .pink, label: "缩略图缓存",
                     value: vm.format(vm.treasuryUsage.thumbnailCacheBytes)
                 )
+                storageRow(
+                    icon: "arrow.triangle.2.circlepath", color: .cyan, label: "跨端按需缓存",
+                    value: vm.format(vm.treasuryUsage.syncCacheBytes)
+                )
                 Button(role: .destructive) {
                     showTreasuryCacheConfirmation = true
                 } label: {
                     HStack {
                         if isClearingTreasuryCache { ProgressView().controlSize(.small) }
-                        Text(isClearingTreasuryCache ? "正在清理…" : "清理缩略图缓存")
+                        Text(isClearingTreasuryCache ? "正在清理…" : "清理可重建缓存")
                         Spacer()
-                        Text(vm.format(vm.treasuryUsage.thumbnailCacheBytes))
+                        Text(vm.format(
+                            vm.treasuryUsage.thumbnailCacheBytes + vm.treasuryUsage.syncCacheBytes
+                        ))
                             .foregroundStyle(.secondary)
                     }
                 }
-                .disabled(isClearingTreasuryCache || vm.treasuryUsage.thumbnailCacheBytes == 0)
+                .disabled(isClearingTreasuryCache ||
+                    vm.treasuryUsage.thumbnailCacheBytes + vm.treasuryUsage.syncCacheBytes == 0)
             } header: {
                 Text("藏宝阁")
             } footer: {
-                Text("只清理可重新生成的链接缩略图，不会删除原始附件、笔记、条目或恢复版本。")
+                Text("只清理可重新生成的缩略图、续传分片和远端按需副本，不会删除本机原始附件、笔记、条目或恢复版本。")
             }
 
             Section("Sessions") {
@@ -190,7 +197,7 @@ struct StorageManagementView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { vm.load() }
         .confirmationDialog(
-            "清理藏宝阁缩略图缓存？",
+            "清理藏宝阁可重建缓存？",
             isPresented: $showTreasuryCacheConfirmation,
             titleVisibility: .visible
         ) {
@@ -198,6 +205,7 @@ struct StorageManagementView: View {
                 isClearingTreasuryCache = true
                 Task.detached(priority: .userInitiated) {
                     _ = CollectionStore.clearThumbnailCache()
+                    _ = CollectionStore.clearSyncCache()
                     await MainActor.run {
                         isClearingTreasuryCache = false
                         vm.load()
@@ -206,7 +214,7 @@ struct StorageManagementView: View {
             }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("原始附件、正文、笔记和收藏条目会保留。缩略图会在后台按需重新生成。")
+            Text("本机原始附件、正文、笔记和收藏条目会保留；跨端正文或附件可在需要时重新获取。")
         }
     }
 

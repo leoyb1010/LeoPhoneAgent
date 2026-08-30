@@ -161,6 +161,16 @@ struct RelayEventPayload {
     let now: Double
 }
 
+enum TreasuryAssetFetchStatus: String {
+    case ready, pending, unavailable, failed
+}
+
+private struct TreasuryRemoteAssetHeaders {
+    let digest: String
+    let byteCount: Int
+    let mimeType: String
+}
+
 extension LeoAgentClient {
     /// Phase 4 cursor sync. The wire item is metadata-only; body/file bytes are
     /// never included in this automatic pass.
@@ -192,6 +202,228 @@ extension LeoAgentClient {
             return false
         }
     }
+
+    func fetchTreasuryAsset(itemID: String, kind: String) async -> TreasuryAssetFetchStatus {
+        guard ["body", "attachment"].contains(kind),
+              let directory = CollectionStore.directory,
+              let root = treasuryRelayRoot else { return .unavailable }
+        do {
+            let store = try TreasurySQLiteStore(directory: directory)
+            let (createdData, createdResponse) = try await treasuryRequest(
+                root: root, path: "assets/requests", method: "POST",
+                body: [
+                    "item_id": itemID,
+                    "asset_kind": kind,
+                    "requester_device_id": TreasurySQLiteStore.originDeviceID(),
+                ])
+            if [404, 409].contains(createdResponse.statusCode) { return .unavailable }
+            guard (200..<300).contains(createdResponse.statusCode),
+                  let object = try JSONSerialization.jsonObject(with: createdData) as? [String: Any],
+                  let request = object["request"] as? [String: Any],
+                  let requestID = request["id"] as? String,
+                  UUID(uuidString: requestID) != nil,
+                  request["item_id"] as? String == itemID,
+                  request["asset_kind"] as? String == kind else { return .failed }
+            switch request["status"] as? String {
+            case "pending": return .pending
+            case "ready": break
+            default: return .unavailable
+            }
+            return try await downloadTreasuryAsset(
+                store: store, root: root, requestID: requestID,
+                itemID: itemID, kind: kind)
+        } catch {
+            return .failed
+        }
+    }
+
+    private func downloadTreasuryAsset(store: TreasurySQLiteStore, root: URL,
+                                       requestID: String, itemID: String,
+                                       kind: String) async throws -> TreasuryAssetFetchStatus {
+        guard let url = URL(string: "assets/\(requestID)", relativeTo: root)?.absoluteURL else {
+            throw URLError(.badURL)
+        }
+        let partial = kind == "attachment"
+            ? try store.remoteAssetPartialURL(itemID: itemID, kind: kind) : nil
+        var offset = partial.flatMap {
+            guard let values = try? $0.resourceValues(
+                forKeys: [.fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey]),
+                  values.isRegularFile == true, values.isSymbolicLink != true,
+                  let size = values.fileSize, size > 0, size < 128 * 1024 * 1024 else {
+                return nil
+            }
+            return size
+        } ?? 0
+        if let partial, offset == 0 { try? FileManager.default.removeItem(at: partial) }
+
+        func removePartial() {
+            guard let partial else { return }
+            try? FileManager.default.removeItem(at: partial)
+        }
+
+        func request(start: Int) -> URLRequest {
+            var request = URLRequest(url: url)
+            request.setValue("Bearer \(apiKeyForRelay)", forHTTPHeaderField: "Authorization")
+            request.setValue(TreasurySQLiteStore.originDeviceID(),
+                             forHTTPHeaderField: "X-Treasury-Device-ID")
+            if start > 0 { request.setValue("bytes=\(start)-", forHTTPHeaderField: "Range") }
+            request.timeoutInterval = 120
+            return request
+        }
+
+        if kind == "body" {
+            let (data, response) = try await session.data(for: request(start: 0))
+            guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+            if http.statusCode == 202 { return .pending }
+            if http.statusCode == 410 { return .unavailable }
+            guard http.statusCode == 200 else { throw URLError(.badServerResponse) }
+            let metadata = try treasuryAssetHeaders(http, limit: 8 * 1024 * 1024)
+            guard metadata.mimeType == "text/plain", data.count == metadata.byteCount,
+                  SHA256.hash(data: data).map({ String(format: "%02x", $0) }).joined()
+                    == metadata.digest,
+                  let text = String(data: data, encoding: .utf8),
+                  try store.cacheRemoteBody(itemID: itemID, text: text,
+                                            digest: metadata.digest,
+                                            byteCount: metadata.byteCount) else {
+                throw URLError(.cannotDecodeContentData)
+            }
+            return .ready
+        }
+
+        var (bytes, response) = try await session.bytes(for: request(start: offset))
+        guard var http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        if http.statusCode == 416 && offset > 0 {
+            removePartial()
+            offset = 0
+            (bytes, response) = try await session.bytes(for: request(start: 0))
+            guard let retry = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+            http = retry
+        }
+        if http.statusCode == 202 { return .pending }
+        if http.statusCode == 410 { return .unavailable }
+        guard (200..<300).contains(http.statusCode) else { throw URLError(.badServerResponse) }
+        let metadata = try treasuryAssetHeaders(http, limit: 128 * 1024 * 1024)
+        guard let expected = try store.syncContracts(ids: [itemID])[itemID],
+              treasuryAssetMetadataMatches(
+                expectedByteCount: expected.byteCount,
+                expectedDigest: expected.contentDigest,
+                expectedMIMEType: expected.mimeType,
+                actualByteCount: metadata.byteCount,
+                actualDigest: metadata.digest,
+                actualMIMEType: metadata.mimeType
+              ) else {
+            removePartial()
+            throw URLError(.cannotDecodeContentData)
+        }
+        if offset > 0 {
+            if http.statusCode == 206 {
+                guard treasuryValidContentRange(
+                    http.value(forHTTPHeaderField: "Content-Range"),
+                    expectedStart: offset, expectedTotal: metadata.byteCount) else {
+                    removePartial()
+                    throw URLError(.cannotParseResponse)
+                }
+            } else if http.statusCode == 200 {
+                removePartial()
+                offset = 0
+            } else {
+                throw URLError(.badServerResponse)
+            }
+        } else if http.statusCode == 206 {
+            throw URLError(.cannotParseResponse)
+        }
+        guard let partial else { throw URLError(.cannotCreateFile) }
+        if !FileManager.default.fileExists(atPath: partial.path) {
+            guard FileManager.default.createFile(
+                atPath: partial.path, contents: nil,
+                attributes: [.protectionKey:
+                    FileProtectionType.completeUntilFirstUserAuthentication]) else {
+                throw URLError(.cannotCreateFile)
+            }
+        }
+        let handle = try FileHandle(forWritingTo: partial)
+        try handle.seekToEnd()
+        var hasher = SHA256()
+        if offset > 0 {
+            let existing = try FileHandle(forReadingFrom: partial)
+            defer { try? existing.close() }
+            while let chunk = try existing.read(upToCount: 64 * 1024), !chunk.isEmpty {
+                hasher.update(data: chunk)
+            }
+        }
+        var count = offset
+        var buffer = Data()
+        var shouldDiscardPartial = false
+        do {
+            for try await byte in bytes {
+                buffer.append(byte)
+                if buffer.count >= 64 * 1024 {
+                    count += buffer.count
+                    guard count <= metadata.byteCount else {
+                        shouldDiscardPartial = true
+                        throw URLError(.dataLengthExceedsMaximum)
+                    }
+                    hasher.update(data: buffer)
+                    try handle.write(contentsOf: buffer)
+                    buffer.removeAll(keepingCapacity: true)
+                }
+            }
+            if !buffer.isEmpty {
+                count += buffer.count
+                guard count <= metadata.byteCount else {
+                    shouldDiscardPartial = true
+                    throw URLError(.dataLengthExceedsMaximum)
+                }
+                hasher.update(data: buffer)
+                try handle.write(contentsOf: buffer)
+            }
+            try handle.synchronize()
+            try handle.close()
+            let digest = hasher.finalize().map { String(format: "%02x", $0) }.joined()
+            guard count == metadata.byteCount, digest == metadata.digest,
+                  try store.cacheRemoteAttachment(
+                    itemID: itemID, partialURL: partial, mimeType: metadata.mimeType,
+                    byteCount: metadata.byteCount, digest: metadata.digest) else {
+                shouldDiscardPartial = true
+                throw URLError(.cannotDecodeContentData)
+            }
+            return .ready
+        } catch {
+            try? handle.close()
+            if shouldDiscardPartial { try? FileManager.default.removeItem(at: partial) }
+            throw error
+        }
+    }
+
+    private nonisolated func treasuryAssetHeaders(_ response: HTTPURLResponse,
+                                                   limit: Int) throws -> TreasuryRemoteAssetHeaders {
+        let digest = (response.value(forHTTPHeaderField: "X-Treasury-Digest") ?? "").lowercased()
+        let byteCount = Int(response.value(forHTTPHeaderField: "X-Treasury-Byte-Count") ?? "") ?? -1
+        let mimeType = (response.value(forHTTPHeaderField: "Content-Type") ?? "")
+            .split(separator: ";", maxSplits: 1).first.map(String.init)?
+            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        guard digest.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil,
+              byteCount >= 0, byteCount <= limit,
+              Self.treasuryAssetMIMEs.contains(mimeType) else {
+            throw URLError(.cannotParseResponse)
+        }
+        return TreasuryRemoteAssetHeaders(digest: digest, byteCount: byteCount, mimeType: mimeType)
+    }
+
+    private nonisolated static let treasuryAssetMIMEs: Set<String> = [
+        "application/json", "application/msword", "application/octet-stream",
+        "application/pdf", "application/rtf", "application/vnd.apple.keynote",
+        "application/vnd.apple.numbers", "application/vnd.apple.pages",
+        "application/vnd.ms-excel", "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/xml", "application/zip", "audio/aac", "audio/flac", "audio/mp4",
+        "audio/mpeg", "audio/ogg", "audio/wav", "audio/x-m4a", "audio/x-wav",
+        "image/gif", "image/heic", "image/heif", "image/jpeg", "image/png",
+        "image/tiff", "image/webp", "text/csv", "text/html", "text/markdown",
+        "text/plain", "video/mp4", "video/mpeg", "video/quicktime", "video/webm",
+    ]
 
     private nonisolated var treasuryRelayRoot: URL? {
         guard let eventsURL = relayEventsURL,

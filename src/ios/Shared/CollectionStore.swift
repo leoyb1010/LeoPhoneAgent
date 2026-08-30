@@ -18,27 +18,57 @@ import CryptoKit
 import Foundation
 import SQLite3
 
+func treasuryValidContentRange(_ value: String?, expectedStart: Int,
+                               expectedTotal: Int) -> Bool {
+    guard let value,
+          let expression = try? NSRegularExpression(pattern: #"^bytes (\d+)-(\d+)/(\d+)$"#),
+          let match = expression.firstMatch(
+            in: value, range: NSRange(value.startIndex..., in: value)),
+          match.numberOfRanges == 4,
+          let startRange = Range(match.range(at: 1), in: value),
+          let endRange = Range(match.range(at: 2), in: value),
+          let totalRange = Range(match.range(at: 3), in: value),
+          let start = Int(value[startRange]), let end = Int(value[endRange]),
+          let total = Int(value[totalRange]) else { return false }
+    return start == expectedStart && total == expectedTotal && end >= start && end < total
+}
+
+func treasuryAssetMetadataMatches(expectedByteCount: Int, expectedDigest: String?,
+                                  expectedMIMEType: String?, actualByteCount: Int,
+                                  actualDigest: String, actualMIMEType: String) -> Bool {
+    if expectedByteCount > 0, expectedByteCount != actualByteCount { return false }
+    if let expectedDigest = expectedDigest?.trimmingCharacters(in: .whitespacesAndNewlines),
+       !expectedDigest.isEmpty,
+       expectedDigest.caseInsensitiveCompare(actualDigest) != .orderedSame { return false }
+    if let expectedMIMEType = expectedMIMEType?.split(separator: ";", maxSplits: 1).first?
+        .trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+       !expectedMIMEType.isEmpty, expectedMIMEType != actualMIMEType.lowercased() { return false }
+    return true
+}
+
 struct TreasuryStorageUsage: Equatable {
     let databaseBytes: Int64
     let originalAttachmentBytes: Int64
     let bodyBytes: Int64
     let recoveryVersionBytes: Int64
     let thumbnailCacheBytes: Int64
+    let syncCacheBytes: Int64
 
     var totalBytes: Int64 {
         databaseBytes + originalAttachmentBytes + bodyBytes
-            + recoveryVersionBytes + thumbnailCacheBytes
+            + recoveryVersionBytes + thumbnailCacheBytes + syncCacheBytes
     }
 }
 
 enum TreasuryStoragePolicy {
     static func usage(at directory: URL, fileManager: FileManager = .default) -> TreasuryStorageUsage {
-        TreasuryStorageUsage(
+        let files = directory.appendingPathComponent("files", isDirectory: true)
+        let remoteAssets = files.appendingPathComponent("remote-assets", isDirectory: true)
+        let remoteBytes = directoryBytes(at: remoteAssets, fileManager: fileManager)
+        let allFileBytes = directoryBytes(at: files, fileManager: fileManager)
+        return TreasuryStorageUsage(
             databaseBytes: databaseBytes(at: directory, fileManager: fileManager),
-            originalAttachmentBytes: directoryBytes(
-                at: directory.appendingPathComponent("files", isDirectory: true),
-                fileManager: fileManager
-            ),
+            originalAttachmentBytes: max(0, allFileBytes - remoteBytes),
             bodyBytes: directoryBytes(
                 at: directory.appendingPathComponent("notes", isDirectory: true),
                 fileManager: fileManager
@@ -50,7 +80,13 @@ enum TreasuryStoragePolicy {
             thumbnailCacheBytes: directoryBytes(
                 at: directory.appendingPathComponent("thumbs", isDirectory: true),
                 fileManager: fileManager
-            )
+            ),
+            syncCacheBytes: [
+                directory.appendingPathComponent("sync-outbox", isDirectory: true),
+                directory.appendingPathComponent("sync-inbox", isDirectory: true),
+            ].reduce(remoteBytes) {
+                $0 + directoryBytes(at: $1, fileManager: fileManager)
+            }
         )
     }
 
@@ -59,6 +95,8 @@ enum TreasuryStoragePolicy {
                                     fileManager: FileManager = .default) throws -> Int64 {
         let root = directory.appendingPathComponent("thumbs", isDirectory: true)
         guard fileManager.fileExists(atPath: root.path) else { return 0 }
+        let rootValues = try root.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+        guard rootValues.isDirectory == true, rootValues.isSymbolicLink != true else { return 0 }
         let before = directoryBytes(at: root, fileManager: fileManager)
         let entries = try fileManager.contentsOfDirectory(
             at: root,
@@ -77,6 +115,37 @@ enum TreasuryStoragePolicy {
         return before - directoryBytes(at: root, fileManager: fileManager)
     }
 
+    @discardableResult
+    static func clearSyncCache(at directory: URL,
+                               fileManager: FileManager = .default) throws -> Int64 {
+        var removed: Int64 = 0
+        let roots = [
+            directory.appendingPathComponent("sync-outbox", isDirectory: true),
+            directory.appendingPathComponent("sync-inbox", isDirectory: true),
+            directory.appendingPathComponent("files/remote-assets", isDirectory: true),
+        ]
+        for root in roots where fileManager.fileExists(atPath: root.path) {
+            let rootValues = try root.resourceValues(
+                forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+            guard rootValues.isDirectory == true, rootValues.isSymbolicLink != true else { continue }
+            let before = directoryBytes(at: root, fileManager: fileManager)
+            let entries = try fileManager.contentsOfDirectory(
+                at: root,
+                includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey],
+                options: []
+            )
+            for entry in entries {
+                let values = try entry.resourceValues(
+                    forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+                if values.isSymbolicLink == true || values.isRegularFile == true {
+                    try fileManager.removeItem(at: entry)
+                }
+            }
+            removed += max(0, before - directoryBytes(at: root, fileManager: fileManager))
+        }
+        return removed
+    }
+
     private static func databaseBytes(at directory: URL,
                                       fileManager: FileManager) -> Int64 {
         ["treasury.sqlite3", "treasury.sqlite3-wal", "treasury.sqlite3-shm"].reduce(0) {
@@ -86,10 +155,13 @@ enum TreasuryStoragePolicy {
 
     private static func directoryBytes(at directory: URL,
                                        fileManager: FileManager) -> Int64 {
+        guard let rootValues = try? directory.resourceValues(
+            forKeys: [.isDirectoryKey, .isSymbolicLinkKey]),
+              rootValues.isDirectory == true, rootValues.isSymbolicLink != true else { return 0 }
         guard let enumerator = fileManager.enumerator(
             at: directory,
             includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey],
-            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+            options: [.skipsPackageDescendants]
         ) else { return 0 }
         var total: Int64 = 0
         for case let url as URL in enumerator {
@@ -577,7 +649,31 @@ enum CollectionStore {
 
     static func fileURL(named name: String) -> URL? {
         guard SharedContainerStore.isSafeFileName(name), let directory = filesDirectory else { return nil }
-        return directory.appendingPathComponent(name, isDirectory: false)
+        let original = directory.appendingPathComponent(name, isDirectory: false)
+        if let values = try? original.resourceValues(
+            forKeys: [.isRegularFileKey, .isSymbolicLinkKey]),
+           values.isRegularFile == true, values.isSymbolicLink != true { return original }
+        let remote = directory.appendingPathComponent("remote-assets", isDirectory: true)
+            .appendingPathComponent(name, isDirectory: false)
+        if let values = try? remote.resourceValues(
+            forKeys: [.isRegularFileKey, .isSymbolicLinkKey]),
+           values.isRegularFile == true, values.isSymbolicLink != true { return remote }
+        return nil
+    }
+
+    static func cachedBody(itemID: String) -> String? {
+        ioQueue.sync {
+            guard let directory else { return nil }
+            return try? TreasurySQLiteStore(directory: directory).cachedBody(itemID: itemID)
+        }
+    }
+
+    static func isRemoteItem(itemID: String) -> Bool {
+        ioQueue.sync {
+            guard let directory else { return false }
+            return (try? TreasurySQLiteStore(directory: directory).isRemoteItem(itemID: itemID))
+                ?? false
+        }
     }
 
     /// [T-notes] 笔记正文。单文件一篇,不进 items.json。
@@ -859,7 +955,7 @@ enum CollectionStore {
             guard let directory else {
                 return TreasuryStorageUsage(
                     databaseBytes: 0, originalAttachmentBytes: 0, bodyBytes: 0,
-                    recoveryVersionBytes: 0, thumbnailCacheBytes: 0
+                    recoveryVersionBytes: 0, thumbnailCacheBytes: 0, syncCacheBytes: 0
                 )
             }
             return TreasuryStoragePolicy.usage(at: directory)
@@ -877,6 +973,14 @@ enum CollectionStore {
             } catch {
                 return 0
             }
+        }
+    }
+
+    @discardableResult
+    static func clearSyncCache() -> Int64 {
+        ioQueue.sync {
+            guard let directory else { return 0 }
+            return (try? TreasuryStoragePolicy.clearSyncCache(at: directory)) ?? 0
         }
     }
 
@@ -1620,6 +1724,200 @@ final class TreasurySQLiteStore {
         }
     }
 
+    func cachedBody(itemID: String) throws -> String? {
+        try withDatabase { db in
+            var stmt: OpaquePointer?
+            try Self.prepare(db, "SELECT original_text FROM treasure_items WHERE id=? AND deleted_at IS NULL LIMIT 1", &stmt)
+            defer { sqlite3_finalize(stmt) }
+            Self.bind(itemID, stmt, 1)
+            guard sqlite3_step(stmt) == SQLITE_ROW else { return nil }
+            return Self.optionalText(stmt, 0)
+        }
+    }
+
+    func isRemoteItem(itemID: String) throws -> Bool {
+        try withDatabase { db in
+            var stmt: OpaquePointer?
+            try Self.prepare(db, """
+                SELECT 1 FROM treasure_items
+                WHERE id=? AND deleted_at IS NULL AND origin_device_id != ?
+                  AND sync_state IN ('remote_only','synced','conflict')
+                LIMIT 1
+                """, &stmt)
+            defer { sqlite3_finalize(stmt) }
+            Self.bind(itemID, stmt, 1)
+            Self.bind(Self.originDeviceID(), stmt, 2)
+            return sqlite3_step(stmt) == SQLITE_ROW
+        }
+    }
+
+    @discardableResult
+    func cacheRemoteBody(itemID: String, text: String, digest: String,
+                         byteCount: Int) throws -> Bool {
+        let data = Data(text.utf8)
+        guard data.count == byteCount, data.count <= 8 * 1024 * 1024,
+              digest.range(of: "^[0-9a-fA-F]{64}$", options: .regularExpression) != nil,
+              SHA256.hash(data: data).map({ String(format: "%02x", $0) }).joined()
+                .caseInsensitiveCompare(digest) == .orderedSame else { return false }
+        return try withDatabase { db in
+            var updated = false
+            try Self.transaction(db) {
+                var update: OpaquePointer?
+                try Self.prepare(db, """
+                    UPDATE treasure_items SET original_text=?
+                    WHERE id=? AND deleted_at IS NULL
+                      AND origin_device_id != ?
+                      AND sync_state IN ('remote_only','synced','conflict')
+                    """, &update)
+                Self.bind(text, update, 1)
+                Self.bind(itemID, update, 2)
+                Self.bind(Self.originDeviceID(), update, 3)
+                try Self.stepDone(db, update)
+                sqlite3_finalize(update)
+                updated = sqlite3_changes(db) > 0
+                guard updated else { return }
+                var fts: OpaquePointer?
+                try Self.prepare(db, "DELETE FROM treasure_fts WHERE item_id=?", &fts)
+                Self.bind(itemID, fts, 1)
+                try Self.stepDone(db, fts)
+                sqlite3_finalize(fts)
+                try Self.prepare(db, """
+                    INSERT INTO treasure_fts(item_id,title,body,summary,annotation,tags)
+                    SELECT id,COALESCE(title,''),COALESCE(original_text,''),
+                           COALESCE(summary,''),COALESCE(annotation,''),tags_json
+                    FROM treasure_items WHERE id=? AND deleted_at IS NULL
+                    """, &fts)
+                Self.bind(itemID, fts, 1)
+                try Self.stepDone(db, fts)
+                sqlite3_finalize(fts)
+            }
+            return updated
+        }
+    }
+
+    func remoteAssetPartialURL(itemID: String, kind: String) throws -> URL {
+        guard !itemID.isEmpty, ["body", "attachment"].contains(kind) else {
+            throw StoreError.invalidImport
+        }
+        let directory = try managedCacheDirectory(relativePath: "sync-inbox")
+        let name = SHA256.hash(data: Data("\(itemID)\0\(kind)".utf8))
+            .map { String(format: "%02x", $0) }.joined()
+        return directory.appendingPathComponent(".\(name).partial", isDirectory: false)
+    }
+
+    @discardableResult
+    func cacheRemoteAttachment(itemID: String, partialURL: URL, mimeType: String,
+                               byteCount: Int, digest: String) throws -> Bool {
+        let partialValues = try? partialURL.resourceValues(
+            forKeys: [.fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey])
+        guard byteCount >= 0, byteCount <= 128 * 1024 * 1024,
+              digest.range(of: "^[0-9a-fA-F]{64}$", options: .regularExpression) != nil,
+              partialValues?.isRegularFile == true, partialValues?.isSymbolicLink != true,
+              let partialSize = partialValues?.fileSize,
+              partialSize == byteCount,
+              Self.sha256(partialURL)?.caseInsensitiveCompare(digest) == .orderedSame else { return false }
+        let inbox = try managedCacheDirectory(relativePath: "sync-inbox")
+            .resolvingSymlinksInPath().standardizedFileURL.path + "/"
+        guard partialURL.resolvingSymlinksInPath().standardizedFileURL.path.hasPrefix(inbox) else {
+            return false
+        }
+        let eligible = try withDatabase { db in
+            var stmt: OpaquePointer?
+            try Self.prepare(db, """
+                SELECT 1 FROM treasure_items
+                WHERE id=? AND deleted_at IS NULL
+                  AND kind IN ('file','image','document','audio','video','artifact')
+                  AND origin_device_id != ?
+                  AND sync_state IN ('remote_only','synced','conflict')
+                LIMIT 1
+                """, &stmt)
+            defer { sqlite3_finalize(stmt) }
+            Self.bind(itemID, stmt, 1)
+            Self.bind(Self.originDeviceID(), stmt, 2)
+            return sqlite3_step(stmt) == SQLITE_ROW
+        }
+        guard eligible else { return false }
+
+        let cacheDirectory = try managedCacheDirectory(relativePath: "files/remote-assets")
+        let name = SHA256.hash(data: Data("\(itemID)\0\(digest.lowercased())".utf8))
+            .map { String(format: "%02x", $0) }.joined() + ".bin"
+        let target = cacheDirectory.appendingPathComponent(name, isDirectory: false)
+        if FileManager.default.fileExists(atPath: target.path) {
+            let existing = try? target.resourceValues(
+                forKeys: [.fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey])
+            if existing?.isRegularFile == true, existing?.isSymbolicLink != true,
+               existing?.fileSize == byteCount,
+               Self.sha256(target)?.caseInsensitiveCompare(digest) == .orderedSame {
+                try? FileManager.default.removeItem(at: partialURL)
+            } else {
+                try FileManager.default.removeItem(at: target)
+                try FileManager.default.moveItem(at: partialURL, to: target)
+            }
+        } else {
+            try FileManager.default.moveItem(at: partialURL, to: target)
+        }
+        let updated = try withDatabase { db in
+            var stmt: OpaquePointer?
+            try Self.prepare(db, """
+                UPDATE treasure_items
+                SET legacy_value=?,body_ref=?,mime_type=?,byte_count=?,content_digest=?
+                WHERE id=? AND deleted_at IS NULL
+                  AND kind IN ('file','image','document','audio','video','artifact')
+                  AND origin_device_id != ?
+                  AND sync_state IN ('remote_only','synced','conflict')
+                """, &stmt)
+            defer { sqlite3_finalize(stmt) }
+            Self.bind(name, stmt, 1)
+            Self.bind("files/remote-assets/\(name)", stmt, 2)
+            Self.bind(mimeType, stmt, 3)
+            sqlite3_bind_int64(stmt, 4, Int64(byteCount))
+            Self.bind(digest.lowercased(), stmt, 5)
+            Self.bind(itemID, stmt, 6)
+            Self.bind(Self.originDeviceID(), stmt, 7)
+            try Self.stepDone(db, stmt)
+            return sqlite3_changes(db) > 0
+        }
+        if !updated { try? FileManager.default.removeItem(at: target) }
+        return updated
+    }
+
+    private func managedCacheDirectory(relativePath: String) throws -> URL {
+        guard !relativePath.isEmpty, !relativePath.hasPrefix("/"),
+              !relativePath.split(separator: "/").contains("..") else {
+            throw StoreError.invalidImport
+        }
+        let fileManager = FileManager.default
+        let rootValues = try directory.resourceValues(
+            forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+        guard rootValues.isDirectory == true, rootValues.isSymbolicLink != true else {
+            throw StoreError.invalidImport
+        }
+        var candidate = directory
+        for component in relativePath.split(separator: "/") {
+            candidate.appendPathComponent(String(component), isDirectory: true)
+            if fileManager.fileExists(atPath: candidate.path) {
+                let values = try candidate.resourceValues(
+                    forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+                guard values.isDirectory == true, values.isSymbolicLink != true else {
+                    throw StoreError.invalidImport
+                }
+            } else {
+                try fileManager.createDirectory(at: candidate, withIntermediateDirectories: false)
+            }
+        }
+        let values = try candidate.resourceValues(
+            forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+        guard values.isDirectory == true, values.isSymbolicLink != true else {
+            throw StoreError.invalidImport
+        }
+        let resolvedRoot = directory.resolvingSymlinksInPath().standardizedFileURL
+        let expected = resolvedRoot.appendingPathComponent(relativePath, isDirectory: true)
+            .standardizedFileURL.path
+        let resolvedCandidate = candidate.resolvingSymlinksInPath().standardizedFileURL.path
+        guard resolvedCandidate == expected else { throw StoreError.invalidImport }
+        return candidate
+    }
+
     func applyRemoteChanges(_ changes: [RemoteChange]) throws {
         guard !changes.isEmpty else { return }
         let localOrigin = Self.originDeviceID()
@@ -1707,11 +2005,20 @@ final class TreasurySQLiteStore {
                         try Self.stepDone(db, resurrect)
                         sqlite3_finalize(resurrect)
                     }
+                    let preserveLocalAssets = existingOrigin == localOrigin ||
+                        ["local", "pending", "conflict"].contains(existingSync)
                     let prepared = prepareForPersistence(item)
                     try Self.upsert(item, normalizedURL: prepared.normalizedURL,
                                     contentDigest: prepared.contentDigest,
                                     filesDirectory: filesDirectoryURL, db: db)
                     try Self.applyContractMetadata(contract, db: db)
+                    if !preserveLocalAssets {
+                        var invalidate: OpaquePointer?
+                        try Self.prepare(db, "UPDATE treasure_items SET original_text=NULL,body_ref=NULL WHERE id=?", &invalidate)
+                        Self.bind(change.itemID, invalidate, 1)
+                        try Self.stepDone(db, invalidate)
+                        sqlite3_finalize(invalidate)
+                    }
                     var finalize: OpaquePointer?
                     let clearMissingBody = !hasExisting && contract.originalText == nil
                     try Self.prepare(db, "UPDATE treasure_items SET updated_at=?,sync_state=?,origin_device_id=?,deleted_at=NULL,original_text=CASE WHEN ? THEN NULL ELSE original_text END WHERE id=?", &finalize)

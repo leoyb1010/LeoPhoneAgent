@@ -186,6 +186,14 @@ final class GatewayHostStore: ObservableObject {
         return built
     }
 
+    /// One shared entry point for Treasury sync/read-through. Providers and
+    /// views must not each invent their own relay selection or key handling.
+    func treasuryRelayClient() -> LeoAgentClient? {
+        activeHosts
+            .compactMap { client(for: $0) }
+            .first { $0.relayEventsURL != nil }
+    }
+
     // MARK: - Keychain (local only, never synchronized)
 
     nonisolated static func accessKey(hostId: String) -> String? {

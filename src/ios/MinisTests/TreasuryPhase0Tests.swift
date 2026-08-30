@@ -1,3 +1,4 @@
+import CryptoKit
 import XCTest
 
 final class TreasuryPhase0Tests: XCTestCase {
@@ -887,6 +888,115 @@ final class TreasuryPhase0Tests: XCTestCase {
         XCTAssertNil(try store.syncAsset(itemID: file.id, kind: "body"))
     }
 
+    func testPhase4RangeValidationRejectsWrongOffsetsTotalsAndOverflow() {
+        XCTAssertTrue(treasuryValidContentRange("bytes 4-9/10", expectedStart: 4, expectedTotal: 10))
+        XCTAssertFalse(treasuryValidContentRange("bytes 3-9/10", expectedStart: 4, expectedTotal: 10))
+        XCTAssertFalse(treasuryValidContentRange("bytes 4-9/11", expectedStart: 4, expectedTotal: 10))
+        XCTAssertFalse(treasuryValidContentRange("bytes 4-10/10", expectedStart: 4, expectedTotal: 10))
+        XCTAssertFalse(treasuryValidContentRange("bytes */10", expectedStart: 4, expectedTotal: 10))
+        XCTAssertFalse(treasuryValidContentRange(nil, expectedStart: 4, expectedTotal: 10))
+        XCTAssertTrue(treasuryAssetMetadataMatches(
+            expectedByteCount: 10, expectedDigest: String(repeating: "a", count: 64),
+            expectedMIMEType: "application/pdf; charset=binary", actualByteCount: 10,
+            actualDigest: String(repeating: "A", count: 64), actualMIMEType: "application/pdf"
+        ))
+        XCTAssertFalse(treasuryAssetMetadataMatches(
+            expectedByteCount: 10, expectedDigest: String(repeating: "a", count: 64),
+            expectedMIMEType: "application/pdf", actualByteCount: 9,
+            actualDigest: String(repeating: "a", count: 64), actualMIMEType: "application/pdf"
+        ))
+        XCTAssertFalse(treasuryAssetMetadataMatches(
+            expectedByteCount: 10, expectedDigest: String(repeating: "a", count: 64),
+            expectedMIMEType: "application/pdf", actualByteCount: 10,
+            actualDigest: String(repeating: "b", count: 64), actualMIMEType: "application/pdf"
+        ))
+        XCTAssertFalse(treasuryAssetMetadataMatches(
+            expectedByteCount: 10, expectedDigest: String(repeating: "a", count: 64),
+            expectedMIMEType: "application/pdf", actualByteCount: 10,
+            actualDigest: String(repeating: "a", count: 64), actualMIMEType: "image/png"
+        ))
+    }
+
+    func testPhase4RemoteBodyAndAttachmentCacheAreVerifiedAndDoNotCreateUploadChanges() throws {
+        let directory = try temporaryTreasuryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try TreasurySQLiteStore(directory: directory)
+        let now = Date(timeIntervalSince1970: 2_100_000_000)
+        let payload = Data("remote-pdf-payload".utf8)
+        let payloadDigest = SHA256.hash(data: payload).map { String(format: "%02x", $0) }.joined()
+        let item = CollectedItem(
+            id: "remote-cache-item", kind: .file, value: "remote.pdf", resolvedURL: nil,
+            title: "远端 PDF", thumbnailFile: nil, sourceLabel: "Android", createdAt: now,
+            tags: [], pinned: false, summary: nil, metadataFetched: true, bodyFile: nil,
+            annotation: nil, archived: false, updatedAt: now
+        )
+        let contract = TreasureItemContract(
+            item: item, originDeviceID: "android-cache-test", byteCount: payload.count,
+            contentDigest: payloadDigest, mimeType: "application/pdf",
+            processingState: "ready", syncState: "remote_only"
+        )
+        try store.applyRemoteChanges([
+            .init(sequence: 1, id: "remote-cache-change", itemID: item.id,
+                  operation: "upsert", updatedAt: now, originDeviceID: "android-cache-test",
+                  payloadDigest: String(repeating: "f", count: 64), contract: contract)
+        ])
+        XCTAssertTrue(try store.isRemoteItem(itemID: item.id))
+        let changesBeforeCache = try store.changes().count
+
+        let body = "远端正文"
+        let bodyData = Data(body.utf8)
+        let bodyDigest = SHA256.hash(data: bodyData).map { String(format: "%02x", $0) }.joined()
+        XCTAssertFalse(try store.cacheRemoteBody(
+            itemID: item.id, text: body, digest: String(repeating: "0", count: 64),
+            byteCount: bodyData.count
+        ))
+        XCTAssertTrue(try store.cacheRemoteBody(
+            itemID: item.id, text: body, digest: bodyDigest, byteCount: bodyData.count
+        ))
+        XCTAssertEqual(try store.cachedBody(itemID: item.id), body)
+
+        let partial = try store.remoteAssetPartialURL(itemID: item.id, kind: "attachment")
+        try payload.write(to: partial, options: .atomic)
+        XCTAssertTrue(try store.cacheRemoteAttachment(
+            itemID: item.id, partialURL: partial, mimeType: "application/pdf",
+            byteCount: payload.count, digest: payloadDigest
+        ))
+        let refreshed = try XCTUnwrap(store.load().first(where: { $0.id == item.id }))
+        let cached = directory.appendingPathComponent("files/remote-assets", isDirectory: true)
+            .appendingPathComponent(refreshed.value)
+        XCTAssertEqual(try Data(contentsOf: cached), payload)
+        XCTAssertEqual(try store.changes().count, changesBeforeCache)
+        XCTAssertNil(try store.syncAsset(itemID: item.id, kind: "attachment"),
+                     "A read-through cache must never be uploaded as a new local asset")
+
+        let outside = directory.appendingPathComponent("outside.bin")
+        try payload.write(to: outside)
+        let linkedPartial = try store.remoteAssetPartialURL(itemID: item.id, kind: "attachment")
+        try FileManager.default.createSymbolicLink(at: linkedPartial, withDestinationURL: outside)
+        XCTAssertFalse(try store.cacheRemoteAttachment(
+            itemID: item.id, partialURL: linkedPartial, mimeType: "application/pdf",
+            byteCount: payload.count, digest: payloadDigest
+        ))
+        XCTAssertEqual(try Data(contentsOf: outside), payload)
+    }
+
+    func testPhase4RemoteAssetCacheRejectsSymbolicLinkDirectories() throws {
+        let directory = try temporaryTreasuryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let outside = try temporaryTreasuryDirectory()
+        defer { try? FileManager.default.removeItem(at: outside) }
+        let store = try TreasurySQLiteStore(directory: directory)
+        try FileManager.default.createSymbolicLink(
+            at: directory.appendingPathComponent("sync-inbox", isDirectory: true),
+            withDestinationURL: outside
+        )
+
+        XCTAssertThrowsError(
+            try store.remoteAssetPartialURL(itemID: "remote-link-root", kind: "attachment")
+        )
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: outside.path), [])
+    }
+
     func testPhase1ConcurrentAppAndShareWritesDoNotLoseItems() throws {
         let directory = try temporaryTreasuryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -1011,26 +1121,52 @@ final class TreasuryPhase0Tests: XCTestCase {
         let files = directory.appendingPathComponent("files", isDirectory: true)
         let notes = directory.appendingPathComponent("notes", isDirectory: true)
         let thumbs = directory.appendingPathComponent("thumbs", isDirectory: true)
+        let remote = files.appendingPathComponent("remote-assets", isDirectory: true)
+        let inbox = directory.appendingPathComponent("sync-inbox", isDirectory: true)
         try FileManager.default.createDirectory(at: files, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: notes, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: thumbs, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: remote, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
         try Data(repeating: 1, count: 31).write(to: files.appendingPathComponent("original.pdf"))
         try Data(repeating: 2, count: 17).write(to: notes.appendingPathComponent("note.md"))
         try Data(repeating: 3, count: 23).write(to: thumbs.appendingPathComponent("preview.jpg"))
+        try Data(repeating: 4, count: 19).write(to: remote.appendingPathComponent("remote.bin"))
+        try Data(repeating: 5, count: 11).write(to: inbox.appendingPathComponent(".resume.partial"))
 
         let before = TreasuryStoragePolicy.usage(at: directory)
         XCTAssertEqual(before.originalAttachmentBytes, 31)
         XCTAssertEqual(before.bodyBytes, 17)
         XCTAssertEqual(before.thumbnailCacheBytes, 23)
+        XCTAssertEqual(before.syncCacheBytes, 30)
         XCTAssertEqual(try TreasuryStoragePolicy.clearThumbnailCache(at: directory), 23)
+        XCTAssertEqual(try TreasuryStoragePolicy.clearSyncCache(at: directory), 30)
 
         let after = TreasuryStoragePolicy.usage(at: directory)
         XCTAssertEqual(after.originalAttachmentBytes, 31)
         XCTAssertEqual(after.bodyBytes, 17)
         XCTAssertEqual(after.thumbnailCacheBytes, 0)
+        XCTAssertEqual(after.syncCacheBytes, 0)
         XCTAssertTrue(FileManager.default.fileExists(
             atPath: files.appendingPathComponent("original.pdf").path
         ))
+    }
+
+    func testTreasuryStorageCleanupNeverFollowsCacheRootSymlinks() throws {
+        let directory = try temporaryTreasuryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let outside = try temporaryTreasuryDirectory()
+        defer { try? FileManager.default.removeItem(at: outside) }
+        let protected = outside.appendingPathComponent("keep.bin")
+        try Data(repeating: 9, count: 13).write(to: protected)
+        try FileManager.default.createSymbolicLink(
+            at: directory.appendingPathComponent("sync-inbox", isDirectory: true),
+            withDestinationURL: outside
+        )
+
+        XCTAssertEqual(TreasuryStoragePolicy.usage(at: directory).syncCacheBytes, 0)
+        XCTAssertEqual(try TreasuryStoragePolicy.clearSyncCache(at: directory), 0)
+        XCTAssertEqual(try Data(contentsOf: protected), Data(repeating: 9, count: 13))
     }
 
     func testClearingPreviewCacheQueuesRegenerationWithoutDeletingItems() throws {

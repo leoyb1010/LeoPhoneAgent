@@ -357,9 +357,9 @@ struct CollectionsView: View {
         }
     }
 
-    private func splitOpenAction(for item: CollectedItem) -> (() -> Void)? {
+    private func splitOpenAction(for item: CollectedItem) -> ((CollectedItem) -> Void)? {
         guard item.kind != .text else { return nil }
-        return { open(item) }
+        return { refreshed in open(refreshed) }
     }
 
     private var treasuryHero: some View {
@@ -1153,7 +1153,7 @@ private struct TreasuryReadingSheet: View {
     let item: CollectedItem
     let relatedItems: [CollectedItem]
     let showsCloseButton: Bool
-    let onOpenOriginal: (() -> Void)?
+    let onOpenOriginal: ((CollectedItem) -> Void)?
     let onOpenRelated: (CollectedItem) -> Void
     let onUpdate: () -> Void
 
@@ -1165,11 +1165,13 @@ private struct TreasuryReadingSheet: View {
     @State private var highlightNote = ""
     @State private var highlights: [TreasureHighlight] = []
     @State private var message: String?
+    @State private var remoteAttachmentStatus = "idle"
+    @State private var isRemoteItem = false
 
     init(item: CollectedItem,
          relatedItems: [CollectedItem],
          showsCloseButton: Bool = true,
-         onOpenOriginal: (() -> Void)? = nil,
+         onOpenOriginal: ((CollectedItem) -> Void)? = nil,
          onOpenRelated: @escaping (CollectedItem) -> Void,
          onUpdate: @escaping () -> Void) {
         self.item = item
@@ -1208,14 +1210,19 @@ private struct TreasuryReadingSheet: View {
                 }
 
                 Section("正文") {
-                    if bodyStatus == "loading" {
+                    if bodyStatus == "loading" || bodyStatus == "remote_fetching" {
                         ProgressView("正在读取…")
                     } else if bodyText.isEmpty {
                         ContentUnavailableView(
-                            bodyStatus == "missing" ? "正文文件缺失" : "正文尚未抽取",
+                            bodyUnavailableTitle,
                             systemImage: "doc.text.magnifyingglass",
-                            description: Text("原始收藏仍然安全保留，增强失败不会删除内容。")
+                            description: Text(bodyUnavailableDescription)
                         )
+                        if isRemoteItem {
+                            Button("重新获取正文", systemImage: "arrow.clockwise") {
+                                Task { await loadBody(forceRemoteFetch: true) }
+                            }
+                        }
                     } else {
                         SelectableTreasuryText(text: bodyText, selection: $selection)
                             .frame(minHeight: 240)
@@ -1224,6 +1231,31 @@ private struct TreasuryReadingSheet: View {
                             Text("为保持阅读流畅，当前显示前 200,000 个字符；原始正文仍完整保留。")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                if item.kind == .file, isRemoteItem {
+                    Section("附件") {
+                        switch remoteAttachmentStatus {
+                        case "ready":
+                            Label("附件已安全下载并通过完整性校验", systemImage: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                            if let onOpenOriginal {
+                                Button("打开附件", systemImage: "doc") {
+                                    if let refreshed = CollectionStore.load().first(where: { $0.id == item.id }) {
+                                        onOpenOriginal(refreshed)
+                                    }
+                                }
+                            }
+                        case "fetching":
+                            ProgressView("正在续传附件…")
+                        default:
+                            Label(remoteAttachmentMessage, systemImage: "icloud.and.arrow.down")
+                                .foregroundStyle(remoteAttachmentStatus == "failed" ? .red : .secondary)
+                            Button("获取附件", systemImage: "arrow.down.circle") {
+                                Task { await fetchRemoteAttachment() }
+                            }
                         }
                     }
                 }
@@ -1307,11 +1339,20 @@ private struct TreasuryReadingSheet: View {
                 }
                 if let onOpenOriginal {
                     ToolbarItem(placement: .primaryAction) {
-                        Button(item.kind == .note ? "编辑" : "打开", action: onOpenOriginal)
+                        Button(item.kind == .note ? "编辑" : "打开") {
+                            let refreshed = CollectionStore.load()
+                                .first(where: { $0.id == item.id }) ?? item
+                            onOpenOriginal(refreshed)
+                        }
                     }
                 }
             }
-            .task { await loadBody(); reloadHighlights() }
+            .task {
+                isRemoteItem = CollectionStore.isRemoteItem(itemID: item.id)
+                await loadBody()
+                refreshRemoteAttachmentState()
+                reloadHighlights()
+            }
             .onChange(of: readingState) { _, _ in persistReadingState() }
             .onDisappear { persistReadingState() }
         }
@@ -1326,7 +1367,64 @@ private struct TreasuryReadingSheet: View {
         return quote.isEmpty ? nil : String(quote.prefix(20_000))
     }
 
-    private func loadBody() async {
+    private var bodyUnavailableTitle: String {
+        switch bodyStatus {
+        case "missing": return "正文文件缺失"
+        case "remote_pending": return "正在等待原设备"
+        case "remote_unavailable": return "原设备暂未提供正文"
+        case "remote_failed": return "正文获取失败"
+        default: return "正文尚未抽取"
+        }
+    }
+
+    private var bodyUnavailableDescription: String {
+        switch bodyStatus {
+        case "remote_pending": return "请求已排队；原设备下次在线同步后可重新获取。"
+        case "remote_unavailable": return "本机仍保留元数据，可在原设备在线后重试。"
+        case "remote_failed": return "网络或完整性校验失败，已保留可恢复状态。"
+        default: return "原始收藏仍然安全保留，增强失败不会删除内容。"
+        }
+    }
+
+    private var remoteAttachmentMessage: String {
+        switch remoteAttachmentStatus {
+        case "pending": return "请求已排队，等待原设备在线提供附件。"
+        case "unavailable": return "附件暂不可用，可在原设备在线后重试。"
+        case "failed": return "下载或完整性校验失败；有效分片已保留，可继续重试。"
+        default: return "附件默认按需获取，不会自动占用本机空间。"
+        }
+    }
+
+    private func loadBody(forceRemoteFetch: Bool = false) async {
+        bodyStatus = "loading"
+        if let cached = CollectionStore.cachedBody(itemID: item.id) {
+            applyBody(cached, status: "available")
+            return
+        }
+        var resolution = await localBodyResolution()
+        if resolution.0.isEmpty, isRemoteItem,
+           forceRemoteFetch || ["missing", "not_extracted"].contains(resolution.1) {
+            bodyStatus = "remote_fetching"
+            guard let client = GatewayHostStore.shared.treasuryRelayClient() else {
+                bodyStatus = "remote_unavailable"
+                return
+            }
+            let status = await client.fetchTreasuryAsset(itemID: item.id, kind: "body")
+            guard !Task.isCancelled else { return }
+            if status == .ready, let cached = CollectionStore.cachedBody(itemID: item.id) {
+                resolution = (cached, "available")
+                onUpdate()
+            } else {
+                bodyText = ""
+                bodyStatus = "remote_\(status.rawValue)"
+                return
+            }
+        }
+        guard !Task.isCancelled else { return }
+        applyBody(resolution.0, status: resolution.1)
+    }
+
+    private func localBodyResolution() async -> (String, String) {
         let resolution: (String, String)
         switch item.kind {
         case .text:
@@ -1347,10 +1445,36 @@ private struct TreasuryReadingSheet: View {
             let value = await NoteBodyStore.load(bodyFile)
             resolution = (value, value.isEmpty ? "missing" : "available")
         }
-        guard !Task.isCancelled else { return }
+        return resolution
+    }
+
+    private func applyBody(_ value: String, status: String) {
         let readerLimit = 200_000
-        bodyText = String(resolution.0.prefix(readerLimit))
-        bodyStatus = resolution.0.count > readerLimit ? "truncated" : resolution.1
+        bodyText = String(value.prefix(readerLimit))
+        bodyStatus = value.count > readerLimit ? "truncated" : status
+    }
+
+    private func refreshRemoteAttachmentState() {
+        guard item.kind == .file, isRemoteItem else { return }
+        let refreshed = CollectionStore.load().first(where: { $0.id == item.id }) ?? item
+        let url = CollectionStore.fileURL(named: refreshed.value)
+        remoteAttachmentStatus = url.map { FileManager.default.fileExists(atPath: $0.path) } == true
+            ? "ready" : "idle"
+    }
+
+    private func fetchRemoteAttachment() async {
+        remoteAttachmentStatus = "fetching"
+        guard let client = GatewayHostStore.shared.treasuryRelayClient() else {
+            remoteAttachmentStatus = "unavailable"
+            return
+        }
+        let status = await client.fetchTreasuryAsset(itemID: item.id, kind: "attachment")
+        guard !Task.isCancelled else { return }
+        remoteAttachmentStatus = status.rawValue
+        if status == .ready {
+            refreshRemoteAttachmentState()
+            onUpdate()
+        }
     }
 
     private func persistReadingState() {

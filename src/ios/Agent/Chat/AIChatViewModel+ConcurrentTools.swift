@@ -695,7 +695,15 @@ extension AIChatViewModel {
             toolSuccess = result.success
 
         case "treasury_get":
-            let result = await TreasuryService.executeGet(from: argsJson)
+            let treasuryClient = GatewayHostStore.shared.treasuryRelayClient()
+            let result = await TreasuryService.executeGet(
+                from: argsJson,
+                remoteAssetFetcher: treasuryClient.map { client in
+                    { itemID, kind in
+                        await client.fetchTreasuryAsset(itemID: itemID, kind: kind).rawValue
+                    }
+                }
+            )
             if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
                 messages[msgIdx].blocks[blockIdx].content = result.output
             }
