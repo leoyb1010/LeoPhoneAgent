@@ -302,6 +302,28 @@ class RelayTreasurySyncTests(unittest.IsolatedAsyncioTestCase):
             with open(file_response["path"], "rb") as stream:
                 self.assertEqual(stream.read(), body)
             self.assertEqual(file_response["headers"]["X-Treasury-Digest"], digest)
+            self.assertEqual(file_response["headers"]["Accept-Ranges"], "bytes")
+
+            if HAS_AIOHTTP:
+                # Exercise aiohttp's real FileResponse path when the optional
+                # relay runtime is installed. Stdlib-only CI still validates
+                # the advertised Range contract through the mocked response.
+                client = TestClient(TestServer(relay.build_app()))
+                await client.start_server()
+                try:
+                    ranged = await client.get(
+                        f"/relay/api/treasury/assets/{request_id}",
+                        headers={**headers, "X-Treasury-Device-ID": "mac:test", "Range": "bytes=7-"},
+                    )
+                    self.assertEqual(ranged.status, 206)
+                    self.assertEqual(
+                        ranged.headers.get("Content-Range"),
+                        f"bytes 7-{len(body) - 1}/{len(body)}",
+                    )
+                    self.assertEqual(ranged.headers.get("Accept-Ranges"), "bytes")
+                    self.assertEqual(await ranged.read(), body[7:])
+                finally:
+                    await client.close()
 
             restarted = self._relay(tmp)
             self.assertEqual(restarted.treasury_asset_requests[request_id]["status"], "ready")

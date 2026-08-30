@@ -667,6 +667,7 @@ class Relay:
             "Content-Type": str(value.get("mime_type") or "application/octet-stream"),
             "X-Treasury-Digest": str(value.get("digest") or ""),
             "X-Treasury-Byte-Count": str(int(value.get("byte_count") or 0)),
+            "Accept-Ranges": "bytes",
             "Cache-Control": "private, no-store",
         })
         return response

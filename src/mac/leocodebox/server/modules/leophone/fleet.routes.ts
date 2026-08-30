@@ -1,5 +1,5 @@
-import { createHash, randomUUID } from 'node:crypto';
-import { createReadStream, promises as fs } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { constants as fsConstants, createReadStream, promises as fs } from 'node:fs';
 import path from 'node:path';
 
 import express from 'express';
@@ -115,9 +115,18 @@ async function relayJson(path: string, target: RelayTarget, init?: RequestInit):
   return payload;
 }
 
-async function relayRaw(pathname: string, target: RelayTarget, deviceId: string): Promise<Response> {
+async function relayRaw(
+  pathname: string,
+  target: RelayTarget,
+  deviceId: string,
+  rangeStart = 0,
+): Promise<Response> {
   return fetch(`${target.base}${pathname}`, {
-    headers: { authorization: `Bearer ${target.key}`, 'x-treasury-device-id': deviceId },
+    headers: {
+      authorization: `Bearer ${target.key}`,
+      'x-treasury-device-id': deviceId,
+      ...(rangeStart > 0 ? { range: `bytes=${rangeStart}-` } : {}),
+    },
     signal: AbortSignal.timeout(ASSET_TIMEOUT_MS),
   });
 }
@@ -803,9 +812,25 @@ function remoteAssetDirectory(): string {
   return path.join(path.dirname(getDatabasePath()), 'treasury-assets');
 }
 
+async function ensureRemoteAssetDirectory(): Promise<string> {
+  const directory = remoteAssetDirectory();
+  await fs.mkdir(directory, { recursive: true, mode: 0o700 });
+  const stat = await fs.lstat(directory);
+  if (!stat.isDirectory() || stat.isSymbolicLink()) {
+    throw new Error('remote treasury cache directory is unsafe');
+  }
+  await fs.chmod(directory, 0o700);
+  return directory;
+}
+
 export function cachedAttachmentPath(scope: string, itemId: string, digest: string): string {
   const name = createHash('sha256').update(`${scope}\0${itemId}\0${digest}`).digest('hex');
   return path.join(remoteAssetDirectory(), `${name}.bin`);
+}
+
+export function cachedAttachmentPartialPath(scope: string, itemId: string): string {
+  const name = createHash('sha256').update(`${scope}\0${itemId}`).digest('hex');
+  return path.join(remoteAssetDirectory(), `.${name}.partial`);
 }
 
 export function isCachedAttachmentPath(value: string): boolean {
@@ -837,6 +862,34 @@ export function isAllowedTreasuryAssetMime(mimeType: string): boolean {
   return ALLOWED_TREASURY_ASSET_MIMES.has(mimeType);
 }
 
+export function validTreasuryContentRange(
+  value: string | null,
+  expectedStart: number,
+  expectedTotal: number,
+): boolean {
+  const match = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(value ?? '');
+  if (!match) return false;
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+  const total = Number(match[3]);
+  return Number.isSafeInteger(start) && Number.isSafeInteger(end) && Number.isSafeInteger(total) &&
+    start === expectedStart && total === expectedTotal && end >= start && end < total;
+}
+
+export async function resumableTreasuryPartialSize(filePath: string): Promise<number> {
+  try {
+    const stat = await fs.lstat(filePath);
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.size <= 0 ||
+        stat.size >= REMOTE_ATTACHMENT_LIMIT) {
+      await fs.rm(filePath, { force: true });
+      return 0;
+    }
+    return stat.size;
+  } catch {
+    return 0;
+  }
+}
+
 export function isValidCachedBody(asset: {
   content_text: string | null; digest: string; byte_count: number; mime_type: string;
 } | null): asset is {
@@ -857,20 +910,41 @@ async function isValidCachedAttachment(
       (item.content_digest && item.content_digest !== asset.digest) ||
       (item.mime_type && item.mime_type.split(';', 1)[0].toLowerCase() !== asset.mime_type)) return false;
   try {
-    const stat = await fs.stat(asset.file_path);
-    return stat.isFile() && stat.size === asset.byte_count &&
+    const stat = await fs.lstat(asset.file_path);
+    return stat.isFile() && !stat.isSymbolicLink() && stat.size === asset.byte_count &&
       await sha256File(asset.file_path) === asset.digest;
   } catch {
     return false;
   }
 }
 
+type RemoteAssetFetchState = { status: 'ready' | 'pending' | 'unavailable'; stale: boolean };
+const remoteAssetFetches = new Map<string, Promise<RemoteAssetFetchState>>();
+
 async function requestRemoteAsset(
   target: RelayTarget,
   scope: string,
   item: RemoteTreasureMetadata,
   assetKind: 'body' | 'attachment',
-): Promise<{ status: 'ready' | 'pending' | 'unavailable'; stale: boolean }> {
+): Promise<RemoteAssetFetchState> {
+  const key = `${scope}\0${item.id}\0${assetKind}`;
+  const existing = remoteAssetFetches.get(key);
+  if (existing) return existing;
+  const pending = downloadRemoteAsset(target, scope, item, assetKind);
+  remoteAssetFetches.set(key, pending);
+  try {
+    return await pending;
+  } finally {
+    if (remoteAssetFetches.get(key) === pending) remoteAssetFetches.delete(key);
+  }
+}
+
+async function downloadRemoteAsset(
+  target: RelayTarget,
+  scope: string,
+  item: RemoteTreasureMetadata,
+  assetKind: 'body' | 'attachment',
+): Promise<RemoteAssetFetchState> {
   const requester = treasuryDeviceId();
   const created = await relayJson('/treasury/assets/requests', target, {
     method: 'POST',
@@ -883,7 +957,24 @@ async function requestRemoteAsset(
   }
   if (request.status === 'pending') return { status: 'pending', stale: false };
   if (request.status !== 'ready') return { status: 'unavailable', stale: false };
-  const response = await relayRaw(`/treasury/assets/${encodeURIComponent(request.id)}`, target, requester);
+  const partialPath = assetKind === 'attachment'
+    ? cachedAttachmentPartialPath(scope, item.id)
+    : null;
+  if (partialPath) await ensureRemoteAssetDirectory();
+  let rangeOffset = partialPath ? await resumableTreasuryPartialSize(partialPath) : 0;
+  if (rangeOffset > 0 && item.byte_count > 0 && rangeOffset >= item.byte_count) {
+    await fs.rm(partialPath!, { force: true });
+    rangeOffset = 0;
+  }
+  let response = await relayRaw(
+    `/treasury/assets/${encodeURIComponent(request.id)}`, target, requester, rangeOffset,
+  );
+  if (response.status === 416 && rangeOffset > 0 && partialPath) {
+    await response.body?.cancel().catch(() => undefined);
+    await fs.rm(partialPath, { force: true });
+    rangeOffset = 0;
+    response = await relayRaw(`/treasury/assets/${encodeURIComponent(request.id)}`, target, requester);
+  }
   if (response.status === 202) return { status: 'pending', stale: false };
   if (response.status === 410) return { status: 'unavailable', stale: false };
   if (!response.ok) throw new Error(`relay ${response.status}`);
@@ -893,6 +984,7 @@ async function requestRemoteAsset(
     if ((item.byte_count > 0 && item.byte_count !== metadata.byteCount) ||
         (item.content_digest && item.content_digest !== metadata.digest) ||
         (item.mime_type && item.mime_type.split(';', 1)[0].toLowerCase() !== metadata.mimeType)) {
+      if (partialPath) await fs.rm(partialPath, { force: true });
       throw new Error('remote treasury attachment does not match metadata');
     }
   } else if (metadata.mimeType !== 'text/plain') {
@@ -911,15 +1003,44 @@ async function requestRemoteAsset(
       updated_at: Date.now() / 1_000,
     });
   } else {
-    const directory = remoteAssetDirectory();
-    await fs.mkdir(directory, { recursive: true, mode: 0o700 });
+    await ensureRemoteAssetDirectory();
     const targetPath = cachedAttachmentPath(scope, item.id, metadata.digest);
-    const temporary = path.join(directory, `.${randomUUID()}.tmp`);
+    const temporary = partialPath!;
+    if (rangeOffset > 0) {
+      if (response.status === 206) {
+        if (!validTreasuryContentRange(
+          response.headers.get('content-range'), rangeOffset, metadata.byteCount,
+        )) {
+          await response.body?.cancel().catch(() => undefined);
+          await fs.rm(temporary, { force: true });
+          throw new Error('remote treasury attachment returned invalid range');
+        }
+      } else if (response.status === 200) {
+        // Older relay/proxy ignored Range. Restart safely instead of appending
+        // a full response to the retained prefix.
+        await fs.rm(temporary, { force: true });
+        rangeOffset = 0;
+      } else {
+        await response.body?.cancel().catch(() => undefined);
+        throw new Error(`relay ${response.status}`);
+      }
+    } else if (response.status === 206) {
+      await response.body?.cancel().catch(() => undefined);
+      throw new Error('remote treasury attachment returned unsolicited range');
+    }
     const reader = response.body?.getReader();
     if (!reader) throw new Error('relay returned an empty treasury attachment');
-    const handle = await fs.open(temporary, 'wx', 0o600);
+    const flags = fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_APPEND |
+      (fsConstants.O_NOFOLLOW ?? 0);
+    const handle = await fs.open(temporary, flags, 0o600);
     const hash = createHash('sha256');
-    let byteCount = 0;
+    let byteCount = rangeOffset;
+    if (rangeOffset > 0) {
+      for await (const chunk of createReadStream(temporary, { start: 0, end: rangeOffset - 1 })) {
+        hash.update(chunk as Buffer);
+      }
+    }
+    let discardPartial = false;
     try {
       for (;;) {
         const { done, value } = await reader.read();
@@ -927,6 +1048,7 @@ async function requestRemoteAsset(
         const chunk = Buffer.from(value);
         byteCount += chunk.length;
         if (byteCount > metadata.byteCount || byteCount > REMOTE_ATTACHMENT_LIMIT) {
+          discardPartial = true;
           throw new Error('remote treasury attachment exceeds declared size');
         }
         hash.update(chunk);
@@ -934,6 +1056,7 @@ async function requestRemoteAsset(
       }
       await handle.sync();
       if (byteCount !== metadata.byteCount || hash.digest('hex') !== metadata.digest) {
+        discardPartial = true;
         throw new Error('remote treasury asset integrity mismatch');
       }
       await handle.close();
@@ -941,7 +1064,7 @@ async function requestRemoteAsset(
     } catch (error) {
       await reader.cancel().catch(() => undefined);
       await handle.close().catch(() => undefined);
-      await fs.rm(temporary, { force: true });
+      if (discardPartial) await fs.rm(temporary, { force: true });
       throw error;
     }
     const previous = treasuryDb.remoteAsset(scope, item.id, 'attachment');

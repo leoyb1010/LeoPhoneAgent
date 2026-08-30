@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { promises as fs } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -7,13 +9,16 @@ import type { RemoteTreasureMetadata } from '../database/repositories/treasury.d
 
 import {
   cachedAttachmentPath,
+  cachedAttachmentPartialPath,
   offlineBodyCandidates,
   offlineCollectionCandidates,
   isCachedAttachmentPath,
   isAllowedTreasuryAssetMime,
   isValidCachedBody,
   publicTreasuryError,
+  resumableTreasuryPartialSize,
   safeAssetHeaders,
+  validTreasuryContentRange,
 } from './fleet.routes.js';
 
 test('fleet treasury asset headers require bounded digest count and safe mime', () => {
@@ -56,9 +61,40 @@ test('fleet treasury cached body is revalidated before offline reuse', () => {
 
 test('fleet treasury attachment cache path is digest-derived and contained', () => {
   const cached = cachedAttachmentPath('relay:test', '../../item', 'b'.repeat(64));
+  const partial = cachedAttachmentPartialPath('relay:test', '../../item');
   assert.equal(isCachedAttachmentPath(cached), true);
+  assert.equal(isCachedAttachmentPath(partial), true);
   assert.equal(path.basename(cached).length, 68);
+  assert.match(path.basename(partial), /^\.[0-9a-f]{64}\.partial$/);
   assert.equal(isCachedAttachmentPath('/private/treasury-secret.bin'), false);
+});
+
+test('fleet treasury range validation requires the requested prefix and full size', () => {
+  assert.equal(validTreasuryContentRange('bytes 4-9/10', 4, 10), true);
+  assert.equal(validTreasuryContentRange('bytes 3-9/10', 4, 10), false);
+  assert.equal(validTreasuryContentRange('bytes 4-9/11', 4, 10), false);
+  assert.equal(validTreasuryContentRange('bytes */10', 4, 10), false);
+  assert.equal(validTreasuryContentRange('bytes 4-10/10', 4, 10), false);
+  assert.equal(validTreasuryContentRange(null, 4, 10), false);
+});
+
+test('fleet treasury keeps valid partial bytes and rejects symbolic-link partials', async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'treasury-range-'));
+  try {
+    const partial = path.join(directory, '.asset.partial');
+    await fs.writeFile(partial, Buffer.from('prefix'));
+    assert.equal(await resumableTreasuryPartialSize(partial), 6);
+
+    const outside = path.join(directory, 'outside.bin');
+    await fs.writeFile(outside, Buffer.from('secret'));
+    await fs.rm(partial);
+    await fs.symlink(outside, partial);
+    assert.equal(await resumableTreasuryPartialSize(partial), 0);
+    await assert.rejects(fs.lstat(partial));
+    assert.equal(await fs.readFile(outside, 'utf8'), 'secret');
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
 });
 
 test('fleet treasury offline collection prefetch is explicit bounded and metadata-only', () => {
