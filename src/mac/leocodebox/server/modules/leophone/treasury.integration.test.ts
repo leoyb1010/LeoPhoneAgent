@@ -5,17 +5,18 @@ import os from 'node:os';
 import path from 'node:path';
 import test, { after, before } from 'node:test';
 
-import { closeConnection, getConnection } from '@/modules/database/connection.js';
-import { initializeDatabase } from '@/modules/database/init-db.js';
-import { executeTreasuryTool, TreasuryToolError } from './treasury-mcp.service.js';
-
 import {
+  closeConnection,
+  getConnection,
+  initializeDatabase,
   parseTreasuryQuery,
   treasuryDb,
   type RemoteTreasureChange,
   type RemoteTreasureMetadata,
   type TreasureItem,
-} from '@/modules/database/repositories/treasury.db.js';
+} from '@/modules/database/index.js';
+
+import { executeTreasuryTool, TreasuryToolError } from './treasury-mcp.service.js';
 
 let root = '';
 let previousDatabasePath: string | undefined;
@@ -76,6 +77,10 @@ test('unified Treasury MCP enforces compact reads, explicit write approval, and 
     tags: ['Agent', 'Agent'], user_confirmed: true,
   }) as { saved: boolean; id: string };
   assert.equal(saved.saved, true);
+  executeTreasuryTool(userId, 'treasury_save', {
+    kind: 'text', content: '第二条 MCP 契约正文', title: '第二条统一工具',
+    tags: ['Agent'], user_confirmed: true,
+  });
 
   const search = executeTreasuryTool(userId, 'treasury_search', {
     query: 'MCP', limit: 20,
@@ -86,6 +91,23 @@ test('unified Treasury MCP enforces compact reads, explicit write approval, and 
   assert.deepEqual(Object.keys(search.items.find((entry) => entry.id === saved.id)!).sort(), [
     'created_at', 'id', 'kind', 'match_sources', 'score', 'snippet', 'source', 'tags', 'title',
   ]);
+  const limited = executeTreasuryTool(userId, 'treasury_search', {
+    query: 'MCP', limit: 1,
+  }) as { items: Array<Record<string, unknown>>; truncated: boolean };
+  assert.equal(limited.items.length, 1);
+  assert.equal(limited.truncated, true);
+  assert.throws(() => executeTreasuryTool(userId, 'treasury_search', {
+    query: 'MCP', kinds: ['unknown'],
+  }), /content kind/);
+  assert.throws(() => executeTreasuryTool(userId, 'treasury_search', {
+    query: 'MCP', created_after: '2026-08-31junk',
+  }), /created_after/);
+  assert.throws(() => executeTreasuryTool(userId, 'treasury_search', {
+    query: 'MCP', created_after: '2026-02-30T00:00:00Z',
+  }), /created_after/);
+  assert.throws(() => executeTreasuryTool(userId, 'treasury_search', {
+    query: 'MCP', created_after: '2026-09-01', created_before: '2026-08-31',
+  }), /earlier/);
 
   treasuryDb.update(userId, { ...treasuryDb.get(userId, [saved.id])[0]!, archived: true,
     updated_at: new Date().toISOString() });
@@ -104,6 +126,13 @@ test('unified Treasury MCP enforces compact reads, explicit write approval, and 
   assert.equal(read.untrusted_content, true);
   assert.equal(read.items[0]?.body.length, 8);
   assert.equal(read.items[0]?.truncated, true);
+  const boundedRead = executeTreasuryTool(userId, 'treasury_get', {
+    ids: Array.from({ length: 101 }, (_, index) => `missing-${index}`),
+  }) as { items: Array<{ body: null; annotation: null }>; truncated: boolean };
+  assert.equal(boundedRead.items.length, 100);
+  assert.equal(boundedRead.truncated, true);
+  assert.equal(boundedRead.items[0]?.body, null);
+  assert.equal(boundedRead.items[0]?.annotation, null);
 
   const updated = executeTreasuryTool(userId, 'treasury_update', {
     id: saved.id, pinned: true, archived: true, reading_state: 'read',
@@ -140,7 +169,8 @@ test('unified Treasury MCP enforces compact reads, explicit write approval, and 
     byte_count: Buffer.byteLength('手机缓存正文'), mime_type: 'text/plain', updated_at: 2_000,
   });
   const remoteSearch = executeTreasuryTool(userId, 'treasury_search', {
-    query: '跨端', source_labels: ['iPhone'], collection_ids: ['phone'],
+    query: '跨端', kinds: ['NOTE'], reading_state: 'UNREAD',
+    source_labels: ['iPhone'], collection_ids: ['phone'],
   }) as { items: Array<{ id: string }> };
   assert.equal(remoteSearch.items.some((entry) => entry.id === remoteId), true);
   treasuryDb.applyRemoteChanges('relay:mcp-test-duplicate', [{
@@ -300,4 +330,27 @@ test('treasury remote body and attachment cache persists integrity metadata sepa
     scope, item_id: 'bad', asset_kind: 'body', content_text: null, file_path: '/private/file',
     digest: 'x', byte_count: -1, mime_type: 'text/plain', updated_at: 0,
   }), /Invalid remote treasury asset/);
+});
+
+test('Treasury MCP applies structured filters before the local result cap', () => {
+  const baseTime = Date.parse('2026-08-01T00:00:00.000Z');
+  for (let index = 0; index < 500; index += 1) {
+    const updated = new Date(baseTime + index * 1_000).toISOString();
+    treasuryDb.save(userId, item({
+      title: `cap-sentinel ${index}`, original_text: 'cap-sentinel',
+      source_label: 'wrong-source', created_at: updated, updated_at: updated,
+    }));
+  }
+  const target = item({
+    title: 'cap-sentinel target', original_text: 'cap-sentinel',
+    source_label: 'target-source', created_at: new Date(baseTime - 1_000).toISOString(),
+    updated_at: new Date(baseTime - 1_000).toISOString(),
+  });
+  treasuryDb.save(userId, target);
+
+  const search = executeTreasuryTool(userId, 'treasury_search', {
+    query: 'cap-sentinel', source_labels: ['target-source'], limit: 20,
+  }) as { items: Array<{ id: string }>; truncated: boolean };
+  assert.deepEqual(search.items.map((entry) => entry.id), [target.id]);
+  assert.equal(search.truncated, false);
 });

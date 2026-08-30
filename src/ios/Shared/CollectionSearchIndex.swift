@@ -108,7 +108,7 @@ actor CollectionSearchIndex {
         guard ready, let db else { return [] }
         let q = String(query.trimmingCharacters(in: .whitespacesAndNewlines).prefix(512))
         guard !q.isEmpty else { return [] }
-        let cappedLimit = min(200, max(1, limit))
+        let cappedLimit = min(Int(Int32.max), max(1, limit))
         // FTS5 的 MATCH 语法对引号、星号敏感;整体当短语查,避免用户
         // 输入里的符号变成语法错误让搜索直接失败。
         var stmt: OpaquePointer?
@@ -375,9 +375,15 @@ enum TreasuryService {
     private static let sourceOrder = [
         "title", "summary", "body", "annotation", "tags", "source", "url", "text",
     ]
+    private static let searchableKinds = Set([
+        "link", "text", "note", "image", "document", "audio", "video", "artifact",
+    ])
+    private static let readingStates = Set(["none", "unread", "reading", "read"])
 
     static func executeSearch(from json: String) async -> (output: String, success: Bool) {
-        let request = parseSearchRequest(json)
+        let dict = jsonDictionary(json)
+        if let error = searchValidationError(dict) { return ("Error: \(error)", false) }
+        let request = parseSearchRequest(dict)
         let response = await search(request)
         return (renderUntrusted(response, element: "treasury_search_results"), true)
     }
@@ -565,25 +571,40 @@ enum TreasuryService {
 
     static func search(_ request: SearchRequest,
                        items: [CollectedItem]? = nil,
+                       collectionIDsByItem: [String: Set<String>]? = nil,
                        index: CollectionSearchIndex = .shared) async -> SearchResponse {
         let all = items ?? CollectionStore.load()
         let query = request.query.trimmingCharacters(in: .whitespacesAndNewlines)
         let limit = min(50, max(1, request.limit))
+        // Structured filters live in the item database, while full-text
+        // ranking lives in the FTS database. Fetch every matching FTS id for
+        // the current library before applying filters; a fixed 200-row
+        // candidate cap silently lost valid body-only matches after row 200.
         let ftsHits = query.isEmpty
             ? []
-            : await index.search(query, limit: max(50, limit * 4))
+            : await index.search(query, limit: max(50, all.count))
         let hitByID = Dictionary(ftsHits.map { ($0.itemId, $0) },
                                  uniquingKeysWith: { first, _ in first })
         let requestedKinds = Set(request.kinds.map { $0.lowercased() })
         let requestedTags = Set(request.tags.map { $0.lowercased() })
         let requestedSources = Set(request.sourceLabels.map { $0.lowercased() })
+        let requestedCollections = Set(request.collectionIDs)
+        let memberships: [String: Set<String>] = if requestedCollections.isEmpty {
+            [:]
+        } else if let collectionIDsByItem {
+            collectionIDsByItem
+        } else if items == nil {
+            CollectionStore.collectionIDs(itemIDs: all.map(\.id))
+        } else {
+            [:]
+        }
 
         var results: [SearchResult] = []
         results.reserveCapacity(min(all.count, limit * 2))
         for item in all {
             guard request.includeArchived || !item.archived else { continue }
             guard request.createdAfter.map({ item.createdAt >= $0 }) ?? true else { continue }
-            guard request.createdBefore.map({ item.createdAt <= $0 }) ?? true else { continue }
+            guard request.createdBefore.map({ item.createdAt < $0 }) ?? true else { continue }
             let kind = contractKind(for: item)
             guard requestedKinds.isEmpty
                     || requestedKinds.contains(kind)
@@ -592,6 +613,9 @@ enum TreasuryService {
             guard requestedTags.isSubset(of: normalizedTags) else { continue }
             guard requestedSources.isEmpty
                     || requestedSources.contains(item.sourceLabel.lowercased()) else { continue }
+            guard request.readingState.map({ item.readingState == $0 }) ?? true else { continue }
+            guard requestedCollections.isEmpty
+                    || requestedCollections.isSubset(of: memberships[item.id] ?? []) else { continue }
 
             var matchSources = Set(hitByID[item.id]?.matchSources ?? [])
             var score = hitByID[item.id]?.score ?? 0
@@ -638,12 +662,12 @@ enum TreasuryService {
     static func get(_ request: GetRequest,
                     items: [CollectedItem]? = nil,
                     index: CollectionSearchIndex = .shared) async -> GetResponse {
-        let cappedIDs = Array(request.ids.prefix(20))
+        let cappedIDs = Array(request.ids.prefix(100))
         let all = items ?? CollectionStore.load()
         let byID = Dictionary(all.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         var found: [GetItem] = []
         var missing: [String] = []
-        let charLimit = min(20_000, max(500, request.maxCharsPerItem))
+        let charLimit = min(50_000, max(1, request.maxCharsPerItem))
         for id in cappedIDs {
             guard let item = byID[id] else { missing.append(id); continue }
             let indexedDocument = request.includeBody ? await index.document(itemId: id) : nil
@@ -712,8 +736,7 @@ enum TreasuryService {
         }
     }
 
-    private static func parseSearchRequest(_ json: String) -> SearchRequest {
-        let dict = jsonDictionary(json)
+    private static func parseSearchRequest(_ dict: [String: Any]) -> SearchRequest {
         return SearchRequest(
             query: (dict["query"] as? String) ?? "",
             kinds: stringArray(dict["kinds"]),
@@ -722,16 +745,45 @@ enum TreasuryService {
             collectionIDs: stringArray(dict["collection_ids"]),
             createdAfter: parseDate(dict["created_after"]),
             createdBefore: parseDate(dict["created_before"]),
-            readingState: dict["reading_state"] as? String,
+            readingState: (dict["reading_state"] as? String)?
+                .trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
             includeArchived: bool(dict["include_archived"], default: false),
             limit: integer(dict["limit"], default: 20)
         )
     }
 
+    private static func searchValidationError(_ dict: [String: Any]) -> String? {
+        let query = ((dict["query"] as? String) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if query.isEmpty { return "treasury_search requires a non-empty query." }
+        let kinds = stringArray(dict["kinds"]).map { $0.lowercased() }
+        if kinds.contains(where: { !searchableKinds.contains($0) }) {
+            return "invalid Treasury content kind."
+        }
+        if let raw = dict["reading_state"] as? String {
+            let value = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if !value.isEmpty, !readingStates.contains(value) {
+                return "invalid Treasury reading state."
+            }
+        }
+        let afterRaw = (dict["created_after"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let beforeRaw = (dict["created_before"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let after = parseDate(afterRaw)
+        let before = parseDate(beforeRaw)
+        if !afterRaw.isEmpty, after == nil { return "invalid created_after time bound." }
+        if !beforeRaw.isEmpty, before == nil { return "invalid created_before time bound." }
+        if let after, let before, after >= before {
+            return "created_after must be earlier than created_before."
+        }
+        return nil
+    }
+
     private static func parseGetRequest(_ json: String) -> GetRequest {
         let dict = jsonDictionary(json)
         return GetRequest(
-            ids: stringArray(dict["ids"]),
+            ids: uniqueStrings(stringArray(dict["ids"])),
             includeBody: bool(dict["include_body"], default: true),
             includeAnnotations: bool(dict["include_annotations"], default: true),
             maxCharsPerItem: integer(dict["max_chars_per_item"], default: 12_000)
@@ -763,6 +815,11 @@ enum TreasuryService {
             .filter { !$0.isEmpty }
     }
 
+    private static func uniqueStrings(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        return values.filter { seen.insert($0).inserted }
+    }
+
     private static func bool(_ raw: Any?, default fallback: Bool) -> Bool {
         if let value = raw as? Bool { return value }
         if let number = raw as? NSNumber { return number.boolValue }
@@ -778,7 +835,17 @@ enum TreasuryService {
     }
 
     private static func parseDate(_ raw: Any?) -> Date? {
-        guard let text = raw as? String, !text.isEmpty else { return nil }
+        guard let rawText = raw as? String else { return nil }
+        let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+        if text.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil {
+            let formatter = DateFormatter()
+            formatter.calendar = Calendar(identifier: .gregorian)
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(secondsFromGMT: 0)
+            formatter.dateFormat = "yyyy-MM-dd"
+            return formatter.date(from: text)
+        }
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return formatter.date(from: text) ?? ISO8601DateFormatter().date(from: text)

@@ -1,6 +1,7 @@
 package com.leoyuan.leophoneagent.treasury
 
 import com.leoyuan.leophoneagent.share.PendingShare
+import com.leoyuan.leophoneagent.data.db.TreasureSearchRow
 import com.leoyuan.leophoneagent.tools.AgentTools
 import com.leoyuan.leophoneagent.tools.TreasuryTools
 import java.io.ByteArrayInputStream
@@ -62,6 +63,26 @@ class TreasuryPhase2ContractTest {
         assertTrue(TreasuryTools.includeArchivedArgument(
             JSONObject().put("include_archived", true)
         )!!)
+    }
+
+    @Test
+    fun `search envelope reports truncation without returning extra rows`() {
+        val rows = (0..2).map { index ->
+            TreasureSearchRow(
+                id = "item-$index", kind = "text", title = "Title $index",
+                sourceUri = null, sourceLabel = "测试", snippet = "body $index",
+                matchOffsets = "", tagsJson = "[]", pinned = false, archived = false,
+                readingState = "none", readingProgress = 0.0, lastOpenedAt = null,
+                processingState = "ready", processingErrorCode = null,
+                createdAt = index.toLong(), updatedAt = index.toLong(),
+            )
+        }
+        val payload = TreasuryTools.searchPayload(rows, 2)
+
+        assertTrue(payload.getBoolean("untrusted_content"))
+        assertTrue(payload.getBoolean("truncated"))
+        assertEquals(2, payload.getJSONArray("items").length())
+        assertFalse(payload.getJSONArray("items").getJSONObject(0).has("original_text"))
     }
 
     @Test

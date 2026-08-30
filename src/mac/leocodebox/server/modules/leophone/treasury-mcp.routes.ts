@@ -1,4 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
+
 import express from 'express';
 
 import { executeTreasuryTool, TreasuryToolError, treasuryMcpService } from './treasury-mcp.service.js';

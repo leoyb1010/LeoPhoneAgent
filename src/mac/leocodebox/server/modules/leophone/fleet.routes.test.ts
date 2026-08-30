@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import test from 'node:test';
 
+import type { RemoteTreasureMetadata } from '../database/repositories/treasury.db.js';
+
 import {
   cachedAttachmentPath,
   offlineBodyCandidates,
@@ -13,7 +15,6 @@ import {
   publicTreasuryError,
   safeAssetHeaders,
 } from './fleet.routes.js';
-import type { RemoteTreasureMetadata } from '../database/repositories/treasury.db.js';
 
 test('fleet treasury asset headers require bounded digest count and safe mime', () => {
   const response = new Response('body', { headers: {

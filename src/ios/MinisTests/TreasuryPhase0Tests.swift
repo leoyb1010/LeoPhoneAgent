@@ -202,18 +202,51 @@ final class TreasuryPhase0Tests: XCTestCase {
                                      sourceLabel: "Android")
         matching.tags = ["离线", "开源"]
         matching.annotation = "Fold state survives"
+        matching.readingState = "unread"
         var archived = CollectedItem(kind: .text, value: "ROOM hidden", sourceLabel: "Android")
         archived.tags = matching.tags
+        archived.readingState = "unread"
         archived.archived = true
         let response = await TreasuryService.search(
             .init(query: "room", kinds: ["text"], tags: ["离线", "开源"],
-                  sourceLabels: ["android"], createdAfter: Date.distantPast,
-                  createdBefore: Date.distantFuture, includeArchived: false, limit: 10),
-            items: [matching, archived]
+                  sourceLabels: ["android"], collectionIDs: ["work"],
+                  createdAfter: Date.distantPast, createdBefore: Date.distantFuture,
+                  readingState: "unread", includeArchived: false, limit: 10),
+            items: [matching, archived],
+            collectionIDsByItem: [matching.id: ["work", "offline"], archived.id: ["work"]]
         )
 
         XCTAssertEqual(response.items.map(\.id), [matching.id])
         XCTAssertTrue(response.items[0].matchSources.contains("text"))
+    }
+
+    func testTreasurySearchDoesNotLoseFilteredBodyHitAfterTwoHundredFTSRows() async {
+        let dbURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("treasury-filter-cap-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: dbURL) }
+        let index = CollectionSearchIndex(databaseURL: dbURL)
+        var items: [CollectedItem] = []
+        for number in 0..<250 {
+            var item = CollectedItem(kind: .file, value: "decoy-\(number).pdf", sourceLabel: "PDF")
+            item.title = "needle ranked title \(number)"
+            items.append(item)
+            await index.index(itemId: item.id, title: item.title ?? "", body: "")
+        }
+        let target = CollectedItem(kind: .file, value: "target.pdf", sourceLabel: "PDF")
+        items.append(target)
+        await index.index(itemId: target.id, title: "", body: "needle body only")
+
+        let response = await TreasuryService.search(
+            .init(query: "needle", kinds: ["document"], tags: [], sourceLabels: [],
+                  collectionIDs: ["target-collection"], createdAfter: nil, createdBefore: nil,
+                  readingState: nil, includeArchived: false, limit: 20),
+            items: items,
+            collectionIDsByItem: [target.id: ["target-collection"]],
+            index: index
+        )
+
+        XCTAssertEqual(response.items.map(\.id), [target.id])
+        XCTAssertTrue(response.items[0].matchSources.contains("body"))
     }
 
     func testTreasuryGetTruncatesAndReportsBodyStatus() async {
@@ -232,6 +265,47 @@ final class TreasuryPhase0Tests: XCTestCase {
         XCTAssertEqual(response.items[0].bodyStatus, "available")
         XCTAssertEqual(response.items[0].body?.count, 500)
         XCTAssertTrue(response.items[0].truncated)
+    }
+
+    func testTreasuryGetUsesCrossPlatformHundredItemAndFiftyThousandCharacterCaps() async {
+        var items = (0..<101).map { index in
+            CollectedItem(kind: .text, value: "item-\(index)", sourceLabel: "文本")
+        }
+        items[0] = CollectedItem(
+            kind: .text, value: String(repeating: "长", count: 50_001), sourceLabel: "文本"
+        )
+        let response = await TreasuryService.get(
+            .init(ids: items.map(\.id), includeBody: true, includeAnnotations: true,
+                  maxCharsPerItem: 60_000),
+            items: items,
+            index: CollectionSearchIndex(databaseURL: FileManager.default.temporaryDirectory
+                .appendingPathComponent("treasury-get-contract-\(UUID().uuidString).sqlite"))
+        )
+
+        XCTAssertEqual(response.items.count, 100)
+        XCTAssertTrue(response.truncated)
+        XCTAssertEqual(response.items[0].body?.count, 50_000)
+        XCTAssertTrue(response.items[0].truncated)
+    }
+
+    func testTreasurySearchRejectsInvalidStructuredFiltersInsteadOfBroadening() async {
+        let invalidKind = await TreasuryService.executeSearch(
+            from: #"{"query":"折叠","kinds":["unknown"]}"#
+        )
+        XCTAssertFalse(invalidKind.success)
+        XCTAssertTrue(invalidKind.output.contains("content kind"))
+
+        let invalidDate = await TreasuryService.executeSearch(
+            from: #"{"query":"折叠","created_after":"2026-08-31junk"}"#
+        )
+        XCTAssertFalse(invalidDate.success)
+        XCTAssertTrue(invalidDate.output.contains("created_after"))
+
+        let reversed = await TreasuryService.executeSearch(
+            from: #"{"query":"折叠","created_after":"2026-09-01","created_before":"2026-08-31"}"#
+        )
+        XCTAssertFalse(reversed.success)
+        XCTAssertTrue(reversed.output.contains("earlier"))
     }
 
     func testTreasuryGetReportsMissingFileSafelyAndNeverReturnsAbsolutePath() async {
@@ -437,7 +511,24 @@ final class TreasuryPhase0Tests: XCTestCase {
         XCTAssertEqual(loaded.annotation, "用户批注")
         let contract = try XCTUnwrap(store.syncContracts(ids: Set([item.id]))[item.id])
         XCTAssertEqual(contract.collectionIDs, ["inbox", "work"])
+        XCTAssertEqual(try store.collectionIDs(itemIDs: [item.id])[item.id], ["inbox", "work"])
         XCTAssertNil(contract.deletedAt)
+    }
+
+    func testCollectionMembershipLookupDoesNotDropItemsAfterFiveHundredRows() throws {
+        let directory = try temporaryTreasuryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try TreasurySQLiteStore(directory: directory)
+        let items = (0...500).map {
+            CollectedItem(kind: .text, value: "正文 \($0)", sourceLabel: "文本")
+        }
+        try store.add(items)
+        var last = try XCTUnwrap(store.load().first(where: { $0.id == items.last?.id }))
+        last.updatedAt = Date()
+        XCTAssertTrue(try store.agentUpdate(last, collectionIDs: ["after-500"]))
+
+        let memberships = try store.collectionIDs(itemIDs: items.map(\.id))
+        XCTAssertEqual(memberships[last.id], Set(["after-500"]))
     }
 
     func testPhase1SQLiteMigratesLegacyJSONWithBackupAndSafeRetry() throws {

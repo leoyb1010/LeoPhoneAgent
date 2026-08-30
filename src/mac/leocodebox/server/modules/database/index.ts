@@ -30,4 +30,6 @@ export {
   type TreasureItem,
   type TreasureJob,
   type TreasureKind,
+  type TreasuryAgentSearchFilters,
+  type ReadingState,
 } from '@/modules/database/repositories/treasury.db.js';

@@ -640,6 +640,17 @@ enum CollectionStore {
         }
     }
 
+    /// Collection membership lives in the SQLite contract table rather than
+    /// `CollectedItem`. Search must read it explicitly instead of advertising
+    /// a collection filter that silently does nothing.
+    static func collectionIDs(itemIDs: [String]) -> [String: Set<String>] {
+        ioQueue.sync {
+            guard let directory else { return [:] }
+            return (try? TreasurySQLiteStore(directory: directory)
+                .collectionIDs(itemIDs: itemIDs)) ?? [:]
+        }
+    }
+
     static func update(_ item: CollectedItem) {
         ioQueue.sync {
             guard let directory else { return }
@@ -1108,6 +1119,38 @@ final class TreasurySQLiteStore {
                 updated = true
             }
             return updated
+        }
+    }
+
+    func collectionIDs(itemIDs: [String]) throws -> [String: Set<String>] {
+        let uniqueIDs = Array(Set(itemIDs.filter { !$0.isEmpty }))
+        guard !uniqueIDs.isEmpty else { return [:] }
+        return try withDatabase { db in
+            var memberships: [String: Set<String>] = [:]
+            // Stay below SQLite's host-parameter ceiling without silently
+            // dropping collection membership for libraries larger than 500 rows.
+            for start in stride(from: 0, to: uniqueIDs.count, by: 400) {
+                let end = min(start + 400, uniqueIDs.count)
+                let batch = uniqueIDs[start..<end]
+                let placeholders = batch.map { _ in "?" }.joined(separator: ",")
+                var stmt: OpaquePointer?
+                try Self.prepare(
+                    db,
+                    "SELECT id,collection_ids_json FROM treasure_items WHERE deleted_at IS NULL AND id IN (\(placeholders))",
+                    &stmt
+                )
+                defer { sqlite3_finalize(stmt) }
+                for (offset, id) in batch.enumerated() {
+                    Self.bind(id, stmt, Int32(offset + 1))
+                }
+                while sqlite3_step(stmt) == SQLITE_ROW {
+                    let values = (try? JSONDecoder().decode(
+                        [String].self, from: Data(Self.text(stmt, 1).utf8)
+                    )) ?? []
+                    memberships[Self.text(stmt, 0)] = Set(values)
+                }
+            }
+            return memberships
         }
     }
 

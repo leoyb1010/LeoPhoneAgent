@@ -53,6 +53,21 @@ export const treasuryService = {
     }));
   },
 
+  searchForAgent(userId: number, query: string, limit: number, includeArchived: boolean,
+    filters: Parameters<typeof treasuryDb.searchForAgent>[4]): TreasurySearchResult[] {
+    return treasuryDb.searchForAgent(userId, query, limit, includeArchived, filters).map((item) => ({
+      id: item.id,
+      title: item.title,
+      kind: item.kind,
+      source: item.source_uri ?? item.source_label,
+      created_at: item.created_at,
+      snippet: compactSnippet(item, query),
+      tags: item.tags,
+      score: item.score,
+      match_sources: matchSources(item, query),
+    }));
+  },
+
   get(userId: number, ids: string[]): TreasureItem[] {
     // Metadata only in Phase 1. Large bodies/assets remain separate and are
     // added to the on-demand transport in Phase 4.

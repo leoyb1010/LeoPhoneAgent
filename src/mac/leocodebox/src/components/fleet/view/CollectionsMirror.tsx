@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { apiClient } from '../../../utils/apiClient';
+
 import { buildTreasuryPrompt } from './treasuryPrompt';
 
 type RemoteItem = {
@@ -585,7 +586,7 @@ export default function CollectionsMirror({ refreshTick = 0 }: { refreshTick?: n
                   {count.remote > 0 && (
                     <button type="button" aria-pressed={offline}
                       onClick={() => toggleOfflineCollection(collectionId)}
-                      className="mt-1 w-full rounded-md border border-border px-2 py-1 text-left text-[10px] text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring hover:text-foreground">
+                      className="mt-1 w-full rounded-md border border-border px-2 py-1 text-left text-[10px] text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                       {offline ? '已设为离线正文' : '设为离线正文'}
                     </button>
                   )}
@@ -649,7 +650,7 @@ export default function CollectionsMirror({ refreshTick = 0 }: { refreshTick?: n
 
         {selectedId && (
           <aside ref={detailPanel} tabIndex={-1}
-            className="rounded-xl border border-border bg-background p-4 outline-none lg:col-start-2 xl:col-start-3 xl:row-start-1 xl:sticky xl:top-3 xl:max-h-[75vh] xl:overflow-y-auto"
+            className="rounded-xl border border-border bg-background p-4 outline-none lg:col-start-2 xl:sticky xl:top-3 xl:col-start-3 xl:row-start-1 xl:max-h-[75vh] xl:overflow-y-auto"
             aria-label="藏宝阁阅读详情" aria-busy={detailBusy}>
             <div className="flex items-start justify-between gap-3">
               <div><p className="text-xs text-muted-foreground">{remoteDetail ? '手机按需内容' : 'Mac 本机内容'}</p>

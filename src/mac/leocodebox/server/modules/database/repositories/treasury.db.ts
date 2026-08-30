@@ -92,6 +92,16 @@ export type TreasuryQuerySpec = {
   archived: boolean; recent: boolean; after: string | null; before: string | null;
 };
 
+export type TreasuryAgentSearchFilters = {
+  kinds?: Set<string>;
+  tags?: Set<string>;
+  sourceLabels?: Set<string>;
+  collectionIds?: Set<string>;
+  readingState?: ReadingState | null;
+  createdAfter?: string | null;
+  createdBefore?: string | null;
+};
+
 type ItemRow = Omit<TreasureItem, 'tags' | 'collection_ids' | 'pinned' | 'archived'> & {
   user_id: number; normalized_url_key: string | null; tags_json: string;
   collection_ids_json: string; pinned: number; archived: number;
@@ -337,7 +347,8 @@ export const parseTreasuryQuery = (raw: string): TreasuryQuerySpec => {
 };
 
 const queryItems = (userId: number, raw: string, limit: number,
-                    includeArchived = false): Array<TreasureItem & { score: number }> => {
+                    includeArchived = false,
+                    filters: TreasuryAgentSearchFilters = {}): Array<TreasureItem & { score: number }> => {
   const spec = parseTreasuryQuery(raw);
   const expression = ftsExpression(spec.textQuery);
   const parameters: Array<string | number> = [];
@@ -363,8 +374,33 @@ const queryItems = (userId: number, raw: string, limit: number,
       WHERE lower(CAST(json_each.value AS TEXT))=?)`);
     parameters.push(tag.toLowerCase());
   }
+  addSet('treasure_items.kind', filters.kinds ?? new Set());
+  if (filters.readingState) {
+    where.push('treasure_items.reading_state=?');
+    parameters.push(filters.readingState);
+  }
+  if (filters.sourceLabels?.size) {
+    where.push(`lower(treasure_items.source_label) IN (${[...filters.sourceLabels].map(() => '?').join(',')})`);
+    parameters.push(...filters.sourceLabels);
+  }
+  for (const tag of filters.tags ?? []) {
+    where.push(`EXISTS (SELECT 1 FROM json_each(treasure_items.tags_json)
+      WHERE lower(CAST(json_each.value AS TEXT))=?)`);
+    parameters.push(tag.toLowerCase());
+  }
+  for (const collectionId of filters.collectionIds ?? []) {
+    where.push(`EXISTS (SELECT 1 FROM json_each(treasure_items.collection_ids_json)
+      WHERE CAST(json_each.value AS TEXT)=?)`);
+    parameters.push(collectionId);
+  }
   if (spec.after) { where.push('treasure_items.created_at>=?'); parameters.push(spec.after); }
   if (spec.before) { where.push('treasure_items.created_at<?'); parameters.push(spec.before); }
+  if (filters.createdAfter) {
+    where.push('treasure_items.created_at>=?'); parameters.push(filters.createdAfter);
+  }
+  if (filters.createdBefore) {
+    where.push('treasure_items.created_at<?'); parameters.push(filters.createdBefore);
+  }
   const rank = expression ? 'bm25(treasure_search_fts)' : '0';
   const order = spec.recent
     ? 'treasure_items.pinned DESC, COALESCE(treasure_items.last_opened_at,\'\') DESC, treasure_items.updated_at DESC'
@@ -454,6 +490,11 @@ export const treasuryDb = {
   search(userId: number, query: string, limit = 50,
          includeArchived = false): Array<TreasureItem & { score: number }> {
     return queryItems(userId, query, Math.min(limit, 500), includeArchived);
+  },
+
+  searchForAgent(userId: number, query: string, limit: number,
+                 includeArchived: boolean, filters: TreasuryAgentSearchFilters) {
+    return queryItems(userId, query, Math.min(limit, 51), includeArchived, filters);
   },
 
   updateReading(userId: number, id: string, readingState: ReadingState,

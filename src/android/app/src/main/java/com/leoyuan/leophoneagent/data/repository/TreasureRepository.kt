@@ -297,6 +297,11 @@ class TreasureRepository(
         val offsets = if (expression.isNotEmpty()) "offsets(treasure_search_fts)" else "''"
         val order = if (spec.recent) {
             "treasure_items.pinned DESC, COALESCE(treasure_items.last_opened_at, 0) DESC, treasure_items.updated_at DESC"
+        } else if (expression.isNotEmpty()) {
+            // Rank before LIMIT so an older title/annotation hit cannot be
+            // discarded merely because 51 newer body matches exist.
+            "bm25(treasure_search_fts, 0.0, 4.0, 1.0, 2.0, 2.5, 3.0) ASC, " +
+                "treasure_items.pinned DESC, treasure_items.updated_at DESC"
         } else {
             "treasure_items.pinned DESC, treasure_items.updated_at DESC"
         }
