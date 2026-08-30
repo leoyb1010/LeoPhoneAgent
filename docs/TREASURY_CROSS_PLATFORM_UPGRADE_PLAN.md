@@ -922,6 +922,10 @@ Android Standard 获得完整独立藏宝阁；iOS、Android、Mac 捕获入口�
 - Mac 不联网时仍能查看上次成功的本地内容并明确标陈旧；
 - 用户可控制正文和附件同步范围。
 
+实际交付证据：[Phase 4 增量同步与 Mac 主动工作台](TREASURY_PHASE4_DELIVERY_EVIDENCE.md)
+
+当前状态：本机必需源码、自动化和 Mac 浏览器交互范围已完成；真实三设备联网、移动设备离线恢复、Fold8/iPhone/iPad、签名/覆盖安装和 HTTP Range 断点续传仍明确 HOLD。当前附件具备完整文件重试、临时文件、原子落盘和 digest 校验，不得描述为已完成 Range 续传。
+
 ### Phase 5：打磨、审计与发布
 
 #### 工作项

@@ -4,6 +4,28 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## 藏宝阁 Phase 4 源码交付（未发版）- 2026-08-31
+
+### 用户可见源码变化
+
+- iOS、Android、Mac 使用游标增量 changes，不再同步“前 500 条”整体快照；重复、乱序、删除、冲突和游标过期均有恢复路径。
+- 正文和附件与元数据分离，默认按需获取并校验大小、SHA-256、MIME 和路径；Mac 离线保留最后成功内容并标记陈旧。
+- Mac 藏宝阁升级为三栏主动工作台，可本机捕获、搜索、阅读、指定合集离线，并选择仅本机、元数据或元数据+正文同步范围。
+- Mac 本机与手机收藏均可安全引用到新对话，正文有 20,000 字预算、截断标记和不可信资料边界。
+
+### 三轮审计与验证
+
+- 第一轮修复 Mac 本机条目引用缺口、长正文预算、资料边界闭合和项目选择衔接。
+- 第二轮修复 Artifact 正文/附件声明、Relay/Mac MIME 允许列表与 mismatch 拒绝、iOS SQLite statement 生命周期。
+- 第三轮修复 iOS 毫秒冲突精度、410 快照时间截断和 Mac 同步范围控制。
+- Android Standard/Power 编译和 JVM 单测通过，双 lint 0 error；iOS MinisLogicTests 304/304 与 MinisShare target build 通过；Relay 12/12；Mac client 160/160、server 392/392、typecheck、production build 和真实浏览器主要交互通过。
+
+### 边界
+
+- 本条是源码交付，不 bump 版本、不发布 APK/IPA/Mac 包。
+- 当前附件是完整文件失败重试和原子落盘，没有 HTTP Range 断点续传，不虚报该能力。
+- 三设备真实联网矩阵、Fold8/API 26/TalkBack/200% 字体、iPhone/iPad 主 App、移动签名/覆盖安装、Mac 双机 Relay/签名/公证仍为 HOLD。
+
 ## 藏宝阁 Phase 3 源码交付（未发版）- 2026-08-31
 
 ### 用户可见源码变化

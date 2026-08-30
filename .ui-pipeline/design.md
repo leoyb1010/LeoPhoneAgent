@@ -28,7 +28,7 @@
 - Android medium: 380dp 列表 + 弹性详情。
 - Android expanded: 190dp 筛选 rail + 380dp 列表 + 弹性详情。
 - iPad: 现有收藏列表接受系统 URL/String drop；文件继续走统一 importer。
-- Mac: 捕获区 → 离线/陈旧状态 → 搜索 → Mac/手机混合结果卡片。
+- Mac: 同步范围 → 捕获区 → 离线/陈旧状态 → 搜索 → Mac/手机混合结果卡片 → 按需正文/附件与 Agent 引用。
 
 ## State matrix
 
@@ -37,7 +37,7 @@
 | Android list | 引导从分享或页面保存 | 状态标签 | 错误标签与详情重试 | 本地能力不受影响 | 1/2/3 栏 |
 | Android detail | 选择提示 | 正文/附件可先读 | 原因码、重试 | 本地附件可打开 | 小屏替换/宽屏并列 |
 | Share receiver | 无内容提示 | 原始复制后结束 | 失败 toast，暂存定向清理 | 链接仍先落库 | 系统对话框 |
-| Mac workspace | 捕获提示 | 保存中禁用 | 本机错误单独显示 | 手机旧内容保留并标陈旧 | 单列到双列卡片 |
+| Mac workspace | 捕获提示 | 保存中禁用 | 本机错误单独显示 | 手机旧内容保留并标陈旧；可切仅本机 | 窄窗两段、宽窗三栏 |
 
 ## Motion budget
 

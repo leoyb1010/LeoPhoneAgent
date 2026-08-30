@@ -81,10 +81,13 @@ extraction runs locally in bounded WorkManager jobs; unsupported OCR or audio
 transcription remains visibly partial instead of uploading the file silently.
 External web, PDF, OCR and transcription text is treated as untrusted content
 and cannot authorize `treasury_save` or `treasury_update`. Content is sent to an
-AI provider only when you explicitly include or ask the Agent to use it. Cross-
-device body and attachment synchronization is not enabled by the Phase 3 source
-delivery; Phase 4 must add user-controlled, on-demand transfer before claiming
-that capability.
+AI provider only when you explicitly include or ask the Agent to use it. When
+you configure your Leo Relay, Treasury metadata is synchronized incrementally;
+body text and attachments are transferred only after an explicit remote request
+or an offline-body choice. Transfers are size-bounded and verify SHA-256, byte
+count and MIME. Disabling/removing the Relay configuration stops future remote
+synchronization; existing device-local and already cached copies remain until
+you delete app data or the corresponding Treasury content.
 
 ---
 
@@ -143,5 +146,7 @@ URL、文字或文件不依赖 OCR、模型或 Leo 运营的服务器。PDF 文�
 WorkManager 后台任务中本地提取；不支持的 OCR 或音频转写会明确显示 partial，不会
 静默上传文件。网页、PDF、OCR 和转写文本都按不可信资料处理，不能授权
 `treasury_save` 或 `treasury_update`。只有你明确选择或要求 Agent 使用时，相关内容才会
-发送给已配置的 AI 提供商。Phase 3 源码交付尚未开启跨设备正文和附件同步；Phase 4
-必须先实现用户可控的按需传输，才能宣称具备该能力。
+发送给已配置的 AI 提供商。配置自己的 Leo Relay 后，藏宝阁元数据使用游标增量同步；
+正文和附件只有在远端明确请求或用户选择离线正文时才传输，并校验大小、SHA-256、
+byte count 与 MIME。删除/停用 Relay 配置会停止后续远端同步；设备本机和已经缓存的副本
+会保留到用户删除相应收藏或应用数据。
