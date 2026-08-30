@@ -679,7 +679,11 @@ enum TreasuryService {
                               indexedBody: indexedDocument?.body,
                               bodyFileExists: bodyFileExists)
                 : BodyResolution(body: nil, status: "not_requested")
-            let clipped = clip(resolution.body, limit: charLimit)
+            let clipped = clipRelevant(
+                resolution.body,
+                limit: charLimit,
+                anchors: [item.title, item.summary, item.annotation] + item.tags.map(Optional.some)
+            )
             let attachment = attachmentReference(for: item)
             found.append(GetItem(
                 id: item.id,
@@ -703,6 +707,26 @@ enum TreasuryService {
             missingIDs: missing,
             truncated: request.ids.count > cappedIDs.count
         )
+    }
+
+    static func related(to target: CollectedItem, items: [CollectedItem], limit: Int = 5) -> [CollectedItem] {
+        let targetTags = Set(target.tags.map { $0.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil) })
+        let targetKeywords = relatedKeywords(for: target)
+        let targetSource = relatedSourceKey(for: target)
+        return items.compactMap { candidate -> (CollectedItem, Int)? in
+            guard candidate.id != target.id, !candidate.archived else { return nil }
+            let candidateTags = Set(candidate.tags.map {
+                $0.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+            })
+            let sharedTags = targetTags.intersection(candidateTags).count
+            let sameSource = targetSource != nil && targetSource == relatedSourceKey(for: candidate)
+            let keywordOverlap = targetKeywords.intersection(relatedKeywords(for: candidate)).count
+            let score = sharedTags * 4 + (sameSource ? 2 : 0) + min(keywordOverlap, 3)
+            return score > 0 ? (candidate, score) : nil
+        }.sorted {
+            if $0.1 != $1.1 { return $0.1 > $1.1 }
+            return $0.0.updatedAt > $1.0.updatedAt
+        }.prefix(max(0, limit)).map { $0.0 }
     }
 
     /// Pure body selection rule used by production and regression tests. This
@@ -937,10 +961,82 @@ enum TreasuryService {
         return value.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil
     }
 
-    private static func clip(_ text: String?, limit: Int) -> (text: String?, truncated: Bool) {
+    private static func clipRelevant(_ text: String?, limit: Int,
+                                     anchors: [String?]) -> (text: String?, truncated: Bool) {
         guard let text else { return (nil, false) }
         guard text.count > limit else { return (text, false) }
-        return (String(text.prefix(limit)), true)
+        guard limit > 2 else { return (String(text.prefix(limit)), true) }
+
+        let terms = relevanceTerms(anchors)
+        var bestRange: Range<String.Index>?
+        var bestLength = 0
+        for term in terms {
+            guard let range = text.range(of: term, options: [.caseInsensitive, .diacriticInsensitive]) else {
+                continue
+            }
+            if term.count > bestLength {
+                bestRange = range
+                bestLength = term.count
+            }
+        }
+        guard let bestRange else { return (String(text.prefix(limit)), true) }
+
+        let total = text.count
+        let matchOffset = text.distance(from: text.startIndex, to: bestRange.lowerBound)
+        let contentBudget = limit - 2
+        let startOffset = min(max(0, matchOffset - contentBudget / 3), total - contentBudget)
+        let start = text.index(text.startIndex, offsetBy: startOffset)
+        let end = text.index(start, offsetBy: contentBudget)
+        let leading = startOffset > 0 ? "…" : ""
+        let trailing = end < text.endIndex ? "…" : ""
+        return (leading + text[start..<end] + trailing, true)
+    }
+
+    private static func relevanceTerms(_ anchors: [String?]) -> [String] {
+        var seen = Set<String>()
+        var terms: [String] = []
+        let separators = CharacterSet.alphanumerics.inverted
+        for anchor in anchors.compactMap({ $0?.trimmingCharacters(in: .whitespacesAndNewlines) })
+            where !anchor.isEmpty {
+            let candidates = [String(anchor.prefix(120))] + anchor.components(separatedBy: separators)
+            for candidate in candidates {
+                let value = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+                let key = value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+                guard value.count >= 2, value.count <= 120, seen.insert(key).inserted else { continue }
+                terms.append(value)
+            }
+        }
+        return terms.sorted { $0.count > $1.count }
+    }
+
+    private static func relatedKeywords(for item: CollectedItem) -> Set<String> {
+        let material = String([item.title, item.summary, item.annotation,
+                               item.kind == .text ? item.value : nil]
+            .compactMap { $0 }.joined(separator: " ").prefix(4_000))
+        let words = material.components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .map { String($0.prefix(120)).folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil) }
+            .filter { $0.count >= 2 }
+        var result = Set(words)
+        for word in words where word.count >= 4 {
+            let characters = Array(word)
+            for index in 0..<(characters.count - 1) {
+                result.insert(String(characters[index...index + 1]))
+            }
+        }
+        return result
+    }
+
+    private static func relatedSourceKey(for item: CollectedItem) -> String? {
+        if item.kind == .link, let host = URL(string: item.value)?.host?.lowercased(), !host.isEmpty {
+            return "host:\(host)"
+        }
+        let label = item.sourceLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+        let generic = Set([
+            "", "收藏", "文本", "笔记", "文件", "图片", "网页", "agent 保存", "聊天 artifact",
+            "collection", "text", "note", "file", "image", "web", "agent saved", "chat artifact",
+        ])
+        return generic.contains(label) ? nil : "label:\(label)"
     }
 
     static func renderUntrusted<T: Encodable>(_ value: T, element: String) -> String {

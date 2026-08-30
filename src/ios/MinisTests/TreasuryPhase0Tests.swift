@@ -267,6 +267,30 @@ final class TreasuryPhase0Tests: XCTestCase {
         XCTAssertTrue(response.items[0].truncated)
     }
 
+    func testTreasuryGetTruncatesAroundRelevantMetadataInsteadOfBodyPrefix() async {
+        var item = CollectedItem(
+            kind: .text,
+            value: String(repeating: "开头无关内容。", count: 180)
+                + "\n\n量子缓存一致性是这一段真正需要引用的主题。"
+                + String(repeating: "结尾补充。", count: 180),
+            sourceLabel: "文本"
+        )
+        item.title = "量子缓存一致性"
+
+        let response = await TreasuryService.get(
+            .init(ids: [item.id], includeBody: true, includeAnnotations: true,
+                  maxCharsPerItem: 240),
+            items: [item],
+            index: CollectionSearchIndex(databaseURL: FileManager.default.temporaryDirectory
+                .appendingPathComponent("treasury-get-relevant-\(UUID().uuidString).sqlite"))
+        )
+
+        XCTAssertEqual(response.items[0].body?.count, 240)
+        XCTAssertTrue(response.items[0].body?.contains("量子缓存一致性") == true)
+        XCTAssertTrue(response.items[0].body?.hasPrefix("…") == true)
+        XCTAssertTrue(response.items[0].truncated)
+    }
+
     func testTreasuryGetUsesCrossPlatformHundredItemAndFiftyThousandCharacterCaps() async {
         var items = (0..<101).map { index in
             CollectedItem(kind: .text, value: "item-\(index)", sourceLabel: "文本")
@@ -286,6 +310,48 @@ final class TreasuryPhase0Tests: XCTestCase {
         XCTAssertTrue(response.truncated)
         XCTAssertEqual(response.items[0].body?.count, 50_000)
         XCTAssertTrue(response.items[0].truncated)
+    }
+
+    func testRelatedTreasuryItemsPreferSharedTagsThenSourceAndExcludeArchived() {
+        var target = CollectedItem(kind: .text, value: "量子缓存正文", sourceLabel: "研发周报")
+        target.tags = ["缓存", "架构"]
+        var sharedTags = CollectedItem(kind: .text, value: "另一份缓存方案", sourceLabel: "其他来源")
+        sharedTags.title = "缓存一致性"
+        sharedTags.tags = ["缓存", "架构"]
+        var sameSource = CollectedItem(kind: .text, value: "普通内容", sourceLabel: "研发周报")
+        sameSource.title = "同来源记录"
+        var archived = CollectedItem(kind: .text, value: "缓存", sourceLabel: "研发周报")
+        archived.tags = ["缓存", "架构"]
+        archived.archived = true
+
+        let related = TreasuryService.related(
+            to: target, items: [target, sameSource, archived, sharedTags], limit: 5
+        )
+
+        XCTAssertEqual(related.map(\.id), [sharedTags.id, sameSource.id])
+    }
+
+    func testRelatedTreasuryItemsDoNotTreatGenericTextSourceAsAConnection() {
+        let target = CollectedItem(kind: .text, value: "苹果香蕉", sourceLabel: "文本")
+        let unrelated = CollectedItem(kind: .text, value: "完全不同", sourceLabel: "文本")
+
+        XCTAssertTrue(TreasuryService.related(to: target, items: [target, unrelated]).isEmpty)
+    }
+
+    func testBackgroundEnhancementOnlyReplacesTheTitleCapturedBeforeItsAwait() {
+        XCTAssertTrue(TreasuryEnhancementPolicy.shouldReplaceTitle(
+            current: "分享时标题", captured: "分享时标题"
+        ))
+        XCTAssertTrue(TreasuryEnhancementPolicy.shouldReplaceTitle(current: nil, captured: nil))
+        XCTAssertFalse(TreasuryEnhancementPolicy.shouldReplaceTitle(
+            current: "用户手写标题", captured: "分享时标题"
+        ))
+        XCTAssertTrue(TreasuryEnhancementPolicy.canRetry(
+            kind: .link, errorCode: "article_extraction_unavailable"
+        ))
+        XCTAssertFalse(TreasuryEnhancementPolicy.canRetry(
+            kind: .file, errorCode: "ocr_engine_unavailable"
+        ))
     }
 
     func testTreasurySearchRejectsInvalidStructuredFiltersInsteadOfBroadening() async {
@@ -852,6 +918,26 @@ final class TreasuryPhase0Tests: XCTestCase {
         try store.completeJob(id: job.id)
         XCTAssertFalse(try TreasurySQLiteStore(directory: directory)
             .pendingJobs(now: .distantFuture).contains { $0.id == job.id })
+    }
+
+    func testPhase1AutomaticJobsStopAfterFiveFailuresUntilUserRetry() throws {
+        let directory = try temporaryTreasuryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try TreasurySQLiteStore(directory: directory)
+        try store.add([CollectedItem(kind: .text, value: "有限重试", sourceLabel: "文本")])
+        let jobID = try XCTUnwrap(store.pendingJobs().first?.id)
+        var now = Date(timeIntervalSince1970: 10_000)
+
+        for _ in 0..<5 {
+            XCTAssertTrue(try store.claimJob(id: jobID, now: now))
+            try store.failJob(id: jobID, errorCode: "temporary", now: now)
+            now = now.addingTimeInterval(100_000)
+        }
+
+        XCTAssertFalse(try store.pendingJobs(now: .distantFuture).contains { $0.id == jobID })
+        XCTAssertEqual(try store.retryFailedJobs(itemID: store.load().first!.id), 1)
+        let retried = try XCTUnwrap(store.pendingJobs().first(where: { $0.id == jobID }))
+        XCTAssertEqual(retried.attemptCount, 0)
     }
 
     func testPhase1IndexRebuildAndImportExportRoundTrip() throws {

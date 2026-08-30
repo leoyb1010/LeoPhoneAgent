@@ -51,6 +51,7 @@ struct CollectionsView: View {
     /// [T-notes] 正在写批注的条目
     @State private var annotating: CollectedItem?
     @State private var readingItem: CollectedItem?
+    @State private var pendingReadingItem: CollectedItem?
     @State private var annotationDraft = ""
     /// [T-notes] 显示归档的条目(默认收起)
     @State private var showArchived = false
@@ -264,8 +265,20 @@ struct CollectionsView: View {
             }
             .presentationDetents([.medium])
         }
-        .sheet(item: $readingItem) { item in
-            TreasuryReadingSheet(item: item) { reload() }
+        .sheet(item: $readingItem, onDismiss: {
+            guard let pending = pendingReadingItem else { return }
+            pendingReadingItem = nil
+            Task { @MainActor in readingItem = pending }
+        }) { item in
+            TreasuryReadingSheet(
+                item: item,
+                relatedItems: TreasuryService.related(to: item, items: items)
+            ) { related in
+                pendingReadingItem = related
+                readingItem = nil
+            } onUpdate: {
+                reload()
+            }
         }
         .fullScreenCover(item: $readerTarget) { target in
             LeoReaderView(url: target.url, preferReaderMode: target.preferReaderMode)
@@ -463,6 +476,13 @@ struct CollectionsView: View {
             Button {
                 sendToAgent(item, prompt: "用一两句话总结这条收藏的内容要点。")
             } label: { Label("让 Agent 总结", systemImage: "sparkles") }
+            if TreasuryEnhancementPolicy.canRetry(
+                kind: item.kind, errorCode: item.processingErrorCode
+            ) {
+                Button {
+                    retryProcessing(item)
+                } label: { Label("重试处理", systemImage: "arrow.clockwise") }
+            }
             Button {
                 var updated = item
                 updated.pinned.toggle()
@@ -858,6 +878,24 @@ struct CollectionsView: View {
         }
     }
 
+    private func retryProcessing(_ item: CollectedItem) {
+        guard TreasuryEnhancementPolicy.canRetry(
+            kind: item.kind, errorCode: item.processingErrorCode
+        ) else { return }
+        let failKey = "collections.fulltext.attempts"
+        var attempts = (UserDefaults.standard.dictionary(forKey: failKey) as? [String: Int]) ?? [:]
+        attempts.removeValue(forKey: item.id)
+        UserDefaults.standard.set(attempts, forKey: failKey)
+        CollectionStore.retryFailedJobs(itemID: item.id)
+        CollectionStore.mutate(id: item.id) { current in
+            current.processingState = "queued"
+            current.processingErrorCode = nil
+            current.updatedAt = Date()
+        }
+        reload()
+        indexMissingFullText()
+    }
+
     /// autoHide=false 用于"正在导入…"这类进行中提示:导入 OCR 是串行的,
     /// 九张图要跑十几秒,1.8 秒就消失等于中途界面毫无动静。
     /// toastID 挡竞态:前一条的隐藏任务醒来时若已有新 toast,不许掐掉它。
@@ -964,6 +1002,7 @@ struct CollectionsView: View {
         guard !pending.isEmpty else { return }
         Task {
             for var item in pending.prefix(10) {
+                let capturedTitle = item.title
                 guard let url = URL(string: item.value) else { continue }
                 // [T-collections-deeplink] 顺手把短链解析掉,首次点击直达 app
                 if item.resolvedURL == nil, CollectionOpener.isShortLink(url) {
@@ -1003,7 +1042,12 @@ struct CollectionsView: View {
                 CollectionStore.mutate(id: captured.id) { fresh in
                     fresh.metadataFetched = true
                     if fresh.resolvedURL == nil { fresh.resolvedURL = captured.resolvedURL }
-                    if let fetched = capturedPreviewTitle, !fetched.isEmpty { fresh.title = fetched }
+                    if let fetched = capturedPreviewTitle, !fetched.isEmpty,
+                       TreasuryEnhancementPolicy.shouldReplaceTitle(
+                        current: fresh.title, captured: capturedTitle
+                       ) {
+                        fresh.title = fetched
+                    }
                     if let thumb = captured.thumbnailFile { fresh.thumbnailFile = thumb }
                     if fresh.summary == nil {
                         fresh.summary = captured.summary
@@ -1022,6 +1066,8 @@ struct CollectionsView: View {
 
 private struct TreasuryReadingSheet: View {
     let item: CollectedItem
+    let relatedItems: [CollectedItem]
+    let onOpenRelated: (CollectedItem) -> Void
     let onUpdate: () -> Void
 
     @State private var bodyText = ""
@@ -1032,10 +1078,14 @@ private struct TreasuryReadingSheet: View {
     @State private var highlightNote = ""
     @State private var highlights: [TreasureHighlight] = []
     @State private var message: String?
-    @Environment(\.dismiss) private var dismiss
 
-    init(item: CollectedItem, onUpdate: @escaping () -> Void) {
+    init(item: CollectedItem,
+         relatedItems: [CollectedItem],
+         onOpenRelated: @escaping (CollectedItem) -> Void,
+         onUpdate: @escaping () -> Void) {
         self.item = item
+        self.relatedItems = relatedItems
+        self.onOpenRelated = onOpenRelated
         self.onUpdate = onUpdate
         _readingState = State(initialValue: item.readingState)
         _progress = State(initialValue: item.readingProgress)
@@ -1121,6 +1171,31 @@ private struct TreasuryReadingSheet: View {
                                 Button("删除", role: .destructive) {
                                     CollectionStore.deleteHighlight(id: highlight.id)
                                     reloadHighlights()
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if !relatedItems.isEmpty {
+                    Section("相关收藏") {
+                        ForEach(relatedItems) { related in
+                            Button {
+                                onOpenRelated(related)
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(related.title ?? related.value)
+                                            .lineLimit(2)
+                                            .foregroundStyle(.primary)
+                                        Text(related.sourceLabel)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.tertiary)
                                 }
                             }
                         }

@@ -18,6 +18,18 @@ import CryptoKit
 import Foundation
 import SQLite3
 
+enum TreasuryEnhancementPolicy {
+    static func shouldReplaceTitle(current: String?, captured: String?) -> Bool {
+        let normalizedCurrent = current?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalizedCurrent?.isEmpty != false { return true }
+        return current == captured
+    }
+
+    static func canRetry(kind: CollectedItem.Kind, errorCode: String?) -> Bool {
+        kind == .link && errorCode == "article_extraction_unavailable"
+    }
+}
+
 struct TreasuryLocalQuery: Equatable {
     let textQuery: String
     let kinds: Set<String>
@@ -708,6 +720,14 @@ enum CollectionStore {
         }
     }
 
+    @discardableResult
+    static func retryFailedJobs(itemID: String) -> Int {
+        ioQueue.sync {
+            guard let directory else { return 0 }
+            return (try? TreasurySQLiteStore(directory: directory).retryFailedJobs(itemID: itemID)) ?? 0
+        }
+    }
+
     static func delete(ids: Set<String>) {
         ioQueue.sync {
             guard let directory else { return }
@@ -1185,6 +1205,7 @@ final class TreasurySQLiteStore {
             SELECT id, item_id, job_type, state, attempt_count, next_attempt_at,
                    last_error_code FROM treasure_jobs
             WHERE state IN ('queued','failed')
+              AND attempt_count < 5
               AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
             ORDER BY created_at ASC LIMIT ?
             """
@@ -1249,6 +1270,19 @@ final class TreasurySQLiteStore {
                 Self.bind(id, stmt, 4)
                 try Self.stepDone(db, stmt)
             }
+        }
+    }
+
+    @discardableResult
+    func retryFailedJobs(itemID: String, now: Date = Date()) throws -> Int {
+        try withDatabase { db in
+            var stmt: OpaquePointer?
+            try Self.prepare(db, "UPDATE treasure_jobs SET state='queued',attempt_count=0,next_attempt_at=NULL,updated_at=?,last_error_code=NULL WHERE item_id=? AND state='failed'", &stmt)
+            defer { sqlite3_finalize(stmt) }
+            sqlite3_bind_double(stmt, 1, now.timeIntervalSince1970)
+            Self.bind(itemID, stmt, 2)
+            try Self.stepDone(db, stmt)
+            return Int(sqlite3_changes(db))
         }
     }
 
