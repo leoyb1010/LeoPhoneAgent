@@ -1,6 +1,51 @@
 import XCTest
 
 final class TreasuryPhase0Tests: XCTestCase {
+    func testTreasuryShortcutSearchReturnsOnlyBoundedTitlesAndSources() {
+        let response = TreasuryService.SearchResponse(items: [
+            .init(id: "one", title: "Fold8 适配\n指南", kind: "document", source: "本机 PDF",
+                  createdAt: Date(timeIntervalSince1970: 1), snippet: "绝不能由 Siri 朗读的正文秘密",
+                  tags: ["折叠屏"], score: 0.9, matchSources: ["body"]),
+            .init(id: "two", title: "离线同步", kind: "note", source: "私人批注",
+                  createdAt: Date(timeIntervalSince1970: 2), snippet: "另一个敏感片段",
+                  tags: [], score: 0.8, matchSources: ["annotation"]),
+            .init(id: "three", title: " \n", kind: "text", source: "",
+                  createdAt: Date(timeIntervalSince1970: 3), snippet: "仍不能朗读",
+                  tags: [], score: 0.7, matchSources: ["body"]),
+        ], truncated: true)
+
+        let output = TreasuryShortcutPresentation.searchText(query: " Fold8\n", response: response)
+        XCTAssertTrue(output.contains("Fold8 适配 指南（本机 PDF）"))
+        XCTAssertTrue(output.contains("未命名收藏"))
+        XCTAssertTrue(output.contains("还有更多结果"))
+        XCTAssertFalse(output.contains("正文秘密"))
+        XCTAssertFalse(output.contains("敏感片段"))
+        XCTAssertFalse(output.contains("one"))
+    }
+
+    @MainActor
+    func testTreasuryOpenIntentRouteIsRetainedUntilConsumed() {
+        TreasuryIntentRouteStore.requestOpen()
+        XCTAssertTrue(TreasuryIntentRouteStore.hasPendingOpen)
+        XCTAssertTrue(TreasuryIntentRouteStore.consumeOpen())
+        XCTAssertFalse(TreasuryIntentRouteStore.hasPendingOpen)
+        XCTAssertFalse(TreasuryIntentRouteStore.consumeOpen())
+    }
+
+    func testTreasuryIntentOpeningPolicyKeepsSearchInlineAndOpensWorkspace() {
+        if #available(iOS 16.0, *) {
+            XCTAssertFalse(SearchTreasuryIntent.openAppWhenRun)
+            XCTAssertTrue(OpenTreasuryIntent.openAppWhenRun)
+        }
+    }
+
+    func testTreasuryWorkspaceSplitUsesAvailableWidthWithoutKeyboardHeight() {
+        XCTAssertFalse(TreasuryWorkspaceLayoutPolicy.usesSplit(width: 759, regularWidth: true))
+        XCTAssertTrue(TreasuryWorkspaceLayoutPolicy.usesSplit(width: 760, regularWidth: true))
+        XCTAssertFalse(TreasuryWorkspaceLayoutPolicy.usesSplit(width: 1_024, regularWidth: false))
+        XCTAssertFalse(TreasuryWorkspaceLayoutPolicy.usesSplit(width: .infinity, regularWidth: true))
+    }
+
     func testPhase3ExactQueryParserKeepsMalformedFiltersAsText() {
         let spec = TreasuryLocalQuery.parse(
             "折叠屏 type:link,text state:failed read:unread tag:工作 is:pinned "

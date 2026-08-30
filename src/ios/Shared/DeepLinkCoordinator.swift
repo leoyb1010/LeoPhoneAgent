@@ -68,6 +68,15 @@ final class DeepLinkCoordinator: ObservableObject {
     /// not on the Data settings group that merely links to it.
     @Published var pendingCollections: Bool = false
 
+    /// Consume the one-shot Treasury route. ContentView calls this from both
+    /// its cold-launch task and the warm onChange path so an App Intent or URL
+    /// delivered before the view mounts cannot be lost.
+    func consumePendingCollections() -> Bool {
+        guard pendingCollections else { return false }
+        pendingCollections = false
+        return true
+    }
+
     /// Switch to a specific session. ContentView observes this and sets
     /// `selectedSessionId` to the requested id (also reloading the
     /// session list if the id isn't already loaded).

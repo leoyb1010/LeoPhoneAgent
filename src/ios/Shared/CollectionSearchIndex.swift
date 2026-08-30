@@ -1055,6 +1055,80 @@ enum TreasuryService {
     }
 }
 
+/// Privacy-bounded presentation for system surfaces such as Shortcuts and
+/// Siri. Search can complete inline, but it must not export or speak body text,
+/// OCR, annotations, snippets, item IDs or local paths.
+enum TreasuryShortcutPresentation {
+    static func searchText(query: String, response: TreasuryService.SearchResponse) -> String {
+        let normalizedQuery = compact(query, limit: 80)
+        guard !response.items.isEmpty else {
+            return normalizedQuery.isEmpty
+                ? "请输入要搜索的内容。"
+                : "藏宝阁里没有找到“\(normalizedQuery)”。"
+        }
+
+        let rows = response.items.prefix(5).enumerated().map { index, item in
+            let title = compact(item.title, limit: 120)
+            let source = compact(item.source, limit: 60)
+            let displayTitle = title.isEmpty ? "未命名收藏" : title
+            return source.isEmpty
+                ? "\(index + 1). \(displayTitle)"
+                : "\(index + 1). \(displayTitle)（\(source)）"
+        }
+        let more = response.truncated || response.items.count > 5
+            ? " 还有更多结果，请打开藏宝阁继续查看。"
+            : ""
+        return "找到 \(response.items.count) 条藏宝阁结果：\(rows.joined(separator: "；"))。\(more)"
+    }
+
+    private static func compact(_ value: String, limit: Int) -> String {
+        let words = value.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+        return String(words.prefix(limit))
+    }
+}
+
+/// Available-width policy for the iPad Treasury workspace. Height is
+/// deliberately irrelevant: presenting the keyboard must not collapse the
+/// split view and rebuild an in-progress annotation or highlight editor.
+enum TreasuryWorkspaceLayoutPolicy {
+    static func usesSplit(width: CGFloat, regularWidth: Bool) -> Bool {
+        regularWidth && width.isFinite && width >= 760
+    }
+}
+
+/// One-shot handoff for an open-app Treasury intent. The App Group flag
+/// survives an Intent execution process handing off to a cold app launch;
+/// the notification handles an already-mounted ContentView.
+@MainActor
+enum TreasuryIntentRouteStore {
+    static let openNotification = Notification.Name("OpenTreasuryFromAppIntent")
+    private static let pendingKey = "leo.treasury.intent.pendingOpen"
+    private static var processPendingOpen = false
+
+    static var hasPendingOpen: Bool {
+        processPendingOpen || SharedContainerStore.sharedDefaults?.bool(forKey: pendingKey) == true
+    }
+
+    static func requestOpen() {
+        processPendingOpen = true
+        if let defaults = SharedContainerStore.sharedDefaults {
+            defaults.set(true, forKey: pendingKey)
+            defaults.synchronize()
+        }
+        NotificationCenter.default.post(name: openNotification, object: nil)
+    }
+
+    static func consumeOpen() -> Bool {
+        guard hasPendingOpen else { return false }
+        processPendingOpen = false
+        if let defaults = SharedContainerStore.sharedDefaults {
+            defaults.removeObject(forKey: pendingKey)
+            defaults.synchronize()
+        }
+        return true
+    }
+}
+
 /// Builds the hidden, separately-carried context used by “Send to Agent”. The
 /// text is bounded and XML-escaped so an item cannot forge a closing boundary.
 enum TreasuryContextBuilder {

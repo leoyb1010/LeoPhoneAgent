@@ -198,6 +198,7 @@
 		E5TRP004 /* PendingShare.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E000016 /* PendingShare.swift */; };
 		E5TRP005 /* SharedContainerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E000017 /* SharedContainerStore.swift */; };
 		E5TRP006 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = AA26CCB82F31070A00AECF2D /* libsqlite3.tbd */; };
+		E5TRP007 /* CollectionIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5COL0008 /* CollectionIntents.swift */; };
 		E5E000004 /* PendingShare.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E000016 /* PendingShare.swift */; };
 		E5E000005 /* SharedContainerStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E000017 /* SharedContainerStore.swift */; };
 		E5E000006 /* PendingShare.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5E000016 /* PendingShare.swift */; };
@@ -2852,6 +2853,7 @@
 				E5TRP003 /* NoteBodyStore.swift in Sources */,
 				E5TRP004 /* PendingShare.swift in Sources */,
 				E5TRP005 /* SharedContainerStore.swift in Sources */,
+				E5TRP007 /* CollectionIntents.swift in Sources */,
 				E5RMC0003 /* RelayMachinesClient.swift in Sources */,
 				E5STG9003 /* SensitiveToolGate.swift in Sources */,
 				E5TT0003 /* ThinkingTypes.swift in Sources */,

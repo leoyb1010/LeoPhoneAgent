@@ -52,6 +52,7 @@ struct CollectionsView: View {
     @State private var annotating: CollectedItem?
     @State private var readingItem: CollectedItem?
     @State private var pendingReadingItem: CollectedItem?
+    @State private var selectedReadingItemID: String?
     @State private var annotationDraft = ""
     /// [T-notes] 显示归档的条目(默认收起)
     @State private var showArchived = false
@@ -71,12 +72,12 @@ struct CollectionsView: View {
     @State private var fullTextMatches: [String] = []
     @State private var fullTextSnippets: [String: String] = [:]
     @State private var indexing = false
-    @State private var lastSyncedFingerprint = ""
     @State private var searchTask: Task<Void, Never>?
     @AppStorage(CollectionStore.defaultActionKey, store: SharedContainerStore.sharedDefaults)
     private var defaultAction = "ask"
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private var sources: [String] {
         Array(Set(items.map(\.sourceLabel))).sorted()
@@ -134,6 +135,25 @@ struct CollectionsView: View {
     }
 
     var body: some View {
+        GeometryReader { geometry in
+            let usesSplit = TreasuryWorkspaceLayoutPolicy.usesSplit(
+                width: geometry.size.width,
+                regularWidth: horizontalSizeClass == .regular)
+            Group {
+                if usesSplit {
+                    NavigationSplitView {
+                        collectionList(usesSplit: true)
+                    } detail: {
+                        splitReadingDetail
+                    }
+                } else {
+                    collectionList(usesSplit: false)
+                }
+            }
+        }
+    }
+
+    private func collectionList(usesSplit: Bool) -> some View {
         List(selection: $selection) {
             if !editMode.isEditing {
                 treasuryHero
@@ -156,7 +176,7 @@ struct CollectionsView: View {
             } else {
                 if sources.count > 1 { sourceFilter }
                 ForEach(visible) { item in
-                    row(item)
+                    row(item, usesSplit: usesSplit)
                         .listRowInsets(EdgeInsets(top: 5, leading: 14, bottom: 5, trailing: 14))
                         .listRowSeparator(.hidden)
                         .listRowBackground(
@@ -313,6 +333,35 @@ struct CollectionsView: View {
         }
     }
 
+    @ViewBuilder
+    private var splitReadingDetail: some View {
+        if let id = selectedReadingItemID,
+           let item = items.first(where: { $0.id == id }) {
+            TreasuryReadingSheet(
+                item: item,
+                relatedItems: TreasuryService.related(to: item, items: items),
+                showsCloseButton: false,
+                onOpenOriginal: splitOpenAction(for: item)
+            ) { related in
+                selectedReadingItemID = related.id
+            } onUpdate: {
+                reload()
+            }
+            .id(item.id)
+        } else {
+            ContentUnavailableView(
+                "选择一条收藏",
+                systemImage: "sidebar.left",
+                description: Text("在左侧选择内容，即可阅读正文、更新进度并添加高亮。")
+            )
+        }
+    }
+
+    private func splitOpenAction(for item: CollectedItem) -> (() -> Void)? {
+        guard item.kind != .text else { return nil }
+        return { open(item) }
+    }
+
     private var treasuryHero: some View {
         let activeCount = items.filter { !$0.archived }.count
         let noteCount = items.filter { !$0.archived && $0.kind == .note }.count
@@ -443,9 +492,13 @@ struct CollectionsView: View {
 
     // MARK: 行
 
-    private func row(_ item: CollectedItem) -> some View {
+    private func row(_ item: CollectedItem, usesSplit: Bool) -> some View {
         Button {
-            open(item)
+            if usesSplit, !editMode.isEditing {
+                selectedReadingItemID = item.id
+            } else {
+                open(item)
+            }
         } label: {
             CollectionCard(item: item)
         }
@@ -469,7 +522,11 @@ struct CollectionsView: View {
             } label: { Label("发给 Agent", systemImage: "paperplane.fill") }
             if item.kind != .file {
                 Button {
-                    readingItem = item
+                    if usesSplit {
+                        selectedReadingItemID = item.id
+                    } else {
+                        readingItem = item
+                    }
                 } label: { Label("阅读与高亮", systemImage: "highlighter") }
             }
             Button {
@@ -798,24 +855,15 @@ struct CollectionsView: View {
         syncToRelay()
     }
 
-    /// [T-collections-fleet] 把收藏索引推给中继,Mac 端才看得到。
-    /// 指纹含内容(不只 id):补完标题摘要后 id 集不变,但 Mac 端不能
-    /// 停留在贫化快照上。成功后才记账,失败下次自动重试。
+    /// [T-treasury-sync] Run the cursor-based change exchange. The client
+    /// coalesces overlapping requests and automatically performs another pass
+    /// if a local reload happens while network I/O is in flight.
     private func syncToRelay() {
-        let snapshot = items
-        let fingerprint = snapshot.map {
-            // archived/annotation 必须进指纹:少了它们,归档/写批注后
-            // 指纹不变 → 同步被跳过 → 手机归档了 Mac 端照样列着。
-            "\($0.id)|\($0.title ?? "")|\($0.summary ?? "")|\($0.tags.joined())|\($0.pinned)|\($0.archived)|\($0.annotation ?? "")"
-        }.joined(separator: "\n").hashValue.description
-        guard fingerprint != lastSyncedFingerprint else { return }
         Task {
             guard let client = GatewayHostStore.shared.activeHosts
                 .compactMap({ GatewayHostStore.shared.client(for: $0) })
                 .first(where: { $0.relayEventsURL != nil }) else { return }
-            if await client.uploadCollections(snapshot) {
-                await MainActor.run { lastSyncedFingerprint = fingerprint }
-            }
+            await client.syncTreasuryChanges()
         }
     }
 
@@ -823,6 +871,9 @@ struct CollectionsView: View {
     /// "搜得到但打不开"的幽灵。
     private func purge(_ ids: Set<String>) {
         CollectionStore.delete(ids: ids)
+        if let selectedReadingItemID, ids.contains(selectedReadingItemID) {
+            self.selectedReadingItemID = nil
+        }
         Task {
             for id in ids { await CollectionSearchIndex.shared.remove(itemId: id) }
             await CollectionSearchIndex.shared.unpublishFromSpotlight(ids: ids)
@@ -1101,6 +1152,8 @@ struct CollectionsView: View {
 private struct TreasuryReadingSheet: View {
     let item: CollectedItem
     let relatedItems: [CollectedItem]
+    let showsCloseButton: Bool
+    let onOpenOriginal: (() -> Void)?
     let onOpenRelated: (CollectedItem) -> Void
     let onUpdate: () -> Void
 
@@ -1115,10 +1168,14 @@ private struct TreasuryReadingSheet: View {
 
     init(item: CollectedItem,
          relatedItems: [CollectedItem],
+         showsCloseButton: Bool = true,
+         onOpenOriginal: (() -> Void)? = nil,
          onOpenRelated: @escaping (CollectedItem) -> Void,
          onUpdate: @escaping () -> Void) {
         self.item = item
         self.relatedItems = relatedItems
+        self.showsCloseButton = showsCloseButton
+        self.onOpenOriginal = onOpenOriginal
         self.onOpenRelated = onOpenRelated
         self.onUpdate = onUpdate
         _readingState = State(initialValue: item.readingState)
@@ -1243,8 +1300,15 @@ private struct TreasuryReadingSheet: View {
             .navigationTitle(item.title?.isEmpty == false ? item.title! : "阅读")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") { persistReadingState(); dismiss() }
+                if showsCloseButton {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("关闭") { persistReadingState(); dismiss() }
+                    }
+                }
+                if let onOpenOriginal {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button(item.kind == .note ? "编辑" : "打开", action: onOpenOriginal)
+                    }
                 }
             }
             .task { await loadBody(); reloadHighlights() }

@@ -146,7 +146,7 @@ final class PushRegistrar {
 extension LeoAgentClient {
     /// 向中继登记推送 token。中继根地址从 harness 地址推导(与事件端点同法)。
     func registerPushToken(_ payload: [String: Any]) async {
-        // 按 relay 根拼,不做字符串替换 —— 与 uploadCollections 同法:
+        // 按 relay 根拼,不做字符串替换 —— 与 syncTreasuryChanges 同法:
         // 部署路径本身含 /events 时替换会把地址拼碎。
         guard let eventsURL = relayEventsURL,
               let range = eventsURL.absoluteString.range(of: "/relay/api/"),

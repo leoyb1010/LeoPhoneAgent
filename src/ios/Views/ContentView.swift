@@ -842,6 +842,8 @@ struct ContentView: View {
         content
             .task {
                 sessions = await ChatStore.shared.listSessions()
+                let collectionsPending = deepLink.consumePendingCollections()
+                    || TreasuryIntentRouteStore.consumeOpen()
                 let shareAlreadyHandled = shareCoordinator.bufferVersion > 0
                 // A Home Screen Quick Action that fired during launch will
                 // open the right session itself via `quickActionRouter.newChatTrigger`.
@@ -879,6 +881,9 @@ struct ContentView: View {
                     withTransaction(tx) { openSession(notificationTarget) }
                 } else if NotificationNavigationStore.shared.handledRecently {
                     shareLog.info("[Share] .task: notification navigation just handled — skipping launchScreen logic")
+                } else if collectionsPending {
+                    shareLog.info("[Treasury] .task: consuming cold-launch Treasury route")
+                    activeToolSheet = .collections
                 } else if quickActionPending {
                     shareLog.info("[Share] .task: quick action pending — deferring launchScreen logic to QuickActionRouter")
                 } else if shareAlreadyHandled {
@@ -1087,9 +1092,15 @@ struct ContentView: View {
                 }
             }
             .onChange(of: deepLink.pendingCollections) { pending in
-                if pending {
+                if pending, deepLink.consumePendingCollections() {
                     activeToolSheet = .collections
-                    deepLink.pendingCollections = false
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(
+                for: TreasuryIntentRouteStore.openNotification
+            )) { _ in
+                if TreasuryIntentRouteStore.consumeOpen() {
+                    activeToolSheet = .collections
                 }
             }
             .onChange(of: deepLink.pendingRootfsManagement) { pending in
@@ -1431,15 +1442,13 @@ struct ContentView: View {
         // emptyState 不进视图树,.task 不跑、cover 不弹,整个功能是死的。
         .task {
             MacLiveSessionsStore.shared.start()
-            // [T-collections-fleet] 启动即同步收藏索引到中继。原来只挂在
+            // [T-treasury-sync] 启动即交换藏宝阁增量变更。原来只挂在
             // 收藏页 onAppear 上——用户不进收藏页,Mac 端就永远是空的
             // (线上实测:装了两个版本,中继上 updated_at 一直是 0)。
-            let items = CollectionStore.load()
-            if !items.isEmpty,
-               let client = GatewayHostStore.shared.activeHosts
+            if let client = GatewayHostStore.shared.activeHosts
                    .compactMap({ GatewayHostStore.shared.client(for: $0) })
                    .first(where: { $0.relayEventsURL != nil }) {
-                await client.uploadCollections(items)
+                await client.syncTreasuryChanges()
             }
         }
         .fullScreenCover(item: $macAttachTarget) { row in

@@ -164,8 +164,22 @@ struct RelayEventPayload {
 extension LeoAgentClient {
     /// Phase 4 cursor sync. The wire item is metadata-only; body/file bytes are
     /// never included in this automatic pass.
-    @discardableResult
-    func uploadCollections(_ _: [CollectedItem]) async -> Bool {
+    func syncTreasuryChanges() async {
+        if treasurySyncRunning {
+            treasurySyncPending = true
+            return
+        }
+        treasurySyncRunning = true
+        defer { treasurySyncRunning = false }
+
+        var succeeded = true
+        repeat {
+            treasurySyncPending = false
+            succeeded = await performTreasurySync()
+        } while succeeded && treasurySyncPending
+    }
+
+    private func performTreasurySync() async -> Bool {
         guard let directory = CollectionStore.directory,
               let root = treasuryRelayRoot else { return false }
         do {
