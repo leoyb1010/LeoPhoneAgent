@@ -940,6 +940,26 @@ final class TreasuryPhase0Tests: XCTestCase {
         XCTAssertEqual(retried.attemptCount, 0)
     }
 
+    func testPhase1StaleProcessingJobIsRecoveredAfterProcessDeath() throws {
+        let directory = try temporaryTreasuryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try TreasurySQLiteStore(directory: directory)
+        let item = CollectedItem(kind: .text, value: "进程中断恢复", sourceLabel: "文本")
+        try store.add([item])
+        let claimedAt = Date(timeIntervalSince1970: 10_000)
+        let job = try XCTUnwrap(store.pendingJobs(now: claimedAt).first)
+        XCTAssertTrue(try store.claimJob(id: job.id, now: claimedAt))
+
+        XCTAssertTrue(try store.pendingJobs(now: claimedAt.addingTimeInterval(29 * 60)).isEmpty)
+        let recovered = try XCTUnwrap(
+            store.pendingJobs(now: claimedAt.addingTimeInterval(31 * 60))
+                .first(where: { $0.id == job.id })
+        )
+        XCTAssertEqual(recovered.state, "queued")
+        XCTAssertEqual(recovered.attemptCount, 1)
+        XCTAssertEqual(try store.load().first?.processingState, "queued")
+    }
+
     func testPhase1IndexRebuildAndImportExportRoundTrip() throws {
         let sourceDirectory = try temporaryTreasuryDirectory()
         let targetDirectory = try temporaryTreasuryDirectory()

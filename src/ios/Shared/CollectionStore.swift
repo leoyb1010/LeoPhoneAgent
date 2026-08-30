@@ -463,6 +463,8 @@ struct TreasureItemContract: Codable, Equatable {
 }
 
 enum CollectionStore {
+    typealias Job = TreasurySQLiteStore.Job
+
     static let defaultActionKey = "leo.share.defaultAction"   // ask | chat | collect
 
     // MARK: 目录
@@ -725,6 +727,38 @@ enum CollectionStore {
         ioQueue.sync {
             guard let directory else { return 0 }
             return (try? TreasurySQLiteStore(directory: directory).retryFailedJobs(itemID: itemID)) ?? 0
+        }
+    }
+
+    static func pendingJobs(limit: Int = 50, now: Date = Date()) -> [Job] {
+        ioQueue.sync {
+            guard let directory else { return [] }
+            return (try? TreasurySQLiteStore(directory: directory)
+                .pendingJobs(limit: limit, now: now)) ?? []
+        }
+    }
+
+    @discardableResult
+    static func claimJob(id: String, now: Date = Date()) -> Bool {
+        ioQueue.sync {
+            guard let directory else { return false }
+            return (try? TreasurySQLiteStore(directory: directory)
+                .claimJob(id: id, now: now)) ?? false
+        }
+    }
+
+    static func completeJob(id: String, now: Date = Date()) {
+        ioQueue.sync {
+            guard let directory else { return }
+            try? TreasurySQLiteStore(directory: directory).completeJob(id: id, now: now)
+        }
+    }
+
+    static func failJob(id: String, errorCode: String, now: Date = Date()) {
+        ioQueue.sync {
+            guard let directory else { return }
+            try? TreasurySQLiteStore(directory: directory)
+                .failJob(id: id, errorCode: errorCode, now: now)
         }
     }
 
@@ -1201,6 +1235,46 @@ final class TreasurySQLiteStore {
 
     func pendingJobs(limit: Int = 50, now: Date = Date()) throws -> [Job] {
         try withDatabase { db in
+            // A process can be killed after claiming a job. Without leasing,
+            // that row remains `processing` forever and neither automatic nor
+            // explicit retries can see it. Reclaim only work whose heartbeat
+            // has been stale for 30 minutes, longer than the bounded metadata
+            // and extraction operations used by the main app.
+            let staleCutoff = now.addingTimeInterval(-30 * 60).timeIntervalSince1970
+            var recovery: OpaquePointer?
+            try Self.prepare(db, """
+                UPDATE treasure_jobs
+                SET state=CASE WHEN attempt_count >= 5 THEN 'failed' ELSE 'queued' END,
+                    next_attempt_at=NULL,updated_at=?,last_error_code='unknown'
+                WHERE state='processing' AND updated_at <= ?
+                """, &recovery)
+            sqlite3_bind_double(recovery, 1, now.timeIntervalSince1970)
+            sqlite3_bind_double(recovery, 2, staleCutoff)
+            try Self.stepDone(db, recovery)
+            sqlite3_finalize(recovery)
+
+            var recoverItems: OpaquePointer?
+            try Self.prepare(db, """
+                UPDATE treasure_items
+                SET processing_state=CASE
+                      WHEN EXISTS(SELECT 1 FROM treasure_jobs j
+                                  WHERE j.item_id=treasure_items.id
+                                    AND j.state='failed' AND j.attempt_count >= 5)
+                      THEN 'failed' ELSE 'queued' END,
+                    processing_error_code=CASE
+                      WHEN EXISTS(SELECT 1 FROM treasure_jobs j
+                                  WHERE j.item_id=treasure_items.id
+                                    AND j.state='failed' AND j.attempt_count >= 5)
+                      THEN 'unknown' ELSE NULL END,
+                    updated_at=?
+                WHERE id IN (SELECT item_id FROM treasure_jobs
+                             WHERE updated_at=? AND last_error_code='unknown')
+                """, &recoverItems)
+            sqlite3_bind_double(recoverItems, 1, now.timeIntervalSince1970)
+            sqlite3_bind_double(recoverItems, 2, now.timeIntervalSince1970)
+            try Self.stepDone(db, recoverItems)
+            sqlite3_finalize(recoverItems)
+
             let sql = """
             SELECT id, item_id, job_type, state, attempt_count, next_attempt_at,
                    last_error_code FROM treasure_jobs

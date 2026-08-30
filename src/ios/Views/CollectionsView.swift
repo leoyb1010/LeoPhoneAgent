@@ -287,7 +287,7 @@ struct CollectionsView: View {
         .sheet(isPresented: $showImportSheet) {
             CollectionImportSheet { added in
                 reload()
-                fetchMissingMetadata()
+                processPendingJobs()
                 flash("已收藏 \(added) 条")
             }
         }
@@ -309,8 +309,7 @@ struct CollectionsView: View {
         }
         .onAppear {
             reload()
-            fetchMissingMetadata()
-            indexMissingFullText()
+            processPendingJobs()
         }
     }
 
@@ -607,7 +606,7 @@ struct CollectionsView: View {
                     let added = strings.reduce(0) { $0 + CollectionStore.ingestText($1) }
                     Task { @MainActor in
                         reload()
-                        fetchMissingMetadata()
+                        processPendingJobs()
                         flash(added > 0 ? "已收藏 \(added) 条" : "剪贴板里没有可收藏的内容")
                     }
                 }
@@ -715,7 +714,7 @@ struct CollectionsView: View {
         if !links.isEmpty {
             CollectionStore.add(links)
             reload()
-            fetchMissingMetadata()
+            processPendingJobs()
             flash("已收藏 \(links.count) 条链接")
         }
         if !files.isEmpty { importFiles(files) }
@@ -735,7 +734,7 @@ struct CollectionsView: View {
         guard !made.isEmpty else { return }
         CollectionStore.add(made)
         reload()
-        fetchMissingMetadata()
+        processPendingJobs()
         flash("已收藏 \(made.count) 条")
     }
 
@@ -765,6 +764,7 @@ struct CollectionsView: View {
                 } else {
                     CollectionStore.add(made)
                     reload()
+                    processPendingJobs()
                     flash("已导入 \(made.count) 项")
                 }
             }
@@ -830,51 +830,153 @@ struct CollectionsView: View {
         reload()
     }
 
-    /// [T-collections-fulltext] 给还没有正文的链接抓正文入索引。
-    /// 串行循环直到清空(WebView 一次一个);抽取失败记尝试次数,
-    /// 3 次仍失败就放弃——否则付费墙/短文那几条会永远堵在队首,
-    /// 后面的条目一辈子进不了索引。
-    private func indexMissingFullText() {
+    /// Consume the durable SQLite queue serially. Share Extension captures
+    /// only save bytes and enqueue work; the main app owns enhancement. Job
+    /// claims, retry counts and backoff therefore survive process death.
+    private func processPendingJobs() {
         guard !indexing else { return }
+        let jobs = CollectionStore.pendingJobs(limit: 20)
+        guard !jobs.isEmpty else { return }
         indexing = true
         Task {
             defer { Task { @MainActor in indexing = false } }
-            let failKey = "collections.fulltext.attempts"
-            var attempts = (UserDefaults.standard.dictionary(forKey: failKey) as? [String: Int]) ?? [:]
-            let indexed = await CollectionSearchIndex.shared.indexedIds()
-            let todo = items.filter {
-                $0.kind == .link && !indexed.contains($0.id) && (attempts[$0.id] ?? 0) < 3
-            }
-            for item in todo {
-                let target = item.resolvedURL.flatMap(URL.init(string:))
-                    ?? URL(string: item.value)
-                guard let target else { attempts[item.id] = 3; continue }
-                if let article = await ArticleExtractor.shared.extract(url: target) {
-                    await CollectionSearchIndex.shared.index(
-                        itemId: item.id,
-                        title: article.title ?? item.title ?? "",
-                        body: article.text)
-                    attempts.removeValue(forKey: item.id)
-                    CollectionStore.mutate(id: item.id) { current in
-                        current.processingState = "ready"
-                        current.processingErrorCode = nil
-                        current.metadataFetched = true
-                        current.updatedAt = Date()
+            var batch = jobs
+            while !batch.isEmpty, !Task.isCancelled {
+                for job in batch {
+                    guard CollectionStore.claimJob(id: job.id) else { continue }
+                    guard let item = CollectionStore.load().first(where: { $0.id == job.itemID }) else {
+                        CollectionStore.completeJob(id: job.id)
+                        continue
                     }
-                } else {
-                    attempts[item.id] = (attempts[item.id] ?? 0) + 1
-                    if attempts[item.id] == 3 {
+                    CollectionStore.mutate(id: item.id) { current in
+                        current.processingState = "processing"
+                        current.processingErrorCode = nil
+                    }
+                    switch job.type {
+                    case "metadata":
+                        await processMetadataJob(job, item: item)
+                    case "index":
+                        await processIndexJob(job, item: item)
+                    default:
+                        CollectionStore.failJob(id: job.id, errorCode: "unsupported_type")
                         CollectionStore.mutate(id: item.id) { current in
-                            current.processingState = "partial"
-                            current.processingErrorCode = "article_extraction_unavailable"
+                            current.processingState = "failed"
+                            current.processingErrorCode = "unsupported_type"
                             current.updatedAt = Date()
                         }
                     }
                 }
+                batch = CollectionStore.pendingJobs(limit: 20)
             }
-            UserDefaults.standard.set(attempts, forKey: failKey)
-            let snapshot = items
+            let snapshot = CollectionStore.load()
             await CollectionSearchIndex.shared.publishToSpotlight(snapshot)
+            await MainActor.run { reload() }
+        }
+    }
+
+    private func processMetadataJob(_ job: CollectionStore.Job,
+                                    item original: CollectedItem) async {
+        guard original.kind == .link, let url = URL(string: original.value) else {
+            CollectionStore.failJob(id: job.id, errorCode: "source_unreachable")
+            CollectionStore.mutate(id: original.id) { current in
+                current.processingState = "failed"
+                current.processingErrorCode = "source_unreachable"
+                current.updatedAt = Date()
+            }
+            return
+        }
+        var item = original
+        let capturedTitle = item.title
+        if item.resolvedURL == nil, CollectionOpener.isShortLink(url) {
+            let resolved = await CollectionOpener.resolve(url)
+            if resolved != url { item.resolvedURL = resolved.absoluteString }
+        }
+        let target = item.resolvedURL.flatMap(URL.init(string:)) ?? url
+        let preview = await LinkPreviewFetcher.fetch(target)
+        if let image = preview.image, let thumbDir = CollectionStore.thumbsDirectory {
+            let name = "thumb-\(item.id).jpg"
+            let resized = image.leoResized(maxDimension: 480)
+            if let data = resized.jpegData(compressionQuality: 0.8) {
+                try? data.write(to: thumbDir.appendingPathComponent(name), options: .atomic)
+                item.thumbnailFile = name
+            }
+        }
+        if item.summary == nil {
+            let material = [preview.title ?? item.title, item.value]
+                .compactMap { $0 }.joined(separator: "\n")
+            if let insight = await LocalBrain.shared.summarizeCollection(
+                title: preview.title ?? item.title, text: material
+            ) {
+                item.summary = insight.summary
+                if item.tags.isEmpty { item.tags = insight.tags }
+            }
+        }
+        let captured = item
+        CollectionStore.mutate(id: item.id) { current in
+            current.metadataFetched = true
+            if current.resolvedURL == nil { current.resolvedURL = captured.resolvedURL }
+            if let fetched = preview.title, !fetched.isEmpty,
+               TreasuryEnhancementPolicy.shouldReplaceTitle(
+                current: current.title, captured: capturedTitle
+               ) {
+                current.title = fetched
+            }
+            if let thumbnail = captured.thumbnailFile { current.thumbnailFile = thumbnail }
+            if current.summary == nil {
+                current.summary = captured.summary
+                if current.tags.isEmpty { current.tags = captured.tags }
+            }
+            current.processingState = "queued"
+            current.processingErrorCode = nil
+            current.updatedAt = Date()
+        }
+        CollectionStore.completeJob(id: job.id)
+    }
+
+    private func processIndexJob(_ job: CollectionStore.Job,
+                                 item: CollectedItem) async {
+        let body: String?
+        var title = item.title ?? ""
+        if item.kind == .link {
+            let indexed = await CollectionSearchIndex.shared.indexedIds()
+            if indexed.contains(item.id) {
+                CollectionStore.completeJob(id: job.id)
+                CollectionStore.mutate(id: item.id) { current in
+                    current.processingState = "ready"
+                    current.processingErrorCode = nil
+                    current.updatedAt = Date()
+                }
+                return
+            }
+            let target = item.resolvedURL.flatMap(URL.init(string:)) ?? URL(string: item.value)
+            guard let target, let article = await ArticleExtractor.shared.extract(url: target) else {
+                CollectionStore.failJob(
+                    id: job.id, errorCode: "article_extraction_unavailable"
+                )
+                CollectionStore.mutate(id: item.id) { current in
+                    current.processingState = "partial"
+                    current.processingErrorCode = "article_extraction_unavailable"
+                    current.updatedAt = Date()
+                }
+                return
+            }
+            title = article.title ?? title
+            body = article.text
+        } else if item.kind == .text {
+            body = item.value
+        } else if let bodyFile = item.bodyFile {
+            body = await NoteBodyStore.load(bodyFile)
+        } else {
+            body = nil
+        }
+        await CollectionSearchIndex.shared.index(
+            itemId: item.id, title: title, body: body ?? ""
+        )
+        CollectionStore.completeJob(id: job.id)
+        CollectionStore.mutate(id: item.id) { current in
+            current.processingState = "ready"
+            current.processingErrorCode = nil
+            current.updatedAt = Date()
         }
     }
 
@@ -882,10 +984,6 @@ struct CollectionsView: View {
         guard TreasuryEnhancementPolicy.canRetry(
             kind: item.kind, errorCode: item.processingErrorCode
         ) else { return }
-        let failKey = "collections.fulltext.attempts"
-        var attempts = (UserDefaults.standard.dictionary(forKey: failKey) as? [String: Int]) ?? [:]
-        attempts.removeValue(forKey: item.id)
-        UserDefaults.standard.set(attempts, forKey: failKey)
         CollectionStore.retryFailedJobs(itemID: item.id)
         CollectionStore.mutate(id: item.id) { current in
             current.processingState = "queued"
@@ -893,7 +991,7 @@ struct CollectionsView: View {
             current.updatedAt = Date()
         }
         reload()
-        indexMissingFullText()
+        processPendingJobs()
     }
 
     /// autoHide=false 用于"正在导入…"这类进行中提示:导入 OCR 是串行的,
@@ -996,70 +1094,6 @@ struct CollectionsView: View {
         }
     }
 
-    /// 惰性补抓链接标题/封面,每条只试一次。
-    private func fetchMissingMetadata() {
-        let pending = items.filter { $0.kind == .link && !$0.metadataFetched }
-        guard !pending.isEmpty else { return }
-        Task {
-            for var item in pending.prefix(10) {
-                let capturedTitle = item.title
-                guard let url = URL(string: item.value) else { continue }
-                // [T-collections-deeplink] 顺手把短链解析掉,首次点击直达 app
-                if item.resolvedURL == nil, CollectionOpener.isShortLink(url) {
-                    let resolved = await CollectionOpener.resolve(url)
-                    if resolved != url { item.resolvedURL = resolved.absoluteString }
-                }
-                // [T-preview] 通用抓取:系统抓取器 → HTML 多级兜底
-                // (og / twitter / JSON-LD / 站点变量 / 正文首图 / favicon)。
-                // 任何站都走这一条,不是给某几个站开的特例。
-                let metaTarget = item.resolvedURL.flatMap(URL.init(string:)) ?? url
-                let preview = await LinkPreviewFetcher.fetch(metaTarget)
-                item.metadataFetched = true
-                // 抓到的标题优先;抓不到时保留导入时从文案里截的标题
-                if let fetched = preview.title, !fetched.isEmpty { item.title = fetched }
-                if let image = preview.image, let thumbDir = CollectionStore.thumbsDirectory {
-                    let name = "thumb-\(item.id).jpg"
-                    let resized = image.leoResized(maxDimension: 480)
-                    if let data = resized.jpegData(compressionQuality: 0.8) {
-                        try? data.write(to: thumbDir.appendingPathComponent(name))
-                        item.thumbnailFile = name
-                    }
-                }
-                // [T-local-brain] 顺手让本机模型给一句话摘要与标签。
-                // 不可用就跳过——收藏功能本身不依赖它。
-                if item.summary == nil {
-                    let material = [item.title, item.value].compactMap { $0 }.joined(separator: "\n")
-                    if let insight = await LocalBrain.shared.summarizeCollection(
-                        title: item.title, text: material) {
-                        item.summary = insight.summary
-                        if item.tags.isEmpty { item.tags = insight.tags }
-                    }
-                }
-                // 条目级写回:长路径期间用户可能置顶/批注/归档了这条,
-                // 整条 update 会把那些回滚。只写自己抓到的字段。
-                let captured = item
-                let capturedPreviewTitle = preview.title
-                CollectionStore.mutate(id: captured.id) { fresh in
-                    fresh.metadataFetched = true
-                    if fresh.resolvedURL == nil { fresh.resolvedURL = captured.resolvedURL }
-                    if let fetched = capturedPreviewTitle, !fetched.isEmpty,
-                       TreasuryEnhancementPolicy.shouldReplaceTitle(
-                        current: fresh.title, captured: capturedTitle
-                       ) {
-                        fresh.title = fetched
-                    }
-                    if let thumb = captured.thumbnailFile { fresh.thumbnailFile = thumb }
-                    if fresh.summary == nil {
-                        fresh.summary = captured.summary
-                        if fresh.tags.isEmpty { fresh.tags = captured.tags }
-                    }
-                }
-            }
-            // 循环尾统一刷一次:每条抓完就 reload 的话,十条 = 一分钟内
-            // 十波全表解码 + Equatable 比较 + 列表动画。
-            await MainActor.run { reload() }
-        }
-    }
 }
 
 // MARK: - 阅读、进度与定位高亮
