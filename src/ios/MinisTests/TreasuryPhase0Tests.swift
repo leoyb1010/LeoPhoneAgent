@@ -451,6 +451,138 @@ final class TreasuryPhase0Tests: XCTestCase {
         XCTAssertEqual(try reopened.pendingJobs().count, 2)
     }
 
+    func testPhase4RemoteChangesAreIncrementalAndLocalEditsBecomeConflicts() throws {
+        let directory = try temporaryTreasuryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try TreasurySQLiteStore(directory: directory)
+        let baseDate = Date(timeIntervalSince1970: 2_000_000_000.1234)
+        var remoteItem = CollectedItem(
+            id: "remote-ios-item", kind: .link, value: "https://example.com/remote",
+            resolvedURL: nil, title: "远端标题", thumbnailFile: nil, sourceLabel: "Android",
+            createdAt: baseDate, tags: ["同步"], pinned: false, summary: "远端摘要",
+            metadataFetched: true, bodyFile: nil, annotation: nil, archived: false,
+            updatedAt: baseDate, readingState: "unread", readingProgress: 0,
+            lastOpenedAt: nil, processingState: "ready", processingErrorCode: nil
+        )
+        let contract = TreasureItemContract(
+            item: remoteItem, originDeviceID: "android-test", readingState: "unread",
+            processingState: "ready", syncState: "remote_only"
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(TreasureItemContract.date(from: contract.updatedAt)).timeIntervalSince1970,
+            baseDate.timeIntervalSince1970,
+            accuracy: 0.001
+        )
+        try store.applyRemoteChanges([
+            TreasurySQLiteStore.RemoteChange(
+                sequence: 1, id: "remote-change-1", itemID: remoteItem.id,
+                operation: "upsert", updatedAt: baseDate, originDeviceID: "android-test",
+                payloadDigest: String(repeating: "a", count: 64), contract: contract
+            )
+        ])
+        XCTAssertEqual(try store.load().first?.title, "远端标题")
+        XCTAssertEqual(try store.syncContracts(ids: Set([remoteItem.id]))[remoteItem.id]?.syncState,
+                       "remote_only")
+
+        try store.mutate(id: remoteItem.id) { item in
+            item.title = "本机编辑"
+            item.updatedAt = baseDate.addingTimeInterval(20)
+        }
+        let local = try XCTUnwrap(store.syncContracts(ids: Set([remoteItem.id]))[remoteItem.id])
+        XCTAssertEqual(local.syncState, "pending")
+        XCTAssertEqual(local.originDeviceID, TreasurySQLiteStore.originDeviceID())
+
+        remoteItem.title = "并发远端编辑"
+        // Android and Relay timestamps are millisecond-precision. Exercise a
+        // sub-millisecond difference that previously made this conflict flaky.
+        remoteItem.updatedAt = baseDate.addingTimeInterval(20 - 0.0003)
+        let concurrent = TreasureItemContract(
+            item: remoteItem, originDeviceID: "android-test", readingState: "unread",
+            processingState: "ready", syncState: "remote_only"
+        )
+        try store.applyRemoteChanges([
+            TreasurySQLiteStore.RemoteChange(
+                sequence: 2, id: "remote-change-2", itemID: remoteItem.id,
+                operation: "upsert", updatedAt: remoteItem.updatedAt,
+                originDeviceID: "android-test", payloadDigest: String(repeating: "b", count: 64),
+                contract: concurrent
+            )
+        ])
+        XCTAssertEqual(try store.syncContracts(ids: Set([remoteItem.id]))[remoteItem.id]?.syncState,
+                       "conflict")
+
+        try store.applyRemoteChanges([
+            TreasurySQLiteStore.RemoteChange(
+                sequence: 3, id: "remote-delete-old", itemID: remoteItem.id,
+                operation: "delete", updatedAt: baseDate, originDeviceID: "android-test",
+                payloadDigest: String(repeating: "c", count: 64), contract: nil
+            )
+        ])
+        XCTAssertEqual(try store.load().count, 1)
+    }
+
+    func testPhase4MissingRemoteDeleteCreatesTombstoneAndBlocksStaleResurrection() throws {
+        let directory = try temporaryTreasuryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try TreasurySQLiteStore(directory: directory)
+        let staleDate = Date(timeIntervalSince1970: 2_000)
+        let deleteDate = staleDate.addingTimeInterval(10)
+        try store.applyRemoteChanges([
+            TreasurySQLiteStore.RemoteChange(
+                sequence: 2, id: "delete-first", itemID: "remote-missing-item",
+                operation: "delete", updatedAt: deleteDate, originDeviceID: "android-test",
+                payloadDigest: String(repeating: "d", count: 64), contract: nil
+            )
+        ])
+        let staleItem = CollectedItem(
+            id: "remote-missing-item", kind: .text, value: "旧正文", resolvedURL: nil,
+            title: "旧标题", thumbnailFile: nil, sourceLabel: "Android", createdAt: staleDate,
+            tags: [], pinned: false, summary: nil, metadataFetched: true, bodyFile: nil,
+            annotation: nil, archived: false, updatedAt: staleDate
+        )
+        let staleContract = TreasureItemContract(
+            item: staleItem, originDeviceID: "android-test", processingState: "ready",
+            syncState: "remote_only"
+        )
+        try store.applyRemoteChanges([
+            TreasurySQLiteStore.RemoteChange(
+                sequence: 1, id: "stale-upsert", itemID: staleItem.id,
+                operation: "upsert", updatedAt: staleDate, originDeviceID: "android-test",
+                payloadDigest: String(repeating: "e", count: 64), contract: staleContract
+            )
+        ])
+        XCTAssertTrue(try store.load().isEmpty)
+        XCTAssertEqual(try store.load(includeDeleted: true).count, 1)
+    }
+
+    func testPhase4SyncAssetsAreLocalBoundedAndDigestVerified() throws {
+        let directory = try temporaryTreasuryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let files = directory.appendingPathComponent("files", isDirectory: true)
+        try FileManager.default.createDirectory(at: files, withIntermediateDirectories: true)
+        let attachmentURL = files.appendingPathComponent("asset.pdf")
+        let attachmentData = Data("attachment-payload".utf8)
+        try attachmentData.write(to: attachmentURL)
+        let store = try TreasurySQLiteStore(directory: directory)
+        let text = CollectedItem(kind: .text, value: "按需正文", sourceLabel: "文本")
+        let file = CollectedItem(kind: .file, value: "asset.pdf", sourceLabel: "PDF")
+        try store.add([text, file])
+
+        let body = try XCTUnwrap(store.syncAsset(itemID: text.id, kind: "body"))
+        XCTAssertEqual(try String(contentsOf: body.fileURL, encoding: .utf8), "按需正文")
+        XCTAssertEqual(body.byteCount, Data("按需正文".utf8).count)
+        XCTAssertEqual(body.digest.count, 64)
+        XCTAssertTrue(body.removeAfterUpload)
+        try? FileManager.default.removeItem(at: body.fileURL)
+
+        let attachment = try XCTUnwrap(store.syncAsset(itemID: file.id, kind: "attachment"))
+        XCTAssertEqual(try Data(contentsOf: attachment.fileURL), attachmentData)
+        XCTAssertEqual(attachment.byteCount, attachmentData.count)
+        XCTAssertEqual(attachment.digest.count, 64)
+        XCTAssertFalse(attachment.removeAfterUpload)
+        XCTAssertNil(try store.syncAsset(itemID: file.id, kind: "body"))
+    }
+
     func testPhase1ConcurrentAppAndShareWritesDoNotLoseItems() throws {
         let directory = try temporaryTreasuryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

@@ -84,7 +84,8 @@ class TreasuryEnrichmentWorker(
                 }
             }
         }
-        if (repository.hasPendingAutomaticJobs()) Result.retry() else Result.success()
+        val syncSucceeded = TreasurySyncClient(applicationContext).sync(repository)
+        if (repository.hasPendingAutomaticJobs() || !syncSucceeded) Result.retry() else Result.success()
     }
 
     private suspend fun enrichLink(item: TreasureItemEntity) {

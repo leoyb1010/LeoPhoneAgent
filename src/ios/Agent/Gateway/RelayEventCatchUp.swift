@@ -19,6 +19,7 @@
 //
 
 import Foundation
+import CryptoKit
 import UIKit
 import UserNotifications
 
@@ -161,46 +162,318 @@ struct RelayEventPayload {
 }
 
 extension LeoAgentClient {
-    /// [T-collections-fleet] 把收藏索引上传到中继,好让 Mac 端能查。
-    ///
-    /// 只传"给人看的"字段:标题、链接、来源、摘要、标签、时间。附件与
-    /// 正文留在手机沙盒里不外传 —— Mac 上要的是"我收藏过什么",
-    /// 不是把手机的私有文件复制一份出去。
+    /// Phase 4 cursor sync. The wire item is metadata-only; body/file bytes are
+    /// never included in this automatic pass.
     @discardableResult
-    func uploadCollections(_ items: [CollectedItem]) async -> Bool {
-        // 按 relay 根拼,不做字符串替换:部署路径本身含 /events 时替换会碎
+    func uploadCollections(_ _: [CollectedItem]) async -> Bool {
+        guard let directory = CollectionStore.directory,
+              let root = treasuryRelayRoot else { return false }
+        do {
+            let store = try TreasurySQLiteStore(directory: directory)
+            try await uploadTreasuryChanges(store: store, root: root)
+            try await pullTreasuryChanges(store: store, root: root)
+            try await serveTreasuryAssetRequests(store: store, root: root)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private nonisolated var treasuryRelayRoot: URL? {
         guard let eventsURL = relayEventsURL,
-              let range = eventsURL.absoluteString.range(of: "/relay/api/"),
-              let url = URL(string: String(eventsURL.absoluteString[..<range.upperBound]) + "collections")
-        else { return false }
-        let payload: [String: Any] = [
-            "items": items.prefix(500).map { item in
-                [
-                    "id": item.id,
-                    "kind": item.kind.rawValue,
-                    "title": item.title ?? "",
-                    "url": item.kind == .link ? (item.resolvedURL ?? item.value) : "",
-                    "source": item.sourceLabel,
-                    "summary": item.summary ?? "",
-                    "tags": item.tags,
-                    "created_at": item.createdAt.timeIntervalSince1970,
-                    // 归档的条目在 Mac 上也该收起来 —— 不传这个字段,
-                    // 手机上归档了 Mac 端照样列着,两端就不一致了。
-                    "archived": item.archived,
-                    "annotation": item.annotation ?? "",
-                    "updated_at": item.updatedAt.timeIntervalSince1970,
-                ] as [String: Any]
-            },
+              let range = eventsURL.absoluteString.range(of: "/relay/api/") else { return nil }
+        return URL(string: String(eventsURL.absoluteString[..<range.upperBound]) + "treasury/")
+    }
+
+    private nonisolated func treasuryCursorKey(_ root: URL, direction: String) -> String {
+        let digest = SHA256.hash(data: Data(root.absoluteString.utf8))
+            .map { String(format: "%02x", $0) }.joined()
+        return "leo.treasury.sync.\(direction).\(digest)"
+    }
+
+    private func treasuryRequest(root: URL, path: String, method: String = "GET",
+                                 body: [String: Any]? = nil) async throws -> (Data, HTTPURLResponse) {
+        guard let url = URL(string: path, relativeTo: root)?.absoluteURL else {
+            throw URLError(.badURL)
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.setValue("Bearer \(apiKeyForRelay)", forHTTPHeaderField: "Authorization")
+        if let body {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
+        request.timeoutInterval = 25
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        return (data, http)
+    }
+
+    private func uploadTreasuryChanges(store: TreasurySQLiteStore, root: URL) async throws {
+        let defaults = UserDefaults(suiteName: SharedContainerStore.appGroupID) ?? .standard
+        let key = treasuryCursorKey(root, direction: "upload")
+        var cursor = Int64(defaults.object(forKey: key) as? Int ?? 0)
+        let deviceID = TreasurySQLiteStore.originDeviceID()
+        for _ in 0..<20 {
+            let changes = try store.changes(afterRowID: cursor, limit: 500)
+            guard !changes.isEmpty else { return }
+            let contracts = try store.syncContracts(ids: Set(changes.map(\.itemID)))
+            var payloadChanges: [[String: Any]] = []
+            for change in changes {
+                var value: [String: Any] = [
+                    "local_sequence": change.sequence,
+                    "change_id": change.id,
+                    "item_id": change.itemID,
+                    "operation": change.operation,
+                    "updated_at": change.updatedAt.timeIntervalSince1970,
+                    "origin_device_id": deviceID,
+                    "payload_digest": change.payloadDigest,
+                ]
+                if change.operation == "upsert" {
+                    guard let contract = contracts[change.itemID] else { break }
+                    value["item"] = Self.treasuryMetadata(contract, deviceID: deviceID)
+                }
+                payloadChanges.append(value)
+            }
+            guard !payloadChanges.isEmpty else { throw URLError(.cannotParseResponse) }
+            let (data, response) = try await treasuryRequest(
+                root: root, path: "changes", method: "POST",
+                body: ["device_id": deviceID, "changes": payloadChanges]
+            )
+            guard response.statusCode == 200,
+                  let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let ack = (json["ack_local_cursor"] as? NSNumber)?.int64Value,
+                  ack > cursor else { throw URLError(.cannotParseResponse) }
+            cursor = ack
+            defaults.set(Int(cursor), forKey: key)
+            if changes.count < 500 { return }
+        }
+        throw URLError(.dataLengthExceedsMaximum)
+    }
+
+    private func pullTreasuryChanges(store: TreasurySQLiteStore, root: URL) async throws {
+        let defaults = UserDefaults(suiteName: SharedContainerStore.appGroupID) ?? .standard
+        let key = treasuryCursorKey(root, direction: "download")
+        var cursor = Int64(defaults.object(forKey: key) as? Int ?? 0)
+        for _ in 0..<40 {
+            let (data, response) = try await treasuryRequest(
+                root: root, path: "changes?after=\(cursor)&limit=500")
+            if response.statusCode == 410 {
+                try await rebuildTreasurySnapshot(store: store, root: root, cursorKey: key)
+                return
+            }
+            guard response.statusCode == 200,
+                  let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let rawChanges = json["changes"] as? [[String: Any]] else {
+                throw URLError(.cannotParseResponse)
+            }
+            var changes: [TreasurySQLiteStore.RemoteChange] = []
+            var deliveredCursor = cursor
+            for raw in rawChanges {
+                guard let sequence = (raw["sequence"] as? NSNumber)?.int64Value,
+                      sequence > deliveredCursor else { throw URLError(.cannotParseResponse) }
+                deliveredCursor = sequence
+                if raw["applied"] as? Bool == false { continue }
+                guard let change = Self.remoteTreasuryChange(raw) else {
+                    throw URLError(.cannotParseResponse)
+                }
+                changes.append(change)
+            }
+            try store.applyRemoteChanges(changes)
+            let next = (json["next_cursor"] as? NSNumber)?.int64Value ?? cursor
+            guard next == deliveredCursor else { throw URLError(.cannotParseResponse) }
+            cursor = next
+            defaults.set(Int(cursor), forKey: key)
+            if (json["has_more"] as? Bool) != true { return }
+        }
+        throw URLError(.dataLengthExceedsMaximum)
+    }
+
+    private func serveTreasuryAssetRequests(store: TreasurySQLiteStore, root: URL) async throws {
+        let deviceID = TreasurySQLiteStore.originDeviceID()
+        let encoded = deviceID.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        let (data, response) = try await treasuryRequest(
+            root: root, path: "assets/requests?origin_device_id=\(encoded)")
+        guard response.statusCode == 200,
+              let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let requests = json["requests"] as? [[String: Any]] else {
+            throw URLError(.cannotParseResponse)
+        }
+        for requestValue in requests.prefix(10) {
+            guard let requestID = requestValue["id"] as? String,
+                  UUID(uuidString: requestID) != nil,
+                  let itemID = requestValue["item_id"] as? String,
+                  let kind = requestValue["asset_kind"] as? String,
+                  requestID.count <= 200, itemID.count <= 200,
+                  ["body", "attachment"].contains(kind) else { continue }
+            guard let asset = try store.syncAsset(itemID: itemID, kind: kind) else {
+                _ = try? await treasuryRequest(
+                    root: root, path: "assets/\(requestID)/unavailable", method: "POST",
+                    body: ["device_id": deviceID]
+                )
+                continue
+            }
+            defer {
+                if asset.removeAfterUpload { try? FileManager.default.removeItem(at: asset.fileURL) }
+            }
+            guard let url = URL(string: "assets/\(requestID)", relativeTo: root)?.absoluteURL else {
+                continue
+            }
+            var upload = URLRequest(url: url)
+            upload.httpMethod = "PUT"
+            upload.setValue("Bearer \(apiKeyForRelay)", forHTTPHeaderField: "Authorization")
+            upload.setValue(deviceID, forHTTPHeaderField: "X-Treasury-Device-ID")
+            upload.setValue(asset.digest, forHTTPHeaderField: "X-Treasury-Digest")
+            upload.setValue(String(asset.byteCount), forHTTPHeaderField: "X-Treasury-Byte-Count")
+            upload.setValue(asset.mimeType, forHTTPHeaderField: "Content-Type")
+            upload.timeoutInterval = 120
+            let (_, uploadedResponse) = try await session.upload(for: upload, fromFile: asset.fileURL)
+            guard let http = uploadedResponse as? HTTPURLResponse,
+                  (200..<300).contains(http.statusCode) else { throw URLError(.cannotWriteToFile) }
+        }
+    }
+
+    private func rebuildTreasurySnapshot(store: TreasurySQLiteStore, root: URL,
+                                         cursorKey: String) async throws {
+        var after: Int64 = 0
+        var serverCursor: Int64 = 0
+        var changes: [TreasurySQLiteStore.RemoteChange] = []
+        for _ in 0..<60 {
+            let (data, response) = try await treasuryRequest(
+                root: root, path: "items?after_sequence=\(after)&limit=1000")
+            guard response.statusCode == 200,
+                  let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let items = json["items"] as? [[String: Any]] else {
+                throw URLError(.cannotParseResponse)
+            }
+            var pageCursor = after
+            for item in items {
+                guard let sequence = (item["server_sequence"] as? NSNumber)?.int64Value,
+                      sequence > pageCursor,
+                      let contract = Self.remoteTreasuryContract(item) else {
+                    throw URLError(.cannotParseResponse)
+                }
+                pageCursor = sequence
+                let deleted = (item["deleted_at"] as? NSNumber)?.doubleValue ?? 0
+                changes.append(TreasurySQLiteStore.RemoteChange(
+                    sequence: sequence, id: "snapshot-\(sequence)-\(contract.id)",
+                    itemID: contract.id, operation: deleted > 0 ? "delete" : "upsert",
+                    updatedAt: TreasureItemContract.date(from: contract.updatedAt) ?? .distantPast,
+                    originDeviceID: contract.originDeviceID,
+                    payloadDigest: String(repeating: "0", count: 64), contract: contract
+                ))
+            }
+            after = (json["next_cursor"] as? NSNumber)?.int64Value ?? after
+            serverCursor = (json["server_cursor"] as? NSNumber)?.int64Value ?? serverCursor
+            guard after == pageCursor, serverCursor >= after else {
+                throw URLError(.cannotParseResponse)
+            }
+            if (json["has_more"] as? Bool) != true {
+                try store.applyRemoteChanges(changes)
+                let defaults = UserDefaults(suiteName: SharedContainerStore.appGroupID) ?? .standard
+                defaults.set(Int(serverCursor), forKey: cursorKey)
+                return
+            }
+        }
+        throw URLError(.dataLengthExceedsMaximum)
+    }
+
+    private nonisolated static func treasuryMetadata(_ contract: TreasureItemContract,
+                                                      deviceID: String) -> [String: Any] {
+        let seconds: (String?) -> Any = { raw in
+            raw.flatMap(TreasureItemContract.date(from:))?.timeIntervalSince1970 ?? 0
+        }
+        let bodyAvailable = contract.originalText != nil ||
+            (["link", "note", "text"].contains(contract.kind) && contract.bodyRef != nil)
+        let attachmentAvailable = ["image", "document", "audio", "video", "artifact"].contains(contract.kind) &&
+            contract.bodyRef != nil
+        return [
+            "id": contract.id, "schema_version": 1, "kind": contract.kind,
+            "title": contract.title ?? "", "source_uri": contract.sourceURI ?? "",
+            "source_app": contract.sourceApp ?? "", "source_label": contract.sourceLabel,
+            "summary": contract.summary ?? "", "annotation": contract.annotation ?? "",
+            "tags": contract.tags, "collection_ids": contract.collectionIDs,
+            "pinned": contract.pinned, "archived": contract.archived,
+            "reading_state": contract.readingState, "reading_progress": contract.readingProgress,
+            "created_at": seconds(contract.createdAt), "updated_at": seconds(contract.updatedAt),
+            "last_opened_at": seconds(contract.lastOpenedAt),
+            "processing_state": contract.processingState,
+            "processing_error_code": contract.processingErrorCode ?? "",
+            "content_digest": contract.contentDigest ?? "", "byte_count": contract.byteCount,
+            "mime_type": contract.mimeType ?? "", "body_available": bodyAvailable,
+            "attachment_available": attachmentAvailable, "origin_device_id": deviceID,
+            "deleted_at": seconds(contract.deletedAt),
         ]
-        var req = URLRequest(url: url)
-        req.httpMethod = "PUT"
-        req.setValue("Bearer \(apiKeyForRelay)", forHTTPHeaderField: "Authorization")
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try? JSONSerialization.data(withJSONObject: payload)
-        req.timeoutInterval = 25
-        guard let (_, resp) = try? await session.data(for: req),
-              (resp as? HTTPURLResponse)?.statusCode == 200 else { return false }
-        return true
+    }
+
+    private nonisolated static func remoteTreasuryChange(_ raw: [String: Any]) -> TreasurySQLiteStore.RemoteChange? {
+        guard let sequence = (raw["sequence"] as? NSNumber)?.int64Value,
+              sequence > 0,
+              let id = raw["change_id"] as? String,
+              !id.isEmpty, id.count <= 200,
+              let itemID = raw["item_id"] as? String,
+              !itemID.isEmpty, itemID.count <= 200,
+              let operation = raw["operation"] as? String,
+              ["upsert", "delete"].contains(operation),
+              let updated = (raw["updated_at"] as? NSNumber)?.doubleValue,
+              updated > 0,
+              let origin = raw["origin_device_id"] as? String,
+              !origin.isEmpty, origin.count <= 200,
+              let digest = raw["payload_digest"] as? String,
+              digest.count == 64,
+              digest.unicodeScalars.allSatisfy(
+                CharacterSet(charactersIn: "0123456789abcdefABCDEF").contains
+              ) else { return nil }
+        let contract = (raw["item"] as? [String: Any]).flatMap(remoteTreasuryContract)
+        if operation == "upsert" && (contract == nil || contract?.id != itemID ||
+            contract?.originDeviceID != origin) { return nil }
+        return TreasurySQLiteStore.RemoteChange(
+            sequence: sequence, id: id, itemID: itemID, operation: operation,
+            updatedAt: Date(timeIntervalSince1970: updated), originDeviceID: origin,
+            payloadDigest: digest, contract: contract
+        )
+    }
+
+    private nonisolated static func remoteTreasuryContract(_ raw: [String: Any]) -> TreasureItemContract? {
+        guard let id = raw["id"] as? String,
+              let kind = raw["kind"] as? String,
+              let origin = raw["origin_device_id"] as? String else { return nil }
+        let iso: (Any?) -> String? = { value in
+            guard let seconds = (value as? NSNumber)?.doubleValue, seconds > 0 else { return nil }
+            return TreasureItemContract.string(from: Date(timeIntervalSince1970: seconds))
+        }
+        let nullableString: (Any?) -> Any = { value in
+            guard let text = value as? String, !text.isEmpty else { return NSNull() }
+            return text
+        }
+        guard let created = iso(raw["created_at"]), let updated = iso(raw["updated_at"]) else { return nil }
+        let object: [String: Any] = [
+            "id": id, "schema_version": 1, "kind": kind,
+            "title": raw["title"] as? String ?? "",
+            "source_uri": nullableString(raw["source_uri"]),
+            "source_app": nullableString(raw["source_app"]),
+            "source_label": raw["source_label"] as? String ?? "",
+            "original_text": NSNull(), "body_ref": NSNull(), "preview_ref": NSNull(),
+            "mime_type": nullableString(raw["mime_type"]),
+            "byte_count": (raw["byte_count"] as? NSNumber)?.intValue ?? 0,
+            "content_digest": nullableString(raw["content_digest"]),
+            "summary": nullableString(raw["summary"]),
+            "annotation": nullableString(raw["annotation"]),
+            "tags": raw["tags"] as? [String] ?? [],
+            "collection_ids": raw["collection_ids"] as? [String] ?? [],
+            "pinned": raw["pinned"] as? Bool ?? false,
+            "archived": raw["archived"] as? Bool ?? false,
+            "reading_state": raw["reading_state"] as? String ?? "none",
+            "reading_progress": (raw["reading_progress"] as? NSNumber)?.doubleValue ?? 0,
+            "created_at": created, "updated_at": updated,
+            "last_opened_at": iso(raw["last_opened_at"]).map { $0 as Any } ?? NSNull(),
+            "processing_state": raw["processing_state"] as? String ?? "ready",
+            "processing_error_code": nullableString(raw["processing_error_code"]),
+            "sync_state": "remote_only", "origin_device_id": origin,
+            "deleted_at": iso(raw["deleted_at"]).map { $0 as Any } ?? NSNull(),
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: object) else { return nil }
+        return try? JSONDecoder().decode(TreasureItemContract.self, from: data)
     }
 
     /// 中继事件端点的绝对地址。

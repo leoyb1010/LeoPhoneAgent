@@ -65,6 +65,25 @@ data class TreasureImportReport(
     val quarantinedCount: Int,
 )
 
+data class TreasureRemoteChange(
+    val sequence: Long,
+    val changeId: String,
+    val itemId: String,
+    val operation: String,
+    val updatedAt: Long,
+    val originDeviceId: String,
+    val payloadDigest: String,
+    val record: TreasureItemRecord?,
+)
+
+data class TreasureSyncAsset(
+    val file: File,
+    val mimeType: String,
+    val byteCount: Long,
+    val digest: String,
+    val removeAfterUpload: Boolean,
+)
+
 class TreasureRepository(
     private val dao: TreasureDao,
     private val filesDirectory: File,
@@ -75,8 +94,80 @@ class TreasureRepository(
     fun observeItems(limit: Int = 100, offset: Int = 0): Flow<List<TreasureItemEntity>> =
         dao.observeItems(limit.coerceIn(1, 500), offset.coerceAtLeast(0))
 
+    fun localOriginDeviceId(): String = originDeviceId()
+
     suspend fun get(ids: List<String>): List<TreasureItemEntity> =
         dao.getByIds(ids.distinct().filter(String::isNotBlank).take(100))
+
+    suspend fun changes(after: Long, limit: Int = 500): List<TreasureChangeEntity> =
+        dao.changes(after.coerceAtLeast(0), limit.coerceIn(1, 1_000))
+
+    suspend fun recordsIncludingDeleted(ids: List<String>): Map<String, TreasureItemRecord> =
+        dao.getManyIncludingDeleted(ids.distinct().filter(String::isNotBlank).take(1_000))
+            .associate { it.id to it.toRecord() }
+
+    suspend fun syncAsset(itemId: String, kind: String): TreasureSyncAsset? {
+        if (kind !in setOf("body", "attachment")) return null
+        val item = dao.getById(itemId) ?: return null
+        if (kind == "body") {
+            val body = item.originalText ?: item.bodyRef?.let { ref ->
+                managedFile(ref, 8L * 1024 * 1024)?.readText(Charsets.UTF_8)
+            } ?: return null
+            val bytes = body.toByteArray(Charsets.UTF_8)
+            if (bytes.size > 8 * 1024 * 1024) return null
+            val outbox = File(filesDirectory, "sync-outbox").apply { mkdirs() }
+            val temporary = File.createTempFile("body-", ".txt", outbox)
+            return try {
+                temporary.writeBytes(bytes)
+                TreasureSyncAsset(
+                    file = temporary, mimeType = "text/plain", byteCount = bytes.size.toLong(),
+                    digest = sha256File(temporary) ?: run { temporary.delete(); return null },
+                    removeAfterUpload = true,
+                )
+            } catch (_: Exception) {
+                temporary.delete()
+                null
+            }
+        }
+        if (item.kind !in setOf("image", "document", "audio", "video", "artifact")) return null
+        val ref = item.bodyRef ?: return null
+        val file = managedFile(ref, 128L * 1024 * 1024) ?: return null
+        val digest = sha256File(file) ?: return null
+        if ((item.byteCount > 0 && item.byteCount != file.length()) ||
+            (item.contentDigest != null && !item.contentDigest.equals(digest, ignoreCase = true))) return null
+        return TreasureSyncAsset(
+            file = file, mimeType = item.mimeType ?: "application/octet-stream",
+            byteCount = file.length(), digest = digest, removeAfterUpload = false,
+        )
+    }
+
+    suspend fun applyRemoteChanges(changes: List<TreasureRemoteChange>): Int {
+        var applied = 0
+        for (change in changes.sortedBy(TreasureRemoteChange::sequence)) {
+            if (change.originDeviceId == originDeviceId() ||
+                change.operation !in setOf("upsert", "delete") || change.itemId.isBlank()) continue
+            val incoming = if (change.operation == "upsert") {
+                val record = change.record ?: continue
+                if (record.id != change.itemId || record.originDeviceId != change.originDeviceId) continue
+                runCatching { validatedEntity(record.copy(syncState = "remote_only")) }.getOrNull() ?: continue
+            } else {
+                val existing = dao.getIncludingDeleted(change.itemId)
+                (existing ?: TreasureItemEntity(
+                    id = change.itemId, kind = "text", sourceLabel = "同步删除",
+                    createdAt = change.updatedAt, updatedAt = change.updatedAt,
+                    processingState = "saved", syncState = "remote_only",
+                    originDeviceId = change.originDeviceId, deletedAt = change.updatedAt,
+                )).copy(
+                    updatedAt = change.updatedAt,
+                    syncState = "remote_only",
+                    originDeviceId = change.originDeviceId,
+                    deletedAt = change.updatedAt,
+                )
+            }
+            if (dao.applyRemoteItem(incoming, change.operation, change.changeId, originDeviceId())) applied += 1
+        }
+        return applied
+    }
 
     suspend fun save(record: TreasureItemRecord): TreasureItemEntity {
         val entity = validatedEntity(record)
@@ -325,9 +416,6 @@ class TreasureRepository(
         ) > 0
     }
 
-    suspend fun changes(after: Long, limit: Int = 500) =
-        dao.changes(after.coerceAtLeast(0), limit.coerceIn(1, 1_000))
-
     suspend fun rebuildIndex() = dao.rebuildSearchIndex()
 
     suspend fun updateItem(
@@ -501,13 +589,23 @@ class TreasureRepository(
         }.toList()
 
     fun digestAsset(relativeRef: String): String? {
+        val canonicalFile = managedFile(relativeRef, Long.MAX_VALUE) ?: return null
+        return sha256File(canonicalFile)
+    }
+
+    private fun managedFile(relativeRef: String, maxBytes: Long): File? {
         if (!isSafeRelativeRef(relativeRef)) return null
         val file = File(filesDirectory, relativeRef)
         val canonicalRoot = filesDirectory.canonicalFile
         val canonicalFile = file.canonicalFile
-        if (!canonicalFile.path.startsWith(canonicalRoot.path + File.separator) || !canonicalFile.isFile) return null
+        if (!canonicalFile.path.startsWith(canonicalRoot.path + File.separator) ||
+            !canonicalFile.isFile || canonicalFile.length() > maxBytes) return null
+        return canonicalFile
+    }
+
+    private fun sha256File(file: File): String? = runCatching {
         val digest = MessageDigest.getInstance("SHA-256")
-        canonicalFile.inputStream().buffered().use { input ->
+        file.inputStream().buffered().use { input ->
             val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
             while (true) {
                 val count = input.read(buffer)
@@ -515,8 +613,8 @@ class TreasureRepository(
                 digest.update(buffer, 0, count)
             }
         }
-        return digest.digest().joinToString("") { "%02x".format(it) }
-    }
+        digest.digest().joinToString("") { "%02x".format(it) }
+    }.getOrNull()
 
     private fun TreasureItemRecord.toEntity(normalizedUrl: String?, digest: String?) =
         TreasureItemEntity(

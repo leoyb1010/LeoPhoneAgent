@@ -31,6 +31,7 @@ import secrets
 import time
 import uuid
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlsplit
 
 from aiohttp import WSMsgType, web
 
@@ -42,6 +43,15 @@ REQUEST_TIMEOUT_S = 60
 JOIN_TTL_S = 15 * 60
 DEVICE_KEY_TTL_S = 90 * 24 * 3600
 DEFAULT_DEVICE_KEYS_PATH = os.path.expanduser("~/.leoagent/device-keys.json")
+DEFAULT_TREASURY_SYNC_PATH = os.path.expanduser("~/.leoagent/treasury-sync.json")
+TREASURY_CHANGE_LIMIT = 50_000
+TREASURY_SEEN_CHANGE_LIMIT = 200_000
+TREASURY_BATCH_LIMIT = 500
+TREASURY_ITEM_LIMIT = 50_000
+TREASURY_ASSET_REQUEST_LIMIT = 10_000
+TREASURY_BODY_LIMIT = 8 * 1024 * 1024
+TREASURY_ATTACHMENT_LIMIT = 128 * 1024 * 1024
+TREASURY_ASSET_TTL_S = 30 * 24 * 3600
 
 
 class Machine:
@@ -59,7 +69,9 @@ class Machine:
 class Relay:
     def __init__(self, key: str, extra_keys: Optional[list] = None,
                  rejected_log: Optional[str] = None,
-                 device_keys_path: Optional[str] = None):
+                 device_keys_path: Optional[str] = None,
+                 treasury_sync_path: Optional[str] = None,
+                 treasury_asset_dir: Optional[str] = None):
         self.key = key
         # 多钥匙:手机端历史上可能存过任意一台 Mac 的旧钥匙,统一钥匙后
         # 旧钥匙会被拒。RELAY_KEYS 里列出的都放行,老用户无感迁移。
@@ -83,16 +95,581 @@ class Relay:
         self.apns = build_pusher()
         # 后台任务引用集(防 GC,见 _push_apns 调用处)
         self._bg_tasks: set = set()
-        # [T-collections-fleet] 手机上传的收藏索引(只读镜像)
-        self.collections: List[Dict[str, Any]] = []
-        self.collections_updated_at: float = 0.0
+        # Phase 4 Treasury sync: metadata changes are append-only and items are
+        # materialized by deterministic last-write-wins. Bodies/attachments are
+        # intentionally absent here; their separate on-demand channel can be
+        # added without turning every metadata refresh into a private-data dump.
+        self.treasury_sync_path = treasury_sync_path or DEFAULT_TREASURY_SYNC_PATH
+        self.treasury_items: Dict[str, Dict[str, Any]] = {}
+        self.treasury_changes: List[Dict[str, Any]] = []
+        self.treasury_change_ids: set[str] = set()
+        self.treasury_seen_change_order: List[str] = []
+        self.treasury_next_sequence = 1
+        self.treasury_updated_at = 0.0
+        self.treasury_asset_dir = treasury_asset_dir or os.path.join(
+            os.path.dirname(self.treasury_sync_path), "treasury-assets")
+        self.treasury_asset_requests: Dict[str, Dict[str, Any]] = {}
+        self._load_treasury_sync()
+
+    # -- treasury sync -----------------------------------------------------
+
+    @staticmethod
+    def _safe_treasury_text(value: Any, limit: int) -> str:
+        return str(value).strip()[:limit] if isinstance(value, str) else ""
+
+    @staticmethod
+    def _safe_treasury_time(value: Any) -> float:
         try:
-            with open(os.path.expanduser("~/.leoagent/collections.json")) as f:
-                saved = json.load(f)
-            self.collections = list(saved.get("items") or [])
-            self.collections_updated_at = float(saved.get("updated_at") or 0)
+            parsed = float(value)
+            return parsed if 0 < parsed < 10_000_000_000 else 0.0
+        except (TypeError, ValueError):
+            return 0.0
+
+    @staticmethod
+    def _safe_treasury_url(value: Any) -> str:
+        if not isinstance(value, str) or len(value) > 16_384:
+            return ""
+        try:
+            parsed = urlsplit(value)
+        except ValueError:
+            return ""
+        if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
+            return ""
+        if parsed.username or parsed.password:
+            return ""
+        return value
+
+    def _sanitize_treasury_item(self, raw: Any, device_id: str) -> Optional[Dict[str, Any]]:
+        if not isinstance(raw, dict):
+            return None
+        item_id = self._safe_treasury_text(raw.get("id"), 200)
+        kind = self._safe_treasury_text(raw.get("kind"), 20)
+        if not item_id or kind not in {
+                "link", "text", "note", "image", "document", "audio", "video", "artifact"}:
+            return None
+        source_uri = self._safe_treasury_url(raw.get("source_uri") or raw.get("url"))
+        if kind == "link" and not source_uri:
+            return None
+        updated_at = self._safe_treasury_time(raw.get("updated_at"))
+        created_at = self._safe_treasury_time(raw.get("created_at")) or updated_at
+        if not updated_at:
+            return None
+        tags = raw.get("tags") if isinstance(raw.get("tags"), list) else []
+        collections = raw.get("collection_ids") if isinstance(raw.get("collection_ids"), list) else []
+        reading_state = self._safe_treasury_text(raw.get("reading_state"), 20)
+        if reading_state not in {"none", "unread", "reading", "read"}:
+            reading_state = "none"
+        processing_state = self._safe_treasury_text(raw.get("processing_state"), 20)
+        if processing_state not in {"saved", "queued", "processing", "ready", "partial", "failed"}:
+            processing_state = "ready"
+        try:
+            progress = min(1.0, max(0.0, float(raw.get("reading_progress") or 0)))
+        except (TypeError, ValueError):
+            progress = 0.0
+        digest = self._safe_treasury_text(raw.get("content_digest"), 64).lower()
+        if digest and (len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest)):
+            digest = ""
+        deleted_at = self._safe_treasury_time(raw.get("deleted_at"))
+        raw_byte_count = raw.get("byte_count") or 0
+        try:
+            byte_count = max(0, min(int(raw_byte_count), 2 ** 53 - 1))
+        except (TypeError, ValueError, OverflowError):
+            byte_count = 0
+        return {
+            "id": item_id,
+            "schema_version": 1,
+            "kind": kind,
+            "title": self._safe_treasury_text(raw.get("title"), 500),
+            "source_uri": source_uri,
+            "source_app": self._safe_treasury_text(raw.get("source_app"), 200),
+            "source_label": self._safe_treasury_text(raw.get("source_label") or raw.get("source"), 500),
+            "summary": self._safe_treasury_text(raw.get("summary"), 4_000),
+            "annotation": self._safe_treasury_text(raw.get("annotation"), 20_000),
+            "tags": [self._safe_treasury_text(tag, 100) for tag in tags[:100]
+                     if self._safe_treasury_text(tag, 100)],
+            "collection_ids": [self._safe_treasury_text(entry, 200) for entry in collections[:100]
+                               if self._safe_treasury_text(entry, 200)],
+            "pinned": raw.get("pinned") is True,
+            "archived": raw.get("archived") is True,
+            "reading_state": reading_state,
+            "reading_progress": progress,
+            "created_at": created_at,
+            "updated_at": updated_at,
+            "last_opened_at": self._safe_treasury_time(raw.get("last_opened_at")),
+            "processing_state": processing_state,
+            "processing_error_code": self._safe_treasury_text(raw.get("processing_error_code"), 100),
+            "content_digest": digest,
+            "byte_count": byte_count,
+            "mime_type": self._safe_treasury_text(raw.get("mime_type"), 200),
+            "body_available": raw.get("body_available") is True,
+            "attachment_available": raw.get("attachment_available") is True,
+            "origin_device_id": device_id,
+            "deleted_at": deleted_at,
+        }
+
+    @staticmethod
+    def _treasury_order_key(change: Dict[str, Any]) -> tuple:
+        return (
+            float(change.get("updated_at") or 0),
+            1 if change.get("operation") == "delete" else 0,
+            str(change.get("origin_device_id") or ""),
+            str(change.get("change_id") or ""),
+        )
+
+    def _load_treasury_sync(self) -> None:
+        try:
+            with open(self.treasury_sync_path, encoding="utf-8") as stream:
+                saved = json.load(stream)
+            if not isinstance(saved, dict):
+                raise TypeError("invalid treasury state")
+            changes = saved.get("changes")
+            items = saved.get("items")
+            if isinstance(changes, list):
+                self.treasury_changes = [entry for entry in changes[-TREASURY_CHANGE_LIMIT:]
+                                         if isinstance(entry, dict)]
+            seen = saved.get("seen_change_ids")
+            if isinstance(seen, list):
+                self.treasury_seen_change_order = [str(value) for value in seen[-TREASURY_SEEN_CHANGE_LIMIT:]
+                                                   if isinstance(value, str) and value]
+            else:
+                self.treasury_seen_change_order = [str(entry.get("change_id"))
+                                                   for entry in self.treasury_changes if entry.get("change_id")]
+            self.treasury_change_ids = set(self.treasury_seen_change_order)
+            if isinstance(items, dict):
+                self.treasury_items = {
+                    str(key): value for key, value in items.items()
+                    if isinstance(key, str) and isinstance(value, dict)
+                }
+            requests = saved.get("asset_requests")
+            if isinstance(requests, dict):
+                self.treasury_asset_requests = {
+                    str(key): value for key, value in requests.items()
+                    if self._valid_treasury_asset_request(str(key), value)
+                }
+            self.treasury_next_sequence = max(
+                int(saved.get("next_sequence") or 1),
+                1 + max((int(entry.get("sequence") or 0) for entry in self.treasury_changes), default=0),
+            )
+            self.treasury_updated_at = float(saved.get("updated_at") or 0)
+            return
         except (OSError, json.JSONDecodeError, TypeError, ValueError):
             pass
+
+        # One-time compatibility import from the old whole-snapshot mirror.
+        legacy_path = os.path.expanduser("~/.leoagent/collections.json")
+        try:
+            with open(legacy_path, encoding="utf-8") as stream:
+                legacy = json.load(stream)
+            for index, raw in enumerate(list(legacy.get("items") or [])[:TREASURY_ITEM_LIMIT]):
+                updated = self._safe_treasury_time(raw.get("updated_at")) or time.time()
+                item = self._sanitize_treasury_item({**raw, "updated_at": updated}, "ios-legacy")
+                if item:
+                    canonical = json.dumps(item, sort_keys=True, ensure_ascii=False,
+                                           separators=(",", ":"))
+                    digest = hashlib.sha256(canonical.encode()).hexdigest()
+                    self._apply_treasury_change({
+                        "change_id": f"legacy-import-{item['id']}-{digest}",
+                        "item_id": item["id"], "operation": "upsert",
+                        "updated_at": updated, "origin_device_id": "ios-legacy",
+                        "payload_digest": digest, "local_sequence": index + 1,
+                        "item": item,
+                    }, "ios-legacy")
+            if self.treasury_items:
+                self.treasury_updated_at = float(legacy.get("updated_at") or time.time())
+                self._persist_treasury_sync()
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            pass
+
+    def _persist_treasury_sync(self) -> None:
+        directory = os.path.dirname(self.treasury_sync_path)
+        if directory:
+            os.makedirs(directory, mode=0o700, exist_ok=True)
+        tmp = self.treasury_sync_path + ".tmp"
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                json.dump({
+                    "version": 1,
+                    "next_sequence": self.treasury_next_sequence,
+                    "updated_at": self.treasury_updated_at,
+                    "changes": self.treasury_changes,
+                    "seen_change_ids": self.treasury_seen_change_order,
+                    "items": self.treasury_items,
+                    "asset_requests": self.treasury_asset_requests,
+                }, stream, ensure_ascii=False, separators=(",", ":"))
+            os.replace(tmp, self.treasury_sync_path)
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
+
+    def _apply_treasury_change(self, raw: Dict[str, Any], device_id: str) -> tuple[bool, int]:
+        change_id = self._safe_treasury_text(raw.get("change_id"), 200)
+        item_id = self._safe_treasury_text(raw.get("item_id"), 200)
+        operation = self._safe_treasury_text(raw.get("operation"), 20)
+        updated_at = self._safe_treasury_time(raw.get("updated_at"))
+        digest = self._safe_treasury_text(raw.get("payload_digest"), 64).lower()
+        try:
+            local_sequence = int(raw.get("local_sequence") or 0)
+        except (TypeError, ValueError, OverflowError):
+            return False, 0
+        if (not change_id or not item_id or operation not in {"upsert", "delete"} or
+                not updated_at or local_sequence < 0 or len(digest) != 64 or
+                any(ch not in "0123456789abcdef" for ch in digest)):
+            return False, 0
+        if change_id in self.treasury_change_ids:
+            return True, local_sequence
+        item = None
+        if operation == "upsert":
+            item = self._sanitize_treasury_item(raw.get("item"), device_id)
+            if not item or item["id"] != item_id:
+                return False, 0
+        winner = {
+            "updated_at": updated_at,
+            "operation": operation,
+            "origin_device_id": device_id,
+            "change_id": change_id,
+        }
+        sequence = self.treasury_next_sequence
+        self.treasury_next_sequence += 1
+        change = {
+            "sequence": sequence,
+            "change_id": change_id,
+            "item_id": item_id,
+            "operation": operation,
+            "updated_at": updated_at,
+            "origin_device_id": device_id,
+            "payload_digest": digest,
+            "item": item,
+        }
+        self.treasury_changes.append(change)
+        self.treasury_change_ids.add(change_id)
+        self.treasury_seen_change_order.append(change_id)
+        if len(self.treasury_seen_change_order) > TREASURY_SEEN_CHANGE_LIMIT:
+            removed_seen = self.treasury_seen_change_order[:-TREASURY_SEEN_CHANGE_LIMIT]
+            self.treasury_seen_change_order = self.treasury_seen_change_order[-TREASURY_SEEN_CHANGE_LIMIT:]
+            retained_seen = set(self.treasury_seen_change_order)
+            self.treasury_change_ids.difference_update(
+                change for change in removed_seen if change not in retained_seen)
+        current = self.treasury_items.get(item_id)
+        if current is None or self._treasury_order_key(winner) > self._treasury_order_key(current["winner"]):
+            if operation == "upsert":
+                materialized = item
+            else:
+                previous = current.get("item") if isinstance(current, dict) else None
+                materialized = {
+                    **(previous if isinstance(previous, dict) else {}),
+                    "id": item_id, "schema_version": 1,
+                    "kind": previous.get("kind", "text") if isinstance(previous, dict) else "text",
+                    "title": previous.get("title", "") if isinstance(previous, dict) else "",
+                    "source_uri": previous.get("source_uri", "") if isinstance(previous, dict) else "",
+                    "source_app": previous.get("source_app", "") if isinstance(previous, dict) else "",
+                    "source_label": previous.get("source_label", "同步删除") if isinstance(previous, dict)
+                        else "同步删除",
+                    "summary": previous.get("summary", "") if isinstance(previous, dict) else "",
+                    "annotation": previous.get("annotation", "") if isinstance(previous, dict) else "",
+                    "tags": previous.get("tags", []) if isinstance(previous, dict) else [],
+                    "collection_ids": previous.get("collection_ids", []) if isinstance(previous, dict) else [],
+                    "pinned": previous.get("pinned", False) is True if isinstance(previous, dict) else False,
+                    "archived": previous.get("archived", False) is True if isinstance(previous, dict) else False,
+                    "reading_state": previous.get("reading_state", "none") if isinstance(previous, dict)
+                        else "none",
+                    "reading_progress": previous.get("reading_progress", 0) if isinstance(previous, dict) else 0,
+                    "created_at": previous.get("created_at", updated_at) if isinstance(previous, dict)
+                        else updated_at,
+                    "updated_at": updated_at,
+                    "last_opened_at": previous.get("last_opened_at", 0) if isinstance(previous, dict) else 0,
+                    "processing_state": previous.get("processing_state", "ready") if isinstance(previous, dict)
+                        else "ready",
+                    "processing_error_code": previous.get("processing_error_code", "")
+                        if isinstance(previous, dict) else "",
+                    "content_digest": previous.get("content_digest", "") if isinstance(previous, dict) else "",
+                    "byte_count": previous.get("byte_count", 0) if isinstance(previous, dict) else 0,
+                    "mime_type": previous.get("mime_type", "") if isinstance(previous, dict) else "",
+                    "body_available": False, "attachment_available": False,
+                    "origin_device_id": device_id, "deleted_at": updated_at,
+                }
+            self.treasury_items[item_id] = {
+                "item": materialized,
+                "winner": winner,
+                "server_sequence": sequence,
+            }
+        if len(self.treasury_changes) > TREASURY_CHANGE_LIMIT:
+            self.treasury_changes = self.treasury_changes[-TREASURY_CHANGE_LIMIT:]
+        self.treasury_updated_at = time.time()
+        return True, local_sequence
+
+    def _treasury_asset_path(self, request_id: str) -> str:
+        try:
+            normalized = str(uuid.UUID(request_id))
+        except (ValueError, TypeError, AttributeError):
+            return ""
+        return os.path.join(self.treasury_asset_dir, normalized + ".bin")
+
+    def _valid_treasury_asset_request(self, request_id: str, value: Any) -> bool:
+        if not self._treasury_asset_path(request_id) or not isinstance(value, dict):
+            return False
+        return (
+            self._safe_treasury_text(value.get("item_id"), 200) != ""
+            and self._safe_treasury_text(value.get("origin_device_id"), 200) != ""
+            and self._safe_treasury_text(value.get("requester_device_id"), 200) != ""
+            and value.get("asset_kind") in {"body", "attachment"}
+            and value.get("status") in {"pending", "ready", "unavailable"}
+        )
+
+    def _clean_treasury_asset_requests(self) -> bool:
+        now = time.time()
+        expired = [request_id for request_id, value in self.treasury_asset_requests.items()
+                   if float(value.get("expires_at") or 0) <= now]
+        if not expired:
+            return True
+        removed = {request_id: self.treasury_asset_requests.pop(request_id)
+                   for request_id in expired}
+        try:
+            self._persist_treasury_sync()
+        except OSError:
+            self.treasury_asset_requests.update(removed)
+            return False
+        for request_id in expired:
+            asset_path = self._treasury_asset_path(request_id)
+            if asset_path:
+                try:
+                    os.unlink(asset_path)
+                except OSError:
+                    pass
+        return True
+
+    @staticmethod
+    def _treasury_mime(value: Any) -> str:
+        if not isinstance(value, str):
+            return ""
+        mime = value.split(";", 1)[0].strip().lower()[:200]
+        if not mime or any(ord(ch) < 33 or ord(ch) > 126 for ch in mime):
+            return ""
+        return mime
+
+    @staticmethod
+    def _allowed_treasury_attachment_mime(mime: str) -> bool:
+        return mime in {
+            "application/json", "application/msword", "application/octet-stream",
+            "application/pdf", "application/rtf", "application/vnd.apple.keynote",
+            "application/vnd.apple.numbers", "application/vnd.apple.pages",
+            "application/vnd.ms-excel", "application/vnd.ms-powerpoint",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/xml", "application/zip",
+            "audio/aac", "audio/flac", "audio/mp4", "audio/mpeg", "audio/ogg",
+            "audio/wav", "audio/x-m4a", "audio/x-wav",
+            "image/gif", "image/heic", "image/heif", "image/jpeg", "image/png",
+            "image/tiff", "image/webp",
+            "text/csv", "text/html", "text/markdown", "text/plain",
+            "video/mp4", "video/mpeg", "video/quicktime", "video/webm",
+        }
+
+    async def post_treasury_asset_request(self, request: web.Request) -> web.Response:
+        if not self._authorized(request):
+            return self._unauthorized()
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001
+            return web.json_response({"error": {"message": "invalid json"}}, status=400)
+        item_id = self._safe_treasury_text(body.get("item_id"), 200)
+        requester = self._safe_treasury_text(body.get("requester_device_id"), 200)
+        asset_kind = self._safe_treasury_text(body.get("asset_kind"), 20)
+        current = self.treasury_items.get(item_id)
+        item = current.get("item") if isinstance(current, dict) else None
+        if (not item_id or not requester or asset_kind not in {"body", "attachment"}
+                or not isinstance(item, dict) or item.get("deleted_at")):
+            return web.json_response({"error": {"message": "treasury item unavailable"}}, status=404)
+        available_key = "body_available" if asset_kind == "body" else "attachment_available"
+        if item.get(available_key) is not True:
+            return web.json_response({"error": {"message": "treasury asset unavailable"}}, status=409)
+        origin = self._safe_treasury_text(item.get("origin_device_id"), 200)
+        if not origin or origin == requester:
+            return web.json_response({"error": {"message": "invalid asset request"}}, status=400)
+        if not self._clean_treasury_asset_requests():
+            return web.json_response({"error": {"message": "treasury persistence failed"}}, status=507)
+        for value in self.treasury_asset_requests.values():
+            if (value.get("item_id") == item_id and value.get("requester_device_id") == requester
+                    and value.get("asset_kind") == asset_kind
+                    and value.get("status") in {"pending", "ready"}):
+                return web.json_response({"request": value})
+        if len(self.treasury_asset_requests) >= TREASURY_ASSET_REQUEST_LIMIT:
+            return web.json_response({"error": {"message": "too many asset requests"}}, status=429)
+        now = time.time()
+        request_id = str(uuid.uuid4())
+        value = {
+            "id": request_id, "item_id": item_id, "asset_kind": asset_kind,
+            "origin_device_id": origin, "requester_device_id": requester,
+            "status": "pending", "expected_digest": item.get("content_digest") or "",
+            "expected_byte_count": int(item.get("byte_count") or 0),
+            "expected_mime_type": self._treasury_mime(item.get("mime_type")),
+            "digest": "", "byte_count": 0, "mime_type": "",
+            "created_at": now, "updated_at": now, "expires_at": now + TREASURY_ASSET_TTL_S,
+        }
+        self.treasury_asset_requests[request_id] = value
+        try:
+            self._persist_treasury_sync()
+        except OSError:
+            self.treasury_asset_requests.pop(request_id, None)
+            return web.json_response({"error": {"message": "treasury persistence failed"}}, status=507)
+        return web.json_response({"request": value}, status=201)
+
+    async def get_treasury_asset_requests(self, request: web.Request) -> web.Response:
+        if not self._authorized(request):
+            return self._unauthorized()
+        origin = self._safe_treasury_text(request.query.get("origin_device_id"), 200)
+        if not origin:
+            return web.json_response({"error": {"message": "origin_device_id is required"}}, status=400)
+        if not self._clean_treasury_asset_requests():
+            return web.json_response({"error": {"message": "treasury persistence failed"}}, status=507)
+        values = [value for value in self.treasury_asset_requests.values()
+                  if value.get("origin_device_id") == origin and value.get("status") == "pending"]
+        values.sort(key=lambda value: float(value.get("created_at") or 0))
+        return web.json_response({"requests": values[:100]})
+
+    async def put_treasury_asset(self, request: web.Request) -> web.Response:
+        if not self._authorized(request):
+            return self._unauthorized()
+        if not self._clean_treasury_asset_requests():
+            return web.json_response({"error": {"message": "treasury persistence failed"}}, status=507)
+        request_id = str(request.match_info.get("request_id") or "")
+        value = self.treasury_asset_requests.get(request_id)
+        if not self._valid_treasury_asset_request(request_id, value) or value.get("status") != "pending":
+            return web.json_response({"error": {"message": "asset request unavailable"}}, status=404)
+        device_id = self._safe_treasury_text(request.headers.get("X-Treasury-Device-ID"), 200)
+        digest_header = self._safe_treasury_text(request.headers.get("X-Treasury-Digest"), 64).lower()
+        mime_type = self._treasury_mime(request.headers.get("Content-Type"))
+        try:
+            declared_count = int(request.headers.get("X-Treasury-Byte-Count", "-1"))
+        except (TypeError, ValueError, OverflowError):
+            declared_count = -1
+        if (device_id != value.get("origin_device_id") or len(digest_header) != 64
+                or any(ch not in "0123456789abcdef" for ch in digest_header)
+                or not mime_type or declared_count < 0):
+            return web.json_response({"error": {"message": "invalid asset metadata"}}, status=400)
+        asset_kind = value.get("asset_kind")
+        limit = TREASURY_BODY_LIMIT if asset_kind == "body" else TREASURY_ATTACHMENT_LIMIT
+        if declared_count > limit:
+            return web.json_response({"error": {"message": "asset too large"}}, status=413)
+        if asset_kind == "body" and mime_type != "text/plain":
+            return web.json_response({"error": {"message": "invalid body mime type"}}, status=415)
+        if asset_kind == "attachment" and not self._allowed_treasury_attachment_mime(mime_type):
+            return web.json_response({"error": {"message": "unsupported attachment mime type"}}, status=415)
+        expected_count = int(value.get("expected_byte_count") or 0)
+        expected_digest = str(value.get("expected_digest") or "").lower()
+        expected_mime = str(value.get("expected_mime_type") or "").lower()
+        if asset_kind == "attachment" and expected_count > 0 and declared_count != expected_count:
+            return web.json_response({"error": {"message": "asset byte count mismatch"}}, status=409)
+        if asset_kind == "attachment" and expected_digest and digest_header != expected_digest:
+            return web.json_response({"error": {"message": "asset digest mismatch"}}, status=409)
+        if (asset_kind == "attachment" and expected_mime and
+                expected_mime != "application/octet-stream" and mime_type != expected_mime):
+            return web.json_response({"error": {"message": "asset mime type mismatch"}}, status=409)
+        os.makedirs(self.treasury_asset_dir, mode=0o700, exist_ok=True)
+        target = self._treasury_asset_path(request_id)
+        temporary = target + ".tmp"
+        actual_digest = hashlib.sha256()
+        actual_count = 0
+        try:
+            stream = open(temporary, "wb")
+            os.chmod(temporary, 0o600)
+            try:
+                async for chunk in request.content.iter_chunked(1024 * 1024):
+                    actual_count += len(chunk)
+                    if actual_count > limit or actual_count > declared_count:
+                        raise ValueError("asset too large")
+                    actual_digest.update(chunk)
+                    await asyncio.to_thread(stream.write, chunk)
+                await asyncio.to_thread(stream.flush)
+                await asyncio.to_thread(os.fsync, stream.fileno())
+            finally:
+                stream.close()
+            if actual_count != declared_count or actual_digest.hexdigest() != digest_header:
+                raise ValueError("asset integrity mismatch")
+            if asset_kind == "body":
+                with open(temporary, "rb") as body_stream:
+                    body_stream.read().decode("utf-8")
+            os.replace(temporary, target)
+        except (OSError, ValueError, UnicodeDecodeError):
+            try:
+                os.unlink(temporary)
+            except OSError:
+                pass
+            return web.json_response({"error": {"message": "asset integrity validation failed"}}, status=422)
+        previous_value = dict(value)
+        value.update({
+            "status": "ready", "digest": digest_header, "byte_count": actual_count,
+            "mime_type": mime_type, "updated_at": time.time(),
+            "expires_at": time.time() + TREASURY_ASSET_TTL_S,
+        })
+        try:
+            self._persist_treasury_sync()
+        except OSError:
+            value.clear()
+            value.update(previous_value)
+            try:
+                os.unlink(target)
+            except OSError:
+                pass
+            return web.json_response({"error": {"message": "treasury persistence failed"}}, status=507)
+        return web.json_response({"request": value})
+
+    async def post_treasury_asset_unavailable(self, request: web.Request) -> web.Response:
+        if not self._authorized(request):
+            return self._unauthorized()
+        if not self._clean_treasury_asset_requests():
+            return web.json_response({"error": {"message": "treasury persistence failed"}}, status=507)
+        request_id = str(request.match_info.get("request_id") or "")
+        value = self.treasury_asset_requests.get(request_id)
+        if not self._valid_treasury_asset_request(request_id, value) or value.get("status") != "pending":
+            return web.json_response({"error": {"message": "asset request unavailable"}}, status=404)
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001
+            body = {}
+        device_id = self._safe_treasury_text(body.get("device_id"), 200)
+        if device_id != value.get("origin_device_id"):
+            return web.json_response({"error": {"message": "asset request denied"}}, status=403)
+        previous_value = dict(value)
+        value.update({"status": "unavailable", "updated_at": time.time(),
+                      "expires_at": time.time() + TREASURY_ASSET_TTL_S})
+        try:
+            self._persist_treasury_sync()
+        except OSError:
+            value.clear()
+            value.update(previous_value)
+            return web.json_response({"error": {"message": "treasury persistence failed"}}, status=507)
+        return web.json_response({"request": value})
+
+    async def get_treasury_asset(self, request: web.Request) -> web.StreamResponse:
+        if not self._authorized(request):
+            return self._unauthorized()
+        if not self._clean_treasury_asset_requests():
+            return web.json_response({"error": {"message": "treasury persistence failed"}}, status=507)
+        request_id = str(request.match_info.get("request_id") or "")
+        value = self.treasury_asset_requests.get(request_id)
+        requester = self._safe_treasury_text(request.headers.get("X-Treasury-Device-ID"), 200)
+        if not self._valid_treasury_asset_request(request_id, value) \
+                or requester != value.get("requester_device_id"):
+            return web.json_response({"error": {"message": "asset request unavailable"}}, status=404)
+        if value.get("status") == "pending":
+            return web.json_response({"request": value}, status=202)
+        if value.get("status") != "ready":
+            return web.json_response({"request": value}, status=410)
+        asset_path = self._treasury_asset_path(request_id)
+        if not asset_path or not os.path.isfile(asset_path):
+            return web.json_response({"error": {"message": "asset file unavailable"}}, status=410)
+        response = web.FileResponse(asset_path, headers={
+            "Content-Type": str(value.get("mime_type") or "application/octet-stream"),
+            "X-Treasury-Digest": str(value.get("digest") or ""),
+            "X-Treasury-Byte-Count": str(int(value.get("byte_count") or 0)),
+            "Cache-Control": "private, no-store",
+        })
+        return response
 
     # -- auth ---------------------------------------------------------------
 
@@ -389,11 +966,11 @@ class Relay:
             print(f"[relay] apns push failed: {exc}", flush=True)
 
     async def put_collections(self, request: web.Request) -> web.Response:
-        """[T-collections-fleet] 手机上传收藏索引,Mac 端据此查看。
+        """Compatibility adapter for clients that still send a whole snapshot.
 
-        收藏本体在手机上(附件、正文都在手机沙盒里),这里只存一份可读的
-        索引:标题、来源、摘要、标签、链接。Mac 上看得见、点得开原链接,
-        但不复制手机的私有文件——最小必要。
+        The relay no longer truncates to 500 or replaces another device's data.
+        Each legacy item becomes an idempotent metadata change; missing ids from
+        that same legacy device become tombstones.
         """
         if not self._authorized(request):
             return self._unauthorized()
@@ -404,27 +981,159 @@ class Relay:
         items = body.get("items")
         if not isinstance(items, list):
             return web.json_response({"error": {"message": "items must be a list"}}, status=400)
-        self.collections = items[:500]
-        self.collections_updated_at = time.time()
+        if len(items) > TREASURY_ITEM_LIMIT:
+            return web.json_response({"error": {"message": "too many items"}}, status=413)
+        device_id = self._safe_treasury_text(body.get("device_id"), 200) or "ios-legacy"
+        seen: set[str] = set()
+        accepted = 0
+        now = time.time()
+        for index, raw in enumerate(items):
+            if not isinstance(raw, dict):
+                continue
+            item_id = self._safe_treasury_text(raw.get("id"), 200)
+            updated = self._safe_treasury_time(raw.get("updated_at")) or now
+            canonical = json.dumps(raw, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+            change = {
+                "change_id": f"legacy-{device_id}-{item_id}-{hashlib.sha256(canonical.encode()).hexdigest()}",
+                "item_id": item_id,
+                "operation": "upsert",
+                "updated_at": updated,
+                "origin_device_id": device_id,
+                "payload_digest": hashlib.sha256(canonical.encode()).hexdigest(),
+                "local_sequence": index + 1,
+                "item": {**raw, "updated_at": updated},
+            }
+            ok, _ = self._apply_treasury_change(change, device_id)
+            if ok:
+                accepted += 1
+                seen.add(item_id)
+        for item_id, current in list(self.treasury_items.items()):
+            winner = current.get("winner") or {}
+            if winner.get("origin_device_id") != device_id or item_id in seen:
+                continue
+            digest = hashlib.sha256(f"legacy-delete:{device_id}:{item_id}:{now}".encode()).hexdigest()
+            self._apply_treasury_change({
+                "change_id": f"legacy-delete-{device_id}-{item_id}-{int(now * 1000)}",
+                "item_id": item_id, "operation": "delete", "updated_at": now,
+                "origin_device_id": device_id, "payload_digest": digest, "local_sequence": 0,
+            }, device_id)
         try:
-            # tmp+replace 原子写:O_TRUNC 原地写在崩溃时会留半截坏 JSON
-            path = os.path.expanduser("~/.leoagent/collections.json")
-            tmp = path + ".tmp"
-            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-            with os.fdopen(fd, "w") as f:
-                json.dump({"items": self.collections,
-                           "updated_at": self.collections_updated_at}, f, ensure_ascii=False)
-            os.replace(tmp, path)
+            self._persist_treasury_sync()
         except OSError:
-            pass  # 落盘失败只丢重启后的持久性,内存里仍可读
-        return web.json_response({"ok": True, "count": len(self.collections)})
+            return web.json_response({"error": {"message": "treasury persistence failed"}}, status=507)
+        return web.json_response({"ok": True, "count": accepted,
+                                  "cursor": self.treasury_next_sequence - 1})
 
     async def get_collections(self, request: web.Request) -> web.Response:
         if not self._authorized(request):
             return self._unauthorized()
+        items = [entry["item"] for entry in self.treasury_items.values()
+                 if not entry["item"].get("deleted_at")]
+        items.sort(key=lambda item: float(item.get("updated_at") or 0), reverse=True)
         return web.json_response({
-            "items": self.collections,
-            "updated_at": self.collections_updated_at,
+            "items": items,
+            "updated_at": self.treasury_updated_at,
+            "cursor": self.treasury_next_sequence - 1,
+        })
+
+    async def post_treasury_changes(self, request: web.Request) -> web.Response:
+        if not self._authorized(request):
+            return self._unauthorized()
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001
+            return web.json_response({"error": {"message": "invalid json"}}, status=400)
+        device_id = self._safe_treasury_text(body.get("device_id"), 200)
+        changes = body.get("changes")
+        if not device_id or not isinstance(changes, list):
+            return web.json_response({"error": {"message": "device_id and changes are required"}}, status=400)
+        if len(changes) > TREASURY_BATCH_LIMIT:
+            return web.json_response({"error": {"message": "change batch too large"}}, status=413)
+        accepted = 0
+        ack_local_cursor = 0
+        previous_local_sequence = -1
+        for raw in changes:
+            if not isinstance(raw, dict):
+                break
+            try:
+                local_sequence = int(raw.get("local_sequence") or 0)
+            except (TypeError, ValueError, OverflowError):
+                break
+            # The acknowledgement is a contiguous upload cursor. Continuing
+            # past a malformed or out-of-order row could acknowledge a later
+            # local sequence and permanently skip the bad row on the client.
+            if local_sequence < 0 or local_sequence <= previous_local_sequence:
+                break
+            ok, local_sequence = self._apply_treasury_change(raw, device_id)
+            if not ok:
+                break
+            previous_local_sequence = local_sequence
+            accepted += 1
+            ack_local_cursor = local_sequence
+        try:
+            if accepted:
+                self._persist_treasury_sync()
+        except OSError:
+            return web.json_response({"error": {"message": "treasury persistence failed"}}, status=507)
+        return web.json_response({
+            "accepted": accepted,
+            "ack_local_cursor": ack_local_cursor,
+            "next_cursor": self.treasury_next_sequence - 1,
+        })
+
+    async def get_treasury_changes(self, request: web.Request) -> web.Response:
+        if not self._authorized(request):
+            return self._unauthorized()
+        try:
+            after = max(0, int(request.query.get("after", "0")))
+            limit = max(1, min(TREASURY_BATCH_LIMIT, int(request.query.get("limit", "500"))))
+        except (TypeError, ValueError):
+            return web.json_response({"error": {"message": "invalid cursor"}}, status=400)
+        min_cursor = int(self.treasury_changes[0]["sequence"]) - 1 if self.treasury_changes else 0
+        if after < min_cursor:
+            return web.json_response({"error": {"message": "cursor expired"},
+                                      "min_cursor": min_cursor}, status=410)
+        page = [entry for entry in self.treasury_changes if int(entry["sequence"]) > after][:limit]
+        next_cursor = int(page[-1]["sequence"]) if page else after
+        # A change can be accepted into the append-only log but lose the
+        # deterministic LWW materialization. Marking winners explicitly lets
+        # clients advance their cursors without briefly applying stale rows or
+        # needing to persist the relay's private tie-break metadata locally.
+        delivered = []
+        for entry in page:
+            current = self.treasury_items.get(str(entry.get("item_id") or ""))
+            winner = current.get("winner") if isinstance(current, dict) else None
+            delivered.append({
+                **entry,
+                "applied": isinstance(winner, dict)
+                and winner.get("change_id") == entry.get("change_id"),
+            })
+        return web.json_response({
+            "changes": delivered,
+            "next_cursor": next_cursor,
+            "has_more": any(int(entry["sequence"]) > next_cursor for entry in self.treasury_changes),
+            "min_cursor": min_cursor,
+            "server_cursor": self.treasury_next_sequence - 1,
+            "updated_at": self.treasury_updated_at,
+        })
+
+    async def get_treasury_items(self, request: web.Request) -> web.Response:
+        if not self._authorized(request):
+            return self._unauthorized()
+        try:
+            after = max(0, int(request.query.get("after_sequence", "0")))
+            limit = max(1, min(1_000, int(request.query.get("limit", "1000"))))
+        except (TypeError, ValueError):
+            return web.json_response({"error": {"message": "invalid cursor"}}, status=400)
+        materialized = sorted(self.treasury_items.values(), key=lambda entry: int(entry["server_sequence"]))
+        page = [entry for entry in materialized if int(entry["server_sequence"]) > after][:limit]
+        next_cursor = int(page[-1]["server_sequence"]) if page else after
+        return web.json_response({
+            "items": [{**entry["item"], "server_sequence": entry["server_sequence"]} for entry in page],
+            "next_cursor": next_cursor,
+            "has_more": any(int(entry["server_sequence"]) > next_cursor for entry in materialized),
+            "server_cursor": self.treasury_next_sequence - 1,
+            "updated_at": self.treasury_updated_at,
         })
 
     async def register_device(self, request: web.Request) -> web.Response:
@@ -600,6 +1309,17 @@ class Relay:
         app.router.add_get("/relay/api/push-status", self.push_status)
         app.router.add_put("/relay/api/collections", self.put_collections)
         app.router.add_get("/relay/api/collections", self.get_collections)
+        app.router.add_post("/relay/api/treasury/changes", self.post_treasury_changes)
+        app.router.add_get("/relay/api/treasury/changes", self.get_treasury_changes)
+        app.router.add_get("/relay/api/treasury/items", self.get_treasury_items)
+        app.router.add_post("/relay/api/treasury/assets/requests", self.post_treasury_asset_request)
+        app.router.add_get("/relay/api/treasury/assets/requests", self.get_treasury_asset_requests)
+        app.router.add_put("/relay/api/treasury/assets/{request_id}", self.put_treasury_asset)
+        app.router.add_get("/relay/api/treasury/assets/{request_id}", self.get_treasury_asset)
+        app.router.add_post(
+            "/relay/api/treasury/assets/{request_id}/unavailable",
+            self.post_treasury_asset_unavailable,
+        )
         app.router.add_route("*", "/relay/api/m/{name}/{tail:.*}", self.forward)
         return app
 

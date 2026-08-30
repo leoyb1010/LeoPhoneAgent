@@ -39,6 +39,9 @@ interface TreasureDao {
     @Query("SELECT * FROM treasure_items WHERE stable_id = :id LIMIT 1")
     suspend fun getIncludingDeleted(id: String): TreasureItemEntity?
 
+    @Query("SELECT * FROM treasure_items WHERE stable_id IN (:ids)")
+    suspend fun getManyIncludingDeleted(ids: List<String>): List<TreasureItemEntity>
+
     @Query("SELECT * FROM treasure_items WHERE stable_id = :id AND deleted_at IS NULL LIMIT 1")
     suspend fun getById(id: String): TreasureItemEntity?
 
@@ -66,8 +69,57 @@ interface TreasureDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertItem(item: TreasureItemEntity): Long
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertRemoteItem(item: TreasureItemEntity): Long
+
     @Update
     suspend fun updateItem(item: TreasureItemEntity)
+
+    @Transaction
+    suspend fun applyRemoteItem(
+        incoming: TreasureItemEntity,
+        operation: String,
+        incomingChangeId: String,
+        localOriginDeviceId: String,
+    ): Boolean {
+        val existing = getIncludingDeleted(incoming.id)
+        val incomingDeleted = operation == "delete" || incoming.deletedAt != null
+        if (existing != null) {
+            val incomingKey = listOf(
+                incoming.updatedAt.toString().padStart(20, '0'),
+                if (incomingDeleted) "1" else "0",
+                incoming.originDeviceId,
+                incomingChangeId,
+            ).joinToString("|")
+            val existingKey = listOf(
+                existing.updatedAt.toString().padStart(20, '0'),
+                if (existing.deletedAt != null) "1" else "0",
+                existing.originDeviceId,
+                "",
+            ).joinToString("|")
+            if (incomingKey <= existingKey) {
+                if (existing.syncState == "pending" && existing.originDeviceId == localOriginDeviceId &&
+                    incoming.updatedAt >= existing.updatedAt) {
+                    updateItem(existing.copy(syncState = "conflict"))
+                }
+                return false
+            }
+            val conflict = existing.syncState == "pending" && existing.originDeviceId == localOriginDeviceId &&
+                incoming.originDeviceId != localOriginDeviceId
+            updateItem(incoming.copy(
+                rowId = existing.rowId,
+                originalText = incoming.originalText ?: existing.originalText,
+                bodyRef = incoming.bodyRef ?: existing.bodyRef,
+                previewRef = incoming.previewRef ?: existing.previewRef,
+                mimeType = incoming.mimeType ?: existing.mimeType,
+                byteCount = maxOf(incoming.byteCount, existing.byteCount),
+                contentDigest = incoming.contentDigest ?: existing.contentDigest,
+                syncState = if (conflict) "conflict" else "synced",
+            ))
+            return true
+        }
+        return insertRemoteItem(incoming.copy(syncState = "remote_only")) != -1L
+    }
 
     @Query("UPDATE treasure_items SET deleted_at = :deletedAt, updated_at = :deletedAt, sync_state = 'pending' WHERE stable_id IN (:ids) AND deleted_at IS NULL")
     suspend fun tombstone(ids: List<String>, deletedAt: Long): Int

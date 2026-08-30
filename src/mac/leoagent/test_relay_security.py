@@ -1,9 +1,11 @@
 import asyncio
+import hashlib
 import json
 import os
 import signal
 import sys
 import tempfile
+import time
 import types
 import unittest
 import unittest.mock
@@ -11,6 +13,8 @@ from pathlib import Path
 
 try:
     import aiohttp  # noqa: F401
+    from aiohttp.test_utils import TestClient, TestServer
+    HAS_AIOHTTP = True
 except ModuleNotFoundError:
     # The logger is stdlib-only. CI can exercise it without installing the
     # relay network stack; postponed annotations keep web types unevaluated.
@@ -18,6 +22,7 @@ except ModuleNotFoundError:
     stub.WSMsgType = object()
     stub.web = types.SimpleNamespace()
     sys.modules["aiohttp"] = stub
+    HAS_AIOHTTP = False
 
 from . import relay as relay_module
 from .harness import HARNESSES, HarnessSession
@@ -81,6 +86,323 @@ class RelayMachineListTests(unittest.IsolatedAsyncioTestCase):
         # 非权威字段照常透传
         self.assertEqual(machine["platform"], "android")
         self.assertEqual(machine["server"], "minis")
+
+
+class RelayTreasurySyncTests(unittest.IsolatedAsyncioTestCase):
+    def _relay(self, tmp):
+        return Relay(
+            "server-key-0123456789",
+            device_keys_path=os.path.join(tmp, "device-keys.json"),
+            treasury_sync_path=os.path.join(tmp, "treasury-sync.json"),
+            treasury_asset_dir=os.path.join(tmp, "treasury-assets"),
+        )
+
+    async def _call(self, method, body=None, query=None):
+        captured = {}
+
+        def fake_json_response(payload, **kwargs):
+            captured["payload"] = payload
+            captured["status"] = kwargs.get("status", 200)
+            return payload
+
+        request = types.SimpleNamespace(
+            headers={"Authorization": "Bearer server-key-0123456789"},
+            path="/relay/api/treasury",
+            query=query or {},
+            json=lambda: asyncio.sleep(0, result=body),
+        )
+        with unittest.mock.patch.object(
+                relay_module.web, "json_response", fake_json_response, create=True):
+            await method(request)
+        return captured
+
+    @staticmethod
+    def _change(change_id, item_id, updated_at, operation="upsert", title="title"):
+        digest = hashlib.sha256(f"{change_id}:{item_id}:{updated_at}".encode()).hexdigest()
+        result = {
+            "change_id": change_id,
+            "item_id": item_id,
+            "operation": operation,
+            "updated_at": updated_at,
+            "origin_device_id": "ios-phone",
+            "payload_digest": digest,
+            "local_sequence": 1,
+        }
+        if operation == "upsert":
+            result["item"] = {
+                "id": item_id, "kind": "text", "title": title,
+                "source_label": "iPhone", "created_at": updated_at,
+                "updated_at": updated_at, "processing_state": "ready",
+            }
+        return result
+
+    async def test_changes_are_idempotent_ordered_and_survive_restart(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            relay = self._relay(tmp)
+            first = self._change("c1", "item-1", 1000, title="new")
+            response = await self._call(
+                relay.post_treasury_changes,
+                {"device_id": "ios-phone", "changes": [first]},
+            )
+            self.assertEqual(response["status"], 200)
+            self.assertEqual(len(relay.treasury_changes), 1)
+
+            # A replay is acknowledged but does not allocate another server sequence.
+            await self._call(
+                relay.post_treasury_changes,
+                {"device_id": "ios-phone", "changes": [first]},
+            )
+            self.assertEqual(len(relay.treasury_changes), 1)
+
+            # Older delete cannot erase a newer item; equal-time delete wins.
+            older_delete = self._change("c2", "item-1", 999, operation="delete")
+            await self._call(relay.post_treasury_changes,
+                             {"device_id": "ios-phone", "changes": [older_delete]})
+            self.assertFalse(relay.treasury_items["item-1"]["item"].get("deleted_at"))
+            equal_delete = self._change("c3", "item-1", 1000, operation="delete")
+            await self._call(relay.post_treasury_changes,
+                             {"device_id": "ios-phone", "changes": [equal_delete]})
+            self.assertTrue(relay.treasury_items["item-1"]["item"].get("deleted_at"))
+
+            listing = await self._call(
+                relay.get_treasury_changes, query={"after": "0", "limit": "20"})
+            delivered = listing["payload"]["changes"]
+            self.assertEqual([entry["applied"] for entry in delivered], [False, False, True])
+
+            restarted = self._relay(tmp)
+            self.assertEqual(len(restarted.treasury_changes), 3)
+            self.assertTrue(restarted.treasury_items["item-1"]["item"].get("deleted_at"))
+            tombstone = restarted.treasury_items["item-1"]["item"]
+            self.assertEqual(tombstone["kind"], "text")
+            self.assertGreater(tombstone["created_at"], 0)
+            self.assertGreater(tombstone["updated_at"], 0)
+
+    async def test_upload_ack_never_skips_a_rejected_or_out_of_order_change(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            relay = self._relay(tmp)
+            first = self._change("c1", "item-1", 1000)
+            first["local_sequence"] = 7
+            invalid = self._change("bad", "item-2", 1001)
+            invalid["local_sequence"] = 8
+            invalid["payload_digest"] = "not-a-digest"
+            later = self._change("c3", "item-3", 1002)
+            later["local_sequence"] = 9
+            response = await self._call(
+                relay.post_treasury_changes,
+                {"device_id": "ios-phone", "changes": [first, invalid, later]},
+            )
+            self.assertEqual(response["payload"]["ack_local_cursor"], 7)
+            self.assertEqual([entry["item_id"] for entry in relay.treasury_changes], ["item-1"])
+
+            out_of_order = self._change("c4", "item-4", 1003)
+            out_of_order["local_sequence"] = 6
+            response = await self._call(
+                relay.post_treasury_changes,
+                {"device_id": "ios-phone", "changes": [first, out_of_order]},
+            )
+            self.assertEqual(response["payload"]["ack_local_cursor"], 7)
+            self.assertEqual(len(relay.treasury_changes), 1)
+
+    async def test_assets_are_requested_on_demand_integrity_checked_and_persisted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            relay = self._relay(tmp)
+            change = self._change("asset-change", "asset-item", 1000)
+            change["item"].update({
+                "body_available": True,
+                "attachment_available": False,
+            })
+            relay._apply_treasury_change(change, "ios-phone")
+            relay._persist_treasury_sync()
+            headers = {"Authorization": "Bearer server-key-0123456789"}
+            captured = {}
+
+            def fake_json_response(payload, **kwargs):
+                captured["payload"] = payload
+                captured["status"] = kwargs.get("status", 200)
+                return payload
+
+            create = types.SimpleNamespace(
+                headers=headers, path="/relay/api/treasury/assets/requests",
+                json=lambda: asyncio.sleep(0, result={
+                    "item_id": "asset-item", "asset_kind": "body",
+                    "requester_device_id": "mac:test",
+                }),
+            )
+            with unittest.mock.patch.object(
+                    relay_module.web, "json_response", fake_json_response, create=True):
+                await relay.post_treasury_asset_request(create)
+            self.assertEqual(captured["status"], 201)
+            request_id = captured["payload"]["request"]["id"]
+
+            listing = types.SimpleNamespace(
+                headers=headers, path="/relay/api/treasury/assets/requests",
+                query={"origin_device_id": "ios-phone"},
+            )
+            with unittest.mock.patch.object(
+                    relay_module.web, "json_response", fake_json_response, create=True):
+                await relay.get_treasury_asset_requests(listing)
+            self.assertEqual([row["id"] for row in captured["payload"]["requests"]], [request_id])
+
+            body = "按需同步正文，不进入元数据刷新。".encode()
+            digest = hashlib.sha256(body).hexdigest()
+
+            class FakeContent:
+                async def iter_chunked(self, _size):
+                    yield body[:7]
+                    yield body[7:]
+
+            upload = types.SimpleNamespace(
+                headers={**headers, "X-Treasury-Device-ID": "ios-phone",
+                         "X-Treasury-Digest": digest,
+                         "X-Treasury-Byte-Count": str(len(body)),
+                         "Content-Type": "text/plain; charset=utf-8"},
+                path=f"/relay/api/treasury/assets/{request_id}",
+                match_info={"request_id": request_id}, content=FakeContent(),
+            )
+            bad_upload = types.SimpleNamespace(
+                headers={**upload.headers, "X-Treasury-Digest": "0" * 64},
+                path=upload.path, match_info=upload.match_info, content=FakeContent(),
+            )
+            with unittest.mock.patch.object(
+                    relay_module.web, "json_response", fake_json_response, create=True):
+                await relay.put_treasury_asset(bad_upload)
+            self.assertEqual(captured["status"], 422)
+            self.assertEqual(relay.treasury_asset_requests[request_id]["status"], "pending")
+            self.assertFalse(os.path.exists(relay._treasury_asset_path(request_id)))
+
+            with unittest.mock.patch.object(
+                    relay_module.web, "json_response", fake_json_response, create=True):
+                await relay.put_treasury_asset(upload)
+            self.assertEqual(captured["status"], 200)
+
+            denied = types.SimpleNamespace(
+                headers={**headers, "X-Treasury-Device-ID": "android-other"},
+                path=f"/relay/api/treasury/assets/{request_id}",
+                match_info={"request_id": request_id},
+            )
+            with unittest.mock.patch.object(
+                    relay_module.web, "json_response", fake_json_response, create=True):
+                await relay.get_treasury_asset(denied)
+            self.assertEqual(captured["status"], 404)
+
+            file_response = {}
+
+            def fake_file_response(path, headers=None):
+                file_response.update({"path": path, "headers": headers or {}})
+                return file_response
+
+            download = types.SimpleNamespace(
+                headers={**headers, "X-Treasury-Device-ID": "mac:test"},
+                path=f"/relay/api/treasury/assets/{request_id}",
+                match_info={"request_id": request_id},
+            )
+            with unittest.mock.patch.object(
+                    relay_module.web, "FileResponse", fake_file_response, create=True):
+                await relay.get_treasury_asset(download)
+            with open(file_response["path"], "rb") as stream:
+                self.assertEqual(stream.read(), body)
+            self.assertEqual(file_response["headers"]["X-Treasury-Digest"], digest)
+
+            restarted = self._relay(tmp)
+            self.assertEqual(restarted.treasury_asset_requests[request_id]["status"], "ready")
+            self.assertTrue(os.path.isfile(restarted._treasury_asset_path(request_id)))
+
+            restarted.treasury_asset_requests[request_id]["expires_at"] = time.time() - 1
+            restarted._persist_treasury_sync()
+            self.assertTrue(restarted._clean_treasury_asset_requests())
+            self.assertNotIn(request_id, restarted.treasury_asset_requests)
+            self.assertFalse(os.path.exists(restarted._treasury_asset_path(request_id)))
+            after_cleanup = self._relay(tmp)
+            self.assertNotIn(request_id, after_cleanup.treasury_asset_requests)
+
+    async def test_attachment_upload_rejects_unsupported_or_mismatched_mime(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            relay = self._relay(tmp)
+            content = b"%PDF-safe-fixture"
+            digest = hashlib.sha256(content).hexdigest()
+            change = self._change("attachment-change", "attachment-item", 1000)
+            change["item"].update({
+                "attachment_available": True, "body_available": False,
+                "mime_type": "application/pdf", "byte_count": len(content),
+                "content_digest": digest,
+            })
+            relay._apply_treasury_change(change, "ios-phone")
+            headers = {"Authorization": "Bearer server-key-0123456789"}
+            captured = {}
+
+            def fake_json_response(payload, **kwargs):
+                captured["payload"] = payload
+                captured["status"] = kwargs.get("status", 200)
+                return payload
+
+            create = types.SimpleNamespace(
+                headers=headers, path="/relay/api/treasury/assets/requests",
+                json=lambda: asyncio.sleep(0, result={
+                    "item_id": "attachment-item", "asset_kind": "attachment",
+                    "requester_device_id": "mac:test",
+                }),
+            )
+            with unittest.mock.patch.object(
+                    relay_module.web, "json_response", fake_json_response, create=True):
+                await relay.post_treasury_asset_request(create)
+            request_id = captured["payload"]["request"]["id"]
+
+            class FakeContent:
+                async def iter_chunked(self, _size):
+                    yield content
+
+            base_headers = {
+                **headers, "X-Treasury-Device-ID": "ios-phone",
+                "X-Treasury-Digest": digest,
+                "X-Treasury-Byte-Count": str(len(content)),
+            }
+            for mime, expected in [
+                    ("application/x-executable", 415), ("text/plain", 409)]:
+                upload = types.SimpleNamespace(
+                    headers={**base_headers, "Content-Type": mime},
+                    path=f"/relay/api/treasury/assets/{request_id}",
+                    match_info={"request_id": request_id}, content=FakeContent(),
+                )
+                with unittest.mock.patch.object(
+                        relay_module.web, "json_response", fake_json_response, create=True):
+                    await relay.put_treasury_asset(upload)
+                self.assertEqual(captured["status"], expected)
+                self.assertEqual(relay.treasury_asset_requests[request_id]["status"], "pending")
+
+    async def test_legacy_snapshot_is_not_truncated_to_500(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            relay = self._relay(tmp)
+            items = [{
+                "id": f"legacy-{index}", "kind": "text", "title": f"Item {index}",
+                "source": "iPhone", "created_at": 1000 + index,
+                "updated_at": 1000 + index,
+            } for index in range(650)]
+            response = await self._call(
+                relay.put_collections,
+                {"device_id": "ios-legacy", "items": items},
+            )
+            self.assertEqual(response["status"], 200)
+            listing = await self._call(relay.get_collections)
+            self.assertEqual(len(listing["payload"]["items"]), 650)
+
+    async def test_one_time_legacy_file_import_has_rebuildable_sequences(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            legacy_root = os.path.join(tmp, "home")
+            os.makedirs(os.path.join(legacy_root, ".leoagent"))
+            with open(os.path.join(legacy_root, ".leoagent", "collections.json"), "w",
+                      encoding="utf-8") as stream:
+                json.dump({"items": [{
+                    "id": "legacy-file-item", "kind": "text", "title": "旧镜像",
+                    "source": "iPhone", "created_at": 1000, "updated_at": 1001,
+                }]}, stream)
+            with unittest.mock.patch.dict(os.environ, {"HOME": legacy_root}):
+                relay = self._relay(tmp)
+            entry = relay.treasury_items["legacy-file-item"]
+            self.assertGreater(entry["server_sequence"], 0)
+            self.assertEqual(len(relay.treasury_changes), 1)
+            snapshot = await self._call(
+                relay.get_treasury_items, query={"after_sequence": "0", "limit": "10"})
+            self.assertEqual(snapshot["payload"]["items"][0]["id"], "legacy-file-item")
 
 
 class RelayClientOutboxTests(unittest.IsolatedAsyncioTestCase):

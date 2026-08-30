@@ -309,6 +309,40 @@ CREATE TABLE IF NOT EXISTS treasure_changes (
 );
 CREATE INDEX IF NOT EXISTS idx_treasure_changes_item ON treasure_changes(item_id, sequence);
 
+CREATE TABLE IF NOT EXISTS treasure_remote_items (
+    scope TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    origin_device_id TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    server_sequence INTEGER NOT NULL,
+    updated_at REAL NOT NULL,
+    deleted_at REAL,
+    PRIMARY KEY(scope, item_id)
+);
+CREATE INDEX IF NOT EXISTS idx_treasure_remote_items_visible
+    ON treasure_remote_items(scope, deleted_at, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS treasure_sync_cursors (
+    scope TEXT PRIMARY KEY NOT NULL,
+    cursor INTEGER NOT NULL DEFAULT 0,
+    upload_cursor INTEGER NOT NULL DEFAULT 0,
+    last_success_at REAL,
+    updated_at REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS treasure_remote_assets (
+    scope TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    asset_kind TEXT NOT NULL CHECK(asset_kind IN ('body','attachment')),
+    content_text TEXT,
+    file_path TEXT,
+    digest TEXT NOT NULL,
+    byte_count INTEGER NOT NULL,
+    mime_type TEXT NOT NULL,
+    updated_at REAL NOT NULL,
+    PRIMARY KEY(scope, item_id, asset_kind)
+);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS treasure_search_fts USING fts5(
     item_id UNINDEXED, user_id UNINDEXED, title, original_text, summary, annotation, tags,
     tokenize='unicode61 remove_diacritics 2'

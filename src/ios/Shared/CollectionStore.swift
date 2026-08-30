@@ -345,7 +345,6 @@ struct TreasureItemContract: Codable, Equatable {
          lastOpenedAt: String? = nil, processingState: String? = nil,
          processingErrorCode: String? = nil, syncState: String = "local",
          deletedAt: String? = nil) {
-        let formatter = ISO8601DateFormatter()
         id = item.id
         schemaVersion = 1
         kind = item.kind == .file ? Self.fileKind(item.value) : item.kind.rawValue
@@ -369,8 +368,8 @@ struct TreasureItemContract: Codable, Equatable {
         archived = item.archived
         self.readingState = readingState
         self.readingProgress = readingProgress
-        createdAt = formatter.string(from: item.createdAt)
-        updatedAt = formatter.string(from: item.updatedAt)
+        createdAt = Self.string(from: item.createdAt)
+        updatedAt = Self.string(from: item.updatedAt)
         self.lastOpenedAt = lastOpenedAt
         self.processingState = processingState ?? (item.metadataFetched ? "ready" : "saved")
         self.processingErrorCode = processingErrorCode
@@ -394,8 +393,13 @@ struct TreasureItemContract: Codable, Equatable {
         case "text", "artifact":
             legacyKind = .text; value = originalText ?? ""
         case "image", "document", "audio", "video":
-            guard let bodyRef, let name = Self.safeLastPathComponent(bodyRef) else { return nil }
-            legacyKind = .file; value = name
+            if let bodyRef, let name = Self.safeLastPathComponent(bodyRef) {
+                legacyKind = .file; value = name
+            } else if ["remote_only", "synced", "conflict"].contains(syncState) {
+                legacyKind = .file; value = "remote-\(id)"
+            } else {
+                return nil
+            }
         default: return nil
         }
         return CollectedItem(
@@ -426,6 +430,12 @@ struct TreasureItemContract: Codable, Equatable {
         fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         if let date = fractional.date(from: value) { return date }
         return ISO8601DateFormatter().date(from: value)
+    }
+
+    static func string(from date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: date)
     }
 
     private static func fileKind(_ name: String) -> String {
@@ -786,6 +796,8 @@ enum CollectionStore {
 /// serialization without holding a database handle while doing extraction,
 /// OCR, hashing, or network work.
 final class TreasurySQLiteStore {
+    private static let initializationLock = NSLock()
+
     struct MigrationReport: Equatable {
         let importedCount: Int
         let quarantinedCount: Int
@@ -803,12 +815,32 @@ final class TreasurySQLiteStore {
     }
 
     struct Change: Equatable {
+        let sequence: Int64
         let id: String
         let itemID: String
         let operation: String
         let updatedAt: Date
         let originDeviceID: String
         let payloadDigest: String
+    }
+
+    struct RemoteChange {
+        let sequence: Int64
+        let id: String
+        let itemID: String
+        let operation: String
+        let updatedAt: Date
+        let originDeviceID: String
+        let payloadDigest: String
+        let contract: TreasureItemContract?
+    }
+
+    struct SyncAsset {
+        let fileURL: URL
+        let mimeType: String
+        let byteCount: Int
+        let digest: String
+        let removeAfterUpload: Bool
     }
 
     enum StoreError: Error {
@@ -834,6 +866,8 @@ final class TreasurySQLiteStore {
         legacyURL = directory.appendingPathComponent("items.json")
         try FileManager.default.createDirectory(at: directory,
                                                 withIntermediateDirectories: true)
+        Self.initializationLock.lock()
+        defer { Self.initializationLock.unlock() }
         migrationReport = try withDatabase { db in
             try Self.createSchema(db)
             return try migrateLegacyJSONIfNeeded(db)
@@ -987,6 +1021,7 @@ final class TreasurySQLiteStore {
                 let now = Date()
                 var stmt: OpaquePointer?
                 try Self.prepare(db, "UPDATE treasure_highlights SET deleted_at=?,updated_at=? WHERE id=? AND deleted_at IS NULL", &stmt)
+                defer { sqlite3_finalize(stmt) }
                 sqlite3_bind_double(stmt, 1, now.timeIntervalSince1970)
                 sqlite3_bind_double(stmt, 2, now.timeIntervalSince1970)
                 Self.bind(id, stmt, 3)
@@ -1122,7 +1157,7 @@ final class TreasurySQLiteStore {
     func changes(afterRowID: Int64 = 0, limit: Int = 500) throws -> [Change] {
         try withDatabase { db in
             let sql = """
-            SELECT change_id, item_id, operation, updated_at, origin_device_id,
+            SELECT rowid, change_id, item_id, operation, updated_at, origin_device_id,
                    payload_digest FROM treasure_changes
             WHERE rowid > ? ORDER BY rowid ASC LIMIT ?
             """
@@ -1134,13 +1169,206 @@ final class TreasurySQLiteStore {
             var changes: [Change] = []
             while sqlite3_step(stmt) == SQLITE_ROW {
                 changes.append(Change(
-                    id: Self.text(stmt, 0), itemID: Self.text(stmt, 1),
-                    operation: Self.text(stmt, 2),
-                    updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 3)),
-                    originDeviceID: Self.text(stmt, 4), payloadDigest: Self.text(stmt, 5)
+                    sequence: sqlite3_column_int64(stmt, 0),
+                    id: Self.text(stmt, 1), itemID: Self.text(stmt, 2),
+                    operation: Self.text(stmt, 3),
+                    updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(stmt, 4)),
+                    originDeviceID: Self.text(stmt, 5), payloadDigest: Self.text(stmt, 6)
                 ))
             }
             return changes
+        }
+    }
+
+    func syncContracts(ids: Set<String>) throws -> [String: TreasureItemContract] {
+        guard !ids.isEmpty else { return [:] }
+        let items = try load(includeDeleted: true).filter { ids.contains($0.id) }
+        let storage = try contractStorageFields()
+        return Dictionary(uniqueKeysWithValues: items.map { item in
+            let fields = storage[item.id]
+            let contract = TreasureItemContract(
+                item: item,
+                originDeviceID: fields?.originDeviceID ?? Self.originDeviceID(),
+                byteCount: fields?.byteCount ?? 0,
+                contentDigest: fields?.contentDigest,
+                sourceApp: fields?.sourceApp,
+                mimeType: fields?.mimeType,
+                collectionIDs: fields?.collectionIDs ?? [],
+                readingState: fields?.readingState ?? item.readingState,
+                readingProgress: fields?.readingProgress ?? item.readingProgress,
+                lastOpenedAt: fields?.lastOpenedAt,
+                processingState: fields?.processingState ?? item.processingState,
+                processingErrorCode: fields?.processingErrorCode,
+                syncState: fields?.syncState ?? "local",
+                deletedAt: fields?.deletedAt
+            )
+            return (item.id, contract)
+        })
+    }
+
+    func syncAsset(itemID: String, kind: String) throws -> SyncAsset? {
+        guard ["body", "attachment"].contains(kind) else { return nil }
+        return try withDatabase { db in
+            var stmt: OpaquePointer?
+            try Self.prepare(db, """
+                SELECT kind,legacy_value,original_text,body_ref,mime_type,
+                       byte_count,content_digest,origin_device_id
+                FROM treasure_items WHERE id=? AND deleted_at IS NULL LIMIT 1
+                """, &stmt)
+            defer { sqlite3_finalize(stmt) }
+            Self.bind(itemID, stmt, 1)
+            guard sqlite3_step(stmt) == SQLITE_ROW else { return nil }
+            let itemKind = Self.text(stmt, 0)
+            let legacyValue = Self.text(stmt, 1)
+            let originalText = Self.optionalText(stmt, 2)
+            let bodyRef = Self.optionalText(stmt, 3)
+            let storedMime = Self.optionalText(stmt, 4)
+            let storedCount = Int(sqlite3_column_int64(stmt, 5))
+            let storedDigest = Self.optionalText(stmt, 6)?.lowercased()
+
+            if kind == "body" {
+                if let originalText {
+                    let data = Data(originalText.utf8)
+                    guard data.count <= 8 * 1024 * 1024 else { return nil }
+                    let temp = FileManager.default.temporaryDirectory
+                        .appendingPathComponent("treasury-body-\(UUID().uuidString).txt")
+                    try data.write(to: temp, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+                    guard let digest = Self.sha256(temp) else {
+                        try? FileManager.default.removeItem(at: temp)
+                        return nil
+                    }
+                    return SyncAsset(fileURL: temp, mimeType: "text/plain",
+                                     byteCount: data.count, digest: digest,
+                                     removeAfterUpload: true)
+                }
+                guard let ref = bodyRef.flatMap(TreasureItemContract.safeLastPathComponent) else {
+                    return nil
+                }
+                let file = directory.appendingPathComponent("notes", isDirectory: true)
+                    .appendingPathComponent(ref, isDirectory: false)
+                guard let size = try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+                      size <= 8 * 1024 * 1024, let digest = Self.sha256(file) else { return nil }
+                return SyncAsset(fileURL: file, mimeType: "text/plain", byteCount: size,
+                                 digest: digest, removeAfterUpload: false)
+            }
+
+            guard ["file", "image", "document", "audio", "video", "artifact"].contains(itemKind),
+                  SharedContainerStore.isSafeFileName(legacyValue) else { return nil }
+            let file = directory.appendingPathComponent("files", isDirectory: true)
+                .appendingPathComponent(legacyValue, isDirectory: false)
+            guard let size = try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+                  size <= 128 * 1024 * 1024, let digest = Self.sha256(file),
+                  storedCount <= 0 || storedCount == size,
+                  storedDigest == nil || storedDigest == digest else { return nil }
+            return SyncAsset(fileURL: file, mimeType: storedMime ?? "application/octet-stream",
+                             byteCount: size, digest: digest, removeAfterUpload: false)
+        }
+    }
+
+    func applyRemoteChanges(_ changes: [RemoteChange]) throws {
+        guard !changes.isEmpty else { return }
+        let localOrigin = Self.originDeviceID()
+        try withDatabase { db in
+            try Self.transaction(db) {
+                for change in changes.sorted(by: { $0.sequence < $1.sequence }) {
+                    guard change.originDeviceID != localOrigin,
+                          ["upsert", "delete"].contains(change.operation),
+                          !change.itemID.isEmpty else { continue }
+                    var state: OpaquePointer?
+                    try Self.prepare(db, "SELECT updated_at,origin_device_id,sync_state,deleted_at FROM treasure_items WHERE id=?", &state)
+                    Self.bind(change.itemID, state, 1)
+                    let hasExisting = sqlite3_step(state) == SQLITE_ROW
+                    let existingUpdated = hasExisting
+                        ? Date(timeIntervalSince1970: sqlite3_column_double(state, 0)) : .distantPast
+                    let existingOrigin = hasExisting ? Self.text(state, 1) : ""
+                    let existingSync = hasExisting ? Self.text(state, 2) : ""
+                    let existingDeleted = hasExisting && sqlite3_column_type(state, 3) != SQLITE_NULL
+                    sqlite3_finalize(state)
+
+                    // Android and the relay exchange epoch milliseconds. Compare the
+                    // same canonical precision here so a sub-millisecond SQLite value
+                    // cannot make an otherwise concurrent remote edit look stale.
+                    let incomingTimestamp = Self.syncTimestampMilliseconds(change.updatedAt)
+                    let existingTimestamp = Self.syncTimestampMilliseconds(existingUpdated)
+                    let incomingKey = (incomingTimestamp,
+                                       change.operation == "delete" ? 1 : 0,
+                                       change.originDeviceID, change.id)
+                    let existingKey = (existingTimestamp,
+                                       existingDeleted ? 1 : 0, existingOrigin, "")
+                    guard !hasExisting || incomingKey > existingKey else {
+                        if existingSync == "pending" && existingOrigin == localOrigin &&
+                            incomingTimestamp >= existingTimestamp {
+                            var conflict: OpaquePointer?
+                            try Self.prepare(db, "UPDATE treasure_items SET sync_state='conflict' WHERE id=?", &conflict)
+                            Self.bind(change.itemID, conflict, 1)
+                            try Self.stepDone(db, conflict)
+                            sqlite3_finalize(conflict)
+                        }
+                        continue
+                    }
+                    let conflict = hasExisting && existingSync == "pending" && existingOrigin == localOrigin
+                    let finalSync = conflict ? "conflict" : (hasExisting ? "synced" : "remote_only")
+
+                    if change.operation == "delete" {
+                        if !hasExisting {
+                            var insertTombstone: OpaquePointer?
+                            try Self.prepare(db, """
+                                INSERT INTO treasure_items(
+                                  id,kind,legacy_value,source_label,created_at,updated_at,
+                                  processing_state,sync_state,origin_device_id,deleted_at,
+                                  metadata_fetched
+                                ) VALUES(?,'text','','同步删除',?,?,'saved','remote_only',?,?,1)
+                                """, &insertTombstone)
+                            Self.bind(change.itemID, insertTombstone, 1)
+                            sqlite3_bind_double(insertTombstone, 2, change.updatedAt.timeIntervalSince1970)
+                            sqlite3_bind_double(insertTombstone, 3, change.updatedAt.timeIntervalSince1970)
+                            Self.bind(change.originDeviceID, insertTombstone, 4)
+                            sqlite3_bind_double(insertTombstone, 5, change.updatedAt.timeIntervalSince1970)
+                            try Self.stepDone(db, insertTombstone)
+                            sqlite3_finalize(insertTombstone)
+                            continue
+                        }
+                        var deletion: OpaquePointer?
+                        try Self.prepare(db, "UPDATE treasure_items SET deleted_at=?,updated_at=?,sync_state=?,origin_device_id=? WHERE id=?", &deletion)
+                        sqlite3_bind_double(deletion, 1, change.updatedAt.timeIntervalSince1970)
+                        sqlite3_bind_double(deletion, 2, change.updatedAt.timeIntervalSince1970)
+                        Self.bind(finalSync, deletion, 3)
+                        Self.bind(change.originDeviceID, deletion, 4)
+                        Self.bind(change.itemID, deletion, 5)
+                        try Self.stepDone(db, deletion)
+                        sqlite3_finalize(deletion)
+                        continue
+                    }
+
+                    guard let contract = change.contract,
+                          contract.id == change.itemID,
+                          contract.originDeviceID == change.originDeviceID,
+                          Self.isValidContract(contract),
+                          let item = contract.collectedItem() else { continue }
+                    if existingDeleted {
+                        var resurrect: OpaquePointer?
+                        try Self.prepare(db, "UPDATE treasure_items SET deleted_at=NULL WHERE id=?", &resurrect)
+                        Self.bind(change.itemID, resurrect, 1)
+                        try Self.stepDone(db, resurrect)
+                        sqlite3_finalize(resurrect)
+                    }
+                    let prepared = prepareForPersistence(item)
+                    try Self.upsert(item, normalizedURL: prepared.normalizedURL,
+                                    contentDigest: prepared.contentDigest,
+                                    filesDirectory: filesDirectoryURL, db: db)
+                    try Self.applyContractMetadata(contract, db: db)
+                    var finalize: OpaquePointer?
+                    let clearMissingBody = !hasExisting && contract.originalText == nil
+                    try Self.prepare(db, "UPDATE treasure_items SET updated_at=?,sync_state=?,origin_device_id=?,deleted_at=NULL,original_text=CASE WHEN ? THEN NULL ELSE original_text END WHERE id=?", &finalize)
+                    sqlite3_bind_double(finalize, 1, change.updatedAt.timeIntervalSince1970)
+                    Self.bind(finalSync, finalize, 2)
+                    Self.bind(change.originDeviceID, finalize, 3)
+                    sqlite3_bind_int(finalize, 4, clearMissingBody ? 1 : 0)
+                    Self.bind(change.itemID, finalize, 5)
+                    try Self.stepDone(db, finalize)
+                    sqlite3_finalize(finalize)
+                }
+            }
         }
     }
 
@@ -1193,17 +1421,16 @@ final class TreasurySQLiteStore {
                        collection_ids_json, reading_state, reading_progress,
                        last_opened_at, processing_state, processing_error_code,
                        sync_state, origin_device_id, deleted_at
-                FROM treasure_items WHERE deleted_at IS NULL
+                FROM treasure_items
                 """, &stmt)
             defer { sqlite3_finalize(stmt) }
-            let formatter = ISO8601DateFormatter()
             var values: [String: ContractStorageFields] = [:]
             while sqlite3_step(stmt) == SQLITE_ROW {
                 let collectionData = Data(Self.text(stmt, 5).utf8)
                 let collectionIDs = (try? JSONDecoder().decode([String].self,
                                                                 from: collectionData)) ?? []
-                let lastOpened = Self.optionalDate(stmt, 8).map(formatter.string(from:))
-                let deleted = Self.optionalDate(stmt, 13).map(formatter.string(from:))
+                let lastOpened = Self.optionalDate(stmt, 8).map(TreasureItemContract.string(from:))
+                let deleted = Self.optionalDate(stmt, 13).map(TreasureItemContract.string(from:))
                 values[Self.text(stmt, 0)] = ContractStorageFields(
                     byteCount: Int(sqlite3_column_int64(stmt, 1)),
                     contentDigest: Self.optionalText(stmt, 2),
@@ -1401,7 +1628,8 @@ final class TreasurySQLiteStore {
         )) ?? "[]"
         let sql = """
         UPDATE treasure_items SET
-          schema_version=?, source_app=?, body_ref=?, preview_ref=?, mime_type=?,
+          schema_version=?, source_app=?, body_ref=COALESCE(?,body_ref),
+          preview_ref=COALESCE(?,preview_ref), mime_type=COALESCE(?,mime_type),
           byte_count=MAX(byte_count,?), content_digest=COALESCE(?,content_digest),
           collection_ids_json=?, reading_state=?,
           reading_progress=?, last_opened_at=?, processing_state=?,
@@ -1670,9 +1898,12 @@ final class TreasurySQLiteStore {
           kind=excluded.kind, legacy_value=excluded.legacy_value,
           source_uri=excluded.source_uri, normalized_url_key=excluded.normalized_url_key,
           resolved_url=excluded.resolved_url, title=excluded.title,
-          source_label=excluded.source_label, original_text=excluded.original_text,
-          body_ref=excluded.body_ref, preview_ref=excluded.preview_ref,
-          mime_type=excluded.mime_type, byte_count=excluded.byte_count,
+          source_label=excluded.source_label,
+          original_text=COALESCE(excluded.original_text,treasure_items.original_text),
+          body_ref=COALESCE(excluded.body_ref,treasure_items.body_ref),
+          preview_ref=COALESCE(excluded.preview_ref,treasure_items.preview_ref),
+          mime_type=COALESCE(excluded.mime_type,treasure_items.mime_type),
+          byte_count=MAX(excluded.byte_count,treasure_items.byte_count),
           content_digest=COALESCE(excluded.content_digest, treasure_items.content_digest),
           summary=excluded.summary, annotation=excluded.annotation,
           tags_json=excluded.tags_json, pinned=excluded.pinned,
@@ -1682,6 +1913,7 @@ final class TreasurySQLiteStore {
           processing_state=excluded.processing_state,
           processing_error_code=excluded.processing_error_code,
           updated_at=excluded.updated_at,
+          sync_state='pending', origin_device_id=excluded.origin_device_id,
           metadata_fetched=excluded.metadata_fetched
         WHERE treasure_items.deleted_at IS NULL
         """
@@ -1711,7 +1943,7 @@ final class TreasurySQLiteStore {
         }
         bind(item.processingState, stmt, 25)
         bind(item.processingErrorCode, stmt, 26)
-        bind("local", stmt, 27)
+        bind("pending", stmt, 27)
         bind(originDeviceID(), stmt, 28)
         sqlite3_bind_int(stmt, 29, item.metadataFetched ? 1 : 0)
         try stepDone(db, stmt)
@@ -1918,6 +2150,10 @@ final class TreasurySQLiteStore {
         let value = "ios-\(suffix)"
         defaults.set(value, forKey: key)
         return value
+    }
+
+    private static func syncTimestampMilliseconds(_ date: Date) -> Int64 {
+        Int64(date.timeIntervalSince1970 * 1_000)
     }
 
     static func mimeTypeForContract(_ name: String) -> String? {

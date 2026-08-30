@@ -113,13 +113,15 @@ app.use(leophoneRoutes);
 // Optional API key validation (if configured)
 app.use('/api', validateApiKey);
 
-// Fleet reads relay metadata and can answer privileged approvals. It belongs
-// behind the same local-user authentication boundary as every other UI API.
-app.use('/api', authenticateToken, fleetRoutes);
-app.use('/api/treasury', authenticateToken, treasuryRoutes);
-
 // Authentication routes (public)
 app.use('/api/auth', authRoutes);
+
+// Fleet reads relay metadata and can answer privileged approvals. It belongs
+// behind the same local-user authentication boundary as every other UI API.
+// Keep this broad /api router after the public auth router; otherwise its
+// authenticateToken middleware intercepts login and local-bootstrap exchange.
+app.use('/api', authenticateToken, fleetRoutes);
+app.use('/api/treasury', authenticateToken, treasuryRoutes);
 
 // Projects API Routes (protected)
 app.use('/api/projects', authenticateToken, projectModuleRoutes);

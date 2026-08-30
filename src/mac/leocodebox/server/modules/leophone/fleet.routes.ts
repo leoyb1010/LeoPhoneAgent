@@ -1,4 +1,16 @@
+import { createHash, randomUUID } from 'node:crypto';
+import { createReadStream, promises as fs } from 'node:fs';
+import path from 'node:path';
+
 import express from 'express';
+
+import {
+  treasuryDb,
+  getDatabasePath,
+  type RemoteTreasureChange,
+  type RemoteTreasureMetadata,
+  type TreasureItem,
+} from '@/modules/database/index.js';
 
 import { isLiveHarnessStatus } from './harness-session.service.js';
 import { localMachineName, resolveRelayConfig } from './relay-client.service.js';
@@ -18,9 +30,42 @@ import { localMachineName, resolveRelayConfig } from './relay-client.service.js'
 const router: express.Router = express.Router();
 
 const REQUEST_TIMEOUT_MS = 15_000;
+const ASSET_TIMEOUT_MS = 120_000;
+const REMOTE_BODY_LIMIT = 8 * 1024 * 1024;
+const REMOTE_ATTACHMENT_LIMIT = 128 * 1024 * 1024;
 const SNAPSHOT_CACHE_MS = 3_000;
+const ALLOWED_TREASURY_ASSET_MIMES = new Set([
+  'application/json', 'application/msword', 'application/octet-stream',
+  'application/pdf', 'application/rtf', 'application/vnd.apple.keynote',
+  'application/vnd.apple.numbers', 'application/vnd.apple.pages',
+  'application/vnd.ms-excel', 'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/xml', 'application/zip',
+  'audio/aac', 'audio/flac', 'audio/mp4', 'audio/mpeg', 'audio/ogg',
+  'audio/wav', 'audio/x-m4a', 'audio/x-wav',
+  'image/gif', 'image/heic', 'image/heif', 'image/jpeg', 'image/png',
+  'image/tiff', 'image/webp',
+  'text/csv', 'text/html', 'text/markdown', 'text/plain',
+  'video/mp4', 'video/mpeg', 'video/quicktime', 'video/webm',
+]);
 
 type RelayTarget = { base: string; key: string };
+
+function authenticatedUserId(req: express.Request): number {
+  const value = Number((req as express.Request & { user?: { id?: unknown } }).user?.id);
+  if (!Number.isInteger(value) || value <= 0) throw new Error('Authenticated user is missing');
+  return value;
+}
+
+function treasuryScope(target: RelayTarget): string {
+  return `relay:${createHash('sha256').update(target.base).digest('hex').slice(0, 24)}`;
+}
+
+function treasuryDeviceId(): string {
+  return `mac:${localMachineName()}`.slice(0, 200);
+}
 
 /** 中继根地址(…/relay/api)。没配中继就返回 null,前端据此显示引导。 */
 function relayTarget(): RelayTarget | null {
@@ -41,6 +86,34 @@ async function relayFetch(path: string, target: RelayTarget): Promise<unknown> {
   });
   if (!res.ok) throw new Error(`relay ${res.status}`);
   return res.json();
+}
+
+class RelayHttpError extends Error {
+  constructor(readonly status: number, readonly payload: unknown) {
+    super(`relay ${status}`);
+  }
+}
+
+async function relayJson(path: string, target: RelayTarget, init?: RequestInit): Promise<unknown> {
+  const res = await fetch(`${target.base}${path}`, {
+    ...init,
+    headers: {
+      authorization: `Bearer ${target.key}`,
+      ...(init?.body ? { 'content-type': 'application/json' } : {}),
+      ...(init?.headers ?? {}),
+    },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+  const payload: unknown = await res.json().catch(() => null);
+  if (!res.ok) throw new RelayHttpError(res.status, payload);
+  return payload;
+}
+
+async function relayRaw(pathname: string, target: RelayTarget, deviceId: string): Promise<Response> {
+  return fetch(`${target.base}${pathname}`, {
+    headers: { authorization: `Bearer ${target.key}`, 'x-treasury-device-id': deviceId },
+    signal: AbortSignal.timeout(ASSET_TIMEOUT_MS),
+  });
 }
 
 async function relayPost(path: string, target: RelayTarget, body: unknown): Promise<unknown> {
@@ -426,28 +499,589 @@ router.post('/leophone/join-token', async (req, res) => {
   }
 });
 
-/** [T-collections-fleet] 手机上传的收藏索引(只读镜像)。 */
-router.get('/leophone/collections', async (_req, res) => {
+const REMOTE_KINDS = new Set(['link', 'text', 'note', 'image', 'document', 'audio', 'video', 'artifact']);
+const REMOTE_READING = new Set(['none', 'unread', 'reading', 'read']);
+const REMOTE_PROCESSING = new Set(['saved', 'queued', 'processing', 'ready', 'partial', 'failed']);
+const remoteText = (value: unknown, limit: number): string => typeof value === 'string' ? value.slice(0, limit) : '';
+const remoteNumber = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+};
+
+function normalizeRemoteItem(value: unknown): RemoteTreasureMetadata | null {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as Record<string, unknown>;
+  const id = remoteText(raw.id, 200);
+  const kind = remoteText(raw.kind, 20);
+  const origin = remoteText(raw.origin_device_id, 200);
+  const sourceUri = remoteText(raw.source_uri, 16_384);
+  if (!id || !origin || !REMOTE_KINDS.has(kind)) return null;
+  if (sourceUri) {
+    try {
+      const parsed = new URL(sourceUri);
+      if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password) return null;
+    } catch { return null; }
+  }
+  const digest = remoteText(raw.content_digest, 64).toLowerCase();
+  if (digest && !/^[0-9a-f]{64}$/.test(digest)) return null;
+  const reading = remoteText(raw.reading_state, 20);
+  const processing = remoteText(raw.processing_state, 20);
+  const tags = Array.isArray(raw.tags) ? raw.tags.flatMap((entry) => {
+    const text = remoteText(entry, 100); return text ? [text] : [];
+  }).slice(0, 100) : [];
+  const collectionIds = Array.isArray(raw.collection_ids)
+    ? raw.collection_ids.flatMap((entry) => {
+      const text = remoteText(entry, 200); return text ? [text] : [];
+    }).slice(0, 100) : [];
+  return {
+    id, kind: kind as RemoteTreasureMetadata['kind'], title: remoteText(raw.title, 500),
+    source_uri: sourceUri, source_app: remoteText(raw.source_app, 200),
+    source_label: remoteText(raw.source_label, 500), summary: remoteText(raw.summary, 4_000),
+    annotation: remoteText(raw.annotation, 20_000), tags, collection_ids: collectionIds,
+    pinned: raw.pinned === true, archived: raw.archived === true,
+    reading_state: (REMOTE_READING.has(reading) ? reading : 'none') as RemoteTreasureMetadata['reading_state'],
+    reading_progress: Math.min(1, remoteNumber(raw.reading_progress)),
+    created_at: remoteNumber(raw.created_at), updated_at: remoteNumber(raw.updated_at),
+    last_opened_at: remoteNumber(raw.last_opened_at),
+    processing_state: (REMOTE_PROCESSING.has(processing) ? processing : 'ready') as RemoteTreasureMetadata['processing_state'],
+    processing_error_code: remoteText(raw.processing_error_code, 100),
+    content_digest: digest, byte_count: Math.min(Number.MAX_SAFE_INTEGER, remoteNumber(raw.byte_count)),
+    mime_type: remoteText(raw.mime_type, 200), body_available: raw.body_available === true,
+    attachment_available: raw.attachment_available === true, origin_device_id: origin,
+    deleted_at: remoteNumber(raw.deleted_at),
+  };
+}
+
+function localSyncItem(item: TreasureItem): RemoteTreasureMetadata {
+  const seconds = (raw: string | null): number => raw ? Date.parse(raw) / 1_000 : 0;
+  return {
+    id: item.id, kind: item.kind, title: item.title ?? '', source_uri: item.source_uri ?? '',
+    source_app: item.source_app ?? '', source_label: item.source_label,
+    summary: item.summary ?? '', annotation: item.annotation ?? '', tags: item.tags,
+    collection_ids: item.collection_ids, pinned: item.pinned, archived: item.archived,
+    reading_state: item.reading_state, reading_progress: item.reading_progress,
+    created_at: seconds(item.created_at), updated_at: seconds(item.updated_at),
+    last_opened_at: seconds(item.last_opened_at), processing_state: item.processing_state,
+    processing_error_code: item.processing_error_code ?? '', content_digest: item.content_digest ?? '',
+    byte_count: item.byte_count, mime_type: item.mime_type ?? '',
+    body_available: item.original_text !== null,
+    attachment_available: item.body_ref !== null && item.byte_count > 0,
+    origin_device_id: treasuryDeviceId(), deleted_at: seconds(item.deleted_at),
+  };
+}
+
+async function uploadLocalTreasury(userId: number, target: RelayTarget, scope: string): Promise<void> {
+  const state = treasuryDb.remoteSyncState(scope);
+  let cursor = state.uploadCursor;
+  for (let page = 0; page < 20; page += 1) {
+    const changes = treasuryDb.changes(cursor, 500);
+    if (!changes.length) return;
+    const items = treasuryDb.get(userId, changes.map((change) => change.item_id), true);
+    const byId = new Map(items.map((item) => [item.id, item]));
+    const payload = changes.map((change) => ({
+      ...change,
+      local_sequence: change.sequence,
+      updated_at: Date.parse(change.updated_at) / 1_000,
+      origin_device_id: treasuryDeviceId(),
+      item: change.operation === 'upsert' && byId.has(change.item_id)
+        ? localSyncItem(byId.get(change.item_id)!) : undefined,
+    }));
+    const response = await relayJson('/treasury/changes', target, {
+      method: 'POST', body: JSON.stringify({ device_id: treasuryDeviceId(), changes: payload }),
+    }) as { ack_local_cursor?: unknown };
+    const ack = Math.max(cursor, Number(response.ack_local_cursor) || 0);
+    if (ack <= cursor) throw new Error('relay did not acknowledge treasury changes');
+    treasuryDb.setUploadCursor(scope, ack);
+    cursor = ack;
+    if (changes.length < 500) return;
+  }
+  throw new Error('local treasury sync page limit exceeded');
+}
+
+async function rebuildRemoteTreasury(target: RelayTarget, scope: string): Promise<void> {
+  let after = 0;
+  const items: Array<RemoteTreasureMetadata & { server_sequence: number }> = [];
+  let serverCursor = 0;
+  for (let page = 0; page < 60; page += 1) {
+    const response = await relayJson(`/treasury/items?after_sequence=${after}&limit=1000`, target) as {
+      items?: unknown[]; next_cursor?: unknown; has_more?: unknown; server_cursor?: unknown;
+    };
+    if (!Array.isArray(response.items)) throw new Error('relay treasury snapshot is missing');
+    let pageCursor = after;
+    for (const value of response.items) {
+      if (!value || typeof value !== 'object') throw new Error('relay treasury snapshot is invalid');
+      const normalized = normalizeRemoteItem(value);
+      const sequence = remoteNumber((value as Record<string, unknown>)?.server_sequence);
+      if (!normalized || sequence <= pageCursor) throw new Error('relay treasury snapshot is invalid');
+      pageCursor = sequence;
+      items.push({ ...normalized, server_sequence: sequence });
+    }
+    const next = remoteNumber(response.next_cursor);
+    serverCursor = remoteNumber(response.server_cursor);
+    if (next !== pageCursor || serverCursor < next) throw new Error('relay treasury snapshot cursor mismatch');
+    if (response.has_more !== true) {
+      treasuryDb.replaceRemoteSnapshot(scope, items, serverCursor);
+      return;
+    }
+    if (next <= after) throw new Error('relay treasury rebuild cursor stalled');
+    after = next;
+  }
+  throw new Error('remote treasury rebuild page limit exceeded');
+}
+
+async function pullRemoteTreasury(target: RelayTarget, scope: string): Promise<void> {
+  let cursor = treasuryDb.remoteSyncState(scope).cursor;
+  for (let page = 0; page < 40; page += 1) {
+    let response: { changes?: unknown[]; next_cursor?: unknown; has_more?: unknown };
+    try {
+      response = await relayJson(`/treasury/changes?after=${cursor}&limit=500`, target) as typeof response;
+    } catch (error) {
+      if (error instanceof RelayHttpError && error.status === 410) {
+        await rebuildRemoteTreasury(target, scope);
+        return;
+      }
+      throw error;
+    }
+    if (!Array.isArray(response.changes)) throw new Error('relay treasury change list is missing');
+    const changes: RemoteTreasureChange[] = [];
+    let deliveredCursor = cursor;
+    for (const value of response.changes) {
+      if (!value || typeof value !== 'object') throw new Error('relay treasury change is invalid');
+      const raw = value as Record<string, unknown>;
+      const sequence = remoteNumber(raw.sequence);
+      if (sequence <= deliveredCursor) throw new Error('relay treasury change order is invalid');
+      deliveredCursor = sequence;
+      if (raw.applied === false) continue;
+      const operation = remoteText(raw.operation, 20);
+      const item = raw.item == null ? null : normalizeRemoteItem(raw.item);
+      const changeId = remoteText(raw.change_id, 200);
+      const itemId = remoteText(raw.item_id, 200);
+      const origin = remoteText(raw.origin_device_id, 200);
+      const digest = remoteText(raw.payload_digest, 64).toLowerCase();
+      if (!sequence || !changeId || !itemId || !origin || !['upsert', 'delete'].includes(operation) ||
+          !/^[0-9a-f]{64}$/.test(digest) ||
+          (operation === 'upsert' && (!item || item.id !== itemId || item.origin_device_id !== origin))) {
+        throw new Error('relay treasury change is invalid');
+      }
+      changes.push({ sequence, change_id: changeId, item_id: itemId,
+        operation: operation as 'upsert' | 'delete', updated_at: remoteNumber(raw.updated_at),
+        origin_device_id: origin, payload_digest: digest, item });
+    }
+    const next = remoteNumber(response.next_cursor);
+    if (next !== deliveredCursor) throw new Error('relay treasury cursor does not match delivered changes');
+    treasuryDb.applyRemoteChanges(scope, changes, Math.max(cursor, next));
+    if (response.has_more !== true) return;
+    if (next <= cursor) throw new Error('relay treasury cursor stalled');
+    cursor = next;
+  }
+  throw new Error('remote treasury page limit exceeded');
+}
+
+async function serveLocalTreasuryAssetRequests(userId: number, target: RelayTarget): Promise<void> {
+  const deviceId = treasuryDeviceId();
+  const response = await relayJson(
+    `/treasury/assets/requests?origin_device_id=${encodeURIComponent(deviceId)}`, target,
+  ) as { requests?: unknown[] };
+  const root = path.join(path.dirname(getDatabasePath()), 'treasury');
+  for (const value of (response.requests ?? []).slice(0, 10)) {
+    if (!value || typeof value !== 'object') continue;
+    const raw = value as Record<string, unknown>;
+    const requestId = remoteText(raw.id, 200);
+    const itemId = remoteText(raw.item_id, 200);
+    const assetKind = remoteText(raw.asset_kind, 20);
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId) ||
+        !itemId || !['body', 'attachment'].includes(assetKind)) continue;
+    const item = treasuryDb.get(userId, [itemId], true)[0];
+    let bytes: Buffer | null = null;
+    let filePath: string | null = null;
+    let byteCount = 0;
+    let digest = '';
+    let mimeType = 'application/octet-stream';
+    if (item && !item.deleted_at && assetKind === 'body' && item.original_text !== null) {
+      bytes = Buffer.from(item.original_text, 'utf8');
+      mimeType = 'text/plain';
+      if (bytes.length > REMOTE_BODY_LIMIT) bytes = null;
+      if (bytes) {
+        byteCount = bytes.length;
+        digest = createHash('sha256').update(bytes).digest('hex');
+      }
+    } else if (item && !item.deleted_at && assetKind === 'attachment' && item.body_ref) {
+      const candidate = path.resolve(root, item.body_ref);
+      const rootPrefix = path.resolve(root) + path.sep;
+      if (candidate.startsWith(rootPrefix)) {
+        try {
+          const stat = await fs.stat(candidate);
+          if (stat.isFile() && stat.size <= REMOTE_ATTACHMENT_LIMIT) {
+            const fileDigest = await sha256File(candidate);
+            if ((!item.content_digest || item.content_digest === fileDigest) &&
+                (!item.byte_count || item.byte_count === stat.size)) {
+              filePath = candidate;
+              byteCount = stat.size;
+              digest = fileDigest;
+              mimeType = item.mime_type ?? 'application/octet-stream';
+            }
+          }
+        } catch { /* origin will report unavailable below */ }
+      }
+    }
+    if (!bytes && !filePath) {
+      await relayJson(`/treasury/assets/${encodeURIComponent(requestId)}/unavailable`, target, {
+        method: 'POST', body: JSON.stringify({ device_id: deviceId }),
+      });
+      continue;
+    }
+    const stream = filePath ? createReadStream(filePath) : null;
+    const uploadInit: RequestInit & { duplex?: 'half' } = {
+      method: 'PUT', body: stream ? stream as unknown as RequestInit['body'] : bytes,
+      headers: {
+        authorization: `Bearer ${target.key}`, 'x-treasury-device-id': deviceId,
+        'x-treasury-digest': digest, 'x-treasury-byte-count': String(byteCount),
+        'content-type': mimeType,
+      },
+      signal: AbortSignal.timeout(ASSET_TIMEOUT_MS),
+    };
+    if (stream) uploadInit.duplex = 'half';
+    try {
+      const uploaded = await fetch(
+        `${target.base}/treasury/assets/${encodeURIComponent(requestId)}`, uploadInit,
+      );
+      await uploaded.body?.cancel().catch(() => undefined);
+      if (!uploaded.ok) throw new Error(`relay ${uploaded.status}`);
+    } finally {
+      stream?.destroy();
+    }
+  }
+}
+
+/** Phase 4 cursor sync. Cached metadata remains available when the relay is offline. */
+router.get('/leophone/collections', async (req, res) => {
   const target = relayTarget();
   if (!target) {
     res.json({ configured: false, items: [] });
     return;
   }
+  const scope = treasuryScope(target);
+  const localDevice = treasuryDeviceId();
   try {
-    const payload = (await relayFetch('/collections', target)) as {
-      items?: unknown[];
-      updated_at?: number;
-    };
+    const userId = authenticatedUserId(req);
+    await uploadLocalTreasury(userId, target, scope);
+    await pullRemoteTreasury(target, scope);
+    await serveLocalTreasuryAssetRequests(userId, target);
+    const state = treasuryDb.remoteSyncState(scope);
     res.json({
       configured: true,
-      items: payload.items ?? [],
-      updatedAt: payload.updated_at ?? 0,
+      items: treasuryDb.remoteItems(scope).filter((item) => item.origin_device_id !== localDevice),
+      updatedAt: state.lastSuccessAt ?? 0,
+      cursor: state.cursor,
+      stale: false,
     });
   } catch (error) {
-    res.status(502).json({
+    const state = treasuryDb.remoteSyncState(scope);
+    const cached = treasuryDb.remoteItems(scope).filter((item) => item.origin_device_id !== localDevice);
+    res.status(cached.length ? 200 : 502).json({
+      configured: true,
+      items: cached,
+      updatedAt: state.lastSuccessAt ?? 0,
+      cursor: state.cursor,
+      stale: true,
       error: { message: error instanceof Error ? error.message : 'relay unreachable' },
     });
   }
+});
+
+type RemoteAssetRequest = {
+  id: string; item_id: string; asset_kind: 'body' | 'attachment'; status: string;
+};
+
+function remoteAssetDirectory(): string {
+  return path.join(path.dirname(getDatabasePath()), 'treasury-assets');
+}
+
+export function cachedAttachmentPath(scope: string, itemId: string, digest: string): string {
+  const name = createHash('sha256').update(`${scope}\0${itemId}\0${digest}`).digest('hex');
+  return path.join(remoteAssetDirectory(), `${name}.bin`);
+}
+
+export function isCachedAttachmentPath(value: string): boolean {
+  const root = path.resolve(remoteAssetDirectory()) + path.sep;
+  return path.resolve(value).startsWith(root);
+}
+
+async function sha256File(filePath: string): Promise<string> {
+  const hash = createHash('sha256');
+  for await (const chunk of createReadStream(filePath)) hash.update(chunk as Buffer);
+  return hash.digest('hex');
+}
+
+export function safeAssetHeaders(response: Response, limit: number): {
+  digest: string; byteCount: number; mimeType: string;
+} {
+  const digest = (response.headers.get('x-treasury-digest') ?? '').toLowerCase();
+  const byteCount = Number(response.headers.get('x-treasury-byte-count'));
+  const mimeType = (response.headers.get('content-type') ?? '').split(';', 1)[0].trim().toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(digest) || !Number.isSafeInteger(byteCount) ||
+      byteCount < 0 || byteCount > limit || !mimeType || /[\r\n]/.test(mimeType) ||
+      !isAllowedTreasuryAssetMime(mimeType)) {
+    throw new Error('relay returned invalid treasury asset metadata');
+  }
+  return { digest, byteCount, mimeType };
+}
+
+export function isAllowedTreasuryAssetMime(mimeType: string): boolean {
+  return ALLOWED_TREASURY_ASSET_MIMES.has(mimeType);
+}
+
+export function isValidCachedBody(asset: {
+  content_text: string | null; digest: string; byte_count: number; mime_type: string;
+} | null): asset is {
+  content_text: string; digest: string; byte_count: number; mime_type: string;
+} {
+  if (!asset || asset.content_text === null || asset.mime_type !== 'text/plain') return false;
+  const bytes = Buffer.from(asset.content_text, 'utf8');
+  return bytes.length === asset.byte_count &&
+    createHash('sha256').update(bytes).digest('hex') === asset.digest;
+}
+
+async function isValidCachedAttachment(
+  asset: ReturnType<typeof treasuryDb.remoteAsset>,
+  item: RemoteTreasureMetadata,
+): Promise<boolean> {
+  if (!asset?.file_path || !isCachedAttachmentPath(asset.file_path) ||
+      (item.byte_count > 0 && item.byte_count !== asset.byte_count) ||
+      (item.content_digest && item.content_digest !== asset.digest) ||
+      (item.mime_type && item.mime_type.split(';', 1)[0].toLowerCase() !== asset.mime_type)) return false;
+  try {
+    const stat = await fs.stat(asset.file_path);
+    return stat.isFile() && stat.size === asset.byte_count &&
+      await sha256File(asset.file_path) === asset.digest;
+  } catch {
+    return false;
+  }
+}
+
+async function requestRemoteAsset(
+  target: RelayTarget,
+  scope: string,
+  item: RemoteTreasureMetadata,
+  assetKind: 'body' | 'attachment',
+): Promise<{ status: 'ready' | 'pending' | 'unavailable'; stale: boolean }> {
+  const requester = treasuryDeviceId();
+  const created = await relayJson('/treasury/assets/requests', target, {
+    method: 'POST',
+    body: JSON.stringify({ item_id: item.id, asset_kind: assetKind, requester_device_id: requester }),
+  }) as { request?: RemoteAssetRequest };
+  const request = created.request;
+  if (!request?.id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(request.id) ||
+      request.item_id !== item.id || request.asset_kind !== assetKind) {
+    throw new Error('relay returned invalid treasury asset request');
+  }
+  if (request.status === 'pending') return { status: 'pending', stale: false };
+  if (request.status !== 'ready') return { status: 'unavailable', stale: false };
+  const response = await relayRaw(`/treasury/assets/${encodeURIComponent(request.id)}`, target, requester);
+  if (response.status === 202) return { status: 'pending', stale: false };
+  if (response.status === 410) return { status: 'unavailable', stale: false };
+  if (!response.ok) throw new Error(`relay ${response.status}`);
+  const limit = assetKind === 'body' ? REMOTE_BODY_LIMIT : REMOTE_ATTACHMENT_LIMIT;
+  const metadata = safeAssetHeaders(response, limit);
+  if (assetKind === 'attachment') {
+    if ((item.byte_count > 0 && item.byte_count !== metadata.byteCount) ||
+        (item.content_digest && item.content_digest !== metadata.digest) ||
+        (item.mime_type && item.mime_type.split(';', 1)[0].toLowerCase() !== metadata.mimeType)) {
+      throw new Error('remote treasury attachment does not match metadata');
+    }
+  } else if (metadata.mimeType !== 'text/plain') {
+    throw new Error('remote treasury body has invalid mime type');
+  }
+  if (assetKind === 'body') {
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length !== metadata.byteCount ||
+        createHash('sha256').update(bytes).digest('hex') !== metadata.digest) {
+      throw new Error('remote treasury asset integrity mismatch');
+    }
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    treasuryDb.putRemoteAsset({
+      scope, item_id: item.id, asset_kind: 'body', content_text: text, file_path: null,
+      digest: metadata.digest, byte_count: metadata.byteCount, mime_type: metadata.mimeType,
+      updated_at: Date.now() / 1_000,
+    });
+  } else {
+    const directory = remoteAssetDirectory();
+    await fs.mkdir(directory, { recursive: true, mode: 0o700 });
+    const targetPath = cachedAttachmentPath(scope, item.id, metadata.digest);
+    const temporary = path.join(directory, `.${randomUUID()}.tmp`);
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('relay returned an empty treasury attachment');
+    const handle = await fs.open(temporary, 'wx', 0o600);
+    const hash = createHash('sha256');
+    let byteCount = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = Buffer.from(value);
+        byteCount += chunk.length;
+        if (byteCount > metadata.byteCount || byteCount > REMOTE_ATTACHMENT_LIMIT) {
+          throw new Error('remote treasury attachment exceeds declared size');
+        }
+        hash.update(chunk);
+        await handle.write(chunk);
+      }
+      await handle.sync();
+      if (byteCount !== metadata.byteCount || hash.digest('hex') !== metadata.digest) {
+        throw new Error('remote treasury asset integrity mismatch');
+      }
+      await handle.close();
+      await fs.rename(temporary, targetPath);
+    } catch (error) {
+      await reader.cancel().catch(() => undefined);
+      await handle.close().catch(() => undefined);
+      await fs.rm(temporary, { force: true });
+      throw error;
+    }
+    const previous = treasuryDb.remoteAsset(scope, item.id, 'attachment');
+    treasuryDb.putRemoteAsset({
+      scope, item_id: item.id, asset_kind: 'attachment', content_text: null,
+      file_path: targetPath, digest: metadata.digest, byte_count: metadata.byteCount,
+      mime_type: metadata.mimeType, updated_at: Date.now() / 1_000,
+    });
+    if (previous?.file_path && previous.file_path !== targetPath && isCachedAttachmentPath(previous.file_path)) {
+      await fs.rm(previous.file_path, { force: true });
+    }
+  }
+  return { status: 'ready', stale: false };
+}
+
+function remoteItem(scope: string, itemId: string): RemoteTreasureMetadata | null {
+  const localDevice = treasuryDeviceId();
+  return treasuryDb.remoteItems(scope).find((item) =>
+    item.id === itemId && item.origin_device_id !== localDevice && !item.deleted_at) ?? null;
+}
+
+export function offlineCollectionCandidates(
+  items: RemoteTreasureMetadata[], collectionId: string, limit = 200,
+): RemoteTreasureMetadata[] {
+  return offlineBodyCandidates(items, collectionId, limit);
+}
+
+export function offlineBodyCandidates(
+  items: RemoteTreasureMetadata[], collectionId: string | null, limit = 200,
+): RemoteTreasureMetadata[] {
+  const bounded = Math.max(1, Math.min(limit, 500));
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (item.deleted_at || !item.body_available ||
+        (collectionId !== null && !item.collection_ids.includes(collectionId)) ||
+        seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  }).slice(0, bounded);
+}
+
+router.post('/leophone/collections/offline', async (req, res) => {
+  const target = relayTarget();
+  if (!target) { res.status(409).json({ error: { message: '未配置中继' } }); return; }
+  const collectionId = remoteText(req.body?.collection_id, 200);
+  const allBody = req.body?.all_body === true;
+  if (!collectionId && !allBody) { res.status(400).json({ error: { message: '合集不能为空' } }); return; }
+  const scope = treasuryScope(target);
+  const localDevice = treasuryDeviceId();
+  const allCandidates = treasuryDb.remoteItems(scope).filter((item) =>
+    item.origin_device_id !== localDevice && !item.deleted_at && item.body_available &&
+    (allBody || item.collection_ids.includes(collectionId!)));
+  const candidates = offlineBodyCandidates(allCandidates, allBody ? null : collectionId);
+  const counts = { ready: 0, pending: 0, unavailable: 0, failed: 0 };
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < candidates.length) {
+      const item = candidates[cursor++];
+      const cached = treasuryDb.remoteAsset(scope, item.id, 'body');
+      if (isValidCachedBody(cached)) { counts.ready += 1; continue; }
+      try {
+        const state = await requestRemoteAsset(target, scope, item, 'body');
+        const current = treasuryDb.remoteAsset(scope, item.id, 'body');
+        if (state.status === 'ready' && isValidCachedBody(current)) counts.ready += 1;
+        else if (state.status === 'pending') counts.pending += 1;
+        else counts.unavailable += 1;
+      } catch { counts.failed += 1; }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, candidates.length) }, worker));
+  res.json({
+    collection_id: collectionId ?? null,
+    all_body: allBody,
+    total: allCandidates.length,
+    attempted: candidates.length,
+    truncated: allCandidates.length > candidates.length,
+    ...counts,
+  });
+});
+
+router.get('/leophone/collections/:itemId/body', async (req, res) => {
+  const target = relayTarget();
+  if (!target) { res.status(409).json({ error: { message: '未配置中继' } }); return; }
+  const scope = treasuryScope(target);
+  const item = remoteItem(scope, req.params.itemId);
+  if (!item || !item.body_available) { res.status(404).json({ error: { message: '远端正文不可用' } }); return; }
+  const cached = treasuryDb.remoteAsset(scope, item.id, 'body');
+  try {
+    const state = await requestRemoteAsset(target, scope, item, 'body');
+    const current = treasuryDb.remoteAsset(scope, item.id, 'body') ?? cached;
+    if (state.status === 'ready' && isValidCachedBody(current)) {
+      res.json({ item, body: current.content_text, status: 'ready', stale: false,
+        digest: current.digest, byte_count: current.byte_count });
+      return;
+    }
+    if (isValidCachedBody(current)) {
+      res.json({ item, body: current.content_text, status: state.status, stale: true,
+        digest: current.digest, byte_count: current.byte_count });
+      return;
+    }
+    res.status(state.status === 'pending' ? 202 : 410).json({ item, body: null, status: state.status });
+  } catch (error) {
+    if (isValidCachedBody(cached)) {
+      res.json({ item, body: cached.content_text, status: 'ready', stale: true,
+        digest: cached.digest, byte_count: cached.byte_count });
+      return;
+    }
+    res.status(502).json({ error: { message: error instanceof Error ? error.message : '远端正文读取失败' } });
+  }
+});
+
+router.get('/leophone/collections/:itemId/attachment', async (req, res) => {
+  const target = relayTarget();
+  if (!target) { res.status(409).json({ error: { message: '未配置中继' } }); return; }
+  const scope = treasuryScope(target);
+  const item = remoteItem(scope, req.params.itemId);
+  if (!item || !item.attachment_available) {
+    res.status(404).json({ error: { message: '远端附件不可用' } }); return;
+  }
+  let cached = treasuryDb.remoteAsset(scope, item.id, 'attachment');
+  if (!await isValidCachedAttachment(cached, item)) cached = null;
+  try {
+    if (!cached) {
+      const state = await requestRemoteAsset(target, scope, item, 'attachment');
+      cached = treasuryDb.remoteAsset(scope, item.id, 'attachment');
+      if (state.status !== 'ready' && !await isValidCachedAttachment(cached, item)) {
+        res.status(state.status === 'pending' ? 202 : 410).json({ status: state.status }); return;
+      }
+    }
+  } catch (error) {
+    if (!cached?.file_path) {
+      res.status(502).json({ error: { message: error instanceof Error ? error.message : '远端附件读取失败' } });
+      return;
+    }
+  }
+  if (!await isValidCachedAttachment(cached, item) || !cached?.file_path) {
+    res.status(410).json({ error: { message: '远端附件缓存不可用' } }); return;
+  }
+  if (req.query.status === '1') {
+    res.json({ status: 'ready', digest: cached.digest, byte_count: cached.byte_count });
+    return;
+  }
+  res.setHeader('Content-Type', cached.mime_type);
+  res.setHeader('X-Treasury-Digest', cached.digest);
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.sendFile(cached.file_path);
 });
 
 export default router;

@@ -8,6 +8,7 @@ export const TREASURE_KINDS = [
 const READING_STATES = new Set(['none', 'unread', 'reading', 'read']);
 const PROCESSING_STATES = new Set(['saved', 'queued', 'processing', 'ready', 'partial', 'failed']);
 const SYNC_STATES = new Set(['local', 'pending', 'synced', 'conflict', 'remote_only']);
+const TREASURE_ITEM_REMOTE_LIMIT = 50_000;
 export type TreasureKind = (typeof TREASURE_KINDS)[number];
 export type ReadingState = 'unread' | 'reading' | 'read' | 'none';
 export type ProcessingState = 'saved' | 'queued' | 'processing' | 'ready' | 'partial' | 'failed';
@@ -55,6 +56,28 @@ export type TreasureJob = {
 export type TreasureChange = {
   sequence: number; change_id: string; item_id: string; operation: 'upsert' | 'delete';
   updated_at: string; origin_device_id: string; payload_digest: string;
+};
+
+export type RemoteTreasureMetadata = {
+  id: string; kind: TreasureKind; title: string; source_uri: string; source_app: string;
+  source_label: string; summary: string; annotation: string; tags: string[];
+  collection_ids: string[]; pinned: boolean; archived: boolean; reading_state: ReadingState;
+  reading_progress: number; created_at: number; updated_at: number; last_opened_at: number;
+  processing_state: ProcessingState; processing_error_code: string; content_digest: string;
+  byte_count: number; mime_type: string; body_available: boolean; attachment_available: boolean;
+  origin_device_id: string; deleted_at: number;
+};
+
+export type RemoteTreasureChange = {
+  sequence: number; change_id: string; item_id: string; operation: 'upsert' | 'delete';
+  updated_at: number; origin_device_id: string; payload_digest: string;
+  item: RemoteTreasureMetadata | null;
+};
+
+export type RemoteTreasureAsset = {
+  scope: string; item_id: string; asset_kind: 'body' | 'attachment';
+  content_text: string | null; file_path: string | null; digest: string;
+  byte_count: number; mime_type: string; updated_at: number;
 };
 
 export type TreasureHighlight = {
@@ -636,6 +659,121 @@ export const treasuryDb = {
       `SELECT sequence,change_id,item_id,operation,updated_at,origin_device_id,payload_digest
        FROM treasure_changes WHERE sequence>? ORDER BY sequence LIMIT ?`,
     ).all(Math.max(0, after), Math.max(1, Math.min(limit, 1_000))) as TreasureChange[];
+  },
+
+  remoteSyncState(scope: string): { cursor: number; uploadCursor: number; lastSuccessAt: number | null } {
+    const row = getConnection().prepare(
+      `SELECT cursor,upload_cursor,last_success_at FROM treasure_sync_cursors WHERE scope=?`,
+    ).get(scope) as { cursor: number; upload_cursor: number; last_success_at: number | null } | undefined;
+    return { cursor: row?.cursor ?? 0, uploadCursor: row?.upload_cursor ?? 0,
+      lastSuccessAt: row?.last_success_at ?? null };
+  },
+
+  setUploadCursor(scope: string, uploadCursor: number): void {
+    const now = Date.now() / 1_000;
+    getConnection().prepare(
+      `INSERT INTO treasure_sync_cursors(scope,cursor,upload_cursor,last_success_at,updated_at)
+       VALUES(?,0,?,NULL,?)
+       ON CONFLICT(scope) DO UPDATE SET
+         upload_cursor=MAX(treasure_sync_cursors.upload_cursor,excluded.upload_cursor),
+         updated_at=excluded.updated_at`,
+    ).run(scope, Math.max(0, uploadCursor), now);
+  },
+
+  applyRemoteChanges(scope: string, changes: RemoteTreasureChange[], nextCursor: number,
+                     successAt = Date.now() / 1_000): void {
+    const upsert = getConnection().prepare(
+      `INSERT INTO treasure_remote_items
+       (scope,item_id,origin_device_id,payload_json,server_sequence,updated_at,deleted_at)
+       VALUES(?,?,?,?,?,?,?)
+       ON CONFLICT(scope,item_id) DO UPDATE SET
+         origin_device_id=excluded.origin_device_id,payload_json=excluded.payload_json,
+         server_sequence=excluded.server_sequence,updated_at=excluded.updated_at,
+         deleted_at=excluded.deleted_at
+       WHERE excluded.server_sequence>treasure_remote_items.server_sequence`,
+    );
+    getConnection().transaction(() => {
+      for (const change of changes) {
+        const deletedAt = change.operation === 'delete' ? change.updated_at : change.item?.deleted_at || null;
+        const payload = change.item ?? {
+          id: change.item_id, origin_device_id: change.origin_device_id,
+          updated_at: change.updated_at, deleted_at: change.updated_at,
+        };
+        upsert.run(scope, change.item_id, change.origin_device_id, JSON.stringify(payload),
+          change.sequence, change.updated_at, deletedAt);
+      }
+      getConnection().prepare(
+        `INSERT INTO treasure_sync_cursors(scope,cursor,upload_cursor,last_success_at,updated_at)
+         VALUES(?,?,0,?,?)
+         ON CONFLICT(scope) DO UPDATE SET cursor=MAX(treasure_sync_cursors.cursor,excluded.cursor),
+           last_success_at=excluded.last_success_at,updated_at=excluded.updated_at`,
+      ).run(scope, Math.max(0, nextCursor), successAt, successAt);
+    })();
+  },
+
+  replaceRemoteSnapshot(scope: string, items: Array<RemoteTreasureMetadata & { server_sequence: number }>,
+                        serverCursor: number, successAt = Date.now() / 1_000): void {
+    const insert = getConnection().prepare(
+      `INSERT INTO treasure_remote_items
+       (scope,item_id,origin_device_id,payload_json,server_sequence,updated_at,deleted_at)
+       VALUES(?,?,?,?,?,?,?)`,
+    );
+    getConnection().transaction(() => {
+      getConnection().prepare('DELETE FROM treasure_remote_items WHERE scope=?').run(scope);
+      for (const item of items) {
+        insert.run(scope, item.id, item.origin_device_id, JSON.stringify(item), item.server_sequence,
+          item.updated_at, item.deleted_at || null);
+      }
+      getConnection().prepare(
+        `INSERT INTO treasure_sync_cursors(scope,cursor,upload_cursor,last_success_at,updated_at)
+         VALUES(?,?,0,?,?)
+         ON CONFLICT(scope) DO UPDATE SET cursor=excluded.cursor,
+           last_success_at=excluded.last_success_at,updated_at=excluded.updated_at`,
+      ).run(scope, Math.max(0, serverCursor), successAt, successAt);
+    })();
+  },
+
+  remoteItems(scope: string, limit = 10_000): RemoteTreasureMetadata[] {
+    const rows = getConnection().prepare(
+      `SELECT payload_json FROM treasure_remote_items
+       WHERE scope=? AND deleted_at IS NULL ORDER BY updated_at DESC LIMIT ?`,
+    ).all(scope, Math.max(1, Math.min(limit, TREASURE_ITEM_REMOTE_LIMIT))) as Array<{ payload_json: string }>;
+    return rows.flatMap((row) => {
+      try {
+        return [JSON.parse(row.payload_json) as RemoteTreasureMetadata];
+      } catch {
+        return [];
+      }
+    });
+  },
+
+  remoteAsset(scope: string, itemId: string, assetKind: 'body' | 'attachment'): RemoteTreasureAsset | null {
+    return (getConnection().prepare(
+      `SELECT scope,item_id,asset_kind,content_text,file_path,digest,byte_count,mime_type,updated_at
+       FROM treasure_remote_assets WHERE scope=? AND item_id=? AND asset_kind=?`,
+    ).get(scope, itemId, assetKind) as RemoteTreasureAsset | undefined) ?? null;
+  },
+
+  putRemoteAsset(asset: RemoteTreasureAsset): void {
+    if (!/^[0-9a-f]{64}$/.test(asset.digest) || !Number.isSafeInteger(asset.byte_count) ||
+        asset.byte_count < 0 || !['body', 'attachment'].includes(asset.asset_kind)) {
+      throw new Error('Invalid remote treasury asset');
+    }
+    if (asset.asset_kind === 'body' && (asset.content_text === null || asset.file_path !== null)) {
+      throw new Error('Invalid remote treasury body cache');
+    }
+    if (asset.asset_kind === 'attachment' && (!asset.file_path || asset.content_text !== null)) {
+      throw new Error('Invalid remote treasury attachment cache');
+    }
+    getConnection().prepare(
+      `INSERT INTO treasure_remote_assets
+       (scope,item_id,asset_kind,content_text,file_path,digest,byte_count,mime_type,updated_at)
+       VALUES(?,?,?,?,?,?,?,?,?)
+       ON CONFLICT(scope,item_id,asset_kind) DO UPDATE SET
+         content_text=excluded.content_text,file_path=excluded.file_path,digest=excluded.digest,
+         byte_count=excluded.byte_count,mime_type=excluded.mime_type,updated_at=excluded.updated_at`,
+    ).run(asset.scope, asset.item_id, asset.asset_kind, asset.content_text, asset.file_path,
+      asset.digest, asset.byte_count, asset.mime_type, asset.updated_at);
   },
 
   rebuildIndex(): void {
