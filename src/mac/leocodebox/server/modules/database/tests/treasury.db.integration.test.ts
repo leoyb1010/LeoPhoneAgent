@@ -55,7 +55,10 @@ test('treasury database persists, deduplicates, indexes, queues and tombstones',
     const saved = treasuryDb.save(userId, fixture());
     assert.equal(saved.deduplicated, false);
     assert.deepEqual(saved.item.tags, ['Android', '离线']);
-    assert.equal(treasuryDb.readyJobs().length, 2);
+    assert.equal(treasuryDb.readyJobs().length, 1);
+    assert.equal((getConnection().prepare(
+      "SELECT state FROM treasure_jobs WHERE item_id=? AND job_type='index'",
+    ).get(saved.item.id) as { state: string }).state, 'completed');
     assert.equal(treasuryDb.changes().length, 1);
 
     const duplicate = treasuryDb.save(userId, fixture({ id: 'duplicate', source_uri: 'https://EXAMPLE.com/read?a=1&b=2' }));

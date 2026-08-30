@@ -1,6 +1,74 @@
 import XCTest
 
 final class TreasuryPhase0Tests: XCTestCase {
+    func testPhase3ExactQueryParserKeepsMalformedFiltersAsText() {
+        let spec = TreasuryLocalQuery.parse(
+            "折叠屏 type:link,text state:failed read:unread tag:工作 is:pinned "
+                + "after:2026-01-02 nope:value before:bad"
+        )
+
+        XCTAssertEqual(spec.textQuery, "折叠屏 nope:value before:bad")
+        XCTAssertEqual(spec.kinds, ["link", "text"])
+        XCTAssertEqual(spec.processingStates, ["failed"])
+        XCTAssertEqual(spec.readingStates, ["unread"])
+        XCTAssertEqual(spec.tags, ["工作"])
+        XCTAssertEqual(spec.pinned, true)
+        XCTAssertNotNil(spec.after)
+        XCTAssertNil(spec.before)
+        XCTAssertEqual(CollectedItem(kind: .file, value: "scan.pdf", sourceLabel: "PDF").treasuryKind,
+                       "document")
+        XCTAssertEqual(CollectedItem(kind: .file, value: "photo.png", sourceLabel: "图片").treasuryKind,
+                       "image")
+    }
+
+    func testPhase3ReadingStateAndLocatedHighlightPersistWithChangeLog() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("treasury-phase3-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try TreasurySQLiteStore(directory: directory)
+        let body = "开头😀需要高亮的正文结尾"
+        var item = CollectedItem(kind: .text, value: body, sourceLabel: "文本")
+        item.readingState = "unread"
+        try store.add([item])
+        let utf16 = body as NSString
+        let range = utf16.range(of: "需要高亮")
+        let beforeChanges = try store.changes().count
+
+        try store.mutate(id: item.id) { current in
+            current.readingState = "reading"
+            current.readingProgress = 0.42
+            current.lastOpenedAt = Date()
+            current.updatedAt = Date()
+        }
+        let highlight = TreasureHighlight(
+            id: UUID().uuidString, itemID: item.id, quoteText: "需要高亮", note: "重点",
+            startOffset: range.location, endOffset: range.location + range.length,
+            pageNumber: nil, createdAt: Date(), updatedAt: Date(), originDeviceID: "ios-test"
+        )
+        try store.addHighlight(highlight, body: body)
+
+        let loaded = try store.load().first
+        XCTAssertEqual(loaded?.readingState, "reading")
+        XCTAssertEqual(loaded?.readingProgress, 0.42)
+        XCTAssertNotNil(loaded?.lastOpenedAt)
+        let loadedHighlights = try store.highlights(itemID: item.id)
+        XCTAssertEqual(loadedHighlights.map(\.id), [highlight.id])
+        XCTAssertEqual(loadedHighlights.first?.quoteText, highlight.quoteText)
+        XCTAssertEqual(loadedHighlights.first?.startOffset, highlight.startOffset)
+        XCTAssertEqual(loadedHighlights.first?.endOffset, highlight.endOffset)
+        XCTAssertThrowsError(try store.addHighlight(
+            TreasureHighlight(
+                id: UUID().uuidString, itemID: item.id, quoteText: "伪造", note: nil,
+                startOffset: range.location, endOffset: range.location + range.length,
+                pageNumber: nil, createdAt: Date(), updatedAt: Date(), originDeviceID: "ios-test"
+            ),
+            body: body
+        ))
+        try store.deleteHighlight(id: highlight.id)
+        XCTAssertEqual(try store.highlights(itemID: item.id), [])
+        XCTAssertGreaterThanOrEqual(try store.changes().count, beforeChanges + 3)
+    }
+
     func testLegacyCollectionJSONStillDecodesWithSafeDefaults() throws {
         let data = Data("""
         [{"id":"legacy-note","kind":"note","value":"","sourceLabel":"笔记","createdAt":0}]
@@ -255,6 +323,13 @@ final class TreasuryPhase0Tests: XCTestCase {
         XCTAssertFalse(SharedContainerStore.isSafeFileName("folder\\secret.txt"))
         XCTAssertNil(TreasureItemContract.safeLastPathComponent("C:\\private\\secret.txt"))
         XCTAssertNil(TreasureItemContract.safeLastPathComponent("notes/item\0.md"))
+    }
+
+    func testNoteBodyStoreRejectsTraversalNames() async {
+        let loaded = await NoteBodyStore.load("../items.json")
+        let saved = await NoteBodyStore.save("secret", to: "../escape.md")
+        XCTAssertEqual(loaded, "")
+        XCTAssertFalse(saved)
     }
 
     func testArrayArgumentsAcceptNativeJSONAndStringEncodedJSON() {

@@ -147,4 +147,77 @@ class TreasureRepositoryImportTest {
             database.close()
         }
     }
+
+    @Test
+    fun exactFiltersReadingProgressAndHighlightsRoundTrip() = runBlocking {
+        val database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
+        try {
+            val repository = TreasureRepository(
+                dao = database.treasureDao(),
+                filesDirectory = context.cacheDir,
+                originDeviceId = { "android-test" },
+            )
+            repository.save(TreasureItemRecord(
+                id = "reading-item", kind = "text", sourceLabel = "文本",
+                originalText = "第一段需要高亮。第二段继续阅读。", tags = listOf("资料"),
+                readingState = "unread", processingState = "ready",
+                originDeviceId = "android-test",
+            ))
+
+            assertEquals(1, repository.search("type:text read:unread tag:资料").first().size)
+            repository.updateItem("reading-item", tags = listOf("A\"B"))
+            assertEquals(1, repository.search("tag:a\"b").first().size)
+            val opened = repository.markOpened("reading-item")!!
+            assertEquals("reading", opened.readingState)
+            assertTrue(opened.lastOpenedAt != null)
+            assertEquals("read", repository.updateReadingProgress("reading-item", 1.0)!!.readingState)
+            val reset = repository.updateItem("reading-item", readingState = "unread")!!
+            assertEquals("unread", reset.readingState)
+            assertEquals(0.0, reset.readingProgress, 0.0)
+
+            val highlight = repository.addHighlight("reading-item", 0, 7, "第一段需要高亮")
+            assertEquals(1, repository.observeHighlights("reading-item").first().size)
+            assertTrue(repository.deleteHighlight(highlight.id))
+            assertTrue(repository.observeHighlights("reading-item").first().isEmpty())
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun pdfPageExtractionStoresPageChunksIndexesTextAndKeepsHighlights() = runBlocking {
+        val database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
+        try {
+            val repository = TreasureRepository(
+                dao = database.treasureDao(), filesDirectory = context.cacheDir,
+                originDeviceId = { "android-test" },
+            )
+            repository.save(TreasureItemRecord(
+                id = "pdf-item", kind = "document", sourceLabel = "PDF",
+                originalText = "用户已经高亮", processingState = "processing",
+                originDeviceId = "android-test",
+            ))
+            val highlight = repository.addHighlight("pdf-item", 0, 6, "用户已经高亮")
+
+            assertTrue(repository.applyDocumentExtraction(
+                "pdf-item", listOf("第一页正文", "第二页关键字 Fold8", ""),
+            ))
+
+            assertTrue(repository.search("Fold8").first().single().snippet.contains("Fold8"))
+            val cursor = database.openHelper.readableDatabase.query(
+                "SELECT section_label,text FROM treasure_chunks WHERE item_id=? ORDER BY chunk_index",
+                arrayOf("pdf-item"),
+            )
+            cursor.use {
+                assertEquals(2, it.count)
+                assertTrue(it.moveToFirst())
+                assertEquals("page:1", it.getString(0))
+                assertTrue(it.moveToNext())
+                assertEquals("第二页关键字 Fold8", it.getString(1))
+            }
+            assertEquals(highlight.id, repository.observeHighlights("pdf-item").first().single().id)
+        } finally {
+            database.close()
+        }
+    }
 }
