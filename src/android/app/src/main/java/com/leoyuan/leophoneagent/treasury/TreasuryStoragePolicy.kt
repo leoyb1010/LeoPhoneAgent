@@ -14,17 +14,21 @@ data class TreasuryStorageUsage(
 /**
  * Storage accounting deliberately separates durable user content from cache.
  * `files/` contains the only copy of captured attachments and is never a
- * cleanup target. `sync-outbox/` contains bounded upload copies that can be
- * recreated from Room/original files.
+ * cleanup target. `sync-outbox/`, `sync-inbox/`, and `remote-assets/` contain
+ * upload copies, resumable partial downloads, and re-downloadable remote files.
  */
 object TreasuryStoragePolicy {
     fun usage(root: File): TreasuryStorageUsage = TreasuryStorageUsage(
         originalAttachmentBytes = directoryBytes(File(root, "files")),
-        syncTemporaryCacheBytes = directoryBytes(File(root, "sync-outbox")),
+        syncTemporaryCacheBytes = listOf("sync-outbox", "sync-inbox", "remote-assets")
+            .fold(0L) { total, name -> saturatedAdd(total, directoryBytes(File(root, name))) },
     )
 
-    fun clearSyncTemporaryCache(root: File): Long {
-        val cache = File(root, "sync-outbox")
+    fun clearSyncTemporaryCache(root: File): Long =
+        listOf("sync-outbox", "sync-inbox", "remote-assets")
+            .sumOf { clearCacheDirectory(File(root, it)) }
+
+    private fun clearCacheDirectory(cache: File): Long {
         val cachePath = cache.toPath()
         if (Files.isSymbolicLink(cachePath) ||
             !Files.isDirectory(cachePath, LinkOption.NOFOLLOW_LINKS)
@@ -50,6 +54,9 @@ object TreasuryStoragePolicy {
         }
         return (before - directoryBytes(cache)).coerceAtLeast(0L)
     }
+
+    private fun saturatedAdd(left: Long, right: Long): Long =
+        if (Long.MAX_VALUE - left < right) Long.MAX_VALUE else left + right
 
     internal fun directoryBytes(directory: File): Long {
         val root = directory.toPath()

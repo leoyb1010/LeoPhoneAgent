@@ -1239,9 +1239,9 @@
     <string name="storage_treasury_sync_cache">同步暫存快取</string>
     <string name="storage_treasury_clear_cache">清理同步快取</string>
     <string name="storage_treasury_clearing">正在清理…</string>
-    <string name="storage_treasury_footer">只清理可重新產生的同步上傳副本，不會刪除原始附件、已擷取正文、筆記或藏寶閣項目。</string>
+    <string name="storage_treasury_footer">清理上傳副本、可續傳下載片段和可重新下載的遠端附件，不會刪除原始附件、已擷取正文、筆記或藏寶閣項目。</string>
     <string name="storage_treasury_clear_confirm_title">清理藏寶閣同步快取？</string>
-    <string name="storage_treasury_clear_confirm_text">原始附件和藏寶閣項目不會被刪除；需要同步時會重新產生上傳副本。</string>
+    <string name="storage_treasury_clear_confirm_text">原始附件和藏寶閣項目不會被刪除；上傳副本和遠端快取會在需要時重新產生或下載。</string>
     <string name="storage_clear_confirm_title">清除工作階段檔案？</string>
     <string name="storage_clear_confirm_text">这將刪除 %1$s 的檔案。此操作无法撤销。</string>
     <string name="storage_clear_confirm_button">清除 %1$s</string>
@@ -1766,6 +1766,13 @@
     <string name="treasury_retry_processing">重試處理</string>
     <string name="treasury_capture_url_title">儲存連結或文字</string>
     <string name="treasury_save_action">收進藏寶閣</string>
+    <string name="treasury_remote_body_title">這條收藏的完整正文位於另一台裝置。</string>
+    <string name="treasury_remote_attachment_title">這個附件位於另一台裝置。</string>
+    <string name="treasury_fetch_remote_body">取得正文</string>
+    <string name="treasury_fetch_remote_attachment">下載附件</string>
+    <string name="treasury_remote_asset_pending">來源裝置尚未上傳，請在該裝置上線後重試。</string>
+    <string name="treasury_remote_asset_unavailable">來源裝置回報此內容無法使用。</string>
+    <string name="treasury_remote_asset_failed">下載失敗；重試時會繼續使用已保留的有效片段。</string>
     <string name="treasury_send_to_chat_action">傳到對話</string>
     <string name="treasury_share_destination_title">這次分享到哪裡？</string>
     <string name="treasury_share_destination_message">請選擇 %1$d 個分享項目的去向。儲存進藏寶閣不會開啟聊天。</string>

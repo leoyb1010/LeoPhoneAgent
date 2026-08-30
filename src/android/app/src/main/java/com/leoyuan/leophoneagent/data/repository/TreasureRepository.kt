@@ -12,6 +12,9 @@ import com.leoyuan.leophoneagent.data.db.TreasureSearchRow
 import com.leoyuan.leophoneagent.treasury.TreasuryQuery
 import java.io.File
 import java.net.URI
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.time.Instant
 import java.util.UUID
@@ -141,6 +144,104 @@ class TreasureRepository(
         )
     }
 
+    fun remoteAssetPartialFile(itemId: String, kind: String): File {
+        require(itemId.isNotBlank() && kind in setOf("body", "attachment"))
+        val directory = requireNotNull(managedDirectory("sync-inbox")) {
+            "Unsafe Treasury sync inbox"
+        }
+        val file = File(directory, ".${sha256("$itemId\u0000$kind")}.partial")
+        require(file.parentFile?.canonicalFile == directory)
+        if (Files.isSymbolicLink(file.toPath())) runCatching { Files.deleteIfExists(file.toPath()) }
+        return file
+    }
+
+    fun remoteAssetPartialLength(file: File, limit: Long): Long {
+        val path = file.toPath()
+        val size = runCatching {
+            if (Files.isSymbolicLink(path) ||
+                !Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)
+            ) return@runCatching 0L
+            Files.size(path)
+        }.getOrDefault(0L)
+        if (size !in 1 until limit) {
+            runCatching { Files.deleteIfExists(path) }
+            return 0L
+        }
+        return size
+    }
+
+    suspend fun cacheRemoteBody(
+        itemId: String,
+        body: String,
+        expectedDigest: String,
+        expectedByteCount: Long,
+    ): TreasureItemEntity? {
+        val bytes = body.toByteArray(Charsets.UTF_8)
+        if (bytes.size.toLong() != expectedByteCount || bytes.size > 8 * 1024 * 1024 ||
+            !DIGEST_PATTERN.matches(expectedDigest) ||
+            !sha256(body).equals(expectedDigest, ignoreCase = true)) return null
+        if (dao.cacheRemoteBody(itemId, originDeviceId(), body) <= 0) return null
+        return dao.getById(itemId)
+    }
+
+    suspend fun cacheRemoteAttachment(
+        itemId: String,
+        completedPartial: File,
+        mimeType: String,
+        byteCount: Long,
+        digest: String,
+    ): TreasureItemEntity? {
+        if (byteCount !in 0L..128L * 1024 * 1024 || !DIGEST_PATTERN.matches(digest)) return null
+        val inbox = managedDirectory("sync-inbox") ?: return null
+        if (Files.isSymbolicLink(completedPartial.toPath())) return null
+        val source = runCatching { completedPartial.canonicalFile }.getOrNull() ?: return null
+        if (!source.path.startsWith(inbox.path + File.separator) ||
+            !Files.isRegularFile(source.toPath(), LinkOption.NOFOLLOW_LINKS) ||
+            source.length() != byteCount || !sha256File(source).equals(digest, ignoreCase = true)) return null
+        val existing = dao.getById(itemId) ?: return null
+        if (existing.originDeviceId == originDeviceId() ||
+            existing.kind !in setOf("image", "document", "audio", "video", "artifact")) return null
+        val cacheDirectory = managedDirectory("remote-assets") ?: return null
+        val name = "${sha256("$itemId\u0000${digest.lowercase(Locale.ROOT)}")}.bin"
+        val target = File(cacheDirectory, name).canonicalFile
+        if (!target.path.startsWith(cacheDirectory.path + File.separator)) return null
+        runCatching {
+            java.nio.file.Files.move(
+                source.toPath(), target.toPath(),
+                StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING,
+            )
+        }.recoverCatching {
+            java.nio.file.Files.move(
+                source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING,
+            )
+        }.getOrElse { return null }
+        val relativeRef = "remote-assets/$name"
+        if (dao.cacheRemoteAttachment(
+                itemId, originDeviceId(), relativeRef, mimeType, byteCount,
+                digest.lowercase(Locale.ROOT),
+            ) <= 0) {
+            target.delete()
+            return null
+        }
+        existing.bodyRef?.takeIf { it != relativeRef && it.startsWith("remote-assets/") }
+            ?.let { old -> managedFile(old, Long.MAX_VALUE)?.delete() }
+        return dao.getById(itemId)
+    }
+
+    private fun managedDirectory(relativeName: String): File? {
+        if (!isSafeRelativeRef(relativeName) || Files.isSymbolicLink(filesDirectory.toPath())) return null
+        val root = runCatching { filesDirectory.canonicalFile }.getOrNull() ?: return null
+        val candidate = File(filesDirectory, relativeName)
+        if (Files.isSymbolicLink(candidate.toPath())) return null
+        if (!candidate.exists() && !candidate.mkdirs()) return null
+        if (Files.isSymbolicLink(candidate.toPath())) return null
+        val directory = runCatching { candidate.canonicalFile }.getOrNull() ?: return null
+        if (!directory.path.startsWith(root.path + File.separator) ||
+            !Files.isDirectory(directory.toPath(), LinkOption.NOFOLLOW_LINKS)
+        ) return null
+        return directory
+    }
+
     suspend fun applyRemoteChanges(changes: List<TreasureRemoteChange>): Int {
         var applied = 0
         for (change in changes.sortedBy(TreasureRemoteChange::sequence)) {
@@ -164,7 +265,15 @@ class TreasureRepository(
                     deletedAt = change.updatedAt,
                 )
             }
-            if (dao.applyRemoteItem(incoming, change.operation, change.changeId, originDeviceId())) applied += 1
+            val previousRemoteCache = dao.getIncludingDeleted(change.itemId)?.bodyRef
+                ?.takeIf { it.startsWith("remote-assets/") }
+            if (dao.applyRemoteItem(incoming, change.operation, change.changeId, originDeviceId())) {
+                applied += 1
+                val currentRef = dao.getIncludingDeleted(change.itemId)?.bodyRef
+                if (previousRemoteCache != null && previousRemoteCache != currentRef) {
+                    managedFile(previousRemoteCache, Long.MAX_VALUE)?.delete()
+                }
+            }
         }
         return applied
     }

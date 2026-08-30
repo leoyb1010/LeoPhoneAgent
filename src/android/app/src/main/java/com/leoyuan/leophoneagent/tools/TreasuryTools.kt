@@ -6,6 +6,7 @@ import com.leoyuan.leophoneagent.data.db.TreasureItemEntity
 import com.leoyuan.leophoneagent.data.db.TreasureSearchRow
 import com.leoyuan.leophoneagent.data.repository.TreasureItemRecord
 import com.leoyuan.leophoneagent.treasury.TreasuryFilePolicy
+import com.leoyuan.leophoneagent.treasury.TreasurySyncClient
 import java.io.File
 import java.time.Instant
 import java.time.LocalDate
@@ -158,10 +159,11 @@ object TreasuryTools {
             args.optBoolean("include_annotation", true)
         }
         val maxChars = args.optInt("max_chars_per_item", DEFAULT_ITEM_CHARS).coerceIn(1, HARD_ITEM_CHARS)
-        val byId = repository.get(ids).associateBy { it.id }
+        val byId = repository.get(ids).associateBy { it.id }.toMutableMap()
+        val syncClient = TreasurySyncClient(context)
         val results = JSONArray()
         ids.forEach { id ->
-            val item = byId[id]
+            var item = byId[id]
             if (item == null) {
                 results.put(JSONObject()
                     .put("id", id)
@@ -172,7 +174,20 @@ object TreasuryTools {
                     .put("annotation", JSONObject.NULL))
                 return@forEach
             }
-            val body = if (includeBody) bodyText(item, context) else BodyResult(null, "not_requested")
+            var remoteFetchStatus: String? = null
+            var localBody = if (includeBody) bodyText(item, context) else BodyResult(null, "not_requested")
+            if (includeBody && localBody.text == null &&
+                item.originDeviceId != repository.localOriginDeviceId()
+            ) {
+                val fetched = syncClient.fetchAsset(repository, item.id, "body")
+                remoteFetchStatus = fetched.status
+                item = fetched.item ?: item
+                byId[id] = item
+                localBody = bodyText(item, context)
+            }
+            val body = if (includeBody && localBody.text == null && remoteFetchStatus != null) {
+                BodyResult(null, if (remoteFetchStatus == "ready") "remote_missing" else "remote_$remoteFetchStatus")
+            } else localBody
             val raw = body.text.orEmpty()
             val clippedBody = if (includeBody && raw.isNotEmpty()) {
                 clipRelevantBody(
@@ -181,6 +196,16 @@ object TreasuryTools {
                     listOf(item.title, item.summary, item.annotation) + jsonStrings(item.tagsJson),
                 )
             } else null
+            val attachment = if (item.kind in setOf("image", "document", "audio", "video", "artifact")) {
+                val file = TreasuryFilePolicy.managedFile(
+                    File(context.filesDir, "treasury"), item.bodyRef, 128L * 1024 * 1024,
+                )
+                JSONObject()
+                    .put("ref", item.bodyRef ?: JSONObject.NULL)
+                    .put("file_name", item.title ?: item.bodyRef?.substringAfterLast('/') ?: JSONObject.NULL)
+                    .put("mime_type", item.mimeType ?: "application/octet-stream")
+                    .put("available", file != null)
+            } else JSONObject.NULL
             results.put(JSONObject()
                 .put("id", item.id)
                 .put("available", true)
@@ -195,7 +220,8 @@ object TreasuryTools {
                 .put("body_status", body.status)
                 .put("truncated", includeBody && raw.length > maxChars)
                 .put("annotation", if (includeAnnotation) item.annotation ?: JSONObject.NULL else JSONObject.NULL)
-                .put("tags", safeJsonArray(item.tagsJson)))
+                .put("tags", safeJsonArray(item.tagsJson))
+                .put("attachment", attachment))
         }
         return ToolExecutionResult(
             JSONObject()

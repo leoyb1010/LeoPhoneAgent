@@ -2,8 +2,26 @@ package com.leoyuan.leophoneagent.treasury
 
 import java.io.File
 import java.io.InputStream
+import java.nio.file.Files
+import java.nio.file.LinkOption
 
 internal object TreasuryFilePolicy {
+    fun managedFile(root: File, relativeRef: String?, maxBytes: Long): File? {
+        if (relativeRef == null || maxBytes < 0 ||
+            !com.leoyuan.leophoneagent.data.repository.TreasureRepository.isSafeRelativeRef(relativeRef)
+        ) return null
+        if (Files.isSymbolicLink(root.toPath())) return null
+        val canonicalRoot = runCatching { root.canonicalFile }.getOrNull() ?: return null
+        val candidate = File(canonicalRoot, relativeRef)
+        if (Files.isSymbolicLink(candidate.toPath())) return null
+        val canonical = runCatching { candidate.canonicalFile }.getOrNull() ?: return null
+        if (!canonical.path.startsWith(canonicalRoot.path + File.separator) ||
+            !Files.isRegularFile(canonical.toPath(), LinkOption.NOFOLLOW_LINKS)
+        ) return null
+        val size = runCatching { Files.size(canonical.toPath()) }.getOrNull() ?: return null
+        return canonical.takeIf { size <= maxBytes }
+    }
+
     /** Copies a raw capture and removes any partial target when the read or write fails. */
     fun copyToFileLimited(input: InputStream, target: File, maxBytes: Long): Long {
         require(maxBytes >= 0)

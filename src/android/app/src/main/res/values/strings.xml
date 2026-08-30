@@ -829,9 +829,9 @@
     <string name="storage_treasury_sync_cache">Sync temporary cache</string>
     <string name="storage_treasury_clear_cache">Clear sync cache</string>
     <string name="storage_treasury_clearing">Clearing…</string>
-    <string name="storage_treasury_footer">Only regenerable sync upload copies are cleared. Original attachments, extracted text, notes, and Treasury items are preserved.</string>
+    <string name="storage_treasury_footer">Clears upload copies, resumable partial downloads, and re-downloadable remote attachments. Original attachments, extracted text, notes, and Treasury items are preserved.</string>
     <string name="storage_treasury_clear_confirm_title">Clear Treasury sync cache?</string>
-    <string name="storage_treasury_clear_confirm_text">Original attachments and Treasury items will not be deleted. Upload copies are recreated when needed.</string>
+    <string name="storage_treasury_clear_confirm_text">Original attachments and Treasury items will not be deleted. Upload copies and remote caches are recreated or downloaded again when needed.</string>
     <string name="storage_clear_confirm_title">Clear Session Files?</string>
     <string name="storage_clear_confirm_text">This will delete %1$s of files. This action cannot be undone.</string>
     <string name="storage_clear_confirm_button">Clear %1$s</string>
@@ -1925,6 +1925,13 @@
     <string name="treasury_retry_processing">Retry processing</string>
     <string name="treasury_capture_url_title">Save a link or text</string>
     <string name="treasury_save_action">Save to Treasury</string>
+    <string name="treasury_remote_body_title">This item’s full content is on another device.</string>
+    <string name="treasury_remote_attachment_title">This attachment is on another device.</string>
+    <string name="treasury_fetch_remote_body">Get content</string>
+    <string name="treasury_fetch_remote_attachment">Download attachment</string>
+    <string name="treasury_remote_asset_pending">The source device has not uploaded it yet. Try again when that device is online.</string>
+    <string name="treasury_remote_asset_unavailable">The source device reports that this content is unavailable.</string>
+    <string name="treasury_remote_asset_failed">Download failed. The retained partial file will be used when you retry.</string>
     <string name="treasury_send_to_chat_action">Send to conversation</string>
     <string name="treasury_share_destination_title">Where should this go?</string>
     <string name="treasury_share_destination_message">Choose a destination for %1$d shared item(s).</string>

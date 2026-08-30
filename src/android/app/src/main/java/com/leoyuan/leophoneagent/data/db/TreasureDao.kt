@@ -16,6 +16,23 @@ data class TreasureCaptureBundle(
     val change: TreasureChangeEntity,
 )
 
+internal fun mergeRemoteTreasureItem(
+    existing: TreasureItemEntity,
+    incoming: TreasureItemEntity,
+    preserveLocalAssets: Boolean,
+    conflict: Boolean,
+): TreasureItemEntity = incoming.copy(
+    rowId = existing.rowId,
+    originalText = incoming.originalText ?: existing.originalText.takeIf { preserveLocalAssets },
+    bodyRef = incoming.bodyRef ?: existing.bodyRef.takeIf { preserveLocalAssets },
+    previewRef = incoming.previewRef ?: existing.previewRef,
+    mimeType = incoming.mimeType ?: existing.mimeType.takeIf { preserveLocalAssets },
+    byteCount = if (preserveLocalAssets) maxOf(incoming.byteCount, existing.byteCount)
+        else incoming.byteCount,
+    contentDigest = incoming.contentDigest ?: existing.contentDigest.takeIf { preserveLocalAssets },
+    syncState = if (conflict) "conflict" else "synced",
+)
+
 @Dao
 interface TreasureDao {
     @Query("SELECT * FROM treasure_items WHERE deleted_at IS NULL ORDER BY pinned DESC, updated_at DESC LIMIT :limit OFFSET :offset")
@@ -44,6 +61,32 @@ interface TreasureDao {
 
     @Query("SELECT * FROM treasure_items WHERE stable_id = :id AND deleted_at IS NULL LIMIT 1")
     suspend fun getById(id: String): TreasureItemEntity?
+
+    @Query("""
+        UPDATE treasure_items SET original_text = :body
+        WHERE stable_id = :id AND deleted_at IS NULL
+          AND origin_device_id != :localOriginDeviceId
+          AND sync_state IN ('remote_only','synced','conflict')
+    """)
+    suspend fun cacheRemoteBody(id: String, localOriginDeviceId: String, body: String): Int
+
+    @Query("""
+        UPDATE treasure_items
+        SET body_ref = :bodyRef, mime_type = :mimeType,
+            byte_count = :byteCount, content_digest = :digest
+        WHERE stable_id = :id AND deleted_at IS NULL
+          AND kind IN ('image','document','audio','video','artifact')
+          AND origin_device_id != :localOriginDeviceId
+          AND sync_state IN ('remote_only','synced','conflict')
+    """)
+    suspend fun cacheRemoteAttachment(
+        id: String,
+        localOriginDeviceId: String,
+        bodyRef: String,
+        mimeType: String,
+        byteCount: Long,
+        digest: String,
+    ): Int
 
     @Query("SELECT * FROM treasure_highlights WHERE item_id = :itemId AND deleted_at IS NULL ORDER BY page_number, start_offset, created_at")
     fun observeHighlights(itemId: String): Flow<List<TreasureHighlightEntity>>
@@ -106,15 +149,15 @@ interface TreasureDao {
             }
             val conflict = existing.syncState == "pending" && existing.originDeviceId == localOriginDeviceId &&
                 incoming.originDeviceId != localOriginDeviceId
-            updateItem(incoming.copy(
-                rowId = existing.rowId,
-                originalText = incoming.originalText ?: existing.originalText,
-                bodyRef = incoming.bodyRef ?: existing.bodyRef,
-                previewRef = incoming.previewRef ?: existing.previewRef,
-                mimeType = incoming.mimeType ?: existing.mimeType,
-                byteCount = maxOf(incoming.byteCount, existing.byteCount),
-                contentDigest = incoming.contentDigest ?: existing.contentDigest,
-                syncState = if (conflict) "conflict" else "synced",
+            val preserveLocalAssets = existing.originDeviceId == localOriginDeviceId ||
+                existing.syncState in setOf("local", "pending", "conflict")
+            // Remote body/attachment bytes are caches. A newer remote metadata
+            // change invalidates them instead of preserving stale byte counts.
+            updateItem(mergeRemoteTreasureItem(
+                existing = existing,
+                incoming = incoming,
+                preserveLocalAssets = preserveLocalAssets,
+                conflict = conflict,
             ))
             return true
         }

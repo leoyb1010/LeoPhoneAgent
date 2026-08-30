@@ -41,6 +41,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -81,6 +82,7 @@ import com.leoyuan.leophoneagent.data.db.TreasureItemEntity
 import com.leoyuan.leophoneagent.data.db.TreasureHighlightEntity
 import com.leoyuan.leophoneagent.data.db.TreasureSearchRow
 import com.leoyuan.leophoneagent.data.repository.TreasureRepository
+import com.leoyuan.leophoneagent.treasury.TreasuryFilePolicy
 import com.leoyuan.leophoneagent.treasury.TreasuryWorkScheduler
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -110,6 +112,8 @@ fun TreasuryScreen(
     var highlights by remember { mutableStateOf(emptyList<TreasureHighlightEntity>()) }
     var annotationDraft by rememberSaveable(selectedItemId) { mutableStateOf("") }
     var showCapture by rememberSaveable { mutableStateOf(false) }
+    var remoteBodyStatus by rememberSaveable(selectedItemId) { mutableStateOf("") }
+    var remoteAttachmentStatus by rememberSaveable(selectedItemId) { mutableStateOf("") }
     val pendingSystemCapture by com.leoyuan.leophoneagent.deeplink.DeepLinkCoordinator
         .pendingTreasuryCapture.collectAsState()
     val listState = rememberLazyListState()
@@ -142,6 +146,21 @@ fun TreasuryScreen(
         selected = repository.markOpened(id)
         if (annotationDraft.isEmpty()) annotationDraft = selected?.annotation.orEmpty()
         repository.observeHighlights(id).collectLatest { highlights = it }
+    }
+
+    val fetchRemoteAsset: (String) -> Unit = { kind ->
+        val id = selectedItemId
+        val currentStatus = if (kind == "body") remoteBodyStatus else remoteAttachmentStatus
+        if (id != null && currentStatus != "loading") {
+            if (kind == "body") remoteBodyStatus = "loading" else remoteAttachmentStatus = "loading"
+            scope.launch {
+                val result = com.leoyuan.leophoneagent.treasury.TreasurySyncClient(context)
+                    .fetchAsset(repository, id, kind)
+                selected = result.item ?: repository.get(listOf(id)).firstOrNull()
+                val status = if (result.status == "ready") "" else result.status
+                if (kind == "body") remoteBodyStatus = status else remoteAttachmentStatus = status
+            }
+        }
     }
 
     val visible = remember(rows, filter) {
@@ -195,6 +214,11 @@ fun TreasuryScreen(
                         TreasuryWorkScheduler.enqueue(context)
                     }
                 },
+                isRemote = selectedItem.originDeviceId != repository.localOriginDeviceId(),
+                remoteBodyStatus = remoteBodyStatus,
+                remoteAttachmentStatus = remoteAttachmentStatus,
+                onFetchBody = { fetchRemoteAsset("body") },
+                onFetchAttachment = { fetchRemoteAsset("attachment") },
                 relatedItems = relatedRows,
                 onOpenRelated = { selectedItemId = it },
                 onBack = { selectedItemId = null },
@@ -293,6 +317,11 @@ fun TreasuryScreen(
                                         TreasuryWorkScheduler.enqueue(context)
                                     }
                                 },
+                                isRemote = selectedItem.originDeviceId != repository.localOriginDeviceId(),
+                                remoteBodyStatus = remoteBodyStatus,
+                                remoteAttachmentStatus = remoteAttachmentStatus,
+                                onFetchBody = { fetchRemoteAsset("body") },
+                                onFetchAttachment = { fetchRemoteAsset("attachment") },
                                 relatedItems = relatedRows,
                                 onOpenRelated = { selectedItemId = it },
                                 onBack = null,
@@ -445,12 +474,22 @@ private fun TreasuryDetail(
     onAddHighlight: (Int, Int, String, String?) -> Unit,
     onDeleteHighlight: (String) -> Unit,
     onRetry: () -> Unit,
+    isRemote: Boolean,
+    remoteBodyStatus: String,
+    remoteAttachmentStatus: String,
+    onFetchBody: () -> Unit,
+    onFetchAttachment: () -> Unit,
     relatedItems: List<TreasureSearchRow>,
     onOpenRelated: (String) -> Unit,
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val attachmentFile = remember(item.id, item.bodyRef, item.byteCount, item.contentDigest) {
+        TreasuryFilePolicy.managedFile(
+            File(context.filesDir, "treasury"), item.bodyRef, 128L * 1024 * 1024,
+        )
+    }
     var progressDraft by remember(item.id, item.readingProgress) { mutableStateOf(item.readingProgress.toFloat()) }
     Scaffold(
         modifier = modifier,
@@ -482,6 +521,16 @@ private fun TreasuryDetail(
                     }) { Icon(Icons.Default.Link, null); Spacer(Modifier.width(8.dp)); Text(stringResource(R.string.treasury_open_source)) }
                 }
             }
+            if (isRemote && item.originalText == null) {
+                item {
+                    RemoteTreasuryAssetCard(
+                        title = stringResource(R.string.treasury_remote_body_title),
+                        action = stringResource(R.string.treasury_fetch_remote_body),
+                        status = remoteBodyStatus,
+                        onClick = onFetchBody,
+                    )
+                }
+            }
             val fullBody = item.originalText ?: item.summary
             val body = fullBody?.take(TREASURY_READER_MAX_CHARS)
             if (!body.isNullOrBlank()) {
@@ -504,7 +553,7 @@ private fun TreasuryDetail(
                     }
                 }
             }
-            if (item.bodyRef != null && body.isNullOrBlank()) {
+            if (attachmentFile != null && body.isNullOrBlank()) {
                 item {
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -516,6 +565,18 @@ private fun TreasuryDetail(
                             }
                         }
                     }
+                }
+            }
+            if (isRemote && attachmentFile == null &&
+                item.kind in setOf("image", "document", "audio", "video", "artifact")
+            ) {
+                item {
+                    RemoteTreasuryAssetCard(
+                        title = stringResource(R.string.treasury_remote_attachment_title),
+                        action = stringResource(R.string.treasury_fetch_remote_attachment),
+                        status = remoteAttachmentStatus,
+                        onClick = onFetchAttachment,
+                    )
                 }
             }
             item {
@@ -588,6 +649,35 @@ private fun TreasuryDetail(
     }
 }
 
+@Composable
+private fun RemoteTreasuryAssetCard(
+    title: String,
+    action: String,
+    status: String,
+    onClick: () -> Unit,
+) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
+        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(title)
+            Button(onClick = onClick, enabled = status != "loading") {
+                if (status == "loading") {
+                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(action)
+            }
+            when (status) {
+                "pending" -> Text(stringResource(R.string.treasury_remote_asset_pending))
+                "unavailable" -> Text(stringResource(R.string.treasury_remote_asset_unavailable))
+                "failed" -> Text(
+                    stringResource(R.string.treasury_remote_asset_failed),
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+    }
+}
+
 internal fun relatedTreasuryRows(
     target: TreasureItemEntity,
     rows: List<TreasureSearchRow>,
@@ -641,12 +731,10 @@ private fun TreasuryLabel(value: String) {
 }
 
 private fun openTreasuryAttachment(context: android.content.Context, item: TreasureItemEntity) {
-    val ref = item.bodyRef ?: return
-    if (!TreasureRepository.isSafeRelativeRef(ref)) return
     runCatching {
-        val root = File(context.filesDir, "treasury").canonicalFile
-        val file = File(root, ref).canonicalFile
-        require(file.path.startsWith(root.path + File.separator) && file.isFile)
+        val file = requireNotNull(TreasuryFilePolicy.managedFile(
+            File(context.filesDir, "treasury"), item.bodyRef, 128L * 1024 * 1024,
+        ))
         val uri = androidx.core.content.FileProvider.getUriForFile(
             context,
             "${context.packageName}.fileprovider",

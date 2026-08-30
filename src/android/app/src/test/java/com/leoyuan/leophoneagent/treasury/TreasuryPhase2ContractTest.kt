@@ -171,12 +171,16 @@ class TreasuryPhase2ContractTest {
         try {
             val originals = File(root, "files").apply { mkdirs() }
             val cache = File(root, "sync-outbox").apply { mkdirs() }
+            val partials = File(root, "sync-inbox").apply { mkdirs() }
+            val remote = File(root, "remote-assets").apply { mkdirs() }
             File(originals, "original.pdf").writeBytes(ByteArray(31) { 1 })
             File(cache, "body.txt").writeBytes(ByteArray(17) { 2 })
+            File(partials, ".download.partial").writeBytes(ByteArray(19) { 3 })
+            File(remote, "cached.bin").writeBytes(ByteArray(23) { 4 })
 
             assertEquals(31L, TreasuryStoragePolicy.usage(root).originalAttachmentBytes)
-            assertEquals(17L, TreasuryStoragePolicy.usage(root).syncTemporaryCacheBytes)
-            assertEquals(17L, TreasuryStoragePolicy.clearSyncTemporaryCache(root))
+            assertEquals(59L, TreasuryStoragePolicy.usage(root).syncTemporaryCacheBytes)
+            assertEquals(59L, TreasuryStoragePolicy.clearSyncTemporaryCache(root))
             assertTrue(File(originals, "original.pdf").isFile)
             assertEquals(0L, TreasuryStoragePolicy.usage(root).syncTemporaryCacheBytes)
         } finally {

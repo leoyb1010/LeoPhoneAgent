@@ -4,7 +4,12 @@ import android.content.Context
 import com.leoyuan.leophoneagent.data.repository.TreasureItemRecord
 import com.leoyuan.leophoneagent.data.repository.TreasureRemoteChange
 import com.leoyuan.leophoneagent.data.repository.TreasureRepository
+import com.leoyuan.leophoneagent.data.db.TreasureItemEntity
 import com.leoyuan.leophoneagent.relay.RelayFleetStore
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.nio.ByteBuffer
+import java.nio.charset.CodingErrorAction
 import java.security.MessageDigest
 import java.time.Instant
 import java.net.URLEncoder
@@ -55,6 +60,178 @@ internal class TreasurySyncClient(
             pull(repository, base, key, scope)
             serveAssetRequests(repository, base, key)
         }.isSuccess
+    }
+
+    suspend fun fetchAsset(
+        repository: TreasureRepository,
+        itemId: String,
+        kind: String,
+    ): TreasuryAssetFetchResult = withContext(Dispatchers.IO) {
+        if (kind !in setOf("body", "attachment")) return@withContext TreasuryAssetFetchResult("unavailable")
+        val item = repository.get(listOf(itemId)).firstOrNull()
+            ?: return@withContext TreasuryAssetFetchResult("unavailable")
+        if (item.originDeviceId == repository.localOriginDeviceId()) {
+            return@withContext TreasuryAssetFetchResult("unavailable", item)
+        }
+        val config = RelayFleetStore.get(app).config.value
+        val base = config.relayApiBase.trimEnd('/')
+        val key = config.accessKey.trim().trimEnd('%').trim()
+        if (key.length < 16) return@withContext TreasuryAssetFetchResult("unavailable", item)
+        runCatching {
+            val created = request(
+                base, key, "treasury/assets/requests", "POST",
+                buildJsonObject {
+                    put("item_id", itemId)
+                    put("asset_kind", kind)
+                    put("requester_device_id", repository.localOriginDeviceId())
+                },
+            )
+            if (created.code in setOf(404, 409)) return@runCatching TreasuryAssetFetchResult("unavailable", item)
+            if (created.code !in 200..299) error("relay treasury asset request failed")
+            val raw = created.body?.get("request") as? JsonObject
+                ?: error("relay treasury asset request missing")
+            val requestId = raw.text("id", 200)?.takeIf {
+                runCatching { java.util.UUID.fromString(it) }.isSuccess
+            } ?: error("relay treasury asset request invalid")
+            if (raw.text("item_id", 200) != itemId || raw.text("asset_kind", 20) != kind) {
+                error("relay treasury asset request mismatch")
+            }
+            when (raw.text("status", 20)) {
+                "pending" -> TreasuryAssetFetchResult("pending", item)
+                "ready" -> downloadAsset(repository, item, kind, requestId, base, key)
+                else -> TreasuryAssetFetchResult("unavailable", item)
+            }
+        }.getOrElse { TreasuryAssetFetchResult("failed", item) }
+    }
+
+    private suspend fun downloadAsset(
+        repository: TreasureRepository,
+        item: TreasureItemEntity,
+        kind: String,
+        requestId: String,
+        base: String,
+        key: String,
+    ): TreasuryAssetFetchResult {
+        val partial = if (kind == "attachment") repository.remoteAssetPartialFile(item.id, kind) else null
+        var offset = partial?.let { repository.remoteAssetPartialLength(it, ATTACHMENT_LIMIT) } ?: 0L
+        if (item.byteCount > 0 && offset >= item.byteCount) {
+            partial?.delete()
+            offset = 0
+        }
+        fun buildDownload(start: Long): Request = Request.Builder()
+            .url("$base/treasury/assets/$requestId")
+            .header("Authorization", "Bearer $key")
+            .header("X-Treasury-Device-ID", repository.localOriginDeviceId())
+            .apply { if (start > 0) header("Range", "bytes=$start-") }
+            .build()
+
+        var response = http.newCall(buildDownload(offset)).execute()
+        if (response.code == 416 && offset > 0) {
+            response.close()
+            partial?.delete()
+            offset = 0
+            response = http.newCall(buildDownload(0)).execute()
+        }
+        response.use { result ->
+            if (result.code == 202) return TreasuryAssetFetchResult("pending", item)
+            if (result.code == 410) return TreasuryAssetFetchResult("unavailable", item)
+            if (!result.isSuccessful) error("relay treasury asset download failed")
+            val metadata = safeAssetHeaders(result, if (kind == "body") BODY_LIMIT else ATTACHMENT_LIMIT)
+            if (kind == "body") {
+                if (result.code == 206 || metadata.mimeType != "text/plain") {
+                    error("relay treasury body response invalid")
+                }
+                val bytes = result.body?.bytes() ?: error("relay treasury body missing")
+                if (bytes.size.toLong() != metadata.byteCount || sha256(bytes) != metadata.digest) {
+                    error("relay treasury body integrity mismatch")
+                }
+                val text = Charsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(bytes)).toString()
+                val cached = repository.cacheRemoteBody(item.id, text, metadata.digest, metadata.byteCount)
+                    ?: error("remote treasury body cache failed")
+                return TreasuryAssetFetchResult("ready", cached)
+            }
+
+            if (item.byteCount > 0 && item.byteCount != metadata.byteCount ||
+                item.contentDigest != null && !item.contentDigest.equals(metadata.digest, ignoreCase = true) ||
+                item.mimeType != null && item.mimeType.substringBefore(';').lowercase() != metadata.mimeType) {
+                partial?.delete()
+                error("remote treasury attachment metadata mismatch")
+            }
+            if (offset > 0) {
+                if (result.code == 206) {
+                    if (!validTreasuryContentRange(
+                            result.header("Content-Range"), offset, metadata.byteCount,
+                        )) {
+                        partial?.delete()
+                        error("remote treasury attachment range invalid")
+                    }
+                } else if (result.code == 200) {
+                    partial?.delete()
+                    offset = 0
+                } else {
+                    error("relay treasury attachment response invalid")
+                }
+            } else if (result.code == 206) {
+                error("relay treasury attachment returned unsolicited range")
+            }
+            val target = partial ?: error("remote treasury attachment cache missing")
+            val digest = MessageDigest.getInstance("SHA-256")
+            if (offset > 0) FileInputStream(target).buffered().use { input ->
+                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    digest.update(buffer, 0, count)
+                }
+            }
+            var count = offset
+            var discardPartial = false
+            try {
+                FileOutputStream(target, offset > 0).use { output ->
+                    val input = result.body?.byteStream() ?: error("relay treasury attachment missing")
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        count += read
+                        if (count > metadata.byteCount || count > ATTACHMENT_LIMIT) {
+                            discardPartial = true
+                            error("remote treasury attachment exceeds declared size")
+                        }
+                        digest.update(buffer, 0, read)
+                        output.write(buffer, 0, read)
+                    }
+                    output.flush()
+                    output.fd.sync()
+                }
+                if (count != metadata.byteCount || digest.digest().toHex() != metadata.digest) {
+                    discardPartial = true
+                    error("remote treasury attachment integrity mismatch")
+                }
+            } catch (error: Throwable) {
+                if (discardPartial) target.delete()
+                throw error
+            }
+            val cached = repository.cacheRemoteAttachment(
+                item.id, target, metadata.mimeType, metadata.byteCount, metadata.digest,
+            ) ?: error("remote treasury attachment cache failed")
+            return TreasuryAssetFetchResult("ready", cached)
+        }
+    }
+
+    private data class AssetHeaders(val digest: String, val byteCount: Long, val mimeType: String)
+
+    private fun safeAssetHeaders(response: okhttp3.Response, limit: Long): AssetHeaders {
+        val digest = response.header("X-Treasury-Digest").orEmpty().lowercase()
+        val count = response.header("X-Treasury-Byte-Count")?.toLongOrNull() ?: -1
+        val mime = response.header("Content-Type").orEmpty().substringBefore(';').trim().lowercase()
+        require(DIGEST.matches(digest) && count in 0L..limit && mime in ALLOWED_ASSET_MIMES) {
+            "relay treasury asset metadata invalid"
+        }
+        return AssetHeaders(digest, count, mime)
     }
 
     private suspend fun upload(repository: TreasureRepository, base: String, key: String, scope: String) {
@@ -317,13 +494,46 @@ internal class TreasurySyncClient(
         return Instant.ofEpochMilli((seconds * 1_000).toLong())
     }
 
-    private fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")
-        .digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
+    private fun sha256(value: String): String = sha256(value.toByteArray())
+
+    private fun sha256(value: ByteArray): String = MessageDigest.getInstance("SHA-256")
+        .digest(value).toHex()
+
+    private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
 
     private companion object {
         val DIGEST = Regex("^[0-9a-fA-F]{64}$")
         val KINDS = setOf("link", "text", "note", "image", "document", "audio", "video", "artifact")
+        const val BODY_LIMIT = 8L * 1024 * 1024
+        const val ATTACHMENT_LIMIT = 128L * 1024 * 1024
+        val ALLOWED_ASSET_MIMES = setOf(
+            "application/json", "application/msword", "application/octet-stream",
+            "application/pdf", "application/rtf", "application/vnd.apple.keynote",
+            "application/vnd.apple.numbers", "application/vnd.apple.pages",
+            "application/vnd.ms-excel", "application/vnd.ms-powerpoint",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/xml", "application/zip", "audio/aac", "audio/flac", "audio/mp4",
+            "audio/mpeg", "audio/ogg", "audio/wav", "audio/x-m4a", "audio/x-wav",
+            "image/gif", "image/heic", "image/heif", "image/jpeg", "image/png",
+            "image/tiff", "image/webp", "text/csv", "text/html", "text/markdown",
+            "text/plain", "video/mp4", "video/mpeg", "video/quicktime", "video/webm",
+        )
     }
+}
+
+internal data class TreasuryAssetFetchResult(
+    val status: String,
+    val item: TreasureItemEntity? = null,
+)
+
+internal fun validTreasuryContentRange(value: String?, expectedStart: Long, expectedTotal: Long): Boolean {
+    val match = Regex("^bytes (\\d+)-(\\d+)/(\\d+)$").matchEntire(value.orEmpty()) ?: return false
+    val start = match.groupValues[1].toLongOrNull() ?: return false
+    val end = match.groupValues[2].toLongOrNull() ?: return false
+    val total = match.groupValues[3].toLongOrNull() ?: return false
+    return start == expectedStart && total == expectedTotal && end in start until total
 }
 
 internal data class TreasurySyncAvailability(val body: Boolean, val attachment: Boolean)
