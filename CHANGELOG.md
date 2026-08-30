@@ -4,6 +4,29 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## 藏宝阁 Phase 5 源码交付（未发版）- 2026-08-31
+
+### 用户可见源码变化
+
+- iOS Agent 补齐 `treasury_save` / `treasury_update`，支持 link、text、note、聊天 Artifact 保存，以及标题、标签、合集、置顶、归档、阅读状态和批注更新；永久删除仍走独立高风险确认。
+- Mac 新增四种 Provider 共用的 `leocodebox-treasury` MCP，统一提供 search/get/save/update；本机与手机缓存可搜索、受控读取和引用。
+- Mac 藏宝阁补齐六视图键盘导航、tab/tabpanel、加载/错误 live region、详情焦点和删除高亮确认。
+- 远端正文缓存写入和读取都校验 MIME、byte count 与 SHA-256；同 ID 跨 Relay scope 去重并选择最新内容。
+
+### 三轮最终审计与验证
+
+- 第一轮修复 iOS 工具闭环、note 正文、Artifact kind、URL 去重和 JSON fallback 合集更新。
+- 第二轮修复 Mac 写审批边界、MCP token 存储、错误脱敏、归档搜索、跨 scope 去重和正文缓存完整性。
+- 第三轮修复 Mac 键盘/读屏语义、详情焦点、加载空态和测试落盘位置，并完成真实 production browser 宽/窄窗口走查。
+- iOS Treasury 35/35、MinisLogicTests 306/306 和 MinisShare build 通过；Android Standard/Power 各 604 tests（0 failed、1 skipped）且双 lint 0 error；Mac client 162/162、server 395/395、typecheck、production build、MCP stdio 枚举和双 npm audit 通过。
+
+### 边界
+
+- 本条是 Phase 0–5 源码交付，不 bump 版本，不发布 APK、IPA、DMG 或热更新。
+- Mac 写工具必须经过 Provider 客户端审批并携带 `user_confirmed=true`；MCP 服务不能独立读取 CLI 原始用户消息。iOS/Android 另有当前真实用户消息校验。
+- HTTP Range 未实现；iPhone/iPad 主 App、API 26/Fold8/TalkBack/200% 字体、三设备联网、签名、覆盖安装、Mac 双机 Relay/屏幕阅读器/公证仍为 HOLD。
+- 完整证据见 `docs/TREASURY_PHASE5_DELIVERY_EVIDENCE.md`，设备执行见 `docs/TREASURY_DEVICE_RELEASE_CHECKLIST.md`。
+
 ## 藏宝阁 Phase 4 源码交付（未发版）- 2026-08-31
 
 ### 用户可见源码变化

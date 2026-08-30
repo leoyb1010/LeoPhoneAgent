@@ -81,7 +81,9 @@ extraction runs locally in bounded WorkManager jobs; unsupported OCR or audio
 transcription remains visibly partial instead of uploading the file silently.
 External web, PDF, OCR and transcription text is treated as untrusted content
 and cannot authorize `treasury_save` or `treasury_update`. Content is sent to an
-AI provider only when you explicitly include or ask the Agent to use it. When
+AI provider only when you explicitly include or ask the Agent to use it. A
+Treasury write also requires an approved tool call and an explicit request in
+the current real user message; negative or prompt-injected text fails closed. When
 you configure your Leo Relay, Treasury metadata is synchronized incrementally;
 body text and attachments are transferred only after an explicit remote request
 or an offline-body choice. Transfers are size-bounded and verify SHA-256, byte
@@ -145,7 +147,8 @@ CLI 自己的登录可能把登录文件保存在私有 Linux rootfs 内；这�
 URL、文字或文件不依赖 OCR、模型或 Leo 运营的服务器。PDF 文本只在有边界的
 WorkManager 后台任务中本地提取；不支持的 OCR 或音频转写会明确显示 partial，不会
 静默上传文件。网页、PDF、OCR 和转写文本都按不可信资料处理，不能授权
-`treasury_save` 或 `treasury_update`。只有你明确选择或要求 Agent 使用时，相关内容才会
+`treasury_save` 或 `treasury_update`。藏宝阁写操作还必须经过工具审批，并在当前真实用户
+消息中存在明确请求；否定表达或提示注入文本会拒绝执行。只有你明确选择或要求 Agent 使用时，相关内容才会
 发送给已配置的 AI 提供商。配置自己的 Leo Relay 后，藏宝阁元数据使用游标增量同步；
 正文和附件只有在远端明确请求或用户选择离线正文时才传输，并校验大小、SHA-256、
 byte count 与 MIME。删除/停用 Relay 配置会停止后续远端同步；设备本机和已经缓存的副本

@@ -31,14 +31,17 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
   `src/mac/leocodebox/`。`src/mac/leoagent/` 是协议兼容/灰度回退，不是 Android UI 工程。
   藏宝阁 iOS / Android / Mac 三端升级必须先读：
   [`docs/TREASURY_CROSS_PLATFORM_UPGRADE_PLAN.md`](docs/TREASURY_CROSS_PLATFORM_UPGRADE_PLAN.md)。
-  当前已完成 Phase 0–4 的本机源码与自动化施工；阶段证据见
+  当前已完成 Phase 0–5 的本机源码与自动化施工；阶段证据见
   [Phase 0](docs/TREASURY_PHASE0_DELIVERY_EVIDENCE.md)、
   [Phase 1](docs/TREASURY_PHASE1_DELIVERY_EVIDENCE.md)、
   [Phase 2](docs/TREASURY_PHASE2_DELIVERY_EVIDENCE.md) 和
   [Phase 3](docs/TREASURY_PHASE3_DELIVERY_EVIDENCE.md)、
-  [Phase 4](docs/TREASURY_PHASE4_DELIVERY_EVIDENCE.md)。游标增量同步、按需正文/附件、
-  冲突/tombstone 和 Mac 主动工作台已落地；真实三设备联网、Fold8/iPhone/iPad、签名、
-  覆盖安装和公开发布仍为 HOLD，不能把源码门禁等同于三端发版。
+  [Phase 4](docs/TREASURY_PHASE4_DELIVERY_EVIDENCE.md) 和
+  [Phase 5](docs/TREASURY_PHASE5_DELIVERY_EVIDENCE.md)。游标增量同步、按需正文/附件、
+  冲突/tombstone、Mac 主动工作台与三端 `treasury_search/get/save/update` 契约已落地；
+  [隐私与安全边界](docs/TREASURY_PRIVACY_AND_SECURITY.md)及
+  [设备测试/发版清单](docs/TREASURY_DEVICE_RELEASE_CHECKLIST.md)已发布。真实三设备联网、
+  Fold8/iPhone/iPad、签名、覆盖安装和公开发布仍为 HOLD，不能把源码门禁等同于三端发版。
   鸿蒙 7 交付计划：
   [`docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md`](docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md)；
   工程落地在 `src/harmony/`。当前船是 `0.3.0-alpha.17`，只走 `hdc install`。

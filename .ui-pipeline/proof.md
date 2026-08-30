@@ -2,7 +2,7 @@
 
 ## Verification scope
 
-- Release level: Phase 4 source delivery；不发布 APK/IPA/Mac 包。
+- Release level: Phase 5 source delivery；不发布 APK/IPA/Mac 包。
 - Screens: Android Treasury 单/双/三栏、Share destination、处理/阅读筛选、详情/定位高亮/批注/重试；iPad drop；Artifact Tray save；Mac 捕获、搜索、阅读、高亮、同步范围、离线合集、按需正文/附件与 Agent 引用工作台。
 - Required viewports: Fold8 1080×1728 cover、1768×2208 expanded、200% font；当前无 AVD，视觉状态为 HOLD。
 
@@ -10,16 +10,16 @@
 
 - Android Standard/Power: Kotlin compile、instrumentation 测试源码 compile、完整 JVM tests、lint 均通过；lint 0 error；无设备，因此 instrumentation 未执行。
 - Android contract tests: Room 11→12、精确查询/特殊字符标签、阅读状态/进度、高亮事务、Agent 授权/注入和 PDF 任务边界。
-- iOS: MinisLogicTests 304/304；毫秒冲突用例连续 3 次通过；MinisShare direct target simulator build succeeded。
+- iOS: Treasury 35/35；MinisLogicTests 306/306；MinisShare direct target simulator build succeeded。
 - iOS main app: HOLD；`LeoPhoneAgent` scheme 包含嵌入式 Apple Watch App，本机未安装 watchOS 26.5，`xcodebuild` 以 exit 70 在编译前终止。
 - Relay: 12/12 安全与协议测试通过，覆盖幂等、乱序、重启、旧 500 快照、按需资产和 MIME/digest 拒绝。
-- Mac: typecheck passed；client 160/160；server 392/392；production build passed。
+- Mac: typecheck passed；client 162/162；server 395/395；production build、MCP stdio `tools/list` 和双 npm audit passed。
 
 ## Rendered/interaction evidence
 
 - Android emulator screenshots: HOLD，无可用 AVD，未伪造 Fold8/200%/TalkBack 证据。
 - iPhone/iPad screenshots: HOLD，主 App 未越过仓库现有 LeoWatch build blocker。
-- Mac browser walkthrough: 宽/窄布局、本机捕获、智能视图、搜索、详情、阅读、高亮、引用和同步范围控件真实渲染通过；真实 Electron 双机 Relay、键盘全流程和屏幕阅读器仍 HOLD。
+- Mac browser walkthrough: production build 宽/`720×900` 窄布局、本机捕获、六视图 Arrow/Home/End 键盘切换、搜索、详情、阅读、高亮、引用和同步范围控件真实渲染通过；console 0 error/0 warning。真实 Electron 双机 Relay和屏幕阅读器仍 HOLD。
 
 ## Code-level accessibility evidence
 
@@ -29,6 +29,7 @@
 - 查询、筛选、选择、详情 ID、批注草稿使用 rememberSaveable；LazyListState 保持滚动状态。
 - Android 列表和 Agent 搜索使用轻量 SQL/FTS 投影，不加载完整正文；Mac 列表投影排除正文与文件引用。
 - Mac textarea、搜索、同步 select 和捕获 group 有 label/aria-label；保存区暴露 aria-busy；手机离线和离线缓存结果使用 role=status。
+- Mac 六视图使用 tab/tabpanel、roving tabindex、Arrow/Home/End；加载使用 live status，失败使用 assertive alert，详情打开后移动焦点，删除高亮先确认。
 - 三端交互式正文视图设字符上限，完整原始内容仍留在本地存储；失败和 partial 状态以文字表达，不只依赖颜色或动效。
 
 ## Originality gate

@@ -943,6 +943,10 @@ Android Standard 获得完整独立藏宝阁；iOS、Android、Mac 捕获入口�
 
 第 13～16 节全部满足才允许公开发布。
 
+实际交付证据：[Phase 5 最终审计、修复与源码交付](TREASURY_PHASE5_DELIVERY_EVIDENCE.md)
+
+当前状态：Phase 0–5 本机可实现源码与自动化范围已完成；真实 iPhone/iPad、API 26/Fold8、三端联网、签名、覆盖安装、公证和公开发布门禁仍为 HOLD。设备执行步骤见 [藏宝阁设备测试与发版清单](TREASURY_DEVICE_RELEASE_CHECKLIST.md)，不得把源码完成写成已公开发版。
+
 ---
 
 ## 13. 测试矩阵
