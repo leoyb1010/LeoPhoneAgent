@@ -14,6 +14,8 @@
 - 远端正文缓存写入和读取都校验 MIME、byte count 与 SHA-256；同 ID 跨 Relay scope 去重并选择最新内容。
 - Android Agent 契约完成跨端对齐：search 支持内容类型、标签、来源、合集、日期、阅读状态和归档筛选，get 使用统一复数批注参数，save/update 支持合集并拒绝非法筛选扩大查询。
 - iOS Share Extension 优先保留图片和文件原始字节，暂存成功后才登记附件；Spotlight 只索引标题、来源和标签，不再索引正文、原始 URL 或摘要。
+- 三端 `treasury_search` / `treasury_get` 上限与 envelope 再次对齐：search 明确顶层 `truncated`，get 统一最多 100 个 ID、单条 50,000 字正文，并对非法 kind、阅读状态和时间区间失败关闭。
+- iOS 合集过滤不再在 500 条后丢成员关系，正文 FTS 候选不再在 200 条后漏掉合法结果；Mac 结构化过滤在 SQL 截断前执行；Android FTS 在 LIMIT 前按加权相关度排序。
 
 ### 三轮最终审计与验证
 
@@ -21,7 +23,8 @@
 - 第二轮修复 Mac 写审批边界、MCP token 存储、错误脱敏、归档搜索、跨 scope 去重和正文缓存完整性。
 - 第三轮修复 Mac 键盘/读屏语义、详情焦点、加载空态和测试落盘位置，并完成真实 production browser 宽/窄窗口走查。
 - 完成定义复审继续修复 Android 工具契约分叉、非法筛选静默放宽、iOS Spotlight 摘要泄漏和 Share Extension 假成功/有损转码，并补回归测试。
-- iOS Treasury 37/37、MinisLogicTests 308/308 和 MinisShare build 通过；Android Standard/Power 各 607 tests（0 failed、1 skipped）且双 lint 0 error；Mac client 162/162、server 395/395、typecheck、production build、MCP stdio 枚举和双 npm audit 通过。
+- 契约完成度三轮复审继续修复 iOS 200/500 条候选截断、Mac 500 条后二次过滤漏项与非法日历日期、Android 在相关度排序前按更新时间截断，并增加超过 200/500 条的大库回归。
+- iOS Treasury 41/41、MinisLogicTests 312/312 和 MinisShare direct target build 通过；Android Standard/Power 各 607 tests（0 failed、1 skipped）且双 lint 0 error；Mac desktop 37/37、client 162/162、server 396/396、typecheck、全仓 lint 和 production build 通过。
 
 ### 边界
 

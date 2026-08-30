@@ -91,13 +91,20 @@ treasury_update -> explicit approved metadata/read-state/annotation write
 - iOS Spotlight 移除正文、原始 URL 和生成摘要 fallback；Share Extension 移除保存前 JPEG 强制转码，并只在暂存真实成功后发布附件记录。
 - 复扫 SQL 参数顺序、路径穿越、凭据 URL、错误文本、debug 输出和本机路径；本轮改动未新增密钥、真实收藏、敏感绝对路径或常驻能力。
 
+### 契约完成度三轮复审：过滤、上限与大库正确性
+
+- 第一轮核对三端 envelope 与预算：Android/Mac search 增加顶层 `truncated`，Android/Mac get 对超过 100 个 ID 明确顶层截断；iOS get 对齐 100 IDs、50,000 字，并真正执行 reading state / collection filters。
+- 第二轮修复固定候选上限导致的漏项：iOS 合集成员读取按 SQLite 参数上限分批，不再静默截到 500；Agent FTS 在结构化过滤前读取当前库全部匹配 ID，不再漏掉第 201 条后的正文命中；Mac 把来源、合集、标签、阅读状态和精确时间下推 SQL，避免先取 500 条再过滤。
+- 第三轮修复排序与严格解析：Android 在 SQL `LIMIT` 前使用加权 BM25，旧但高度相关结果不会被 51 条较新弱命中挤掉；Mac 拒绝非法 kind、reading state、倒置区间以及 `2026-02-30` 这类自动归一化日期；远端 kind/reading filter 大小写语义与本机一致。
+- 新增 iOS 200/500 条边界和 Mac 500 条后二次过滤回归；复扫提示注入、正文/附件路径、错误脱敏和永久删除边界，未放宽任何写授权或高风险操作。
+
 ## 自动化验证
 
 ### iOS / iPadOS
 
-- Treasury 定向测试：**37/37 passed**。
-- `MinisLogicTests`：**308/308 passed**，0 failed，0 skipped。
-- xcresult：`~/Library/Developer/Xcode/DerivedData/LeoPhoneAgent-eepkwcwlunoccyencmgmqedpdkny/Logs/Test/Test-MinisLogicTests-2026.08.31_03-38-27-+0800.xcresult`。
+- Treasury 定向测试：**41/41 passed**。
+- `MinisLogicTests`：**312/312 passed**，0 failed，0 skipped。
+- xcresult：`~/Library/Developer/Xcode/DerivedData/LeoPhoneAgent-eepkwcwlunoccyencmgmqedpdkny/Logs/Test/Test-MinisLogicTests-2026.08.31_04-09-49-+0800.xcresult`。
 - `MinisShare` iOS Simulator target：build succeeded。
 - 主 App scheme：本机缺少仓库目标要求的 watchOS runtime，编译前阻断；保持 HOLD，不声明 iPhone/iPad 主 App 已运行。
 
@@ -119,8 +126,10 @@ treasury_update -> explicit approved metadata/read-state/annotation write
 ### Mac leocodebox
 
 - `npm run typecheck`：通过。
+- `npm run test:desktop`：**37/37 passed**。
 - `npm run test:client`：**162/162 passed**。
-- `npm run test:server`：**395/395 passed**。
+- `npm run test:server`：**396/396 passed**。
+- `npm run lint`：通过，0 error / 0 warning。
 - `npm run build`：client/server production build 通过。
 - MCP stdio `tools/list`：通过，四工具、annotations 和 schema 可被真实进程枚举。
 - 完整 `npm audit`：0 vulnerabilities；production-only audit：0 vulnerabilities。
@@ -143,6 +152,7 @@ treasury_update -> explicit approved metadata/read-state/annotation write
 - `2282d44` — `fix(mac-treasury): harden cache integrity and accessibility`
 - `4a583cd` — `fix(android-treasury): align agent tools with cross-platform contract`
 - `8b61baf` — `fix(ios-treasury): preserve raw share captures and private spotlight data`
+- `386c138` — `fix(treasury): enforce cross-platform filtered search bounds`
 
 实际代码范围：
 
