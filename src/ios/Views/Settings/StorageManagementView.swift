@@ -13,6 +13,10 @@ class StorageManagementViewModel: ObservableObject {
     @Published var shellContainerSize: Int64 = 0
     @Published var chatDatabaseSize: Int64 = 0
     @Published var sessions: [SessionStorage] = []
+    @Published var treasuryUsage = TreasuryStorageUsage(
+        databaseBytes: 0, originalAttachmentBytes: 0, bodyBytes: 0,
+        recoveryVersionBytes: 0, thumbnailCacheBytes: 0
+    )
     @Published var isLoading = true
 
     private let fm = FileManager.default
@@ -46,6 +50,7 @@ class StorageManagementViewModel: ObservableObject {
             // Chat database
             let dbURL = libraryURL.appendingPathComponent("MinisChat/minis.db")
             let dbSize = self.fileSize(at: dbURL)
+            let treasuryUsage = CollectionStore.storageUsage()
 
             // Per-session minis files: Library/MinisChat/minis/<sessionId>/
             let minisBaseURL = libraryURL.appendingPathComponent("MinisChat/minis", isDirectory: true)
@@ -79,6 +84,7 @@ class StorageManagementViewModel: ObservableObject {
                 self.shellContainerSize = shellSize
                 self.chatDatabaseSize = dbSize
                 self.sessions = sorted
+                self.treasuryUsage = treasuryUsage
                 self.isLoading = false
             }
         }
@@ -111,6 +117,8 @@ class StorageManagementViewModel: ObservableObject {
 
 struct StorageManagementView: View {
     @StateObject private var vm = StorageManagementViewModel()
+    @State private var showTreasuryCacheConfirmation = false
+    @State private var isClearingTreasuryCache = false
 
     var body: some View {
         List {
@@ -118,6 +126,37 @@ struct StorageManagementView: View {
                 storageRow(icon: "terminal", color: .gray, label: "Shell Container", value: vm.format(vm.shellContainerSize))
                 storageRow(icon: "cylinder", color: .blue, label: "Chat Database", value: vm.format(vm.chatDatabaseSize))
                 storageRow(icon: "doc", color: .indigo, label: "Session Files", value: vm.format(vm.totalSessionSize))
+            }
+
+            Section {
+                storageRow(
+                    icon: "archivebox.fill", color: .orange, label: "原始附件",
+                    value: vm.format(vm.treasuryUsage.originalAttachmentBytes)
+                )
+                storageRow(
+                    icon: "doc.text.fill", color: .indigo, label: "正文与笔记",
+                    value: vm.format(vm.treasuryUsage.bodyBytes)
+                )
+                storageRow(
+                    icon: "photo.fill", color: .pink, label: "缩略图缓存",
+                    value: vm.format(vm.treasuryUsage.thumbnailCacheBytes)
+                )
+                Button(role: .destructive) {
+                    showTreasuryCacheConfirmation = true
+                } label: {
+                    HStack {
+                        if isClearingTreasuryCache { ProgressView().controlSize(.small) }
+                        Text(isClearingTreasuryCache ? "正在清理…" : "清理缩略图缓存")
+                        Spacer()
+                        Text(vm.format(vm.treasuryUsage.thumbnailCacheBytes))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .disabled(isClearingTreasuryCache || vm.treasuryUsage.thumbnailCacheBytes == 0)
+            } header: {
+                Text("藏宝阁")
+            } footer: {
+                Text("只清理可重新生成的链接缩略图，不会删除原始附件、笔记、条目或恢复版本。")
             }
 
             Section("Sessions") {
@@ -150,6 +189,25 @@ struct StorageManagementView: View {
         .navigationTitle("Storage")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { vm.load() }
+        .confirmationDialog(
+            "清理藏宝阁缩略图缓存？",
+            isPresented: $showTreasuryCacheConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("清理缓存", role: .destructive) {
+                isClearingTreasuryCache = true
+                Task.detached(priority: .userInitiated) {
+                    _ = CollectionStore.clearThumbnailCache()
+                    await MainActor.run {
+                        isClearingTreasuryCache = false
+                        vm.load()
+                    }
+                }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("原始附件、正文、笔记和收藏条目会保留。缩略图会在后台按需重新生成。")
+        }
     }
 
     private func storageRow(icon: String, color: Color, label: String, value: String) -> some View {

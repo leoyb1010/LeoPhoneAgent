@@ -960,6 +960,58 @@ final class TreasuryPhase0Tests: XCTestCase {
         XCTAssertEqual(try store.load().first?.processingState, "queued")
     }
 
+    func testTreasuryStorageCleanupDeletesOnlyRegenerableThumbnails() throws {
+        let directory = try temporaryTreasuryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let files = directory.appendingPathComponent("files", isDirectory: true)
+        let notes = directory.appendingPathComponent("notes", isDirectory: true)
+        let thumbs = directory.appendingPathComponent("thumbs", isDirectory: true)
+        try FileManager.default.createDirectory(at: files, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: notes, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: thumbs, withIntermediateDirectories: true)
+        try Data(repeating: 1, count: 31).write(to: files.appendingPathComponent("original.pdf"))
+        try Data(repeating: 2, count: 17).write(to: notes.appendingPathComponent("note.md"))
+        try Data(repeating: 3, count: 23).write(to: thumbs.appendingPathComponent("preview.jpg"))
+
+        let before = TreasuryStoragePolicy.usage(at: directory)
+        XCTAssertEqual(before.originalAttachmentBytes, 31)
+        XCTAssertEqual(before.bodyBytes, 17)
+        XCTAssertEqual(before.thumbnailCacheBytes, 23)
+        XCTAssertEqual(try TreasuryStoragePolicy.clearThumbnailCache(at: directory), 23)
+
+        let after = TreasuryStoragePolicy.usage(at: directory)
+        XCTAssertEqual(after.originalAttachmentBytes, 31)
+        XCTAssertEqual(after.bodyBytes, 17)
+        XCTAssertEqual(after.thumbnailCacheBytes, 0)
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: files.appendingPathComponent("original.pdf").path
+        ))
+    }
+
+    func testClearingPreviewCacheQueuesRegenerationWithoutDeletingItems() throws {
+        let directory = try temporaryTreasuryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try TreasurySQLiteStore(directory: directory)
+        var item = CollectedItem(kind: .link, value: "https://example.com/cache", sourceLabel: "网页")
+        item.thumbnailFile = "thumb.jpg"
+        item.metadataFetched = true
+        item.processingState = "ready"
+        try store.add([item])
+        for job in try store.pendingJobs() {
+            XCTAssertTrue(try store.claimJob(id: job.id))
+            try store.completeJob(id: job.id)
+        }
+
+        try store.invalidatePreviewCache()
+
+        let reloaded = try XCTUnwrap(store.load().first)
+        XCTAssertEqual(reloaded.id, item.id)
+        XCTAssertNil(reloaded.thumbnailFile)
+        XCTAssertFalse(reloaded.metadataFetched)
+        XCTAssertEqual(reloaded.processingState, "queued")
+        XCTAssertEqual(Set(try store.pendingJobs().map(\.type)), Set(["metadata", "index"]))
+    }
+
     func testPhase1IndexRebuildAndImportExportRoundTrip() throws {
         let sourceDirectory = try temporaryTreasuryDirectory()
         let targetDirectory = try temporaryTreasuryDirectory()

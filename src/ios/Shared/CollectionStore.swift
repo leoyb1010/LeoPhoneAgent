@@ -18,6 +18,98 @@ import CryptoKit
 import Foundation
 import SQLite3
 
+struct TreasuryStorageUsage: Equatable {
+    let databaseBytes: Int64
+    let originalAttachmentBytes: Int64
+    let bodyBytes: Int64
+    let recoveryVersionBytes: Int64
+    let thumbnailCacheBytes: Int64
+
+    var totalBytes: Int64 {
+        databaseBytes + originalAttachmentBytes + bodyBytes
+            + recoveryVersionBytes + thumbnailCacheBytes
+    }
+}
+
+enum TreasuryStoragePolicy {
+    static func usage(at directory: URL, fileManager: FileManager = .default) -> TreasuryStorageUsage {
+        TreasuryStorageUsage(
+            databaseBytes: databaseBytes(at: directory, fileManager: fileManager),
+            originalAttachmentBytes: directoryBytes(
+                at: directory.appendingPathComponent("files", isDirectory: true),
+                fileManager: fileManager
+            ),
+            bodyBytes: directoryBytes(
+                at: directory.appendingPathComponent("notes", isDirectory: true),
+                fileManager: fileManager
+            ),
+            recoveryVersionBytes: directoryBytes(
+                at: directory.appendingPathComponent("versions", isDirectory: true),
+                fileManager: fileManager
+            ),
+            thumbnailCacheBytes: directoryBytes(
+                at: directory.appendingPathComponent("thumbs", isDirectory: true),
+                fileManager: fileManager
+            )
+        )
+    }
+
+    @discardableResult
+    static func clearThumbnailCache(at directory: URL,
+                                    fileManager: FileManager = .default) throws -> Int64 {
+        let root = directory.appendingPathComponent("thumbs", isDirectory: true)
+        guard fileManager.fileExists(atPath: root.path) else { return 0 }
+        let before = directoryBytes(at: root, fileManager: fileManager)
+        let entries = try fileManager.contentsOfDirectory(
+            at: root,
+            includingPropertiesForKeys: [.isRegularFileKey, .isSymbolicLinkKey],
+            options: [.skipsHiddenFiles]
+        )
+        for entry in entries {
+            let values = try entry.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+            // Never follow a symlink out of the managed cache root. Removing
+            // the link itself is safe; nested directories are not expected
+            // and are left untouched for an explicit audit.
+            if values.isSymbolicLink == true || values.isRegularFile == true {
+                try fileManager.removeItem(at: entry)
+            }
+        }
+        return before - directoryBytes(at: root, fileManager: fileManager)
+    }
+
+    private static func databaseBytes(at directory: URL,
+                                      fileManager: FileManager) -> Int64 {
+        ["treasury.sqlite3", "treasury.sqlite3-wal", "treasury.sqlite3-shm"].reduce(0) {
+            $0 + fileBytes(at: directory.appendingPathComponent($1), fileManager: fileManager)
+        }
+    }
+
+    private static func directoryBytes(at directory: URL,
+                                       fileManager: FileManager) -> Int64 {
+        guard let enumerator = fileManager.enumerator(
+            at: directory,
+            includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else { return 0 }
+        var total: Int64 = 0
+        for case let url as URL in enumerator {
+            let values = try? url.resourceValues(
+                forKeys: [.fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey]
+            )
+            if values?.isRegularFile == true, values?.isSymbolicLink != true {
+                total += Int64(values?.fileSize ?? 0)
+            }
+        }
+        return total
+    }
+
+    private static func fileBytes(at url: URL, fileManager: FileManager) -> Int64 {
+        guard fileManager.fileExists(atPath: url.path),
+              let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize else { return 0 }
+        return Int64(size)
+    }
+}
+
 enum TreasuryEnhancementPolicy {
     static func shouldReplaceTitle(current: String?, captured: String?) -> Bool {
         let normalizedCurrent = current?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -762,6 +854,32 @@ enum CollectionStore {
         }
     }
 
+    static func storageUsage() -> TreasuryStorageUsage {
+        ioQueue.sync {
+            guard let directory else {
+                return TreasuryStorageUsage(
+                    databaseBytes: 0, originalAttachmentBytes: 0, bodyBytes: 0,
+                    recoveryVersionBytes: 0, thumbnailCacheBytes: 0
+                )
+            }
+            return TreasuryStoragePolicy.usage(at: directory)
+        }
+    }
+
+    @discardableResult
+    static func clearThumbnailCache() -> Int64 {
+        ioQueue.sync {
+            guard let directory else { return 0 }
+            do {
+                let store = try TreasurySQLiteStore(directory: directory)
+                try store.invalidatePreviewCache()
+                return try TreasuryStoragePolicy.clearThumbnailCache(at: directory)
+            } catch {
+                return 0
+            }
+        }
+    }
+
     static func delete(ids: Set<String>) {
         ioQueue.sync {
             guard let directory else { return }
@@ -1357,6 +1475,37 @@ final class TreasurySQLiteStore {
             Self.bind(itemID, stmt, 2)
             try Self.stepDone(db, stmt)
             return Int(sqlite3_changes(db))
+        }
+    }
+
+    func invalidatePreviewCache(now: Date = Date()) throws {
+        try withDatabase { db in
+            try Self.transaction(db) {
+                var clear: OpaquePointer?
+                try Self.prepare(db, """
+                    UPDATE treasure_items
+                    SET preview_ref=NULL,metadata_fetched=0,
+                        processing_state='queued',processing_error_code=NULL,updated_at=?
+                    WHERE kind='link' AND deleted_at IS NULL AND preview_ref IS NOT NULL
+                    """, &clear)
+                defer { sqlite3_finalize(clear) }
+                sqlite3_bind_double(clear, 1, now.timeIntervalSince1970)
+                try Self.stepDone(db, clear)
+
+                let links = try Self.queryItems(
+                    db,
+                    sql: """
+                    SELECT id, kind, legacy_value, resolved_url, title, preview_ref,
+                           source_label, created_at, tags_json, pinned, summary,
+                           metadata_fetched, body_ref, annotation, archived, updated_at,
+                           reading_state, reading_progress, last_opened_at,
+                           processing_state, processing_error_code
+                    FROM treasure_items
+                    WHERE kind='link' AND deleted_at IS NULL AND metadata_fetched=0
+                    """
+                )
+                for item in links { try Self.enqueueDefaultJobs(for: item, db: db) }
+            }
         }
     }
 
