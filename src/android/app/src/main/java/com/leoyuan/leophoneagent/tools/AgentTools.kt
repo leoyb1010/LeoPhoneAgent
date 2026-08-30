@@ -140,10 +140,21 @@ object AgentTools {
         parameters = mapOf(
             "tool_title" to AgentToolParam("string", "Short user-facing action title."),
             "query" to AgentToolParam("string", "Keyword query, up to 512 characters."),
+            "kinds" to AgentToolParam("array", "Optional content kinds.", itemType = "string"),
+            "tags" to AgentToolParam("array", "Optional tags; every supplied tag must match.", itemType = "string"),
+            "source_labels" to AgentToolParam("array", "Optional exact source labels.", itemType = "string"),
+            "collection_ids" to AgentToolParam("array", "Optional collection IDs; every supplied collection must match.", itemType = "string"),
+            "created_after" to AgentToolParam("string", "Optional ISO-8601 lower creation-time bound."),
+            "created_before" to AgentToolParam("string", "Optional ISO-8601 upper creation-time bound."),
+            "reading_state" to AgentToolParam("string", "Optional reading state.", enumValues = listOf("none", "unread", "reading", "read")),
+            "include_archived" to AgentToolParam("boolean", "Include archived items as well as active items."),
             "limit" to AgentToolParam("integer", "Maximum compact results, 1-50."),
         ),
         required = listOf("tool_title", "query"),
-        propertyOrdering = listOf("tool_title", "query", "limit"),
+        propertyOrdering = listOf(
+            "tool_title", "query", "kinds", "tags", "source_labels", "collection_ids",
+            "created_after", "created_before", "reading_state", "include_archived", "limit",
+        ),
     )
 
     private fun treasuryGetDefinition() = AgentToolDefinition(
@@ -153,11 +164,11 @@ object AgentTools {
             "tool_title" to AgentToolParam("string", "Short user-facing action title."),
             "ids" to AgentToolParam("array", "Treasury item IDs to read (maximum 100).", itemType = "string"),
             "include_body" to AgentToolParam("boolean", "Whether to read extracted/local text bodies."),
-            "include_annotation" to AgentToolParam("boolean", "Whether to return user annotations."),
+            "include_annotations" to AgentToolParam("boolean", "Whether to return user annotations."),
             "max_chars_per_item" to AgentToolParam("integer", "Per-item body character budget, maximum 50000."),
         ),
         required = listOf("tool_title", "ids"),
-        propertyOrdering = listOf("tool_title", "ids", "include_body", "include_annotation", "max_chars_per_item"),
+        propertyOrdering = listOf("tool_title", "ids", "include_body", "include_annotations", "max_chars_per_item"),
     )
 
     private fun treasurySaveDefinition() = AgentToolDefinition(
@@ -170,25 +181,27 @@ object AgentTools {
             "content" to AgentToolParam("string", "HTTP(S) URL for link, otherwise the literal text to save."),
             "title" to AgentToolParam("string", "Optional title."),
             "tags" to AgentToolParam("array", "Optional tags.", itemType = "string"),
+            "collection_ids" to AgentToolParam("array", "Optional collection IDs.", itemType = "string"),
         ),
         required = listOf("tool_title", "user_confirmed", "kind", "content"),
-        propertyOrdering = listOf("tool_title", "user_confirmed", "kind", "content", "title", "tags"),
+        propertyOrdering = listOf("tool_title", "user_confirmed", "kind", "content", "title", "tags", "collection_ids"),
     )
 
     private fun treasuryUpdateDefinition() = AgentToolDefinition(
         name = "treasury_update",
-        description = "Update safe metadata on one Treasury item. Supports title, tags, pin, archive, reading state, and annotation. Permanent deletion is intentionally unavailable.",
+        description = "Update safe metadata on one Treasury item. Supports title, tags, collections, pin, archive, reading state, and annotation. Permanent deletion is intentionally unavailable.",
         parameters = mapOf(
             "tool_title" to AgentToolParam("string", "Short user-facing action title."),
             "id" to AgentToolParam("string", "Treasury item ID."),
             "title" to AgentToolParam("string", "New title."),
             "tags" to AgentToolParam("array", "Replacement tag list.", itemType = "string"),
+            "collection_ids" to AgentToolParam("array", "Replacement collection ID list.", itemType = "string"),
             "pinned" to AgentToolParam("boolean", "Pin or unpin the item."),
             "archived" to AgentToolParam("boolean", "Archive or restore the item."),
             "reading_state" to AgentToolParam("string", "Reading state.", enumValues = listOf("none", "unread", "reading", "read")),
             "annotation" to AgentToolParam("string", "Replacement user annotation."),
         ),
         required = listOf("tool_title", "id"),
-        propertyOrdering = listOf("tool_title", "id", "title", "tags", "pinned", "archived", "reading_state", "annotation"),
+        propertyOrdering = listOf("tool_title", "id", "title", "tags", "collection_ids", "pinned", "archived", "reading_state", "annotation"),
     )
 }

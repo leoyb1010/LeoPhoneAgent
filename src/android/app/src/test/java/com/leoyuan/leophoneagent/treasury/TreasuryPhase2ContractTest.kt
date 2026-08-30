@@ -6,11 +6,14 @@ import com.leoyuan.leophoneagent.tools.TreasuryTools
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.net.InetAddress
+import java.time.Instant
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.json.JSONObject
 
 class TreasuryPhase2ContractTest {
     @Test
@@ -22,7 +25,43 @@ class TreasuryPhase2ContractTest {
         val ids = tools.getValue("treasury_get").parameters.getValue("ids")
         assertEquals("array", ids.type)
         assertEquals("string", ids.itemType)
-        assertFalse(tools.getValue("treasury_update").parameters.containsKey("delete"))
+        val search = tools.getValue("treasury_search").parameters
+        assertTrue(search.keys.containsAll(setOf(
+            "kinds", "tags", "source_labels", "collection_ids", "created_after",
+            "created_before", "reading_state", "include_archived",
+        )))
+        val get = tools.getValue("treasury_get").parameters
+        assertTrue(get.containsKey("include_annotations"))
+        assertFalse(get.containsKey("include_annotation"))
+        assertTrue(tools.getValue("treasury_save").parameters.containsKey("collection_ids"))
+        val update = tools.getValue("treasury_update").parameters
+        assertTrue(update.containsKey("collection_ids"))
+        assertFalse(update.containsKey("delete"))
+    }
+
+    @Test
+    fun `search time bounds accept only strict dates or instants`() {
+        assertEquals(
+            Instant.parse("2026-08-31T00:00:00Z").toEpochMilli(),
+            TreasuryTools.parseTimeBound("2026-08-31"),
+        )
+        assertEquals(
+            Instant.parse("2026-08-31T12:34:56Z").toEpochMilli(),
+            TreasuryTools.parseTimeBound("2026-08-31T12:34:56Z"),
+        )
+        assertEquals(null, TreasuryTools.parseTimeBound("2026-08-31junk"))
+        assertEquals(null, TreasuryTools.parseTimeBound("not-a-date"))
+    }
+
+    @Test
+    fun `archived argument preserves exact query syntax when omitted`() {
+        assertNull(TreasuryTools.includeArchivedArgument(JSONObject()))
+        assertFalse(TreasuryTools.includeArchivedArgument(
+            JSONObject().put("include_archived", false)
+        )!!)
+        assertTrue(TreasuryTools.includeArchivedArgument(
+            JSONObject().put("include_archived", true)
+        )!!)
     }
 
     @Test

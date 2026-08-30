@@ -207,7 +207,18 @@ class TreasureRepository(
         return dao.tombstoneWithChanges(existingIds, now, changes)
     }
 
-    fun search(query: String, limit: Int = 50): Flow<List<TreasureSearchRow>> {
+    fun search(
+        query: String,
+        limit: Int = 50,
+        kinds: List<String> = emptyList(),
+        tags: List<String> = emptyList(),
+        sourceLabels: List<String> = emptyList(),
+        collectionIds: List<String> = emptyList(),
+        readingStates: List<String> = emptyList(),
+        includeArchived: Boolean? = null,
+        createdAfter: Long? = null,
+        createdBefore: Long? = null,
+    ): Flow<List<TreasureSearchRow>> {
         val spec = TreasuryQuery.parse(query)
         val expression = ftsExpression(spec.textQuery)
         val args = mutableListOf<Any>()
@@ -219,10 +230,20 @@ class TreasureRepository(
         }
         val where = mutableListOf("treasure_items.deleted_at IS NULL")
         if (expression.isNotEmpty()) where += "treasure_search_fts MATCH ?"
-        where += if (spec.archived) "treasure_items.archived = 1" else "treasure_items.archived = 0"
+        when (includeArchived) {
+            true -> Unit
+            false -> where += "treasure_items.archived = 0"
+            null -> where += if (spec.archived) "treasure_items.archived = 1" else "treasure_items.archived = 0"
+        }
         if (spec.kinds.isNotEmpty()) {
             where += "treasure_items.kind IN (${spec.kinds.joinToString(",") { "?" }})"
             args.addAll(spec.kinds)
+        }
+        val explicitKinds = kinds.map { it.trim().lowercase(Locale.ROOT) }
+            .filter(ALLOWED_KINDS::contains).distinct()
+        if (explicitKinds.isNotEmpty()) {
+            where += "treasure_items.kind IN (${explicitKinds.joinToString(",") { "?" }})"
+            args.addAll(explicitKinds)
         }
         if (spec.processingStates.isNotEmpty()) {
             where += "treasure_items.processing_state IN (${spec.processingStates.joinToString(",") { "?" }})"
@@ -232,6 +253,12 @@ class TreasureRepository(
             where += "treasure_items.reading_state IN (${spec.readingStates.joinToString(",") { "?" }})"
             args.addAll(spec.readingStates)
         }
+        val explicitReading = readingStates.map { it.trim().lowercase(Locale.ROOT) }
+            .filter(READING_STATES::contains).distinct()
+        if (explicitReading.isNotEmpty()) {
+            where += "treasure_items.reading_state IN (${explicitReading.joinToString(",") { "?" }})"
+            args.addAll(explicitReading)
+        }
         spec.pinned?.let {
             where += "treasure_items.pinned = ?"
             args += if (it) 1 else 0
@@ -240,8 +267,28 @@ class TreasureRepository(
             where += "treasure_items.tags_json LIKE ? ESCAPE '\\'"
             args += "%${escapeLike(JSONObject.quote(tag))}%"
         }
-        spec.afterEpochMs?.let { where += "treasure_items.created_at >= ?"; args += it }
-        spec.beforeEpochMs?.let { where += "treasure_items.created_at < ?"; args += it }
+        normalizedTags(tags).take(100).forEach { tag ->
+            where += "treasure_items.tags_json LIKE ? ESCAPE '\\'"
+            args += "%${escapeLike(JSONObject.quote(tag))}%"
+        }
+        val safeSources = sourceLabels.map(String::trim).filter(String::isNotEmpty)
+            .map { it.take(200).lowercase(Locale.ROOT) }.distinct().take(100)
+        if (safeSources.isNotEmpty()) {
+            where += "LOWER(treasure_items.source_label) IN (${safeSources.joinToString(",") { "?" }})"
+            args.addAll(safeSources)
+        }
+        normalizedCollectionIds(collectionIds).forEach { id ->
+            where += "treasure_items.collection_ids_json LIKE ? ESCAPE '\\'"
+            args += "%${escapeLike(JSONObject.quote(id))}%"
+        }
+        (createdAfter ?: spec.afterEpochMs)?.let {
+            where += "treasure_items.created_at >= ?"
+            args += it
+        }
+        (createdBefore ?: spec.beforeEpochMs)?.let {
+            where += "treasure_items.created_at < ?"
+            args += it
+        }
         val snippet = if (expression.isNotEmpty()) {
             "snippet(treasure_search_fts, '', '', '…', -1, 48)"
         } else {
@@ -428,6 +475,7 @@ class TreasureRepository(
         readingProgress: Double? = null,
         lastOpenedAt: Long? = null,
         annotation: String? = null,
+        collectionIds: List<String>? = null,
     ): TreasureItemEntity? {
         val existing = dao.getIncludingDeleted(id) ?: return null
         if (existing.deletedAt != null) return null
@@ -453,6 +501,9 @@ class TreasureRepository(
             readingProgress = normalizedReadingProgress,
             lastOpenedAt = lastOpenedAt ?: existing.lastOpenedAt,
             annotation = annotation?.take(20_000) ?: existing.annotation,
+            collectionIdsJson = collectionIds?.let {
+                json.encodeToString(normalizedCollectionIds(it))
+            } ?: existing.collectionIdsJson,
             updatedAt = System.currentTimeMillis(),
             syncState = "pending",
         )
@@ -624,7 +675,7 @@ class TreasureRepository(
             previewRef = previewRef, mimeType = mimeType, byteCount = byteCount,
             contentDigest = digest, summary = summary, annotation = annotation,
             tagsJson = json.encodeToString(normalizedTags(tags)),
-            collectionIdsJson = json.encodeToString(collectionIds.distinct()),
+            collectionIdsJson = json.encodeToString(normalizedCollectionIds(collectionIds)),
             pinned = pinned, archived = archived, readingState = readingState,
             readingProgress = readingProgress, createdAt = Instant.parse(createdAt).toEpochMilli(),
             updatedAt = Instant.parse(updatedAt).toEpochMilli(),
@@ -766,6 +817,13 @@ class TreasureRepository(
         fun normalizedTags(tags: List<String>): List<String> {
             val seen = mutableSetOf<String>()
             return tags.map(String::trim).filter { it.isNotEmpty() && seen.add(it.lowercase(Locale.ROOT)) }
+        }
+
+        fun normalizedCollectionIds(ids: List<String>): List<String> {
+            val seen = mutableSetOf<String>()
+            return ids.map { it.trim().take(200) }
+                .filter { it.isNotEmpty() && seen.add(it.lowercase(Locale.ROOT)) }
+                .take(100)
         }
 
         private fun escapeLike(value: String): String = value

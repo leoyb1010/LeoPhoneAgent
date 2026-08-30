@@ -43,6 +43,20 @@ class TreasureRepositoryContractTest {
     }
 
     @Test
+    fun collectionIdsAreBoundedTrimmedAndCaseInsensitiveDeduplicated() {
+        assertEquals(
+            listOf("work", "稍后阅读", "x".repeat(200)),
+            TreasureRepository.normalizedCollectionIds(
+                listOf(" work ", "WORK", "稍后阅读", " ", "x".repeat(240))
+            )
+        )
+        assertEquals(
+            100,
+            TreasureRepository.normalizedCollectionIds((0..150).map(Int::toString)).size,
+        )
+    }
+
+    @Test
     fun ftsExpressionBoundsAndEscapesUntrustedQuery() {
         val expression = TreasureRepository.ftsExpression("Room \"quoted\" Fold")
         assertEquals("\"Room\"* AND \"\"\"quoted\"\"\"* AND \"Fold\"*", expression)
