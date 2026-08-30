@@ -17,6 +17,7 @@ import {
   treasuryCaptureSafeExtension,
   treasuryCaptureVerifyPdfFile,
 } from './treasury-capture-policy.js';
+import { clearTreasuryCache, getTreasuryStorageUsage } from './treasury-storage.service.js';
 
 const router = express.Router();
 const MAX_FILE_BYTES = 100 * 1024 * 1024;
@@ -210,6 +211,28 @@ router.get('/', (req, res) => {
   } catch (error) {
     console.error('Treasury query failed:', error instanceof Error ? error.name : 'unknown');
     return res.status(400).json({ error: 'Treasury query failed' });
+  }
+});
+
+router.get('/storage', async (_req, res) => {
+  try {
+    return res.json({ usage: await getTreasuryStorageUsage() });
+  } catch (error) {
+    console.error('Treasury storage usage failed:', error instanceof Error ? error.name : 'unknown');
+    return res.status(500).json({ error: 'Treasury storage usage failed' });
+  }
+});
+
+router.delete('/storage/cache/:kind', async (req, res) => {
+  const kind = req.params.kind;
+  if (kind !== 'body' && kind !== 'attachment') {
+    return res.status(400).json({ error: 'Unknown Treasury cache kind' });
+  }
+  try {
+    return res.json(await clearTreasuryCache(kind));
+  } catch (error) {
+    console.error('Treasury cache cleanup failed:', error instanceof Error ? error.name : 'unknown');
+    return res.status(500).json({ error: 'Treasury cache cleanup failed' });
   }
 });
 

@@ -819,6 +819,34 @@ export const treasuryDb = {
     ).get(scope, itemId, assetKind) as RemoteTreasureAsset | undefined) ?? null;
   },
 
+  remoteAssetUsage(): {
+    bodyBytes: number; bodyEntries: number; attachmentBytes: number; attachmentEntries: number;
+  } {
+    const rows = getConnection().prepare(
+      `SELECT asset_kind,COUNT(*) AS entry_count,COALESCE(SUM(byte_count),0) AS byte_count
+       FROM treasure_remote_assets GROUP BY asset_kind`,
+    ).all() as Array<{ asset_kind: 'body' | 'attachment'; entry_count: number; byte_count: number }>;
+    const body = rows.find((row) => row.asset_kind === 'body');
+    const attachment = rows.find((row) => row.asset_kind === 'attachment');
+    return {
+      bodyBytes: body?.byte_count ?? 0,
+      bodyEntries: body?.entry_count ?? 0,
+      attachmentBytes: attachment?.byte_count ?? 0,
+      attachmentEntries: attachment?.entry_count ?? 0,
+    };
+  },
+
+  deleteRemoteAssets(assetKind: 'body' | 'attachment'): { entries: number; bytes: number } {
+    return getConnection().transaction(() => {
+      const usage = getConnection().prepare(
+        `SELECT COUNT(*) AS entry_count,COALESCE(SUM(byte_count),0) AS byte_count
+         FROM treasure_remote_assets WHERE asset_kind=?`,
+      ).get(assetKind) as { entry_count: number; byte_count: number };
+      getConnection().prepare('DELETE FROM treasure_remote_assets WHERE asset_kind=?').run(assetKind);
+      return { entries: usage.entry_count, bytes: usage.byte_count };
+    })();
+  },
+
   putRemoteAsset(asset: RemoteTreasureAsset): void {
     if (!/^[0-9a-f]{64}$/.test(asset.digest) || !Number.isSafeInteger(asset.byte_count) ||
         asset.byte_count < 0 || !['body', 'attachment'].includes(asset.asset_kind)) {

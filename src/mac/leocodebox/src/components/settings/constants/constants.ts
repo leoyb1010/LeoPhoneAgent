@@ -4,6 +4,7 @@ import {
   Bot,
   Boxes,
   GitBranch,
+  HardDrive,
   Info,
   KeyRound,
   ListChecks,
@@ -67,6 +68,7 @@ export const SETTINGS_MAIN_TABS: SettingsMainTabMeta[] = [
   { id: 'api', label: 'API Tokens', labelKey: 'mainTabs.apiTokens', group: 'system', keywords: 'api tokens auth keys 密钥 令牌 接口 凭据', icon: KeyRound },
   { id: 'notifications', label: 'Notifications', labelKey: 'mainTabs.notifications', group: 'system', keywords: 'notifications alerts push 通知', icon: Bell },
   { id: 'plugins', label: 'Plugins', labelKey: 'mainTabs.plugins', group: 'system', keywords: 'plugins extensions integrations 插件', icon: Plug },
+  { id: 'storage', label: 'Storage', labelKey: 'mainTabs.storage', group: 'system', keywords: 'storage cache treasury disk cleanup 存储 缓存 藏宝阁 清理', icon: HardDrive },
   { id: 'about', label: 'About', labelKey: 'mainTabs.about', group: 'system', keywords: 'about version info 关于 版本 更新', icon: Info },
 ];
 

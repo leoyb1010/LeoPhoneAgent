@@ -98,7 +98,38 @@
     "browser": "瀏覽器",
     "notifications": "通知",
     "plugins": "外掛",
+    "storage": "儲存空間",
     "about": "關於"
+  },
+  "storage": {
+    "title": "藏寶閣儲存空間",
+    "description": "查看本機原始檔案佔用，並只清理可從手機重新取得的快取內容。",
+    "refresh": "重新整理",
+    "loading": "正在讀取",
+    "clear": "清理",
+    "cancel": "取消",
+    "fileCount": "{{count}} 個檔案",
+    "entryCount": "{{count}} 筆快取",
+    "clearConfirm": "清理快取",
+    "cleared": "快取已清理，本機藏寶閣原始檔案保持不變。",
+    "loadError": "無法讀取藏寶閣儲存佔用。",
+    "clearError": "無法清理快取。",
+    "originals": {
+      "label": "本機原始檔案",
+      "description": "在這台 Mac 擷取的持久原始檔案。此處僅統計，不會作為清理目標。"
+    },
+    "bodyCache": {
+      "label": "手機正文快取",
+      "description": "已下載的文章、筆記、OCR 和轉寫正文；手機上線時可以重新取得。"
+    },
+    "attachmentCache": {
+      "label": "手機附件快取",
+      "description": "已下載的 PDF、圖片、文件、音訊和影片引用；原始內容仍保留在來源裝置。"
+    },
+    "confirm": {
+      "title": "清理藏寶閣快取？",
+      "description": "確定清理{{label}}（{{size}}）嗎？不會刪除本機原始檔案或藏寶閣項目。"
+    }
   },
   "notifications": {
     "title": "通知",

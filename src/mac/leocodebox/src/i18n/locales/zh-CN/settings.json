@@ -99,7 +99,38 @@
     "browser": "浏览器",
     "notifications": "通知",
     "plugins": "插件",
+    "storage": "存储空间",
     "about": "关于"
+  },
+  "storage": {
+    "title": "藏宝阁存储空间",
+    "description": "查看本机原始文件占用，并只清理可从手机重新获取的缓存内容。",
+    "refresh": "刷新",
+    "loading": "正在读取",
+    "clear": "清理",
+    "cancel": "取消",
+    "fileCount": "{{count}} 个文件",
+    "entryCount": "{{count}} 条缓存",
+    "clearConfirm": "清理缓存",
+    "cleared": "缓存已清理，本机藏宝阁原始文件保持不变。",
+    "loadError": "无法读取藏宝阁存储占用。",
+    "clearError": "无法清理缓存。",
+    "originals": {
+      "label": "本机原始文件",
+      "description": "在这台 Mac 捕获的持久原始文件。这里仅统计，不会作为清理目标。"
+    },
+    "bodyCache": {
+      "label": "手机正文缓存",
+      "description": "已下载的文章、笔记、OCR 和转写正文；手机在线时可以重新获取。"
+    },
+    "attachmentCache": {
+      "label": "手机附件缓存",
+      "description": "已下载的 PDF、图片、文档、音频和视频引用；原始内容仍保留在来源设备。"
+    },
+    "confirm": {
+      "title": "清理藏宝阁缓存？",
+      "description": "确定清理{{label}}（{{size}}）吗？不会删除本机原始文件或藏宝阁条目。"
+    }
   },
   "notifications": {
     "title": "通知",

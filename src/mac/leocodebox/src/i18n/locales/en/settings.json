@@ -115,7 +115,38 @@
     "browser": "Browser",
     "notifications": "Notifications",
     "plugins": "Plugins",
+    "storage": "Storage",
     "about": "About"
+  },
+  "storage": {
+    "title": "Treasury storage",
+    "description": "Inspect local originals and clear only phone content that can be downloaded again.",
+    "refresh": "Refresh",
+    "loading": "Loading",
+    "clear": "Clear",
+    "cancel": "Cancel",
+    "fileCount": "{{count}} files",
+    "entryCount": "{{count}} entries",
+    "clearConfirm": "Clear cache",
+    "cleared": "Cache cleared. Original Treasury files were preserved.",
+    "loadError": "Unable to read Treasury storage usage.",
+    "clearError": "Unable to clear the cache.",
+    "originals": {
+      "label": "Local original files",
+      "description": "Durable files captured on this Mac. They are read-only here and are never cleanup targets."
+    },
+    "bodyCache": {
+      "label": "Phone body cache",
+      "description": "Downloaded article, note, OCR, and transcript text. It can be fetched again when the phone is online."
+    },
+    "attachmentCache": {
+      "label": "Phone attachment cache",
+      "description": "Downloaded PDFs, images, documents, audio, and video references. Originals remain on their source device."
+    },
+    "confirm": {
+      "title": "Clear Treasury cache?",
+      "description": "Clear {{label}} ({{size}})? Local original files and Treasury items will not be deleted."
+    }
   },
   "notifications": {
     "title": "Notifications",
