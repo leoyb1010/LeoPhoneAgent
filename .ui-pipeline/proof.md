@@ -9,8 +9,8 @@
 ## Automated evidence
 
 - Android Standard/Power: Kotlin compile、instrumentation 测试源码 compile、完整 JVM tests、lint 均通过；lint 0 error；无设备，因此 instrumentation 未执行。
-- Android contract tests: Room 11→12、精确查询/特殊字符标签、阅读状态/进度、高亮事务、Agent 授权/注入和 PDF 任务边界。
-- iOS: Treasury 35/35；MinisLogicTests 306/306；MinisShare direct target simulator build succeeded。
+- Android contract tests: Standard/Power 各 607 tests（0 failed、1 skipped）；Room 11→12、精确查询/特殊字符标签、结构化 Agent 筛选、严格时间边界、阅读状态/进度、高亮事务、Agent 授权/注入和 PDF 任务边界。
+- iOS: Treasury 37/37；MinisLogicTests 308/308；MinisShare direct target simulator build succeeded；Spotlight 不再接收正文/URL/摘要，分享暂存按原始字节成功后发布。
 - iOS main app: HOLD；`LeoPhoneAgent` scheme 包含嵌入式 Apple Watch App，本机未安装 watchOS 26.5，`xcodebuild` 以 exit 70 在编译前终止。
 - Relay: 12/12 安全与协议测试通过，覆盖幂等、乱序、重启、旧 500 快照、按需资产和 MIME/digest 拒绝。
 - Mac: typecheck passed；client 162/162；server 395/395；production build、MCP stdio `tools/list` 和双 npm audit passed。

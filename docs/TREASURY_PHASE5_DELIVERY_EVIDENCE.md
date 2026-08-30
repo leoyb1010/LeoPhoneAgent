@@ -5,7 +5,7 @@
 
 ## 结论与完成比例
 
-藏宝阁 Phase 0–5 的本机可实现源码、迁移、自动化测试、Mac 生产构建和浏览器交互审计已经完成。iOS 补齐 `treasury_save` / `treasury_update`，Mac 四种 Provider 共享同一个 Treasury MCP 工具入口；最后三轮审计修复了写授权、远端缓存完整性、错误脱敏、跨 scope 去重和键盘/读屏语义。
+藏宝阁 Phase 0–5 的本机可实现源码、迁移、自动化测试、Mac 生产构建和浏览器交互审计已经完成。iOS 补齐 `treasury_save` / `treasury_update`，Android Agent 工具完成跨端契约对齐，Mac 四种 Provider 共享同一个 Treasury MCP 工具入口；最后三轮审计和完成定义复审修复了写授权、工具契约分叉、远端缓存完整性、Spotlight 隐私、Share Extension 捕获完整性、错误脱敏、跨 scope 去重和键盘/读屏语义。
 
 - Phase 5 本机源码与自动化范围：**100%**。
 - Phase 0–5 本机施工范围：**100%**。
@@ -21,6 +21,15 @@
 - URL 保存执行凭据安全的 HTTP(S) 校验和规范化去重；搜索索引与真实保存正文一致。
 - 写工具同时要求当前真实用户消息表达明确意图和工具参数 `user_confirmed=true`。否定表达、伪造 system/assistant/developer 标记、网页/PDF/OCR 引用中的写指令均拒绝。
 - `treasury_update` 不提供永久删除；永久删除继续走独立高风险确认流程。
+- Share Extension 对图片和文件优先保留 URL/Data 原始字节，仅在系统只提供 `UIImage` 时使用无损 PNG fallback；暂存失败不会登记附件。
+- Spotlight 不再回退到正文或带 query 的原始 URL，也不索引生成摘要；只使用明确标题、来源和标签。
+
+### Android
+
+- `treasury_search` 支持 kinds、tags、source labels、collection IDs、创建时间、阅读状态和 active+archived 筛选，返回统一 `items` 紧凑结果。
+- `treasury_get` 对外统一 `include_annotations`，兼容旧队列的单数参数；缺失条目明确返回正文状态、null 字段和 `truncated=false`。
+- `treasury_save` 使用无凭据 HTTP(S) 规范化 URL、返回去重状态并支持合集；`treasury_update` 支持合集且非法阅读状态失败关闭。
+- 内容类型、阅读状态和时间边界不再静默忽略；非法筛选会拒绝执行，避免扩大 Agent 查询范围。
 
 ### Mac
 
@@ -75,13 +84,20 @@ treasury_update -> explicit approved metadata/read-state/annotation write
 - 移除被 `.gitignore` 覆盖的测试落盘方式，将高级 Treasury integration 测试迁到可跟踪目录。
 - 复核无新增常驻服务、搜索服务、语义模型、24 小时监听、Power 权限依赖或重复 Provider 工具实现。
 
+### 完成定义复审：跨端契约、捕获完整性与系统索引边界
+
+- 逐项对照施工规范重新核对 Android 四工具，修复 get 参数单复数分叉、search 过滤器缺失、结果 wrapper 不一致和 save/update 合集缺口。
+- Android search 对未知 kind、reading state、非法日期及倒置时间区间失败关闭；repository 保留结构化过滤、active+archived 和大小写无关来源语义。
+- iOS Spotlight 移除正文、原始 URL 和生成摘要 fallback；Share Extension 移除保存前 JPEG 强制转码，并只在暂存真实成功后发布附件记录。
+- 复扫 SQL 参数顺序、路径穿越、凭据 URL、错误文本、debug 输出和本机路径；本轮改动未新增密钥、真实收藏、敏感绝对路径或常驻能力。
+
 ## 自动化验证
 
 ### iOS / iPadOS
 
-- Treasury 定向测试：**35/35 passed**。
-- `MinisLogicTests`：**306/306 passed**，0 failed。
-- xcresult：`~/Library/Developer/Xcode/DerivedData/LeoPhoneAgent-eepkwcwlunoccyencmgmqedpdkny/Logs/Test/Test-MinisLogicTests-2026.08.31_03-00-08-+0800.xcresult`。
+- Treasury 定向测试：**37/37 passed**。
+- `MinisLogicTests`：**308/308 passed**，0 failed，0 skipped。
+- xcresult：`~/Library/Developer/Xcode/DerivedData/LeoPhoneAgent-eepkwcwlunoccyencmgmqedpdkny/Logs/Test/Test-MinisLogicTests-2026.08.31_03-38-27-+0800.xcresult`。
 - `MinisShare` iOS Simulator target：build succeeded。
 - 主 App scheme：本机缺少仓库目标要求的 watchOS runtime，编译前阻断；保持 HOLD，不声明 iPhone/iPad 主 App 已运行。
 
@@ -95,9 +111,9 @@ treasury_update -> explicit approved metadata/read-state/annotation write
 ```
 
 - `BUILD SUCCESSFUL`。
-- Standard：**604 tests，0 failures，1 skipped**。
-- Power：**604 tests，0 failures，1 skipped**。
-- 双 flavor lint：0 errors；538 warnings、38 hints 为仓库全局既有项。
+- Standard：**607 tests，0 failures，1 skipped**。
+- Power：**607 tests，0 failures，1 skipped**。
+- Standard lint：0 errors、542 warnings、38 hints；Power lint：0 errors、538 warnings、38 hints。XML 报告未命中本轮修改文件，均为仓库全局既有项。
 - Standard 基础藏宝阁未引入 Accessibility、Shizuku、悬浮窗或 Power 权限依赖。
 
 ### Mac leocodebox
@@ -125,10 +141,13 @@ treasury_update -> explicit approved metadata/read-state/annotation write
 - `ee39ea2` — `feat(ios-treasury): complete save and update tools`
 - `db9e9fc` — `feat(mac-treasury): expose unified provider mcp tools`
 - `2282d44` — `fix(mac-treasury): harden cache integrity and accessibility`
+- `4a583cd` — `fix(android-treasury): align agent tools with cross-platform contract`
+- `8b61baf` — `fix(ios-treasury): preserve raw share captures and private spotlight data`
 
 实际代码范围：
 
-- iOS：`src/ios/Shared/CollectionStore.swift`、`CollectionSearchIndex.swift`、Agent Chat 工具定义/执行/状态、`ChatStore.swift`、Treasury 测试。
+- iOS：`src/ios/Shared/CollectionStore.swift`、`CollectionSearchIndex.swift`、`SharedContainerStore.swift`、`ShareExtension/ShareViewModel.swift`、Agent Chat 工具定义/执行/状态、`ChatStore.swift`、Treasury 测试。
+- Android：Treasure repository、统一 Agent tool schema/executor 与契约回归测试。
 - Mac server：Treasury MCP stdio/API、CLI 入口、server 挂载、Treasury repository/service、Fleet 缓存校验和 integration tests。
 - Mac client：`CollectionsMirror.tsx` 与可访问性测试。
 

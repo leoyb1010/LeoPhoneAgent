@@ -12,13 +12,16 @@
 - Mac 新增四种 Provider 共用的 `leocodebox-treasury` MCP，统一提供 search/get/save/update；本机与手机缓存可搜索、受控读取和引用。
 - Mac 藏宝阁补齐六视图键盘导航、tab/tabpanel、加载/错误 live region、详情焦点和删除高亮确认。
 - 远端正文缓存写入和读取都校验 MIME、byte count 与 SHA-256；同 ID 跨 Relay scope 去重并选择最新内容。
+- Android Agent 契约完成跨端对齐：search 支持内容类型、标签、来源、合集、日期、阅读状态和归档筛选，get 使用统一复数批注参数，save/update 支持合集并拒绝非法筛选扩大查询。
+- iOS Share Extension 优先保留图片和文件原始字节，暂存成功后才登记附件；Spotlight 只索引标题、来源和标签，不再索引正文、原始 URL 或摘要。
 
 ### 三轮最终审计与验证
 
 - 第一轮修复 iOS 工具闭环、note 正文、Artifact kind、URL 去重和 JSON fallback 合集更新。
 - 第二轮修复 Mac 写审批边界、MCP token 存储、错误脱敏、归档搜索、跨 scope 去重和正文缓存完整性。
 - 第三轮修复 Mac 键盘/读屏语义、详情焦点、加载空态和测试落盘位置，并完成真实 production browser 宽/窄窗口走查。
-- iOS Treasury 35/35、MinisLogicTests 306/306 和 MinisShare build 通过；Android Standard/Power 各 604 tests（0 failed、1 skipped）且双 lint 0 error；Mac client 162/162、server 395/395、typecheck、production build、MCP stdio 枚举和双 npm audit 通过。
+- 完成定义复审继续修复 Android 工具契约分叉、非法筛选静默放宽、iOS Spotlight 摘要泄漏和 Share Extension 假成功/有损转码，并补回归测试。
+- iOS Treasury 37/37、MinisLogicTests 308/308 和 MinisShare build 通过；Android Standard/Power 各 607 tests（0 failed、1 skipped）且双 lint 0 error；Mac client 162/162、server 395/395、typecheck、production build、MCP stdio 枚举和双 npm audit 通过。
 
 ### 边界
 
