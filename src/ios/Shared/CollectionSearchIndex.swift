@@ -374,6 +374,178 @@ enum TreasuryService {
         return (renderUntrusted(response, element: "treasury_items"), true)
     }
 
+    static func executeSave(from json: String,
+                            currentUserText: String?) async -> (output: String, success: Bool) {
+        let dict = jsonDictionary(json)
+        guard userExplicitlyRequestedSave(currentUserText),
+              bool(dict["user_confirmed"], default: false) else {
+            return ("Error: treasury_save requires an explicit request in the current user message.", false)
+        }
+        let requestedKind = ((dict["kind"] as? String) ?? "text")
+            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard ["link", "text", "note", "artifact"].contains(requestedKind) else {
+            return ("Error: treasury_save supports link, text, note, or artifact content.", false)
+        }
+        let content = String(((dict["content"] as? String) ?? "").prefix(2_000_000))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty else { return ("Error: treasury_save requires content.", false) }
+
+        let title = cappedOptional(dict["title"], limit: 500)
+        let tags = normalizedUserStrings(stringArray(dict["tags"]), limit: 100, count: 100)
+        var item: CollectedItem
+        var indexedBody = content
+        switch requestedKind {
+        case "link":
+            guard TreasurySQLiteStore.normalizedURLKey(content) != nil,
+                  let url = URL(string: content) else {
+                return ("Error: treasury_save accepts only credential-free HTTP(S) links.", false)
+            }
+            if let existing = CollectionStore.load().first(where: {
+                $0.kind == .link && TreasurySQLiteStore.normalizedURLKey($0.value)
+                    == TreasurySQLiteStore.normalizedURLKey(content)
+            }) {
+                return ("{\"saved\":true,\"deduplicated\":true,\"id\":\"\(existing.id)\"}", true)
+            }
+            item = CollectedItem(kind: .link, value: content,
+                                 sourceLabel: CollectionStore.sourceLabel(forHost: url.host))
+            indexedBody = ""
+        case "note":
+            item = CollectedItem.newNote(title: title ?? "")
+            guard let bodyFile = item.bodyFile,
+                  await NoteBodyStore.save(content, to: bodyFile) else {
+                return ("Error: Treasury note body could not be saved.", false)
+            }
+        case "artifact":
+            item = CollectedItem(kind: .text, value: content, sourceLabel: "聊天 Artifact")
+        default:
+            item = CollectedItem(kind: .text, value: content, sourceLabel: "Agent 保存")
+        }
+        if requestedKind != "note" { item.title = title }
+        item.tags = tags
+        item.updatedAt = Date()
+        CollectionStore.add([item])
+        guard CollectionStore.load().contains(where: { $0.id == item.id }) else {
+            if let bodyFile = item.bodyFile { NoteBodyStore.delete(bodyFile) }
+            return ("Error: Treasury item could not be persisted.", false)
+        }
+        await CollectionSearchIndex.shared.index(
+            itemId: item.id, title: item.title ?? "", body: indexedBody
+        )
+        return ("{\"saved\":true,\"deduplicated\":false,\"id\":\"\(item.id)\"}", true)
+    }
+
+    static func executeUpdate(from json: String,
+                              currentUserText: String?) async -> (output: String, success: Bool) {
+        let dict = jsonDictionary(json)
+        guard userExplicitlyRequestedUpdate(currentUserText) else {
+            return ("Error: treasury_update requires an explicit request in the current user message.", false)
+        }
+        guard dict["delete"] == nil, dict["deleted_at"] == nil else {
+            return ("Error: permanent deletion is not available through treasury_update.", false)
+        }
+        let id = ((dict["id"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !id.isEmpty else { return ("Error: treasury_update requires an item id.", false) }
+        let supported = ["title", "tags", "collection_ids", "pinned", "archived",
+                         "reading_state", "annotation"]
+        guard supported.contains(where: { dict.keys.contains($0) }) else {
+            return ("Error: treasury_update requires at least one supported field.", false)
+        }
+        guard var item = CollectionStore.load().first(where: { $0.id == id }) else {
+            return ("Error: Treasury item was not found.", false)
+        }
+        if dict.keys.contains("title") { item.title = cappedOptional(dict["title"], limit: 500) }
+        if dict.keys.contains("tags") {
+            item.tags = normalizedUserStrings(stringArray(dict["tags"]), limit: 100, count: 100)
+        }
+        if let value = dict["pinned"] as? Bool { item.pinned = value }
+        if let value = dict["archived"] as? Bool { item.archived = value }
+        if dict.keys.contains("annotation") {
+            item.annotation = cappedOptional(dict["annotation"], limit: 20_000)
+        }
+        if dict.keys.contains("reading_state") {
+            let value = ((dict["reading_state"] as? String) ?? "").lowercased()
+            guard ["none", "unread", "reading", "read"].contains(value) else {
+                return ("Error: invalid Treasury reading state.", false)
+            }
+            item.readingState = value
+            if value == "read" { item.readingProgress = 1 }
+            if value == "none" || value == "unread" { item.readingProgress = 0 }
+        }
+        item.updatedAt = Date()
+        let collectionIDs = dict.keys.contains("collection_ids")
+            ? normalizedUserStrings(stringArray(dict["collection_ids"]), limit: 200, count: 100)
+            : nil
+        guard CollectionStore.agentUpdate(item, collectionIDs: collectionIDs) else {
+            return ("Error: Treasury item could not be updated.", false)
+        }
+        return ("{\"updated\":true,\"id\":\"\(id)\"}", true)
+    }
+
+    static func userExplicitlyRequestedSave(_ userText: String?) -> Bool {
+        explicitUserIntent(userText,
+                           positive: [
+                            #"(?:保存|收藏|收进|加入|存到|记到).{0,12}(?:藏宝阁|收藏)?"#,
+                            #"(?:save|store|bookmark|add).{0,24}(?:treasury|library|collection)"#,
+                           ], negative: [
+                            #"(?:不要|别|停止|取消).{0,8}(?:保存|收藏|藏宝阁)"#,
+                            #"(?:do not|don't|never|cancel).{0,16}(?:save|store|bookmark|treasury)"#,
+                           ])
+    }
+
+    static func userExplicitlyRequestedUpdate(_ userText: String?) -> Bool {
+        explicitUserIntent(userText,
+                           positive: [
+                            #"(?:修改|更新|重命名).{0,16}(?:收藏|条目|标题|标签|批注|阅读状态|藏宝阁)"#,
+                            #"(?:置顶|取消置顶|归档|取消归档|加标签|添加标签|移除标签|标为已读|标为未读|添加批注|修改批注)"#,
+                            #"(?:update|rename|tag|pin|unpin|archive|unarchive|annotate|mark as read|mark as unread).{0,28}(?:treasury|library|collection|item|entry|title|tag|annotation)?"#,
+                           ], negative: [
+                            #"(?:不要|别|停止|取消).{0,10}(?:修改|更新|置顶|归档|标签|批注|已读)"#,
+                            #"(?:do not|don't|never|cancel).{0,18}(?:update|rename|tag|pin|archive|annotate|mark)"#,
+                           ])
+    }
+
+    private static func explicitUserIntent(_ userText: String?, positive: [String],
+                                           negative: [String]) -> Bool {
+        let text = userText?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        guard !text.isEmpty, !containsPromptInjectionMarkers(text),
+              !negative.contains(where: { regex($0, matches: text) }) else { return false }
+        return positive.contains(where: { regex($0, matches: text) })
+    }
+
+    private static func containsPromptInjectionMarkers(_ text: String) -> Bool {
+        [
+            #"(?:system|assistant|developer)\s*:|<\/?(?:system|assistant|developer)>"#,
+            #"treasury_(?:save|update)|user_confirmed"#,
+            #"ignore (?:all |the )?(?:previous|prior) instructions"#,
+            #"忽略.{0,8}(?:之前|以上|系统).{0,8}(?:指令|提示)"#,
+            #"(?:网页|pdf|ocr|文档|文件|收藏)(?:正文|内容|文本)?(?:写着|显示|包含|说)?\s*[：:「“\"].{0,80}(?:保存|收藏|更新|修改|置顶|归档|save|update|archive|pin)"#,
+            #"(?:webpage|pdf|ocr|document|file|retrieved content)(?: content| text| says| contains)?\s*[:\"].{0,80}(?:save|store|update|archive|pin)"#,
+        ].contains(where: { regex($0, matches: text) })
+    }
+
+    private static func regex(_ pattern: String, matches text: String) -> Bool {
+        guard let expression = try? NSRegularExpression(pattern: pattern,
+                                                         options: [.caseInsensitive]) else { return false }
+        return expression.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
+    }
+
+    private static func cappedOptional(_ raw: Any?, limit: Int) -> String? {
+        guard let value = raw as? String else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : String(trimmed.prefix(limit))
+    }
+
+    private static func normalizedUserStrings(_ values: [String], limit: Int,
+                                              count: Int) -> [String] {
+        var seen = Set<String>()
+        return values.compactMap { raw in
+            let value = String(raw.trimmingCharacters(in: .whitespacesAndNewlines).prefix(limit))
+            let key = value.lowercased()
+            guard !value.isEmpty, seen.insert(key).inserted else { return nil }
+            return value
+        }.prefix(count).map { $0 }
+    }
+
     static func search(_ request: SearchRequest,
                        items: [CollectedItem]? = nil,
                        index: CollectionSearchIndex = .shared) async -> SearchResponse {
@@ -640,13 +812,7 @@ enum TreasuryService {
     }
 
     private static func contractKind(for item: CollectedItem) -> String {
-        switch item.kind {
-        case .link: return "link"
-        case .text: return "text"
-        case .note: return "note"
-        case .file:
-            return ["图片", "image"].contains(item.sourceLabel.lowercased()) ? "image" : "document"
-        }
+        item.treasuryKind
     }
 
     private static func displayTitle(for item: CollectedItem, fallbackBody: String?) -> String {

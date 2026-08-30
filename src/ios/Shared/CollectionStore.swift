@@ -256,6 +256,9 @@ struct CollectedItem: Codable, Identifiable, Equatable {
 
 extension CollectedItem {
     var treasuryKind: String {
+        if kind == .text && sourceLabel.localizedCaseInsensitiveContains("artifact") {
+            return "artifact"
+        }
         guard kind == .file else { return kind.rawValue }
         if sourceLabel.localizedCaseInsensitiveContains("artifact") { return "artifact" }
         let ext = (value as NSString).pathExtension.lowercased()
@@ -611,6 +614,28 @@ enum CollectionStore {
                     guard let index = items.firstIndex(where: { $0.id == id }) else { return }
                     transform(&items[index])
                 }
+            }
+        }
+    }
+
+    @discardableResult
+    static func agentUpdate(_ item: CollectedItem, collectionIDs: [String]?) -> Bool {
+        ioQueue.sync {
+            guard let directory else { return false }
+            do {
+                return try TreasurySQLiteStore(directory: directory)
+                    .agentUpdate(item, collectionIDs: collectionIDs)
+            } catch {
+                // Legacy JSON has no collection_ids field. Never report a
+                // successful update while silently dropping the requested collection change.
+                if collectionIDs != nil { return false }
+                var found = false
+                mutateLegacyLocked { items in
+                    guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
+                    items[index] = item
+                    found = true
+                }
+                return found
             }
         }
     }
@@ -1053,6 +1078,36 @@ final class TreasurySQLiteStore {
                                 filesDirectory: filesDirectoryURL, db: db)
                 try Self.appendChange(for: item, operation: "upsert", db: db)
             }
+        }
+    }
+
+    func agentUpdate(_ item: CollectedItem, collectionIDs: [String]?) throws -> Bool {
+        try withDatabase { db in
+            var updated = false
+            try Self.transaction(db) {
+                guard try Self.scalarInt(
+                    db, sql: "SELECT COUNT(*) FROM treasure_items WHERE id=? AND deleted_at IS NULL",
+                    bindings: [item.id]
+                ) > 0 else { return }
+                let record = prepareForPersistence(item)
+                try Self.upsert(item, normalizedURL: record.normalizedURL,
+                                contentDigest: record.contentDigest,
+                                filesDirectory: filesDirectoryURL, db: db)
+                if let collectionIDs {
+                    let normalized = Array(Set(collectionIDs)).sorted()
+                    let encoded = (try? String(data: JSONEncoder().encode(normalized),
+                                               encoding: .utf8)) ?? "[]"
+                    var stmt: OpaquePointer?
+                    try Self.prepare(db, "UPDATE treasure_items SET collection_ids_json=? WHERE id=?", &stmt)
+                    defer { sqlite3_finalize(stmt) }
+                    Self.bind(encoded, stmt, 1)
+                    Self.bind(item.id, stmt, 2)
+                    try Self.stepDone(db, stmt)
+                }
+                try Self.appendChange(for: item, operation: "upsert", db: db)
+                updated = true
+            }
+            return updated
         }
     }
 

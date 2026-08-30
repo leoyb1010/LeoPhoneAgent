@@ -1312,6 +1312,11 @@ actor ChatStore {
             if let query = str("query") { return cap("treasury_search: " + query) }
         case "treasury_get":
             if let ids = str("ids") { return cap("treasury_get: " + ids) }
+        case "treasury_save":
+            if let title = str("title") { return cap("treasury_save: " + title) }
+            if let kind = str("kind") { return cap("treasury_save: " + kind) }
+        case "treasury_update":
+            if let id = str("id") { return cap("treasury_update: " + id) }
         default:
             break
         }
@@ -4035,7 +4040,7 @@ extension RawMessage {
                     let path = extractStringParam("path", from: tu.input)
                     kind = .readImageTool(path: path)
                     content = "Reading image \(path)..."
-                case "memory_write", "memory_get", "treasury_search", "treasury_get":
+                case "memory_write", "memory_get", "treasury_search", "treasury_get", "treasury_save", "treasury_update":
                     kind = .memoryTool(action: tu.name)
                     if tu.name == "memory_write" {
                         content = "Writing memory..."
@@ -4043,6 +4048,10 @@ extension RawMessage {
                         content = "Searching Treasury..."
                     } else if tu.name == "treasury_get" {
                         content = "Reading Treasury..."
+                    } else if tu.name == "treasury_save" {
+                        content = "Saving to Treasury..."
+                    } else if tu.name == "treasury_update" {
+                        content = "Updating Treasury..."
                     } else {
                         content = "Reading memory..."
                     }

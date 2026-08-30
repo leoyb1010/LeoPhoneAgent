@@ -702,6 +702,30 @@ extension AIChatViewModel {
             toolOutput = result.output
             toolSuccess = result.success
 
+        case "treasury_save":
+            let currentUserText = msgIdx <= messages.count
+                ? messages[..<msgIdx].last(where: { $0.role == .user })?.content : nil
+            let result = await TreasuryService.executeSave(
+                from: argsJson, currentUserText: currentUserText
+            )
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = result.output
+            }
+            toolOutput = result.output
+            toolSuccess = result.success
+
+        case "treasury_update":
+            let currentUserText = msgIdx <= messages.count
+                ? messages[..<msgIdx].last(where: { $0.role == .user })?.content : nil
+            let result = await TreasuryService.executeUpdate(
+                from: argsJson, currentUserText: currentUserText
+            )
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = result.output
+            }
+            toolOutput = result.output
+            toolSuccess = result.success
+
         case "memory_write":
             let memResult = executeMemoryWrite(from: argsJson)
             if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
