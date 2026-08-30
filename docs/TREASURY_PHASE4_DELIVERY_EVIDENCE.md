@@ -5,7 +5,7 @@
 Phase 4 的本机可实现源码、自动化和 Mac 真实浏览器验证已完成。旧的“前 500 条整体镜像”已替换为游标增量 changes；元数据、正文和附件分层同步；iOS、Android、Mac 均能上传本地变更、拉取远端变更、处理 tombstone，并按需提供正文或附件。Mac 已从只读镜像演进为可捕获、搜索、阅读、离线缓存和引用到新对话的主动工作台。
 
 - 本机源码与自动化范围：**100%**。
-- Phase 4 全验收范围：**82%**。尚缺三端真实联网互操作、移动设备离线恢复、Fold8/iPhone/iPad 设备体验和附件 Range 断点续传证据。
+- Phase 4 全验收范围：**86%**。HTTP Range 源码与本机自动化已完成；尚缺三端真实联网互操作、真实弱网续传、移动设备进程死亡恢复和 Fold8/iPhone/iPad 设备体验证据。
 - 发布状态：**HOLD**。本阶段只提交并 push 源码，不发布 APK、IPA、DMG 或热更新。
 
 ## 用户可见变化
@@ -151,7 +151,8 @@ POST /relay/api/treasury/assets/:requestId/unavailable
 
 ## 明确边界与 HOLD
 
-- 没有实现 HTTP Range 分块续传。当前附件支持完整文件失败重试、临时文件、原子落盘和 digest 校验；不得写成“已完成断点续传”。
+- 三端已实现 HTTP Range、206/416、旧代理忽略 Range 回退、确定性 partial、有效断线分片保留、byte count/digest/MIME 校验和原子缓存；Relay 真实 206 响应及三端范围解析/缓存完整性有自动化覆盖。
+- 尚未取得真实 iOS/Android/Mac 三设备弱网切换、移动端进程死亡、大附件长时间断线后的续传证据；不得把本机自动化写成设备门禁完成。
 - iOS → Android/Mac、Android 更新 → iOS/Mac、双端并发编辑、离线删除恢复、重复/乱序 change 和附件下载的真实三设备联网矩阵仍需用户测试环境执行。
 - Fold8 封面/展开/折叠切换、API 26、200% 字体、TalkBack、预测性返回、进程死亡恢复仍为 HOLD。
 - iPhone/iPad 主 App、VoiceOver、Dynamic Type、Reduce Motion、拖放、多窗口和真机 Relay 恢复仍为 HOLD。

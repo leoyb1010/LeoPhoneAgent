@@ -131,6 +131,27 @@
 - 新增 `capture=1/true/0`、动作映射和一次性消费回归；双 flavor 编译、单测、资源校验和 lint 通过。
 - Manifest 中新 Tile 仅使用系统 `BIND_QUICK_SETTINGS_TILE` 绑定权限；没有新增运行时权限、Power 专属依赖、剪贴板监听或常驻服务。
 
+## 按需资产与 Range 续传追加三轮审计（2026-08-31）
+
+### 第 1 轮：调用链与数据正确性
+
+- iOS 阅读页和 `treasury_get` 在本地正文缺失时通过统一 Relay 客户端按需请求正文；Android Agent 同样读取经完整性校验的远端正文，不再只看到元数据。
+- iOS/Android 远端附件写入应用私有 `remote-assets`，缓存不产生本地 change，也不会反向上传为原始资产。
+- 修复 Android 远端附件变小时保留旧 `byte_count`、缓存清理后 UI 仍误判附件存在，以及 Mac 同一资产并发下载争用 partial。
+
+### 第 2 轮：Range、恢复与完整性
+
+- iOS、Android、Mac 支持确定性 partial、`Range: bytes=N-`、206 `Content-Range` 校验、416 清零重试和旧 Relay/代理忽略 Range 返回 200 时安全重下。
+- 网络中断保留实际写入的有效前缀；超出声明大小、最终 byte count 或 SHA-256 不一致时删除损坏分片。
+- 正文限制 8 MB，附件限制 128 MB；正文严格 UTF-8，附件 MIME 使用允许列表并与条目元数据复核。
+
+### 第 3 轮：路径、缓存与错误边界
+
+- 三端拒绝 partial 文件、缓存根目录和中间父目录符号链接；受控路径外文件、特殊文件和越界 realpath 不会被读取、覆盖或清理。
+- 远端新元数据使旧正文/附件缓存引用失效；存储管理可清理可重新下载缓存，但不删除收藏、正文文件、批注或原始附件。
+- Agent 和 UI 只暴露 pending/unavailable/failed/missing 等有限状态，不返回 Relay Key、本机敏感绝对路径或底层异常正文。
+- 真实安装的 Mac 1.78 工作台复现 server 正常但项目 API 返回 `Invalid local auth token`；页面重载后立即恢复，确认是 SPA 持有旧 token。1.80 源码已增加受信 bridge token 刷新与 401 单次重试，客户端/桌面测试、typecheck、lint 和 production build 通过。
+
 ## Agent 工具与授权边界
 
 统一契约：
@@ -192,12 +213,12 @@ treasury_update -> explicit approved metadata/read-state/annotation write
 
 ### iOS / iPadOS
 
-- Treasury 定向测试：**53/53 passed**。
-- `MinisLogicTests`：**324/324 passed**，0 failed，0 skipped。
-- xcresult：`~/Library/Developer/Xcode/DerivedData/LeoPhoneAgent-eepkwcwlunoccyencmgmqedpdkny/Logs/Test/Test-MinisLogicTests-2026.08.31_06-07-16-+0800.xcresult`。
+- Treasury 定向测试：**57/57 passed**。
+- `MinisLogicTests`：**328/328 passed**，0 failed，0 skipped。
+- 最新 xcresult：`~/Library/Developer/Xcode/DerivedData/LeoPhoneAgent-eepkwcwlunoccyencmgmqedpdkny/Logs/Test/Test-MinisLogicTests-2026.08.31_07-36-27-+0800.xcresult`。
 - `MinisShare` iOS Simulator target：build succeeded。
 - 本轮 8 个 Swift 改动文件通过 `swiftc -frontend -parse` 语法解析。
-- 主 App target：正常构建在应用源码编译前被 `LeoWatch/Assets.xcassets` 和缺失 `WatchKit` 阻断；临时移除 Watch 构建边后又被 Swift package `_CryptoExtras` 无法解析 `SwiftASN1` 阻断，诊断改动已立即恢复。保持 HOLD，不声明新增 iPad UI 已完成类型检查或运行验证。
+- 主 App target：当前机器缺少 watchOS 26.5 runtime；排除 Watch 诊断后又因 `deps/ish` 固定提交 `8d53d6b9e47aa375d6a932ebb47f4ab6f71e66b1` 上游不可获取而缺少 iSH 头文件/Rootfs 资源。诊断改动均已恢复。保持 HOLD，不声明主 App 完整构建或运行验证。
 
 ### Android Standard / Power
 
@@ -209,8 +230,9 @@ treasury_update -> explicit approved metadata/read-state/annotation write
 ```
 
 - `BUILD SUCCESSFUL`。
-- Standard：**616 tests，0 failures，1 skipped**。
-- Power：**616 tests，0 failures，1 skipped**。
+- Standard：**621 tests，0 failures，1 skipped**。
+- Power：**621 tests，0 failures，1 skipped**。
+- 新增 Range/缓存测试在两个 flavor 均通过；双 lint 0 error。
 - Standard lint：0 errors、542 warnings、38 hints；Power lint：0 errors、538 warnings、38 hints。XML 报告未命中本轮修改文件，均为仓库全局既有项。
 - Standard 基础藏宝阁未引入 Accessibility、Shizuku、悬浮窗或 Power 权限依赖。
 
@@ -264,7 +286,7 @@ treasury_update -> explicit approved metadata/read-state/annotation write
 - Android：API 26、Fold8 `1080×1728` 封面屏、`1768×2208` 展开屏、折叠切换、200% 字体、TalkBack、预测性返回、进程死亡/WorkManager 恢复、Launcher Shortcut/Quick Settings Tile/widget 真实交互、固定签名、覆盖安装、Logcat、版本号、APK digest 与发布。
 - 跨端：iOS 创建后 Android/Mac 看见、Android 更新后 iOS/Mac 看见、双端同时编辑、离线删除恢复、重复/乱序 change、游标过期和附件下载的真实三设备联网矩阵。
 - Mac：新增存储页的登录后真实 Electron/浏览器走查、双机 Relay 在线/离线、四种 CLI 与 Leo 模型的真实写审批/引用、Electron 屏幕阅读器、签名、公证、热更新与回滚。
-- 协议：附件支持完整文件失败重试、临时文件、原子落盘和 digest 校验；**没有 HTTP Range 断点续传**。
+- 协议：HTTP Range 源码与本机自动化已完成；真实三设备弱网/断线、大附件和移动端进程死亡续传仍为 HOLD。
 - 可选能力：音频转写和语义召回/RRF 未启用；FTS 基础检索不依赖模型。
 
 设备与发布执行步骤见 [藏宝阁设备测试与发版清单](TREASURY_DEVICE_RELEASE_CHECKLIST.md)。隐私与授权边界见 [藏宝阁隐私与安全说明](TREASURY_PRIVACY_AND_SECURITY.md)。

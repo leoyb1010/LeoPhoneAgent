@@ -102,7 +102,8 @@ npm audit --omit=dev
 - 离线删除后恢复；旧 upsert 不得复活 tombstone。
 - 注入重复、乱序 change 和过期游标；验证幂等与 410 分页重建。
 - 正文/附件按需下载；错误 byte count、digest、MIME 或越界路径必须拒绝。
-- 大正文和大附件不进入列表 API；当前不测试或宣称 HTTP Range，因为尚未实现。
+- 大正文和大附件不进入列表 API；对大附件制造中途断线，记录 partial 大小，恢复后确认请求携带 `Range: bytes=N-` 并收到合法 206；同时覆盖 416 清零重试和代理忽略 Range 返回 200 的安全重下。
+- 完成后复核最终 byte count、SHA-256、MIME 与条目元数据一致；错误 `Content-Range`、digest、大小或 MIME 必须失败关闭且不得打开损坏缓存。
 
 ### 签名、公证与热更新
 

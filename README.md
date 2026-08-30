@@ -42,7 +42,7 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
   [隐私与安全边界](docs/TREASURY_PRIVACY_AND_SECURITY.md)及
   [设备测试/发版清单](docs/TREASURY_DEVICE_RELEASE_CHECKLIST.md)已发布。真实三设备联网、
   Fold8/iPhone/iPad、签名、覆盖安装和公开发布仍为 HOLD，不能把源码门禁等同于三端发版。
-  最新追加审计已补齐三端相关正文/相关收藏、有限重试、用户标题保护、Mac PDF 重试完整性、iOS 持久增强任务执行、三端安全缓存清理，以及 Android 藏宝阁 App Shortcut、按需快捷设置图块和桌面小组件快速捕获；设备 HOLD 边界不变。
+  最新追加审计已补齐三端相关正文/相关收藏、有限重试、用户标题保护、Mac PDF 重试完整性、iOS 持久增强任务执行、三端安全缓存清理、Android 系统快速捕获，以及正文/附件按需读取与 HTTP Range 断点续传；真实弱网、进程死亡和设备 HOLD 边界不变。
   鸿蒙 7 交付计划：
   [`docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md`](docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md)；
   工程落地在 `src/harmony/`。当前船是 `0.3.0-alpha.17`，只走 `hdc install`。

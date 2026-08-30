@@ -24,7 +24,7 @@
 - 元数据、正文和附件分层。正文和附件默认按需获取；Mac 可选择仅本机、元数据或元数据+正文，并可指定合集离线正文。
 - 附件和远端正文使用大小、byte count、SHA-256、MIME 和受控路径校验；损坏或不匹配内容被拒绝。
 - tombstone、change ID 和游标用于防止重复创建、乱序覆盖和旧内容复活。手机离线时 Mac 可保留最后成功缓存并标记陈旧。
-- 当前没有 HTTP Range 分块续传；大附件使用完整文件失败重试、临时文件、原子落盘和完整 digest 校验。
+- 大附件使用 HTTP Range、确定性 partial、206/416 恢复和旧代理回退；续传完成后仍必须通过 byte count、SHA-256、MIME 与条目元数据校验才会进入缓存。真实弱网和移动进程死亡续传仍需设备环境验证。
 - 三端存储管理明确区分原始内容与可再生/可重新下载缓存。清理缩略图、同步 outbox、远端正文或附件缓存不会删除收藏、正文文件、批注或本机原始附件。
 - 缓存统计和清理限制在应用受控根目录，拒绝符号链接根目录、realpath 越界和特殊文件；Mac 原始目录只读统计，Android 只允许清理 `treasury/sync-outbox`。
 
@@ -51,4 +51,4 @@
 
 ## 尚待设备验证
 
-真实 iPhone/iPad、Fold8/API 26/TalkBack/200% 字体、三设备联网、签名、覆盖安装、Mac 新存储页登录后走查/双机 Relay、屏幕阅读器、公证和热更新仍需在对应环境执行。详见 [`TREASURY_DEVICE_RELEASE_CHECKLIST.md`](TREASURY_DEVICE_RELEASE_CHECKLIST.md)。
+真实 iPhone/iPad、Fold8/API 26/TalkBack/200% 字体、三设备联网弱网/进程死亡续传、签名、覆盖安装、Mac 新存储页登录后走查/双机 Relay、屏幕阅读器、公证和热更新仍需在对应环境执行。详见 [`TREASURY_DEVICE_RELEASE_CHECKLIST.md`](TREASURY_DEVICE_RELEASE_CHECKLIST.md)。

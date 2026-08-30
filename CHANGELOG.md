@@ -22,6 +22,8 @@
 - iOS 主 App 现在实际执行持久网页/OCR/PDF/音频/索引任务；三端设置页分开显示原始内容和可再生/可重新下载缓存，清理不删除收藏、正文、批注或原始附件。
 - Android 只清理受控 `treasury/sync-outbox`；Mac 正文缓存与附件缓存可独立清理，`treasury/files` 原始文件保持只读。三端均补符号链接/路径边界与失败恢复测试。
 - Android Standard/Power 新增统一 `minis://action/treasury?capture=1` 捕获路由，并接入 App Shortcut、按需快捷设置图块和桌面小组件；入口只弹出轻量文字/URL 收藏，不自动读取剪贴板，也不依赖 Power 权限。
+- iOS、Android 与 Mac 现在都能按需获取远端正文和附件；附件使用确定性 partial、HTTP Range、206/416 恢复和旧代理忽略 Range 时的安全重下，并在落盘前复核 byte count、SHA-256、MIME 与本地元数据。
+- Mac 本地 server 重启或 token 轮换后，运行中的工作台遇到 401 会通过受信 Electron bridge 重新注入当前本机 token 并安全重试一次，不再显示“本地项目加载失败 / Invalid local auth token”并要求手动刷新。
 
 ### 三轮最终审计与验证
 
@@ -33,13 +35,15 @@
 - 追加三轮恢复审计修复相关来源误判、iOS sheet 动画竞态、三端持久重试、Mac PDF 重试完整性、UTF-16 截断、TypeScript 窄类型和 Tailwind 零警告门禁。
 - 存储治理三轮审计修复 iOS 持久任务执行断链、Android Compose 后台状态提交与路径逃逸、Mac 原始/正文/附件删除边界、零字节/缺失文件残留、确认弹窗和错误本地化。
 - Android 系统入口追加两轮审计先补齐三种系统表面和中英繁中文案，再修复冷启动 Compose 重组可能重放捕获请求、广播转发丢失 `capture=false` 语义的问题；新增一次性消费回归。
-- iOS Treasury 全量纳入 MinisLogicTests 324/324，MinisShare direct target build 通过；Android Standard/Power 各 616 tests（0 failed、1 skipped）且双 lint 0 error；Mac desktop 37/37、client 166/166、server 404/404、typecheck、全仓 lint 和 production build 通过。
+- 按需资产追加三轮审计修复远端正文无法被 Agent/阅读页读取、远端附件缓存失效、Android 小附件更新保留旧大小、Mac 并发下载争用，以及三端 partial/缓存目录符号链接边界；有效断线分片保留，完整性不匹配分片删除。
+- 真实 Mac 应用复现了旧 token 导致的项目加载失败；手动重载可恢复，随后补齐 401 自动刷新 token/单次重试和客户端回归测试。
+- iOS Treasury 最新全量纳入 MinisLogicTests 328/328，MinisShare direct target build 通过；Android Standard/Power 各 621 tests（0 failed、1 skipped）且双 lint 0 error；Mac 全量 test、typecheck、lint 和 production build 通过。
 
 ### 边界
 
 - 本条是 Phase 0–5 源码交付，不 bump 版本，不发布 APK、IPA、DMG 或热更新。
 - Mac 写工具必须经过 Provider 客户端审批并携带 `user_confirmed=true`；MCP 服务不能独立读取 CLI 原始用户消息。iOS/Android 另有当前真实用户消息校验。
-- HTTP Range 未实现；iPhone/iPad 主 App、API 26/Fold8/TalkBack/200% 字体、三设备联网、签名、覆盖安装、Mac 新存储页登录后走查/双机 Relay/屏幕阅读器/公证仍为 HOLD。
+- HTTP Range 源码与本机自动化已完成；真实三设备弱网/断线续传、移动端进程死亡仍需装机环境验证。iPhone/iPad 主 App、API 26/Fold8/TalkBack/200% 字体、三设备联网、签名、覆盖安装、Mac 新存储页登录后走查/双机 Relay/屏幕阅读器/公证仍为 HOLD。
 - 完整证据见 `docs/TREASURY_PHASE5_DELIVERY_EVIDENCE.md`，设备执行见 `docs/TREASURY_DEVICE_RELEASE_CHECKLIST.md`。
 
 ## 藏宝阁 Phase 4 源码交付（未发版）- 2026-08-31
@@ -61,7 +65,7 @@
 ### 边界
 
 - 本条是源码交付，不 bump 版本、不发布 APK/IPA/Mac 包。
-- 当前附件是完整文件失败重试和原子落盘，没有 HTTP Range 断点续传，不虚报该能力。
+- 后续追加已实现 HTTP Range 断点续传源码与本机自动化；真实三设备弱网、断线与进程死亡证据仍保持 HOLD。
 - 三设备真实联网矩阵、Fold8/API 26/TalkBack/200% 字体、iPhone/iPad 主 App、移动签名/覆盖安装、Mac 双机 Relay/签名/公证仍为 HOLD。
 
 ## 藏宝阁 Phase 3 源码交付（未发版）- 2026-08-31

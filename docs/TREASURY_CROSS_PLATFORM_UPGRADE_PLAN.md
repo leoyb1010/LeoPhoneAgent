@@ -924,7 +924,7 @@ Android Standard 获得完整独立藏宝阁；iOS、Android、Mac 捕获入口�
 
 实际交付证据：[Phase 4 增量同步与 Mac 主动工作台](TREASURY_PHASE4_DELIVERY_EVIDENCE.md)
 
-当前状态：本机必需源码、自动化和 Mac 浏览器交互范围已完成；真实三设备联网、移动设备离线恢复、Fold8/iPhone/iPad、签名/覆盖安装和 HTTP Range 断点续传仍明确 HOLD。当前附件具备完整文件重试、临时文件、原子落盘和 digest 校验，不得描述为已完成 Range 续传。
+当前状态：本机必需源码、自动化和 Mac 浏览器交互范围已完成；HTTP Range、206/416 恢复、旧代理回退、确定性 partial、byte count/digest/MIME 校验和原子缓存已由三端源码与本机自动化覆盖。真实三设备联网弱网、移动端进程死亡恢复、Fold8/iPhone/iPad、签名/覆盖安装仍明确 HOLD，不得把本机协议测试描述成真机续传证据。
 
 ### Phase 5：打磨、审计与发布
 
@@ -945,7 +945,7 @@ Android Standard 获得完整独立藏宝阁；iOS、Android、Mac 捕获入口�
 
 实际交付证据：[Phase 5 最终审计、修复与源码交付](TREASURY_PHASE5_DELIVERY_EVIDENCE.md)
 
-当前状态：Phase 0–5 本机可实现源码与自动化范围已完成，并额外完成相关内容、持久重试、后台标题竞态、PDF 重试完整性、Unicode 截断、iOS 持久增强任务执行和三端安全缓存清理复审；真实 iPhone/iPad、API 26/Fold8、三端联网、Mac 新存储页登录后走查、签名、覆盖安装、公证和公开发布门禁仍为 HOLD。设备执行步骤见 [藏宝阁设备测试与发版清单](TREASURY_DEVICE_RELEASE_CHECKLIST.md)，不得把源码完成写成已公开发版。
+当前状态：Phase 0–5 本机可实现源码与自动化范围已完成，并额外完成相关内容、持久重试、后台标题竞态、PDF 重试完整性、Unicode 截断、iOS 持久增强任务执行、三端安全缓存清理和 HTTP Range 按需资产续传复审；真实 iPhone/iPad、API 26/Fold8、三端联网弱网、移动进程死亡、Mac 新存储页登录后走查、签名、覆盖安装、公证和公开发布门禁仍为 HOLD。设备执行步骤见 [藏宝阁设备测试与发版清单](TREASURY_DEVICE_RELEASE_CHECKLIST.md)，不得把源码完成写成已公开发版。
 
 ---
 
