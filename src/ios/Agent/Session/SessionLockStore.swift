@@ -75,20 +75,48 @@ final class SessionLockStore: ObservableObject {
 
     private let defaults: UserDefaults
     private var defaultsObserver: NSObjectProtocol?
+    private struct SettingsSnapshot: Equatable {
+        let globalEnabled: Bool
+        let idleSeconds: Int
+        let appLockEnabled: Bool
+        let appLockIdleSeconds: Int
+    }
+    private var settingsSnapshot: SettingsSnapshot
 
     private init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         self.lockedSessionIds = Self.loadLocked(from: defaults)
+        self.settingsSnapshot = Self.settingsSnapshot(from: defaults)
         // Settings UI writes `globalEnabled` / `idleTimeoutSeconds` via
-        // @AppStorage which bypasses this object. Observe UserDefaults so
-        // every dependent view re-renders when those keys change.
+        // @AppStorage which bypasses this object. UserDefaults notifications
+        // are suite-wide, so filter unrelated database/migration keys instead
+        // of invalidating every lock-dependent SwiftUI view during launch.
         defaultsObserver = NotificationCenter.default.addObserver(
             forName: UserDefaults.didChangeNotification,
             object: defaults,
             queue: .main
         ) { [weak self] _ in
-            self?.objectWillChange.send()
+            Task { @MainActor in
+                await Task.yield()
+                self?.publishSettingsChangeIfNeeded()
+            }
         }
+    }
+
+    private static func settingsSnapshot(from defaults: UserDefaults) -> SettingsSnapshot {
+        SettingsSnapshot(
+            globalEnabled: defaults.bool(forKey: SessionLockDefaultsKey.enabled),
+            idleSeconds: defaults.integer(forKey: SessionLockDefaultsKey.idleSeconds),
+            appLockEnabled: defaults.bool(forKey: SessionLockDefaultsKey.appLockEnabled),
+            appLockIdleSeconds: defaults.integer(forKey: SessionLockDefaultsKey.appLockIdleSeconds)
+        )
+    }
+
+    private func publishSettingsChangeIfNeeded() {
+        let next = Self.settingsSnapshot(from: defaults)
+        guard next != settingsSnapshot else { return }
+        settingsSnapshot = next
+        objectWillChange.send()
     }
 
     deinit {

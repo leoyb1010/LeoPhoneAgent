@@ -37,8 +37,9 @@ enum SyncV2Bootstrap {
     /// first launch). For users upgrading from a build that only had
     /// the v1 engine we inherit their v1 toggle (`cloudSync.enabled`)
     /// so a user who had iCloud Sync ON in v1 keeps it on after the
-    /// upgrade, and one who had it OFF keeps it off. The resolved
-    /// value is persisted under the v2 key.
+    /// upgrade, and one who had it OFF keeps it off. Reading this value must
+    /// stay side-effect free because SwiftUI consults it while building views;
+    /// persistence happens only when the user changes the setting.
     /// Override via the `cloudSync.v2.enabled` UserDefaults key directly
     /// during development.
     static var isEnabled: Bool {
@@ -58,7 +59,6 @@ enum SyncV2Bootstrap {
                 inherited = false
                 logger.info("[SyncCore] v2 isEnabled bootstrap — fresh install, defaulting OFF")
             }
-            UserDefaults.standard.set(inherited, forKey: key)
             return inherited
         }
         return UserDefaults.standard.bool(forKey: key)

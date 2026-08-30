@@ -25,12 +25,13 @@
 - Android：JDK 17 下 Standard/Power 编译、各 585 项单测（0 失败、各 1 跳过）、双 lint（0 error）、双 Release 构建通过；补齐 Gradle 8.13 lint 与 debug 资产生产任务的显式依赖。
 - Android 固定 Alpha 签名、包名、versionCode `100023`、versionName `1.0.0-alpha.23` / `1.0.0-alpha.23-power` 与能力隔离通过。SHA-256：Standard `1b38a978647481afb2aca7a5830c515b3129dbc01d33784105d4a542c8837898`；Power `867edbfe1ce9c87a032b4aa9a189e3644cfdeaaec7a186f8166cdafee6997bb5`。
 - Fold8 API 35 模拟器：alpha.22 → alpha.23 覆盖安装已通过；最终 Release 两包再次覆盖安装，冷启动、`ACTION_ASSIST`、PID 与 AndroidRuntime 通过。1080×1728 封面大字体更新弹窗 UI 树无越界。
-- iOS/iPad：`IOSReleaseReadinessAudit` 1.30.1 (105)、MinisLogicTests 测试编译和 `generic/platform=iOS` 无签名构建通过；按既定边界不启动异常退出的模拟器，真机安装由用户执行。
+- iOS/iPad：iPhone 17 Pro 与 iPad Pro 13″ 模拟器完成真实安装、冷启动、通知授权、更新页、iPhone 独立工作区及 iPad 横屏双栏截图验证；两端进程持续存活，目标日志中 SwiftUI 视图更新发布警告与重复数据库迁移错误均为 0。
+- iOS `MinisLogicTests` 实际执行 271 项、0 失败；`IOSReleaseReadinessAudit`、动效/无障碍审计、可见控件审计和 `generic/platform=iOS` 无签名真机构建通过。修复 SkillStore `use_count` 重复迁移、SyncV2 getter 写偏好及 SessionLockStore 对全套 UserDefaults 无差别刷 UI。真机安装仍由用户执行。
 - Mac：typecheck、lint、0 漏洞 npm audit、生产构建和 565 项测试通过；Developer ID 签名链、36 个嵌套 Mach-O、CodexHost 0.3.5、本机 1.80 后端、动态 Grok 目录均通过。DMG SHA-256 `585f2d86276032e7c8d1c36287c5d2f51dd22e2017cdf396a3c369150b6ae6e1`；ZIP SHA-256 `76cabb658eecb61bb4e24c58d865ee7ddbc204435919388f64a38bb7e1f48e64`。
 
 ### 边界
 
-- 本机没有 notarytool profile，Mac 1.80 是 Developer ID 已签名但未公证；Gatekeeper 仍会报告 `Unnotarized Developer ID`，不写成已公证。
+- 本机 Developer ID 私钥与 GitHub 热更新权限均可用，Mac 1.80 的 DMG/ZIP/`latest-mac.yml` 已发布且本机后端正在运行 1.80.0；安全枚举钥匙串并实测 `notarytool history --keychain-profile leocodebox` 后确认公证 profile 当前不存在，所以 Gatekeeper 仍报告 `Unnotarized Developer ID`。
 - 本地没有可用于移动端的真实 Grok OAuth 账号会话；已验证的是 OpenMinis 路径对齐、模型目录、单测与构建，账号级真实对话仍需用户在 Android/iPhone 实机确认。
 
 ## Mac 1.79.0 · CodexHost 原生 Harness 工作台 - 2026-08-30

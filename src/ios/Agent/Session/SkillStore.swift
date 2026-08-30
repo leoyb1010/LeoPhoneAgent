@@ -156,8 +156,22 @@ final class SkillStore: ObservableObject {
 
     /// Add use_count column if it doesn't exist (migration).
     private func migrateAddUseCount() {
+        var stmt: OpaquePointer?
+        var alreadyExists = false
+        if sqlite3_prepare_v2(db, "PRAGMA table_info(skills)", -1, &stmt, nil) == SQLITE_OK {
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                guard let rawName = sqlite3_column_text(stmt, 1) else { continue }
+                if String(cString: rawName) == "use_count" {
+                    alreadyExists = true
+                    break
+                }
+            }
+        }
+        sqlite3_finalize(stmt)
+        guard !alreadyExists else { return }
+
         let sql = "ALTER TABLE skills ADD COLUMN use_count REAL NOT NULL DEFAULT 0"
-        sqlite3_exec(db, sql, nil, nil, nil) // silently fails if column already exists
+        sqlite3_exec(db, sql, nil, nil, nil)
     }
 
     // MARK: - DB Operations
