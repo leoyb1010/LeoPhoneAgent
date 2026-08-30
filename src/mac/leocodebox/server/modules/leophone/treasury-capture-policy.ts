@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto';
+import fs from 'node:fs';
+import { open, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { TreasureItem, TreasureKind } from '@/modules/database/index.js';
@@ -21,6 +24,34 @@ export function treasuryCaptureHttpUrl(raw: string): URL | null {
   } catch {
     return null;
   }
+}
+
+export async function treasuryCaptureVerifyPdfFile(
+  filePath: string,
+  expected: { byteCount: number; digest: string | null; mime: string | null },
+  maxBytes = 100 * 1024 * 1024,
+): Promise<boolean> {
+  try {
+    const metadata = await stat(filePath);
+    if (!metadata.isFile() || metadata.size <= 0 || metadata.size > maxBytes) return false;
+    if (expected.byteCount > 0 && metadata.size !== expected.byteCount) return false;
+    const looksLikePdf = expected.mime?.toLocaleLowerCase() === 'application/pdf'
+      || path.extname(filePath).toLocaleLowerCase() === '.pdf';
+    if (!looksLikePdf) return false;
+    const handle = await open(filePath, 'r');
+    try {
+      const header = Buffer.alloc(Math.min(1_024, metadata.size));
+      const { bytesRead } = await handle.read(header, 0, header.length, 0);
+      if (!header.subarray(0, bytesRead).includes(Buffer.from('%PDF-'))) return false;
+    } finally { await handle.close(); }
+    if (expected.digest) {
+      if (!/^[0-9a-f]{64}$/i.test(expected.digest)) return false;
+      const digest = createHash('sha256');
+      for await (const chunk of fs.createReadStream(filePath)) digest.update(chunk as Buffer);
+      if (digest.digest('hex').toLocaleLowerCase() !== expected.digest.toLocaleLowerCase()) return false;
+    }
+    return true;
+  } catch { return false; }
 }
 
 export function treasuryCaptureCompactItem(item: TreasureItem) {

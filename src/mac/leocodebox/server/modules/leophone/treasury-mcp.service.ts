@@ -63,6 +63,33 @@ function nullableString(value: unknown, limit: number): string | null {
   return text || null;
 }
 
+export function clipRelevantBody(text: string, maxChars: number, anchors: Array<string | null | undefined>): string {
+  if (text.length <= maxChars) return text;
+  if (maxChars <= 2) return text.slice(0, maxChars);
+  const terms = [...new Set(anchors.flatMap((anchor) => {
+    const trimmed = anchor?.trim();
+    if (!trimmed) return [];
+    return [trimmed.slice(0, 120), ...trimmed.split(/[^\p{L}\p{N}]+/u)];
+  }).map((term) => term.trim()).filter((term) => term.length >= 2 && term.length <= 120)
+    .map((term) => term.toLocaleLowerCase()))].sort((a, b) => b.length - a.length);
+  let matchIndex = -1;
+  for (const term of terms) {
+    const index = text.toLocaleLowerCase().indexOf(term);
+    if (index >= 0) { matchIndex = index; break; }
+  }
+  if (matchIndex < 0) return text.slice(0, maxChars);
+  const contentBudget = maxChars - 2;
+  const rawStart = Math.min(Math.max(0, matchIndex - Math.floor(contentBudget / 3)), text.length - contentBudget);
+  const rawEnd = rawStart + contentBudget;
+  const start = rawStart > 0 && /[\uDC00-\uDFFF]/u.test(text[rawStart] ?? '')
+    && /[\uD800-\uDBFF]/u.test(text[rawStart - 1] ?? '') ? rawStart + 1 : rawStart;
+  const end = rawEnd < text.length && /[\uD800-\uDBFF]/u.test(text[rawEnd - 1] ?? '')
+    && /[\uDC00-\uDFFF]/u.test(text[rawEnd] ?? '') ? rawEnd - 1 : rawEnd;
+  const leading = start > 0 ? '…' : '';
+  const trailing = end < text.length ? '…' : '';
+  return `${leading}${text.slice(start, end)}${trailing}`;
+}
+
 function parseTimeBound(value: unknown): number | null {
   const raw = stringValue(value, 100);
   if (!raw) return null;
@@ -201,7 +228,9 @@ function getResult(userId: number, input: Record<string, unknown>) {
           source: remote.source_uri || remote.source_label, source_uri: remote.source_uri || null,
           created_at: new Date(remote.created_at * 1000).toISOString(),
           updated_at: new Date(remote.updated_at * 1000).toISOString(), summary: remote.summary || null,
-          body: rawBody?.slice(0, maxChars) ?? null,
+          body: rawBody === null ? null : clipRelevantBody(
+            rawBody, maxChars, [remote.title, remote.summary, remote.annotation, ...remote.tags],
+          ),
           body_status: !includeBody ? 'not_requested' : rawBody !== null ? 'available'
             : remote.body_available ? 'not_fetched' : 'unavailable',
           truncated: rawBody !== null && rawBody.length > maxChars,
@@ -213,7 +242,9 @@ function getResult(userId: number, input: Record<string, unknown>) {
         id: item.id, available: true, title: item.title, kind: item.kind,
         source: item.source_uri ?? item.source_label, source_uri: item.source_uri,
         created_at: item.created_at, updated_at: item.updated_at, summary: item.summary,
-        body: rawBody?.slice(0, maxChars) ?? null,
+        body: rawBody === null ? null : clipRelevantBody(
+          rawBody, maxChars, [item.title, item.summary, item.annotation, ...item.tags],
+        ),
         body_status: !includeBody ? 'not_requested' : rawBody !== null ? 'available'
           : item.body_ref ? 'not_extracted' : 'unavailable',
         truncated: rawBody !== null && rawBody.length > maxChars,

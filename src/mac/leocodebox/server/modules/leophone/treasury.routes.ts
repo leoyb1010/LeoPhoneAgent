@@ -15,6 +15,7 @@ import {
   treasuryCaptureCompactItem,
   treasuryCaptureKindForMime,
   treasuryCaptureSafeExtension,
+  treasuryCaptureVerifyPdfFile,
 } from './treasury-capture-policy.js';
 
 const router = express.Router();
@@ -186,6 +187,20 @@ function enrichPdfInBackground(user: number, item: TreasureItem, absolutePath: s
   });
 }
 
+function managedTreasuryFile(relativeRef: string | null): string | null {
+  if (!relativeRef?.startsWith('files/') || relativeRef.includes('//') ||
+      path.isAbsolute(relativeRef) || relativeRef.includes('\\')) return null;
+  const candidate = path.resolve(treasuryRoot, relativeRef);
+  const lexicalRelative = path.relative(treasuryRoot, candidate);
+  if (!lexicalRelative || lexicalRelative.startsWith(`..${path.sep}`) || lexicalRelative === '..') return null;
+  try {
+    const real = fs.realpathSync(candidate);
+    const realRelative = path.relative(fs.realpathSync(treasuryRoot), real);
+    if (!realRelative || realRelative.startsWith(`..${path.sep}`) || realRelative === '..') return null;
+    return fs.statSync(real).isFile() ? real : null;
+  } catch { return null; }
+}
+
 router.get('/', (req, res) => {
   try {
     const query = safeText(req.query.q, 512);
@@ -252,6 +267,36 @@ router.get('/:id', (req, res) => {
   } catch (error) {
     console.error('Treasury detail failed:', error instanceof Error ? error.name : 'unknown');
     return res.status(400).json({ error: 'Treasury detail failed' });
+  }
+});
+
+router.post('/:id/retry', async (req, res) => {
+  try {
+    const user = userId(req);
+    const item = treasuryDb.get(user, [safeText(req.params.id, 200)])[0];
+    if (!item) return res.status(404).json({ error: 'Treasury item not found' });
+    if (item.processing_error_code !== 'pdf_text_unavailable') {
+      return res.status(409).json({ error: 'This processing failure is not retryable' });
+    }
+    const source = managedTreasuryFile(item.body_ref);
+    if (!source) return res.status(410).json({ error: 'Treasury source file is unavailable' });
+    const validPdf = await treasuryCaptureVerifyPdfFile(source, {
+      byteCount: item.byte_count, digest: item.content_digest, mime: item.mime_type,
+    }, MAX_FILE_BYTES);
+    if (!validPdf) return res.status(409).json({ error: 'Treasury source file failed integrity validation' });
+    if (treasuryDb.retryFailedJobs(item.id, 'extract_text') < 1) {
+      return res.status(409).json({ error: 'No failed Treasury job is available to retry' });
+    }
+    const queued = treasuryDb.update(user, {
+      ...item, processing_state: 'queued', processing_error_code: null,
+      updated_at: new Date().toISOString(), sync_state: 'pending',
+    });
+    if (!queued) return res.status(404).json({ error: 'Treasury item not found' });
+    setImmediate(() => enrichPdfInBackground(user, queued, source));
+    return res.status(202).json({ item: treasuryCaptureCompactItem(queued) });
+  } catch (error) {
+    console.error('Treasury retry failed:', error instanceof Error ? error.name : 'unknown');
+    return res.status(400).json({ error: 'Treasury retry failed' });
   }
 });
 

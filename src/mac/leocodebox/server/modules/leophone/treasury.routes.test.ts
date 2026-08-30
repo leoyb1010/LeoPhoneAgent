@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 
 import {
@@ -6,6 +10,7 @@ import {
   treasuryCaptureHttpUrl,
   treasuryCaptureCompactItem,
   treasuryCaptureSafeExtension,
+  treasuryCaptureVerifyPdfFile,
 } from './treasury-capture-policy.js';
 
 test('treasury local capture maps supported media without relying on file names', () => {
@@ -44,4 +49,24 @@ test('treasury list projection never returns a full body or local file reference
   assert.equal(compact.snippet.length, 400);
   assert.equal('original_text' in compact, false);
   assert.equal('body_ref' in compact, false);
+});
+
+test('treasury PDF retry validates type, byte count and digest before processing', async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'treasury-pdf-retry-'));
+  const file = path.join(directory, 'sample.pdf');
+  const body = Buffer.from('%PDF-1.7\n1 0 obj\n<<>>\nendobj\n%%EOF');
+  try {
+    await fs.writeFile(file, body);
+    const digest = createHash('sha256').update(body).digest('hex');
+    assert.equal(await treasuryCaptureVerifyPdfFile(file, {
+      byteCount: body.length, digest, mime: 'application/pdf',
+    }), true);
+    assert.equal(await treasuryCaptureVerifyPdfFile(file, {
+      byteCount: body.length + 1, digest, mime: 'application/pdf',
+    }), false);
+    await fs.writeFile(file, Buffer.from('not a pdf'));
+    assert.equal(await treasuryCaptureVerifyPdfFile(file, {
+      byteCount: 9, digest: null, mime: 'application/pdf',
+    }), false);
+  } finally { await fs.rm(directory, { recursive: true, force: true }); }
 });

@@ -90,6 +90,51 @@ test('treasury database persists, deduplicates, indexes, queues and tombstones',
   });
 });
 
+test('treasury automatic jobs stop after five failures', async () => {
+  await withDatabase((userId) => {
+    const saved = treasuryDb.save(userId, fixture({ id: 'finite-retry' })).item;
+    const job = treasuryDb.readyJobs().find((candidate) => candidate.item_id === saved.id);
+    assert.ok(job);
+    let now = new Date('2026-08-31T00:00:00.000Z');
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      assert.equal(treasuryDb.claimJob(job.id, now.toISOString()), true);
+      treasuryDb.failJob(job.id, 'temporary', now);
+      now = new Date(now.getTime() + 7 * 86_400_000);
+    }
+    assert.equal(treasuryDb.readyJobs(50, '9999-12-31T00:00:00.000Z').some(({ id }) => id === job.id), false);
+    assert.equal(treasuryDb.retryFailedJobs(saved.id), 1);
+    assert.equal(treasuryDb.readyJobs().some(({ id }) => id === job.id), true);
+  });
+});
+
+test('treasury explicit retry can target only the failed processor the UI will run', async () => {
+  await withDatabase((userId) => {
+    const item = treasuryDb.save(userId, fixture({
+      id: 'targeted-retry', kind: 'document', source_uri: null, body_ref: 'files/retry.pdf',
+      mime_type: 'application/pdf', content_digest: null,
+    })).item;
+    const extract = treasuryDb.readyJobForItem(item.id, 'extract_text');
+    assert.ok(extract);
+    assert.equal(treasuryDb.claimJob(extract.id), true);
+    treasuryDb.failJob(extract.id, 'pdf_text_unavailable');
+    getConnection().prepare(
+      `INSERT INTO treasure_jobs
+       (id,item_id,job_type,state,attempt_count,created_at,updated_at,last_error_code)
+       VALUES('other-failure',?,'metadata','failed',2,?,?, 'temporary')`,
+    ).run(item.id, item.created_at, item.updated_at);
+
+    assert.equal(treasuryDb.retryFailedJobs(item.id, 'extract_text'), 1);
+    const states = getConnection().prepare(
+      'SELECT job_type,state FROM treasure_jobs WHERE item_id=? ORDER BY job_type',
+    ).all(item.id) as Array<{ job_type: string; state: string }>;
+    assert.deepEqual(states, [
+      { job_type: 'extract_text', state: 'queued' },
+      { job_type: 'index', state: 'completed' },
+      { job_type: 'metadata', state: 'failed' },
+    ]);
+  });
+});
+
 test('treasury JSON and browser HTML import round trip without duplicate URLs', async () => {
   await withDatabase((userId) => {
     treasuryDb.save(userId, fixture({ kind: 'text', source_uri: null, id: 'text' }));

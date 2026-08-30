@@ -16,7 +16,7 @@ import {
   type TreasureItem,
 } from '@/modules/database/index.js';
 
-import { executeTreasuryTool, TreasuryToolError } from './treasury-mcp.service.js';
+import { clipRelevantBody, executeTreasuryTool, TreasuryToolError } from './treasury-mcp.service.js';
 
 let root = '';
 let previousDatabasePath: string | undefined;
@@ -65,6 +65,29 @@ test('treasury exact query parser keeps malformed filters as searchable text', (
   assert.equal(parsed.after, '2026-01-02T00:00:00.000Z');
   assert.equal(parsed.before, null);
   assert.equal(parsed.textQuery, '折叠屏 nope:value before:bad');
+});
+
+test('treasury_get body clipping keeps a relevant late passage', () => {
+  const body = `${'开头无关内容。'.repeat(180)}\n\n量子缓存一致性是这一段真正需要引用的主题。${'结尾补充。'.repeat(180)}`;
+  const clipped = clipRelevantBody(body, 240, ['量子缓存一致性']);
+  assert.equal(clipped.length, 240);
+  assert.equal(clipped.startsWith('…'), true);
+  assert.equal(clipped.includes('量子缓存一致性'), true);
+});
+
+test('treasury_get body clipping never returns unpaired UTF-16 surrogates', () => {
+  const clipped = clipRelevantBody(`${'😀'.repeat(200)}关键段落${'😀'.repeat(200)}`, 101, ['关键段落']);
+  for (let index = 0; index < clipped.length; index += 1) {
+    const code = clipped.charCodeAt(index);
+    if (code >= 0xD800 && code <= 0xDBFF) {
+      const next = clipped.charCodeAt(index + 1);
+      assert.equal(next >= 0xDC00 && next <= 0xDFFF, true);
+    }
+    if (code >= 0xDC00 && code <= 0xDFFF) {
+      const previous = clipped.charCodeAt(index - 1);
+      assert.equal(previous >= 0xD800 && previous <= 0xDBFF, true);
+    }
+  }
 });
 
 test('unified Treasury MCP enforces compact reads, explicit write approval, and no permanent delete', () => {

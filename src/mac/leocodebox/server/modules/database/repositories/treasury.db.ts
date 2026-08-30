@@ -660,7 +660,7 @@ export const treasuryDb = {
     return getConnection().prepare(
       `SELECT id,item_id,job_type,state,attempt_count,next_attempt_at,created_at,updated_at,last_error_code
        FROM treasure_jobs WHERE state IN ('queued','failed')
-       AND (next_attempt_at IS NULL OR next_attempt_at<=?) ORDER BY created_at LIMIT ?`,
+       AND attempt_count<5 AND (next_attempt_at IS NULL OR next_attempt_at<=?) ORDER BY created_at LIMIT ?`,
     ).all(now, Math.max(1, Math.min(limit, 500))) as TreasureJob[];
   },
 
@@ -668,7 +668,7 @@ export const treasuryDb = {
     return (getConnection().prepare(
       `SELECT id,item_id,job_type,state,attempt_count,next_attempt_at,created_at,updated_at,last_error_code
        FROM treasure_jobs WHERE item_id=? AND job_type=? AND state IN ('queued','failed')
-       AND (next_attempt_at IS NULL OR next_attempt_at<=?) ORDER BY created_at LIMIT 1`,
+       AND attempt_count<5 AND (next_attempt_at IS NULL OR next_attempt_at<=?) ORDER BY created_at LIMIT 1`,
     ).get(itemId, jobType, now) as TreasureJob | undefined) ?? null;
   },
 
@@ -696,6 +696,14 @@ export const treasuryDb = {
     getConnection().prepare(
       `UPDATE treasure_jobs SET state='failed',attempt_count=?,next_attempt_at=?,updated_at=?,last_error_code=? WHERE id=?`,
     ).run(attempt, next, now.toISOString(), safeCode, id);
+  },
+
+  retryFailedJobs(itemId: string, jobType?: TreasureJobType, now = isoNow()): number {
+    const typePredicate = jobType ? ' AND job_type=?' : '';
+    return getConnection().prepare(
+      `UPDATE treasure_jobs SET state='queued',attempt_count=0,next_attempt_at=NULL,
+       updated_at=?,last_error_code=NULL WHERE item_id=? AND state='failed'${typePredicate}`,
+    ).run(...(jobType ? [now, itemId, jobType] : [now, itemId])).changes;
   },
 
   changes(after = 0, limit = 500): TreasureChange[] {

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiClient } from '../../../utils/apiClient';
 
 import { buildTreasuryPrompt } from './treasuryPrompt';
+import { rankTreasuryRelated } from './treasuryRelated';
 
 type RemoteItem = {
   id: string; kind: string; title: string; source_uri: string; source_label: string;
@@ -107,6 +108,14 @@ export default function CollectionsMirror({ refreshTick = 0 }: { refreshTick?: n
   const loadGeneration = useRef(0);
   const remoteGeneration = useRef(0);
   const detailGeneration = useRef(0);
+  const relatedRemoteItems = useMemo(
+    () => remoteDetail ? rankTreasuryRelated(remoteDetail.item, remoteItems) : [],
+    [remoteDetail, remoteItems],
+  );
+  const relatedLocalItems = useMemo(
+    () => detail ? rankTreasuryRelated(detail.item, localItems) : [],
+    [detail, localItems],
+  );
 
   const serverQuery = useMemo(() => {
     const viewToken = VIEWS.find((entry) => entry.id === libraryView)?.query ?? '';
@@ -356,6 +365,17 @@ export default function CollectionsMirror({ refreshTick = 0 }: { refreshTick?: n
       if (generation === detailGeneration.current) setDetailBusy(false);
     }
   }, [loadLocal]);
+
+  const retryLocalProcessing = useCallback(async (id: string) => {
+    setDetailBusy(true);
+    try {
+      await apiClient.post(`/api/treasury/${encodeURIComponent(id)}/retry`, {});
+      await loadLocal();
+      await openLocal(id);
+    } catch (error) {
+      setLocalError(error instanceof Error ? error.message : '重新处理失败');
+    } finally { setDetailBusy(false); }
+  }, [loadLocal, openLocal]);
 
   const openRemote = useCallback(async (item: RemoteItem) => {
     const generation = ++detailGeneration.current;
@@ -720,6 +740,15 @@ export default function CollectionsMirror({ refreshTick = 0 }: { refreshTick?: n
                 className="mt-3 rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 引用到新对话
               </button>
+              {relatedRemoteItems.length > 0 && <div className="mt-4 space-y-2">
+                <p className="text-xs font-medium text-foreground">相关收藏</p>
+                {relatedRemoteItems.map((related) => <button key={related.id} type="button"
+                  onClick={() => void openRemote(related)}
+                  className="block w-full rounded-lg border border-border p-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <span className="line-clamp-2 block text-xs font-medium text-foreground">{related.title || related.source_label}</span>
+                  <span className="mt-1 block text-[11px] text-muted-foreground">{related.source_label}</span>
+                </button>)}
+              </div>}
             </>}
             {detail && <>
               <div className="mt-4 grid grid-cols-3 gap-2" role="group" aria-label="阅读状态">
@@ -759,7 +788,23 @@ export default function CollectionsMirror({ refreshTick = 0 }: { refreshTick?: n
                   {detail.body_status === 'not_extracted' ? '正文尚未抽取；原始收藏仍然保留。' : '正文当前不可用。'}
                 </p>}
                 {detail.truncated && <p className="mt-1 text-xs text-warning">正文过长，当前详情已截断。</p>}
+                {detail.item.processing_error_code === 'pdf_text_unavailable' && (
+                  <button type="button" disabled={detailBusy}
+                    onClick={() => void retryLocalProcessing(detail.item.id)}
+                    className="mt-2 rounded-lg border border-border px-3 py-2 text-xs font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-45">
+                    重新处理 PDF
+                  </button>
+                )}
               </div>
+              {relatedLocalItems.length > 0 && <div className="mt-4 space-y-2">
+                <p className="text-xs font-medium text-foreground">相关收藏</p>
+                {relatedLocalItems.map((related) => <button key={related.id} type="button"
+                  onClick={() => void openLocal(related.id)}
+                  className="block w-full rounded-lg border border-border p-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <span className="line-clamp-2 block text-xs font-medium text-foreground">{related.title || related.source_label}</span>
+                  <span className="mt-1 block text-[11px] text-muted-foreground">{related.source_label}</span>
+                </button>)}
+              </div>}
               {detail.body && (
                 <div className="mt-4 rounded-lg border border-border p-3">
                   <p className="text-xs font-medium text-foreground">定位高亮</p>
