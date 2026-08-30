@@ -137,6 +137,11 @@ enum CollectionStore {
         return dir
     }
 
+    static func fileURL(named name: String) -> URL? {
+        guard SharedContainerStore.isSafeFileName(name), let directory = filesDirectory else { return nil }
+        return directory.appendingPathComponent(name, isDirectory: false)
+    }
+
     /// [T-notes] 笔记正文。单文件一篇,不进 items.json。
     static var notesDirectory: URL? {
         guard let dir = directory?.appendingPathComponent("notes", isDirectory: true) else { return nil }

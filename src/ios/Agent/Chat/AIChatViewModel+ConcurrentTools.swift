@@ -686,6 +686,22 @@ extension AIChatViewModel {
                 toolSuccess = false
             }
 
+        case "treasury_search":
+            let result = await TreasuryService.executeSearch(from: argsJson)
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = result.output
+            }
+            toolOutput = result.output
+            toolSuccess = result.success
+
+        case "treasury_get":
+            let result = await TreasuryService.executeGet(from: argsJson)
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = result.output
+            }
+            toolOutput = result.output
+            toolSuccess = result.success
+
         case "memory_write":
             let memResult = executeMemoryWrite(from: argsJson)
             if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {

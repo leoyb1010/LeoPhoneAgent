@@ -809,6 +809,8 @@ change_id, item_id, operation, updated_at, origin_device_id, payload_digest
 - 10 条长文章不会未经控制全部塞进上下文；
 - 工具调用失败不丢收藏、不崩溃。
 
+实际交付证据：[Phase 0 可调用记忆修复与验证](TREASURY_PHASE0_DELIVERY_EVIDENCE.md)
+
 ### Phase 1：统一 SQLite 数据层与持久任务队列
 
 #### 目标

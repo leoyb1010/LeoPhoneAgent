@@ -18,6 +18,23 @@ enum SharedContainerStore {
             .appendingPathComponent("ShareExtension", isDirectory: true)
     }
 
+    /// Shared transfer records must always name a single file inside the App
+    /// Group staging directory. Treat decoded PendingShare values as untrusted:
+    /// a legacy/corrupt record must not be able to escape with `../` or a slash.
+    static func isSafeFileName(_ name: String) -> Bool {
+        !name.isEmpty
+            && name == (name as NSString).lastPathComponent
+            && !name.contains("/")
+            && !name.contains("\\")
+            && name != "."
+            && name != ".."
+    }
+
+    static func sharedFileURL(named name: String) -> URL? {
+        guard isSafeFileName(name), let directory = sharedFileDirectory else { return nil }
+        return directory.appendingPathComponent(name, isDirectory: false)
+    }
+
     // MARK: - Write (called by Share Extension)
 
     static func savePendingShare(_ share: PendingShare) {

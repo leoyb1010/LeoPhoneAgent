@@ -118,7 +118,14 @@ final class ShareCoordinator: ObservableObject {
             for item in share.items where !merged.contains(where: { $0.kind == item.kind && $0.value == item.value }) {
                 merged.append(item)
             }
-            let mergedShare = PendingShare(items: merged, timestamp: share.timestamp)
+            let mergedShare = PendingShare(
+                items: merged,
+                timestamp: share.timestamp,
+                instruction: PendingShare.boundedMerge(
+                    [existing.share.instruction, share.instruction], maxTotalChars: 8_000),
+                treasuryContext: PendingShare.boundedMerge(
+                    [existing.share.treasuryContext, share.treasuryContext], maxTotalChars: 50_000)
+            )
             pendingShareBuffer = PendingShareBuffer(share: mergedShare, bufferedAt: Date())
             bufferVersion += 1
             shareLog.info("[Share] storeBuffer: MERGED \(existing.share.items.count) existing + \(share.items.count) new → \(merged.count) items (v\(bufferVersion))")

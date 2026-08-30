@@ -446,7 +446,7 @@ struct CollectionsView: View {
                     }
                     Button {
                         withAnimation { editMode = .active }
-                    } label: { Label("选择并删除", systemImage: "checkmark.circle") }
+                    } label: { Label("选择", systemImage: "checkmark.circle") }
                     Divider()
                     Picker("分享时的默认动作", selection: $defaultAction) {
                         Text("每次询问").tag("ask")
@@ -458,13 +458,23 @@ struct CollectionsView: View {
         }
         ToolbarItem(placement: .bottomBar) {
             if editMode.isEditing {
-                Button(role: .destructive) {
-                    purge(selection)
-                    selection = []
-                } label: {
-                    Label("删除所选", systemImage: "trash")
+                HStack(spacing: 24) {
+                    Button {
+                        let chosen = items.filter { selection.contains($0.id) }
+                        sendToAgent(chosen, prompt: nil)
+                    } label: {
+                        Label("发给 Agent", systemImage: "paperplane.fill")
+                    }
+                    .disabled(selection.isEmpty)
+
+                    Button(role: .destructive) {
+                        purge(selection)
+                        selection = []
+                    } label: {
+                        Label("删除所选", systemImage: "trash")
+                    }
+                    .disabled(selection.isEmpty)
                 }
-                .disabled(selection.isEmpty)
             }
         }
     }
@@ -755,26 +765,45 @@ struct CollectionsView: View {
 
     /// 装回分享缓冲 → 请求新建对话。与外部分享进来的路径一致。
     private func sendToAgent(_ item: CollectedItem, prompt: String?) {
-        var shareItems: [PendingShare.Item] = []
-        switch item.kind {
-        case .link, .text, .note:
-            shareItems.append(.init(kind: .inlineText, value: item.value))
-        case .file:
-            if let src = CollectionStore.filesDirectory?.appendingPathComponent(item.value),
-               let destDir = SharedContainerStore.sharedFileDirectory {
-                try? FileManager.default.createDirectory(at: destDir, withIntermediateDirectories: true)
-                let dest = destDir.appendingPathComponent(item.value)
-                try? FileManager.default.removeItem(at: dest)
-                try? FileManager.default.copyItem(at: src, to: dest)
-                shareItems.append(.init(kind: .attachment, value: item.value))
+        sendToAgent([item], prompt: prompt)
+    }
+
+    /// 多选与单条共用同一个结构化上下文构造器。正文、来源、标签和批注
+    /// 都在独立的 untrusted context 字段中，用户提示不会与资料拼成一段。
+    private func sendToAgent(_ selectedItems: [CollectedItem], prompt: String?) {
+        let chosen = Array(selectedItems.prefix(20))
+        guard !chosen.isEmpty else { return }
+        Task {
+            let context = await TreasuryContextBuilder.build(items: chosen)
+            var shareItems: [PendingShare.Item] = []
+            for item in chosen where item.kind == .file {
+                if let src = CollectionStore.fileURL(named: item.value),
+                   let dest = SharedContainerStore.sharedFileURL(named: item.value),
+                   FileManager.default.fileExists(atPath: src.path) {
+                    try? FileManager.default.createDirectory(
+                        at: dest.deletingLastPathComponent(), withIntermediateDirectories: true)
+                    try? FileManager.default.removeItem(at: dest)
+                    try? FileManager.default.copyItem(at: src, to: dest)
+                    shareItems.append(.init(kind: .attachment, value: item.value))
+                }
+            }
+            let instruction = prompt ?? (chosen.count == 1
+                ? "请使用我从藏宝阁选择的这条资料回答。保留可追踪来源。"
+                : "请综合我从藏宝阁选择的 \(chosen.count) 条资料回答。比较时保留每条资料的可追踪来源。")
+            await MainActor.run {
+                ShareCoordinator.shared.storeBuffer(PendingShare(
+                    items: shareItems,
+                    timestamp: Date(),
+                    instruction: instruction,
+                    treasuryContext: context
+                ))
+                selection = []
+                editMode = .inactive
+                dismiss()
+                // 分享缓冲已装好,复用主界面现成的"新建对话"通道消费它
+                NotificationCenter.default.post(name: .newChatRequested, object: nil)
             }
         }
-        if let prompt { shareItems.append(.init(kind: .inlineText, value: prompt)) }
-        guard !shareItems.isEmpty else { return }
-        ShareCoordinator.shared.storeBuffer(PendingShare(items: shareItems, timestamp: Date()))
-        dismiss()
-        // 分享缓冲已装好,复用主界面现成的"新建对话"通道消费它
-        NotificationCenter.default.post(name: .newChatRequested, object: nil)
     }
 
     /// 惰性补抓链接标题/封面,每条只试一次。

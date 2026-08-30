@@ -1567,6 +1567,11 @@ struct AIChatView: View {
         }
         minisLogger.info("[Share] Injecting \(pending.items.count) items into chat")
 
+        if let context = pending.treasuryContext?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !context.isEmpty {
+            vm.pendingTreasuryContext = context
+        }
+
         for (i, item) in pending.items.enumerated() {
             switch item.kind {
             case .inlineText:
@@ -1580,11 +1585,10 @@ struct AIChatView: View {
                     vm.inputText += text
                 }
             case .attachment:
-                guard let dir = SharedContainerStore.sharedFileDirectory else {
-                    minisLogger.error("[Share] item[\(i)] sharedFileDirectory is nil!")
+                guard let fileURL = SharedContainerStore.sharedFileURL(named: item.value) else {
+                    minisLogger.error("[Share] item[\(i)] rejected unsafe or unavailable attachment reference")
                     continue
                 }
-                let fileURL = dir.appendingPathComponent(item.value)
                 let exists = FileManager.default.fileExists(atPath: fileURL.path)
                 minisLogger.info("[Share] item[\(i)] attachment exists=\(exists) extension=\(fileURL.pathExtension.lowercased())")
                 guard exists else { continue }
@@ -1606,6 +1610,12 @@ struct AIChatView: View {
                 vm.addFileAttachment(from: fileURL)
                 minisLogger.info("[Share] item[\(i)] addFileAttachment done, attachments count=\(self.vm.attachments.count)")
             }
+        }
+
+        if let instruction = pending.instruction?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !instruction.isEmpty {
+            if !vm.inputText.isEmpty { vm.inputText += "\n" }
+            vm.inputText += instruction
         }
 
         // Clean up shared files after ingestion

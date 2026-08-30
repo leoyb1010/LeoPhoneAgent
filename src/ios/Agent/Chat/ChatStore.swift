@@ -1308,6 +1308,10 @@ actor ChatStore {
                 if !joined.isEmpty { return cap("memory_get: " + joined) }
             }
             if let kw = str("keywords") { return cap("memory_get: " + kw) }
+        case "treasury_search":
+            if let query = str("query") { return cap("treasury_search: " + query) }
+        case "treasury_get":
+            if let ids = str("ids") { return cap("treasury_get: " + ids) }
         default:
             break
         }
@@ -4031,9 +4035,17 @@ extension RawMessage {
                     let path = extractStringParam("path", from: tu.input)
                     kind = .readImageTool(path: path)
                     content = "Reading image \(path)..."
-                case "memory_write", "memory_get":
+                case "memory_write", "memory_get", "treasury_search", "treasury_get":
                     kind = .memoryTool(action: tu.name)
-                    content = tu.name == "memory_write" ? "Writing memory..." : "Reading memory..."
+                    if tu.name == "memory_write" {
+                        content = "Writing memory..."
+                    } else if tu.name == "treasury_search" {
+                        content = "Searching Treasury..."
+                    } else if tu.name == "treasury_get" {
+                        content = "Reading Treasury..."
+                    } else {
+                        content = "Reading memory..."
+                    }
                 default:
                     kind = .shellTool(command: tu.name)
                     content = tu.name
