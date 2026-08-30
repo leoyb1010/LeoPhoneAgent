@@ -6,12 +6,15 @@ package com.leoyuan.leophoneagent.deeplink
  * reconcile. Parsing is string-based so JVM tests do not need Uri stubs.
  *
  * Failures always become [Home] — never throw into an Activity/Service.
+ * Treasury system surfaces use `capture=1` to request a one-shot text/URL
+ * capture dialog without reading the clipboard automatically.
  */
 sealed class SystemEntry {
     data object Home : SystemEntry()
     data object NewChat : SystemEntry()
     data object VoiceChat : SystemEntry()
     data object CameraChat : SystemEntry()
+    data class Treasury(val capture: Boolean) : SystemEntry()
     data object LastSession : SystemEntry()
     data class OpenSession(val sessionId: String) : SystemEntry()
     data class ResumeSession(val sessionId: String) : SystemEntry()
@@ -38,7 +41,11 @@ object SystemEntryParser {
 
     const val NEW_CHAT_URI = "minis://action/new_chat"
     const val VOICE_CHAT_URI = "minis://action/voice_chat"
+    const val TREASURY_URI = "minis://action/treasury?capture=1"
     const val LAST_SESSION_URI = "minis://action/last_session"
+
+    fun treasuryUri(capture: Boolean): String =
+        if (capture) TREASURY_URI else "minis://action/treasury"
 
     fun sessionUri(sessionId: String): String = "minis://session/$sessionId"
     fun resumeUri(sessionId: String): String = "minis://action/resume?session=$sessionId"
@@ -63,6 +70,7 @@ object SystemEntryParser {
         SystemEntry.NewChat, is SystemEntry.Assist -> DeepLinkAction.NewChat
         SystemEntry.VoiceChat -> DeepLinkAction.NewVoiceChat
         SystemEntry.CameraChat -> DeepLinkAction.NewCameraChat
+        is SystemEntry.Treasury -> DeepLinkAction.OpenTreasury(entry.capture)
         SystemEntry.LastSession -> DeepLinkAction.LastSession
         is SystemEntry.OpenSession -> DeepLinkAction.OpenSession(entry.sessionId)
         is SystemEntry.ResumeSession -> DeepLinkAction.ResumeSession(entry.sessionId)
@@ -145,6 +153,9 @@ object SystemEntryParser {
                 "new_chat" -> SystemEntry.NewChat
                 "voice_chat" -> SystemEntry.VoiceChat
                 "camera_chat" -> SystemEntry.CameraChat
+                "treasury" -> SystemEntry.Treasury(
+                    params["capture"]?.lowercase() in setOf("1", "true", "yes"),
+                )
                 "last_session" -> SystemEntry.LastSession
                 "resume" -> params["session"]?.ifBlank { null }?.let {
                     SystemEntry.ResumeSession(it)

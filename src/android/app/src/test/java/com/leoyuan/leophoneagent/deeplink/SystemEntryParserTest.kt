@@ -25,8 +25,29 @@ class SystemEntryParserTest {
     fun `new chat and voice uris`() {
         assertEquals(SystemEntry.NewChat, SystemEntryParser.parseData(SystemEntryParser.NEW_CHAT_URI))
         assertEquals(SystemEntry.VoiceChat, SystemEntryParser.parseData(SystemEntryParser.VOICE_CHAT_URI))
+        assertEquals(SystemEntry.Treasury(capture = true), SystemEntryParser.parseData(SystemEntryParser.TREASURY_URI))
+        assertEquals(
+            SystemEntry.Treasury(capture = false),
+            SystemEntryParser.parseData(SystemEntryParser.treasuryUri(capture = false)),
+        )
         assertEquals(SystemEntry.LastSession, SystemEntryParser.parseData(SystemEntryParser.LAST_SESSION_URI))
         assertEquals(SystemEntry.CameraChat, SystemEntryParser.parseData("minis://action/camera_chat"))
+    }
+
+    @Test
+    fun `treasury capture request is explicit and consumed once`() {
+        assertEquals(
+            SystemEntry.Treasury(capture = true),
+            SystemEntryParser.parseData("minis://action/treasury?capture=true"),
+        )
+        assertEquals(
+            SystemEntry.Treasury(capture = false),
+            SystemEntryParser.parseData("minis://action/treasury?capture=0"),
+        )
+        DeepLinkCoordinator.requestTreasuryCapture()
+        assertTrue(DeepLinkCoordinator.pendingTreasuryCapture.value)
+        assertTrue(DeepLinkCoordinator.consumeTreasuryCapture())
+        assertTrue(!DeepLinkCoordinator.consumeTreasuryCapture())
     }
 
     @Test
@@ -127,6 +148,10 @@ class SystemEntryParserTest {
     fun `toDeepLinkAction maps product entries`() {
         assertEquals(DeepLinkAction.NewChat, SystemEntryParser.toDeepLinkAction(SystemEntry.NewChat))
         assertEquals(DeepLinkAction.NewVoiceChat, SystemEntryParser.toDeepLinkAction(SystemEntry.VoiceChat))
+        assertEquals(
+            DeepLinkAction.OpenTreasury(capture = true),
+            SystemEntryParser.toDeepLinkAction(SystemEntry.Treasury(capture = true)),
+        )
         assertEquals(DeepLinkAction.LastSession, SystemEntryParser.toDeepLinkAction(SystemEntry.LastSession))
         assertEquals(
             DeepLinkAction.OpenSession("x"),

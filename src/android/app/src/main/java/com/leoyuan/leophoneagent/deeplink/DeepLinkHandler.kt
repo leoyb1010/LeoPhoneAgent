@@ -33,6 +33,7 @@ import com.leoyuan.leophoneagent.ui.navigation.Routes
  *                                               → Environment variables
  *   minis://settings/rootfs                     → Rootfs management (mirror config lives here)
  *   minis://settings/mirrors                    → alias for rootfs (mirrors live inside Rootfs UI)
+ *   minis://action/treasury?capture=1           → Treasury with the quick-capture dialog
  *
  * Unknown settings paths fall back to Settings home rather than
  * Unknown — matches iOS's "best-effort land somewhere reasonable"
@@ -58,6 +59,7 @@ sealed class DeepLinkAction {
      *  - [NewChat] — plain new draft chat
      *  - [NewVoiceChat] — new chat + auto-trigger voice input mic on first compose
      *  - [NewCameraChat] — new chat + auto-launch camera attachment on first compose
+     *  - [OpenTreasury] — local library, optionally opening quick capture
      *
      * Encoded as `minis://action/<name>` so the static shortcuts XML can
      * point to them via plain Intent.data without any custom extras —
@@ -66,6 +68,7 @@ sealed class DeepLinkAction {
     data object NewChat : DeepLinkAction()
     data object NewVoiceChat : DeepLinkAction()
     data object NewCameraChat : DeepLinkAction()
+    data class OpenTreasury(val capture: Boolean) : DeepLinkAction()
     data object LastSession : DeepLinkAction()
     data class ResumeSession(val sessionId: String) : DeepLinkAction()
     data class PauseSession(val sessionId: String?) : DeepLinkAction()
@@ -121,6 +124,9 @@ object DeepLinkHandler {
                 "new_chat" -> DeepLinkAction.NewChat
                 "voice_chat" -> DeepLinkAction.NewVoiceChat
                 "camera_chat" -> DeepLinkAction.NewCameraChat
+                "treasury" -> DeepLinkAction.OpenTreasury(
+                    uri.getQueryParameter("capture")?.lowercase() in setOf("1", "true", "yes"),
+                )
                 "last_session" -> DeepLinkAction.LastSession
                 "resume" -> uri.getQueryParameter("session")
                     ?.takeIf { it.isNotBlank() }

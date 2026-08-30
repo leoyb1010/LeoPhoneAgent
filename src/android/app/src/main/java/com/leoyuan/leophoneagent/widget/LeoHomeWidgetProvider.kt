@@ -73,6 +73,10 @@ class LeoHomeWidgetProvider : AppWidgetProvider() {
                 R.id.widget_voice_chat,
                 SystemEntryIntents.activity(context, SystemEntryParser.VOICE_CHAT_URI, 2),
             )
+            views.setOnClickPendingIntent(
+                R.id.widget_treasury,
+                SystemEntryIntents.activity(context, SystemEntryParser.TREASURY_URI, 5),
+            )
             return views
         }
     }

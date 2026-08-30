@@ -46,6 +46,7 @@ class SystemEntryReceiver : BroadcastReceiver() {
             is SystemEntry.OpenSession -> launch(app, SystemEntryParser.sessionUri(entry.sessionId))
             SystemEntry.NewChat -> launch(app, SystemEntryParser.NEW_CHAT_URI)
             SystemEntry.VoiceChat -> launch(app, SystemEntryParser.VOICE_CHAT_URI)
+            is SystemEntry.Treasury -> launch(app, SystemEntryParser.treasuryUri(entry.capture))
             SystemEntry.LastSession -> launch(app, SystemEntryParser.LAST_SESSION_URI)
             else -> launch(app, SystemEntryParser.NEW_CHAT_URI)
         }

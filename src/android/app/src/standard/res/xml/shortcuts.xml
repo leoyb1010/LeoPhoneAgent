@@ -18,6 +18,18 @@
         <categories android:name="android.shortcut.conversation" />
     </shortcut>
     <shortcut
+        android:shortcutId="treasury"
+        android:enabled="true"
+        android:icon="@drawable/ic_qs_treasury"
+        android:shortcutShortLabel="@string/shortcut_treasury_short"
+        android:shortcutLongLabel="@string/shortcut_treasury_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.leoyuan.leophoneagent"
+            android:targetClass="com.leoyuan.leophoneagent.MainActivity"
+            android:data="minis://action/treasury?capture=1" />
+    </shortcut>
+    <shortcut
         android:shortcutId="voice_chat"
         android:enabled="true"
         android:icon="@mipmap/ic_shortcut_voice_chat"

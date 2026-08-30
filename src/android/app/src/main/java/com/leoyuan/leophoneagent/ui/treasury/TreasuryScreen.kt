@@ -59,6 +59,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -109,6 +110,8 @@ fun TreasuryScreen(
     var highlights by remember { mutableStateOf(emptyList<TreasureHighlightEntity>()) }
     var annotationDraft by rememberSaveable(selectedItemId) { mutableStateOf("") }
     var showCapture by rememberSaveable { mutableStateOf(false) }
+    val pendingSystemCapture by com.leoyuan.leophoneagent.deeplink.DeepLinkCoordinator
+        .pendingTreasuryCapture.collectAsState()
     val listState = rememberLazyListState()
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) scope.launch {
@@ -119,6 +122,14 @@ fun TreasuryScreen(
     LaunchedEffect(query) {
         delay(220)
         repository.search(query, limit = 500).collectLatest { rows = it }
+    }
+
+    LaunchedEffect(pendingSystemCapture) {
+        if (pendingSystemCapture &&
+            com.leoyuan.leophoneagent.deeplink.DeepLinkCoordinator.consumeTreasuryCapture()
+        ) {
+            showCapture = true
+        }
     }
 
     LaunchedEffect(selectedItemId) {

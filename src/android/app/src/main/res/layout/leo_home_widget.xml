@@ -40,24 +40,37 @@
             android:id="@+id/widget_new_chat"
             android:layout_width="0dp"
             android:layout_height="36dp"
-            android:layout_marginEnd="6dp"
+            android:layout_marginEnd="4dp"
             android:layout_weight="1"
             android:background="@drawable/leo_home_widget_btn"
             android:gravity="center"
             android:text="@string/shortcut_new_chat_short"
             android:textColor="#FF111111"
-            android:textSize="13sp" />
+            android:textSize="12sp" />
 
         <TextView
             android:id="@+id/widget_voice_chat"
             android:layout_width="0dp"
             android:layout_height="36dp"
-            android:layout_marginStart="6dp"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
             android:layout_weight="1"
             android:background="@drawable/leo_home_widget_btn"
             android:gravity="center"
             android:text="@string/shortcut_voice_chat_short"
             android:textColor="#FF111111"
-            android:textSize="13sp" />
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/widget_treasury"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="4dp"
+            android:layout_weight="1"
+            android:background="@drawable/leo_home_widget_btn"
+            android:gravity="center"
+            android:text="@string/shortcut_treasury_short"
+            android:textColor="#FF111111"
+            android:textSize="12sp" />
     </LinearLayout>
 </LinearLayout>

@@ -302,6 +302,15 @@ fun AppNavigation(
             is DeepLinkAction.OpenPermissionSettings -> {
                 navController.safeNavigate(Routes.PERMISSIONS)
             }
+            is DeepLinkAction.OpenTreasury -> {
+                // Cold starts mount Treasury directly below; this branch is
+                // intentionally navigation-free to avoid pushing the same
+                // route twice. Queue capture here, after composition, so a
+                // recomposition cannot replay the one-shot request.
+                if (initialDeepLink.capture) {
+                    DeepLinkCoordinator.requestTreasuryCapture()
+                }
+            }
             // OpenHtmlPreview is handled by setting startDestination
             // (see below) so the NavHost mounts directly into the right
             // chat — no safeNavigate dance, no sessions-list flash.
@@ -464,6 +473,7 @@ fun AppNavigation(
             Routes.chat("__new__${java.util.UUID.randomUUID()}")
         }
         is DeepLinkAction.NewChat -> Routes.chat("__new__${java.util.UUID.randomUUID()}")
+        is DeepLinkAction.OpenTreasury -> Routes.TREASURY
         is DeepLinkAction.LastSession ->
             com.leoyuan.leophoneagent.task.AgentRunStore.lastSessionId()
                 ?.let { Routes.chat(it) }

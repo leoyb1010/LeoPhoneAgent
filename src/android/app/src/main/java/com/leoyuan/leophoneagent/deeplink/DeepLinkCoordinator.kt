@@ -10,6 +10,17 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 object DeepLinkCoordinator {
 
+    private val _pendingTreasuryCapture = MutableStateFlow(false)
+    val pendingTreasuryCapture: StateFlow<Boolean> = _pendingTreasuryCapture.asStateFlow()
+
+    fun requestTreasuryCapture() { _pendingTreasuryCapture.value = true }
+
+    fun consumeTreasuryCapture(): Boolean {
+        val current = _pendingTreasuryCapture.value
+        _pendingTreasuryCapture.value = false
+        return current
+    }
+
     data class EnvVarCreate(val key: String, val value: String, val note: String)
 
     private val _pendingEnvVarCreate = MutableStateFlow<EnvVarCreate?>(null)

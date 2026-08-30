@@ -38,6 +38,7 @@ import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Contacts
 import androidx.compose.material.icons.outlined.Event
@@ -247,6 +248,13 @@ fun SystemPermissionsScreen(
                     title = stringResource(R.string.system_permissions_qs_row),
                     subtitle = stringResource(R.string.system_permissions_qs_sub),
                     onClick = { requestQuickTile(context) },
+                )
+                SettingsRow(
+                    icon = Icons.Outlined.StarBorder,
+                    iconColor = Color(0xFFFF9500),
+                    title = stringResource(R.string.system_permissions_treasury_qs_row),
+                    subtitle = stringResource(R.string.system_permissions_treasury_qs_sub),
+                    onClick = { requestQuickTile(context, treasury = true) },
                 )
                 SettingsRow(
                     icon = Icons.Outlined.Widgets,
@@ -668,20 +676,34 @@ private fun isAccessibilityEnabled(context: Context): Boolean {
     return enabled.split(':').any { it.equals(expected, ignoreCase = true) }
 }
 
-private fun requestQuickTile(context: Context) {
+private fun requestQuickTile(context: Context, treasury: Boolean = false) {
+    val component = if (treasury) {
+        ComponentName(context, com.leoyuan.leophoneagent.tile.LeoTreasuryTileService::class.java)
+    } else {
+        ComponentName(context, com.leoyuan.leophoneagent.tile.LeoQuickTileService::class.java)
+    }
+    val label = context.getString(
+        if (treasury) R.string.qs_tile_treasury_label else R.string.qs_tile_label,
+    )
+    val icon = if (treasury) R.drawable.ic_qs_treasury else R.drawable.ic_qs_new_chat
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         val statusBar = context.getSystemService(StatusBarManager::class.java)
         try {
             statusBar?.requestAddTileService(
-                ComponentName(context, com.leoyuan.leophoneagent.tile.LeoQuickTileService::class.java),
-                context.getString(R.string.qs_tile_label),
-                Icon.createWithResource(context, R.drawable.ic_qs_new_chat),
+                component,
+                label,
+                Icon.createWithResource(context, icon),
                 context.mainExecutor,
             ) { /* added / already / rejected — user sees the system sheet */ }
             return
         } catch (_: Throwable) {}
     }
-    Toast.makeText(context, context.getString(R.string.system_permissions_qs_manual), Toast.LENGTH_SHORT).show()
+    val fallback = if (treasury) {
+        R.string.system_permissions_treasury_qs_manual
+    } else {
+        R.string.system_permissions_qs_manual
+    }
+    Toast.makeText(context, context.getString(fallback), Toast.LENGTH_SHORT).show()
 }
 
 private fun areNotificationsEnabled(context: Context): Boolean =

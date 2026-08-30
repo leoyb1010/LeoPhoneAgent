@@ -658,6 +658,10 @@ class MainActivity : ComponentActivity() {
             is DeepLinkAction.OpenPermissionSettings -> {
                 nav.navigate(Routes.PERMISSIONS)
             }
+            is DeepLinkAction.OpenTreasury -> {
+                if (action.capture) DeepLinkCoordinator.requestTreasuryCapture()
+                nav.navigate(Routes.TREASURY) { launchSingleTop = true }
+            }
             is DeepLinkAction.OpenHtmlPreview -> {
                 DeepLinkCoordinator.setPendingHtmlPreview(
                     action.sessionId,

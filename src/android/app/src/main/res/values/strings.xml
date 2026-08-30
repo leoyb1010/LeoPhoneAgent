@@ -1335,12 +1335,15 @@
     <string name="system_permissions_qs_row">Add Quick Settings tile</string>
     <string name="system_permissions_qs_sub">Open a new chat or voice chat from the shade</string>
     <string name="system_permissions_qs_manual">Add the LeoPhoneAgent tile from the Quick Settings edit panel</string>
+    <string name="system_permissions_treasury_qs_row">Add Treasury capture tile</string>
+    <string name="system_permissions_treasury_qs_sub">Save text or a link without opening a chat</string>
+    <string name="system_permissions_treasury_qs_manual">Add the Treasury tile from the Quick Settings edit panel</string>
     <string name="system_permissions_widget_row">Add home-screen widget</string>
     <string name="system_permissions_widget_sub">Task status on the home screen; tap to open the session</string>
     <string name="system_permissions_widget_manual">Long-press the home screen and add the LeoPhoneAgent widget</string>
     <string name="qs_tile_label">New chat</string>
     <string name="widget_title">LeoPhoneAgent</string>
-    <string name="widget_description">Task status, new chat, and voice entry</string>
+    <string name="widget_description">Task status, chat, voice, and Treasury entry</string>
     <string name="assist_composer_hint">I was invoked as the system assistant from %1$s. Help with what is on that screen.</string>
     <string name="screen_capture_notice">A screenshot or screen recording of LeoPhoneAgent was just captured.</string>
     <string name="system_permissions_section_a11y">Accessibility</string>
@@ -1453,6 +1456,8 @@
     <string name="shortcut_voice_chat_long">Chat with Voice</string>
     <string name="shortcut_camera_chat_short">Chat with Camera</string>
     <string name="shortcut_camera_chat_long">Chat with Camera</string>
+    <string name="shortcut_treasury_short">Save</string>
+    <string name="shortcut_treasury_long">Save to Treasury</string>
 
     <!-- [T-android-scheduled-tasks-design] Scheduled tasks UI -->
     <string name="ok">OK</string>
@@ -1673,6 +1678,8 @@
     <string name="task_state_needs_attention">Needs attention</string>
     <string name="qs_tile_subtitle">Tap to start a new chat</string>
     <string name="qs_tile_voice_label">Voice chat</string>
+    <string name="qs_tile_treasury_label">Treasury</string>
+    <string name="qs_tile_treasury_subtitle">Tap to save something</string>
     <string name="shortcut_last_session_short">Last chat</string>
     <string name="shortcut_last_session_long">Open last chat</string>
     <string name="notif_action_continue">Continue</string>

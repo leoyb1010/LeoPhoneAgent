@@ -1212,6 +1212,8 @@
     <string name="shortcut_voice_chat_long">语音对话</string>
     <string name="shortcut_camera_chat_short">拍照对话</string>
     <string name="shortcut_camera_chat_long">拍照对话</string>
+    <string name="shortcut_treasury_short">收藏</string>
+    <string name="shortcut_treasury_long">收进藏宝阁</string>
     <string name="image_action_copy">复制</string>
     <string name="image_action_share">分享</string>
     <string name="image_action_save">保存</string>
@@ -1458,12 +1460,15 @@
     <string name="system_permissions_qs_row">添加快捷设置磁贴</string>
     <string name="system_permissions_qs_sub">从状态栏下拉开新对话或语音</string>
     <string name="system_permissions_qs_manual">请在快捷设置编辑页添加 LeoPhoneAgent 磁贴</string>
+    <string name="system_permissions_treasury_qs_row">添加藏宝阁收藏磁贴</string>
+    <string name="system_permissions_treasury_qs_sub">不打开对话，快速收藏文字或链接</string>
+    <string name="system_permissions_treasury_qs_manual">请在快捷设置编辑页添加藏宝阁磁贴</string>
     <string name="system_permissions_widget_row">添加桌面小组件</string>
     <string name="system_permissions_widget_sub">桌面显示任务状态，点进去打开对应会话</string>
     <string name="system_permissions_widget_manual">请长按桌面，添加 LeoPhoneAgent 小组件</string>
     <string name="qs_tile_label">新对话</string>
     <string name="widget_title">LeoPhoneAgent</string>
-    <string name="widget_description">任务状态、新建对话和语音入口</string>
+    <string name="widget_description">任务状态、对话、语音和藏宝阁入口</string>
     <string name="assist_composer_hint">我刚从「%1$s」被系统助手唤起。请根据当前屏幕帮我处理。</string>
     <string name="screen_capture_notice">刚才有人截屏或录屏了 LeoPhoneAgent。</string>
     <string name="system_permissions_section_a11y">无障碍</string>
@@ -1604,6 +1609,8 @@
     <string name="task_state_needs_attention">需要处理</string>
     <string name="qs_tile_subtitle">点按开始新对话</string>
     <string name="qs_tile_voice_label">语音对话</string>
+    <string name="qs_tile_treasury_label">藏宝阁</string>
+    <string name="qs_tile_treasury_subtitle">点按快速收藏</string>
     <string name="shortcut_last_session_short">上次会话</string>
     <string name="shortcut_last_session_long">打开上次会话</string>
     <string name="notif_action_continue">继续</string>
