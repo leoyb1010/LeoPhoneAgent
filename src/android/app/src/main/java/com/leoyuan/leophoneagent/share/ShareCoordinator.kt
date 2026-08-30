@@ -48,7 +48,7 @@ object ShareCoordinator {
         if (ageMs > LAUNCH_MAX_AGE_MS) {
             AppLogger.info(TAG, "[Share] processPendingShare: stale (age=${ageMs}ms), discarding")
             SharedShareStore.clearPendingShare(context)
-            SharedShareStore.cleanSharedFiles(context)
+            SharedShareStore.cleanSharedFiles(context, pending.items)
             return
         }
         AppLogger.info(TAG, "[Share] processPendingShare: buffering ${pending.items.size} item(s)")
@@ -64,7 +64,7 @@ object ShareCoordinator {
         val ageMs = System.currentTimeMillis() - buf.bufferedAtMs
         if (ageMs > BUFFER_TTL_MS) {
             AppLogger.info(TAG, "[Share] consumeBuffer: expired (age=${ageMs}ms)")
-            SharedShareStore.cleanSharedFiles(context)
+            SharedShareStore.cleanSharedFiles(context, buf.share.items)
             return null
         }
         AppLogger.info(TAG, "[Share] consumeBuffer: ${buf.share.items.size} item(s)")

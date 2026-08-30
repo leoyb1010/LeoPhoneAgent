@@ -2,56 +2,44 @@
 
 ## Direction decision
 
-- Options considered and structural differences: A. 保留单一“使用 Key”开关；B. 新增独立 Leoapi 页；C. 每个 CLI 卡内明确“官方账号 / Leo 模型”两条路径。
-- Chosen option and evidence: C；它贴近安装后立即启动的任务，并诚实保留 Cursor 的官方边界。
-- Existing visual authority to preserve: Material 3、SettingsSection、主按钮“启动”、次按钮“登录/更新”、现有主题与 LeoMotion。
+- Chosen direction: “捕获入口轻，工作台信息密度随宽度增长”。保存动作不要求先填写分类；进入藏宝阁后再搜索、筛选、阅读和批注。
+- Existing authority: Android Material 3、iOS SwiftUI 列表/系统拖放、Mac leocodebox token 与卡片体系。
 
 ## Originality contract
 
 - Visitor mode: Operate
-- Product truth: 手机同时是模型控制面和 Linux 执行体。
-- Concept spine: 先看连接来源，再启动 Agent。
-- First viewport / primary task region: 每张 CLI 卡的版本、账号/模型来源状态与启动按钮。
-- First-read object and primary action: 当前连接方式；主动作随状态变为“登录”或“启动”。
-- Spatial thesis: 纵向单任务卡，展开态保持可读行宽，不增加桌面式侧栏。
-- Material and asset strategy: 原生 Compose/Material 图标，不新增图片资产。
-- Product-specific signature: 同卡呈现“CLI 官方账号”和“LeoPhoneAgent 模型”两条真实路径。
-- Motion grammar: 仅状态切换、进度和对话框进入；尊重系统减少动画。
-- Explicit anti-defaults: 不用万能“连接”按钮；不把失败原文当说明；不显示不可执行授权。
+- Product truth: 收藏不是聊天附件的副本，而是本机可搜索、可被 Agent 受控调用的个人资产。
+- Concept spine: 先收下 → 显示处理状态 → 找回 → 打开/批注/交给 Agent。
+- First-read object: 搜索框和内容列表；主要动作是“收进藏宝阁”。
+- Spatial thesis: 小屏单栏详情替换列表；600dp 双栏；840dp 筛选/列表/详情三栏。
+- Material strategy: 只用仓库已有 Compose/SwiftUI/React 组件和 Material/SF Symbol 图标，不新增图片或 UI 依赖。
+- Anti-defaults: 不做无限目录树、假按钮、首页 AI 推荐瀑布流或桌面 UI 强塞到手机。
 
 ## System
 
-- Typography: 现有 Material typography，标题/状态/说明三级。
-- Color and surfaces: 现有 surfaceContainer；成功绿、警告橙、错误红只表达状态。
-- Grid and spacing: 8dp 基线，卡内 12–16dp，按钮最小 48dp。
-- Shape and borders: 沿用 SettingsSection 与 12–16dp 圆角。
-- Iconography and imagery: Material 账号、模型、终端与检查图标。
-- Density: 封面屏单列紧凑，展开态不无限拉宽正文。
+- Typography: 继承平台动态字体；顶栏使用图标动作减少 200% 字体拥挤。
+- Color: 仅失败/部分处理使用 error；普通 queued/ready 使用主题 surface 和文字层级。
+- Grid: 8dp 基线；列表 12dp 水平间距；详情 18dp；触控动作由原生 Button/IconButton/Checkbox 保证。
+- Shape: 继承 Material 3 和 leocodebox 现有圆角/边框。
 
 ## Composition
 
-- Reading or task path: 安装状态 → 授权来源 → 模型/账号状态 → 启动或登录 → 日志/更新。
-- Major regions and their jobs: CLI 摘要、连接方式、主次动作、配置弹窗、失败恢复。
-- Scale and density rhythm: 卡片摘要紧凑，配置对话框展开信息，日志按需显示。
-- Responsive structural changes: 展开态动作同排；封面态动作换行并保持主按钮优先。
-
-## Components and tokens
-
-- Existing component source: 本仓 Compose Material 组件与 SettingsSection。
-- Components to reuse: ListItem、Button、OutlinedButton、FilterChip、AlertDialog、DropdownMenu。
-- New components justified: 仅封装重复的 CLI 连接状态，不新增通用设计系统。
-- Token changes: 无。
-
-## Motion budget
-
-- Primary motion engine: Compose 原生动画/LeoMotion。
-- Functional transitions: 状态刷新、安装进度、登录返回后的徽标更新。
-- Dominant effect, if any: 无。
-- Reduced-motion behavior: 状态直接切换，不依赖动画表达结果。
+- Android compact: 搜索/筛选 → 列表；点开后进入独立详情，系统返回恢复列表状态。
+- Android medium: 380dp 列表 + 弹性详情。
+- Android expanded: 190dp 筛选 rail + 380dp 列表 + 弹性详情。
+- iPad: 现有收藏列表接受系统 URL/String drop；文件继续走统一 importer。
+- Mac: 捕获区 → 离线/陈旧状态 → 搜索 → Mac/手机混合结果卡片。
 
 ## State matrix
 
-| Surface | Loading | Empty | Error | Success | Disabled | Long content | Responsive |
-|---|---|---|---|---|---|---|---|
-| CLI 卡片 | 探测转圈 | 未安装 | 登录/桥接错误 | 已安装已连接 | 忙碌时禁用 | 版本/错误省略、日志展开 | Fold8 双尺寸换行 |
-| 授权配置 | 模型加载占位 | 无兼容模型 | 解释协议边界 | 显示已选模型 | 不兼容项禁用 | 200 字模型 ID | 对话框可滚动 |
+| Surface | Empty | Processing | Partial/failed | Offline/stale | Responsive |
+|---|---|---|---|---|---|
+| Android list | 引导从分享或页面保存 | 状态标签 | 错误标签与详情重试 | 本地能力不受影响 | 1/2/3 栏 |
+| Android detail | 选择提示 | 正文/附件可先读 | 原因码、重试 | 本地附件可打开 | 小屏替换/宽屏并列 |
+| Share receiver | 无内容提示 | 原始复制后结束 | 失败 toast，暂存定向清理 | 链接仍先落库 | 系统对话框 |
+| Mac workspace | 捕获提示 | 保存中禁用 | 本机错误单独显示 | 手机旧内容保留并标陈旧 | 单列到双列卡片 |
+
+## Motion budget
+
+- 使用原生导航、列表和对话框过渡；状态不依赖动画表达。
+- 未增加持续 shimmer、呼吸或后台动画；遵循系统 Reduce Motion。

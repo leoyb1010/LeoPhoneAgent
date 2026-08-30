@@ -127,7 +127,7 @@ const normalizeTags = (tags: string[]): string[] => {
 export const normalizeTreasuryUrl = (raw: string): string | null => {
   try {
     const value = new URL(raw);
-    if (value.protocol !== 'http:' && value.protocol !== 'https:') return null;
+    if ((value.protocol !== 'http:' && value.protocol !== 'https:') || value.username || value.password) return null;
     value.hash = '';
     value.hostname = value.hostname.toLowerCase();
     const retained = [...value.searchParams.entries()]

@@ -703,7 +703,7 @@ fun ChatScreen(
             }
         }
         viewModel.markShareInjected()
-        com.leoyuan.leophoneagent.share.SharedShareStore.cleanSharedFiles(context)
+        com.leoyuan.leophoneagent.share.SharedShareStore.cleanSharedFiles(context, pending.items)
     }
 
     // T311: publish "this is the active chat" while ChatScreen is composed,

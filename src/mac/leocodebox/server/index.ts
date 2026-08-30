@@ -28,6 +28,7 @@ import pluginsRoutes from './routes/plugins.js';
 import leocodeboxRoutes, { startHealthMonitor } from './modules/leocodebox/index.js';
 import leophoneRoutes, { startLeophoneRelayClient } from './modules/leophone/index.js';
 import fleetRoutes from './modules/leophone/fleet.routes.js';
+import treasuryRoutes from './modules/leophone/treasury.routes.js';
 import { startDailyUsageSummary } from './modules/usage/index.js';
 import providerRoutes from './modules/providers/provider.routes.js';
 import agentProfilesRoutes from './modules/agent-profiles/agent-profiles.routes.js';
@@ -115,6 +116,7 @@ app.use('/api', validateApiKey);
 // Fleet reads relay metadata and can answer privileged approvals. It belongs
 // behind the same local-user authentication boundary as every other UI API.
 app.use('/api', authenticateToken, fleetRoutes);
+app.use('/api/treasury', authenticateToken, treasuryRoutes);
 
 // Authentication routes (public)
 app.use('/api/auth', authRoutes);

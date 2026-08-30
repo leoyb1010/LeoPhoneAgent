@@ -48,4 +48,20 @@ object SharedShareStore {
         val dir = sharedFileDirectory(context)
         dir.listFiles()?.forEach { runCatching { it.delete() } }
     }
+
+    /** Remove only files owned by one share so concurrent capture cannot lose another share's bytes. */
+    fun cleanSharedFiles(context: Context, items: List<PendingShare.Item>) {
+        val root = sharedFileDirectory(context).canonicalFile
+        items.asSequence()
+            .filter { it.kind == PendingShare.Item.Kind.ATTACHMENT }
+            .map { it.value }
+            .distinct()
+            .forEach { name ->
+                if (name != File(name).name) return@forEach
+                runCatching {
+                    val file = File(root, name).canonicalFile
+                    if (file.parentFile == root) file.delete()
+                }
+            }
+    }
 }

@@ -14,7 +14,12 @@ import org.json.JSONObject
  *            the share staging dir (filesDir/share_extension/).
  */
 data class PendingShare(val items: List<Item>, val timestampMs: Long) {
-    data class Item(val kind: Kind, val value: String) {
+    data class Item(
+        val kind: Kind,
+        val value: String,
+        val mimeType: String? = null,
+        val displayName: String? = null,
+    ) {
         enum class Kind(val wire: String) {
             INLINE_TEXT("inlineText"),
             ATTACHMENT("attachment"),
@@ -24,7 +29,13 @@ data class PendingShare(val items: List<Item>, val timestampMs: Long) {
     fun toJson(): JSONObject {
         val arr = JSONArray()
         for (item in items) {
-            arr.put(JSONObject().put("kind", item.kind.wire).put("value", item.value))
+            arr.put(JSONObject()
+                .put("kind", item.kind.wire)
+                .put("value", item.value)
+                .apply {
+                    item.mimeType?.let { put("mime_type", it) }
+                    item.displayName?.let { put("display_name", it) }
+                })
         }
         return JSONObject().put("items", arr).put("timestamp", timestampMs)
     }
@@ -40,7 +51,12 @@ data class PendingShare(val items: List<Item>, val timestampMs: Long) {
                 val kind = Item.Kind.entries.firstOrNull { it.wire == kindStr } ?: continue
                 val value = o.optString("value", "")
                 if (value.isEmpty()) continue
-                items += Item(kind, value)
+                items += Item(
+                    kind = kind,
+                    value = value,
+                    mimeType = o.optString("mime_type").takeIf(String::isNotBlank),
+                    displayName = o.optString("display_name").takeIf(String::isNotBlank),
+                )
             }
             if (items.isEmpty()) return null
             return PendingShare(items, json.optLong("timestamp", System.currentTimeMillis()))

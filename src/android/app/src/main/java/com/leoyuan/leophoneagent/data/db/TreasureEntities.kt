@@ -49,6 +49,24 @@ data class TreasureItemEntity(
     @ColumnInfo(name = "deleted_at") val deletedAt: Long? = null,
 )
 
+/** Lightweight list/search projection; never carries a full body or attachment bytes. */
+data class TreasureSearchRow(
+    @ColumnInfo(name = "stable_id") val id: String,
+    val kind: String,
+    val title: String?,
+    @ColumnInfo(name = "source_uri") val sourceUri: String?,
+    @ColumnInfo(name = "source_label") val sourceLabel: String,
+    val snippet: String,
+    @ColumnInfo(name = "match_offsets") val matchOffsets: String,
+    @ColumnInfo(name = "tags_json") val tagsJson: String,
+    val pinned: Boolean,
+    val archived: Boolean,
+    @ColumnInfo(name = "processing_state") val processingState: String,
+    @ColumnInfo(name = "processing_error_code") val processingErrorCode: String?,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "updated_at") val updatedAt: Long,
+)
+
 @Entity(tableName = "treasure_collections")
 data class TreasureCollectionEntity(
     @PrimaryKey val id: String,

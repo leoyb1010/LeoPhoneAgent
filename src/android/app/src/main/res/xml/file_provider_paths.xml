@@ -21,6 +21,8 @@
     <!-- Per-session attachments/workspace/etc. where agent downloads land. -->
     <files-path name="sessions" path="minis-sessions/" />
     <files-path name="global" path="minis-global/" />
+    <!-- Treasury originals are exposed only through explicit, short-lived URI grants. -->
+    <files-path name="treasury" path="treasury/files/" />
     <!-- Downloaded update APKs (UpdateChecker → PendingUpdateStore). Moved
          from cacheDir/shared/ to filesDir/updates/ so the OS doesn't evict
          the APK while the user is in system Settings granting "install

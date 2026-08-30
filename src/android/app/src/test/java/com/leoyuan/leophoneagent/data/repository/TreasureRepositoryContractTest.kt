@@ -19,6 +19,7 @@ class TreasureRepositoryContractTest {
             )
         )
         assertNull(TreasureRepository.normalizedUrlKey("file:///data/local.txt"))
+        assertNull(TreasureRepository.normalizedUrlKey("https://token@example.com/private"))
     }
 
     @Test

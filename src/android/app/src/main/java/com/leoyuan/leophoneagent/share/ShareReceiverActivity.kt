@@ -4,9 +4,11 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.lifecycle.lifecycleScope
 import com.leoyuan.leophoneagent.logging.AppLogger
 import java.io.File
 import java.util.UUID
+import kotlinx.coroutines.launch
 
 /**
  * Activity that handles ACTION_SEND / ACTION_SEND_MULTIPLE / ACTION_VIEW
@@ -72,7 +74,51 @@ class ShareReceiverActivity : ComponentActivity() {
             return
         }
 
-        finishWithAttachmentFlow(items)
+        promptShareDestination(items)
+    }
+
+    private fun promptShareDestination(items: List<PendingShare.Item>) {
+        if (items.isEmpty()) {
+            toast(getString(com.leoyuan.leophoneagent.R.string.treasury_share_nothing))
+            finish()
+            return
+        }
+        android.app.AlertDialog.Builder(this)
+            .setTitle(getString(com.leoyuan.leophoneagent.R.string.treasury_share_destination_title))
+            .setMessage(getString(com.leoyuan.leophoneagent.R.string.treasury_share_destination_message, items.size))
+            .setPositiveButton(getString(com.leoyuan.leophoneagent.R.string.treasury_save_action)) { _, _ ->
+                lifecycleScope.launch {
+                    try {
+                        val result = com.leoyuan.leophoneagent.treasury.TreasuryCaptureService.capturePendingShare(
+                            this@ShareReceiverActivity,
+                            PendingShare(items, System.currentTimeMillis()),
+                        )
+                        val message = when {
+                            result.failedCount > 0 && result.savedCount == 0 && result.duplicateCount == 0 ->
+                                getString(com.leoyuan.leophoneagent.R.string.treasury_share_failed)
+                            result.duplicateCount > 0 && result.savedCount == 0 ->
+                                getString(com.leoyuan.leophoneagent.R.string.treasury_share_duplicate)
+                            else -> getString(com.leoyuan.leophoneagent.R.string.treasury_share_saved, result.savedCount)
+                        }
+                        toast(message)
+                        finish()
+                    } finally {
+                        SharedShareStore.cleanSharedFiles(this@ShareReceiverActivity, items)
+                    }
+                }
+            }
+            .setNegativeButton(getString(com.leoyuan.leophoneagent.R.string.treasury_send_to_chat_action)) { _, _ ->
+                finishWithAttachmentFlow(items)
+            }
+            .setNeutralButton(getString(com.leoyuan.leophoneagent.R.string.cancel)) { _, _ ->
+                SharedShareStore.cleanSharedFiles(this, items)
+                finish()
+            }
+            .setOnCancelListener {
+                SharedShareStore.cleanSharedFiles(this, items)
+                finish()
+            }
+            .show()
     }
 
     /**
@@ -143,6 +189,7 @@ class ShareReceiverActivity : ComponentActivity() {
             .setMessage(getString(com.leoyuan.leophoneagent.R.string.share_provider_json_message))
             .setPositiveButton(getString(com.leoyuan.leophoneagent.R.string.share_provider_json_import)) { _, _ ->
                 importProviderJson(json)
+                SharedShareStore.cleanSharedFiles(this, items)
                 finish()
             }
             .setNegativeButton(getString(com.leoyuan.leophoneagent.R.string.share_provider_json_attach)) { _, _ ->
@@ -185,18 +232,33 @@ class ShareReceiverActivity : ComponentActivity() {
                 val text = intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }
                     ?: return
                 if (text.length <= INLINE_TEXT_LIMIT) {
-                    out += PendingShare.Item(PendingShare.Item.Kind.INLINE_TEXT, text)
+                    out += PendingShare.Item(
+                        PendingShare.Item.Kind.INLINE_TEXT,
+                        text,
+                        mimeType = "text/plain",
+                        displayName = intent.getStringExtra(Intent.EXTRA_SUBJECT),
+                    )
                 } else {
                     val name = "shared-text-${shortId()}.txt"
                     File(SharedShareStore.sharedFileDirectory(this), name)
                         .writeText(text, Charsets.UTF_8)
-                    out += PendingShare.Item(PendingShare.Item.Kind.ATTACHMENT, name)
+                    out += PendingShare.Item(
+                        PendingShare.Item.Kind.ATTACHMENT,
+                        name,
+                        mimeType = "text/plain",
+                        displayName = intent.getStringExtra(Intent.EXTRA_SUBJECT) ?: "共享文本.txt",
+                    )
                 }
             }
             else -> {
                 val uri = getParcelableExtra<Uri>(intent, Intent.EXTRA_STREAM) ?: return
                 copyUriToStaging(uri, type)?.let {
-                    out += PendingShare.Item(PendingShare.Item.Kind.ATTACHMENT, it)
+                    out += PendingShare.Item(
+                        PendingShare.Item.Kind.ATTACHMENT,
+                        it,
+                        mimeType = type.ifBlank { contentResolver.getType(uri) },
+                        displayName = displayName(uri),
+                    )
                 }
             }
         }
@@ -207,7 +269,12 @@ class ShareReceiverActivity : ComponentActivity() {
         val uris = getParcelableArrayListExtra<Uri>(intent, Intent.EXTRA_STREAM) ?: return
         for (uri in uris.take(MAX_SHARED_ITEMS)) {
             copyUriToStaging(uri, type)?.let {
-                out += PendingShare.Item(PendingShare.Item.Kind.ATTACHMENT, it)
+                out += PendingShare.Item(
+                    PendingShare.Item.Kind.ATTACHMENT,
+                    it,
+                    mimeType = type.ifBlank { contentResolver.getType(uri) },
+                    displayName = displayName(uri),
+                )
             }
         }
     }
@@ -227,7 +294,12 @@ class ShareReceiverActivity : ComponentActivity() {
         val type = intent.type ?: contentResolver.getType(uri) ?: ""
         AppLogger.info(TAG, "ACTION_VIEW uri=$uri type=$type")
         copyUriToStaging(uri, type)?.let {
-            out += PendingShare.Item(PendingShare.Item.Kind.ATTACHMENT, it)
+            out += PendingShare.Item(
+                PendingShare.Item.Kind.ATTACHMENT,
+                it,
+                mimeType = type.ifBlank { contentResolver.getType(uri) },
+                displayName = displayName(uri),
+            )
         }
     }
 
@@ -244,12 +316,14 @@ class ShareReceiverActivity : ComponentActivity() {
         val name = "$prefix-${shortId()}${if (ext.isNotEmpty()) ".$ext" else ""}"
         val dest = File(SharedShareStore.sharedFileDirectory(this), name)
         return try {
-            contentResolver.openInputStream(uri)?.use { input ->
+            val input = contentResolver.openInputStream(uri)
+                ?: throw java.io.IOException("shared content is unreadable")
+            input.use {
                 dest.outputStream().use { output ->
                     val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
                     var fileBytes = 0L
                     while (true) {
-                        val count = input.read(buffer)
+                        val count = it.read(buffer)
                         if (count < 0) break
                         fileBytes += count
                         if (fileBytes > MAX_SHARED_FILE_BYTES || stagedBytesThisIntent + fileBytes > MAX_SHARED_TOTAL_BYTES) {
@@ -277,6 +351,19 @@ class ShareReceiverActivity : ComponentActivity() {
         if (!fromMime.isNullOrBlank()) return fromMime
         return uri.lastPathSegment?.substringAfterLast('.', "")?.takeIf { it.length in 1..6 } ?: ""
     }
+
+    private fun displayName(uri: Uri): String? = runCatching {
+        contentResolver.query(
+            uri,
+            arrayOf(android.provider.OpenableColumns.DISPLAY_NAME),
+            null,
+            null,
+            null,
+        )?.use { cursor ->
+            if (!cursor.moveToFirst()) return@use null
+            cursor.getString(0)?.take(240)
+        }
+    }.getOrNull()
 
     private fun shortId(): String = UUID.randomUUID().toString().take(8)
 

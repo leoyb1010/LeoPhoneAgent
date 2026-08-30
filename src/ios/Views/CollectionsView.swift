@@ -137,6 +137,14 @@ struct CollectionsView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(LeoTheme.ColorToken.groupedBackground)
+        .dropDestination(for: URL.self) { urls, _ in
+            handleDroppedURLs(urls)
+            return !urls.isEmpty
+        }
+        .dropDestination(for: String.self) { values, _ in
+            handleDroppedText(values)
+            return !values.isEmpty
+        }
         .onChange(of: query) { _, newValue in
             // 防抖 250ms 再查:FTS 查询别跟着每一次击键跑
             searchTask?.cancel()
@@ -588,6 +596,47 @@ struct CollectionsView: View {
             }
             return made
         }
+    }
+
+    /// iPad multi-window drag and drop uses the exact same capture pipeline as
+    /// Files/Share Extension: URLs save immediately; file bytes are copied into
+    /// the managed Treasury directory before the provider's temporary grant ends.
+    private func handleDroppedURLs(_ urls: [URL]) {
+        var links: [CollectedItem] = []
+        var files: [URL] = []
+        for url in urls {
+            if let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+                links.append(CollectedItem(kind: .link, value: url.absoluteString,
+                                           sourceLabel: CollectionStore.sourceLabel(forHost: url.host)))
+            } else if url.isFileURL {
+                files.append(url)
+            }
+        }
+        if !links.isEmpty {
+            CollectionStore.add(links)
+            reload()
+            fetchMissingMetadata()
+            flash("已收藏 \(links.count) 条链接")
+        }
+        if !files.isEmpty { importFiles(files) }
+    }
+
+    private func handleDroppedText(_ values: [String]) {
+        let made = values.compactMap { raw -> CollectedItem? in
+            let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { return nil }
+            if let url = URL(string: text), let scheme = url.scheme?.lowercased(),
+               scheme == "http" || scheme == "https" {
+                return CollectedItem(kind: .link, value: text,
+                                     sourceLabel: CollectionStore.sourceLabel(forHost: url.host))
+            }
+            return CollectedItem(kind: .text, value: String(text.prefix(2_000_000)), sourceLabel: "文本")
+        }
+        guard !made.isEmpty else { return }
+        CollectionStore.add(made)
+        reload()
+        fetchMissingMetadata()
+        flash("已收藏 \(made.count) 条")
     }
 
     private func importScans(_ pages: [UIImage]) {

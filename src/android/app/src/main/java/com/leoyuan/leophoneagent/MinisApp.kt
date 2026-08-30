@@ -25,6 +25,7 @@ import com.leoyuan.leophoneagent.data.repository.ProviderRepository
 import com.leoyuan.leophoneagent.data.repository.WebAppShortcutRepository
 import com.leoyuan.leophoneagent.data.repository.MCPRepository
 import com.leoyuan.leophoneagent.data.repository.SkillRepository
+import com.leoyuan.leophoneagent.data.repository.TreasureRepository
 import com.leoyuan.leophoneagent.notification.BackgroundTaskNotifier
 import com.leoyuan.leophoneagent.logging.AppLogger
 import com.leoyuan.leophoneagent.network.NetworkMonitor
@@ -72,6 +73,8 @@ class MinisApp : Application(), ImageLoaderFactory {
     lateinit var mcpRepository: MCPRepository
         private set
     lateinit var memoryRepository: MemoryRepository
+        private set
+    lateinit var treasureRepository: TreasureRepository
         private set
     lateinit var webAppShortcutRepository: WebAppShortcutRepository
         private set
@@ -291,6 +294,12 @@ class MinisApp : Application(), ImageLoaderFactory {
         skillRepository = SkillRepository(this)
         mcpRepository = MCPRepository(this)
         memoryRepository = MemoryRepository(java.io.File(filesDir, "minis-global/memory"))
+        treasureRepository = TreasureRepository(
+            dao = database.treasureDao(),
+            filesDirectory = java.io.File(filesDir, "treasury").apply { mkdirs() },
+            originDeviceId = { com.leoyuan.leophoneagent.data.DeviceIdentity.deviceId(this) },
+        )
+        com.leoyuan.leophoneagent.treasury.TreasuryWorkScheduler.enqueue(this)
         webAppShortcutRepository = WebAppShortcutRepository(database.webAppShortcutDao())
 
         // [T-soul-md] Seed SOUL.md with the default content on first launch

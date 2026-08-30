@@ -93,6 +93,7 @@ import com.leoyuan.leophoneagent.sandbox.CliManagedConfigWriter
 import com.leoyuan.leophoneagent.ui.terminal.TerminalScreen
 import com.leoyuan.leophoneagent.ui.onboarding.OnboardingModelSelectionScreen
 import com.leoyuan.leophoneagent.ui.relay.RelayFleetScreen
+import com.leoyuan.leophoneagent.ui.treasury.TreasuryScreen
 
 
 /**
@@ -109,6 +110,7 @@ internal fun shouldUseFoldableTwoPane(widthDp: Float, heightDp: Float): Boolean 
 
 object Routes {
     const val SESSION_LIST = "sessions"
+    const val TREASURY = "treasury"
     const val CHAT = "chat/{sessionId}"
     const val SETTINGS = "settings"
     const val PROVIDER_LIST = "providers"
@@ -576,6 +578,7 @@ fun AppNavigation(
                     navController.safeNavigate(Routes.SCHEDULED_TASKS)
                 },
                 onFleetClick = { navController.safeNavigate(Routes.RELAY_FLEET) },
+                onTreasuryClick = { navController.safeNavigate(Routes.TREASURY) },
             )
         }
 
@@ -681,6 +684,7 @@ fun AppNavigation(
                         onRootfsClick = { navController.safeNavigate(Routes.ROOTFS_MANAGEMENT) },
                         onScheduledTasksClick = { navController.safeNavigate(Routes.SCHEDULED_TASKS) },
                         onFleetClick = { navController.safeNavigate(Routes.RELAY_FLEET) },
+                        onTreasuryClick = { navController.safeNavigate(Routes.TREASURY) },
                         modifier = listMod,
                         compactHeader = true,
                     )
@@ -726,6 +730,14 @@ fun AppNavigation(
                     }
                 }
             }
+        }
+
+        composable(Routes.TREASURY) {
+            val app = context.applicationContext as com.leoyuan.leophoneagent.MinisApp
+            TreasuryScreen(
+                repository = app.treasureRepository,
+                onBack = { navController.safePopBackStack() },
+            )
         }
 
         composable(Routes.SETTINGS) {

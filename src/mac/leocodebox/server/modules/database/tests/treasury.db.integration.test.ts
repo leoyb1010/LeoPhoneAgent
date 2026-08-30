@@ -129,6 +129,7 @@ test('treasury URL and local reference validation reject unsafe values', () => {
     'https://example.com/read?a=1&b=2',
   );
   assert.equal(normalizeTreasuryUrl('file:///tmp/private'), null);
+  assert.equal(normalizeTreasuryUrl('https://token@example.com/private'), null);
   assert.equal(isSafeTreasuryRef('bodies/item.md'), true);
   assert.equal(isSafeTreasuryRef('../private'), false);
   assert.equal(isSafeTreasuryRef('/Users/person/private'), false);

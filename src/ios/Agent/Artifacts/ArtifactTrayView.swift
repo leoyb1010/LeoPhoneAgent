@@ -12,6 +12,7 @@ final class ArtifactTrayViewModel: ObservableObject {
     @Published private(set) var artifacts: [ArtifactSnapshot] = []
     @Published private(set) var state: LoadState = .loading
     @Published var showsTrash = false
+    @Published private(set) var savedToTreasury: Set<String> = []
 
     private let repository: ArtifactRepository
     private let sessionId: String?
@@ -66,6 +67,21 @@ final class ArtifactTrayViewModel: ObservableObject {
         } catch {
             state = .failed(error.localizedDescription)
         }
+    }
+
+    func saveToTreasury(_ snapshot: ArtifactSnapshot) async throws {
+        guard let version = snapshot.currentVersion else {
+            throw ArtifactRepository.RepositoryError.artifactNotFound
+        }
+        let url = try await repository.fileURL(for: version)
+        guard var item = await AttachmentImporter.importFile(at: url) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        item.title = snapshot.artifact.title
+        item.sourceLabel = "Artifact"
+        item.summary = "来自会话 Artifact · \(snapshot.artifact.kind.rawValue)"
+        CollectionStore.add([item])
+        savedToTreasury.insert(snapshot.artifact.id)
     }
 }
 
@@ -182,6 +198,19 @@ struct ArtifactTrayView: View {
                                     }
                                     .tint(.blue)
                                 } else {
+                                    Button {
+                                        Task {
+                                            do {
+                                                try await viewModel.saveToTreasury(snapshot)
+                                            } catch {
+                                                actionError = error.localizedDescription
+                                            }
+                                        }
+                                    } label: {
+                                        Label(String(localized: "Save to Treasury"), systemImage: "archivebox")
+                                    }
+                                    .tint(.orange)
+                                    .disabled(viewModel.savedToTreasury.contains(snapshot.artifact.id))
                                     Button { open(snapshot, sharing: true) } label: {
                                         Label(String(localized: "Share"), systemImage: "square.and.arrow.up")
                                     }
@@ -215,6 +244,24 @@ struct ArtifactTrayView: View {
                 Label(String(localized: "Delete Permanently"), systemImage: "trash")
             }
         } else {
+            Button {
+                Task {
+                    do {
+                        try await viewModel.saveToTreasury(snapshot)
+                    } catch {
+                        actionError = error.localizedDescription
+                    }
+                }
+            } label: {
+                Label(
+                    viewModel.savedToTreasury.contains(snapshot.artifact.id)
+                        ? String(localized: "Saved to Treasury")
+                        : String(localized: "Save to Treasury"),
+                    systemImage: viewModel.savedToTreasury.contains(snapshot.artifact.id)
+                        ? "checkmark.circle" : "archivebox"
+                )
+            }
+            .disabled(viewModel.savedToTreasury.contains(snapshot.artifact.id))
             Button { open(snapshot, sharing: false) } label: {
                 Label(String(localized: "Quick Look"), systemImage: "eye")
             }

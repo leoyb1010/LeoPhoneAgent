@@ -59,6 +59,7 @@ import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.Calculate
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.ChecklistRtl
+import androidx.compose.material.icons.outlined.CollectionsBookmark
 import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.Schedule
@@ -284,6 +285,7 @@ fun SessionListScreen(
     // [T-android-scheduled-tasks-design] Entry to the scheduled-tasks list.
     onScheduledTasksClick: () -> Unit = {},
     onFleetClick: () -> Unit = {},
+    onTreasuryClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     /** Compact chrome for the Fold8 inner-screen navigation pane. */
     compactHeader: Boolean = false,
@@ -472,6 +474,12 @@ fun SessionListScreen(
                             )
                         }
                     } else {
+                        if (!compactHeader) IconButton(onClick = onTreasuryClick) {
+                            Icon(
+                                Icons.Outlined.CollectionsBookmark,
+                                contentDescription = stringResource(R.string.treasury_title),
+                            )
+                        }
                         // [T-android-scheduled-tasks-design] Scheduled-tasks entry,
                         // sits to the left of the Shell button on the home toolbar.
                         // [T-android-scheduled-tasks-full] Badge shows the count of
@@ -503,6 +511,16 @@ fun SessionListScreen(
                                 offset = DpOffset(0.dp, 0.dp),
                             ) {
                                 if (compactHeader) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.treasury_title)) },
+                                        onClick = {
+                                            showOverflowMenu = false
+                                            onTreasuryClick()
+                                        },
+                                        leadingIcon = {
+                                            Icon(Icons.Outlined.CollectionsBookmark, contentDescription = null)
+                                        },
+                                    )
                                     DropdownMenuItem(
                                         text = { Text(stringResource(R.string.sessionlist_scheduled_tasks)) },
                                         onClick = {

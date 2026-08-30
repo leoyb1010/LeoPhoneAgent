@@ -7551,9 +7551,22 @@ class ChatViewModel(
             "browser_use" -> executeBrowserUseTool(argsJson)
             "memory_write" -> executeMemoryWriteTool(argsJson)
             "memory_get" -> executeMemoryGetTool(argsJson)
+            "treasury_search", "treasury_get", "treasury_save", "treasury_update" ->
+                com.leoyuan.leophoneagent.tools.TreasuryTools.execute(
+                    name,
+                    argsJson,
+                    context,
+                    saveAuthorizedByUser = com.leoyuan.leophoneagent.tools.TreasuryTools.userExplicitlyRequestedSave(
+                        _messages.value.lastOrNull { it.role.equals("USER", ignoreCase = true) }?.content,
+                    ),
+                    updateAuthorizedByUser = com.leoyuan.leophoneagent.tools.TreasuryTools.userExplicitlyRequestedUpdate(
+                        _messages.value.lastOrNull { it.role.equals("USER", ignoreCase = true) }?.content,
+                    ),
+                )
             else -> ToolExecutionResult("Unknown tool: $name", false)
         }
     }
+
 
     /**
      * Mirror of iOS AIChatViewModel post-tool hook (Agent/Chat/AIChatViewModel.swift:5387 / :5408):

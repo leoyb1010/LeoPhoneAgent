@@ -24,4 +24,5 @@ export {
   type TreasureChange,
   type TreasureItem,
   type TreasureJob,
+  type TreasureKind,
 } from '@/modules/database/repositories/treasury.db.js';

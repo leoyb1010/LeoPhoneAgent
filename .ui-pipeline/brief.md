@@ -2,43 +2,42 @@
 
 ## Outcome
 
-- User-visible outcome: Android 用户可明确选择“CLI 官方账号”或“使用 LeoPhoneAgent 模型”，从产品内完成登录或直接启动，不再遇到含糊的授权错误。
-- Success signal: Claude/Codex/Grok 的兼容模型以无密钥落盘配置桥接；四家官方登录入口可达；Fold8 展开/封面态没有按钮挤压或英文残留。
+- User-visible outcome: Android、iPad 和 Mac 都有低打扰的原生藏宝阁捕获入口；Android 可在手机/宽屏间连续搜索、筛选、阅读和批注。
+- Success signal: 分享不必打开聊天；原文件先保存；失败可见可重试；Fold 宽度变化不丢查询、选择和批注草稿。
 
 ## Users and situation
 
-- Primary users: 在 Android PRoot 中运行编码 Agent 的 LeoPhoneAgent 用户。
-- Job to be done: 安装 CLI 后立即完成账号或模型连接，并在聊天或终端里可靠运行。
-- Environment and devices: Android 8–16 ARM64；主验收 Fold8 1768×2208 展开态与 1080×1728 封面态。
-- Visitor mode (`Persuade` / `Operate` / `Read` / `Experience`): Operate
+- Primary users: 随手收藏网页、截图、PDF、文件和聊天产物，并希望稍后交给 Agent 的个人用户。
+- Job to be done: 先可靠收下，再离线搜索/阅读；需要时受控交给 Agent。
+- Environment and devices: Android 手机与 Fold8 双宽度、iPhone/iPad 多窗口、Mac 工作台。
+- Visitor mode: Operate
 
 ## Product truth
 
-- Unique mechanism: App 已持有多家模型配置，同时在私有 PRoot 中运行官方 CLI；两层通过瞬时环境与无秘密配置文件桥接。
-- User's real scene: 用户已在 LeoPhoneAgent 配好模型，却被 CLI 再次要求官方登录或报授权不兼容。
-- Primary change created: 授权来源成为显式选择；兼容模型映射到各 CLI 官方支持的 gateway/provider 配置。
-- Real proof, content, data, and assets: ProviderRepository、CLI 版本/登录状态、官方文档、Fold8 截图与 UI tree。
-- Category rut and predictable opposite: 不做重复安装卡和技术错误弹窗；改成账号状态、模型来源、主动作一眼可读的操作面。
+- Unique mechanism: 本机 SQLite/Room/Mac DB 保存原始内容，后台增强与 Agent 工具都围绕同一 TreasureItem 语义工作。
+- Primary change: Android 从缺失变为完整本地藏宝阁；Mac 从手机镜像增加本机捕获；iPad/Artifact 补齐入口。
+- Real proof: Compose/SwiftUI/React 实现、双 flavor 编译、单测/lint、Mac typecheck/test/build、Share Extension build。
 
 ## Scope
 
-- In scope: Claude/Codex/Grok 模型桥接，Claude/Codex/Cursor/Grok 官方登录与状态，中文 UX，Fold8 验证。
-- Out of scope: 导出 OAuth/订阅令牌；把任意模型伪装成 Cursor 账号；未验证协议的跨厂商转译。
+- In scope: Android 搜索/筛选/详情/批量/分享/文件/Agent，iPad 拖放，iOS Artifact，Mac 本机捕获。
+- Out of scope: Phase 3 阅读高亮/PDF 逐页/语义检索，Phase 4 增量跨端正文和附件同步。
 
-## Facts and constraints
+## Constraints
 
-- Product facts: Standard/Power 共用 CLI 层；CLI 运行在 App 私有 Alpine。
-- Technical constraints: 密钥不得进入命令、导航、日志或配置文件；Codex 自定义 provider 仅走 Responses wire API。
-- Accessibility / localization constraints: 48dp 触控目标、TalkBack、简繁英同步、200% 字体与 Fold8 双尺寸。
+- 原始保存不依赖网络、OCR 或模型。
+- Android Standard 不得依赖 Power 权限或常驻服务。
+- 200% 字体、TalkBack、折叠切换和进程恢复必须有明确设计；本机无 AVD 时保持视觉 HOLD。
+- 三端继承各自原生组件，不共享 UI 框架。
 
 ## References
 
-- Product references: 现有 SettingsSection、CLI 卡片、模型选择器与终端启动提示。
-- Visual references: Android Material 3 设置层级与聊天模型选择器的“本机 CLI”分组。
-- What to inherit from each reference: 语义色、圆角、主次按钮、状态徽标、中文密度。
-- What must not be copied: Mac Web 控制台、iOS 表单外观、第三方 CLI TUI。
+- Android: 现有 Material 3 导航、主题、列表和对话框。
+- iOS/iPadOS: 现有 CollectionsView、Artifact Tray、AttachmentImporter。
+- Mac: 现有 leocodebox Fleet/CollectionsMirror、API client、主题 token。
 
-## Assumptions and open decisions
+## Open verification
 
-- Assumptions: 默认优先复用 LeoPhoneAgent 已配模型；官方订阅能力仍走 CLI 自己登录。
-- Open decisions: 兼容端点失败时不静默回退，显示原因并提供一键切换官方账号。
+- Fold8 两尺寸、200% 字体、TalkBack、预测性返回和折叠过程的真实运行证据。
+- iPhone/iPad 主 App 因本机缺少 watchOS 26.5 尚未完成模拟器运行。
+- Mac 真实拖放和屏幕阅读器走查。

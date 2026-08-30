@@ -21,11 +21,25 @@ interface TreasureDao {
     @Query("SELECT * FROM treasure_items WHERE deleted_at IS NULL ORDER BY pinned DESC, updated_at DESC LIMIT :limit OFFSET :offset")
     fun observeItems(limit: Int, offset: Int): Flow<List<TreasureItemEntity>>
 
+    @Query("""
+        SELECT stable_id, kind, title, source_uri, source_label,
+               substr(COALESCE(NULLIF(summary, ''), NULLIF(original_text, ''), source_uri, processing_error_code, ''), 1, 400) AS snippet,
+               '' AS match_offsets, tags_json, pinned, archived, processing_state, processing_error_code, created_at, updated_at
+        FROM treasure_items
+        WHERE deleted_at IS NULL
+        ORDER BY pinned DESC, updated_at DESC
+        LIMIT :limit OFFSET :offset
+    """)
+    fun observeSearchRows(limit: Int, offset: Int): Flow<List<TreasureSearchRow>>
+
     @Query("SELECT * FROM treasure_items WHERE stable_id IN (:ids) AND deleted_at IS NULL")
     suspend fun getByIds(ids: List<String>): List<TreasureItemEntity>
 
     @Query("SELECT * FROM treasure_items WHERE stable_id = :id LIMIT 1")
     suspend fun getIncludingDeleted(id: String): TreasureItemEntity?
+
+    @Query("SELECT * FROM treasure_items WHERE stable_id = :id AND deleted_at IS NULL LIMIT 1")
+    suspend fun getById(id: String): TreasureItemEntity?
 
     @Query("SELECT * FROM treasure_items WHERE normalized_url_key = :key AND deleted_at IS NULL LIMIT 1")
     suspend fun findByNormalizedUrl(key: String): TreasureItemEntity?
@@ -45,8 +59,11 @@ interface TreasureDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertJobs(jobs: List<TreasureJobEntity>)
 
-    @Query("SELECT * FROM treasure_jobs WHERE state IN ('queued','failed') AND (next_attempt_at IS NULL OR next_attempt_at <= :now) ORDER BY created_at LIMIT :limit")
+    @Query("SELECT * FROM treasure_jobs WHERE state IN ('queued','failed') AND attempt_count < 5 AND (next_attempt_at IS NULL OR next_attempt_at <= :now) ORDER BY CASE WHEN job_type = 'index' THEN 1 ELSE 0 END, created_at LIMIT :limit")
     suspend fun readyJobs(now: Long, limit: Int): List<TreasureJobEntity>
+
+    @Query("SELECT COUNT(*) FROM treasure_jobs WHERE state IN ('queued','failed') AND attempt_count < 5")
+    suspend fun pendingAutomaticJobCount(): Int
 
     @Query("SELECT * FROM treasure_jobs WHERE id = :id LIMIT 1")
     suspend fun getJob(id: String): TreasureJobEntity?
@@ -60,8 +77,60 @@ interface TreasureDao {
     @Query("UPDATE treasure_jobs SET state = 'failed', next_attempt_at = :nextAttemptAt, updated_at = :now, last_error_code = :errorCode WHERE id = :id")
     suspend fun failJob(id: String, now: Long, nextAttemptAt: Long, errorCode: String): Int
 
+    @Query("UPDATE treasure_jobs SET state = 'failed', next_attempt_at = :now, updated_at = :now, last_error_code = 'process_interrupted' WHERE state = 'processing' AND updated_at < :staleBefore")
+    suspend fun recoverStaleJobs(staleBefore: Long, now: Long): Int
+
+    @Query("SELECT DISTINCT item_id FROM treasure_jobs WHERE state = 'processing' AND updated_at < :staleBefore")
+    suspend fun staleProcessingItemIds(staleBefore: Long): List<String>
+
+    @Query("UPDATE treasure_jobs SET state = 'queued', attempt_count = 0, next_attempt_at = NULL, updated_at = :now, last_error_code = NULL WHERE item_id = :itemId AND state = 'failed'")
+    suspend fun retryFailedJobs(itemId: String, now: Long): Int
+
+    @Query("UPDATE treasure_items SET processing_state = :state, processing_error_code = :errorCode, updated_at = :now, sync_state = 'pending' WHERE stable_id = :itemId AND deleted_at IS NULL")
+    suspend fun updateProcessingStateRaw(itemId: String, state: String, errorCode: String?, now: Long): Int
+
+    @Query("UPDATE treasure_items SET processing_state = 'ready', processing_error_code = NULL, updated_at = :now, sync_state = 'pending' WHERE stable_id = :itemId AND deleted_at IS NULL AND processing_state NOT IN ('ready','partial','failed')")
+    suspend fun markIndexedRaw(itemId: String, now: Long): Int
+
+    @Query("UPDATE treasure_items SET title = COALESCE(:title, title), original_text = COALESCE(:originalText, original_text), processing_state = :state, processing_error_code = NULL, updated_at = :now, sync_state = 'pending' WHERE stable_id = :itemId AND deleted_at IS NULL")
+    suspend fun applyEnhancementRaw(itemId: String, title: String?, originalText: String?, state: String, now: Long): Int
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertChange(change: TreasureChangeEntity)
+
+    @Transaction
+    suspend fun updateProcessingState(
+        itemId: String,
+        state: String,
+        errorCode: String?,
+        now: Long,
+        change: TreasureChangeEntity,
+    ): Int {
+        val count = updateProcessingStateRaw(itemId, state, errorCode, now)
+        if (count > 0) insertChange(change)
+        return count
+    }
+
+    @Transaction
+    suspend fun markIndexed(itemId: String, now: Long, change: TreasureChangeEntity): Int {
+        val count = markIndexedRaw(itemId, now)
+        if (count > 0) insertChange(change)
+        return count
+    }
+
+    @Transaction
+    suspend fun applyEnhancement(
+        itemId: String,
+        title: String?,
+        originalText: String?,
+        state: String,
+        now: Long,
+        change: TreasureChangeEntity,
+    ): Int {
+        val count = applyEnhancementRaw(itemId, title, originalText, state, now)
+        if (count > 0) insertChange(change)
+        return count
+    }
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertChanges(changes: List<TreasureChangeEntity>)
@@ -123,6 +192,9 @@ interface TreasureDao {
 
     @RawQuery(observedEntities = [TreasureItemEntity::class])
     fun search(query: SupportSQLiteQuery): Flow<List<TreasureItemEntity>>
+
+    @RawQuery(observedEntities = [TreasureItemEntity::class])
+    fun searchRows(query: SupportSQLiteQuery): Flow<List<TreasureSearchRow>>
 
     @RawQuery
     suspend fun mutateSearchIndex(query: SupportSQLiteQuery): Int

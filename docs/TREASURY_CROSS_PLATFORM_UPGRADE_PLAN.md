@@ -865,6 +865,8 @@ Android Standard 获得完整独立藏宝阁；iOS、Android、Mac 捕获入口�
 - 离线保存成功，联网后自动补增强；
 - Android Agent 能搜索和读取本机藏宝阁。
 
+实际交付证据：[Phase 2 Android 藏宝阁与三端捕获](TREASURY_PHASE2_DELIVERY_EVIDENCE.md)
+
 ### Phase 3：阅读、批注、处理状态与智能搜索
 
 #### 目标
