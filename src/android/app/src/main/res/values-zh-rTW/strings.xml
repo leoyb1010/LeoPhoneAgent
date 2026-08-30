@@ -1735,6 +1735,7 @@
     <string name="treasury_content">正文</string>
     <string name="treasury_body_truncated">為保持閱讀流暢，目前顯示前 200,000 個字元；原始正文仍完整保留。</string>
     <string name="treasury_annotation">批註</string>
+    <string name="treasury_related">相關收藏</string>
     <string name="treasury_reading_progress">閱讀進度</string>
     <string name="treasury_reading_percent">已讀 %1$d%%</string>
     <string name="treasury_reading_unread">待讀</string>

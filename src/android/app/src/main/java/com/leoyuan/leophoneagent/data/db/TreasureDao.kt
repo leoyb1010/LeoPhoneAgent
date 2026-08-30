@@ -152,7 +152,7 @@ interface TreasureDao {
     suspend fun staleProcessingItemIds(staleBefore: Long): List<String>
 
     @Query("UPDATE treasure_jobs SET state = 'queued', attempt_count = 0, next_attempt_at = NULL, updated_at = :now, last_error_code = NULL WHERE item_id = :itemId AND state = 'failed'")
-    suspend fun retryFailedJobs(itemId: String, now: Long): Int
+    suspend fun retryFailedJobsRaw(itemId: String, now: Long): Int
 
     @Query("UPDATE treasure_items SET processing_state = :state, processing_error_code = :errorCode, updated_at = :now, sync_state = 'pending' WHERE stable_id = :itemId AND deleted_at IS NULL")
     suspend fun updateProcessingStateRaw(itemId: String, state: String, errorCode: String?, now: Long): Int
@@ -160,8 +160,8 @@ interface TreasureDao {
     @Query("UPDATE treasure_items SET processing_state = 'ready', processing_error_code = NULL, updated_at = :now, sync_state = 'pending' WHERE stable_id = :itemId AND deleted_at IS NULL AND processing_state NOT IN ('ready','partial','failed')")
     suspend fun markIndexedRaw(itemId: String, now: Long): Int
 
-    @Query("UPDATE treasure_items SET title = COALESCE(:title, title), original_text = COALESCE(:originalText, original_text), processing_state = :state, processing_error_code = NULL, updated_at = :now, sync_state = 'pending' WHERE stable_id = :itemId AND deleted_at IS NULL")
-    suspend fun applyEnhancementRaw(itemId: String, title: String?, originalText: String?, state: String, now: Long): Int
+    @Query("UPDATE treasure_items SET title = CASE WHEN :title IS NULL THEN title WHEN title IS NULL OR title = :capturedTitle THEN :title ELSE title END, original_text = COALESCE(:originalText, original_text), processing_state = :state, processing_error_code = NULL, updated_at = :now, sync_state = 'pending' WHERE stable_id = :itemId AND deleted_at IS NULL")
+    suspend fun applyEnhancementRaw(itemId: String, title: String?, capturedTitle: String?, originalText: String?, state: String, now: Long): Int
 
     @Query("DELETE FROM treasure_chunks WHERE item_id = :itemId")
     suspend fun deleteChunks(itemId: String)
@@ -212,13 +212,27 @@ interface TreasureDao {
     suspend fun applyEnhancement(
         itemId: String,
         title: String?,
+        capturedTitle: String?,
         originalText: String?,
         state: String,
         now: Long,
         change: TreasureChangeEntity,
     ): Int {
-        val count = applyEnhancementRaw(itemId, title, originalText, state, now)
+        val count = applyEnhancementRaw(itemId, title, capturedTitle, originalText, state, now)
         if (count > 0) insertChange(change)
+        return count
+    }
+
+    @Transaction
+    suspend fun retryFailedJobs(
+        itemId: String,
+        now: Long,
+        change: TreasureChangeEntity,
+    ): Int {
+        val count = retryFailedJobsRaw(itemId, now)
+        if (count > 0 && updateProcessingStateRaw(itemId, "queued", null, now) > 0) {
+            insertChange(change)
+        }
         return count
     }
 
@@ -230,7 +244,7 @@ interface TreasureDao {
         now: Long,
         change: TreasureChangeEntity,
     ): Int {
-        val count = applyEnhancementRaw(itemId, null, originalText, "ready", now)
+        val count = applyEnhancementRaw(itemId, null, null, originalText, "ready", now)
         if (count > 0) {
             deleteChunks(itemId)
             insertChunks(chunks)

@@ -396,8 +396,12 @@ class TreasureRepository(
         return dao.failJob(id, now, now + delay, safeCode) > 0
     }
 
-    suspend fun retryFailedJobs(itemId: String): Int =
-        dao.retryFailedJobs(itemId, System.currentTimeMillis())
+    suspend fun retryFailedJobs(itemId: String): Int {
+        val now = System.currentTimeMillis()
+        return dao.retryFailedJobs(
+            itemId, now, stateChange(itemId, "queued", null, now, sha256("retry:$itemId:$now")),
+        )
+    }
 
     suspend fun markProcessing(itemId: String): Boolean =
         updateProcessingState(itemId, "processing", null)
@@ -422,6 +426,7 @@ class TreasureRepository(
     suspend fun applyEnhancement(
         itemId: String,
         title: String? = null,
+        capturedTitle: String? = null,
         originalText: String? = null,
         state: String = "ready",
     ): Boolean {
@@ -434,6 +439,7 @@ class TreasureRepository(
         return dao.applyEnhancement(
             itemId = itemId,
             title = safeTitle,
+            capturedTitle = capturedTitle?.trim()?.take(500),
             originalText = safeText,
             state = safeState,
             now = now,

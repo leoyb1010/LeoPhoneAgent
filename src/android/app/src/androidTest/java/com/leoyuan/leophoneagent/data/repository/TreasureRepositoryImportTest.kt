@@ -149,6 +149,61 @@ class TreasureRepositoryImportTest {
     }
 
     @Test
+    fun backgroundEnhancementDoesNotOverwriteATitleEditedAfterTheJobWasCaptured() = runBlocking {
+        val database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
+        try {
+            val repository = TreasureRepository(
+                dao = database.treasureDao(), filesDirectory = context.cacheDir,
+                originDeviceId = { "android-test" },
+            )
+            repository.save(TreasureItemRecord(
+                id = "title-race", kind = "link", title = "分享时标题",
+                sourceUri = "https://example.com/title-race", sourceLabel = "example.com",
+                processingState = "queued", originDeviceId = "android-test",
+            ))
+            repository.updateItem("title-race", title = "用户手写标题")
+
+            repository.applyEnhancement(
+                "title-race", title = "网页抓取标题", capturedTitle = "分享时标题",
+                originalText = "网页正文", state = "ready",
+            )
+
+            val updated = repository.get(listOf("title-race")).single()
+            assertEquals("用户手写标题", updated.title)
+            assertEquals("网页正文", updated.originalText)
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
+    fun explicitRetryResetsTheJobAndMovesTheVisibleItemBackToQueued() = runBlocking {
+        val database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
+        try {
+            val repository = TreasureRepository(
+                dao = database.treasureDao(), filesDirectory = context.cacheDir,
+                originDeviceId = { "android-test" },
+            )
+            repository.save(TreasureItemRecord(
+                id = "retry-visible", kind = "link", sourceUri = "https://example.com/retry",
+                sourceLabel = "example.com", processingState = "queued", originDeviceId = "android-test",
+            ))
+            val job = repository.readyJobs().first { it.itemId == "retry-visible" }
+            assertTrue(repository.claimJob(job.id))
+            assertTrue(repository.failJob(job.id, "network_unavailable"))
+            assertTrue(repository.markProcessingFailed("retry-visible", "network_unavailable"))
+
+            assertEquals(1, repository.retryFailedJobs("retry-visible"))
+            val item = repository.get(listOf("retry-visible")).single()
+            assertEquals("queued", item.processingState)
+            assertEquals(null, item.processingErrorCode)
+            assertEquals(0, repository.readyJobs().first { it.id == job.id }.attemptCount)
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
     fun exactFiltersReadingProgressAndHighlightsRoundTrip() = runBlocking {
         val database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
         try {

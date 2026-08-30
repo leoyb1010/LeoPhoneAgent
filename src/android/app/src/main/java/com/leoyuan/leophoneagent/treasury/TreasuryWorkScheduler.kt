@@ -150,6 +150,7 @@ class TreasuryEnrichmentWorker(
                     (applicationContext as MinisApp).treasureRepository.applyEnhancement(
                         item.id,
                         title = title,
+                        capturedTitle = item.title,
                         originalText = text.takeIf(String::isNotBlank),
                         state = "ready",
                     )

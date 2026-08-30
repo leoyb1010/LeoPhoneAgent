@@ -1894,6 +1894,7 @@
     <string name="treasury_content">Content</string>
     <string name="treasury_body_truncated">This reader shows the first 200,000 characters to stay responsive. The original content remains intact.</string>
     <string name="treasury_annotation">Annotation</string>
+    <string name="treasury_related">Related items</string>
     <string name="treasury_reading_progress">Reading progress</string>
     <string name="treasury_reading_percent">%1$d%% complete</string>
     <string name="treasury_reading_unread">To read</string>

@@ -174,6 +174,13 @@ object TreasuryTools {
             }
             val body = if (includeBody) bodyText(item, context) else BodyResult(null, "not_requested")
             val raw = body.text.orEmpty()
+            val clippedBody = if (includeBody && raw.isNotEmpty()) {
+                clipRelevantBody(
+                    raw,
+                    maxChars,
+                    listOf(item.title, item.summary, item.annotation) + jsonStrings(item.tagsJson),
+                )
+            } else null
             results.put(JSONObject()
                 .put("id", item.id)
                 .put("available", true)
@@ -184,7 +191,7 @@ object TreasuryTools {
                 .put("created_at", Instant.ofEpochMilli(item.createdAt).toString())
                 .put("updated_at", Instant.ofEpochMilli(item.updatedAt).toString())
                 .put("summary", item.summary ?: JSONObject.NULL)
-                .put("body", if (includeBody && raw.isNotEmpty()) raw.take(maxChars) else JSONObject.NULL)
+                .put("body", clippedBody ?: JSONObject.NULL)
                 .put("body_status", body.status)
                 .put("truncated", includeBody && raw.length > maxChars)
                 .put("annotation", if (includeAnnotation) item.annotation ?: JSONObject.NULL else JSONObject.NULL)
@@ -301,6 +308,42 @@ object TreasuryTools {
         val value = item.snippet.ifBlank { item.title ?: item.sourceUri ?: item.sourceLabel }
         return if (value.length <= maxChars) value else value.take(maxChars).trimEnd() + "…"
     }
+
+    internal fun clipRelevantBody(text: String, maxChars: Int, anchors: List<String?>): String {
+        if (text.length <= maxChars) return text
+        if (maxChars <= 2) return text.take(maxChars)
+        val terms = relevanceTerms(anchors)
+        val match = terms.mapNotNull { term ->
+            text.indexOf(term, ignoreCase = true).takeIf { it >= 0 }?.let { it to term.length }
+        }.maxByOrNull { it.second } ?: return text.take(maxChars)
+        val contentBudget = maxChars - 2
+        val rawStart = (match.first - contentBudget / 3).coerceIn(0, text.length - contentBudget)
+        val rawEnd = rawStart + contentBudget
+        val start = if (rawStart > 0 && Character.isLowSurrogate(text[rawStart]) &&
+            Character.isHighSurrogate(text[rawStart - 1])) rawStart + 1 else rawStart
+        val end = if (rawEnd < text.length && Character.isHighSurrogate(text[rawEnd - 1]) &&
+            Character.isLowSurrogate(text[rawEnd])) rawEnd - 1 else rawEnd
+        val leading = if (start > 0) "…" else ""
+        val trailing = if (end < text.length) "…" else ""
+        return leading + text.substring(start, end.coerceAtLeast(start)) + trailing
+    }
+
+    private fun relevanceTerms(anchors: List<String?>): List<String> {
+        val parts = Regex("[^\\p{L}\\p{N}]+")
+        return anchors.filterNotNull().flatMap { anchor ->
+            val trimmed = anchor.trim()
+            if (trimmed.isEmpty()) emptyList()
+            else listOf(trimmed.take(120)) + trimmed.split(parts)
+        }.map(String::trim)
+            .filter { it.length in 2..120 }
+            .distinctBy { it.lowercase(Locale.ROOT) }
+            .sortedByDescending(String::length)
+    }
+
+    private fun jsonStrings(raw: String): List<String> = runCatching {
+        val array = JSONArray(raw)
+        List(array.length()) { index -> array.optString(index) }.filter(String::isNotBlank)
+    }.getOrDefault(emptyList())
 
     private fun matchSources(item: TreasureSearchRow): List<String> {
         val names = mapOf(1 to "title", 2 to "body", 3 to "summary", 4 to "annotation", 5 to "tags")

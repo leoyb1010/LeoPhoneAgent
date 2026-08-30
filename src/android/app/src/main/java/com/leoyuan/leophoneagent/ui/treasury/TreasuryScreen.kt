@@ -85,6 +85,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.io.File
+import java.util.Locale
 
 private enum class TreasuryFilter { INBOX, PROCESSING, FAILED, UNREAD, RECENT, ALL, LINKS, NOTES, FILES }
 private const val TREASURY_READER_MAX_CHARS = 200_000
@@ -149,6 +150,9 @@ fun TreasuryScreen(
         if (filter == TreasuryFilter.RECENT) filtered.sortedByDescending { it.lastOpenedAt } else filtered
     }
     val selectedItem = selected
+    val relatedRows = remember(selectedItem, rows) {
+        selectedItem?.let { relatedTreasuryRows(it, rows) }.orEmpty()
+    }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= 600.dp
         val extraWide = maxWidth >= 840.dp
@@ -180,6 +184,8 @@ fun TreasuryScreen(
                         TreasuryWorkScheduler.enqueue(context)
                     }
                 },
+                relatedItems = relatedRows,
+                onOpenRelated = { selectedItemId = it },
                 onBack = { selectedItemId = null },
             )
         } else {
@@ -276,6 +282,8 @@ fun TreasuryScreen(
                                         TreasuryWorkScheduler.enqueue(context)
                                     }
                                 },
+                                relatedItems = relatedRows,
+                                onOpenRelated = { selectedItemId = it },
                                 onBack = null,
                                 modifier = Modifier.weight(1f),
                             )
@@ -426,6 +434,8 @@ private fun TreasuryDetail(
     onAddHighlight: (Int, Int, String, String?) -> Unit,
     onDeleteHighlight: (String) -> Unit,
     onRetry: () -> Unit,
+    relatedItems: List<TreasureSearchRow>,
+    onOpenRelated: (String) -> Unit,
     onBack: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
@@ -545,9 +555,68 @@ private fun TreasuryDetail(
                     }
                 }
             }
+            if (relatedItems.isNotEmpty()) {
+                item {
+                    Text(stringResource(R.string.treasury_related), style = MaterialTheme.typography.titleMedium)
+                }
+                items(relatedItems, key = { it.id }) { related ->
+                    OutlinedButton(
+                        onClick = { onOpenRelated(related.id) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
+                            Text(related.title ?: related.sourceLabel, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(related.sourceLabel, style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
             item { Spacer(Modifier.size(24.dp)) }
         }
     }
+}
+
+internal fun relatedTreasuryRows(
+    target: TreasureItemEntity,
+    rows: List<TreasureSearchRow>,
+    limit: Int = 5,
+): List<TreasureSearchRow> {
+    fun tags(raw: String): Set<String> = runCatching {
+        val array = org.json.JSONArray(raw)
+        buildSet { repeat(array.length()) { index -> add(array.optString(index).lowercase(Locale.ROOT)) } }
+    }.getOrDefault(emptySet())
+    fun keywords(vararg values: String?): Set<String> = buildSet {
+        values.filterNotNull().joinToString(" ").take(4_000).lowercase(Locale.ROOT)
+            .split(Regex("[^\\p{L}\\p{N}]+"))
+            .map { it.take(120) }
+            .filter { it.length >= 2 }.forEach { word ->
+                add(word)
+                if (word.length >= 4) word.windowed(2).forEach(::add)
+            }
+    }
+    fun sourceKey(sourceUri: String?, sourceLabel: String): String? {
+        val host = sourceUri?.let { runCatching { java.net.URI(it).host?.lowercase(Locale.ROOT) }.getOrNull() }
+        if (!host.isNullOrBlank()) return "host:$host"
+        val label = sourceLabel.trim().lowercase(Locale.ROOT)
+        val generic = setOf(
+            "", "收藏", "文本", "笔记", "文件", "图片", "网页", "agent 保存", "聊天 artifact",
+            "collection", "text", "note", "file", "image", "web", "agent saved", "chat artifact",
+        )
+        return label.takeUnless(generic::contains)?.let { "label:$it" }
+    }
+    val targetTags = tags(target.tagsJson)
+    val targetKeywords = keywords(target.title, target.summary, target.annotation, target.originalText)
+    val targetSource = sourceKey(target.sourceUri, target.sourceLabel)
+    return rows.asSequence().filter { it.id != target.id && !it.archived }.mapNotNull { row ->
+        val sharedTags = targetTags.intersect(tags(row.tagsJson)).size
+        val sameSource = targetSource != null && targetSource == sourceKey(row.sourceUri, row.sourceLabel)
+        val overlap = targetKeywords.intersect(keywords(row.title, row.snippet)).size
+        val score = sharedTags * 4 + (if (sameSource) 2 else 0) + minOf(overlap, 3)
+        if (score > 0) row to score else null
+    }.sortedWith(compareByDescending<Pair<TreasureSearchRow, Int>> { it.second }
+        .thenByDescending { it.first.updatedAt })
+        .take(limit.coerceAtLeast(0)).map { it.first }.toList()
 }
 
 @Composable

@@ -2,8 +2,10 @@ package com.leoyuan.leophoneagent.treasury
 
 import com.leoyuan.leophoneagent.share.PendingShare
 import com.leoyuan.leophoneagent.data.db.TreasureSearchRow
+import com.leoyuan.leophoneagent.data.db.TreasureItemEntity
 import com.leoyuan.leophoneagent.tools.AgentTools
 import com.leoyuan.leophoneagent.tools.TreasuryTools
+import com.leoyuan.leophoneagent.ui.treasury.relatedTreasuryRows
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.net.InetAddress
@@ -159,6 +161,75 @@ class TreasuryPhase2ContractTest {
         } finally {
             file.delete()
         }
+    }
+
+    @Test
+    fun `agent body clipping keeps the relevant passage instead of only the prefix`() {
+        val body = "开头无关内容。".repeat(180) +
+            "\n\n量子缓存一致性是这一段真正需要引用的主题。" +
+            "结尾补充。".repeat(180)
+
+        val clipped = TreasuryTools.clipRelevantBody(body, 240, listOf("量子缓存一致性"))
+
+        assertEquals(240, clipped.length)
+        assertTrue(clipped.startsWith("…"))
+        assertTrue(clipped.contains("量子缓存一致性"))
+    }
+
+    @Test
+    fun `agent body clipping never splits an emoji surrogate pair`() {
+        val clipped = TreasuryTools.clipRelevantBody(
+            "😀".repeat(200) + "关键段落" + "😀".repeat(200), 101, listOf("关键段落"),
+        )
+        clipped.forEachIndexed { index, character ->
+            if (Character.isHighSurrogate(character)) {
+                assertTrue(index + 1 < clipped.length && Character.isLowSurrogate(clipped[index + 1]))
+            }
+            if (Character.isLowSurrogate(character)) {
+                assertTrue(index > 0 && Character.isHighSurrogate(clipped[index - 1]))
+            }
+        }
+    }
+
+    @Test
+    fun `related items prefer shared tags then same source and exclude archived`() {
+        val target = TreasureItemEntity(
+            id = "target", kind = "text", title = "量子缓存", sourceLabel = "研发周报",
+            originalText = "量子缓存正文", tagsJson = "[\"缓存\",\"架构\"]",
+            createdAt = 1, updatedAt = 1, originDeviceId = "test",
+        )
+        fun row(id: String, source: String, tags: String = "[]", archived: Boolean = false) = TreasureSearchRow(
+            id = id, kind = "text", title = id, sourceUri = null, sourceLabel = source,
+            snippet = "普通内容", matchOffsets = "", tagsJson = tags, pinned = false,
+            archived = archived, readingState = "none", readingProgress = 0.0,
+            lastOpenedAt = null, processingState = "ready", processingErrorCode = null,
+            createdAt = 1, updatedAt = 1,
+        )
+
+        val related = relatedTreasuryRows(target, listOf(
+            row("same-source", "研发周报"),
+            row("archived", "研发周报", "[\"缓存\",\"架构\"]", archived = true),
+            row("shared-tags", "其他", "[\"缓存\",\"架构\"]"),
+        ))
+
+        assertEquals(listOf("shared-tags", "same-source"), related.map { it.id })
+    }
+
+    @Test
+    fun `related items do not connect every generic text source`() {
+        val target = TreasureItemEntity(
+            id = "target", kind = "text", title = "苹果香蕉", sourceLabel = "文本",
+            originalText = "苹果香蕉", createdAt = 1, updatedAt = 1, originDeviceId = "test",
+        )
+        val unrelated = TreasureSearchRow(
+            id = "unrelated", kind = "text", title = "完全不同", sourceUri = null,
+            sourceLabel = "文本", snippet = "没有重叠", matchOffsets = "", tagsJson = "[]",
+            pinned = false, archived = false, readingState = "none", readingProgress = 0.0,
+            lastOpenedAt = null, processingState = "ready", processingErrorCode = null,
+            createdAt = 1, updatedAt = 1,
+        )
+
+        assertTrue(relatedTreasuryRows(target, listOf(unrelated)).isEmpty())
     }
 
     @Test
