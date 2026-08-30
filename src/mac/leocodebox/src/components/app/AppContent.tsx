@@ -92,6 +92,7 @@ function AppContentInner() {
     newSessionTrigger,
     pendingPrompt,
     consumePendingPrompt,
+    queuePendingPrompt,
     setActiveTab,
     setSidebarOpen,
     setIsInputFocused,
@@ -337,6 +338,7 @@ function AppContentInner() {
     // 空输入不建会话:指挥条自己也拦了一道,这里兜底,免得别的入口漏拦。
     if (!prompt.trim()) return;
     if (!selectedProject) {
+      queuePendingPrompt(prompt);
       setProjectDrawerOpen(true);
       return;
     }
@@ -344,7 +346,16 @@ function AppContentInner() {
     setRemoteTarget(null);
     setActiveTab('chat');
     handleNewSession(selectedProject, prompt);
-  }, [closeOverlays, handleNewSession, selectedProject, setActiveTab]);
+  }, [closeOverlays, handleNewSession, queuePendingPrompt, selectedProject, setActiveTab]);
+
+  useEffect(() => {
+    const onTreasuryPrompt = (event: Event) => {
+      const text = (event as CustomEvent<{ text?: unknown }>).detail?.text;
+      if (typeof text === 'string' && text.trim()) startLocalRun(text.slice(0, 30_000));
+    };
+    window.addEventListener('leocodebox:launch-treasury-prompt', onTreasuryPrompt);
+    return () => window.removeEventListener('leocodebox:launch-treasury-prompt', onTreasuryPrompt);
+  }, [startLocalRun]);
 
   /**
    * 目标选了远程 Mac 时,任务经中继下发到那台机器。中继不可达就退回本机,

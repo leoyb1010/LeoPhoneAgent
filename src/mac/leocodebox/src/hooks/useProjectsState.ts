@@ -122,6 +122,11 @@ export function useProjectsState({
     return prompt;
   }, [pendingPromptSlot]);
 
+  const queuePendingPrompt = useCallback((prompt: string) => {
+    pendingPromptSlot.set(prompt);
+    setPendingPrompt(pendingPromptSlot.peek());
+  }, [pendingPromptSlot]);
+
   const { attentionSessionIds, markSessionAttention, clearSessionAttention } = useProjectSessionAttention(
     selectedSession,
     sessionId,
@@ -416,16 +421,21 @@ export function useProjectsState({
 
   const handleProjectSelect = useCallback(
     (project: Project) => {
+      const isStartingPendingRun = pendingPromptSlot.peek() !== null;
       pendingRootSelectionReset.current = true;
       setSelectedProject(project);
       setSelectedSession(null);
+      if (isStartingPendingRun) {
+        setActiveTab('chat');
+        setNewSessionTrigger((previous) => previous + 1);
+      }
       navigate('/');
 
       if (isMobile) {
         setSidebarOpen(false);
       }
     },
-    [isMobile, navigate],
+    [isMobile, navigate, pendingPromptSlot],
   );
 
   const handleSessionSelect = useCallback(
@@ -656,6 +666,7 @@ export function useProjectsState({
     newSessionTrigger,
     pendingPrompt,
     consumePendingPrompt,
+    queuePendingPrompt,
     setActiveTab,
     setSidebarOpen,
     setIsInputFocused,
