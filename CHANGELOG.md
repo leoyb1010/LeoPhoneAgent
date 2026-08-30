@@ -19,6 +19,8 @@
 - 三端 `treasury_get` 在正文后部存在标题/摘要/标签/批注命中时返回相关窗口，不再只给开头；emoji 截断保持有效 Unicode。
 - iOS、Android、Mac 详情补齐可解释相关收藏，并排除“文本/文件/图片”等通用来源造成的伪关联。
 - 后台网页增强不再覆盖用户刚修改的标题；五次自动失败后停止，用户显式重试会重置持久任务。Mac PDF 重试额外复核受控路径、文件类型、byte count 和 SHA-256。
+- iOS 主 App 现在实际执行持久网页/OCR/PDF/音频/索引任务；三端设置页分开显示原始内容和可再生/可重新下载缓存，清理不删除收藏、正文、批注或原始附件。
+- Android 只清理受控 `treasury/sync-outbox`；Mac 正文缓存与附件缓存可独立清理，`treasury/files` 原始文件保持只读。三端均补符号链接/路径边界与失败恢复测试。
 
 ### 三轮最终审计与验证
 
@@ -28,13 +30,14 @@
 - 完成定义复审继续修复 Android 工具契约分叉、非法筛选静默放宽、iOS Spotlight 摘要泄漏和 Share Extension 假成功/有损转码，并补回归测试。
 - 契约完成度三轮复审继续修复 iOS 200/500 条候选截断、Mac 500 条后二次过滤漏项与非法日历日期、Android 在相关度排序前按更新时间截断，并增加超过 200/500 条的大库回归。
 - 追加三轮恢复审计修复相关来源误判、iOS sheet 动画竞态、三端持久重试、Mac PDF 重试完整性、UTF-16 截断、TypeScript 窄类型和 Tailwind 零警告门禁。
-- iOS Treasury 全量纳入 MinisLogicTests 317/317，MinisShare direct target build 通过；Android Standard/Power 各 612 tests（0 failed、1 skipped）且双 lint 0 error；Mac desktop 37/37、client 163/163、server 401/401、typecheck、全仓 lint 和 production build 通过。
+- 存储治理三轮审计修复 iOS 持久任务执行断链、Android Compose 后台状态提交与路径逃逸、Mac 原始/正文/附件删除边界、零字节/缺失文件残留、确认弹窗和错误本地化。
+- iOS Treasury 全量纳入 MinisLogicTests 320/320，MinisShare direct target build 通过；Android Standard/Power 各 615 tests（0 failed、1 skipped）且双 lint 0 error；Mac desktop 37/37、client 166/166、server 404/404、typecheck、全仓 lint 和 production build 通过。
 
 ### 边界
 
 - 本条是 Phase 0–5 源码交付，不 bump 版本，不发布 APK、IPA、DMG 或热更新。
 - Mac 写工具必须经过 Provider 客户端审批并携带 `user_confirmed=true`；MCP 服务不能独立读取 CLI 原始用户消息。iOS/Android 另有当前真实用户消息校验。
-- HTTP Range 未实现；iPhone/iPad 主 App、API 26/Fold8/TalkBack/200% 字体、三设备联网、签名、覆盖安装、Mac 双机 Relay/屏幕阅读器/公证仍为 HOLD。
+- HTTP Range 未实现；iPhone/iPad 主 App、API 26/Fold8/TalkBack/200% 字体、三设备联网、签名、覆盖安装、Mac 新存储页登录后走查/双机 Relay/屏幕阅读器/公证仍为 HOLD。
 - 完整证据见 `docs/TREASURY_PHASE5_DELIVERY_EVIDENCE.md`，设备执行见 `docs/TREASURY_DEVICE_RELEASE_CHECKLIST.md`。
 
 ## 藏宝阁 Phase 4 源码交付（未发版）- 2026-08-31

@@ -945,7 +945,7 @@ Android Standard 获得完整独立藏宝阁；iOS、Android、Mac 捕获入口�
 
 实际交付证据：[Phase 5 最终审计、修复与源码交付](TREASURY_PHASE5_DELIVERY_EVIDENCE.md)
 
-当前状态：Phase 0–5 本机可实现源码与自动化范围已完成，并额外完成相关内容、持久重试、后台标题竞态、PDF 重试完整性和 Unicode 截断三轮复审；真实 iPhone/iPad、API 26/Fold8、三端联网、签名、覆盖安装、公证和公开发布门禁仍为 HOLD。设备执行步骤见 [藏宝阁设备测试与发版清单](TREASURY_DEVICE_RELEASE_CHECKLIST.md)，不得把源码完成写成已公开发版。
+当前状态：Phase 0–5 本机可实现源码与自动化范围已完成，并额外完成相关内容、持久重试、后台标题竞态、PDF 重试完整性、Unicode 截断、iOS 持久增强任务执行和三端安全缓存清理复审；真实 iPhone/iPad、API 26/Fold8、三端联网、Mac 新存储页登录后走查、签名、覆盖安装、公证和公开发布门禁仍为 HOLD。设备执行步骤见 [藏宝阁设备测试与发版清单](TREASURY_DEVICE_RELEASE_CHECKLIST.md)，不得把源码完成写成已公开发版。
 
 ---
 

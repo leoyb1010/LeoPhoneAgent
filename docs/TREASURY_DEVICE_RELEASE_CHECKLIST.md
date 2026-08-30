@@ -27,6 +27,7 @@ git submodule update --init --recursive
 - iPad 验证 URL、文字、图片/PDF/文件拖放；切换窗口大小后查询、筛选、选中条目和批注草稿不丢失。
 - 开启 VoiceOver、最大 Dynamic Type 和 Reduce Motion；验证所有操作可读、焦点顺序正确、状态不只依赖颜色或动画。
 - 验证 Share Extension 只保存原始内容和排队，不运行 WebView、OCR 或模型；主 App/Share 并发保存不丢条目。
+- 在存储管理分别清理缩略图与同步临时缓存，确认收藏、正文、批注和原始附件仍在；后台任务可重新生成缩略图。
 
 ### 真机与发版
 
@@ -54,6 +55,7 @@ cd src/android
 - 保存原始内容后立即断网、杀进程；重启确认原始内容仍在，WorkManager 继续或可重试。
 - 制造 OCR/PDF/索引失败，确认失败可见、可解释、可重试，且附件不丢失。
 - 验证预测性返回、SAF 权限失效、附件缺失和 digest 不一致。
+- 分别清理同步临时缓存并复核原始附件、正文和条目不受影响；Standard/Power 行为一致，路径异常时必须失败关闭。
 
 ### Fold8
 
@@ -86,6 +88,7 @@ npm audit --omit=dev
 ```
 
 - 在真实 Electron 窗口验证宽/窄布局、六视图键盘导航、搜索、捕获、详情、高亮、批注、离线合集和陈旧状态。
+- 在“设置 → 存储空间”验证原始文件只读统计、正文/附件缓存独立确认清理、零字节和文件缺失残留；清理后本机原始文件不变。
 - 使用 VoiceOver 验证 tab/tabpanel、加载 live region、assertive error、详情焦点和确认对话框。
 - 分别从 Claude Code、Codex、Cursor 和 OpenCode/Grok 枚举 `leocodebox-treasury`，执行 search → get → answer、多选引用、截断、文件缺失、保存、更新、归档和审批拒绝。
 - 手机离线时确认最后成功内容保留并标陈旧；Relay 恢复后只拉增量，不上传整库。

@@ -5,7 +5,7 @@
 
 ## 结论与完成比例
 
-藏宝阁 Phase 0–5 的本机可实现源码、迁移、自动化测试、Mac 生产构建和浏览器交互审计已经完成。iOS 补齐 `treasury_save` / `treasury_update`，Android Agent 工具完成跨端契约对齐，Mac 四种 Provider 共享同一个 Treasury MCP 工具入口；最后三轮审计和完成定义复审修复了写授权、工具契约分叉、远端缓存完整性、Spotlight 隐私、Share Extension 捕获完整性、错误脱敏、跨 scope 去重和键盘/读屏语义。
+藏宝阁 Phase 0–5 的本机可实现源码、迁移、自动化测试和 Mac 生产构建已经完成。iOS 补齐 `treasury_save` / `treasury_update`，Android Agent 工具完成跨端契约对齐，Mac 四种 Provider 共享同一个 Treasury MCP 工具入口；最终审计和完成定义复审修复了写授权、工具契约分叉、远端缓存完整性、Spotlight 隐私、Share Extension 捕获完整性、错误脱敏、跨 scope 去重、键盘/读屏语义、持久增强任务执行和三端安全缓存治理。
 
 - Phase 5 本机源码与自动化范围：**100%**。
 - Phase 0–5 本机施工范围：**100%**。
@@ -23,6 +23,8 @@
 - `treasury_update` 不提供永久删除；永久删除继续走独立高风险确认流程。
 - Share Extension 对图片和文件优先保留 URL/Data 原始字节，仅在系统只提供 `UIImage` 时使用无损 PNG fallback；暂存失败不会登记附件。
 - Spotlight 不再回退到正文或带 query 的原始 URL，也不索引生成摘要；只使用明确标题、来源和标签。
+- 设置中的存储管理分开显示原始附件、可再生缩略图缓存和同步临时缓存；清理动作只作用于可再生成或可重新下载的数据，不删除收藏、正文、批注或原始附件。
+- 持久增强队列现在由主 App 实际领取并执行网页正文、OCR、PDF、音频转写和索引任务；失败状态、五次自动停止和用户显式重试继续使用既有恢复契约。
 
 ### Android
 
@@ -30,6 +32,7 @@
 - `treasury_get` 对外统一 `include_annotations`，兼容旧队列的单数参数；缺失条目明确返回正文状态、null 字段和 `truncated=false`。
 - `treasury_save` 使用无凭据 HTTP(S) 规范化 URL、返回去重状态并支持合集；`treasury_update` 支持合集且非法阅读状态失败关闭。
 - 内容类型、阅读状态和时间边界不再静默忽略；非法筛选会拒绝执行，避免扩大 Agent 查询范围。
+- 设置页分开显示藏宝阁原始附件与同步临时缓存；清理仅删除受控 `treasury/sync-outbox`，并拒绝符号链接根目录或越界路径。Standard 与 Power 共用同一安全实现。
 
 ### Mac
 
@@ -41,6 +44,8 @@
 - MCP token 加密保存在数据库，并以 `0600` 权限镜像到本机文件供 stdio 子进程读取；API 使用 timing-safe Bearer token 比较。
 - 藏宝阁标签页支持 ArrowLeft/ArrowRight/Home/End、roving tabindex、tab/tabpanel 关联；加载、错误、详情焦点和删除高亮确认具备明确可访问语义。
 - 本机和手机详情提供轻量“相关收藏”；本机 PDF 失败可显式重新处理，且重试前重新验证受控路径、PDF 文件头、byte count 与 SHA-256。
+- 设置新增“存储空间”，分别统计本机原始文件、手机正文缓存和手机附件缓存。正文与附件缓存可独立确认清理；`treasury/files` 原始文件永不进入清理路径。
+- 存储统计与清理拒绝符号链接根目录、realpath 越界和特殊文件；清理前先预检受控路径，避免路径异常时数据库先删而文件未删。
 
 ## 追加三轮审计与修复（2026-08-31）
 
@@ -63,6 +68,27 @@
 - 修复 Mac 测试窄类型导致的 TypeScript 正式 typecheck 失败，以及两处 Tailwind 类名顺序零警告门禁。
 - 重新执行 iOS 全量逻辑测试与 Share target、Android 双 flavor 编译/单测/androidTest 编译/lint、Mac typecheck/test/lint/build。
 - 复核本轮无新依赖、无常驻服务、无 Power 权限泄漏、无密钥/真实收藏/本机敏感路径写入源码。
+
+## 存储治理与持久任务追加三轮审计（2026-08-31）
+
+### 第 1 轮：iOS 持久增强执行与可再生缓存边界
+
+- 修复持久 `TreasureJob` 只入队但主 App 没有实际领取执行的问题；网页正文、OCR、PDF、音频转写和索引现在使用同一持久任务状态机执行和恢复。
+- 存储管理只允许清理缩略图与同步临时缓存；原始附件、正文文件、条目、批注和数据库记录保持不变。
+- 增加失败重试、清理后缩略图再生、原始内容保留和受控路径回归测试。
+
+### 第 2 轮：Android 双 flavor 路径安全与 Compose 并发
+
+- Standard/Power 共用 `TreasuryStoragePolicy`，只清理 `treasury/sync-outbox`，拒绝缓存根目录符号链接、子路径逃逸和特殊文件。
+- 存储统计在 IO 线程计算不可变快照，再在主线程提交 Compose 状态，避免后台线程直接修改 UI state。
+- 中英繁中补齐原始附件/同步缓存文案；Standard 基础能力仍不依赖 Accessibility、Shizuku、悬浮窗或 Power 权限。
+
+### 第 3 轮：Mac 原始/正文/附件分层与确认交互
+
+- 服务端把原始文件、手机正文缓存和手机附件缓存分开统计与删除；正文只删除 `treasure_remote_assets.body`，附件只删除受控 `treasury-assets` 与对应记录。
+- 修复符号链接根目录、realpath 越界、特殊文件、零字节缓存、文件丢失但数据库残留和部分完成风险；原始目录只读统计。
+- UI 增加确认弹窗、本地化错误、ARIA live/alert、显式 dialog label、窄屏布局和加载骨架；组件、服务、全量 typecheck/lint/test/build 均通过。
+- 本机浏览器成功加载客户端，但私有部署登录页阻挡“设置 → 存储空间”的登录后点击走查；没有读取或绕过凭据，因此该新增页面的真实 Electron/浏览器交互保持 HOLD。自动化组件测试已覆盖加载和错误状态，响应式结构通过 typecheck、lint 与 production build。
 
 ## Agent 工具与授权边界
 
@@ -125,9 +151,9 @@ treasury_update -> explicit approved metadata/read-state/annotation write
 
 ### iOS / iPadOS
 
-- Treasury 定向测试：**41/41 passed**。
-- `MinisLogicTests`：**317/317 passed**，0 failed，0 skipped。
-- xcresult：`~/Library/Developer/Xcode/DerivedData/LeoPhoneAgent-eepkwcwlunoccyencmgmqedpdkny/Logs/Test/Test-MinisLogicTests-2026.08.31_04-45-13-+0800.xcresult`。
+- Treasury 定向测试：**49/49 passed**。
+- `MinisLogicTests`：**320/320 passed**，0 failed，0 skipped。
+- xcresult：`~/Library/Developer/Xcode/DerivedData/LeoPhoneAgent-eepkwcwlunoccyencmgmqedpdkny/Logs/Test/Test-MinisLogicTests-2026.08.31_05-38-48-+0800.xcresult`。
 - `MinisShare` iOS Simulator target：build succeeded。
 - 主 App scheme：本机缺少仓库目标要求的 watchOS runtime，编译前阻断；保持 HOLD，不声明 iPhone/iPad 主 App 已运行。
 
@@ -141,8 +167,8 @@ treasury_update -> explicit approved metadata/read-state/annotation write
 ```
 
 - `BUILD SUCCESSFUL`。
-- Standard：**612 tests，0 failures，1 skipped**。
-- Power：**612 tests，0 failures，1 skipped**。
+- Standard：**615 tests，0 failures，1 skipped**。
+- Power：**615 tests，0 failures，1 skipped**。
 - Standard lint：0 errors、542 warnings、38 hints；Power lint：0 errors、538 warnings、38 hints。XML 报告未命中本轮修改文件，均为仓库全局既有项。
 - Standard 基础藏宝阁未引入 Accessibility、Shizuku、悬浮窗或 Power 权限依赖。
 
@@ -150,13 +176,13 @@ treasury_update -> explicit approved metadata/read-state/annotation write
 
 - `npm run typecheck`：通过。
 - `npm run test:desktop`：**37/37 passed**。
-- `npm run test:client`：**163/163 passed**。
-- `npm run test:server`：**401/401 passed**。
+- `npm run test:client`：**166/166 passed**。
+- `npm run test:server`：**404/404 passed**。
 - `npm run lint`：通过，0 error / 0 warning。
 - `npm run build`：client/server production build 通过。
 - MCP stdio `tools/list`：通过，四工具、annotations 和 schema 可被真实进程枚举。
 - 完整 `npm audit`：0 vulnerabilities；production-only audit：0 vulnerabilities。
-- 真实浏览器：宽/窄布局、六视图键盘切换、搜索、捕获、筛选和详情语义通过；控制台 0 error / 0 warning。
+- 既有藏宝阁工作台真实浏览器证据：宽/窄布局、六视图键盘切换、搜索、捕获、筛选和详情语义通过，控制台 0 error / 0 warning。新增“存储空间”页因本机私有部署登录阻挡，真实交互保持 HOLD；组件测试与 production build 通过。
 
 ## 数据迁移、同步与性能证据
 
@@ -176,20 +202,24 @@ treasury_update -> explicit approved metadata/read-state/annotation write
 - `4a583cd` — `fix(android-treasury): align agent tools with cross-platform contract`
 - `8b61baf` — `fix(ios-treasury): preserve raw share captures and private spotlight data`
 - `386c138` — `fix(treasury): enforce cross-platform filtered search bounds`
+- `c574c83` — `fix(ios-treasury): execute persistent enrichment jobs`
+- `555765e` — `feat(ios-treasury): add safe cache storage controls`
+- `cf3bee4` — `feat(android-treasury): add safe cache storage controls`
+- `6552ae6` — `feat(mac-treasury): add safe cache storage controls`
 
 实际代码范围：
 
-- iOS：`src/ios/Shared/CollectionStore.swift`、`CollectionSearchIndex.swift`、`SharedContainerStore.swift`、`ShareExtension/ShareViewModel.swift`、Agent Chat 工具定义/执行/状态、`ChatStore.swift`、Treasury 测试。
-- Android：Treasure repository、统一 Agent tool schema/executor 与契约回归测试。
-- Mac server：Treasury MCP stdio/API、CLI 入口、server 挂载、Treasury repository/service、Fleet 缓存校验和 integration tests。
-- Mac client：`CollectionsMirror.tsx` 与可访问性测试。
+- iOS：`src/ios/Shared/CollectionStore.swift`、`CollectionSearchIndex.swift`、`SharedContainerStore.swift`、`ShareExtension/ShareViewModel.swift`、`StorageManagementView.swift`、Agent Chat 工具定义/执行/状态、`ChatStore.swift`、Treasury 测试。
+- Android：Treasure repository、统一 Agent tool schema/executor、`TreasuryStoragePolicy.kt`、`StorageManagementScreen.kt` 与契约回归测试。
+- Mac server：Treasury MCP stdio/API、CLI 入口、server 挂载、Treasury repository/service、Fleet 缓存校验、`treasury-storage.service.ts` 和 integration tests。
+- Mac client：`CollectionsMirror.tsx`、`StorageSettingsTab.tsx` 与可访问性/交互测试。
 
 ## 明确 HOLD 与未实现能力
 
 - iOS/iPadOS：主 App 模拟器运行、VoiceOver、Dynamic Type、Reduce Motion、拖放、多窗口、外接键盘、真机、签名、Archive、安装与发布。
 - Android：API 26、Fold8 `1080×1728` 封面屏、`1768×2208` 展开屏、折叠切换、200% 字体、TalkBack、预测性返回、进程死亡/WorkManager 恢复、固定签名、覆盖安装、Logcat、版本号、APK digest 与发布。
 - 跨端：iOS 创建后 Android/Mac 看见、Android 更新后 iOS/Mac 看见、双端同时编辑、离线删除恢复、重复/乱序 change、游标过期和附件下载的真实三设备联网矩阵。
-- Mac：双机 Relay 在线/离线、四种 CLI 与 Leo 模型的真实写审批/引用、Electron 屏幕阅读器、签名、公证、热更新与回滚。
+- Mac：新增存储页的登录后真实 Electron/浏览器走查、双机 Relay 在线/离线、四种 CLI 与 Leo 模型的真实写审批/引用、Electron 屏幕阅读器、签名、公证、热更新与回滚。
 - 协议：附件支持完整文件失败重试、临时文件、原子落盘和 digest 校验；**没有 HTTP Range 断点续传**。
 - 可选能力：音频转写和语义召回/RRF 未启用；FTS 基础检索不依赖模型。
 
