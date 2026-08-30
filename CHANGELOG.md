@@ -21,6 +21,7 @@
 - 后台网页增强不再覆盖用户刚修改的标题；五次自动失败后停止，用户显式重试会重置持久任务。Mac PDF 重试额外复核受控路径、文件类型、byte count 和 SHA-256。
 - iOS 主 App 现在实际执行持久网页/OCR/PDF/音频/索引任务；三端设置页分开显示原始内容和可再生/可重新下载缓存，清理不删除收藏、正文、批注或原始附件。
 - Android 只清理受控 `treasury/sync-outbox`；Mac 正文缓存与附件缓存可独立清理，`treasury/files` 原始文件保持只读。三端均补符号链接/路径边界与失败恢复测试。
+- Android Standard/Power 新增统一 `minis://action/treasury?capture=1` 捕获路由，并接入 App Shortcut、按需快捷设置图块和桌面小组件；入口只弹出轻量文字/URL 收藏，不自动读取剪贴板，也不依赖 Power 权限。
 
 ### 三轮最终审计与验证
 
@@ -31,7 +32,8 @@
 - 契约完成度三轮复审继续修复 iOS 200/500 条候选截断、Mac 500 条后二次过滤漏项与非法日历日期、Android 在相关度排序前按更新时间截断，并增加超过 200/500 条的大库回归。
 - 追加三轮恢复审计修复相关来源误判、iOS sheet 动画竞态、三端持久重试、Mac PDF 重试完整性、UTF-16 截断、TypeScript 窄类型和 Tailwind 零警告门禁。
 - 存储治理三轮审计修复 iOS 持久任务执行断链、Android Compose 后台状态提交与路径逃逸、Mac 原始/正文/附件删除边界、零字节/缺失文件残留、确认弹窗和错误本地化。
-- iOS Treasury 全量纳入 MinisLogicTests 320/320，MinisShare direct target build 通过；Android Standard/Power 各 615 tests（0 failed、1 skipped）且双 lint 0 error；Mac desktop 37/37、client 166/166、server 404/404、typecheck、全仓 lint 和 production build 通过。
+- Android 系统入口追加两轮审计先补齐三种系统表面和中英繁中文案，再修复冷启动 Compose 重组可能重放捕获请求、广播转发丢失 `capture=false` 语义的问题；新增一次性消费回归。
+- iOS Treasury 全量纳入 MinisLogicTests 324/324，MinisShare direct target build 通过；Android Standard/Power 各 616 tests（0 failed、1 skipped）且双 lint 0 error；Mac desktop 37/37、client 166/166、server 404/404、typecheck、全仓 lint 和 production build 通过。
 
 ### 边界
 

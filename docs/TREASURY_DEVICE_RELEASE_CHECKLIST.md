@@ -52,6 +52,8 @@ cd src/android
 ### API 26 与进程恢复
 
 - API 26 冷启动、旧数据库迁移、分享 URL/文字/图片/多图/PDF/文档/文件。
+- 分别从 Standard/Power 的 Launcher App Shortcut、快捷设置藏宝阁图块和桌面小组件“收藏”按钮冷/热启动；确认只弹一次文字/URL 捕获框，返回/旋转不重复弹出，普通藏宝阁入口不被强制弹框。
+- 确认系统入口不自动读取剪贴板；未授予 Accessibility、Shizuku、悬浮窗或 Power 权限时 Standard 仍可完成捕获。
 - 保存原始内容后立即断网、杀进程；重启确认原始内容仍在，WorkManager 继续或可重试。
 - 制造 OCR/PDF/索引失败，确认失败可见、可解释、可重试，且附件不丢失。
 - 验证预测性返回、SAF 权限失效、附件缺失和 digest 不一致。

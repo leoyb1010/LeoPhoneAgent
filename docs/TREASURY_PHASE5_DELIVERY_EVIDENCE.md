@@ -5,7 +5,7 @@
 
 ## 结论与完成比例
 
-藏宝阁 Phase 0–5 的本机可实现源码、迁移、自动化测试和 Mac 生产构建已经完成。iOS 补齐 `treasury_save` / `treasury_update`，Android Agent 工具完成跨端契约对齐，Mac 四种 Provider 共享同一个 Treasury MCP 工具入口；最终审计和完成定义复审修复了写授权、工具契约分叉、远端缓存完整性、Spotlight 隐私、Share Extension 捕获完整性、错误脱敏、跨 scope 去重、键盘/读屏语义、持久增强任务执行和三端安全缓存治理。
+藏宝阁 Phase 0–5 的本机可实现源码、迁移、自动化测试和 Mac 生产构建已经完成。iOS 补齐 `treasury_save` / `treasury_update`，Android Agent 工具完成跨端契约对齐并补齐系统快速捕获表面，Mac 四种 Provider 共享同一个 Treasury MCP 工具入口；最终审计和完成定义复审修复了写授权、工具契约分叉、远端缓存完整性、Spotlight 隐私、Share Extension 捕获完整性、错误脱敏、跨 scope 去重、键盘/读屏语义、持久增强任务执行和三端安全缓存治理。
 
 - Phase 5 本机源码与自动化范围：**100%**。
 - Phase 0–5 本机施工范围：**100%**。
@@ -37,6 +37,8 @@
 - `treasury_save` 使用无凭据 HTTP(S) 规范化 URL、返回去重状态并支持合集；`treasury_update` 支持合集且非法阅读状态失败关闭。
 - 内容类型、阅读状态和时间边界不再静默忽略；非法筛选会拒绝执行，避免扩大 Agent 查询范围。
 - 设置页分开显示藏宝阁原始附件与同步临时缓存；清理仅删除受控 `treasury/sync-outbox`，并拒绝符号链接根目录或越界路径。Standard 与 Power 共用同一安全实现。
+- Standard/Power 的 App Shortcut、按需快捷设置图块和桌面小组件现在复用同一个 `minis://action/treasury?capture=1` 路由，直接打开轻量文字/URL 捕获框；普通应用内入口仍只打开藏宝阁。
+- 快速捕获请求是一次性状态，覆盖冷启动和热启动；不读取剪贴板、不增加 Accessibility/Shizuku/悬浮窗/Power 权限，也不创建藏宝阁常驻前台服务。
 
 ### Mac
 
@@ -113,6 +115,21 @@
 - 将“打开藏宝阁”从纯进程内静态标记升级为 App Group 一次性标记加热启动通知，消费后同步清除，避免独立 Intent 执行进程导致冷启动路由丢失。
 - `CollectionsView` 增加按实际窗口宽度驱动的 `NavigationSplitView`；选中条目在详情列阅读、高亮、更新进度和打开/编辑，删除选中条目会清理详情状态。
 - 初版复用了同时依赖高度的聊天布局策略；复审发现键盘可能改变高度并重建未提交批注，因此改为藏宝阁独立纯宽度策略并补 759/760pt、compact size class 和非有限宽度测试。
+
+## Android 系统捕获入口追加两轮审计（2026-08-31）
+
+### 第 1 轮：系统表面、统一路由与本地化
+
+- 对照施工规范 8.2，补齐 Standard/Power 的藏宝阁 App Shortcut、按需 Quick Settings Tile 和桌面小组件按钮，三者统一进入 `minis://action/treasury?capture=1`。
+- 新入口只打开既有轻量文字/URL 捕获框，不读取剪贴板；普通应用内导航使用不带 capture 的路由，不强制弹框。
+- 设置 → 系统权限增加独立“添加藏宝阁收藏图块”，并补齐简中、繁中和英文；顺手修复同一组繁中文案中的简繁混杂。
+
+### 第 2 轮：冷启动重组、一次性状态与权限边界
+
+- 初版在 Compose `startDestination` 计算期间写入一次性状态；复审发现重组可能重放捕获请求，改为在 `LaunchedEffect(initialDeepLink)` 中排队，Treasury 页面消费后立即清零。
+- 广播转发从固定强制 `capture=1` 改为保留原始 capture 语义，避免“只打开藏宝阁”的入口被意外升级为写入动作。
+- 新增 `capture=1/true/0`、动作映射和一次性消费回归；双 flavor 编译、单测、资源校验和 lint 通过。
+- Manifest 中新 Tile 仅使用系统 `BIND_QUICK_SETTINGS_TILE` 绑定权限；没有新增运行时权限、Power 专属依赖、剪贴板监听或常驻服务。
 
 ## Agent 工具与授权边界
 
@@ -192,8 +209,8 @@ treasury_update -> explicit approved metadata/read-state/annotation write
 ```
 
 - `BUILD SUCCESSFUL`。
-- Standard：**615 tests，0 failures，1 skipped**。
-- Power：**615 tests，0 failures，1 skipped**。
+- Standard：**616 tests，0 failures，1 skipped**。
+- Power：**616 tests，0 failures，1 skipped**。
 - Standard lint：0 errors、542 warnings、38 hints；Power lint：0 errors、538 warnings、38 hints。XML 报告未命中本轮修改文件，均为仓库全局既有项。
 - Standard 基础藏宝阁未引入 Accessibility、Shizuku、悬浮窗或 Power 权限依赖。
 
@@ -232,18 +249,19 @@ treasury_update -> explicit approved metadata/read-state/annotation write
 - `cf3bee4` — `feat(android-treasury): add safe cache storage controls`
 - `6552ae6` — `feat(mac-treasury): add safe cache storage controls`
 - `19a3323` — `fix(ios-treasury): complete system intents and adaptive workspace`
+- `99b4c76` — `feat(android-treasury): add system capture surfaces`
 
 实际代码范围：
 
 - iOS：`src/ios/Shared/CollectionStore.swift`、`CollectionSearchIndex.swift`、`SharedContainerStore.swift`、`ShareExtension/ShareViewModel.swift`、`StorageManagementView.swift`、`CollectionIntents.swift`、`CollectionsView.swift`、`ContentView.swift`、Relay 增量同步入口、Agent Chat 工具定义/执行/状态、`ChatStore.swift`、Treasury 测试。
-- Android：Treasure repository、统一 Agent tool schema/executor、`TreasuryStoragePolicy.kt`、`StorageManagementScreen.kt` 与契约回归测试。
+- Android：Treasure repository、统一 Agent tool schema/executor、`TreasuryStoragePolicy.kt`、`StorageManagementScreen.kt`、统一系统入口/Tile/Shortcut/widget 与契约/路由回归测试。
 - Mac server：Treasury MCP stdio/API、CLI 入口、server 挂载、Treasury repository/service、Fleet 缓存校验、`treasury-storage.service.ts` 和 integration tests。
 - Mac client：`CollectionsMirror.tsx`、`StorageSettingsTab.tsx` 与可访问性/交互测试。
 
 ## 明确 HOLD 与未实现能力
 
 - iOS/iPadOS：本轮新增 App Intents 与 iPad 分栏的主 App 类型检查/模拟器运行；VoiceOver、Dynamic Type、Reduce Motion、拖放、多窗口、外接键盘、真机、签名、Archive、安装与发布。
-- Android：API 26、Fold8 `1080×1728` 封面屏、`1768×2208` 展开屏、折叠切换、200% 字体、TalkBack、预测性返回、进程死亡/WorkManager 恢复、固定签名、覆盖安装、Logcat、版本号、APK digest 与发布。
+- Android：API 26、Fold8 `1080×1728` 封面屏、`1768×2208` 展开屏、折叠切换、200% 字体、TalkBack、预测性返回、进程死亡/WorkManager 恢复、Launcher Shortcut/Quick Settings Tile/widget 真实交互、固定签名、覆盖安装、Logcat、版本号、APK digest 与发布。
 - 跨端：iOS 创建后 Android/Mac 看见、Android 更新后 iOS/Mac 看见、双端同时编辑、离线删除恢复、重复/乱序 change、游标过期和附件下载的真实三设备联网矩阵。
 - Mac：新增存储页的登录后真实 Electron/浏览器走查、双机 Relay 在线/离线、四种 CLI 与 Leo 模型的真实写审批/引用、Electron 屏幕阅读器、签名、公证、热更新与回滚。
 - 协议：附件支持完整文件失败重试、临时文件、原子落盘和 digest 校验；**没有 HTTP Range 断点续传**。

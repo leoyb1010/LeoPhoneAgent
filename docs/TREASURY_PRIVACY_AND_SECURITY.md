@@ -33,6 +33,7 @@
 - iOS Share Extension 只负责原始保存和任务排队，不在受限扩展进程运行 WebView、OCR 或模型；图片/文件优先保留原始字节，只有暂存成功才登记附件，增强失败不会制造假成功记录。
 - iOS Spotlight 只接收明确标题、来源和用户标签，不接收原始正文、原始 URL 或生成摘要，避免敏感 query 和私密内容离开应用内索引边界。
 - Android Standard 的藏宝阁不依赖 Accessibility、Shizuku、悬浮窗或 Power 权限；后台增强使用 WorkManager，不新增常驻前台服务。
+- Android App Shortcut、按需快捷设置图块和桌面小组件复用同一个显式捕获深链，只在用户点击后打开轻量文字/URL 输入框；不自动读取或监听剪贴板。Quick Settings Tile 仅声明系统绑定权限 `BIND_QUICK_SETTINGS_TILE`，不增加应用运行时权限。
 - Mac 复用 leocodebox 本机认证、数据库和 Provider MCP 体系。MCP token 加密存储，stdio 文件镜像权限为 `0600`。
 
 ## 保留与删除
