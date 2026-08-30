@@ -25,6 +25,10 @@
 - Spotlight 不再回退到正文或带 query 的原始 URL，也不索引生成摘要；只使用明确标题、来源和标签。
 - 设置中的存储管理分开显示原始附件、可再生缩略图缓存和同步临时缓存；清理动作只作用于可再生成或可重新下载的数据，不删除收藏、正文、批注或原始附件。
 - 持久增强队列现在由主 App 实际领取并执行网页正文、OCR、PDF、音频转写和索引任务；失败状态、五次自动停止和用户显式重试继续使用既有恢复契约。
+- App Intents 现在完整提供“收进藏宝阁”“搜索藏宝阁”“打开藏宝阁”。Siri/快捷指令搜索只返回最多五条标题和来源，不朗读正文、OCR、批注、命中片段、ID 或本机路径。
+- “打开藏宝阁”使用 App Group 一次性路由标记，覆盖 Intent 独立执行进程到主 App 冷启动的交接；热启动继续通过同一中央路由打开。
+- iPad 在可用宽度至少 760pt 且为 regular width 时使用 `NavigationSplitView` 并排显示收藏列表与阅读/高亮详情；分屏或窗口变窄时退化为单栏。布局判断不依赖设备型号或键盘改变后的高度。
+- iOS Relay 入口移除旧 `uploadCollections(items)` 整库快照命名、无用数组参数和整库 fingerprint；自动同步现在只调用游标增量 changes，并在 actor 内合并并发触发且不丢失同步期间的新请求。
 
 ### Android
 
@@ -90,6 +94,26 @@
 - UI 增加确认弹窗、本地化错误、ARIA live/alert、显式 dialog label、窄屏布局和加载骨架；组件、服务、全量 typecheck/lint/test/build 均通过。
 - 本机浏览器成功加载客户端，但私有部署登录页阻挡“设置 → 存储空间”的登录后点击走查；没有读取或绕过凭据，因此该新增页面的真实 Electron/浏览器交互保持 HOLD。自动化组件测试已覆盖加载和错误状态，响应式结构通过 typecheck、lint 与 production build。
 
+## 系统入口、增量同步与 iPad 工作台追加三轮审计（2026-08-31）
+
+### 第 1 轮：施工规范逐项复核与 App Intents
+
+- 对照施工规范 8.1 的系统能力要求，确认原代码只有“收进藏宝阁”，补齐“搜索藏宝阁”和“打开藏宝阁”。
+- 搜索 Intent 查询限制为 500 字、结果限制为 5 条，输出层只允许标题和来源；新增敏感 snippet、条目 ID、空标题和打开策略回归。
+- Intent 定义加入 `MinisLogicTests` 编译源，修复 Swift 6 对静态可变 App Intent 元数据的并发检查。
+
+### 第 2 轮：同步协议真相与阶段性死码
+
+- 重新追踪 `CollectionsView` / `ContentView` 到 `RelayEventCatchUp` 的真实调用链，确认 wire protocol 已经使用游标 changes，而旧 `uploadCollections(items)` 参数被完全忽略。
+- 将 API 改为无快照参数的 `syncTreasuryChanges()`，删除整库 fingerprint 和“上传收藏索引”旧语义，避免代码继续暗示每次上传整库。
+- `LeoAgentClient` actor 合并重叠同步请求；网络 await 期间到达的新请求会触发额外完整游标轮次，不并发争用 cursor，也不静默漏掉更新。
+
+### 第 3 轮：冷启动交接、iPad 分栏与键盘状态
+
+- 将“打开藏宝阁”从纯进程内静态标记升级为 App Group 一次性标记加热启动通知，消费后同步清除，避免独立 Intent 执行进程导致冷启动路由丢失。
+- `CollectionsView` 增加按实际窗口宽度驱动的 `NavigationSplitView`；选中条目在详情列阅读、高亮、更新进度和打开/编辑，删除选中条目会清理详情状态。
+- 初版复用了同时依赖高度的聊天布局策略；复审发现键盘可能改变高度并重建未提交批注，因此改为藏宝阁独立纯宽度策略并补 759/760pt、compact size class 和非有限宽度测试。
+
 ## Agent 工具与授权边界
 
 统一契约：
@@ -151,11 +175,12 @@ treasury_update -> explicit approved metadata/read-state/annotation write
 
 ### iOS / iPadOS
 
-- Treasury 定向测试：**49/49 passed**。
-- `MinisLogicTests`：**320/320 passed**，0 failed，0 skipped。
-- xcresult：`~/Library/Developer/Xcode/DerivedData/LeoPhoneAgent-eepkwcwlunoccyencmgmqedpdkny/Logs/Test/Test-MinisLogicTests-2026.08.31_05-38-48-+0800.xcresult`。
+- Treasury 定向测试：**53/53 passed**。
+- `MinisLogicTests`：**324/324 passed**，0 failed，0 skipped。
+- xcresult：`~/Library/Developer/Xcode/DerivedData/LeoPhoneAgent-eepkwcwlunoccyencmgmqedpdkny/Logs/Test/Test-MinisLogicTests-2026.08.31_06-07-16-+0800.xcresult`。
 - `MinisShare` iOS Simulator target：build succeeded。
-- 主 App scheme：本机缺少仓库目标要求的 watchOS runtime，编译前阻断；保持 HOLD，不声明 iPhone/iPad 主 App 已运行。
+- 本轮 8 个 Swift 改动文件通过 `swiftc -frontend -parse` 语法解析。
+- 主 App target：正常构建在应用源码编译前被 `LeoWatch/Assets.xcassets` 和缺失 `WatchKit` 阻断；临时移除 Watch 构建边后又被 Swift package `_CryptoExtras` 无法解析 `SwiftASN1` 阻断，诊断改动已立即恢复。保持 HOLD，不声明新增 iPad UI 已完成类型检查或运行验证。
 
 ### Android Standard / Power
 
@@ -206,17 +231,18 @@ treasury_update -> explicit approved metadata/read-state/annotation write
 - `555765e` — `feat(ios-treasury): add safe cache storage controls`
 - `cf3bee4` — `feat(android-treasury): add safe cache storage controls`
 - `6552ae6` — `feat(mac-treasury): add safe cache storage controls`
+- `19a3323` — `fix(ios-treasury): complete system intents and adaptive workspace`
 
 实际代码范围：
 
-- iOS：`src/ios/Shared/CollectionStore.swift`、`CollectionSearchIndex.swift`、`SharedContainerStore.swift`、`ShareExtension/ShareViewModel.swift`、`StorageManagementView.swift`、Agent Chat 工具定义/执行/状态、`ChatStore.swift`、Treasury 测试。
+- iOS：`src/ios/Shared/CollectionStore.swift`、`CollectionSearchIndex.swift`、`SharedContainerStore.swift`、`ShareExtension/ShareViewModel.swift`、`StorageManagementView.swift`、`CollectionIntents.swift`、`CollectionsView.swift`、`ContentView.swift`、Relay 增量同步入口、Agent Chat 工具定义/执行/状态、`ChatStore.swift`、Treasury 测试。
 - Android：Treasure repository、统一 Agent tool schema/executor、`TreasuryStoragePolicy.kt`、`StorageManagementScreen.kt` 与契约回归测试。
 - Mac server：Treasury MCP stdio/API、CLI 入口、server 挂载、Treasury repository/service、Fleet 缓存校验、`treasury-storage.service.ts` 和 integration tests。
 - Mac client：`CollectionsMirror.tsx`、`StorageSettingsTab.tsx` 与可访问性/交互测试。
 
 ## 明确 HOLD 与未实现能力
 
-- iOS/iPadOS：主 App 模拟器运行、VoiceOver、Dynamic Type、Reduce Motion、拖放、多窗口、外接键盘、真机、签名、Archive、安装与发布。
+- iOS/iPadOS：本轮新增 App Intents 与 iPad 分栏的主 App 类型检查/模拟器运行；VoiceOver、Dynamic Type、Reduce Motion、拖放、多窗口、外接键盘、真机、签名、Archive、安装与发布。
 - Android：API 26、Fold8 `1080×1728` 封面屏、`1768×2208` 展开屏、折叠切换、200% 字体、TalkBack、预测性返回、进程死亡/WorkManager 恢复、固定签名、覆盖安装、Logcat、版本号、APK digest 与发布。
 - 跨端：iOS 创建后 Android/Mac 看见、Android 更新后 iOS/Mac 看见、双端同时编辑、离线删除恢复、重复/乱序 change、游标过期和附件下载的真实三设备联网矩阵。
 - Mac：新增存储页的登录后真实 Electron/浏览器走查、双机 Relay 在线/离线、四种 CLI 与 Leo 模型的真实写审批/引用、Electron 屏幕阅读器、签名、公证、热更新与回滚。
