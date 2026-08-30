@@ -40,6 +40,29 @@
 - 手机正文缓存写入和读取均复核 MIME、byte count 和 SHA-256；不完整或被篡改的缓存不会交给 Agent。
 - MCP token 加密保存在数据库，并以 `0600` 权限镜像到本机文件供 stdio 子进程读取；API 使用 timing-safe Bearer token 比较。
 - 藏宝阁标签页支持 ArrowLeft/ArrowRight/Home/End、roving tabindex、tab/tabpanel 关联；加载、错误、详情焦点和删除高亮确认具备明确可访问语义。
+- 本机和手机详情提供轻量“相关收藏”；本机 PDF 失败可显式重新处理，且重试前重新验证受控路径、PDF 文件头、byte count 与 SHA-256。
+
+## 追加三轮审计与修复（2026-08-31）
+
+### 第 1 轮：相关正文、相关收藏与后台竞态
+
+- 三端 `treasury_get` 由无条件正文前缀改为围绕标题、摘要、标签和批注命中的相关窗口；无命中才回退前缀。
+- 三端实现可解释相关收藏排序，并排除归档、自身以及“文本/文件/图片”等通用来源造成的伪关联。
+- iOS 相关收藏切换移除固定 0.25 秒动画假设，改由 sheet 关闭回调安全衔接。
+- iOS/Android 网页增强不再覆盖增强期间用户手写的新标题。
+
+### 第 2 轮：持久重试、完整性与 Unicode
+
+- 三端自动任务统一在五次失败后停止；用户显式重试重置 attempt count。
+- Android 重试在 Room 事务中同时更新任务与条目可见状态；Mac PDF 重试只重置 `extract_text`，不误唤醒其他失败作业。
+- Mac PDF 重试重新验证 realpath 受控目录、文件类型、byte count 和 digest 后才排队。
+- Android/Mac 相关正文截断避免拆开 UTF-16 surrogate pair，补 emoji 回归。
+
+### 第 3 轮：类型、lint、构建与边界复核
+
+- 修复 Mac 测试窄类型导致的 TypeScript 正式 typecheck 失败，以及两处 Tailwind 类名顺序零警告门禁。
+- 重新执行 iOS 全量逻辑测试与 Share target、Android 双 flavor 编译/单测/androidTest 编译/lint、Mac typecheck/test/lint/build。
+- 复核本轮无新依赖、无常驻服务、无 Power 权限泄漏、无密钥/真实收藏/本机敏感路径写入源码。
 
 ## Agent 工具与授权边界
 
@@ -103,8 +126,8 @@ treasury_update -> explicit approved metadata/read-state/annotation write
 ### iOS / iPadOS
 
 - Treasury 定向测试：**41/41 passed**。
-- `MinisLogicTests`：**312/312 passed**，0 failed，0 skipped。
-- xcresult：`~/Library/Developer/Xcode/DerivedData/LeoPhoneAgent-eepkwcwlunoccyencmgmqedpdkny/Logs/Test/Test-MinisLogicTests-2026.08.31_04-09-49-+0800.xcresult`。
+- `MinisLogicTests`：**317/317 passed**，0 failed，0 skipped。
+- xcresult：`~/Library/Developer/Xcode/DerivedData/LeoPhoneAgent-eepkwcwlunoccyencmgmqedpdkny/Logs/Test/Test-MinisLogicTests-2026.08.31_04-45-13-+0800.xcresult`。
 - `MinisShare` iOS Simulator target：build succeeded。
 - 主 App scheme：本机缺少仓库目标要求的 watchOS runtime，编译前阻断；保持 HOLD，不声明 iPhone/iPad 主 App 已运行。
 
@@ -118,8 +141,8 @@ treasury_update -> explicit approved metadata/read-state/annotation write
 ```
 
 - `BUILD SUCCESSFUL`。
-- Standard：**607 tests，0 failures，1 skipped**。
-- Power：**607 tests，0 failures，1 skipped**。
+- Standard：**612 tests，0 failures，1 skipped**。
+- Power：**612 tests，0 failures，1 skipped**。
 - Standard lint：0 errors、542 warnings、38 hints；Power lint：0 errors、538 warnings、38 hints。XML 报告未命中本轮修改文件，均为仓库全局既有项。
 - Standard 基础藏宝阁未引入 Accessibility、Shizuku、悬浮窗或 Power 权限依赖。
 
@@ -127,8 +150,8 @@ treasury_update -> explicit approved metadata/read-state/annotation write
 
 - `npm run typecheck`：通过。
 - `npm run test:desktop`：**37/37 passed**。
-- `npm run test:client`：**162/162 passed**。
-- `npm run test:server`：**396/396 passed**。
+- `npm run test:client`：**163/163 passed**。
+- `npm run test:server`：**401/401 passed**。
 - `npm run lint`：通过，0 error / 0 warning。
 - `npm run build`：client/server production build 通过。
 - MCP stdio `tools/list`：通过，四工具、annotations 和 schema 可被真实进程枚举。

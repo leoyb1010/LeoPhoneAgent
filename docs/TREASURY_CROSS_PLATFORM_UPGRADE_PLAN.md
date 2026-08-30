@@ -895,7 +895,7 @@ Android Standard 获得完整独立藏宝阁；iOS、Android、Mac 捕获入口�
 
 实际交付证据：[Phase 3 阅读、批注、处理状态与智能搜索](TREASURY_PHASE3_DELIVERY_EVIDENCE.md)
 
-当前状态：本机必需源码与自动化范围已完成；设备/可访问性、跨端阅读冲突、可选音频转写和可选语义召回仍明确 HOLD，不能据此宣称 Phase 3 已公开发布。
+当前状态：本机必需源码与自动化范围已完成；相关收藏、相关正文截断、有限自动重试和 iOS/Mac 失败重试入口已在追加审计中落地。设备/可访问性、跨端阅读冲突、可选音频转写和可选语义召回仍明确 HOLD，不能据此宣称 Phase 3 已公开发布。
 
 ### Phase 4：增量同步与 Mac 主动工作台
 
@@ -945,7 +945,7 @@ Android Standard 获得完整独立藏宝阁；iOS、Android、Mac 捕获入口�
 
 实际交付证据：[Phase 5 最终审计、修复与源码交付](TREASURY_PHASE5_DELIVERY_EVIDENCE.md)
 
-当前状态：Phase 0–5 本机可实现源码与自动化范围已完成；真实 iPhone/iPad、API 26/Fold8、三端联网、签名、覆盖安装、公证和公开发布门禁仍为 HOLD。设备执行步骤见 [藏宝阁设备测试与发版清单](TREASURY_DEVICE_RELEASE_CHECKLIST.md)，不得把源码完成写成已公开发版。
+当前状态：Phase 0–5 本机可实现源码与自动化范围已完成，并额外完成相关内容、持久重试、后台标题竞态、PDF 重试完整性和 Unicode 截断三轮复审；真实 iPhone/iPad、API 26/Fold8、三端联网、签名、覆盖安装、公证和公开发布门禁仍为 HOLD。设备执行步骤见 [藏宝阁设备测试与发版清单](TREASURY_DEVICE_RELEASE_CHECKLIST.md)，不得把源码完成写成已公开发版。
 
 ---
 

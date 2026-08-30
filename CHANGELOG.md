@@ -16,6 +16,9 @@
 - iOS Share Extension 优先保留图片和文件原始字节，暂存成功后才登记附件；Spotlight 只索引标题、来源和标签，不再索引正文、原始 URL 或摘要。
 - 三端 `treasury_search` / `treasury_get` 上限与 envelope 再次对齐：search 明确顶层 `truncated`，get 统一最多 100 个 ID、单条 50,000 字正文，并对非法 kind、阅读状态和时间区间失败关闭。
 - iOS 合集过滤不再在 500 条后丢成员关系，正文 FTS 候选不再在 200 条后漏掉合法结果；Mac 结构化过滤在 SQL 截断前执行；Android FTS 在 LIMIT 前按加权相关度排序。
+- 三端 `treasury_get` 在正文后部存在标题/摘要/标签/批注命中时返回相关窗口，不再只给开头；emoji 截断保持有效 Unicode。
+- iOS、Android、Mac 详情补齐可解释相关收藏，并排除“文本/文件/图片”等通用来源造成的伪关联。
+- 后台网页增强不再覆盖用户刚修改的标题；五次自动失败后停止，用户显式重试会重置持久任务。Mac PDF 重试额外复核受控路径、文件类型、byte count 和 SHA-256。
 
 ### 三轮最终审计与验证
 
@@ -24,7 +27,8 @@
 - 第三轮修复 Mac 键盘/读屏语义、详情焦点、加载空态和测试落盘位置，并完成真实 production browser 宽/窄窗口走查。
 - 完成定义复审继续修复 Android 工具契约分叉、非法筛选静默放宽、iOS Spotlight 摘要泄漏和 Share Extension 假成功/有损转码，并补回归测试。
 - 契约完成度三轮复审继续修复 iOS 200/500 条候选截断、Mac 500 条后二次过滤漏项与非法日历日期、Android 在相关度排序前按更新时间截断，并增加超过 200/500 条的大库回归。
-- iOS Treasury 41/41、MinisLogicTests 312/312 和 MinisShare direct target build 通过；Android Standard/Power 各 607 tests（0 failed、1 skipped）且双 lint 0 error；Mac desktop 37/37、client 162/162、server 396/396、typecheck、全仓 lint 和 production build 通过。
+- 追加三轮恢复审计修复相关来源误判、iOS sheet 动画竞态、三端持久重试、Mac PDF 重试完整性、UTF-16 截断、TypeScript 窄类型和 Tailwind 零警告门禁。
+- iOS Treasury 全量纳入 MinisLogicTests 317/317，MinisShare direct target build 通过；Android Standard/Power 各 612 tests（0 failed、1 skipped）且双 lint 0 error；Mac desktop 37/37、client 163/163、server 401/401、typecheck、全仓 lint 和 production build 通过。
 
 ### 边界
 

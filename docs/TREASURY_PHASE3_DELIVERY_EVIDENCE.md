@@ -34,6 +34,16 @@ Phase 3 的本机必需能力已完成：三端都能区分收件箱、处理中
 - PDF 通过持久 `extract_text` 作业调用 PDFKit JXA 后台提取，具备 claim、complete、fail、30 秒超时、16 MB 输出和 500 页/2,000,000 字符上限。
 - 列表 API 不返回大正文；详情按需读取并限制单次 100,000 字符。SQLite FTS trigger 直接维护索引，不制造无法消费的假 `index` 作业。
 - 不支持的图片 OCR、通用文档提取和音频转写显示 partial，而不是伪装完成或丢弃原文件。
+- 本机 PDF 失败详情提供真实“重新处理 PDF”入口；重试前重新验证受控路径、PDF 文件头、byte count 和 SHA-256，并只重置 `extract_text` 作业。
+
+### 2026-08-31 追加恢复审计
+
+- 三端 `treasury_get` 不再永远截取正文前缀；标题、摘要、标签或批注在正文后部命中时，会返回包含相关段落的有界窗口，并保持明确 `truncated`。
+- 三端详情新增可解释的“相关收藏”：共享标签优先，其次为真实站点/来源与关键词重叠；“文本”“文件”“图片”等通用捕获标签不再把无关条目强行关联。
+- iOS 相关条目切换改为等待 sheet 的真实关闭回调后再打开，不依赖固定动画延时。
+- iOS、Android、Mac 自动增强最多尝试五次；用户显式重试会重置持久任务。Android 同一事务把可见处理状态切回 queued，Mac PDF 重试不会误唤醒其他失败处理器。
+- iOS/Android 网页标题增强记录任务开始时的标题，完成时仅在标题未被用户修改时写回，避免慢网络覆盖用户手写标题。
+- Android/Mac 正文窗口补齐 UTF-16 代理对边界测试，emoji 不会在截断处产生损坏字符串。
 
 ## 数据与协议变化
 
@@ -126,7 +136,7 @@ Phase 3 的本机必需能力已完成：三端都能区分收件箱、处理中
 
 ### iOS / iPadOS
 
-- `MinisLogicTests`：**301/301 passed**，0 failed。
+- 最新追加审计 `MinisLogicTests`：**317/317 passed**，0 failed，0 skipped。
 - `MinisShare` iOS Simulator target：build succeeded。
 - 修改 Swift 文件：`swiftc -parse` 通过。
 - `ArticleExtractor.swift` 独立 iOS Simulator typecheck 通过。
@@ -141,7 +151,7 @@ npm run test:server
 npm run build
 ```
 
-结果：typecheck 成功；服务端测试 **385/385 passed**；client/server production build 成功。
+最新追加审计结果：typecheck 成功；desktop **37/37**、client **163/163**、server **401/401 passed**；零警告 lint 和 client/server production build 成功。
 
 ## HOLD：必须在用户测试环境完成
 

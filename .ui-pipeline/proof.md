@@ -9,11 +9,11 @@
 ## Automated evidence
 
 - Android Standard/Power: Kotlin compile、instrumentation 测试源码 compile、完整 JVM tests、lint 均通过；lint 0 error；无设备，因此 instrumentation 未执行。
-- Android contract tests: Standard/Power 各 607 tests（0 failed、1 skipped）；Room 11→12、精确查询/特殊字符标签、结构化 Agent 筛选、严格时间边界、阅读状态/进度、高亮事务、Agent 授权/注入和 PDF 任务边界。
-- iOS: Treasury 41/41；MinisLogicTests 312/312；MinisShare direct target simulator build succeeded；Spotlight 不再接收正文/URL/摘要，分享暂存按原始字节成功后发布；200/500 条后的过滤命中有自动化回归。
+- Android contract tests: Standard/Power 各 612 tests（0 failed、1 skipped）；Room 11→12、精确查询/特殊字符标签、结构化 Agent 筛选、严格时间边界、阅读状态/进度、高亮事务、Agent 授权/注入、PDF 任务边界、相关正文/相关收藏与显式重试状态。
+- iOS: MinisLogicTests 317/317；MinisShare direct target simulator build succeeded；Spotlight 不再接收正文/URL/摘要，分享暂存按原始字节成功后发布；200/500 条过滤、相关正文/相关收藏、有限重试和用户标题保护有自动化回归。
 - iOS main app: HOLD；`LeoPhoneAgent` scheme 包含嵌入式 Apple Watch App，本机未安装 watchOS 26.5，`xcodebuild` 以 exit 70 在编译前终止。
 - Relay: 12/12 安全与协议测试通过，覆盖幂等、乱序、重启、旧 500 快照、按需资产和 MIME/digest 拒绝。
-- Mac: typecheck passed；desktop 37/37；client 162/162；server 396/396；全仓 lint 和 production build passed；结构化过滤在 SQL 截断前执行的 500 条边界有自动化回归。
+- Mac: typecheck passed；desktop 37/37；client 163/163；server 401/401；全仓 lint 和 production build passed；结构化过滤、相关收藏、UTF-16 截断、有限重试和 PDF 重试完整性有自动化回归。
 
 ## Rendered/interaction evidence
 
