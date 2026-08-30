@@ -22,6 +22,13 @@ function isLocalHttpOrigin(location) {
     && (location.hostname === '127.0.0.1' || location.hostname === 'localhost');
 }
 
+function requestLocalOnlyAuthToken(location) {
+  if (!isLocalHttpOrigin(location)) return false;
+
+  const token = ipcRenderer.sendSync('leocodebox:get-local-auth-token', location.origin);
+  return typeof token === 'string' && token ? token : null;
+}
+
 function installLocalOnlyAuthToken(location) {
   if (!isLocalHttpOrigin(location)) return false;
 
@@ -34,8 +41,8 @@ function installLocalOnlyAuthToken(location) {
       window.localStorage.setItem(languageMigrationKey, '1');
     }
 
-    const token = ipcRenderer.sendSync('leocodebox:get-local-auth-token', location.origin);
-    if (typeof token === 'string' && token) {
+    const token = requestLocalOnlyAuthToken(location);
+    if (token) {
       window.localStorage.setItem('auth-token', token);
       return true;
     }
@@ -56,7 +63,11 @@ function onDesktopStateUpdated(callback) {
 const localAuthReady = installLocalOnlyAuthToken(window.location);
 
 if (isLocalHttpOrigin(window.location)) {
-  const localBridge = { enabled: true, authReady: localAuthReady };
+  const localBridge = {
+    enabled: true,
+    authReady: localAuthReady,
+    refreshAuthToken: () => installLocalOnlyAuthToken(window.location),
+  };
   // Leoapi 切换页是同源的独立工具页,需要「回到工作台」这条出口。
   // (菜单栏额度面板曾经也走这里;产品收缩后那条线已整体移除。)
   if (window.location.pathname === '/leocodebox-switch.html') {

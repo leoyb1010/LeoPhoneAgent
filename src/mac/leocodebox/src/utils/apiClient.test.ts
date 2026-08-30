@@ -60,6 +60,53 @@ test('apiRequest rejects malformed refreshed tokens instead of storing them', as
   }
 });
 
+test('local desktop refreshes a rotated auth token and retries a rejected request once', async () => {
+  const values = installLocalStorage();
+  values.set('auth-token', 'stale-local-token');
+  const originalFetch = globalThis.fetch;
+  const originalWindow = globalThis.window;
+  let refreshCalls = 0;
+  let requests = 0;
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: {
+      leocodeboxLocal: {
+        enabled: true,
+        refreshAuthToken: () => {
+          refreshCalls += 1;
+          values.set('auth-token', 'fresh-local-token');
+          return true;
+        },
+      },
+    },
+  });
+  globalThis.fetch = async (_url, init) => {
+    requests += 1;
+    const authorization = new Headers(init?.headers).get('Authorization');
+    if (authorization !== 'Bearer fresh-local-token') {
+      return new Response(JSON.stringify({ error: 'Access denied. Invalid local auth token.' }), {
+        status: 401,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    return new Response(JSON.stringify({ projects: [] }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  try {
+    assert.deepEqual(await apiRequest('/api/projects'), { projects: [] });
+    assert.equal(refreshCalls, 1);
+    assert.equal(requests, 2);
+    assert.equal(values.get('auth-token'), 'fresh-local-token');
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalWindow === undefined) delete (globalThis as { window?: Window }).window;
+    else Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
+  }
+});
+
 test('apiRequest converts server error payloads into structured ApiError instances', async () => {
   installLocalStorage();
   const originalFetch = globalThis.fetch;

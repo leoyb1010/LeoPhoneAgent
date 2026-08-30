@@ -20,20 +20,31 @@ export function isValidRefreshedToken(token: unknown): token is string {
     && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token);
 }
 
-export function authenticatedFetch(url: string, options: RequestInit = {}): Promise<Response> {
-  const token = localStorage.getItem('auth-token');
-  const defaultHeaders: Record<string, string> = {};
-  if (!(options.body instanceof FormData)) defaultHeaders['Content-Type'] = 'application/json';
-  if (!IS_PLATFORM && token) defaultHeaders.Authorization = `Bearer ${token}`;
+export async function authenticatedFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const localBridge = typeof window === 'undefined' ? undefined : window.leocodeboxLocal;
+  const send = () => {
+    const token = localStorage.getItem('auth-token');
+    const headers = new Headers(options.headers);
+    if (!(options.body instanceof FormData) && !headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
+    if (!IS_PLATFORM && token && (localBridge?.enabled || !headers.has('Authorization'))) {
+      // The desktop bridge is the authority for loopback auth. Never let a
+      // stale caller-provided header override the token it just installed.
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+    return fetch(url, { ...options, headers });
+  };
 
-  return fetch(url, {
-    ...options,
-    headers: { ...defaultHeaders, ...options.headers },
-  }).then((response) => {
-    const refreshedToken = response.headers.get('X-Refreshed-Token');
-    if (isValidRefreshedToken(refreshedToken)) localStorage.setItem('auth-token', refreshedToken);
-    return response;
-  });
+  let response = await send();
+  if (response.status === 401 && localBridge?.enabled && localBridge.refreshAuthToken?.()) {
+    // A bundled server restart rotates the in-memory local token while the SPA
+    // can remain alive. A 401 is side-effect free, so refresh and retry once.
+    response = await send();
+  }
+  const refreshedToken = response.headers.get('X-Refreshed-Token');
+  if (isValidRefreshedToken(refreshedToken)) localStorage.setItem('auth-token', refreshedToken);
+  return response;
 }
 
 async function parseResponsePayload(response: Response): Promise<unknown> {

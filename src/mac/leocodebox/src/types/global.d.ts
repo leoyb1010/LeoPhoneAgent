@@ -3,7 +3,11 @@ export {};
 declare global {
   interface Window {
     __ROUTER_BASENAME__?: string;
-    leocodeboxLocal?: { enabled: boolean; authReady?: boolean };
+    leocodeboxLocal?: {
+      enabled: boolean;
+      authReady?: boolean;
+      refreshAuthToken?: () => boolean;
+    };
     leocodeboxDesktopTools?: {
       setThemeMode: (mode: 'system' | 'light' | 'dark') => Promise<unknown>;
       setRunningBadge?: (count: number) => Promise<unknown>;
