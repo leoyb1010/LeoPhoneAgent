@@ -893,6 +893,10 @@ Android Standard 获得完整独立藏宝阁；iOS、Android、Mac 捕获入口�
 - 用户高亮/标签不被重新处理覆盖；
 - 阅读进度跨端冲突可预测。
 
+实际交付证据：[Phase 3 阅读、批注、处理状态与智能搜索](TREASURY_PHASE3_DELIVERY_EVIDENCE.md)
+
+当前状态：本机必需源码与自动化范围已完成；设备/可访问性、跨端阅读冲突、可选音频转写和可选语义召回仍明确 HOLD，不能据此宣称 Phase 3 已公开发布。
+
 ### Phase 4：增量同步与 Mac 主动工作台
 
 #### 目标

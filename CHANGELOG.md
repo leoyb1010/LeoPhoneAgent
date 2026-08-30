@@ -4,6 +4,27 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## 藏宝阁 Phase 3 源码交付（未发版）- 2026-08-31
+
+### 用户可见源码变化
+
+- iOS、Android、Mac 藏宝阁增加收件箱、处理中、失败、待读、最近使用、阅读状态、阅读进度、定位高亮、批注和精确筛选。
+- Android/iOS 在后台离线逐页提取 PDF，Mac 使用可恢复的持久 PDF 作业；失败不会删除原始附件，搜索结果可返回页级命中片段。
+- 三端长正文阅读改为有界渲染；Android Fold 状态和 Mac 快速搜索竞态得到修复。
+
+### 三轮审计与验证
+
+- 第一轮修复高亮事务、阅读状态矛盾、iOS 正文落盘状态、Mac FTS/PDF 作业完整性。
+- 第二轮修复 iOS 网页 SSRF/重定向/子资源边界、正文路径穿越、Android Agent 提示注入授权和 Mac 查询竞态/命中来源。
+- 第三轮修复长正文渲染、Android 滚动状态、Mac 重复镜像请求和 PDFBox 传递许可。
+- Android Standard/Power 编译、JVM tests、instrumentation 源码编译和 lint 通过（0 lint error）；iOS MinisLogicTests 301/301、MinisShare build 和 ArticleExtractor typecheck 通过；Mac typecheck、385/385 server tests 和 production build 通过。
+
+### 边界
+
+- 本条是源码交付，不 bump 版本、不发布 APK/IPA/Mac 包。
+- Fold8、API 26、TalkBack、200% 字体、移动端签名/覆盖安装、iPhone/iPad 主 App、Mac 真实窗口/签名/公证仍为 HOLD。
+- Phase 4 游标增量同步、正文/附件按需同步和跨端冲突尚未完成；可选音频转写与语义召回/RRF 未启用。
+
 <a id="t12-alpha23"></a>
 ## T12 · iOS 1.30.1 (105) / Android 1.0.0-alpha.23 / Mac 1.80.0 - 2026-08-30
 

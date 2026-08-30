@@ -2,7 +2,7 @@
 
 ## Direction decision
 
-- Chosen direction: “捕获入口轻，工作台信息密度随宽度增长”。保存动作不要求先填写分类；进入藏宝阁后再搜索、筛选、阅读和批注。
+- Chosen direction: “捕获入口轻，工作台信息密度随宽度增长”。保存动作不要求先填写分类；进入藏宝阁后再按处理/阅读状态搜索、筛选、阅读、定位高亮和批注。
 - Existing authority: Android Material 3、iOS SwiftUI 列表/系统拖放、Mac leocodebox token 与卡片体系。
 
 ## Originality contract
@@ -43,3 +43,4 @@
 
 - 使用原生导航、列表和对话框过渡；状态不依赖动画表达。
 - 未增加持续 shimmer、呼吸或后台动画；遵循系统 Reduce Motion。
+- 超长正文只向交互式阅读控件提供有界窗口；PDF/OCR/索引均在后台任务完成，避免用动画掩盖主线程阻塞。

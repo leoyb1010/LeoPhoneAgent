@@ -31,6 +31,12 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
   `src/mac/leocodebox/`。`src/mac/leoagent/` 是协议兼容/灰度回退，不是 Android UI 工程。
   藏宝阁 iOS / Android / Mac 三端升级必须先读：
   [`docs/TREASURY_CROSS_PLATFORM_UPGRADE_PLAN.md`](docs/TREASURY_CROSS_PLATFORM_UPGRADE_PLAN.md)。
+  当前已完成 Phase 0–3 的本机源码与自动化施工；阶段证据见
+  [Phase 0](docs/TREASURY_PHASE0_DELIVERY_EVIDENCE.md)、
+  [Phase 1](docs/TREASURY_PHASE1_DELIVERY_EVIDENCE.md)、
+  [Phase 2](docs/TREASURY_PHASE2_DELIVERY_EVIDENCE.md) 和
+  [Phase 3](docs/TREASURY_PHASE3_DELIVERY_EVIDENCE.md)。Phase 3 的设备、可访问性、
+  签名和公开发布仍为 HOLD，Phase 4 增量同步尚未完成，不能把源码门禁等同于三端发版。
   鸿蒙 7 交付计划：
   [`docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md`](docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md)；
   工程落地在 `src/harmony/`。当前船是 `0.3.0-alpha.17`，只走 `hdc install`。

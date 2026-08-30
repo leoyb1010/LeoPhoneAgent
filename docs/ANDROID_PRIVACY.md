@@ -1,6 +1,6 @@
 # LeoPhoneAgent Android Privacy / Android 隐私说明
 
-Last updated: 2026-08-21
+Last updated: 2026-08-31
 
 LeoPhoneAgent is a personal, local-first Agent. Chat sessions, terminal files,
 settings, permission decisions and Relay configuration are stored on the
@@ -72,6 +72,20 @@ You can delete conversations, provider credentials, memories, mounted folders,
 logs and application data from the app or Android system settings. Uninstalling
 the app removes its private local data.
 
+### Treasury / local knowledge library
+
+Treasury items, extracted text, reading progress, highlights and annotations
+are stored in the app-private local database and files. Saving an original URL,
+text or file does not require OCR, a model or a Leo-operated server. PDF text
+extraction runs locally in bounded WorkManager jobs; unsupported OCR or audio
+transcription remains visibly partial instead of uploading the file silently.
+External web, PDF, OCR and transcription text is treated as untrusted content
+and cannot authorize `treasury_save` or `treasury_update`. Content is sent to an
+AI provider only when you explicitly include or ask the Agent to use it. Cross-
+device body and attachment synchronization is not enabled by the Phase 3 source
+delivery; Phase 4 must add user-controlled, on-demand transfer before claiming
+that capability.
+
 ---
 
 LeoPhoneAgent 是一个个人、本地优先的 Agent。聊天会话、终端文件、设置、权限决定和
@@ -121,3 +135,13 @@ CLI 自己的登录可能把登录文件保存在私有 Linux rootfs 内；这�
 或 xAI API Key 才会通过内存交给当前这一个终端子进程。密钥不会进入导航参数、
 命令行、Shell 历史或 Linux 配置文件。OAuth/订阅令牌、自定义地址和 Azure 凭据
 不会导出给外部 CLI；Cursor 使用自己的登录或 `CURSOR_API_KEY`。
+
+### 藏宝阁 / 本地知识库
+
+藏宝阁条目、提取正文、阅读进度、高亮和批注保存在应用私有数据库与文件中。保存原始
+URL、文字或文件不依赖 OCR、模型或 Leo 运营的服务器。PDF 文本只在有边界的
+WorkManager 后台任务中本地提取；不支持的 OCR 或音频转写会明确显示 partial，不会
+静默上传文件。网页、PDF、OCR 和转写文本都按不可信资料处理，不能授权
+`treasury_save` 或 `treasury_update`。只有你明确选择或要求 Agent 使用时，相关内容才会
+发送给已配置的 AI 提供商。Phase 3 源码交付尚未开启跨设备正文和附件同步；Phase 4
+必须先实现用户可控的按需传输，才能宣称具备该能力。

@@ -39,6 +39,8 @@ Transitive packages (pinned in `Package.resolved`), all **Apache-2.0**, maintain
 | multiplatform-markdown-renderer (+ m3) — mikepenz | 0.33.0 | **Apache-2.0** |
 | Reorderable (sh.calvin.reorderable) | 2.4.0 | **Apache-2.0** |
 | ACRA (acra-core) | 5.12.0 | **Apache-2.0** |
+| PDFBox Android (com.tom-roush:pdfbox-android) | 2.0.27.0 | **Apache-2.0** |
+| Bouncy Castle Provider / PKIX / Utilities (PDFBox Android transitive) | 1.72 | **Bouncy Castle Licence (MIT-style)** |
 | Shizuku API + provider (dev.rikka.shizuku) | 13.1.5 | **MIT** |
 
 Test-only dependencies: JUnit 4.13.2 (**EPL-1.0**), MockWebServer 4.12.0 (**Apache-2.0**), kotlinx-coroutines-test 1.9.0 (**Apache-2.0**), org.json 20231013 (**Public Domain / JSON License**).

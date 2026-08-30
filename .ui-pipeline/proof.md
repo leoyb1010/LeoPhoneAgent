@@ -2,17 +2,17 @@
 
 ## Verification scope
 
-- Release level: Phase 2 source delivery；不发布 APK/IPA/Mac 包。
-- Screens: Android Treasury 单/双/三栏、Share destination、详情/批注/重试；iPad drop；Artifact Tray save；Mac 本机捕获和混合列表。
+- Release level: Phase 3 source delivery；不发布 APK/IPA/Mac 包。
+- Screens: Android Treasury 单/双/三栏、Share destination、处理/阅读筛选、详情/定位高亮/批注/重试；iPad drop；Artifact Tray save；Mac 捕获、搜索、阅读与高亮工作台。
 - Required viewports: Fold8 1080×1728 cover、1768×2208 expanded、200% font；当前无 AVD，视觉状态为 HOLD。
 
 ## Automated evidence
 
-- Android Standard/Power: Kotlin compile、instrumentation 测试源码 compile、完整 JVM tests、lint 均通过；无设备，因此 instrumentation 未执行。
-- Android contract tests: Agent schema/授权/注入、PendingShare 兼容、SSRF 网段、文本预算、URL 凭据。
-- iOS: MinisLogicTests 298/298；MinisShare direct target simulator build succeeded。
-- iOS main app: HOLD；LeoWatch 需要未安装的 watchOS 26.5，且现有 AppIcon/Watch target 阻断完整主 App build。
-- Mac: typecheck passed；server tests 381/381；production build passed。
+- Android Standard/Power: Kotlin compile、instrumentation 测试源码 compile、完整 JVM tests、lint 均通过；lint 0 error；无设备，因此 instrumentation 未执行。
+- Android contract tests: Room 11→12、精确查询/特殊字符标签、阅读状态/进度、高亮事务、Agent 授权/注入和 PDF 任务边界。
+- iOS: MinisLogicTests 301/301；MinisShare direct target simulator build succeeded；ArticleExtractor 独立 simulator typecheck 通过。
+- iOS main app: HOLD；`LeoPhoneAgent` scheme 包含嵌入式 Apple Watch App，本机未安装 watchOS 26.5，`xcodebuild` 以 exit 70 在编译前终止。
+- Mac: typecheck passed；server tests 385/385；production build passed。
 
 ## Rendered/interaction evidence
 
@@ -28,12 +28,13 @@
 - 查询、筛选、选择、详情 ID、批注草稿使用 rememberSaveable；LazyListState 保持滚动状态。
 - Android 列表和 Agent 搜索使用轻量 SQL/FTS 投影，不加载完整正文；Mac 列表投影排除正文与文件引用。
 - Mac textarea、搜索和捕获 group 有 aria-label；保存区暴露 aria-busy；手机离线错误使用 role=status。
+- 三端交互式正文视图设字符上限，完整原始内容仍留在本地存储；失败和 partial 状态以文字表达，不只依赖颜色或动效。
 
 ## Originality gate
 
 | Axis | Score | Evidence |
 |---|---:|---|
-| Product specificity | 2 | 原始先保存、处理状态、Agent 调用与手机陈旧镜像均为藏宝阁真实机制 |
+| Product specificity | 2 | 原始先保存、处理/阅读状态、PDF 页级命中、Agent 调用与手机陈旧镜像均为藏宝阁真实机制 |
 | Hierarchy | 2 | 搜索/列表为首读，详情与捕获动作层级明确 |
 | Composition | 2 | Android 1/2/3 栏按可用宽度重组 |
 | Material/assets | 2 | 完全复用三端原生系统与仓库 token，无新视觉依赖 |
@@ -48,3 +49,4 @@
 - TalkBack、预测性返回、SAF 大批量分享需要设备验证。
 - iOS Artifact/Drop 主 App 源文件未获得完整 simulator build/run 证据。
 - Mac Electron 真界面的拖放、键盘与屏幕阅读器仍需运行走查。
+- 可选音频转写和可选语义召回/RRF 未启用；当前 FTS 基础检索不依赖模型。
