@@ -200,6 +200,120 @@ CREATE TABLE IF NOT EXISTS mission_cards (
 );
 `;
 
+export const TREASURE_TABLES_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS treasure_items (
+    id TEXT PRIMARY KEY NOT NULL,
+    user_id INTEGER NOT NULL,
+    schema_version INTEGER NOT NULL DEFAULT 1,
+    kind TEXT NOT NULL,
+    title TEXT,
+    source_uri TEXT,
+    normalized_url_key TEXT,
+    source_app TEXT,
+    source_label TEXT NOT NULL,
+    original_text TEXT,
+    body_ref TEXT,
+    preview_ref TEXT,
+    mime_type TEXT,
+    byte_count INTEGER NOT NULL DEFAULT 0 CHECK(byte_count >= 0),
+    content_digest TEXT,
+    summary TEXT,
+    annotation TEXT,
+    tags_json TEXT NOT NULL DEFAULT '[]',
+    collection_ids_json TEXT NOT NULL DEFAULT '[]',
+    pinned INTEGER NOT NULL DEFAULT 0,
+    archived INTEGER NOT NULL DEFAULT 0,
+    reading_state TEXT NOT NULL DEFAULT 'none',
+    reading_progress REAL NOT NULL DEFAULT 0 CHECK(reading_progress BETWEEN 0 AND 1),
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    last_opened_at TEXT,
+    processing_state TEXT NOT NULL DEFAULT 'saved',
+    processing_error_code TEXT,
+    sync_state TEXT NOT NULL DEFAULT 'local',
+    origin_device_id TEXT NOT NULL,
+    deleted_at TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_treasure_items_user_updated
+    ON treasure_items(user_id, deleted_at, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_treasure_items_url
+    ON treasure_items(user_id, normalized_url_key) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_treasure_items_digest
+    ON treasure_items(user_id, content_digest) WHERE deleted_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS treasure_collections (
+    id TEXT PRIMARY KEY NOT NULL,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    icon TEXT,
+    color_token TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    deleted_at TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS treasure_chunks (
+    item_id TEXT NOT NULL,
+    chunk_index INTEGER NOT NULL,
+    section_label TEXT,
+    text TEXT NOT NULL,
+    start_offset INTEGER NOT NULL,
+    end_offset INTEGER NOT NULL,
+    PRIMARY KEY(item_id, chunk_index),
+    FOREIGN KEY (item_id) REFERENCES treasure_items(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS treasure_jobs (
+    id TEXT PRIMARY KEY NOT NULL,
+    item_id TEXT NOT NULL,
+    job_type TEXT NOT NULL,
+    state TEXT NOT NULL DEFAULT 'queued',
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    last_error_code TEXT,
+    FOREIGN KEY (item_id) REFERENCES treasure_items(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_treasure_jobs_ready
+    ON treasure_jobs(state, next_attempt_at, created_at);
+
+CREATE TABLE IF NOT EXISTS treasure_changes (
+    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+    change_id TEXT UNIQUE NOT NULL,
+    item_id TEXT NOT NULL,
+    operation TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    origin_device_id TEXT NOT NULL,
+    payload_digest TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_treasure_changes_item ON treasure_changes(item_id, sequence);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS treasure_search_fts USING fts5(
+    item_id UNINDEXED, user_id UNINDEXED, title, original_text, summary, annotation, tags,
+    tokenize='unicode61 remove_diacritics 2'
+);
+CREATE TRIGGER IF NOT EXISTS treasure_search_insert AFTER INSERT ON treasure_items
+WHEN new.deleted_at IS NULL BEGIN
+    INSERT INTO treasure_search_fts(rowid,item_id,user_id,title,original_text,summary,annotation,tags)
+    VALUES(new.rowid,new.id,new.user_id,COALESCE(new.title,''),COALESCE(new.original_text,''),
+           COALESCE(new.summary,''),COALESCE(new.annotation,''),new.tags_json);
+END;
+CREATE TRIGGER IF NOT EXISTS treasure_search_update AFTER UPDATE ON treasure_items BEGIN
+    DELETE FROM treasure_search_fts WHERE rowid=old.rowid;
+    INSERT INTO treasure_search_fts(rowid,item_id,user_id,title,original_text,summary,annotation,tags)
+    SELECT new.rowid,new.id,new.user_id,COALESCE(new.title,''),COALESCE(new.original_text,''),
+           COALESCE(new.summary,''),COALESCE(new.annotation,''),new.tags_json
+    WHERE new.deleted_at IS NULL;
+END;
+CREATE TRIGGER IF NOT EXISTS treasure_search_delete AFTER DELETE ON treasure_items BEGIN
+    DELETE FROM treasure_search_fts WHERE rowid=old.rowid;
+END;
+`;
+
 export const WORKTREES_TABLE_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS worktrees (
     worktree_id TEXT PRIMARY KEY NOT NULL,
@@ -268,4 +382,6 @@ CREATE INDEX IF NOT EXISTS idx_worktrees_project ON worktrees(project_path);
 ${MISSION_CARDS_TABLE_SCHEMA_SQL}
 CREATE INDEX IF NOT EXISTS idx_mission_cards_user ON mission_cards(user_id);
 CREATE INDEX IF NOT EXISTS idx_mission_cards_project ON mission_cards(project_path);
+
+${TREASURE_TABLES_SCHEMA_SQL}
 `;

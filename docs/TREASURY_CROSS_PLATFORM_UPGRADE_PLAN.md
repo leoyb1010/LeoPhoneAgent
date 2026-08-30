@@ -837,6 +837,8 @@ change_id, item_id, operation, updated_at, origin_device_id, payload_digest
 - 进程被杀后队列可恢复；
 - 三端能序列化/反序列化同一契约样本。
 
+实际交付证据：[Phase 1 统一 SQLite 数据层与持久任务队列](TREASURY_PHASE1_DELIVERY_EVIDENCE.md)
+
 ### Phase 2：Android 藏宝阁与三端捕获一致
 
 #### 目标

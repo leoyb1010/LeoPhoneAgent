@@ -489,6 +489,7 @@
 		E5VC0000A /* TypedVocabularyBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5VC0001A /* TypedVocabularyBuilder.swift */; };
 		E5VC0000B /* zh_background_wordfreq.txt in Resources */ = {isa = PBXBuildFile; fileRef = E5VC0001B /* zh_background_wordfreq.txt */; };
 		E5VC0000C /* zh_background_wordfreq.txt in Resources */ = {isa = PBXBuildFile; fileRef = E5VC0001B /* zh_background_wordfreq.txt */; };
+		E5TRC0001 /* treasure_item_v1.fixture.json in Resources */ = {isa = PBXBuildFile; fileRef = E5TRC0002 /* treasure_item_v1.fixture.json */; };
 		E5VC0000D /* VoiceCorrectionDiff.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5VC0001D /* VoiceCorrectionDiff.swift */; };
 		E5VC0000E /* VocabularyFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5VC0001E /* VocabularyFilter.swift */; };
 		E5VC1000A /* SentenceSplitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5VC00013 /* SentenceSplitter.swift */; };
@@ -783,6 +784,7 @@
 		B7E2CB0D0D63E6D6FDB45568 /* VoiceActivityDetector.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoiceActivityDetector.swift; sourceTree = "<group>"; };
 		BB1000010F700000000000AA /* MinisTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MinisTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		BB1000110F700000000000AA /* ContextPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextPolicy.swift; sourceTree = "<group>"; };
+		E5TRC0002 /* treasure_item_v1.fixture.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = treasure_item_v1.fixture.json; path = ../shared/treasury/treasure_item_v1.fixture.json; sourceTree = SOURCE_ROOT; };
 		D7656F4130247E4002A3AC0C /* VoiceTextSanitizer.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoiceTextSanitizer.swift; sourceTree = "<group>"; };
 		DE154CF628D8699BD99CF9CB /* AudioSessionCoordinator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AudioSessionCoordinator.swift; sourceTree = "<group>"; };
 		E51000010 /* LeoPhoneAgent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LeoPhoneAgent.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -1482,6 +1484,7 @@
 		AACCC6B4300B9D590053F20D /* Recovered References */ = {
 			isa = PBXGroup;
 			children = (
+				E5TRC0002 /* treasure_item_v1.fixture.json */,
 				E5BSH0014 /* bashism_rules.json */,
 				AC0000201 /* ProviderCustomizationGenerated.swift */,
 				E54000AC2 /* DebugSkillGenerated.swift */,
@@ -2737,6 +2740,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E5TRC0001 /* treasure_item_v1.fixture.json in Resources */,
 				E5JB10003 /* jieba.dict.utf8 in Resources */,
 				E5VC0000B /* zh_background_wordfreq.txt in Resources */,
 				E5JB10004 /* hmm_model.utf8 in Resources */,

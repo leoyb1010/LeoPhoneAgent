@@ -145,6 +145,10 @@ android {
 
 }
 
+// Cross-platform Treasury contract fixtures remain single-source under
+// src/shared and are exposed to JVM unit tests without copying them.
+android.sourceSets.getByName("test").resources.srcDir(rootProject.file("../shared/treasury"))
+
 // [perf/丝滑度] Compose 编译器报告。
 //
 // why: 判断"某个 composable 为什么不跳过重组"，唯一可靠的依据是编译器自己

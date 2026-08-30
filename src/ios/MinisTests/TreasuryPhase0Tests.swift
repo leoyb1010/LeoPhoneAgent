@@ -253,11 +253,309 @@ final class TreasuryPhase0Tests: XCTestCase {
         XCTAssertFalse(SharedContainerStore.isSafeFileName("../secret.txt"))
         XCTAssertFalse(SharedContainerStore.isSafeFileName("folder/secret.txt"))
         XCTAssertFalse(SharedContainerStore.isSafeFileName("folder\\secret.txt"))
+        XCTAssertNil(TreasureItemContract.safeLastPathComponent("C:\\private\\secret.txt"))
+        XCTAssertNil(TreasureItemContract.safeLastPathComponent("notes/item\0.md"))
     }
 
     func testArrayArgumentsAcceptNativeJSONAndStringEncodedJSON() {
         XCTAssertEqual(TreasuryService.stringArray(["one", "two"]), ["one", "two"])
         XCTAssertEqual(TreasuryService.stringArray("[\"one\",\"two\"]"), ["one", "two"])
         XCTAssertEqual(TreasuryService.stringArray("one, two"), ["one", "two"])
+    }
+
+    func testPhase1SQLiteMigratesLegacyJSONWithBackupAndSafeRetry() throws {
+        let directory = try temporaryTreasuryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var note = CollectedItem.newNote(title: "迁移笔记")
+        note.tags = ["迁移", "离线"]
+        note.annotation = "保留批注"
+        note.archived = true
+        try JSONEncoder().encode([note]).write(
+            to: directory.appendingPathComponent("items.json"), options: .atomic
+        )
+
+        let first = try TreasurySQLiteStore(directory: directory)
+        XCTAssertEqual(first.migrationReport,
+                       .init(importedCount: 1, quarantinedCount: 0, didRun: true))
+        let firstLoaded = try XCTUnwrap(first.load().first)
+        XCTAssertEqual(firstLoaded.id, note.id)
+        XCTAssertEqual(firstLoaded.tags, note.tags)
+        XCTAssertEqual(firstLoaded.annotation, note.annotation)
+        XCTAssertEqual(firstLoaded.bodyFile, note.bodyFile)
+        XCTAssertEqual(firstLoaded.archived, note.archived)
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: directory.appendingPathComponent("items.pre-sqlite-v1.json").path
+        ))
+
+        let second = try TreasurySQLiteStore(directory: directory)
+        XCTAssertFalse(second.migrationReport.didRun)
+        XCTAssertEqual(try second.load().map(\.id), [note.id])
+    }
+
+    func testPhase1MigrationQuarantinesBadRowsWithoutDroppingGoodRows() throws {
+        let directory = try temporaryTreasuryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let item = CollectedItem(kind: .text, value: "保留正文", sourceLabel: "文本")
+        let valid = try JSONSerialization.jsonObject(with: JSONEncoder().encode(item))
+        let payload: [Any] = [valid, ["kind": "text", "value": "missing id"]]
+        try JSONSerialization.data(withJSONObject: payload).write(
+            to: directory.appendingPathComponent("items.json"), options: .atomic
+        )
+
+        let store = try TreasurySQLiteStore(directory: directory)
+        XCTAssertEqual(store.migrationReport.importedCount, 1)
+        XCTAssertEqual(store.migrationReport.quarantinedCount, 1)
+        XCTAssertEqual(try store.load().map(\.id), [item.id])
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: directory.appendingPathComponent("items.quarantine-v1.json").path
+        ))
+    }
+
+    func testPhase1FailedMigrationCanRetryAfterSourceRepair() throws {
+        let directory = try temporaryTreasuryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let legacyURL = directory.appendingPathComponent("items.json")
+        try Data("not-json".utf8).write(to: legacyURL)
+        XCTAssertThrowsError(try TreasurySQLiteStore(directory: directory))
+
+        let repaired = CollectedItem(kind: .text, value: "修复后", sourceLabel: "文本")
+        try JSONEncoder().encode([repaired]).write(to: legacyURL, options: .atomic)
+        let store = try TreasurySQLiteStore(directory: directory)
+        XCTAssertEqual(store.migrationReport.importedCount, 1)
+        XCTAssertEqual(try store.load().first?.value, "修复后")
+    }
+
+    func testPhase1URLAndFileDigestDeduplication() throws {
+        let directory = try temporaryTreasuryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let files = directory.appendingPathComponent("files", isDirectory: true)
+        try FileManager.default.createDirectory(at: files, withIntermediateDirectories: true)
+        try Data("same-content".utf8).write(to: files.appendingPathComponent("one.pdf"))
+        try Data("same-content".utf8).write(to: files.appendingPathComponent("two.pdf"))
+        let store = try TreasurySQLiteStore(directory: directory)
+        let firstLink = CollectedItem(kind: .link,
+                                      value: "https://EXAMPLE.com:443/read?b=2&utm_source=x&a=1#part",
+                                      sourceLabel: "网页")
+        let secondLink = CollectedItem(kind: .link,
+                                       value: "https://example.com/read?a=1&b=2",
+                                       sourceLabel: "网页")
+        let firstFile = CollectedItem(kind: .file, value: "one.pdf", sourceLabel: "PDF")
+        let secondFile = CollectedItem(kind: .file, value: "two.pdf", sourceLabel: "PDF")
+
+        try store.add([firstLink, secondLink, firstFile, secondFile])
+
+        XCTAssertEqual(try store.load().count, 2)
+        XCTAssertEqual(
+            TreasurySQLiteStore.normalizedURLKey(firstLink.value),
+            TreasurySQLiteStore.normalizedURLKey(secondLink.value)
+        )
+        let contracts = try JSONDecoder().decode([TreasureItemContract].self,
+                                                 from: store.exportJSON())
+        let exportedFile = try XCTUnwrap(contracts.first { $0.id == firstFile.id })
+        XCTAssertEqual(exportedFile.byteCount, 12)
+        XCTAssertEqual(exportedFile.contentDigest?.count, 64)
+    }
+
+    func testPhase1TombstoneWinsOverStaleUpdateAndQueueSurvivesReopen() throws {
+        let directory = try temporaryTreasuryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try TreasurySQLiteStore(directory: directory)
+        var item = CollectedItem(kind: .link, value: "https://example.com/queue",
+                                 sourceLabel: "网页")
+        try store.add([item])
+        XCTAssertEqual(try store.pendingJobs().map(\.type), ["metadata", "index"])
+        try store.tombstone(ids: [item.id])
+        let changeCount = try store.changes().count
+        item.title = "过期异步回写"
+        try store.update(item)
+
+        let reopened = try TreasurySQLiteStore(directory: directory)
+        XCTAssertTrue(try reopened.load().isEmpty)
+        XCTAssertEqual(try reopened.load(includeDeleted: true).count, 1)
+        XCTAssertEqual(try reopened.changes().count, changeCount)
+        XCTAssertEqual(try reopened.pendingJobs().count, 2)
+    }
+
+    func testPhase1ConcurrentAppAndShareWritesDoNotLoseItems() throws {
+        let directory = try temporaryTreasuryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        _ = try TreasurySQLiteStore(directory: directory)
+        let group = DispatchGroup()
+        let queue = DispatchQueue(label: "treasury.concurrent.test", attributes: .concurrent)
+        for index in 0..<40 {
+            group.enter()
+            queue.async {
+                defer { group.leave() }
+                let item = CollectedItem(kind: .text, value: "并发-\(index)", sourceLabel: "文本")
+                try? TreasurySQLiteStore(directory: directory).add([item])
+            }
+        }
+        XCTAssertEqual(group.wait(timeout: .now() + 10), .success)
+        XCTAssertEqual(try TreasurySQLiteStore(directory: directory).load().count, 40)
+    }
+
+    func testPhase1ConcurrentFirstOpenRunsLegacyMigrationOnce() throws {
+        let directory = try temporaryTreasuryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let legacy = (0..<25).map {
+            CollectedItem(kind: .text, value: "迁移-\($0)", sourceLabel: "文本")
+        }
+        try JSONEncoder().encode(legacy)
+            .write(to: directory.appendingPathComponent("items.json"), options: .atomic)
+
+        let group = DispatchGroup()
+        let queue = DispatchQueue(label: "treasury.first-open", attributes: .concurrent)
+        let reports = MigrationReportBox()
+        for _ in 0..<8 {
+            group.enter()
+            queue.async {
+                defer { group.leave() }
+                guard let store = try? TreasurySQLiteStore(directory: directory) else { return }
+                reports.append(store.migrationReport)
+            }
+        }
+        XCTAssertEqual(group.wait(timeout: .now() + 10), .success)
+        XCTAssertEqual(try TreasurySQLiteStore(directory: directory).load().count, 25)
+        XCTAssertEqual(reports.values.filter(\.didRun).count, 1)
+        XCTAssertEqual(reports.values.reduce(0) { $0 + $1.importedCount }, 25)
+    }
+
+    func testPhase1SQLiteListSupportsBoundedPagination() throws {
+        let directory = try temporaryTreasuryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try TreasurySQLiteStore(directory: directory)
+        let items = (0..<1_000).map {
+            CollectedItem(kind: .text, value: "page-\($0)", sourceLabel: "文本")
+        }
+        try store.add(items)
+
+        XCTAssertEqual(try store.load(limit: 50).count, 50)
+        XCTAssertEqual(try store.load(limit: 50, offset: 950).count, 50)
+        XCTAssertEqual(try store.load(limit: 50, offset: 1_000).count, 0)
+    }
+
+    func testPhase1JobClaimFailureBackoffAndCompletionPersist() throws {
+        let directory = try temporaryTreasuryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try TreasurySQLiteStore(directory: directory)
+        let item = CollectedItem(kind: .text, value: "队列恢复", sourceLabel: "文本")
+        try store.add([item])
+        let job = try XCTUnwrap(store.pendingJobs().first)
+        let now = Date(timeIntervalSince1970: 1_000)
+        XCTAssertTrue(try store.claimJob(id: job.id, now: now))
+        XCTAssertFalse(try store.claimJob(id: job.id, now: now))
+        try store.failJob(id: job.id, errorCode: "network /Users/private token=secret", now: now)
+        XCTAssertTrue(try store.pendingJobs(now: now).isEmpty)
+        let retried = try XCTUnwrap(store.pendingJobs(now: now.addingTimeInterval(100)).first)
+        XCTAssertEqual(retried.lastErrorCode, "networkUsersprivatetokensecret")
+        XCTAssertTrue(try store.claimJob(id: job.id, now: now.addingTimeInterval(100)))
+        try store.completeJob(id: job.id)
+        XCTAssertFalse(try TreasurySQLiteStore(directory: directory)
+            .pendingJobs(now: .distantFuture).contains { $0.id == job.id })
+    }
+
+    func testPhase1IndexRebuildAndImportExportRoundTrip() throws {
+        let sourceDirectory = try temporaryTreasuryDirectory()
+        let targetDirectory = try temporaryTreasuryDirectory()
+        let markdownDirectory = try temporaryTreasuryDirectory()
+        defer {
+            try? FileManager.default.removeItem(at: sourceDirectory)
+            try? FileManager.default.removeItem(at: targetDirectory)
+            try? FileManager.default.removeItem(at: markdownDirectory)
+        }
+        let source = try TreasurySQLiteStore(directory: sourceDirectory)
+        var item = CollectedItem(kind: .text, value: "SQLite 离线正文", sourceLabel: "文本")
+        item.tags = ["离线", "SQLite", "离线"]
+        try source.add([item])
+        try source.rebuildIndex()
+        let exported = try source.exportJSON()
+
+        let target = try TreasurySQLiteStore(directory: targetDirectory)
+        try target.importJSON(exported)
+        XCTAssertEqual(try target.load().first?.tags, ["离线", "SQLite"])
+        XCTAssertTrue(try target.exportMarkdown().contains("SQLite 离线正文"))
+        XCTAssertEqual(
+            try target.importBrowserBookmarksHTML(
+                #"<DT><A HREF="https://example.com/docs">文档入口</A>"#
+            ),
+            1
+        )
+        XCTAssertEqual(
+            try target.importBrowserBookmarksHTML(
+                #"<DT><A HREF="https://example.com/docs?utm_source=again">重复文档</A>"#
+            ),
+            0
+        )
+        XCTAssertEqual(try target.load().count, 2)
+
+        let markdownTarget = try TreasurySQLiteStore(directory: markdownDirectory)
+        XCTAssertEqual(try markdownTarget.importMarkdown(try source.exportMarkdown()), 1)
+        let markdownItem = try XCTUnwrap(markdownTarget.load().first)
+        XCTAssertEqual(markdownItem.title, "文本")
+        XCTAssertEqual(markdownItem.value, "SQLite 离线正文")
+        XCTAssertEqual(markdownItem.tags, ["离线", "SQLite"])
+    }
+
+    func testPhase1SharedContractFixtureRoundTripsOnIOS() throws {
+        let directory = try temporaryTreasuryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let fixtureURL = try XCTUnwrap(
+            Bundle(for: Self.self).url(forResource: "treasure_item_v1.fixture", withExtension: "json")
+        )
+        let data = try Data(contentsOf: fixtureURL)
+        let decoded = try JSONDecoder().decode(TreasureItemContract.self, from: data)
+        let encoded = try JSONEncoder().encode(decoded)
+        let roundTrip = try JSONDecoder().decode(TreasureItemContract.self, from: encoded)
+
+        XCTAssertEqual(decoded, roundTrip)
+        XCTAssertEqual(decoded.id, "shared-contract-fixture")
+        XCTAssertEqual(decoded.kind, "document")
+        XCTAssertEqual(decoded.readingProgress, 0.5)
+        XCTAssertEqual(decoded.collectedItem()?.value, "contract.pdf")
+
+        let store = try TreasurySQLiteStore(directory: directory)
+        try store.importJSON(JSONEncoder().encode([decoded]))
+        let stored = try XCTUnwrap(
+            JSONDecoder().decode([TreasureItemContract].self, from: store.exportJSON()).first
+        )
+        XCTAssertEqual(stored.byteCount, 42)
+        XCTAssertEqual(stored.contentDigest, decoded.contentDigest)
+        XCTAssertEqual(stored.collectionIDs, ["collection-fixture"])
+        XCTAssertEqual(stored.mimeType, "application/pdf")
+        XCTAssertEqual(stored.readingState, "reading")
+        XCTAssertEqual(stored.readingProgress, 0.5)
+        XCTAssertEqual(stored.originDeviceID, "shared-test-device")
+
+        var hostile = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+        hostile["id"] = "hostile-contract"
+        hostile["body_ref"] = "../private.pdf"
+        let hostilePayload = try JSONSerialization.data(withJSONObject: [hostile])
+        XCTAssertThrowsError(try store.importJSON(hostilePayload))
+    }
+
+    private func temporaryTreasuryDirectory() throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("treasury-phase1-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
+    private final class MigrationReportBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var storage: [TreasurySQLiteStore.MigrationReport] = []
+
+        func append(_ report: TreasurySQLiteStore.MigrationReport) {
+            lock.lock()
+            storage.append(report)
+            lock.unlock()
+        }
+
+        var values: [TreasurySQLiteStore.MigrationReport] {
+            lock.lock()
+            defer { lock.unlock() }
+            return storage
+        }
     }
 }

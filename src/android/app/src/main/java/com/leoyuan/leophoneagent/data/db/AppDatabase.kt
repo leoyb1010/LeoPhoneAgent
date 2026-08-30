@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.RoomDatabase.Callback
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
@@ -13,13 +14,19 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         MessageEntity::class,
         CompactMarkerEntity::class,
         WebAppShortcutEntity::class,
+        TreasureItemEntity::class,
+        TreasureCollectionEntity::class,
+        TreasureChunkEntity::class,
+        TreasureJobEntity::class,
+        TreasureChangeEntity::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = false,
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun chatDao(): ChatDao
     abstract fun webAppShortcutDao(): WebAppShortcutDao
+    abstract fun treasureDao(): TreasureDao
 
     companion object {
         @Volatile
@@ -163,6 +170,105 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS treasure_items (
+                        row_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        stable_id TEXT NOT NULL,
+                        schema_version INTEGER NOT NULL,
+                        kind TEXT NOT NULL,
+                        title TEXT,
+                        source_uri TEXT,
+                        normalized_url_key TEXT,
+                        source_app TEXT,
+                        source_label TEXT NOT NULL,
+                        original_text TEXT,
+                        body_ref TEXT,
+                        preview_ref TEXT,
+                        mime_type TEXT,
+                        byte_count INTEGER NOT NULL,
+                        content_digest TEXT,
+                        summary TEXT,
+                        annotation TEXT,
+                        tags_json TEXT NOT NULL,
+                        collection_ids_json TEXT NOT NULL,
+                        pinned INTEGER NOT NULL,
+                        archived INTEGER NOT NULL,
+                        reading_state TEXT NOT NULL,
+                        reading_progress REAL NOT NULL,
+                        created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        last_opened_at INTEGER,
+                        processing_state TEXT NOT NULL,
+                        processing_error_code TEXT,
+                        sync_state TEXT NOT NULL,
+                        origin_device_id TEXT NOT NULL,
+                        deleted_at INTEGER
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_treasure_items_stable_id ON treasure_items(stable_id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_treasure_items_deleted_at_updated_at ON treasure_items(deleted_at, updated_at)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_treasure_items_normalized_url_key ON treasure_items(normalized_url_key)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_treasure_items_content_digest ON treasure_items(content_digest)")
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS treasure_collections (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        icon TEXT,
+                        color_token TEXT,
+                        sort_order INTEGER NOT NULL,
+                        created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        deleted_at INTEGER
+                    )
+                """.trimIndent())
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS treasure_chunks (
+                        item_id TEXT NOT NULL,
+                        chunk_index INTEGER NOT NULL,
+                        section_label TEXT,
+                        text TEXT NOT NULL,
+                        start_offset INTEGER NOT NULL,
+                        end_offset INTEGER NOT NULL,
+                        PRIMARY KEY(item_id, chunk_index),
+                        FOREIGN KEY(item_id) REFERENCES treasure_items(stable_id) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_treasure_chunks_item_id ON treasure_chunks(item_id)")
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS treasure_jobs (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        item_id TEXT NOT NULL,
+                        job_type TEXT NOT NULL,
+                        state TEXT NOT NULL,
+                        attempt_count INTEGER NOT NULL,
+                        next_attempt_at INTEGER,
+                        created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        last_error_code TEXT,
+                        FOREIGN KEY(item_id) REFERENCES treasure_items(stable_id) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_treasure_jobs_item_id ON treasure_jobs(item_id)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_treasure_jobs_state_next_attempt_at_created_at ON treasure_jobs(state, next_attempt_at, created_at)")
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS treasure_changes (
+                        sequence INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        change_id TEXT NOT NULL,
+                        item_id TEXT NOT NULL,
+                        operation TEXT NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        origin_device_id TEXT NOT NULL,
+                        payload_digest TEXT NOT NULL
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_treasure_changes_item_id ON treasure_changes(item_id)")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_treasure_changes_change_id ON treasure_changes(change_id)")
+                createTreasureAuxiliarySchema(db)
+            }
+        }
+
         val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 // sessions: add iOS-parity columns
@@ -200,10 +306,45 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "minis.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
+                    .addCallback(object : Callback() {
+                        override fun onCreate(db: SupportSQLiteDatabase) {
+                            super.onCreate(db)
+                            createTreasureAuxiliarySchema(db)
+                        }
+                    })
                     .build()
                     .also { INSTANCE = it }
             }
+        }
+
+        private fun createTreasureAuxiliarySchema(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE VIRTUAL TABLE IF NOT EXISTS treasure_search_fts USING fts4(
+                    stable_id, title, original_text, summary, annotation, tags_json,
+                    notindexed=stable_id, tokenize=unicode61
+                )
+            """.trimIndent())
+            db.execSQL("""
+                CREATE TRIGGER IF NOT EXISTS treasure_items_search_insert AFTER INSERT ON treasure_items
+                WHEN new.deleted_at IS NULL BEGIN
+                    INSERT INTO treasure_search_fts(rowid,stable_id,title,original_text,summary,annotation,tags_json)
+                    VALUES(new.row_id,new.stable_id,COALESCE(new.title,''),COALESCE(new.original_text,''),COALESCE(new.summary,''),COALESCE(new.annotation,''),new.tags_json);
+                END
+            """.trimIndent())
+            db.execSQL("""
+                CREATE TRIGGER IF NOT EXISTS treasure_items_search_update AFTER UPDATE ON treasure_items BEGIN
+                    DELETE FROM treasure_search_fts WHERE rowid=old.row_id;
+                    INSERT INTO treasure_search_fts(rowid,stable_id,title,original_text,summary,annotation,tags_json)
+                    SELECT new.row_id,new.stable_id,COALESCE(new.title,''),COALESCE(new.original_text,''),COALESCE(new.summary,''),COALESCE(new.annotation,''),new.tags_json
+                    WHERE new.deleted_at IS NULL;
+                END
+            """.trimIndent())
+            db.execSQL("""
+                CREATE TRIGGER IF NOT EXISTS treasure_items_search_delete AFTER DELETE ON treasure_items BEGIN
+                    DELETE FROM treasure_search_fts WHERE rowid=old.row_id;
+                END
+            """.trimIndent())
         }
     }
 }
