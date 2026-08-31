@@ -12,6 +12,17 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.31.0",
+            date: "2026-08-31",
+            title: "藏宝阁成为可搜索、可恢复的跨端工作区",
+            highlights: [
+                "收藏改用 SQLite 持久化，旧数据迁移带备份和失败重试；并发写入、删除墓碑与进程中断恢复不会再静默丢内容。",
+                "新增收件箱、处理中、失败、待读、阅读进度、高亮、批注和精确筛选；中文短词、正文后段与大库搜索也能返回相关片段。",
+                "分享扩展保留图片和文件原始字节，网页、OCR、PDF、音频与索引增强任务可后台持久执行；Agent 可安全搜索、读取、保存和更新收藏。",
+                "远端正文和附件按需下载并校验大小、SHA-256、MIME 与路径，支持 HTTP Range 续传；缓存清理不会删除收藏、正文、批注或原始附件。",
+            ]
+        ),
+        LeoRelease(
             version: "1.30.1",
             date: "2026-08-30",
             title: "Grok OAuth 恢复 OpenMinis 稳定链路",

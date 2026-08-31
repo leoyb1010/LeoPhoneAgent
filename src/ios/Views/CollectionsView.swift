@@ -1150,6 +1150,8 @@ struct CollectionsView: View {
 // MARK: - 阅读、进度与定位高亮
 
 private struct TreasuryReadingSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
     let item: CollectedItem
     let relatedItems: [CollectedItem]
     let showsCloseButton: Bool
