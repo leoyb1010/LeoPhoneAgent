@@ -17,6 +17,17 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '1.81.0',
+    date: '2026-08-31',
+    items: [
+      '藏宝阁从手机收藏镜像升级为跨端可调用知识工作台：Mac 可以搜索本机与手机内容、读取正文、保存和更新条目，并把结果交给已配置的本机 Agent。',
+      '手机正文和附件改为按需下载，支持 Range 断点续传、206 / 416 恢复、byte count、MIME 与 SHA-256 完整性校验；损坏或越界缓存不会交给 Agent。',
+      '新增统一 leocodebox-treasury MCP，Claude Code、Codex、Cursor 与 OpenCode / Grok 共用同一套 search、get、save、update 工具，不再维护 Provider 分叉。',
+      '藏宝阁补齐键盘导航、加载与错误语义、详情焦点、删除确认、存储统计和正文/附件缓存独立清理；本机原始文件始终不进入缓存清理路径。',
+      '修复本机认证 token 轮换后的恢复路径，旧进程持有的 token 失效时会安全刷新，不再让已登录工作台误报后端不可用。',
+    ],
+  },
+  {
     version: '1.80.0',
     date: '2026-08-30',
     items: [

@@ -1847,8 +1847,8 @@
     <!-- 发版铁律:每次改 versionName 都必须同步改这里,并重写下面的
          whats_new_current 文案。WhatsNewGateTest 会比对这两个值,
          对不上就构建失败 —— 防止弹出的是上一版的更新内容。 -->
-    <string name="whats_new_version" translatable="false">1.0.0-alpha.23</string>
-    <string name="whats_new_current">• Grok OAuth is restored to the OpenMinis path: the full built-in catalog stays available, including Grok 4.6 and Composer 2.5, and chat requests use api.x.ai again. This release removes the incompatible CLI-proxy routing introduced in alpha.22.</string>
+    <string name="whats_new_version" translatable="false">1.0.0-alpha.24</string>
+    <string name="whats_new_current">• Treasury is now a native callable knowledge workspace: capture links, text, images, PDFs and files, then search, read, save and update them through the Agent.\n• Phone content and attachments are fetched on demand with resumable Range downloads plus byte-count, MIME and SHA-256 verification.\n• The new Treasury shortcut, Quick Settings tile and widget action open the lightweight capture sheet without reading the clipboard or requiring Power permissions.\n• Foldable and large-screen layouts preserve search, filters and selected content while moving between compact and expanded windows.</string>
     <string name="whats_new_scroll_hint">Swipe up to read the complete update</string>
     <string name="artifact_ready">ARTIFACT READY</string>
     <string name="artifact_open">Open artifact</string>

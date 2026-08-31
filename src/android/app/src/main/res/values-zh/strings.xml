@@ -1772,7 +1772,7 @@
     <string name="whats_new_title">本次更新（%1$s）</string>
     <string name="whats_new_heading">本次更新</string>
     <string name="whats_new_confirm">知道了</string>
-    <string name="whats_new_current">• Grok OAuth 已恢复 OpenMinis 的稳定路径：完整内置模型目录始终可见，包含 Grok 4.6 与 Composer 2.5；对话重新使用 api.x.ai。本版移除了 alpha.22 引入的不兼容 CLI 代理路由。</string>
+    <string name="whats_new_current">• 藏宝阁升级为原生可调用知识工作台：链接、文字、图片、PDF 与文件可以直接捕获，Agent 可以搜索、读取、保存和更新。\n• 手机正文和附件按需获取，支持 Range 断点续传，并校验文件大小、MIME 与 SHA-256，损坏缓存不会交给 Agent。\n• 新增藏宝阁快捷方式、快捷设置图块和桌面小组件入口，直接打开轻量捕获框，不读取剪贴板，也不依赖 Power 权限。\n• 折叠屏和大屏布局会在窗口变化时保留搜索、筛选和已选内容。</string>
     <string name="whats_new_scroll_hint">向上滑动查看完整更新内容</string>
     <string name="artifact_ready">交付物已就绪</string>
     <string name="artifact_open">打开交付物</string>

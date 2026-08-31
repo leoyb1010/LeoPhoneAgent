@@ -1,8 +1,8 @@
 # LeoPhoneAgent
 
-[![iOS](https://img.shields.io/badge/iOS-1.30.1%20(105)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
-[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.23-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.23)
-[![macOS](https://img.shields.io/badge/macOS-1.80.0-7C3AED.svg)](src/mac/leocodebox/package.json)
+[![iOS](https://img.shields.io/badge/iOS-1.31.0%20(106)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.24-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.24)
+[![macOS](https://img.shields.io/badge/macOS-1.81.0-7C3AED.svg)](src/mac/leocodebox/package.json)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.17-D94B16.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Mobile](https://img.shields.io/badge/mobile-iOS%20%2B%20Android-black.svg)](#系统架构)
@@ -40,8 +40,9 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
   [Phase 5](docs/TREASURY_PHASE5_DELIVERY_EVIDENCE.md)。游标增量同步、按需正文/附件、
   冲突/tombstone、Mac 主动工作台与三端 `treasury_search/get/save/update` 契约已落地；
   [隐私与安全边界](docs/TREASURY_PRIVACY_AND_SECURITY.md)及
-  [设备测试/发版清单](docs/TREASURY_DEVICE_RELEASE_CHECKLIST.md)已发布。真实三设备联网、
-  Fold8/iPhone/iPad、签名、覆盖安装和公开发布仍为 HOLD，不能把源码门禁等同于三端发版。
+  [设备测试/发版清单](docs/TREASURY_DEVICE_RELEASE_CHECKLIST.md)已发布。Android alpha.24 已完成
+  固定签名、Fold8 API 35、alpha.23 覆盖安装与公开附件门禁；Mac 1.81.0 已完成 Developer ID
+  签名和本机安装。真实三设备联网、iPhone/iPad、Mac 公证仍为 HOLD，不能把源码门禁等同于全部实机发版。
   最新追加审计已补齐三端相关正文/相关收藏、有限重试、用户标题保护、Mac PDF 重试完整性、iOS 持久增强任务执行、三端安全缓存清理、Android 系统快速捕获，以及正文/附件按需读取与 HTTP Range 断点续传；真实弱网、进程死亡和设备 HOLD 边界不变。
   鸿蒙 7 交付计划：
   [`docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md`](docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md)；
@@ -76,16 +77,16 @@ bash src/harmony/scripts/build_hap.sh
 > 同一台手机上同时安装。Power 版只有在用户完成产品内授权以及 Android
 > 无障碍/Shizuku 系统授权后，才会开放更深的跨应用操控。
 
-- [下载 Standard alpha.23](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.23/LeoPhoneAgent-Standard-1.0.0-alpha.23.apk)
-- [下载 Power alpha.23](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.23/LeoPhoneAgent-Power-1.0.0-alpha.23.apk)
-- [查看本次更新记录](CHANGELOG.md#t12-alpha23)
+- [下载 Standard alpha.24](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.24/LeoPhoneAgent-Standard-1.0.0-alpha.24.apk)
+- [下载 Power alpha.24](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.24/LeoPhoneAgent-Power-1.0.0-alpha.24.apk)
+- [查看本次更新记录](CHANGELOG.md#t13-alpha24)
 - [查看完整五轮审计与交付报告](docs/ANDROID_DELIVERY_1.0.0_ALPHA1.md)
 
 SHA-256：
 
 ```text
-Standard  1b38a978647481afb2aca7a5830c515b3129dbc01d33784105d4a542c8837898
-Power     867edbfe1ce9c87a032b4aa9a189e3644cfdeaaec7a186f8166cdafee6997bb5
+Standard  ad0b152eba4c9065e7f1974d9a22693ce7e630d2d3371437242c657aedaad109
+Power     3b2ac7c507dcd0a35482e67fe6f512773d1e7cdbb1e854d390dfe084fd013567
 ```
 
 本次公开附件使用显式开启的个人 Alpha 调试证书签名，不应作为应用商店的
@@ -148,7 +149,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 版本/构建:`1.30.1 (105)`;Bundle ID `com.leoyuan.leophoneagent`
+- 版本/构建:`1.31.0 (106)`;Bundle ID `com.leoyuan.leophoneagent`
 - iPhone / iPad 本机动作：剪贴板读写和设备信息直接走系统能力，写入后读回核对；
   支持 Foundation Models 的设备用结构化生成整理收藏与语音任务
 - iPad 工作区：分屏、台前调度和窗口缩放按正文/侧栏实际可用空间切换单双栏，
@@ -165,7 +166,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 Android 版本
 
-- 开发/发布版本：`1.0.0-alpha.23`（versionCode `100023`），`minSdk 26`、`targetSdk 35`、`compileSdk 36`、仅 ARM64。
+- 开发/发布版本：`1.0.0-alpha.24`（versionCode `100024`），`minSdk 26`、`targetSdk 35`、`compileSdk 36`、仅 ARM64。
 - Standard 包名：`com.leoyuan.leophoneagent`
 - Power 包名：`com.leoyuan.leophoneagent.power`
 - 两个版本共享本机 Agent、Provider、Skills、MCP、Memory、PRoot 与浏览器底座；
@@ -317,7 +318,8 @@ adb logcat -d | rg 'FATAL EXCEPTION|AndroidRuntime'
 
 | 版本 | 状态 | 处理 |
 |---|---|---|
-| alpha.23 | 当前公开附件 | 恢复 OpenMinis Grok OAuth/完整目录，Fold8 更新弹窗与双 flavor 构建稳定性修复 |
+| alpha.24 | 当前公开附件 | 藏宝阁三端可调用知识库、系统捕获、按需正文/附件、Range 续传与 Fold8 完整门禁 |
+| alpha.23 | 上一公开附件 | 恢复 OpenMinis Grok OAuth/完整目录，Fold8 更新弹窗与双 flavor 构建稳定性修复 |
 | alpha.22 | 上一公开附件 | 出行双写、无障碍快照与省电恢复；Grok CLI 代理改动已在 alpha.23 回退 |
 | alpha.21 | 上一公开附件 | 本机动作回执、产物格式、权限隔离、减少动态效果与 Fold8 200% 字体修正 |
 | alpha.20 | 上一公开附件 | 打开其他 App 后继续操控；悬浮窗默认开；Power 无障碍默认放行 |

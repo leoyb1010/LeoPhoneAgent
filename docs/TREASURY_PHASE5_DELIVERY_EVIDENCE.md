@@ -283,9 +283,9 @@ treasury_update -> explicit approved metadata/read-state/annotation write
 ## 明确 HOLD 与未实现能力
 
 - iOS/iPadOS：本轮新增 App Intents 与 iPad 分栏的主 App 类型检查/模拟器运行；VoiceOver、Dynamic Type、Reduce Motion、拖放、多窗口、外接键盘、真机、签名、Archive、安装与发布。
-- Android：API 26、Fold8 `1080×1728` 封面屏、`1768×2208` 展开屏、折叠切换、200% 字体、TalkBack、预测性返回、进程死亡/WorkManager 恢复、Launcher Shortcut/Quick Settings Tile/widget 真实交互、固定签名、覆盖安装、Logcat、版本号、APK digest 与发布。
+- Android：alpha.24 已在 Fold8 API 35 AVD 完成 `1080×1728` 封面屏、`1768×2208` 展开屏、200% 字体、alpha.23 覆盖安装、固定签名、冷启动、助手/藏宝阁深链、双 flavor 122 项仪器测试、Logcat、版本号与 APK digest。API 26、实体 Fold8 铰链切换、TalkBack 逐控件、预测性返回、进程死亡/WorkManager 恢复及三种系统入口的手工点击仍为 HOLD。
 - 跨端：iOS 创建后 Android/Mac 看见、Android 更新后 iOS/Mac 看见、双端同时编辑、离线删除恢复、重复/乱序 change、游标过期和附件下载的真实三设备联网矩阵。
-- Mac：新增存储页的登录后真实 Electron/浏览器走查、双机 Relay 在线/离线、四种 CLI 与 Leo 模型的真实写审批/引用、Electron 屏幕阅读器、签名、公证、热更新与回滚。
+- Mac：1.81.0 已完成 610 项测试、0 漏洞审计、生产构建、36 个嵌套 Mach-O Developer ID 签名、本机覆盖安装与 `/health` 版本回读。新增存储页登录后走查、双机 Relay、四种 CLI 与 Leo 模型的真实写审批/引用、Electron 屏幕阅读器和 Apple 公证仍为 HOLD；本机缺少 `notarytool` profile，不能宣称已公证。
 - 协议：HTTP Range 源码与本机自动化已完成；真实三设备弱网/断线、大附件和移动端进程死亡续传仍为 HOLD。
 - 可选能力：音频转写和语义召回/RRF 未启用；FTS 基础检索不依赖模型。
 

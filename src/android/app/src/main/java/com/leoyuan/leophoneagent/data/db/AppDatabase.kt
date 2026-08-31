@@ -342,7 +342,7 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        private fun createTreasureAuxiliarySchema(db: SupportSQLiteDatabase) {
+        internal fun createTreasureAuxiliarySchema(db: SupportSQLiteDatabase) {
             db.execSQL("""
                 CREATE VIRTUAL TABLE IF NOT EXISTS treasure_search_fts USING fts4(
                     stable_id, title, original_text, summary, annotation, tags_json,

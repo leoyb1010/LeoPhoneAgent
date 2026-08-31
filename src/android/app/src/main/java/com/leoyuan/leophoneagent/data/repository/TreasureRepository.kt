@@ -407,10 +407,21 @@ class TreasureRepository(
         val order = if (spec.recent) {
             "treasure_items.pinned DESC, COALESCE(treasure_items.last_opened_at, 0) DESC, treasure_items.updated_at DESC"
         } else if (expression.isNotEmpty()) {
-            // Rank before LIMIT so an older title/annotation hit cannot be
-            // discarded merely because 51 newer body matches exist.
-            "bm25(treasure_search_fts, 0.0, 4.0, 1.0, 2.0, 2.5, 3.0) ASC, " +
-                "treasure_items.pinned DESC, treasure_items.updated_at DESC"
+            // Android's bundled SQLite exposes FTS4 here, not FTS5's bm25().
+            // Keep deterministic field priority before LIMIT so an older
+            // title/annotation hit is not discarded behind newer body hits.
+            val text = spec.textQuery.trim().take(200)
+            val contains = "%${escapeLike(text)}%"
+            args += text
+            args += contains
+            args += contains
+            args += contains
+            "CASE " +
+                "WHEN LOWER(COALESCE(treasure_items.title, '')) = LOWER(?) THEN 0 " +
+                "WHEN LOWER(COALESCE(treasure_items.title, '')) LIKE LOWER(?) ESCAPE '\\' THEN 1 " +
+                "WHEN LOWER(COALESCE(treasure_items.annotation, '')) LIKE LOWER(?) ESCAPE '\\' THEN 2 " +
+                "WHEN LOWER(COALESCE(treasure_items.summary, '')) LIKE LOWER(?) ESCAPE '\\' THEN 3 " +
+                "ELSE 4 END ASC, treasure_items.pinned DESC, treasure_items.updated_at DESC"
         } else {
             "treasure_items.pinned DESC, treasure_items.updated_at DESC"
         }

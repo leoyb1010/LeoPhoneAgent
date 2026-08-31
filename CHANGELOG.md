@@ -4,6 +4,54 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## iOS 1.31.0 (106) · 藏宝阁跨端主动工作区 - 2026-08-31
+
+### 用户可见
+
+- 藏宝阁升级为 SQLite 持久化工作区，支持收件箱、处理状态、阅读进度、高亮、批注、合集与精确筛选；中文短词、正文后段及大库搜索不会再因候选截断漏项。
+- 分享扩展保留图片与文件原始字节，网页、OCR、PDF、音频和索引增强任务持久执行；Agent 可在当前用户授权下搜索、读取、保存和更新收藏。
+- 远端正文与附件改为按需读取，下载前后校验 byte count、SHA-256、MIME 与路径边界，并支持 HTTP Range 断点续传。
+- 设置页可分别清理可再生和可重新下载缓存，不删除收藏、正文、批注或原始附件；iPad 工作区按实际可用宽度稳定切换单双栏。
+
+### 本机交付验证
+
+- iOS 版本提升为 `1.31.0 (106)`，内置“本次更新”与项目所有 target 版本保持一致。
+- `IOSReleaseReadinessAudit`、动效/无障碍、可见控件审计和完整 `MinisLogicTests` 作为装机前门禁；Release 签名构建与 iPhone/iPad 覆盖安装结果在本次本机交付后记录。
+
+### 边界
+
+- 本次只发布 iOS 开发真机包；Android、Mac 的本地未提交改动不纳入本提交。
+- 真实弱网长时间断线、移动端进程死亡后的跨设备恢复仍需持续实机观察。
+
+<a id="t13-alpha24"></a>
+## T13 · iOS 1.30.1 (105) / Android 1.0.0-alpha.24 / Mac 1.81.0 - 2026-08-31
+
+### 用户可见
+
+- 藏宝阁升级为 iOS、Android、Mac 三端可调用知识库：链接、文字、笔记、图片、PDF、文件与聊天产出可捕获、搜索、阅读、保存、更新并交给 Agent。
+- Android Standard/Power 新增藏宝阁 App Shortcut、快捷设置图块和桌面小组件入口，直接打开轻量文字/URL 捕获框；不读剪贴板、不依赖 Accessibility、Shizuku、悬浮窗或 Power 权限。
+- iOS、Android、Mac 支持远端正文和附件按需获取；大附件使用 HTTP Range 断点续传，并验证 byte count、MIME 与 SHA-256，损坏或越界缓存不会交给 Agent。
+- Mac 新增统一 `leocodebox-treasury` MCP，Claude Code、Codex、Cursor 与 OpenCode/Grok 共用 search/get/save/update；工作台补齐键盘、读屏、存储统计和正文/附件缓存独立清理。
+- Mac 本地 server token 轮换后会通过受信 Electron bridge 安全刷新并单次重试，不再把已登录工作台误报为后端不可用。
+
+### 发布门禁发现并修复
+
+- Android Release 首次 R8 压缩发现 PDFBox 对可选 JP2Android 解码器的引用；确认其缺失时会走 `MissingImageReaderException` 后，用精确 `dontwarn` 保留降级，没有为极少见 JPEG2000 PDF 引入大型硬依赖。
+- Fold8 仪器测试发现测试库未复用生产 FTS 建表回调，并发现 Android 创建的是 FTS4、搜索却调用 FTS5 专属 `bm25()`。测试与生产现共用同一辅助 schema；排序改为 FTS4 可用的标题/批注/摘要字段优先，并新增旧标题命中优先于新正文命中的回归。
+
+### 已执行验证
+
+- Android：JDK 17 下 Standard/Power 各 621 项 JVM 单测（0 失败、各 1 跳过）；Fold8 API 35 上 Standard/Power 各 122 项仪器测试全部通过；双 Release lint 均 0 error，R8 和双 Release 组装通过。
+- Android：固定 Alpha 证书、Standard/Power 包名、versionCode `100024`、versionName `1.0.0-alpha.24` / `1.0.0-alpha.24-power` 与能力隔离通过。SHA-256：Standard `ad0b152eba4c9065e7f1974d9a22693ce7e630d2d3371437242c657aedaad109`；Power `3b2ac7c507dcd0a35482e67fe6f512773d1e7cdbb1e854d390dfe084fd013567`。
+- Fold8 API 35：alpha.23 → alpha.24 两包覆盖安装均返回 `Success`；1080×1728 封面屏与 1768×2208 展开屏、200% 字体、冷启动、`ACTION_ASSIST`、藏宝阁捕获深链、PID 和崩溃日志扫描通过。
+- Mac：release notes、typecheck、lint、0 漏洞 npm audit、生产构建以及桌面 37、客户端 167、服务端 406，共 610 项测试通过；1.81.0 DMG 内 36 个嵌套 Mach-O 使用 Developer ID 签名并通过严格校验。
+- Mac 1.81.0 已覆盖安装到本机，`/health` 回读 `status=ok`、`version=1.81.0`。DMG SHA-256 `124d24faf31cebed9f8a5635bdef45a6b0fc8b17c2a34cfb7f0a155fcf7ce5bd`；ZIP SHA-256 `fdc0a8d53869f33b5f8b2c8224daad1a0320311a43236064e9254b96216d4033`。
+
+### 边界
+
+- Mac Developer ID 签名有效，但本机仍未配置 `notarytool` profile，Gatekeeper 如实报告 `Unnotarized Developer ID`；本次不虚报公证。
+- iOS 代码与自动化保持 1.30.1 (105)，本轮不重新发 iOS；真机与三设备联网矩阵继续由具备对应设备和签名环境的机器关闭。
+
 ## 藏宝阁 Phase 5 源码交付（未发版）- 2026-08-31
 
 ### 用户可见源码变化

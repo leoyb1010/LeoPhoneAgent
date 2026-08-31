@@ -2,6 +2,8 @@ package com.leoyuan.leophoneagent.data.repository
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.RoomDatabase
+import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.leoyuan.leophoneagent.data.db.AppDatabase
@@ -23,11 +25,19 @@ import org.junit.runner.RunWith
 class TreasureRepositoryImportTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
 
+    private fun database(): AppDatabase =
+        Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
+            .allowMainThreadQueries()
+            .addCallback(object : RoomDatabase.Callback() {
+                override fun onCreate(db: SupportSQLiteDatabase) {
+                    AppDatabase.createTreasureAuxiliarySchema(db)
+                }
+            })
+            .build()
+
     @Test
     fun jsonImportPersistsValidRowsAndIsolatesDuplicatesAndBadRows() = runBlocking {
-        val database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
-            .allowMainThreadQueries()
-            .build()
+        val database = database()
         try {
             val repository = TreasureRepository(
                 dao = database.treasureDao(),
@@ -60,7 +70,7 @@ class TreasureRepositoryImportTest {
 
     @Test
     fun concurrentCaptureDeduplicatesInsideRoomTransaction() = runBlocking {
-        val database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
+        val database = database()
         try {
             val repository = TreasureRepository(
                 dao = database.treasureDao(),
@@ -91,7 +101,7 @@ class TreasureRepositoryImportTest {
 
     @Test
     fun compactSearchReturnsFtsSnippetWithoutLoadingTheFullBody() = runBlocking {
-        val database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
+        val database = database()
         try {
             val repository = TreasureRepository(
                 dao = database.treasureDao(),
@@ -116,8 +126,37 @@ class TreasureRepositoryImportTest {
     }
 
     @Test
+    fun searchRanksAnOlderTitleHitBeforeANewerBodyHitWithoutFts5Bm25() = runBlocking {
+        val database = database()
+        try {
+            val repository = TreasureRepository(
+                dao = database.treasureDao(),
+                filesDirectory = context.cacheDir,
+                originDeviceId = { "android-test" },
+            )
+            repository.save(TreasureItemRecord(
+                id = "title-hit", kind = "text", title = "needle",
+                sourceLabel = "文本", originalText = "older body",
+                createdAt = "2026-08-29T00:00:00Z", updatedAt = "2026-08-29T00:00:00Z",
+                originDeviceId = "android-test",
+            ))
+            repository.save(TreasureItemRecord(
+                id = "body-hit", kind = "text", title = "newer item",
+                sourceLabel = "文本", originalText = "contains needle in its body",
+                createdAt = "2026-08-30T00:00:00Z", updatedAt = "2026-08-30T00:00:00Z",
+                originDeviceId = "android-test",
+            ))
+
+            val results = repository.search("needle").first()
+            assertEquals(listOf("title-hit", "body-hit"), results.map { it.id })
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
     fun staleProcessingJobMarksItsItemFailedAndLeavesAChangeForSync() = runBlocking {
-        val database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
+        val database = database()
         try {
             val repository = TreasureRepository(
                 dao = database.treasureDao(),
@@ -150,7 +189,7 @@ class TreasureRepositoryImportTest {
 
     @Test
     fun backgroundEnhancementDoesNotOverwriteATitleEditedAfterTheJobWasCaptured() = runBlocking {
-        val database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
+        val database = database()
         try {
             val repository = TreasureRepository(
                 dao = database.treasureDao(), filesDirectory = context.cacheDir,
@@ -178,7 +217,7 @@ class TreasureRepositoryImportTest {
 
     @Test
     fun explicitRetryResetsTheJobAndMovesTheVisibleItemBackToQueued() = runBlocking {
-        val database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
+        val database = database()
         try {
             val repository = TreasureRepository(
                 dao = database.treasureDao(), filesDirectory = context.cacheDir,
@@ -205,7 +244,7 @@ class TreasureRepositoryImportTest {
 
     @Test
     fun exactFiltersReadingProgressAndHighlightsRoundTrip() = runBlocking {
-        val database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
+        val database = database()
         try {
             val repository = TreasureRepository(
                 dao = database.treasureDao(),
@@ -241,7 +280,7 @@ class TreasureRepositoryImportTest {
 
     @Test
     fun pdfPageExtractionStoresPageChunksIndexesTextAndKeepsHighlights() = runBlocking {
-        val database = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
+        val database = database()
         try {
             val repository = TreasureRepository(
                 dao = database.treasureDao(), filesDirectory = context.cacheDir,

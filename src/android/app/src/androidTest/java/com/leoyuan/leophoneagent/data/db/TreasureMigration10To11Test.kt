@@ -43,10 +43,10 @@ class TreasureMigration10To11Test {
         db.execSQL(
             """
             INSERT INTO treasure_items(
-              stable_id,schema_version,kind,source_label,byte_count,tags_json,
+              stable_id,schema_version,kind,title,source_label,byte_count,tags_json,
               collection_ids_json,pinned,archived,reading_state,reading_progress,
               created_at,updated_at,processing_state,sync_state,origin_device_id
-            ) VALUES('fixture',1,'text','文本',0,'[]','[]',0,0,'none',0,1,1,'saved','local','test')
+            ) VALUES('fixture',1,'text','fixture title','文本',0,'[]','[]',0,0,'none',0,1,1,'saved','local','test')
             """.trimIndent()
         )
         db.query("SELECT COUNT(*) FROM treasure_search_fts WHERE treasure_search_fts MATCH 'fixture'").use {

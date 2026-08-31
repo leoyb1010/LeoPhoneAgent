@@ -758,7 +758,7 @@
     <string name="whats_new_title">本次更新（%1$s）</string>
     <string name="whats_new_heading">本次更新</string>
     <string name="whats_new_confirm">知道了</string>
-    <string name="whats_new_current">• Grok OAuth 已恢復 OpenMinis 的穩定路徑：完整內建模型目錄永遠可見，包含 Grok 4.6 與 Composer 2.5；對話重新使用 api.x.ai。本版移除了 alpha.22 引入的不相容 CLI 代理路由。</string>
+    <string name="whats_new_current">• 藏寶閣升級為原生可呼叫知識工作台：連結、文字、圖片、PDF 與檔案可以直接擷取，Agent 可以搜尋、讀取、儲存和更新。\n• 手機正文和附件按需取得，支援 Range 斷點續傳，並驗證檔案大小、MIME 與 SHA-256，損壞快取不會交給 Agent。\n• 新增藏寶閣捷徑、快速設定圖塊和桌面小工具入口，直接開啟輕量擷取框，不讀取剪貼簿，也不依賴 Power 權限。\n• 摺疊螢幕和大螢幕版面會在視窗變化時保留搜尋、篩選和已選內容。</string>
     <string name="whats_new_scroll_hint">向上滑動查看完整更新內容</string>
     <string name="artifact_ready">交付物已就緒</string>
     <string name="artifact_open">開啟交付物</string>
