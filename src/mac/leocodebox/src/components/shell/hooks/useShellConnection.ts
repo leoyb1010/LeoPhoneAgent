@@ -4,6 +4,7 @@ import type { FitAddon } from '@xterm/addon-fit';
 import type { Terminal } from '@xterm/xterm';
 
 import type { Project, ProjectSession } from '../../../types/app';
+import { refreshLocalAuthToken } from '../../../utils/apiClient';
 import { TERMINAL_INIT_DELAY_MS } from '../constants/constants';
 import { getShellWebSocketUrl, parseShellMessage, sendSocketMessage } from '../utils/socket';
 
@@ -53,6 +54,7 @@ export function useShellConnection({
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const connectingRef = useRef(false);
+  const authRefreshedRef = useRef(false);
   const forceRestartOnInitRef = useRef(false);
   const suppressAutoConnectRef = useRef(false);
 
@@ -120,8 +122,11 @@ export function useShellConnection({
 
         const socket = new WebSocket(wsUrl);
         wsRef.current = socket;
+        let opened = false;
 
         socket.onopen = () => {
+          opened = true;
+          authRefreshedRef.current = false;
           setIsConnected(true);
           setIsConnecting(false);
           connectingRef.current = false;
@@ -159,6 +164,12 @@ export function useShellConnection({
         };
 
         socket.onclose = () => {
+          // A rejected upgrade closes without ever opening — after a bundled
+          // server restart that is the stale local token. Refresh once so the
+          // auto-reconnect below carries a fresh one.
+          if (!opened && !authRefreshedRef.current) {
+            authRefreshedRef.current = refreshLocalAuthToken();
+          }
           setIsConnected(false);
           setIsConnecting(false);
           connectingRef.current = false;

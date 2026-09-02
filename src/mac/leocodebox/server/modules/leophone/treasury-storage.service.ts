@@ -53,6 +53,16 @@ async function controlledDirectory(root: string): Promise<string | null> {
   return fs.realpath(root);
 }
 
+/** Entries can disappear mid-walk; a vanished one contributes nothing. */
+async function skipMissing<T>(operation: Promise<T>): Promise<T | null> {
+  try {
+    return await operation;
+  } catch (error) {
+    if (isNotFound(error)) return null;
+    throw error;
+  }
+}
+
 async function directoryUsage(root: string): Promise<DirectoryUsage> {
   const realRoot = await controlledDirectory(root);
   if (!realRoot) return { bytes: 0, files: 0 };
@@ -61,22 +71,23 @@ async function directoryUsage(root: string): Promise<DirectoryUsage> {
   const pending = [realRoot];
   while (pending.length) {
     const directory = pending.pop()!;
-    const names = await fs.readdir(directory);
-    for (const name of names) {
+    const names = await skipMissing(fs.readdir(directory));
+    for (const name of names ?? []) {
       const entry = path.join(directory, name);
-      const stat = await fs.lstat(entry);
-      if (stat.isSymbolicLink()) continue;
-      if (stat.isDirectory()) {
-        const real = await fs.realpath(entry);
-        assertWithin(realRoot, real);
-        pending.push(real);
-      } else if (stat.isFile()) {
-        const real = await fs.realpath(entry);
-        assertWithin(realRoot, real);
+      const stat = await skipMissing(fs.lstat(entry));
+      if (!stat || stat.isSymbolicLink()) continue;
+      // ponytail: a FIFO/socket/device under the cache root is ignored rather
+      // than fatal — it holds no cache bytes, and throwing here used to 500
+      // both the storage panel and the clear button. Tighten only if these
+      // roots ever need to reject unexpected entries outright.
+      if (!stat.isDirectory() && !stat.isFile()) continue;
+      const real = await skipMissing(fs.realpath(entry));
+      if (!real) continue;
+      assertWithin(realRoot, real);
+      if (stat.isDirectory()) pending.push(real);
+      else {
         bytes = Math.min(Number.MAX_SAFE_INTEGER, bytes + stat.size);
         files += 1;
-      } else {
-        throw new UnsafeTreasuryStoragePathError();
       }
     }
   }

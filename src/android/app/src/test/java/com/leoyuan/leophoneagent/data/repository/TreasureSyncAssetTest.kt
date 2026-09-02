@@ -3,6 +3,8 @@ package com.leoyuan.leophoneagent.data.repository
 import com.leoyuan.leophoneagent.data.db.TreasureDao
 import com.leoyuan.leophoneagent.data.db.TreasureItemEntity
 import com.leoyuan.leophoneagent.data.db.mergeRemoteTreasureItem
+import com.leoyuan.leophoneagent.treasury.TreasuryRangeAction
+import com.leoyuan.leophoneagent.treasury.treasuryRangeAction
 import com.leoyuan.leophoneagent.treasury.treasurySyncAvailability
 import com.leoyuan.leophoneagent.treasury.validTreasuryContentRange
 import java.lang.reflect.Proxy
@@ -145,6 +147,82 @@ class TreasureSyncAssetTest {
         assertEquals(512, merged.byteCount)
         assertEquals("b".repeat(64), merged.contentDigest)
         assertEquals("image/png", merged.mimeType)
+    }
+
+    @Test
+    fun `remote metadata update keeps a cache whose digest and byte count are unchanged`() {
+        val existing = item(
+            id = "remote-progress", kind = "document", bodyRef = "remote-assets/kept.bin",
+            mimeType = "application/pdf", byteCount = 104_857_600,
+            contentDigest = "a".repeat(64), originDeviceId = "ios-phone",
+            syncState = "remote_only",
+        )
+        // An iPhone reading-progress or pin edit is a newer remote upsert. The wire
+        // record never carries original_text/body_ref, but it does carry the
+        // unchanged mime_type, byte_count and content_digest.
+        val progressOnly = existing.copy(
+            originalText = null, bodyRef = null, readingProgress = 0.4,
+            contentDigest = "A".repeat(64), updatedAt = 2_000,
+        )
+
+        val merged = mergeRemoteTreasureItem(
+            existing = existing, incoming = progressOnly,
+            preserveLocalAssets = false, conflict = false,
+        )
+
+        // applyRemoteChanges only deletes remote-assets/*.bin when the stored
+        // bodyRef changes, so an unchanged ref is the 100 MB download surviving.
+        assertEquals(existing.bodyRef, merged.bodyRef)
+        assertEquals(104_857_600L, merged.byteCount)
+        assertEquals("application/pdf", merged.mimeType)
+        assertTrue(merged.contentDigest.equals("a".repeat(64), ignoreCase = true))
+
+        // A remote change carrying no digest at all also keeps the cache.
+        val merged2 = mergeRemoteTreasureItem(
+            existing = existing,
+            incoming = progressOnly.copy(contentDigest = null, byteCount = 0),
+            preserveLocalAssets = false, conflict = false,
+        )
+        assertEquals(existing.bodyRef, merged2.bodyRef)
+        assertEquals(104_857_600L, merged2.byteCount)
+    }
+
+    @Test
+    fun `ranged download retries on 416, truncates on 200 and resumes a short 206`() {
+        // 416 says the retained prefix no longer matches: drop it and refetch.
+        assertEquals(TreasuryRangeAction.RETRY, treasuryRangeAction(416, 7))
+        assertEquals(TreasuryRangeAction.REJECT, treasuryRangeAction(416, 0))
+        // A relay may answer a Range request with the whole body instead.
+        assertEquals(TreasuryRangeAction.TRUNCATE, treasuryRangeAction(200, 7, null, 16))
+        assertEquals(TreasuryRangeAction.CONTINUE, treasuryRangeAction(200, 0, null, 16))
+        // An unsolicited 206, and a 206 that does not continue the prefix.
+        assertEquals(TreasuryRangeAction.REJECT, treasuryRangeAction(206, 0, "bytes 0-15/16", 16))
+        assertEquals(TreasuryRangeAction.REJECT, treasuryRangeAction(206, 7, "bytes 6-15/16", 16))
+        assertEquals(TreasuryRangeAction.REJECT, treasuryRangeAction(500, 7, null, 16))
+        // A 206 that legally ends before total-1 is valid and must be kept.
+        assertTrue(validTreasuryContentRange("bytes 7-9/16", 7, 16))
+        assertEquals(TreasuryRangeAction.CONTINUE, treasuryRangeAction(206, 7, "bytes 7-9/16", 16))
+    }
+
+    @Test
+    fun `a short attachment chunk stays on disk and reports a resumable offset`() {
+        val root = Files.createTempDirectory("treasury-short-chunk").toFile()
+        try {
+            val repository = TreasureRepository(dao(item = { item("remote", "document") }), root) {
+                "android-test"
+            }
+            val partial = repository.remoteAssetPartialFile("remote", "attachment")
+            partial.writeBytes(ByteArray(10))
+
+            assertTrue(partial.isFile)
+            assertEquals(10L, repository.remoteAssetPartialLength(partial, 1024))
+            assertEquals(
+                TreasuryRangeAction.CONTINUE,
+                treasuryRangeAction(206, 10, "bytes 10-11/16", 16),
+            )
+        } finally {
+            root.deleteRecursively()
+        }
     }
 
     @Test

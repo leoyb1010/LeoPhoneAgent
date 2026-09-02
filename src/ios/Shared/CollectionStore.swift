@@ -526,7 +526,11 @@ struct TreasureItemContract: Codable, Equatable {
          deletedAt: String? = nil) {
         id = item.id
         schemaVersion = 1
-        kind = item.kind == .file ? Self.fileKind(item.value) : item.kind.rawValue
+        let resolvedMime = mimeType
+            ?? (item.kind == .file ? TreasurySQLiteStore.mimeTypeForContract(item.value) : nil)
+        kind = item.kind == .file
+            ? Self.fileKind(item.value, mimeType: resolvedMime)
+            : item.kind.rawValue
         title = item.title
         sourceURI = item.kind == .link ? item.value : nil
         self.sourceApp = sourceApp
@@ -535,8 +539,7 @@ struct TreasureItemContract: Codable, Equatable {
         bodyRef = item.bodyFile.map { "notes/\($0)" }
             ?? (item.kind == .file ? "files/\(item.value)" : nil)
         previewRef = item.thumbnailFile.map { "thumbs/\($0)" }
-        self.mimeType = mimeType
-            ?? (item.kind == .file ? TreasurySQLiteStore.mimeTypeForContract(item.value) : nil)
+        self.mimeType = resolvedMime
         self.byteCount = byteCount
         self.contentDigest = contentDigest
         summary = item.summary
@@ -617,12 +620,22 @@ struct TreasureItemContract: Codable, Equatable {
         return formatter.string(from: date)
     }
 
-    private static func fileKind(_ name: String) -> String {
+    private static func fileKind(_ name: String, mimeType: String? = nil) -> String {
         let ext = (name as NSString).pathExtension.lowercased()
         if ["jpg", "jpeg", "png", "gif", "webp", "heic"].contains(ext) { return "image" }
         if ["mp3", "m4a", "wav", "aac"].contains(ext) { return "audio" }
         if ["mp4", "mov", "m4v"].contains(ext) { return "video" }
-        return "document"
+        if !ext.isEmpty { return "document" }
+        // A remote item cached on this device is stored as `remote-<id>`, which
+        // has no extension. Its stored MIME type is the only surviving record of
+        // what it really is, so without this an image round-tripping through
+        // this device came back to the fleet as a document.
+        switch mimeType?.lowercased().split(separator: "/").first.map(String.init) {
+        case "image": return "image"
+        case "audio": return "audio"
+        case "video": return "video"
+        default: return "document"
+        }
     }
 }
 
@@ -1928,7 +1941,11 @@ final class TreasurySQLiteStore {
                           ["upsert", "delete"].contains(change.operation),
                           !change.itemID.isEmpty else { continue }
                     var state: OpaquePointer?
-                    try Self.prepare(db, "SELECT updated_at,origin_device_id,sync_state,deleted_at FROM treasure_items WHERE id=?", &state)
+                    try Self.prepare(db, """
+                        SELECT updated_at,origin_device_id,sync_state,deleted_at,
+                               content_digest,byte_count,legacy_value,body_ref
+                        FROM treasure_items WHERE id=?
+                        """, &state)
                     Self.bind(change.itemID, state, 1)
                     let hasExisting = sqlite3_step(state) == SQLITE_ROW
                     let existingUpdated = hasExisting
@@ -1936,6 +1953,10 @@ final class TreasurySQLiteStore {
                     let existingOrigin = hasExisting ? Self.text(state, 1) : ""
                     let existingSync = hasExisting ? Self.text(state, 2) : ""
                     let existingDeleted = hasExisting && sqlite3_column_type(state, 3) != SQLITE_NULL
+                    let existingDigest = hasExisting ? Self.optionalText(state, 4)?.lowercased() : nil
+                    let existingByteCount = hasExisting ? Int(sqlite3_column_int64(state, 5)) : 0
+                    let existingValue = hasExisting ? Self.text(state, 6) : ""
+                    let existingBodyRef = hasExisting ? Self.optionalText(state, 7) : nil
                     sqlite3_finalize(state)
 
                     // Android and the relay exchange epoch milliseconds. Compare the
@@ -1949,7 +1970,11 @@ final class TreasurySQLiteStore {
                     let existingKey = (existingTimestamp,
                                        existingDeleted ? 1 : 0, existingOrigin, "")
                     guard !hasExisting || incomingKey > existingKey else {
-                        if existingSync == "pending" && existingOrigin == localOrigin &&
+                        // `sync_state == "pending"` is set only by a local edit,
+                        // so it alone identifies an unsynced local change. Pairing
+                        // it with `existingOrigin == localOrigin` only worked while
+                        // a local edit also re-homed the item, which was the bug.
+                        if existingSync == "pending" &&
                             incomingTimestamp >= existingTimestamp {
                             var conflict: OpaquePointer?
                             try Self.prepare(db, "UPDATE treasure_items SET sync_state='conflict' WHERE id=?", &conflict)
@@ -1959,7 +1984,7 @@ final class TreasurySQLiteStore {
                         }
                         continue
                     }
-                    let conflict = hasExisting && existingSync == "pending" && existingOrigin == localOrigin
+                    let conflict = hasExisting && existingSync == "pending"
                     let finalSync = conflict ? "conflict" : (hasExisting ? "synced" : "remote_only")
 
                     if change.operation == "delete" {
@@ -2005,13 +2030,37 @@ final class TreasurySQLiteStore {
                         try Self.stepDone(db, resurrect)
                         sqlite3_finalize(resurrect)
                     }
+                    // The bytes we cached are still the bytes this change
+                    // describes, so a metadata-only edit from another device (a
+                    // pin, a tag, a reading-progress tick) must not evict them.
+                    // Without this, an already-downloaded 100 MB attachment was
+                    // dropped and had to be fetched again from an origin device
+                    // that may not even be online.
+                    let remoteCacheIsCurrent = hasExisting && !existingValue.isEmpty
+                        && existingDigest?.isEmpty == false
+                        && contract.contentDigest?.lowercased() == existingDigest
+                        && contract.byteCount == existingByteCount
                     let preserveLocalAssets = existingOrigin == localOrigin ||
                         ["local", "pending", "conflict"].contains(existingSync)
+                        || remoteCacheIsCurrent
                     let prepared = prepareForPersistence(item)
                     try Self.upsert(item, normalizedURL: prepared.normalizedURL,
                                     contentDigest: prepared.contentDigest,
                                     filesDirectory: filesDirectoryURL, db: db)
                     try Self.applyContractMetadata(contract, db: db)
+                    if remoteCacheIsCurrent {
+                        // upsert rewrites legacy_value from the contract's
+                        // bodyRef, which names the file on the ORIGIN device.
+                        // Point the row back at the copy this device actually
+                        // holds under files/remote-assets/.
+                        var restore: OpaquePointer?
+                        try Self.prepare(db, "UPDATE treasure_items SET legacy_value=?,body_ref=COALESCE(?,body_ref) WHERE id=?", &restore)
+                        Self.bind(existingValue, restore, 1)
+                        Self.bind(existingBodyRef, restore, 2)
+                        Self.bind(change.itemID, restore, 3)
+                        try Self.stepDone(db, restore)
+                        sqlite3_finalize(restore)
+                    }
                     if !preserveLocalAssets {
                         var invalidate: OpaquePointer?
                         try Self.prepare(db, "UPDATE treasure_items SET original_text=NULL,body_ref=NULL WHERE id=?", &invalidate)
@@ -2575,7 +2624,15 @@ final class TreasurySQLiteStore {
           processing_state=excluded.processing_state,
           processing_error_code=excluded.processing_error_code,
           updated_at=excluded.updated_at,
-          sync_state='pending', origin_device_id=excluded.origin_device_id,
+          sync_state='pending',
+          -- An item's origin is the device that holds its bytes; it is decided
+          -- once, at insert. Taking excluded.origin_device_id here re-homed a
+          -- remote item to whichever device last edited its metadata (a pin, a
+          -- tag, a reading-progress tick), after which asset requests routed to
+          -- a device that only has `remote-<id>` and answered "unavailable"
+          -- forever. applyRemoteChanges still sets the true origin explicitly in
+          -- its own finalize UPDATE, so remote applies are unaffected.
+          origin_device_id=treasure_items.origin_device_id,
           metadata_fetched=excluded.metadata_fetched
         WHERE treasure_items.deleted_at IS NULL
         """

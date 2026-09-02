@@ -6,6 +6,7 @@ import com.leoyuan.leophoneagent.data.repository.TreasureRemoteChange
 import com.leoyuan.leophoneagent.data.repository.TreasureRepository
 import com.leoyuan.leophoneagent.data.db.TreasureItemEntity
 import com.leoyuan.leophoneagent.relay.RelayFleetStore
+import java.io.ByteArrayOutputStream
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
@@ -14,6 +15,7 @@ import java.security.MessageDigest
 import java.time.Instant
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -39,11 +41,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 
 internal class TreasurySyncClient(
     context: Context,
-    private val http: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(8, TimeUnit.SECONDS)
-        .readTimeout(20, TimeUnit.SECONDS)
-        .writeTimeout(20, TimeUnit.SECONDS)
-        .build(),
+    private val http: OkHttpClient = SHARED_HTTP,
 ) {
     private val app = context.applicationContext
     private val state = app.getSharedPreferences("treasury_sync_state", Context.MODE_PRIVATE)
@@ -59,7 +57,14 @@ internal class TreasurySyncClient(
             upload(repository, base, key, scope)
             pull(repository, base, key, scope)
             serveAssetRequests(repository, base, key)
-        }.isSuccess
+            true
+        }.getOrElse {
+            // Same reason as fetchAsset: runCatching also catches cancellation,
+            // and reporting it as a plain failed sync hides that the caller gave
+            // up while the remaining stages keep issuing network and DB work.
+            if (it is CancellationException) throw it
+            false
+        }
     }
 
     suspend fun fetchAsset(
@@ -101,7 +106,12 @@ internal class TreasurySyncClient(
                 "ready" -> downloadAsset(repository, item, kind, requestId, base, key)
                 else -> TreasuryAssetFetchResult("unavailable", item)
             }
-        }.getOrElse { TreasuryAssetFetchResult("failed", item) }
+        }.getOrElse {
+            // runCatching also catches cancellation; swallowing it would let the
+            // HTTP call and DB write run on after the caller gave up.
+            if (it is CancellationException) throw it
+            TreasuryAssetFetchResult("failed", item)
+        }
     }
 
     private suspend fun downloadAsset(
@@ -126,7 +136,7 @@ internal class TreasurySyncClient(
             .build()
 
         var response = http.newCall(buildDownload(offset)).execute()
-        if (response.code == 416 && offset > 0) {
+        if (treasuryRangeAction(response.code, offset) == TreasuryRangeAction.RETRY) {
             response.close()
             partial?.delete()
             offset = 0
@@ -141,7 +151,22 @@ internal class TreasurySyncClient(
                 if (result.code == 206 || metadata.mimeType != "text/plain") {
                     error("relay treasury body response invalid")
                 }
-                val bytes = result.body?.bytes() ?: error("relay treasury body missing")
+                // Read through the declared count instead of buffering the whole
+                // response first: a lying relay must not OOM the app before the check.
+                val input = result.body?.byteStream() ?: error("relay treasury body missing")
+                val collected = ByteArrayOutputStream()
+                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                var received = 0L
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    received += read
+                    if (received > metadata.byteCount || received > BODY_LIMIT) {
+                        error("relay treasury body exceeds declared size")
+                    }
+                    collected.write(buffer, 0, read)
+                }
+                val bytes = collected.toByteArray()
                 if (bytes.size.toLong() != metadata.byteCount || sha256(bytes) != metadata.digest) {
                     error("relay treasury body integrity mismatch")
                 }
@@ -160,22 +185,18 @@ internal class TreasurySyncClient(
                 partial?.delete()
                 error("remote treasury attachment metadata mismatch")
             }
-            if (offset > 0) {
-                if (result.code == 206) {
-                    if (!validTreasuryContentRange(
-                            result.header("Content-Range"), offset, metadata.byteCount,
-                        )) {
-                        partial?.delete()
-                        error("remote treasury attachment range invalid")
-                    }
-                } else if (result.code == 200) {
+            when (treasuryRangeAction(
+                result.code, offset, result.header("Content-Range"), metadata.byteCount,
+            )) {
+                TreasuryRangeAction.CONTINUE -> Unit
+                TreasuryRangeAction.TRUNCATE -> {
                     partial?.delete()
                     offset = 0
-                } else {
-                    error("relay treasury attachment response invalid")
                 }
-            } else if (result.code == 206) {
-                error("relay treasury attachment returned unsolicited range")
+                TreasuryRangeAction.RETRY, TreasuryRangeAction.REJECT -> {
+                    if (offset > 0 && result.code == 206) partial?.delete()
+                    error("relay treasury attachment range response invalid")
+                }
             }
             val target = partial ?: error("remote treasury attachment cache missing")
             val digest = MessageDigest.getInstance("SHA-256")
@@ -189,31 +210,36 @@ internal class TreasurySyncClient(
             }
             var count = offset
             var discardPartial = false
-            try {
-                FileOutputStream(target, offset > 0).use { output ->
-                    val input = result.body?.byteStream() ?: error("relay treasury attachment missing")
-                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                    while (true) {
-                        val read = input.read(buffer)
-                        if (read < 0) break
-                        count += read
-                        if (count > metadata.byteCount || count > ATTACHMENT_LIMIT) {
-                            discardPartial = true
-                            error("remote treasury attachment exceeds declared size")
+            TreasuryStoragePolicy.whileDownloading {
+                try {
+                    FileOutputStream(target, offset > 0).use { output ->
+                        val input = result.body?.byteStream() ?: error("relay treasury attachment missing")
+                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read < 0) break
+                            count += read
+                            if (count > metadata.byteCount || count > ATTACHMENT_LIMIT) {
+                                discardPartial = true
+                                error("remote treasury attachment exceeds declared size")
+                            }
+                            digest.update(buffer, 0, read)
+                            output.write(buffer, 0, read)
                         }
-                        digest.update(buffer, 0, read)
-                        output.write(buffer, 0, read)
+                        output.flush()
+                        output.fd.sync()
                     }
-                    output.flush()
-                    output.fd.sync()
+                    // A 206 may legally stop short of total-1. The retained prefix is
+                    // correct, so keep it and resume from it instead of starting over.
+                    if (count < metadata.byteCount) error("remote treasury attachment incomplete")
+                    if (digest.digest().toHex() != metadata.digest) {
+                        discardPartial = true
+                        error("remote treasury attachment integrity mismatch")
+                    }
+                } catch (error: Throwable) {
+                    if (discardPartial) target.delete()
+                    throw error
                 }
-                if (count != metadata.byteCount || digest.digest().toHex() != metadata.digest) {
-                    discardPartial = true
-                    error("remote treasury attachment integrity mismatch")
-                }
-            } catch (error: Throwable) {
-                if (discardPartial) target.delete()
-                throw error
             }
             val cached = repository.cacheRemoteAttachment(
                 item.id, target, metadata.mimeType, metadata.byteCount, metadata.digest,
@@ -502,6 +528,13 @@ internal class TreasurySyncClient(
     private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }
 
     private companion object {
+        // One dispatcher and one connection pool for every sync, treasury_get and
+        // "fetch" tap; a per-call client leaked threads and reused no connection.
+        val SHARED_HTTP: OkHttpClient = OkHttpClient.Builder()
+            .connectTimeout(8, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
+            .writeTimeout(20, TimeUnit.SECONDS)
+            .build()
         val DIGEST = Regex("^[0-9a-fA-F]{64}$")
         val KINDS = setOf("link", "text", "note", "image", "document", "audio", "video", "artifact")
         const val BODY_LIMIT = 8L * 1024 * 1024
@@ -527,6 +560,32 @@ internal data class TreasuryAssetFetchResult(
     val status: String,
     val item: TreasureItemEntity? = null,
 )
+
+/** What a ranged attachment download must do with the prefix it already retained. */
+internal enum class TreasuryRangeAction { CONTINUE, TRUNCATE, RETRY, REJECT }
+
+/**
+ * 416 means the retained prefix no longer matches the relay copy, so it is dropped
+ * and refetched from zero. A relay may also answer a Range request with the whole
+ * body (200), which truncates the prefix without a second request. A 206 is only
+ * accepted when its range continues the prefix; it may legally end before total-1.
+ */
+internal fun treasuryRangeAction(
+    code: Int,
+    offset: Long,
+    contentRange: String? = null,
+    total: Long = 0,
+): TreasuryRangeAction = when {
+    code == 416 -> if (offset > 0) TreasuryRangeAction.RETRY else TreasuryRangeAction.REJECT
+    offset <= 0L -> if (code == 206) TreasuryRangeAction.REJECT else TreasuryRangeAction.CONTINUE
+    code == 200 -> TreasuryRangeAction.TRUNCATE
+    code == 206 -> if (validTreasuryContentRange(contentRange, offset, total)) {
+        TreasuryRangeAction.CONTINUE
+    } else {
+        TreasuryRangeAction.REJECT
+    }
+    else -> TreasuryRangeAction.REJECT
+}
 
 internal fun validTreasuryContentRange(value: String?, expectedStart: Long, expectedTotal: Long): Boolean {
     val match = Regex("^bytes (\\d+)-(\\d+)/(\\d+)$").matchEntire(value.orEmpty()) ?: return false

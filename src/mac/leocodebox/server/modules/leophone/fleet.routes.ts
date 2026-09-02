@@ -684,7 +684,11 @@ async function pullRemoteTreasury(target: RelayTarget, scope: string): Promise<v
     }
     const next = remoteNumber(response.next_cursor);
     if (next !== deliveredCursor) throw new Error('relay treasury cursor does not match delivered changes');
+    const orphanedPartials = changes.some((change) => change.operation === 'delete')
+      ? deletedAttachmentPartials(scope, changes, treasuryDb.remoteItems(scope))
+      : [];
     treasuryDb.applyRemoteChanges(scope, changes, Math.max(cursor, next));
+    for (const partial of orphanedPartials) await fs.rm(partial, { force: true });
     if (response.has_more !== true) return;
     if (next <= cursor) throw new Error('relay treasury cursor stalled');
     cursor = next;
@@ -828,9 +832,21 @@ export function cachedAttachmentPath(scope: string, itemId: string, digest: stri
   return path.join(remoteAssetDirectory(), `${name}.bin`);
 }
 
-export function cachedAttachmentPartialPath(scope: string, itemId: string): string {
-  const name = createHash('sha256').update(`${scope}\0${itemId}`).digest('hex');
+export function cachedAttachmentPartialPath(scope: string, itemId: string, digest = ''): string {
+  // The digest is part of the name so a remote edit starts a fresh partial:
+  // resuming a prefix of the old content only wastes the whole suffix transfer
+  // before the final sha256 rejects it.
+  const name = createHash('sha256').update(`${scope}\0${itemId}\0${digest}`).digest('hex');
   return path.join(remoteAssetDirectory(), `.${name}.partial`);
+}
+
+/** Partial files of items the phone just deleted: nothing will ever resume them. */
+export function deletedAttachmentPartials(
+  scope: string, changes: RemoteTreasureChange[], items: RemoteTreasureMetadata[],
+): string[] {
+  const digests = new Map(items.map((item) => [item.id, item.content_digest]));
+  return changes.filter((change) => change.operation === 'delete').map((change) =>
+    cachedAttachmentPartialPath(scope, change.item_id, digests.get(change.item_id) ?? ''));
 }
 
 export function isCachedAttachmentPath(value: string): boolean {
@@ -958,7 +974,7 @@ async function downloadRemoteAsset(
   if (request.status === 'pending') return { status: 'pending', stale: false };
   if (request.status !== 'ready') return { status: 'unavailable', stale: false };
   const partialPath = assetKind === 'attachment'
-    ? cachedAttachmentPartialPath(scope, item.id)
+    ? cachedAttachmentPartialPath(scope, item.id, item.content_digest)
     : null;
   if (partialPath) await ensureRemoteAssetDirectory();
   let rangeOffset = partialPath ? await resumableTreasuryPartialSize(partialPath) : 0;
@@ -1075,6 +1091,9 @@ async function downloadRemoteAsset(
     });
     if (previous?.file_path && previous.file_path !== targetPath && isCachedAttachmentPath(previous.file_path)) {
       await fs.rm(previous.file_path, { force: true });
+      // An interrupted download of the superseded digest leaves its own partial
+      // behind; nothing will ever resume it now.
+      await fs.rm(cachedAttachmentPartialPath(scope, item.id, previous.digest), { force: true });
     }
   }
   return { status: 'ready', stale: false };

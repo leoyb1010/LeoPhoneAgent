@@ -25,7 +25,14 @@ export class TreasuryToolError extends Error {}
 
 function toolError(message: string): never { throw new TreasuryToolError(message); }
 
+// ponytail: process-lifetime memo, so the auth pre-handler stops doing a DB
+// read + decrypt + mkdir + readFile on every MCP request. A token rotated by
+// another process needs an app restart to be picked up; add invalidation only
+// if rotation ever becomes a live operation.
+let memoizedMcpToken = '';
+
 function getOrCreateMcpToken(): string {
+  if (memoizedMcpToken) return memoizedMcpToken;
   const stored = appConfigDb.get(MCP_TOKEN_KEY)?.trim();
   const token = stored ? (isEncrypted(stored) ? decryptSecret(stored) : stored)
     : randomBytes(32).toString('hex');
@@ -35,6 +42,7 @@ function getOrCreateMcpToken(): string {
   try { current = fs.readFileSync(MCP_TOKEN_FILE, 'utf8').trim(); } catch { /* create below */ }
   if (current !== token) fs.writeFileSync(MCP_TOKEN_FILE, `${token}\n`, { encoding: 'utf8', mode: 0o600 });
   try { fs.chmodSync(MCP_TOKEN_FILE, 0o600); } catch { /* best effort */ }
+  memoizedMcpToken = token;
   return token;
 }
 

@@ -214,6 +214,14 @@ router.get('/', (req, res) => {
   }
 });
 
+// ponytail: /storage and /storage/cache/:kind are machine-wide, not per-user.
+// Nothing they read carries a user: `treasure_remote_assets` /
+// `treasure_remote_items` are keyed by relay scope (a device pairing) and
+// `treasury/files/` is a flat `<uuid><ext>` directory whose owner only exists
+// as `treasure_items.user_id` -> `body_ref`. Correct for the local single-user
+// desktop; in multi-user JWT mode one user sees and can clear every user's
+// cache. Scoping needs a user column on those rows (+ a per-user file layout),
+// not a filter here.
 router.get('/storage', async (_req, res) => {
   try {
     return res.json({ usage: await getTreasuryStorageUsage() });

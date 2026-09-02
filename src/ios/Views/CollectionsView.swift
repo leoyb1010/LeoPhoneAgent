@@ -1721,9 +1721,9 @@ private struct CollectionCard: View {
             // ThumbnailCache 用 ImageIO 直接产 120px 小图(不整张解码),
             // 后台队列 + NSCache 都是现成的,直接复用。
             guard item.kind == .file, item.thumbnailFile == nil,
-                  let dir = CollectionStore.filesDirectory else { return }
+                  let file = CollectionStore.fileURL(named: item.value) else { return }
             let image = await ThumbnailCache.shared.thumbnail(
-                for: dir.appendingPathComponent(item.value).path, maxSize: 120)
+                for: file.path, maxSize: 120)
             // 行被复用去显示别的条目时 task(id:) 会取消本任务 ——
             // 别把旧条目的图填进新行。
             guard !Task.isCancelled else { return }
@@ -1829,8 +1829,12 @@ private struct CollectionPreviewSheet: View {
                     .padding()
             }
         case .file:
-            if let dir = CollectionStore.filesDirectory,
-               let image = UIImage(contentsOfFile: dir.appendingPathComponent(item.value).path) {
+            // fileURL(named:) is the only lookup that also checks
+            // files/remote-assets/, where an on-demand download lands. Joining
+            // filesDirectory by hand showed "附件已安全下载" and then a generic
+            // doc placeholder for every attachment fetched from another device.
+            if let file = CollectionStore.fileURL(named: item.value),
+               let image = UIImage(contentsOfFile: file.path) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         Image(uiImage: image).resizable().scaledToFit()

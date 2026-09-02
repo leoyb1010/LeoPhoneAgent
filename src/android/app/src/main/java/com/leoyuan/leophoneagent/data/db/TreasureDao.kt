@@ -21,17 +21,25 @@ internal fun mergeRemoteTreasureItem(
     incoming: TreasureItemEntity,
     preserveLocalAssets: Boolean,
     conflict: Boolean,
-): TreasureItemEntity = incoming.copy(
-    rowId = existing.rowId,
-    originalText = incoming.originalText ?: existing.originalText.takeIf { preserveLocalAssets },
-    bodyRef = incoming.bodyRef ?: existing.bodyRef.takeIf { preserveLocalAssets },
-    previewRef = incoming.previewRef ?: existing.previewRef,
-    mimeType = incoming.mimeType ?: existing.mimeType.takeIf { preserveLocalAssets },
-    byteCount = if (preserveLocalAssets) maxOf(incoming.byteCount, existing.byteCount)
-        else incoming.byteCount,
-    contentDigest = incoming.contentDigest ?: existing.contentDigest.takeIf { preserveLocalAssets },
-    syncState = if (conflict) "conflict" else "synced",
-)
+): TreasureItemEntity {
+    // A remote metadata-only change (reading progress, pin, title) always arrives
+    // with null body/asset fields. Dropping the downloaded cache for one of those
+    // costs a full re-download, so keep it whenever the content itself is unchanged.
+    val keepAssets = preserveLocalAssets || incoming.contentDigest == null ||
+        (incoming.contentDigest.equals(existing.contentDigest, ignoreCase = true) &&
+            incoming.byteCount == existing.byteCount)
+    return incoming.copy(
+        rowId = existing.rowId,
+        originalText = incoming.originalText ?: existing.originalText.takeIf { keepAssets },
+        bodyRef = incoming.bodyRef ?: existing.bodyRef.takeIf { keepAssets },
+        previewRef = incoming.previewRef ?: existing.previewRef,
+        mimeType = incoming.mimeType ?: existing.mimeType.takeIf { keepAssets },
+        byteCount = if (keepAssets) maxOf(incoming.byteCount, existing.byteCount)
+            else incoming.byteCount,
+        contentDigest = incoming.contentDigest ?: existing.contentDigest.takeIf { keepAssets },
+        syncState = if (conflict) "conflict" else "synced",
+    )
+}
 
 @Dao
 interface TreasureDao {
@@ -151,8 +159,9 @@ interface TreasureDao {
                 incoming.originDeviceId != localOriginDeviceId
             val preserveLocalAssets = existing.originDeviceId == localOriginDeviceId ||
                 existing.syncState in setOf("local", "pending", "conflict")
-            // Remote body/attachment bytes are caches. A newer remote metadata
-            // change invalidates them instead of preserving stale byte counts.
+            // Remote body/attachment bytes are caches. A newer remote change
+            // invalidates them only when its digest/byte count says the content
+            // actually changed; metadata-only edits keep the download.
             updateItem(mergeRemoteTreasureItem(
                 existing = existing,
                 incoming = incoming,

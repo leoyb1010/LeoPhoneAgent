@@ -23,6 +23,7 @@ object TreasuryTools {
     private const val MAX_RESULT_LIMIT = 50
     private const val DEFAULT_ITEM_CHARS = 12_000
     private const val HARD_ITEM_CHARS = 50_000
+    private const val MAX_REMOTE_BODY_FETCHES = 5
     private val SEARCH_KINDS = setOf("link", "text", "note", "image", "document", "audio", "video", "artifact")
     private val READING_STATES = setOf("none", "unread", "reading", "read")
 
@@ -162,6 +163,7 @@ object TreasuryTools {
         val byId = repository.get(ids).associateBy { it.id }.toMutableMap()
         val syncClient = TreasurySyncClient(context)
         val results = JSONArray()
+        var remoteFetches = 0
         ids.forEach { id ->
             var item = byId[id]
             if (item == null) {
@@ -179,11 +181,21 @@ object TreasuryTools {
             if (includeBody && localBody.text == null &&
                 item.originDeviceId != repository.localOriginDeviceId()
             ) {
-                val fetched = syncClient.fetchAsset(repository, item.id, "body")
-                remoteFetchStatus = fetched.status
-                item = fetched.item ?: item
-                byId[id] = item
-                localBody = bodyText(item, context)
+                // Every remote body costs a relay round-trip at 8s/20s timeouts, so a
+                // 100-id call must not block for minutes or queue 100 relay requests.
+                // ponytail: a flat cap on sequential fetches. The rest report
+                // remote_not_fetched and the agent asks for them explicitly; fetch
+                // them concurrently instead if that round trip becomes the complaint.
+                if (remoteFetches >= MAX_REMOTE_BODY_FETCHES) {
+                    remoteFetchStatus = "not_fetched"
+                } else {
+                    remoteFetches += 1
+                    val fetched = syncClient.fetchAsset(repository, item.id, "body")
+                    remoteFetchStatus = fetched.status
+                    item = fetched.item ?: item
+                    byId[id] = item
+                    localBody = bodyText(item, context)
+                }
             }
             val body = if (includeBody && localBody.text == null && remoteFetchStatus != null) {
                 BodyResult(null, if (remoteFetchStatus == "ready") "remote_missing" else "remote_$remoteFetchStatus")

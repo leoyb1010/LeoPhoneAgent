@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readlink, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -73,6 +74,16 @@ test('Mac Treasury storage cleanup preserves originals and separates body and at
   assert.equal(treasuryDb.remoteAsset('relay:storage', 'attachment-item', 'attachment'), null);
   assert.equal((await getTreasuryStorageUsage()).original_bytes, 31);
   assert.equal((await getTreasuryStorageUsage()).attachment_cache_bytes, 0);
+
+  // A FIFO under the originals root used to 500 both the panel and the clear
+  // button; it holds no cache bytes and must simply be skipped.
+  const fifo = path.join(originals, 'odd.fifo');
+  execFileSync('mkfifo', [fifo]);
+  try {
+    assert.equal((await getTreasuryStorageUsage()).original_bytes, 31);
+  } finally {
+    await rm(fifo, { force: true });
+  }
 });
 
 test('Mac Treasury attachment cleanup unlinks cache symlinks without touching their targets', async () => {

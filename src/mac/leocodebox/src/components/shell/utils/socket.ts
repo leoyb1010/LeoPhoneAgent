@@ -1,4 +1,5 @@
 import { IS_PLATFORM } from '../../../constants/config';
+import { refreshLocalAuthToken } from '../../../utils/apiClient';
 import type { ShellIncomingMessage, ShellOutgoingMessage } from '../types/types';
 
 export function getShellWebSocketUrl(): string | null {
@@ -8,7 +9,8 @@ export function getShellWebSocketUrl(): string | null {
     return `${protocol}//${window.location.host}/shell`;
   }
 
-  const token = localStorage.getItem('auth-token');
+  let token = localStorage.getItem('auth-token');
+  if (!token && refreshLocalAuthToken()) token = localStorage.getItem('auth-token');
   if (!token) {
     console.error('No authentication token found for Shell WebSocket connection');
     return null;

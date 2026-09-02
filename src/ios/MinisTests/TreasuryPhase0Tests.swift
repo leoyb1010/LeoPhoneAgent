@@ -6,13 +6,16 @@ final class TreasuryPhase0Tests: XCTestCase {
         let response = TreasuryService.SearchResponse(items: [
             .init(id: "one", title: "Fold8 适配\n指南", kind: "document", source: "本机 PDF",
                   createdAt: Date(timeIntervalSince1970: 1), snippet: "绝不能由 Siri 朗读的正文秘密",
-                  tags: ["折叠屏"], score: 0.9, matchSources: ["body"]),
+                  tags: ["折叠屏"], score: 0.9, matchSources: ["body"],
+                  safeTitle: "Fold8 适配\n指南"),
             .init(id: "two", title: "离线同步", kind: "note", source: "私人批注",
                   createdAt: Date(timeIntervalSince1970: 2), snippet: "另一个敏感片段",
-                  tags: [], score: 0.8, matchSources: ["annotation"]),
-            .init(id: "three", title: " \n", kind: "text", source: "",
+                  tags: [], score: 0.8, matchSources: ["annotation"], safeTitle: "离线同步"),
+            // Untitled: `title` would be the raw body, `safeTitle` is what a
+            // system surface is allowed to say.
+            .init(id: "three", title: "绝密正文当标题", kind: "text", source: "",
                   createdAt: Date(timeIntervalSince1970: 3), snippet: "仍不能朗读",
-                  tags: [], score: 0.7, matchSources: ["body"]),
+                  tags: [], score: 0.7, matchSources: ["body"], safeTitle: " \n"),
         ], truncated: true)
 
         let output = TreasuryShortcutPresentation.searchText(query: " Fold8\n", response: response)
@@ -21,7 +24,45 @@ final class TreasuryPhase0Tests: XCTestCase {
         XCTAssertTrue(output.contains("还有更多结果"))
         XCTAssertFalse(output.contains("正文秘密"))
         XCTAssertFalse(output.contains("敏感片段"))
+        XCTAssertFalse(output.contains("绝密正文当标题"))
         XCTAssertFalse(output.contains("one"))
+    }
+
+    /// The hand-built response above always carries a real title, so it never
+    /// exercised the untitled fallback. Drive the actual search path instead:
+    /// an untitled text item used to surface its private body as the "title",
+    /// and an untitled link its full URL including the query string — both of
+    /// which Siri then reads aloud.
+    func testTreasuryShortcutSearchNeverSpeaksUntitledBodyOrURLQuery() async {
+        let note = CollectedItem(kind: .text,
+                                 value: "报销密码 hunter2 不能被念出来",
+                                 sourceLabel: "文本")
+        let link = CollectedItem(kind: .link,
+                                 value: "https://example.com/doc?token=SUPERSECRET42",
+                                 sourceLabel: "Safari")
+
+        let response = await TreasuryService.search(
+            .init(query: "", limit: 10), items: [note, link]
+        )
+        XCTAssertEqual(response.items.count, 2)
+        for result in response.items {
+            XCTAssertFalse(result.safeTitle.contains("hunter2"))
+            XCTAssertFalse(result.safeTitle.contains("SUPERSECRET42"))
+            XCTAssertFalse(result.safeTitle.contains("token="))
+        }
+        // The in-app agent keeps the richer title; only system surfaces are
+        // restricted, and the agent-facing JSON must not carry the safe copy.
+        XCTAssertTrue(response.items.contains { $0.title.contains("hunter2") })
+        let payload = TreasuryService.renderUntrusted(
+            response, element: "treasury_search_results")
+        XCTAssertFalse(payload.contains("safeTitle"))
+
+        let output = TreasuryShortcutPresentation.searchText(query: "", response: response)
+        XCTAssertFalse(output.contains("hunter2"))
+        XCTAssertFalse(output.contains("SUPERSECRET42"))
+        XCTAssertFalse(output.contains("token="))
+        XCTAssertTrue(output.contains("文本"))
+        XCTAssertTrue(output.contains("Safari"))
     }
 
     @MainActor
@@ -795,7 +836,11 @@ final class TreasuryPhase0Tests: XCTestCase {
         }
         let local = try XCTUnwrap(store.syncContracts(ids: Set([remoteItem.id]))[remoteItem.id])
         XCTAssertEqual(local.syncState, "pending")
-        XCTAssertEqual(local.originDeviceID, TreasurySQLiteStore.originDeviceID())
+        // Editing a remote item locally marks it pending, but must NOT re-home
+        // it: the origin is the device that holds the bytes, and it only
+        // answers asset requests there. This assertion previously required the
+        // opposite and locked in the bug.
+        XCTAssertEqual(local.originDeviceID, "android-test")
 
         remoteItem.title = "并发远端编辑"
         // Android and Relay timestamps are millisecond-precision. Exercise a
@@ -1272,6 +1317,86 @@ final class TreasuryPhase0Tests: XCTestCase {
         hostile["body_ref"] = "../private.pdf"
         let hostilePayload = try JSONSerialization.data(withJSONObject: [hostile])
         XCTAssertThrowsError(try store.importJSON(hostilePayload))
+    }
+
+    /// A metadata-only edit from the origin device (a pin, a tag, a
+    /// reading-progress tick) arrives with the same content digest. Evicting
+    /// the cached body then forced a full re-download from a device that may
+    /// not be online. A genuine content change must still evict.
+    func testUnchangedDigestKeepsCachedRemoteBodyAndChangedDigestEvictsIt() throws {
+        let directory = try temporaryTreasuryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try TreasurySQLiteStore(directory: directory)
+        let base = Date(timeIntervalSince1970: 5_000)
+        let body = "远端正文十二字"
+        let bodyBytes = Data(body.utf8)
+        let digest = SHA256.hash(data: bodyBytes).map { String(format: "%02x", $0) }.joined()
+
+        func remote(_ item: CollectedItem, digest: String?) -> TreasureItemContract {
+            TreasureItemContract(item: item, originDeviceID: "android-test",
+                                 byteCount: bodyBytes.count, contentDigest: digest,
+                                 readingState: "unread", processingState: "ready",
+                                 syncState: "remote_only")
+        }
+        func apply(_ sequence: Int64, _ contract: TreasureItemContract,
+                   _ updated: Date, _ payload: String) throws {
+            try store.applyRemoteChanges([
+                TreasurySQLiteStore.RemoteChange(
+                    sequence: sequence, id: "change-\(sequence)", itemID: contract.id,
+                    operation: "upsert", updatedAt: updated, originDeviceID: "android-test",
+                    payloadDigest: String(repeating: payload, count: 64), contract: contract)
+            ])
+        }
+
+        var item = CollectedItem(
+            id: "cached-body-item", kind: .text, value: body,
+            resolvedURL: nil, title: "远端条目", thumbnailFile: nil, sourceLabel: "Android",
+            createdAt: base, tags: [], pinned: false, summary: nil, metadataFetched: true,
+            bodyFile: nil, annotation: nil, archived: false, updatedAt: base,
+            readingState: "unread", readingProgress: 0, lastOpenedAt: nil,
+            processingState: "ready", processingErrorCode: nil
+        )
+        try apply(1, remote(item, digest: digest), base, "a")
+        // A new remote item arrives without its body; the user fetches it once.
+        XCTAssertTrue(try store.cacheRemoteBody(itemID: item.id, text: body,
+                                                digest: digest, byteCount: bodyBytes.count))
+        XCTAssertEqual(try store.cachedBody(itemID: item.id), body)
+
+        // Same bytes, new metadata: the fetched body must survive.
+        item.pinned = true
+        item.updatedAt = base.addingTimeInterval(10)
+        try apply(2, remote(item, digest: digest), item.updatedAt, "b")
+        XCTAssertEqual(try store.cachedBody(itemID: item.id), body)
+
+        // Different bytes: the stale cache must go.
+        item.updatedAt = base.addingTimeInterval(20)
+        try apply(3, remote(item, digest: String(repeating: "c", count: 64)), item.updatedAt, "c")
+        XCTAssertNil(try store.cachedBody(itemID: item.id))
+    }
+
+    /// A remote attachment cached on this device is stored as `remote-<id>`,
+    /// which has no extension. Reconstructing its kind from the name alone
+    /// turned every synced photo and recording back into a "document".
+    func testRemoteAttachmentKindSurvivesRoundTripThroughThisDevice() {
+        let base = Date(timeIntervalSince1970: 9_000)
+        func kind(value: String, mimeType: String?) -> String {
+            let item = CollectedItem(
+                id: "kind-item", kind: .file, value: value, resolvedURL: nil, title: nil,
+                thumbnailFile: nil, sourceLabel: "iPhone", createdAt: base, tags: [],
+                pinned: false, summary: nil, metadataFetched: true, bodyFile: nil,
+                annotation: nil, archived: false, updatedAt: base
+            )
+            return TreasureItemContract(item: item, originDeviceID: "ios-phone",
+                                        mimeType: mimeType).kind
+        }
+        XCTAssertEqual(kind(value: "remote-abc", mimeType: "image/jpeg"), "image")
+        XCTAssertEqual(kind(value: "remote-abc", mimeType: "audio/mpeg"), "audio")
+        XCTAssertEqual(kind(value: "remote-abc", mimeType: "video/mp4"), "video")
+        XCTAssertEqual(kind(value: "remote-abc", mimeType: "application/pdf"), "document")
+        XCTAssertEqual(kind(value: "remote-abc", mimeType: nil), "document")
+        // A real local filename still wins over the MIME type.
+        XCTAssertEqual(kind(value: "scan.pdf", mimeType: "image/jpeg"), "document")
+        XCTAssertEqual(kind(value: "photo.heic", mimeType: nil), "image")
     }
 
     private func temporaryTreasuryDirectory() throws -> URL {

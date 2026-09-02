@@ -136,6 +136,79 @@ class RelayTreasurySyncTests(unittest.IsolatedAsyncioTestCase):
             }
         return result
 
+    async def test_metadata_edit_from_another_device_cannot_rehome_the_asset(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            relay = self._relay(tmp)
+            created = self._change("origin-change", "photo-item", 1000)
+            created["item"].update({
+                "kind": "image", "mime_type": "image/jpeg", "byte_count": 4096,
+                "content_digest": "a" * 64,
+                "body_available": False, "attachment_available": True,
+            })
+            relay._apply_treasury_change(created, "ios-phone")
+
+            # A second device pins the item. It holds no bytes, so its view of
+            # kind, mime, digest and availability is a placeholder, not truth.
+            edited = self._change("pin-change", "photo-item", 2000)
+            edited["item"].update({
+                "kind": "document", "mime_type": "", "byte_count": 0,
+                "content_digest": "", "pinned": True,
+                "body_available": False, "attachment_available": False,
+            })
+            ok, _ = relay._apply_treasury_change(edited, "mac:studio")
+            self.assertTrue(ok)
+
+            stored = relay.treasury_items["photo-item"]["item"]
+            self.assertEqual(stored["asset_origin_device_id"], "ios-phone")
+            self.assertEqual(stored["kind"], "image")
+            self.assertEqual(stored["mime_type"], "image/jpeg")
+            self.assertEqual(stored["byte_count"], 4096)
+            self.assertEqual(stored["content_digest"], "a" * 64)
+            self.assertTrue(stored["attachment_available"])
+            # The shared metadata the editor does own still lands.
+            self.assertTrue(stored["pinned"])
+
+            # The change stream keeps the invariant every client asserts:
+            # a change's envelope origin equals its item's origin.
+            replicated = [entry for entry in relay.treasury_changes
+                          if entry["change_id"] == "pin-change"][0]
+            self.assertEqual(replicated["origin_device_id"], "mac:studio")
+            self.assertEqual(replicated["item"]["origin_device_id"], "mac:studio")
+
+            # An asset request is routed to the device that has the bytes.
+            captured = {}
+
+            def fake_json_response(payload, **kwargs):
+                captured["payload"] = payload
+                captured["status"] = kwargs.get("status", 200)
+                return payload
+
+            create = types.SimpleNamespace(
+                headers={"Authorization": "Bearer server-key-0123456789"},
+                path="/relay/api/treasury/assets/requests",
+                json=lambda: asyncio.sleep(0, result={
+                    "item_id": "photo-item", "asset_kind": "attachment",
+                    "requester_device_id": "mac:studio",
+                }),
+            )
+            with unittest.mock.patch.object(
+                    relay_module.web, "json_response", fake_json_response, create=True):
+                await relay.post_treasury_asset_request(create)
+            self.assertIn(captured["status"], (200, 201))
+            self.assertEqual(
+                captured["payload"]["request"]["origin_device_id"], "ios-phone")
+
+            # The origin device itself may still correct those fields.
+            corrected = self._change("replace-change", "photo-item", 3000)
+            corrected["item"].update({
+                "kind": "image", "mime_type": "image/png", "byte_count": 8192,
+                "content_digest": "b" * 64, "attachment_available": True,
+            })
+            relay._apply_treasury_change(corrected, "ios-phone")
+            stored = relay.treasury_items["photo-item"]["item"]
+            self.assertEqual(stored["mime_type"], "image/png")
+            self.assertEqual(stored["content_digest"], "b" * 64)
+
     async def test_changes_are_idempotent_ordered_and_survive_restart(self):
         with tempfile.TemporaryDirectory() as tmp:
             relay = self._relay(tmp)

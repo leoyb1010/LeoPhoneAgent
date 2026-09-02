@@ -5,6 +5,7 @@ import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicInteger
 
 data class TreasuryStorageUsage(
     val originalAttachmentBytes: Long,
@@ -24,8 +25,27 @@ object TreasuryStoragePolicy {
             .fold(0L) { total, name -> saturatedAdd(total, directoryBytes(File(root, name))) },
     )
 
+    private val downloadsInFlight = AtomicInteger()
+
+    /**
+     * A streaming attachment download keeps its `.partial` open. Unlinking that file
+     * mid-flight makes the download finish into an unlinked inode and fail the later
+     * `isRegularFile` check, so the clear path skips `sync-inbox` while one runs.
+     */
+    // ponytail: one process-wide counter, not per root or per file. A second
+    // Treasury root would need a keyed map; there is only ever one.
+    internal fun <T> whileDownloading(block: () -> T): T {
+        downloadsInFlight.incrementAndGet()
+        return try {
+            block()
+        } finally {
+            downloadsInFlight.decrementAndGet()
+        }
+    }
+
     fun clearSyncTemporaryCache(root: File): Long =
         listOf("sync-outbox", "sync-inbox", "remote-assets")
+            .filterNot { it == "sync-inbox" && downloadsInFlight.get() > 0 }
             .sumOf { clearCacheDirectory(File(root, it)) }
 
     private fun clearCacheDirectory(cache: File): Long {

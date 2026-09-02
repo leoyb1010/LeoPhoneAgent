@@ -207,6 +207,46 @@ class Relay:
             "deleted_at": deleted_at,
         }
 
+    # Fields that describe the stored bytes rather than the shared metadata.
+    # Only the device that actually holds those bytes may set them.
+    TREASURY_ASSET_OWNED_FIELDS = (
+        "kind", "mime_type", "content_digest", "byte_count",
+        "body_available", "attachment_available",
+    )
+
+    def _materialize_treasury_item(self, item: Dict[str, Any],
+                                   device_id: str) -> Dict[str, Any]:
+        """Pin byte-describing fields to the device that actually stored them.
+
+        `origin_device_id` on a change means "who produced this change", and
+        every client rejects a change whose envelope and item disagree, so it
+        has to stay the uploader. But asset requests were routed with that same
+        field: pin an item on a second device and the relay started sending its
+        attachment requests there, to a device holding only a `remote-<id>`
+        placeholder, which answered "unavailable" forever. The bytes' real home
+        is tracked separately here, in the materialized item only, so the change
+        stream and every existing client stay exactly as they were.
+
+        ponytail: a permanently retired origin device strands its items' bytes;
+        recovering that needs an explicit re-share, not an implicit takeover.
+        """
+        materialized = dict(item)
+        current = self.treasury_items.get(item["id"])
+        previous = current.get("item") if isinstance(current, dict) else None
+        asset_origin = ""
+        if isinstance(previous, dict):
+            asset_origin = self._safe_treasury_text(
+                previous.get("asset_origin_device_id")
+                or previous.get("origin_device_id"), 200)
+        if not asset_origin or asset_origin == device_id:
+            materialized["asset_origin_device_id"] = device_id
+            return materialized
+        materialized["asset_origin_device_id"] = asset_origin
+        for field in self.TREASURY_ASSET_OWNED_FIELDS:
+            if field in previous:
+                materialized[field] = previous[field]
+        return materialized
+
     @staticmethod
     def _treasury_order_key(change: Dict[str, Any]) -> tuple:
         return (
@@ -356,7 +396,7 @@ class Relay:
         current = self.treasury_items.get(item_id)
         if current is None or self._treasury_order_key(winner) > self._treasury_order_key(current["winner"]):
             if operation == "upsert":
-                materialized = item
+                materialized = self._materialize_treasury_item(item, device_id)
             else:
                 previous = current.get("item") if isinstance(current, dict) else None
                 materialized = {
@@ -487,7 +527,8 @@ class Relay:
         available_key = "body_available" if asset_kind == "body" else "attachment_available"
         if item.get(available_key) is not True:
             return web.json_response({"error": {"message": "treasury asset unavailable"}}, status=409)
-        origin = self._safe_treasury_text(item.get("origin_device_id"), 200)
+        origin = self._safe_treasury_text(
+            item.get("asset_origin_device_id") or item.get("origin_device_id"), 200)
         if not origin or origin == requester:
             return web.json_response({"error": {"message": "invalid asset request"}}, status=400)
         if not self._clean_treasury_asset_requests():

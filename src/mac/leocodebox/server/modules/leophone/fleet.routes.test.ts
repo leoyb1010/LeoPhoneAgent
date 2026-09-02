@@ -10,6 +10,7 @@ import type { RemoteTreasureMetadata } from '../database/repositories/treasury.d
 import {
   cachedAttachmentPath,
   cachedAttachmentPartialPath,
+  deletedAttachmentPartials,
   offlineBodyCandidates,
   offlineCollectionCandidates,
   isCachedAttachmentPath,
@@ -67,6 +68,17 @@ test('fleet treasury attachment cache path is digest-derived and contained', () 
   assert.equal(path.basename(cached).length, 68);
   assert.match(path.basename(partial), /^\.[0-9a-f]{64}\.partial$/);
   assert.equal(isCachedAttachmentPath('/private/treasury-secret.bin'), false);
+  // A changed remote digest must start a fresh partial, never resume the old prefix.
+  assert.notEqual(cachedAttachmentPartialPath('relay:test', 'item', 'a'.repeat(64)),
+    cachedAttachmentPartialPath('relay:test', 'item', 'b'.repeat(64)));
+  // Deleting a remote item strands its partial; the pull path reclaims exactly that one.
+  const changes = [
+    { item_id: 'gone', operation: 'delete' as const },
+    { item_id: 'kept', operation: 'upsert' as const },
+  ] as Parameters<typeof deletedAttachmentPartials>[1];
+  const stranded = deletedAttachmentPartials('relay:test', changes,
+    [{ id: 'gone', content_digest: 'c'.repeat(64) }] as Parameters<typeof deletedAttachmentPartials>[2]);
+  assert.deepEqual(stranded, [cachedAttachmentPartialPath('relay:test', 'gone', 'c'.repeat(64))]);
 });
 
 test('fleet treasury range validation requires the requested prefix and full size', () => {

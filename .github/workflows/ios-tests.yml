@@ -19,6 +19,10 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+# 只读即可:本工作流只跑测试和审计,不写仓库。不声明就继承仓库默认权限,
+# 默认可能是可写的 —— android.yml 早就声明了,这里一直漏。
+permissions:
+  contents: read
 jobs:
   ios-unit-tests:
     # 项目 deployment target 是 iOS 26。macos-15 的默认 Xcode 仍是 16.4，

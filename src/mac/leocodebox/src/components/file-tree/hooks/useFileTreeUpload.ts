@@ -3,7 +3,7 @@ import type { DragEvent } from 'react';
 
 import { IS_PLATFORM } from '../../../constants/config';
 import type { Project } from '../../../types/app';
-import { isValidRefreshedToken } from '../../../utils/apiClient';
+import { isValidRefreshedToken, refreshLocalAuthToken } from '../../../utils/apiClient';
 import {
   MAX_FILE_UPLOAD_COUNT,
   MAX_FILE_UPLOAD_SIZE_BYTES,
@@ -105,10 +105,11 @@ const buildUploadFormData = (files: File[], targetPath: string) => {
   return formData;
 };
 
-const uploadFormDataWithProgress = (
+const sendUpload = (
   projectId: string,
   formData: FormData,
   onProgress: (progress: number) => void,
+  allowAuthRetry: boolean,
 ) =>
   new Promise<UploadResponse>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -142,6 +143,13 @@ const uploadFormDataWithProgress = (
         return;
       }
 
+      // A bundled server restart rotates the local token; the upload never
+      // reached a handler, so refreshing and resending the same files is safe.
+      if (xhr.status === 401 && allowAuthRetry && refreshLocalAuthToken()) {
+        resolve(sendUpload(projectId, formData, onProgress, false));
+        return;
+      }
+
       reject(new Error(payload.error || payload.message || `Upload failed with status ${xhr.status}`));
     };
 
@@ -150,6 +158,12 @@ const uploadFormDataWithProgress = (
 
     xhr.send(formData);
   });
+
+const uploadFormDataWithProgress = (
+  projectId: string,
+  formData: FormData,
+  onProgress: (progress: number) => void,
+) => sendUpload(projectId, formData, onProgress, true);
 
 // Helper function to read all files from a directory entry recursively
 const readAllDirectoryEntries = async (directoryEntry: FileSystemDirectoryEntry, basePath = ''): Promise<File[]> => {

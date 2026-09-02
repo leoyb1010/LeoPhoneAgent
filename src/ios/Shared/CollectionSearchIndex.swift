@@ -307,6 +307,12 @@ enum TreasuryService {
         let tags: [String]
         let score: Double
         let matchSources: [String]
+        /// What a system surface may say out loud. `title` falls back to
+        /// `value`, which for an untitled text item is the private body and for
+        /// an untitled link is the full URL including its query string; the
+        /// in-app agent may see that, Siri may not. Deliberately absent from
+        /// `CodingKeys`, so it never reaches the agent payload.
+        var safeTitle: String = ""
 
         enum CodingKeys: String, CodingKey {
             case id, title, kind, source, snippet, tags, score
@@ -671,7 +677,8 @@ enum TreasuryService {
                                        ftsSnippet: hitByID[item.id]?.snippet),
                 tags: item.tags,
                 score: min(0.99, max(0, score)),
-                matchSources: orderedSources
+                matchSources: orderedSources,
+                safeTitle: CollectionSearchIndex.spotlightTitle(for: item)
             ))
         }
         results.sort {
@@ -929,11 +936,17 @@ enum TreasuryService {
 
     private static func attachmentReference(for item: CollectedItem) -> AttachmentReference? {
         guard item.kind == .file, isControlledFileName(item.value) else { return nil }
+        // An on-demand download lands in files/remote-assets/, which a bare
+        // files/<name> probe never sees. Without this the agent was told an
+        // attachment it had already fetched and verified was unavailable.
+        let resolved = CollectionStore.fileURL(named: item.value)
+        let cachedRemotely = resolved?.deletingLastPathComponent()
+            .lastPathComponent == "remote-assets"
         return AttachmentReference(
-            ref: "files/\(item.value)",
+            ref: cachedRemotely ? "files/remote-assets/\(item.value)" : "files/\(item.value)",
             fileName: item.value,
             mimeType: mimeType(for: item.value),
-            available: controlledFileExists(item.value, in: CollectionStore.filesDirectory)
+            available: resolved != nil
         )
     }
 
@@ -1105,7 +1118,9 @@ enum TreasuryShortcutPresentation {
         }
 
         let rows = response.items.prefix(5).enumerated().map { index, item in
-            let title = compact(item.title, limit: 120)
+            // Never `item.title`: it falls back to the private body or to a URL
+            // with its query string, and this text is read aloud.
+            let title = compact(item.safeTitle, limit: 120)
             let source = compact(item.source, limit: 60)
             let displayTitle = title.isEmpty ? "未命名收藏" : title
             return source.isEmpty

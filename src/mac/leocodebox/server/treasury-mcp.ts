@@ -79,7 +79,16 @@ async function callApi(name: string, input: Record<string, unknown>) {
     method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(input), signal: AbortSignal.timeout(30_000),
   });
-  const payload = await response.json() as { success?: boolean; data?: unknown; error?: string };
+  const body = await response.text();
+  let payload: { success?: boolean; data?: unknown; error?: string };
+  try {
+    payload = JSON.parse(body) as typeof payload;
+  } catch {
+    // An HTML error page or a body-size rejection is not JSON; report the
+    // status and a snippet instead of a raw "Unexpected token" SyntaxError.
+    throw new Error(`Treasury API returned ${response.status}: ${
+      body.replace(/\s+/g, ' ').trim().slice(0, 200) || '(empty response)'}`);
+  }
   if (!response.ok || payload.success === false) throw new Error(payload.error || 'Treasury operation failed.');
   return { content: [{ type: 'text', text: JSON.stringify(payload.data) }] };
 }

@@ -20,6 +20,27 @@ export function isValidRefreshedToken(token: unknown): token is string {
     && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token);
 }
 
+const IDEMPOTENT_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'PUT', 'DELETE']);
+
+// Retrying a 401 re-sends the request, so only do it where that is provably
+// safe: an idempotent method, or a 401 the auth gate itself emitted before any
+// handler ran (X-Auth-Required). A ReadableStream body is consumed by the first
+// fetch and would throw on the second.
+function canRetryUnauthorized(response: Response, options: RequestInit): boolean {
+  if (typeof ReadableStream !== 'undefined' && options.body instanceof ReadableStream) return false;
+  return IDEMPOTENT_METHODS.has((options.method || 'GET').toUpperCase())
+    || response.headers.get('X-Auth-Required') === '1';
+}
+
+/**
+ * Re-installs the desktop bridge's local auth token after a bundled-server
+ * restart rotated it. Returns false everywhere else (browser, platform mode).
+ */
+export function refreshLocalAuthToken(): boolean {
+  const localBridge = typeof window === 'undefined' ? undefined : window.leocodeboxLocal;
+  return Boolean(localBridge?.enabled && localBridge.refreshAuthToken?.());
+}
+
 export async function authenticatedFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const localBridge = typeof window === 'undefined' ? undefined : window.leocodeboxLocal;
   const send = () => {
@@ -37,9 +58,9 @@ export async function authenticatedFetch(url: string, options: RequestInit = {})
   };
 
   let response = await send();
-  if (response.status === 401 && localBridge?.enabled && localBridge.refreshAuthToken?.()) {
+  if (response.status === 401 && canRetryUnauthorized(response, options) && refreshLocalAuthToken()) {
     // A bundled server restart rotates the in-memory local token while the SPA
-    // can remain alive. A 401 is side-effect free, so refresh and retry once.
+    // can remain alive. Refresh and retry once.
     response = await send();
   }
   const refreshedToken = response.headers.get('X-Refreshed-Token');

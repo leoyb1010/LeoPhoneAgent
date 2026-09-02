@@ -25,6 +25,12 @@ const safeTokenEquals = (actual: string | null | undefined, expected: string | n
 
 const isLocalOnlyAuthToken = (token: string | null | undefined): boolean => safeTokenEquals(token, LOCAL_ONLY_AUTH_TOKEN);
 
+// Marks a 401 raised by this gate, before any route handler ran. The SPA only
+// refreshes its local token and retries a non-idempotent request when it sees
+// this header, so the retry can never replay a side effect.
+const authGateDenied = (res: Response, error: string) =>
+    res.status(401).set('X-Auth-Required', '1').json({ error });
+
 const getRequestToken = (req: Request): string | null => {
   const authHeader = req.headers['authorization'];
   let token = authHeader && authHeader.split(' ')[1];
@@ -50,7 +56,7 @@ const authenticateToken = async (req: AuthenticatedRequest, res: Response, next:
   if (IS_LOCAL_ONLY_AUTH) {
     const token = getRequestToken(req);
     if (!isLocalOnlyAuthToken(token)) {
-      return res.status(401).json({ error: 'Access denied. Invalid local auth token.' });
+      return authGateDenied(res, 'Access denied. Invalid local auth token.');
     }
 
     try {
@@ -81,7 +87,7 @@ const authenticateToken = async (req: AuthenticatedRequest, res: Response, next:
   const token = getRequestToken(req);
 
   if (!token) {
-    return res.status(401).json({ error: 'Access denied. No token provided.' });
+    return authGateDenied(res, 'Access denied. No token provided.');
   }
 
   try {
@@ -90,7 +96,7 @@ const authenticateToken = async (req: AuthenticatedRequest, res: Response, next:
     // Verify user still exists and is active
     const user = typeof decoded.userId === 'number' ? userDb.getUserById(decoded.userId) : undefined;
     if (!user) {
-      return res.status(401).json({ error: 'Invalid token. User not found.' });
+      return authGateDenied(res, 'Invalid token. User not found.');
     }
 
     // Auto-refresh: if token is past halfway through its lifetime, issue a new one

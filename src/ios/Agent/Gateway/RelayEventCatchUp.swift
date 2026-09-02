@@ -38,6 +38,12 @@ final class RelayEventCatchUp: ObservableObject {
     private var notifiedSet = Set<String>()
     private var inFlight = false
 
+    /// One download per asset. The reading sheet and the agent can ask for the
+    /// same attachment at the same time; both then appended to the same
+    /// `.partial`, and the file-level re-hash threw the interleaved result away
+    /// after paying for it twice.
+    private var treasuryAssetFetches = Set<String>()
+
     /// [T-catchup-surface] 前台时错过的待审批。app 在最前时发系统通知是
     /// 无效动作(用户正看着 app),所以前台走这个已发布属性,由界面显示
     /// 横幅;后台/非活跃才发通知。
@@ -207,6 +213,9 @@ extension LeoAgentClient {
         guard ["body", "attachment"].contains(kind),
               let directory = CollectionStore.directory,
               let root = treasuryRelayRoot else { return .unavailable }
+        let fetchKey = "\(itemID)\u{0}\(kind)"
+        guard treasuryAssetFetches.insert(fetchKey).inserted else { return .pending }
+        defer { treasuryAssetFetches.remove(fetchKey) }
         do {
             let store = try TreasurySQLiteStore(directory: directory)
             let (createdData, createdResponse) = try await treasuryRequest(
@@ -366,6 +375,12 @@ extension LeoAgentClient {
                     hasher.update(data: buffer)
                     try handle.write(contentsOf: buffer)
                     buffer.removeAll(keepingCapacity: true)
+                    // "Clear cache" unlinks this partial under us. Without the
+                    // check we keep streaming the whole asset into an inode
+                    // nobody can reach, then fail the final verification anyway.
+                    guard FileManager.default.fileExists(atPath: partial.path) else {
+                        throw URLError(.cancelled)
+                    }
                 }
             }
             if !buffer.isEmpty {
@@ -379,6 +394,11 @@ extension LeoAgentClient {
             }
             try handle.synchronize()
             try handle.close()
+            // A 206 may legally stop short of the requested end, and a dropped
+            // connection stops short too. The bytes already on disk are still
+            // correct either way, so keep them and resume from here: discarding
+            // them turned every short chunk into a full restart.
+            if count < metadata.byteCount { throw URLError(.networkConnectionLost) }
             let digest = hasher.finalize().map { String(format: "%02x", $0) }.joined()
             guard count == metadata.byteCount, digest == metadata.digest,
                   try store.cacheRemoteAttachment(
@@ -629,9 +649,16 @@ extension LeoAgentClient {
         let seconds: (String?) -> Any = { raw in
             raw.flatMap(TreasureItemContract.date(from:))?.timeIntervalSince1970 ?? 0
         }
-        let bodyAvailable = contract.originalText != nil ||
-            (["link", "note", "text"].contains(contract.kind) && contract.bodyRef != nil)
-        let attachmentAvailable = ["image", "document", "audio", "video", "artifact"].contains(contract.kind) &&
+        // Only the origin device holds the bytes. On every other device a
+        // remote item still has a non-nil `bodyRef` of "files/remote-<id>",
+        // which is a placeholder, not a file this device can serve — claiming
+        // availability from here made the relay hand out asset requests that
+        // could never be answered.
+        let isOrigin = contract.originDeviceID == deviceID
+        let bodyAvailable = isOrigin && (contract.originalText != nil ||
+            (["link", "note", "text"].contains(contract.kind) && contract.bodyRef != nil))
+        let attachmentAvailable = isOrigin &&
+            ["image", "document", "audio", "video", "artifact"].contains(contract.kind) &&
             contract.bodyRef != nil
         return [
             "id": contract.id, "schema_version": 1, "kind": contract.kind,
@@ -647,6 +674,9 @@ extension LeoAgentClient {
             "processing_error_code": contract.processingErrorCode ?? "",
             "content_digest": contract.contentDigest ?? "", "byte_count": contract.byteCount,
             "mime_type": contract.mimeType ?? "", "body_available": bodyAvailable,
+            // Stays the uploading device: iOS, Android and the Mac desktop all
+            // reject a change whose envelope origin and item origin disagree.
+            // Where the bytes actually live is tracked by the relay instead.
             "attachment_available": attachmentAvailable, "origin_device_id": deviceID,
             "deleted_at": seconds(contract.deletedAt),
         ]

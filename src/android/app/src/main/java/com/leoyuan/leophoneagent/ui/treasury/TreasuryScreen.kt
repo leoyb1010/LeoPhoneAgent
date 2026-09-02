@@ -64,6 +64,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -84,9 +85,11 @@ import com.leoyuan.leophoneagent.data.db.TreasureSearchRow
 import com.leoyuan.leophoneagent.data.repository.TreasureRepository
 import com.leoyuan.leophoneagent.treasury.TreasuryFilePolicy
 import com.leoyuan.leophoneagent.treasury.TreasuryWorkScheduler
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
 
@@ -180,8 +183,11 @@ fun TreasuryScreen(
         if (filter == TreasuryFilter.RECENT) filtered.sortedByDescending { it.lastOpenedAt } else filtered
     }
     val selectedItem = selected
-    val relatedRows = remember(selectedItem, rows) {
-        selectedItem?.let { relatedTreasuryRows(it, rows) }.orEmpty()
+    // Keyword windowing over up to 500 rows is too heavy for composition.
+    val relatedRows by produceState(emptyList<TreasureSearchRow>(), selectedItem, rows) {
+        value = selectedItem?.let {
+            withContext(Dispatchers.Default) { relatedTreasuryRows(it, rows) }
+        }.orEmpty()
     }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= 600.dp
@@ -485,10 +491,18 @@ private fun TreasuryDetail(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val attachmentFile = remember(item.id, item.bodyRef, item.byteCount, item.contentDigest) {
-        TreasuryFilePolicy.managedFile(
-            File(context.filesDir, "treasury"), item.bodyRef, 128L * 1024 * 1024,
-        )
+    // canonicalFile/Files.size are disk reads; StrictMode flags them in composition.
+    // ponytail: the null reset costs one frame where a cached attachment still
+    // renders the "fetch remote" card. Cache the lookup by ref if that flicker shows.
+    val attachmentFile by produceState<File?>(
+        null, item.id, item.bodyRef, item.byteCount, item.contentDigest,
+    ) {
+        value = null
+        value = withContext(Dispatchers.IO) {
+            TreasuryFilePolicy.managedFile(
+                File(context.filesDir, "treasury"), item.bodyRef, 128L * 1024 * 1024,
+            )
+        }
     }
     var progressDraft by remember(item.id, item.readingProgress) { mutableStateOf(item.readingProgress.toFloat()) }
     Scaffold(

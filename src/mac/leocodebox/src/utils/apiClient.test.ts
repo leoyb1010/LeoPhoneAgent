@@ -107,6 +107,65 @@ test('local desktop refreshes a rotated auth token and retries a rejected reques
   }
 });
 
+test('a 401 that did not come from the auth gate never replays a POST body', async () => {
+  const values = installLocalStorage();
+  values.set('auth-token', 'stale-local-token');
+  const originalFetch = globalThis.fetch;
+  const originalWindow = globalThis.window;
+  let refreshCalls = 0;
+  let requests = 0;
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: {
+      leocodeboxLocal: {
+        enabled: true,
+        refreshAuthToken: () => {
+          refreshCalls += 1;
+          values.set('auth-token', 'fresh-local-token');
+          return true;
+        },
+      },
+    },
+  });
+  // A handler-issued 401 (no X-Auth-Required) must not be retried: the write
+  // may already have happened, and a stream body cannot be sent twice at all.
+  globalThis.fetch = async () => {
+    requests += 1;
+    return new Response(JSON.stringify({ error: 'Session expired' }), {
+      status: 401,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  try {
+    await assert.rejects(() => apiRequest('/api/things', { method: 'POST', body: '{}' }),
+      (error: unknown) => error instanceof ApiError && error.status === 401);
+    assert.equal(requests, 1);
+    assert.equal(refreshCalls, 0);
+
+    // The same POST is retried once when the auth gate itself rejected it.
+    requests = 0;
+    globalThis.fetch = async (_url, init) => {
+      requests += 1;
+      if (new Headers(init?.headers).get('Authorization') === 'Bearer fresh-local-token') {
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200, headers: { 'content-type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({ error: 'Access denied. Invalid local auth token.' }), {
+        status: 401,
+        headers: { 'content-type': 'application/json', 'x-auth-required': '1' },
+      });
+    };
+    assert.deepEqual(await apiRequest('/api/things', { method: 'POST', body: '{}' }), { ok: true });
+    assert.equal(requests, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalWindow === undefined) delete (globalThis as { window?: Window }).window;
+    else Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
+  }
+});
+
 test('apiRequest converts server error payloads into structured ApiError instances', async () => {
   installLocalStorage();
   const originalFetch = globalThis.fetch;
