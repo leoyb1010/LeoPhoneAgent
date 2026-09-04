@@ -31,14 +31,16 @@ export function setGatewayEnabled(enabled: boolean): boolean {
 }
 
 /**
- * Whether request-time context compaction is enabled (default false). A
+ * Whether request-time context protection is enabled. It defaults on only
+ * inside the opt-in loopback gateway; users who explicitly switch it off keep
+ * that choice. The gateway itself remains default-off.
  * sub-feature of the gateway: only meaningful while the gateway is on, and only
  * ever trims OLD, oversized tool outputs — never the system prompt, the first
  * turn, or recent turns. Deterministic (no model call), so it adds no latency
  * or cost; it only reduces input tokens.
  */
 export function isCompactionEnabled(): boolean {
-  return appConfigDb.get(COMPACTION_KEY) === '1';
+  return appConfigDb.get(COMPACTION_KEY) !== '0';
 }
 
 export function setCompactionEnabled(enabled: boolean): boolean {

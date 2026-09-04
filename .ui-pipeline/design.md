@@ -44,3 +44,11 @@
 - 使用原生导航、列表和对话框过渡；状态不依赖动画表达。
 - 未增加持续 shimmer、呼吸或后台动画；遵循系统 Reduce Motion。
 - 超长正文只向交互式阅读控件提供有界窗口；PDF/OCR/索引均在后台任务完成，避免用动画掩盖主线程阻塞。
+
+## 2026-09-04 interaction contract
+
+- Signature interaction: every deterministic phone action ends in an “执行凭证” inside the same message, naming the native path, system verification and undo route.
+- Android Treasury: keep only inbox / needs-attention / all in the first filter row; secondary filters live behind one menu. Empty states expose Save and Import instead of leaving the Fold detail pane blank.
+- Android updates: automatic discovery is quiet and battery/network constrained; a notification deep-links to About, where the existing update sheet performs download and install.
+- Mac dashboard: the typed New Task card is the sole task-creation surface. The hero communicates state and device routing but no longer duplicates the primary action.
+- Mac context: the existing opt-in local gateway keeps its switch, while safe old-tool-output compaction defaults on within that gateway and is visible in the Leoapi panel.

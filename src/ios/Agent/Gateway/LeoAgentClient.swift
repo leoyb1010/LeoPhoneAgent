@@ -198,6 +198,9 @@ actor LeoAgentClient {
     /// active caller then performs one more complete cursor pass.
     var treasurySyncRunning = false
     var treasurySyncPending = false
+    /// One download per asset. The reading sheet and the agent can request the
+    /// same attachment concurrently; coalescing prevents interleaved partials.
+    var treasuryAssetFetches = Set<String>()
 
     /// [T-leophone-push] 中继事件端点要绕开 harness 路径前缀自行拼 URL,
     /// 所以把这两样以只读形式露出来(仍然只在本模块内使用)。

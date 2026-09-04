@@ -349,38 +349,50 @@ extension AIChatViewModel {
         switch route.kind {
         case .savePhoto:
             guard let imageURL, await saveImageToPhotos(imageURL) else { return nil }
-            return route.spoken()
+            return route.receipt()
         case .setAlarm:
-            guard let hour = route.hour, let minute = route.minute,
-                  await scheduleNativeAlarm(hour: hour, minute: minute, tomorrow: route.tomorrow, label: route.label) else { return nil }
-            return route.spoken()
+            guard let hour = route.hour, let minute = route.minute else { return nil }
+            guard await scheduleNativeAlarm(hour: hour, minute: minute, tomorrow: route.tomorrow, label: route.label) else {
+                return route.failureReceipt(nextStep: "请检查系统时钟或闹钟权限后重试")
+            }
+            return route.receipt()
         case .createCalendar:
-            guard let hour = route.hour, let minute = route.minute,
-                  await createNativeEvent(hour: hour, minute: minute, tomorrow: route.tomorrow, title: route.label, notes: route.notes, location: route.location) else { return nil }
-            return route.spoken()
+            guard let hour = route.hour, let minute = route.minute else { return nil }
+            guard await createNativeEvent(hour: hour, minute: minute, tomorrow: route.tomorrow, title: route.label, notes: route.notes, location: route.location) else {
+                return route.failureReceipt(nextStep: "请授权日历访问后重试")
+            }
+            return route.receipt()
         case .createTravel:
             guard let hour = route.hour, let minute = route.minute else { return nil }
             let due = nativeDate(hour: hour, minute: minute, tomorrow: route.tomorrow)
-            guard let due,
-                  await createNativeEvent(hour: hour, minute: minute, tomorrow: route.tomorrow, title: route.label, notes: route.notes, location: route.location),
-                  await FastLocalActions.addTodo(route.label, dueDate: due, notes: route.notes) else { return nil }
-            return route.spoken()
+            guard let due else { return nil }
+            guard await createNativeEvent(hour: hour, minute: minute, tomorrow: route.tomorrow, title: route.label, notes: route.notes, location: route.location),
+                  await FastLocalActions.addTodo(route.label, dueDate: due, notes: route.notes) else {
+                return route.failureReceipt(nextStep: "请授权日历和提醒事项后重试")
+            }
+            return route.receipt()
         case .toggleFlashlight:
-            return FastLocalActions.setTorch(route.label != "off") ? route.spoken() : nil
+            return FastLocalActions.setTorch(route.label != "off")
+                ? route.receipt()
+                : route.failureReceipt(nextStep: "请确认设备有闪光灯并允许相机访问")
         case .createTodo:
-            return await FastLocalActions.addTodo(route.label.isEmpty ? "待办" : route.label) ? route.spoken() : nil
+            return await FastLocalActions.addTodo(route.label.isEmpty ? "待办" : route.label)
+                ? route.receipt()
+                : route.failureReceipt(nextStep: "请授权提醒事项后重试")
         case .readClipboard:
             let text = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            return text.isEmpty ? "剪贴板是空的。" : "剪贴板内容：\n\(String(text.prefix(4_000)))"
+            return route.receipt(summary: text.isEmpty ? "剪贴板是空的。" : "剪贴板内容：\n\(String(text.prefix(4_000)))")
         case .writeClipboard:
             UIPasteboard.general.string = route.label
-            guard UIPasteboard.general.string == route.label else { return nil }
-            return "已写入剪贴板，并读回核对成功。"
+            guard UIPasteboard.general.string == route.label else {
+                return route.failureReceipt(nextStep: "系统没有读回相同内容，请重试")
+            }
+            return route.receipt(summary: "已写入剪贴板，并读回核对成功。")
         case .deviceInfo:
             let device = UIDevice.current
             device.isBatteryMonitoringEnabled = true
             let battery = device.batteryLevel >= 0 ? "\(Int(device.batteryLevel * 100))%" : "未知"
-            return "本机设备信息：\n型号：\(device.model)\n系统：\(device.systemName) \(device.systemVersion)\n电量：\(battery)"
+            return route.receipt(summary: "本机设备信息：\n型号：\(device.model)\n系统：\(device.systemName) \(device.systemVersion)\n电量：\(battery)")
         case nil:
             return nil
         }

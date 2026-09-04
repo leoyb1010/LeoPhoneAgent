@@ -41,3 +41,11 @@
 - Fold8 两尺寸、200% 字体、TalkBack、预测性返回和折叠过程的真实运行证据。
 - iPhone/iPad 主 App 因本机缺少 watchOS 26.5 尚未完成模拟器运行。
 - Mac 真实拖放和屏幕阅读器走查。
+
+## 2026-09-04 delivery extension
+
+- Outcome: high-confidence native phone actions leave a compact execution receipt with route, verification and undo guidance; Android discovers signed app updates automatically; Mac protects long gateway contexts automatically and removes the duplicate dashboard task CTA.
+- Expensive action removed: users no longer need to manually poll GitHub for every Android APK or guess whether a native action actually completed.
+- Persistent context: session, chosen device, native route and verification result remain visible in the conversation.
+- Recovery: native permission failures stop at an actionable receipt instead of falling through to a model that may guess; update downloads reject missing release digests, wrong package names and mismatched signers.
+- Platform constraint: binary Android changes still use the OS package installer; only signed declarative rules, catalogs and skills qualify as no-install hot updates.

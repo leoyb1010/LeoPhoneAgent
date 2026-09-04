@@ -92,6 +92,21 @@ final class AgentChatCorrectnessTests: XCTestCase {
         XCTAssertEqual(ActionRouter.decide(text: "怎么复制到剪贴板", imageCount: 0).path, .agent)
     }
 
+    func testNativeReceiptNamesPathVerificationAndUndo() {
+        let route = ActionRouter.Decision(
+            path: .native,
+            kind: .createCalendar,
+            hour: 19,
+            minute: 0,
+            tomorrow: true,
+            label: "高铁"
+        )
+        let receipt = route.receipt()
+        XCTAssertTrue(receipt.contains("路径：系统日历"))
+        XCTAssertTrue(receipt.contains("系统已确认完成"))
+        XCTAssertTrue(receipt.contains("可在系统日历"))
+    }
+
     func testResizableWorkspaceLayoutPolicy() {
         XCTAssertFalse(LeoWorkspaceLayoutPolicy.usesSplit(width: 700, height: 900, regularWidth: true))
         XCTAssertTrue(LeoWorkspaceLayoutPolicy.usesSplit(width: 820, height: 1_100, regularWidth: true))

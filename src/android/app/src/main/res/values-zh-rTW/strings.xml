@@ -758,7 +758,7 @@
     <string name="whats_new_title">本次更新（%1$s）</string>
     <string name="whats_new_heading">本次更新</string>
     <string name="whats_new_confirm">知道了</string>
-    <string name="whats_new_current">• 藏寶閣升級為原生可呼叫知識工作台：連結、文字、圖片、PDF 與檔案可以直接擷取，Agent 可以搜尋、讀取、儲存和更新。\n• 手機正文和附件按需取得，支援 Range 斷點續傳，並驗證檔案大小、MIME 與 SHA-256，損壞快取不會交給 Agent。\n• 新增藏寶閣捷徑、快速設定圖塊和桌面小工具入口，直接開啟輕量擷取框，不讀取剪貼簿，也不依賴 Power 權限。\n• 摺疊螢幕和大螢幕版面會在視窗變化時保留搜尋、篩選和已選內容。</string>
+    <string name="whats_new_current">• 手機原生動作現在會回傳執行憑證，寫清使用路徑、系統驗證和復原方式；權限失敗會安全停止，不再交給模型猜測。\n• 每天僅在網路可用且電量充足時自動檢查一次更新；APK 必須同時通過 GitHub Release SHA-256、套件名稱和目前安裝簽章驗證，才會開啟系統安裝程式。\n• 修正 Android Alpha 版本比較，alpha.24 現在能正確發現 alpha.25；同一儲存庫的 iOS 和 Mac Release 不會再干擾。\n• 藏寶閣主篩選收束為收件匣、需要處理和全部，其餘收入更多篩選；封面螢幕和展開螢幕空狀態都提供真正的收進來與匯入操作。</string>
     <string name="whats_new_scroll_hint">向上滑動查看完整更新內容</string>
     <string name="artifact_ready">交付物已就緒</string>
     <string name="artifact_open">開啟交付物</string>
@@ -837,6 +837,11 @@
     <string name="check_update_section_header">应用更新</string>
     <string name="check_update_current_version">目前版本：%1$s</string>
     <string name="check_update_check_button">检查更新</string>
+    <string name="auto_update_check_title">自動檢查更新</string>
+    <string name="auto_update_check_subtitle">每天在網路可用且電量充足時檢查一次；只有你點擊後才下載和安裝。</string>
+    <string name="auto_update_channel">應用程式更新</string>
+    <string name="auto_update_available_title">LeoPhoneAgent %1$s 可以更新</string>
+    <string name="auto_update_available_body">點擊查看更新內容並安裝已驗證的版本。</string>
     <string name="check_update_checking">检查中…</string>
     <string name="check_update_up_to_date">已經是最新版本。</string>
     <string name="check_update_no_release">暂未發布任何版本。</string>
@@ -1733,6 +1738,8 @@
     <string name="treasury_import_files">匯入檔案</string>
     <string name="treasury_search_hint">搜尋標題、正文、批註和標籤</string>
     <string name="treasury_empty">還沒有收藏內容。可從分享面板或此處儲存連結。</string>
+    <string name="treasury_search_short">搜尋收藏</string>
+    <string name="treasury_more_filters">更多篩選</string>
     <string name="treasury_views">智慧檢視</string>
     <string name="treasury_filter_all">全部</string>
     <string name="treasury_filter_inbox">收件匣</string>

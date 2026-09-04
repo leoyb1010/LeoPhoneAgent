@@ -58,6 +58,24 @@ object ActionRouter {
             Kind.DeviceInfo -> "已读取这台设备的信息。"
             null -> ""
         }
+
+        /** Compact proof for a completed native action; keeps chat useful without a debug panel. */
+        fun receipt(summary: String = spoken()): String {
+            val undo = when (kind) {
+                Kind.SavePhoto -> "可在系统相册中删除"
+                Kind.SetAlarm -> "可在系统时钟中关闭"
+                Kind.CreateCalendar, Kind.CreateTravel -> "可在系统日历中删除"
+                Kind.ToggleFlashlight -> "可用相反指令恢复"
+                Kind.CreateTodo -> "可在 LeoPhoneAgent 待办中删除"
+                Kind.WriteClipboard -> "可再次写入或清空剪贴板"
+                Kind.ReadClipboard, Kind.DeviceInfo -> "只读操作，无需撤销"
+                null -> "无需撤销"
+            }
+            return "$summary\n\n执行凭证\n- 路径：$chip\n- 核对：系统已确认完成\n- 撤销：$undo"
+        }
+
+        fun failureReceipt(nextStep: String): String =
+            "没有完成这项操作。\n\n执行凭证\n- 路径：$chip\n- 核对：系统未确认完成\n- 下一步：$nextStep"
     }
 
     fun decide(text: String, imageCount: Int): Decision {

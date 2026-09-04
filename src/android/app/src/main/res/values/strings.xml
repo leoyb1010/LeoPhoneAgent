@@ -48,6 +48,11 @@
     <string name="check_update_up_to_date">You\'re on the latest version.</string>
     <string name="check_update_no_release">No release published yet.</string>
     <string name="check_update_no_apk_asset">Release %1$s is published but doesn\'t include an APK.</string>
+    <string name="auto_update_check_title">Automatic update checks</string>
+    <string name="auto_update_check_subtitle">Checks once a day when the network and battery allow. Downloads and installs only after you tap.</string>
+    <string name="auto_update_channel">App updates</string>
+    <string name="auto_update_available_title">LeoPhoneAgent %1$s is ready</string>
+    <string name="auto_update_available_body">Tap to review the changes and install the verified update.</string>
     <string name="check_update_error">Check failed: %1$s</string>
     <string name="check_update_available_title">Update Available</string>
     <string name="check_update_available_subtitle">%1$s → %2$s</string>
@@ -1847,8 +1852,8 @@
     <!-- 发版铁律:每次改 versionName 都必须同步改这里,并重写下面的
          whats_new_current 文案。WhatsNewGateTest 会比对这两个值,
          对不上就构建失败 —— 防止弹出的是上一版的更新内容。 -->
-    <string name="whats_new_version" translatable="false">1.0.0-alpha.24</string>
-    <string name="whats_new_current">• Treasury is now a native callable knowledge workspace: capture links, text, images, PDFs and files, then search, read, save and update them through the Agent.\n• Phone content and attachments are fetched on demand with resumable Range downloads plus byte-count, MIME and SHA-256 verification.\n• The new Treasury shortcut, Quick Settings tile and widget action open the lightweight capture sheet without reading the clipboard or requiring Power permissions.\n• Foldable and large-screen layouts preserve search, filters and selected content while moving between compact and expanded windows.</string>
+    <string name="whats_new_version" translatable="false">1.0.0-alpha.25</string>
+    <string name="whats_new_current">• Native phone actions now return an execution receipt naming the route, system verification and undo path; permission failures stop safely instead of falling through to a model guess.\n• Automatic update checks run once a day only when network and battery conditions allow. APKs must match the GitHub Release SHA-256, package name and installed signer before Android opens the installer.\n• Fixed Android alpha tag comparison, so alpha.24 can really discover alpha.25; iOS and Mac releases in the same repository are ignored.\n• Treasury keeps only Inbox, Needs attention and All in the primary row; more filters move into a menu, and compact/Fold empty states now offer real Save and Import actions.</string>
     <string name="whats_new_scroll_hint">Swipe up to read the complete update</string>
     <string name="artifact_ready">ARTIFACT READY</string>
     <string name="artifact_open">Open artifact</string>
@@ -1892,6 +1897,8 @@
     <string name="treasury_import_files">Import files</string>
     <string name="treasury_search_hint">Search title, body, notes, and tags</string>
     <string name="treasury_empty">Nothing saved here yet.</string>
+    <string name="treasury_search_short">Search Treasury</string>
+    <string name="treasury_more_filters">More filters</string>
     <string name="treasury_views">Views</string>
     <string name="treasury_filter_all">All</string>
     <string name="treasury_filter_inbox">Inbox</string>

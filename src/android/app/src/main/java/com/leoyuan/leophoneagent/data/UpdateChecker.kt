@@ -5,6 +5,8 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.content.pm.PackageInfo
+import android.content.pm.PackageManager
 import androidx.core.content.FileProvider
 import com.leoyuan.leophoneagent.BuildConfig
 import com.leoyuan.leophoneagent.logging.AppLogger
@@ -26,10 +28,9 @@ import java.util.concurrent.TimeUnit
  * coordinates download → install. iOS has no equivalent (sideloading is not
  * permitted) so this is Android-only.
  *
- * Comparison strategy: strip a leading `v` from `tag_name`, then split both
- * the tag and the local versionName on `.` and compare numerically component
- * by component. A tag like `v1.0.1` beats local `1.0.0`; `v1.0.0-rc1` beats
- * `1.0.0` because the suffix sorts higher under string fallback.
+ * Comparison strategy: keep the Android alpha sequence (`alpha.24` →
+ * `alpha.25`), strip only repository/flavor decoration, then compare numeric
+ * components. iOS/Mac tags in the same repository are ignored.
  */
 object UpdateChecker {
 
@@ -61,6 +62,7 @@ object UpdateChecker {
             val changelog: String,
             val apkUrl: String,
             val apkSizeBytes: Long,
+            val expectedSha256: String,
         ) : CheckResult()
         data object UpToDate : CheckResult()
         // The repo has zero non-draft releases (or 404'd entirely).
@@ -146,6 +148,7 @@ object UpdateChecker {
                     val isPrerelease: Boolean,
                     val apkUrl: String?,
                     val apkSize: Long,
+                    val expectedSha256: String?,
                 )
 
                 val candidates = mutableListOf<ReleaseInfo>()
@@ -155,6 +158,10 @@ object UpdateChecker {
                     val tag = r.optString("tag_name")
                     if (tag.isEmpty()) continue
                     val (apkUrl, apkSize) = findApkAsset(r.optJSONArray("assets"))
+                    // This repository also publishes iOS and Mac releases.
+                    // They must not outrank Android and produce a false
+                    // "new release has no APK" result.
+                    if (apkUrl == null && !tag.startsWith("android-", ignoreCase = true)) continue
                     candidates += ReleaseInfo(
                         tagName = tag,
                         versionName = normalizeTag(tag),
@@ -163,6 +170,10 @@ object UpdateChecker {
                         isPrerelease = r.optBoolean("prerelease", false),
                         apkUrl = apkUrl,
                         apkSize = apkSize,
+                        expectedSha256 = releaseSha256(
+                            r.optString("body", ""),
+                            power = BuildConfig.POWER_FEATURES_ENABLED,
+                        ),
                     )
                 }
                 AppLogger.info(
@@ -186,9 +197,10 @@ object UpdateChecker {
                 // Highest version we've seen at all (used for the "release
                 // exists but is older or equal" → UpToDate decision and for
                 // logging).
-                val highest = candidates.maxWithOrNull(
-                    compareBy { compareVersions(it.versionName, "0") },
-                ) ?: candidates.first()
+                val versionOrder = Comparator<ReleaseInfo> { left, right ->
+                    compareVersions(left.versionName, right.versionName)
+                }
+                val highest = candidates.maxWithOrNull(versionOrder) ?: candidates.first()
                 AppLogger.info(
                     TAG,
                     "highest-published tag=${highest.tagName} parsed=${highest.versionName} prerelease=${highest.isPrerelease} apk=${highest.apkUrl != null}",
@@ -200,9 +212,15 @@ object UpdateChecker {
                 val upgradeCandidate = candidates
                     .filter { it.apkUrl != null }
                     .filter { compareVersions(it.versionName, localVer) > 0 }
-                    .maxWithOrNull(compareBy { compareVersions(it.versionName, "0") })
+                    .maxWithOrNull(versionOrder)
 
                 if (upgradeCandidate != null) {
+                    val expectedSha256 = upgradeCandidate.expectedSha256
+                        ?: return@withContext CheckResult.Error(
+                            "Release ${upgradeCandidate.tagName} is missing the " +
+                                (if (BuildConfig.POWER_FEATURES_ENABLED) "Power" else "Standard") +
+                                " SHA-256 digest.",
+                        )
                     AppLogger.info(
                         TAG,
                         "Update available: $localVer → ${upgradeCandidate.versionName} (${upgradeCandidate.tagName})",
@@ -214,6 +232,7 @@ object UpdateChecker {
                         changelog = upgradeCandidate.changelog,
                         apkUrl = upgradeCandidate.apkUrl!!,
                         apkSizeBytes = upgradeCandidate.apkSize,
+                        expectedSha256 = expectedSha256,
                     )
                 }
 
@@ -288,17 +307,22 @@ object UpdateChecker {
     }
 
     /**
-     * Strip the leading `v` and any `-preview` / `-rc1` / etc. trailing
-     * label so the numeric comparator keeps `0.1` and `0.1-preview`
-     * treated as equivalent. Without this, "0.1 (local) vs 0.1-preview
-     * (remote)" reported the remote as newer because the trailing token
-     * fell into string comparison.
+     * Strip repository/flavor decoration while preserving prerelease sequence
+     * components. `android-v1.0.0-alpha.25` and the Power build's
+     * `1.0.0-alpha.24-power` must compare as 25 > 24.
      */
-    private fun normalizeTag(tag: String): String {
-        val trimmed = tag.trim().removePrefix("v").removePrefix("V")
-        // "0.1-preview" → "0.1"; "0.1.0" → "0.1.0"; "1.2.3-rc1" → "1.2.3"
-        val dashIdx = trimmed.indexOf('-')
-        return if (dashIdx > 0) trimmed.substring(0, dashIdx) else trimmed
+    internal fun normalizeTag(tag: String): String {
+        val trimmed = tag.trim().removeSuffix("-power")
+        val firstDigit = trimmed.indexOfFirst(Char::isDigit)
+        return if (firstDigit >= 0) trimmed.substring(firstDigit) else trimmed.removePrefix("v").removePrefix("V")
+    }
+
+    /** Digest published in the GitHub Release body by the Android release gate. */
+    internal fun releaseSha256(body: String, power: Boolean): String? {
+        val edition = if (power) "Power" else "Standard"
+        return Regex(
+            "(?im)^\\s*${Regex.escape(edition)}\\s+SHA-256:\\s*([a-f0-9]{64})\\s*$",
+        ).find(body)?.groupValues?.getOrNull(1)?.lowercase()
     }
 
     /**
@@ -313,6 +337,7 @@ object UpdateChecker {
         context: Context,
         url: String,
         versionName: String? = null,
+        expectedSha256: String? = null,
         onProgress: (Float) -> Unit = {},
     ): DownloadResult = withContext(Dispatchers.IO) {
         try {
@@ -368,6 +393,10 @@ object UpdateChecker {
             val sha = runCatching { PendingUpdateStore.sha256(outFile) }
                 .onFailure { AppLogger.warning(TAG, "sha256 compute failed: ${it.message}") }
                 .getOrNull()
+            if (expectedSha256 != null && !sha.equals(expectedSha256, ignoreCase = true)) {
+                outFile.delete()
+                return@withContext DownloadResult.Error("SHA-256 mismatch")
+            }
             if (versionName != null) {
                 PendingUpdateStore.setPending(
                     context,
@@ -453,6 +482,10 @@ object UpdateChecker {
 
     fun installApk(context: Context, apk: File): Boolean {
         return try {
+            if (!archiveMatchesInstalledApp(context, apk)) {
+                AppLogger.error(TAG, "installApk rejected: package name or signer mismatch")
+                return false
+            }
             val authority = "${context.packageName}.fileprovider"
             val uri = FileProvider.getUriForFile(context, authority, apk)
             val intent = Intent(Intent.ACTION_VIEW).apply {
@@ -474,12 +507,47 @@ object UpdateChecker {
         }
     }
 
+    /** Never open the installer for an APK that cannot upgrade this exact app. */
+    internal fun archiveMatchesInstalledApp(context: Context, apk: File): Boolean {
+        val pm = context.packageManager
+        val archive = packageInfo(pm, apk.absolutePath, archive = true) ?: return false
+        val installed = packageInfo(pm, context.packageName, archive = false) ?: return false
+        if (archive.packageName != context.packageName) return false
+        val archiveSigners = signers(archive)
+        val installedSigners = signers(installed)
+        return archiveSigners.isNotEmpty() && archiveSigners.any { candidate ->
+            installedSigners.any { current -> candidate.contentEquals(current) }
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun packageInfo(pm: PackageManager, value: String, archive: Boolean): PackageInfo? {
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            PackageManager.GET_SIGNING_CERTIFICATES
+        } else {
+            PackageManager.GET_SIGNATURES
+        }
+        return if (archive) pm.getPackageArchiveInfo(value, flags)
+        else runCatching { pm.getPackageInfo(value, flags) }.getOrNull()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun signers(info: PackageInfo): List<ByteArray> {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val signing = info.signingInfo ?: return emptyList()
+            val values = if (signing.hasMultipleSigners()) signing.apkContentsSigners
+            else signing.signingCertificateHistory
+            return values.orEmpty().map { it.toByteArray() }
+        }
+        return info.signatures.orEmpty().map { it.toByteArray() }
+    }
+
     /**
      * Numeric-aware version comparator. `1.0.10` beats `1.0.9`. Non-numeric
      * components fall back to lexicographic compare so a `1.0.0-rc1` build is
      * treated as "newer than 1.0.0" — acceptable noise for our use case.
      */
-    private fun compareVersions(a: String, b: String): Int {
+    internal fun compareVersions(a: String, b: String): Int {
         val ap = a.split('.', '-')
         val bp = b.split('.', '-')
         val n = maxOf(ap.size, bp.size)

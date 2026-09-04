@@ -12,10 +12,12 @@ import { useLeoapiStatus } from '../../hooks/useLeoapiStatus';
 
 type GatewayStatus = {
   enabled: boolean;
+  compaction?: boolean;
   baseUrl: string | null;
   meter: {
     today: { requests: number; inputTokens: number; outputTokens: number; costUsd: number };
   };
+  compactionMeter?: { requests: number; touchedBlocks: number; savedChars: number };
 };
 
 type LeoapiPanelProps = {
@@ -199,6 +201,14 @@ export default function LeoapiPanel({ onClose, onOpenFullSwitch, onOpenCredentia
               <p className="mt-1.5 font-mono text-[9.5px] text-wb-faint">
                 tokens · {formatCountCn(today?.requests ?? 0)} 次调用
               </p>
+              <div className="mt-3 flex items-center justify-between border-t border-border pt-2 text-[10.5px]">
+                <span className="text-muted-foreground">自动上下文保护</span>
+                <span className={status?.compaction ? 'text-success' : 'text-wb-faint'}>
+                  {status?.compaction
+                    ? `已开启 · 省约 ${formatCountCn(status.compactionMeter?.savedChars ?? 0)} 字符`
+                    : '已关闭'}
+                </span>
+              </div>
             </Card>
           </section>
         </div>

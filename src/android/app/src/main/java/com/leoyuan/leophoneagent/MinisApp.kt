@@ -300,6 +300,7 @@ class MinisApp : Application(), ImageLoaderFactory {
             originDeviceId = { com.leoyuan.leophoneagent.data.DeviceIdentity.deviceId(this) },
         )
         com.leoyuan.leophoneagent.treasury.TreasuryWorkScheduler.enqueue(this)
+        com.leoyuan.leophoneagent.data.AutomaticUpdateCheck.enqueue(this)
         webAppShortcutRepository = WebAppShortcutRepository(database.webAppShortcutDao())
 
         // [T-soul-md] Seed SOUL.md with the default content on first launch

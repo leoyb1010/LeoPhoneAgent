@@ -4,6 +4,31 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## iOS 1.32.0 (107) / Android 1.0.0-alpha.25 / Mac 1.82.0 · 可验证执行与低打扰更新 - 2026-09-04
+
+### 用户可见
+
+- iPhone、iPad 与 Android 的确定性原生动作新增执行凭证，显示系统路径、完成核对和撤销方式；权限或系统写入失败会明确停止，不再让模型猜测成功。
+- Android 每天在网络可用且电量充足时自动检查一次新版本，点击通知即可进入现有更新页；代码更新仍由 Android 安装器确认，声明式规则/目录继续走免装包热更新。
+- Android 更新 APK 在打开安装器前必须匹配 Release 公布的 SHA-256、当前包名与当前安装证书；修复 `android-v1.0.0-alpha.24` 标签此前无法正确比较到 alpha.25 的问题。
+- Fold8 藏宝阁把九个并列筛选收束为三个主筛选和一个“更多筛选”，封面/展开空状态提供保存和导入，200% 字体下顶栏与操作仍可达。
+- Mac 主控台移除重复的新任务按钮；Leoapi 网关内的上下文保护默认自动开启，并在侧栏显示启用状态与累计裁剪量。
+
+### 构建与验证
+
+- iOS 修复远端藏宝阁并发下载锁作用域错误、补齐 Watch 图标规格与 watchOS 平台声明；iPhone 设备目标完整无签名构建通过，MinisLogicTests 332/332。
+- Android Standard/Power 各 628 项 JVM 单测（0 失败、各 1 跳过），双 Release lint 0 error，R8 与双 Release 组装通过；alpha.24 → alpha.25 两包覆盖安装均返回 `Success`。
+- Fold8 API 35 封面、展开、200% 字体、冷启动、ACTION_ASSIST 和折叠过程 PID 保持验证通过，Logcat 中本 App `FATAL EXCEPTION` 为 0。
+- Android APK SHA-256：Standard `b993c810853f02900fa58bd79c1056c1a377967cd4a3d05c1155b6cd89304a94`；Power `808be525d539adececd0cc3fc7c3889d3215f036bcd0a8d403548f9acb5877fb`。
+- Mac release notes、typecheck、lint、production build、桌面 37、客户端 168、服务端 406 项测试通过；36 个嵌套 Mach-O 使用 Developer ID 签名并通过严格校验。
+- Mac 1.82.0 已覆盖安装到本机，`/health` 回读 `status=ok`、`version=1.82.0`；DMG SHA-256 `f8979d86649300c19cc7b4828b7b53a387d41ca1e51a532716c07d1518251bcb`，热更新 ZIP SHA-256 `4f50b046fc2a664529f0dbd867bde82bd1b3887e9046e4320a83b2f22daf0066`。
+
+### 平台边界
+
+- Android 不能对新的 Kotlin/Java/原生库做真正无安装热更新；Standard 版由系统安装器确认，Power 版也不绕过用户确认。Skills、模型目录、Thinking Rules 和声明式 App Rules 才允许签名热更新。
+- 本机只有 Xcode 26.6 / iOS 26.5 SDK；iOS 27 的 `LongRunningIntent`、`EntityCollection`、`SyncableEntity` 等新 API 要在 Xcode 27 可用后再编译接入，本版不写不可验证的条件代码。
+- iPhone/iPad 真机安装按用户要求留到所有端交付后；本条不以模拟器替代最终实机验收。
+
 ## iOS 1.31.0 (106) · 藏宝阁跨端主动工作区 - 2026-08-31
 
 ### 用户可见

@@ -115,6 +115,25 @@ enum ActionRouter {
             case nil: return ""
             }
         }
+
+        func receipt(summary: String? = nil) -> String {
+            let undo: String
+            switch kind {
+            case .savePhoto: undo = "可在系统相册中删除"
+            case .setAlarm: undo = "可在系统时钟中关闭"
+            case .createCalendar, .createTravel: undo = "可在系统日历或提醒事项中删除"
+            case .toggleFlashlight: undo = "可用相反指令恢复"
+            case .createTodo: undo = "可在系统提醒事项中删除"
+            case .writeClipboard: undo = "可再次写入或清空剪贴板"
+            case .readClipboard, .deviceInfo: undo = "只读操作，无需撤销"
+            case nil: undo = "无需撤销"
+            }
+            return "\(summary ?? spoken())\n\n执行凭证\n- 路径：\(chip)\n- 核对：系统已确认完成\n- 撤销：\(undo)"
+        }
+
+        func failureReceipt(nextStep: String) -> String {
+            "没有完成这项操作。\n\n执行凭证\n- 路径：\(chip)\n- 核对：系统未确认完成\n- 下一步：\(nextStep)"
+        }
     }
 
     static func decide(text: String, imageCount: Int) -> Decision {

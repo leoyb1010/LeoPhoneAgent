@@ -43,6 +43,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -72,6 +74,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
@@ -192,6 +195,7 @@ fun TreasuryScreen(
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= 600.dp
         val extraWide = maxWidth >= 840.dp
+        val largeText = LocalDensity.current.fontScale >= 1.5f
         if (!wide && selectedItem != null) {
             BackHandler { selectedItemId = null }
             TreasuryDetail(
@@ -233,7 +237,15 @@ fun TreasuryScreen(
             Scaffold(
                 topBar = {
                     TopAppBar(
-                        title = { Text(stringResource(R.string.treasury_title), fontWeight = FontWeight.Bold) },
+                        title = {
+                            Text(
+                                stringResource(R.string.treasury_title),
+                                fontWeight = FontWeight.Bold,
+                                style = if (largeText) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        },
                         navigationIcon = {
                             IconButton(onClick = onBack) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.settings_back))
@@ -291,6 +303,8 @@ fun TreasuryScreen(
                         onOpen = { item ->
                             selectedItemId = item.id
                         },
+                        onCapture = { showCapture = true },
+                        onImport = { filePicker.launch(arrayOf("*/*")) },
                         listState = listState,
                         modifier = if (wide) Modifier.width(380.dp).fillMaxHeight() else Modifier.fillMaxSize(),
                     )
@@ -334,8 +348,18 @@ fun TreasuryScreen(
                                 modifier = Modifier.weight(1f),
                             )
                         } else {
-                            Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                            Column(
+                                Modifier.weight(1f).fillMaxHeight().padding(32.dp),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
                                 Text(stringResource(R.string.treasury_select_item), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Spacer(Modifier.size(16.dp))
+                                Button(onClick = { showCapture = true }) {
+                                    Icon(Icons.Default.Bookmark, null)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(stringResource(R.string.treasury_add))
+                                }
                             }
                         }
                     }
@@ -368,15 +392,25 @@ private fun TreasuryList(
     selectedIds: Set<String>,
     onToggleSelection: (String) -> Unit,
     onOpen: (TreasureSearchRow) -> Unit,
+    onCapture: () -> Unit,
+    onImport: () -> Unit,
     listState: LazyListState,
     modifier: Modifier = Modifier,
 ) {
+    var showMoreFilters by remember { mutableStateOf(false) }
+    val largeText = LocalDensity.current.fontScale >= 1.5f
     Column(modifier) {
         OutlinedTextField(
             value = query,
             onValueChange = onQuery,
             leadingIcon = { Icon(Icons.Default.Search, null) },
-            placeholder = { Text(stringResource(R.string.treasury_search_hint)) },
+            placeholder = {
+                Text(
+                    stringResource(
+                        if (largeText) R.string.treasury_search_short else R.string.treasury_search_hint,
+                    ),
+                )
+            },
             singleLine = true,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
         )
@@ -385,18 +419,73 @@ private fun TreasuryList(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                TreasuryFilter.entries.forEach { choice ->
+                listOf(TreasuryFilter.INBOX, TreasuryFilter.FAILED, TreasuryFilter.ALL).forEach { choice ->
                     FilterChip(
                         selected = filter == choice,
                         onClick = { onFilter(choice) },
                         label = { Text(filterLabel(choice)) },
                     )
                 }
+                Box {
+                    val secondary = TreasuryFilter.entries.filterNot {
+                        it in setOf(TreasuryFilter.INBOX, TreasuryFilter.FAILED, TreasuryFilter.ALL)
+                    }
+                    FilterChip(
+                        selected = filter in secondary,
+                        onClick = { showMoreFilters = true },
+                        label = {
+                            Text(
+                                if (filter in secondary) filterLabel(filter)
+                                else stringResource(R.string.treasury_more_filters),
+                            )
+                        },
+                    )
+                    DropdownMenu(
+                        expanded = showMoreFilters,
+                        onDismissRequest = { showMoreFilters = false },
+                    ) {
+                        secondary.forEach { choice ->
+                            DropdownMenuItem(
+                                text = { Text(filterLabel(choice)) },
+                                onClick = {
+                                    showMoreFilters = false
+                                    onFilter(choice)
+                                },
+                            )
+                        }
+                    }
+                }
             }
         }
         if (rows.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+            Column(
+                Modifier.fillMaxSize().padding(32.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
                 Text(stringResource(R.string.treasury_empty), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.size(16.dp))
+                val actions: @Composable () -> Unit = {
+                    Button(onClick = onCapture) {
+                        Icon(Icons.Default.Bookmark, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.treasury_add))
+                    }
+                    OutlinedButton(onClick = onImport) {
+                        Icon(Icons.Default.AttachFile, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(stringResource(R.string.treasury_import_files))
+                    }
+                }
+                if (largeText) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        content = { actions() },
+                    )
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), content = { actions() })
+                }
             }
         } else {
             LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {

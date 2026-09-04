@@ -38,12 +38,6 @@ final class RelayEventCatchUp: ObservableObject {
     private var notifiedSet = Set<String>()
     private var inFlight = false
 
-    /// One download per asset. The reading sheet and the agent can ask for the
-    /// same attachment at the same time; both then appended to the same
-    /// `.partial`, and the file-level re-hash threw the interleaved result away
-    /// after paying for it twice.
-    private var treasuryAssetFetches = Set<String>()
-
     /// [T-catchup-surface] 前台时错过的待审批。app 在最前时发系统通知是
     /// 无效动作(用户正看着 app),所以前台走这个已发布属性,由界面显示
     /// 横幅;后台/非活跃才发通知。

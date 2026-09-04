@@ -158,7 +158,7 @@ export default function GatewayCard({ delay = 0 }: { delay?: number }) {
           </div>
           <div className="mt-3 flex items-center gap-2 border-t border-border pt-2 text-[11px]">
             <span className={compaction ? 'text-foreground/80' : 'text-muted-foreground'}>
-              {t('dashboard.gatewayCompaction', { defaultValue: '上下文瘦身 · 降本' })}
+              {t('dashboard.gatewayCompaction', { defaultValue: '自动上下文保护' })}
             </span>
             {compaction && savedChars > 0 && (
               <span className="rounded-md bg-success/10 px-1.5 py-0.5 font-medium text-success">
@@ -169,7 +169,7 @@ export default function GatewayCard({ delay = 0 }: { delay?: number }) {
               type="button"
               role="switch"
               aria-checked={compaction}
-              aria-label={t('dashboard.gatewayCompaction', { defaultValue: '上下文瘦身 · 降本' })}
+              aria-label={t('dashboard.gatewayCompaction', { defaultValue: '自动上下文保护' })}
               disabled={busy || !status}
               onClick={() => void toggleCompaction()}
               className={`relative ml-auto inline-flex h-4 w-7 flex-shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${compaction ? 'bg-primary' : 'bg-muted'}`}

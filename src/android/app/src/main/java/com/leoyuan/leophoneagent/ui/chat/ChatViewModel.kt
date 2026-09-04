@@ -1460,6 +1460,8 @@ class ChatViewModel(
         sessionId: String,
     ): NativeRouteResult? = withContext(Dispatchers.IO) {
         val offload = com.leoyuan.leophoneagent.sandbox.NativeOffloadServer
+        fun success(summary: String = route.spoken()) = NativeRouteResult(route.receipt(summary))
+        fun failed(nextStep: String) = NativeRouteResult(route.failureReceipt(nextStep), verified = false)
         when (route.kind) {
             com.leoyuan.leophoneagent.agent.ActionRouter.Kind.SavePhoto -> {
                 val linux = prepared.imageUploadPaths.firstOrNull() ?: return@withContext null
@@ -1469,7 +1471,7 @@ class ChatViewModel(
                 )
                 if (!host.isFile) return@withContext null
                 val ok = offload.invoke("android-photos", listOf("import", "--path", host.absolutePath), sessionId).exitCode == 0
-                if (ok) NativeRouteResult(route.spoken()) else null
+                if (ok) success() else failed("请检查照片权限和可用存储空间后重试")
             }
             com.leoyuan.leophoneagent.agent.ActionRouter.Kind.SetAlarm -> {
                 val hh = route.hour ?: return@withContext null
@@ -1482,7 +1484,7 @@ class ChatViewModel(
                     listOf("set", "--time", time, "--label", route.label.ifBlank { "闹钟" }),
                     sessionId,
                 ).exitCode == 0
-                if (ok) NativeRouteResult(route.spoken()) else null
+                if (ok) success() else failed("请检查系统时钟或闹钟权限后重试")
             }
             com.leoyuan.leophoneagent.agent.ActionRouter.Kind.CreateCalendar -> {
                 val hh = route.hour ?: return@withContext null
@@ -1497,7 +1499,7 @@ class ChatViewModel(
                     },
                     sessionId,
                 ).exitCode == 0
-                if (ok) NativeRouteResult(route.spoken()) else null
+                if (ok) success() else failed("请授权日历访问后重试")
             }
             com.leoyuan.leophoneagent.agent.ActionRouter.Kind.CreateTravel -> {
                 val hh = route.hour ?: return@withContext null
@@ -1511,7 +1513,7 @@ class ChatViewModel(
                     },
                     sessionId,
                 )
-                if (calendar.exitCode != 0) return@withContext null
+                if (calendar.exitCode != 0) return@withContext failed("请授权日历访问后重试")
                 com.leoyuan.leophoneagent.agent.FastLocalActions.addTodo(
                     context,
                     route.label,
@@ -1525,21 +1527,21 @@ class ChatViewModel(
                     listOf("schedule", "--title", "出行提醒", "--body", route.label, "--at", start),
                     sessionId,
                 )
-                NativeRouteResult(route.spoken())
+                success()
             }
             com.leoyuan.leophoneagent.agent.ActionRouter.Kind.ToggleFlashlight -> {
                 if (com.leoyuan.leophoneagent.agent.FastLocalActions.setTorch(context, route.label != "off")) {
-                    NativeRouteResult(route.spoken())
-                } else null
+                    success()
+                } else failed("请确认设备有闪光灯并允许相机访问")
             }
             com.leoyuan.leophoneagent.agent.ActionRouter.Kind.CreateTodo -> {
                 if (com.leoyuan.leophoneagent.agent.FastLocalActions.addTodo(context, route.label)) {
-                    NativeRouteResult(route.spoken())
-                } else null
+                    success()
+                } else failed("请稍后重试，待办没有写入")
             }
             com.leoyuan.leophoneagent.agent.ActionRouter.Kind.ReadClipboard -> {
                 val result = offload.invoke("android-clipboard", listOf("get"), sessionId)
-                if (result.exitCode != 0) null else NativeRouteResult(
+                if (result.exitCode != 0) failed("请在前台打开应用后重试") else success(
                     if (result.output.isBlank()) "剪贴板是空的。" else "剪贴板内容：\n${result.output.trim().take(4_000)}",
                 )
             }
@@ -1548,12 +1550,12 @@ class ChatViewModel(
                 if (write.exitCode != 0) return@withContext null
                 val read = offload.invoke("android-clipboard", listOf("get"), sessionId)
                 if (read.exitCode == 0 && read.output.trimEnd() == route.label) {
-                    NativeRouteResult("已写入剪贴板，并读回核对成功。")
-                } else null
+                    success("已写入剪贴板，并读回核对成功。")
+                } else failed("系统没有读回相同内容，请重试")
             }
             com.leoyuan.leophoneagent.agent.ActionRouter.Kind.DeviceInfo -> {
                 val result = offload.invoke("android-device", listOf("all"), sessionId)
-                if (result.exitCode != 0) null else NativeRouteResult(
+                if (result.exitCode != 0) failed("暂时无法读取设备信息") else success(
                     "本机设备信息：\n${result.output.trim().take(6_000)}",
                 )
             }

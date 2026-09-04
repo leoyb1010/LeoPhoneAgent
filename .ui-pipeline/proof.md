@@ -53,3 +53,13 @@
 - Mac Electron 双机 Relay、拖放、键盘与屏幕阅读器仍需运行走查。
 - 当前附件支持完整文件重试和原子落盘，没有 HTTP Range 断点续传证据。
 - 可选音频转写和可选语义召回/RRF 未启用；当前 FTS 基础检索不依赖模型。
+
+## 2026-09-04 release proof
+
+- Android alpha.25: Standard/Power compile passed; both flavors ran 628 JVM tests with 0 failures and 1 skip each; Standard/Power Release lint completed with 0 errors; both signed Release APKs passed package/version/signer/capability-isolation gates.
+- Fold8 API 35: alpha.24 → alpha.25 Standard and Power upgrade installs returned `Success`; cold launch and ACTION_ASSIST returned `Status: ok`; no app `FATAL EXCEPTION` was found. The same process id survived 1080×1728 → 1768×2208 resizing.
+- Visual evidence: `/tmp/leophone-alpha25-treasury-cover.png`, `/tmp/leophone-alpha25-treasury-before.png`, and `/tmp/leophone-alpha25-treasury-cover-200-v4.png`. Primary filters, Save/Import empty actions, dual-pane starter action and 200% top-bar reachability are visible.
+- iOS/iPadOS 1.32.0 source: Watch AppIcon compiled for watchOS, iPhone device target build passed without signing, release/readiness/accessibility/visible-control audits passed, and MinisLogicTests passed 332/332. Per user instruction, no iPhone/iPad installation was performed yet.
+- Mac 1.82.0: release-note gate, typecheck, lint, production build, desktop 37, client 168 and server 406 tests passed. Signed DMG/ZIP were produced; 36 nested Mach-O signatures passed strict verification. `/Applications/leocodebox.app` is the only installed copy and `/health` reports version 1.82.0.
+
+Finish state: PASS for source/build and Android Fold8/Mac installed validation. iPhone/iPad remains intentionally pending final real-device installation, not a simulator substitute.

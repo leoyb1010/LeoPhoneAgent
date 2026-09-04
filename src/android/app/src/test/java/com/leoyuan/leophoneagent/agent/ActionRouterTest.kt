@@ -7,6 +7,19 @@ import org.junit.Test
 
 class ActionRouterTest {
     @Test
+    fun nativeReceiptNamesPathVerificationAndUndo() {
+        val route = ActionRouter.Decision(
+            path = ActionRouter.Path.Native,
+            kind = ActionRouter.Kind.CreateCalendar,
+            hour = 19,
+            minute = 0,
+        )
+        val text = route.receipt()
+        assertTrue(text.contains("路径：系统日历"))
+        assertTrue(text.contains("系统已确认完成"))
+        assertTrue(text.contains("可在系统日历中删除"))
+    }
+    @Test
     fun savePhotoNeedsImageAndAlbumWords() {
         val hit = ActionRouter.decide("把这张图存进相册", imageCount = 1)
         assertEquals(ActionRouter.Path.Native, hit.path)

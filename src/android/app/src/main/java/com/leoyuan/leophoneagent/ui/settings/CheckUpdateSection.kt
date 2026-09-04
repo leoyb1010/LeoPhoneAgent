@@ -18,6 +18,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,6 +44,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import com.leoyuan.leophoneagent.BuildConfig
 import com.leoyuan.leophoneagent.R
 import com.leoyuan.leophoneagent.data.UpdateChecker
+import com.leoyuan.leophoneagent.data.AutomaticUpdateCheck
 import kotlinx.coroutines.launch
 import com.leoyuan.leophoneagent.ui.components.MinisButton
 import com.leoyuan.leophoneagent.ui.components.MinisTextButton
@@ -72,6 +74,40 @@ fun CheckUpdateSection() {
     var downloadProgress by remember { mutableStateOf<Float?>(null) }
     var downloadError by remember { mutableStateOf<String?>(null) }
     var awaitingInstallPerm by remember { mutableStateOf(false) }
+    var automaticCheck by remember { mutableStateOf(AutomaticUpdateCheck.isEnabled(context)) }
+
+    val runCheck: suspend () -> Unit = {
+        checking = true
+        statusMessage = null
+        showReleasesLink = false
+        when (val r = UpdateChecker.check()) {
+            is UpdateChecker.CheckResult.UpdateAvailable -> {
+                update = r
+                statusMessage = null
+            }
+            UpdateChecker.CheckResult.UpToDate ->
+                statusMessage = context.getString(R.string.check_update_up_to_date)
+            UpdateChecker.CheckResult.NoReleaseAvailable ->
+                statusMessage = context.getString(R.string.check_update_no_release)
+            is UpdateChecker.CheckResult.NoApkAsset ->
+                statusMessage = context.getString(R.string.check_update_no_apk_asset, r.tagName)
+            UpdateChecker.CheckResult.Forbidden -> {
+                statusMessage = context.getString(R.string.update_error_forbidden_with_link)
+                showReleasesLink = true
+            }
+            UpdateChecker.CheckResult.NetworkUnreachable ->
+                statusMessage = context.getString(R.string.update_error_network_unreachable)
+            is UpdateChecker.CheckResult.Error ->
+                statusMessage = context.getString(R.string.check_update_error, r.message)
+        }
+        checking = false
+    }
+
+    // A notification deep-links here. Re-check on entry so the update sheet
+    // opens immediately instead of making the user tap "Check" a second time.
+    LaunchedEffect(Unit) {
+        if (automaticCheck) runCheck()
+    }
 
     // Resume the install flow on every ON_RESUME. There are two cases:
     //
@@ -90,7 +126,7 @@ fun CheckUpdateSection() {
     // Either way: if permission is still denied we leave the pending record
     // alone so the next resume can pick it up.
     val lifecycleOwner = LocalLifecycleOwner.current
-    LaunchedEffect(lifecycleOwner) {
+    DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event != Lifecycle.Event.ON_RESUME) return@LifecycleEventObserver
             if (!UpdateChecker.canInstall(context)) return@LifecycleEventObserver
@@ -106,12 +142,22 @@ fun CheckUpdateSection() {
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     SettingsSection(
         header = stringResource(R.string.check_update_section_header),
         footer = stringResource(R.string.check_update_current_version, BuildConfig.VERSION_NAME),
     ) {
+        SettingsSwitchRow(
+            title = stringResource(R.string.auto_update_check_title),
+            subtitle = stringResource(R.string.auto_update_check_subtitle),
+            checked = automaticCheck,
+            onCheckedChange = {
+                automaticCheck = it
+                AutomaticUpdateCheck.setEnabled(context, it)
+            },
+        )
         SettingsRow(
             icon = Icons.Outlined.SystemUpdate,
             iconColor = Color(0xFF007AFF),
@@ -123,32 +169,7 @@ fun CheckUpdateSection() {
             showDivider = false,
             onClick = if (checking) null else {
                 {
-                    checking = true
-                    statusMessage = null
-                    showReleasesLink = false
-                    scope.launch {
-                        when (val r = UpdateChecker.check()) {
-                            is UpdateChecker.CheckResult.UpdateAvailable -> {
-                                update = r
-                                statusMessage = null
-                            }
-                            UpdateChecker.CheckResult.UpToDate ->
-                                statusMessage = context.getString(R.string.check_update_up_to_date)
-                            UpdateChecker.CheckResult.NoReleaseAvailable ->
-                                statusMessage = context.getString(R.string.check_update_no_release)
-                            is UpdateChecker.CheckResult.NoApkAsset ->
-                                statusMessage = context.getString(R.string.check_update_no_apk_asset, r.tagName)
-                            UpdateChecker.CheckResult.Forbidden -> {
-                                statusMessage = context.getString(R.string.update_error_forbidden_with_link)
-                                showReleasesLink = true
-                            }
-                            UpdateChecker.CheckResult.NetworkUnreachable ->
-                                statusMessage = context.getString(R.string.update_error_network_unreachable)
-                            is UpdateChecker.CheckResult.Error ->
-                                statusMessage = context.getString(R.string.check_update_error, r.message)
-                        }
-                        checking = false
-                    }
+                    scope.launch { runCheck() }
                 }
             },
         )
@@ -206,6 +227,7 @@ fun CheckUpdateSection() {
                         context = context,
                         url = u.apkUrl,
                         versionName = u.versionName,
+                        expectedSha256 = u.expectedSha256,
                     ) { p -> downloadProgress = p }
                     when (result) {
                         is UpdateChecker.DownloadResult.Success -> {

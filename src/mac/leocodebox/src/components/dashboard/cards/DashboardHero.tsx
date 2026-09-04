@@ -30,7 +30,6 @@ type DashboardHeroProps = {
   readyAgents: number;
   projectCount: number;
   onRefresh: () => Promise<{ ok: boolean }>;
-  onNewChat: () => void;
   onShowFleet: () => void;
   onShowSettings: () => void;
 };
@@ -76,7 +75,6 @@ export default function DashboardHero({
   readyAgents,
   projectCount,
   onRefresh,
-  onNewChat,
   onShowFleet,
   onShowSettings,
 }: DashboardHeroProps) {
@@ -130,15 +128,6 @@ export default function DashboardHero({
           </div>
 
           <div className="flex flex-wrap gap-2.5 lg:justify-end">
-            <button
-              type="button"
-              onClick={onNewChat}
-              aria-label="开始本机任务"
-              className="leo-squish inline-flex min-h-11 items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-elevation-1 hover:-translate-y-0.5 hover:shadow-elevation-2"
-            >
-              <MessageSquare className="h-4 w-4" />
-              开始本机任务
-            </button>
             <button
               type="button"
               onClick={onShowFleet}

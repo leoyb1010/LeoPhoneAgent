@@ -139,7 +139,6 @@ export default function DashboardView({
           readyAgents={readyAgents}
           projectCount={data.projects.data?.length ?? 0}
           onRefresh={data.refresh}
-          onNewChat={() => onNewChat?.()}
           onShowFleet={() => onShowTab?.('fleet')}
           onShowSettings={() => onShowSettings()}
         />

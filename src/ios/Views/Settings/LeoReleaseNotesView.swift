@@ -12,6 +12,17 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.32.0",
+            date: "2026-09-04",
+            title: "本机动作可验证，iPhone 与 iPad 构建闭环",
+            highlights: [
+                "相册、闹钟、日历、提醒事项、手电筒、剪贴板和设备信息等确定性操作会返回执行凭证，写清使用的系统能力、核对结果与撤销方式。",
+                "系统权限不足或写入没有得到确认时会明确停下并告诉你下一步，不再退回模型猜测已经完成。",
+                "修复藏宝阁远端附件并发下载锁放错对象导致的主工程编译失败；下载仍按条目与附件类型去重。",
+                "补齐 Apple Watch 全尺寸 AppIcon 与 watchOS 平台声明，iPhone 设备目标的完整无签名构建和 332 项逻辑测试通过；iPhone/iPad 真机安装留到三端交付后执行。",
+            ]
+        ),
+        LeoRelease(
             version: "1.31.0",
             date: "2026-08-31",
             title: "藏宝阁成为可搜索、可恢复的跨端工作区",
