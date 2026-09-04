@@ -4,17 +4,14 @@ import { useTranslation } from 'react-i18next';
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
-  Check,
   ChevronRight,
   CornerUpLeft,
   FileText,
-  Gauge,
   GitCommit,
   GitMerge,
   MessageSquare,
   MessageSquarePlus,
   RefreshCw,
-  Route,
   Settings,
   Stethoscope,
   SunMoon,
@@ -44,10 +41,9 @@ import { useCommitsSource } from './sources/useCommitsSource';
 import { useSessionMessageSearch } from './sources/useSessionMessageSearch';
 import { useBranchesSource } from './sources/useBranchesSource';
 import { useGitActions } from './sources/useGitActions';
-import { useLeoapiSwitchSource, type LeoapiSwitchNode } from './sources/useLeoapiSwitchSource';
 import { HANDOFF_TARGET_PROVIDERS, useHandoffSource } from './sources/useHandoffSource';
 
-type Page = 'actions' | 'files' | 'sessions' | 'commits' | 'branches' | 'leoapi' | 'handoff';
+type Page = 'actions' | 'files' | 'sessions' | 'commits' | 'branches' | 'handoff';
 
 type CommandPaletteProps = {
   selectedProject: Project | null;
@@ -58,8 +54,7 @@ type CommandPaletteProps = {
 };
 
 const NAV_TABS: Array<{ id: AppTab; labelKey: string; keywords: string }> = [
-  // 主控台排第一:换 Agent / 开新任务都在那儿,是这个外壳的落地页。
-  { id: 'dashboard', labelKey: 'commandPalette.goConsole', keywords: 'console home dashboard 主控台 首页 新任务 换 agent' },
+  { id: 'dashboard', labelKey: 'commandPalette.goConsole', keywords: 'new task 新任务 agent 项目 设备' },
   { id: 'chat', labelKey: 'commandPalette.goChat', keywords: 'chat messages conversation' },
   { id: 'files', labelKey: 'commandPalette.goFiles', keywords: 'files file tree explorer' },
   { id: 'shell', labelKey: 'commandPalette.goShell', keywords: 'shell terminal console' },
@@ -75,7 +70,6 @@ const NAV_TABS: Array<{ id: AppTab; labelKey: string; keywords: string }> = [
  */
 const SHELL_ENTRIES: Array<{ event: string; labelKey: string; fallback: string; keywords: string }> = [
   { event: 'leocodebox:open-projects', labelKey: 'commandPalette.openProjects', fallback: '项目', keywords: 'projects 项目 仓库 新建项目' },
-  { event: 'leocodebox:open-leoapi', labelKey: 'commandPalette.openLeoapi', fallback: 'Leoapi 网关', keywords: 'leoapi gateway 网关 模型路由' },
   { event: 'leocodebox:open-local-log', labelKey: 'commandPalette.openLocalLog', fallback: '本地日志', keywords: 'log 日志 diagnostics' },
 ];
 
@@ -114,13 +108,10 @@ export default function CommandPalette({
     };
   }, []);
 
-  const [pendingSwitchNode, setPendingSwitchNode] = React.useState<LeoapiSwitchNode | null>(null);
-
   React.useEffect(() => {
     if (!open) {
       setSearch('');
       setPages([]);
-      setPendingSwitchNode(null);
     }
   }, [open]);
 
@@ -132,15 +123,12 @@ export default function CommandPalette({
   const showCommits = !page || page === 'commits';
   const showBranches = !page || page === 'branches' || page === 'actions';
 
-  const showLeoapi = page === 'leoapi';
-
   const sessions = useSessionsSource(projectId, open && showSessions);
   const { items: messageMatches, coveredProviders } = useSessionMessageSearch(projectId, search, open && showSessions);
   const files = useFilesSource(projectId, open && showFiles);
   const commits = useCommitsSource(projectId, open && showCommits);
   const branches = useBranchesSource(projectId, open && showBranches);
   const git = useGitActions(projectId);
-  const leoapi = useLeoapiSwitchSource(open && showLeoapi);
   const handoff = useHandoffSource();
   const showHandoff = page === 'handoff';
   const currentSessionProvider = selectedSession?.__provider || null;
@@ -200,7 +188,6 @@ export default function CommandPalette({
 
   const popPage = React.useCallback(() => {
     setSearch('');
-    setPendingSwitchNode(null);
     setPages((prev) => prev.slice(0, -1));
   }, []);
 
@@ -272,13 +259,6 @@ export default function CommandPalette({
                   <span className="flex-1">{t('commandPalette.toggleTheme')}</span>
                 </CommandItem>
                 <CommandItem
-                  value="Switch Leoapi node api endpoint 换轨 接口 节点"
-                  onSelect={() => pushPage('leoapi')}
-                >
-                  <Route className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                  <span className="flex-1">{t('commandPalette.switchLeoapi')}</span>
-                </CommandItem>
-                <CommandItem
                   value="Doctor environment health check 环境体检 诊断 健康"
                   onSelect={() => run(() => {
                     window.dispatchEvent(new CustomEvent('leocodebox:doctor-refresh'));
@@ -331,64 +311,6 @@ export default function CommandPalette({
                 <div className="px-3 py-1.5 text-xs text-muted-foreground">
                   {handoff.preparing ? t('commandPalette.handoffPreparing') : t('commandPalette.handoffHint')}
                 </div>
-              </CommandGroup>
-            )}
-
-            {showLeoapi && !pendingSwitchNode && (
-              <CommandGroup heading={t('commandPalette.leoapi')}>
-                {leoapi.nodes.map((node) => (
-                  <CommandItem
-                    key={node.id}
-                    value={`${node.name} ${node.target} ${node.baseUrl}`}
-                    onSelect={() => setPendingSwitchNode(node)}
-                  >
-                    <Route className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                    <span className="flex-1 truncate">{node.name}</span>
-                    <span className="text-xs text-muted-foreground">{node.target}</span>
-                    {node.latencyMs !== null && (
-                      <span className="text-xs text-muted-foreground">{node.latencyMs}ms</span>
-                    )}
-                    {node.isActive && <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden />}
-                  </CommandItem>
-                ))}
-                {leoapi.lastResult && (
-                  <div className="px-3 py-1.5 text-xs text-muted-foreground">{leoapi.lastResult}</div>
-                )}
-              </CommandGroup>
-            )}
-
-            {showLeoapi && pendingSwitchNode && (
-              <CommandGroup heading={pendingSwitchNode.name}>
-                <CommandItem
-                  value="confirm switch apply 确认 切换"
-                  disabled={leoapi.busyNodeId !== null}
-                  onSelect={() => {
-                    void leoapi.apply(pendingSwitchNode).then(() => {
-                      window.dispatchEvent(new CustomEvent('leocodebox:leoapi-switched'));
-                      setOpen(false);
-                    }).catch(() => {
-                      // Transactional apply rolls back server-side; surface via lastResult.
-                    });
-                  }}
-                >
-                  <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden />
-                  <span className="flex-1">{t('commandPalette.confirmSwitch', { name: pendingSwitchNode.name })}</span>
-                </CommandItem>
-                <CommandItem
-                  value="test latency 测速"
-                  disabled={leoapi.busyNodeId !== null}
-                  onSelect={() => void leoapi.test(pendingSwitchNode)}
-                >
-                  <Gauge className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                  <span className="flex-1">{t('commandPalette.testNode', { name: pendingSwitchNode.name })}</span>
-                </CommandItem>
-                <CommandItem value="back cancel 返回" onSelect={() => setPendingSwitchNode(null)}>
-                  <ChevronRight className="h-4 w-4 shrink-0 rotate-180 text-muted-foreground" aria-hidden />
-                  <span className="flex-1">{t('commandPalette.backToNodes')}</span>
-                </CommandItem>
-                {leoapi.lastResult && (
-                  <div className="px-3 py-1.5 text-xs text-muted-foreground">{leoapi.lastResult}</div>
-                )}
               </CommandGroup>
             )}
 

@@ -43,6 +43,8 @@ import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Contacts
 import androidx.compose.material.icons.outlined.Event
 import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.PhotoLibrary
@@ -61,6 +63,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -69,9 +72,12 @@ import androidx.compose.ui.res.stringResource
 import com.leoyuan.leophoneagent.BuildConfig
 import com.leoyuan.leophoneagent.R
 import com.leoyuan.leophoneagent.accessibility.MinisAccessibilityService
+import com.leoyuan.leophoneagent.accessibility.RestrictedSettingsManager
 import com.leoyuan.leophoneagent.offload.MinisNotificationListenerService
+import com.leoyuan.leophoneagent.offload.ShizukuManager
 import com.leoyuan.leophoneagent.power.PowerOptimizationManager
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * T323: surfaces OS-level permission states (Accessibility service,
@@ -101,6 +107,11 @@ fun SystemPermissionsScreen(
     // battery "no restrictions"; surface those (reusing PowerOptimizationManager)
     // only when the service is degraded AND the vendor is known to enforce it.
     var a11yDegraded by remember { mutableStateOf(false) }
+    var a11yRestricted by remember { mutableStateOf(false) }
+    var unrestricting by remember { mutableStateOf(false) }
+    var unrestrictFailed by remember { mutableStateOf(false) }
+    var shizukuReady by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     var notificationsOn by remember { mutableStateOf(areNotificationsEnabled(context)) }
     var batteryExempt by remember {
         mutableStateOf(PowerOptimizationManager.isIgnoringBatteryOptimizations(context))
@@ -131,6 +142,8 @@ fun SystemPermissionsScreen(
             val connected = MinisAccessibilityService.getInstance() != null
             a11yEnabled = inSettings || connected
             a11yDegraded = inSettings && !connected
+            a11yRestricted = !a11yEnabled && RestrictedSettingsManager.isRestricted(context)
+            shizukuReady = ShizukuManager.isReady()
             notificationsOn = areNotificationsEnabled(context)
             batteryExempt = PowerOptimizationManager.isIgnoringBatteryOptimizations(context)
             overlayGranted = currentOverlayGranted(context)
@@ -455,6 +468,50 @@ fun SystemPermissionsScreen(
                     onClick = { openAccessibilitySettings(context) },
                     showDivider = false,
                 )
+            }
+
+            if (a11yRestricted) {
+                SettingsSection(
+                    header = stringResource(R.string.system_permissions_a11y_restricted_header),
+                    footer = stringResource(R.string.system_permissions_a11y_restricted_footer),
+                ) {
+                    if (shizukuReady) {
+                        SettingsRow(
+                            icon = Icons.Outlined.LockOpen,
+                            iconColor = Color(0xFF34C759),
+                            title = stringResource(R.string.system_permissions_a11y_restricted_shizuku),
+                            subtitle = stringResource(
+                                when {
+                                    unrestricting -> R.string.system_permissions_a11y_restricted_working
+                                    unrestrictFailed -> R.string.system_permissions_a11y_restricted_failed
+                                    else -> R.string.system_permissions_a11y_restricted_shizuku_sub
+                                },
+                            ),
+                            onClick = {
+                                if (!unrestricting) {
+                                    unrestricting = true
+                                    unrestrictFailed = false
+                                    scope.launch {
+                                        val ok = RestrictedSettingsManager.clearWithShizuku(context)
+                                        unrestricting = false
+                                        unrestrictFailed = !ok
+                                        a11yRestricted = !ok
+                                    }
+                                }
+                            },
+                        )
+                    }
+                    SettingsRow(
+                        icon = Icons.Outlined.Info,
+                        iconColor = Color(0xFFFF9500),
+                        title = stringResource(R.string.system_permissions_a11y_restricted_manual),
+                        subtitle = stringResource(R.string.system_permissions_a11y_restricted_manual_sub),
+                        onClick = {
+                            (context as? Activity)?.let(PowerOptimizationManager::openAppDetailsSettings)
+                        },
+                        showDivider = false,
+                    )
+                }
             }
 
             // [T-android-a11y-miui-service-failure] OEM keep-alive guidance. Only

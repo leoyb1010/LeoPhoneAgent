@@ -39,7 +39,7 @@ test('bundled CodexHost payload is the exact runnable upstream release', async (
   const status = await getCliToolStatus(CLI_TOOLS.codexhost, { checkLatest: false });
   assert.equal(status.installed, true);
   assert.equal(status.runnable, true);
-  assert.equal(status.currentVersion, '0.3.5');
+  assert.equal(status.currentVersion, '0.4.4');
   assert.equal(status.installSource, 'app-bundled');
   assert.equal(status.canLaunch, true);
 });

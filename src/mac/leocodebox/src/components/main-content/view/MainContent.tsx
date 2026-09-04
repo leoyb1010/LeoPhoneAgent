@@ -9,8 +9,7 @@ import { useUiPreferences } from '../../../hooks/useUiPreferences';
 import { useFileOpenResolver } from '../../../hooks/useFileOpenResolver';
 import { apiClient } from '../../../utils/apiClient';
 import { useEditorSidebar } from '../../code-editor/hooks/useEditorSidebar';
-import type { AppTab, LLMProvider, Project } from '../../../types/app';
-import type { SettingsMainTab } from '../../settings/types/types';
+import type { LLMProvider, Project } from '../../../types/app';
 import type { OpenMissionSession } from '../../missions/view/MissionsView';
 import FleetView from '../../fleet/view/FleetView';
 
@@ -28,7 +27,7 @@ const PluginTabContent = React.lazy(() => import('../../plugins/view/PluginTabCo
 const BrowserUsePanel = React.lazy(() => import('../../browser-use/view/BrowserUsePanel'));
 const ConversationAuditPanel = React.lazy(() => import('../../conversation-audit/view/ConversationAuditPanel'));
 const MissionsView = React.lazy(() => import('../../missions/view/MissionsView'));
-const DashboardView = React.lazy(() => import('../../dashboard/DashboardView'));
+const TaskStartView = React.lazy(() => import('../../task-start/TaskStartView'));
 const EditorSidebar = React.lazy(() => import('../../code-editor/view/EditorSidebar'));
 const TaskMasterPanel = React.lazy(() => import('../../task-master/view/TaskMasterPanel'));
 
@@ -67,8 +66,6 @@ function MainContent({
   onNavigateToSession,
   onSessionEstablished,
   onShowSettings,
-  onStartNewChat,
-  onStartConsoleTask,
   externalMessageUpdate,
   newSessionTrigger,
   pendingPrompt,
@@ -173,14 +170,11 @@ function MainContent({
     },
   });
 
-  // 主控台是这个外壳的落地页,不是一个可有可无的仪表盘:它是「选 Agent 开新
-  // 任务」唯一还没有绑定会话的地方(见 DashboardView 的注释)。所以除了显式停在
-  // `dashboard` 页签上,**没有项目可停靠时也落在这里** —— 以前那种"选择项目"
-  // 空态是个死胡同:它既开不了任务,也换不了 Agent。
+  // `dashboard` 只保留为旧本地状态的内部兼容值；可见界面已经收敛成“新任务”。
+  // 这里不再加载指标、模块卡或第二个输入框，唯一提交入口是外壳 Task Dock。
   // 移动端例外:那里没有指挥条/会话列表,选项目全靠抽屉的汉堡按钮,所以保留
   // 带菜单入口的空态,否则没项目的手机会被困在一个开不了抽屉的页面上。
-  // fleet / missions 不绑项目也能用。主控台仍是「没项目时」的落点,但不能
-  // 把这两处入口吞回仪表盘。
+  // fleet / missions 不绑项目也能用，不能被无项目状态吞回新任务页。
   if (activeTab === 'fleet') {
     return (
       <div className="leocodebox-workspace-enter h-full overflow-hidden">
@@ -196,17 +190,7 @@ function MainContent({
       <div className="leocodebox-workspace-enter h-full overflow-hidden">
         <ErrorBoundary showDetails>
           <React.Suspense fallback={panelFallback}>
-            <DashboardView
-              onNavigateToSession={(sessionId) => {
-                setActiveTab('chat');
-                onNavigateToSession(sessionId);
-              }}
-              onShowTab={(tab) => setActiveTab(tab as AppTab)}
-              onNewChat={onStartNewChat}
-              onShowSettings={(tab) => onShowSettings(tab as SettingsMainTab | undefined)}
-              selectedProjectId={selectedProject?.projectId ?? null}
-              onStartTask={onStartConsoleTask}
-            />
+            <TaskStartView project={selectedProject} />
           </React.Suspense>
         </ErrorBoundary>
       </div>

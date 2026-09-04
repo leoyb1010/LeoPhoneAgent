@@ -7,7 +7,6 @@ import type {
   SessionActivityMap,
 } from '../../../hooks/useSessionProtection';
 import type { SessionEstablishedContext, SessionNavigationOptions } from '../../chat/types/types';
-import type { NewTaskLaunch } from '../../dashboard/newTask';
 import type { SettingsMainTab } from '../../settings/types/types';
 
 export type TaskMasterTask = {
@@ -56,9 +55,6 @@ export type MainContentProps = {
   onNavigateToSession: (targetSessionId: string, options?: SessionNavigationOptions) => void;
   onSessionEstablished: (sessionId: string, context: SessionEstablishedContext) => void;
   onShowSettings: (tab?: SettingsMainTab) => void;
-  onStartNewChat: () => void;
-  /** 主控台「新任务」的落地口 —— 选中的 Agent 显式随请求下发。 */
-  onStartConsoleTask: (launch: NewTaskLaunch) => void;
   externalMessageUpdate: number;
   newSessionTrigger: number;
   /** 新会话的第一句话,和 newSessionTrigger 同源下发(见 hooks/pendingPrompt.ts)。 */

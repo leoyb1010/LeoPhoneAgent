@@ -52,7 +52,7 @@ function managedTomlBlocks(provider: SwitchProvider, includeProfile = true): { t
     `[model_providers.${providerKey}]`,
     `name = ${tomlString(provider.name || providerKey)}`,
     `base_url = ${tomlString(baseUrl)}`,
-    'env_key = "OPENAI_API_KEY"',
+    ...(provider.apiKey ? [`experimental_bearer_token = ${tomlString(provider.apiKey)}`] : []),
     `wire_api = ${tomlString(wireApi)}`,
     '',
     ...(includeProfile ? [
@@ -119,17 +119,8 @@ async function applyClaudeProvider(provider: SwitchProvider): Promise<string[]> 
 }
 
 async function applyCodexProvider(provider: SwitchProvider): Promise<string[]> {
-  const [authPath, configPath] = targetConfigPaths('codex');
-  await maybeBackup(authPath);
+  const [, configPath] = targetConfigPaths('codex');
   await maybeBackup(configPath);
-
-  const auth = await readJsonFile<Record<string, string>>(authPath, {});
-  if (provider.apiKey) {
-    auth.OPENAI_API_KEY = provider.apiKey;
-  } else {
-    delete auth.OPENAI_API_KEY;
-  }
-  await writeJsonFile(authPath, auth);
 
   let existing = '';
   try {
@@ -150,7 +141,10 @@ async function applyCodexProvider(provider: SwitchProvider): Promise<string[]> {
   const nextConfig = `${managed.topLevel}${unmanaged ? `\n${unmanaged.trimStart()}\n` : '\n'}\n${managed.tables}`;
   TOML.parse(nextConfig);
   await atomicWrite(configPath, nextConfig);
-  return [authPath, configPath];
+  // Codex >= 0.149 no longer lets custom providers inherit credentials from
+  // auth.json. Keep official ChatGPT OAuth untouched and bind a third-party
+  // token to its own provider table instead (config-only switching).
+  return [configPath];
 }
 
 export function parseEnv(content: unknown): Record<string, string> {

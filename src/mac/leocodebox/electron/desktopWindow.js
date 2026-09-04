@@ -103,11 +103,15 @@ export class DesktopWindowManager {
   getContentViewBounds() {
     if (!this.mainWindow) return { x: 0, y: TITLEBAR_HEIGHT, width: 0, height: 0 };
     const [width, height] = this.mainWindow.getContentSize();
+    // The local workspace owns its native-looking draggable title bar and
+    // already leaves room for macOS traffic lights. Let it fill the whole
+    // window so users never see a launcher toolbar stacked above it.
+    const topInset = this.actions.getActiveTarget()?.kind === 'local' ? 0 : TITLEBAR_HEIGHT;
     return {
       x: 0,
-      y: TITLEBAR_HEIGHT,
+      y: topInset,
       width,
-      height: Math.max(0, height - TITLEBAR_HEIGHT),
+      height: Math.max(0, height - topInset),
     };
   }
 

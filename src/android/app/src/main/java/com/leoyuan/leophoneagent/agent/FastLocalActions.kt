@@ -40,7 +40,9 @@ object FastLocalActions {
 
     fun addTodo(context: Context, title: String, dueAtMs: Long? = null, notes: String = ""): Boolean {
         val text = title.ifBlank { "待办" }
-        LocalTodoStore(context).add(text, dueAtMs, notes)
+        val store = LocalTodoStore(context)
+        val id = store.add(text, dueAtMs, notes)
+        if (!store.contains(id)) return false
         SessionTaskStatus.setLastTodo(text)
         ensureChannel(context)
         val note = NotificationCompat.Builder(context, CHANNEL)
@@ -93,4 +95,12 @@ internal class LocalTodoStore(context: Context) {
     fun load(): JSONArray = runCatching {
         JSONArray(prefs.getString("entries", "[]") ?: "[]")
     }.getOrDefault(JSONArray())
+
+    fun contains(id: String): Boolean {
+        val entries = load()
+        for (index in 0 until entries.length()) {
+            if (entries.optJSONObject(index)?.optString("id") == id) return true
+        }
+        return false
+    }
 }

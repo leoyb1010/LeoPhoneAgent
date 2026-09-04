@@ -63,3 +63,44 @@
 - Mac 1.82.0: release-note gate, typecheck, lint, production build, desktop 37, client 168 and server 406 tests passed. Signed DMG/ZIP were produced; 36 nested Mach-O signatures passed strict verification. `/Applications/leocodebox.app` is the only installed copy and `/health` reports version 1.82.0.
 
 Finish state: PASS for source/build and Android Fold8/Mac installed validation. iPhone/iPad remains intentionally pending final real-device installation, not a simulator substitute.
+
+## 2026-09-04 G1/G2 implementation evidence (in progress)
+
+- Mac dashboard source, 16 card/test files, dashboard data hook, animated metric helper and standalone LeoAPI panel were removed rather than hidden.
+- The normal local BrowserView now fills the Electron window from y=0; the React workbench title bar owns the traffic-light-safe drag region, eliminating the visible launcher bar stack.
+- Workbench title bar now exposes only New Task, device status and Settings. Command Palette no longer switches LeoAPI nodes.
+- One Task Dock renders only in the internal new-task state; selected sessions render only their own composer. A quiet TaskStartView replaces the dashboard.
+- LeoAPI route management is mounted in Settings → 接口与凭据; the first implementation covers provider list, add/edit, masked secret preservation, model discovery, preview/apply, test, native rollback and current/CC Switch import.
+- CodexHost dependency and native payload are upgraded from 0.3.5 to 0.4.4.
+- Codex third-party switching is config-only: `experimental_bearer_token` lives in the provider table and official `auth.json` is no longer overwritten.
+- Android ActionRouter focused suite passes 13/13. iOS MinisLogicTests passed on the booted iPhone 17 Pro simulator after the separate stale “Codex Test” clone failed to allocate.
+- Mac typecheck, production build and client tests passed (162/162). Full server test reached 405/406; its only failure was the old expected CodexHost version and has been updated for 0.4.4. Lint found one radius-tier violation, corrected before the next full gate.
+
+Finish state: this interim HOLD is superseded by the final proof below.
+
+## 2026-09-04 unified work-surface final proof
+
+### Round A · product, UI, motion and accessibility
+
+- Mac 1.83.0 installed app: CUA accessibility tree and rendered screenshots at 1024×640 and 1440×960 show one native/React title bar, one Task Dock on New Task, and exactly one composer after entering a session. The title bar exposes New Task, device status and Settings only.
+- Settings → 接口与凭据 visibly contains the local gateway, context protection, health monitor, target tabs, provider import/create/test/apply/rollback and CC Switch import. No launcher, sidebar, title-bar or command-palette LeoAPI button remains.
+- Mac motion is limited to location/state continuity (`wb-anim-entry`, chip/menu transitions) and is disabled by `prefers-reduced-motion`; dashboard metric rolls and decorative card stagger were deleted with the dashboard.
+- Fold8 API 35 rendered at 1768×2208 and 1080×1728. A real 200% font pass exposed a clipped home title and setup-card subtitle; the fix switches narrow/large-font chrome to `Leo`, moves secondary actions into the overflow, enables scrolling and gives step content dynamic height. Re-render confirms the title and first card are no longer clipped.
+- iOS/iPad keep native Dynamic Type, NavigationSplitView, Stage Manager sizing, drag/drop and Artifacts. ⌘⇧O now opens Artifacts from a hardware keyboard; iPad physical installation remains explicitly deferred because the device is not present.
+
+### Round B · capability and failure recovery
+
+- Android xAI: authenticated live `/v1/models`, correct xAI default base, full built-in fallback and OAuth Chat-Completions bearer path are covered by MockWebServer tests. Provider groups now filter disabled/hidden/uncredentialed members before fallback/load-balance selection and retain OAuth-only members.
+- iOS/Android deterministic intent routing understands reminders, calendar and rail/flight/bus/trip records plus relative dates, weekdays and month/day input. Missing required fields produce one clarification; EventKit/local stores are read back before issuing a success receipt.
+- Android cold recovery recognizes tool-result, unfinished tool-use, Continue reminder and ordinary unanswered user tails. iOS uses the same non-empty-user-tail invariant. Long pastes fold out of the composer and >15k text becomes a normal previewable attachment.
+- Android sideloaded restricted-settings state is diagnosed from the installer source; Power may clear the app-op only through already-authorized Shizuku and must read back `allow`. A newer Room database is opened read-only for version inspection and left untouched with a guidance screen instead of crashing or wiping data.
+
+### Round C · build, security, performance and release
+
+- Net source change removes roughly 4k lines of Mac dashboard/duplicate-shell code while adding the settings integration and mobile reliability contracts; no new third-party UI or runtime dependency was added. CodexHost is the only dependency update (0.3.5 → 0.4.4).
+- Mac: release-note gate, typecheck, lint, production build, npm audit (0 vulnerabilities), desktop 37/37, client 159/159 and server 406/406. Signed DMG/ZIP validate 36 nested Mach-O files; installed `/Applications/leocodebox.app` reports `/health` version 1.83.0.
+- Android: Standard/Power compile, 641/641 JVM tests per flavor (0 failed, 1 skipped), Debug lint and Release lint/R8/assembly pass with 0 errors. Both signed Release APKs pass package/version/signer/capability-isolation checks and both cold-launch on Fold8 API 35 without app FATAL/ANR.
+- iOS: MinisLogicTests 337/337 and generic iPhone/iPad device build pass with signing disabled. The main simulator build is honestly HOLD because the committed iSH static libraries are iphoneos arm64, exactly as documented in BUILDING.md; this does not block the physical-device build the user will install elsewhere.
+- Secrets scan over the patch found only the deliberate fake bearer in a unit test. Codex switching never mutates official `auth.json`; provider-bound secrets remain encrypted/0600 and transactional backups/rollback stay enabled.
+
+Finish state: PASS for source, full build gates, Android Fold8 Release installs and installed Mac 1.83.0. HOLD is limited to iPhone/iPad physical installation and Apple notarization credentials, both external/device-gated and explicitly documented rather than claimed complete.

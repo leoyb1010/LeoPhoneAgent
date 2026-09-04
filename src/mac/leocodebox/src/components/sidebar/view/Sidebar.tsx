@@ -47,16 +47,16 @@ function Sidebar({
   const { setCurrentProject, mcpServerStatus } = useTaskMaster() as TaskMasterSidebarContext;
   const { tasksEnabled } = useTasksSettings();
   const paletteOps = usePaletteOps();
-  const [localTool, setLocalTool] = useState<'leoapi' | 'feedback' | null>(null);
+  const [localTool, setLocalTool] = useState<'feedback' | null>(null);
   const closeLocalTool = useCallback(() => setLocalTool(null), []);
 
   useEffect(() => {
     const unsubscribe = window.leocodeboxDesktopTools?.onOpenModal((tool) => {
-      if (tool === 'leoapi' || tool === 'feedback') setLocalTool(tool);
+      if (tool === 'feedback') setLocalTool(tool);
     });
     const handleLocalTool = (event: Event) => {
-      const tool = (event as CustomEvent<'leoapi' | 'feedback'>).detail;
-      if (tool === 'leoapi' || tool === 'feedback') setLocalTool(tool);
+      const tool = (event as CustomEvent<'feedback'>).detail;
+      if (tool === 'feedback') setLocalTool(tool);
     };
     window.addEventListener('leocodebox:open-local-tool', handleLocalTool);
     return () => {
@@ -235,7 +235,6 @@ function Sidebar({
           restartRequired={restartRequired}
           onShowVersionModal={() => setShowVersionModal(true)}
           t={t}
-          onShowLeoapi={() => setLocalTool('leoapi')}
           onShowFeedback={() => setLocalTool('feedback')}
         />
       ) : (
@@ -313,7 +312,6 @@ function Sidebar({
             currentVersion={currentVersion}
             onShowVersionModal={() => setShowVersionModal(true)}
             onShowSettings={onShowSettings}
-            onShowLeoapi={() => setLocalTool('leoapi')}
             onShowFeedback={() => setLocalTool('feedback')}
             projectListProps={projectListProps}
             t={t}

@@ -49,3 +49,11 @@
 - Persistent context: session, chosen device, native route and verification result remain visible in the conversation.
 - Recovery: native permission failures stop at an actionable receipt instead of falling through to a model that may guess; update downloads reject missing release digests, wrong package names and mismatched signers.
 - Platform constraint: binary Android changes still use the OS package installer; only signed declarative rules, catalogs and skills qualify as no-install hot updates.
+
+## 2026-09-04 full landing extension
+
+- Outcome: Mac collapses to one task work surface and one settings center; iOS/Android compile ordinary natural language into native system actions with explicit missing-field clarification and verified receipts.
+- Mac first action: remove the visible dashboard, second task composer, duplicate launcher title bar, standalone LeoAPI controls and CodexHost launch card.
+- Natural-language contract: extract action, system object, time/date/timezone, place, people, identifiers, recurrence, reminder offset and payload; never invent missing values; ask one focused question only for essential fields.
+- Cross-platform difference: iOS uses Apple frameworks/App Intents/Shortcuts and never pretends to own arbitrary cross-app Accessibility; Android uses native APIs/Intents before signed rules, Accessibility, vision and Shizuku.
+- Upstream boundary: selectively port OpenMinis 1.13 reliability and data-contract changes. Do not wholesale merge or add a second runtime.

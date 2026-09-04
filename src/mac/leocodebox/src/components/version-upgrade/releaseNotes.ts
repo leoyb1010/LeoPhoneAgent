@@ -17,6 +17,16 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '1.83.0',
+    date: '2026-09-04',
+    items: [
+      '主控台和重复卡片已移除：新任务只从顶部任务坞建立，进入会话后只保留会话自己的输入框。',
+      'LeoAPI 完整并入「设置 → 接口与凭据」：统一管理网关、模型线路、自动上下文保护、健康检测、自动切换和 CC Switch 导入。',
+      'Codex 自定义接口只写 provider 自己的配置与 bearer token，不再覆盖官方 ChatGPT 登录；切换前预览、备份与回滚保留。',
+      '内置 CodexHost 更新到 0.4.4；1024×640 和 1440×960 工作台验证无双层标题栏、无遮挡，新任务和已有会话的输入语义明确分开。',
+    ],
+  },
+  {
     version: '1.82.0',
     date: '2026-09-04',
     items: [

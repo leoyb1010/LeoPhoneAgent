@@ -372,7 +372,7 @@
     "openLeoapi": "Leoapi gateway",
     "openLocalLog": "Local log",
     "goMissions": "Quick tasks",
-    "goConsole": "Vai alla console"
+    "goConsole": "Nuova attività"
   },
   "workbench": {
     "localMachine": "Local · {{name}}",

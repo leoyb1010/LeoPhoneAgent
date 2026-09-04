@@ -50,5 +50,14 @@
 - Signature interaction: every deterministic phone action ends in an “执行凭证” inside the same message, naming the native path, system verification and undo route.
 - Android Treasury: keep only inbox / needs-attention / all in the first filter row; secondary filters live behind one menu. Empty states expose Save and Import instead of leaving the Fold detail pane blank.
 - Android updates: automatic discovery is quiet and battery/network constrained; a notification deep-links to About, where the existing update sheet performs download and install.
-- Mac dashboard: the typed New Task card is the sole task-creation surface. The hero communicates state and device routing but no longer duplicates the primary action.
+- Mac task surface: the dashboard/hero/card grid is removed. A quiet “新任务” canvas plus one Task Dock is the only task-creation surface; an existing session shows only its own composer.
 - Mac context: the existing opt-in local gateway keeps its switch, while safe old-tool-output compaction defaults on within that gateway and is visible in the Leoapi panel.
+
+## 2026-09-04 unified work-surface contract
+
+- Concept spine: one intent enters once, then the selected Agent, project, device and permission boundary stay visible through execution and receipt.
+- First-read object: new task mode reads as one Task Dock; session mode reads as the transcript and its composer. They are never visible together.
+- Spatial thesis: one draggable desktop title bar, one session rail, one main work surface. Device status and settings stay global; provider internals do not.
+- Settings: LeoAPI has no title-bar, launcher or command-palette entry. It lives under “接口与凭据” with provider creation, preview, apply, test, import and rollback.
+- Motion: Quiet. Only state/location continuity uses motion; no dashboard card stagger, metric rolling or decorative pulse remains.
+- Anti-defaults: no dashboard hero, no module-card launcher, no second settings shell, no second task input.

@@ -5,9 +5,12 @@ import com.leoyuan.leophoneagent.logging.AppLogger
 import com.leoyuan.leophoneagent.provider.ModelsDevApi
 
 /**
- * Static catalog of xAI (Grok) models exposed to OAuth users.
- * Mirrors OpenMinis iOS/Android: OAuth model selection must not depend on a
- * CLI-only catalog endpoint that can return a smaller subscription subset.
+ * Built-in xAI (Grok) seed and offline fallback.
+ *
+ * ProviderRepository refreshes from xAI's authenticated /v1/models endpoint
+ * first so new models appear without waiting for an app release. This list
+ * keeps first-run and offline model selection usable when the live endpoint is
+ * unavailable or returns no models for the current subscription.
  */
 object XAIModelsApi {
     private const val TAG = "XAIModelsApi"

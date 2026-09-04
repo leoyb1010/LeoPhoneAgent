@@ -60,6 +60,8 @@ import com.leoyuan.leophoneagent.ui.MinisImageFetcher
 import kotlinx.coroutines.launch
 
 class MinisApp : Application(), ImageLoaderFactory {
+    var dbVersionDecision = com.leoyuan.leophoneagent.data.db.DatabaseVersionGuard.Decision.PROCEED
+        private set
     lateinit var database: AppDatabase
         private set
     lateinit var chatRepository: ChatRepository
@@ -287,6 +289,11 @@ class MinisApp : Application(), ImageLoaderFactory {
         // unstuck on the next launch.
         com.leoyuan.leophoneagent.diagnostics.HangDetector.start(this)
 
+        dbVersionDecision = com.leoyuan.leophoneagent.data.db.DatabaseVersionGuard.evaluate(this)
+        if (dbVersionDecision == com.leoyuan.leophoneagent.data.db.DatabaseVersionGuard.Decision.SHOW_NEWER_DB_GUIDANCE) {
+            Log.w("MinisApp", "newer database detected; leaving it untouched")
+            return
+        }
         database = AppDatabase.getInstance(this)
         chatRepository = ChatRepository(database.chatDao())
         providerRepository = ProviderRepository(this)

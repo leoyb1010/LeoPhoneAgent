@@ -11,6 +11,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import com.leoyuan.leophoneagent.accessibility.MinisAccessibilityService
 import com.leoyuan.leophoneagent.accessibility.NodeRegistry
 import com.leoyuan.leophoneagent.accessibility.AccessibilityRecoveryManager
+import com.leoyuan.leophoneagent.accessibility.RestrictedSettingsManager
 import com.leoyuan.leophoneagent.logging.AppLogger
 import com.leoyuan.leophoneagent.sandbox.NativeOffloadHandler
 import com.leoyuan.leophoneagent.sandbox.NativeOffloadRequest
@@ -111,10 +112,15 @@ First-run: enable "LeoPhoneAgent" under Settings → Accessibility, then `servic
                     AccessibilityRecoveryManager.ensureUsable(context)
                 }
                 if (!recovered) {
+                    val restricted = RestrictedSettingsManager.isRestricted(context)
                     return err(
                         args,
                         "SERVICE_NOT_RUNNING",
-                        "Accessibility is not connected. If the app was force-stopped, re-enable LeoPhoneAgent in Settings → Accessibility; Power can restore it automatically when Shizuku is authorized.",
+                        if (restricted) {
+                            "Android blocked Accessibility as a restricted setting for this sideloaded install. Open App info → ⋮ → Allow restricted settings, then enable LeoPhoneAgent; Power can clear the block when Shizuku is authorized."
+                        } else {
+                            "Accessibility is not connected. If the app was force-stopped, re-enable LeoPhoneAgent in Settings → Accessibility; Power can restore it automatically when Shizuku is authorized."
+                        },
                         exit = 77,
                     )
                 }
@@ -172,11 +178,14 @@ First-run: enable "LeoPhoneAgent" under Settings → Accessibility, then `servic
                         put("retrieveWindowContent"); put("performGestures"); put("watchEvents")
                     })
                     .put("androidVersion", android.os.Build.VERSION.SDK_INT)
+                    .put("restrictedSettings", RestrictedSettingsManager.isRestricted(context))
                 ok(args, data)
             }
             "ping" -> {
                 if (MinisAccessibilityService.getInstance() != null)
                     NativeOffloadResult(0, "✓ Accessibility service is running\n")
+                else if (RestrictedSettingsManager.isRestricted(context))
+                    NativeOffloadResult(77, "✗ Android blocked Accessibility as a restricted setting. Open App info → ⋮ → Allow restricted settings first.\n")
                 else
                     NativeOffloadResult(77, "✗ Accessibility service is not running — go to Settings → Accessibility → LeoPhoneAgent to enable\n")
             }

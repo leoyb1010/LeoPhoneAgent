@@ -1481,6 +1481,14 @@
     <string name="system_permissions_a11y_enabled">已启用，android-a11y-cli 可以使用</string>
     <string name="system_permissions_a11y_disabled">未启用，点击前往系统设置</string>
     <string name="system_permissions_a11y_footer">android-a11y-cli 需要此权限读取界面树、注入手势和监听事件。未启用时，AI Agent 无法操作其他 App。请在下一页打开 LeoPhoneAgent 的开关。</string>
+    <string name="system_permissions_a11y_restricted_header">安卓已限制无障碍权限</string>
+    <string name="system_permissions_a11y_restricted_footer">从浏览器或文件管理器安装 APK 后，Android 会限制敏感权限。先允许受限设置，再开启无障碍。</string>
+    <string name="system_permissions_a11y_restricted_shizuku">用 Shizuku 解除限制</string>
+    <string name="system_permissions_a11y_restricted_shizuku_sub">使用已授权的 Power 通道，完成后自动校验</string>
+    <string name="system_permissions_a11y_restricted_working">正在解除并校验…</string>
+    <string name="system_permissions_a11y_restricted_failed">解除失败，请使用下方手动方式</string>
+    <string name="system_permissions_a11y_restricted_manual">打开应用信息允许受限设置</string>
+    <string name="system_permissions_a11y_restricted_manual_sub">点右上角 ⋮，选择「允许受限设置」，返回后再启用无障碍</string>
     <string name="voice_input_picker_title">语音输入</string>
     <string name="voice_input_picker_done">完成</string>
     <string name="voice_input_picker_groups">模型组</string>
@@ -1777,7 +1785,7 @@
     <string name="whats_new_title">本次更新（%1$s）</string>
     <string name="whats_new_heading">本次更新</string>
     <string name="whats_new_confirm">知道了</string>
-    <string name="whats_new_current">• 手机原生动作现在会返回执行凭证，写清使用路径、系统核对和撤销方式；权限失败会安全停止，不再交给模型猜测。\n• 每天仅在网络可用且电量充足时自动检查一次更新；APK 必须同时通过 GitHub Release SHA-256、包名和当前安装签名校验，才会打开系统安装器。\n• 修复 Android Alpha 版本比较，alpha.24 现在能正确发现 alpha.25；同仓库的 iOS 和 Mac Release 不会再干扰。\n• 藏宝阁主筛选收束为收件箱、需要处理和全部，其余收入更多筛选；封面屏和展开屏空状态都提供真实的收进来与导入操作。</string>
+    <string name="whats_new_current">• Grok OAuth 会先刷新令牌并读取 xAI 实时模型目录，网络不可用时才回退到完整内置列表。\n• 自然语言提醒、日历和出行可理解明天、后天、月日、周几和几天后；必要信息缺失时只询问一次，不猜测。\n• 长文本粘贴不再撑爆输入框，超大文本自动变成可预览附件；进程中断后未回复的消息可继续。\n• 侧载 APK 导致无障碍被限制时，权限页会说明原因；Power 可通过已授权的 Shizuku 解除并回读校验。</string>
     <string name="whats_new_scroll_hint">向上滑动查看完整更新内容</string>
     <string name="artifact_ready">交付物已就绪</string>
     <string name="artifact_open">打开交付物</string>
@@ -1883,4 +1891,8 @@
     <string name="treasury_error_network">已在本机保存，网络增强暂时不可用。</string>
     <string name="treasury_error_interrupted">处理曾被中断，可以重试。</string>
     <string name="treasury_error_generic">原内容已安全保存，但增强处理失败。</string>
+    <string name="newer_db_title">这份数据来自更新的 LeoPhoneAgent</string>
+    <string name="newer_db_body">会话数据仍然完好。当前版本无法安全打开更新的数据库，请安装最新版后重新打开。</string>
+    <string name="newer_db_versions">当前版本支持数据库版本 %1$d。</string>
+    <string name="newer_db_exit">不修改数据并退出</string>
 </resources>

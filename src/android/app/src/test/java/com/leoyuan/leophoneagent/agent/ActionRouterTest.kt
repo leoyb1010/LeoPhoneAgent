@@ -4,8 +4,16 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.LocalDate
 
 class ActionRouterTest {
+    @Test fun `relative calendar phrases resolve without model guessing`() {
+        val monday = LocalDate.of(2026, 9, 7)
+        assertEquals(11, ActionRouter.dayOffset("9月18日", monday))
+        assertEquals(4, ActionRouter.dayOffset("周五", monday))
+        assertEquals(11, ActionRouter.dayOffset("下周五", monday))
+        assertEquals(3, ActionRouter.dayOffset("3天后", monday))
+    }
     @Test
     fun nativeReceiptNamesPathVerificationAndUndo() {
         val route = ActionRouter.Decision(
@@ -110,7 +118,12 @@ class ActionRouterTest {
         assertEquals("call mom", enTodo.label)
 
         assertEquals(ActionRouter.Path.Agent, ActionRouter.decide("手电筒坏了怎么办", 0).path)
-        assertEquals(ActionRouter.Path.Agent, ActionRouter.decide("帮我记一下今天的会", 0).path)
+        val natural = ActionRouter.decide("提醒我后天下午3点去医院复诊", 0)
+        assertEquals(ActionRouter.Kind.CreateTodo, natural.kind)
+        assertEquals(ActionRouter.Path.Native, natural.path)
+        assertEquals(15, natural.hour)
+        assertEquals(2, natural.effectiveDayOffset)
+        assertEquals("去医院复诊", natural.label)
     }
 
     @Test
@@ -150,5 +163,22 @@ class ActionRouterTest {
         assertEquals("北京", result.location)
         assertTrue(result.notes.contains("G1234"))
         assertTrue(result.notes.contains("12A"))
+    }
+
+    @Test
+    fun travelDoesNotRequireOptionalTicketFieldsUnlessUserNamesThem() {
+        val result = ActionRouter.decide("帮我记下明天早上8点去机场的行程", 0)
+        assertEquals(ActionRouter.Path.Native, result.path)
+        assertEquals(ActionRouter.Kind.CreateTravel, result.kind)
+        assertEquals("机场", result.location)
+        assertTrue(result.missingFields.isEmpty())
+    }
+
+    @Test
+    fun calendarWithoutTimeClarifiesInsteadOfFallingThroughToModel() {
+        val result = ActionRouter.decide("把明天产品评审加到日历", 0)
+        assertEquals(ActionRouter.Path.Clarify, result.path)
+        assertEquals(ActionRouter.Kind.CreateCalendar, result.kind)
+        assertEquals(listOf("开始时间"), result.missingFields)
     }
 }

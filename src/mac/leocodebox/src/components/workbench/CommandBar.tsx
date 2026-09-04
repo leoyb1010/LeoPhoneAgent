@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FolderOpen } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { cn } from '../../lib/utils';
@@ -13,7 +14,7 @@ import { FALLBACK_PERMISSION_MODES } from '../chat/constants/providerPermissions
 import type { LLMProvider, Project } from '../../types/app';
 
 import ChipMenu from './ChipMenu';
-import { announceAgentIntent, commitAgentForNewSession, resolveCommandBarAgent } from './agentIntent';
+import { announceAgentIntent, commitAgentForNewSession } from './agentIntent';
 import { useLocalAgents } from './useLocalAgents';
 import { isMachineOnline, isMinisBody, type FleetMachine } from './useFleetSnapshot';
 
@@ -50,37 +51,23 @@ type CommandBarProps = {
   project: Project | null;
   localName: string;
   remotes: FleetMachine[];
-  /** 当前选中会话建会话时定下的 Agent;没有选中会话时为 null。 */
-  sessionProvider: string | null;
   onOpenAgentSettings: () => void;
-  /** 回主控台 —— 锁住的 Agent 芯片点下去就去那儿换。 */
-  onOpenConsole: () => void;
+  onOpenProjects: () => void;
   onStartLocalRun: (prompt: string) => void;
   onStartRemoteRun: (machine: FleetMachine, prompt: string, provider: string, effort: string) => Promise<boolean>;
 };
 
 /**
- * 指挥条 —— 一条 820px 的悬浮条:选谁(Agent)、在哪(@目标)、用什么授权
+ * 唯一任务坞 —— 只在“新任务”表面出现:选谁(Agent)、在哪(@目标)、用什么授权
  * (权限模式)、想多深(推理强度)、干什么(输入框),回车就跑。
- *
- * ── Agent 芯片:为什么在会话里是锁的(方案 b) ───────────────────
- * 这条指挥条常驻在最上面,而它下面可能是主控台(还没有会话),也可能是一个
- * **建会话时就把 Agent 定死了**的已有会话。同一个下拉在两种语境下含义不同,
- * 就是歧义本身:在会话里点它,看起来像"把这个会话换成 Codex",实际上只改了
- * 一个全局默认值 —— 于是"芯片写着 Codex、发出去还是 Claude"。
- *
- * 收敛方式:**选中了会话 → 芯片只显示该会话的 Agent,不可选**,点它回主控台
- * 开新任务;**没有选中会话(主控台 / 新会话)→ 芯片才是选择器**,这时候
- * "选 Agent"只有一种意思:下一个新会话用它。判据抽在 resolveCommandBarAgent。
- * 权限模式与推理强度也跟着这个"当前生效的 Agent"走,不再按全局默认置灰。
+ * 已有会话只显示会话自己的 composer,因此整个窗口任何时刻只有一个提交输入框。
  */
 export default function CommandBar({
   project,
   localName,
   remotes,
-  sessionProvider,
   onOpenAgentSettings,
-  onOpenConsole,
+  onOpenProjects,
   onStartLocalRun,
   onStartRemoteRun,
 }: CommandBarProps) {
@@ -92,12 +79,7 @@ export default function CommandBar({
   const [effort, setEffort] = useState(DEFAULT_EFFORT_VALUE);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const resolvedAgent = resolveCommandBarAgent({
-    sessionProvider,
-    preferredProvider: preferences.defaultProvider,
-  });
-  const provider = resolvedAgent.provider as LLMProvider;
-  const agentLocked = resolvedAgent.locked;
+  const provider = preferences.defaultProvider as LLMProvider;
   const permission = (preferences.permissionMode ?? 'default') as PermissionMode;
   const permissionMeta = PERMISSION_MODES.find((mode) => mode.id === permission) ?? PERMISSION_MODES[0];
   const agentLabel = PROVIDER_LABEL[provider] ?? provider;
@@ -161,7 +143,7 @@ export default function CommandBar({
     // 先交出 Agent,再开会话。芯片上的选择和会话真正用的 provider 是两份状态,
     // 只靠这条通道对齐;在会话之间点选过之后,之前那次宣告已经被会话跟随逻辑冲掉,
     // 不重新交一次就会拿上一个会话的 provider 建新会话(= 选了 Codex 仍然走 Claude)。
-    // 用 commit 而不是只 announce:从主控台按回车时 ChatInterface 还没挂载,事件
+    // 用 commit 而不是只 announce:从新任务页按回车时 ChatInterface 还没挂载,事件
     // 没人听得见,得同时落到它挂载时读的那把钥匙上(见 agentIntent.ts)。
     commitAgentForNewSession(provider, effort);
     onStartLocalRun(prompt);
@@ -182,50 +164,32 @@ export default function CommandBar({
   return (
     <div className="relative z-30 flex flex-none justify-center pt-4">
       <div className="wb-command-bar flex h-14 w-[820px] max-w-[calc(100vw-48px)] items-center gap-2 rounded-[17px] pl-3 pr-2.5">
-        {agentLocked ? (
-          <Tooltip
-            content={t('workbench.agentLockedTooltip', { defaultValue: '这个会话建立时就用的它,换 Agent 请回主控台开新任务' })}
-            position="bottom"
-          >
+        <ChipMenu
+          value={provider}
+          onSelect={(next) => void updatePreferences({ defaultProvider: next as LLMProvider })}
+          tooltip={t('workbench.agentTooltip', { defaultValue: '为新任务选择 Agent' })}
+          ariaLabel={t('workbench.agentTooltip', { defaultValue: '为新任务选择 Agent' })}
+          className="wb-agent-button h-9 gap-[7px] rounded-[10px] px-2.5"
+          menuClassName="w-60"
+          options={agents.map((agent) => ({
+            value: agent.provider,
+            label: agent.label,
+            desc: agent.status,
+            icon: <SessionProviderLogo provider={agent.provider} className="h-[15px] w-[15px] flex-none" />,
+          }))}
+          footer={
             <button
               type="button"
-              onClick={onOpenConsole}
-              aria-label={t('workbench.agentLockedLabel', { agent: agentLabel, defaultValue: `本会话的 Agent:${agentLabel}` })}
-              className="wb-chip-button wb-agent-button h-9 gap-[7px] rounded-[10px] px-2.5"
+              onClick={onOpenAgentSettings}
+              className="mx-1.5 mb-0.5 mt-1.5 block w-[calc(100%-12px)] cursor-pointer border-t border-border bg-transparent pt-1.5 text-left text-[9.5px] text-wb-faint hover:text-muted-foreground"
             >
-              <SessionProviderLogo provider={provider} className="h-[17px] w-[17px]" />
-              <span className="text-xs font-semibold text-foreground">{agentLabel}</span>
-              <span aria-hidden className="text-[9px] text-wb-faint">{t('workbench.agentLockedMark', { defaultValue: '本会话' })}</span>
+              {t('workbench.agentMenuFooter', { defaultValue: '安装 / 更新 / 登录 → 设置 · 模型与智能体' })}
             </button>
-          </Tooltip>
-        ) : (
-          <ChipMenu
-            value={provider}
-            onSelect={(next) => void updatePreferences({ defaultProvider: next as LLMProvider })}
-            tooltip={t('workbench.agentTooltip', { defaultValue: '为下一个新会话选 Agent' })}
-            ariaLabel={t('workbench.agentTooltip', { defaultValue: '为下一个新会话选 Agent' })}
-            className="wb-agent-button h-9 gap-[7px] rounded-[10px] px-2.5"
-            menuClassName="w-60"
-            options={agents.map((agent) => ({
-              value: agent.provider,
-              label: agent.label,
-              desc: agent.status,
-              icon: <SessionProviderLogo provider={agent.provider} className="h-[15px] w-[15px] flex-none" />,
-            }))}
-            footer={
-              <button
-                type="button"
-                onClick={onOpenAgentSettings}
-                className="mx-1.5 mb-0.5 mt-1.5 block w-[calc(100%-12px)] cursor-pointer border-t border-border bg-transparent pt-1.5 text-left text-[9.5px] text-wb-faint hover:text-muted-foreground"
-              >
-                {t('workbench.agentMenuFooter', { defaultValue: '安装 / 更新 / 登录 → 设置 · 本机智能体' })}
-              </button>
-            }
-          >
-            <SessionProviderLogo provider={provider} className="h-[17px] w-[17px]" />
-            <span className="text-xs font-semibold text-foreground">{agentLabel}</span>
-          </ChipMenu>
-        )}
+          }
+        >
+          <SessionProviderLogo provider={provider} className="h-[17px] w-[17px]" />
+          <span className="text-xs font-semibold text-foreground">{agentLabel}</span>
+        </ChipMenu>
 
         <input
           ref={inputRef}
@@ -247,6 +211,18 @@ export default function CommandBar({
           }
           className="min-w-0 flex-1 border-none bg-transparent font-sans text-[15px] text-foreground outline-none placeholder:text-wb-faint disabled:cursor-not-allowed"
         />
+
+        <Tooltip content={project?.fullPath || t('workbench.pickProject', { defaultValue: '选择任务项目' })} position="bottom">
+          <button
+            type="button"
+            onClick={onOpenProjects}
+            aria-label={t('workbench.pickProject', { defaultValue: '选择任务项目' })}
+            className="wb-chip-button h-[26px] max-w-[170px] gap-1.5 rounded-lg px-2.5 text-[10.5px]"
+          >
+            <FolderOpen className="h-3 w-3 flex-none" />
+            <span className="truncate">{project?.displayName || t('workbench.noProject', { defaultValue: '选项目' })}</span>
+          </button>
+        </Tooltip>
 
         <ChipMenu
           value={target}

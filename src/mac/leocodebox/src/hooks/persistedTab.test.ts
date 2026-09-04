@@ -48,10 +48,10 @@ test('真下线的页签仍然不合法', () => {
   assert.equal(isValidTab('missions'), false);
 });
 
-test('主控台不在页签栏里,但必须能被持久化 —— 它是这个外壳的落地页', () => {
+test('新任务表面不在页签栏里,但必须能被持久化', () => {
   // dashboard 不由 TabSwitcher 渲染(MainContent 在它那个分支直接接管整块主区),
-  // 所以上面那条"页签栏 ↔ 白名单"的对照抓不到它。这里单独钉住:它是「选 Agent
-  // 开新任务」唯一不产生歧义的落点,重启后被判非法弹回聊天就等于把入口弄丢了。
-  assert.ok(!declaredBuiltInTabs().includes('dashboard'), '主控台不该出现在项目页签栏里');
+  // 所以上面那条"页签栏 ↔ 白名单"的对照抓不到它。内部值继续叫 dashboard 只为
+  // 兼容旧 localStorage；可见产品只称“新任务”。
+  assert.ok(!declaredBuiltInTabs().includes('dashboard'), '新任务表面不该出现在项目页签栏里');
   assert.equal(isValidTab('dashboard'), true);
 });

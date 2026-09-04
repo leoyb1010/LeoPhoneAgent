@@ -34,6 +34,7 @@ import com.leoyuan.leophoneagent.data.model.LLMModel
 import com.leoyuan.leophoneagent.data.model.LLMStreamChunk
 import com.leoyuan.leophoneagent.data.model.LLMUsage
 import com.leoyuan.leophoneagent.data.model.ModelGroup
+import com.leoyuan.leophoneagent.data.model.RoutingStrategy
 import com.leoyuan.leophoneagent.data.model.ThinkingLevel
 import com.leoyuan.leophoneagent.R
 import com.leoyuan.leophoneagent.data.repository.ChatRepository
@@ -637,6 +638,26 @@ class ChatViewModel(
 
     internal val _attachments = MutableStateFlow<List<InputAttachment>>(emptyList())
     val attachments: StateFlow<List<InputAttachment>> = _attachments.asStateFlow()
+
+    /** Stores a very large paste as a normal previewable text attachment. */
+    fun stashPastedTextAsFile(text: String): InputAttachment? {
+        val dir = java.io.File(context.cacheDir, "pasted_text").apply { mkdirs() }
+        val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US)
+            .format(java.util.Date())
+        val name = "Pasted_$stamp-${java.util.UUID.randomUUID().toString().take(8)}.txt"
+        val file = java.io.File(dir, name)
+        return runCatching {
+            file.writeText(text)
+            InputAttachment(
+                fileName = name,
+                uri = android.net.Uri.fromFile(file),
+                mimeType = "text/plain",
+                kind = InputAttachment.Kind.DOCUMENT,
+            ).also(::addAttachment)
+        }.onFailure {
+            AppLogger.warning(TAG, "[Paste] failed to store oversized paste: ${it.message}")
+        }.getOrNull()
+    }
 
     /**
      * One-shot composer-side image-budget events (T-imgsize). Emitted by
@@ -1489,7 +1510,7 @@ class ChatViewModel(
             com.leoyuan.leophoneagent.agent.ActionRouter.Kind.CreateCalendar -> {
                 val hh = route.hour ?: return@withContext null
                 val mm = route.minute ?: return@withContext null
-                val start = calendarIso(hh, mm, route.tomorrow)
+                val start = calendarIso(hh, mm, route.effectiveDayOffset)
                 val ok = offload.invoke(
                     "android-calendar",
                     buildList {
@@ -1504,7 +1525,7 @@ class ChatViewModel(
             com.leoyuan.leophoneagent.agent.ActionRouter.Kind.CreateTravel -> {
                 val hh = route.hour ?: return@withContext null
                 val mm = route.minute ?: return@withContext null
-                val start = calendarIso(hh, mm, route.tomorrow)
+                val start = calendarIso(hh, mm, route.effectiveDayOffset)
                 val calendar = offload.invoke(
                     "android-calendar",
                     buildList {
@@ -1517,7 +1538,7 @@ class ChatViewModel(
                 com.leoyuan.leophoneagent.agent.FastLocalActions.addTodo(
                     context,
                     route.label,
-                    calendarEpochMs(hh, mm, route.tomorrow),
+                    calendarEpochMs(hh, mm, route.effectiveDayOffset),
                     route.notes,
                 )
                 // Android has no universal Tasks provider; the app owns the
@@ -1535,7 +1556,10 @@ class ChatViewModel(
                 } else failed("请确认设备有闪光灯并允许相机访问")
             }
             com.leoyuan.leophoneagent.agent.ActionRouter.Kind.CreateTodo -> {
-                if (com.leoyuan.leophoneagent.agent.FastLocalActions.addTodo(context, route.label)) {
+                val dueAt = if (route.hour != null && route.minute != null) {
+                    calendarEpochMs(route.hour, route.minute, route.effectiveDayOffset)
+                } else null
+                if (com.leoyuan.leophoneagent.agent.FastLocalActions.addTodo(context, route.label, dueAt, route.notes)) {
                     success()
                 } else failed("请稍后重试，待办没有写入")
             }
@@ -1563,18 +1587,18 @@ class ChatViewModel(
         }
     }
 
-    private fun calendarIso(hour: Int, minute: Int, tomorrow: Boolean): String {
+    private fun calendarIso(hour: Int, minute: Int, dayOffset: Int): String {
         val cal = java.util.Calendar.getInstance()
-        if (tomorrow) cal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+        if (dayOffset > 0) cal.add(java.util.Calendar.DAY_OF_YEAR, dayOffset)
         cal.set(java.util.Calendar.HOUR_OF_DAY, hour)
         cal.set(java.util.Calendar.MINUTE, minute)
         cal.set(java.util.Calendar.SECOND, 0)
         return java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm", java.util.Locale.US).format(cal.time)
     }
 
-    private fun calendarEpochMs(hour: Int, minute: Int, tomorrow: Boolean): Long {
+    private fun calendarEpochMs(hour: Int, minute: Int, dayOffset: Int): Long {
         val cal = java.util.Calendar.getInstance()
-        if (tomorrow) cal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+        if (dayOffset > 0) cal.add(java.util.Calendar.DAY_OF_YEAR, dayOffset)
         cal.set(java.util.Calendar.HOUR_OF_DAY, hour)
         cal.set(java.util.Calendar.MINUTE, minute)
         cal.set(java.util.Calendar.SECOND, 0)
@@ -3132,8 +3156,8 @@ class ChatViewModel(
                     _activeEntryId.value = entry.id
                     val instance = providerRepository.instance(entry.providerInstanceId)
                     if (instance != null) {
-                        val apiKey = providerRepository.loadApiKey(instance.id)
-                        if (apiKey != null) {
+                        if (providerRepository.hasAnyCredential(instance)) {
+                            val apiKey = providerRepository.usableApiKey(instance) ?: ""
                             currentProvider = ProviderFactory.create(instance, apiKey, entry.model, context)
                             _providerName.value = instance.label.ifEmpty { entry.model.provider }
                             resolved = true
@@ -3347,8 +3371,8 @@ class ChatViewModel(
             }
 
             // Cold-start interrupt detection: an agent loop that was killed by
-            // the OS (or app force-quit) leaves agentHistory in one of three
-            // tell-tale shapes. Detecting any of them lets the user tap
+            // the OS (or app force-quit) leaves agentHistory in a recoverable
+            // tail shape. Detecting it lets the user tap
             // Resume to pick up where the model left off — the in-memory
             // [_canResume] flag set by [handleUserCancelledCleanup] is lost
             // across cold starts so we have to re-derive it from the DB.
@@ -3360,27 +3384,12 @@ class ChatViewModel(
             //   Case C: last entry is user with the synthetic "Continue"
             //           reminder text — text-cancel handler committed it
             //           but [resume] never re-entered the agent loop.
+            //   Case D: a real user turn was persisted but no assistant row
+            //           was ever written (process death or first-call error).
             val lastEntry = agentHistory.lastOrNull()
-            if (lastEntry != null && !_isStreaming.value) {
-                val isInterrupted = when (lastEntry.role) {
-                    LLMMessage.Role.USER -> {
-                        val parts = lastEntry.contentParts
-                        val allToolResults = parts.isNotEmpty() &&
-                            parts.all { it is AgentContentPart.ToolResult }
-                        val isContinueReminder = parts.size == 1 &&
-                            (parts.first() as? AgentContentPart.Text)?.text
-                                ?.contains("The user stopped the previous response") == true
-                        allToolResults || isContinueReminder
-                    }
-                    LLMMessage.Role.ASSISTANT -> {
-                        lastEntry.contentParts.any { it is AgentContentPart.ToolUse }
-                    }
-                    else -> false
-                }
-                if (isInterrupted) {
-                    _canResume.value = true
-                    Log.i(TAG, "loadSession: detected interrupted agent loop, canResume=true (lastRole=${lastEntry.role})")
-                }
+            if (!_isStreaming.value && com.leoyuan.leophoneagent.agent.InterruptedTailDetector.isInterrupted(lastEntry)) {
+                _canResume.value = true
+                Log.i(TAG, "loadSession: detected interrupted agent loop, canResume=true (shape=${com.leoyuan.leophoneagent.agent.InterruptedTailDetector.classify(lastEntry)})")
             }
             } finally {
                 // T201: open the gate even on early `return@launch` (draft path,
@@ -3671,7 +3680,8 @@ class ChatViewModel(
                     val entryId = obj.optString("entryId").takeIf { it.isNotEmpty() } ?: return false
                     val entry = providerRepository.config.value.modelEntries.find { it.id == entryId } ?: return false
                     val instance = providerRepository.instance(entry.providerInstanceId) ?: return false
-                    val apiKey = providerRepository.loadApiKey(instance.id) ?: return false
+                    if (!providerRepository.hasAnyCredential(instance)) return false
+                    val apiKey = providerRepository.usableApiKey(instance) ?: ""
                     currentModel = entry.model
                     _modelName.value = entry.model.displayName
                     _providerName.value = instance.label.ifEmpty { entry.model.provider }
@@ -3709,15 +3719,17 @@ class ChatViewModel(
         // this entry inside the group last time"). Honor it only if the
         // entry is still enabled; otherwise fall back to the first enabled
         // member so the session can still proceed on a now-degraded group.
-        val enabledMembers = providerRepository.enabledMemberEntries(group)
+        val enabledMembers = providerRepository.availableMemberEntries(group)
         if (enabledMembers.isEmpty()) return false
-        val targetEntry = if (preferredEntryId != null) {
-            enabledMembers.firstOrNull { it.id == preferredEntryId } ?: enabledMembers.first()
-        } else {
-            enabledMembers.first()
-        }
+        val targetEntry = enabledMembers.firstOrNull { it.id == preferredEntryId }
+            ?: when (group.strategy) {
+                RoutingStrategy.fallback -> enabledMembers.first()
+                RoutingStrategy.loadBalance -> enabledMembers[
+                    Math.floorMod(realSessionId.ifEmpty { sessionId }.hashCode(), enabledMembers.size),
+                ]
+            }
         val instance = providerRepository.instance(targetEntry.providerInstanceId) ?: return false
-        val apiKey = providerRepository.loadApiKey(instance.id) ?: return false
+        val apiKey = providerRepository.usableApiKey(instance) ?: ""
 
         currentModel = targetEntry.model
         _activeCliToolId.value = null
@@ -3805,10 +3817,9 @@ class ChatViewModel(
         _modelName.value = entry.model.displayName
         _activeEntryId.value = entry.id
         _providerName.value = instance.label.ifEmpty { entry.model.provider }
-        val apiKey = providerRepository.loadApiKey(instance.id)
-        if (apiKey != null) {
-            currentProvider = ProviderFactory.create(instance, apiKey, entry.model, context)
-        }
+        if (!providerRepository.hasAnyCredential(instance)) return false
+        val apiKey = providerRepository.usableApiKey(instance) ?: ""
+        currentProvider = ProviderFactory.create(instance, apiKey, entry.model, context)
         return true
     }
 
@@ -3817,7 +3828,8 @@ class ChatViewModel(
         val config = providerRepository.config.value
         val entry = config.modelEntries.find { it.id == entryId } ?: return
         val instance = providerRepository.instance(entry.providerInstanceId) ?: return
-        val apiKey = providerRepository.loadApiKey(instance.id) ?: return
+        if (!providerRepository.hasAnyCredential(instance)) return
+        val apiKey = providerRepository.usableApiKey(instance) ?: ""
 
         currentModel = entry.model
         _activeCliToolId.value = null
@@ -3897,7 +3909,8 @@ class ChatViewModel(
             val entry = config.modelEntries.find { it.id == entryId } ?: continue
             val instance = config.instances.find { it.id == entry.providerInstanceId } ?: continue
             if (!instance.isEnabled) continue
-            val apiKey = providerRepository.loadApiKey(instance.id) ?: continue
+            if (!providerRepository.hasAnyCredential(instance)) continue
+            val apiKey = providerRepository.usableApiKey(instance) ?: ""
             val p = try {
                 ProviderFactory.create(instance, apiKey, entry.model, context)
             } catch (_: Exception) { continue }
@@ -3926,7 +3939,7 @@ class ChatViewModel(
             val reason = when {
                 entry.isHidden -> "Hidden"
                 !instance.isEnabled -> "Disabled"
-                providerRepository.loadApiKey(instance.id) == null -> "Not logged in"
+                !providerRepository.hasAnyCredential(instance) -> "Not logged in"
                 else -> continue
             }
             result.add("⚠️ ${entry.model.displayName} ($label): $reason")
@@ -3954,7 +3967,8 @@ class ChatViewModel(
             // get picked up. buildFallbackProviders already does this; the
             // single-step variant here had the same bug.
             if (!instance.isEnabled) continue
-            val apiKey = providerRepository.loadApiKey(instance.id) ?: continue
+            if (!providerRepository.hasAnyCredential(instance)) continue
+            val apiKey = providerRepository.usableApiKey(instance) ?: ""
 
             currentModel = entry.model
             _modelName.value = entry.model.displayName
@@ -8458,7 +8472,10 @@ Tool call style:
 - Narrate only when it helps: multi-step work, complex problems, sensitive actions, or when the user explicitly asks.
 - Keep narration brief and value-dense; avoid repeating obvious steps.
 - When a tool exists for an action, use it directly instead of explaining what you plan to do or asking the user to confirm.
-- Use reasonable defaults and contextual inference to fill in missing details (e.g. 'tonight' means today, 'remind me' implies creating a reminder immediately). Only ask for clarification when genuinely ambiguous.
+- For every device/system intent, first extract the action, target app/object, date/time/timezone, location, people, identifiers, recurrence, reminder offset, and payload. Preserve every value the user supplied; never invent a train number, seat, address, contact, time, or app state.
+- Ask one concise clarification only when an essential field is missing. Safe semantic defaults are allowed only when they cannot change the user's meaning (for example, an undated reminder when no time was requested).
+- Route in this order: Android framework/Intent/AppFunction → signed app rule → Accessibility tree → screenshot/vision fallback → Shizuku. Do not use GUI automation when a native tool can complete and verify the action.
+- A successful command is not sufficient proof. Read back the created system object or verify the resulting UI/state when the platform supports it. If verification is unavailable, say so explicitly; never claim success from a guessed state.
 
 Tone and style:
 - Reply in the language that best matches the user's input. Only switch languages when the user explicitly asks.
@@ -9223,7 +9240,8 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         // every member sits behind a disabled provider.
         val entry = providerRepository.resolveTitleSubEntry() ?: return null
         val instance = providerRepository.instance(entry.providerInstanceId) ?: return null
-        var apiKey = providerRepository.loadApiKey(instance.id) ?: return null
+        if (!providerRepository.hasAnyCredential(instance)) return null
+        var apiKey = providerRepository.usableApiKey(instance) ?: ""
 
         // [T-android-titlegen-oauth-refresh] Refresh the OAuth token before
         // building the provider — matches the manual Regenerate path

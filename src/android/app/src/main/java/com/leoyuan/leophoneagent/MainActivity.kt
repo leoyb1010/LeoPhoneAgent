@@ -202,6 +202,18 @@ class MainActivity : ComponentActivity() {
             return
         }
 
+        val launchApp = application as? MinisApp
+        if (launchApp?.dbVersionDecision ==
+            com.leoyuan.leophoneagent.data.db.DatabaseVersionGuard.Decision.SHOW_NEWER_DB_GUIDANCE
+        ) {
+            setContent {
+                com.leoyuan.leophoneagent.ui.NewerDatabaseGuidanceScreen(
+                    onExit = { finishAndRemoveTask() },
+                )
+            }
+            return
+        }
+
         // T166: if we were killed by LMK while the user was inside a
         // chat, restore the sessionId now so the synthesised deep-link
         // re-opens it before any composable is composed. ChatViewModel

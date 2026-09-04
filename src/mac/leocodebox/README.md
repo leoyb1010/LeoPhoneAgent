@@ -157,7 +157,7 @@ leocodebox 以 **AGPL-3.0-or-later** 分发。
 
 ### CodexHost 原生 Harness 模式
 
-1.79.0 起随包内置 [CodexHost 0.3.5](https://github.com/BytePioneer-AI/codex-host) 的官方完整载荷；
+1.83.0 起随包内置 [CodexHost 0.4.4](https://github.com/BytePioneer-AI/codex-host) 的官方完整载荷；
 1.80.0 起主控台直接显示独立 CodexHost 工作台卡片。点「打开 CodexHost」，即可在 Codex Desktop 中使用 Pi、
 Oh My Pi、Claude Code、Grok Build 与 DeepSeek Harness；流式输出、工具状态、Diff、审批、
 Usage、Fork、上下文压缩和斜杠命令由各 Harness 原生适配器投影，不退化成通用聊天协议。

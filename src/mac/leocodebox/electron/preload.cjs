@@ -118,7 +118,6 @@ if (isFirstPartyShellLocation(window.location)) {
     copyLocalWebUrl: () => ipcRenderer.invoke('leocodebox-desktop:copy-local-web-url'),
     getState: () => ipcRenderer.invoke('leocodebox-desktop:get-state'),
     openLocal: () => ipcRenderer.invoke('leocodebox-desktop:open-local'),
-    openSwitch: () => ipcRenderer.invoke('leocodebox-desktop:open-switch'),
     openLocalWebUi: () => ipcRenderer.invoke('leocodebox-desktop:open-local-web-ui'),
     refreshActiveTab: () => ipcRenderer.invoke('leocodebox-desktop:reload-active-tab'),
     showEnvironmentPicker: () => ipcRenderer.invoke('leocodebox-desktop:show-environment-picker'),

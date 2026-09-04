@@ -651,6 +651,7 @@ struct AIChatView: View {
                                         .offset(x: 8, y: -6)
                                 }
                         }
+                        .keyboardShortcut("o", modifiers: [.command, .shift])
                         .accessibilityLabel(Text("Artifacts"))
                     }
                     trailingMenu

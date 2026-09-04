@@ -357,6 +357,9 @@ fun SessionListScreen(
     // [主题一致性] 跟应用内主题，不跟系统主题。应用内浅/深覆盖设置下，
     // isSystemInDarkTheme() 会和同屏其它用 MaterialTheme/ChatColors 的元素反色。
     val isDark = ChatColors.isDark
+    val windowConfig = androidx.compose.ui.platform.LocalConfiguration.current
+    val effectiveCompactHeader = compactHeader ||
+        windowConfig.screenWidthDp < 500 || windowConfig.fontScale >= 1.4f
 
     // [T-android-search-focus-sticky] When the user opens search but types
     // nothing (or only whitespace) and then navigates into a chat, the
@@ -446,7 +449,7 @@ fun SessionListScreen(
                         )
                     } else {
                         Text(
-                            if (compactHeader) "Leo" else stringResource(R.string.app_name),
+                            if (effectiveCompactHeader) "Leo" else stringResource(R.string.app_name),
                             fontWeight = FontWeight.Bold,
                             fontSize = 20.sp,
                         )
@@ -474,7 +477,7 @@ fun SessionListScreen(
                             )
                         }
                     } else {
-                        if (!compactHeader) IconButton(onClick = onTreasuryClick) {
+                        if (!effectiveCompactHeader) IconButton(onClick = onTreasuryClick) {
                             Icon(
                                 Icons.Outlined.CollectionsBookmark,
                                 contentDescription = stringResource(R.string.treasury_title),
@@ -485,7 +488,7 @@ fun SessionListScreen(
                         // [T-android-scheduled-tasks-full] Badge shows the count of
                         // scheduled tasks so the user can see at a glance how many
                         // are configured without opening the list.
-                        if (!compactHeader) IconButton(onClick = onScheduledTasksClick) {
+                        if (!effectiveCompactHeader) IconButton(onClick = onScheduledTasksClick) {
                             if (scheduledTaskCount > 0) {
                                 BadgedBox(badge = { Badge { Text("$scheduledTaskCount") } }) {
                                     Icon(
@@ -510,7 +513,7 @@ fun SessionListScreen(
                                 onDismissRequest = { showOverflowMenu = false },
                                 offset = DpOffset(0.dp, 0.dp),
                             ) {
-                                if (compactHeader) {
+                                if (effectiveCompactHeader) {
                                     DropdownMenuItem(
                                         text = { Text(stringResource(R.string.treasury_title)) },
                                         onClick = {
@@ -644,7 +647,7 @@ fun SessionListScreen(
                                     if (sessionId != null) onNewChatGuarded(sessionId)
                                 }
                             },
-                            compactLayout = compactHeader,
+                            compactLayout = effectiveCompactHeader,
                         )
                     }
                 } else {
@@ -1836,6 +1839,7 @@ private fun SetupStepCard(
     isLocked: Boolean,
     onClick: () -> Unit,
 ) {
+    val largeText = androidx.compose.ui.platform.LocalDensity.current.fontScale >= 1.5f
     val isEnabled = !isDone && !isLocked
     val accent = when {
         isDone -> Color(0xFF25B96F)
@@ -1894,7 +1898,10 @@ private fun SetupStepCard(
             // Column 是固定高度就直接把副标题裁掉。
             // 换成 heightIn(min = 52.dp)：不足时仍撑到 52dp（默认布局完全不变），
             // 超出时按内容长高，不再裁切。
-            modifier = Modifier.weight(1f).heightIn(min = 52.dp),
+            modifier = Modifier
+                .weight(1f)
+                .heightIn(min = 52.dp)
+                .padding(vertical = if (largeText) 8.dp else 0.dp),
             verticalArrangement = Arrangement.Center,
         ) {
             Text(

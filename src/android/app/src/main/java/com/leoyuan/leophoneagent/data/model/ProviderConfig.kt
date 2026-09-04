@@ -182,6 +182,12 @@ data class ProviderInstance(
             return if (appendV1Suffix && !base.endsWith("/v1")) "$base/v1" else base
         }
 
+    /** Keyless local OpenAI/Anthropic-compatible gateways are valid configurations. */
+    val allowsEmptyAPIKey: Boolean
+        get() = credentialType == ProviderCredential.apiKey &&
+            !customBaseURL.isNullOrBlank() &&
+            (providerType == ProviderType.openAI || providerType == ProviderType.anthropic)
+
     /**
      * [T-android-image-endpoint-mode] Whether the "Image Generation" endpoint
      * picker is surfaced for this instance. Mirrors iOS

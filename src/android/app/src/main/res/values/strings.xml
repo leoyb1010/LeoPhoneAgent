@@ -1356,6 +1356,14 @@
     <string name="system_permissions_a11y_enabled">Enabled — android-a11y-cli is ready</string>
     <string name="system_permissions_a11y_disabled">Disabled — tap to enable in system Settings</string>
     <string name="system_permissions_a11y_footer">Required by android-a11y-cli for UI-tree reads, gesture injection, and event monitoring. Without this, AI agents cannot drive other apps. Toggle the switch under LeoPhoneAgent on the next screen.</string>
+    <string name="system_permissions_a11y_restricted_header">Accessibility is blocked by Android</string>
+    <string name="system_permissions_a11y_restricted_footer">Android restricts sensitive permissions for APKs installed from a browser or file manager. Allow restricted settings before enabling Accessibility.</string>
+    <string name="system_permissions_a11y_restricted_shizuku">Clear the restriction with Shizuku</string>
+    <string name="system_permissions_a11y_restricted_shizuku_sub">Uses your existing Power authorization and verifies the result</string>
+    <string name="system_permissions_a11y_restricted_working">Clearing and verifying…</string>
+    <string name="system_permissions_a11y_restricted_failed">Could not clear it. Use the manual method below.</string>
+    <string name="system_permissions_a11y_restricted_manual">Open App info to allow restricted settings</string>
+    <string name="system_permissions_a11y_restricted_manual_sub">Tap ⋮, choose Allow restricted settings, then return and enable Accessibility</string>
     <string name="system_permissions_a11y_oem_header">Service keeps getting killed?</string>
     <string name="system_permissions_a11y_oem_footer">%1$s may show \"this service has failed\" and stop the accessibility service in the background. Whitelist autostart and remove the battery restriction so it stays connected.</string>
     <string name="system_permissions_a11y_oem_autostart">Add to autostart whitelist</string>
@@ -1852,8 +1860,8 @@
     <!-- 发版铁律:每次改 versionName 都必须同步改这里,并重写下面的
          whats_new_current 文案。WhatsNewGateTest 会比对这两个值,
          对不上就构建失败 —— 防止弹出的是上一版的更新内容。 -->
-    <string name="whats_new_version" translatable="false">1.0.0-alpha.25</string>
-    <string name="whats_new_current">• Native phone actions now return an execution receipt naming the route, system verification and undo path; permission failures stop safely instead of falling through to a model guess.\n• Automatic update checks run once a day only when network and battery conditions allow. APKs must match the GitHub Release SHA-256, package name and installed signer before Android opens the installer.\n• Fixed Android alpha tag comparison, so alpha.24 can really discover alpha.25; iOS and Mac releases in the same repository are ignored.\n• Treasury keeps only Inbox, Needs attention and All in the primary row; more filters move into a menu, and compact/Fold empty states now offer real Save and Import actions.</string>
+    <string name="whats_new_version" translatable="false">1.0.0-alpha.26</string>
+    <string name="whats_new_current">• Grok OAuth now refreshes its token, fetches the live xAI model catalog and falls back to the full built-in list only when the network catalog is unavailable.\n• Natural-language reminders, calendar events and travel plans understand tomorrow, the day after tomorrow, dates, weekdays and relative days; missing required details are asked once and never guessed.\n• Long pasted text stays out of the editor, and very large pastes become previewable text attachments. Interrupted user turns can resume after process death.\n• Sideloaded APK restricted-settings blocks are explained in Permissions; Power can clear and verify the block through an already-authorized Shizuku session.</string>
     <string name="whats_new_scroll_hint">Swipe up to read the complete update</string>
     <string name="artifact_ready">ARTIFACT READY</string>
     <string name="artifact_open">Open artifact</string>
@@ -1959,4 +1967,8 @@
     <string name="treasury_error_network">Saved locally. Network enhancement is temporarily unavailable.</string>
     <string name="treasury_error_interrupted">Processing was interrupted and can be retried.</string>
     <string name="treasury_error_generic">The original content is safe, but enhancement failed.</string>
+    <string name="newer_db_title">This data belongs to a newer LeoPhoneAgent</string>
+    <string name="newer_db_body">Your conversations are still intact. This build cannot safely open the newer database. Install the latest version, then open the app again.</string>
+    <string name="newer_db_versions">This build supports database version %1$d.</string>
+    <string name="newer_db_exit">Exit without changing data</string>
 </resources>

@@ -314,8 +314,8 @@ export const removeSessionFromProject = (project: Project, sessionIdToDelete: st
  * 能点开,但重启之后 readPersistedTab 判它们非法,直接把人弹回聊天 —— 从用户
  * 视角就是"停在会话审计/Mac 控制台上,下次打开却回到了聊天"。
  *
- * `dashboard`(主控台)在 1.68 被降级掉,又在这一轮请回来:它是「选 Agent 开新
- * 任务」的唯一落点,不是一个可有可无的仪表盘。详见 DashboardView 的注释。
+ * `dashboard` 是旧版本留下的内部持久化值。可见产品只称“新任务”，并且只渲染
+ * 一个 Task Dock；保留这个值避免升级后把用户丢进不存在的路由。
  */
 const VALID_TABS: Set<string> = new Set(['dashboard', 'chat', 'files', 'shell', 'git', 'tasks', 'browser', 'audit', 'fleet']);
 
@@ -327,7 +327,7 @@ const VALID_TABS: Set<string> = new Set(['dashboard', 'chat', 'files', 'shell', 
 const RETIRED_TABS: Set<string> = new Set(['missions']);
 
 /**
- * 冷启动的落点。回到主控台,而不是某个会话 —— 「换 Agent」必须发生在一个还没
+ * 冷启动的落点。回到新任务,而不是某个会话 —— 「换 Agent」必须发生在一个还没
  * 绑定 Agent 的地方,否则代码只能猜用户是想改这个会话还是想开新的,猜错就是
  * 「选了 Codex 发出去还是 Claude」。装过旧版本的机器有 activeTab 记录,按记录走。
  */
@@ -338,9 +338,7 @@ export const isValidTab = (tab: string): tab is AppTab => {
 };
 
 /**
- * 一次性迁移标记。主控台在 1.68 被删掉,几乎所有老装机的 `activeTab` 都停在
- * 'chat' —— 光把默认值改回 dashboard 等于谁也看不见它。升级后的第一次启动强制
- * 落在主控台一次,让"换 Agent 在这儿"被看见;之后照旧按用户上次停的地方走。
+ * 一次性迁移标记。内部 key 保持不变，避免再次打扰已经迁移过的用户。
  */
 const CONSOLE_LANDING_KEY = 'console-landing-seen';
 

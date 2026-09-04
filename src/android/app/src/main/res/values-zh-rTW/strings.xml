@@ -758,7 +758,7 @@
     <string name="whats_new_title">本次更新（%1$s）</string>
     <string name="whats_new_heading">本次更新</string>
     <string name="whats_new_confirm">知道了</string>
-    <string name="whats_new_current">• 手機原生動作現在會回傳執行憑證，寫清使用路徑、系統驗證和復原方式；權限失敗會安全停止，不再交給模型猜測。\n• 每天僅在網路可用且電量充足時自動檢查一次更新；APK 必須同時通過 GitHub Release SHA-256、套件名稱和目前安裝簽章驗證，才會開啟系統安裝程式。\n• 修正 Android Alpha 版本比較，alpha.24 現在能正確發現 alpha.25；同一儲存庫的 iOS 和 Mac Release 不會再干擾。\n• 藏寶閣主篩選收束為收件匣、需要處理和全部，其餘收入更多篩選；封面螢幕和展開螢幕空狀態都提供真正的收進來與匯入操作。</string>
+    <string name="whats_new_current">• Grok OAuth 會先更新憑證並讀取 xAI 即時模型目錄，網路不可用時才回退到完整內建清單。\n• 自然語言提醒、行事曆和出行可理解明天、後天、月日、週幾和幾天後；必要資訊缺失時只詢問一次，不猜測。\n• 長文字貼上不再撠滿輸入框，超大文字自動轉為可預覽附件；處理程序中斷後未回覆的訊息可繼續。\n• 側載 APK 導致無障礙被限制時，權限頁會說明原因；Power 可通過已授權的 Shizuku 解除並回讀驗證。</string>
     <string name="whats_new_scroll_hint">向上滑動查看完整更新內容</string>
     <string name="artifact_ready">交付物已就緒</string>
     <string name="artifact_open">開啟交付物</string>
@@ -1411,6 +1411,14 @@
     <string name="system_permissions_a11y_enabled">已启用，android-a11y-cli 可以使用</string>
     <string name="system_permissions_a11y_disabled">未启用，點击前往系统設定</string>
     <string name="system_permissions_a11y_footer">android-a11y-cli 需要此權限讀取界面树、注入手势和监听事件。未启用時，AI Agent 无法操作其他 App。請在下一頁開啟 LeoPhoneAgent 的開關。</string>
+    <string name="system_permissions_a11y_restricted_header">Android 已限制無障礙權限</string>
+    <string name="system_permissions_a11y_restricted_footer">從瀏覽器或檔案管理器安裝 APK 後，Android 會限制敏感權限。先允許受限設定，再開啟無障礙。</string>
+    <string name="system_permissions_a11y_restricted_shizuku">用 Shizuku 解除限制</string>
+    <string name="system_permissions_a11y_restricted_shizuku_sub">使用已授權的 Power 通道，完成後自動驗證</string>
+    <string name="system_permissions_a11y_restricted_working">正在解除並驗證…</string>
+    <string name="system_permissions_a11y_restricted_failed">解除失敗，請使用下方手動方式</string>
+    <string name="system_permissions_a11y_restricted_manual">開啟應用程式資訊以允許受限設定</string>
+    <string name="system_permissions_a11y_restricted_manual_sub">點右上角 ⋮，選擇「允許受限設定」，返回後再啟用無障礙</string>
     <string name="a11y_service_label">LeoPhoneAgent 无障碍服务</string>
     <string name="a11y_service_description">允许 LeoPhoneAgent 代表调用 android-a11y-cli 的 AI Agent 讀取屏幕界面结构、执行點击和手势並接收系统事件。</string>
     <string name="a11y_service_summary">LeoPhoneAgent 的界面自动化後端</string>
@@ -1800,4 +1808,8 @@
     <string name="treasury_error_network">已在本機儲存，網路增強暫時不可用。</string>
     <string name="treasury_error_interrupted">處理曾被中斷，可以重試。</string>
     <string name="treasury_error_generic">原內容已安全儲存，但增強處理失敗。</string>
+    <string name="newer_db_title">這份資料來自更新的 LeoPhoneAgent</string>
+    <string name="newer_db_body">對話資料仍然完好。目前版本無法安全開啟更新的資料庫，請安裝最新版後重新開啟。</string>
+    <string name="newer_db_versions">目前版本支援資料庫版本 %1$d。</string>
+    <string name="newer_db_exit">不修改資料並離開</string>
 </resources>

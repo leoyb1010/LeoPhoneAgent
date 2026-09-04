@@ -14,7 +14,6 @@ import ProjectDrawer from '../workbench/ProjectDrawer';
 import RemoteSessionPanel, { type RemoteTarget } from '../workbench/RemoteSessionPanel';
 import VersionUpgradeModal from '../version-upgrade/view';
 import { remoteLaunchFields, useFleetSnapshot, type FleetMachine } from '../workbench/useFleetSnapshot';
-import type { NewTaskLaunch } from '../dashboard/newTask';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { PaletteOpsProvider, usePaletteOpsRegister } from '../../contexts/PaletteOpsContext';
 import type { SessionEstablishedContext, SessionNavigationOptions } from '../chat/types/types';
@@ -263,19 +262,11 @@ function AppContentInner() {
     [registerOptimisticSession],
   );
 
-  const handleDashboardNewChat = useCallback(() => {
-    if (selectedProject) {
-      handleNewSession(selectedProject);
-      return;
-    }
-    setActiveTab('chat');
-  }, [handleNewSession, selectedProject, setActiveTab]);
-
   // 工作台外壳自己持有的浮层状态。这些以前分别住在 DesktopAppRail、Sidebar
   // 和 FleetView 里;导航栏拆掉之后统一收到外壳,互斥关闭由 closeOverlays 保证。
   const [remoteOpen, setRemoteOpen] = useState(false);
   const [projectDrawerOpen, setProjectDrawerOpen] = useState(false);
-  const [localTool, setLocalTool] = useState<'leoapi' | 'feedback' | null>(null);
+  const [localTool, setLocalTool] = useState<'feedback' | null>(null);
   // 状态栏的"有新版本 / 需重启"角标点开的更新卡。以前监听器住在 Sidebar 里,
   // 而 Sidebar 只在项目抽屉打开时才挂载 —— 抽屉关着时事件没人接,点角标毫无反应。
   // 这类"跨组件喊一嗓子"的入口必须落在常驻的外壳上。
@@ -288,16 +279,23 @@ function AppContentInner() {
     setProjectDrawerOpen(false);
   }, []);
 
-  /**
-   * 回主控台。这是「换 Agent」的唯一落点,所以它必须有一个常驻入口 —— 标题栏上
-   * 那颗「主控台」,以及会话内指挥条上那枚被锁住的 Agent 芯片都指向这里。
-   * 只切页签、不动 selectedSession:会话列表里那一行仍然高亮,回得去。
-   */
-  const openConsole = useCallback(() => {
+  /** 进入唯一的新任务表面；旧会话仍留在任务列表里，可随时返回。 */
+  const openNewTask = useCallback(() => {
     closeOverlays();
     setRemoteTarget(null);
     setActiveTab('dashboard');
   }, [closeOverlays, setActiveTab]);
+
+  useEffect(() => {
+    const onNewTaskShortcut = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'n') {
+        event.preventDefault();
+        openNewTask();
+      }
+    };
+    window.addEventListener('keydown', onNewTaskShortcut);
+    return () => window.removeEventListener('keydown', onNewTaskShortcut);
+  }, [openNewTask]);
 
   // 这两个开关以前把 closeOverlays() 写在 setState 的 updater 里。updater 必须是
   // 纯函数:React 会在同一批次里重放它,重放时那句 closeOverlays 又排入一次
@@ -306,14 +304,6 @@ function AppContentInner() {
   const toggleRemote = useCallback(() => {
     closeOverlays();
     setRemoteOpen((open) => !open);
-  }, [closeOverlays]);
-
-  // 标题栏的 Leoapi 直接进配置页(/leocodebox-switch.html)。
-  // 原来展开的是一个只读浮层:能看到网关地址、模型路由和今日用量,
-  // 却一个都改不了 —— 点它的人要的是去配置,不是去看板。
-  const toggleLeoapi = useCallback(() => {
-    closeOverlays();
-    setLocalTool('leoapi');
   }, [closeOverlays]);
 
   const { remotes, onlineCount, localName, configured: fleetConfigured } = useFleetSnapshot();
@@ -402,37 +392,6 @@ function AppContentInner() {
     }
   }, [closeOverlays, refreshProjectsSilently, t]);
 
-  /**
-   * 主控台「新任务」落地:选中的 Agent / 机器 / 目录 / 第一句话变成一个真会话。
-   *
-   * Agent 已经由 NewTaskCard 在按下开始那一刻交给会话侧了(commitAgentForNewSession),
-   * 这里只负责把目录解析成项目、把会话开出来。远程目标则把 Agent 当作 harness 一起
-   * 下发给中继 —— 两条路都是"显式带着选择走",没有任何一处需要猜。
-   */
-  const startConsoleTask = useCallback((launch: NewTaskLaunch) => {
-    if (!launch.prompt.trim()) return;
-    const project = projects.find((candidate) => candidate.projectId === launch.projectId);
-    if (!project) {
-      setProjectDrawerOpen(true);
-      return;
-    }
-    if (launch.machine) {
-      const remote = remotes.find((machine) => machine.name === launch.machine);
-      void startRemoteRun(launch.machine, launch.prompt, remoteLaunchFields(remote, launch.provider, {
-        cwd: project.fullPath || project.path,
-        thinking: localStorage.getItem(`${launch.provider}-effort`) || undefined,
-      }));
-      return;
-    }
-    closeOverlays();
-    setRemoteTarget(null);
-    setActiveTab('chat');
-    // 和指挥条同一条路:首句随会话重置一起下发。主控台这条路以前必丢内容 ——
-    // 按下开始那一刻 MainContent 还停在 dashboard 分支,ChatInterface 根本没挂载,
-    // 同步派发的 handoff-draft 没有任何监听者。
-    handleNewSession(project, launch.prompt);
-  }, [closeOverlays, handleNewSession, projects, remotes, setActiveTab, startRemoteRun]);
-
   /** 接管远程会话 = 在主区挂上那台机器的事件流(全量回放 + 实时跟随)。 */
   const takeOverRemote = useCallback((machine: FleetMachine, remoteSessionId?: string) => {
     closeOverlays();
@@ -466,10 +425,10 @@ function AppContentInner() {
     return () => window.removeEventListener('leocodebox:open-version-modal', openVersionModal);
   }, []);
 
-  // 命令面板要能到达外壳里的这几个入口(导航栏没了,⌘K 是唯一的替代)。
+  // 命令面板与旧桌面消息统一落到真实页面；LeoAPI 不再拥有独立浮层。
   useEffect(() => {
     const openProjects = () => { closeOverlays(); setProjectDrawerOpen(true); };
-    const openLeoapi = () => { closeOverlays(); setLocalTool('leoapi'); };
+    const openLeoapi = () => openSettingsTab('api');
     const openLog = () => { closeOverlays(); setLocalTool('feedback'); };
     window.addEventListener('leocodebox:open-projects', openProjects);
     window.addEventListener('leocodebox:open-leoapi', openLeoapi);
@@ -479,19 +438,19 @@ function AppContentInner() {
       window.removeEventListener('leocodebox:open-leoapi', openLeoapi);
       window.removeEventListener('leocodebox:open-local-log', openLog);
     };
-  }, [closeOverlays]);
+  }, [closeOverlays, openSettingsTab]);
 
   // 桌面端应用菜单发过来的导航意图。
   // (菜单栏额度面板的 `settings:quota` / `usage` 两个目的地已随托盘整体移除。)
   useEffect(() => {
     const unsubscribe = window.leocodeboxDesktopTools?.onOpenModal((tool) => {
-      if (tool === 'leoapi') { closeOverlays(); setLocalTool('leoapi'); }
+      if (tool === 'leoapi') openSettingsTab('api');
       if (tool === 'feedback') { closeOverlays(); setLocalTool('feedback'); }
       if (tool === 'settings') openSettingsTab();
     });
     const handleLocalTool = (event: Event) => {
       const tool = (event as CustomEvent<'leoapi' | 'feedback'>).detail;
-      if (tool === 'leoapi') { closeOverlays(); setLocalTool('leoapi'); }
+      if (tool === 'leoapi') openSettingsTab('api');
       if (tool === 'feedback') { closeOverlays(); setLocalTool('feedback'); }
     };
     window.addEventListener('leocodebox:open-local-tool', handleLocalTool);
@@ -508,8 +467,8 @@ function AppContentInner() {
     >
       {!isMobile && (
         <WorkbenchTitleBar
-          onOpenConsole={openConsole}
-          consoleActive={activeTab === 'dashboard'}
+          onStartNewTask={openNewTask}
+          newTaskActive={activeTab === 'dashboard'}
           localName={localName}
           remotes={remotes}
           onlineCount={onlineCount}
@@ -517,21 +476,17 @@ function AppContentInner() {
           remoteOpen={remoteOpen}
           onToggleRemote={toggleRemote}
           onTakeOver={takeOverRemote}
-          onOpenLeoapi={toggleLeoapi}
-          onOpenPalette={() => {
-            closeOverlays();
-            window.dispatchEvent(new CustomEvent('leocodebox:open-command-palette'));
-          }}
           onOpenSettings={() => openSettingsTab()}
         />
       )}
 
-      {!isMobile && (
+      {!isMobile && activeTab === 'dashboard' && (
         <CommandBar
           project={selectedProject}
           localName={localName}
           remotes={remotes}
           onOpenAgentSettings={() => openSettingsTab('agents')}
+          onOpenProjects={() => { closeOverlays(); setProjectDrawerOpen(true); }}
           onStartLocalRun={startLocalRun}
           onStartRemoteRun={(machine, prompt, provider, effort) => {
             return startRemoteRun(machine.name, prompt, remoteLaunchFields(machine, provider, {
@@ -539,13 +494,6 @@ function AppContentInner() {
               thinking: effort,
             }));
           }}
-          /*
-           * 主控台在屏幕上时,芯片就是"给下一个新会话选 Agent"的选择器 —— 哪怕
-           * 外壳里还留着一个 selectedSession(用户是从某个会话点回来的,会话列表
-           * 那一行仍然高亮)。判据是"现在看的是不是会话",不是"有没有选中过会话"。
-           */
-          sessionProvider={activeTab === 'dashboard' ? null : (selectedSession?.__provider ?? null)}
-          onOpenConsole={openConsole}
         />
       )}
 
@@ -597,8 +545,6 @@ function AppContentInner() {
             onNavigateToSession={handleNavigateToSession}
             onSessionEstablished={handleSessionEstablished}
             onShowSettings={openSettings}
-            onStartNewChat={handleDashboardNewChat}
-            onStartConsoleTask={startConsoleTask}
             externalMessageUpdate={externalMessageUpdate}
             newSessionTrigger={newSessionTrigger}
             pendingPrompt={pendingPrompt}
@@ -624,8 +570,8 @@ function AppContentInner() {
 
       {localTool && (
         <LocalToolModal
-          title={localTool === 'leoapi' ? t('sidebar:localUi.leoapiSwitch') : t('sidebar:localUi.localLog')}
-          src={localTool === 'leoapi' ? '/leocodebox-switch.html?embedded=1' : '/leocodebox-feedback.html?embedded=1'}
+          title={t('sidebar:localUi.localLog')}
+          src="/leocodebox-feedback.html?embedded=1"
           onClose={() => setLocalTool(null)}
         />
       )}

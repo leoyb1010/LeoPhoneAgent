@@ -24,7 +24,7 @@ test('retired top-level workspaces are no longer valid tabs', () => {
   assert.equal(isValidTab('chat'), true);
   assert.equal(isValidTab('fleet'), true, 'Mac 控制台仍在页签栏里');
   assert.equal(isValidTab('audit'), true, '会话审计仍在页签栏里');
-  assert.equal(isValidTab('dashboard'), true, '主控台是「选 Agent 开新任务」的落点,必须合法');
+  assert.equal(isValidTab('dashboard'), true, '内部新任务落点必须兼容旧持久化值');
 });
 
 // Minimal in-memory localStorage for the handoff-map helpers (Node has none).
@@ -41,7 +41,7 @@ const installLocalStorage = () => {
   return storage;
 };
 
-test('an install parked on a retired tab lands on the console', () => {
+test('an install parked on a retired tab lands on new task', () => {
   const storage = installLocalStorage();
   storage.setItem('console-landing-seen', '1');
   storage.setItem('activeTab', 'missions');
@@ -53,8 +53,8 @@ test('an install parked on a retired tab lands on the console', () => {
   assert.equal(readPersistedTab(), 'files');
 });
 
-test('升级后的第一次启动强制落在主控台一次', () => {
-  // 老装机的 activeTab 全停在 'chat';不迁移一次,恢复回来的主控台谁也看不见。
+test('升级后的第一次启动强制落在新任务一次', () => {
+  // 旧 activeTab 停在 chat；一次迁移确保用户先看到唯一的新任务入口。
   const storage = installLocalStorage();
   storage.setItem('activeTab', 'chat');
   assert.equal(readPersistedTab(), 'dashboard');
@@ -62,18 +62,18 @@ test('升级后的第一次启动强制落在主控台一次', () => {
   assert.equal(readPersistedTab(), 'chat');
 });
 
-test('冷启动落在主控台,而不是某个会话', () => {
+test('冷启动落在新任务,而不是某个会话', () => {
   // 「换 Agent」必须发生在一个还没绑定 Agent 的地方。一开机就落进会话,等于把
   // 每一次 Agent 切换都推回"在已有会话里改还是开新的?"那个歧义里 —— 三轮没根治的
   // 「选了 Codex 发出去还是 Claude」就长在这块土壤上。
   const storage = installLocalStorage();
   storage.clear();
   assert.equal(readPersistedTab(), 'dashboard');
-  // 全新装机同样只走一次迁移,之后没有 activeTab 记录时的默认值仍是主控台。
+  // 全新装机同样只走一次迁移,之后没有 activeTab 记录时仍是新任务。
   assert.equal(readPersistedTab(), 'dashboard');
 });
 
-test('上次停在主控台,下次打开还在主控台', () => {
+test('上次停在新任务,下次打开还在新任务', () => {
   const storage = installLocalStorage();
   storage.setItem('console-landing-seen', '1');
   storage.setItem('activeTab', 'dashboard');

@@ -756,7 +756,9 @@ class ProviderRepository(private val context: Context) {
      */
     fun lastUsedVisibleEntry(): ModelEntry? {
         val id = lastUsedEntryId ?: return null
-        return allVisibleEntries().firstOrNull { it.id == id }
+        val entry = allVisibleEntries().firstOrNull { it.id == id } ?: return null
+        val instance = instance(entry.providerInstanceId) ?: return null
+        return entry.takeIf { hasAnyCredential(instance) }
     }
 
     /**
@@ -775,7 +777,7 @@ class ProviderRepository(private val context: Context) {
     fun newestProviderNewestTextEntry(): ModelEntry? {
         val config = _config.value
         val enabledProviders = config.instances
-            .filter { it.isEnabled }
+            .filter { it.isEnabled && hasAnyCredential(it) }
             .sortedByDescending { it.createdAt }
         for (instance in enabledProviders) {
             val textEntry = config.modelEntries
@@ -813,6 +815,23 @@ class ProviderRepository(private val context: Context) {
     fun firstEnabledMemberEntry(group: ModelGroup): ModelEntry? =
         enabledMemberEntries(group).firstOrNull()
 
+    /** True for API keys, manual bearer tokens and structured OAuth logins. */
+    fun hasAnyCredential(instance: ProviderInstance): Boolean =
+        usableApiKey(instance) != null ||
+            com.leoyuan.leophoneagent.auth.OAuthManager.hasStoredCredential(context, instance.id)
+
+    /** Runtime-ready members, preserving the user's declared group order. */
+    fun availableMemberEntries(group: ModelGroup): List<ModelEntry> {
+        val current = _config.value
+        return group.memberEntryIds.mapNotNull { entryId ->
+            val entry = current.modelEntries.find { it.id == entryId } ?: return@mapNotNull null
+            if (entry.isHidden) return@mapNotNull null
+            val instance = current.instances.find { it.id == entry.providerInstanceId } ?: return@mapNotNull null
+            if (!instance.isEnabled || !hasAnyCredential(instance)) return@mapNotNull null
+            entry
+        }
+    }
+
     /**
      * [T-android-regenerate-title-submodel] The dedicated title-generation
      * sub-model entry: the first enabled member of the configured
@@ -825,7 +844,7 @@ class ProviderRepository(private val context: Context) {
     fun resolveTitleSubEntry(): ModelEntry? {
         val subGroupId = defaultSubGroupId ?: return null
         val group = group(subGroupId) ?: return null
-        return firstEnabledMemberEntry(group)
+        return availableMemberEntries(group).firstOrNull()
     }
 
     /**
@@ -1552,15 +1571,15 @@ class ProviderRepository(private val context: Context) {
 
 
     suspend fun refreshModels(instance: ProviderInstance) {
-        var apiKey = loadApiKey(instance.id)
+        var apiKey = usableApiKey(instance)
 
         // For OAuth providers, try to refresh the token before using it (mirrors iOS validAccessToken)
-        if (instance.credentialType == com.leoyuan.leophoneagent.data.model.ProviderCredential.oauth && apiKey != null) {
+        if (instance.credentialType == com.leoyuan.leophoneagent.data.model.ProviderCredential.oauth && hasAnyCredential(instance)) {
             try {
                 val manager = com.leoyuan.leophoneagent.auth.OAuthManager.forInstance(context, instance)
                 val freshToken = manager?.validAccessToken()
-                if (freshToken != null && freshToken != apiKey) {
-                    saveApiKey(instance.id, freshToken)
+                if (freshToken != null) {
+                    if (freshToken != apiKey) saveApiKey(instance.id, freshToken)
                     apiKey = freshToken
                     android.util.Log.i("ProviderRepo", "refreshModels: OAuth token refreshed")
                 }
@@ -1603,7 +1622,20 @@ class ProviderRepository(private val context: Context) {
                     // [T-provider-custom-user-agent] models-list UA override.
                     ProviderType.openAI -> OpenAIModelsApi.fetchModels(apiKey, baseURL, customUserAgent = instance.customUserAgent)
                     ProviderType.openRouter -> OpenRouterModelsApi.fetchModels(apiKey)
-                    ProviderType.xAI -> com.leoyuan.leophoneagent.provider.xai.XAIModelsApi.fetchModelsOAuth()
+                    // xAI exposes an OpenAI-compatible /v1/models endpoint.
+                    // Always prefer the authenticated live catalog so newly
+                    // released Grok/Composer models do not require an app
+                    // update. Keep the known-good built-in list as an offline
+                    // and subscription-limited fallback.
+                    //
+                    // effectiveBaseURL is null for the built-in OAuth entry;
+                    // passing that through would query OpenAI with the xAI
+                    // token and could surface GPT models under Grok.
+                    ProviderType.xAI -> OpenAIModelsApi.fetchModels(
+                        apiKey,
+                        baseURL ?: "https://api.x.ai/v1",
+                        customUserAgent = instance.customUserAgent,
+                    ).ifEmpty { com.leoyuan.leophoneagent.provider.xai.XAIModelsApi.fetchModelsOAuth() }
                     // [T-kimi-oauth] Kimi Code: unlike Codex OAuth, the Kimi
                     // OAuth token CAN call the models endpoint — real fetch
                     // from GET /coding/v1/models (OpenAI-compatible shape).
@@ -1748,6 +1780,9 @@ class ProviderRepository(private val context: Context) {
     fun loadApiKey(instanceId: String): String? {
         return encryptedPrefs.getString("apikey_$instanceId", null)
     }
+
+    fun usableApiKey(instance: ProviderInstance): String? =
+        loadApiKey(instance.id) ?: if (instance.allowsEmptyAPIKey) "" else null
 
     fun deleteApiKey(instanceId: String) {
         encryptedPrefs.edit().remove("apikey_$instanceId").apply()

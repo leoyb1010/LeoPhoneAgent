@@ -459,12 +459,6 @@ async function openLocalInDesktop() {
   return getDesktopState();
 }
 
-async function openSwitchInDesktop() {
-  await openLocalInDesktop();
-  desktopWindow.emitLocalModal('leoapi');
-  return getDesktopState();
-}
-
 /**
  * A notification click brings the workspace forward and deep-links straight
  * into the session that finished, so long-running agents can be left alone
@@ -535,7 +529,6 @@ function registerIpcHandlers() {
   // localStartupLogs stripped.
   ipcMain.handle('leocodebox-desktop:get-state', (event) => getDesktopStateForSender(event));
   trustedHandle('leocodebox-desktop:open-local', async () => openLocalInDesktop());
-  trustedHandle('leocodebox-desktop:open-switch', async () => openSwitchInDesktop());
   trustedHandle('leocodebox-desktop:open-local-web-ui', async () => openLocalWebUi());
   trustedHandle('leocodebox-desktop:reload-active-tab', async () => desktopWindow.reloadActiveTab());
   // Environment switching collapsed to "open the local workspace" when the

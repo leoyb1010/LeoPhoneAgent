@@ -132,6 +132,22 @@ class OpenAIProviderTest {
     }
 
     @Test
+    fun `xAI OAuth-compatible bearer stays on Chat Completions endpoint`() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":1,"completion_tokens":1}}"""))
+        val xai = OpenAIProvider.oauthOpenAICompat(
+            oauthTokenProvider = { "fresh-xai-oauth-token" },
+            model = LLMModel.grok46,
+            basePath = server.url("/v1").toString().trimEnd('/'),
+        )
+
+        xai.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "test")), null, 100)
+
+        val request = server.takeRequest()
+        assertEquals("/v1/chat/completions", request.path)
+        assertEquals("Bearer fresh-xai-oauth-token", request.getHeader("Authorization"))
+    }
+
+    @Test
     fun `sendMessage includes system prompt as system message`() = runBlocking {
         server.enqueue(MockResponse().setBody("""{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":0,"completion_tokens":0}}"""))
 

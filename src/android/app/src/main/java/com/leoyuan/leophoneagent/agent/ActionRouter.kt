@@ -1,5 +1,9 @@
 package com.leoyuan.leophoneagent.agent
 
+import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
+
 /**
  * Fast path in front of the agent loop. Only high-precision native
  * intents skip the model; everything else stays on the existing loop.
@@ -20,6 +24,7 @@ object ActionRouter {
         val hour: Int? = null,
         val minute: Int? = null,
         val tomorrow: Boolean = false,
+        val dayOffset: Int = if (tomorrow) 1 else 0,
         val label: String = "",
         val location: String = "",
         val notes: String = "",
@@ -38,6 +43,8 @@ object ActionRouter {
                 null -> ""
             }
 
+        val effectiveDayOffset: Int get() = dayOffset.coerceIn(0, 366)
+
         fun spoken(): String = when (kind) {
             Kind.SavePhoto -> "已用系统相册保存，未打开界面。"
             Kind.SetAlarm -> {
@@ -45,14 +52,22 @@ object ActionRouter {
                 val mm = minute?.toString()?.padStart(2, '0') ?: "--"
                 "已用系统闹钟设定 $hh:$mm，未打开界面。"
             }
-            Kind.CreateCalendar -> "已用系统日历创建日程，未打开界面。"
+            Kind.CreateCalendar -> if (path == Path.Clarify) {
+                "我已识别为日程，还需要：${missingFields.joinToString("、")}。补充后我会写入系统日历。"
+            } else {
+                "已用系统日历创建日程，未打开界面。"
+            }
             Kind.CreateTravel -> if (path == Path.Clarify) {
                 "我已识别为出行记录，还需要：${missingFields.joinToString("、")}。补充后我会同时写入日历和待办提醒。"
             } else {
                 "已把出行信息写入系统日历和本机待办，并设置提前提醒。"
             }
             Kind.ToggleFlashlight -> if (label == "off") "已关掉手电筒。" else "已打开手电筒。"
-            Kind.CreateTodo -> "已记下待办：${label.ifBlank { "待办" }}。"
+            Kind.CreateTodo -> if (path == Path.Clarify) {
+                "我已识别为提醒，还需要：${missingFields.joinToString("、")}。"
+            } else {
+                "已记下待办：$label。"
+            }
             Kind.ReadClipboard -> "已读取剪贴板。"
             Kind.WriteClipboard -> "已写入剪贴板。"
             Kind.DeviceInfo -> "已读取这台设备的信息。"
@@ -98,7 +113,19 @@ object ActionRouter {
         }
         parseTravel(raw, lower)?.let { return it }
         if (isTodo(lower)) {
-            return Decision(Path.Native, Kind.CreateTodo, label = todoTitle(raw))
+            val time = parseTime(raw, lower)
+            val title = todoTitle(raw)
+            return Decision(
+                path = if (title.isBlank()) Path.Clarify else Path.Native,
+                kind = Kind.CreateTodo,
+                hour = time?.first,
+                minute = time?.second,
+                tomorrow = isTomorrow(lower),
+                dayOffset = dayOffset(lower),
+                label = title,
+                notes = "原始指令：$raw",
+                missingFields = if (title.isBlank()) listOf("要提醒的事情") else emptyList(),
+            )
         }
         if (isAlarm(raw, lower)) {
             val time = parseTime(raw, lower) ?: return Decision(Path.Agent)
@@ -108,18 +135,33 @@ object ActionRouter {
                 hour = time.first,
                 minute = time.second,
                 tomorrow = isTomorrow(lower),
+                dayOffset = dayOffset(lower),
                 label = alarmLabel(raw),
             )
         }
         if (isCalendar(lower)) {
-            val time = parseTime(raw, lower) ?: return Decision(Path.Agent)
+            val time = parseTime(raw, lower)
+            if (time == null) {
+                return Decision(
+                    path = Path.Clarify,
+                    kind = Kind.CreateCalendar,
+                    tomorrow = isTomorrow(lower),
+                    dayOffset = dayOffset(lower),
+                    label = calendarTitle(raw),
+                    notes = "原始指令：$raw",
+                    missingFields = listOf("开始时间"),
+                )
+            }
             return Decision(
                 path = Path.Native,
                 kind = Kind.CreateCalendar,
                 hour = time.first,
                 minute = time.second,
                 tomorrow = isTomorrow(lower),
+                dayOffset = dayOffset(lower),
                 label = calendarTitle(raw),
+                location = extractLocation(raw),
+                notes = "原始指令：$raw",
             )
         }
         return Decision(Path.Agent)
@@ -127,21 +169,23 @@ object ActionRouter {
 
     /** High-precision travel record compiler; incomplete fields never reach an LLM to guess. */
     internal fun parseTravel(raw: String, lower: String = raw.lowercase()): Decision? {
-        if (listOf("高铁", "动车", "火车", "train").none { lower.contains(it) }) return null
-        if (listOf("记录", "记下", "提醒", "行程", "日历", "record", "remind").none { lower.contains(it) }) return null
+        val vehicle = listOf("高铁", "动车", "火车", "航班", "飞机", "客车", "大巴", "轮船", "行程", "train", "flight", "bus", "trip")
+            .firstOrNull { lower.contains(it) } ?: return null
+        if (listOf("记录", "记下", "记一下", "提醒", "行程", "日历", "别忘", "record", "remind", "schedule")
+                .none { lower.contains(it) }) return null
 
         val time = parseTime(raw, lower)
-        val destination = Regex("""(?:去|到)\s*([\p{L}]{2,16}?)(?:的)?(?:高铁|动车|火车|[，,。\s])""")
+        val destination = Regex("""(?:去|到)\s*([\p{L}]{2,16}?)(?:的)?(?:高铁|动车|火车|航班|飞机|客车|大巴|轮船|行程|[，,。\s])""")
             .find(raw)?.groupValues?.getOrNull(1)?.trim().orEmpty()
-        val train = Regex("""\b([GDCZTK]\s*\d{1,4})\b""", RegexOption.IGNORE_CASE)
+        val train = Regex("""\b([A-Z]{1,3}\s*\d{1,5})\b""", RegexOption.IGNORE_CASE)
             .find(raw)?.groupValues?.getOrNull(1)?.replace(" ", "")?.uppercase().orEmpty()
         val seat = Regex("""座位(?:是|号|[：:])?\s*([0-9]{1,2}[A-Fa-f]|[0-9]{1,2}车(?:厢)?[0-9]{1,3}[A-Fa-f]?号?)""")
             .find(raw)?.groupValues?.getOrNull(1)?.trim().orEmpty()
         val missing = buildList {
-            if (destination.isBlank()) add("目的地")
             if (time == null) add("开车时间")
-            if (train.isBlank()) add("车次")
-            if (seat.isBlank()) add("座位")
+            if (destination.isBlank() && train.isBlank()) add("目的地或车次/航班号")
+            if (train.isBlank() && Regex("""(?:车次|航班)(?:是|号|[：:])?\s*(?:[，,。]|$)""").containsMatchIn(raw)) add("车次")
+            if (seat.isBlank() && Regex("""座位(?:是|号|[：:])?\s*(?:[，,。]|$)""").containsMatchIn(raw)) add("座位")
         }
         val notes = buildString {
             if (train.isNotBlank()) append("车次：$train")
@@ -149,7 +193,7 @@ object ActionRouter {
                 if (isNotEmpty()) append("\n")
                 append("座位：$seat")
             }
-            append("\n由 LeoPhoneAgent 记录；未提供到达时间，不做推断。")
+            append("\n原始指令：$raw\n未提供的信息保持为空，不做推断。")
         }.trim()
         return Decision(
             path = if (missing.isEmpty()) Path.Native else Path.Clarify,
@@ -157,7 +201,8 @@ object ActionRouter {
             hour = time?.first,
             minute = time?.second,
             tomorrow = isTomorrow(lower),
-            label = listOf(destination, "高铁", train).filter(String::isNotBlank).joinToString(" "),
+            dayOffset = dayOffset(lower),
+            label = listOf(destination, vehicle, train).filter(String::isNotBlank).joinToString(" "),
             location = destination,
             notes = notes,
             missingFields = missing,
@@ -183,7 +228,7 @@ object ActionRouter {
     internal fun isCalendar(lower: String): Boolean {
         val needles = listOf(
             "加到日历", "写入日历", "添加到日历", "加进日历",
-            "add to calendar", "create calendar event", "创建日程",
+            "add to calendar", "create calendar event", "创建日程", "记到日历", "安排日程",
         )
         return needles.any { lower.contains(it) }
     }
@@ -207,7 +252,8 @@ object ActionRouter {
     internal fun isTodo(lower: String): Boolean {
         val needles = listOf(
             "记个待办", "记一条待办", "添加待办", "写个待办",
-            "add a todo", "add todo", "remind me to",
+            "提醒我", "记得提醒", "到时候提醒", "别忘了", "别忘记", "帮我记一下", "帮我记下",
+            "add a todo", "add todo", "remind me to", "remember to",
         )
         return needles.any { lower.contains(it) }
     }
@@ -239,6 +285,41 @@ object ActionRouter {
     internal fun isTomorrow(lower: String): Boolean =
         lower.contains("明早") || lower.contains("明天") ||
             lower.contains("tomorrow") || lower.contains("tmrw")
+
+    internal fun dayOffset(lower: String, today: LocalDate = LocalDate.now()): Int {
+        if (lower.contains("后天") || lower.contains("day after tomorrow")) return 2
+        if (isTomorrow(lower)) return 1
+        Regex("""(\d{1,3})\s*天后""").find(lower)?.groupValues?.getOrNull(1)
+            ?.toIntOrNull()?.coerceIn(0, 366)?.let { return it }
+
+        Regex("""(\d{1,2})月(\d{1,2})[日号]?""").find(lower)?.let { match ->
+            val month = match.groupValues[1].toIntOrNull()
+            val day = match.groupValues[2].toIntOrNull()
+            if (month != null && day != null) {
+                var target = runCatching { LocalDate.of(today.year, month, day) }.getOrNull()
+                if (target != null && target.isBefore(today)) {
+                    target = runCatching { target.withYear(today.year + 1) }.getOrNull()
+                }
+                if (target != null) return ChronoUnit.DAYS.between(today, target).toInt().coerceIn(0, 366)
+            }
+        }
+
+        val weekday = Regex("""(?:下)?(?:周|星期)([一二三四五六日天])""").find(lower)
+        if (weekday != null) {
+            val target = when (weekday.groupValues[1]) {
+                "一" -> DayOfWeek.MONDAY
+                "二" -> DayOfWeek.TUESDAY
+                "三" -> DayOfWeek.WEDNESDAY
+                "四" -> DayOfWeek.THURSDAY
+                "五" -> DayOfWeek.FRIDAY
+                "六" -> DayOfWeek.SATURDAY
+                else -> DayOfWeek.SUNDAY
+            }
+            val thisWeekDelta = Math.floorMod(target.value - today.dayOfWeek.value, 7)
+            return (thisWeekDelta + if (weekday.value.startsWith("下")) 7 else 0).coerceAtMost(366)
+        }
+        return 0
+    }
 
     internal fun parseTime(raw: String, lower: String = raw.lowercase()): Pair<Int, Int>? {
         Regex("""(\d{1,2})[:：](\d{2})""").find(raw)?.let { m ->
@@ -283,10 +364,13 @@ object ActionRouter {
     }
 
     private fun calendarTitle(raw: String): String {
-        val stripped = raw.replace(Regex("""加到日历|写入日历|添加到日历|加进日历|add to calendar|create calendar event|创建日程""", RegexOption.IGNORE_CASE), "")
-            .replace(Regex("""明早|明天|tomorrow|tmrw""", RegexOption.IGNORE_CASE), "")
+        val stripped = raw.replace(Regex("""加到日历|写入日历|添加到日历|加进日历|记到日历|安排日程|add to calendar|create calendar event|创建日程""", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("""今天|今晚|今早|明早|明天|后天|tomorrow|tmrw|day after tomorrow""", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("""\d{1,3}\s*天后|\d{1,2}月\d{1,2}[日号]?|(?:下)?(?:周|星期)[一二三四五六日天]"""), "")
+            .replace(Regex("""上午|中午|下午|晚上|早上|凌晨"""), "")
             .replace(Regex("""\d{1,2}[:：]\d{2}"""), "")
             .replace(Regex("""\d{1,2}\s*点\s*\d{0,2}\s*分?"""), "")
+            .replace(Regex("""^(?:要|的|在|于)\s*"""), "")
             .trim(' ', '，', ',', '。', '.', '：', ':')
         return stripped.ifBlank { "日程" }
     }
@@ -294,11 +378,21 @@ object ActionRouter {
     private fun todoTitle(raw: String): String {
         val stripped = raw.replace(
             Regex(
-                """记个待办|记一条待办|添加待办|写个待办|add a todo|add todo|remind me to""",
+                """记个待办|记一条待办|添加待办|写个待办|提醒我|记得提醒|到时候提醒|别忘了|别忘记|帮我记一下|帮我记下|add a todo|add todo|remind me to|remember to""",
                 RegexOption.IGNORE_CASE,
             ),
             "",
-        ).trim(' ', '，', ',', '。', '.', '：', ':')
-        return stripped.ifBlank { "待办" }
+        )
+            .replace(Regex("""今天|今晚|今早|明早|明天|后天|tomorrow|tmrw|day after tomorrow""", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("""\d{1,3}\s*天后|\d{1,2}月\d{1,2}[日号]?|(?:下)?(?:周|星期)[一二三四五六日天]"""), "")
+            .replace(Regex("""上午|中午|下午|晚上|早上|凌晨"""), "")
+            .replace(Regex("""\d{1,2}[:：]\d{2}"""), "")
+            .replace(Regex("""\d{1,2}\s*点\s*\d{0,2}\s*分?"""), "")
+            .replace(Regex("""^(?:要|的|在|于)\s*"""), "")
+            .trim(' ', '，', ',', '。', '.', '：', ':')
+        return stripped
     }
+
+    private fun extractLocation(raw: String): String = Regex("""(?:在|去|到)\s*([\p{L}0-9·_-]{2,24}?)(?:开会|复诊|办事|见面|[，,。\s])""")
+        .find(raw)?.groupValues?.getOrNull(1)?.trim().orEmpty()
 }

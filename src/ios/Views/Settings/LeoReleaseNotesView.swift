@@ -12,6 +12,17 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.33.0",
+            date: "2026-09-04",
+            title: "自然语言直达系统，中断任务可恢复",
+            highlights: [
+                "提醒、日历和出行意图可理解明天、后天、月日、周几和几天后；缺少必要字段时只询问缺失项，不交给模型猜测。",
+                "EventKit 写入日程和提醒后会按系统标识符立即回读；只有真实读到才返回执行凭证，权限或写入失败都会明确停止。",
+                "应用被系统回收、网络在首次回复前失败，或工具完成后中断时，会话会准确显示继续，不会把未回复消息伪装成完成。",
+                "iPhone 和 iPad 继续共用同一结构化意图与结果回执；长粘贴、Artifacts、键盘快捷键、分屏与台前调度能力保留。",
+            ]
+        ),
+        LeoRelease(
             version: "1.32.0",
             date: "2026-09-04",
             title: "本机动作可验证，iPhone 与 iPad 构建闭环",

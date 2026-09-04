@@ -778,6 +778,10 @@ fun ChatScreen(
     var inputFieldValue by remember {
         mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(""))
     }
+    // Long pastes stay outside the editor so the caret and surrounding prompt
+    // remain usable. They are expanded exactly once when the message leaves.
+    val pastedTexts = remember(sessionId) { androidx.compose.runtime.mutableStateListOf<PastedText>() }
+    var nextPasteId by remember(sessionId) { mutableStateOf(1) }
     // T217-2: suppress IME commits arriving briefly after send. clearFocus
     // triggers finishComposingText, which makes voice/Pinyin IMEs commit
     // their pending candidate back through onValueChange even after we
@@ -1435,11 +1439,13 @@ fun ChatScreen(
             focusManager.clearFocus()
             return@handler
         }
+        val (expandedText, consumedPasteIds) = expandPastePlaceholders(rawText, pastedTexts)
         lastSendTimeMs = System.currentTimeMillis()
         viewModel.setInputText("")
         keyboardController?.hide()
         focusManager.clearFocus()
-        viewModel.sendMessage(rawText)
+        viewModel.sendMessage(expandedText)
+        pastedTexts.removeAll { it.id in consumedPasteIds }
         noteSendForInputModePref()
         userScrolledAway = false
         coroutineScope.launch {
@@ -4572,7 +4578,7 @@ fun ChatScreen(
                                 shadowPaint,
                             )
                         }
-                        .padding(top = if (attachments.isNotEmpty()) 8.dp else 4.dp),
+                        .padding(top = if (attachments.isNotEmpty() || pastedTexts.isNotEmpty()) 8.dp else 4.dp),
                 ) {
                     // T185: Move-to capsule lives INSIDE the composer card,
                     // pinned 8dp from the top-right corner, mirroring iOS
@@ -4665,7 +4671,7 @@ fun ChatScreen(
                         }
                     }
                     // Attachment thumbnails inside the box (iOS: 64×64 squares)
-                    if (attachments.isNotEmpty()) {
+                    if (attachments.isNotEmpty() || pastedTexts.isNotEmpty()) {
                         LazyRow(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -4678,6 +4684,17 @@ fun ChatScreen(
                             // past the top-right; no extra spacedBy needed.
                             horizontalArrangement = Arrangement.spacedBy(0.dp),
                         ) {
+                            items(pastedTexts, key = { "paste-${it.id}" }) { pasted ->
+                                PastedTextChip(
+                                    pasted = pasted,
+                                    onRemove = {
+                                        pastedTexts.removeAll { it.id == pasted.id }
+                                        viewModel.setInputText(
+                                            inputText.replace(PastedText.placeholderFor(pasted.id), ""),
+                                        )
+                                    },
+                                )
+                            }
                             items(attachments, key = { it.id }) { attachment ->
                                 Box {
                                 AttachmentChip(
@@ -4861,34 +4878,7 @@ fun ChatScreen(
                         // truth for what "press Enter to send" means.
                         val performEnterSend: () -> Boolean = handler@{
                             if (inputText.isBlank() && attachments.isEmpty()) return@handler false
-                            // Intercept slash commands so "/compact" et al.
-                            // run locally instead of being sent as a chat
-                            // turn. Mirrors iOS performSend().
-                            if (viewModel.tryExecuteInputAsSlashCommand(inputText)) {
-                                viewModel.setInputText("")
-                                keyboardController?.hide()
-                                focusManager.clearFocus()
-                                return@handler true
-                            }
-                            // T160: snapshot → clear state + IME →
-                            // sendMessage. Same ordering as the send-
-                            // button click; finishComposingText fires
-                            // when focus drops so any IME composing
-                            // buffer is committed/dropped before the
-                            // empty inputText becomes visible.
-                            val toSend = inputText
-                            lastSendTimeMs = System.currentTimeMillis()
-                            viewModel.setInputText("")
-                            keyboardController?.hide()
-                            focusManager.clearFocus()
-                            viewModel.sendMessage(toSend)
-                            noteSendForInputModePref()
-                            userScrolledAway = false
-                            coroutineScope.launch {
-                                tracedScrollToItem("SEND-PATH(keyboard-imeAction)/initial", 0, 0)
-                                kotlinx.coroutines.delay(100)
-                                tracedScrollToItem("SEND-PATH(keyboard-imeAction)/settle", 0, 0)
-                            }
+                            performSendOrEnqueue(inputText)
                             true
                         }
                         BasicTextField(
@@ -4901,6 +4891,17 @@ fun ChatScreen(
                                 val now = System.currentTimeMillis()
                                 if (now - lastSendTimeMs < 300L && tfv.text.isNotEmpty()) {
                                     return@BasicTextField
+                                }
+                                val nextValue = foldLongPasteIfNeeded(inputFieldValue, tfv) { inserted ->
+                                    if (inserted.length > PASTE_AS_FILE_THRESHOLD &&
+                                        viewModel.stashPastedTextAsFile(inserted) != null
+                                    ) {
+                                        ""
+                                    } else {
+                                        val entry = PastedText(nextPasteId++, inserted)
+                                        pastedTexts += entry
+                                        entry.placeholder
+                                    }
                                 }
                                 // [T-android-voice-correction] Capability #3:
                                 // learn from select-and-replace edits. When the
@@ -4916,7 +4917,7 @@ fun ChatScreen(
                                 // fire-and-forget, no UI. Deliberately NOT
                                 // firing on ordinary typing, which is
                                 // append-only and carries no correction signal.
-                                captureSelectionReplacement(context, inputFieldValue, tfv)
+                                captureSelectionReplacement(context, inputFieldValue, nextValue)
                                 // [T-android-enter-to-send-multiline] Root cause:
                                 // the composer is a multi-line BasicTextField
                                 // (maxLines=6 ⇒ EditorInfo carries
@@ -4942,11 +4943,11 @@ fun ChatScreen(
                                 // never reaches the send path).
                                 if (sendOnEnter && !showMentionMenu) {
                                     val oldText = inputFieldValue.text
-                                    val newText = tfv.text
+                                    val newText = nextValue.text
                                     val addedNewline = newText.length == oldText.length + 1 &&
                                         newText.count { it == '\n' } == oldText.count { it == '\n' } + 1
                                     if (addedNewline) {
-                                        val caret = tfv.selection.end
+                                        val caret = nextValue.selection.end
                                         // The inserted char sits just before the
                                         // caret; confirm it is the newline so we
                                         // don't misfire on an unrelated 1-char edit
@@ -4959,10 +4960,10 @@ fun ChatScreen(
                                         }
                                     }
                                 }
-                                inputFieldValue = tfv
-                                if (inputText != tfv.text) {
-                                    viewModel.setInputText(tfv.text)
-                                    viewModel.updateSlashMenuState(tfv.text)
+                                inputFieldValue = nextValue
+                                if (inputText != nextValue.text) {
+                                    viewModel.setInputText(nextValue.text)
+                                    viewModel.updateSlashMenuState(nextValue.text)
                                 }
                                 // Drive the @ mention picker on every keystroke
                                 // and selection change — caret position alone
@@ -4971,8 +4972,8 @@ fun ChatScreen(
                                 // the slash-menu-priority case and any
                                 // non-mention caret state.
                                 viewModel.updateMentionMenuState(
-                                    text = tfv.text,
-                                    caret = tfv.selection.end,
+                                    text = nextValue.text,
+                                    caret = nextValue.selection.end,
                                 )
                             },
                             modifier = Modifier
@@ -5605,10 +5606,11 @@ fun ChatScreen(
                     onSelect = { targetId ->
                         ChatViewModelStore.stashPendingTransfer(
                             ChatViewModelStore.PendingTransfer(
-                                inputText = inputText,
+                                inputText = expandPastePlaceholders(inputText, pastedTexts).first,
                                 attachments = viewModel.attachments.value,
                             ),
                         )
+                        pastedTexts.clear()
                         viewModel.setInputText("")
                         viewModel.clearAttachments()
                         viewModel.clearShareInjectedFlag()
@@ -5631,6 +5633,7 @@ fun ChatScreen(
                     onConfirm = {
                         viewModel.clearChat()
                         viewModel.setInputText("")
+                        pastedTexts.clear()
                         showClearChatDialog = false
                     },
                 )

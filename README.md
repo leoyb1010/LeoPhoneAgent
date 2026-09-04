@@ -1,8 +1,8 @@
 # LeoPhoneAgent
 
-[![iOS](https://img.shields.io/badge/iOS-1.32.0%20(107)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
-[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.25-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.25)
-[![macOS](https://img.shields.io/badge/macOS-1.82.0-7C3AED.svg)](src/mac/leocodebox/package.json)
+[![iOS](https://img.shields.io/badge/iOS-1.33.0%20(108)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.26-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.26)
+[![macOS](https://img.shields.io/badge/macOS-1.83.0-7C3AED.svg)](src/mac/leocodebox/package.json)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.17-D94B16.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Mobile](https://img.shields.io/badge/mobile-iOS%20%2B%20Android-black.svg)](#系统架构)
@@ -40,8 +40,8 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
   [Phase 5](docs/TREASURY_PHASE5_DELIVERY_EVIDENCE.md)。游标增量同步、按需正文/附件、
   冲突/tombstone、Mac 主动工作台与三端 `treasury_search/get/save/update` 契约已落地；
   [隐私与安全边界](docs/TREASURY_PRIVACY_AND_SECURITY.md)及
-  [设备测试/发版清单](docs/TREASURY_DEVICE_RELEASE_CHECKLIST.md)已发布。Android alpha.25 已完成
-  固定签名、Fold8 API 35、alpha.24 覆盖安装与公开附件门禁；Mac 1.82.0 已完成 Developer ID
+  [设备测试/发版清单](docs/TREASURY_DEVICE_RELEASE_CHECKLIST.md)已发布。Android alpha.26 已完成
+  固定签名、Fold8 API 35、Standard/Power 覆盖安装与公开附件门禁；Mac 1.83.0 已完成 Developer ID
   签名和本机安装。真实三设备联网、iPhone/iPad、Mac 公证仍为 HOLD，不能把源码门禁等同于全部实机发版。
   最新追加审计已补齐三端相关正文/相关收藏、有限重试、用户标题保护、Mac PDF 重试完整性、iOS 持久增强任务执行、三端安全缓存清理、Android 系统快速捕获，以及正文/附件按需读取与 HTTP Range 断点续传；真实弱网、进程死亡和设备 HOLD 边界不变。
   鸿蒙 7 交付计划：
@@ -77,16 +77,16 @@ bash src/harmony/scripts/build_hap.sh
 > 同一台手机上同时安装。Power 版只有在用户完成产品内授权以及 Android
 > 无障碍/Shizuku 系统授权后，才会开放更深的跨应用操控。
 
-- [下载 Standard alpha.25](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.25/LeoPhoneAgent-Standard-1.0.0-alpha.25.apk)
-- [下载 Power alpha.25](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.25/LeoPhoneAgent-Power-1.0.0-alpha.25.apk)
-- [查看本次更新记录](CHANGELOG.md#ios-1320-107--android-100-alpha25--mac-1820--可验证执行与低打扰更新---2026-09-04)
+- [下载 Standard alpha.26](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.26/LeoPhoneAgent-Standard-1.0.0-alpha.26.apk)
+- [下载 Power alpha.26](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/android-v1.0.0-alpha.26/LeoPhoneAgent-Power-1.0.0-alpha.26.apk)
+- [查看本次更新记录](CHANGELOG.md#ios-1330-108--android-100-alpha26--mac-1830--三端统一任务与系统执行---2026-09-04)
 - [查看完整五轮审计与交付报告](docs/ANDROID_DELIVERY_1.0.0_ALPHA1.md)
 
 SHA-256：
 
 ```text
-Standard  b993c810853f02900fa58bd79c1056c1a377967cd4a3d05c1155b6cd89304a94
-Power     808be525d539adececd0cc3fc7c3889d3215f036bcd0a8d403548f9acb5877fb
+Standard  5bc52be1fd48913920c04616980c519013faed48a035c911d61f0a458e131800
+Power     b424035bc900b2728305356b2d56487761faa76c25d4259899d8102e0353c85c
 ```
 
 本次公开附件使用显式开启的个人 Alpha 调试证书签名，不应作为应用商店的
@@ -149,13 +149,13 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 版本/构建:`1.32.0 (107)`;Bundle ID `com.leoyuan.leophoneagent`
+- 版本/构建:`1.33.0 (108)`;Bundle ID `com.leoyuan.leophoneagent`
 - iPhone / iPad 本机动作：剪贴板读写和设备信息直接走系统能力，写入后读回核对；
   支持 Foundation Models 的设备用结构化生成整理收藏与语音任务
 - iPad 工作区：分屏、台前调度和窗口缩放按正文/侧栏实际可用空间切换单双栏，
   保留多窗口、拖放附件与外接键盘快捷键
-- iOS 26.5 模拟器已覆盖 iPhone 17 Pro 独立工作首页、iPad Pro 13″ 竖屏更新页与
-  横屏双栏；冷启动目标日志不含 SwiftUI 视图更新发布警告或重复数据库迁移错误
+- iPhone/iPad 通用设备目标已完成无签名构建，`MinisLogicTests` 337/337；
+  当前 iSH 静态库为 iPhoneOS arm64，主 App 模拟器需先重建 simulator 依赖，iPad 实机安装待设备在场后验收
 - 主对话框直达 Mac:「指挥一台 Mac」选机 + 选 CLI 即开聊;发送在会话建立
   期间自动排队,永不吞点击
 - 会话接管:进入任意 Mac 先列进行中任务,一键接管(全量回放 + 实时跟随)
@@ -166,7 +166,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 Android 版本
 
-- 开发/发布版本：`1.0.0-alpha.25`（versionCode `100025`），`minSdk 26`、`targetSdk 35`、`compileSdk 36`、仅 ARM64。
+- 开发/发布版本：`1.0.0-alpha.26`（versionCode `100026`），`minSdk 26`、`targetSdk 35`、`compileSdk 36`、仅 ARM64。
 - Standard 包名：`com.leoyuan.leophoneagent`
 - Power 包名：`com.leoyuan.leophoneagent.power`
 - 两个版本共享本机 Agent、Provider、Skills、MCP、Memory、PRoot 与浏览器底座；
@@ -321,7 +321,8 @@ adb logcat -d | rg 'FATAL EXCEPTION|AndroidRuntime'
 
 | 版本 | 状态 | 处理 |
 |---|---|---|
-| alpha.25 | 当前公开附件 | 执行凭证、自动安全更新、藏宝阁筛选/空状态和 Fold8 200% 字体优化 |
+| alpha.26 | 当前公开附件 | Grok 实时模型目录、自然语言系统动作、中断恢复、长粘贴和受限设置修复 |
+| alpha.25 | 上一公开附件 | 执行凭证、自动安全更新、藏宝阁筛选/空状态和 Fold8 200% 字体优化 |
 | alpha.24 | 上一公开附件 | 藏宝阁三端可调用知识库、系统捕获、按需正文/附件、Range 续传与 Fold8 完整门禁 |
 | alpha.23 | 上一公开附件 | 恢复 OpenMinis Grok OAuth/完整目录，Fold8 更新弹窗与双 flavor 构建稳定性修复 |
 | alpha.22 | 上一公开附件 | 出行双写、无障碍快照与省电恢复；Grok CLI 代理改动已在 alpha.23 回退 |
@@ -397,10 +398,10 @@ npm run typecheck && npm run lint && npm test && npm run build
 npm run desktop:dist:mac
 ```
 
-- [下载 Mac 1.82.0 DMG](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/v1.82.0/leocodebox-1.82.0-mac-arm64.dmg)
-- [Mac 1.82.0 热更新 ZIP](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/v1.82.0/leocodebox-1.82.0-mac-arm64.zip)
-- DMG SHA-256：`f8979d86649300c19cc7b4828b7b53a387d41ca1e51a532716c07d1518251bcb`
-- ZIP SHA-256：`4f50b046fc2a664529f0dbd867bde82bd1b3887e9046e4320a83b2f22daf0066`
+- [下载 Mac 1.83.0 DMG](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/v1.83.0/leocodebox-1.83.0-mac-arm64.dmg)
+- [Mac 1.83.0 热更新 ZIP](https://github.com/leoyb1010/LeoPhoneAgent/releases/download/v1.83.0/leocodebox-1.83.0-mac-arm64.zip)
+- DMG SHA-256：`12b7687f3f70ec38eafd12f4da876307b2af6002c71140213d1ab2b3cfff6c6b`
+- ZIP SHA-256：`311d61147aed60f5a9e9c7691372a4cca80f7713a3db6d5c914b7725de69a5b0`
 
 旧版 `src/mac/leoagent/` 保留作协议灰度回退,`relay.py` 继续服务中继。
 合并和迁移边界见

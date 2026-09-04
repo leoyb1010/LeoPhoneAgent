@@ -35,6 +35,29 @@ function asStringRecord(value: unknown): StringRecord {
   return Object.fromEntries(Object.entries(record).map(([key, item]) => [key, typeof item === 'string' ? item : ''])) as StringRecord;
 }
 
+function readCodexLiveConfig(config: string, legacyApiKey = ''): {
+  providerId: string;
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  wireApi: 'responses' | 'chat';
+} {
+  const parsed = asRecord(config ? TOML.parse(config) : {});
+  const providerId = typeof parsed.model_provider === 'string' ? parsed.model_provider : '';
+  const providerConfig = providerId
+    ? asRecord(asRecord(parsed.model_providers)[providerId])
+    : {};
+  return {
+    providerId,
+    baseUrl: typeof providerConfig.base_url === 'string' ? providerConfig.base_url : '',
+    apiKey: typeof providerConfig.experimental_bearer_token === 'string'
+      ? providerConfig.experimental_bearer_token
+      : legacyApiKey,
+    model: typeof parsed.model === 'string' ? parsed.model : '',
+    wireApi: providerConfig.wire_api === 'chat' ? 'chat' : 'responses',
+  };
+}
+
 
 async function importCurrentProviders(store: ProviderStore): Promise<SwitchProvider[]> {
   const imported: SwitchProvider[] = [];
@@ -75,24 +98,16 @@ async function importCurrentProviders(store: ProviderStore): Promise<SwitchProvi
     } catch {
       config = '';
     }
-    const parsed = asRecord(config ? TOML.parse(config) : {});
-    const activeProviderId = typeof parsed.model_provider === 'string' ? parsed.model_provider : '';
-    const configuredProviders = asRecord(parsed.model_providers);
-    const providerConfig = activeProviderId && configuredProviders[activeProviderId]
-      ? asRecord(configuredProviders[activeProviderId])
-      : null;
-    const baseUrl = typeof providerConfig?.base_url === 'string' ? providerConfig.base_url : '';
-    const model = typeof parsed.model === 'string' ? parsed.model : '';
-    const wireApi = providerConfig?.wire_api === 'chat' ? 'chat' : 'responses';
-    if (auth.OPENAI_API_KEY || baseUrl || model) {
+    const live = readCodexLiveConfig(config, auth.OPENAI_API_KEY || '');
+    if (live.apiKey || live.baseUrl || live.model) {
       const provider = normalizeProvider({
         id: 'codex-current',
         target: 'codex',
         name: 'Codex 当前配置',
-        baseUrl,
-        apiKey: auth.OPENAI_API_KEY || '',
-        model,
-        wireApi,
+        baseUrl: live.baseUrl,
+        apiKey: live.apiKey,
+        model: live.model,
+        wireApi: live.wireApi,
         category: 'imported',
       }, store.providers.find((item) => item.id === 'codex-current'));
       upsertProviderInStore(store, provider);
@@ -235,11 +250,8 @@ async function detectActiveByTarget(providers: SwitchProvider[], lastAppliedByTa
       lastAppliedByTarget.codex,
     );
     if (!match && (auth.OPENAI_API_KEY || config)) {
-      const current = {
-        baseUrl: config.match(/^\s*base_url\s*=\s*["']([^"']+)["']/m)?.[1] || '',
-        apiKey: auth.OPENAI_API_KEY || '',
-        model: config.match(/^\s*model\s*=\s*["']([^"']+)["']/m)?.[1] || '',
-      };
+      const live = readCodexLiveConfig(config, auth.OPENAI_API_KEY || '');
+      const current = { baseUrl: live.baseUrl, apiKey: live.apiKey, model: live.model };
       match = chooseActiveProvider(
         providers,
         'codex',
@@ -327,10 +339,11 @@ function mapCcSwitchRow(row: CcSwitchRow): ImportedProviderDraft | null {
     };
   } else if (target === 'codex') {
     const auth = asStringRecord(settings.auth);
-    apiKey = auth.OPENAI_API_KEY || '';
     const configText = typeof settings.config === 'string' ? settings.config : '';
-    baseUrl = configText.match(/^\s*base_url\s*=\s*["']([^"']+)["']/m)?.[1] || '';
-    model = configText.match(/^\s*model\s*=\s*["']([^"']+)["']/m)?.[1] || '';
+    const live = readCodexLiveConfig(configText, auth.OPENAI_API_KEY || '');
+    apiKey = live.apiKey;
+    baseUrl = live.baseUrl;
+    model = live.model;
   } else if (target === 'gemini') {
     baseUrl = env.GOOGLE_GEMINI_BASE_URL || '';
     apiKey = env.GEMINI_API_KEY || env.GOOGLE_API_KEY || '';
@@ -460,21 +473,19 @@ async function adoptLiveProviderEdits(store: ProviderStore, target: string): Pro
     }
 
     if (target === 'codex') {
-      const [authPath, configPath] = targetConfigPaths('codex');
-      const [auth, config] = await Promise.all([
-        readJsonFile<StringRecord>(authPath, {}),
-        fs.readFile(configPath, 'utf8').catch(() => ''),
-      ]);
+      const [, configPath] = targetConfigPaths('codex');
+      const config = await fs.readFile(configPath, 'utf8').catch(() => '');
       // Only adopt while our managed provider is still selected in config.toml
       // AND its base_url still matches the record — a hand-edited base_url
       // means the live key belongs to a different destination, and adopting it
       // would make a later re-apply send that key to the old host.
       if (!config.includes(`model_provider = "leocodebox_${sanitizeIdPart(provider.id)}"`)) return false;
-      const liveBase = (config.match(/^\s*base_url\s*=\s*["']([^"']+)["']/m)?.[1] || '').replace(/\/+$/, '');
+      const live = readCodexLiveConfig(config);
+      const liveBase = live.baseUrl.replace(/\/+$/, '');
       if (liveBase && liveBase !== provider.baseUrl) return false;
       return adopt({
-        apiKey: auth.OPENAI_API_KEY || '',
-        model: config.match(/^\s*model\s*=\s*["']([^"']+)["']/m)?.[1] || '',
+        apiKey: live.apiKey,
+        model: live.model,
       });
     }
 

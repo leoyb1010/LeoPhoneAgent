@@ -59,6 +59,13 @@ abstract class OAuthManager(
             return diff == 0
         }
 
+        /** Credential-presence probe for routing; refresh still happens on request. */
+        fun hasStoredCredential(context: Context, instanceId: String): Boolean {
+            val prefs = com.leoyuan.leophoneagent.util.EncryptedPrefsFactory.safeCreate(context, "oauth_prefs")
+            if (!prefs.getString("oauth_tokens_$instanceId", null).isNullOrEmpty()) return true
+            return !prefs.getString("oauth_${KEY_MANUAL_BEARER}_$instanceId", null).isNullOrEmpty()
+        }
+
         /** Create the appropriate OAuthManager for a provider instance. */
         fun forInstance(context: Context, instance: com.leoyuan.leophoneagent.data.model.ProviderInstance): OAuthManager? {
             return when (instance.providerType) {

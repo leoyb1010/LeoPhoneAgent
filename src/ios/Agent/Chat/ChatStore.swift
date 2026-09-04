@@ -2304,24 +2304,16 @@ actor ChatStore {
     /// factored out so it stays identical to `loadSession`'s inline logic. Keep
     /// the two in sync if either changes.
     static func isInterruptedTail(role: MessageRole, parts: [ContentPart]) -> Bool {
-        if role == .user {
-            let allToolResults = !parts.isEmpty && parts.allSatisfy {
-                if case .toolResult = $0 { return true }; return false
-            }
-            let isContinueMessage = parts.count == 1 && {
-                if case .text(let t) = parts.first,
-                   t.contains("The user stopped the previous response") {
-                    return true
-                }
-                return false
-            }()
-            return allToolResults || isContinueMessage
-        } else if role == .assistant {
-            return parts.contains {
-                if case .toolUse = $0 { return true }; return false
+        let tailRole: AgentChatCorrectness.TailRole = role == .user ? .user : .assistant
+        let tailParts: [AgentChatCorrectness.TailPart] = parts.map {
+            switch $0 {
+            case .text(let value): return .text(value)
+            case .toolUse: return .toolUse
+            case .toolResult: return .toolResult
+            case .mediaRef: return .other
             }
         }
-        return false
+        return AgentChatCorrectness.isInterruptedTail(role: tailRole, parts: tailParts)
     }
 
     func deleteMessages(sessionId: String) {

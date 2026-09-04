@@ -4,6 +4,32 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## iOS 1.33.0 (108) / Android 1.0.0-alpha.26 / Mac 1.83.0 · 三端统一任务与系统执行 - 2026-09-04
+
+### 用户可见
+
+- Mac 移除主控台、第二任务输入和重复卡片：新任务只从顶部 Task Dock 建立，已有会话只保留自己的 composer。LeoAPI 的网关、模型线路、上下文保护、健康检测、自动切换和 CC Switch 导入统一进入「设置 → 接口与凭据」。
+- Mac 内置 CodexHost 更新到 `0.4.4`；Codex 自定义接口的 bearer token 只写入对应 provider 表，不再改写官方 ChatGPT `auth.json`。切换前预览、备份、回滚与官方登录保护继续有效。
+- iOS/Android 的确定性意图从单一高铁句子扩展为通用系统动作路由：提醒、日历和出行可理解明天、后天、月日、周几与几天后；必要信息缺失时只问缺失项，系统写入后回读，不让模型伪造成功。
+- Android Grok OAuth 改为刷新令牌后读取 xAI 实时 `/v1/models`，失败才使用完整内置目录；OAuth bearer 明确使用 xAI Chat Completions，不会误走 Codex Responses 或把令牌发往 OpenAI。
+- Android 补齐长粘贴折叠/超大文本附件、未回复用户尾部恢复、新版数据库无损保护，以及侧载 APK 受限设置识别与 Shizuku 验证式修复。
+- Fold8 封面宽度或 200% 字体下，首页标题栏自动收敛为 `Leo`，步骤卡按文字真实增高；高铁、航班、大巴等出行语义共用同一个结构化合同。
+
+### 上游吸收与边界
+
+- 选择性吸收 OpenMinis 1.13 的 xAI 动态目录、凭据感知模型组、中断尾部恢复、长粘贴、受限设置和数据库版本防护；已有 Fast Mode、partial response、tool-result image、FoldLayoutPolicy 与 Action Receipt 保留原实现。
+- 没有整包并入上游约 1.4 万行 Android 备份 UI 和 1.7 万行 iOS/rclone 实现，避免引入第二套同步状态机和云账号设置。
+- 当前 Xcode 26.6 / iOS 26.5 SDK 不提交无法构建的 iOS 27 符号；已将意图合同、App Intents、EventKit、Shortcuts、Artifacts 和 iPad 键盘/分屏路径做成可向 iOS 27 延伸的边界。
+
+### 审计与验证
+
+- Android Standard/Power 各 `641` 项 JVM 测试（`0` 失败、各 `1` 跳过），双 flavor 编译、Debug/Release lint（`0 error`）、R8 和双 Release 组装通过。
+- Fold8 API 35 上 Standard/Power Release 覆盖安装均返回 `Success`，版本为 `100026`；Standard/Power 冷启动 `Status: ok`，1768×2208 ↔ 1080×1728 重排 PID 保持，App `FATAL EXCEPTION`/ANR 为 `0`。200% 字体截断在本轮被真实发现并复测修复。
+- Android APK SHA-256：Standard `5bc52be1fd48913920c04616980c519013faed48a035c911d61f0a458e131800`；Power `b424035bc900b2728305356b2d56487761faa76c25d4259899d8102e0353c85c`。
+- iOS `MinisLogicTests` `337/337`；`LeoPhoneAgent` 通用 iPhone/iPad 设备目标完整无签名构建成功。仓库当前的 iSH 静态库是 iPhoneOS arm64，所以主 App 模拟器链接仍按 BUILDING.md 明确保持 HOLD；iPad 实机按用户要求延后验收。
+- Mac release notes、typecheck、lint、production build、npm audit（`0 vulnerabilities`）与 desktop `37`、client `159`、server `406` 测试全部通过。Developer ID DMG/ZIP 完成 `36` 个嵌套 Mach-O 严格签名校验，本机覆盖安装后 `/health` 回读 `version=1.83.0`。
+- Mac DMG SHA-256 `12b7687f3f70ec38eafd12f4da876307b2af6002c71140213d1ab2b3cfff6c6b`；热更新 ZIP SHA-256 `311d61147aed60f5a9e9c7691372a4cca80f7713a3db6d5c914b7725de69a5b0`。本机无 `notarytool` 专用 profile，因此 Gatekeeper 仍如实为 `Unnotarized Developer ID`，不伪报公证。
+
 ## iOS 1.32.0 (107) / Android 1.0.0-alpha.25 / Mac 1.82.0 · 可验证执行与低打扰更新 - 2026-09-04
 
 ### 用户可见

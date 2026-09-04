@@ -35,7 +35,6 @@ window.__MOCK_STATE__ = {
       return Promise.resolve(clone(mockState));
     },
     copyLocalWebUrl: function () { return Promise.resolve(clone(mockState)); },
-    openSwitch: function () { return Promise.resolve(clone(mockState)); },
     refreshActiveTab: function () { return Promise.resolve(clone(mockState)); },
     copyDiagnostics: function () { return Promise.resolve(clone(mockState)); },
     showEnvironmentPicker: function () { return Promise.resolve(clone(mockState)); },
@@ -225,8 +224,6 @@ window.__MOCK_STATE__ = {
     switch (name) {
       case 'local':
 	        return CC.run('正在打开本地 leocodebox...', function () { return bridge.openLocal(); });
-      case 'cc-switch':
-        return CC.run('正在打开 Leoapi...', function () { return bridge.openSwitch(); });
       case 'open-web':
         return CC.run('正在浏览器中打开本机工作台...', function () { return bridge.openLocalWebUi(); });
       case 'copy-web':
@@ -290,7 +287,6 @@ window.__MOCK_STATE__ = {
 	      envActions +
 	      accountAction +
 	      logoutAction +
-      '<button class="btn sm tb-action no-drag" data-cc-action="cc-switch" title="打开 Leoapi 接口切换">Leoapi</button>' +
       '<button class="icon-btn tb-action no-drag" data-cc-action="settings-toggle" title="设置">' + icon('settings', 16) + '</button>' +
       '</div>';
   };
@@ -571,7 +567,7 @@ window.__MOCK_STATE__ = {
   function localPane(state) {
     return '<div class="pane-h"><div><h2 class="pane-title">本地服务</h2><p class="pane-sub">无需账号，直接管理这台 Mac 上的本地智能体。</p></div></div>' +
       '<div class="card"><div class="card-head"><div><div class="card-t">leocodebox 服务</div><div class="card-sub mono">' + CC.esc(CC.localUrl(state) || '打开 App 时自动启动') + '</div></div><div class="card-tools"><span class="dot" style="background:' + (state.localServerRunning ? 'var(--ok)' : 'var(--tx3)') + '"></span><button class="icon-btn" data-cc-action="local-settings-toggle" title="本地设置">' + CC.icon('gear', 16) + '</button></div></div>' +
-      '<div class="card-actions"><button class="btn pri" data-cc-action="local">' + CC.icon('play', 15) + '打开 leocodebox</button><button class="btn" data-cc-action="cc-switch">' + CC.icon('settings', 15) + 'Leoapi 接口切换</button></div></div>';
+      '<div class="card-actions"><button class="btn pri" data-cc-action="local">' + CC.icon('play', 15) + '打开 leocodebox</button></div></div>';
   }
 
   function envRow(environment) {
@@ -608,7 +604,6 @@ window.__MOCK_STATE__ = {
 	      CC.ui.section = 'local';
 	      var localNav = '<div class="sb"><div class="sb-grp"><div class="lbl">工具</div>' +
 	        navItem('local', 'terminal', '本地服务', state.localServerRunning ? '运行中' : '空闲', 'local') +
-          navItem('switch', 'settings', 'Leoapi', '接口', 'local') +
 	        '</div></div>';
 	      return localNav + '<div class="sb-main">' + localPane(state) + '</div>';
 	    }
@@ -617,7 +612,6 @@ window.__MOCK_STATE__ = {
     CC.ui.section = section;
     var nav = '<div class="sb"><div class="sb-grp"><div class="lbl">Launcher</div>' +
       navItem('local', 'terminal', 'Local servers', state.localServerRunning ? 'on' : 'idle', section) +
-      navItem('switch', 'settings', 'Leoapi', '接口', section) +
       navItem('cloud', 'cloud', 'Cloud environments', (state.environments || []).length, section) +
       '</div></div>';
     return nav + '<div class="sb-main">' + (section === 'local' ? localPane(state) : cloudPane(state)) + '</div>';
@@ -626,10 +620,6 @@ window.__MOCK_STATE__ = {
   function onClick(event) {
     var nav = event.target.closest('[data-cc-nav]');
     if (!nav) return false;
-    if (nav.getAttribute('data-cc-nav') === 'switch') {
-      CC.act('cc-switch', nav);
-      return true;
-    }
     CC.ui.section = nav.getAttribute('data-cc-nav');
     CC.render(CC.state);
     return true;

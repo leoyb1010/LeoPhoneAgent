@@ -2,6 +2,16 @@ import XCTest
 
 final class AgentChatCorrectnessTests: XCTestCase {
 
+    func testRelativeCalendarPhrasesResolveWithoutModelGuessing() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let monday = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 9, day: 7)))
+        XCTAssertEqual(ActionRouter.dayOffset("9月18日", today: monday, calendar: calendar), 11)
+        XCTAssertEqual(ActionRouter.dayOffset("周五", today: monday, calendar: calendar), 4)
+        XCTAssertEqual(ActionRouter.dayOffset("下周五", today: monday, calendar: calendar), 11)
+        XCTAssertEqual(ActionRouter.dayOffset("3天后", today: monday, calendar: calendar), 3)
+    }
+
     func testLastAssistantIndexSkipsTrailingQueuedUser() {
         // assistant, user (queued) — Resume/Stop must target index 0
         XCTAssertEqual(AgentChatCorrectness.lastAssistantIndex(isAssistant: [true, false]), 0)
@@ -63,6 +73,13 @@ final class AgentChatCorrectnessTests: XCTestCase {
         XCTAssertEqual(todo.kind, .createTodo)
         XCTAssertEqual(todo.label, "买牛奶")
         XCTAssertEqual(ActionRouter.decide(text: "手电筒坏了怎么办", imageCount: 0).path, .agent)
+
+        let natural = ActionRouter.decide(text: "提醒我后天下午3点去医院复诊", imageCount: 0)
+        XCTAssertEqual(natural.kind, .createTodo)
+        XCTAssertEqual(natural.path, .native)
+        XCTAssertEqual(natural.hour, 15)
+        XCTAssertEqual(natural.effectiveDayOffset, 2)
+        XCTAssertEqual(natural.label, "去医院复诊")
 
         let enPhoto = ActionRouter.decide(text: "Save this photo to the album", imageCount: 1)
         XCTAssertEqual(enPhoto.path, .native)
@@ -151,5 +168,21 @@ final class AgentChatCorrectnessTests: XCTestCase {
         XCTAssertEqual(complete.hour, 19)
         XCTAssertTrue(complete.notes.contains("G1234"))
         XCTAssertTrue(complete.notes.contains("12A"))
+
+        let optionalDetails = ActionRouter.decide(
+            text: "帮我记下明天早上8点去机场的行程",
+            imageCount: 0
+        )
+        XCTAssertEqual(optionalDetails.path, .native)
+        XCTAssertEqual(optionalDetails.kind, .createTravel)
+        XCTAssertEqual(optionalDetails.location, "机场")
+        XCTAssertTrue(optionalDetails.missingFields.isEmpty)
+    }
+
+    func testCalendarWithoutTimeClarifiesInsteadOfGuessing() {
+        let result = ActionRouter.decide(text: "把明天产品评审加到日历", imageCount: 0)
+        XCTAssertEqual(result.path, .clarify)
+        XCTAssertEqual(result.kind, .createCalendar)
+        XCTAssertEqual(result.missingFields, ["开始时间"])
     }
 }

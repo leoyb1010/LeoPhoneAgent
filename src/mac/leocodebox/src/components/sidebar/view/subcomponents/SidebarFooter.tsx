@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowUpCircle, Bug, Settings, SlidersHorizontal } from 'lucide-react';
+import { AlertTriangle, ArrowUpCircle, Bug, Settings } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import type { ReleaseInfo } from '../../../../types/sharedTypes';
@@ -11,7 +11,6 @@ type SidebarFooterProps = {
   currentVersion: string;
   onShowVersionModal: () => void;
   onShowSettings: () => void;
-  onShowLeoapi: () => void;
   onShowFeedback: () => void;
   t: TFunction;
 };
@@ -24,7 +23,6 @@ export default function SidebarFooter({
   currentVersion,
   onShowVersionModal,
   onShowSettings,
-  onShowLeoapi,
   onShowFeedback,
   t,
 }: SidebarFooterProps) {
@@ -45,20 +43,13 @@ export default function SidebarFooter({
           <span className="truncate">{releaseInfo?.title || t('localUi.updateTo', { version: latestVersion })}</span>
         </button>
       )}
-      <div className="grid grid-cols-3 gap-1 md:hidden">
+      <div className="grid grid-cols-2 gap-1 md:hidden">
         <button
           type="button"
           onClick={onShowFeedback}
           className="flex items-center justify-center gap-1.5 rounded-md px-1.5 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
         >
           <Bug className="h-3.5 w-3.5" />{t('localUi.localLog')}
-        </button>
-        <button
-          type="button"
-          onClick={onShowLeoapi}
-          className="flex items-center justify-center gap-1.5 rounded-md px-1.5 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
-        >
-          <SlidersHorizontal className="h-3.5 w-3.5" />Leoapi
         </button>
         <button
           className="flex items-center justify-center gap-1.5 rounded-md px-1.5 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"

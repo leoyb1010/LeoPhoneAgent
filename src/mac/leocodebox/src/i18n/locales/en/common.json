@@ -392,7 +392,7 @@
     "openLeoapi": "Leoapi gateway",
     "openLocalLog": "Local log",
     "goMissions": "Quick tasks",
-    "goConsole": "Go to console"
+    "goConsole": "New task"
   },
   "dashboard": {
     "greetingNight": "Up late",

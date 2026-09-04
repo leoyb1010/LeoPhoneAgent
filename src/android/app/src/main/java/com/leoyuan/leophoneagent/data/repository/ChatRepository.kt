@@ -62,7 +62,8 @@ class ChatRepository(internal val dao: ChatDao) {
      * over a raw `parts_json` string, matching ChatViewModel.loadSession's
      * AgentContentPart-based logic:
      *   - role USER + ALL parts are tool_result (tools ran, next model call never
-     *     fired), OR the single synthetic "Continue" reminder text part, OR
+     *     fired), OR the single synthetic "Continue" reminder text part, OR a
+     *     non-empty user turn that has no assistant reply at all, OR
      *   - role ASSISTANT + any tool_use part (model asked for tools that never ran)
      * Part type discriminator is the JSON "type" field — the @SerialName values
      * from [com.leoyuan.leophoneagent.data.model.ContentPart]: "toolUse" / "toolResult"
@@ -76,12 +77,8 @@ class ChatRepository(internal val dao: ChatDao) {
         }
         return when (role.uppercase()) {
             "USER" -> {
-                val allToolResults = types.isNotEmpty() && types.all { it == "toolResult" }
-                val isContinueReminder = arr.length() == 1 &&
-                    arr.optJSONObject(0)?.takeIf { it.optString("type") == "text" }
-                        ?.optString("value")
-                        ?.contains("The user stopped the previous response") == true
-                allToolResults || isContinueReminder
+                // A non-empty user tail has no persisted assistant reply.
+                arr.length() > 0
             }
             "ASSISTANT" -> types.any { it == "toolUse" }
             else -> false
@@ -133,6 +130,7 @@ class ChatRepository(internal val dao: ChatDao) {
      * Existing oversized rows are not migrated; new oversized inserts
      * are prevented by the cap in [appendMessage].
      */
+    @Suppress("SuspiciousIndentation")
     suspend fun loadMessages(sessionId: String): List<MessageEntity> {
         // T-android-crash-safe-mode-v2: defensive guard. ChatViewModel.loadSession
         // is already gated upstream, but loadMessages has other call sites

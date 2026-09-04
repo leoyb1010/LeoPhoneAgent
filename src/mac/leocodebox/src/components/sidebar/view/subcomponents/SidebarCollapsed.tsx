@@ -1,4 +1,4 @@
-import { Settings, Sparkles, PanelLeftOpen, Bug, AlertTriangle, SlidersHorizontal } from 'lucide-react';
+import { Settings, Sparkles, PanelLeftOpen, Bug, AlertTriangle } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 
@@ -8,7 +8,6 @@ type SidebarCollapsedProps = {
   updateAvailable: boolean;
   restartRequired: boolean;
   onShowVersionModal: () => void;
-  onShowLeoapi: () => void;
   onShowFeedback: () => void;
   t: TFunction;
 };
@@ -19,7 +18,6 @@ export default function SidebarCollapsed({
   updateAvailable,
   restartRequired,
   onShowVersionModal,
-  onShowLeoapi,
   onShowFeedback,
   t,
 }: SidebarCollapsedProps) {
@@ -45,16 +43,6 @@ export default function SidebarCollapsed({
         title={t('actions.settings')}
       >
         <Settings className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
-      </button>
-
-      <button
-        type="button"
-        onClick={onShowLeoapi}
-        className="group flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-accent/80"
-        aria-label={t('localUi.leoapiSwitch')}
-        title={t('localUi.leoapiSwitch')}
-      >
-        <SlidersHorizontal className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
       </button>
 
       {/* Report Issue */}

@@ -22,7 +22,7 @@ type SidebarModalsProps = {
   showVersionModal: boolean;
   onCloseVersionModal: () => void;
   t: TFunction;
-  localTool: 'leoapi' | 'feedback' | null;
+  localTool: 'feedback' | null;
   onCloseLocalTool: () => void;
 };
 
@@ -46,8 +46,8 @@ export default function SidebarModals({
     <>
       {localTool && ReactDOM.createPortal(
         <LocalToolModal
-          title={localTool === 'leoapi' ? t('localUi.leoapiSwitch') : t('localUi.localLog')}
-          src={localTool === 'leoapi' ? '/leocodebox-switch.html?embedded=1' : '/leocodebox-feedback.html?embedded=1'}
+          title={t('localUi.localLog')}
+          src="/leocodebox-feedback.html?embedded=1"
           onClose={onCloseLocalTool}
         />,
         document.body,

@@ -372,7 +372,7 @@
     "openLeoapi": "Leoapi 网关",
     "openLocalLog": "本地日志",
     "goMissions": "快速任务",
-    "goConsole": "前往主控台"
+    "goConsole": "新任務"
   },
   "workbench": {
     "localMachine": "本机 · {{name}}",

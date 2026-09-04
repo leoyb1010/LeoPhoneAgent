@@ -358,15 +358,15 @@ extension AIChatViewModel {
             return route.receipt()
         case .createCalendar:
             guard let hour = route.hour, let minute = route.minute else { return nil }
-            guard await createNativeEvent(hour: hour, minute: minute, tomorrow: route.tomorrow, title: route.label, notes: route.notes, location: route.location) else {
+            guard await createNativeEvent(hour: hour, minute: minute, dayOffset: route.effectiveDayOffset, title: route.label, notes: route.notes, location: route.location) else {
                 return route.failureReceipt(nextStep: "请授权日历访问后重试")
             }
             return route.receipt()
         case .createTravel:
             guard let hour = route.hour, let minute = route.minute else { return nil }
-            let due = nativeDate(hour: hour, minute: minute, tomorrow: route.tomorrow)
+            let due = nativeDate(hour: hour, minute: minute, dayOffset: route.effectiveDayOffset)
             guard let due else { return nil }
-            guard await createNativeEvent(hour: hour, minute: minute, tomorrow: route.tomorrow, title: route.label, notes: route.notes, location: route.location),
+            guard await createNativeEvent(hour: hour, minute: minute, dayOffset: route.effectiveDayOffset, title: route.label, notes: route.notes, location: route.location),
                   await FastLocalActions.addTodo(route.label, dueDate: due, notes: route.notes) else {
                 return route.failureReceipt(nextStep: "请授权日历和提醒事项后重试")
             }
@@ -376,7 +376,12 @@ extension AIChatViewModel {
                 ? route.receipt()
                 : route.failureReceipt(nextStep: "请确认设备有闪光灯并允许相机访问")
         case .createTodo:
-            return await FastLocalActions.addTodo(route.label.isEmpty ? "待办" : route.label)
+            let due = route.hour.flatMap { hour in
+                route.minute.flatMap { minute in
+                    nativeDate(hour: hour, minute: minute, dayOffset: route.effectiveDayOffset)
+                }
+            }
+            return await FastLocalActions.addTodo(route.label.isEmpty ? "待办" : route.label, dueDate: due, notes: route.notes)
                 ? route.receipt()
                 : route.failureReceipt(nextStep: "请授权提醒事项后重试")
         case .readClipboard:
@@ -450,9 +455,9 @@ extension AIChatViewModel {
         return false
     }
 
-    private func nativeDate(hour: Int, minute: Int, tomorrow: Bool) -> Date? {
+    private func nativeDate(hour: Int, minute: Int, dayOffset: Int) -> Date? {
         var comps = Calendar.current.dateComponents([.year, .month, .day], from: Date())
-        if tomorrow, let day = Calendar.current.date(byAdding: .day, value: 1, to: Date()) {
+        if dayOffset > 0, let day = Calendar.current.date(byAdding: .day, value: dayOffset, to: Date()) {
             comps = Calendar.current.dateComponents([.year, .month, .day], from: day)
         }
         comps.hour = hour
@@ -463,7 +468,7 @@ extension AIChatViewModel {
     private func createNativeEvent(
         hour: Int,
         minute: Int,
-        tomorrow: Bool,
+        dayOffset: Int,
         title: String,
         notes: String = "",
         location: String = ""
@@ -478,7 +483,7 @@ extension AIChatViewModel {
             }
         }
         guard granted else { return false }
-        guard let start = nativeDate(hour: hour, minute: minute, tomorrow: tomorrow) else { return false }
+        guard let start = nativeDate(hour: hour, minute: minute, dayOffset: dayOffset) else { return false }
         let ev = EKEvent(eventStore: store)
         ev.title = title.isEmpty ? "日程" : title
         ev.startDate = start
@@ -489,7 +494,9 @@ extension AIChatViewModel {
         ev.calendar = store.defaultCalendarForNewEvents
         do {
             try store.save(ev, span: .thisEvent)
-            return true
+            guard let identifier = ev.eventIdentifier,
+                  let saved = store.event(withIdentifier: identifier) else { return false }
+            return saved.title == ev.title && abs(saved.startDate.timeIntervalSince(start)) < 1
         } catch {
             return false
         }
@@ -539,7 +546,10 @@ enum FastLocalActions {
         reminder.calendar = store.defaultCalendarForNewReminders()
         do {
             try store.save(reminder, commit: true)
-            return true
+            guard let saved = store.calendarItem(withIdentifier: reminder.calendarItemIdentifier) as? EKReminder else {
+                return false
+            }
+            return saved.title == reminder.title && saved.dueDateComponents == reminder.dueDateComponents
         } catch {
             return false
         }

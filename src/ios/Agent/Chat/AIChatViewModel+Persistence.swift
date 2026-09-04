@@ -796,22 +796,25 @@ extension AIChatViewModel {
         let hasPersistedInterruption = persistedRunState?.isResumable == true
         let isInterruptedByHistory: Bool
         if let lastEntry = agentHistory.last, lastEntry.role == .user {
-            let allToolResults = !lastEntry.parts.isEmpty && lastEntry.parts.allSatisfy {
-                if case .toolResult = $0 { return true }; return false
-            }
-            let isContinueMessage = lastEntry.parts.count == 1 && {
-                if case .text(let t) = lastEntry.parts.first,
-                   t.contains("The user stopped the previous response") {
-                    return true
+            let parts: [AgentChatCorrectness.TailPart] = lastEntry.parts.map {
+                switch $0 {
+                case .text(let value): return .text(value)
+                case .toolUse: return .toolUse
+                case .toolResult: return .toolResult
+                case .imageData: return .other
                 }
-                return false
-            }()
-            isInterruptedByHistory = allToolResults || isContinueMessage
-        } else if let lastEntry = agentHistory.last, lastEntry.role == .assistant {
-            let hasToolUse = lastEntry.parts.contains {
-                if case .toolUse = $0 { return true }; return false
             }
-            isInterruptedByHistory = hasToolUse
+            isInterruptedByHistory = AgentChatCorrectness.isInterruptedTail(role: .user, parts: parts)
+        } else if let lastEntry = agentHistory.last, lastEntry.role == .assistant {
+            let parts: [AgentChatCorrectness.TailPart] = lastEntry.parts.map {
+                switch $0 {
+                case .text(let value): return .text(value)
+                case .toolUse: return .toolUse
+                case .toolResult: return .toolResult
+                case .imageData: return .other
+                }
+            }
+            isInterruptedByHistory = AgentChatCorrectness.isInterruptedTail(role: .assistant, parts: parts)
         } else {
             isInterruptedByHistory = false
         }

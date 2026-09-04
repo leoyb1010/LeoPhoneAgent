@@ -111,7 +111,7 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
   assert.equal(config.profiles.leocodebox.model, 'user-profile-model');
 
   const auth = JSON.parse(await fs.readFile(path.join(codexDir, 'auth.json'), 'utf8'));
-  assert.equal(Object.hasOwn(auth, 'OPENAI_API_KEY'), false);
+  assert.equal(auth.OPENAI_API_KEY, 'old-key', 'provider switching must preserve official Codex auth');
   assert.equal(auth.tokens.access_token, 'keep-token');
 
   await Promise.all(Array.from({ length: 20 }, (_, index) => post('/switch/providers', {
@@ -284,12 +284,24 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
     model: 'external-model',
   });
   await post('/switch/providers/external-codex/apply', {});
+  assert.equal(
+    JSON.parse(await fs.readFile(externalAuthPath, 'utf8')).OPENAI_API_KEY,
+    'before-restore',
+    'custom provider apply must not overwrite auth.json',
+  );
+  const externalParsed = TOML.parse(await fs.readFile(externalConfigPath, 'utf8')) as {
+    model_providers?: Record<string, { experimental_bearer_token?: string }>;
+  };
+  assert.equal(
+    externalParsed.model_providers?.['leocodebox_external-codex']?.experimental_bearer_token,
+    'after-apply',
+  );
   const externalBackups = await fetch(`${base}/switch/backups`).then(readApiJson);
-  const externalAuthBackup = externalBackups.backups.find((entry) => entry.targetPath === externalAuthPath);
-  assert.ok(externalAuthBackup, 'external CODEX_HOME backup should retain its absolute destination');
-  await fs.writeFile(externalAuthPath, JSON.stringify({ OPENAI_API_KEY: 'modified-after-apply' }));
-  await post('/switch/backups/restore', { relativePath: externalAuthBackup.relativePath });
-  assert.equal(JSON.parse(await fs.readFile(externalAuthPath, 'utf8')).OPENAI_API_KEY, 'before-restore');
+  const externalConfigBackup = externalBackups.backups.find((entry) => entry.targetPath === externalConfigPath);
+  assert.ok(externalConfigBackup, 'external CODEX_HOME backup should retain its absolute destination');
+  await fs.writeFile(externalConfigPath, 'model = "modified-after-apply"\n');
+  await post('/switch/backups/restore', { relativePath: externalConfigBackup.relativePath });
+  assert.equal((await fs.readFile(externalConfigPath, 'utf8')).trim(), 'approval_policy = "on-request"');
 
   await fs.mkdir(path.join(home, '.hermes'), { recursive: true });
   await fs.writeFile(path.join(home, '.hermes', 'config.yaml'), 'telemetry: false\n');
