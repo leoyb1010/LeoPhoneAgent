@@ -118,8 +118,21 @@ async function getSessionMessages(
     }
 
     const projectDir = path.dirname(jsonLPath);
-    const files = await fsp.readdir(projectDir);
-    const agentFiles = files.filter((file) => file.endsWith('.jsonl') && file.startsWith('agent-'));
+    // Subagent transcripts moved from `<projectDir>/agent-*.jsonl` (legacy) to
+    // `<projectDir>/<sessionId>/subagents/agent-*.jsonl`. Index both so tool
+    // details from Agent runs keep resolving on current Claude Code versions.
+    const subagentDir = path.join(projectDir, providerSessionId, 'subagents');
+    const [legacyFiles, subagentFiles] = await Promise.all([
+      fsp.readdir(projectDir).catch(() => [] as string[]),
+      fsp.readdir(subagentDir).catch(() => [] as string[]),
+    ]);
+    const agentFileDirs = new Map<string, string>();
+    for (const file of legacyFiles) {
+      if (file.endsWith('.jsonl') && file.startsWith('agent-')) agentFileDirs.set(file, projectDir);
+    }
+    for (const file of subagentFiles) {
+      if (file.endsWith('.jsonl') && file.startsWith('agent-')) agentFileDirs.set(file, subagentDir);
+    }
 
     const messages: AnyRecord[] = [];
     const agentToolsCache = new Map<string, AnyRecord[]>();
@@ -155,11 +168,12 @@ async function getSessionMessages(
 
     for (const agentId of agentIds) {
       const agentFileName = `agent-${agentId}.jsonl`;
-      if (!agentFiles.includes(agentFileName)) {
+      const agentDir = agentFileDirs.get(agentFileName);
+      if (!agentDir) {
         continue;
       }
 
-      const agentFilePath = path.join(projectDir, agentFileName);
+      const agentFilePath = path.join(agentDir, agentFileName);
       const tools = await parseAgentTools(agentFilePath);
       agentToolsCache.set(agentId, tools);
     }

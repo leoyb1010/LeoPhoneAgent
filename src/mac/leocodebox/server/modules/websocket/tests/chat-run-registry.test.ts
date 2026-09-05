@@ -222,6 +222,36 @@ test('replayEvents returns only events after the requested seq', async () => {
   });
 });
 
+test('isReplayTruncated flags a client whose lastSeq predates the buffered events', async () => {
+  await withIsolatedDatabase(() => {
+    sessionsDb.createAppSession('app-run-trunc', 'claude', '/workspace/demo');
+    const connection = new FakeConnection();
+    const run = chatRunRegistry.startRun({
+      appSessionId: 'app-run-trunc',
+      provider: 'claude',
+      providerSessionId: null,
+      connection,
+      userId: null,
+    });
+    assert.ok(run);
+
+    for (const content of ['a', 'b', 'c']) {
+      run.writer.send({ kind: 'stream_delta', provider: 'claude', sessionId: 'x', content });
+    }
+    // Buffer intact: the client at seq 1 can still be replayed b, c.
+    assert.equal(chatRunRegistry.isReplayTruncated('app-run-trunc', 1), false);
+    assert.equal(chatRunRegistry.isReplayTruncated('app-run-trunc', 3), false);
+
+    // Simulate the buffer cap dropping the oldest events: only seq 3 remains.
+    run.events.splice(0, 2);
+    assert.equal(chatRunRegistry.isReplayTruncated('app-run-trunc', 0), true);
+    assert.equal(chatRunRegistry.isReplayTruncated('app-run-trunc', 1), true);
+    // seq 2 → oldest buffered is 3 == afterSeq + 1: nothing was lost.
+    assert.equal(chatRunRegistry.isReplayTruncated('app-run-trunc', 2), false);
+    assert.equal(chatRunRegistry.isReplayTruncated('missing-run', 0), false);
+  });
+});
+
 test('attachConnection reroutes the live stream to a new socket', async () => {
   await withIsolatedDatabase(() => {
     sessionsDb.createAppSession('app-run-5', 'opencode', '/workspace/demo');

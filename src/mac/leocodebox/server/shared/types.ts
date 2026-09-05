@@ -277,7 +277,8 @@ export type GatewayEventKind =
   | 'chat_subscribed'
   | 'session_upserted'
   | 'loading_progress'
-  | 'protocol_error';
+  | 'protocol_error'
+  | 'pong';
 
 /**
  * Complete set of `kind` values emitted to websocket clients.
@@ -385,6 +386,12 @@ export type FetchHistoryResult = {
   offset: number;
   limit: number | null;
   tokenUsage?: unknown;
+  /**
+   * The session row still points at a transcript file that no longer exists on
+   * disk (Claude Code prunes transcripts after `cleanupPeriodDays`). The UI
+   * must say so instead of rendering an empty "start a conversation" state.
+   */
+  transcriptMissing?: boolean;
 };
 
 // ---------------------------

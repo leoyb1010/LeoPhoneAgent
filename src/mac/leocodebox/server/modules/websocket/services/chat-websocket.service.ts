@@ -336,6 +336,10 @@ function handleChatSubscribe(
       sessionId,
       isProcessing,
       lastSeq: run?.lastSeq ?? 0,
+      // The buffer only keeps the newest events of a run. When the client's
+      // `lastSeq` predates it, the replay below is incomplete and the client
+      // must re-read history over REST to fill the gap.
+      replayTruncated: isProcessing && chatRunRegistry.isReplayTruncated(sessionId, lastSeq),
       pendingPermissions,
       timestamp: new Date().toISOString(),
     });
@@ -416,6 +420,12 @@ export function handleChatConnection(
           return;
         case 'chat.permission-response':
           handlePermissionResponse(data, dependencies);
+          return;
+        case 'ping':
+          // App-level heartbeat. Browsers cannot observe protocol ping/pong, so
+          // the renderer sends this when idle and closes the socket itself if
+          // the `pong` misses its deadline (half-open loopback after sleep).
+          sendJson(ws, { kind: 'pong', timestamp: new Date().toISOString() });
           return;
         default:
           sendProtocolError(ws, 'UNKNOWN_MESSAGE_TYPE', `Unknown message type "${messageType}".`);

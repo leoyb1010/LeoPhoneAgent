@@ -57,3 +57,22 @@ test('chat.abort uses the app session id before a provider session id exists', a
   )));
   chatRunRegistry.clearAll();
 });
+
+test('ping is answered with pong so the renderer can detect half-open sockets', async () => {
+  chatRunRegistry.clearAll();
+  const socket = new FakeSocket();
+  const spawn = async () => undefined;
+  const abort = async () => true;
+  handleChatConnection(socket as never, { user: { id: 1 } } as never, {
+    spawnFns: { claude: spawn, cursor: spawn, codex: spawn, opencode: spawn, grok: spawn },
+    abortFns: { claude: abort, cursor: abort, codex: abort, opencode: abort, grok: abort },
+    resolveToolApproval: () => undefined,
+    getPendingApprovalsForSession: () => [],
+  });
+
+  socket.emit('message', JSON.stringify({ type: 'ping' }));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const kinds = socket.sent.map((message) => (message as { kind?: string }).kind);
+  assert.deepEqual(kinds, ['pong']);
+});

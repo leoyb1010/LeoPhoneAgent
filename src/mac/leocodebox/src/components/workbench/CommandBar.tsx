@@ -149,16 +149,21 @@ export default function CommandBar({
     onStartLocalRun(prompt);
   }, [draft, effort, onStartLocalRun, onStartRemoteRun, provider, target, targetOptions]);
 
-  // ⌘/Ctrl + L 把焦点带回指挥条,不用摸鼠标。
+  // ⌘/Ctrl + L 和标题栏「新任务」都把焦点带回指挥条,不用摸鼠标。
   useEffect(() => {
+    const focusInput = () => inputRef.current?.focus();
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'l') {
         event.preventDefault();
-        inputRef.current?.focus();
+        focusInput();
       }
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('leocodebox:focus-command-bar', focusInput);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('leocodebox:focus-command-bar', focusInput);
+    };
   }, []);
 
   return (
@@ -191,14 +196,19 @@ export default function CommandBar({
           <span className="text-xs font-semibold text-foreground">{agentLabel}</span>
         </ChipMenu>
 
+        {/*
+          没选项目时输入框也保持可用:回车后由 startLocalRun 排队这句话并打开项目
+          抽屉,选完项目自动发出。以前直接 disabled,配合"先在 ⌘K 里选一个项目"
+          的占位文案,新任务页看上去就是一个点不动的假输入框。
+        */}
         <input
           ref={inputRef}
+          autoFocus
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.nativeEvent.isComposing) submit();
           }}
-          disabled={!project}
           aria-label={t('workbench.commandInputLabel', { defaultValue: '新任务' })}
           placeholder={
             project
@@ -207,9 +217,9 @@ export default function CommandBar({
                 target: target || localLabel,
                 defaultValue: `让 ${agentLabel} 在 ${target || localLabel} 上做点什么…`,
               })
-              : t('workbench.commandNoProject', { defaultValue: '先在 ⌘K 里选一个项目…' })
+              : t('workbench.commandNoProject', { defaultValue: '先说要做什么，回车后选项目…' })
           }
-          className="min-w-0 flex-1 border-none bg-transparent font-sans text-[15px] text-foreground outline-none placeholder:text-wb-faint disabled:cursor-not-allowed"
+          className="min-w-0 flex-1 border-none bg-transparent font-sans text-[15px] text-foreground outline-none placeholder:text-wb-faint"
         />
 
         <Tooltip content={project?.fullPath || t('workbench.pickProject', { defaultValue: '选择任务项目' })} position="bottom">

@@ -21,15 +21,19 @@ struct SettingsEntry: Identifiable {
     let keywords: String
     let icon: String
     let color: Color
+    /// 一句话说清这一项管什么。只给容易混淆的条目写(远程机器 vs Mac 控制台),
+    /// 其余保持一行一个对象。
+    let hint: String?
     let destination: () -> AnyView
 
-    init(_ title: String, keywords: String, icon: String, color: Color,
+    init(_ title: String, keywords: String, icon: String, color: Color, hint: String? = nil,
          @ViewBuilder destination: @escaping () -> some View) {
         self.id = title
         self.title = title
         self.keywords = keywords
         self.icon = icon
         self.color = color
+        self.hint = hint
         let build = destination
         self.destination = { AnyView(build()) }
     }
@@ -57,15 +61,18 @@ struct SettingsHomeView: View {
         [
             SettingsGroup(id: "device", title: "我的设备", entries: [
                 SettingsEntry("远程机器", keywords: "mac android 舰队 中继 relay 密钥 macbook cortex studio fold ipad",
-                              icon: "desktopcomputer", color: .teal) { GatewaySettingsView() },
+                              icon: "desktopcomputer", color: .teal,
+                              hint: "连接哪几台 Mac、中继地址与密钥") { GatewaySettingsView() },
                 SettingsEntry("Mac 控制台", keywords: "控制台 console 编码 任务 遥控",
-                              icon: "terminal.fill", color: .teal) { GatewayEntryView() },
+                              icon: "terminal.fill", color: .teal,
+                              hint: "在已连接的 Mac 上发任务、看进度、审批") { GatewayEntryView() },
                 SettingsEntry("Siri 指挥中心", keywords: "siri 语音 快捷指令 shortcuts 审批 action button 自动化",
                               icon: "mic.fill", color: .purple) { SiriCommandCenterView() },
                 SettingsEntry("本机模型", keywords: "本机 端上 离线 apple intelligence foundation models 改写 摘要 隐私",
                               icon: "cpu.fill", color: .pink) { LocalBrainSettingsView() },
                 SettingsEntry("远程主机(SSH·备用)", keywords: "ssh remote host 备用",
-                              icon: "server.rack", color: .gray) { RemoteHostSettingsView() },
+                              icon: "server.rack", color: .gray,
+                              hint: "旧通道，只在中继不可用时使用") { RemoteHostSettingsView() },
             ]),
             SettingsGroup(id: "agent", title: "Agent", entries: [
                 SettingsEntry("模型供应商", keywords: "provider api key oauth 模型 llm",
@@ -77,7 +84,8 @@ struct SettingsHomeView: View {
                 SettingsEntry("快速任务", keywords: "quick task 捷径",
                               icon: "bolt.fill", color: .indigo) { QuickTaskSettingsView() },
                 SettingsEntry("能力中心", keywords: "capabilities 权限 能干什么",
-                              icon: "square.grid.2x2.fill", color: .cyan) { CapabilitiesView() },
+                              icon: "square.grid.2x2.fill", color: .cyan,
+                              hint: "Agent 能调用哪些手机能力，系统授权到哪一步") { CapabilitiesView() },
                 SettingsEntry("技能", keywords: "skills 技能包",
                               icon: "sparkles", color: .purple) { SkillsManagementView() },
                 SettingsEntry("Soul", keywords: "soul 人格 性格",
@@ -97,7 +105,8 @@ struct SettingsHomeView: View {
                 SettingsEntry("外观", keywords: "appearance 深色 浅色 主题 主动卡 手电筒 待办",
                               icon: "paintbrush.fill", color: .blue) { AppearanceSettingsView() },
                 SettingsEntry("权限", keywords: "permission 审批 offload",
-                              icon: "hand.raised.fill", color: .red) { OffloadPermissionSettingsView() },
+                              icon: "hand.raised.fill", color: .red,
+                              hint: "Agent 动用某项能力前，是直接放行还是先问你") { OffloadPermissionSettingsView() },
                 SettingsEntry("生物识别保护", keywords: "face id touch id 解锁 保护",
                               icon: "faceid", color: .red) { FaceIDProtectionSettingsView() },
             ]),
@@ -243,48 +252,59 @@ struct SettingsHomeView: View {
         .transition(.opacity.combined(with: .move(edge: .top)))
     }
 
+    /// 母菜单(分组头)和子菜单(条目)必须一眼分开。旧版两者都是
+    /// "34pt 图标框 + 15pt 标题 + 白底",展开后十几行长得一样,用户反馈
+    /// "母菜单和子菜单堆在一起"。现在分组头是一条低饱和色带、小号粗体、
+    /// 无图标框、带数量胶囊;子项白底、向右缩进、图标框更小、常规字重 ——
+    /// 颜色、字号、缩进三个维度同时区分,任何一个维度失效仍能分开。
     private func groupCard(_ group: SettingsGroup, isOpen: Binding<Bool>, index: Int) -> some View {
-        VStack(spacing: 0) {
+        let tint = groupTint(group.id)
+        return VStack(spacing: 0) {
             Button {
                 withAnimation(LeoMotion.spring(reduceMotion: reduceMotion, dampingFraction: 0.86)) {
                     isOpen.wrappedValue.toggle()
                 }
                 LeoHaptics.selection()
             } label: {
-                HStack(spacing: 12) {
+                HStack(spacing: 10) {
                     Image(systemName: groupSymbol(group.id))
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(groupTint(group.id))
-                        .frame(width: 34, height: 34)
-                        .background(groupTint(group.id).opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(group.title)
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(.primary)
-                        Text("\(group.entries.count) 项")
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.tertiary)
-                    }
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(tint)
+                        .frame(width: 22)
+                    Text(group.title)
+                        .font(.footnote.weight(.bold))
+                        .foregroundStyle(tint)
+                    Text("\(group.entries.count)")
+                        .font(.caption2.monospacedDigit().weight(.semibold))
+                        .foregroundStyle(tint)
+                        .padding(.horizontal, 7)
+                        .frame(minHeight: 18)
+                        .background(tint.opacity(0.14), in: Capsule())
                     Spacer()
+                    Text(isOpen.wrappedValue ? "收起" : "展开")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
                     Image(systemName: "chevron.right")
-                        .font(.caption.weight(.bold))
+                        .font(.caption2.weight(.bold))
                         .foregroundStyle(.tertiary)
                         .rotationEffect(.degrees(isOpen.wrappedValue ? 90 : 0))
                 }
                 .padding(.horizontal, 14)
-                .frame(minHeight: 58)
+                .frame(minHeight: 44)
+                .background(tint.opacity(0.07))
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text("\(group.title)，\(group.entries.count) 项"))
             .accessibilityValue(isOpen.wrappedValue ? Text("已展开") : Text("已折叠"))
+            .accessibilityAddTraits(.isHeader)
 
             if isOpen.wrappedValue {
-                Divider().padding(.leading, 60)
                 ForEach(Array(group.entries.enumerated()), id: \.element.id) { rowIndex, entry in
-                    SettingsRow(entry: entry)
+                    SettingsRow(entry: entry, nested: true)
                         .leoStaggerEntrance(index: rowIndex)
                     if rowIndex < group.entries.count - 1 {
-                        Divider().padding(.leading, 60)
+                        Divider().padding(.leading, 68)
                     }
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
@@ -362,6 +382,8 @@ struct SettingsHomeView: View {
 
 private struct SettingsRow: View {
     let entry: SettingsEntry
+    /// 分组内的子项:向右缩进、图标框更小,和分组头拉开层级。搜索结果平铺时为 false。
+    var nested: Bool = false
 
     var body: some View {
         NavigationLink {
@@ -369,20 +391,30 @@ private struct SettingsRow: View {
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: entry.icon)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: nested ? 13 : 14, weight: .semibold))
                     .foregroundStyle(entry.color)
-                    .frame(width: 34, height: 34)
-                    .background(entry.color.opacity(0.11), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                Text(entry.title)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.primary)
+                    .frame(width: nested ? 28 : 34, height: nested ? 28 : 34)
+                    .background(entry.color.opacity(0.11), in: RoundedRectangle(cornerRadius: nested ? 8 : 10, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(entry.title)
+                        .font(.subheadline.weight(nested ? .regular : .medium))
+                        .foregroundStyle(.primary)
+                    if let hint = entry.hint {
+                        Text(hint)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                }
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(.tertiary)
             }
-            .padding(.horizontal, 14)
-            .frame(minHeight: 54)
+            .padding(.leading, nested ? 28 : 14)
+            .padding(.trailing, 14)
+            .padding(.vertical, entry.hint == nil ? 0 : 8)
+            .frame(minHeight: nested ? 48 : 54)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

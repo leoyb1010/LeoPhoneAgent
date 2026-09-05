@@ -1,6 +1,6 @@
 {
   "name": "leocodebox",
-  "version": "1.83.0",
+  "version": "1.84.0",
   "productName": "leocodebox",
   "description": "LeoPhoneAgent Mac workstation for local coding agents",
   "type": "module",
@@ -266,10 +266,11 @@
     "@hono/node-server": "2.1.0",
     "@modelcontextprotocol/sdk": "1.30.0",
     "body-parser@1.20.5": "1.20.6",
-    "fast-uri": "3.1.5",
+    "fast-uri": "3.1.7",
     "hono": "4.13.1",
     "ip-address": "10.5.0",
     "js-yaml@3.15.0": "3.15.1",
-    "js-yaml@4.3.0": "4.3.1"
+    "js-yaml@4.3.0": "4.3.1",
+    "qs": "6.16.0"
   }
 }

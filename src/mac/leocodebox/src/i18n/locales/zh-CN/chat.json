@@ -162,7 +162,12 @@
     "loading": {
       "olderMessages": "正在加载更早的消息...",
       "sessionMessages": "正在加载会话消息...",
-      "startingRun": "正在开始…"
+      "startingRun": "正在开始…",
+      "error": "无法加载会话消息",
+      "errorHint": "本地服务没有在限定时间内返回这段对话。可以重试；如果一直失败，重启 leocodebox 后再试。",
+      "retry": "重试",
+      "transcriptMissing": "这段对话的记录已不在本机",
+      "transcriptMissingHint": "Claude Code 会定期清理旧的转录文件。会话名还留在列表里，但正文已经找不回来，可以在列表里删除这一条。"
     },
     "messages": {
       "showingOf": "显示 {{shown}} / {{total}} 条消息",

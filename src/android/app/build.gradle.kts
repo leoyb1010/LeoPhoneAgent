@@ -37,8 +37,8 @@ android {
         applicationId = "com.leoyuan.leophoneagent"
         minSdk = 26
         targetSdk = 35
-        versionCode = 100026
-        versionName = "1.0.0-alpha.26"
+        versionCode = 100027
+        versionName = "1.0.0-alpha.27"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

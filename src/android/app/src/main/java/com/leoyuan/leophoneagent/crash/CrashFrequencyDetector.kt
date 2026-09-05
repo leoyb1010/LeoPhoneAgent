@@ -561,11 +561,8 @@ object CrashFrequencyDetector {
             column.addView(tv)
         }
 
-        addRow(R.string.crash_freq_method_email) {
-            dispatchZippedShare(activity, files, emailOnly = true, onClosed)
-        }
         addRow(R.string.crash_freq_method_share) {
-            dispatchZippedShare(activity, files, emailOnly = false, onClosed)
+            dispatchZippedShare(activity, files, onClosed)
         }
         addRow(R.string.crash_freq_method_save) {
             if (saveLauncher != null) {
@@ -614,15 +611,13 @@ object CrashFrequencyDetector {
 
     /**
      * Zip the [files] into cacheDir/share/ and fire ACTION_SEND with
-     * application/zip. When [emailOnly] is true we hint at an email
-     * client (EMAIL extra + setType message/rfc822 fallback) so the
-     * chooser surfaces Gmail / Outlook first; otherwise we use the
-     * generic share sheet so the user gets every share target.
+     * application/zip through the generic share sheet. The former
+     * "email" variant addressed the upstream OpenMinis inbox, which does
+     * not maintain this fork — users pick where the report goes.
      */
     private fun dispatchZippedShare(
         ctx: Context,
         files: List<File>,
-        emailOnly: Boolean,
         onClosed: (() -> Unit)?,
     ) {
         try {
@@ -639,21 +634,7 @@ object CrashFrequencyDetector {
             val uri = FileProvider.getUriForFile(ctx, authority, zip)
             val date = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date())
             val subject = ctx.getString(R.string.crash_freq_email_subject, date)
-            // Project crash-report inbox — a public alias, safe to ship in
-            // open-source builds (replaced the maintainer's personal email).
-            val recipient = "dev@openminis.app"
-
-            val launched: Boolean = if (emailOnly) {
-                tryLaunchMailto(ctx, recipient, subject, uri)
-            } else {
-                tryLaunchShare(ctx, uri, subject)
-            }
-            if (!launched) {
-                // Fallback path: generic ACTION_SEND chooser. Works
-                // everywhere even if no email app is installed (file
-                // managers / messengers will appear in the chooser).
-                tryLaunchShare(ctx, uri, subject)
-            }
+            tryLaunchShare(ctx, uri, subject)
             // 500ms lets the chooser surface before MainActivity (which
             // passed `finish()` as onClosed) tears itself down. Matches
             // the prior share path's behaviour.
@@ -667,80 +648,6 @@ object CrashFrequencyDetector {
                 Toast.LENGTH_LONG,
             ).show()
             finishClose(onClosed)
-        }
-    }
-
-    /**
-     * Launch a mail-only intent that carries the crash zip as a real
-     * attachment. Previously this used `ACTION_SENDTO mailto:` with
-     * EXTRA_STREAM, but most major mail clients (Gmail in particular,
-     * reproduced on 0.10-preview by LeeeSe / TG 36234) silently drop
-     * EXTRA_STREAM when the action is ACTION_SENDTO — the user lands
-     * in a compose window with To/Subject filled but no attachment,
-     * and the developer never gets the log.
-     *
-     * Correct shape per the Android docs:
-     *   - Primary intent = ACTION_SEND with the attachment + recipient
-     *     + subject + body. ACTION_SEND is the one mail clients actually
-     *     honour for EXTRA_STREAM.
-     *   - Use `selector` = ACTION_SENDTO mailto: so the chooser is
-     *     filtered to email apps only (no messengers / file managers
-     *     leaking into the list).
-     *
-     * Returns false when no email app is installed — caller falls back
-     * to the generic share path so the user still has some way to ship
-     * the zip out.
-     */
-    private fun tryLaunchMailto(
-        ctx: Context,
-        recipient: String,
-        subject: String,
-        attachment: Uri,
-    ): Boolean {
-        return try {
-            // Body that names the attachment by hand. Most mail clients
-            // still render the attachment chip themselves, but if a
-            // client somehow drops the attachment again this paragraph
-            // tells the recipient what was supposed to be there.
-            val body = ctx.getString(R.string.crash_freq_email_body)
-            // Selector restricts the chooser to apps that can handle a
-            // bare mailto:. Without a body the selector intent doesn't
-            // need data beyond the scheme — Gmail / Outlook / Inbox all
-            // match `mailto:` with no recipient.
-            val selector = Intent(Intent.ACTION_SENDTO).apply {
-                data = Uri.parse("mailto:")
-            }
-            val intent = Intent(Intent.ACTION_SEND).apply {
-                // application/zip matches the packaged attachment; mail
-                // clients route MIME → "attach as file" regardless of
-                // the extension hint, so this is what gets the chip to
-                // appear in Gmail.
-                type = "application/zip"
-                putExtra(Intent.EXTRA_EMAIL, arrayOf(recipient))
-                putExtra(Intent.EXTRA_SUBJECT, subject)
-                putExtra(Intent.EXTRA_TEXT, body)
-                putExtra(Intent.EXTRA_STREAM, attachment)
-                // FLAG_GRANT_READ_URI_PERMISSION on the OUTER intent
-                // covers both the chooser shim and the eventual mail
-                // app receiving the EXTRA_STREAM URI.
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                this.selector = selector
-            }
-            // resolveActivity on a selector-bearing ACTION_SEND returns
-            // null on some OEM builds even when mail apps are present
-            // (the resolver doesn't fold selectors when probing). Probe
-            // the selector directly — if any mail app matches mailto:,
-            // the launch will succeed.
-            if (selector.resolveActivity(ctx.packageManager) == null) {
-                android.util.Log.w(TAG, "mailto selector: no email app resolved")
-                return false
-            }
-            ctx.startActivity(intent)
-            true
-        } catch (t: Throwable) {
-            android.util.Log.w(TAG, "mailto launch failed: ${t.message}")
-            false
         }
     }
 

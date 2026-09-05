@@ -4,6 +4,31 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
+## iOS 1.34.0 (109) / Android 1.0.0-alpha.27 / Mac 1.84.0 · 三轮全面审计（源码交付，未发版）- 2026-09-06
+
+三轮独立审计（动线与点名问题 → 系统能力与一致性 → 性能、安全、死代码与发版就绪），鸿蒙不在范围。版本号与三端「本次更新」已按发版铁律写好；APK / DMG / IPA 尚未构建发布。
+
+### 用户可见
+
+- Mac：Claude Code 长任务后「无法加载当前对话」有四个叠加根因，全部修复 —— 历史刷新不再每次拉整段含 base64 截图的转录（改有界分页），请求 60 秒超时并提供重试，转录被 Claude Code 定期清理的会话明确显示「记录已不在本机」而非空白新对话，长任务重放缓冲截断时服务端告知、客户端自动补齐；WebSocket 新增空闲心跳与唤醒探活，睡眠后半开连接自动重连。
+- Mac：「新任务」按钮点击后同时清空当前会话、回到根路径并聚焦任务坞；未选项目时输入框可写、回车后弹项目选择；「当前项目」行可点；菜单栏新增「工作环境 → 新任务 ⌘N」。会话列表新增「更早」折叠组。
+- iOS：设置首页母菜单（分组头）改为色带 + 小号粗体 + 数量胶囊，子项缩进、图标更小、常规字重，展开后层级一眼可分；易混条目补一句说明。
+- Android：会话多选「导出」从空实现变为逐个打包一次分享；设置首页与全部子页统一为同一套 SettingsScaffold / SettingsSection / SettingsRow；反馈只指向本仓库 GitHub Issues，删除寄往上游 OpenMinis 邮箱与 Telegram 的入口（含崩溃报告邮件路径）。
+
+### 审计与修复（非用户可见）
+
+- Mac：修复历史同步器把 `subagents/agent-*.jsonl` 写进父会话路径的数据库行（启动迁移），子代理工具明细兼容新目录；上一版声称 `npm audit` 0 漏洞时实际已有 5 项（express 链上的 qs / body-parser、ajv 链上的 fast-uri），本轮把 overrides 升到 qs 6.16.0 与 fast-uri 3.1.7，`npm audit --omit=dev` 回到 0。
+- Android：删除三份重复的 SettingsSection 实现中的两份及 4 条无用字符串（8 个语言文件）。
+- 记录未改：Mac 云端模式菜单英文（本地模式隐藏）；Android 9 个子页仍用裸 TopAppBar；Android 相比 iOS 缺 maps / files / camera 三类本机能力。
+
+### 验证
+
+- Mac：typecheck、lint、`verify:release-notes` 3/3、desktop 37/37、client 162/162（新增 3）、server 410/410（新增 4）、production build、`npm audit --omit=dev` 0 漏洞。
+- Android：Standard / Power compileDebugKotlin 通过；Standard / Power JVM 单测各 641（1 跳过、0 失败）。
+- iOS：generic iPhone/iPad 设备目标无签名构建通过（版本提升后复跑），MinisLogicTests 337/337。
+- relay：test_relay_security 13/13。
+- 未做实机：Mac 桌面端本机未运行且未获屏幕控制授权，iPhone/iPad/Fold8 未装机；装机复核清单见 [`docs/AUDIT_THREE_ROUNDS_2026-09-06.md`](docs/AUDIT_THREE_ROUNDS_2026-09-06.md)。
+
 ## iOS 1.33.0 (108) / Android 1.0.0-alpha.26 / Mac 1.83.0 · 三端统一任务与系统执行 - 2026-09-04
 
 ### 用户可见

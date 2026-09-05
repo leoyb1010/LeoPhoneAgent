@@ -4,8 +4,9 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { closeConnection } from '@/modules/database/connection.js';
+import { closeConnection, getConnection } from '@/modules/database/connection.js';
 import { initializeDatabase } from '@/modules/database/init-db.js';
+import { runMigrations } from '@/modules/database/migrations.js';
 import { projectsDb } from '@/modules/database/repositories/projects.db.js';
 import { sessionsDb } from '@/modules/database/repositories/sessions.db.js';
 import { sessionsService } from '@/modules/providers/services/sessions.service.js';
@@ -133,5 +134,33 @@ test('app session creation rejects archived projects', async () => {
       () => sessionsService.createAppSession('codex', '/workspace/archived'),
       (error: unknown) => (error as { code?: string }).code === 'PROJECT_NOT_ACTIVE',
     );
+  });
+});
+
+test('fetchHistory reports a pruned transcript instead of an empty conversation', async () => {
+  await withIsolatedDatabase(async () => {
+    const missingPath = path.join(tmpdir(), `pruned-${Date.now()}`, 'provider-gone.jsonl');
+    sessionsDb.createSession('provider-gone', 'claude', '/workspace/demo', 'Old', undefined, undefined, missingPath);
+
+    const result = await sessionsService.fetchHistory('provider-gone', { limit: 20, offset: 0 });
+    assert.equal(result.transcriptMissing, true);
+    assert.deepEqual(result.messages, []);
+    assert.equal(result.total, 0);
+  });
+});
+
+test('migration repairs rows whose jsonl_path was overwritten by a subagent transcript', async () => {
+  await withIsolatedDatabase(() => {
+    const projectDir = path.join('/Users/leo/.claude/projects', '-Users-leo');
+    const badPath = path.join(projectDir, 'parent-1', 'subagents', 'agent-abc.jsonl');
+    sessionsDb.createSession('parent-1', 'claude', '/Users/leo', 'Parent', undefined, undefined, badPath);
+    const untouched = path.join(projectDir, 'other-2.jsonl');
+    sessionsDb.createSession('other-2', 'claude', '/Users/leo', 'Other', undefined, undefined, untouched);
+
+    // Migrations are idempotent and run on every boot; the repair is one of them.
+    runMigrations(getConnection());
+
+    assert.equal(sessionsDb.getSessionById('parent-1')?.jsonl_path, path.join(projectDir, 'parent-1.jsonl'));
+    assert.equal(sessionsDb.getSessionById('other-2')?.jsonl_path, untouched);
   });
 });

@@ -758,7 +758,7 @@
     <string name="whats_new_title">本次更新（%1$s）</string>
     <string name="whats_new_heading">本次更新</string>
     <string name="whats_new_confirm">知道了</string>
-    <string name="whats_new_current">• Grok OAuth 會先更新憑證並讀取 xAI 即時模型目錄，網路不可用時才回退到完整內建清單。\n• 自然語言提醒、行事曆和出行可理解明天、後天、月日、週幾和幾天後；必要資訊缺失時只詢問一次，不猜測。\n• 長文字貼上不再撠滿輸入框，超大文字自動轉為可預覽附件；處理程序中斷後未回覆的訊息可繼續。\n• 側載 APK 導致無障礙被限制時，權限頁會說明原因；Power 可通過已授權的 Shizuku 解除並回讀驗證。</string>
+    <string name="whats_new_current">• 對話多選後的「匯出」真正可用：所選對話逐個打包，一次分享。\n• 設定首頁與全部設定子頁統一同一套分組、列與頂欄元件，圖示和圓角一致。\n• 回饋直達本專案的 GitHub Issues；當機報告不再提供寄往上游信箱的選項。\n• 同期 Mac 端修復了長任務對話載入不出來與「新任務」按鈕無回應的問題。</string>
     <string name="whats_new_scroll_hint">向上滑動查看完整更新內容</string>
     <string name="artifact_ready">交付物已就緒</string>
     <string name="artifact_open">開啟交付物</string>
@@ -993,8 +993,6 @@
     <string name="settings_about_subtitle">版本與项目信息</string>
     <string name="settings_privacy_policy">隱私政策</string>
     <string name="settings_submit_github_issues">提交 GitHub Issue</string>
-    <string name="settings_feedback_telegram">回饋 (Telegram)</string>
-    <string name="settings_feedback_email">回饋 (邮件)</string>
     <string name="about_title">關於</string>
     <string name="about_minis_tagline">LeoPhoneAgent 是完全本地、完全私密的裝置端 Agent。</string>
     <string name="about_links">链接</string>
@@ -1458,13 +1456,11 @@
     <string name="chat_stream_degraded_notice">性能保护：流式输出期間已簡化渲染</string>
     <string name="chat_resume_crash_warning">上次流式输出時 App 失去响应。再次點击仍要继续。</string>
     <string name="chat_message_large_export_fail">导出失敗</string>
-    <string name="crash_freq_email_body">附件為崩溃日誌压缩包，已包含裝置型號、LeoPhoneAgent 版本和時間戳。</string>
     <string name="crash_freq_pick_files_title">检测到最近多次闪退，是否分享以下日誌给開發者</string>
     <string name="crash_freq_pick_continue">继续</string>
     <string name="crash_freq_pick_section_crashes">最近 24 小時的闪退日誌</string>
     <string name="crash_freq_pick_section_logs">最近 3 天的运行日誌</string>
     <string name="crash_freq_method_title">分享 %1$d 個檔案</string>
-    <string name="crash_freq_method_email">通過邮件發送</string>
     <string name="crash_freq_method_share">分享给…</string>
     <string name="crash_freq_method_save">保存到…</string>
     <string name="crash_freq_zip_failed">打包日誌失敗：%1$s</string>

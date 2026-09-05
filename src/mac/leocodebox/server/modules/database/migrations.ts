@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import path from 'node:path';
 
 import { Database } from 'better-sqlite3';
 
@@ -476,6 +477,33 @@ const migrateUserCredentialsToEncrypted = (db: Database): void => {
   }
 };
 
+/**
+ * Before the synchronizer learned to skip `<session>/subagents/agent-*.jsonl`,
+ * those files were indexed as top-level transcripts and overwrote the parent
+ * row's `jsonl_path` (they repeat the parent's `sessionId`). Such rows load as
+ * empty conversations forever. Point them back at the real transcript, which
+ * lives next to the `<session>` directory as `<providerSessionId>.jsonl`.
+ */
+const repairSubagentJsonlPaths = (db: Database): void => {
+  if (!tableExists(db, 'sessions')) return;
+  const rows = db
+    .prepare(`SELECT session_id, provider_session_id, jsonl_path FROM sessions WHERE jsonl_path LIKE '%subagents%'`)
+    .all() as Array<{ session_id: string; provider_session_id: string | null; jsonl_path: string }>;
+  if (rows.length === 0) return;
+
+  logger.info(`Running migration: repairing ${rows.length} session rows that point at subagent transcripts`);
+  const update = db.prepare('UPDATE sessions SET jsonl_path = ? WHERE session_id = ?');
+  for (const row of rows) {
+    const segments = row.jsonl_path.split(/[\\/]/);
+    const subagentsIndex = segments.lastIndexOf('subagents');
+    // .../<projectDir>/<sessionId>/subagents/agent-x.jsonl → .../<projectDir>/<providerSessionId>.jsonl
+    const projectSegments = subagentsIndex > 1 ? segments.slice(0, subagentsIndex - 1) : [];
+    const providerId = row.provider_session_id || row.session_id;
+    const repaired = projectSegments.length > 0 ? path.join(projectSegments.join(path.sep), `${providerId}.jsonl`) : null;
+    update.run(repaired, row.session_id);
+  }
+};
+
 export const runMigrations = (db: Database) => {
   try {
     const usersTableInfo = db.prepare('PRAGMA table_info(users)').all() as { name: string }[];
@@ -512,6 +540,7 @@ export const runMigrations = (db: Database) => {
     ensureProjectsForSessionPaths(db);
     migrateApiKeysToHashes(db);
     migrateUserCredentialsToEncrypted(db);
+    repairSubagentJsonlPaths(db);
 
     // L3 fleet: worktrees table + session columns binding a session to a
     // worktree and a routing slot. Added after the sessions rebuild so the

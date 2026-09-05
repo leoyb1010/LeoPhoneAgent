@@ -477,6 +477,13 @@ export class DesktopWindowManager {
         label: '工作环境',
         submenu: [
           {
+            // 菜单里露出来,⌘N 才是可发现的;点击和快捷键都落到工作台同一个入口。
+            label: '新任务',
+            accelerator: 'CmdOrCtrl+N',
+            click: () => { this.emitLocalModal('new-task'); },
+          },
+          { type: 'separator' },
+          {
             label: '显示启动台',
             accelerator: 'CmdOrCtrl+Shift+L',
             click: () => void this.showLauncher().catch((error) => this.actions.showError('Could not show launcher', error)),

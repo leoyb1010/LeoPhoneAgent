@@ -44,6 +44,11 @@ export const useWebSocket = () => {
   return context;
 };
 
+/** Send a heartbeat only after this much silence; live streams need none. */
+const HEARTBEAT_IDLE_MS = 30_000;
+/** A pong later than this means the socket is dead even if it says OPEN. */
+const HEARTBEAT_TIMEOUT_MS = 10_000;
+
 const buildWebSocketUrl = (token: string | null) => {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   if (IS_PLATFORM) return `${protocol}//${window.location.host}/ws`; // Platform mode: Use same domain as the page (goes through proxy)
@@ -72,7 +77,45 @@ const useWebSocketProviderState = (): WebSocketContextType => {
    * second socket or nulling the live `wsRef`.
    */
   const generationRef = useRef(0);
+  /**
+   * App-level heartbeat. A loopback socket left half-open after the Mac
+   * slept, or a local server that died without a FIN, never fires `onclose`,
+   * so the UI sat "connected" while no live event could ever arrive — the
+   * long-running Claude Code session then looked like it stopped loading.
+   * Ping when idle; if the pong misses its deadline, close the socket so the
+   * normal reconnect path (and its history refresh) takes over.
+   */
+  const heartbeatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pongDeadlineRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastFrameAtRef = useRef(0);
   const { token } = useAuth();
+
+  const stopHeartbeat = useCallback(() => {
+    if (heartbeatTimerRef.current) {
+      clearInterval(heartbeatTimerRef.current);
+      heartbeatTimerRef.current = null;
+    }
+    if (pongDeadlineRef.current) {
+      clearTimeout(pongDeadlineRef.current);
+      pongDeadlineRef.current = null;
+    }
+  }, []);
+
+  /** Ping the socket if nothing arrived recently; close it if the pong is late. */
+  const probeConnection = useCallback((websocket: WebSocket) => {
+    if (websocket.readyState !== WebSocket.OPEN || pongDeadlineRef.current) return;
+    if (Date.now() - lastFrameAtRef.current < HEARTBEAT_IDLE_MS) return;
+    try {
+      websocket.send(JSON.stringify({ type: 'ping' }));
+    } catch {
+      websocket.close();
+      return;
+    }
+    pongDeadlineRef.current = setTimeout(() => {
+      pongDeadlineRef.current = null;
+      if (wsRef.current === websocket) websocket.close();
+    }, HEARTBEAT_TIMEOUT_MS);
+  }, []);
 
   const dispatch = useCallback((event: ServerEvent) => {
     // Synchronous fan-out to subscribers only. Intentionally holds NO React
@@ -109,6 +152,9 @@ const useWebSocketProviderState = (): WebSocketContextType => {
         setIsConnected(true);
         wsRef.current = websocket;
         setSocket(websocket);
+        lastFrameAtRef.current = Date.now();
+        stopHeartbeat();
+        heartbeatTimerRef.current = setInterval(() => probeConnection(websocket), HEARTBEAT_IDLE_MS);
         if (hasConnectedRef.current) {
           // This is a reconnect — signal so components can catch up on missed messages
           dispatch({ kind: 'websocket_reconnected', timestamp: Date.now() });
@@ -117,8 +163,15 @@ const useWebSocketProviderState = (): WebSocketContextType => {
       };
 
       websocket.onmessage = (event) => {
+        lastFrameAtRef.current = Date.now();
+        if (pongDeadlineRef.current) {
+          clearTimeout(pongDeadlineRef.current);
+          pongDeadlineRef.current = null;
+        }
         try {
           const data = JSON.parse(event.data) as ServerEvent;
+          // Heartbeat replies are transport-level; listeners never see them.
+          if ((data as { kind?: string }).kind === 'pong') return;
           dispatch(data);
         } catch (error) {
           console.error('Error parsing WebSocket message:', error);
@@ -133,6 +186,7 @@ const useWebSocketProviderState = (): WebSocketContextType => {
         // socket of the same generation already took over, leave it untouched.
         if (wsRef.current && wsRef.current !== websocket) return;
 
+        stopHeartbeat();
         setIsConnected(false);
         wsRef.current = null;
         setSocket(null);
@@ -152,7 +206,26 @@ const useWebSocketProviderState = (): WebSocketContextType => {
     } catch (error) {
       console.error('Error creating WebSocket connection:', error);
     }
-  }, [token, dispatch]); // everytime token changes, we reconnect
+  }, [token, dispatch, probeConnection, stopHeartbeat]); // everytime token changes, we reconnect
+
+  // Waking from sleep, regaining network or refocusing the window are the
+  // moments a half-open socket is most likely — probe right away instead of
+  // waiting for the next idle tick.
+  useEffect(() => {
+    const onWake = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      const websocket = wsRef.current;
+      if (websocket) probeConnection(websocket);
+    };
+    document.addEventListener('visibilitychange', onWake);
+    window.addEventListener('online', onWake);
+    window.addEventListener('focus', onWake);
+    return () => {
+      document.removeEventListener('visibilitychange', onWake);
+      window.removeEventListener('online', onWake);
+      window.removeEventListener('focus', onWake);
+    };
+  }, [probeConnection]);
 
 
   useEffect(() => {
@@ -174,13 +247,14 @@ const useWebSocketProviderState = (): WebSocketContextType => {
         clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = null;
       }
+      stopHeartbeat();
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
         setSocket(null);
       }
     };
-  }, [connect, token]); // every time token changes, reconnect
+  }, [connect, token, stopHeartbeat]); // every time token changes, reconnect
   const sendMessage = useCallback((message: unknown) => {
     const socket = wsRef.current;
     if (socket && socket.readyState === WebSocket.OPEN) {

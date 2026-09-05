@@ -12,6 +12,17 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.34.0",
+            date: "2026-09-06",
+            title: "设置层级看得清，入口说得明",
+            highlights: [
+                "设置分组头改为色带、小号粗体和数量胶囊，子项缩进并用更小的图标框；展开后母菜单和子菜单一眼分开，不再堆成一片。",
+                "「远程机器」「Mac 控制台」「SSH 备用」「能力中心」「权限」这些容易混淆的条目各补一句说明，先看懂再点。",
+                "分组头带标题语义与展开/收起状态，读屏可辨；搜索结果继续平铺，不受折叠影响。",
+                "本版是 iOS / Android / Mac 三轮联合审计中的 iOS 部分；Mac 端同步修复了长任务会话加载与「新任务」按钮，Android 端修复了会话导出。",
+            ]
+        ),
+        LeoRelease(
             version: "1.33.0",
             date: "2026-09-04",
             title: "自然语言直达系统，中断任务可恢复",

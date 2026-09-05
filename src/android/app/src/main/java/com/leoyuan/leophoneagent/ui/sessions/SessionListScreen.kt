@@ -826,7 +826,14 @@ fun SessionListScreen(
                 // Selection toolbar at bottom (matching iOS: Export + Delete)
                 SelectionToolbar(
                     selectedCount = selectedIds.size,
-                    onExport = { /* TODO: export */ },
+                    onExport = {
+                        exportSessions(
+                            context,
+                            sessions.filter { it.id in selectedIds },
+                            chatRepository,
+                            scope,
+                        )
+                    },
                     onDelete = { showBulkDeleteDialog = true },
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
@@ -2105,6 +2112,56 @@ internal fun SessionEditSheet(
  * share sheet as a real file attachment. Peak memory stays bounded by
  * batch size regardless of session length.
  */
+/**
+ * Bulk export for the selection toolbar. Each session becomes its own zip
+ * (same exporter as the single-session menu) and they are handed to the
+ * system share sheet in one ACTION_SEND_MULTIPLE, so the user gets one
+ * chooser instead of N. The toolbar button used to be a no-op stub.
+ */
+private fun exportSessions(
+    context: Context,
+    sessions: List<ChatSessionEntity>,
+    chatRepository: ChatRepository,
+    scope: kotlinx.coroutines.CoroutineScope,
+) {
+    if (sessions.isEmpty()) return
+    if (sessions.size == 1) {
+        exportSession(context, sessions.first(), chatRepository, scope, "json")
+        return
+    }
+    scope.launch {
+        try {
+            val uris = ArrayList<android.net.Uri>(sessions.size)
+            for (session in sessions) {
+                val (uri, _) = com.leoyuan.leophoneagent.share.ChatExporter.exportToZip(
+                    context = context,
+                    session = session,
+                    repository = chatRepository,
+                    format = "json",
+                )
+                uris.add(uri)
+            }
+            val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                type = "application/zip"
+                putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.sessionlist_n_selected, sessions.size))
+                putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            val chooser = Intent.createChooser(
+                intent,
+                context.getString(R.string.sessionlist_export),
+            ).apply { addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            context.startActivity(chooser)
+        } catch (t: Throwable) {
+            android.widget.Toast.makeText(
+                context,
+                context.getString(R.string.export_progress_failed),
+                android.widget.Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
+}
+
 private fun exportSession(
     context: Context,
     session: ChatSessionEntity,

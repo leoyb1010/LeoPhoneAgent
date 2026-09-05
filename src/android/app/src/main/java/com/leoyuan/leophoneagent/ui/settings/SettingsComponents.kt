@@ -25,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -205,6 +206,19 @@ fun SettingsSection(
 }
 
 // ─── Row primitives ────────────────────────────────────────────────────────────
+
+/**
+ * Thin inset divider for hand-built rows inside a [SettingsSection] (rows
+ * that are not [SettingsRow] and therefore draw no divider of their own).
+ */
+@Composable
+fun SettingsRowDivider(modifier: Modifier = Modifier) {
+    HorizontalDivider(
+        modifier = modifier.padding(horizontal = 16.dp),
+        thickness = 0.5.dp,
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
+    )
+}
 
 /**
  * Generic row: left icon (optional colored circle) + title/subtitle + trailing slot + optional chevron.

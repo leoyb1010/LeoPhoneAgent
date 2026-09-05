@@ -301,8 +301,6 @@
     <string name="settings_privacy_policy">Privacy Policy</string>
     <string name="settings_feedback">Feedback</string>
     <string name="settings_submit_github_issues">Submit GitHub Issues</string>
-    <string name="settings_feedback_telegram">Feedback (Telegram)</string>
-    <string name="settings_feedback_email">Feedback (Email)</string>
     <string name="about_title">About</string>
     <string name="about_minis_tagline">LeoPhoneAgent is Your Fully Local, Fully Private On-Device Agent.</string>
     <string name="about_links">Links</string>
@@ -1446,14 +1444,12 @@
     <string name="crash_freq_dialog_share">Share logs</string>
     <string name="crash_freq_dialog_dismiss">Not now</string>
     <string name="crash_freq_email_subject">LeoPhoneAgent Crash Report %1$s</string>
-    <string name="crash_freq_email_body">Crash log zip is attached. Device model, LeoPhoneAgent version, and timestamp are included inside.</string>
     <string name="crash_freq_share_chooser">Send crash logs</string>
     <string name="crash_freq_pick_files_title">Multiple recent crashes detected — share the logs below with the developer?</string>
     <string name="crash_freq_pick_continue">Continue</string>
     <string name="crash_freq_pick_section_crashes">Crash logs (last 24h)</string>
     <string name="crash_freq_pick_section_logs">Recent runtime logs (last 3 days)</string>
     <string name="crash_freq_method_title">Share %1$d file(s) via</string>
-    <string name="crash_freq_method_email">Send via email</string>
     <string name="crash_freq_method_share">Share to…</string>
     <string name="crash_freq_method_save">Save to…</string>
     <string name="crash_freq_zip_failed">Failed to package logs: %1$s</string>
@@ -1860,8 +1856,8 @@
     <!-- 发版铁律:每次改 versionName 都必须同步改这里,并重写下面的
          whats_new_current 文案。WhatsNewGateTest 会比对这两个值,
          对不上就构建失败 —— 防止弹出的是上一版的更新内容。 -->
-    <string name="whats_new_version" translatable="false">1.0.0-alpha.26</string>
-    <string name="whats_new_current">• Grok OAuth now refreshes its token, fetches the live xAI model catalog and falls back to the full built-in list only when the network catalog is unavailable.\n• Natural-language reminders, calendar events and travel plans understand tomorrow, the day after tomorrow, dates, weekdays and relative days; missing required details are asked once and never guessed.\n• Long pasted text stays out of the editor, and very large pastes become previewable text attachments. Interrupted user turns can resume after process death.\n• Sideloaded APK restricted-settings blocks are explained in Permissions; Power can clear and verify the block through an already-authorized Shizuku session.</string>
+    <string name="whats_new_version" translatable="false">1.0.0-alpha.27</string>
+    <string name="whats_new_current">• Bulk export in the session list now works: every selected session is packaged and shared in one go.\n• Settings home and every settings page share the same section, row and top-bar components, with consistent icons and corners.\n• Feedback goes straight to this project\'s GitHub Issues; crash reports no longer offer an email to the upstream inbox.\n• Companion changes on Mac fix long-running Claude Code sessions that would not load and the “New Task” button.</string>
     <string name="whats_new_scroll_hint">Swipe up to read the complete update</string>
     <string name="artifact_ready">ARTIFACT READY</string>
     <string name="artifact_open">Open artifact</string>

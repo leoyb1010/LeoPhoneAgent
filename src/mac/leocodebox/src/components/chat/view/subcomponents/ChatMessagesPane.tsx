@@ -24,6 +24,11 @@ interface ChatMessagesPaneProps {
   onWheel: () => void;
   onTouchMove: () => void;
   isLoadingSessionMessages: boolean;
+  /** First history fetch failed or timed out; the pane offers a retry. */
+  sessionLoadError?: boolean;
+  /** The transcript file behind this session no longer exists on disk. */
+  transcriptMissing?: boolean;
+  onRetrySessionLoad?: () => void;
   /** True while the viewed session has an active provider run in flight. */
   isProcessing?: boolean;
   /**
@@ -82,6 +87,9 @@ function ChatMessagesPane({
   onWheel,
   onTouchMove,
   isLoadingSessionMessages,
+  sessionLoadError = false,
+  transcriptMissing = false,
+  onRetrySessionLoad,
   isProcessing = false,
   isStartingNewSession = false,
   hasActivityIndicator = false,
@@ -244,6 +252,35 @@ function ChatMessagesPane({
             <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-border" />
             <p>{t('session.loading.sessionMessages')}</p>
           </div>
+        </div>
+      ) : chatMessages.length === 0 && transcriptMissing ? (
+        <div role="status" className="mx-auto mt-8 max-w-md text-center text-sm text-muted-foreground">
+          <p className="font-medium text-foreground">
+            {t('session.loading.transcriptMissing', { defaultValue: '这段对话的记录已不在本机' })}
+          </p>
+          <p className="mt-2 leading-6">
+            {t('session.loading.transcriptMissingHint', {
+              defaultValue: 'Claude Code 会定期清理旧的转录文件。会话名还留在列表里，但正文已经找不回来，可以在列表里删除这一条。',
+            })}
+          </p>
+        </div>
+      ) : chatMessages.length === 0 && sessionLoadError ? (
+        <div role="alert" className="mx-auto mt-8 max-w-md text-center text-sm">
+          <p className="font-medium text-foreground">
+            {t('session.loading.error', { defaultValue: '无法加载会话消息' })}
+          </p>
+          <p className="mt-2 leading-6 text-muted-foreground">
+            {t('session.loading.errorHint', {
+              defaultValue: '本地服务没有在限定时间内返回这段对话。可以重试；如果一直失败，重启 leocodebox 后再试。',
+            })}
+          </p>
+          <button
+            type="button"
+            onClick={onRetrySessionLoad}
+            className="mt-4 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
+          >
+            {t('session.loading.retry', { defaultValue: '重试' })}
+          </button>
         </div>
       ) : chatMessages.length === 0 && isStartingNewSession ? (
         <div className="mt-8 text-center text-sm text-muted-foreground">

@@ -101,6 +101,7 @@ function AppContentInner() {
     sidebarSharedProps,
     handleNewSession,
     handleSessionSelect,
+    handleProjectSelect,
     fetchProjects,
   } = useProjectsState({
     sessionId,
@@ -279,12 +280,20 @@ function AppContentInner() {
     setProjectDrawerOpen(false);
   }, []);
 
-  /** 进入唯一的新任务表面；旧会话仍留在任务列表里，可随时返回。 */
+  /**
+   * 进入唯一的新任务表面；旧会话仍留在任务列表里，可随时返回。
+   *
+   * 以前这里只切 tab:URL 仍是 /session/<id>、会话列表仍高亮旧会话、已经在
+   * 新任务页时再点毫无反应 —— 用户的原话是"新任务按钮是假的"。现在同时
+   * 清掉会话选择(回到 /),并把光标送进任务坞,让每一次点击都有可见结果。
+   */
   const openNewTask = useCallback(() => {
     closeOverlays();
     setRemoteTarget(null);
+    if (selectedProject) handleProjectSelect(selectedProject);
     setActiveTab('dashboard');
-  }, [closeOverlays, setActiveTab]);
+    window.dispatchEvent(new CustomEvent('leocodebox:focus-command-bar'));
+  }, [closeOverlays, handleProjectSelect, selectedProject, setActiveTab]);
 
   useEffect(() => {
     const onNewTaskShortcut = (event: KeyboardEvent) => {
@@ -447,6 +456,9 @@ function AppContentInner() {
       if (tool === 'leoapi') openSettingsTab('api');
       if (tool === 'feedback') { closeOverlays(); setLocalTool('feedback'); }
       if (tool === 'settings') openSettingsTab();
+      // 菜单栏「工作环境 → 新任务 ⌘N」:菜单加速键会先于页面 keydown 吃掉 ⌘N,
+      // 所以必须从主进程转发回来,落到同一个 openNewTask。
+      if ((tool as string) === 'new-task') openNewTask();
     });
     const handleLocalTool = (event: Event) => {
       const tool = (event as CustomEvent<'leoapi' | 'feedback'>).detail;
@@ -458,7 +470,7 @@ function AppContentInner() {
       unsubscribe?.();
       window.removeEventListener('leocodebox:open-local-tool', handleLocalTool);
     };
-  }, [closeOverlays, openSettingsTab]);
+  }, [closeOverlays, openNewTask, openSettingsTab]);
 
   return (
     <div

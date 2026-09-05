@@ -115,9 +115,27 @@ export interface SessionSlot {
   hasMore: boolean;
   offset: number;
   tokenUsage: unknown;
+  /** Server reported the transcript file is gone (see FetchHistoryResult). */
+  transcriptMissing: boolean;
 }
 
 const EMPTY: NormalizedMessage[] = [];
+
+/**
+ * History requests must not hang forever: a stuck local server used to leave
+ * the pane on "正在加载会话消息..." with no way out. After the timeout the slot
+ * flips to `error` and the pane offers a retry.
+ */
+const HISTORY_FETCH_TIMEOUT_MS = 60_000;
+
+/** Smallest page a refresh re-reads; matches the chat pane's first page. */
+const REFRESH_MIN_PAGE = 20;
+
+function historyFetchSignal(): AbortSignal | undefined {
+  return typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+    ? AbortSignal.timeout(HISTORY_FETCH_TIMEOUT_MS)
+    : undefined;
+}
 
 function createEmptySlot(): SessionSlot {
   return {
@@ -134,6 +152,7 @@ function createEmptySlot(): SessionSlot {
     tokenUsage: null,
     _fetchSeq: 0,
     _appliedFetchSeq: 0,
+    transcriptMissing: false,
   };
 }
 
@@ -522,7 +541,7 @@ export function useSessionStore() {
 
       const qs = params.toString();
       const url = `/api/providers/sessions/${encodeURIComponent(sessionId)}/messages${qs ? `?${qs}` : ''}`;
-      const body = await apiClient.get<Record<string, any>>(url);
+      const body = await apiClient.get<Record<string, any>>(url, undefined, historyFetchSignal());
       const data = body?.data ?? body;
       const messages: NormalizedMessage[] = data.messages || [];
 
@@ -537,6 +556,7 @@ export function useSessionStore() {
       slot.hasMore = Boolean(data.hasMore);
       slot.offset = (opts.offset ?? 0) + messages.length;
       slot.fetchedAt = Date.now();
+      slot.transcriptMissing = Boolean(data.transcriptMissing);
       slot.status = 'idle';
       recomputeMergedIfNeeded(slot);
       if (data.tokenUsage) {
@@ -578,7 +598,7 @@ export function useSessionStore() {
     const url = `/api/providers/sessions/${encodeURIComponent(sessionId)}/messages${qs ? `?${qs}` : ''}`;
 
     try {
-      const body = await apiClient.get<Record<string, any>>(url);
+      const body = await apiClient.get<Record<string, any>>(url, undefined, historyFetchSignal());
       const data = body?.data ?? body;
       const olderMessages: NormalizedMessage[] = data.messages || [];
 
@@ -650,8 +670,13 @@ export function useSessionStore() {
     const slot = getSlot(sessionId);
     const fetchTicket = ++slot._fetchSeq;
     try {
-      const url = `/api/providers/sessions/${encodeURIComponent(sessionId)}/messages`;
-      const body = await apiClient.get<Record<string, any>>(url);
+      // Re-read only as much as the pane already shows. An unbounded refresh
+      // pulled the entire transcript — tens of MB once a long Claude Code run
+      // had pasted screenshots (base64 inline) — on every `complete`, watcher
+      // event and reconnect, which is what made long sessions stop loading.
+      const limit = Math.max(REFRESH_MIN_PAGE, slot.serverMessages.length);
+      const url = `/api/providers/sessions/${encodeURIComponent(sessionId)}/messages?limit=${limit}&offset=0`;
+      const body = await apiClient.get<Record<string, any>>(url, undefined, historyFetchSignal());
       const data = body?.data ?? body;
 
       // A later-started fetch already applied: applying this stale transcript
@@ -665,6 +690,8 @@ export function useSessionStore() {
       slot.serverMessages = data.messages || [];
       slot.total = data.total ?? slot.serverMessages.length;
       slot.hasMore = Boolean(data.hasMore);
+      slot.offset = slot.serverMessages.length;
+      slot.transcriptMissing = Boolean(data.transcriptMissing);
       slot.fetchedAt = Date.now();
       // Only drop realtime rows the server transcript now owns. A blind clear
       // here caused the chat pane to flash "Continue your conversation" after

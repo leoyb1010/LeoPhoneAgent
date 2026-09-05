@@ -25,15 +25,22 @@ export default function TaskStartView({ project }: TaskStartViewProps) {
         </p>
 
         <div className="mt-8 divide-y divide-border/80 border-y border-border/80">
-          <div className="flex items-center gap-4 py-4">
+          {/* 这一行是可点的:没项目时它就是最近的一条出路,不能只是一句提示。 */}
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('leocodebox:open-projects'))}
+            className="flex w-full items-center gap-4 py-4 text-left hover:bg-muted/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+            aria-label={project ? '更换任务项目' : '选择任务项目'}
+          >
             <Command className="h-4 w-4 flex-none text-primary" />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-foreground">当前项目</p>
               <p className="truncate font-mono text-[11px] text-muted-foreground">
-                {project?.fullPath || '尚未选择；点击任务坞里的“选项目”继续'}
+                {project?.fullPath || '尚未选择；点这里或任务坞里的“选项目”'}
               </p>
             </div>
-          </div>
+            <span className="flex-none text-[11px] text-muted-foreground">{project ? '更换' : '选择'}</span>
+          </button>
           <div className="flex items-center gap-4 py-4">
             <Monitor className="h-4 w-4 flex-none text-primary" />
             <div>

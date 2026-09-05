@@ -1,34 +1,16 @@
 package com.leoyuan.leophoneagent.ui.settings
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.BatteryFull
-import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Computer
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Description
-import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Feedback
 import androidx.compose.material.icons.outlined.Folder
@@ -39,20 +21,13 @@ import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Psychology
-import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Terminal
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
@@ -60,14 +35,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.leoyuan.leophoneagent.BuildConfig
 import androidx.compose.ui.res.stringResource
 import com.leoyuan.leophoneagent.R
@@ -75,7 +47,6 @@ import com.leoyuan.leophoneagent.ui.components.openExternalUrl
 
 private val LocalSettingsQuery = compositionLocalOf { "" }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
@@ -113,29 +84,11 @@ fun SettingsScreen(
     onAboutClick: () -> Unit = {},
 ) {
     val context = LocalContext.current
-    var showFeedbackSheet by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.settings_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.settings_back),
-                        )
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState()),
-        ) {
+    // Same scaffold, section and row primitives as every sub-screen. The root
+    // page used to carry private copies with a different icon shape, radius
+    // and header colour, so "settings" and "a settings page" looked like two apps.
+    SettingsScaffold(title = stringResource(R.string.settings_title), onBack = onBack) {
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
@@ -149,7 +102,7 @@ fun SettingsScreen(
                 },
             )
             CompositionLocalProvider(LocalSettingsQuery provides searchQuery) {
-            SettingsSection(title = stringResource(R.string.settings_section_my_device)) {
+            SettingsSection(header = stringResource(R.string.settings_section_my_device)) {
                 SettingsItem(
                     icon = Icons.Outlined.Computer,
                     iconColor = Color(0xFF30B0C7),
@@ -161,7 +114,7 @@ fun SettingsScreen(
             }
 
             SettingsSection(
-                title = stringResource(R.string.settings_section_agent),
+                header = stringResource(R.string.settings_section_agent),
                 footer = stringResource(R.string.settings_section_llm_providers_footer),
             ) {
                 SettingsItem(
@@ -231,7 +184,7 @@ fun SettingsScreen(
             }
 
             SettingsSection(
-                title = stringResource(R.string.settings_section_appearance_general),
+                header = stringResource(R.string.settings_section_appearance_general),
                 footer = stringResource(R.string.bg_section_footer),
             ) {
                 SettingsItem(
@@ -265,7 +218,7 @@ fun SettingsScreen(
                 )
             }
 
-            SettingsSection(title = stringResource(R.string.settings_section_data_about)) {
+            SettingsSection(header = stringResource(R.string.settings_section_data_about)) {
                 SettingsItem(
                     icon = Icons.Outlined.Inventory2,
                     iconColor = Color(0xFF007AFF),
@@ -310,78 +263,22 @@ fun SettingsScreen(
                     subtitle = null,
                     onClick = { openExternalUrl(context, "https://github.com/leoyb1010/LeoPhoneAgent/blob/main/docs/ANDROID_PRIVACY.md") },
                 )
+                // Feedback goes straight to this fork's issue tracker. The old
+                // sheet also offered the upstream OpenMinis Telegram group and
+                // dev@openminis.app inbox, i.e. it sent users' reports to a
+                // project that does not ship this app.
                 SettingsItem(
                     icon = Icons.Outlined.Feedback,
                     iconColor = Color(0xFF007AFF),
                     title = stringResource(R.string.settings_feedback),
-                    subtitle = null,
-                    onClick = { showFeedbackSheet = true },
+                    subtitle = stringResource(R.string.settings_submit_github_issues),
+                    onClick = { openExternalUrl(context, buildBugReportUrl()) },
                     showDivider = false,
                 )
             }
 
             Spacer(Modifier.height(24.dp))
             }
-        }
-    }
-
-    if (showFeedbackSheet) {
-        ModalBottomSheet(onDismissRequest = { showFeedbackSheet = false }) {
-            Column(modifier = Modifier.padding(bottom = 24.dp)) {
-                FeedbackSheetItem(
-                    icon = Icons.Outlined.BugReport,
-                    title = stringResource(R.string.settings_submit_github_issues),
-                    onClick = {
-                        showFeedbackSheet = false
-                        openExternalUrl(context, buildBugReportUrl())
-                    },
-                )
-                FeedbackSheetItem(
-                    icon = Icons.AutoMirrored.Outlined.Send,
-                    title = stringResource(R.string.settings_feedback_telegram),
-                    onClick = {
-                        showFeedbackSheet = false
-                        openExternalUrl(context, "https://t.me/+2NzhOJuzRyI1YmM1")
-                    },
-                )
-                FeedbackSheetItem(
-                    icon = Icons.Outlined.Email,
-                    title = stringResource(R.string.settings_feedback_email),
-                    onClick = {
-                        showFeedbackSheet = false
-                        openExternalUrl(context, buildFeedbackMailto())
-                    },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun FeedbackSheetItem(
-    icon: ImageVector,
-    title: String,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.size(22.dp),
-        )
-        Spacer(Modifier.width(16.dp))
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
     }
 }
 
@@ -462,78 +359,9 @@ private fun buildBugReportUrl(): String {
 }
 
 /**
- * Compose a `mailto:` URL with a prefilled subject and body that include
- * app version, Android version, and device model. Mirrors iOS
- * `ContentView.makeFeedbackEmailURL()`.
- */
-private fun buildFeedbackMailto(): String {
-    val body = """
-        Please describe your feedback:
-
-
-        ---
-        App Version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})
-        Android Version: ${android.os.Build.VERSION.RELEASE} (SDK ${android.os.Build.VERSION.SDK_INT})
-        Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}
-
-        Screenshot (optional): Please attach a screenshot if relevant.
-    """.trimIndent()
-    val subject = java.net.URLEncoder.encode("LeoPhoneAgent Feedback", "UTF-8")
-    val encodedBody = java.net.URLEncoder.encode(body, "UTF-8")
-    return "mailto:dev@openminis.app?subject=$subject&body=$encodedBody"
-}
-
-/**
- * A grouped settings section with header and optional footer, matching iOS grouped List sections.
- */
-@Composable
-private fun SettingsSection(
-    title: String,
-    footer: String? = null,
-    content: @Composable () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 20.dp),
-    ) {
-        // Section header
-        Text(
-            text = title.uppercase(),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = FontWeight.Medium,
-            letterSpacing = 0.5.sp,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-        )
-
-        // Section card
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(color = MaterialTheme.colorScheme.surfaceContainerLow),
-        ) {
-            content()
-        }
-
-        // Section footer
-        if (footer != null) {
-            Text(
-                text = footer,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
-                lineHeight = 16.sp,
-            )
-        }
-    }
-}
-
-/**
- * A single settings row item with colored icon, title, optional subtitle, and chevron.
- * Styled to match iOS settings rows with SF Symbol-like colored circle icons.
+ * Root-page row = the shared [SettingsRow] plus the search filter. Every
+ * sub-screen already renders [SettingsRow]/[SettingsSection] from
+ * SettingsComponents; the root page carried its own copy for a long time.
  */
 @Composable
 private fun SettingsItem(
@@ -545,71 +373,12 @@ private fun SettingsItem(
     showDivider: Boolean = true,
 ) {
     if (!SettingsSearch.matches(LocalSettingsQuery.current, title, subtitle)) return
-    Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick)
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // Colored circle icon (matching iOS settings style)
-            Box(
-                modifier = Modifier
-                    .size(30.dp)
-                    .background(
-                        color = iconColor,
-                        shape = CircleShape,
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(16.dp),
-                )
-            }
-
-            Spacer(Modifier.width(14.dp))
-
-            // Title + subtitle
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(1.dp),
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                if (subtitle != null) {
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-
-            // Chevron
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier.size(20.dp),
-            )
-        }
-
-        // Divider between items (inset to match icon alignment)
-        if (showDivider) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 58.dp, end = 14.dp)
-                    .height(0.5.dp)
-                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-            )
-        }
-    }
+    SettingsRow(
+        title = title,
+        subtitle = subtitle,
+        icon = icon,
+        iconColor = iconColor,
+        onClick = onClick,
+        showDivider = showDivider,
+    )
 }

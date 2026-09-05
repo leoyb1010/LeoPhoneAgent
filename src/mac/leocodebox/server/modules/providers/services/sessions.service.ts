@@ -211,6 +211,24 @@ export const sessionsService = {
       };
     }
 
+    // A recorded transcript path whose file is gone is a different state from
+    // "no history yet": Claude Code deletes old transcripts, and the sidebar
+    // row outlives the file. Report it so the client can explain instead of
+    // showing a blank new-conversation screen (the "无法加载当前对话" report).
+    if (session.jsonl_path) {
+      const transcriptExists = await fsp.access(session.jsonl_path).then(() => true, () => false);
+      if (!transcriptExists) {
+        return {
+          messages: [],
+          total: 0,
+          hasMore: false,
+          offset: options.offset ?? 0,
+          limit: options.limit ?? null,
+          transcriptMissing: true,
+        };
+      }
+    }
+
     const provider = session.provider as LLMProvider;
     const result = await providerRegistry.resolveProvider(provider).sessions.fetchHistory(sessionId, {
       limit: options.limit ?? null,

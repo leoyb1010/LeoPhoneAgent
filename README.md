@@ -1,8 +1,8 @@
 # LeoPhoneAgent
 
-[![iOS](https://img.shields.io/badge/iOS-1.33.0%20(108)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
-[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.26-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.26)
-[![macOS](https://img.shields.io/badge/macOS-1.83.0-7C3AED.svg)](src/mac/leocodebox/package.json)
+[![iOS](https://img.shields.io/badge/iOS-1.34.0%20(109)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27%20(source)-3DDC84.svg)](src/android/app/build.gradle.kts)
+[![macOS](https://img.shields.io/badge/macOS-1.84.0-7C3AED.svg)](src/mac/leocodebox/package.json)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.17-D94B16.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Mobile](https://img.shields.io/badge/mobile-iOS%20%2B%20Android-black.svg)](#系统架构)
@@ -149,7 +149,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 版本/构建:`1.33.0 (108)`;Bundle ID `com.leoyuan.leophoneagent`
+- 版本/构建:`1.34.0 (109)`;Bundle ID `com.leoyuan.leophoneagent`
 - iPhone / iPad 本机动作：剪贴板读写和设备信息直接走系统能力，写入后读回核对；
   支持 Foundation Models 的设备用结构化生成整理收藏与语音任务
 - iPad 工作区：分屏、台前调度和窗口缩放按正文/侧栏实际可用空间切换单双栏，

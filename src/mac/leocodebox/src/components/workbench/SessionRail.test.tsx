@@ -112,3 +112,38 @@ test('审批处理完(集合里被移除)标签立刻消失', () => {
   });
   assert.deepEqual(badgedTitles(renderer), []);
 });
+
+test('昨天及更早的会话进「更早」折叠组,展开后能点到', () => {
+  const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+  const withOld = {
+    ...project,
+    sessions: [
+      ...(project.sessions ?? []),
+      { id: 's-old', summary: '前天的活', lastActivity: twoDaysAgo, __provider: 'codex' },
+    ],
+  } as unknown as Project;
+  let renderer!: TestRenderer.ReactTestRenderer;
+  act(() => {
+    renderer = TestRenderer.create(
+      <SessionRail
+        projects={[withOld]}
+        selectedSessionId={null}
+        activeSessions={new Map()}
+        approvalSessionIds={new Set()}
+        remotes={[]}
+        localName="本机"
+        onSelectLocal={() => undefined}
+        onTakeOverRemote={() => undefined}
+      />,
+    );
+  });
+  const allTexts = () => renderer.root.findAllByType('button').flatMap((node) => texts(node));
+  // 默认收起:分组头可见,旧会话标题不可见 —— 以前这一条根本不在列表里。
+  assert.ok(allTexts().some((text) => text.includes('更早')));
+  assert.equal(allTexts().includes('前天的活'), false);
+
+  const toggle = renderer.root.findAllByType('button').find((node) => texts(node).some((text) => text.includes('更早')));
+  assert.ok(toggle);
+  act(() => { toggle!.props.onClick(); });
+  assert.ok(allTexts().includes('前天的活'));
+});

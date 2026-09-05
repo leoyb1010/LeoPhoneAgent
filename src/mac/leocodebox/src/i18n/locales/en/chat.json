@@ -181,7 +181,12 @@
     "loading": {
       "olderMessages": "Loading older messages...",
       "sessionMessages": "Loading session messages...",
-      "startingRun": "Starting…"
+      "startingRun": "Starting…",
+      "error": "Couldn't load this conversation",
+      "errorHint": "The local server did not return this conversation in time. Retry; if it keeps failing, restart leocodebox.",
+      "retry": "Retry",
+      "transcriptMissing": "This conversation's transcript is no longer on this Mac",
+      "transcriptMissingHint": "Claude Code prunes old transcript files. The session title stays in the list, but its content cannot be recovered — you can delete the entry from the list."
     },
     "messages": {
       "showingOf": "Showing {{shown}} of {{total}} messages",

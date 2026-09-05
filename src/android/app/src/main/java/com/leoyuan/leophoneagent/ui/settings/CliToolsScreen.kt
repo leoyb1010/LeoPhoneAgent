@@ -72,7 +72,6 @@ import com.leoyuan.leophoneagent.sandbox.CliToolPreferences
 import com.leoyuan.leophoneagent.sandbox.CliAuthState
 import com.leoyuan.leophoneagent.sandbox.CliToolLaunchResolver
 import com.leoyuan.leophoneagent.data.repository.ProviderRepository
-import com.leoyuan.leophoneagent.ui.components.SettingsSection
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -148,7 +147,7 @@ fun CliToolsScreen(
             )
 
             if (!state.rootfsReady) {
-                SettingsSection(title = stringResource(R.string.cli_tools_linux_required)) {
+                SettingsSection(header = stringResource(R.string.cli_tools_linux_required)) {
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.cli_tools_linux_missing)) },
                         supportingContent = { Text(stringResource(R.string.cli_tools_linux_missing_subtitle)) },
@@ -164,7 +163,7 @@ fun CliToolsScreen(
             CliToolCatalog.tools.forEach { tool ->
                 val status = state.statuses.getValue(tool.id)
                 val busy = state.busyTool == tool.id
-                SettingsSection(title = tool.displayName) {
+                SettingsSection(header = tool.displayName) {
                     ListItem(
                         headlineContent = {
                             Text(

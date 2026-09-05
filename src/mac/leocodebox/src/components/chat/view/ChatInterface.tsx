@@ -104,6 +104,9 @@ function ChatInterface({
     currentSessionId,
     setCurrentSessionId,
     isLoadingSessionMessages,
+    sessionLoadError,
+    transcriptMissing,
+    retrySessionLoad,
     isLoadingMoreMessages,
     hasMoreMessages,
     totalMessages,
@@ -370,6 +373,9 @@ function ChatInterface({
           onShowAllTasks={onShowAllTasks}
           setInput={setInput}
           isLoadingMoreMessages={isLoadingMoreMessages}
+          sessionLoadError={sessionLoadError}
+          transcriptMissing={transcriptMissing}
+          onRetrySessionLoad={() => { void retrySessionLoad(); }}
           hasMoreMessages={hasMoreMessages}
           totalMessages={totalMessages}
           sessionMessagesCount={chatMessages.length}

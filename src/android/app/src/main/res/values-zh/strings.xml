@@ -176,8 +176,6 @@
     <string name="settings_privacy_policy">隐私政策</string>
     <string name="settings_feedback">反馈问题</string>
     <string name="settings_submit_github_issues">提交 GitHub Issue</string>
-    <string name="settings_feedback_telegram">反馈 (Telegram)</string>
-    <string name="settings_feedback_email">反馈 (邮件)</string>
     <string name="about_title">关于</string>
     <string name="about_minis_tagline">LeoPhoneAgent 是完全本地、完全私密的设备端 Agent。</string>
     <string name="about_links">链接</string>
@@ -1196,14 +1194,12 @@
     <string name="crash_freq_dialog_share">分享日志</string>
     <string name="crash_freq_dialog_dismiss">暂不分享</string>
     <string name="crash_freq_email_subject">LeoPhoneAgent 崩溃报告 %1$s</string>
-    <string name="crash_freq_email_body">附件为崩溃日志压缩包，已包含设备型号、LeoPhoneAgent 版本和时间戳。</string>
     <string name="crash_freq_share_chooser">发送崩溃日志</string>
     <string name="crash_freq_pick_files_title">检测到最近多次闪退，是否分享以下日志给开发者</string>
     <string name="crash_freq_pick_continue">继续</string>
     <string name="crash_freq_pick_section_crashes">最近 24 小时的闪退日志</string>
     <string name="crash_freq_pick_section_logs">最近 3 天的运行日志</string>
     <string name="crash_freq_method_title">分享 %1$d 个文件</string>
-    <string name="crash_freq_method_email">通过邮件发送</string>
     <string name="crash_freq_method_share">分享给…</string>
     <string name="crash_freq_method_save">保存到…</string>
     <string name="crash_freq_zip_failed">打包日志失败：%1$s</string>
@@ -1785,7 +1781,7 @@
     <string name="whats_new_title">本次更新（%1$s）</string>
     <string name="whats_new_heading">本次更新</string>
     <string name="whats_new_confirm">知道了</string>
-    <string name="whats_new_current">• Grok OAuth 会先刷新令牌并读取 xAI 实时模型目录，网络不可用时才回退到完整内置列表。\n• 自然语言提醒、日历和出行可理解明天、后天、月日、周几和几天后；必要信息缺失时只询问一次，不猜测。\n• 长文本粘贴不再撑爆输入框，超大文本自动变成可预览附件；进程中断后未回复的消息可继续。\n• 侧载 APK 导致无障碍被限制时，权限页会说明原因；Power 可通过已授权的 Shizuku 解除并回读校验。</string>
+    <string name="whats_new_current">• 会话多选后的「导出」真正可用：所选会话逐个打包，一次分享。\n• 设置首页与全部设置子页统一同一套分组、行与顶栏组件，图标和圆角一致。\n• 反馈直达本项目的 GitHub Issues；崩溃报告不再提供寄往上游邮箱的选项。\n• 同期 Mac 端修复了长任务会话加载不出来与「新任务」按钮无响应的问题。</string>
     <string name="whats_new_scroll_hint">向上滑动查看完整更新内容</string>
     <string name="artifact_ready">交付物已就绪</string>
     <string name="artifact_open">打开交付物</string>

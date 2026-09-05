@@ -119,6 +119,13 @@ export function useChatRealtimeHandlers({
           // pending tool-permission prompts for the run.
           if (!sid) return;
 
+          // The server's replay buffer no longer covers what this client
+          // missed (long run + sleep/reconnect). Re-read the persisted
+          // transcript so the conversation does not stay half-loaded.
+          if ((msg as { replayTruncated?: boolean }).replayTruncated) {
+            void sessionStore.refreshFromServer(sid);
+          }
+
           if (msg.isProcessing) {
             onSessionProcessing?.(sid);
           } else {

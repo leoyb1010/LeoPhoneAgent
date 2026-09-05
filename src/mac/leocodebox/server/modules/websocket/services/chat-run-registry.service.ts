@@ -358,6 +358,22 @@ export const chatRunRegistry = {
   },
 
   /**
+   * True when the client missed events that the buffer no longer holds:
+   * the run has advanced past `afterSeq`, but the oldest buffered event is
+   * already newer than `afterSeq + 1`. Long tool-heavy runs (> 5000 events)
+   * hit this on every reconnect; without the flag the transcript silently
+   * gaps and the user sees a conversation that "won't load".
+   */
+  isReplayTruncated(appSessionId: string, afterSeq: number): boolean {
+    const run = runs.get(appSessionId);
+    if (!run || run.lastSeq <= afterSeq) {
+      return false;
+    }
+    const oldestBuffered = run.events[0]?.seq;
+    return typeof oldestBuffered !== 'number' || oldestBuffered > afterSeq + 1;
+  },
+
+  /**
    * Emits a synthetic terminal `complete` if (and only if) the run is still
    * marked running. Used when a provider runtime throws or resolves without
    * having produced its own terminal event, and by the abort path.

@@ -168,8 +168,6 @@
     <string name="settings_privacy_policy">Политика конфиденциальности</string>
     <string name="settings_feedback">Обратная связь</string>
     <string name="settings_submit_github_issues">Создать issue на GitHub</string>
-    <string name="settings_feedback_telegram">Обратная связь (Telegram)</string>
-    <string name="settings_feedback_email">Обратная связь (Email)</string>
     <string name="about_title">О приложении</string>
     <string name="about_minis_tagline">LeoPhoneAgent — ваш полностью локальный и приватный Агент прямо на устройстве.</string>
     <string name="about_links">Ссылки</string>
@@ -1092,14 +1090,12 @@
     <string name="crash_freq_dialog_share">Отправить журналы</string>
     <string name="crash_freq_dialog_dismiss">Не сейчас</string>
     <string name="crash_freq_email_subject">Отчёт о сбое LeoPhoneAgent %1$s</string>
-    <string name="crash_freq_email_body">ZIP-архив с журналами сбоев прикреплён. Модель устройства, версия LeoPhoneAgent и временная метка указаны внутри.</string>
     <string name="crash_freq_share_chooser">Отправить журналы сбоев</string>
     <string name="crash_freq_pick_files_title">Обнаружено несколько недавних сбоев — отправить указанные ниже журналы разработчику?</string>
     <string name="crash_freq_pick_continue">Продолжить</string>
     <string name="crash_freq_pick_section_crashes">Журналы сбоев (за 24 ч)</string>
     <string name="crash_freq_pick_section_logs">Недавние журналы работы (за 3 дня)</string>
     <string name="crash_freq_method_title">Поделиться файлами (%1$d) через</string>
-    <string name="crash_freq_method_email">Отправить по эл. почте</string>
     <string name="crash_freq_method_share">Поделиться через…</string>
     <string name="crash_freq_method_save">Сохранить в…</string>
     <string name="crash_freq_zip_failed">Не удалось упаковать журналы: %1$s</string>

@@ -53,8 +53,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.leoyuan.leophoneagent.ui.components.SettingsRowDivider
-import com.leoyuan.leophoneagent.ui.components.SettingsSection
+import com.leoyuan.leophoneagent.ui.settings.SettingsRowDivider
+import com.leoyuan.leophoneagent.ui.settings.SettingsSection
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -102,7 +102,7 @@ fun RootfsManagementScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             // --- Status section ---
-            SettingsSection(title = stringResource(R.string.rootfs_status_section)) {
+            SettingsSection(header = stringResource(R.string.rootfs_status_section)) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.rootfs_installed_label)) },
                     trailingContent = {
@@ -151,7 +151,7 @@ fun RootfsManagementScreen(
 
             if (state.isInstalled) {
                 // --- Browse section ---
-                SettingsSection(title = stringResource(R.string.rootfs_browse_section)) {
+                SettingsSection(header = stringResource(R.string.rootfs_browse_section)) {
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.rootfs_browse_files_label)) },
                         leadingContent = {
@@ -172,13 +172,13 @@ fun RootfsManagementScreen(
                 }
 
                 // --- Mirrors section ---
-                SettingsSection(title = stringResource(R.string.rootfs_mirrors_section)) {
+                SettingsSection(header = stringResource(R.string.rootfs_mirrors_section)) {
                     MirrorsSectionView(onNavigate = onMirrorCategoryClick)
                 }
             }
 
             // --- Actions section ---
-            SettingsSection(title = stringResource(R.string.rootfs_actions_section)) {
+            SettingsSection(header = stringResource(R.string.rootfs_actions_section)) {
                 if (!state.isInstalled) {
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.rootfs_install_label)) },
@@ -246,7 +246,7 @@ fun RootfsManagementScreen(
 
             // --- Progress / Result ---
             if (state.isProcessing) {
-                SettingsSection(title = stringResource(R.string.rootfs_progress_section)) {
+                SettingsSection(header = stringResource(R.string.rootfs_progress_section)) {
                     ListItem(
                         headlineContent = { Text(state.statusMessage) },
                         supportingContent = state.installProgress?.let { p ->
@@ -266,7 +266,7 @@ fun RootfsManagementScreen(
             }
 
             state.resultMessage?.let { msg ->
-                SettingsSection(title = stringResource(R.string.rootfs_result_section)) {
+                SettingsSection(header = stringResource(R.string.rootfs_result_section)) {
                     Text(
                         text = msg,
                         style = MaterialTheme.typography.bodyMedium,
@@ -280,7 +280,7 @@ fun RootfsManagementScreen(
             }
 
             // --- Info section ---
-            SettingsSection(title = stringResource(R.string.rootfs_info_section)) {
+            SettingsSection(header = stringResource(R.string.rootfs_info_section)) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         text = stringResource(R.string.rootfs_about_title),

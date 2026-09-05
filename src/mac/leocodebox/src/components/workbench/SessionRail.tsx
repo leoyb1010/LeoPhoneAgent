@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { cn } from '../../lib/utils';
@@ -41,6 +41,9 @@ type SessionRailProps = {
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** 「更早」最多列这么多条;再往前的用 ⌘K 搜,列表不该变成无限长的历史页。 */
+const EARLIER_LIMIT = 40;
+const EARLIER_OPEN_KEY = 'wb-rail-earlier-open';
 
 function sessionTimestamp(session: ProjectSession): number {
   const raw = session.lastActivity ?? session.updated_at ?? session.createdAt ?? session.created_at;
@@ -77,7 +80,7 @@ export default function SessionRail({
 }: SessionRailProps) {
   const { t } = useTranslation();
 
-  const { running, doneToday, lookup } = useMemo(() => {
+  const { running, doneToday, earlier, lookup } = useMemo(() => {
     const now = Date.now();
     const rows: RailRow[] = [];
     const index = new Map<string, { session: ProjectSession; project: Project }>();
@@ -125,15 +128,32 @@ export default function SessionRail({
     // 等我点头的排最前 —— 这一列存在的意义就是别让审批干等着。
     const byUrgency = (a: RailRow, b: RailRow) =>
       Number(b.needsApproval) - Number(a.needsApproval) || b.sortAt - a.sortAt;
+    const finishedLocal = rows.filter((row) => !isRunning(row) && !row.remote);
 
     return {
       running: rows.filter(isRunning).sort(byUrgency),
-      doneToday: rows
-        .filter((row) => !isRunning(row) && !row.remote && now - row.sortAt < DAY_MS)
+      doneToday: finishedLocal
+        .filter((row) => now - row.sortAt < DAY_MS)
         .sort((a, b) => b.sortAt - a.sortAt),
+      // 昨天及更早的会话以前根本不在列表里,只能靠 ⌘K 搜 —— "我昨天那个
+      // 会话去哪了"。折叠放在最下面,默认收起,不抢进行中/今天的位置。
+      earlier: finishedLocal
+        .filter((row) => now - row.sortAt >= DAY_MS)
+        .sort((a, b) => b.sortAt - a.sortAt)
+        .slice(0, EARLIER_LIMIT),
       lookup: index,
     };
   }, [projects, activeSessions, approvalSessionIds, remotes, localName, t]);
+
+  const [earlierOpen, setEarlierOpen] = useState(() => {
+    try { return localStorage.getItem(EARLIER_OPEN_KEY) === '1'; } catch { return false; }
+  });
+  const toggleEarlier = () => {
+    setEarlierOpen((open) => {
+      try { localStorage.setItem(EARLIER_OPEN_KEY, open ? '0' : '1'); } catch { /* private mode */ }
+      return !open;
+    });
+  };
 
   const renderRow = (row: RailRow, dimmed: boolean) => (
     <button
@@ -200,6 +220,26 @@ export default function SessionRail({
         </p>
       ) : (
         doneToday.map((row) => renderRow(row, true))
+      )}
+
+      {earlier.length > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={toggleEarlier}
+            aria-expanded={earlierOpen}
+            className="mt-4 flex w-full items-center justify-between px-2.5 pb-2 font-mono text-[9.5px] tracking-[0.18em] text-wb-faint hover:text-muted-foreground"
+          >
+            <span>{t('workbench.groupEarlier', { defaultValue: '更早' })} · {earlier.length}</span>
+            <span aria-hidden>{earlierOpen ? '−' : '+'}</span>
+          </button>
+          {earlierOpen && earlier.map((row) => renderRow(row, true))}
+          {earlierOpen && (
+            <p className="px-2.5 pt-1 text-[10.5px] text-wb-faint">
+              {t('workbench.earlierHint', { defaultValue: '更早的会话用 ⌘K 搜索。' })}
+            </p>
+          )}
+        </>
       )}
     </nav>
   );

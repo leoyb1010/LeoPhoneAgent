@@ -110,6 +110,11 @@ export function useChatSessionState({
 }: UseChatSessionStateArgs) {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(selectedSession?.id || null);
   const [isLoadingSessionMessages, setIsLoadingSessionMessages] = useState(false);
+  // Distinct terminal states of the first history fetch. Both used to collapse
+  // into "no messages" and the pane showed the pick-a-provider empty state, so
+  // a failed or pruned transcript looked like a brand-new conversation.
+  const [sessionLoadError, setSessionLoadError] = useState(false);
+  const [transcriptMissing, setTranscriptMissing] = useState(false);
   const [isLoadingMoreMessages] = useState(false);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [totalMessages, setTotalMessages] = useState(0);
@@ -528,6 +533,8 @@ export function useChatSessionState({
     messagesOffsetRef.current = 0;
     setHasMoreMessages(false);
     setTotalMessages(0);
+    setSessionLoadError(false);
+    setTranscriptMissing(false);
     setVisibleMessageCount(INITIAL_VISIBLE_MESSAGES);
     setAllMessagesLoaded(false);
     allMessagesLoadedRef.current = false;
@@ -563,10 +570,13 @@ export function useChatSessionState({
       if (slot) {
         setHasMoreMessages(slot.hasMore);
         setTotalMessages(slot.total);
+        setSessionLoadError(slot.status === 'error');
+        setTranscriptMissing(slot.transcriptMissing);
         if (slot.tokenUsage) setTokenBudget(slot.tokenUsage as Record<string, unknown>);
       }
       setIsLoadingSessionMessages(false);
     }).catch(() => {
+      setSessionLoadError(true);
       setIsLoadingSessionMessages(false);
     });
   }, [
@@ -839,6 +849,20 @@ export function useChatSessionState({
     setVisibleMessageCount((prev) => prev + 100);
   }, []);
 
+  /** Re-run the first-page fetch after a timeout/failure without re-selecting the session. */
+  const retrySessionLoad = useCallback(async () => {
+    const sessionId = selectedSession?.id;
+    if (!sessionId) return;
+    setSessionLoadError(false);
+    setIsLoadingSessionMessages(true);
+    const slot = await sessionStore.fetchFromServer(sessionId, { limit: MESSAGES_PER_PAGE, offset: 0 });
+    setHasMoreMessages(slot.hasMore);
+    setTotalMessages(slot.total);
+    setSessionLoadError(slot.status === 'error');
+    setTranscriptMissing(slot.transcriptMissing);
+    setIsLoadingSessionMessages(false);
+  }, [selectedSession?.id, sessionStore]);
+
   return {
     chatMessages,
     addMessage,
@@ -850,6 +874,9 @@ export function useChatSessionState({
     currentSessionId,
     setCurrentSessionId,
     isLoadingSessionMessages,
+    sessionLoadError,
+    transcriptMissing,
+    retrySessionLoad,
     isLoadingMoreMessages,
     hasMoreMessages,
     totalMessages,
