@@ -4,9 +4,9 @@
 `1.0.1`、`1.0.2`、`1.0.3`……`1.0.12`，同时递增 iOS 构建号。1.1.0
 开发期只递增内部 Build，完成全部验收后一次正式发布。
 
-## iOS 1.34.0 (109) / Android 1.0.0-alpha.27 / Mac 1.84.0 · 三轮全面审计（源码交付，未发版）- 2026-09-06
+## iOS 1.34.0 (109) / Android 1.0.0-alpha.27 / Mac 1.84.0 · 三轮全面审计与三端发布 - 2026-09-07
 
-三轮独立审计（动线与点名问题 → 系统能力与一致性 → 性能、安全、死代码与发版就绪），鸿蒙不在范围。版本号与三端「本次更新」已按发版铁律写好；APK / DMG / IPA 尚未构建发布。
+三轮独立审计（动线与点名问题 → 系统能力与一致性 → 性能、安全、死代码与发版就绪），鸿蒙不在范围。审计分支已快进并入 `main`；Mac 热更新、iPhone Wi-Fi 真机安装和 Android 双 APK 发布均已完成。
 
 ### 用户可见
 
@@ -23,11 +23,11 @@
 
 ### 验证
 
-- Mac：typecheck、lint、`verify:release-notes` 3/3、desktop 37/37、client 162/162（新增 3）、server 410/410（新增 4）、production build、`npm audit --omit=dev` 0 漏洞。
-- Android：Standard / Power compileDebugKotlin 通过；Standard / Power JVM 单测各 641（1 跳过、0 失败）。
-- iOS：generic iPhone/iPad 设备目标无签名构建通过（版本提升后复跑），MinisLogicTests 337/337。
+- Mac：typecheck、lint、`verify:release-notes` 3/3、desktop 37/37、client 162/162（新增 3）、server 410/410（新增 4）、production build、`npm audit` 0 漏洞。1.84.0 的 36 个嵌套 Mach-O 均通过 Developer ID、时间戳和 hardened runtime 校验；DMG `d9b1f330ad48ebf9197efd16caf29c040d3aa01b0a093fa70c3315405216586a`，ZIP `b0321319452ded5d970aaea96fb1de4b25c0dc900f2ad1ac1868a5692a3125a8`；主仓与 `leocodebox-updates` 双 Release digest 一致，本机整包安装后 `/health` 回读 1.84.0。本机无 notarytool profile，仍如实标记为未公证 Developer ID。
+- Android：GitHub JDK 17 CI 的 Standard / Power 中文资源门禁、JVM 单测各 641（1 跳过、0 失败）、双 Release lint / R8 / 组装全部通过；本机干净 worktree 双 Release 构建和发布验签通过。Fold8 API 35 上 alpha.26→alpha.27 两包覆盖安装均为 `Success`，普通冷启动与 `ACTION_ASSIST` 均为 `Status: ok`，无本 App `FATAL EXCEPTION`。Standard SHA-256 `fed97d46d607e30a73dbaa00b90e1a52325d797fd04308347deb1b8a8ee1c8d1`；Power `74e11977bad918576be72b59b1d8e52e17e7f6e85e1fd8fd13e53b5e321ddba4`。
+- iOS：generic iPhone/iPad 设备目标无签名构建通过，MinisLogicTests 337/337；iPhone 17 Pro Max 通过 Wi-Fi 从 1.33.0 (108) 覆盖安装到 1.34.0 (109)，设备版本回读、主 App 与 Widget 进程启动均通过。iPad 实机未在场，继续保留为外部验收项。
 - relay：test_relay_security 13/13。
-- 未做实机：Mac 桌面端本机未运行且未获屏幕控制授权，iPhone/iPad/Fold8 未装机；装机复核清单见 [`docs/AUDIT_THREE_ROUNDS_2026-09-06.md`](docs/AUDIT_THREE_ROUNDS_2026-09-06.md)。
+- 外部 HOLD：iPad 实机不在当前环境；Mac 本机缺少 notarytool profile，未执行 Apple 公证。其余装机复核清单见 [`docs/AUDIT_THREE_ROUNDS_2026-09-06.md`](docs/AUDIT_THREE_ROUNDS_2026-09-06.md)。
 
 ## iOS 1.33.0 (108) / Android 1.0.0-alpha.26 / Mac 1.83.0 · 三端统一任务与系统执行 - 2026-09-04
 
