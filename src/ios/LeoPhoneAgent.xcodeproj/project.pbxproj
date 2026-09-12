@@ -606,6 +606,8 @@
 		F1W00101 /* PrintHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1W00100 /* PrintHelper.swift */; };
 		F1W0E101 /* WebLoadError.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1W0E100 /* WebLoadError.swift */; };
 		FDD896F80E0A14A7B60B12EF /* VoiceLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28E23EA0E199D6D50EBC76F2 /* VoiceLog.swift */; };
+		808A25205D208491596E63A7 /* AppleSpeechAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18E9A421C24F0F32CCF8867B /* AppleSpeechAnalyzer.swift */; };
+		D686CFC625007710F37C0C19 /* SystemSpeechResourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3C8BDAC6686E9822D1B75A2 /* SystemSpeechResourcesView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -1339,6 +1341,8 @@
 		F1W00100 /* PrintHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrintHelper.swift; sourceTree = "<group>"; };
 		F1W0E100 /* WebLoadError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebLoadError.swift; sourceTree = "<group>"; };
 		F2941B643B8A2F048A2B154E /* VoiceProviderFactory.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoiceProviderFactory.swift; sourceTree = "<group>"; };
+		18E9A421C24F0F32CCF8867B /* AppleSpeechAnalyzer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSpeechAnalyzer.swift; sourceTree = "<group>"; };
+		E3C8BDAC6686E9822D1B75A2 /* SystemSpeechResourcesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemSpeechResourcesView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -1399,6 +1403,7 @@
 				88993FC8E3F0199C6638F664 /* VoiceProvider+System.swift */,
 				A1B2C3D4E5F60718293A4B5D /* SystemVoiceCatalog.swift */,
 				E5SPOL011 /* SystemSpeechPolicy.swift */,
+				18E9A421C24F0F32CCF8867B /* AppleSpeechAnalyzer.swift */,
 				F2941B643B8A2F048A2B154E /* VoiceProviderFactory.swift */,
 				86DD7E40E65177AB39C55882 /* VoiceProviderResolver.swift */,
 				E5VC00016 /* CorrectionStrategy.swift */,
@@ -2434,6 +2439,7 @@
 				E5D00031 /* ProviderInstanceDetailView.swift */,
 				E5D00030 /* ProviderInstancesView.swift */,
 				E5SVP0031 /* ShadowVoiceProviderDetailView.swift */,
+				E3C8BDAC6686E9822D1B75A2 /* SystemSpeechResourcesView.swift */,
 				E5D00035 /* SessionModelPicker.swift */,
 				E5UMP0011 /* UnifiedModelPicker.swift */,
 				E5MDT0011 /* ModelDisplayTraits.swift */,
@@ -3173,6 +3179,7 @@
 				E5DEVA003 /* DeviceActions+Apple.swift in Sources */,
 				E5NATX001 /* NativeActionExecutor.swift in Sources */,
 				E5SPOL001 /* SystemSpeechPolicy.swift in Sources */,
+				808A25205D208491596E63A7 /* AppleSpeechAnalyzer.swift in Sources */,
 				E5L100002 /* ClipboardOffload.m in Sources */,
 				E5L100003 /* OpenOffload.m in Sources */,
 				E5L100004 /* CalendarOffload.m in Sources */,
@@ -3270,6 +3277,7 @@
 				E5D00020 /* ProviderInstancesView.swift in Sources */,
 				E5D00021 /* ProviderInstanceDetailView.swift in Sources */,
 				E5SVP0021 /* ShadowVoiceProviderDetailView.swift in Sources */,
+				D686CFC625007710F37C0C19 /* SystemSpeechResourcesView.swift in Sources */,
 				E5D00022 /* AddProviderView.swift in Sources */,
 				E5KIMIUI1 /* KimiDeviceLoginSheet.swift in Sources */,
 				E5D00023 /* ModelGroupsView.swift in Sources */,

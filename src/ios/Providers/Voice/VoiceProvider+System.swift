@@ -47,7 +47,10 @@ final class SystemVoiceProvider: NSObject, VoiceInputCapable, VoiceOutputCapable
         super.init()
     }
 
-    var supportsVoiceInput: Bool  { SFSpeechRecognizer.authorizationStatus() == .authorized }
+    var supportsVoiceInput: Bool {
+        if #available(iOS 26.0, *), SpeechTranscriber.isAvailable { return true }
+        return Self.speechAuthStatus == .authorized
+    }
     var supportsVoiceOutput: Bool { true }
 
     // MARK: - Speech recognition authorization
@@ -78,10 +81,11 @@ final class SystemVoiceProvider: NSObject, VoiceInputCapable, VoiceOutputCapable
             return exact
         }
         let lower = code.lowercased()
-        if let match = SFSpeechRecognizer.supportedLocales().first(where: { $0.identifier.lowercased().hasPrefix(lower) }) {
+        if let match = SFSpeechRecognizer.supportedLocales().sorted(by: { $0.identifier < $1.identifier })
+            .first(where: { $0.identifier.lowercased().hasPrefix(lower) }) {
             return match
         }
-        return locale
+        return exact
     }
 
     /// Cached recognizer for a locale (created once, reused warm).
@@ -106,26 +110,26 @@ final class SystemVoiceProvider: NSObject, VoiceInputCapable, VoiceOutputCapable
     // MARK: - Voice input (offline SFSpeechRecognizer)
 
     func transcribe(_ request: VoiceInputRequest) async throws -> VoiceInputResponse {
-        guard SFSpeechRecognizer.authorizationStatus() == .authorized else {
-            throw VoiceProviderError.unsupported("Speech recognition permission not granted")
-        }
-        // Reuse a cached (pre-warmed) recognizer for the requested language so
-        // the first request after entering voice mode isn't cold.
         let loc = resolveLocale(forLanguage: request.language)
-        guard let recognizer = cachedRecognizer(for: loc), recognizer.isAvailable else {
-            throw VoiceProviderError.unsupported("System speech recognizer unavailable for this language")
-        }
-
+        let requestedLocale = Locale(identifier: request.language ?? locale.identifier)
+        let assets: SystemSpeechAvailability
+        if #available(iOS 26.0, *) { assets = await AppleSpeechAnalyzer.availability(locale: requestedLocale) }
+        else { assets = .init(requestedLocale: loc.identifier, resolvedLocale: nil, state: .unsupported) }
+        let recognizer = cachedRecognizer(for: loc)
         let route = try SystemSpeechPolicy.choose(
             mode: SystemSpeechPolicy.mode(onDevice: request.onDeviceRecognition, modelID: request.model),
             automaticNetworkAllowed: SystemSpeechPreferences.autoNetworkAllowed,
-            assets: SystemSpeechAvailability(requestedLocale: loc.identifier, resolvedLocale: nil, state: .unknown),
-            legacyAvailable: recognizer.isAvailable,
-            legacySupportsOnDevice: recognizer.supportsOnDeviceRecognition,
-            legacyAuthorized: true)
-        guard case .legacy(let useOnDevice) = route else {
-            throw SystemSpeechError.recognizerUnavailable
+            assets: assets,
+            legacyAvailable: recognizer?.isAvailable == true,
+            legacySupportsOnDevice: recognizer?.supportsOnDeviceRecognition == true,
+            legacyAuthorized: Self.speechAuthStatus == .authorized)
+        if case .analyzer(let locale) = route {
+            if #available(iOS 26.0, *) {
+                return try await AppleSpeechAnalyzer.transcribe(data: request.audioData, localeIdentifier: locale)
+            }
+            throw SystemSpeechError.offlineUnavailable(loc.identifier)
         }
+        guard case .legacy(let useOnDevice) = route, let recognizer else { throw SystemSpeechError.recognizerUnavailable }
         try Task.checkCancellation()
 
         // SFSpeechRecognizer needs a file URL, so spill the WAV to tmp.
@@ -137,6 +141,9 @@ final class SystemVoiceProvider: NSObject, VoiceInputCapable, VoiceOutputCapable
             throw VoiceProviderError.parseError("Failed to write temp audio file")
         }
         defer { try? FileManager.default.removeItem(at: tmpURL) }
+
+        let audioFile = try? AVAudioFile(forReading: tmpURL)
+        let duration = audioFile.map { Double($0.length) / $0.processingFormat.sampleRate }
 
         let recognitionRequest = SFSpeechURLRecognitionRequest(url: tmpURL)
         // Report partial results so we can salvage text if the recognizer never
@@ -153,48 +160,29 @@ final class SystemVoiceProvider: NSObject, VoiceInputCapable, VoiceOutputCapable
             recognitionRequest.contextualStrings = [prompt]
         }
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let lock = NSLock()
-            var didResume = false
-            var latestText = ""
-            var task: SFSpeechRecognitionTask?
-
-            func finish(_ result: Result<String, Error>) {
-                lock.lock()
-                if didResume { lock.unlock(); return }
-                didResume = true
-                lock.unlock()
-                task?.cancel()
-                switch result {
-                case .success(let text):
-                    continuation.resume(returning: VoiceInputResponse(text: text, language: nil, duration: nil))
-                case .failure(let err):
-                    continuation.resume(throwing: err)
-                }
-            }
-
-            task = recognizer.recognitionTask(with: recognitionRequest) { result, error in
+        let transcript = SpeechTranscriptBuffer()
+        let lifetime = SpeechRequestLifetime<VoiceInputResponse>()
+        let response: @Sendable (String, Bool) -> VoiceInputResponse = { text, isFinal in
+            VoiceInputResponse(text: text, language: loc.identifier, duration: duration,
+                execution: .init(engine: useOnDevice ? .legacyOnDevice : .legacyNetworkAllowed,
+                    location: useOnDevice ? .onDevice : .systemManaged, locale: loc.identifier,
+                    isFinal: isFinal, note: isFinal ? nil : "系统只返回了部分转写结果"))
+        }
+        return try await lifetime.value(timeoutSeconds: SystemSpeechPolicy.timeout(audioDuration: duration), onTimeout: {
+            transcript.text.isEmpty ? .failure(SystemSpeechError.timedOut) : .success(response(transcript.text, false))
+        }) { lifetime in
+            let task = recognizer.recognitionTask(with: recognitionRequest) { result, error in
                 if let result {
                     let text = result.bestTranscription.formattedString
-                    lock.lock(); if !text.isEmpty { latestText = text }; lock.unlock()
-                    if result.isFinal { finish(.success(text)); return }
+                    if !text.isEmpty { transcript.replace(text) }
+                    if result.isFinal { lifetime.finish(.success(response(text, true))); return }
                 }
                 if let error {
-                    // If we already captured partial text, salvage it rather than
-                    // failing — a cold-start recognizer often errors out after a
-                    // partial without ever delivering a final.
-                    lock.lock(); let salvage = latestText; lock.unlock()
-                    if !salvage.isEmpty { finish(.success(salvage)) }
-                    else { finish(.failure(VoiceProviderError.parseError(error.localizedDescription))) }
+                    if !transcript.text.isEmpty { lifetime.finish(.success(response(transcript.text, false))) }
+                    else { lifetime.finish(.failure(SystemSpeechError.recognitionFailed(error.localizedDescription))) }
                 }
             }
-
-            // Watchdog: never hang. After 8s, finish with whatever partial text
-            // we have (empty → treated as a no-op utterance upstream).
-            DispatchQueue.global().asyncAfter(deadline: .now() + 8) {
-                lock.lock(); let salvage = latestText; lock.unlock()
-                finish(.success(salvage))
-            }
+            lifetime.onFinish { task.cancel() }
         }
     }
 
@@ -385,4 +373,3 @@ private extension Data {
         Swift.withUnsafeBytes(of: &v) { append(contentsOf: $0) }
     }
 }
-

@@ -115,7 +115,7 @@ final class TestRun: ObservableObject, Identifiable {
         case text(String)
         case image(Data)
         case audio(Data)
-        case transcript(spoken: String, heard: String)
+        case transcript(spoken: String, heard: String, execution: SpeechExecutionMetadata?)
         case failure(String)
     }
 
@@ -281,7 +281,7 @@ final class TestSession: ObservableObject {
             let req = VoiceInputRequest(audioData: wav, model: entry.model.id, language: "en", responseFormat: .json, prompt: nil)
             let resp = try await voice.transcribe(req)
             let heard = resp.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            return .transcript(spoken: spoken, heard: heard.isEmpty ? String(localized: "(empty transcription)") : heard)
+            return .transcript(spoken: spoken, heard: heard.isEmpty ? String(localized: "(empty transcription)") : heard, execution: resp.execution)
         }
     }
 
@@ -450,9 +450,13 @@ private struct TestCard: View {
             }
             .buttonStyle(.borderless)
 
-        case .transcript(let spoken, let heard):
+        case .transcript(let spoken, let heard, let execution):
             labeled("Spoken (test clip)", spoken)
             labeled("Transcribed", heard)
+            if let execution {
+                Text(execution.displayLabel + (execution.isFinal ? "" : " · 部分结果"))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
 
         case .failure(let message):
             Text(message).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)

@@ -2741,7 +2741,8 @@ final class DebugJSONRPC: @unchecked Sendable {
                         let detail: String
                         switch state {
                         case .text(let t): detail = t
-                        case .transcript(let spoken, let heard): detail = "spoken: \(spoken) | heard: \(heard)"
+                        case .transcript(let spoken, let heard, let execution):
+                            detail = "spoken: \(spoken) | heard: \(heard) | execution: \(execution?.displayLabel ?? "provider") | final: \(execution?.isFinal.description ?? "unknown")"
                         case .audio(let d):
                             let dur = (try? AVAudioPlayer(data: d))?.duration ?? -1
                             detail = "\(d.count) bytes, \(String(format: "%.2f", dur))s"

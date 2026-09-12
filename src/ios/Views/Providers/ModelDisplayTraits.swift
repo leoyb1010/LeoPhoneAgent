@@ -44,14 +44,20 @@ extension ModelEntry {
             // reflect that in the subtitle so "works offline" isn't shown for the
             // cloud one. Recognised by the entry id suffix.
             let isOnlineASR = id.hasSuffix("/system-asr-online")
+            let isAutomaticASR = isASR && !isOnlineASR && !id.hasSuffix("/system-asr-offline")
+            let permitsNetwork = isOnlineASR || (isAutomaticASR && SystemSpeechPreferences.autoNetworkAllowed)
             let subtitle: String
             if isOnlineASR {
-                subtitle = String(localized: "iOS built-in, needs network", comment: "Cloud built-in ASR subtitle")
+                subtitle = String(localized: "允许联网；优先使用已安装的本机资源")
+            } else if isAutomaticASR {
+                subtitle = permitsNetwork ? String(localized: "优先本机；允许联网回退") : String(localized: "自动模式仅本机；联网回退已关闭")
+            } else if isASR {
+                subtitle = String(localized: "仅本机；需要可用的语言资源")
             } else {
                 subtitle = String(localized: "iOS built-in, works offline", comment: "Built-in engine subtitle")
             }
             return ModelDisplayTraits(
-                isOffline: !isOnlineASR,
+                isOffline: !permitsNetwork,
                 requiresCredential: false,
                 subtitle: subtitle,
                 iconSymbol: isTTS ? "speaker.wave.2.fill" : (isASR ? "mic.fill" : "cpu"),

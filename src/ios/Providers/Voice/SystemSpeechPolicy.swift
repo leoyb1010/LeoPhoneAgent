@@ -51,6 +51,7 @@ enum SystemSpeechError: Error, LocalizedError, Equatable, Sendable {
     case timedOut
     case installationRequiresUserAction
     case installationNotConfirmed
+    case installationTimedOut
 
     var errorDescription: String? {
         switch self {
@@ -64,6 +65,7 @@ enum SystemSpeechError: Error, LocalizedError, Equatable, Sendable {
         case .timedOut: return "系统转写超时，已停止本次请求，请重试。"
         case .installationRequiresUserAction: return "语言资源下载必须由你点击开始。"
         case .installationNotConfirmed: return "系统尚未确认语言资源安装完成，请刷新状态后重试。"
+        case .installationTimedOut: return "语言资源下载等待超时，已请求停止本次下载。请刷新查看系统的实际资源状态。"
         }
     }
 

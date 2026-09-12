@@ -50,6 +50,7 @@ final class VoiceInputViewModel: ObservableObject {
     /// Non-nil when the last transcription request failed — shown as a tip so the
     /// user sees WHY (e.g. HTTP 404 / auth) instead of silent no-text.
     @Published var transcribeError: String?
+    @Published var lastSpeechExecution: SpeechExecutionMetadata?
     @Published var retryCountdown: Int?
     @Published var canManualRetry = false
     private var retryAudioData: Data?
@@ -242,6 +243,12 @@ final class VoiceInputViewModel: ObservableObject {
     /// Pre-warm the on-device recognizer when the active ASR is the System
     /// provider (no-op for cloud providers). Avoids the cold-start miss where
     /// the first request or two produce no result.
+    private func ensureSystemSpeechAuthorizationIfNeeded() async {
+        guard inputProvider is SystemVoiceProvider else { return }
+        if #available(iOS 26.0, *), await AppleSpeechAnalyzer.availability(locale: Locale(identifier: language)).state == .installed { return }
+        _ = await SystemVoiceProvider.ensureSpeechAuthorization()
+    }
+
     private func prewarmIfSystem() {
         if let sys = inputProvider as? SystemVoiceProvider {
             sys.prewarm(language: language)
@@ -296,7 +303,7 @@ final class VoiceInputViewModel: ObservableObject {
             // System (offline) ASR also needs Speech permission — request it
             // (no-op once granted) before starting capture.
             Task {
-                await SystemVoiceProvider.ensureSpeechAuthorization()
+                await self.ensureSystemSpeechAuthorizationIfNeeded()
                 self.prewarmIfSystem()
                 self.startVAD()
             }
@@ -373,7 +380,7 @@ final class VoiceInputViewModel: ObservableObject {
         let granted = await VoiceActivityDetector.requestMicrophonePermission()
         VoiceLog.log("mic permission request result: granted=\(granted)")
         guard granted else { permissionDenied = true; return }
-        await SystemVoiceProvider.ensureSpeechAuthorization()
+        await self.ensureSystemSpeechAuthorizationIfNeeded()
         prewarmIfSystem()
         startVAD()
     }
@@ -693,10 +700,12 @@ final class VoiceInputViewModel: ObservableObject {
             var text = ""
             do {
                 try Task.checkCancellation()
-                text = try await self.transcribeWithFailover(audioData: audioData,
+                let response = try await self.transcribeWithFailover(audioData: audioData,
                                                              candidates: candidates,
                                                              language: requestLanguage,
                                                              onDevice: onDevice)
+                text = response.text
+                if generation == self.transcriptGeneration, !Task.isCancelled { self.lastSpeechExecution = response.execution }
                 VoiceLog.log("transcript: \"\(text)\"")
                 self.transcribeError = nil
             } catch is CancellationError {
@@ -747,14 +756,14 @@ final class VoiceInputViewModel: ObservableObject {
     private func transcribeWithFailover(audioData: Data,
                                         candidates: [ModelEntry],
                                         language: String,
-                                        onDevice: Bool?) async throws -> String {
+                                        onDevice: Bool?) async throws -> VoiceInputResponse {
         guard !candidates.isEmpty else {
             let request = VoiceInputRequest(audioData: audioData,
                                             model: nil,
                                             language: language,
                                             resolvedModel: nil,
                                             onDeviceRecognition: onDevice)
-            return try await SystemVoiceProvider.shared.transcribe(request).text
+            return try await SystemVoiceProvider.shared.transcribe(request)
         }
         var lastError: Error?
         for (i, entry) in candidates.enumerated() {
@@ -766,7 +775,7 @@ final class VoiceInputViewModel: ObservableObject {
                                             resolvedModel: entry.model,
                                             onDeviceRecognition: onDevice)
             do {
-                let text = try await provider.transcribe(request).text
+                let response = try await provider.transcribe(request)
                 if stickyInputEntryId != entry.id {
                     stickyInputEntryId = entry.id
                     inputProvider = provider
@@ -775,7 +784,7 @@ final class VoiceInputViewModel: ObservableObject {
                         VoiceLog.log("ASR fail-over: switched to \(entry.model.displayName) (sticky)")
                     }
                 }
-                return text
+                return response
             } catch is CancellationError {
                 throw CancellationError()
             } catch {

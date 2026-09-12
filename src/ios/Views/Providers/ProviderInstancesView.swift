@@ -41,6 +41,11 @@ struct ProviderInstancesView: View {
             // instances on the same host show one row (shares that instance's
             // credential/endpoint). Tapping opens the shadow detail (voice models
             // + a "disable this voice row" toggle).
+            Section("系统语音") {
+                NavigationLink { SystemSpeechResourcesView() } label: {
+                    Label("系统语音与语言资源", systemImage: "waveform")
+                }
+            }
             let shadows = store.shadowVoiceProviders()
             if !shadows.isEmpty {
                 Section("Voice Services") {

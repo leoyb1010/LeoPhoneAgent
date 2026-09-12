@@ -582,6 +582,12 @@ struct InlineVoiceInputView: View {
             // first — controls stay pinned — before the panel expands upward.
             Spacer(minLength: 0)
 
+            if let execution = viewModel.lastSpeechExecution {
+                Text(execution.displayLabel + (execution.isFinal ? "" : " · 部分结果"))
+                    .font(.caption2).foregroundStyle(.secondary)
+                    .accessibilityLabel(execution.displayLabel)
+            }
+
             // ── Transcription error tip (with retry countdown / manual retry) ──
             if viewModel.transcribeError != nil || viewModel.retryCountdown != nil {
                 HStack(spacing: 5) {

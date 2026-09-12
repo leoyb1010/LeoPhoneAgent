@@ -45,10 +45,11 @@ enum VoiceInputFormat: String {
     case json, text, srt, vtt
 }
 
-struct VoiceInputResponse {
+struct VoiceInputResponse: Sendable {
     let text: String
     let language: String?
     let duration: Double?
+    var execution: SpeechExecutionMetadata? = nil
 }
 
 /// A speech-synthesis (TTS) request: text in, audio out.
