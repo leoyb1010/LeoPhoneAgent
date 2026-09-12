@@ -236,7 +236,7 @@ final class VoiceInputViewModel: ObservableObject {
     func prepare() {
         captureStart.cancel()
         // First entry into voice mode with nothing configured → auto-create default
-        // Voice Input (System ASR online+offline) and Voice Output (System Voice
+        // Voice Input (System ASR Auto) and Voice Output (System Voice
         // Auto) groups and bind them, so there's an explicit, editable selection
         // instead of a silent fallback. No-op once the user has configured either.
         ProviderConfigStore.shared.ensureDefaultVoiceInputGroup()

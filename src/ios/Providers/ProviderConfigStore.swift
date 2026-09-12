@@ -1674,8 +1674,8 @@ final class ProviderConfigStore: ObservableObject {
 
     /// Ensure a default Voice INPUT group exists and is bound when the user hasn't
     /// configured one. Called on first entry into voice-input mode. Creates a
-    /// "Voice Input" fallback group with the two built-in System ASR models —
-    /// Online (cloud, accurate) first, then Offline (on-device, private) — and
+    /// "Voice Input" group with the automatic System model, whose network fallback
+    /// is disabled unless the user enables it in System Speech resources, and
     /// binds it. No-op if a group is already set. Members are the System sentinel
     /// composite ids, which resolve via SystemVoiceCatalog (never stored/synced).
     @discardableResult
@@ -1684,11 +1684,11 @@ final class ProviderConfigStore: ObservableObject {
         let sentinel = SystemVoiceProvider.builtinProviderId
         let group = ModelGroup(
             name: String(localized: "Voice Input", comment: "Default voice input group name"),
-            memberEntryIds: ["\(sentinel)/system-asr-online", "\(sentinel)/system-asr-offline"])
+            memberEntryIds: ["\(sentinel)/system-asr"])
         config.modelGroups.append(group)
         config.voiceInputGroupId = group.id
         save()
-        logger.info("[Voice] auto-created default Voice Input group \(group.id.prefix(8)) [System ASR online+offline]")
+        logger.info("[Voice] auto-created default Voice Input group \(group.id.prefix(8)) [System ASR auto]")
         return group.id
     }
 

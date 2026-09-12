@@ -397,10 +397,8 @@ enum VoiceProviderResolver {
         return nil
     }
 
-    /// Which System ASR variant the user selected. Offline = on-device (privacy,
-    /// no limits, language switch matters); Online = server/cloud (accuracy, more
-    /// languages). `.auto` = no explicit choice → provider prefers on-device when
-    /// available.
+    /// Offline forbids network recognition; Online permits system-managed network
+    /// fallback. Auto follows the explicit automatic-network preference.
     enum SystemInputMode { case auto, online, offline }
 
     /// Resolve the System ASR mode from the current input selection (override id
@@ -408,15 +406,18 @@ enum VoiceProviderResolver {
     /// "…/system-asr-online" / "…/system-asr-offline" suffix; anything else = .auto.
     static func resolvedSystemInputMode() -> SystemInputMode {
         func mode(_ id: String?) -> SystemInputMode? {
-            guard let id else { return nil }
+            guard let id, isSystemEntry(id) else { return nil }
             if id.hasSuffix("/system-asr-online")  { return .online }
             if id.hasSuffix("/system-asr-offline") { return .offline }
             return nil
         }
-        if let m = mode(VoiceSelectionStore.shared.inputEntryId) { return m }
+        let selection = VoiceSelectionStore.shared.inputEntryId
+        if isSystemEntry(selection) { return mode(selection) ?? .auto }
         if let gid = ProviderConfigStore.shared.voiceInputGroupId,
            let group = ProviderConfigStore.shared.group(for: gid) {
-            for mid in group.memberEntryIds { if let m = mode(mid) { return m } }
+            for mid in group.memberEntryIds where isSystemEntry(mid) {
+                return mode(mid) ?? .auto
+            }
         }
         return .auto
     }
