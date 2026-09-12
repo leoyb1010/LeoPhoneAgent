@@ -217,7 +217,8 @@ final class VoiceActivityDetector: NSObject {
             VoiceLog.log("audio interruption ENDED (shouldResume=\(shouldResume), wasRunning=\(interruptedWhileRunning))")
             if interruptedWhileRunning {
                 interruptedWhileRunning = false
-                attemptResume()
+                if shouldResume { attemptResume() }
+                else { fullStopFromInterruption() }
             }
         @unknown default:
             break
@@ -225,9 +226,17 @@ final class VoiceActivityDetector: NSObject {
     }
 
     @objc private func handleRouteChange(_ note: Notification) {
+        // Apple posts route changes on a secondary thread. Engine/session
+        // ownership and AudioSessionCoordinator cleanup belong to the main thread.
+        // https://developer.apple.com/documentation/avfaudio/avaudiosession/routechangenotification
+        if Thread.isMainThread { resumeAfterRouteChange() }
+        else { DispatchQueue.main.async { [weak self] in self?.resumeAfterRouteChange() } }
+    }
+
+    private func resumeAfterRouteChange() {
         // A route change (e.g. AirPods unplugged) can stop the engine. If we think
         // we're running but the engine actually stopped, rebuild it.
-        guard isRunning, !audioEngine.isRunning else { return }
+        guard isRunning, !interruptedWhileRunning, !audioEngine.isRunning else { return }
         VoiceLog.log("route change while running but engine stopped — resuming")
         attemptResume()
     }
@@ -273,6 +282,7 @@ final class VoiceActivityDetector: NSObject {
     /// Could not recover — fully stop and notify the delegate so the UI can reflect
     /// that capture ended (button returns to idle instead of a frozen "Listening").
     private func fullStopFromInterruption() {
+        flushCapturedSegment(reason: .manualFlush)
         tearDown()
         DispatchQueue.main.async { [weak self] in
             self?.delegate?.voiceActivityInterrupted()

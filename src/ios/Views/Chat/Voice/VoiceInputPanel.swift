@@ -44,6 +44,9 @@ final class VoiceInputViewModel: ObservableObject {
     /// True when microphone permission was denied — surfaced so the UI can
     /// prompt the user to enable it in Settings instead of silently doing nothing.
     @Published var permissionDenied = false
+    @Published private(set) var awaitingCaptureAuthorization = false
+    private let captureStart = SpeechCaptureStartGate()
+    private enum CapturePermissionError: Error { case microphoneDenied }
     /// Non-nil when starting the mic engine failed (e.g. AVAudioSession / VAD
     /// init error) — surfaced so a silent failure isn't a dead, mute button.
     @Published var startError: String?
@@ -70,6 +73,7 @@ final class VoiceInputViewModel: ObservableObject {
     @Published var language: String = VoiceLanguages.lastUsed {
         didSet {
             guard language != oldValue else { return }
+            captureStart.cancel()
             VoiceLanguages.lastUsed = language
         }
     }
@@ -120,6 +124,7 @@ final class VoiceInputViewModel: ObservableObject {
 
     init() {
         vad.delegate = self
+        captureStart.onPendingChange = { [weak self] in self?.awaitingCaptureAuthorization = $0 }
         observeLifecycle()
     }
 
@@ -165,6 +170,7 @@ final class VoiceInputViewModel: ObservableObject {
     }
 
     @objc private func appDidEnterBackground() {
+        captureStart.cancel()
         guard vad.isRunning else { return }
         backgroundTimer?.invalidate()
         backgroundTimer = Timer.scheduledTimer(withTimeInterval: Self.backgroundTimeout, repeats: false) { [weak self] _ in
@@ -184,6 +190,7 @@ final class VoiceInputViewModel: ObservableObject {
 
     /// Re-resolve the ASR provider (e.g. after the user switches engine).
     func refreshInputProvider() {
+        captureStart.cancel()
         resolveInputCandidates(reseed: false)
     }
 
@@ -227,6 +234,7 @@ final class VoiceInputViewModel: ObservableObject {
     /// tap is meaningful and any permission prompt fires on an explicit action).
     /// Here we only resolve the ASR provider and pre-check permission state.
     func prepare() {
+        captureStart.cancel()
         // First entry into voice mode with nothing configured → auto-create default
         // Voice Input (System ASR online+offline) and Voice Output (System Voice
         // Auto) groups and bind them, so there's an explicit, editable selection
@@ -243,10 +251,13 @@ final class VoiceInputViewModel: ObservableObject {
     /// Pre-warm the on-device recognizer when the active ASR is the System
     /// provider (no-op for cloud providers). Avoids the cold-start miss where
     /// the first request or two produce no result.
-    private func ensureSystemSpeechAuthorizationIfNeeded() async {
+    private func ensureSystemSpeechAuthorizationIfNeeded() async throws {
         guard inputProvider is SystemVoiceProvider else { return }
         if #available(iOS 26.0, *), await AppleSpeechAnalyzer.availability(locale: Locale(identifier: language)).state == .installed { return }
-        _ = await SystemVoiceProvider.ensureSpeechAuthorization()
+        try Task.checkCancellation()
+        let allowed = await SystemVoiceProvider.ensureSpeechAuthorization()
+        try Task.checkCancellation()
+        guard allowed else { throw SystemSpeechError.legacyPermissionRequired }
     }
 
     private func prewarmIfSystem() {
@@ -256,6 +267,8 @@ final class VoiceInputViewModel: ObservableObject {
     }
 
     func stopListening() {
+        captureStart.cancel()
+        cancelTotalRecordingTimer()
         vad.stop()
         state = .waiting
         listeningLabelToken &+= 1
@@ -272,6 +285,7 @@ final class VoiceInputViewModel: ObservableObject {
     /// (continuous dictation) — segments transcribe as silence is detected while
     /// capture keeps running, so we never stop it just to transcribe.
     func handleMainButtonTap() {
+        if captureStart.isPending { captureStart.cancel(); return }
         VoiceLog.log("handleMainButtonTap called, state=\(state), vad.isRunning=\(vad.isRunning), isSpeaking=\(vad.isSpeaking), runningDuration=\(String(format: "%.1f", vad.runningDuration))s")
         if vad.isRunning {
             let wasSpeaking = vad.isSpeaking
@@ -299,16 +313,19 @@ final class VoiceInputViewModel: ObservableObject {
         let mic = VoiceActivityDetector.microphonePermission
         VoiceLog.log("mic permission: \(mic), speech permission: \(SystemVoiceProvider.speechAuthStatus)")
         switch mic {
-        case .granted:
-            // System (offline) ASR also needs Speech permission — request it
-            // (no-op once granted) before starting capture.
-            Task {
-                await self.ensureSystemSpeechAuthorizationIfNeeded()
-                self.prewarmIfSystem()
-                self.startVAD()
-            }
-        case .undetermined:
-            Task { await requestPermissionAndStart() }
+        case .granted, .undetermined:
+            captureStart.begin(prepare: { [weak self] in
+                guard let self else { throw CancellationError() }
+                try await self.prepareCaptureAuthorization()
+            }, canStart: {
+                UIApplication.shared.applicationState != .background
+            }, start: { [weak self] in
+                self?.prewarmIfSystem()
+                self?.startVAD()
+            }, onFailure: { [weak self] error in
+                if error is CapturePermissionError { self?.permissionDenied = true }
+                else { self?.startError = error.localizedDescription }
+            })
         case .denied:
             permissionDenied = true
         }
@@ -323,6 +340,7 @@ final class VoiceInputViewModel: ObservableObject {
     /// Leaving it lets the text carry over; the next voice-mode entry re-seeds
     /// the transcript from inputText anyway (InlineVoiceInputView.onAppear).
     func reset(clearTranscript: Bool = true) {
+        captureStart.cancel()
         vad.stop()
         if clearTranscript { transcript = "" }
         // [T-voice-panel-gap-after-edit] Leaving voice mode (mic/"T" toggle) while
@@ -376,13 +394,13 @@ final class VoiceInputViewModel: ObservableObject {
         }
     }
 
-    private func requestPermissionAndStart() async {
+    private func prepareCaptureAuthorization() async throws {
+        try Task.checkCancellation()
         let granted = await VoiceActivityDetector.requestMicrophonePermission()
-        VoiceLog.log("mic permission request result: granted=\(granted)")
-        guard granted else { permissionDenied = true; return }
-        await self.ensureSystemSpeechAuthorizationIfNeeded()
-        prewarmIfSystem()
-        startVAD()
+        try Task.checkCancellation()
+        guard granted else { throw CapturePermissionError.microphoneDenied }
+        try await ensureSystemSpeechAuthorizationIfNeeded()
+        try Task.checkCancellation()
     }
 
     private func beginRecordingLabelCycle() {
@@ -819,7 +837,7 @@ final class VoiceInputViewModel: ObservableObject {
         cancelPendingForceFlush()
         pendingSegments.removeAll(keepingCapacity: true)
         // Stop the mic on send (and cancel idle/background timers via stopListening).
-        if vad.isRunning { stopListening() }
+        stopListening()
         state = .waiting
         // Signal the inline view to collapse to compact mode after a send.
         collapseAfterSendToken &+= 1
@@ -829,6 +847,7 @@ final class VoiceInputViewModel: ObservableObject {
 
     /// Enter keyboard-edit mode: pause VAD so manual edits aren't overwritten.
     func beginEditing() {
+        captureStart.cancel()
         // [T-voice-bg-fg-gap] Idempotency guard + site log. The only caller is
         // the read-only transcript's double-tap, but the device-log flap
         // (isEditingTranscript true→false→true, 12:12:41→43) needs every entry
@@ -858,10 +877,10 @@ final class VoiceInputViewModel: ObservableObject {
 
         if resume {
             state = .waiting
-            startVAD()   // the user's "resume recording" must happen NOW…
+            handleMainButtonTap()
         }
 
-        // …and the learning happens entirely off this call stack (design §12.2). Diff,
+        // Learning stays off the permission/capture path (design §12.2). Diff,
         // segmentation and the SQLite write all run in the detached task; nothing above
         // waits on any of it, and a failure in here can't reach the UI.
         //
@@ -919,6 +938,7 @@ extension VoiceInputViewModel: VoiceActivityDelegate {
     /// Capture was interrupted (call/Siri/route) and couldn't auto-resume — reset
     /// to idle so the mic button reflects "stopped" instead of a frozen waveform.
     func voiceActivityInterrupted() {
+        captureStart.cancel()
         // Flush any audio captured before the interruption, then return to idle.
         flushPendingSegments()
         state = .waiting

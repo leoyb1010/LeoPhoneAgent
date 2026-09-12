@@ -582,6 +582,13 @@ struct InlineVoiceInputView: View {
             // first — controls stay pinned — before the panel expands upward.
             Spacer(minLength: 0)
 
+            if viewModel.awaitingCaptureAuthorization {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.mini)
+                    Text("正在准备录音，可点麦克风取消").font(.caption)
+                }.foregroundStyle(.secondary)
+            }
+
             if let execution = viewModel.lastSpeechExecution {
                 Text(execution.displayLabel + (execution.isFinal ? "" : " · 部分结果"))
                     .font(.caption2).foregroundStyle(.secondary)

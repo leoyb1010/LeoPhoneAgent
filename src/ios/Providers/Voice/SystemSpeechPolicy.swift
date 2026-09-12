@@ -196,3 +196,51 @@ final class SpeechTranscriptBuffer: @unchecked Sendable {
     func append(_ text: String) { lock.lock(); value += text; lock.unlock() }
     var text: String { lock.lock(); defer { lock.unlock() }; return value.trimmingCharacters(in: .whitespacesAndNewlines) }
 }
+
+/// Owns only the asynchronous permission/start boundary; VAD remains the sole capture engine.
+@MainActor
+final class SpeechCaptureStartGate {
+    private var requestID: UUID?
+    private var task: Task<Void, Never>?
+    var onPendingChange: ((Bool) -> Void)?
+    var isPending: Bool { requestID != nil }
+
+    @discardableResult
+    func begin(prepare: @escaping @MainActor () async throws -> Void,
+               canStart: @escaping @MainActor () -> Bool,
+               start: @escaping @MainActor () -> Void,
+               onFailure: @escaping @MainActor (Error) -> Void) -> Bool {
+        guard requestID == nil else { return false }
+        let identity = UUID()
+        requestID = identity
+        onPendingChange?(true)
+        task = Task { @MainActor [weak self] in
+            defer { self?.finish(identity) }
+            guard self?.requestID == identity, !Task.isCancelled else { return }
+            do {
+                try await prepare()
+                guard self?.requestID == identity, !Task.isCancelled, canStart() else { return }
+                start()
+            } catch {
+                guard self?.requestID == identity, !Task.isCancelled else { return }
+                onFailure(error)
+            }
+        }
+        return true
+    }
+
+    func cancel() {
+        guard requestID != nil else { return }
+        requestID = nil
+        task?.cancel()
+        task = nil
+        onPendingChange?(false)
+    }
+
+    private func finish(_ identity: UUID) {
+        guard requestID == identity else { return }
+        requestID = nil
+        task = nil
+        onPendingChange?(false)
+    }
+}
