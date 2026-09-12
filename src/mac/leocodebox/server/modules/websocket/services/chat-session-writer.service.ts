@@ -25,6 +25,8 @@ type ChatSessionWriterOptions = {
    * `complete` after an abort already completed the run).
    */
   decorateOutboundEvent: (message: NormalizedMessage) => NormalizedMessage | null;
+  /** A run's observers outlive any one websocket connection. */
+  forward?: (message: NormalizedMessage) => void;
 };
 
 /**
@@ -138,6 +140,10 @@ export class ChatSessionWriter {
   }
 
   private forward(message: NormalizedMessage): void {
+    if (this.options.forward) {
+      this.options.forward(message);
+      return;
+    }
     if (this.ws.readyState === WS_OPEN_STATE) {
       this.ws.send(JSON.stringify(message));
     }

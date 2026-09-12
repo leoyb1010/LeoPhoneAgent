@@ -2,7 +2,7 @@ import ReactDOM from 'react-dom';
 import { AlertTriangle, EyeOff, Trash2 } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
-import { Button } from '../../../../shared/view/ui';
+import { Button, Dialog, DialogContent } from '../../../../shared/view/ui';
 import VersionUpgradeModal from '../../../version-upgrade/view';
 import type { DeleteProjectConfirmation, SessionDeleteConfirmation } from '../../types/types';
 import ProjectCreationWizard from '../../../project-creation-wizard';
@@ -63,8 +63,8 @@ export default function SidebarModals({
 
       {deleteConfirmation &&
         ReactDOM.createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-md overflow-hidden rounded-xl border border-border bg-card shadow-elevation-3">
+          <Dialog open onOpenChange={(next) => { if (!next) onCancelDeleteProject(); }}>
+            <DialogContent aria-label={t('deleteConfirmation.deleteProject')} className="w-[calc(100%-2rem)] max-w-md overflow-hidden border-border bg-card shadow-elevation-3">
               <div className="p-6">
                 <div className="flex items-start gap-4">
                   <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-warning dark:bg-warning/30">
@@ -110,15 +110,15 @@ export default function SidebarModals({
                   {t('actions.cancel')}
                 </Button>
               </div>
-            </div>
-          </div>,
+            </DialogContent>
+          </Dialog>,
           document.body,
         )}
 
       {sessionDeleteConfirmation &&
         ReactDOM.createPortal(
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-md overflow-hidden rounded-xl border border-border bg-card shadow-elevation-3">
+          <Dialog open onOpenChange={(next) => { if (!next) onCancelDeleteSession(); }}>
+            <DialogContent aria-label={t('deleteConfirmation.deleteSession')} className="w-[calc(100%-2rem)] max-w-md overflow-hidden border-border bg-card shadow-elevation-3">
               <div className="p-6">
                 <div className="flex items-start gap-4">
                   <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-destructive dark:bg-destructive/30">
@@ -166,8 +166,8 @@ export default function SidebarModals({
                   {t('actions.cancel')}
                 </Button>
               </div>
-            </div>
-          </div>,
+            </DialogContent>
+          </Dialog>,
           document.body,
         )}
 

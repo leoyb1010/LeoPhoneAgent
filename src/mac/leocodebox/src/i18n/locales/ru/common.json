@@ -342,7 +342,8 @@
     "openLeoapi": "Leoapi gateway",
     "openLocalLog": "Local log",
     "goMissions": "Quick tasks",
-    "goConsole": "Новая задача"
+    "goConsole": "Новая задача",
+    "goCollections": "Открыть библиотеку"
   },
   "workbench": {
     "localMachine": "Local · {{name}}",
@@ -402,7 +403,16 @@
     "consoleTooltip": "Консоль · выбрать агента, начать задачу",
     "agentLockedTooltip": "Эта сессия создана с ним. Чтобы сменить агента, начните новую задачу в консоли.",
     "agentLockedLabel": "Агент сессии: {{agent}}",
-    "agentLockedMark": "эта сессия"
+    "agentLockedMark": "эта сессия",
+    "remoteLog": "Удалённый вывод (последние 400 строк)",
+    "remoteLatest": "Новый вывод · Перейти к последнему",
+    "journal": {
+      "unknown": "Статус сохранения неизвестен",
+      "pending": "Сохранение журнала",
+      "durable": "Журнал сохранён",
+      "degraded": "Журнал сохранён не полностью"
+    },
+    "journalDetail": "Сохранено {{durable}} / получено {{latest}} · пропусков {{missing}}"
   },
   "dashboard": {
     "newTaskTitle": "Новая задача",
@@ -419,5 +429,16 @@
     "newTaskPlaceholder": "Попросить {{agent}} что-нибудь сделать в {{target}}…",
     "newTaskStart": "Начать сессию",
     "newTaskNeedProject": "Сначала добавьте каталог проекта — задаче нужно где-то выполняться."
+  },
+  "taskStart": {
+    "title": "Что вы хотите сделать?",
+    "description": "Опишите задачу выше, затем выберите проект и устройство перед запуском.",
+    "examples": "Например: проверить последние изменения кода или упорядочить заметки проекта.",
+    "projectLabel": "Текущий проект",
+    "noProject": "Выберите проект, когда будете готовы.",
+    "changeProject": "Сменить проект задачи",
+    "libraryTitle": "Библиотека",
+    "libraryDescription": "Сохраняйте, находите и читайте свои материалы.",
+    "shortcuts": "⌘N Новая задача · ⌘K Поиск и навигация · ⌘, Настройки"
   }
 }

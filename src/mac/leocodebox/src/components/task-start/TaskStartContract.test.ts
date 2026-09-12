@@ -13,7 +13,13 @@ test('desktop exposes one new-task surface and keeps LeoAPI inside settings', ()
     'utf8',
   );
 
-  assert.match(app, /activeTab === 'dashboard' && \(\s*<CommandBar/);
+  // Keep one mounted dock so visiting the library does not discard its draft.
+  // Inactive routes hide it and turn off its keyboard entry points.
+  assert.equal((app.match(/<CommandBar\b/g) ?? []).length, 1);
+  assert.match(app, /className=\{activeTab === 'dashboard' \? 'contents' : 'hidden'\}/);
+  assert.match(app, /<CommandBar\s+active=\{activeTab === 'dashboard'\}/);
+  const home = readFileSync('src/components/task-start/TaskStartView.tsx', 'utf8');
+  assert.doesNotMatch(home, /<input|<textarea|onSubmit=/);
   assert.doesNotMatch(app, /DashboardView|NewTaskCard|LeoapiPanel/);
   assert.match(titlebar, /onStartNewTask/);
   assert.doesNotMatch(titlebar, /主控台|onOpenLeoapi|onOpenPalette/);

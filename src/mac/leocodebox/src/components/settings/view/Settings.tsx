@@ -81,6 +81,8 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
     const focusFrame = window.requestAnimationFrame(() => closeButtonRef.current?.focus());
     const handleKeyDown = (event: KeyboardEvent) => {
       if (loginModalOpenRef.current) return;
+      // A child Dialog owns its own keyboard/focus boundary.
+      if (event.target instanceof Element && event.target.closest('[data-dialog-layer]')) return;
       if (event.key === 'Escape') {
         event.preventDefault();
         onClose();

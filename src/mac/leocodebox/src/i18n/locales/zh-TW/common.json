@@ -372,7 +372,8 @@
     "openLeoapi": "Leoapi 网关",
     "openLocalLog": "本地日志",
     "goMissions": "快速任务",
-    "goConsole": "新任務"
+    "goConsole": "新任務",
+    "goCollections": "開啟藏寶閣"
   },
   "workbench": {
     "localMachine": "本机 · {{name}}",
@@ -432,7 +433,16 @@
     "consoleTooltip": "主控台 · 選 Agent、開新任務",
     "agentLockedTooltip": "這個工作階段建立時就定了它,要換 Agent 請回主控台開新任務",
     "agentLockedLabel": "本工作階段的 Agent:{{agent}}",
-    "agentLockedMark": "本階段"
+    "agentLockedMark": "本階段",
+    "remoteLog": "遠端執行輸出（最近 400 行）",
+    "remoteLatest": "有新輸出 · 回到最新",
+    "journal": {
+      "unknown": "儲存狀態未知",
+      "pending": "日誌儲存中",
+      "durable": "日誌已儲存",
+      "degraded": "日誌儲存異常"
+    },
+    "journalDetail": "已儲存 {{durable}} / 已收到 {{latest}} · {{missing}} 段缺失"
   },
   "dashboard": {
     "newTaskTitle": "新任務",
@@ -449,5 +459,16 @@
     "newTaskPlaceholder": "讓 {{agent}} 在 {{target}} 上做點什麼…",
     "newTaskStart": "開始新工作階段",
     "newTaskNeedProject": "先新增一個專案目錄,任務才有落腳點。"
+  },
+  "taskStart": {
+    "title": "這次想完成什麼？",
+    "description": "在上方說出任務，執行前再確定專案和目標裝置。",
+    "examples": "例如：檢查最近的程式碼變更，或整理專案筆記。",
+    "projectLabel": "目前專案",
+    "noProject": "尚未選擇，準備好後再選。",
+    "changeProject": "更換任務專案",
+    "libraryTitle": "藏寶閣",
+    "libraryDescription": "儲存資料，隨時尋找和閱讀。",
+    "shortcuts": "⌘N 新任務 · ⌘K 尋找與導覽 · ⌘, 設定"
   }
 }

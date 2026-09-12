@@ -2,6 +2,8 @@ import { useCallback, useMemo, useState } from 'react';
 import { FolderPlus, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { Dialog, DialogContent } from '../../shared/view/ui/Dialog';
+
 import ErrorBanner from './components/ErrorBanner';
 import StepConfiguration from './components/StepConfiguration';
 import StepReview from './components/StepReview';
@@ -131,8 +133,8 @@ export default function ProjectCreationWizard({
   );
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 top-0 z-[60] flex items-center justify-center bg-black/50 p-0 backdrop-blur-sm sm:p-4">
-      <div className="h-full w-full overflow-y-auto rounded-none border-0 border-border bg-card shadow-elevation-3 dark:border-border dark:bg-muted sm:h-auto sm:max-w-2xl sm:rounded-lg sm:border">
+    <Dialog open onOpenChange={(next) => { if (!next && !isCreating) onClose(); }}>
+      <DialogContent aria-label={t('projectWizard.title')} className="max-h-[92dvh] w-[calc(100%-2rem)] max-w-2xl overflow-y-auto border-border bg-card shadow-elevation-3 dark:bg-muted">
         <div className="flex items-center justify-between border-b border-border p-6 dark:border-border">
           <div className="flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-info dark:bg-info/50">
@@ -144,6 +146,7 @@ export default function ProjectCreationWizard({
           </div>
           <button
             onClick={onClose}
+            aria-label={t('common.close', { defaultValue: 'Close' })}
             className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted dark:hover:text-muted-foreground"
             disabled={isCreating}
           >
@@ -199,7 +202,7 @@ export default function ProjectCreationWizard({
           onNext={handleNext}
           onCreate={handleCreate}
         />
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

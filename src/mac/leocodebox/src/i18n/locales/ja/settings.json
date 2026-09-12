@@ -629,5 +629,9 @@
     "placeholder": "設定を検索",
     "noResults": "一致する設定がありません",
     "clear": "クリア"
+  },
+  "agentDefaults": {
+    "title": "新しいタスクの既定値",
+    "saveFailed": "既定値を保存できませんでした"
   }
 }

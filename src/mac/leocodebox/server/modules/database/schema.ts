@@ -178,6 +178,36 @@ CREATE TABLE IF NOT EXISTS session_runtime_state (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
 );
+
+-- Accepted commands are data, never closures over a socket. A new process
+-- pauses unfinished rows until the user explicitly confirms recovery.
+CREATE TABLE IF NOT EXISTS chat_queue_items (
+    ordinal INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT UNIQUE NOT NULL,
+    session_id TEXT NOT NULL,
+    user_key TEXT NOT NULL,
+    client_request_id TEXT NOT NULL,
+    content TEXT NOT NULL,
+    options_json TEXT NOT NULL,
+    state TEXT NOT NULL CHECK (state IN ('queued','needs_confirmation','running','completed','cancelled','failed')),
+    worker_epoch TEXT NOT NULL,
+    run_id TEXT,
+    reason TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    UNIQUE (user_key, client_request_id),
+    FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_chat_queue_pending ON chat_queue_items(state, ordinal);
+CREATE INDEX IF NOT EXISTS idx_chat_queue_owner ON chat_queue_items(user_key, session_id, ordinal);
+
+-- Reserve ranges instead of synchronously persisting every streaming frame.
+-- Legacy numeric cursors never move backwards, including after a restart.
+CREATE TABLE IF NOT EXISTS chat_session_cursors (
+    session_id TEXT PRIMARY KEY NOT NULL,
+    high_water INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+);
 `;
 
 export const MISSION_CARDS_TABLE_SCHEMA_SQL = `

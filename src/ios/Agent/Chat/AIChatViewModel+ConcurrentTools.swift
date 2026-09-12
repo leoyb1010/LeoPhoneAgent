@@ -258,26 +258,9 @@ extension AIChatViewModel {
                 break
             }
 
-            // Offload permission check.
-            ctLogger.info("[OffloadPerm] shell commandLength=\(command.count)")
-            if let offloadCmd = OffloadPermissionManager.extractOffloadCommand(from: command) {
-                ctLogger.info("[OffloadPerm] matched offload: \(offloadCmd), level: \(OffloadPermissionManager.shared.permissionLevel(for: offloadCmd).rawValue)")
-                let permResult = await OffloadPermissionManager.shared.checkPermission(
-                    for: offloadCmd, sessionId: self.sessionId, fullCommand: command
-                )
-                if case .denied(let msg) = permResult {
-                    ctLogger.info("[OffloadPerm] DENIED: \(offloadCmd)")
-                    toolOutput = msg
-                    toolSuccess = false
-                    if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
-                        messages[msgIdx].blocks[blockIdx].content = msg
-                    }
-                    break
-                }
-                ctLogger.info("[OffloadPerm] ALLOWED: \(offloadCmd)")
-            } else {
-                ctLogger.info("[OffloadPerm] no offload match for first token")
-            }
+            // Device authorization is enforced at each actual native dispatch,
+            // including child scripts and every command in a shell pipeline.
+            // Shell text is not an authorization boundary.
 
             // Delay execution.
             if delay > 0 {

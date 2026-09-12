@@ -275,6 +275,14 @@ export type MessageKind =
  */
 export type GatewayEventKind =
   | 'chat_subscribed'
+  | 'chat_send_ack'
+  | 'chat_queued'
+  | 'chat_queue_updated'
+  | 'chat_queue_cleared'
+  | 'chat_queue_action_ack'
+  | 'chat_run_started'
+  | 'chat_permission_ack'
+  | 'permission_resolved'
   | 'session_upserted'
   | 'loading_progress'
   | 'protocol_error'
@@ -302,12 +310,14 @@ export type NormalizedMessage = {
   provider: LLMProvider;
   kind: MessageKind;
   /**
-   * Monotonic per-run sequence number assigned by the chat run registry when a
-   * live event is forwarded to the websocket. History messages loaded over
-   * REST do not carry it. Clients use it with `chat.subscribe` to replay only
-   * the live events they missed across websocket reconnects.
+   * Monotonic session sequence, reserved in SQLite blocks so legacy numeric
+   * cursors never move backwards after another turn or a process restart.
+   * Unused reserved numbers may create gaps between runs. New clients also
+   * send runId in cursor; REST history messages do not carry this live cursor.
    */
   seq?: number;
+  runId?: string;
+  cursor?: { runId: string; seq: number };
   role?: 'user' | 'assistant';
   content?: string;
   errorCode?: string;

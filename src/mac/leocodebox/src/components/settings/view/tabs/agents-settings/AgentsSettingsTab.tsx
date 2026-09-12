@@ -7,6 +7,7 @@ import type { AgentContext, AgentsSettingsTabProps } from './types';
 import AgentCategoryContentSection from './sections/AgentCategoryContentSection';
 import AgentCategoryTabsSection from './sections/AgentCategoryTabsSection';
 import AgentSelectorSection from './sections/AgentSelectorSection';
+import AgentDefaultsSection from './AgentDefaultsSection';
 import CliToolsSection from './CliToolsSection';
 import type { CliToolStatus } from './CliToolsSection';
 
@@ -21,7 +22,7 @@ export default function AgentsSettingsTab({
   onCodexPermissionModeChange,
   projects,
 }: AgentsSettingsTabProps) {
-  const { preferences } = useAppPreferences();
+  const { preferences, saving, updatePreferences } = useAppPreferences();
   const [selectedAgent, setSelectedAgent] = useState<AgentProvider>(preferences.defaultProvider);
   const [selectedCategory, setSelectedCategory] = useState<AgentCategory>('account');
   const [localTools, setLocalTools] = useState<CliToolStatus[]>([]);
@@ -79,6 +80,8 @@ export default function AgentsSettingsTab({
 
   return (
     <div className="-mx-4 -mb-4 -mt-2 flex min-h-[300px] min-w-0 flex-col overflow-hidden md:-mx-6 md:-mb-6 md:-mt-2 md:min-h-[500px]">
+      <AgentDefaultsSection preferences={preferences} saving={saving} onUpdate={updatePreferences} />
+
       <CliToolsSection onToolsChange={handleToolsChange} />
 
       <AgentSelectorSection

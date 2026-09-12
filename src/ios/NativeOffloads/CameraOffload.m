@@ -16,6 +16,7 @@
 #import <UIKit/UIKit.h>
 #import "NativeOffloadUtils.h"
 #include "kernel/native_offload.h"
+#include <errno.h>
 
 #import "LeoPhoneAgent-Swift.h"
 
@@ -56,18 +57,29 @@ static NSString *const HELP_TEXT =
 
 /// Shared wait-for-bridge pattern: block up to 300s while the user operates
 /// the capture UI; cooperative cancellation via noff_dispatch_semaphore_wait.
-static int wait_and_emit(NSString *action, dispatch_semaphore_t sem,
-                         NSDictionary *__strong *result, NSString *__strong *errorMsg,
+static int wait_and_emit(NSString *action, CameraCaptureOperation *operation,
+                         dispatch_semaphore_t sem,
+                         NSDictionary *__strong *result, NSError *__strong *errorMsg,
                          int stdout_fd, BOOL compact, BOOL quiet) {
     long waitResult = dispatch_semaphore_wait(sem, dispatch_time(DISPATCH_TIME_NOW, 300 * NSEC_PER_SEC));
     if (waitResult != 0) {
-        noff_emit_json(stdout_fd, noff_json_error(TOOL_NAME, action, NOFF_ERR_INTERNAL_ERROR,
-                       @"Timed out waiting for the camera UI."), compact, quiet);
-        return NOFF_EXIT_ERROR;
+        BOOL cancelled = waitResult == ECANCELED || noff_is_cancelled();
+        // Mark synchronously so a queued authorization/presentation callback
+        // cannot reopen the camera before the main-queue cleanup runs.
+        [operation requestCancellationWithTimedOut:!cancelled];
+        dispatch_async(dispatch_get_main_queue(), ^{ [CameraOffloadBridge cancelOperation:operation]; });
+        noff_emit_json(stdout_fd, noff_json_error(TOOL_NAME, action,
+                       cancelled ? @"cancelled" : @"timed_out",
+                       cancelled ? @"Camera operation cancelled." : @"Timed out waiting for the camera UI."), compact, quiet);
+        return cancelled ? 130 : NOFF_EXIT_ERROR;
     }
     if (*errorMsg) {
-        noff_emit_json(stdout_fd, noff_json_error(TOOL_NAME, action, NOFF_ERR_NO_DATA, *errorMsg),
-                       compact, quiet);
+        NSString *code = (*errorMsg).userInfo[@"code"] ?: NOFF_ERR_INTERNAL_ERROR;
+        noff_emit_json(stdout_fd, noff_json_error(TOOL_NAME, action, code, (*errorMsg).localizedDescription), compact, quiet);
+        if ([code isEqualToString:@"cancelled"]) return 130;
+        if ([code isEqualToString:@"authorization_denied"]) return NOFF_EXIT_AUTH_DENIED;
+        if ([code isEqualToString:@"not_available"] || [code isEqualToString:@"needs_foreground"])
+            return NOFF_EXIT_NOT_AVAILABLE;
         return NOFF_EXIT_ERROR;
     }
     noff_emit_json(stdout_fd, noff_json_envelope(TOOL_NAME, action, *result ?: @{}), compact, quiet);
@@ -80,33 +92,35 @@ static int cmd_photo(int argc, char **argv, int stdout_fd, BOOL compact, BOOL qu
     NSString *hostDir = noff_resolve_host_path(guestDir);
 
     __block NSDictionary *result = nil;
-    __block NSString *errorMsg = nil;
+    __block NSError *errorMsg = nil;
+    CameraCaptureOperation *operation = [CameraCaptureOperation new];
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
 
     dispatch_async(dispatch_get_main_queue(), ^{
-        [CameraOffloadBridge takePhotoWithCamera:camera hostDir:hostDir guestDir:guestDir
-                                      completion:^(NSDictionary *data, NSString *error) {
+        [CameraOffloadBridge takePhotoWithOperation:operation camera:camera hostDir:hostDir guestDir:guestDir
+                                      completion:^(NSDictionary *data, NSError *error) {
             result = data;
             errorMsg = error;
             dispatch_semaphore_signal(sem);
         }];
     });
-    return wait_and_emit(@"photo", sem, &result, &errorMsg, stdout_fd, compact, quiet);
+    return wait_and_emit(@"photo", operation, sem, &result, &errorMsg, stdout_fd, compact, quiet);
 }
 
 static int cmd_scan_code(int stdout_fd, BOOL compact, BOOL quiet) {
     __block NSDictionary *result = nil;
-    __block NSString *errorMsg = nil;
+    __block NSError *errorMsg = nil;
+    CameraCaptureOperation *operation = [CameraCaptureOperation new];
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
 
     dispatch_async(dispatch_get_main_queue(), ^{
-        [CameraOffloadBridge scanCodeWithCompletion:^(NSDictionary *data, NSString *error) {
+        [CameraOffloadBridge scanCodeWithOperation:operation completion:^(NSDictionary *data, NSError *error) {
             result = data;
             errorMsg = error;
             dispatch_semaphore_signal(sem);
         }];
     });
-    return wait_and_emit(@"scan-code", sem, &result, &errorMsg, stdout_fd, compact, quiet);
+    return wait_and_emit(@"scan-code", operation, sem, &result, &errorMsg, stdout_fd, compact, quiet);
 }
 
 static int cmd_scan_document(int stdout_fd, BOOL compact, BOOL quiet) {
@@ -114,18 +128,19 @@ static int cmd_scan_document(int stdout_fd, BOOL compact, BOOL quiet) {
     NSString *hostDir = noff_resolve_host_path(guestDir);
 
     __block NSDictionary *result = nil;
-    __block NSString *errorMsg = nil;
+    __block NSError *errorMsg = nil;
+    CameraCaptureOperation *operation = [CameraCaptureOperation new];
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
 
     dispatch_async(dispatch_get_main_queue(), ^{
-        [CameraOffloadBridge scanDocumentWithHostDir:hostDir guestDir:guestDir
-                                          completion:^(NSDictionary *data, NSString *error) {
+        [CameraOffloadBridge scanDocumentWithOperation:operation hostDir:hostDir guestDir:guestDir
+                                          completion:^(NSDictionary *data, NSError *error) {
             result = data;
             errorMsg = error;
             dispatch_semaphore_signal(sem);
         }];
     });
-    return wait_and_emit(@"scan-document", sem, &result, &errorMsg, stdout_fd, compact, quiet);
+    return wait_and_emit(@"scan-document", operation, sem, &result, &errorMsg, stdout_fd, compact, quiet);
 }
 
 static int cmd_status(int stdout_fd, BOOL compact, BOOL quiet) {

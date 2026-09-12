@@ -371,26 +371,26 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                         SessionActivityTracker.shared.setDraftAlias(draft: did, real: activeKey)
                     }
                 } else {
-                    let finalActivityPhase: AgentActivityPhase
-                    let finalActivityReason: AgentActivityReason?
-                    if self.canResume {
-                        finalActivityPhase = .waitingForUser
-                        finalActivityReason = SessionActivityTracker.shared.sessionActivityReasons[activeKey]
-                            ?? .userInterruption
-                    } else if self.errorMessage != nil
-                                || self.messages.last(where: { $0.role == .assistant })?.error != nil {
-                        finalActivityPhase = .failed
-                        let failureText = self.errorMessage
-                            ?? self.messages.last(where: { $0.role == .assistant })?.error
-                        finalActivityReason = AgentActivityFailureClassifier.reason(for: failureText)
-                    } else {
-                        finalActivityPhase = .completed
-                        finalActivityReason = nil
+                    let completion = AgentRunCompletion(
+                        userCancelled: self.userDidCancel,
+                        canResume: self.canResume,
+                        backgroundSuspended: self.backgroundSuspended,
+                        failureText: self.errorMessage
+                            ?? self.messages.last(where: { $0.role == .assistant })?.error,
+                        waitingReason: SessionActivityTracker.shared.sessionActivityReasons[activeKey],
+                        nativeOutcome: self.nativeRunOutcome,
+                        continuesPendingWork: !self.promptQueue.isEmpty
+                            && (self.compactAndSendRequestId != nil || self.postCompactDrainPending)
+                    )
+                    if completion.keepsRunActive {
+                        SessionActivityTracker.shared.updateActivityPhase(activeKey, phase: .preparing)
+                        return
                     }
                     SessionActivityTracker.shared.setInactive(
                         activeKey,
-                        finalPhase: finalActivityPhase,
-                        reason: finalActivityReason,
+                        finalPhase: completion.phase,
+                        reason: completion.reason,
+                        resultMessageId: self.agentHistory.last(where: { $0.role == .assistant })?.dbMessageId,
                         source: src
                     )
                     // [T-ios-session-completed-badge-not-cleared] The loop just
@@ -615,6 +615,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// dedicated boundary so phase-based consumers can migrate independently
     /// without changing the proven start ordering.
     private func handleProcessingStarted() {
+        nativeRunOutcome = nil
         // Agent loop starting — defer iCloud sync sends until completion
         Task { await ChatStore.shared.setSyncSendDeferred(true) }
         // [T-ios-defer-icloud-sync-after-stop] A new turn supersedes any
@@ -2159,6 +2160,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// Set by cancel() so the task's error handler knows this was a user stop.
     /// Internal-access so concurrent tool extensions can read it. [T-concurrent-tools]
     var userDidCancel = false
+    var nativeRunOutcome: AgentRunOutcome?
+    var compactAndSendRequestId: UUID?
     /// Reentrancy guard for `drainQueuedPrompts()`. After a Stop with queued
     /// prompts, `cancel()` hands off to a fresh Task via `resumeQueueAfterCancel()`,
     /// but the original (superseded) send/retry/resume Task ALSO reaches its own
@@ -2631,12 +2634,12 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             let imageCount = pendingAttachments.filter { $0.kind == .image }.count
             let route = ActionRouter.decide(text: text, imageCount: imageCount)
             if route.path == .clarify {
-                await self.finishNativeRoute(route, spoken: route.spoken())
+                await self.finishNativeRoute(route, result: .init(text: route.spoken(), outcome: .waitingForUser))
                 return
             }
             if route.path == .native,
-               let nativeSpoken = await self.executeNativeRoute(route, imageURL: firstImageHost) {
-                await self.finishNativeRoute(route, spoken: nativeSpoken)
+               let nativeResult = await self.executeNativeRoute(route, imageURL: firstImageHost) {
+                await self.finishNativeRoute(route, result: nativeResult)
                 return
             }
 
@@ -3709,6 +3712,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             foregroundObserver = nil
         }
         userDidCancel = true
+        compactAndSendRequestId = nil
         currentTask?.cancel()
         currentTask = nil
         autoRetryAttempt = 0

@@ -1,18 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   ChangeEvent,
-  Dispatch,
   FormEvent,
   KeyboardEvent,
   MouseEvent,
   MutableRefObject,
-  SetStateAction,
   TouchEvent,
 } from 'react';
 
 import { apiClient } from '../../../utils/apiClient';
 import type { MarkSessionProcessing } from '../../../hooks/useSessionProtection';
-import { APPROVAL_RESOLVED_EVENT, type ApprovalResolvedDetail } from '../../../hooks/useSessionApprovals';
 import { persistHandoffSource } from '../../../hooks/projectStateUtils';
 import { decidePendingPromptSend } from '../../../hooks/pendingPrompt';
 import { grantClaudeToolPermission } from '../utils/chatPermissions';
@@ -21,7 +18,6 @@ import {
 } from '../utils/chatStorage';
 import type {
   ChatMessage,
-  PendingPermissionRequest,
   PermissionMode,
   SessionEstablishedContext,
 } from '../types/types';
@@ -69,6 +65,7 @@ interface UseChatComposerStateArgs {
   opencodeModel: string;
   grokModel: string;
   isLoading: boolean;
+  isConnected?: boolean;
   canAbortSession: boolean;
   tokenBudget: Record<string, unknown> | null;
   sendMessage: (message: unknown) => void;
@@ -88,7 +85,6 @@ interface UseChatComposerStateArgs {
   scrollToBottom: () => void;
   addMessage: (msg: ChatMessage) => void;
   setIsUserScrolledUp: (isScrolledUp: boolean) => void;
-  setPendingPermissionRequests: Dispatch<SetStateAction<PendingPermissionRequest[]>>;
 }
 
 interface MentionableFile {
@@ -121,6 +117,7 @@ export function useChatComposerState({
   opencodeModel,
   grokModel,
   isLoading,
+  isConnected = true,
   canAbortSession,
   tokenBudget,
   sendMessage,
@@ -133,7 +130,6 @@ export function useChatComposerState({
   scrollToBottom,
   addMessage,
   setIsUserScrolledUp,
-  setPendingPermissionRequests,
 }: UseChatComposerStateArgs) {
   const [input, setInput] = useState(() => {
     if (typeof window !== 'undefined' && selectedProject) {
@@ -186,14 +182,12 @@ export function useChatComposerState({
   // to currentSessionId for a just-established session that hasn't been
   // handed back to the parent's `selectedSession` prop yet.
   const sessionKey = selectedSession?.id || currentSessionId || null;
-  const { queuedDraft, queueDraft, editQueuedDraft, deleteQueuedDraft } = useQueuedChatDraft({
+  const { queuedDraft, editQueuedDraft, deleteQueuedDraft } = useQueuedChatDraft({
     sessionKey,
-    isLoading,
     setInput,
     inputValueRef,
     setAttachedImages,
     textareaRef,
-    handleSubmitRef: handleSubmitRef as MutableRefObject<((event: FormEvent<HTMLFormElement>) => Promise<void>) | null>,
   });
   const {
     commandModalPayload,
@@ -275,22 +269,8 @@ export function useChatComposerState({
         return;
       }
 
-      // A turn is already in flight: stash this message instead of sending it.
-      // It's auto-flushed (re-running this same function) once the turn ends,
-      // so it still goes through slash-command interception, image upload, etc.
-      if (isLoading) {
-        queueDraft({
-          content: currentInput,
-          images: attachedImages,
-          options: buildSendOptions(currentInput),
-        });
-        setInput('');
-        inputValueRef.current = '';
-        resetImageAttachments();
-        resetCommandMenuState();
-        collapseTextarea();
-        // selectedProject is guaranteed by the guard at the top of handleSubmit.
-        safeLocalStorage.removeItem(`draft_input_${selectedProject.projectId}`);
+      if (!isConnected) {
+        addMessage({ type: 'error', content: '连接已断开，消息仍保留在输入框中。恢复连接后请重新发送。', timestamp: new Date() });
         return;
       }
 
@@ -413,7 +393,7 @@ export function useChatComposerState({
       // Mark this request as processing in the per-session activity map (the
       // single source of truth the indicator derives from). The id is always
       // concrete at this point — no pending placeholder exists anymore.
-      onSessionProcessing?.(targetSessionId, {
+      if (!isLoading) onSessionProcessing?.(targetSessionId, {
         statusText: null,
         canInterrupt: true,
       });
@@ -426,6 +406,7 @@ export function useChatComposerState({
       // session row; `options` only carries composer-level preferences.
       sendMessage({
         type: 'chat.send',
+        clientRequestId: globalThis.crypto?.randomUUID?.() ?? `request-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         sessionId: targetSessionId,
         content: messageContent,
         options: {
@@ -450,10 +431,10 @@ export function useChatComposerState({
       currentSessionId,
       executeCommand,
       isLoading,
+      isConnected,
       onSessionProcessing,
       onSessionEstablished,
       provider,
-      queueDraft,
       resetCommandMenuState,
       resetImageAttachments,
       scrollToBottom,
@@ -722,29 +703,21 @@ export function useChatComposerState({
         return;
       }
 
+      if (!isConnected) {
+        addMessage({ type: 'error', content: '连接已断开，审批尚未送达。恢复连接后请重试。', timestamp: new Date() });
+        return;
+      }
       validIds.forEach((requestId) => {
         sendMessage({
-          type: 'chat.permission-response',
-          requestId,
-          allow: Boolean(decision?.allow),
-          updatedInput: decision?.updatedInput,
-          message: decision?.message,
-          rememberEntry: decision?.rememberEntry,
+          type: 'chat.permission-response', sessionId: sessionKey,
+          requestId, allow: Boolean(decision?.allow), updatedInput: decision?.updatedInput,
+          message: decision?.message, rememberEntry: decision?.rememberEntry,
         });
       });
-
-      setPendingPermissionRequests((previous) =>
-        previous.filter((request) => !validIds.includes(request.requestId)),
-      );
-
-      // 答复走 chat.permission-response,服务端不会回一条广播,所以外层的
-      // 会话级待审批表只能靠这里销号 —— 否则会话列表的"待审批"会一直挂到
-      // run 结束为止,而这正是用户点进去发现什么都没有的那种假标签。
-      window.dispatchEvent(new CustomEvent<ApprovalResolvedDetail>(APPROVAL_RESOLVED_EVENT, {
-        detail: { sessionId: sessionKey, requestIds: validIds },
-      }));
+      // Keep the approval visible until a server acknowledgement or cancellation
+      // arrives. A local send is not evidence that the provider consumed it.
     },
-    [sendMessage, sessionKey, setPendingPermissionRequests],
+    [addMessage, isConnected, sendMessage, sessionKey],
   );
 
 

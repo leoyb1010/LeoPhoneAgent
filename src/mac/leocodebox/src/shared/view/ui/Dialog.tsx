@@ -3,10 +3,13 @@ import { createPortal } from 'react-dom';
 
 import { cn } from '../../../lib/utils';
 
+import { activateModalLayer } from './modalFocus';
+
 interface DialogContextValue {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   triggerRef: React.MutableRefObject<HTMLElement | null>;
+  depth: number;
 }
 
 const DialogContext = React.createContext<DialogContextValue | null>(null);
@@ -25,6 +28,8 @@ interface DialogProps {
 }
 
 const Dialog: React.FC<DialogProps> = ({ open: controlledOpen, onOpenChange: controlledOnOpenChange, defaultOpen = false, children }) => {
+  const parent = React.useContext(DialogContext);
+  const depth = parent ? parent.depth + 1 : 0;
   const [internalOpen, setInternalOpen] = React.useState(defaultOpen);
   const triggerRef = React.useRef<HTMLElement | null>(null) as React.MutableRefObject<HTMLElement | null>;
   const isControlled = controlledOpen !== undefined;
@@ -37,7 +42,7 @@ const Dialog: React.FC<DialogProps> = ({ open: controlledOpen, onOpenChange: con
     [isControlled, controlledOnOpenChange]
   );
 
-  const value = React.useMemo(() => ({ open, onOpenChange, triggerRef }), [open, onOpenChange]);
+  const value = React.useMemo(() => ({ open, onOpenChange, triggerRef, depth }), [open, onOpenChange, depth]);
 
   return <DialogContext.Provider value={value}>{children}</DialogContext.Provider>;
 };
@@ -90,18 +95,19 @@ const DialogTrigger = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttrib
 DialogTrigger.displayName = 'DialogTrigger';
 
 interface DialogContentProps extends React.HTMLAttributes<HTMLDivElement> {
-  onEscapeKeyDown?: () => void;
+  onEscapeKeyDown?: (event: KeyboardEvent) => void;
   onPointerDownOutside?: () => void;
   wrapperClassName?: string;
+  placement?: 'center' | 'left';
 }
 
-const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
 const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
-  ({ className, children, onEscapeKeyDown, onPointerDownOutside, wrapperClassName, ...props }, ref) => {
-    const { open, onOpenChange, triggerRef } = useDialog();
+  ({ className, children, onEscapeKeyDown, onPointerDownOutside, wrapperClassName, placement = 'center', ...props }, ref) => {
+    const { open, onOpenChange, triggerRef, depth } = useDialog();
     const contentRef = React.useRef<HTMLDivElement | null>(null);
-    const previousFocusRef = React.useRef<HTMLElement | null>(null);
+    const rootRef = React.useRef<HTMLDivElement | null>(null);
+    const callbacksRef = React.useRef({ onOpenChange, onEscapeKeyDown });
+    callbacksRef.current = { onOpenChange, onEscapeKeyDown };
     const [present, setPresent] = React.useState(open);
 
     React.useEffect(() => {
@@ -113,71 +119,17 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
       return () => window.clearTimeout(timer);
     }, [open]);
 
-    // Save the element that had focus before opening, restore on close
-    React.useEffect(() => {
-      if (open) {
-        previousFocusRef.current = document.activeElement as HTMLElement;
-      } else if (previousFocusRef.current) {
-        // Prefer the trigger, fall back to whatever was focused before
-        const restoreTarget = triggerRef.current || previousFocusRef.current;
-        restoreTarget?.focus();
-        previousFocusRef.current = null;
-      }
-    }, [open, triggerRef]);
-
-    React.useEffect(() => {
-      if (!open) return;
-
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-          e.stopPropagation();
-          onEscapeKeyDown?.();
-          onOpenChange(false);
-          return;
-        }
-
-        // Focus trap: Tab / Shift+Tab cycle within the dialog
-        if (e.key === 'Tab' && contentRef.current) {
-          const focusable = Array.from(
-            contentRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
-          );
-          if (focusable.length === 0) return;
-
-          const first = focusable[0];
-          const last = focusable[focusable.length - 1];
-
-          if (e.shiftKey && document.activeElement === first) {
-            e.preventDefault();
-            last.focus();
-          } else if (!e.shiftKey && document.activeElement === last) {
-            e.preventDefault();
-            first.focus();
-          }
-        }
-      };
-
-      document.addEventListener('keydown', handleKeyDown, true);
-
-      // Prevent body scroll
-      const prev = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-
-      return () => {
-        document.removeEventListener('keydown', handleKeyDown, true);
-        document.body.style.overflow = prev;
-      };
-    }, [open, onOpenChange, onEscapeKeyDown]);
-
-    // Auto-focus first focusable element on open
-    React.useEffect(() => {
-      if (open && contentRef.current) {
-        // Small delay to let the portal render
-        requestAnimationFrame(() => {
-          const first = contentRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
-          first?.focus();
-        });
-      }
-    }, [open]);
+    React.useLayoutEffect(() => {
+      if (!open || !present || !rootRef.current || !contentRef.current) return undefined;
+      return activateModalLayer({
+        root: rootRef.current,
+        content: contentRef.current,
+        depth,
+        restoreFocusTo: triggerRef.current,
+        onDismiss: () => callbacksRef.current.onOpenChange(false),
+        onEscapeKeyDown: (event) => callbacksRef.current.onEscapeKeyDown?.(event),
+      });
+    }, [open, present, depth, triggerRef]);
 
     if (!present) return null;
 
@@ -185,7 +137,7 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
       // z-[10000] keeps dialogs above the Settings modal (z-[9999]) so a dialog
       // opened from inside Settings (e.g. the Agent Hub profile editor) is not
       // painted behind it. Dialogs are the active interaction — always topmost.
-      <div data-state={open ? 'open' : 'closed'} className={cn('fixed inset-0 z-[10000]', wrapperClassName)}>
+      <div ref={rootRef} data-dialog-layer data-state={open ? 'open' : 'closed'} {...(!open ? { inert: '' } : {})} style={{ pointerEvents: open ? undefined : 'none' }} className={cn('fixed inset-0 z-[10000]', wrapperClassName)}>
         {/* Overlay */}
         <div
           className="dialog-overlay fixed inset-0 bg-black/50 backdrop-blur-sm"
@@ -204,10 +156,12 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
           }}
           role="dialog"
           aria-modal="true"
+          tabIndex={-1}
           className={cn(
-            'fixed left-1/2 top-1/2 z-[10000] w-full max-w-lg -translate-x-1/2 -translate-y-1/2',
-            'rounded-xl border bg-popover text-popover-foreground shadow-elevation-2',
-            'dialog-content',
+            placement === 'left'
+              ? 'dialog-drawer-content fixed bottom-0 left-0 top-0 z-[10000] flex w-[320px] max-w-[92vw] flex-col border-r'
+              : 'dialog-content fixed left-1/2 top-1/2 z-[10000] w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border',
+            'bg-popover text-popover-foreground shadow-elevation-2',
             className
           )}
           {...props}

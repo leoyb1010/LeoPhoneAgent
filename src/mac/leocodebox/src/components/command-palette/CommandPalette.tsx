@@ -31,10 +31,10 @@ import {
 } from '../../shared/view/ui';
 import { useTheme } from '../../contexts/ThemeContext';
 import { usePaletteOps } from '../../contexts/PaletteOpsContext';
-import { SETTINGS_MAIN_TABS } from '../settings/constants/constants';
 import type { AppTab, Project } from '../../types/app';
 import { readHandoffSource } from '../../hooks/projectStateUtils';
 
+import { getSettingsPaletteItems, NAV_TABS } from './paletteNavigation';
 import { useSessionsSource } from './sources/useSessionsSource';
 import { useFilesSource } from './sources/useFilesSource';
 import { useCommitsSource } from './sources/useCommitsSource';
@@ -53,16 +53,6 @@ type CommandPaletteProps = {
   onShowTab?: (tab: AppTab) => void;
 };
 
-const NAV_TABS: Array<{ id: AppTab; labelKey: string; keywords: string }> = [
-  { id: 'dashboard', labelKey: 'commandPalette.goConsole', keywords: 'new task 新任务 agent 项目 设备' },
-  { id: 'chat', labelKey: 'commandPalette.goChat', keywords: 'chat messages conversation' },
-  { id: 'files', labelKey: 'commandPalette.goFiles', keywords: 'files file tree explorer' },
-  { id: 'shell', labelKey: 'commandPalette.goShell', keywords: 'shell terminal console' },
-  { id: 'git', labelKey: 'commandPalette.goGit', keywords: 'git diff branches' },
-  { id: 'tasks', labelKey: 'commandPalette.goTasks', keywords: 'tasks taskmaster' },
-  // 快速任务从一级导航位搬到这里 —— 它一天用不到几次,不值一个常驻入口。
-  { id: 'missions', labelKey: 'commandPalette.goMissions', keywords: 'missions quick tasks 快速任务 任务板' },
-];
 
 /**
  * 工作台入口 —— 导航栏删掉之后,这三个浮层的唯一键盘入口。
@@ -370,7 +360,7 @@ export default function CommandPalette({
 
             {showActions && (
               <CommandGroup heading={t('commandPalette.settings')}>
-                {SETTINGS_MAIN_TABS.map(({ id, label, keywords, icon: Icon }) => (
+                {getSettingsPaletteItems(t).map(({ id, label, keywords, icon: Icon }) => (
                   <CommandItem
                     key={id}
                     value={`${t('commandPalette.settings')} ${label} ${keywords}`}

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowDownIcon } from 'lucide-react';
 
+import type { ChatCursor } from '../../../../shared/chat-session-protocol';
 import { useTasksSettings } from '../../../contexts/TasksSettingsContext';
 import { useWebSocket } from '../../../contexts/WebSocketContext';
 import PermissionContext from '../../../contexts/PermissionContext';
@@ -12,9 +13,11 @@ import { useChatProviderState } from '../hooks/useChatProviderState';
 import { useChatSessionState } from '../hooks/useChatSessionState';
 import { useChatRealtimeHandlers } from '../hooks/useChatRealtimeHandlers';
 import { useChatComposerState } from '../hooks/useChatComposerState';
+import { useChatQueue } from '../hooks/useChatQueue';
 import { disposeStreamBuffers, type StreamBufferEntry } from '../utils/streamBuffers';
 import { useSessionStore } from '../../../stores/useSessionStore';
 
+import ChatQueuePanel from './subcomponents/ChatQueuePanel';
 import ChatMessagesPane from './subcomponents/ChatMessagesPane';
 import ChatComposer from './subcomponents/ChatComposer';
 import CommandResultModal from './subcomponents/CommandResultModal';
@@ -42,7 +45,7 @@ function ChatInterface({
   onShowAllTasks,
 }: ChatInterfaceProps) {
   const { tasksEnabled, isTaskMasterInstalled } = useTasksSettings();
-  const { subscribe } = useWebSocket();
+  const { subscribe, isConnected } = useWebSocket();
   const { t } = useTranslation('chat');
 
   const sessionStore = useSessionStore();
@@ -56,6 +59,7 @@ function ChatInterface({
   // on every sequenced frame, read whenever a `chat.subscribe` is sent so the
   // server replays only the events this client actually missed.
   const lastSeqRef = useRef(new Map<string, number>());
+  const runCursorsRef = useRef(new Map<string, ChatCursor>());
 
   const resetStreamingState = useCallback(() => {
     disposeStreamBuffers(streamBuffersRef.current);
@@ -138,6 +142,7 @@ function ChatInterface({
     onSessionIdle,
     statusCheckSentAtRef,
     lastSeqRef,
+    runCursorsRef,
     sessionStore,
   });
 
@@ -222,6 +227,7 @@ function ChatInterface({
     opencodeModel,
     grokModel,
     isLoading: isProcessing,
+    isConnected,
     canAbortSession,
     tokenBudget,
     sendMessage,
@@ -234,7 +240,6 @@ function ChatInterface({
     scrollToBottom,
     addMessage,
     setIsUserScrolledUp,
-    setPendingPermissionRequests,
     resolvePermissionModeForProvider,
   });
 
@@ -242,17 +247,18 @@ function ChatInterface({
   // server so missed streaming events are shown, then re-subscribe — the
   // `chat_subscribed` ack restores or clears the activity indicator, replays
   // missed live events, and re-attaches a still-running stream to this socket.
-  const handleWebSocketReconnect = useCallback(async () => {
+  const handleWebSocketReconnect = useCallback(() => {
     if (!selectedProject || !selectedSession) return;
-    await sessionStore.refreshFromServer(selectedSession.id);
     statusCheckSentAtRef.current.set(selectedSession.id, Date.now());
     sendMessage({
       type: 'chat.subscribe',
       sessions: [{
         sessionId: selectedSession.id,
         lastSeq: lastSeqRef.current.get(selectedSession.id) ?? 0,
+        cursor: runCursorsRef.current.get(selectedSession.id),
       }],
     });
+    void sessionStore.refreshFromServer(selectedSession.id);
   }, [selectedProject, selectedSession, sendMessage, sessionStore]);
 
   useChatRealtimeHandlers({
@@ -265,11 +271,17 @@ function ChatInterface({
     setPendingPermissionRequests,
     streamBuffersRef,
     lastSeqRef,
+    runCursorsRef,
     statusCheckSentAtRef,
     onSessionProcessing,
     onSessionIdle,
     onWebSocketReconnect: handleWebSocketReconnect,
     sessionStore,
+  });
+
+  const { queueItems, queueError, pendingActionIds, cancelQueueItem, resumeQueueItem } = useChatQueue({
+    sessionId: selectedSession?.id || currentSessionId || null,
+    subscribe, sendMessage, isConnected,
   });
 
   useEffect(() => {
@@ -414,10 +426,11 @@ function ChatInterface({
           )}
 
           <ErrorBoundary variant="inline" resetKeys={[selectedSession?.id, pendingPermissionRequests.length]}>
+          <ChatQueuePanel items={queueItems} error={queueError} pendingActionIds={pendingActionIds}
+            onCancel={cancelQueueItem} onResume={resumeQueueItem} />
           <ChatComposer
           pendingPermissionRequests={pendingPermissionRequests}
           handlePermissionDecision={handlePermissionDecision}
-          handleGrantToolPermission={handleGrantToolPermission}
           activity={sessionActivity}
           isLoading={isProcessing}
           onAbortSession={handleAbortSession}

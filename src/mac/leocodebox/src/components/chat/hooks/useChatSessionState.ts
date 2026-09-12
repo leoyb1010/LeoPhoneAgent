@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { MutableRefObject } from 'react';
 
+import type { ChatCursor } from '../../../../shared/chat-session-protocol';
 import { apiClient } from '../../../utils/apiClient';
 import { scrollBehavior } from '../../../utils/motion';
 import { startVisibleInterval } from '../../../utils/visibilityInterval';
@@ -29,6 +30,7 @@ interface UseChatSessionStateArgs {
   statusCheckSentAtRef: MutableRefObject<Map<string, number>>;
   /** Highest live seq observed per session; sent as `lastSeq` on subscribe. */
   lastSeqRef: MutableRefObject<Map<string, number>>;
+  runCursorsRef?: MutableRefObject<Map<string, ChatCursor>>;
   sessionStore: SessionStore;
 }
 
@@ -106,6 +108,7 @@ export function useChatSessionState({
   onSessionIdle,
   statusCheckSentAtRef,
   lastSeqRef,
+  runCursorsRef,
   sessionStore,
 }: UseChatSessionStateArgs) {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(selectedSession?.id || null);
@@ -517,6 +520,7 @@ export function useChatSessionState({
         sessions: [{
           sessionId: selectedSessionId,
           lastSeq: lastSeqRef.current.get(selectedSessionId) ?? 0,
+          cursor: runCursorsRef?.current.get(selectedSessionId),
         }],
       });
     };
@@ -586,6 +590,7 @@ export function useChatSessionState({
     sendMessage,
     statusCheckSentAtRef,
     lastSeqRef,
+    runCursorsRef,
     ws,
     sessionStore,
   ]);

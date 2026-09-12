@@ -41,3 +41,33 @@ enum T6RelayLogic {
         max(current, minAfter)
     }
 }
+
+
+struct HarnessJournalStatus: Equatable, Sendable {
+    var state: String = "unknown"
+    var durableSeq: Int = 0
+    var latestSeq: Int = 0
+    var missingRanges: Int = 0
+
+    var label: String {
+        switch state {
+        case "pending": return "日志保存中"
+        case "durable": return "日志已保存"
+        case "degraded": return "日志保存异常，历史可能不完整"
+        default: return "日志保存状态未知"
+        }
+    }
+
+    static func parse(_ object: [String: Any]) -> HarnessJournalStatus? {
+        guard object["type"] as? String == "durability",
+              let state = object["state"] as? String,
+              ["pending", "durable", "degraded"].contains(state),
+              let durable = object["durable_seq"] as? Int,
+              let latest = object["latest_seq"] as? Int,
+              durable >= 0, latest >= durable else { return nil }
+        let missing = (object["missing_ranges"] as? [[String: Any]])?.count ?? 0
+        // A contradictory server frame must never paint an incomplete journal green.
+        let resolved = state == "durable" && (missing > 0 || durable < latest) ? "degraded" : state
+        return HarnessJournalStatus(state: resolved, durableSeq: durable, latestSeq: latest, missingRanges: missing)
+    }
+}

@@ -199,3 +199,11 @@ test('handoff map does not collide with the last-session key', () => {
   assert.equal(storage.getItem('last-session-id'), 'ls-1');
   assert.equal(readHandoffSource('new-a'), 'src-a');
 });
+
+test('the project-independent library survives a restart', () => {
+  const storage = installLocalStorage();
+  storage.setItem('console-landing-seen', '1');
+  storage.setItem('activeTab', 'collections');
+  assert.equal(isValidTab('collections'), true);
+  assert.equal(readPersistedTab(), 'collections');
+});

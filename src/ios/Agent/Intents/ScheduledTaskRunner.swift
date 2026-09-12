@@ -65,6 +65,8 @@ enum ScheduledTaskRunner {
             // meant the flag only ever said true and told the user nothing.
             store.markRun(id: task.id, slot: slot)
 
+            let widgetRequestId = UUID().uuidString
+            WidgetQuickTasksStore.beginRun(id: definition.id, requestId: widgetRequestId)
             do {
                 let result = try await QuickTaskIntent.execute(
                     definition: definition,
@@ -76,15 +78,21 @@ enum ScheduledTaskRunner {
                 started += 1
                 store.markRun(id: task.id, slot: slot)
                 if let sessionId = result.value?.sessionId, !sessionId.isEmpty {
+                    if let runId = result.value?.runId, !runId.isEmpty {
+                        WidgetQuickTasksStore.bindRun(id: definition.id, requestId: widgetRequestId,
+                                                     runId: runId, sessionId: sessionId)
+                    }
                     // Reuse the widget briefing pipeline so a scheduled run's
                     // result lands on the Home Screen the same way a manual
                     // one does.
                     WidgetPendingBriefingStore.add(
                         sessionId: sessionId, taskName: definition.displayName,
-                        origin: "scheduled")
+                        origin: "scheduled", runId: result.value?.runId, taskId: definition.id)
                 }
                 logger.info("started scheduled task \(task.id) (\(definition.displayName)) slot=\(slot)")
             } catch {
+                WidgetQuickTasksStore.updateRunState(id: definition.id, state: .failed,
+                                                    requestId: widgetRequestId)
                 store.markRun(id: task.id, slot: slot)
                 logger.error("scheduled task \(task.id) failed to start: \(error.localizedDescription)")
                 // [T-scheduled-report] The other half of "scheduled work WITH

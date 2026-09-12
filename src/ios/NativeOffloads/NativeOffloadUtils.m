@@ -6,6 +6,9 @@
 //
 
 #import "NativeOffloadUtils.h"
+#import "NativeOffloadDispatch.h"
+#import "LeoPhoneAgent-Swift.h"
+#include "kernel/task.h"
 #include "kernel/fs.h"
 #include "fs/fd.h"
 #include "fs/path.h"
@@ -44,6 +47,78 @@ long noff_dispatch_semaphore_wait(dispatch_semaphore_t semaphore, dispatch_time_
         long result = (dispatch_semaphore_wait)(semaphore, nextDeadline);
         if (result == 0) return 0;
     }
+}
+
+// ── Native execution authorization ──
+
+static int noff_authorize_native(const char *registered_name, int argc, char **argv,
+                                  int stdout_fd, int stderr_fd) {
+    (void)stderr_fd;
+    @autoreleasepool {
+        NSString *command = [NSString stringWithUTF8String:registered_name];
+        BOOL compact = noff_has_flag(argc, argv, "--compact");
+        BOOL quiet = noff_has_flag(argc, argv, "--quiet") || noff_has_flag(argc, argv, "-q");
+        if ([NSThread isMainThread]) {
+            // A synchronous wait on MainActor would prevent the permission UI
+            // and even the callback from running. Direct UI routes use the
+            // async Swift authorize API instead of this guest-thread API.
+            noff_emit_json(stdout_fd, noff_json_error(command, @"authorize", @"needs_async_entry",
+                @"设备操作需要异步授权，不能在主线程同步执行。请从任务入口重试。"), compact, quiet);
+            return NOFF_EXIT_AUTH_DENIED;
+        }
+        if (noff_is_cancelled()) return 130;
+        NSMutableArray<NSString *> *arguments = [NSMutableArray array];
+        for (int i = 1; i < argc; i++) {
+            NSString *argument = argv[i] ? [NSString stringWithUTF8String:argv[i]] : nil;
+            if (!argument) {
+                noff_emit_json(stdout_fd, noff_json_error(command, @"authorize", NOFF_ERR_INVALID_ARGS,
+                    @"设备操作参数不是有效 UTF-8，操作未执行。"), compact, quiet);
+                return NOFF_EXIT_INVALID_ARGS;
+            }
+            [arguments addObject:argument];
+        }
+        // fs_context is set by ISHShellExecutor before exec and inherited by
+        // forks. Guest environment variables and argv cannot replace it.
+        uint64_t context = current && current->group ? current->group->fs_context : 0;
+        dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+        __block NSString *errorCode = nil;
+        __block NSString *message = nil;
+        NativeOffloadPermissionOperation *operation = [NativeOffloadPermissionBridge
+            authorizeCommand:command arguments:arguments fsContext:context
+            completion:^(NSString *code, NSString *detail) {
+                errorCode = code;
+                message = detail;
+                dispatch_semaphore_signal(semaphore);
+            }];
+        // The Swift queue owns a 30-second deadline. This outer deadline also
+        // bounds a delayed/unresponsive UI actor, and polls native cancellation.
+        long wait = noff_dispatch_semaphore_wait(semaphore,
+            dispatch_time(DISPATCH_TIME_NOW, 35 * NSEC_PER_SEC));
+        if (wait != 0) {
+            [operation cancel];
+            BOOL cancelled = wait == ECANCELED || noff_is_cancelled();
+            noff_emit_json(stdout_fd, noff_json_error(command, @"authorize",
+                cancelled ? @"cancelled" : @"authorization_timeout",
+                cancelled ? @"已取消授权，设备操作没有执行。" : @"等待设备授权超时，操作没有执行。"), compact, quiet);
+            return cancelled ? 130 : NOFF_EXIT_AUTH_DENIED;
+        }
+        if (noff_is_cancelled()) { [operation cancel]; return 130; }
+        if (errorCode) {
+            noff_emit_json(stdout_fd, noff_json_error(command, @"authorize", errorCode,
+                message ?: @"设备操作未获授权。"), compact, quiet);
+            return [errorCode isEqualToString:@"cancelled"] ? 130 : NOFF_EXIT_AUTH_DENIED;
+        }
+        return NOFF_EXIT_SUCCESS;
+    }
+}
+
+int noff_register_authorized_handler(const char *guest_name, native_handler_func handler) {
+    // Non-device helpers have their own policy. All apple-* tools, including
+    // future registrations importing this header, must use the guarded slots.
+    if (!guest_name || strncmp(guest_name, "apple-", 6) != 0)
+        return (native_offload_add_handler)(guest_name, handler);
+    return noff_dispatch_register(guest_name, handler, noff_authorize_native,
+                                  (native_offload_add_handler));
 }
 
 // ── Argument helpers ──

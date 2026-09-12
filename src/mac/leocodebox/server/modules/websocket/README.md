@@ -107,8 +107,8 @@ When a chat socket connects:
 
 1. Add socket to `connectedClients`.
 2. Parse each incoming message with `parseIncomingJsonObject`.
-3. Dispatch by `data.type` (four message types, none provider-specific).
-4. On close, remove socket from `connectedClients`.
+3. Dispatch by `data.type` (chat, queue, subscription, approval and heartbeat commands; none provider-specific).
+4. On close, remove the socket from `connectedClients` and every session observer set.
 
 ### Session identity model
 
@@ -128,10 +128,11 @@ flowchart TD
   B -->|invalid| C[send kind:protocol_error]
   B -->|ok| D{data.type}
 
-  D -->|chat.send| E[resolve session row -> startRun -> spawnFns provider]
+  D -->|chat.send| E[persist idempotent command -> claim -> startRun -> spawnFns provider]
   D -->|chat.abort| F[abortFns provider + synthetic complete]
-  D -->|chat.subscribe| G[chat_subscribed ack + attach socket + replay events seq > lastSeq]
-  D -->|chat.permission-response| H[resolveToolApproval]
+  D -->|chat.subscribe| G[chat_subscribed ack + add observer + replay cursor]
+  D -->|chat.permission-response| H[claim approval + resolve once + broadcast result]
+  D -->|chat.queue.cancel or resume| Q[update owned queue item]
   D -->|other| I[send kind:protocol_error]
 ```
 
@@ -139,8 +140,32 @@ flowchart TD
 
 1. **Unified envelope**: every server-to-client frame carries a `kind` — either a provider `NormalizedMessage` kind or a gateway kind (`chat_subscribed`, `session_upserted`, `loading_progress`, `protocol_error`). There is no second `type`-based protocol.
 2. **Unified terminal lifecycle**: every provider run ends with exactly one `complete` message built by `createCompleteMessage()` (`server/shared/utils.ts`): `{ kind: "complete", sessionId, actualSessionId, exitCode, success, aborted }`. The chat handler emits a synthetic `complete` for runs that crash or get aborted, and the run registry drops duplicate completes.
-3. **Per-run event log**: every live event gets a monotonically increasing `seq`. `chat.subscribe { sessions: [{ sessionId, lastSeq }] }` re-attaches the live stream to the requesting socket (any provider, not just Claude) and replays events with `seq > lastSeq`. If the buffer no longer covers `lastSeq`, the client refreshes over REST.
-4. `chat_subscribed` includes `isProcessing` (replaces `check-session-status`) and `pendingPermissions` (replaces `get-pending-permissions`).
+3. **Replay identity**: each run has a `runId`; live frames carry `cursor: { runId, seq }` plus the legacy `seq`. Sequence ranges are reserved in SQLite in blocks of 4096, so the legacy numeric cursor remains monotonic across turns and process restarts without a database write per token. Unused reserved numbers can create gaps between runs; replay begins at that run's initial sequence. The in-memory replay buffer still retains 5000 events.
+4. `chat_subscribed` includes `isProcessing`, authoritative `pendingPermissions`, `queueItems`, `protocolVersion: 2`, `serverEpoch`, `cursor`, `replayFrom`, `replayReset` and `replayTruncated`. The ack's cursor is the **server head**, not the client's received watermark: set the replay cursor to `replayFrom` on reset and then advance only on received frames. If the buffer is truncated, also refresh REST history.
+5. **Observers**: subscribing adds an authenticated observer rather than replacing another socket. Stream fan-out is scoped to the run's user; socket close and `chat.unsubscribe { sessionId }` remove observers. Starting a queued run looks up current observers and never reuses a closed connection captured at enqueue time.
+
+### Durable command queue (protocol version 2)
+
+`chat.send` accepts an optional `clientRequestId` alongside the existing `sessionId`, `content` and `options`. The current client supplies a UUID. The server stores the command in the application's existing SQLite database before returning `chat_send_ack { sessionId, clientRequestId, queueItemId, state, duplicate, protocolVersion }`.
+
+- `(user_key, client_request_id)` is unique. Retrying identical data returns the same item; reusing an ID for different data returns `REQUEST_ID_CONFLICT`. Older clients may omit the field and receive a server-generated ID; arbitrary retries without an ID cannot be deduplicated.
+- Pending commands are limited to 16 per user/session and 128 globally, with a 256 KiB combined content/options limit. Existing provider concurrency remains separately limited (default 4).
+- `chat_queued` retains its legacy `position` field. `chat_queue_updated` and subscription acks carry owned `queueItems` with a bounded text preview, model, attachment count, state and recovery reason. Options and user identities are not sent in this view.
+- `chat.queue.cancel { sessionId, queueItemId }` only cancels an owned pending item. It returns `chat_queue_action_ack`; `already_started` does not stop the current run. The existing `chat.abort` action still aborts the current run and clears that user's pending items for the session, before awaiting provider shutdown.
+- A process restart changes unfinished prior-epoch rows to `needs_confirmation`. They are not scheduled until an explicit `chat.queue.resume { sessionId, queueItemId }`. `server_restarted_during_run` warns that some external steps may already have happened; resume is a deliberate re-send, **not** proof of exactly-once external effects.
+- Legacy `queued_message_*` browser drafts are retained for manual review in the composer; the old background auto-send hook is removed.
+- Attachment descriptors are normalized into the upload store at acceptance and checked again for canonical containment and existence immediately before execution.
+- The running-state claim and sequence reservation share a database transaction. A failed claim cannot create a phantom active run. Completion/usage persistence failures still deliver the terminal event with a visible `persistenceWarning`.
+
+SQLite was chosen because the app already owns a secured connection, schema initialization and durable session index. Queue rows hold data, not executable closures. No second database, broker or third task-state bus is introduced.
+
+### Approval acknowledgement
+
+`chat.permission-response` keeps the old fields and accepts an optional `sessionId`. The gateway finds an authoritative pending request in a run owned by the caller, claims its request ID synchronously, then calls the provider resolver once. Other observers cannot overwrite that decision. A duplicate answer returns `chat_permission_ack` with `already_resolved`; expired requests return `not_pending`.
+
+A successful answer broadcasts `permission_resolved` and a sequenced `permission_cancelled { reason: "resolved" }` for older clients and sidebar counters. The requesting client receives `chat_permission_ack { status: "resolved", rememberEntry? }`. The UI keeps the request until acknowledgement and only persists an Allow-and-remember rule after its own successful ack.
+
+This addition applies to the Mac `/ws` conversation protocol. The iOS/Python `/harness` SSE dialect is separate and is not silently changed by these fields.
 
 ## `/shell` Terminal Flow
 

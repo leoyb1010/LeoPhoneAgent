@@ -16,10 +16,11 @@ enum AgentActivityPhase: String, Codable, CaseIterable, Sendable {
     case completed
     case failed
     case cancelled
+    case unverified
 
     var isTerminal: Bool {
         switch self {
-        case .completed, .failed, .cancelled: true
+        case .completed, .failed, .cancelled, .unverified: true
         default: false
         }
     }
@@ -136,6 +137,7 @@ struct AgentActivityEvent: Identifiable, Codable, Equatable, Sendable {
     let phase: AgentActivityPhase
     let toolName: String?
     let reason: AgentActivityReason?
+    let resultMessageId: String?
 
     init(
         id: String = UUID().uuidString,
@@ -145,7 +147,8 @@ struct AgentActivityEvent: Identifiable, Codable, Equatable, Sendable {
         kind: AgentActivityEventKind,
         phase: AgentActivityPhase,
         toolName: String? = nil,
-        reason: AgentActivityReason? = nil
+        reason: AgentActivityReason? = nil,
+        resultMessageId: String? = nil
     ) {
         self.id = id
         self.runId = runId
@@ -155,6 +158,7 @@ struct AgentActivityEvent: Identifiable, Codable, Equatable, Sendable {
         self.phase = phase
         self.toolName = toolName
         self.reason = reason
+        self.resultMessageId = resultMessageId
     }
 }
 
@@ -172,6 +176,7 @@ struct AgentRunState: Identifiable, Codable, Equatable, Sendable {
     let phase: AgentActivityPhase
     let toolName: String?
     let reason: AgentActivityReason?
+    var resultMessageId: String? = nil
 
     var id: String { runId }
     var isResumable: Bool {
@@ -193,6 +198,85 @@ struct AgentRunState: Identifiable, Codable, Equatable, Sendable {
             toolName: toolName,
             reason: .unexpectedTermination
         )
+    }
+}
+
+/// A receipt is tied to one durable run, never to the presence of reply text
+/// or to a session's processing Bool (which also stops on failure/cancellation).
+enum AgentRunOutcome: String, Codable, Sendable {
+    case unknown, running, awaitingApproval, waitingForUser, suspended
+    case succeeded, failed, cancelled
+
+    init(state: AgentRunState?, expectedRunId: String) {
+        guard let state, state.runId == expectedRunId else { self = .unknown; return }
+        switch state.phase {
+        case .completed: self = .succeeded
+        case .failed: self = .failed
+        case .cancelled: self = .cancelled
+        case .waitingForPermission: self = .awaitingApproval
+        case .waitingForUser: self = .waitingForUser
+        case .suspended: self = .suspended
+        case .idle, .unverified: self = .unknown
+        default: self = .running
+        }
+    }
+
+    var isTerminal: Bool { self == .succeeded || self == .failed || self == .cancelled }
+    var canPublishBriefing: Bool { self == .succeeded }
+    var shouldKeepObserving: Bool { self == .running || self == .awaitingApproval }
+
+    /// Preserve the existing successful Shortcut status while adding accurate
+    /// non-success outcomes for clients that branch on this field.
+    var shortcutStatus: String {
+        switch self {
+        case .succeeded: "Completed"
+        case .failed: "Failed"
+        case .cancelled: "Cancelled"
+        case .suspended: "Suspended"
+        case .waitingForUser: "Waiting for User"
+        case .awaitingApproval: "Awaiting Approval"
+        case .running: "Running"
+        case .unknown: "Unknown"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .succeeded: String(localized: "任务已完成。")
+        case .failed: String(localized: "任务失败，请打开对话查看原因。")
+        case .cancelled: String(localized: "任务已取消。")
+        case .suspended: String(localized: "任务已暂停，可回到应用继续。")
+        case .waitingForUser: String(localized: "任务需要你处理，请打开对话。")
+        case .awaitingApproval: String(localized: "任务正在等待审批。")
+        case .running: String(localized: "任务仍在运行，稍后可查看结果。")
+        case .unknown: String(localized: "暂时无法确认任务结果，请打开对话查看。")
+        }
+    }
+}
+
+struct AgentRunCompletion: Equatable, Sendable {
+    let phase: AgentActivityPhase
+    let reason: AgentActivityReason?
+    var keepsRunActive: Bool { phase == .preparing }
+
+    init(userCancelled: Bool, canResume: Bool, backgroundSuspended: Bool,
+         failureText: String?, waitingReason: AgentActivityReason? = nil,
+         nativeOutcome: AgentRunOutcome? = nil, continuesPendingWork: Bool = false) {
+        if userCancelled {
+            phase = .cancelled; reason = .userInterruption
+        } else if continuesPendingWork {
+            phase = .preparing; reason = nil
+        } else if nativeOutcome == .unknown {
+            phase = .unverified; reason = nil
+        } else if backgroundSuspended {
+            phase = .suspended; reason = .backgroundTimeExpired
+        } else if canResume {
+            phase = .waitingForUser; reason = waitingReason ?? .userInterruption
+        } else if let failureText {
+            phase = .failed; reason = AgentActivityFailureClassifier.reason(for: failureText)
+        } else {
+            phase = .completed; reason = nil
+        }
     }
 }
 

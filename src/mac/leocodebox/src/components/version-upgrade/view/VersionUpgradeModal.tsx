@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useTranslation } from 'react-i18next';
 
+import { Dialog, DialogContent } from '../../../shared/view/ui/Dialog';
 import { useVersionCheck } from '../../../hooks/useVersionCheck';
 import { currentReleaseNote } from '../releaseNotes';
 
@@ -31,9 +32,8 @@ export function VersionUpgradeModal({ isOpen, onClose }: VersionUpgradeModalProp
   const bundledNote = currentReleaseNote();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} aria-label={t('about.close')} />
-      <div className="relative max-h-[88vh] w-full max-w-xl overflow-y-auto rounded-lg border border-border bg-card p-5 shadow-elevation-3">
+    <Dialog open={isOpen} onOpenChange={(next) => { if (!next) onClose(); }}>
+      <DialogContent aria-label={t('about.modalTitle')} className="max-h-[88dvh] w-[calc(100%-2rem)] max-w-xl overflow-y-auto border-border bg-card p-5 shadow-elevation-3">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-foreground">{t('about.modalTitle')}</h2>
@@ -132,7 +132,7 @@ export function VersionUpgradeModal({ isOpen, onClose }: VersionUpgradeModalProp
             </button>
           )}
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

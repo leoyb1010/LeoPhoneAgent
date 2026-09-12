@@ -661,5 +661,9 @@
     "placeholder": "搜尋設定",
     "noResults": "沒有符合的設定項",
     "clear": "清除"
+  },
+  "agentDefaults": {
+    "title": "新任務預設值",
+    "saveFailed": "無法儲存預設值"
   }
 }

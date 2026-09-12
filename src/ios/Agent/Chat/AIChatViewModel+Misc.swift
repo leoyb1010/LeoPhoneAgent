@@ -345,65 +345,13 @@ extension AIChatViewModel {
         return result
     }
 
-    func executeNativeRoute(_ route: ActionRouter.Decision, imageURL: URL?) async -> String? {
-        switch route.kind {
-        case .savePhoto:
-            guard let imageURL, await saveImageToPhotos(imageURL) else { return nil }
-            return route.receipt()
-        case .setAlarm:
-            guard let hour = route.hour, let minute = route.minute else { return nil }
-            guard await scheduleNativeAlarm(hour: hour, minute: minute, tomorrow: route.tomorrow, label: route.label) else {
-                return route.failureReceipt(nextStep: "请检查系统时钟或闹钟权限后重试")
-            }
-            return route.receipt()
-        case .createCalendar:
-            guard let hour = route.hour, let minute = route.minute else { return nil }
-            guard await createNativeEvent(hour: hour, minute: minute, dayOffset: route.effectiveDayOffset, title: route.label, notes: route.notes, location: route.location) else {
-                return route.failureReceipt(nextStep: "请授权日历访问后重试")
-            }
-            return route.receipt()
-        case .createTravel:
-            guard let hour = route.hour, let minute = route.minute else { return nil }
-            let due = nativeDate(hour: hour, minute: minute, dayOffset: route.effectiveDayOffset)
-            guard let due else { return nil }
-            guard await createNativeEvent(hour: hour, minute: minute, dayOffset: route.effectiveDayOffset, title: route.label, notes: route.notes, location: route.location),
-                  await FastLocalActions.addTodo(route.label, dueDate: due, notes: route.notes) else {
-                return route.failureReceipt(nextStep: "请授权日历和提醒事项后重试")
-            }
-            return route.receipt()
-        case .toggleFlashlight:
-            return FastLocalActions.setTorch(route.label != "off")
-                ? route.receipt()
-                : route.failureReceipt(nextStep: "请确认设备有闪光灯并允许相机访问")
-        case .createTodo:
-            let due = route.hour.flatMap { hour in
-                route.minute.flatMap { minute in
-                    nativeDate(hour: hour, minute: minute, dayOffset: route.effectiveDayOffset)
-                }
-            }
-            return await FastLocalActions.addTodo(route.label.isEmpty ? "待办" : route.label, dueDate: due, notes: route.notes)
-                ? route.receipt()
-                : route.failureReceipt(nextStep: "请授权提醒事项后重试")
-        case .readClipboard:
-            let text = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            return route.receipt(summary: text.isEmpty ? "剪贴板是空的。" : "剪贴板内容：\n\(String(text.prefix(4_000)))")
-        case .writeClipboard:
-            UIPasteboard.general.string = route.label
-            guard UIPasteboard.general.string == route.label else {
-                return route.failureReceipt(nextStep: "系统没有读回相同内容，请重试")
-            }
-            return route.receipt(summary: "已写入剪贴板，并读回核对成功。")
-        case .deviceInfo:
-            let device = UIDevice.current
-            device.isBatteryMonitoringEnabled = true
-            let battery = device.batteryLevel >= 0 ? "\(Int(device.batteryLevel * 100))%" : "未知"
-            return route.receipt(summary: "本机设备信息：\n型号：\(device.model)\n系统：\(device.systemName) \(device.systemVersion)\n电量：\(battery)")
-        case nil:
-            return nil
-        }
+    func executeNativeRoute(_ route: ActionRouter.Decision, imageURL: URL?) async -> ActionRouter.ExecutionResult? {
+        await NativeActionExecutor.execute(route, imageURL: imageURL, sessionId: sessionId)
     }
 
-    func finishNativeRoute(_ route: ActionRouter.Decision, spoken: String) async {
+    func finishNativeRoute(_ route: ActionRouter.Decision, result: ActionRouter.ExecutionResult) async {
+        guard !Task.isCancelled, !userDidCancel else { return }
+        let spoken = result.text
         actionRouteChip = route.chip
         messages.append(ChatMessage(role: .assistant, content: spoken))
         let agent = AgentMessage(role: .assistant, parts: [.text(spoken)])
@@ -412,146 +360,13 @@ extension AIChatViewModel {
         if let id = await persistAgentMessage(agent), idx < agentHistory.count {
             agentHistory[idx].dbMessageId = id
         }
+        guard !Task.isCancelled, !userDidCancel else { return }
+        nativeRunOutcome = result.outcome
+        errorMessage = result.outcome == .failed ? spoken : nil
+        canResume = result.outcome == .waitingForUser || result.outcome == .suspended
+        if result.outcome == .cancelled { userDidCancel = true }
         isProcessing = false
         endBackgroundProcessing()
     }
 
-    private func saveImageToPhotos(_ url: URL) async -> Bool {
-        let granted: Bool = await withCheckedContinuation { cont in
-            PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
-                cont.resume(returning: status == .authorized || status == .limited)
-            }
-        }
-        guard granted else { return false }
-        return await withCheckedContinuation { cont in
-            PHPhotoLibrary.shared().performChanges({
-                PHAssetChangeRequest.creationRequestForAssetFromImage(atFileURL: url)
-            }, completionHandler: { ok, _ in
-                cont.resume(returning: ok)
-            })
-        }
-    }
-
-    private func scheduleNativeAlarm(hour: Int, minute: Int, tomorrow: Bool, label: String) async -> Bool {
-        if #available(iOS 26.0, *) {
-            var comps = Calendar.current.dateComponents([.year, .month, .day], from: Date())
-            if tomorrow, let day = Calendar.current.date(byAdding: .day, value: 1, to: Date()) {
-                comps = Calendar.current.dateComponents([.year, .month, .day], from: day)
-            }
-            comps.hour = hour
-            comps.minute = minute
-            guard let fire = Calendar.current.date(from: comps) else { return false }
-            return await withCheckedContinuation { cont in
-                AlarmOffloadBridge.scheduleAlarm(
-                    withId: UUID().uuidString,
-                    fireDate: fire,
-                    label: label.isEmpty ? "闹钟" : label,
-                    repeatMode: "once"
-                ) { _, error in
-                    cont.resume(returning: error == nil)
-                }
-            }
-        }
-        return false
-    }
-
-    private func nativeDate(hour: Int, minute: Int, dayOffset: Int) -> Date? {
-        var comps = Calendar.current.dateComponents([.year, .month, .day], from: Date())
-        if dayOffset > 0, let day = Calendar.current.date(byAdding: .day, value: dayOffset, to: Date()) {
-            comps = Calendar.current.dateComponents([.year, .month, .day], from: day)
-        }
-        comps.hour = hour
-        comps.minute = minute
-        return Calendar.current.date(from: comps)
-    }
-
-    private func createNativeEvent(
-        hour: Int,
-        minute: Int,
-        dayOffset: Int,
-        title: String,
-        notes: String = "",
-        location: String = ""
-    ) async -> Bool {
-        let store = EKEventStore()
-        let granted: Bool
-        if #available(iOS 17.0, *) {
-            granted = (try? await store.requestFullAccessToEvents()) ?? false
-        } else {
-            granted = await withCheckedContinuation { cont in
-                store.requestAccess(to: .event) { ok, _ in cont.resume(returning: ok) }
-            }
-        }
-        guard granted else { return false }
-        guard let start = nativeDate(hour: hour, minute: minute, dayOffset: dayOffset) else { return false }
-        let ev = EKEvent(eventStore: store)
-        ev.title = title.isEmpty ? "日程" : title
-        ev.startDate = start
-        ev.endDate = start.addingTimeInterval(3600)
-        ev.notes = notes.isEmpty ? nil : notes
-        ev.location = location.isEmpty ? nil : location
-        ev.addAlarm(EKAlarm(relativeOffset: -30 * 60))
-        ev.calendar = store.defaultCalendarForNewEvents
-        do {
-            try store.save(ev, span: .thisEvent)
-            guard let identifier = ev.eventIdentifier,
-                  let saved = store.event(withIdentifier: identifier) else { return false }
-            return saved.title == ev.title && abs(saved.startDate.timeIntervalSince(start)) < 1
-        } catch {
-            return false
-        }
-    }
-
-}
-
-enum FastLocalActions {
-    static func setTorch(_ on: Bool) -> Bool {
-        guard let device = AVCaptureDevice.default(for: .video), device.hasTorch else { return false }
-        do {
-            try device.lockForConfiguration()
-            if on {
-                try device.setTorchModeOn(level: AVCaptureDevice.maxAvailableTorchLevel)
-            } else {
-                device.torchMode = .off
-            }
-            device.unlockForConfiguration()
-            UserDefaults.standard.set(on, forKey: "leo.torchOn")
-            return true
-        } catch {
-            return false
-        }
-    }
-
-    static func addTodo(_ title: String, dueDate: Date? = nil, notes: String = "") async -> Bool {
-        let store = EKEventStore()
-        let granted: Bool
-        if #available(iOS 17.0, *) {
-            granted = (try? await store.requestFullAccessToReminders()) ?? false
-        } else {
-            granted = await withCheckedContinuation { cont in
-                store.requestAccess(to: .reminder) { ok, _ in cont.resume(returning: ok) }
-            }
-        }
-        guard granted else { return false }
-        let reminder = EKReminder(eventStore: store)
-        reminder.title = title
-        reminder.notes = notes.isEmpty ? nil : notes
-        if let dueDate {
-            reminder.dueDateComponents = Calendar.current.dateComponents(
-                [.year, .month, .day, .hour, .minute],
-                from: dueDate
-            )
-            reminder.addAlarm(EKAlarm(absoluteDate: dueDate.addingTimeInterval(-30 * 60)))
-        }
-        reminder.calendar = store.defaultCalendarForNewReminders()
-        do {
-            try store.save(reminder, commit: true)
-            guard let saved = store.calendarItem(withIdentifier: reminder.calendarItemIdentifier) as? EKReminder else {
-                return false
-            }
-            return saved.title == reminder.title && saved.dueDateComponents == reminder.dueDateComponents
-        } catch {
-            return false
-        }
-    }
 }

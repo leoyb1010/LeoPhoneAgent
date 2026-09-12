@@ -2,9 +2,16 @@ import SwiftUI
 
 struct OffloadPermissionDialogModifier: ViewModifier {
     @ObservedObject private var manager = OffloadPermissionManager.shared
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var presenterID = UUID().uuidString
+    var isEnabled = true
 
     func body(content: Content) -> some View {
         content
+            .onAppear { updatePresenter() }
+            .onDisappear { manager.setPresenter(presenterID, available: false) }
+            .onChange(of: scenePhase) { _, _ in updatePresenter() }
+            .onChange(of: isEnabled) { _, _ in updatePresenter() }
             .sheet(item: $manager.pendingRequest) { request in
                 OffloadPermissionDialogContent(request: request)
                     // Both detents — long arg lists were getting pushed below
@@ -15,6 +22,10 @@ struct OffloadPermissionDialogModifier: ViewModifier {
                     .presentationDetents([.medium, .large])
                     .interactiveDismissDisabled()
             }
+    }
+
+    private func updatePresenter() {
+        manager.setPresenter(presenterID, available: isEnabled && scenePhase == .active)
     }
 }
 
@@ -141,7 +152,7 @@ private struct OffloadPermissionDialogContent: View {
 }
 
 extension View {
-    func offloadPermissionDialog() -> some View {
-        modifier(OffloadPermissionDialogModifier())
+    func offloadPermissionDialog(isEnabled: Bool = true) -> some View {
+        modifier(OffloadPermissionDialogModifier(isEnabled: isEnabled))
     }
 }

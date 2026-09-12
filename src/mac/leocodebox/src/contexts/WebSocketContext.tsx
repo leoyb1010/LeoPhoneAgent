@@ -163,6 +163,7 @@ const useWebSocketProviderState = (): WebSocketContextType => {
       };
 
       websocket.onmessage = (event) => {
+        if (generation !== generationRef.current || wsRef.current !== websocket) return;
         lastFrameAtRef.current = Date.now();
         if (pongDeadlineRef.current) {
           clearTimeout(pongDeadlineRef.current);

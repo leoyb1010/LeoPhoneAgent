@@ -231,6 +231,14 @@ static int cmd_transcribe(int argc, char **argv, int stdout_fd, BOOL compact, BO
         return NOFF_EXIT_NOT_AVAILABLE;
     }
 
+    if (onDevice && !recognizer.supportsOnDeviceRecognition) {
+        NSDictionary *err = noff_json_error(TOOL_NAME, @"transcribe",
+                                             NOFF_ERR_NOT_AVAILABLE,
+                                             @"On-device recognition is unavailable for this locale. Audio was not sent to network recognition.");
+        noff_emit_json(stdout_fd, err, compact, quiet);
+        return NOFF_EXIT_NOT_AVAILABLE;
+    }
+
     // Shared recognition result state
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
     __block NSString *finalText = nil;

@@ -761,5 +761,9 @@
     "placeholder": "Search settings",
     "noResults": "No matching settings",
     "clear": "Clear"
+  },
+  "agentDefaults": {
+    "title": "New task defaults",
+    "saveFailed": "Could not save defaults"
   }
 }

@@ -12,6 +12,17 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.35.0",
+            date: "2026-09-12",
+            title: "本机能力统一授权，任务结果准确可查",
+            highlights: [
+                "首页可直接执行基础系统动作，无需先配置模型；新增全部系统能力入口。",
+                "手电筒和亮度使用统一设备服务并回读状态，相机取消、超时后释放占用。",
+                "本机命令按实际动作授权；任务、快捷指令和组件区分成功、失败、取消与尚未确认的结果。",
+                "离线语音不再静默切换联网识别；设备或语言不支持时明确提示。"
+            ]
+        ),
+        LeoRelease(
             version: "1.34.0",
             date: "2026-09-06",
             title: "设置层级看得清，入口说得明",

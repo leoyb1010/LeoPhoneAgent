@@ -36,11 +36,11 @@ test('bind is machine+app+pid+window+snapshot', () => {
   });
 });
 
-test('stale snapshot refuses the next action', () => {
+test('stale snapshot refuses the next action', async () => {
   const { store, now } = storeAt();
   const captured = snap(store, false);
   now.t += WINDOW_SNAPSHOT_FRESH_MS + 1;
-  const result = store.act(captured.snapshotId, 'ax');
+  const result = await store.act(captured.snapshotId, 'ax');
   assert.equal(result.ok, false);
   if (!result.ok) {
     assert.equal(result.reason, 'snapshot-expired');
@@ -48,22 +48,28 @@ test('stale snapshot refuses the next action', () => {
   }
 });
 
-test('fresh frontmost action re-observes', () => {
+test('an action without a native executor cannot manufacture a successful fresh snapshot', async () => {
   const { store } = storeAt();
   const captured = snap(store, true);
   store.bindSession('hs_1', captured.snapshotId);
-  const result = store.act(captured.snapshotId, 'menu');
-  assert.equal(result.ok, true);
-  if (result.ok) {
-    assert.notEqual(result.snapshot.snapshotId, captured.snapshotId);
-    assert.equal(store.summary('hs_1')?.snapshot_id, result.snapshot.snapshotId);
-  }
+  const result = await store.act(captured.snapshotId, 'menu');
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.equal(result.reason, 'unsupported-action');
+  assert.equal(store.summary('hs_1')?.snapshot_id, captured.snapshotId);
 });
 
-test('coordinate click on a background window is blocked', () => {
+test('observe requires fresh native evidence rather than renewing an old in-memory snapshot', async () => {
+  const { store, now } = storeAt();
+  const captured = snap(store);
+  now.t += WINDOW_SNAPSHOT_FRESH_MS + 1;
+  await assert.rejects(async () => store.observe(captured.snapshotId), /native|观察|available/i);
+  assert.equal(store.get(captured.snapshotId)?.capturedAt, 1000);
+});
+
+test('coordinate click on a background window is blocked', async () => {
   const { store } = storeAt();
   const captured = snap(store, false);
-  const result = store.act(captured.snapshotId, 'coord');
+  const result = await store.act(captured.snapshotId, 'coord');
   assert.equal(result.ok, false);
   if (!result.ok) assert.equal(result.reason, 'background-blocked');
 });

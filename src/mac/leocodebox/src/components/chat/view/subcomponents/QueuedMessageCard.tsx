@@ -18,9 +18,9 @@ export default function QueuedMessageCard({ content, imageCount = 0, onEdit, onD
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-primary/70">
-            <span>{t('input.queue.label', { defaultValue: 'Queued' })}</span>
+            <span>{t('input.queue.legacyDraft', { defaultValue: '恢复的旧草稿' })}</span>
             <span className="normal-case text-muted-foreground/60">
-              · {t('input.queue.willSend', { defaultValue: 'Will send when this finishes' })}
+              · {t('input.queue.reviewBeforeSend', { defaultValue: '恢复到输入框后，核对并手动发送' })}
             </span>
           </div>
           <p className="mt-0.5 line-clamp-2 break-words text-sm text-foreground/90">{content}</p>

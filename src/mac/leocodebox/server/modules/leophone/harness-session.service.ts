@@ -21,6 +21,7 @@ import {
   type HarnessDialect,
   type HarnessEvent,
 } from './harness-dialects.js';
+import { HarnessJournal, type JournalHealth, type JournalOptions } from './harness-journal.js';
 import { HARNESSES, resolveExecutable, type HarnessSpec } from './harness-specs.js';
 
 // LeoPhoneAgent harness 会话宿主——leoagent(Python)HarnessManager/HarnessSession
@@ -99,12 +100,26 @@ export class HarnessSession {
   private readonly toolNames = new Map<string, string>();
   private readonly dialect: HarnessDialect;
   private proc: ChildProcessWithoutNullStreams | null = null;
+  private readonly journal: HarnessJournal;
 
-  constructor(args: { sessionId: string; spec: HarnessSpec; cwd: string; logPath: string; seq?: number; status?: string }) {
+  constructor(args: { sessionId: string; spec: HarnessSpec; cwd: string; logPath: string; seq?: number; status?: string; journalOptions?: JournalOptions; journal?: HarnessJournal }) {
     this.sessionId = args.sessionId;
     this.spec = args.spec;
     this.cwd = args.cwd;
     this.logPath = args.logPath;
+    this.journal = args.journal ?? new HarnessJournal(args.logPath, {
+      ...args.journalOptions,
+      onCommitted: (event) => {
+        if (PUSHABLE_EVENTS.has(event.event)) {
+          try { pushHarnessEvent(event); } catch { /* delivery does not control persistence */ }
+        }
+        args.journalOptions?.onCommitted?.(event);
+      },
+      onStateChanged: () => {
+        for (const sub of this.subscribers) sub.wake?.();
+        args.journalOptions?.onStateChanged?.();
+      },
+    });
     if (args.seq != null) this.seq = args.seq;
     if (args.status) this.status = args.status;
     this.dialect = createDialect(args.spec.dialect, args.cwd);
@@ -162,27 +177,7 @@ export class HarnessSession {
       }
     }
 
-    // 0600:日志携带 CLI 原样 stdout/stderr,可能包含它顺手打印的令牌。
-    // 写失败只降级持久性,绝不能杀掉 stdout 泵——不抽的管道会永远堵死 CLI。
-    try {
-      if (!fs.existsSync(this.logPath)) {
-        fs.writeFileSync(this.logPath, '', { mode: 0o600 });
-      }
-      fs.appendFileSync(this.logPath, `${JSON.stringify(enriched)}\n`);
-    } catch {
-      // ignore: durable log degraded, live stream continues
-    }
-
-    // [T-leophone-push] 关键事件外推给中继(手机没连着时的唯一触达路径)。
-    // 放在持久化之后:推出去的必须是已经落盘、带 seq 与 approval_id 的
-    // 富化帧,中继与手机才能按 seq 幂等合并。推送失败不影响本地流。
-    if (PUSHABLE_EVENTS.has(String(enriched.event))) {
-      try {
-        pushHarnessEvent(enriched);
-      } catch {
-        // 外推是尽力而为,绝不能影响会话本身
-      }
-    }
+    enriched.durability = this.journal.enqueue(enriched, PUSHABLE_EVENTS.has(name));
 
     for (const sub of [...this.subscribers]) {
       if (sub.queue.length >= 512) {
@@ -197,64 +192,66 @@ export class HarnessSession {
     }
   }
 
-  /** `afterSeq` 之后的全部事件——断线的手机借此精确追平,不缺不重。 */
-  replay(afterSeq = 0): HarnessEvent[] {
-    if (!fs.existsSync(this.logPath)) return [];
-    const events: HarnessEvent[] = [];
-    let content = '';
-    try {
-      content = fs.readFileSync(this.logPath, 'utf8');
-    } catch {
-      return [];
-    }
-    for (const line of content.split('\n')) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      let event: HarnessEvent;
-      try {
-        event = JSON.parse(trimmed) as HarnessEvent;
-      } catch {
-        continue;
-      }
-      if (Number(event.seq ?? 0) > afterSeq) events.push(event);
-    }
-    return events;
+  journalHealth(): JournalHealth { return this.journal.health(); }
+  flushJournal(timeoutMs?: number): Promise<JournalHealth> { return this.journal.flush(timeoutMs); }
+  closeJournal(timeoutMs?: number): Promise<JournalHealth> { return this.journal.close(timeoutMs); }
+  replay(afterSeq = 0, signal?: AbortSignal): AsyncGenerator<HarnessEvent> {
+    return this.journal.replay(afterSeq, signal);
   }
 
-  /**
-   * 回放后接实时,接缝处不丢不重:队列在读日志之前挂上(反过来会永久丢失
-   * 回放期间产生的事件),回放已覆盖的实时事件按 seq 去重丢弃。
-   */
-  async *subscribe(afterSeq = 0): AsyncGenerator<HarnessEvent> {
+  /** Register before replay; snapshot pending rows before any I/O can commit them. */
+  async *subscribe(afterSeq = 0, options: { signal?: AbortSignal; journalStatus?: boolean } = {}): AsyncGenerator<HarnessEvent> {
     const sub: Subscriber = { queue: [], wake: null, closed: false };
     this.subscribers.add(sub);
+    const pending = this.journal.pendingEvents(afterSeq);
+    const abort = () => { sub.closed = true; sub.wake?.(); };
+    options.signal?.addEventListener('abort', abort, { once: true });
     let highest = afterSeq;
+    let lastHealth = '';
     try {
-      for (const event of this.replay(afterSeq)) {
+      for await (const event of this.replay(afterSeq, options.signal)) {
         highest = Math.max(highest, Number(event.seq ?? 0));
         yield event;
       }
-      // 已结束的会话没有实时可跟;不然客户端会白挂在队列上直到超时。
-      if (TERMINAL_STATUSES.has(this.status)) return;
-      while (true) {
-        if (sub.queue.length === 0) {
-          if (sub.closed) return;
-          await new Promise<void>((resolve) => { sub.wake = resolve; });
-          sub.wake = null;
+      for (const event of pending) {
+        if (Number(event.seq) <= highest) continue;
+        highest = Number(event.seq);
+        yield event;
+      }
+      while (!sub.closed && !options.signal?.aborted) {
+        if (options.journalStatus) {
+          const health = this.journal.health();
+          const encoded = JSON.stringify(health);
+          if (encoded !== lastHealth) {
+            lastHealth = encoded;
+            // Control frames have no seq: they never advance the event cursor.
+            yield { event: 'journal.status', type: 'durability', session_id: this.sessionId, ...health };
+          }
+        }
+        if (sub.queue.length) {
+          const event = sub.queue.shift()!;
+          const seq = Number(event.seq ?? 0);
+          if (seq <= highest) continue;
+          highest = seq;
+          yield event;
           continue;
         }
-        const event = sub.queue.shift()!;
-        const seq = Number(event.seq ?? 0);
-        if (seq <= highest) continue; // 回放已交付
-        highest = seq;
-        yield event;
-        if ([EVENT_RUN_COMPLETED, EVENT_RUN_FAILED, EVENT_RUN_CANCELLED].includes(String(event.event))
-          && ['completed', 'failed', 'cancelled'].includes(this.status)) {
+        if (TERMINAL_STATUSES.has(this.status)) {
+          if (options.journalStatus && this.journal.health().state === 'pending') {
+            await this.journal.flush();
+            const health = this.journal.health();
+            yield { event: 'journal.status', type: 'durability', session_id: this.sessionId, ...health };
+          }
           return;
         }
+        await new Promise<void>((resolve) => { sub.wake = resolve; });
+        sub.wake = null;
       }
+    } catch (error) {
+      if (!options.signal?.aborted) throw error;
     } finally {
       sub.closed = true;
+      options.signal?.removeEventListener('abort', abort);
       this.subscribers.delete(sub);
     }
   }
@@ -477,6 +474,7 @@ export class HarnessSession {
       cwd: this.cwd,
       status: this.status,
       seq: this.seq,
+      journal: this.journal.health(),
       window: exactWindows.summary(this.sessionId),
       waiting_for_approval: this.pendingApprovals.size > 0,
       pending_approvals: [...this.pendingApprovals.entries()].map(([id, event]) => ({
@@ -491,18 +489,20 @@ export class HarnessSession {
 export class HarnessManager {
   readonly sessions = new Map<string, HarnessSession>();
   private readonly sessionsDir: string;
+  private readonly readyPromise: Promise<void>;
+  private startupError: unknown;
 
   constructor(sessionsDir = SESSIONS_DIR) {
     this.sessionsDir = sessionsDir;
     fs.mkdirSync(this.sessionsDir, { recursive: true, mode: 0o700 });
     try {
       // mkdir 只对叶子生效;父目录装着钥匙文件,必须显式收紧。
-      fs.chmodSync(path.dirname(this.sessionsDir), 0o700);
+      if (this.sessionsDir === SESSIONS_DIR) fs.chmodSync(path.dirname(this.sessionsDir), 0o700);
       fs.chmodSync(this.sessionsDir, 0o700);
     } catch {
       // best effort
     }
-    this.rehydrate();
+    this.readyPromise = this.rehydrate().catch((error) => { this.startupError = error; });
   }
 
   /**
@@ -510,42 +510,27 @@ export class HarnessManager {
    * 时代创建的:同一个目录、同一种日志格式。它们不能再被操控(进程已随旧
    * daemon 死去),但历史精确回放。
    */
-  private rehydrate(): void {
-    let entries: string[] = [];
-    try {
-      entries = fs.readdirSync(this.sessionsDir).filter((name) => name.startsWith('hs_') && name.endsWith('.ndjson')).sort();
-    } catch {
-      return;
-    }
+  async ready(): Promise<void> {
+    await this.readyPromise;
+    if (this.startupError) throw this.startupError;
+  }
+
+  private async rehydrate(): Promise<void> {
+    const entries = (await fs.promises.readdir(this.sessionsDir))
+      .filter((name) => name.startsWith('hs_') && name.endsWith('.ndjson')).sort();
     for (const entry of entries) {
       const logPath = path.join(this.sessionsDir, entry);
-      const sessionId = entry.slice(0, -'.ndjson'.length);
-      let harnessKey = '?';
-      let cwd = '?';
-      let lastSeq = 0;
-      try {
-        for (const line of fs.readFileSync(logPath, 'utf8').split('\n')) {
-          if (!line.trim()) continue;
-          let event: HarnessEvent;
-          try {
-            event = JSON.parse(line) as HarnessEvent;
-          } catch {
-            continue;
-          }
-          lastSeq = Math.max(lastSeq, Number(event.seq ?? 0));
-          if (event.event === EVENT_SESSION_CREATED) {
-            harnessKey = String(event.harness ?? '?');
-            cwd = String(event.cwd ?? '?');
-          }
-        }
-      } catch {
-        continue;
-      }
+      const journal = new HarnessJournal(logPath);
+      await journal.initialize();
+      const first = (await journal.readPage(0, { limit: 1 })).events[0];
+      const harnessKey = first?.event === EVENT_SESSION_CREATED ? String(first.harness ?? '?') : '?';
+      const cwd = first?.event === EVENT_SESSION_CREATED ? String(first.cwd ?? '?') : '?';
       const spec = HARNESSES[harnessKey] ?? {
         key: harnessKey, displayName: harnessKey, executable: '', args: [], dialect: 'claude_stream_json' as const,
       };
+      const sessionId = entry.slice(0, -'.ndjson'.length);
       this.sessions.set(sessionId, new HarnessSession({
-        sessionId, spec, cwd, logPath, seq: lastSeq, status: 'orphaned',
+        sessionId, spec, cwd, logPath, journal, seq: journal.health().latest_seq, status: 'orphaned',
       }));
     }
   }
@@ -559,6 +544,7 @@ export class HarnessManager {
   }
 
   async create(args: { harness: string; cwd: string; prompt?: string | null }): Promise<HarnessSession> {
+    await this.ready();
     const spec = HARNESSES[args.harness];
     if (!spec) throw new HarnessRequestError(`unknown harness: ${args.harness}`);
     if (!resolveExecutable(spec)) {
@@ -592,6 +578,7 @@ export class HarnessManager {
       await session.start(args.prompt);
       if (args.prompt && !spec.promptInArgs) await session.send(args.prompt);
     } catch (error) {
+      await session.closeJournal();
       try {
         fs.unlinkSync(session.logPath);
       } catch {
@@ -613,8 +600,10 @@ export class HarnessManager {
 
   /** daemon 退出前收割全部子进程;孤儿 CLI 会永远占着工作目录。 */
   async shutdownAll(): Promise<void> {
+    await this.ready();
     const live = [...this.sessions.values()].filter((session) => session.isLive);
     await Promise.allSettled(live.map((session) => session.stop()));
+    await Promise.allSettled([...this.sessions.values()].map((session) => session.closeJournal()));
   }
 
   killAllSync(): void {

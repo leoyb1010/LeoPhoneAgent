@@ -392,7 +392,8 @@
     "openLeoapi": "Leoapi gateway",
     "openLocalLog": "Local log",
     "goMissions": "Quick tasks",
-    "goConsole": "New task"
+    "goConsole": "New task",
+    "goCollections": "Open library"
   },
   "dashboard": {
     "greetingNight": "Up late",
@@ -552,6 +553,26 @@
     "consoleTooltip": "Console · pick an agent, start a task",
     "agentLockedTooltip": "This session was created with it. To switch agents, start a new task from the console.",
     "agentLockedLabel": "Session agent: {{agent}}",
-    "agentLockedMark": "this session"
+    "agentLockedMark": "this session",
+    "remoteLog": "Remote output (latest 400 lines)",
+    "remoteLatest": "New output · Return to latest",
+    "journal": {
+      "unknown": "Save status unknown",
+      "pending": "Saving log",
+      "durable": "Log saved",
+      "degraded": "Log save degraded"
+    },
+    "journalDetail": "Durable {{durable}} / received {{latest}} · {{missing}} missing ranges"
+  },
+  "taskStart": {
+    "title": "What would you like to do?",
+    "description": "Describe a task above, then choose its project and target device before it runs.",
+    "examples": "Try reviewing recent code changes or organizing project notes.",
+    "projectLabel": "Current project",
+    "noProject": "Choose a project when you are ready.",
+    "changeProject": "Change task project",
+    "libraryTitle": "Library",
+    "libraryDescription": "Save, find and read your materials.",
+    "shortcuts": "⌘N New task · ⌘K Search and navigation · ⌘, Settings"
   }
 }

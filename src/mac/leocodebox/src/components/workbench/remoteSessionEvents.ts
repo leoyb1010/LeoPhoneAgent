@@ -87,3 +87,26 @@ export async function readRemoteSse(
     if (done) break;
   }
 }
+
+export type RemoteDurability = {
+  state: 'unknown' | 'pending' | 'durable' | 'degraded';
+  durableSeq: number;
+  latestSeq: number;
+  pendingBytes: number;
+  missingRanges: number;
+};
+export const UNKNOWN_REMOTE_DURABILITY: RemoteDurability = { state: 'unknown', durableSeq: 0, latestSeq: 0, pendingBytes: 0, missingRanges: 0 };
+
+/** A control envelope never advances the event cursor or becomes a log row. */
+export function readRemoteDurability(frame: Record<string, unknown>): RemoteDurability | null {
+  if (frame.type !== 'durability' || !['pending', 'durable', 'degraded'].includes(String(frame.state))) return null;
+  const counters = [frame.durable_seq, frame.latest_seq, frame.pending_bytes];
+  if (counters.some((value) => typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0)) return null;
+  if (!Array.isArray(frame.missing_ranges) || frame.missing_ranges.length > 512 || Number(frame.durable_seq) > Number(frame.latest_seq)) return null;
+  const state = frame.missing_ranges.length > 0 ? 'degraded'
+    : frame.state === 'durable' && (Number(frame.pending_bytes) > 0 || Number(frame.durable_seq) < Number(frame.latest_seq)) ? 'pending' : frame.state;
+  return {
+    state: state as RemoteDurability['state'], durableSeq: Number(frame.durable_seq), latestSeq: Number(frame.latest_seq),
+    pendingBytes: Number(frame.pending_bytes), missingRanges: frame.missing_ranges.length,
+  };
+}

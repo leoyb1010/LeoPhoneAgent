@@ -1,6 +1,7 @@
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
-import { projectsDb, sessionsDb, sessionRuntimeStateDb } from '@/modules/database/index.js';
+import { getConnection, projectsDb, sessionsDb, sessionRuntimeStateDb, chatQueueDb, ChatQueueError, chatUserKey  } from '@/modules/database/index.js';
 import { usageDb, estimateUsageCostUsd } from '@/modules/usage/index.js';
 import { generateDisplayName } from '@/modules/projects/index.js';
 import { ChatSessionWriter } from '@/modules/websocket/services/chat-session-writer.service.js';
@@ -10,6 +11,8 @@ import type {
   NormalizedMessage,
   RealtimeClientConnection,
 } from '@/shared/types.js';
+
+import type { ChatCursor } from '../../../../shared/chat-session-protocol.js';
 
 type ChatRunStatus = 'running' | 'completed';
 
@@ -27,8 +30,14 @@ type ChatRunStatus = 'running' | 'completed';
  *   monotonically increasing `seq` and is buffered so a reconnecting client
  *   can replay exactly the events it missed via `chat.subscribe`.
  */
-type ChatRun = {
+export type ChatRun = {
   appSessionId: string;
+  runId: string;
+  userId: string | number | null;
+  queueItemId: string | null;
+  initialSeq: number;
+  sequenceLimit: number;
+  resolvedApprovals: Set<string>;
   provider: LLMProvider;
   providerSessionId: string | null;
   status: ChatRunStatus;
@@ -65,7 +74,30 @@ const MAX_CONCURRENT_RUNS = Math.max(1, Number.parseInt(process.env.LEOCODEBOX_M
  * path all consult it instead of asking each provider runtime individually.
  */
 const runs = new Map<string, ChatRun>();
-const queuedRuns = new Map<string, Array<() => Promise<void> | void>>();
+export const CHAT_SERVER_EPOCH = randomUUID();
+const SEQUENCE_BLOCK_SIZE = 4096;
+const observers = new Map<string, Map<RealtimeClientConnection, string>>();
+const disconnectedConnection: RealtimeClientConnection = { readyState: 3, send: () => undefined };
+
+function addObserver(sessionId: string, connection: RealtimeClientConnection, userId: string | number | null): void {
+  const subscribers = observers.get(sessionId) ?? new Map<RealtimeClientConnection, string>();
+  subscribers.set(connection, chatUserKey(userId));
+  observers.set(sessionId, subscribers);
+}
+
+function broadcastToObservers(sessionId: string, userId: string | number | null, message: unknown): void {
+  const subscribers = observers.get(sessionId);
+  if (!subscribers) return;
+  const payload = JSON.stringify(message);
+  const owner = chatUserKey(userId);
+  for (const [connection, userKey] of subscribers) {
+    if (connection.readyState !== WS_OPEN_STATE) { subscribers.delete(connection); continue; }
+    if (userKey !== owner) continue;
+    try { connection.send(payload); }
+    catch { subscribers.delete(connection); }
+  }
+  if (subscribers.size === 0) observers.delete(sessionId);
+}
 
 async function broadcastCanonicalSessionUpsert(appSessionId: string): Promise<void> {
   const row = sessionsDb.getSessionById(appSessionId);
@@ -109,11 +141,10 @@ async function broadcastCanonicalSessionUpsert(appSessionId: string): Promise<vo
   });
 }
 
-function evictRunLater(appSessionId: string): void {
+function evictRunLater(completedRun: ChatRun): void {
   const timer = setTimeout(() => {
-    const run = runs.get(appSessionId);
-    if (run && run.status === 'completed') {
-      runs.delete(appSessionId);
+    if (runs.get(completedRun.appSessionId) === completedRun && completedRun.status === 'completed') {
+      runs.delete(completedRun.appSessionId);
     }
   }, COMPLETED_RUN_RETENTION_MS);
 
@@ -136,16 +167,23 @@ function decorateAndRecordEvent(run: ChatRun, message: NormalizedMessage): Norma
   // emits the terminal `complete` immediately, but the killed runtime may
   // still emit its own `complete` from its exit handler moments later.
   // Whichever arrives first wins; the duplicate is dropped here.
-  if (message.kind === 'complete' && run.status === 'completed') {
+  if (runs.get(run.appSessionId) !== run || run.status === 'completed') {
     return null;
   }
 
+  if (run.lastSeq >= run.sequenceLimit) {
+    const range = chatQueueDb.reserveSequenceRange(run.appSessionId, SEQUENCE_BLOCK_SIZE);
+    run.lastSeq = range.start;
+    run.sequenceLimit = range.end;
+  }
   run.lastSeq += 1;
 
   const outbound: NormalizedMessage = {
     ...message,
     sessionId: run.appSessionId,
+    runId: run.runId,
     seq: run.lastSeq,
+    cursor: { runId: run.runId, seq: run.lastSeq },
   };
 
   if (message.kind === 'status' && message.tokenBudget && typeof message.tokenBudget === 'object') {
@@ -156,25 +194,44 @@ function decorateAndRecordEvent(run: ChatRun, message: NormalizedMessage): Norma
     // The provider may report its own id here; the frontend only ever knows
     // the app id, so the "actual" id is by definition the app id as well.
     outbound.actualSessionId = run.appSessionId;
-    run.status = message.aborted ? 'completed' : 'completed';
+    if (run.abortController.signal.aborted) outbound.aborted = true;
+    run.status = 'completed';
     run.completedAt = Date.now();
-    try { sessionRuntimeStateDb.markFinished(run.appSessionId, message.aborted ? 'aborted' : 'completed', run.completedAt); } catch { /* tests and early boot may not have a database yet */ }
-    if (run.tokenBudget) {
-      const session = sessionsDb.getSessionById(run.appSessionId);
-      const inputTokens = Number(run.tokenBudget.inputTokens ?? 0) || 0;
-      const outputTokens = Number(run.tokenBudget.outputTokens ?? 0) || 0;
-      const cacheTokens = Number(run.tokenBudget.cacheTokens ?? run.tokenBudget.cacheReadTokens ?? 0) || 0;
-      usageDb.record({
-        projectPath: session?.project_path,
-        provider: run.provider,
-        model: typeof run.tokenBudget.model === 'string' ? run.tokenBudget.model : null,
-        inputTokens,
-        outputTokens,
-        cacheTokens,
-        costUsd: estimateUsageCostUsd(run.provider, typeof run.tokenBudget.model === 'string' ? run.tokenBudget.model : null, inputTokens, outputTokens),
-      });
+    try { sessionRuntimeStateDb.markFinished(run.appSessionId, outbound.aborted ? 'aborted' : 'completed', run.completedAt); }
+    catch (error) {
+      outbound.persistenceWarning = '任务已结束，但本机未能保存运行状态。请核对结果后再恢复任务。';
+      console.error('[Chat] Could not persist runtime completion', error);
     }
-    evictRunLater(run.appSessionId);
+    try {
+      if (run.tokenBudget) {
+        const session = sessionsDb.getSessionById(run.appSessionId);
+        const inputTokens = Number(run.tokenBudget.inputTokens ?? 0) || 0;
+        const outputTokens = Number(run.tokenBudget.outputTokens ?? 0) || 0;
+        const cacheTokens = Number(run.tokenBudget.cacheTokens ?? run.tokenBudget.cacheReadTokens ?? 0) || 0;
+        usageDb.record({
+          projectPath: session?.project_path,
+          provider: run.provider,
+          model: typeof run.tokenBudget.model === 'string' ? run.tokenBudget.model : null,
+          inputTokens,
+          outputTokens,
+          cacheTokens,
+          costUsd: estimateUsageCostUsd(run.provider, typeof run.tokenBudget.model === 'string' ? run.tokenBudget.model : null, inputTokens, outputTokens),
+        });
+      }
+    } catch (error) {
+      outbound.persistenceWarning = '任务已结束，但用量未能写入本机记录。';
+      console.error('[Chat] Could not persist usage', error);
+    }
+    if (run.queueItemId) {
+      try {
+        chatQueueDb.finish(run.queueItemId, outbound.aborted ? 'cancelled'
+          : (message.success === false || Number(message.exitCode ?? 0) !== 0) ? 'failed' : 'completed');
+      } catch (error) {
+        outbound.persistenceWarning = '任务已结束，但本机未能保存执行状态。重新启动后请核对结果再恢复。';
+        console.error('[Chat] Could not persist command completion', error);
+      }
+    }
+    evictRunLater(run);
   }
 
   run.events.push(outbound);
@@ -195,7 +252,8 @@ function decorateAndRecordEvent(run: ChatRun, message: NormalizedMessage): Norma
  * happens first wins; later calls with the same id are no-ops.
  */
 function recordProviderSessionId(run: ChatRun, providerSessionId: string): void {
-  if (!providerSessionId || run.providerSessionId === providerSessionId) {
+  if (runs.get(run.appSessionId) !== run
+    || !providerSessionId || run.providerSessionId === providerSessionId) {
     return;
   }
 
@@ -238,20 +296,36 @@ export const chatRunRegistry = {
     appSessionId: string;
     provider: LLMProvider;
     providerSessionId: string | null;
-    connection: RealtimeClientConnection;
+    connection?: RealtimeClientConnection;
     userId: string | number | null;
+    queueItemId?: string;
   }): ChatRun | null {
     const existing = runs.get(input.appSessionId);
     if (existing && existing.status === 'running') return null;
     const activeRuns = Array.from(runs.values()).filter((run) => run.status === 'running').length;
     if (activeRuns >= MAX_CONCURRENT_RUNS) return null;
 
+    const runId = `${CHAT_SERVER_EPOCH}:${randomUUID()}`;
+    const range = getConnection().transaction(() => {
+      const reserved = chatQueueDb.reserveSequenceRange(input.appSessionId, SEQUENCE_BLOCK_SIZE);
+      if (input.queueItemId && !chatQueueDb.markRunning(input.queueItemId, runId, CHAT_SERVER_EPOCH)) {
+        throw new ChatQueueError('QUEUE_ITEM_UNAVAILABLE');
+      }
+      return reserved;
+    })();
+    if (input.connection) addObserver(input.appSessionId, input.connection, input.userId);
     const run: ChatRun = {
       appSessionId: input.appSessionId,
+      runId,
+      userId: input.userId,
+      queueItemId: input.queueItemId ?? null,
+      initialSeq: range.start,
+      sequenceLimit: range.end,
+      resolvedApprovals: new Set(),
       provider: input.provider,
       providerSessionId: input.providerSessionId,
       status: 'running',
-      lastSeq: 0,
+      lastSeq: range.start,
       events: [],
       writer: null as unknown as ChatSessionWriter,
       startedAt: Date.now(),
@@ -261,7 +335,7 @@ export const chatRunRegistry = {
     };
 
     run.writer = new ChatSessionWriter({
-      connection: input.connection,
+      connection: input.connection ?? disconnectedConnection,
       userId: input.userId,
       provider: input.provider,
       providerSessionId: input.providerSessionId,
@@ -269,6 +343,7 @@ export const chatRunRegistry = {
         recordProviderSessionId(run, providerSessionId);
       },
       decorateOutboundEvent: (message) => decorateAndRecordEvent(run, message),
+      forward: (message) => broadcastToObservers(run.appSessionId, run.userId, message),
     });
 
     runs.set(input.appSessionId, run);
@@ -276,29 +351,21 @@ export const chatRunRegistry = {
     return run;
   },
 
-  enqueueRun(appSessionId: string, start: () => Promise<void> | void): number {
-    const queue = queuedRuns.get(appSessionId) ?? [];
-    queue.push(start);
-    queuedRuns.set(appSessionId, queue);
-    return queue.length;
+  canStart(appSessionId: string): boolean {
+    return runs.get(appSessionId)?.status !== 'running'
+      && Array.from(runs.values()).filter((run) => run.status === 'running').length < MAX_CONCURRENT_RUNS;
   },
 
-  queuedRunCount(appSessionId: string): number {
-    return queuedRuns.get(appSessionId)?.length ?? 0;
+  broadcast(appSessionId: string, userId: string | number | null, message: unknown): void {
+    broadcastToObservers(appSessionId, userId, message);
   },
 
-  async drainQueuedRuns(appSessionId: string): Promise<void> {
-    if (runs.get(appSessionId)?.status === 'running') return;
-    const queue = queuedRuns.get(appSessionId);
-    const next = queue?.shift();
-    if (!queue || queue.length === 0) queuedRuns.delete(appSessionId);
-    if (next) await next();
-  },
-
-  clearQueuedRuns(appSessionId: string): number {
-    const count = queuedRuns.get(appSessionId)?.length ?? 0;
-    queuedRuns.delete(appSessionId);
-    return count;
+  detachConnection(connection: RealtimeClientConnection, appSessionId?: string): void {
+    for (const [sessionId, subscribers] of observers) {
+      if (appSessionId && appSessionId !== sessionId) continue;
+      subscribers.delete(connection);
+      if (subscribers.size === 0) observers.delete(sessionId);
+    }
   },
 
   getRun(appSessionId: string): ChatRun | undefined {
@@ -314,6 +381,8 @@ export const chatRunRegistry = {
     provider: LLMProvider;
     startedAt: number;
     lastSeq: number;
+    runId: string;
+    userId: string | number | null;
   }> {
     return Array.from(runs.values())
       .filter((run) => run.status === 'running')
@@ -322,6 +391,8 @@ export const chatRunRegistry = {
         provider: run.provider,
         startedAt: run.startedAt,
         lastSeq: run.lastSeq,
+        runId: run.runId,
+        userId: run.userId,
       }));
   },
 
@@ -332,14 +403,29 @@ export const chatRunRegistry = {
    * after a page refresh the new socket subscribes and immediately starts
    * receiving the still-running stream, for every provider.
    */
-  attachConnection(appSessionId: string, connection: RealtimeClientConnection): boolean {
+  attachConnection(appSessionId: string, connection: RealtimeClientConnection, userId?: string | number | null): boolean {
     const run = runs.get(appSessionId);
-    if (!run) {
-      return false;
-    }
+    const owner = userId === undefined ? run?.userId ?? null : userId;
+    if (run && chatUserKey(run.userId) !== chatUserKey(owner)) return false;
+    addObserver(appSessionId, connection, owner);
+    return Boolean(run);
+  },
 
-    run.writer.updateWebSocket(connection);
-    return true;
+  replayState(appSessionId: string, legacySeq: number, cursor?: ChatCursor): {
+    cursor: ChatCursor | null; replayFrom: number; replayReset: boolean; replayTruncated: boolean; events: NormalizedMessage[];
+  } {
+    const run = runs.get(appSessionId);
+    if (!run) return { cursor: null, replayFrom: 0, replayReset: Boolean(cursor), replayTruncated: false, events: [] };
+    const changedRun = Boolean(cursor && cursor.runId !== run.runId);
+    const requested = cursor?.seq ?? legacySeq;
+    const afterSeq = changedRun || requested > run.lastSeq ? run.initialSeq : Math.max(run.initialSeq, requested);
+    return {
+      cursor: { runId: run.runId, seq: run.lastSeq },
+      replayFrom: afterSeq,
+      replayReset: changedRun || requested > run.lastSeq,
+      replayTruncated: this.isReplayTruncated(appSessionId, afterSeq),
+      events: this.replayEvents(appSessionId, afterSeq),
+    };
   },
 
   /**
@@ -354,7 +440,7 @@ export const chatRunRegistry = {
       return [];
     }
 
-    return run.events.filter((event) => typeof event.seq === 'number' && event.seq > afterSeq);
+    return run.events.filter((event) => typeof event.seq === 'number' && event.seq > Math.max(run.initialSeq, afterSeq));
   },
 
   /**
@@ -370,7 +456,7 @@ export const chatRunRegistry = {
       return false;
     }
     const oldestBuffered = run.events[0]?.seq;
-    return typeof oldestBuffered !== 'number' || oldestBuffered > afterSeq + 1;
+    return typeof oldestBuffered !== 'number' || oldestBuffered > Math.max(run.initialSeq, afterSeq) + 1;
   },
 
   /**
@@ -403,21 +489,11 @@ export const chatRunRegistry = {
     run.writer.sendComplete(opts);
   },
 
-  async drainAnyQueuedRun(): Promise<void> {
-    if (Array.from(runs.values()).filter((run) => run.status === 'running').length >= MAX_CONCURRENT_RUNS) return;
-    for (const [sessionId, queue] of queuedRuns) {
-      if (queue.length > 0 && runs.get(sessionId)?.status !== 'running') {
-        await this.drainQueuedRuns(sessionId);
-        return;
-      }
-    }
-  },
-
   /**
    * Test-only escape hatch: clears every tracked run.
    */
   clearAll(): void {
     runs.clear();
-    queuedRuns.clear();
+    observers.clear();
   },
 };

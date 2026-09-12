@@ -88,6 +88,10 @@ enum AgentChatCorrectness {
 
 /// Fast native intents. Same contract as Android `ActionRouter`.
 enum ActionRouter {
+    struct ExecutionResult {
+        let text: String
+        let outcome: AgentRunOutcome
+    }
     enum Path { case native, clarify, agent }
     enum Kind {
         case savePhoto, setAlarm, createCalendar, createTravel, toggleFlashlight, createTodo
@@ -166,6 +170,14 @@ enum ActionRouter {
 
         func failureReceipt(nextStep: String) -> String {
             "没有完成这项操作。\n\n执行凭证\n- 路径：\(chip)\n- 核对：系统未确认完成\n- 下一步：\(nextStep)"
+        }
+
+        func executionSuccess(summary: String? = nil) -> ExecutionResult {
+            .init(text: receipt(summary: summary), outcome: .succeeded)
+        }
+
+        func executionFailure(nextStep: String) -> ExecutionResult {
+            .init(text: failureReceipt(nextStep: nextStep), outcome: .failed)
         }
     }
 

@@ -372,7 +372,8 @@
     "openLeoapi": "Leoapi gateway",
     "openLocalLog": "Local log",
     "goMissions": "Quick tasks",
-    "goConsole": "Nuova attività"
+    "goConsole": "Nuova attività",
+    "goCollections": "Apri la biblioteca"
   },
   "workbench": {
     "localMachine": "Local · {{name}}",
@@ -432,7 +433,16 @@
     "consoleTooltip": "Console · scegli un agente, avvia un task",
     "agentLockedTooltip": "Questa sessione è stata creata con lui. Per cambiare agente avvia un nuovo task dalla console.",
     "agentLockedLabel": "Agente della sessione: {{agent}}",
-    "agentLockedMark": "questa sessione"
+    "agentLockedMark": "questa sessione",
+    "remoteLog": "Output remoto (ultime 400 righe)",
+    "remoteLatest": "Nuovo output · Torna alla fine",
+    "journal": {
+      "unknown": "Stato salvataggio sconosciuto",
+      "pending": "Salvataggio del registro",
+      "durable": "Registro salvato",
+      "degraded": "Registro incompleto"
+    },
+    "journalDetail": "Salvato {{durable}} / ricevuto {{latest}} · {{missing}} intervalli mancanti"
   },
   "dashboard": {
     "newTaskTitle": "Nuovo task",
@@ -449,5 +459,16 @@
     "newTaskPlaceholder": "Chiedi a {{agent}} di fare qualcosa in {{target}}…",
     "newTaskStart": "Avvia sessione",
     "newTaskNeedProject": "Aggiungi prima una directory di progetto — il task deve girare da qualche parte."
+  },
+  "taskStart": {
+    "title": "Cosa vuoi fare?",
+    "description": "Descrivi un’attività qui sopra, poi scegli progetto e dispositivo prima di avviarla.",
+    "examples": "Ad esempio: rivedere le ultime modifiche al codice o organizzare le note del progetto.",
+    "projectLabel": "Progetto attuale",
+    "noProject": "Scegli un progetto quando sei pronto.",
+    "changeProject": "Cambia progetto dell’attività",
+    "libraryTitle": "Biblioteca",
+    "libraryDescription": "Salva, trova e leggi i tuoi materiali.",
+    "shortcuts": "⌘N Nuova attività · ⌘K Ricerca e navigazione · ⌘, Impostazioni"
   }
 }

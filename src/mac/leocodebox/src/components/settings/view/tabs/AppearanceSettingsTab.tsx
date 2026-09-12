@@ -35,47 +35,6 @@ export default function AppearanceSettingsTab({
 
   return (
     <div className="space-y-8">
-      <SettingsSection title={t('appearanceSettings.workspace.agentDefaultsTitle')}>
-        <SettingsCard divided>
-          <SettingsRow label={t('appearanceSettings.workspace.defaultAgent')} description={t('appearanceSettings.workspace.defaultAgentDescription')}>
-            <select
-              value={preferences.defaultProvider}
-              disabled={saving}
-              onChange={(event) => void updatePreferences({ defaultProvider: event.target.value as typeof preferences.defaultProvider })}
-              className="w-full rounded-lg border border-input bg-card p-2.5 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary sm:w-40"
-            >
-              <option value="codex">Codex</option>
-              <option value="opencode">OpenCode</option>
-              <option value="claude">Claude Code</option>
-              <option value="cursor">Cursor</option>
-            </select>
-          </SettingsRow>
-          <SettingsRow label={t('appearanceSettings.workspace.defaultModel')} description={t('appearanceSettings.workspace.defaultModelDescription')}>
-            <input
-              key={`${preferences.defaultProvider}:${preferences.defaultModel}`}
-              defaultValue={preferences.defaultModel}
-              disabled={saving}
-              placeholder={t('appearanceSettings.workspace.defaultModelPlaceholder')}
-              onBlur={(event) => void updatePreferences({ defaultModel: event.target.value })}
-              className="w-full rounded-lg border border-input bg-card p-2.5 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary sm:w-52"
-            />
-          </SettingsRow>
-          <SettingsRow label={t('appearanceSettings.workspace.defaultPermission')} description={t('appearanceSettings.workspace.defaultPermissionDescription')}>
-            <select
-              value={preferences.permissionMode}
-              disabled={saving}
-              onChange={(event) => void updatePreferences({ permissionMode: event.target.value as typeof preferences.permissionMode })}
-              className="w-full rounded-lg border border-input bg-card p-2.5 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary sm:w-40"
-            >
-              <option value="default">{t('appearanceSettings.workspace.permissionEveryTime')}</option>
-              <option value="acceptEdits">{t('appearanceSettings.workspace.permissionAcceptEdits')}</option>
-              <option value="bypassPermissions">{t('appearanceSettings.workspace.permissionBypass')}</option>
-              <option value="plan">{t('appearanceSettings.workspace.permissionPlan')}</option>
-            </select>
-          </SettingsRow>
-        </SettingsCard>
-      </SettingsSection>
-
       <SettingsSection title={t('appearanceSettings.workspace.densityMotionTitle')}>
         <SettingsCard divided>
           <SettingsRow label={t('appearanceSettings.workspace.density')} description={t('appearanceSettings.workspace.densityDescription')}>

@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import test from 'node:test';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 
+import { closeConnection, initializeDatabase, sessionsDb } from '@/modules/database/index.js';
 import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
 import { handleChatConnection } from '@/modules/websocket/services/chat-websocket.service.js';
 import type { LLMProvider } from '@/shared/types.js';
@@ -14,6 +18,24 @@ class FakeSocket extends EventEmitter {
     this.sent.push(JSON.parse(payload));
   }
 }
+
+let directory: string;
+let previousDatabasePath: string | undefined;
+test.beforeEach(async () => {
+  previousDatabasePath = process.env.DATABASE_PATH;
+  directory = await mkdtemp(path.join(tmpdir(), 'chat-abort-'));
+  closeConnection();
+  process.env.DATABASE_PATH = path.join(directory, 'auth.db');
+  await initializeDatabase();
+  sessionsDb.createAppSession('app-session-early-abort', 'codex', '/workspace/demo');
+});
+test.afterEach(async () => {
+  chatRunRegistry.clearAll();
+  closeConnection();
+  if (previousDatabasePath === undefined) delete process.env.DATABASE_PATH;
+  else process.env.DATABASE_PATH = previousDatabasePath;
+  await rm(directory, { recursive: true, force: true });
+});
 
 test('chat.abort uses the app session id before a provider session id exists', async () => {
   chatRunRegistry.clearAll();

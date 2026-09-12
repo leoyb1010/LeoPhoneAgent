@@ -19,6 +19,13 @@
 // source-compatible while the generated headers catch up.
 extern bool native_offload_handler_cancelled(void);
 
+// Every app-side registration passes a fixed-identity proxy to the kernel.
+// The macro is defined after the kernel declaration; the implementation uses
+// parenthesized spelling only for the one raw registrar call.
+int noff_register_authorized_handler(const char *guest_name, native_handler_func handler);
+#define native_offload_add_handler(guest_name, handler) \
+    noff_register_authorized_handler((guest_name), (handler))
+
 // ── Error codes ──
 extern NSString *const NOFF_ERR_AUTHORIZATION_DENIED;
 extern NSString *const NOFF_ERR_AUTHORIZATION_NOT_DETERMINED;

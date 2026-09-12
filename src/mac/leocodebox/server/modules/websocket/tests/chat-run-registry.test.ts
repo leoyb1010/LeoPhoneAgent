@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { closeConnection, initializeDatabase, sessionsDb } from '@/modules/database/index.js';
+import { closeConnection, getConnection, initializeDatabase, sessionsDb } from '@/modules/database/index.js';
 import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
 import { connectedClients } from '@/modules/websocket/services/websocket-state.service.js';
 
@@ -252,7 +252,7 @@ test('isReplayTruncated flags a client whose lastSeq predates the buffered event
   });
 });
 
-test('attachConnection reroutes the live stream to a new socket', async () => {
+test('attachConnection adds an observer without stealing the live stream', async () => {
   await withIsolatedDatabase(() => {
     sessionsDb.createAppSession('app-run-5', 'opencode', '/workspace/demo');
     const firstConnection = new FakeConnection();
@@ -271,7 +271,7 @@ test('attachConnection reroutes the live stream to a new socket', async () => {
     assert.equal(chatRunRegistry.attachConnection('app-run-5', secondConnection), true);
     run.writer.send({ kind: 'stream_delta', provider: 'opencode', sessionId: 'o', content: 'after' });
 
-    assert.deepEqual(firstConnection.frames.map((frame) => frame.content), ['before']);
+    assert.deepEqual(firstConnection.frames.map((frame) => frame.content), ['before', 'after']);
     assert.deepEqual(secondConnection.frames.map((frame) => frame.content), ['after']);
   });
 });
@@ -311,22 +311,32 @@ test('startRun rejects a second concurrent run for the same session', async () =
   });
 });
 
-test('queued runs drain in FIFO order after the active run completes', async () => {
-  await withIsolatedDatabase(async () => {
-    sessionsDb.createAppSession('app-run-queue', 'codex', '/workspace/demo');
+test('late events from a completed run cannot pollute its next run', async () => {
+  await withIsolatedDatabase(() => {
+    sessionsDb.createAppSession('late-event-session', 'codex', '/workspace/demo');
     const connection = new FakeConnection();
-    const run = chatRunRegistry.startRun({
-      appSessionId: 'app-run-queue', provider: 'codex', providerSessionId: null, connection, userId: null,
-    });
-    assert.ok(run);
-    const order: number[] = [];
-    assert.equal(chatRunRegistry.enqueueRun('app-run-queue', () => { order.push(1); }), 1);
-    assert.equal(chatRunRegistry.enqueueRun('app-run-queue', () => { order.push(2); }), 2);
-    await chatRunRegistry.drainQueuedRuns('app-run-queue');
-    assert.deepEqual(order, []);
-    run.writer.send({ kind: 'complete', provider: 'codex', sessionId: 'native', exitCode: 0 });
-    await chatRunRegistry.drainQueuedRuns('app-run-queue');
-    await chatRunRegistry.drainQueuedRuns('app-run-queue');
-    assert.deepEqual(order, [1, 2]);
+    const input = { appSessionId: 'late-event-session', provider: 'codex' as const, providerSessionId: null, connection, userId: null };
+    const previous = chatRunRegistry.startRun(input)!;
+    previous.writer.send({ kind: 'complete', provider: 'codex', exitCode: 0 });
+    const current = chatRunRegistry.startRun(input)!;
+    previous.writer.send({ kind: 'stream_delta', content: 'stale' });
+    current.writer.send({ kind: 'stream_delta', content: 'current' });
+    assert.deepEqual(connection.frames.filter((frame) => frame.kind === 'stream_delta').map((frame) => frame.content), ['current']);
+  });
+});
+
+
+test('a usage persistence failure cannot swallow the terminal event', async () => {
+  await withIsolatedDatabase(() => {
+    sessionsDb.createAppSession('usage-write-failure', 'claude', '/workspace/demo');
+    const connection = new FakeConnection();
+    const run = chatRunRegistry.startRun({ appSessionId: 'usage-write-failure', provider: 'claude', providerSessionId: null, connection, userId: null })!;
+    run.writer.send({ kind: 'status', tokenBudget: { inputTokens: 1, outputTokens: 1 } });
+    getConnection().exec(`CREATE TRIGGER fail_usage_write BEFORE INSERT ON usage_daily
+      BEGIN SELECT RAISE(ABORT, 'fixture usage storage unavailable'); END;`);
+    assert.doesNotThrow(() => run.writer.send({ kind: 'complete', exitCode: 0 }));
+    const complete = connection.frames.find((frame) => frame.kind === 'complete');
+    assert.ok(complete);
+    assert.equal(typeof complete.persistenceWarning, 'string');
   });
 });

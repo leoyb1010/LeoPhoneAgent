@@ -16,6 +16,7 @@
 //  show real state on a cold app with the kernel un-booted.
 //
 
+import AlarmKit
 import AVFoundation
 import Contacts
 import CoreBluetooth
@@ -89,7 +90,7 @@ final class CapabilityAuthorizationProbe: ObservableObject {
         next["apple-location"] = location()
         next["apple-speech"] = Self.speech()
         next["apple-media"] = Self.mediaLibrary()
-        next["apple-player"] = next["apple-media"]
+        next["apple-player"] = .unknown(String(localized: "Access depends on the selected media file"))
         next["apple-bluetooth"] = Self.bluetooth()
         next["apple-healthkit"] = healthKit()
         next["apple-nfc"] = Self.nfc()
@@ -99,7 +100,7 @@ final class CapabilityAuthorizationProbe: ObservableObject {
         // No status API exists for these; say so rather than implying "off".
         next["apple-homekit"] = .unknown(String(localized: "HomeKit exposes no status API; asked on first use"))
         next["apple-clipboard"] = .unknown(String(localized: "iOS asks on demand when reading"))
-        next["apple-alarm"] = .unknown(String(localized: "Asked on first use"))
+        next["apple-alarm"] = Self.alarm()
         next["apple-files"] = .unknown(String(localized: "Per-folder grants via the system picker"))
         next["apple-shortcuts"] = .unknown(String(localized: "Runs through the Shortcuts app"))
 
@@ -131,6 +132,15 @@ final class CapabilityAuthorizationProbe: ObservableObject {
     }
 
     // MARK: - Per-framework probes (status only — never `request`)
+
+    private static func alarm() -> Status {
+        switch AlarmManager.shared.authorizationState {
+        case .authorized: return .authorized
+        case .denied: return .denied
+        case .notDetermined: return .notDetermined
+        @unknown default: return .unknown(String(localized: "Unknown state"))
+        }
+    }
 
     private static func contacts() -> Status {
         switch CNContactStore.authorizationStatus(for: .contacts) {

@@ -11,6 +11,9 @@ struct SendPromptResult: AppEntity {
     @Property(title: "Session ID")
     var sessionId: String
 
+    @Property(title: "Run ID")
+    var runId: String
+
     @Property(title: "Model")
     var modelName: String
 
@@ -47,10 +50,12 @@ struct SendPromptResult: AppEntity {
         prompt: String = "",
         responseText: String = "",
         outputMode: String = "automatic",
-        artifactFileNames: [String] = []
+        artifactFileNames: [String] = [],
+        runId: String = ""
     ) {
         self.id = sessionId
         self.sessionId = sessionId
+        self.runId = runId
         self.modelName = modelName
         self.status = status
         self.isNewSession = isNewSession

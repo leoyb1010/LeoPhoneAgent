@@ -12,6 +12,9 @@ struct AgentWidgetSnapshot: Codable, Hashable {
         case suspended
         case completed
         case failed
+        case cancelled
+        case waitingForUser = "waiting_for_user"
+        case unknown
     }
 
     var updatedAt: Date
@@ -139,6 +142,10 @@ struct WidgetQuickTaskItem: Codable, Hashable, Identifiable {
         case running
         case succeeded
         case failed
+        case cancelled
+        case suspended
+        case waitingForUser = "waiting_for_user"
+        case unknown
     }
 
     var id: String
@@ -146,6 +153,9 @@ struct WidgetQuickTaskItem: Codable, Hashable, Identifiable {
     var symbolName: String
     var lastRunState: RunState = .idle
     var lastRunAt: Date? = nil
+    var lastRunRequestId: String? = nil
+    var lastRunId: String? = nil
+    var lastRunSessionId: String? = nil
 
     // [T-codable-default-not-a-fallback] A property default does NOT make the
     // synthesised `init(from:)` tolerant: Swift emits `decode(_:forKey:)` for a
@@ -170,6 +180,19 @@ struct WidgetQuickTaskItem: Codable, Hashable, Identifiable {
         symbolName = try c.decode(String.self, forKey: .symbolName)
         lastRunState = (try? c.decode(RunState.self, forKey: .lastRunState)) ?? .idle
         lastRunAt = try? c.decode(Date.self, forKey: .lastRunAt)
+        lastRunRequestId = try c.decodeIfPresent(String.self, forKey: .lastRunRequestId)
+        lastRunId = try c.decodeIfPresent(String.self, forKey: .lastRunId)
+        lastRunSessionId = try c.decodeIfPresent(String.self, forKey: .lastRunSessionId)
+    }
+
+    @discardableResult
+    mutating func updateRun(state: RunState, requestId: String? = nil,
+                            runId: String? = nil, at: Date = Date()) -> Bool {
+        if let requestId, requestId != lastRunRequestId { return false }
+        if let runId, runId != lastRunId { return false }
+        lastRunState = state
+        lastRunAt = at
+        return true
     }
 }
 
@@ -194,11 +217,33 @@ enum WidgetQuickTasksStore {
     /// [T-widget-run-in-place] Records the outcome of a widget-initiated run
     /// so the button can show ⏳ / ✅ / ⚠️ without opening the app. Preserves
     /// the rest of the mirrored catalog.
-    static func updateRunState(id: String, state: WidgetQuickTaskItem.RunState) {
+    @MainActor
+    static func updateRunState(id: String, state: WidgetQuickTaskItem.RunState,
+                               requestId: String? = nil, runId: String? = nil) {
         var items = load()
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
-        items[index].lastRunState = state
-        items[index].lastRunAt = Date()
+        guard items[index].updateRun(state: state, requestId: requestId, runId: runId) else { return }
+        save(items)
+    }
+
+    @MainActor
+    static func beginRun(id: String, requestId: String) {
+        var items = load()
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        items[index].lastRunRequestId = requestId
+        items[index].lastRunId = nil
+        items[index].lastRunSessionId = nil
+        items[index].updateRun(state: .running, requestId: requestId)
+        save(items)
+    }
+
+    @MainActor
+    static func bindRun(id: String, requestId: String, runId: String, sessionId: String) {
+        var items = load()
+        guard let index = items.firstIndex(where: { $0.id == id }),
+              items[index].lastRunRequestId == requestId else { return }
+        items[index].lastRunId = runId
+        items[index].lastRunSessionId = sessionId
         save(items)
     }
 }
@@ -236,6 +281,8 @@ enum WidgetPendingBriefingStore {
         /// completion notification); nil/other for widget-launched. Optional →
         /// old persisted entries decode unchanged.
         var origin: String? = nil
+        var runId: String? = nil
+        var taskId: String? = nil
     }
 
     /// [T-pending-briefing-order] Was `[String: String]` capped with
@@ -271,17 +318,19 @@ enum WidgetPendingBriefingStore {
         defaults.set(data, forKey: storageKey)
     }
 
-    static func add(sessionId: String, taskName: String, origin: String? = nil) {
+    static func add(sessionId: String, taskName: String, origin: String? = nil,
+                    runId: String? = nil, taskId: String? = nil) {
         var entries = loadEntries().filter { $0.sessionId != sessionId }
-        entries.append(Entry(sessionId: sessionId, taskName: taskName, addedAt: Date(), origin: origin))
+        entries.append(Entry(sessionId: sessionId, taskName: taskName, addedAt: Date(),
+                             origin: origin, runId: runId, taskId: taskId))
         // Bound the list — a run that never produces a reply must not pile up.
         // Dropping the OLDEST is now well-defined.
         if entries.count > 10 { entries = Array(entries.suffix(10)) }
         save(entries)
     }
 
-    static func remove(sessionId: String) {
-        save(loadEntries().filter { $0.sessionId != sessionId })
+    static func remove(sessionId: String, runId: String? = nil) {
+        save(loadEntries().filter { $0.sessionId != sessionId || $0.runId != runId })
     }
 }
 

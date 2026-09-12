@@ -387,7 +387,8 @@ router.post('/files', upload.array('files', MAX_FILES), (req, res) => {
   }
 });
 
-router.post('/artifacts', (req, res) => {
+router.post('/artifacts', async (req, res) => {
+  await getHarnessManager().ready();
   try {
     const sessionId = safeText(req.body?.session_id, 200);
     const name = safeText(req.body?.name, 1_000);

@@ -93,7 +93,8 @@ export function approvalActionFromEvent(event: ServerEvent): ApprovalAction | nu
       if (!sessionId || !requestId) return null;
       return { type: 'request', sessionId, requestId };
     }
-    case 'permission_cancelled': {
+    case 'permission_cancelled':
+    case 'permission_resolved': {
       const requestId = readString(event.requestId);
       if (!requestId) return null;
       return { type: 'resolve', sessionId, requestIds: [requestId] };
@@ -132,8 +133,8 @@ type Args = {
  * 关系,于是出现"挂着待审批、点进去什么都没有"。这里只跟踪真的 permission_request,
  * 并在取消/答复/run 结束时清掉。
  *
- * 注意:用户答复走的是 `chat.permission-response`,服务端不会回广播,所以 composer
- * 在发出答复时同步派发 APPROVAL_RESOLVED_EVENT 来销号。
+ * 用户答复走 `chat.permission-response`，以服务端的 permission_resolved /
+ * permission_cancelled 广播销号；本地点击不再冒充审批已经送达。旧本地事件保持兼容。
  */
 export function useSessionApprovals({ subscribe }: Args) {
   const [approvals, dispatch] = useReducer(approvalsReducer, EMPTY);

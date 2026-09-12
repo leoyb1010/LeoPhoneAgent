@@ -1,6 +1,72 @@
 import XCTest
 
 final class AgentActivityModelsTests: XCTestCase {
+    func testCompactionHandoffKeepsTheOriginalRunOpenUntilQueuedPromptFinishes() {
+        let handoff = AgentRunCompletion(userCancelled: false, canResume: false,
+            backgroundSuspended: false, failureText: nil, continuesPendingWork: true)
+        XCTAssertEqual(handoff.phase, .preparing)
+        XCTAssertTrue(handoff.keepsRunActive)
+        let cancelled = AgentRunCompletion(userCancelled: true, canResume: false,
+            backgroundSuspended: false, failureText: nil, continuesPendingWork: true)
+        XCTAssertEqual(cancelled.phase, .cancelled)
+        XCTAssertFalse(cancelled.keepsRunActive)
+    }
+
+    func testUnverifiedNativeActionDoesNotPretendSuccessOrOfferAutomaticResume() {
+        let completion = AgentRunCompletion(userCancelled: false, canResume: false,
+            backgroundSuspended: false, failureText: nil, nativeOutcome: .unknown)
+        XCTAssertEqual(completion.phase, .unverified)
+        XCTAssertTrue(completion.phase.isTerminal)
+        let state = AgentRunState(runId: "run", sessionId: "s", startedAt: .now,
+            updatedAt: .now, phase: completion.phase, toolName: nil, reason: completion.reason)
+        XCTAssertFalse(state.isResumable)
+        XCTAssertFalse(state.needsUnexpectedTerminationRecovery)
+        XCTAssertEqual(AgentRunOutcome(state: state, expectedRunId: "run"), .unknown)
+    }
+
+    func testRunOutcomeUsesDurablePhaseRatherThanReplyPresence() {
+        for (phase, expected) in [
+            (AgentActivityPhase.completed, AgentRunOutcome.succeeded),
+            (.failed, .failed), (.cancelled, .cancelled),
+            (.thinking, .running), (.suspended, .suspended),
+            (.waitingForUser, .waitingForUser),
+            (.waitingForPermission, .awaitingApproval),
+        ] {
+            let state = AgentRunState(runId: "run", sessionId: "session",
+                                      startedAt: .distantPast, updatedAt: .now,
+                                      phase: phase, toolName: nil, reason: nil)
+            XCTAssertEqual(AgentRunOutcome(state: state, expectedRunId: "run"), expected)
+        }
+    }
+
+    func testOldOrMissingRunCannotReportSuccess() {
+        let old = AgentRunState(runId: "old", sessionId: "session",
+                                startedAt: .distantPast, updatedAt: .now,
+                                phase: .completed, toolName: nil, reason: nil)
+        XCTAssertEqual(AgentRunOutcome(state: old, expectedRunId: "new"), .unknown)
+        XCTAssertEqual(AgentRunOutcome(state: nil, expectedRunId: "new"), .unknown)
+    }
+
+    func testUserCancelWinsBeforeDelayedCleanupMarksResumable() {
+        let completion = AgentRunCompletion(userCancelled: true, canResume: false,
+                                             backgroundSuspended: false, failureText: nil)
+        XCTAssertEqual(completion.phase, .cancelled)
+        XCTAssertEqual(completion.reason, .userInterruption)
+    }
+
+    func testBackgroundExpirationAndErrorRemainDistinctFromSuccess() {
+        XCTAssertEqual(AgentRunCompletion(userCancelled: false, canResume: false,
+                                          backgroundSuspended: true, failureText: nil).phase,
+                       .suspended)
+        XCTAssertEqual(AgentRunCompletion(userCancelled: false, canResume: false,
+                                          backgroundSuspended: false, failureText: "network timeout").phase,
+                       .failed)
+        XCTAssertFalse(AgentRunOutcome.running.isTerminal)
+        XCTAssertFalse(AgentRunOutcome.unknown.canPublishBriefing)
+        XCTAssertFalse(AgentRunOutcome.failed.canPublishBriefing)
+        XCTAssertTrue(AgentRunOutcome.succeeded.canPublishBriefing)
+    }
+
     func testSafeReasonCodesContainNoFreeText() throws {
         let event = AgentActivityEvent(
             runId: "run",

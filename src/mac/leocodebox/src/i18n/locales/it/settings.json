@@ -635,5 +635,9 @@
     "placeholder": "Search settings",
     "noResults": "No matching settings",
     "clear": "Clear"
+  },
+  "agentDefaults": {
+    "title": "Valori predefiniti per nuove attività",
+    "saveFailed": "Impossibile salvare i valori predefiniti"
   }
 }

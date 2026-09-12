@@ -36,7 +36,7 @@
   }
 
   .wb-chip-button:active {
-    transform: scale(0.94);
+    transform: scale(0.98);
   }
 
   .wb-chip-button:focus-visible {
@@ -53,9 +53,9 @@
     transition: transform var(--motion-slow) cubic-bezier(0.2, 1, 0.4, 1);
   }
 
-  /* Agent 徽标按钮按下时的小回弹。 */
+  /* Frequent Agent selection keeps the same restrained press feedback. */
   .wb-agent-button:active {
-    transform: scale(0.88) rotate(-8deg);
+    transform: scale(0.98);
   }
 
   /* 指挥条:全局唯一的新任务入口。 */
@@ -192,4 +192,24 @@
   .wb-log-surface {
     transition: none !important;
   }
+}
+
+/* Project navigation uses the same modal lifecycle with a directional edge. */
+.dialog-drawer-content {
+  animation: wb-project-drawer-in var(--motion-base) var(--ease-out-quint) both;
+}
+[data-state="closed"] > .dialog-drawer-content {
+  animation: wb-project-drawer-out var(--motion-fast) var(--ease-out-quint) both;
+}
+@keyframes wb-project-drawer-in {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes wb-project-drawer-out {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(-12px); }
+}
+[data-reduce-motion="true"] .dialog-drawer-content { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .dialog-drawer-content { animation: none !important; }
 }

@@ -372,7 +372,8 @@
     "openLeoapi": "Leoapi gateway",
     "openLocalLog": "Local log",
     "goMissions": "Quick tasks",
-    "goConsole": "Yeni görev"
+    "goConsole": "Yeni görev",
+    "goCollections": "Kütüphaneyi aç"
   },
   "workbench": {
     "localMachine": "Local · {{name}}",
@@ -432,7 +433,16 @@
     "consoleTooltip": "Konsol · ajan seç, yeni görev başlat",
     "agentLockedTooltip": "Bu oturum onunla oluşturuldu. Ajanı değiştirmek için konsoldan yeni bir görev başlatın.",
     "agentLockedLabel": "Oturumun ajanı: {{agent}}",
-    "agentLockedMark": "bu oturum"
+    "agentLockedMark": "bu oturum",
+    "remoteLog": "Uzak çıktı (son 400 satır)",
+    "remoteLatest": "Yeni çıktı · En yeniye dön",
+    "journal": {
+      "unknown": "Kaydetme durumu bilinmiyor",
+      "pending": "Günlük kaydediliyor",
+      "durable": "Günlük kaydedildi",
+      "degraded": "Günlük eksik kaydedildi"
+    },
+    "journalDetail": "Kaydedilen {{durable}} / alınan {{latest}} · {{missing}} eksik aralık"
   },
   "dashboard": {
     "newTaskTitle": "Yeni görev",
@@ -449,5 +459,16 @@
     "newTaskPlaceholder": "{{target}} içinde {{agent}} bir şey yapsın…",
     "newTaskStart": "Oturumu başlat",
     "newTaskNeedProject": "Önce bir proje dizini ekleyin — görevin çalışacağı bir yer gerekir."
+  },
+  "taskStart": {
+    "title": "Ne yapmak istersiniz?",
+    "description": "Yukarıya bir görev yazın, çalıştırmadan önce projesini ve hedef cihazını seçin.",
+    "examples": "Örneğin: son kod değişikliklerini inceleyin veya proje notlarını düzenleyin.",
+    "projectLabel": "Geçerli proje",
+    "noProject": "Hazır olduğunuzda bir proje seçin.",
+    "changeProject": "Görev projesini değiştir",
+    "libraryTitle": "Kütüphane",
+    "libraryDescription": "İçeriklerinizi kaydedin, bulun ve okuyun.",
+    "shortcuts": "⌘N Yeni görev · ⌘K Arama ve gezinme · ⌘, Ayarlar"
   }
 }

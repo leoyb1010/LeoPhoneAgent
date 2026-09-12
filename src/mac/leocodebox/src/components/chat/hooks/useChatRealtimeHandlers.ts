@@ -1,6 +1,9 @@
 import { useEffect, useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 
+import type { ChatCursor } from '../../../../shared/chat-session-protocol';
+import { advanceChatCursor } from '../utils/chatRunCursor';
+import { grantClaudeToolPermission } from '../utils/chatPermissions';
 import type { ServerEvent } from '../../../contexts/WebSocketContext';
 import { showCompletionTitleIndicator } from '../../../utils/pageTitleNotification';
 import { playChatCompletionSound, playNotificationSound } from '../../../utils/notificationSound';
@@ -39,6 +42,7 @@ interface UseChatRealtimeHandlersArgs {
    * frame; read wherever a `chat.subscribe` is sent (session open, reconnect).
    */
   lastSeqRef: MutableRefObject<Map<string, number>>;
+  runCursorsRef: MutableRefObject<Map<string, ChatCursor>>;
   /** When each session's `chat.subscribe` was last sent; guards stale idle acks. */
   statusCheckSentAtRef: MutableRefObject<Map<string, number>>;
   onSessionProcessing?: MarkSessionProcessing;
@@ -70,6 +74,7 @@ export function useChatRealtimeHandlers({
   setPendingPermissionRequests,
   streamBuffersRef,
   lastSeqRef,
+  runCursorsRef,
   statusCheckSentAtRef,
   onSessionProcessing,
   onSessionIdle,
@@ -101,6 +106,19 @@ export function useChatRealtimeHandlers({
       const activeViewSessionId = activeViewSessionIdRef.current;
       const sid = (typeof msg.sessionId === 'string' && msg.sessionId) || activeViewSessionId;
 
+      if (sid) {
+        const progress = advanceChatCursor(runCursorsRef.current.get(sid), msg);
+        if (!progress.accept) return;
+        if (progress.cursor) runCursorsRef.current.set(sid, progress.cursor);
+        else if (progress.reset) runCursorsRef.current.delete(sid);
+        if (progress.reset) {
+          const previous = streamBuffersRef.current.get(sid);
+          if (previous?.timer) clearTimeout(previous.timer);
+          streamBuffersRef.current.delete(sid);
+          sessionStore.clearStreaming(sid);
+        }
+      }
+
       // Record replay progress for every sequenced live event.
       if (sid && typeof msg.seq === 'number') {
         const known = lastSeqRef.current.get(sid) ?? 0;
@@ -122,7 +140,7 @@ export function useChatRealtimeHandlers({
           // The server's replay buffer no longer covers what this client
           // missed (long run + sleep/reconnect). Re-read the persisted
           // transcript so the conversation does not stay half-loaded.
-          if ((msg as { replayTruncated?: boolean }).replayTruncated) {
+          if (msg.replayTruncated || msg.replayReset) {
             void sessionStore.refreshFromServer(sid);
           }
 
@@ -157,7 +175,7 @@ export function useChatRealtimeHandlers({
           if (sid) {
             // Surface the failure in the conversation and stop the spinner —
             // the run never started (or was rejected), so no `complete` follows.
-            onSessionIdle?.(sid);
+            if (msg.isProcessing !== true) onSessionIdle?.(sid);
             sessionStore.appendRealtime(sid, {
               id: `protocol_error_${Date.now()}`,
               sessionId: sid,
@@ -170,10 +188,42 @@ export function useChatRealtimeHandlers({
           return;
         }
 
+        case 'chat_run_started': {
+          if (sid) onSessionProcessing?.(sid);
+          if (sid === activeViewSessionId) {
+            pendingPermissionRequestsRef.current = [];
+            setPendingPermissionRequests([]);
+          }
+          return;
+        }
+
+        case 'permission_resolved':
+        case 'chat_permission_ack': {
+          if (msg.kind === 'chat_permission_ack' && !['resolved', 'already_resolved', 'not_pending'].includes(String(msg.status))) return;
+          if (msg.kind === 'chat_permission_ack' && msg.status === 'resolved' && typeof msg.rememberEntry === 'string') {
+            grantClaudeToolPermission(msg.rememberEntry);
+          }
+          if (msg.requestId && sid === activeViewSessionId) {
+            const remaining = pendingPermissionRequestsRef.current.filter((request) => request.requestId !== msg.requestId);
+            pendingPermissionRequestsRef.current = remaining;
+            setPendingPermissionRequests(remaining);
+          }
+          return;
+        }
+
+        // Queue snapshots are consumed by useChatQueue, not persisted as chat rows.
+        case 'chat_send_ack':
+        case 'chat_queue_updated':
+        case 'chat_queue_action_ack':
+          return;
+
+        case 'chat_queued':
+          if (sid && msg.isProcessing === false) onSessionIdle?.(sid);
+          return;
+
         // Sidebar/global events — owned by useProjectsState.
         case 'session_upserted':
         case 'loading_progress':
-        case 'chat_queued':
         case 'chat_queue_cleared':
           return;
 
@@ -358,6 +408,7 @@ export function useChatRealtimeHandlers({
     setPendingPermissionRequests,
     streamBuffersRef,
     lastSeqRef,
+    runCursorsRef,
     statusCheckSentAtRef,
     onSessionProcessing,
     onSessionIdle,

@@ -116,14 +116,17 @@ final class SystemVoiceProvider: NSObject, VoiceInputCapable, VoiceOutputCapable
             throw VoiceProviderError.unsupported("System speech recognizer unavailable for this language")
         }
 
-        // Decide on-device vs server. The Offline model forces on-device; Online
-        // forces server; .auto (nil) prefers on-device when the recognizer supports
-        // it for this locale. On-device that isn't supported here would fail, so we
-        // only set the flag when the recognizer reports support — otherwise fall back
-        // to server so recognition still works (Offline for an unsupported language
-        // degrades to Online rather than erroring).
-        let wantOnDevice = request.onDeviceRecognition ?? recognizer.supportsOnDeviceRecognition
-        let useOnDevice = wantOnDevice && recognizer.supportsOnDeviceRecognition
+        let route = try SystemSpeechPolicy.choose(
+            mode: SystemSpeechPolicy.mode(onDevice: request.onDeviceRecognition, modelID: request.model),
+            automaticNetworkAllowed: SystemSpeechPreferences.autoNetworkAllowed,
+            assets: SystemSpeechAvailability(requestedLocale: loc.identifier, resolvedLocale: nil, state: .unknown),
+            legacyAvailable: recognizer.isAvailable,
+            legacySupportsOnDevice: recognizer.supportsOnDeviceRecognition,
+            legacyAuthorized: true)
+        guard case .legacy(let useOnDevice) = route else {
+            throw SystemSpeechError.recognizerUnavailable
+        }
+        try Task.checkCancellation()
 
         // SFSpeechRecognizer needs a file URL, so spill the WAV to tmp.
         let tmpURL = FileManager.default.temporaryDirectory

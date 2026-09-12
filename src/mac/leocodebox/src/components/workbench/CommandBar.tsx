@@ -15,6 +15,7 @@ import type { LLMProvider, Project } from '../../types/app';
 
 import ChipMenu from './ChipMenu';
 import { announceAgentIntent, commitAgentForNewSession } from './agentIntent';
+import { useTaskDraft } from './useTaskDraft';
 import { useLocalAgents } from './useLocalAgents';
 import { isMachineOnline, isMinisBody, type FleetMachine } from './useFleetSnapshot';
 
@@ -48,6 +49,7 @@ const EFFORT_DESC: Record<string, string> = {
 };
 
 type CommandBarProps = {
+  active?: boolean;
   project: Project | null;
   localName: string;
   remotes: FleetMachine[];
@@ -63,6 +65,7 @@ type CommandBarProps = {
  * 已有会话只显示会话自己的 composer,因此整个窗口任何时刻只有一个提交输入框。
  */
 export default function CommandBar({
+  active = true,
   project,
   localName,
   remotes,
@@ -74,7 +77,6 @@ export default function CommandBar({
   const { t } = useTranslation();
   const { preferences, updatePreferences } = useAppPreferences();
   const { agents } = useLocalAgents();
-  const [draft, setDraft] = useState('');
   const [target, setTarget] = useState('');
   const [effort, setEffort] = useState(DEFAULT_EFFORT_VALUE);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -129,29 +131,21 @@ export default function CommandBar({
     announceAgentIntent(provider, next);
   }, [provider]);
 
-  const submit = useCallback(() => {
-    const prompt = draft.trim();
-    if (!prompt) return;
+  const sendTask = useCallback((prompt: string) => {
     const machine = targetOptions.find((option) => option.value === target)?.machine ?? null;
-    if (machine) {
-      void onStartRemoteRun(machine, prompt, provider, effort).then((ok) => {
-        if (ok) setDraft('');
-      });
-      return;
-    }
-    setDraft('');
-    // 先交出 Agent,再开会话。芯片上的选择和会话真正用的 provider 是两份状态,
-    // 只靠这条通道对齐;在会话之间点选过之后,之前那次宣告已经被会话跟随逻辑冲掉,
-    // 不重新交一次就会拿上一个会话的 provider 建新会话(= 选了 Codex 仍然走 Claude)。
-    // 用 commit 而不是只 announce:从新任务页按回车时 ChatInterface 还没挂载,事件
-    // 没人听得见,得同时落到它挂载时读的那把钥匙上(见 agentIntent.ts)。
+    if (machine) return onStartRemoteRun(machine, prompt, provider, effort);
+    // Preserve the existing single-submit path and provider handoff to chat.
     commitAgentForNewSession(provider, effort);
     onStartLocalRun(prompt);
-  }, [draft, effort, onStartLocalRun, onStartRemoteRun, provider, target, targetOptions]);
+    return true;
+  }, [effort, onStartLocalRun, onStartRemoteRun, provider, target, targetOptions]);
+  const { draft, setDraft, submit, busy, error } = useTaskDraft(sendTask);
 
   // ⌘/Ctrl + L 和标题栏「新任务」都把焦点带回指挥条,不用摸鼠标。
   useEffect(() => {
+    if (!active) return undefined;
     const focusInput = () => inputRef.current?.focus();
+    focusInput();
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'l') {
         event.preventDefault();
@@ -164,10 +158,10 @@ export default function CommandBar({
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('leocodebox:focus-command-bar', focusInput);
     };
-  }, []);
+  }, [active]);
 
   return (
-    <div className="relative z-30 flex flex-none justify-center pt-4">
+    <div className="relative z-30 flex flex-none flex-col items-center pt-4">
       <div className="wb-command-bar flex h-14 w-[820px] max-w-[calc(100vw-48px)] items-center gap-2 rounded-[17px] pl-3 pr-2.5">
         <ChipMenu
           value={provider}
@@ -203,11 +197,15 @@ export default function CommandBar({
         */}
         <input
           ref={inputRef}
-          autoFocus
+          autoFocus={active}
+          aria-busy={busy}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.nativeEvent.isComposing) submit();
+            if (event.key === 'Enter' && !event.nativeEvent.isComposing && active) {
+              event.preventDefault();
+              void submit();
+            }
           }}
           aria-label={t('workbench.commandInputLabel', { defaultValue: '新任务' })}
           placeholder={
@@ -296,6 +294,7 @@ export default function CommandBar({
 
         <span aria-hidden className="flex-none pr-1 font-mono text-[10px] text-wb-faint">⏎</span>
       </div>
+      {error && <p role="alert" className="mt-2 max-w-[820px] px-4 text-sm text-destructive">{error}</p>}
     </div>
   );
 }

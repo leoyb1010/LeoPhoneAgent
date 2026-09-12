@@ -372,7 +372,8 @@
     "openLeoapi": "Leoapi gateway",
     "openLocalLog": "Local log",
     "goMissions": "Quick tasks",
-    "goConsole": "새 작업"
+    "goConsole": "새 작업",
+    "goCollections": "자료실 열기"
   },
   "workbench": {
     "localMachine": "Local · {{name}}",
@@ -432,7 +433,16 @@
     "consoleTooltip": "콘솔 · 에이전트 선택, 새 작업 시작",
     "agentLockedTooltip": "이 세션은 생성 시 이 에이전트로 고정됩니다. 바꾸려면 콘솔에서 새 작업을 시작하세요.",
     "agentLockedLabel": "이 세션의 에이전트: {{agent}}",
-    "agentLockedMark": "이 세션"
+    "agentLockedMark": "이 세션",
+    "remoteLog": "원격 출력(최근 400줄)",
+    "remoteLatest": "새 출력 · 최신으로 이동",
+    "journal": {
+      "unknown": "저장 상태 알 수 없음",
+      "pending": "로그 저장 중",
+      "durable": "로그 저장됨",
+      "degraded": "로그 저장 불완전"
+    },
+    "journalDetail": "저장 {{durable}} / 수신 {{latest}} · 누락 구간 {{missing}}"
   },
   "dashboard": {
     "newTaskTitle": "새 작업",
@@ -449,5 +459,16 @@
     "newTaskPlaceholder": "{{target}}에서 {{agent}}에게 무언가 시키기…",
     "newTaskStart": "세션 시작",
     "newTaskNeedProject": "먼저 프로젝트 디렉터리를 추가하세요. 작업에는 실행할 위치가 필요합니다."
+  },
+  "taskStart": {
+    "title": "어떤 작업을 할까요?",
+    "description": "위에 작업을 입력하고 실행 전에 프로젝트와 대상 기기를 선택하세요.",
+    "examples": "예: 최근 코드 변경 검토 또는 프로젝트 메모 정리.",
+    "projectLabel": "현재 프로젝트",
+    "noProject": "준비되면 프로젝트를 선택하세요.",
+    "changeProject": "작업 프로젝트 변경",
+    "libraryTitle": "자료실",
+    "libraryDescription": "자료를 저장하고 언제든 찾아 읽으세요.",
+    "shortcuts": "⌘N 새 작업 · ⌘K 검색 및 탐색 · ⌘, 설정"
   }
 }

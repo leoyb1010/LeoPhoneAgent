@@ -1,8 +1,8 @@
 # LeoPhoneAgent
 
-[![iOS](https://img.shields.io/badge/iOS-1.34.0%20(109)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![iOS](https://img.shields.io/badge/iOS-1.35.0%20(110)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
-[![macOS](https://img.shields.io/badge/macOS-1.84.0-7C3AED.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/v1.84.0)
+[![macOS](https://img.shields.io/badge/macOS-1.85.0-7C3AED.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/v1.85.0)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.17-D94B16.svg)](src/harmony/app/AppScope/app.json5)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Mobile](https://img.shields.io/badge/mobile-iOS%20%2B%20Android-black.svg)](#系统架构)

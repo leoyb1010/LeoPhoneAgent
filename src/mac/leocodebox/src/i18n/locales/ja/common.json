@@ -372,7 +372,8 @@
     "openLeoapi": "Leoapi gateway",
     "openLocalLog": "Local log",
     "goMissions": "Quick tasks",
-    "goConsole": "新しいタスク"
+    "goConsole": "新しいタスク",
+    "goCollections": "ライブラリを開く"
   },
   "workbench": {
     "localMachine": "Local · {{name}}",
@@ -432,7 +433,16 @@
     "consoleTooltip": "コンソール · エージェントを選んで新規タスク",
     "agentLockedTooltip": "このセッションは作成時にこのエージェントで固定されています。変更するにはコンソールから新規タスクを開始してください。",
     "agentLockedLabel": "このセッションのエージェント: {{agent}}",
-    "agentLockedMark": "このセッション"
+    "agentLockedMark": "このセッション",
+    "remoteLog": "リモート出力（直近400行）",
+    "remoteLatest": "新しい出力 · 最新へ移動",
+    "journal": {
+      "unknown": "保存状態不明",
+      "pending": "ログ保存中",
+      "durable": "ログ保存済み",
+      "degraded": "ログ保存に問題あり"
+    },
+    "journalDetail": "保存済み {{durable}} / 受信済み {{latest}} · 欠落区間 {{missing}}"
   },
   "dashboard": {
     "newTaskTitle": "新規タスク",
@@ -449,5 +459,16 @@
     "newTaskPlaceholder": "{{target}} で {{agent}} に何かを頼む…",
     "newTaskStart": "セッションを開始",
     "newTaskNeedProject": "まずプロジェクトディレクトリを追加してください。タスクには実行場所が必要です。"
+  },
+  "taskStart": {
+    "title": "今回は何をしますか？",
+    "description": "上の入力欄にタスクを記入し、実行前にプロジェクトと対象デバイスを選びます。",
+    "examples": "例：最近のコード変更を確認する、プロジェクトのメモを整理する。",
+    "projectLabel": "現在のプロジェクト",
+    "noProject": "準備ができたらプロジェクトを選んでください。",
+    "changeProject": "タスクのプロジェクトを変更",
+    "libraryTitle": "ライブラリ",
+    "libraryDescription": "資料を保存し、いつでも検索・閲覧できます。",
+    "shortcuts": "⌘N 新しいタスク · ⌘K 検索と移動 · ⌘, 設定"
   }
 }

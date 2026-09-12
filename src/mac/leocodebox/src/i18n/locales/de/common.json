@@ -342,7 +342,8 @@
     "openLeoapi": "Leoapi gateway",
     "openLocalLog": "Local log",
     "goMissions": "Quick tasks",
-    "goConsole": "Neue Aufgabe"
+    "goConsole": "Neue Aufgabe",
+    "goCollections": "Bibliothek öffnen"
   },
   "workbench": {
     "localMachine": "Local · {{name}}",
@@ -402,7 +403,16 @@
     "consoleTooltip": "Konsole · Agent wählen, Aufgabe starten",
     "agentLockedTooltip": "Diese Sitzung wurde damit erstellt. Für einen anderen Agenten in der Konsole eine neue Aufgabe starten.",
     "agentLockedLabel": "Agent dieser Sitzung: {{agent}}",
-    "agentLockedMark": "diese Sitzung"
+    "agentLockedMark": "diese Sitzung",
+    "remoteLog": "Remote-Ausgabe (letzte 400 Zeilen)",
+    "remoteLatest": "Neue Ausgabe · Zum neuesten Stand",
+    "journal": {
+      "unknown": "Speicherstatus unbekannt",
+      "pending": "Protokoll wird gespeichert",
+      "durable": "Protokoll gespeichert",
+      "degraded": "Protokoll unvollständig"
+    },
+    "journalDetail": "Gespeichert {{durable}} / empfangen {{latest}} · {{missing}} Lücken"
   },
   "dashboard": {
     "newTaskTitle": "Neue Aufgabe",
@@ -419,5 +429,16 @@
     "newTaskPlaceholder": "{{agent}} in {{target}} etwas tun lassen…",
     "newTaskStart": "Sitzung starten",
     "newTaskNeedProject": "Zuerst ein Projektverzeichnis hinzufügen — eine Aufgabe braucht einen Ort."
+  },
+  "taskStart": {
+    "title": "Was möchten Sie erledigen?",
+    "description": "Beschreiben Sie oben eine Aufgabe und wählen Sie vor dem Start Projekt und Zielgerät.",
+    "examples": "Zum Beispiel: letzte Codeänderungen prüfen oder Projektnotizen ordnen.",
+    "projectLabel": "Aktuelles Projekt",
+    "noProject": "Wählen Sie ein Projekt, sobald Sie bereit sind.",
+    "changeProject": "Aufgabenprojekt wechseln",
+    "libraryTitle": "Bibliothek",
+    "libraryDescription": "Materialien speichern, finden und lesen.",
+    "shortcuts": "⌘N Neue Aufgabe · ⌘K Suche und Navigation · ⌘, Einstellungen"
   }
 }

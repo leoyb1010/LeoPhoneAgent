@@ -1,5 +1,5 @@
 import type { HarnessSession } from './harness-session.service.js';
-import type { HarnessEvent } from './harness-dialects.js';
+import type { JournalHealth } from './harness-journal.js';
 
 /**
  * [T-leophone-digest] 会话摘要与任务收据。
@@ -34,6 +34,7 @@ export type HarnessDigest = {
   cwd: string;
   status: string;
   seq: number;
+  journal: JournalHealth;
   /** 用户发过的指令(截断),让人一眼看出这个会话在干嘛 */
   prompts: string[];
   /** 执行过的工具调用 */
@@ -51,6 +52,8 @@ export type HarnessDigest = {
     tools: number;
     tool_errors: number;
     approvals: number;
+    approved: number;
+    resolved: number;
   };
 };
 
@@ -71,8 +74,9 @@ function extractPaths(preview: string): string[] {
   return matches ? matches.slice(0, 5) : [];
 }
 
-export function buildDigest(session: HarnessSession): HarnessDigest {
-  const events: HarnessEvent[] = session.replay(0);
+export async function buildDigest(session: HarnessSession): Promise<HarnessDigest> {
+  await session.flushJournal();
+  let eventCount = 0, promptCount = 0, toolCount = 0, approvalCount = 0, approvedCount = 0, resolvedCount = 0, highest = 0;
 
   const prompts: string[] = [];
   const tools: ToolRecord[] = [];
@@ -83,11 +87,12 @@ export function buildDigest(session: HarnessSession): HarnessDigest {
   let error: string | null = null;
   let toolErrors = 0;
 
-  for (const event of events) {
+  for await (const event of session.replay(0)) {
+    eventCount++; highest = Number(event.seq);
     switch (event.event) {
       case 'user.message': {
         const t = text(event.text, PROMPT_CHARS);
-        if (t) prompts.push(t);
+        if (t) { prompts.push(t); promptCount++; if (prompts.length > MAX_LIST) prompts.shift(); }
         // 新一轮开始,上一轮的成文回复定稿
         if (messageBuffer.trim()) {
           lastMessage = messageBuffer;
@@ -97,13 +102,15 @@ export function buildDigest(session: HarnessSession): HarnessDigest {
       }
       case 'message.delta': {
         const delta = typeof event.delta === 'string' ? event.delta : '';
-        messageBuffer += delta;
+        messageBuffer = (messageBuffer + delta).slice(0, MESSAGE_CHARS + 1);
         break;
       }
       case 'tool.started': {
         const preview = text(event.preview, 200);
+        toolCount++;
         tools.push({ tool: String(event.tool ?? 'tool'), preview, ok: true });
-        for (const p of extractPaths(preview)) files.add(p);
+        if (tools.length > MAX_LIST) tools.shift();
+        for (const p of extractPaths(preview)) { if (files.size < MAX_LIST) files.add(p); }
         break;
       }
       case 'tool.completed': {
@@ -121,6 +128,7 @@ export function buildDigest(session: HarnessSession): HarnessDigest {
       case 'approval.request': {
         const id = String(event.approval_id ?? event.request_id ?? '');
         if (id) {
+          approvalCount++;
           approvals.set(id, {
             approval_id: id,
             command: text(event.command, 200),
@@ -133,6 +141,10 @@ export function buildDigest(session: HarnessSession): HarnessDigest {
       case 'approval.responded': {
         const id = String(event.approval_id ?? '');
         const choice = typeof event.choice === 'string' ? event.choice : null;
+        if (id) {
+          resolvedCount++;
+          if (choice === 'once' || choice === 'always' || choice === 'approve') approvedCount++;
+        }
         if (id && approvals.has(id)) {
           const record = approvals.get(id)!;
           record.choice = choice;
@@ -156,6 +168,7 @@ export function buildDigest(session: HarnessSession): HarnessDigest {
       default:
         break;
     }
+    while (approvals.size > MAX_LIST) approvals.delete(approvals.keys().next().value!);
   }
 
   if (messageBuffer.trim()) lastMessage = messageBuffer;
@@ -168,7 +181,8 @@ export function buildDigest(session: HarnessSession): HarnessDigest {
     harness: String(base.harness ?? ''),
     cwd: String(base.cwd ?? ''),
     status: String(base.status ?? 'unknown'),
-    seq: Number(base.seq ?? 0),
+    seq: highest,
+    journal: session.journalHealth(),
     prompts: prompts.slice(-MAX_LIST),
     tools: tools.slice(-MAX_LIST),
     files: [...files].slice(0, MAX_LIST),
@@ -176,11 +190,13 @@ export function buildDigest(session: HarnessSession): HarnessDigest {
     last_message: text(lastMessage, MESSAGE_CHARS),
     error,
     counts: {
-      events: events.length,
-      prompts: prompts.length,
-      tools: tools.length,
+      events: eventCount,
+      prompts: promptCount,
+      tools: toolCount,
       tool_errors: toolErrors,
-      approvals: approvalList.length,
+      approvals: approvalCount,
+      approved: approvedCount,
+      resolved: resolvedCount,
     },
   };
 }
@@ -199,16 +215,19 @@ export function isTerminal(status: string): boolean {
   return TERMINAL.has(status);
 }
 
-export function buildReceipt(session: HarnessSession): HarnessReceipt {
-  const digest = buildDigest(session);
-  const approved = digest.approvals.filter(
-    (a) => a.choice === 'once' || a.choice === 'always' || a.choice === 'approve',
-  ).length;
+export async function buildReceipt(session: HarnessSession): Promise<HarnessReceipt> {
+  if (!isTerminal(session.status)) throw new Error('SESSION_NOT_TERMINAL');
+  const health = await session.flushJournal();
+  if (health.state !== 'durable' || health.durable_seq < session.seq) throw new Error('JOURNAL_NOT_DURABLE');
+  const digest = await buildDigest(session);
+  if (digest.journal.state !== 'durable' || digest.seq !== session.seq || !isTerminal(session.status)) {
+    throw new Error('JOURNAL_NOT_DURABLE');
+  }
   return {
     ...digest,
     object: 'leoagent.receipt',
     outcome: digest.status,
-    approved_count: approved,
-    denied_count: digest.approvals.filter((a) => a.resolved).length - approved,
+    approved_count: digest.counts.approved,
+    denied_count: digest.counts.resolved - digest.counts.approved,
   };
 }

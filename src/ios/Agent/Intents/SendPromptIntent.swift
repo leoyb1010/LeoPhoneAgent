@@ -112,6 +112,13 @@ struct SendPromptIntent: AppIntent {
             }
         }
 
+        // Do not overwrite the composer of a running session. A Shortcut can
+        // wait for it, just as the dedicated follow-up action already does.
+        if vm.isProcessing {
+            for await processing in vm.$isProcessing.values where !processing { break }
+        }
+        try Task.checkCancellation()
+
         // Apply model override if specified (nil = use app default, backward-compatible)
         if let modelSelection = model, let sid = vm.sessionId {
             let store = ProviderConfigStore.shared
@@ -139,9 +146,8 @@ struct SendPromptIntent: AppIntent {
         }
 
         vm.inputText = prompt
-        vm.send()
-
         let sid = vm.sessionId ?? "unknown"
+        let runId = try Self.dispatchRun(vm: vm, sessionId: sid, pendingId: pendingId) { vm.send() }
 
         // Resolve actual model from session binding (matches what the agent loop uses)
         var modelName = vm.selectedModel.displayName
@@ -169,55 +175,29 @@ struct SendPromptIntent: AppIntent {
         )
 
         if waitForResult {
-            // Synchronous mode: wait for the agent to finish, then return the full response
-            for await processing in vm.$isProcessing.values {
-                if !processing { break }
-            }
-
-            // [T-shortcuts-diag-and-pending] Loop finished.
-            ShortcutRunTracker.markCompleted(recordId: pendingId, reason: "waitForResult.done")
-
-            let responseText = Self.extractResponseText(from: vm)
-
-            ShortcutNotification.post(
-                id: "shortcut-done-\(sid)",
-                title: "LeoPhoneAgent Task Completed",
-                body: "\(modelName): \(String(responseText.prefix(200)))",
-                sessionId: sid
-            )
+            let settled = await Self.settleRun(
+                sessionId: sid, runId: runId, pendingId: pendingId,
+                title: "LeoPhoneAgent Task", notificationId: "shortcut-done")
+            let responseText = settled.text
 
             let result = SendPromptResult(
                 sessionId: sid,
                 modelName: modelName,
-                status: "Completed",
+                status: settled.outcome.shortcutStatus,
                 isNewSession: isNewSession,
                 prompt: prompt,
                 responseText: responseText,
-                artifactFileNames: await SendPromptResult.artifactNames(for: sid)
+                artifactFileNames: await SendPromptResult.artifactNames(for: sid),
+                runId: runId
             )
             return .result(value: result, dialog: "\(responseText.prefix(500))")
         }
 
         // Async mode: return immediately, notify on completion in background
-        let capturedModelName = modelName
-        let capturedSid = sid
-        let capturedPendingId = pendingId
         Task { @MainActor in
-            for await processing in vm.$isProcessing.values {
-                if !processing { break }
-            }
-
-            // [T-shortcuts-diag-and-pending] Loop finished.
-            ShortcutRunTracker.markCompleted(recordId: capturedPendingId, reason: "async.done")
-
-            let summary = String(Self.extractResponseText(from: vm).prefix(200))
-
-            ShortcutNotification.post(
-                id: "shortcut-done-\(capturedSid)",
-                title: "LeoPhoneAgent Task Completed",
-                body: "\(capturedModelName): \(summary)",
-                sessionId: capturedSid
-            )
+            _ = await Self.settleRun(
+                sessionId: sid, runId: runId, pendingId: pendingId,
+                title: "LeoPhoneAgent Task", notificationId: "shortcut-done")
         }
 
         let result = SendPromptResult(
@@ -225,7 +205,8 @@ struct SendPromptIntent: AppIntent {
             modelName: modelName,
             status: "Running",
             isNewSession: isNewSession,
-            prompt: prompt
+            prompt: prompt,
+            runId: runId
         )
 
         return .result(value: result, dialog: "Task started with \(modelName). I'll notify you when it's done.")
@@ -248,17 +229,65 @@ struct SendPromptIntent: AppIntent {
         return name
     }
 
-    /// Extracts the full response text from the last assistant message in the VM.
+    /// Register the run before asynchronous compaction/kernel startup so the
+    /// result remains correlated even when the intent's process is suspended.
     @MainActor
-    static func extractResponseText(from vm: AIChatViewModel) -> String {
-        guard let lastAssistant = vm.messages.last(where: { $0.role == .assistant }) else {
-            return "No response."
+    static func dispatchRun(vm: AIChatViewModel, sessionId: String, pendingId: String,
+                            action: () -> Void) throws -> String {
+        var accepted = false
+        defer {
+            if !accepted { ShortcutRunTracker.markCompleted(recordId: pendingId, reason: "not_started") }
         }
-        let textBlocks = lastAssistant.blocks
-            .filter { $0.kind == .text }
-            .map { $0.content }
-        let text = textBlocks.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
-        return text.isEmpty ? "Task completed." : text
+        try Task.checkCancellation()
+        guard !vm.isProcessing else { throw QuickTaskIntentError.sessionBusy }
+        let tracker = SessionActivityTracker.shared
+        tracker.setActive(sessionId, source: "Intent.dispatch")
+        guard let runId = tracker.currentRunId(for: sessionId) else {
+            throw QuickTaskIntentError.notStarted
+        }
+        action()
+        guard vm.isProcessing || vm.isCompacting || vm.compactAndSendRequestId != nil else {
+            tracker.setInactive(sessionId, finalPhase: .failed,
+                                reason: .providerFailure, source: "Intent.notStarted")
+            throw QuickTaskIntentError.notStarted
+        }
+        accepted = true
+        return runId
+    }
+
+    @MainActor
+    static func waitForRun(runId: String, timeout: TimeInterval = 15 * 60) async -> AgentRunOutcome {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(timeout))
+        while true {
+            let outcome = AgentRunOutcome(state: AgentActivityLog.shared.runState(runId: runId),
+                                          expectedRunId: runId)
+            guard outcome.shouldKeepObserving, !Task.isCancelled,
+                  ContinuousClock.now < deadline else { return outcome }
+            do { try await Task.sleep(for: .seconds(1)) }
+            catch { return outcome } // observation cancelled, not the actual run
+        }
+    }
+
+    @MainActor
+    static func settleRun(sessionId: String, runId: String,
+                          pendingId: String, title: String,
+                          notificationId: String) async -> (outcome: AgentRunOutcome, text: String) {
+        let outcome = await waitForRun(runId: runId)
+        if AgentActivityLog.shared.runState(runId: runId)?.phase.isTerminal == true
+            || outcome == .waitingForUser || outcome == .suspended {
+            ShortcutRunTracker.markCompleted(recordId: pendingId, reason: outcome.rawValue)
+        }
+        let response = outcome == .succeeded
+            ? await AgentRunResultReader.text(sessionId: sessionId, runId: runId) : ""
+        let text = response.isEmpty ? outcome.summary : response
+        // A timeout only stops this observer. It cannot fabricate a completion
+        // notification or mutate the state of the still-running task.
+        if !outcome.shouldKeepObserving {
+            ShortcutNotification.post(id: "\(notificationId)-\(runId)",
+                                      title: "\(title) · \(outcome.shortcutStatus)",
+                                      body: String(text.prefix(200)), sessionId: sessionId)
+        }
+        return (outcome, text)
     }
 }
 

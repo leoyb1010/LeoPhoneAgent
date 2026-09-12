@@ -25,7 +25,7 @@ const FAKE_SPEC: HarnessSpec = {
   args: [], dialect: 'claude_stream_json',
 };
 
-test('cursor harness uses the official one-shot stream-json contract', () => {
+test('cursor harness uses the official one-shot stream-json contract', async () => {
   assert.deepEqual(HARNESSES.cursor.args, ['-p', '{prompt}', '--output-format', 'stream-json']);
   assert.equal(HARNESSES.cursor.executable, 'cursor-agent');
   assert.equal(HARNESSES.cursor.promptInArgs, true);
@@ -40,7 +40,7 @@ function tempLog(): string {
 // Claude stream-json 方言
 // --------------------------------------------------------------------------
 
-test('claude dialect: assistant text/thinking/tool_use → vocabulary events', () => {
+test('claude dialect: assistant text/thinking/tool_use → vocabulary events', async () => {
   const dialect = new ClaudeStreamJsonDialect();
   const { events } = dialect.translateLine({
     type: 'assistant',
@@ -58,7 +58,7 @@ test('claude dialect: assistant text/thinking/tool_use → vocabulary events', (
   assert.equal(events[2].tool_use_id, 'tu_1');
 });
 
-test('claude dialect: control_request can_use_tool → approval.request; result → run.completed', () => {
+test('claude dialect: control_request can_use_tool → approval.request; result → run.completed', async () => {
   const dialect = new ClaudeStreamJsonDialect();
   const approval = dialect.translateLine({
     type: 'control_request', request_id: 'req_9',
@@ -81,7 +81,7 @@ test('claude dialect: control_request can_use_tool → approval.request; result 
   assert.equal(passthrough[0].event, 'harness.control_request');
 });
 
-test('claude dialect: approval payload uses control_response envelope; deny carries message', () => {
+test('claude dialect: approval payload uses control_response envelope; deny carries message', async () => {
   const dialect = new ClaudeStreamJsonDialect();
   const allow = dialect.approvalPayload({ request_id: 'r1', raw: {} }, 'once') as Record<string, any>;
   assert.equal(allow.type, 'control_response');
@@ -99,7 +99,7 @@ test('claude dialect: approval payload uses control_response envelope; deny carr
 // codex app-server 方言
 // --------------------------------------------------------------------------
 
-test('codex dialect: handshake → initialize + thread/start; queued input flushes on threadId', () => {
+test('codex dialect: handshake → initialize + thread/start; queued input flushes on threadId', async () => {
   const dialect = new CodexAppServerDialect('/tmp/project');
   const frames = dialect.handshake() as Array<Record<string, any>>;
   assert.equal(frames[0].method, 'initialize');
@@ -122,7 +122,7 @@ test('codex dialect: handshake → initialize + thread/start; queued input flush
   assert.ok('frames' in direct && direct.frames.length === 1);
 });
 
-test('codex dialect: approval request/response and unsupported server request rejection', () => {
+test('codex dialect: approval request/response and unsupported server request rejection', async () => {
   const dialect = new CodexAppServerDialect('/tmp');
   const { events } = dialect.translateLine({
     id: 55, method: 'item/commandExecution/requestApproval',
@@ -139,7 +139,7 @@ test('codex dialect: approval request/response and unsupported server request re
   assert.equal((rejected.outFrames[0] as Record<string, any>).error.code, -32601);
 });
 
-test('codex dialect: item notifications → tool/message events; turn/completed → run.completed', () => {
+test('codex dialect: item notifications → tool/message events; turn/completed → run.completed', async () => {
   const dialect = new CodexAppServerDialect('/tmp');
   const started = dialect.translateLine({
     method: 'item/started', params: { item: { type: 'commandExecution', id: 'i1', command: 'ls -la' } },
@@ -166,7 +166,7 @@ test('codex dialect: item notifications → tool/message events; turn/completed 
 // grok ACP 方言
 // --------------------------------------------------------------------------
 
-test('grok dialect: session capture, prompt lifecycle, permission options', () => {
+test('grok dialect: session capture, prompt lifecycle, permission options', async () => {
   const dialect = new GrokAcpDialect('/tmp');
   dialect.handshake();
   assert.deepEqual(dialect.userMessage('hi'), { queued: true });
@@ -208,7 +208,7 @@ test('grok dialect: session capture, prompt lifecycle, permission options', () =
 // pi 方言(抽查)
 // --------------------------------------------------------------------------
 
-test('pi dialect: deltas and select approval round-trip', () => {
+test('pi dialect: deltas and select approval round-trip', async () => {
   const dialect = new PiRpcDialect();
   const delta = dialect.translateLine({
     type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'x' },
@@ -229,7 +229,7 @@ test('pi dialect: deltas and select approval round-trip', () => {
 // 会话日志:先写后扇出、seq 单调、approval_id 铸造、回放去重
 // --------------------------------------------------------------------------
 
-test('session journal: enrichment lands in the log; replay(after) is exact', () => {
+test('session journal: enrichment lands in the log; replay(after) is exact', async () => {
   const session = new HarnessSession({
     sessionId: 'hs_t1', spec: FAKE_SPEC, cwd: '/tmp', logPath: tempLog(),
   });
@@ -239,7 +239,7 @@ test('session journal: enrichment lands in the log; replay(after) is exact', () 
   session.emit({ event: 'tool.completed', tool: 'tool', error: false, tool_use_id: 'tu1' });
   session.emit({ event: 'approval.request', command: 'Bash', description: '', choices: ['once', 'deny'], raw: {} });
 
-  const all = session.replay(0);
+  const all = (await collectReplay(session, 0));
   assert.deepEqual(all.map((event) => event.seq), [1, 2, 3, 4]);
   assert.equal(all[2].tool, 'Bash');
   // CLI 没给 request_id → 铸造的 approval_id 必须已经在日志里(先富化后写盘)
@@ -249,7 +249,7 @@ test('session journal: enrichment lands in the log; replay(after) is exact', () 
   assert.ok(session.pendingApprovals.has(minted));
 
   // 断线续传:只要 seq > after 的
-  assert.deepEqual(session.replay(2).map((event) => event.seq), [3, 4]);
+  assert.deepEqual((await collectReplay(session, 2)).map((event) => event.seq), [3, 4]);
 });
 
 test('session subscribe: replay-then-follow without gap or repeat; terminal event ends stream', async () => {
@@ -300,7 +300,7 @@ test('stop emits run.cancelled immediately and rejects later steer', async () =>
   await assert.rejects(() => session.send('steer after stop'), /not running/);
   // 二次 stop 必须幂等,不能再写一条 cancelled
   await session.stop();
-  assert.equal(session.replay(0).filter((event) => event.event === 'run.cancelled').length, 1);
+  assert.equal((await collectReplay(session, 0)).filter((event) => event.event === 'run.cancelled').length, 1);
 });
 
 function pidAlive(pid: number): boolean {
@@ -331,7 +331,7 @@ test('stop takes down the whole process group, not just the CLI itself',
 
     let grandchildPid = 0;
     for (let attempt = 0; attempt < 100 && !grandchildPid; attempt += 1) {
-      for (const event of session.replay(0)) {
+      for (const event of (await collectReplay(session, 0))) {
         const text = String(event.text ?? '');
         const match = /^GRANDCHILD (\d+)$/.exec(text.trim());
         if (match) grandchildPid = Number(match[1]);
@@ -354,10 +354,10 @@ test('stop on an already-completed session does not rewrite the outcome', async 
   session.emit({ event: 'run.completed', output: 'ok', usage: {} });
   await session.stop();
   assert.equal(session.status, 'completed');
-  assert.equal(session.replay(0).some((event) => event.event === 'run.cancelled'), false);
+  assert.equal((await collectReplay(session, 0)).some((event) => event.event === 'run.cancelled'), false);
 });
 
-test('fleet helpers: after=N and minis create body drop Mac cwd', () => {
+test('fleet helpers: after=N and minis create body drop Mac cwd', async () => {
   assert.equal(parseEventsAfter('7'), 7);
   assert.equal(parseEventsAfter('-1'), 0);
   assert.equal(parseEventsAfter('nope'), 0);
@@ -371,7 +371,7 @@ test('fleet helpers: after=N and minis create body drop Mac cwd', () => {
   );
 });
 
-test('manager rehydrate: previous-boot logs surface as orphaned sessions with exact seq', () => {
+test('manager rehydrate: previous-boot logs surface as orphaned sessions with exact seq', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'leophone-rehydrate-'));
   const lines = [
     { event: 'session.created', harness: 'codex', name: 'Codex CLI', cwd: '/tmp/x', seq: 1, session_id: 'hs_old', timestamp: 1 },
@@ -380,6 +380,7 @@ test('manager rehydrate: previous-boot logs surface as orphaned sessions with ex
   fs.writeFileSync(path.join(dir, 'hs_old.ndjson'), lines.map((line) => JSON.stringify(line)).join('\n') + '\n');
 
   const manager = new HarnessManager(dir);
+  await manager.ready();
   const rehydrated = manager.get('hs_old');
   assert.ok(rehydrated);
   assert.equal(rehydrated.status, 'orphaned');
@@ -397,7 +398,7 @@ test('manager rehydrate: previous-boot logs surface as orphaned sessions with ex
 // [T-leophone-digest] 摘要 / 收据 / 产物
 // --------------------------------------------------------------------------
 
-test('digest: 把事件日志折叠成结构化摘要', () => {
+test('digest: 把事件日志折叠成结构化摘要', async () => {
   const session = new HarnessSession({
     sessionId: 'hs_dg1', spec: FAKE_SPEC, cwd: '/tmp', logPath: tempLog(),
   });
@@ -409,7 +410,7 @@ test('digest: 把事件日志折叠成结构化摘要', () => {
   session.emit({ event: 'message.delta', delta: '通过了' });
   session.emit({ event: 'run.completed', output: '', usage: {} });
 
-  const digest = buildDigest(session);
+  const digest = await buildDigest(session);
   assert.equal(digest.session_id, 'hs_dg1');
   assert.deepEqual(digest.prompts, ['把测试跑一遍']);
   assert.equal(digest.tools.length, 1);
@@ -421,23 +422,23 @@ test('digest: 把事件日志折叠成结构化摘要', () => {
   assert.ok(digest.files.includes('src/app.ts'));
 });
 
-test('digest: 审批的请求与应答成对折叠', () => {
+test('digest: 审批的请求与应答成对折叠', async () => {
   const session = new HarnessSession({
     sessionId: 'hs_dg2', spec: FAKE_SPEC, cwd: '/tmp', logPath: tempLog(),
   });
   session.emit({ event: 'approval.request', command: 'rm -rf build', description: '', choices: ['once', 'deny'], raw: {} });
-  const approvalId = String(session.replay(0).find((e) => e.event === 'approval.request')?.approval_id ?? '');
+  const approvalId = String((await collectReplay(session, 0)).find((e) => e.event === 'approval.request')?.approval_id ?? '');
   assert.ok(approvalId, 'approval_id 必须在 emit 时就铸好');
   session.emit({ event: 'approval.responded', choice: 'once', approval_id: approvalId });
 
-  const digest = buildDigest(session);
+  const digest = await buildDigest(session);
   assert.equal(digest.approvals.length, 1);
   assert.equal(digest.approvals[0].resolved, true);
   assert.equal(digest.approvals[0].choice, 'once');
   assert.equal(digest.approvals[0].command, 'rm -rf build');
 });
 
-test('receipt: 只在终态签发,非终态不出半截收据', () => {
+test('receipt: 只在终态签发,非终态不出半截收据', async () => {
   const session = new HarnessSession({
     sessionId: 'hs_rc1', spec: FAKE_SPEC, cwd: '/tmp', logPath: tempLog(),
   });
@@ -448,13 +449,13 @@ test('receipt: 只在终态签发,非终态不出半截收据', () => {
   session.status = 'failed';
   assert.equal(isTerminal(session.status), true);
 
-  const receipt = buildReceipt(session);
+  const receipt = await buildReceipt(session);
   assert.equal(receipt.object, 'leoagent.receipt');
   assert.equal(receipt.outcome, 'failed');
   assert.equal(receipt.error, '构建失败');
 });
 
-test('artifacts: 只列 cwd 内真实存在的文件,越界一律拒绝', () => {
+test('artifacts: 只列 cwd 内真实存在的文件,越界一律拒绝', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'leophone-art-'));
   fs.writeFileSync(path.join(dir, 'report.md'), '# hi');
   const session = new HarnessSession({
@@ -462,7 +463,7 @@ test('artifacts: 只列 cwd 内真实存在的文件,越界一律拒绝', () => 
   });
   session.emit({ event: 'tool.started', tool: 'Write', preview: `写入 report.md 与 ../../etc/passwd`, tool_use_id: 'tu1' });
 
-  const list = listArtifacts(session);
+  const list = await listArtifacts(session);
   assert.equal(list.length, 1, '只有 cwd 内真实存在的文件进清单');
   assert.equal(list[0].name, 'report.md');
 
@@ -471,7 +472,14 @@ test('artifacts: 只列 cwd 内真实存在的文件,越界一律拒绝', () => 
   assert.equal(readArtifact(session, '/etc/passwd'), null, '绝对路径必须被拒');
 });
 
-test('resume envelope: ok when after is at or past the watermark, gap otherwise', () => {
+test('resume envelope: ok when after is at or past the watermark, gap otherwise', async () => {
   assert.deepEqual(resumeEnvelope(5, 0), { type: 'resume', status: 'ok', after: 5, min_after: 0 });
   assert.deepEqual(resumeEnvelope(5, 41), { type: 'resume', status: 'gap', after: 5, min_after: 41 });
 });
+
+async function collectReplay(session: HarnessSession, after: number) {
+  await session.flushJournal();
+  const events = [];
+  for await (const event of session.replay(after)) events.push(event);
+  return events;
+}

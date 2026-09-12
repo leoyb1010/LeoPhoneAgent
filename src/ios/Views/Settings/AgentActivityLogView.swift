@@ -174,6 +174,7 @@ struct AgentActivityLogView: View {
         case .completed: "Completed"
         case .failed: "Failed"
         case .cancelled: "Cancelled"
+        case .unverified: "Result unverified"
         }
     }
 
@@ -192,6 +193,7 @@ struct AgentActivityLogView: View {
         case .completed: "checkmark"
         case .failed: "exclamationmark"
         case .cancelled: "xmark"
+        case .unverified: "questionmark"
         }
     }
 
@@ -199,7 +201,7 @@ struct AgentActivityLogView: View {
         return switch phase {
         case .completed: .green
         case .failed: .red
-        case .cancelled: .secondary
+        case .cancelled, .unverified: .secondary
         case .waitingForPermission, .waitingForUser, .suspended: .orange
         case .idle: .secondary
         case .preparing, .thinking, .usingTool: LeoTheme.ColorToken.accent
@@ -390,7 +392,7 @@ struct AgentCurrentStatusCard: View {
         guard UIAccessibility.isVoiceOverRunning else { return }
         let message: String
         switch phase {
-        case .waitingForPermission, .waitingForUser, .suspended, .completed, .failed, .cancelled:
+        case .waitingForPermission, .waitingForUser, .suspended, .completed, .failed, .cancelled, .unverified:
             message = "\(title). \(subtitle)"
         case .idle, .preparing, .thinking, .usingTool:
             return
@@ -428,6 +430,7 @@ struct AgentCurrentStatusCard: View {
         case .completed: "Completed"
         case .failed: "Failed"
         case .cancelled: "Cancelled"
+        case .unverified: "Result unverified"
         case .idle: "Idle"
         }
     }
@@ -458,6 +461,7 @@ struct AgentCurrentStatusCard: View {
         case .completed: "The run finished"
         case .failed: "The run needs attention"
         case .cancelled: "The run was stopped"
+        case .unverified: "Check the result before trying the action again"
         case .idle: "No active run"
         }
     }
@@ -476,6 +480,7 @@ struct AgentCurrentStatusCard: View {
         case .completed: "checkmark"
         case .failed: "exclamationmark"
         case .cancelled: "xmark"
+        case .unverified: "questionmark"
         case .idle: "circle"
         }
     }
@@ -485,7 +490,7 @@ struct AgentCurrentStatusCard: View {
         case .waitingForUser, .suspended, .waitingForPermission: LeoTheme.ColorToken.warning
         case .failed: LeoTheme.ColorToken.destructive
         case .completed: LeoTheme.ColorToken.success
-        case .cancelled, .idle: LeoTheme.ColorToken.secondaryText
+        case .cancelled, .idle, .unverified: LeoTheme.ColorToken.secondaryText
         case .preparing, .thinking, .usingTool: LeoTheme.ColorToken.accent
         }
     }

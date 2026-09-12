@@ -90,6 +90,7 @@ struct MinisApp: App {
     @StateObject private var shareCoordinator = ShareCoordinator.shared
     @ObservedObject private var fontSettings = FontSettings.shared
     @ObservedObject private var configConfirmGate = ConfigConfirmationGate.shared
+    @ObservedObject private var sessionLockStore = SessionLockStore.shared
     @Environment(\.scenePhase) private var scenePhase
     /// Set by the OpenWebAppIntent notification observer; drives a fullScreenCover
     /// presenting `WebAppWebViewScreen`. Cleared when the user dismisses the
@@ -166,6 +167,7 @@ struct MinisApp: App {
                 SpeechPlayerControl()
                 AppLockOverlay()
             }
+                .offloadPermissionDialog(isEnabled: !sessionLockStore.appIsLocked)
                 .onReceive(SessionLockStore.shared.$appIsLocked) { locked in
                     guard !locked, let url = pendingURLWhileLocked else { return }
                     pendingURLWhileLocked = nil

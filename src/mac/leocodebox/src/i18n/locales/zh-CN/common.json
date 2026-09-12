@@ -410,7 +410,8 @@
     "openLeoapi": "Leoapi 网关",
     "openLocalLog": "本地日志",
     "goMissions": "快速任务",
-    "goConsole": "新任务"
+    "goConsole": "新任务",
+    "goCollections": "打开藏宝阁"
   },
   "dashboard": {
     "greetingNight": "夜深了",
@@ -711,6 +712,26 @@
     "consoleTooltip": "主控台 · 选 Agent、开新任务",
     "agentLockedTooltip": "这个会话建立时就定了它,换 Agent 请回主控台开新任务",
     "agentLockedLabel": "本会话的 Agent:{{agent}}",
-    "agentLockedMark": "本会话"
+    "agentLockedMark": "本会话",
+    "remoteLog": "远程运行输出（最近 400 行）",
+    "remoteLatest": "有新输出 · 回到最新",
+    "journal": {
+      "unknown": "保存状态未知",
+      "pending": "日志保存中",
+      "durable": "日志已保存",
+      "degraded": "日志保存异常"
+    },
+    "journalDetail": "已保存 {{durable}} / 已收到 {{latest}} · {{missing}} 段缺失"
+  },
+  "taskStart": {
+    "title": "这次想完成什么？",
+    "description": "在上方说出任务，执行前再确定项目和目标设备。",
+    "examples": "例如：检查最近的代码改动，或整理项目笔记。",
+    "projectLabel": "当前项目",
+    "noProject": "尚未选择，准备好后再选。",
+    "changeProject": "更换任务项目",
+    "libraryTitle": "藏宝阁",
+    "libraryDescription": "保存资料，随时查找和阅读。",
+    "shortcuts": "⌘N 新任务 · ⌘K 查找与导航 · ⌘, 设置"
   }
 }

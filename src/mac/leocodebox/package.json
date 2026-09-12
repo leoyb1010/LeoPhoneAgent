@@ -1,6 +1,6 @@
 {
   "name": "leocodebox",
-  "version": "1.84.0",
+  "version": "1.85.0",
   "productName": "leocodebox",
   "description": "LeoPhoneAgent Mac workstation for local coding agents",
   "type": "module",
@@ -169,7 +169,7 @@
     "jsonwebtoken": "^9.0.2",
     "jszip": "^3.10.1",
     "mime-types": "^3.0.1",
-    "multer": "^2.0.1",
+    "multer": "^2.3.0",
     "node-pty": "^1.2.0-beta.12",
     "playwright": "1.61.1",
     "react": "^18.2.0",
@@ -244,7 +244,7 @@
     "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.0",
     "remark-math": "^6.0.0",
-    "sharp": "^0.35.3",
+    "sharp": "^0.35.4",
     "tailwindcss": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",
     "tsc-alias": "^1.8.16",
@@ -267,10 +267,10 @@
     "@modelcontextprotocol/sdk": "1.30.0",
     "body-parser@1.20.5": "1.20.6",
     "fast-uri": "3.1.7",
-    "hono": "4.13.1",
+    "hono": "4.13.5",
     "ip-address": "10.5.0",
-    "js-yaml@3.15.0": "3.15.1",
-    "js-yaml@4.3.0": "4.3.1",
+    "js-yaml@^3.0.0": "3.15.2",
+    "js-yaml@^4.0.0": "4.3.2",
     "qs": "6.16.0"
   }
 }

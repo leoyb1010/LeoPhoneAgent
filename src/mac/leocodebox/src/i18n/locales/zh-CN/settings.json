@@ -733,5 +733,9 @@
     "placeholder": "搜索设置",
     "noResults": "没有匹配的设置项",
     "clear": "清除"
+  },
+  "agentDefaults": {
+    "title": "新任务默认值",
+    "saveFailed": "默认值保存失败"
   }
 }

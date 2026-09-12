@@ -775,6 +775,17 @@ export function useSessionStore() {
     }
   }, [notify]);
 
+  /** Discard only an obsolete live stream; keep user rows and other realtime history. */
+  const clearStreaming = useCallback((sessionId: string) => {
+    const slot = storeRef.current.get(sessionId);
+    if (!slot) return;
+    const streamId = `__streaming_${sessionId}`;
+    if (!slot.realtimeMessages.some((message) => message.id === streamId)) return;
+    slot.realtimeMessages = slot.realtimeMessages.filter((message) => message.id !== streamId);
+    recomputeMergedIfNeeded(slot);
+    notify(sessionId);
+  }, [notify]);
+
   /**
    * Clear realtime messages for a session (e.g., after stream completes and server fetch catches up).
    */
@@ -814,6 +825,7 @@ export function useSessionStore() {
     isStale,
     updateStreaming,
     finalizeStreaming,
+    clearStreaming,
     clearRealtime,
     getMessages,
     getSessionSlot,
@@ -821,7 +833,7 @@ export function useSessionStore() {
     getSlot, has, fetchFromServer, fetchMore,
     appendRealtime, appendRealtimeBatch, refreshFromServer,
     setActiveSession, setStatus, isStale, updateStreaming, finalizeStreaming,
-    clearRealtime, getMessages, getSessionSlot,
+    clearStreaming, clearRealtime, getMessages, getSessionSlot,
   ]);
 }
 

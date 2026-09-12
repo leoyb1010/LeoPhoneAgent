@@ -1,3 +1,4 @@
+import { once } from 'node:events';
 import { createHash } from 'node:crypto';
 import { constants as fsConstants, createReadStream, promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -424,11 +425,11 @@ router.get('/leophone/fleet/machines/:machine/sessions/:sessionId/events', async
   const after = parseEventsAfter(req.query.after);
   const upstream = new AbortController();
   // 客户端断开时一并掐掉上游,别把中继连接泄漏在那儿。
-  req.on('close', () => upstream.abort());
+  res.on('close', () => upstream.abort());
 
   try {
     const relayRes = await fetch(
-      `${target.base}/m/${encodeURIComponent(machine)}/harness/sessions/${encodeURIComponent(sessionId)}/events?after=${after}`,
+      `${target.base}/m/${encodeURIComponent(machine)}/harness/sessions/${encodeURIComponent(sessionId)}/events?after=${after}${req.query.journal_status === '1' ? '&journal_status=1' : ''}`,
       {
         headers: { authorization: `Bearer ${target.key}`, accept: 'text/event-stream' },
         signal: upstream.signal,
@@ -447,7 +448,7 @@ router.get('/leophone/fleet/machines/:machine/sessions/:sessionId/events', async
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
-      res.write(value);
+      if (!res.write(value)) await once(res, 'drain', { signal: upstream.signal });
     }
     res.end();
   } catch (error) {

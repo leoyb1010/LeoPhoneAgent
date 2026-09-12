@@ -41,6 +41,8 @@ struct HarnessSessionSummary: Sendable, Identifiable, Hashable {
 struct HarnessEvent: Sendable {
     let seq: Int
     let event: GatewayEvent
+    var journal: HarnessJournalStatus? = nil
+    var durability: String? = nil
 }
 
 extension LeoAgentClient {
@@ -140,7 +142,7 @@ extension LeoAgentClient {
         into continuation: AsyncThrowingStream<HarnessEvent, Error>.Continuation
     ) async {
         do {
-            var req = try request("/harness/sessions/\(sessionId)/events?after=\(after)",
+            var req = try request("/harness/sessions/\(sessionId)/events?after=\(after)&journal_status=1",
                                   service: .harness)
             req.setValue("text/event-stream", forHTTPHeaderField: "Accept")
             req.timeoutInterval = 3600
@@ -171,9 +173,14 @@ extension LeoAgentClient {
                     }
                     continue
                 }
+                if obj["type"] as? String == "durability" {
+                    continuation.yield(HarnessEvent(seq: 0, event: .unknown(name: "journal.status", payload: [:]),
+                        journal: HarnessJournalStatus.parse(obj) ?? HarnessJournalStatus()))
+                    continue
+                }
                 continuation.yield(HarnessEvent(
                     seq: obj["seq"] as? Int ?? 0,
-                    event: GatewayEvent.parse(obj)))
+                    event: GatewayEvent.parse(obj), durability: obj["durability"] as? String))
             }
             continuation.finish()
         } catch {
@@ -198,6 +205,7 @@ final class HarnessSessionDriver: ObservableObject {
     @Published private(set) var pendingApprovals: [GatewayApprovalRequest] = []
     @Published private(set) var lastError: String?
     @Published private(set) var resumeCount = 0
+    @Published private(set) var journalStatus = HarnessJournalStatus()
 
     /// The one the UI shows; the rest wait their turn behind it.
     var pendingApproval: GatewayApprovalRequest? { pendingApprovals.first }
@@ -370,9 +378,18 @@ final class HarnessSessionDriver: ObservableObject {
             var ended = false
             var cleanClose = false
             do {
+                await MainActor.run { self.journalStatus = HarnessJournalStatus() }
                 for try await item in client.harnessEvents(sessionId: sessionId, after: lastSeq) {
                     if Task.isCancelled { return }
                     await MainActor.run {
+                        if let journal = item.journal {
+                            self.journalStatus = journal
+                            return
+                        }
+                        if item.durability == "pending" || item.durability == "unavailable" {
+                            self.journalStatus.state = item.durability == "unavailable" || self.journalStatus.state == "degraded" ? "degraded" : "pending"
+                            self.journalStatus.latestSeq = max(self.journalStatus.latestSeq, item.seq)
+                        }
                         // Skip a replay of the last applied seq when `after` is inclusive.
                         // messageDelta concatenates; applying seq N twice doubles the last chunk.
                         // 说明:Android 那条 harness 路径(MinisHarnessRouter)对 `after`

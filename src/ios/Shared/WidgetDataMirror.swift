@@ -25,27 +25,19 @@ enum WidgetDataMirror {
     /// - Returns: true when a card was written.
     @discardableResult
     @MainActor
-    static func recordBriefing(taskName: String, sessionId: String) async -> Bool {
+    static func recordBriefing(taskName: String, sessionId: String, runId: String) async -> Bool {
         guard !BackgroundKeepAliveManager.shared.liveActivityPrivacyMode else {
             logger.info("briefing skipped (privacy mode) session=\(sessionId.prefix(8))")
             return false
         }
-        let messages = await ChatStore.shared.loadMessages(sessionId: sessionId)
-        guard let last = messages.last(where: { $0.role == .assistant }) else {
-            logger.info("briefing not ready — no assistant message yet session=\(sessionId.prefix(8))")
-            return false
+        guard let receipt = AgentActivityLog.shared.runState(runId: runId),
+              receipt.sessionId == sessionId, receipt.phase == .completed else { return false }
+        if let existing = WidgetBriefingStore.load(), existing.generatedAt > receipt.updatedAt {
+            return true // a newer completed run already owns the briefing slot
         }
-
-        let text = last.parts.compactMap { part -> String? in
-            if case .text(let value) = part { return value }
-            return nil
-        }.joined(separator: "\n")
-
-        let summary = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !summary.isEmpty else {
-            logger.info("briefing not ready — assistant reply has no text session=\(sessionId.prefix(8))")
-            return false
-        }
+        let text = await AgentRunResultReader.text(sessionId: sessionId, runId: runId)
+        let summary = text.isEmpty
+            ? String(localized: "任务已完成，可打开对话查看执行记录。") : text
 
         WidgetBriefingStore.save(WidgetBriefing(
             // [T-briefing-timestamp] Use the reply's own timestamp. Using
@@ -53,7 +45,7 @@ enum WidgetDataMirror {
             // which is the normal path for an overnight scheduled run — was
             // stamped "now", so the card claimed to be from just now and the
             // "· Not today" marker could never appear.
-            generatedAt: last.createdAt,
+            generatedAt: receipt.updatedAt,
             taskName: taskName,
             sessionId: sessionId,
             summary: String(summary.prefix(400))
@@ -80,14 +72,34 @@ enum WidgetDataMirror {
             // used to dodge the sweep forever and hold one of the 10 slots.
             if Date().timeIntervalSince(entry.addedAt) > 24 * 3600 {
                 logger.info("dropping stale pending briefing session=\(entry.sessionId.prefix(8))")
-                WidgetPendingBriefingStore.remove(sessionId: entry.sessionId)
+                WidgetPendingBriefingStore.remove(sessionId: entry.sessionId, runId: entry.runId)
                 continue
             }
-            // Never resolve a session that is still working — its final
-            // message is not written yet.
-            if SessionActivityTracker.shared.activeSessions.contains(entry.sessionId) { continue }
-            if await recordBriefing(taskName: entry.taskName, sessionId: entry.sessionId) {
-                WidgetPendingBriefingStore.remove(sessionId: entry.sessionId)
+            let state: AgentRunState?
+            if let runId = entry.runId {
+                state = AgentActivityLog.shared.runState(runId: runId)
+            } else {
+                let latest = AgentActivityLog.shared.latestRunState(sessionId: entry.sessionId)
+                state = latest.flatMap { $0.updatedAt >= entry.addedAt ? $0 : nil }
+            }
+            guard let state, state.sessionId == entry.sessionId else { continue }
+            let outcome = AgentRunOutcome(state: state, expectedRunId: entry.runId ?? state.runId)
+            if let taskId = entry.taskId {
+                WidgetQuickTasksStore.updateRunState(id: taskId,
+                    state: QuickTaskWidgetRunner.badgeState(for: outcome), runId: state.runId)
+                WidgetCenter.shared.reloadTimelines(ofKind: LeoWidgetKind.quickTasks)
+            }
+            if outcome == .failed || outcome == .cancelled {
+                WidgetPendingBriefingStore.remove(sessionId: entry.sessionId, runId: entry.runId)
+                continue
+            }
+            guard outcome.canPublishBriefing else { continue }
+            if BackgroundKeepAliveManager.shared.liveActivityPrivacyMode {
+                WidgetPendingBriefingStore.remove(sessionId: entry.sessionId, runId: entry.runId)
+                continue
+            }
+            if await recordBriefing(taskName: entry.taskName, sessionId: entry.sessionId, runId: state.runId) {
+                WidgetPendingBriefingStore.remove(sessionId: entry.sessionId, runId: entry.runId)
                 // [T-scheduled-report] Close the loop for scheduled runs: the
                 // user asked for this work in advance, tell them it landed.
                 if entry.origin == "scheduled" {

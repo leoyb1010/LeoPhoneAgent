@@ -272,6 +272,16 @@
 		E5KVC0003 /* SafeKVCSetTrue.m in Sources */ = {isa = PBXBuildFile; fileRef = E5KVC0013 /* SafeKVCSetTrue.m */; };
 		E5L000001 /* FFmpegOffload.m in Sources */ = {isa = PBXBuildFile; fileRef = E5L000012 /* FFmpegOffload.m */; };
 		E5L100001 /* NativeOffloadUtils.m in Sources */ = {isa = PBXBuildFile; fileRef = E5L100012 /* NativeOffloadUtils.m */; };
+		E5IMPL0002 /* NativeOffloadDispatch.c in Sources */ = {isa = PBXBuildFile; fileRef = E5IMPL0012 /* NativeOffloadDispatch.c */; };
+		E5RUNR001 /* AgentRunResultReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5RUNR011 /* AgentRunResultReader.swift */; };
+		E5CAMO001 /* CameraCaptureOperation.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CAMO011 /* CameraCaptureOperation.swift */; };
+		E5CAMO002 /* CameraCaptureOperation.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CAMO011 /* CameraCaptureOperation.swift */; };
+		E5DEVA001 /* DeviceActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DEVA011 /* DeviceActions.swift */; };
+		E5DEVA002 /* DeviceActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DEVA011 /* DeviceActions.swift */; };
+		E5DEVA003 /* DeviceActions+Apple.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5DEVA012 /* DeviceActions+Apple.swift */; };
+		E5NATX001 /* NativeActionExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5NATX011 /* NativeActionExecutor.swift */; };
+		E5SPOL001 /* SystemSpeechPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SPOL011 /* SystemSpeechPolicy.swift */; };
+		E5SPOL002 /* SystemSpeechPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5SPOL011 /* SystemSpeechPolicy.swift */; };
 		E5L100002 /* ClipboardOffload.m in Sources */ = {isa = PBXBuildFile; fileRef = E5L100022 /* ClipboardOffload.m */; };
 		E5L100003 /* OpenOffload.m in Sources */ = {isa = PBXBuildFile; fileRef = E5L100032 /* OpenOffload.m */; };
 		E5L100004 /* CalendarOffload.m in Sources */ = {isa = PBXBuildFile; fileRef = E5L100042 /* CalendarOffload.m */; };
@@ -381,6 +391,7 @@
 		E5LEO0006 /* AgentActivityLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LEO0016 /* AgentActivityLogView.swift */; };
 		E5LEO0028 /* LeoReleaseNotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LEO0018 /* LeoReleaseNotesView.swift */; };
 		E5LEO0007 /* AgentActivityModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LEO0014 /* AgentActivityModels.swift */; };
+		E5IMPL0001 /* AgentActivityLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LEO0015 /* AgentActivityLog.swift */; };
 		E5LEO0008 /* AgentToolDefinition.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LEO0017 /* AgentToolDefinition.swift */; };
 		E5LEO0009 /* AgentToolDefinition.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5LEO0017 /* AgentToolDefinition.swift */; };
 		E5LEO0010 /* AIChatViewModel+ToolPreflight.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5VMA0018 /* AIChatViewModel+ToolPreflight.swift */; };
@@ -1019,6 +1030,14 @@
 		E5L000012 /* FFmpegOffload.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = FFmpegOffload.m; sourceTree = "<group>"; };
 		E5L100011 /* NativeOffloadUtils.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NativeOffloadUtils.h; sourceTree = "<group>"; };
 		E5L100012 /* NativeOffloadUtils.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = NativeOffloadUtils.m; sourceTree = "<group>"; };
+		E5IMPL0012 /* NativeOffloadDispatch.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = NativeOffloadDispatch.c; sourceTree = "<group>"; };
+		E5IMPL0013 /* NativeOffloadDispatch.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = NativeOffloadDispatch.h; sourceTree = "<group>"; };
+		E5RUNR011 /* AgentRunResultReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentRunResultReader.swift; sourceTree = "<group>"; };
+		E5CAMO011 /* CameraCaptureOperation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCaptureOperation.swift; sourceTree = "<group>"; };
+		E5DEVA011 /* DeviceActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceActions.swift; sourceTree = "<group>"; };
+		E5DEVA012 /* DeviceActions+Apple.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DeviceActions+Apple.swift"; sourceTree = "<group>"; };
+		E5NATX011 /* NativeActionExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeActionExecutor.swift; sourceTree = "<group>"; };
+		E5SPOL011 /* SystemSpeechPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemSpeechPolicy.swift; sourceTree = "<group>"; };
 		E5L100021 /* ClipboardOffload.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ClipboardOffload.h; sourceTree = "<group>"; };
 		E5L100022 /* ClipboardOffload.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ClipboardOffload.m; sourceTree = "<group>"; };
 		E5L100031 /* OpenOffload.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = OpenOffload.h; sourceTree = "<group>"; };
@@ -1379,6 +1398,7 @@
 				2BB45FC87D39AE9AB4495BE9 /* VoiceProvider+Vendors.swift */,
 				88993FC8E3F0199C6638F664 /* VoiceProvider+System.swift */,
 				A1B2C3D4E5F60718293A4B5D /* SystemVoiceCatalog.swift */,
+				E5SPOL011 /* SystemSpeechPolicy.swift */,
 				F2941B643B8A2F048A2B154E /* VoiceProviderFactory.swift */,
 				86DD7E40E65177AB39C55882 /* VoiceProviderResolver.swift */,
 				E5VC00016 /* CorrectionStrategy.swift */,
@@ -1630,6 +1650,7 @@
 			isa = PBXGroup;
 			children = (
 				E5LEO0014 /* AgentActivityModels.swift */,
+				E5RUNR011 /* AgentRunResultReader.swift */,
 				E5LEO0015 /* AgentActivityLog.swift */,
 				E5ART0030 /* Artifacts */,
 				F1A00014 /* Background */,
@@ -1925,6 +1946,12 @@
 			children = (
 				E5L100011 /* NativeOffloadUtils.h */,
 				E5L100012 /* NativeOffloadUtils.m */,
+				E5IMPL0012 /* NativeOffloadDispatch.c */,
+				E5IMPL0013 /* NativeOffloadDispatch.h */,
+				E5CAMO011 /* CameraCaptureOperation.swift */,
+				E5DEVA011 /* DeviceActions.swift */,
+				E5DEVA012 /* DeviceActions+Apple.swift */,
+				E5NATX011 /* NativeActionExecutor.swift */,
 				E5L000011 /* FFmpegOffload.h */,
 				E5L000012 /* FFmpegOffload.m */,
 				E5L100041 /* CalendarOffload.h */,
@@ -2870,6 +2897,10 @@
 				BB1000120F700000000000AA /* ContextPolicy.swift in Sources */,
 				E5LD00002 /* ToolLoopDetector.swift in Sources */,
 				E5LEO0007 /* AgentActivityModels.swift in Sources */,
+				E5IMPL0001 /* AgentActivityLog.swift in Sources */,
+				E5CAMO002 /* CameraCaptureOperation.swift in Sources */,
+				E5DEVA002 /* DeviceActions.swift in Sources */,
+				E5SPOL002 /* SystemSpeechPolicy.swift in Sources */,
 				E5LEO0009 /* AgentToolDefinition.swift in Sources */,
 				E5LEO0010 /* AIChatViewModel+ToolPreflight.swift in Sources */,
 				E5R1C0013 /* AgentChatCorrectness.swift in Sources */,
@@ -3135,6 +3166,13 @@
 				E55000001 /* ISHShellExecutor.m in Sources */,
 				E5L000001 /* FFmpegOffload.m in Sources */,
 				E5L100001 /* NativeOffloadUtils.m in Sources */,
+				E5IMPL0002 /* NativeOffloadDispatch.c in Sources */,
+				E5RUNR001 /* AgentRunResultReader.swift in Sources */,
+				E5CAMO001 /* CameraCaptureOperation.swift in Sources */,
+				E5DEVA001 /* DeviceActions.swift in Sources */,
+				E5DEVA003 /* DeviceActions+Apple.swift in Sources */,
+				E5NATX001 /* NativeActionExecutor.swift in Sources */,
+				E5SPOL001 /* SystemSpeechPolicy.swift in Sources */,
 				E5L100002 /* ClipboardOffload.m in Sources */,
 				E5L100003 /* OpenOffload.m in Sources */,
 				E5L100004 /* CalendarOffload.m in Sources */,
@@ -3466,7 +3504,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 110;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -3475,7 +3513,7 @@
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.34.0;
+				MARKETING_VERSION = 1.35.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.UITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -3490,12 +3528,12 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 110;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.34.0;
+				MARKETING_VERSION = 1.35.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.UITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -3510,7 +3548,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 110;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_PREPROCESSOR_DEFINITIONS = (
@@ -3526,7 +3564,7 @@
 					"$(SRCROOT)/Vendor/cppjieba/include",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.34.0;
+				MARKETING_VERSION = 1.35.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.Tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -3541,7 +3579,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 110;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -3553,7 +3591,7 @@
 					"$(SRCROOT)/Vendor/cppjieba/include",
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.34.0;
+				MARKETING_VERSION = 1.35.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.Tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -3701,7 +3739,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = LeoPhoneAgent.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 110;
 				DEVELOPMENT_ASSET_PATHS = "\"Preview Content\"";
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
@@ -3731,7 +3769,7 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(SRCROOT)/../../deps/libs";
-				MARKETING_VERSION = 1.34.0;
+				MARKETING_VERSION = 1.35.0;
 				OTHER_LDFLAGS = (
 					"-lish_emu",
 					"-lish",
@@ -3756,7 +3794,7 @@
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = LeoPhoneAgent.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 110;
 				DEVELOPMENT_ASSET_PATHS = "\"Preview Content\"";
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
@@ -3786,7 +3824,7 @@
 					"@executable_path/Frameworks",
 				);
 				LIBRARY_SEARCH_PATHS = "$(SRCROOT)/../../deps/libs";
-				MARKETING_VERSION = 1.34.0;
+				MARKETING_VERSION = 1.35.0;
 				OTHER_LDFLAGS = (
 					"-lish_emu",
 					"-lish",
@@ -3807,7 +3845,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 110;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
@@ -3819,7 +3857,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.34.0;
+				MARKETING_VERSION = 1.35.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.ShareExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -3834,7 +3872,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 110;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
@@ -3846,7 +3884,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.34.0;
+				MARKETING_VERSION = 1.35.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.ShareExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -3861,7 +3899,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FileProvider/FileProvider.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 110;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = FileProvider/Info.plist;
@@ -3873,7 +3911,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.34.0;
+				MARKETING_VERSION = 1.35.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.FileProvider;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -3888,7 +3926,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = FileProvider/FileProvider.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 110;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = FileProvider/Info.plist;
@@ -3900,7 +3938,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.34.0;
+				MARKETING_VERSION = 1.35.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.FileProvider;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -3915,7 +3953,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = AgentWidget/AgentWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 110;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AgentWidget/Info.plist;
@@ -3927,7 +3965,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.34.0;
+				MARKETING_VERSION = 1.35.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.AgentWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -3942,7 +3980,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = AgentWidget/AgentWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 110;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = AgentWidget/Info.plist;
@@ -3954,7 +3992,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.34.0;
+				MARKETING_VERSION = 1.35.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.AgentWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -3969,7 +4007,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 110;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -3978,7 +4016,7 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "语音提问需要麦克风。";
 				INFOPLIST_KEY_WKApplication = YES;
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.leoyuan.leophoneagent;
-				MARKETING_VERSION = 1.34.0;
+				MARKETING_VERSION = 1.35.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
@@ -3995,7 +4033,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 109;
+				CURRENT_PROJECT_VERSION = 110;
 				DEVELOPMENT_TEAM = 48H5Y3LNUK;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = LeoPhoneAgent;
@@ -4003,7 +4041,7 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "语音提问需要麦克风。";
 				INFOPLIST_KEY_WKApplication = YES;
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.leoyuan.leophoneagent;
-				MARKETING_VERSION = 1.34.0;
+				MARKETING_VERSION = 1.35.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.leoyuan.leophoneagent.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;

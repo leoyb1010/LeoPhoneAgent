@@ -52,7 +52,7 @@ export const SETTINGS_TAB_GROUP_KEYS: Record<SettingsMainTabGroup, string> = {
 
 export const SETTINGS_MAIN_TABS: SettingsMainTabMeta[] = [
   // 智能体:先装好、再定档案、再接工具与技能。
-  { id: 'agents', label: 'Agents', labelKey: 'mainTabs.agents', group: 'agent', keywords: 'agents subagents claude code 智能体 本机智能体', icon: Bot },
+  { id: 'agents', label: 'Agents', labelKey: 'mainTabs.agents', group: 'agent', keywords: 'agents subagents claude code defaults model permission 智能体 本机智能体 新任务 默认 模型 权限', icon: Bot },
   { id: 'agentHub', label: 'Agent Hub', labelKey: 'mainTabs.agentHub', group: 'agent', keywords: 'agent hub profiles presets 智能体 档案 launch', icon: Boxes },
   { id: 'mcp', label: 'MCP', labelKey: 'mainTabs.mcp', group: 'agent', keywords: 'mcp servers model context protocol tools 工具', icon: Server },
   { id: 'skills', label: 'Skills', labelKey: 'mainTabs.skills', group: 'agent', keywords: 'skills abilities SKILL.md 技能', icon: Sparkles },

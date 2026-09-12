@@ -22,7 +22,6 @@ import { useDeviceSettings } from '../../hooks/useDeviceSettings';
 import { useSessionProtection } from '../../hooks/useSessionProtection';
 import { useSessionApprovals } from '../../hooks/useSessionApprovals';
 import { useProjectsState } from '../../hooks/useProjectsState';
-import { useQueuedMessageAutoSend } from '../../hooks/useQueuedMessageAutoSend';
 import { apiClient } from '../../utils/apiClient';
 import { startVisibleInterval } from '../../utils/visibilityInterval';
 import { withViewTransition } from '../../utils/viewTransition';
@@ -115,16 +114,6 @@ function AppContentInner() {
   // 会话列表的"待审批"标签只认这一份状态:真实的 permission_request。
   const { approvalSessionIds } = useSessionApprovals({ subscribe });
 
-  // Queued messages for sessions that finish while another session (or none)
-  // is being viewed are sent from here; the viewed session's composer handles
-  // its own queue.
-  useQueuedMessageAutoSend({
-    processingSessions,
-    activeSessionId: selectedSession?.id ?? sessionId ?? null,
-    ws,
-    sendMessage,
-    markSessionProcessing,
-  });
 
   const refreshRunningSessions = useCallback(async () => {
     try {
@@ -492,21 +481,24 @@ function AppContentInner() {
         />
       )}
 
-      {!isMobile && activeTab === 'dashboard' && (
-        <CommandBar
-          project={selectedProject}
-          localName={localName}
-          remotes={remotes}
-          onOpenAgentSettings={() => openSettingsTab('agents')}
-          onOpenProjects={() => { closeOverlays(); setProjectDrawerOpen(true); }}
-          onStartLocalRun={startLocalRun}
-          onStartRemoteRun={(machine, prompt, provider, effort) => {
-            return startRemoteRun(machine.name, prompt, remoteLaunchFields(machine, provider, {
-              cwd: selectedProject?.fullPath || selectedProject?.path,
-              thinking: effort,
-            }));
-          }}
-        />
+      {!isMobile && (
+        <div className={activeTab === 'dashboard' ? 'contents' : 'hidden'}>
+          <CommandBar
+            active={activeTab === 'dashboard'}
+            project={selectedProject}
+            localName={localName}
+            remotes={remotes}
+            onOpenAgentSettings={() => openSettingsTab('agents')}
+            onOpenProjects={() => { closeOverlays(); setProjectDrawerOpen(true); }}
+            onStartLocalRun={startLocalRun}
+            onStartRemoteRun={(machine, prompt, provider, effort) => {
+              return startRemoteRun(machine.name, prompt, remoteLaunchFields(machine, provider, {
+                cwd: selectedProject?.fullPath || selectedProject?.path,
+                thinking: effort,
+              }));
+            }}
+          />
+        </div>
       )}
 
       <div className="relative z-10 flex min-h-0 flex-1">
@@ -526,7 +518,7 @@ function AppContentInner() {
         <div className="leocodebox-workspace flex min-w-0 flex-1 flex-col">
           {remoteTarget ? (
             <RemoteSessionPanel target={remoteTarget} onClose={() => setRemoteTarget(null)} />
-          ) : projectsError ? (
+          ) : projectsError && activeTab !== 'collections' && activeTab !== 'fleet' ? (
             <main className="flex min-w-0 flex-1 items-center justify-center p-6">
               <div role="alert" className="max-w-lg border border-destructive/40 bg-card p-6 text-center">
                 <h2 className="text-base font-semibold text-foreground">{t('errorBoundary.projectsLoad')}</h2>
@@ -577,7 +569,7 @@ function AppContentInner() {
       <ProjectDrawer
         open={projectDrawerOpen}
         onClose={() => setProjectDrawerOpen(false)}
-        sidebarProps={sidebarSharedProps}
+        sidebarProps={{ ...sidebarSharedProps, onShowSettings: () => openSettingsTab() }}
       />
 
       {localTool && (
@@ -592,8 +584,8 @@ function AppContentInner() {
         selectedProject={selectedProject}
         selectedSession={selectedSession}
         onStartNewChat={handleNewSession}
-        onOpenSettings={() => openSettingsTab()}
-        onShowTab={setActiveTab}
+        onOpenSettings={openSettingsTab}
+        onShowTab={(tab) => { closeOverlays(); setRemoteTarget(null); setActiveTab(tab); }}
       />
       <SettingsHost
         isOpen={sidebarSharedProps.showSettings}

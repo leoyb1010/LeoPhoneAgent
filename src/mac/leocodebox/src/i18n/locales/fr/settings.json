@@ -687,5 +687,9 @@
     "placeholder": "Rechercher",
     "noResults": "Aucun réglage correspondant",
     "clear": "Effacer"
+  },
+  "agentDefaults": {
+    "title": "Valeurs par défaut des nouvelles tâches",
+    "saveFailed": "Impossible d’enregistrer les valeurs par défaut"
   }
 }

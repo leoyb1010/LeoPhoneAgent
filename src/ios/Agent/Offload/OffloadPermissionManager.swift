@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 
 // MARK: - Types
 
@@ -17,11 +18,6 @@ enum OffloadPermissionLevel: Int, CaseIterable {
     }
 }
 
-enum PermissionResult {
-    case allowed
-    case denied(String)
-}
-
 struct PermissionRequest: Identifiable {
     let id: String
     let commandName: String
@@ -29,7 +25,8 @@ struct PermissionRequest: Identifiable {
     let description: String
     /// The full shell command string, e.g. "apple-healthkit query --type steps"
     let fullCommand: String
-    let continuation: CheckedContinuation<Bool, Never>
+    /// Native argv is already tokenized; never split quoted values or shell-looking data.
+    var nativeArguments: [String]? = nil
 
     /// Parse the command arguments into displayable key-value pairs.
     /// Handles patterns like: `command subcommand --key value --flag`.
@@ -43,7 +40,7 @@ struct PermissionRequest: Identifiable {
     /// snippet as `arg` rows, pushing the Allow / Deny buttons below the
     /// sheet's bottom edge.
     var parsedArguments: [(key: String, value: String)] {
-        let parts = Self.firstCommandTokens(fullCommand)
+        let parts = nativeArguments.map { [commandName] + $0 } ?? Self.firstCommandTokens(fullCommand)
         guard parts.count > 1 else { return [] }
 
         var result: [(key: String, value: String)] = []
@@ -243,12 +240,6 @@ struct OffloadCommandInfo {
 
 // MARK: - Manager
 
-/// Fallback session id used when an offload permission check has no chat session
-/// context (e.g. invocations outside the chat flow, or before a session id has
-/// been assigned). Mirrors the Android constant `OFFLOAD_GLOBAL_SESSION_ID`
-/// (commit 20d8e68) so per-session grants stay wire-compatible across platforms.
-let OFFLOAD_GLOBAL_SESSION_ID = "offload-global"
-
 @MainActor
 final class OffloadPermissionManager: ObservableObject {
     static let shared = OffloadPermissionManager()
@@ -270,11 +261,12 @@ final class OffloadPermissionManager: ObservableObject {
         .init(name: "apple-camera", displayLabel: "Camera", description: "Photos, barcodes, and documents you capture in the camera UI", category: .privacy, showInSettings: true),
         .init(name: "apple-motion", displayLabel: "Motion", description: "Step counts and motion activity from the last 7 days", category: .privacy, showInSettings: true),
         .init(name: "apple-shortcuts", displayLabel: "Shortcuts", description: "Runs shortcuts you created in the Shortcuts app", category: .privacy, showInSettings: true),
-        // Media — no personal data, always bypass
+        // Audio input, selected files and the media library can contain personal data.
+        // Existing explicit settings are preserved; unset values default to Ask Once.
+        .init(name: "apple-speech", displayLabel: "Speech", description: "Audio submitted for transcription", category: .privacy, showInSettings: true),
+        .init(name: "apple-player", displayLabel: "Player", description: "Media files opened in the native player", category: .privacy, showInSettings: true),
+        .init(name: "apple-media", displayLabel: "Media", description: "Media library and supported playback controls", category: .privacy, showInSettings: true),
         .init(name: "apple-speak", displayLabel: "Speak", description: "", category: .media, showInSettings: false),
-        .init(name: "apple-speech", displayLabel: "Speech", description: "", category: .media, showInSettings: false),
-        .init(name: "apple-player", displayLabel: "Player", description: "", category: .media, showInSettings: false),
-        .init(name: "apple-media", displayLabel: "Media", description: "", category: .media, showInSettings: false),
         // System — no personal data, always bypass
         .init(name: "apple-device", displayLabel: "Device", description: "", category: .system, showInSettings: false),
         .init(name: "apple-notification", displayLabel: "Notification", description: "", category: .system, showInSettings: false),
@@ -287,167 +279,181 @@ final class OffloadPermissionManager: ObservableObject {
     ]
 
     @Published var pendingRequest: PermissionRequest?
-    /// Extra ask-once prompts waiting behind `pendingRequest`. A second
-    /// concurrent `shell_execute` used to overwrite the first continuation.
-    private var pendingQueue: [PermissionRequest] = []
-
-    /// Per-session "Ask Once" grants: [sessionId: Set<commandName>]
     private var sessionGrants: [String: Set<String>] = [:]
-
+    private var presenters: Set<String> = []
+    private var waitingByRun: [String: Int] = [:]
     private let defaults = UserDefaults.standard
     private let logger = AppLogger(category: "OffloadPermission")
+    private lazy var queue: OffloadPermissionQueue = {
+        let queue = OffloadPermissionQueue()
+        queue.onChange = { [weak self] pending in
+            guard let self else { return }
+            self.pendingRequest = pending.map { pending in
+                let invocation = pending.invocation
+                let info = Self.allCommands.first { $0.name == invocation.command }
+                return PermissionRequest(
+                    id: pending.id, commandName: invocation.registeredCommand,
+                    displayLabel: info?.displayLabel ?? invocation.command,
+                    description: info?.description ?? "",
+                    fullCommand: ([invocation.registeredCommand] + invocation.arguments)
+                        .map { "'" + $0.replacingOccurrences(of: "'", with: "'\"'\"'") + "'" }.joined(separator: " "),
+                    nativeArguments: invocation.arguments
+                )
+            }
+        }
+        return queue
+    }()
 
     private init() {}
 
-    // MARK: - Storage
-
-    private func defaultsKey(for command: String) -> String {
-        "offloadPermission.\(command)"
+    private func defaultsKey(for command: String, action: String? = nil) -> String {
+        "offloadPermission.\(command)" + (action.map { ".action.\($0)" } ?? "")
     }
 
-    func permissionLevel(for command: String) -> OffloadPermissionLevel {
-        let key = defaultsKey(for: command)
-        let stored = defaults.object(forKey: key) as? Int
+    func permissionLevel(for command: String, action: String? = nil) -> OffloadPermissionLevel {
+        let stored = defaults.object(forKey: defaultsKey(for: command)) as? Int
         let isPrivacy = Self.allCommands.first(where: { $0.name == command })?.category == .privacy
-        let raw = OffloadPermissionPolicy.resolvedLevel(stored: stored, isPrivacy: isPrivacy)
-        return OffloadPermissionLevel(rawValue: raw) ?? (isPrivacy ? .askOnce : .bypass)
+        let family = OffloadPermissionPolicy.resolvedLevel(stored: stored, isPrivacy: isPrivacy)
+        let validFamily = OffloadPermissionLevel(rawValue: family)?.rawValue ?? (isPrivacy ? 1 : 0)
+        let actionOverride = action.flatMap { defaults.object(forKey: defaultsKey(for: command, action: $0)) as? Int }
+        return OffloadPermissionLevel(rawValue: OffloadPermissionPolicy.resolvedNativeLevel(
+            family: validFamily, actionOverride: actionOverride
+        )) ?? .askOnce
     }
 
-    func setPermissionLevel(_ level: OffloadPermissionLevel, for command: String) {
-        defaults.set(level.rawValue, forKey: defaultsKey(for: command))
+    func setPermissionLevel(_ level: OffloadPermissionLevel, for command: String, action: String? = nil) {
+        defaults.set(level.rawValue, forKey: defaultsKey(for: command, action: action))
+        // A settings change invalidates prior grants immediately, including a
+        // decision already visible in the sheet. The continuation rechecks too.
+        for sid in Array(sessionGrants.keys) {
+            sessionGrants[sid] = sessionGrants[sid]?.filter { !$0.hasPrefix(command + ".") }
+        }
+        queue.cancel(where: { pending in
+            let invocation = pending.invocation
+            return (invocation.command == command || invocation.registeredCommand == command)
+                && (action == nil || invocation.action == action)
+        }, decision: level == .notAllowed ? .disabled : .cancelled)
     }
 
     func setAllBypass() {
-        for cmd in Self.allCommands {
-            setPermissionLevel(.bypass, for: cmd.name)
-        }
+        for command in Self.allCommands { setPermissionLevel(.bypass, for: command.name) }
         sessionGrants.removeAll()
     }
 
-    // MARK: - Command Extraction
-
-    static func extractOffloadCommand(from shellCommand: String) -> String? {
-        OffloadPermissionPolicy.extractOffloadCommand(
-            from: shellCommand,
-            known: allCommands.map(\.name)
-        )
-    }
-
-    // MARK: - Permission Check
-
-    func checkPermission(for command: String, sessionId: String?, fullCommand: String = "") async -> PermissionResult {
-        // Mirror Android: prefer the caller-supplied session id; fall back to the
-        // global bucket when the chat hasn't bound a session yet (or when invoked
-        // outside chat). This keeps `Ask Once` grants per-session when possible
-        // while still working for non-chat callers.
-        let trimmed = sessionId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let sessionId = trimmed.isEmpty ? OFFLOAD_GLOBAL_SESSION_ID : trimmed
-        let level = permissionLevel(for: command)
-
-        switch level {
-        case .bypass:
-            return .allowed
-
-        case .notAllowed:
-            logger.info("Permission denied (Not Allowed): \(command)")
-            return .denied(OffloadPermissionPolicy.disabledDenial(command: command))
-
-        case .askOnce:
-            // Check session grant
-            if sessionGrants[sessionId]?.contains(command) == true {
-                return .allowed
-            }
-
-            let cmdInfo = Self.allCommands.first(where: { $0.name == command })
-            let displayLabel = cmdInfo?.displayLabel ?? command
-            let description = cmdInfo?.description ?? ""
-
-            SessionActivityTracker.shared.updateActivityPhase(
-                sessionId,
-                phase: .waitingForPermission,
-                reason: .permissionApproval
-            )
-
-            let allowed = await withCheckedContinuation { continuation in
-                let request = PermissionRequest(
-                    id: UUID().uuidString,
-                    commandName: command,
-                    displayLabel: displayLabel,
-                    description: description,
-                    fullCommand: fullCommand,
-                    continuation: continuation
-                )
-                if self.pendingRequest == nil {
-                    self.pendingRequest = request
-                } else {
-                    self.pendingQueue.append(request)
-                }
-
-                // 30s timeout
-                Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 30_000_000_000)
-                    if self.pendingRequest?.id == request.id {
-                        self.pendingRequest = nil
-                        continuation.resume(returning: false)
-                        self.promoteNextPermissionRequest()
-                    } else if let idx = self.pendingQueue.firstIndex(where: { $0.id == request.id }) {
-                        self.pendingQueue.remove(at: idx)
-                        continuation.resume(returning: false)
-                    }
-                }
-            }
-
-            // The permission decision closes the wait regardless of outcome.
-            // The tool result itself will carry denial details when applicable.
-            SessionActivityTracker.shared.updateActivityPhase(
-                sessionId,
-                phase: .usingTool
-            )
-
-            if allowed {
-                sessionGrants[sessionId, default: []].insert(command)
-                logger.info("Permission granted (Ask Once): \(command)")
-                return .allowed
-            } else {
-                logger.info("Permission denied (Ask Once): \(command)")
-                if sessionGrants[sessionId]?.contains(command) == true {
-                    // Was granted via timeout race — treat as denied
-                    return .denied(OffloadPermissionPolicy.timeoutDenial(command: command))
-                }
-                return .denied(OffloadPermissionPolicy.declinedDenial(command: command))
-            }
+    /// Installed by the single root presenter. A chat, terminal, or native
+    /// entry may request consent; a hidden/locked/background app cannot.
+    func setPresenter(_ id: String, available: Bool) {
+        if available { presenters.insert(id) } else { presenters.remove(id) }
+        if presenters.isEmpty {
+            queue.cancel(where: { _ in true }, decision: .needsForeground)
         }
     }
 
-    // MARK: - UI Response
+    func authorize(command: String, action: String, arguments: [String] = [],
+                   sessionId: String?) async -> OffloadPermissionDecision {
+        await authorize(command: command, arguments: [action] + arguments, sessionId: sessionId)
+    }
+
+    /// One policy for guest execve and direct Swift/native routes. Session IDs
+    /// on the guest path come from the host-issued fs_context, never env/argv.
+    func authorize(command: String, arguments: [String], sessionId: String?,
+                   requestID: String = UUID().uuidString,
+                   isCancelled: @escaping () -> Bool = { false }) async -> OffloadPermissionDecision {
+        guard Self.allCommands.contains(where: { $0.name == command }) else { return .unknownCapability }
+        let invocation = OffloadPermissionInvocation(command: command, arguments: arguments)
+        let session = sessionId?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sid = session.flatMap { $0.isEmpty ? nil : $0 }
+        if Task.isCancelled || isCancelled() { return .cancelled }
+        if permissionLevel(for: command) == .notAllowed { return .disabled }
+        let level = permissionLevel(for: invocation.command, action: invocation.action)
+        if level == .notAllowed { return .disabled }
+        if level == .bypass || invocation.isStatusOnly { return .allowed }
+        if let sid, sessionGrants[sid]?.contains(invocation.grantScope) == true { return .allowed }
+        guard UIApplication.shared.applicationState == .active, !presenters.isEmpty else { return .needsForeground }
+
+        let tracker = SessionActivityTracker.shared
+        let requestingRunID = sid.flatMap { tracker.isActive($0) ? tracker.currentRunId(for: $0) : nil }
+        if let sid, let requestingRunID {
+            waitingByRun[requestingRunID, default: 0] += 1
+            tracker.updateActivityPhase(sid, phase: .waitingForPermission, reason: .permissionApproval)
+        }
+        defer {
+            if let sid, let requestingRunID {
+                let remaining = max(0, (waitingByRun[requestingRunID] ?? 1) - 1)
+                if remaining == 0 {
+                    waitingByRun.removeValue(forKey: requestingRunID)
+                    if OffloadPermissionPolicy.isSameActiveRun(requestedRunID: requestingRunID,
+                        currentRunID: tracker.currentRunId(for: sid), isActive: tracker.isActive(sid)) {
+                        tracker.updateActivityPhase(sid, phase: .usingTool)
+                    }
+                } else { waitingByRun[requestingRunID] = remaining }
+            }
+        }
+        let decision = await queue.enqueue(.init(id: requestID, invocation: invocation, sessionID: sid))
+        if Task.isCancelled || isCancelled() { return .cancelled }
+        if let sid, let requestingRunID,
+           !OffloadPermissionPolicy.isSameActiveRun(requestedRunID: requestingRunID,
+               currentRunID: tracker.currentRunId(for: sid), isActive: tracker.isActive(sid)) { return .cancelled }
+        guard decision == .allowed else { return decision }
+        // Revocation wins over a late response from the former sheet.
+        if permissionLevel(for: command) == .notAllowed
+            || permissionLevel(for: invocation.command, action: invocation.action) == .notAllowed { return .disabled }
+        guard UIApplication.shared.applicationState == .active, !presenters.isEmpty else { return .needsForeground }
+        // Context-free terminal/native invocations get one approval only; never
+        // share a process-wide "global session" grant with unrelated callers.
+        if let sid { sessionGrants[sid, default: []].insert(invocation.grantScope) }
+        logger.info("Native permission granted: \(invocation.command).\(invocation.action)")
+        return .allowed
+    }
 
     func respond(to requestId: String, allowed: Bool) {
-        guard let request = pendingRequest, request.id == requestId else { return }
-        pendingRequest = nil
-        request.continuation.resume(returning: allowed)
-        promoteNextPermissionRequest()
+        queue.respond(id: requestId, decision: allowed ? .allowed : .denied)
     }
 
-    private func promoteNextPermissionRequest() {
-        guard pendingRequest == nil, !pendingQueue.isEmpty else { return }
-        pendingRequest = pendingQueue.removeFirst()
+    func cancelRequest(_ id: String) {
+        queue.cancel(where: { $0.id == id }, decision: .cancelled)
     }
-
-    // MARK: - Session Reset
 
     func resetSessionGrants(for sessionId: String) {
         sessionGrants.removeValue(forKey: sessionId)
-        // [T-offload-queue-leak] 清授权的同时必须把排队中的请求也裁掉。
-        // pendingQueue 里每一条都挂着一个 CheckedContinuation:会话切走后
-        // 那些 continuation 再也不会有人去 resolve(弹窗已经跟着旧会话消失),
-        // 对应的 shell_execute 就永远挂在 await 上——表现为"上一轮任务卡死"。
-        // 一律按拒绝收尾,并把 pendingRequest 也一起结掉。
-        if let request = pendingRequest {
-            pendingRequest = nil
-            request.continuation.resume(returning: false)
+        queue.cancel(where: { $0.sessionID == sessionId }, decision: .cancelled)
+    }
+}
+
+/// A native worker may cancel while its MainActor hop is still queued. The
+/// synchronous flag closes that race before a permission sheet can be created.
+@objc final class NativeOffloadPermissionOperation: NSObject, @unchecked Sendable {
+    let id = UUID().uuidString
+    private let lock = NSLock()
+    private var cancelled = false
+    var isCancelled: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return cancelled
+    }
+
+    @objc func cancel() {
+        lock.lock()
+        cancelled = true
+        lock.unlock()
+        Task { @MainActor in OffloadPermissionManager.shared.cancelRequest(self.id) }
+    }
+}
+
+@objc final class NativeOffloadPermissionBridge: NSObject {
+    @objc(authorizeCommand:arguments:fsContext:completion:)
+    static func authorize(command: String, arguments: [String], fsContext: UInt64,
+                          completion: @escaping (String?, String?) -> Void) -> NativeOffloadPermissionOperation {
+        let operation = NativeOffloadPermissionOperation()
+        // Resolve the trusted host token before hopping to the UI actor. Unknown
+        // tokens are deliberately context-free, never the currently visible chat.
+        let sid = MinisFsRouter.shared.sid(for: fsContext)
+        Task { @MainActor in
+            let result = await OffloadPermissionManager.shared.authorize(
+                command: command, arguments: arguments, sessionId: sid,
+                requestID: operation.id, isCancelled: { operation.isCancelled }
+            )
+            completion(result.errorCode, result.message(command: command))
         }
-        let orphaned = pendingQueue
-        pendingQueue.removeAll()
-        orphaned.forEach { $0.continuation.resume(returning: false) }
+        return operation
     }
 }

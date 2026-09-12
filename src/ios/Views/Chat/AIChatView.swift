@@ -804,7 +804,6 @@ struct AIChatView: View {
         } message: {
             Text(String(localized: "Messages above this point will be compacted into a summary. This cannot be undone."))
         }
-        .offloadPermissionDialog()
         .environment(\.leoOpenURL, LeoOpenURLAction { url in
             handleMinisURLTap(url)
         })

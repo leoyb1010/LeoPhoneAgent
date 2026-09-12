@@ -39,8 +39,9 @@ xcodebuild -project "$project" -scheme LeoPhoneAgent \
   build >/tmp/ios-install-build.log 2>&1 || {
     echo "构建失败,尾部日志:" >&2; tail -25 /tmp/ios-install-build.log >&2; exit 1; }
 
-app=$(find "$derived/Build/Products" -maxdepth 2 -name "LeoPhoneAgent.app" -type d | head -1)
-[ -n "$app" ] || { echo "没找到构建产物" >&2; exit 1; }
+app="$derived/Build/Products/Release-iphoneos/LeoPhoneAgent.app"
+[ -d "$app" ] || { echo "没找到 Release 真机构建产物" >&2; exit 1; }
+codesign --verify --deep --strict "$app" || exit 1
 
 echo "==> [3/3] 安装"
 rc=0

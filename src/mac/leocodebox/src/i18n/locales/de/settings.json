@@ -629,5 +629,9 @@
     "placeholder": "Einstellungen suchen",
     "noResults": "Keine passenden Einstellungen",
     "clear": "Löschen"
+  },
+  "agentDefaults": {
+    "title": "Standardwerte für neue Aufgaben",
+    "saveFailed": "Standardwerte konnten nicht gespeichert werden"
   }
 }

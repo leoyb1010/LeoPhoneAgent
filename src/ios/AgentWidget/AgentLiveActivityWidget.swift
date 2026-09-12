@@ -285,6 +285,9 @@ private extension AgentWidgetSnapshot {
             case .suspended: return LeoWidgetLanguage.string("Task paused")
             case .completed: return LeoWidgetLanguage.string("Task completed")
             case .failed: return LeoWidgetLanguage.string("Task needs attention")
+            case .cancelled: return LeoWidgetLanguage.string("Cancelled")
+            case .waitingForUser: return LeoWidgetLanguage.string("Waiting for you")
+            case .unknown: return LeoWidgetLanguage.string("Status unavailable")
             }
         }
         return title.isEmpty ? state.fallbackTitle : title
@@ -306,6 +309,9 @@ private extension AgentWidgetSnapshot.State {
         case .suspended: return "pause.circle.fill"
         case .completed: return "checkmark.circle.fill"
         case .failed: return "exclamationmark.circle.fill"
+        case .cancelled: return "xmark.circle.fill"
+        case .waitingForUser: return "hand.raised.fill"
+        case .unknown: return "questionmark.circle"
         }
     }
 
@@ -315,6 +321,8 @@ private extension AgentWidgetSnapshot.State {
         case .suspended: return .orange
         case .completed: return .green
         case .failed: return .red
+        case .cancelled, .unknown: return .secondary
+        case .waitingForUser: return .orange
         }
     }
 
@@ -325,6 +333,9 @@ private extension AgentWidgetSnapshot.State {
         case .suspended: return LeoWidgetLanguage.string("Paused")
         case .completed: return LeoWidgetLanguage.string("Completed")
         case .failed: return LeoWidgetLanguage.string("Needs attention")
+        case .cancelled: return LeoWidgetLanguage.string("Cancelled")
+        case .waitingForUser: return LeoWidgetLanguage.string("Waiting for you")
+        case .unknown: return LeoWidgetLanguage.string("Status unavailable")
         }
     }
 
@@ -335,6 +346,7 @@ private extension AgentWidgetSnapshot.State {
         case .suspended: return LeoWidgetLanguage.string("Open to resume")
         case .completed: return LeoWidgetLanguage.string("Open result")
         case .failed: return LeoWidgetLanguage.string("Open recovery options")
+        case .cancelled, .waitingForUser, .unknown: return LeoWidgetLanguage.string("Open for live progress")
         }
     }
 }
@@ -1037,6 +1049,10 @@ private struct QuickTaskChip: View {
         case .running: return "hourglass"
         case .succeeded: return "checkmark.circle.fill"
         case .failed: return "exclamationmark.triangle.fill"
+        case .cancelled: return "xmark.circle.fill"
+        case .suspended: return "pause.circle.fill"
+        case .waitingForUser: return "hand.raised.fill"
+        case .unknown: return "questionmark.circle"
         }
     }
 
@@ -1045,6 +1061,8 @@ private struct QuickTaskChip: View {
         case .idle, .running: return Color.accentColor
         case .succeeded: return .green
         case .failed: return .orange
+        case .suspended, .waitingForUser: return .orange
+        case .cancelled, .unknown: return .secondary
         }
     }
 }

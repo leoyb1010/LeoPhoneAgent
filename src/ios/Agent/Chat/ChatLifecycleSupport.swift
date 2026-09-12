@@ -265,18 +265,21 @@ final class SessionActivityTracker: ObservableObject {
         _ sessionId: String,
         finalPhase: AgentActivityPhase = .cancelled,
         reason: AgentActivityReason? = nil,
+        resultMessageId: String? = nil,
         source: String = #function
     ) {
         let wasPresent = activeSessions.contains(sessionId)
+        var receiptStored = false
         activeSessions.remove(sessionId)
         sessionToolInfo.removeValue(forKey: sessionId)
         if wasPresent, let runId = activityRunIds[sessionId] {
-            AgentActivityLog.shared.append(AgentActivityEvent(
+            receiptStored = AgentActivityLog.shared.append(AgentActivityEvent(
                 runId: runId,
                 sessionId: sessionId,
                 kind: finalPhase.isTerminal ? .runFinished : .phaseChanged,
                 phase: finalPhase,
-                reason: reason
+                reason: reason,
+                resultMessageId: resultMessageId
             ))
             lastActivityPhases[sessionId] = finalPhase
             if finalPhase.isTerminal {
@@ -316,9 +319,25 @@ final class SessionActivityTracker: ObservableObject {
             LeoHaptics.agent(finalPhase == .failed ? .taskFailed : .taskCompleted)
         }
         logger.info("🔴[Tracker] setInactive(\(sessionId.prefix(8))) src=\(source) wasPresent=\(wasPresent) now count=\(activeSessions.count) ids=[\(activeSessions.map { $0.prefix(8) }.joined(separator: ","))] clearedAliases=\(orphanedAliases.count)")
+        let snapshotState: AgentWidgetSnapshot.State?
+        if !wasPresent || sessionId.hasPrefix("intent-eager:") {
+            snapshotState = nil
+        } else if !receiptStored {
+            snapshotState = .unknown
+        } else {
+            switch finalPhase {
+            case .completed: snapshotState = .completed
+            case .failed: snapshotState = .failed
+            case .cancelled: snapshotState = .cancelled
+            case .unverified: snapshotState = .unknown
+            case .suspended: snapshotState = .suspended
+            case .waitingForUser, .waitingForPermission: snapshotState = .waitingForUser
+            default: snapshotState = .idle
+            }
+        }
         BackgroundKeepAliveManager.shared.refreshHomeScreenWidget(
             source: "trackerInactive",
-            terminalState: finalPhase == .failed ? .failed : .completed,
+            terminalState: snapshotState,
             terminalSessionId: sessionId
         )
         // [T-widget-briefing-pending] A widget-launched run just ended; its
@@ -359,6 +378,10 @@ final class SessionActivityTracker: ObservableObject {
         if let realId = draftAliases[sessionId],
            activeSessions.contains(realId) { return true }
         return false
+    }
+
+    func currentRunId(for sessionId: String) -> String? {
+        activityRunIds[draftAliases[sessionId] ?? sessionId]
     }
 }
 

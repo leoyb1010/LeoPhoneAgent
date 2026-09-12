@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "frames": [
+    {"type":"durability","state":"pending","durable_seq":10,"persisted_seq":10,"latest_seq":12,"pending_bytes":640,"pending_events":2,"dropped_events":0,"missing_ranges":[],"error":null},
+    {"type":"durability","state":"durable","durable_seq":12,"persisted_seq":12,"latest_seq":12,"pending_bytes":0,"pending_events":0,"dropped_events":0,"missing_ranges":[],"error":null},
+    {"type":"durability","state":"degraded","durable_seq":10,"persisted_seq":15,"latest_seq":15,"pending_bytes":0,"pending_events":0,"dropped_events":2,"missing_ranges":[{"from":11,"to":12,"reason":"queue_overflow"}],"error":"queue_overflow"}
+  ]
+}

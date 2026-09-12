@@ -58,9 +58,10 @@ function sessionRoot(session: HarnessSession): string | null {
 }
 
 /** 候选路径:从事件日志里 CLI 报告过的文件路径。 */
-function candidatePaths(session: HarnessSession): string[] {
+async function candidatePaths(session: HarnessSession): Promise<string[]> {
+  await session.flushJournal();
   const out = new Set<string>();
-  for (const event of session.replay(0)) {
+  for await (const event of session.replay(0)) {
     if (event.event !== 'tool.started' && event.event !== 'tool.completed') continue;
     const preview = typeof event.preview === 'string' ? event.preview : '';
     const matches = preview.match(/(?:[\w.~/-]*\/)?[\w.-]+\.[A-Za-z0-9]{1,8}/g);
@@ -74,12 +75,12 @@ function candidatePaths(session: HarnessSession): string[] {
 }
 
 /** 把候选解析成"确实存在、确实在 cwd 内、确实是普通文件"的产物。 */
-export function listArtifacts(session: HarnessSession): ArtifactInfo[] {
+export async function listArtifacts(session: HarnessSession): Promise<ArtifactInfo[]> {
   const root = sessionRoot(session);
   if (!root) return [];
   const seen = new Map<string, ArtifactInfo>();
 
-  for (const candidate of candidatePaths(session)) {
+  for (const candidate of await candidatePaths(session)) {
     if (seen.size >= MAX_ARTIFACTS) break;
     const abs = path.isAbsolute(candidate) ? candidate : path.join(root, candidate);
     let real: string;

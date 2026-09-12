@@ -81,10 +81,9 @@ struct FollowUpSessionIntent: AppIntent {
         logger.info("📎 FollowUp vm.attachments after add: \(vm.attachments.count)")
 
         vm.inputText = prompt
-        vm.send()
-        logger.info("📎 FollowUp send() called, isProcessing=\(vm.isProcessing)")
-
         let sid = vm.sessionId ?? session.id
+        let runId = try SendPromptIntent.dispatchRun(vm: vm, sessionId: sid, pendingId: pendingId) { vm.send() }
+        logger.info("📎 FollowUp send() called, isProcessing=\(vm.isProcessing)")
 
         // Resolve model name
         var modelName = vm.selectedModel.displayName
@@ -111,60 +110,29 @@ struct FollowUpSessionIntent: AppIntent {
         )
 
         if waitForResult {
-            // Synchronous mode: wait for completion
-            for await processing in vm.$isProcessing.values {
-                if !processing { break }
-            }
-
-            // [T-shortcuts-diag-and-pending] Loop finished — clear the pending
-            // record so the next foreground scan doesn't flag it as orphaned.
-            ShortcutRunTracker.markCompleted(recordId: pendingId, reason: "waitForResult.done")
-
-            let responseText = SendPromptIntent.extractResponseText(from: vm)
-
-            ShortcutNotification.post(
-                id: "shortcut-followup-done-\(sid)",
-                title: "LeoPhoneAgent: Follow-up Done",
-                body: "\(modelName): \(String(responseText.prefix(200)))",
-                sessionId: sid
-            )
+            let settled = await SendPromptIntent.settleRun(
+                sessionId: sid, runId: runId, pendingId: pendingId,
+                title: "LeoPhoneAgent Follow-up", notificationId: "shortcut-followup-done")
+            let responseText = settled.text
 
             let result = SendPromptResult(
                 sessionId: sid,
                 modelName: modelName,
-                status: "Completed",
+                status: settled.outcome.shortcutStatus,
                 isNewSession: false,
                 prompt: prompt,
                 responseText: responseText,
-                artifactFileNames: await SendPromptResult.artifactNames(for: sid)
+                artifactFileNames: await SendPromptResult.artifactNames(for: sid),
+                runId: runId
             )
             return .result(value: result, dialog: "\(responseText.prefix(500))")
         }
 
         // Async mode: return immediately
-        let capturedModelName = modelName
-        let capturedSid = sid
-        let capturedPendingId = pendingId
         Task { @MainActor in
-            for await processing in vm.$isProcessing.values {
-                if !processing { break }
-            }
-
-            // [T-shortcuts-diag-and-pending] Loop finished — clear the pending
-            // record. If the process is suspended before we reach this line
-            // (the very bug we're diagnosing), the record survives and the
-            // next foreground scan surfaces guidance based on the recorded
-            // toggle snapshot.
-            ShortcutRunTracker.markCompleted(recordId: capturedPendingId, reason: "async.done")
-
-            let summary = String(SendPromptIntent.extractResponseText(from: vm).prefix(200))
-
-            ShortcutNotification.post(
-                id: "shortcut-followup-done-\(capturedSid)",
-                title: "LeoPhoneAgent: Follow-up Done",
-                body: "\(capturedModelName): \(summary)",
-                sessionId: capturedSid
-            )
+            _ = await SendPromptIntent.settleRun(
+                sessionId: sid, runId: runId, pendingId: pendingId,
+                title: "LeoPhoneAgent Follow-up", notificationId: "shortcut-followup-done")
         }
 
         let result = SendPromptResult(
@@ -172,7 +140,8 @@ struct FollowUpSessionIntent: AppIntent {
             modelName: modelName,
             status: "Running",
             isNewSession: false,
-            prompt: prompt
+            prompt: prompt,
+            runId: runId
         )
 
         return .result(value: result, dialog: "Follow-up sent to \(session.displayName) with \(modelName).")

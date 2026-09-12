@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import SQLite3
 
 private let activityLogLogger = AppLogger(category: "AgentActivityLog")
@@ -13,29 +14,32 @@ final class AgentActivityLog: ObservableObject {
     static let shared = AgentActivityLog()
 
     @Published private(set) var revision = 0
+    @Published private(set) var persistenceAvailable = true
 
     private static let maxRows = 5000
     private var db: OpaquePointer?
     private let dbURL: URL
 
-    init() {
+    init(databaseURL: URL? = nil) {
         let library = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first!
-        var base = library.appendingPathComponent("LeoPhoneAgent", isDirectory: true)
+        var base = databaseURL?.deletingLastPathComponent()
+            ?? library.appendingPathComponent("LeoPhoneAgent", isDirectory: true)
         try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         var resourceValues = URLResourceValues()
         resourceValues.isExcludedFromBackup = true
         try? base.setResourceValues(resourceValues)
-        dbURL = base.appendingPathComponent("agent-activity.db")
+        dbURL = databaseURL ?? base.appendingPathComponent("agent-activity.db")
         openAndMigrate()
         recoverRunsInterruptedByPreviousProcess()
     }
 
-    deinit {
+    isolated deinit {
         sqlite3_close(db)
     }
 
     private func openAndMigrate() {
         guard sqlite3_open(dbURL.path, &db) == SQLITE_OK else {
+            persistenceAvailable = false
             activityLogLogger.error("Could not open device-local activity database")
             return
         }
@@ -53,6 +57,7 @@ final class AgentActivityLog: ObservableObject {
             )
         """)
         ensureColumn("reason", definition: "TEXT")
+        ensureColumn("result_message_id", definition: "TEXT")
         exec("CREATE INDEX IF NOT EXISTS idx_activity_session_at ON activity_event(session_id, at DESC)")
         exec("CREATE INDEX IF NOT EXISTS idx_activity_run_at ON activity_event(run_id, at DESC)")
         exec("""
@@ -68,6 +73,7 @@ final class AgentActivityLog: ObservableObject {
         """)
         exec("CREATE INDEX IF NOT EXISTS idx_run_state_session_updated ON agent_run_state(session_id, updated_at DESC)")
         exec("CREATE INDEX IF NOT EXISTS idx_run_state_phase ON agent_run_state(phase)")
+        ensureColumn("result_message_id", definition: "TEXT", table: "agent_run_state")
         // Backfill the latest privacy-safe event for databases created before
         // durable run state existed. This table is device-local and never
         // participates in the chat/iCloud schema.
@@ -90,20 +96,24 @@ final class AgentActivityLog: ObservableObject {
         """)
     }
 
-    private func exec(_ sql: String) {
+    @discardableResult
+    private func exec(_ sql: String) -> Bool {
         var error: UnsafeMutablePointer<CChar>?
         if sqlite3_exec(db, sql, nil, nil, &error) != SQLITE_OK {
             let message = error.map { String(cString: $0) } ?? "unknown"
             activityLogLogger.error("SQLite error: \(message)")
             sqlite3_free(error)
+            persistenceAvailable = false
+            return false
         }
+        return true
     }
 
-    private func ensureColumn(_ name: String, definition: String) {
+    private func ensureColumn(_ name: String, definition: String, table: String = "activity_event") {
         guard db != nil else { return }
         var statement: OpaquePointer?
         var exists = false
-        if sqlite3_prepare_v2(db, "PRAGMA table_info(activity_event)", -1, &statement, nil) == SQLITE_OK {
+        if sqlite3_prepare_v2(db, "PRAGMA table_info(\(table))", -1, &statement, nil) == SQLITE_OK {
             while sqlite3_step(statement) == SQLITE_ROW {
                 if let text = sqlite3_column_text(statement, 1), String(cString: text) == name {
                     exists = true
@@ -113,26 +123,38 @@ final class AgentActivityLog: ObservableObject {
         }
         sqlite3_finalize(statement)
         if !exists {
-            exec("ALTER TABLE activity_event ADD COLUMN \(name) \(definition)")
+            exec("ALTER TABLE \(table) ADD COLUMN \(name) \(definition)")
         }
     }
 
-    func append(_ event: AgentActivityEvent) {
-        guard db != nil else { return }
-        exec("BEGIN IMMEDIATE")
+    @discardableResult
+    func append(_ event: AgentActivityEvent) -> Bool {
+        guard db != nil else { persistenceAvailable = false; return false }
+        if let state = runState(runId: event.runId), state.phase.isTerminal {
+            return state.phase == event.phase
+        }
+        guard exec("BEGIN IMMEDIATE") else { return false }
+        var committed = false
+        defer {
+            if !committed {
+                exec("ROLLBACK")
+                persistenceAvailable = false
+            }
+        }
         if event.kind == .runStarted {
-            closeSupersededRuns(
+            guard closeSupersededRuns(
                 sessionId: event.sessionId,
                 excluding: event.runId,
                 at: event.at
-            )
+            ) else { return false }
         }
         let sql = """
             INSERT OR REPLACE INTO activity_event
-              (id, run_id, session_id, at, kind, phase, tool_name, reason)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+              (id, run_id, session_id, at, kind, phase, tool_name, reason, result_message_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
         var statement: OpaquePointer?
+        var inserted = false
         if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
             bind(event.id, to: 1, in: statement)
             bind(event.runId, to: 2, in: statement)
@@ -150,42 +172,52 @@ final class AgentActivityLog: ObservableObject {
             } else {
                 sqlite3_bind_null(statement, 8)
             }
-            if sqlite3_step(statement) != SQLITE_DONE {
+            if let resultMessageId = event.resultMessageId {
+                bind(resultMessageId, to: 9, in: statement)
+            } else {
+                sqlite3_bind_null(statement, 9)
+            }
+            inserted = sqlite3_step(statement) == SQLITE_DONE
+            if !inserted {
                 activityLogLogger.error("Could not append activity event")
             }
         }
         sqlite3_finalize(statement)
-        upsertRunState(from: event)
-        exec("""
+        guard inserted, upsertRunState(from: event) else { return false }
+        guard exec("""
             DELETE FROM activity_event
             WHERE id NOT IN (
                 SELECT id FROM activity_event ORDER BY at DESC LIMIT \(Self.maxRows)
             )
-        """)
-        exec("""
+        """) else { return false }
+        guard exec("""
             DELETE FROM agent_run_state
             WHERE run_id NOT IN (
                 SELECT run_id FROM agent_run_state
                 ORDER BY updated_at DESC LIMIT 1000
             )
-        """)
-        exec("COMMIT")
+        """) else { return false }
+        guard exec("COMMIT") else { return false }
+        committed = true
+        persistenceAvailable = true
         revision &+= 1
+        return true
     }
 
     /// A new turn supersedes any resumable/nonterminal run left for the same
     /// session. Close those records before inserting the new run so a stale
     /// interruption badge cannot reappear after the new turn finishes.
-    private func closeSupersededRuns(sessionId: String, excluding runId: String, at: Date) {
+    private func closeSupersededRuns(sessionId: String, excluding runId: String, at: Date) -> Bool {
         let insertSQL = """
             INSERT INTO activity_event
                 (id, run_id, session_id, at, kind, phase, tool_name, reason)
             SELECT lower(hex(randomblob(16))), run_id, session_id, ?, ?, ?, NULL, ?
             FROM agent_run_state
             WHERE session_id = ? AND run_id != ?
-              AND phase NOT IN ('completed', 'failed', 'cancelled')
+              AND phase NOT IN ('completed', 'failed', 'cancelled', 'unverified')
         """
         var insertStatement: OpaquePointer?
+        var inserted = false
         if sqlite3_prepare_v2(db, insertSQL, -1, &insertStatement, nil) == SQLITE_OK {
             sqlite3_bind_double(insertStatement, 1, at.timeIntervalSince1970)
             bind(AgentActivityEventKind.runFinished.rawValue, to: 2, in: insertStatement)
@@ -193,41 +225,46 @@ final class AgentActivityLog: ObservableObject {
             bind(AgentActivityReason.unexpectedTermination.rawValue, to: 4, in: insertStatement)
             bind(sessionId, to: 5, in: insertStatement)
             bind(runId, to: 6, in: insertStatement)
-            sqlite3_step(insertStatement)
+            inserted = sqlite3_step(insertStatement) == SQLITE_DONE
         }
         sqlite3_finalize(insertStatement)
+        guard inserted else { return false }
 
         let updateSQL = """
             UPDATE agent_run_state
             SET updated_at = ?, phase = ?, tool_name = NULL, reason = ?
             WHERE session_id = ? AND run_id != ?
-              AND phase NOT IN ('completed', 'failed', 'cancelled')
+              AND phase NOT IN ('completed', 'failed', 'cancelled', 'unverified')
         """
         var updateStatement: OpaquePointer?
+        var updated = false
         if sqlite3_prepare_v2(db, updateSQL, -1, &updateStatement, nil) == SQLITE_OK {
             sqlite3_bind_double(updateStatement, 1, at.timeIntervalSince1970)
             bind(AgentActivityPhase.cancelled.rawValue, to: 2, in: updateStatement)
             bind(AgentActivityReason.unexpectedTermination.rawValue, to: 3, in: updateStatement)
             bind(sessionId, to: 4, in: updateStatement)
             bind(runId, to: 5, in: updateStatement)
-            sqlite3_step(updateStatement)
+            updated = sqlite3_step(updateStatement) == SQLITE_DONE
         }
         sqlite3_finalize(updateStatement)
+        return updated
     }
 
-    private func upsertRunState(from event: AgentActivityEvent) {
+    private func upsertRunState(from event: AgentActivityEvent) -> Bool {
         let sql = """
             INSERT INTO agent_run_state
-                (run_id, session_id, started_at, updated_at, phase, tool_name, reason)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (run_id, session_id, started_at, updated_at, phase, tool_name, reason, result_message_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(run_id) DO UPDATE SET
                 session_id = excluded.session_id,
                 updated_at = excluded.updated_at,
                 phase = excluded.phase,
                 tool_name = excluded.tool_name,
-                reason = excluded.reason
+                reason = excluded.reason,
+                result_message_id = excluded.result_message_id
         """
         var statement: OpaquePointer?
+        var updated = false
         if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
             bind(event.runId, to: 1, in: statement)
             bind(event.sessionId, to: 2, in: statement)
@@ -244,11 +281,18 @@ final class AgentActivityLog: ObservableObject {
             } else {
                 sqlite3_bind_null(statement, 7)
             }
-            if sqlite3_step(statement) != SQLITE_DONE {
+            if let resultMessageId = event.resultMessageId {
+                bind(resultMessageId, to: 8, in: statement)
+            } else {
+                sqlite3_bind_null(statement, 8)
+            }
+            updated = sqlite3_step(statement) == SQLITE_DONE
+            if !updated {
                 activityLogLogger.error("Could not update durable run state")
             }
         }
         sqlite3_finalize(statement)
+        return updated
     }
 
     /// Re-keys the first run of a newly-created draft to its persisted session.
@@ -278,7 +322,7 @@ final class AgentActivityLog: ObservableObject {
     func recent(limit: Int = 200, sessionId: String? = nil) -> [AgentActivityEvent] {
         guard db != nil else { return [] }
         let cappedLimit = max(1, min(limit, Self.maxRows))
-        var sql = "SELECT id, run_id, session_id, at, kind, phase, tool_name, reason FROM activity_event"
+        var sql = "SELECT id, run_id, session_id, at, kind, phase, tool_name, reason, result_message_id FROM activity_event"
         if sessionId != nil { sql += " WHERE session_id = ?" }
         sql += " ORDER BY at DESC LIMIT ?"
         var statement: OpaquePointer?
@@ -304,7 +348,7 @@ final class AgentActivityLog: ObservableObject {
         guard db != nil else { return [] }
         let sql = """
             SELECT run_id FROM agent_run_state
-            WHERE phase NOT IN ('completed', 'failed', 'cancelled')
+            WHERE phase NOT IN ('completed', 'failed', 'cancelled', 'unverified')
             ORDER BY updated_at DESC
         """
         var statement: OpaquePointer?
@@ -342,7 +386,7 @@ final class AgentActivityLog: ObservableObject {
     func latestRunState(sessionId: String) -> AgentRunState? {
         guard db != nil else { return nil }
         let sql = """
-            SELECT run_id, session_id, started_at, updated_at, phase, tool_name, reason
+            SELECT run_id, session_id, started_at, updated_at, phase, tool_name, reason, result_message_id
             FROM agent_run_state
             WHERE session_id = ?
             ORDER BY updated_at DESC
@@ -360,6 +404,22 @@ final class AgentActivityLog: ObservableObject {
         return state
     }
 
+    /// Read the run the caller launched, even if a newer run now owns the
+    /// session. A missing receipt is unknown, never inferred from chat text.
+    func runState(runId: String) -> AgentRunState? {
+        guard db != nil else { return nil }
+        var statement: OpaquePointer?
+        defer { sqlite3_finalize(statement) }
+        let sql = """
+            SELECT run_id, session_id, started_at, updated_at, phase, tool_name, reason, result_message_id
+            FROM agent_run_state WHERE run_id = ?
+        """
+        guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else { return nil }
+        bind(runId, to: 1, in: statement)
+        guard sqlite3_step(statement) == SQLITE_ROW else { return nil }
+        return decodeRunState(statement)
+    }
+
     /// The singleton is created once per process. At that moment, any durable
     /// nonterminal run necessarily belonged to the previous process and cannot
     /// still be executing. Convert it to an explicit resumable interruption so
@@ -367,9 +427,9 @@ final class AgentActivityLog: ObservableObject {
     private func recoverRunsInterruptedByPreviousProcess() {
         guard db != nil else { return }
         let sql = """
-            SELECT run_id, session_id, started_at, updated_at, phase, tool_name, reason
+            SELECT run_id, session_id, started_at, updated_at, phase, tool_name, reason, result_message_id
             FROM agent_run_state
-            WHERE phase NOT IN ('completed', 'failed', 'cancelled', 'waiting_for_user')
+            WHERE phase NOT IN ('completed', 'failed', 'cancelled', 'unverified', 'waiting_for_user')
             ORDER BY updated_at DESC
         """
         var statement: OpaquePointer?
@@ -420,7 +480,7 @@ final class AgentActivityLog: ObservableObject {
     }
 
     private func bind(_ value: String, to index: Int32, in statement: OpaquePointer?) {
-        sqlite3_bind_text(statement, index, (value as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(statement, index, value, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
     }
 
     private func decode(_ statement: OpaquePointer?) -> AgentActivityEvent? {
@@ -444,7 +504,8 @@ final class AgentActivityLog: ObservableObject {
             kind: kind,
             phase: phase,
             toolName: toolName,
-            reason: reason
+            reason: reason,
+            resultMessageId: sqlite3_column_text(statement, 8).map(String.init(cString:))
         )
     }
 
@@ -465,7 +526,8 @@ final class AgentActivityLog: ObservableObject {
             updatedAt: Date(timeIntervalSince1970: sqlite3_column_double(statement, 3)),
             phase: phase,
             toolName: toolName,
-            reason: reason
+            reason: reason,
+            resultMessageId: sqlite3_column_text(statement, 7).map(String.init(cString:))
         )
     }
 }

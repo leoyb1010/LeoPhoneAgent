@@ -629,5 +629,9 @@
     "placeholder": "설정 검색",
     "noResults": "일치하는 설정 없음",
     "clear": "지우기"
+  },
+  "agentDefaults": {
+    "title": "새 작업 기본값",
+    "saveFailed": "기본값을 저장하지 못했습니다"
   }
 }

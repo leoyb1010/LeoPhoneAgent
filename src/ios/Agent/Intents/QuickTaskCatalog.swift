@@ -557,6 +557,9 @@ final class QuickTaskStore: ObservableObject {
             if let old = previous[task.id] {
                 item.lastRunState = old.lastRunState
                 item.lastRunAt = old.lastRunAt
+                item.lastRunRequestId = old.lastRunRequestId
+                item.lastRunId = old.lastRunId
+                item.lastRunSessionId = old.lastRunSessionId
             }
             return item
         }

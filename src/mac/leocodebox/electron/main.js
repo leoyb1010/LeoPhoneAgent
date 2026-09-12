@@ -194,6 +194,11 @@ async function openExternalUrl(url) {
   await shell.openExternal(url);
 }
 
+function isMainFrameIpcSender(event) {
+  const frame = event?.senderFrame;
+  return Boolean(frame && !frame.parent && frame === event?.sender?.mainFrame);
+}
+
 function isAllowedLocalAuthOrigin(origin) {
   if (!localServer) return false;
   let parsed;
@@ -221,6 +226,7 @@ function isAllowedLocalAuthOrigin(origin) {
 }
 
 function isTrustedLocalIpcSender(event, claimedOrigin = null) {
+  if (!isMainFrameIpcSender(event)) return false;
   const senderUrl = event?.senderFrame?.url || event?.sender?.getURL?.() || '';
   let senderOrigin;
   try {
@@ -248,6 +254,7 @@ function requireTrustedLocalIpcSender(event) {
 // isTrustedLocalIpcSender would reject it. Treat file:// as trusted here in
 // addition to the loopback local server (covered by isTrustedLocalIpcSender).
 function isFirstPartyShellSender(event) {
+  if (!isMainFrameIpcSender(event)) return false;
   const senderUrl = event?.senderFrame?.url || event?.sender?.getURL?.() || '';
   return isFirstPartyShellUrl(senderUrl, getLauncherPath());
 }
@@ -538,10 +545,9 @@ function registerIpcHandlers() {
     await desktopWindow.showLauncher();
     return getDesktopState();
   });
-  // update-desktop-notifications is a designed-public app-origin channel (the
-  // leocodebox web UI manages its own notification prefs), so it is not
-  // sender-gated; its returned state is redacted for untrusted callers.
-  ipcMain.handle('leocodebox-desktop:update-desktop-notifications', async (event, settings) => {
+  // Notification preferences are durable writes, subject to the same sender
+  // boundary as other privileged desktop settings.
+  trustedHandle('leocodebox-desktop:update-desktop-notifications', async (event, settings) => {
     await desktopNotifications?.saveSettings(settings);
     return getDesktopStateForSender(event);
   });

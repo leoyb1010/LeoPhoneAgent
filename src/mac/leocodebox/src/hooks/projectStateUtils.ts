@@ -317,7 +317,7 @@ export const removeSessionFromProject = (project: Project, sessionIdToDelete: st
  * `dashboard` 是旧版本留下的内部持久化值。可见产品只称“新任务”，并且只渲染
  * 一个 Task Dock；保留这个值避免升级后把用户丢进不存在的路由。
  */
-const VALID_TABS: Set<string> = new Set(['dashboard', 'chat', 'files', 'shell', 'git', 'tasks', 'browser', 'audit', 'fleet']);
+const VALID_TABS: Set<string> = new Set(['dashboard', 'chat', 'files', 'shell', 'git', 'tasks', 'browser', 'audit', 'fleet', 'collections']);
 
 /**
  * Tabs that the 工作台 shell retired. `missions` moved into ⌘K. It stays listed

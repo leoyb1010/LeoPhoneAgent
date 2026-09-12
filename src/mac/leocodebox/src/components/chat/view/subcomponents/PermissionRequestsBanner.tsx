@@ -23,13 +23,11 @@ interface PermissionRequestsBannerProps {
     requestIds: string | string[],
     decision: { allow?: boolean; message?: string; rememberEntry?: string | null; updatedInput?: unknown },
   ) => void;
-  handleGrantToolPermission: (suggestion: { entry: string; toolName: string }) => { success: boolean };
 }
 
 export default function PermissionRequestsBanner({
   pendingPermissionRequests,
   handlePermissionDecision,
-  handleGrantToolPermission,
 }: PermissionRequestsBannerProps) {
   // Filter out plan tool requests — they are handled inline by PlanDisplay
   const filteredRequests = pendingPermissionRequests.filter(
@@ -109,9 +107,6 @@ export default function PermissionRequestsBanner({
               <ConfirmationAction
                 variant="outline"
                 onClick={() => {
-                  if (permissionEntry && !alreadyAllowed) {
-                    handleGrantToolPermission({ entry: permissionEntry, toolName: request.toolName });
-                  }
                   handlePermissionDecision(matchingRequestIds, { allow: true, rememberEntry: permissionEntry });
                 }}
                 disabled={!permissionEntry}

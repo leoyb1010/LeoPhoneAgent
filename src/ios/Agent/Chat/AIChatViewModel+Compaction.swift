@@ -74,7 +74,12 @@ extension AIChatViewModel {
         }
 
         let target = lastActive
+        let requestId = UUID()
+        compactAndSendRequestId = requestId
         compactTask = Task {
+            defer {
+                if self.compactAndSendRequestId == requestId { self.compactAndSendRequestId = nil }
+            }
             await compactBefore(target.id)
             // Drain the queued prompt(s) through the SAME path normal
             // streaming uses (drainQueuedPrompts clears `isQueued` on every
@@ -111,6 +116,7 @@ extension AIChatViewModel {
         currentTask = Task { @MainActor [weak self] in
             guard let self else { return }
             defer { self.postCompactDrainPending = false }
+            self.errorMessage = nil
             self.isProcessing = true
             self.beginBackgroundProcessing()
             await self.drainQueuedPrompts()
@@ -665,6 +671,7 @@ extension AIChatViewModel {
             return
         } catch {
             logger.error("[Compact] Summary generation failed type=\(String(describing: type(of: error)))")
+            errorMessage = error.localizedDescription
             statusMsg.content = "Compaction failed: \(error.localizedDescription)"
             statusMsg.isCompactLoading = false
             return

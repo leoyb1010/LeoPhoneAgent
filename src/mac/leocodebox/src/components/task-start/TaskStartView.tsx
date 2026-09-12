@@ -1,65 +1,48 @@
-import { Command, Monitor, ShieldCheck } from 'lucide-react';
+import { ArrowRight, FolderOpen, Library } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import type { Project } from '../../types/app';
 
 type TaskStartViewProps = {
   project: Project | null;
+  onOpenLibrary: () => void;
 };
 
-/**
- * The quiet canvas underneath the single Task Dock.
- * It deliberately has no second prompt, dashboard cards, or module launchers.
- */
-export default function TaskStartView({ project }: TaskStartViewProps) {
+/** Context for the single Task Dock; never a second prompt or submission. */
+export default function TaskStartView({ project, onOpenLibrary }: TaskStartViewProps) {
+  const { t } = useTranslation();
   return (
-    <main className="flex h-full min-h-0 items-center justify-center overflow-y-auto px-6 py-10">
-      <section className="wb-anim-entry w-full max-w-[760px]" aria-labelledby="task-start-title">
-        <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">
-          新任务
-        </p>
-        <h1 id="task-start-title" className="mt-3 max-w-[680px] text-balance text-[38px] font-semibold leading-[1.12] tracking-[-0.035em] text-foreground">
-          选好执行位置，然后直接说要完成什么。
+    <main className="flex h-full min-h-0 justify-center overflow-y-auto px-6 py-8">
+      <section className="w-full max-w-[760px]" aria-labelledby="task-start-title">
+        <h1 id="task-start-title" className="text-balance text-2xl font-semibold leading-snug tracking-tight text-foreground">
+          {t('taskStart.title')}
         </h1>
-        <p className="mt-4 max-w-[620px] text-sm leading-6 text-muted-foreground">
-          上方任务坞是唯一入口。Agent、项目、设备、权限和推理档会在创建会话时一起锁定，后续回复只在会话自己的输入框继续。
-        </p>
+        <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">{t('taskStart.description')}</p>
+        <p className="mt-2 text-xs leading-6 text-wb-faint">{t('taskStart.examples')}</p>
 
-        <div className="mt-8 divide-y divide-border/80 border-y border-border/80">
-          {/* 这一行是可点的:没项目时它就是最近的一条出路,不能只是一句提示。 */}
-          <button
-            type="button"
-            onClick={() => window.dispatchEvent(new CustomEvent('leocodebox:open-projects'))}
-            className="flex w-full items-center gap-4 py-4 text-left hover:bg-muted/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
-            aria-label={project ? '更换任务项目' : '选择任务项目'}
-          >
-            <Command className="h-4 w-4 flex-none text-primary" />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-foreground">当前项目</p>
-              <p className="truncate font-mono text-[11px] text-muted-foreground">
-                {project?.fullPath || '尚未选择；点这里或任务坞里的“选项目”'}
-              </p>
-            </div>
-            <span className="flex-none text-[11px] text-muted-foreground">{project ? '更换' : '选择'}</span>
-          </button>
-          <div className="flex items-center gap-4 py-4">
-            <Monitor className="h-4 w-4 flex-none text-primary" />
-            <div>
-              <p className="text-sm font-medium text-foreground">本机或远程</p>
-              <p className="text-[11px] text-muted-foreground">远程任务沿用目标 Mac 的权限与运行环境，失败不会伪装成已提交。</p>
-            </div>
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent('leocodebox:open-projects'))}
+          className="mt-6 flex w-full items-center gap-3 rounded-xl border border-border px-4 py-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+          aria-label={project ? t('taskStart.changeProject') : t('workbench.pickProject')}
+        >
+          <FolderOpen className="h-4 w-4 flex-none text-primary" aria-hidden />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-foreground">{t('taskStart.projectLabel')}</p>
+            <p className="mt-1 truncate text-xs text-muted-foreground">{project?.fullPath || project?.path || t('taskStart.noProject')}</p>
           </div>
-          <div className="flex items-center gap-4 py-4">
-            <ShieldCheck className="h-4 w-4 flex-none text-primary" />
-            <div>
-              <p className="text-sm font-medium text-foreground">执行前就确定边界</p>
-              <p className="text-[11px] text-muted-foreground">权限、Thinking 和 Provider 都随新会话保存；高风险动作仍会单独请求确认。</p>
-            </div>
-          </div>
-        </div>
+          <ArrowRight className="h-4 w-4 flex-none text-muted-foreground" aria-hidden />
+        </button>
 
-        <p className="mt-6 font-mono text-[10px] text-wb-faint">
-          ⌘N 新任务 · ⌘K 查找与导航 · ⌘, 设置
-        </p>
+        <button type="button" onClick={onOpenLibrary} className="mt-4 flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring">
+          <Library className="h-4 w-4 flex-none text-primary" aria-hidden />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-foreground">{t('taskStart.libraryTitle')}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{t('taskStart.libraryDescription')}</p>
+          </div>
+          <ArrowRight className="h-4 w-4 flex-none text-muted-foreground" aria-hidden />
+        </button>
+        <p className="mt-6 text-xs text-wb-faint">{t('taskStart.shortcuts')}</p>
       </section>
     </main>
   );

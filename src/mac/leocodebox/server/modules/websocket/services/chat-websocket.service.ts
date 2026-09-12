@@ -1,10 +1,13 @@
+import { randomUUID } from 'node:crypto';
+import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
 import type { WebSocket } from 'ws';
 
 import { logger } from '@/modules/logging/index.js';
-import { sessionsDb, worktreesDb } from '@/modules/database/index.js';
-import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
+import { getConnection, sessionsDb, worktreesDb } from '@/modules/database/index.js';
+import { chatQueueDb, ChatQueueError, chatUserKey, type StoredChatQueueItem } from '@/modules/database/index.js';
+import { CHAT_SERVER_EPOCH, chatRunRegistry, type ChatRun } from '@/modules/websocket/services/chat-run-registry.service.js';
 import { connectedClients, WS_OPEN_STATE } from '@/modules/websocket/services/websocket-state.service.js';
 import { getGlobalImageAssetsDir, normalizeImageDescriptors } from '@/shared/image-attachments.js';
 import type {
@@ -13,6 +16,8 @@ import type {
   LLMProvider,
 } from '@/shared/types.js';
 import { parseIncomingJsonObject } from '@/shared/utils.js';
+
+import { CHAT_QUEUE_PROTOCOL_VERSION, type ChatCursor, type ChatQueueItem } from '../../../../shared/chat-session-protocol.js';
 
 /**
  * Trust boundary for client-supplied image attachments: chat.send options come
@@ -42,7 +47,7 @@ export function filterImagesToUploadStore(images: unknown, assetsRootOverride?: 
       console.warn(`[Chat] Dropping image outside the upload store: ${descriptor.path}`);
     }
     return isDirectChild;
-  });
+  }).map((descriptor) => ({ ...descriptor, path: path.resolve(assetsRoot, descriptor.path) }));
 }
 
 /**
@@ -118,7 +123,8 @@ function sendProtocolError(
   ws: WebSocket,
   code: string,
   error: string,
-  sessionId?: string
+  sessionId?: string,
+  extra: AnyRecord = {},
 ): void {
   sendJson(ws, {
     kind: 'protocol_error',
@@ -126,6 +132,7 @@ function sendProtocolError(
     error,
     sessionId: sessionId ?? null,
     timestamp: new Date().toISOString(),
+    ...extra,
   });
 }
 
@@ -134,254 +141,310 @@ function readRequiredSessionId(data: AnyRecord): string | null {
   return sessionId.length > 0 ? sessionId : null;
 }
 
-/**
- * Handles `chat.send`: resolves the session row (provider, project path, and
- * provider-native id all come from the database — never from the client),
- * registers the run, and dispatches to the provider runtime.
- */
+const recoveredDatabases = new WeakSet<object>();
+
+function prepareQueue(): void {
+  const db = getConnection();
+  if (recoveredDatabases.has(db)) return;
+  chatQueueDb.recoverForEpoch(CHAT_SERVER_EPOCH);
+  recoveredDatabases.add(db);
+}
+
+function queueSummary(item: StoredChatQueueItem): ChatQueueItem {
+  return {
+    id: item.id, sessionId: item.sessionId, clientRequestId: item.clientRequestId,
+    content: item.content.length > 500 ? `${item.content.slice(0, 500)}…` : item.content,
+    state: item.state, createdAt: item.createdAt, reason: item.reason,
+    attachmentCount: normalizeImageDescriptors(item.options.images).length,
+    model: typeof item.options.model === 'string' ? item.options.model : undefined,
+    permissionMode: typeof item.options.permissionMode === 'string' ? item.options.permissionMode : undefined,
+  };
+}
+
+function pendingQueue(sessionId: string, userId: string | number | null): ChatQueueItem[] {
+  return chatQueueDb.listPending(userId, sessionId).map(queueSummary);
+}
+
+function broadcastQueue(sessionId: string, userId: string | number | null): void {
+  chatRunRegistry.broadcast(sessionId, userId, {
+    kind: 'chat_queue_updated', sessionId, queueItems: pendingQueue(sessionId, userId),
+    timestamp: new Date().toISOString(),
+  });
+}
+
+function assertRunOwner(sessionId: string, userId: string | number | null): void {
+  const run = chatRunRegistry.getRun(sessionId);
+  if (run && chatUserKey(run.userId) !== chatUserKey(userId)) throw new ChatQueueError('SESSION_ACCESS_DENIED');
+}
+
+/** Recheck queued references when executed: a file may have changed since upload. */
+export async function validateQueuedImageReferences(images: unknown, assetsRootOverride?: string): Promise<AnyRecord[]> {
+  const descriptors = normalizeImageDescriptors(images);
+  if (descriptors.length === 0) return [];
+  const root = await fs.realpath(assetsRootOverride ?? getGlobalImageAssetsDir());
+  return Promise.all(descriptors.map(async (descriptor) => {
+    const resolved = await fs.realpath(descriptor.path);
+    if (path.dirname(resolved) !== root || !(await fs.stat(resolved)).isFile()) {
+      throw new ChatQueueError('INVALID_ATTACHMENT');
+    }
+    return { ...descriptor, path: resolved };
+  }));
+}
+
+async function executeCommand(item: StoredChatQueueItem, run: ChatRun, dependencies: ChatWebSocketDependencies): Promise<void> {
+  try {
+    const session = sessionsDb.getSessionById(item.sessionId);
+    if (!session || session.isArchived) throw new ChatQueueError('SESSION_NOT_FOUND');
+    const boundWorktreeId = sessionsDb.getWorktreeId(item.sessionId);
+    const worktreeCwd = boundWorktreeId ? worktreesDb.get(boundWorktreeId)?.path : undefined;
+    if (boundWorktreeId && !worktreeCwd) throw new ChatQueueError('WORKTREE_NOT_FOUND');
+    const images = await validateQueuedImageReferences(item.options.images);
+    // An abort may arrive while attachment validation is awaiting the filesystem.
+    if (run.abortController.signal.aborted || chatRunRegistry.getRun(item.sessionId) !== run) return;
+    await dependencies.spawnFns[run.provider](item.content, {
+      ...item.options,
+      images,
+      appSessionId: item.sessionId,
+      abortSignal: run.abortController.signal,
+      sessionId: session.provider_session_id ?? undefined,
+      resume: Boolean(session.provider_session_id),
+      cwd: worktreeCwd ?? session.project_path ?? undefined,
+      projectPath: worktreeCwd ?? session.project_path ?? undefined,
+      routingSlot: sessionsDb.getRoutingSlot(item.sessionId) ?? undefined,
+    }, run.writer);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    run.writer.send({ kind: 'error', content: `任务未能完成：${message}`, provider: run.provider });
+  } finally {
+    chatRunRegistry.completeRunIfCurrent(run, { exitCode: 1, aborted: run.abortController.signal.aborted });
+    drainQueuedCommands(dependencies, item);
+  }
+}
+
+/** Only serializable command data is stored. Connections are looked up by the run's observer set. */
+function drainQueuedCommands(dependencies: ChatWebSocketDependencies, source?: { sessionId: string; userId: string | number | null }): void {
+  let affected = source;
+  try {
+    for (const item of chatQueueDb.listReady(CHAT_SERVER_EPOCH)) {
+      affected = item;
+      if (!chatRunRegistry.canStart(item.sessionId)) continue;
+      const session = sessionsDb.getSessionById(item.sessionId);
+      const provider = session?.provider as LLMProvider | undefined;
+      if (!session || session.isArchived || !provider || !dependencies.spawnFns[provider]) {
+        chatQueueDb.failBeforeStart(item.id, 'SESSION_UNAVAILABLE');
+        chatRunRegistry.broadcast(item.sessionId, item.userId, {
+          kind: 'protocol_error', code: 'SESSION_UNAVAILABLE', error: '排队任务的会话已不可用。',
+          sessionId: item.sessionId, clientRequestId: item.clientRequestId, isProcessing: false,
+        });
+        broadcastQueue(item.sessionId, item.userId);
+        continue;
+      }
+      const run = chatRunRegistry.startRun({
+        appSessionId: item.sessionId, provider, providerSessionId: session.provider_session_id,
+        userId: item.userId, queueItemId: item.id,
+      });
+      if (!run) continue;
+      // Once claimed durably, starting the command must not depend on a
+      // subsequent queue-snapshot read or an observer's transport health.
+      queueMicrotask(() => { void executeCommand(item, run, dependencies); });
+      chatRunRegistry.broadcast(item.sessionId, item.userId, {
+        kind: 'chat_run_started', sessionId: item.sessionId, runId: run.runId,
+        cursor: { runId: run.runId, seq: run.initialSeq }, queueItemId: item.id,
+        clientRequestId: item.clientRequestId, timestamp: new Date().toISOString(),
+      });
+      broadcastQueue(item.sessionId, item.userId);
+    }
+  } catch (error) {
+    // A storage failure must never fall back to an in-memory, unacknowledged run.
+    console.error('[Chat] Queue scheduling stopped because persistence is unavailable', error);
+    if (affected) chatRunRegistry.broadcast(affected.sessionId, affected.userId, {
+      kind: 'protocol_error', scope: 'queue', code: 'QUEUE_STORAGE_FAILED', sessionId: affected.sessionId,
+      isProcessing: chatRunRegistry.isProcessing(affected.sessionId),
+      error: '队列调度遇到存储错误，已接收的任务仍被保留。请核对当前运行状态后重试或取消。',
+    });
+  }
+}
+
 async function handleChatSend(
   ws: WebSocket,
   userId: string | number | null,
   data: AnyRecord,
-  dependencies: ChatWebSocketDependencies
+  dependencies: ChatWebSocketDependencies,
 ): Promise<void> {
   const sessionId = readRequiredSessionId(data);
-  if (!sessionId) {
-    sendProtocolError(ws, 'SESSION_ID_REQUIRED', 'chat.send requires a sessionId.');
-    return;
-  }
-
-  const session = sessionsDb.getSessionById(sessionId);
-  if (!session) {
-    sendProtocolError(
-      ws,
-      'SESSION_NOT_FOUND',
-      `Session "${sessionId}" was not found. Create it via POST /api/providers/sessions first.`,
-      sessionId
-    );
-    return;
-  }
-
-  const provider = session.provider as LLMProvider;
-  const spawnFn = dependencies.spawnFns[provider];
-  if (!spawnFn) {
-    sendProtocolError(ws, 'UNSUPPORTED_PROVIDER', `Provider "${provider}" is not available.`, sessionId);
-    return;
-  }
-
-  const run = chatRunRegistry.startRun({
-    appSessionId: sessionId,
-    provider,
-    providerSessionId: session.provider_session_id,
-    connection: ws,
-    userId,
-  });
-
-  if (!run) {
-    const queuedCount = chatRunRegistry.enqueueRun(sessionId, () => handleChatSend(ws, userId, data, dependencies));
-    sendJson(ws, {
-      kind: 'chat_queued',
-      sessionId,
-      position: queuedCount,
-      timestamp: new Date().toISOString(),
-    });
-    return;
-  }
-
-  const clientOptions = (data.options ?? {}) as AnyRecord;
-  const command = typeof data.content === 'string' ? data.content : '';
-
-  // The provider runtimes receive the provider-native session id (that is the
-  // id their CLI/SDK understands for resume). Brand-new sessions have no
-  // provider id yet, so the runtime starts fresh and announces one, which the
-  // gateway writer captures and maps back to the app session id.
-  // L3 fleet: a session bound to a worktree runs in the worktree directory so
-  // parallel sessions on the same project never step on each other. L2 routing:
-  // a stored routing slot picks a specific Leoapi provider for this session.
-  const boundWorktreeId = sessionsDb.getWorktreeId(sessionId);
-  const worktreeCwd = boundWorktreeId ? worktreesDb.get(boundWorktreeId)?.path : undefined;
-  const routingSlot = sessionsDb.getRoutingSlot(sessionId) ?? undefined;
-
-  const runtimeOptions: AnyRecord = {
-    ...clientOptions,
-    // Image attachments are re-validated server-side: only files inside the
-    // global upload store may reach the provider runtimes' file reads.
-    images: filterImagesToUploadStore(clientOptions.images),
-    appSessionId: sessionId,
-    abortSignal: run.abortController.signal,
-    sessionId: session.provider_session_id ?? undefined,
-    resume: Boolean(session.provider_session_id),
-    cwd: worktreeCwd ?? session.project_path ?? undefined,
-    projectPath: worktreeCwd ?? session.project_path ?? undefined,
-    routingSlot,
-  };
-
+  if (!sessionId) { sendProtocolError(ws, 'SESSION_ID_REQUIRED', 'chat.send requires a sessionId.'); return; }
   try {
-    await spawnFn(command, runtimeOptions, run.writer);
+    prepareQueue();
+    assertRunOwner(sessionId, userId);
+    const session = sessionsDb.getSessionById(sessionId);
+    if (!session || session.isArchived) throw new ChatQueueError('SESSION_NOT_FOUND');
+    if (!dependencies.spawnFns[session.provider as LLMProvider]) throw new ChatQueueError('UNSUPPORTED_PROVIDER');
+    if (data.options != null && (typeof data.options !== 'object' || Array.isArray(data.options))) {
+      throw new ChatQueueError('INVALID_OPTIONS');
+    }
+    const options = { ...(data.options ?? {}) } as AnyRecord;
+    if (options.images != null && (!Array.isArray(options.images) || options.images.length > 5)) {
+      throw new ChatQueueError('INVALID_ATTACHMENT');
+    }
+    const images = filterImagesToUploadStore(options.images);
+    if (images.length !== (options.images?.length ?? 0)) throw new ChatQueueError('INVALID_ATTACHMENT');
+    options.images = images;
+    const accepted = chatQueueDb.accept({
+      sessionId, userId,
+      clientRequestId: typeof data.clientRequestId === 'string' ? data.clientRequestId : randomUUID(),
+      content: typeof data.content === 'string' ? data.content : '', options, epoch: CHAT_SERVER_EPOCH,
+    });
+    chatRunRegistry.attachConnection(sessionId, ws, userId);
+    sendJson(ws, {
+      kind: 'chat_send_ack', sessionId, clientRequestId: accepted.item.clientRequestId,
+      queueItemId: accepted.item.id, state: accepted.item.state, duplicate: accepted.duplicate,
+      protocolVersion: CHAT_QUEUE_PROTOCOL_VERSION,
+    });
+    if (accepted.item.state === 'queued') {
+      const queueItems = pendingQueue(sessionId, userId);
+      sendJson(ws, { kind: 'chat_queued', sessionId, queueItemId: accepted.item.id,
+        clientRequestId: accepted.item.clientRequestId, position: queueItems.findIndex((item) => item.id === accepted.item.id) + 1,
+        queueItems, isProcessing: chatRunRegistry.isProcessing(sessionId), timestamp: new Date().toISOString() });
+    }
+    broadcastQueue(sessionId, userId);
+    if (!accepted.duplicate) drainQueuedCommands(dependencies, accepted.item);
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`[Chat] Provider runtime "${provider}" failed`, { sessionId, error: message });
-  } finally {
-    // Safety net: a runtime that crashed (or resolved) without emitting its
-    // terminal `complete` would otherwise leave the session stuck in
-    // "processing" forever on every connected client. Scoped to THIS run —
-    // a queued message can start the session's next run before this promise
-    // settles, and the session-keyed completeRun would kill that new run.
-    chatRunRegistry.completeRunIfCurrent(run, { exitCode: 1 });
-    // FIFO prompt queue: start exactly one next turn after this run has
-    // reached its terminal event. The registry guard prevents races with a
-    // reconnect or an explicit new run.
-    void chatRunRegistry.drainQueuedRuns(sessionId).then(() => chatRunRegistry.drainAnyQueuedRun());
+    sendProtocolError(ws, error instanceof ChatQueueError ? error.code : 'QUEUE_STORAGE_FAILED',
+      error instanceof Error ? error.message : '无法保存待运行任务。', sessionId,
+      { clientRequestId: data.clientRequestId, isProcessing: chatRunRegistry.isProcessing(sessionId), scope: 'queue' });
   }
 }
 
-/**
- * Handles `chat.abort`: cancels the run for one app session and emits the
- * terminal `complete` on its behalf (runtimes skip their own complete for
- * aborted runs, and the registry drops any duplicate).
- */
-async function handleChatAbort(
-  ws: WebSocket,
-  data: AnyRecord,
-  dependencies: ChatWebSocketDependencies
-): Promise<void> {
+async function handleChatAbort(ws: WebSocket, userId: string | number | null, data: AnyRecord, dependencies: ChatWebSocketDependencies): Promise<void> {
   const sessionId = readRequiredSessionId(data);
-  if (!sessionId) {
-    sendProtocolError(ws, 'SESSION_ID_REQUIRED', 'chat.abort requires a sessionId.');
-    return;
-  }
-
+  if (!sessionId) { sendProtocolError(ws, 'SESSION_ID_REQUIRED', 'chat.abort requires a sessionId.'); return; }
+  assertRunOwner(sessionId, userId);
   const run = chatRunRegistry.getRun(sessionId);
   if (!run || run.status !== 'running') {
-    sendProtocolError(ws, 'NO_ACTIVE_RUN', `Session "${sessionId}" has no active run.`, sessionId);
+    sendProtocolError(ws, 'NO_ACTIVE_RUN', '当前会话没有正在运行的任务。', sessionId);
     return;
   }
-
-  const abortFn = dependencies.abortFns[run.provider];
+  // Preserve the existing Stop semantics: clear this user's pending commands
+  // BEFORE awaiting the runtime abort, so a finishing turn cannot start one.
+  const pending = chatQueueDb.listPending(userId, sessionId);
+  for (const item of pending) chatQueueDb.cancel(userId, sessionId, item.id);
+  if (pending.length) chatRunRegistry.broadcast(sessionId, userId, { kind: 'chat_queue_cleared', sessionId, cleared: pending.length });
+  broadcastQueue(sessionId, userId);
   run.abortController.abort();
   let success = false;
-  if (abortFn) {
-    success = Boolean(await abortFn(run.providerSessionId || run.appSessionId));
-  }
-
-  chatRunRegistry.completeRun(sessionId, {
-    exitCode: success ? 0 : 1,
-    aborted: true,
-  });
-  const cleared = chatRunRegistry.clearQueuedRuns(sessionId);
-  if (cleared > 0) {
-    sendJson(ws, { kind: 'chat_queue_cleared', sessionId, cleared, timestamp: new Date().toISOString() });
-  }
+  try { success = Boolean(await dependencies.abortFns[run.provider]?.(run.providerSessionId || run.appSessionId)); }
+  finally { chatRunRegistry.completeRunIfCurrent(run, { exitCode: success ? 0 : 1, aborted: true }); }
 }
 
-/**
- * Handles `chat.subscribe`: for each requested session, reports whether a run
- * is processing, re-attaches the live stream to this socket, replays missed
- * events (seq > lastSeq), and includes pending permission requests.
- *
- * This single message replaces the old `check-session-status`,
- * `get-pending-permissions`, and Claude-only writer reconnect flows.
- */
-function handleChatSubscribe(
-  ws: WebSocket,
-  data: AnyRecord,
-  dependencies: ChatWebSocketDependencies
-): void {
-  const targets = Array.isArray(data.sessions) ? data.sessions : [];
+function readCursor(value: unknown): ChatCursor | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const record = value as Record<string, unknown>;
+  return typeof record.runId === 'string' && typeof record.seq === 'number' && Number.isSafeInteger(record.seq) && record.seq >= 0
+    ? { runId: record.runId, seq: record.seq } : undefined;
+}
 
+function pendingApprovals(sessionId: string, dependencies: ChatWebSocketDependencies): AnyRecord[] {
+  const run = chatRunRegistry.getRun(sessionId);
+  const ids = [sessionId, run?.providerSessionId].filter((id): id is string => Boolean(id));
+  const byRequest = new Map<string, AnyRecord>();
+  for (const id of ids) {
+    for (const approval of dependencies.getPendingApprovalsForSession(id)) {
+      if (!approval || typeof approval !== 'object') continue;
+      const record = approval as AnyRecord;
+      if (typeof record.requestId !== 'string' || run?.resolvedApprovals.has(record.requestId)) continue;
+      byRequest.set(record.requestId, { ...record, sessionId });
+    }
+  }
+  return [...byRequest.values()];
+}
+
+function handleChatSubscribe(ws: WebSocket, userId: string | number | null, data: AnyRecord, dependencies: ChatWebSocketDependencies): void {
+  prepareQueue();
+  const targets = Array.isArray(data.sessions) ? data.sessions.slice(0, 128) : [];
   for (const target of targets) {
-    if (!target || typeof target !== 'object') {
-      continue;
-    }
-
-    const sessionId = typeof (target as AnyRecord).sessionId === 'string'
-      ? ((target as AnyRecord).sessionId as string).trim()
-      : '';
-    if (!sessionId) {
-      continue;
-    }
-
-    const lastSeqRaw = (target as AnyRecord).lastSeq;
-    const lastSeq = typeof lastSeqRaw === 'number' && Number.isFinite(lastSeqRaw)
-      ? Math.max(0, Math.floor(lastSeqRaw))
-      : 0;
-
-    const run = chatRunRegistry.getRun(sessionId);
+    if (!target || typeof target !== 'object') continue;
+    const sessionId = readRequiredSessionId(target as AnyRecord);
+    if (!sessionId) continue;
+    try { assertRunOwner(sessionId, userId); }
+    catch { sendProtocolError(ws, 'SESSION_ACCESS_DENIED', '不能订阅其他用户的运行。', sessionId); continue; }
+    if (!sessionsDb.getSessionById(sessionId)) { sendProtocolError(ws, 'SESSION_NOT_FOUND', '会话不存在。', sessionId); continue; }
+    chatRunRegistry.attachConnection(sessionId, ws, userId);
+    const lastSeq = typeof target.lastSeq === 'number' && Number.isSafeInteger(target.lastSeq) ? Math.max(0, target.lastSeq) : 0;
+    const replay = chatRunRegistry.replayState(sessionId, lastSeq, readCursor(target.cursor));
     const isProcessing = chatRunRegistry.isProcessing(sessionId);
-
-    // Future live events for this run should land on the socket that asked —
-    // this is what makes mid-stream page refreshes work for all providers.
-    if (isProcessing) {
-      chatRunRegistry.attachConnection(sessionId, ws);
-    }
-
-    // Pending approvals are keyed by provider-native id once captured, and by
-    // the app session id before that. Reconnect between start and session_created
-    // must still surface the banner.
-    const pendingIds = [sessionId, run?.providerSessionId].filter((id): id is string => Boolean(id));
-    const seenRequestIds = new Set<string>();
-    const pendingPermissions: unknown[] = [];
-    for (const pendingId of pendingIds) {
-      for (const approval of dependencies.getPendingApprovalsForSession(pendingId)) {
-        const record = approval && typeof approval === 'object' ? approval as AnyRecord : null;
-        const requestId = typeof record?.requestId === 'string' ? record.requestId : '';
-        if (requestId && seenRequestIds.has(requestId)) continue;
-        if (requestId) seenRequestIds.add(requestId);
-        pendingPermissions.push(record ? { ...record, sessionId } : approval);
-      }
-    }
-
     sendJson(ws, {
-      kind: 'chat_subscribed',
-      sessionId,
-      isProcessing,
-      lastSeq: run?.lastSeq ?? 0,
-      // The buffer only keeps the newest events of a run. When the client's
-      // `lastSeq` predates it, the replay below is incomplete and the client
-      // must re-read history over REST to fill the gap.
-      replayTruncated: isProcessing && chatRunRegistry.isReplayTruncated(sessionId, lastSeq),
-      pendingPermissions,
+      kind: 'chat_subscribed', sessionId, isProcessing,
+      lastSeq: replay.cursor?.seq ?? 0, runId: replay.cursor?.runId ?? null, cursor: replay.cursor,
+      serverEpoch: CHAT_SERVER_EPOCH, protocolVersion: CHAT_QUEUE_PROTOCOL_VERSION,
+      replayFrom: replay.replayFrom, replayReset: replay.replayReset,
+      replayTruncated: isProcessing && replay.replayTruncated,
+      pendingPermissions: pendingApprovals(sessionId, dependencies), queueItems: pendingQueue(sessionId, userId),
       timestamp: new Date().toISOString(),
     });
-
-    // Replay only for RUNNING runs, strictly after the ack. Completed runs
-    // are fully persisted to the provider transcript and served over REST —
-    // replaying them (e.g. after a page reload where the client's lastSeq is
-    // 0) would duplicate messages the history fetch already returned.
-    if (isProcessing) {
-      for (const event of chatRunRegistry.replayEvents(sessionId, lastSeq)) {
-        sendJson(ws, event);
-      }
-    }
+    if (isProcessing) for (const event of replay.events) sendJson(ws, event);
   }
 }
 
-/**
- * Handles `chat.permission-response`: forwards a tool-approval decision to the
- * pending approval resolver (Claude is the only provider with interactive
- * approvals today, but the message is intentionally provider-neutral).
- */
-function handlePermissionResponse(data: AnyRecord, dependencies: ChatWebSocketDependencies): void {
-  if (typeof data.requestId !== 'string' || data.requestId.length === 0) {
+function handleQueueAction(ws: WebSocket, userId: string | number | null, data: AnyRecord, dependencies: ChatWebSocketDependencies): void {
+  prepareQueue();
+  const sessionId = readRequiredSessionId(data);
+  const itemId = typeof data.queueItemId === 'string' ? data.queueItemId : '';
+  if (!sessionId || !itemId) { sendProtocolError(ws, 'QUEUE_ITEM_REQUIRED', '需要指定排队任务。'); return; }
+  const action = data.type === 'chat.queue.resume' ? 'resume' : 'cancel';
+  const result = action === 'resume' ? chatQueueDb.resume(userId, sessionId, itemId, CHAT_SERVER_EPOCH)
+    : chatQueueDb.cancel(userId, sessionId, itemId);
+  sendJson(ws, { kind: 'chat_queue_action_ack', sessionId, queueItemId: itemId, action, status: result });
+  broadcastQueue(sessionId, userId);
+  if (result === 'resumed') drainQueuedCommands(dependencies, { sessionId, userId });
+}
+
+function handlePermissionResponse(ws: WebSocket, userId: string | number | null, data: AnyRecord, dependencies: ChatWebSocketDependencies): void {
+  if (typeof data.requestId !== 'string' || !data.requestId || typeof data.allow !== 'boolean') {
+    sendProtocolError(ws, 'INVALID_APPROVAL', '需要有效的审批请求与明确的允许或拒绝。');
     return;
   }
-
-  dependencies.resolveToolApproval(data.requestId, {
-    allow: Boolean(data.allow),
-    updatedInput: data.updatedInput,
-    message: typeof data.message === 'string' ? data.message : undefined,
-    rememberEntry: data.rememberEntry,
-  });
+  const candidates = chatRunRegistry.listRunningRuns().filter((run) => chatUserKey(run.userId) === chatUserKey(userId)
+    && (!data.sessionId || data.sessionId === run.sessionId));
+  for (const candidate of candidates) {
+    const run = chatRunRegistry.getRun(candidate.sessionId)!;
+    if (run.resolvedApprovals.has(data.requestId)) {
+      sendJson(ws, { kind: 'chat_permission_ack', sessionId: candidate.sessionId, requestId: data.requestId, status: 'already_resolved' });
+      return;
+    }
+    if (!pendingApprovals(candidate.sessionId, dependencies).some((item) => item.requestId === data.requestId)) continue;
+    // Claim synchronously before invoking the resolver. A second observer can
+    // neither overwrite this decision nor invoke the provider resolver twice.
+    run.resolvedApprovals.add(data.requestId);
+    try {
+      dependencies.resolveToolApproval(data.requestId, {
+        allow: data.allow, updatedInput: data.updatedInput,
+        message: typeof data.message === 'string' ? data.message : undefined,
+        rememberEntry: data.rememberEntry,
+      });
+    } catch (error) { run.resolvedApprovals.delete(data.requestId); throw error; }
+    // Older clients and sidebar counters already understand permission_cancelled.
+    run.writer.send({ kind: 'permission_cancelled', requestId: data.requestId, reason: 'resolved', provider: run.provider });
+    chatRunRegistry.broadcast(candidate.sessionId, userId, {
+      kind: 'permission_resolved', sessionId: candidate.sessionId, requestId: data.requestId,
+      runId: run.runId, allow: data.allow,
+    });
+    sendJson(ws, { kind: 'chat_permission_ack', sessionId: candidate.sessionId, requestId: data.requestId, status: 'resolved',
+      rememberEntry: data.allow && typeof data.rememberEntry === 'string' ? data.rememberEntry : undefined });
+    return;
+  }
+  sendJson(ws, { kind: 'chat_permission_ack', sessionId: data.sessionId ?? null, requestId: data.requestId, status: 'not_pending' });
 }
 
 /**
  * Handles authenticated chat websocket messages used by the main chat panel.
  *
  * Inbound protocol (client to server):
- * - `chat.send`                { sessionId, content, options? }
+ * - `chat.send`                { sessionId, content, options?, clientRequestId? }
  * - `chat.abort`               { sessionId }
- * - `chat.subscribe`           { sessions: [{ sessionId, lastSeq? }] }
- * - `chat.permission-response` { requestId, allow, updatedInput?, message?, rememberEntry? }
+ * - `chat.subscribe`           { sessions: [{ sessionId, lastSeq?, cursor? }] }
+ * - `chat.unsubscribe`         { sessionId }
+ * - `chat.queue.cancel/resume` { sessionId, queueItemId }
+ * - `chat.permission-response` { sessionId?, requestId, allow, updatedInput?, message?, rememberEntry? }
  *
  * Outbound protocol (server to client): every frame is `kind`-based — either
  * a provider `NormalizedMessage` (with `seq`) or a gateway event
@@ -413,13 +476,20 @@ export function handleChatConnection(
           await handleChatSend(ws, userId, data, dependencies);
           return;
         case 'chat.abort':
-          await handleChatAbort(ws, data, dependencies);
+          await handleChatAbort(ws, userId, data, dependencies);
           return;
         case 'chat.subscribe':
-          handleChatSubscribe(ws, data, dependencies);
+          handleChatSubscribe(ws, userId, data, dependencies);
           return;
         case 'chat.permission-response':
-          handlePermissionResponse(data, dependencies);
+          handlePermissionResponse(ws, userId, data, dependencies);
+          return;
+        case 'chat.queue.cancel':
+        case 'chat.queue.resume':
+          handleQueueAction(ws, userId, data, dependencies);
+          return;
+        case 'chat.unsubscribe':
+          if (typeof data.sessionId === 'string') chatRunRegistry.detachConnection(ws, data.sessionId);
           return;
         case 'ping':
           // App-level heartbeat. Browsers cannot observe protocol ping/pong, so
@@ -441,5 +511,6 @@ export function handleChatConnection(
   ws.on('close', () => {
     logger.info('[INFO] Chat client disconnected');
     connectedClients.delete(ws);
+    chatRunRegistry.detachConnection(ws);
   });
 }

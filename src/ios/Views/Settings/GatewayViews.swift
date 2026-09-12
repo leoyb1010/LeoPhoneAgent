@@ -1066,6 +1066,13 @@ struct HarnessConsoleView: View {
                 }
             }
 
+            Text(driver.journalStatus.label)
+                .font(.caption)
+                .foregroundStyle(driver.journalStatus.state == "degraded" ? Color.orange : Color.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 14).padding(.vertical, 4)
+                .accessibilityValue("已保存 \(driver.journalStatus.durableSeq)，已收到 \(driver.journalStatus.latestSeq)，缺口 \(driver.journalStatus.missingRanges)")
+
             // [T-composer-send-dead] 状态可见:连接中给进度,出错给原因。
             // 以前 lastError 只存不显,失败对用户表现为"点了没反应"。
             if driver.status == "starting" {

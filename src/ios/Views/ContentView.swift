@@ -180,6 +180,7 @@ enum ToolSheet: String, Identifiable {
     case browser
     case browserManagement
     case quickTasks
+    case capabilities
     case syncMigrationDetail
     var id: String { rawValue }
 }
@@ -347,6 +348,9 @@ struct ContentView: View {
     @AppStorage("launchScreen") private var launchScreen: Int = 0
     @AppStorage("leo.homeCardsEnabled") private var homeCardsEnabled = true
     @AppStorage("leo.torchOn") private var torchOn = false
+    @State private var torchSupported = false
+    @State private var homeNativeResult: ActionRouter.ExecutionResult?
+    @State private var homeNativeTask: Task<Void, Never>?
     /// FAB position preference: false = right (default), true = left.
     @AppStorage("fabOnLeft") private var fabOnLeft = false
     /// Mirror of `SyncV2Bootstrap.isEnabled` so SwiftUI re-evaluates
@@ -761,6 +765,15 @@ struct ContentView: View {
                                 }
                             }
                     }
+                case .capabilities:
+                    NavigationStack {
+                        CapabilitiesView()
+                            .toolbar {
+                                ToolbarItem(placement: .cancellationAction) {
+                                    Button("Done") { activeToolSheet = nil }
+                                }
+                            }
+                    }
                 case .syncMigrationDetail:
                     NavigationStack {
                         SyncMigrationDetailView()
@@ -1136,6 +1149,7 @@ struct ContentView: View {
                         // Guard against rapid bg→fg→bg: if scenePhase already
                         // changed back, skip the stale .active work.
                         guard scenePhase == .active else { return }
+                        refreshHomeDeviceState()
                         fetchAlarmsIfNeeded()
                         if #available(iOS 17.0, *) {
                             SyncCore.shared.isAppInBackground = false
@@ -1625,20 +1639,22 @@ struct ContentView: View {
         if homeCardsEnabled, !isSelecting {
             Section {
                 Button {
-                    if FastLocalActions.setTorch(!torchOn) {
-                        torchOn.toggle()
-                    }
+                    let enabled = !DeviceActions.shared.statusTorch().enabled
+                    runHomeNative(.init(path: .native, kind: .toggleFlashlight,
+                        hour: nil, minute: nil, tomorrow: false, label: enabled ? "on" : "off"))
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: torchOn ? "flashlight.off.fill" : "flashlight.on.fill")
                             .foregroundStyle(.tint)
-                        Text(torchOn ? "关掉手电筒" : "打开手电筒")
+                        Text(!torchSupported ? "此设备不支持手电筒" : torchOn ? "关掉手电筒" : "打开手电筒")
                             .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(.primary)
                         Spacer(minLength: 0)
                     }
                 }
                 .buttonStyle(.plain)
+                .disabled(!torchSupported || homeRoutingInProgress)
+                .onAppear { refreshHomeDeviceState() }
             }
         }
     }
@@ -2767,7 +2783,7 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(isIPad ? "此 iPad 工作区" : "此 iPhone 工作区")
                         .font(.headline.weight(.bold))
-                    Text("对话、视觉、文件、Web 与自动化都在本机可用")
+                    Text("基础动作直接完成，复杂任务交给 Agent")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
@@ -2795,7 +2811,7 @@ struct ContentView: View {
                 Text("今天想完成什么？")
                     .font(.subheadline.weight(.semibold))
 
-                TextField("描述目标，点击新任务后立即执行…", text: $homePrompt, axis: .vertical)
+                TextField("说出目标，例如打开手电筒、记个待办…", text: $homePrompt, axis: .vertical)
                     .lineLimit(compact ? 2...4 : 3...6)
                     .textFieldStyle(.plain)
                     .padding(.horizontal, 14)
@@ -2813,13 +2829,20 @@ struct ContentView: View {
                 HStack(spacing: 10) {
                     homeTargetMenu
                     Spacer(minLength: 8)
+                    if homeNativeTask != nil {
+                        Button("取消") {
+                            homeNativeTask?.cancel()
+                            homeNativeResult = .init(text: "等待已取消；已经发生的操作不会自动撤销。", outcome: .cancelled)
+                        }
+                        .buttonStyle(.plain)
+                    }
                     Button(action: runHomePrompt) {
                         HStack(spacing: 6) {
                             if homeRoutingInProgress {
                                 ProgressView()
                                     .tint(.white)
                             } else {
-                                Text("新任务")
+                                Text("开始")
                                 Image(systemName: "paperplane.fill")
                             }
                         }
@@ -2832,7 +2855,7 @@ struct ContentView: View {
                     .buttonStyle(LeoSquishButtonStyle())
                     .disabled(!canRunHomePrompt)
                     .opacity(canRunHomePrompt ? 1 : 0.35)
-                    .accessibilityLabel(Text("新任务并立即发送"))
+                    .accessibilityLabel(Text("开始执行"))
                     .accessibilityHint(Text(homeExecutionTargetHint))
                 }
 
@@ -2842,6 +2865,14 @@ struct ContentView: View {
                         .foregroundStyle(LeoTheme.ColorToken.destructive)
                         .transition(.opacity.combined(with: .move(edge: .top)))
                         .accessibilityLabel(Text("任务未发送：\(homeRoutingError)"))
+                }
+                if let result = homeNativeResult {
+                    Label(result.text, systemImage: result.outcome == .succeeded
+                        ? "checkmark.circle.fill" : "info.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(result.outcome == .succeeded ? Color.green : Color.secondary)
+                        .textSelection(.enabled)
+                        .transition(.opacity)
                 }
             }
             .padding(14)
@@ -2858,7 +2889,7 @@ struct ContentView: View {
                             Text(hasProviders ? "选择本机默认模型" : "连接本机模型")
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.primary)
-                            Text("只需完成这一步，Mac 连接不是必需项")
+                            Text("基础系统动作无需模型；连接后可处理更复杂的任务")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -2926,6 +2957,15 @@ struct ContentView: View {
                     }
                 }
             }
+
+            Button {
+                activeToolSheet = .capabilities
+            } label: {
+                Label("全部系统能力", systemImage: "square.grid.2x2")
+                    .font(.subheadline.weight(.medium))
+                    .frame(minHeight: LeoTheme.TouchTarget.minimum)
+            }
+            .buttonStyle(.plain)
 
             NavigationLink {
                 GatewaySettingsView()
@@ -3099,9 +3139,18 @@ struct ContentView: View {
 
     private func runHomePrompt() {
         let prompt = homePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !prompt.isEmpty else { return }
+        guard canRunHomePrompt else { return }
         switch homeExecutionTarget {
         case .iphone:
+            let native = ActionRouter.decide(text: prompt, imageCount: 0)
+            if native.path == .native {
+                runHomeNative(native, clearingPrompt: prompt)
+                return
+            }
+            if native.path == .clarify {
+                homeNativeResult = .init(text: native.spoken(), outcome: .waitingForUser)
+                return
+            }
             guard !providerStore.modelGroups.isEmpty else {
                 if providerStore.instances.isEmpty { showAddProvider = true }
                 else { showSelectModels = true }
@@ -3144,6 +3193,39 @@ struct ContentView: View {
 
     private func openQuickTask(_ task: QuickTaskDefinition) {
         startHomeChatAction(.prefillQuickTask(id: task.id))
+    }
+
+    private func refreshHomeDeviceState() {
+        let state = DeviceActions.shared.statusTorch()
+        torchSupported = state.supported
+        torchOn = state.enabled
+    }
+
+    private func runHomeNative(_ route: ActionRouter.Decision, clearingPrompt: String? = nil) {
+        guard !homeRoutingInProgress else { return }
+        homeRoutingInProgress = true
+        homeRoutingError = nil
+        homeNativeResult = nil
+        homeNativeTask = Task { @MainActor in
+            defer {
+                homeRoutingInProgress = false
+                homeNativeTask = nil
+                refreshHomeDeviceState()
+            }
+            let result = await NativeActionExecutor.execute(route)
+                ?? .init(text: AgentRunOutcome.unknown.summary, outcome: .unknown)
+            guard !Task.isCancelled else { return }
+            withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) { homeNativeResult = result }
+            if result.outcome == .succeeded {
+                if let clearingPrompt,
+                   homePrompt.trimmingCharacters(in: .whitespacesAndNewlines) == clearingPrompt {
+                    homePrompt = ""
+                }
+                LeoHaptics.notification(.success)
+            } else if result.outcome == .failed {
+                LeoHaptics.notification(.error)
+            }
+        }
     }
 
     // MARK: - Search Bar

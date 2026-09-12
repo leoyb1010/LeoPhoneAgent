@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { resolveWorkspaceSurface } from '../workspaceSurface';
 import type { MainContentProps } from '../types/types';
 import { useTaskMaster } from '../../../contexts/TaskMasterContext';
 import { usePaletteOpsRegister } from '../../../contexts/PaletteOpsContext';
@@ -27,6 +28,7 @@ const PluginTabContent = React.lazy(() => import('../../plugins/view/PluginTabCo
 const BrowserUsePanel = React.lazy(() => import('../../browser-use/view/BrowserUsePanel'));
 const ConversationAuditPanel = React.lazy(() => import('../../conversation-audit/view/ConversationAuditPanel'));
 const MissionsView = React.lazy(() => import('../../missions/view/MissionsView'));
+const CollectionsWorkspace = React.lazy(() => import('./subcomponents/CollectionsWorkspace'));
 const TaskStartView = React.lazy(() => import('../../task-start/TaskStartView'));
 const EditorSidebar = React.lazy(() => import('../../code-editor/view/EditorSidebar'));
 const TaskMasterPanel = React.lazy(() => import('../../task-master/view/TaskMasterPanel'));
@@ -175,7 +177,18 @@ function MainContent({
   // 移动端例外:那里没有指挥条/会话列表,选项目全靠抽屉的汉堡按钮,所以保留
   // 带菜单入口的空态,否则没项目的手机会被困在一个开不了抽屉的页面上。
   // fleet / missions 不绑项目也能用，不能被无项目状态吞回新任务页。
-  if (activeTab === 'fleet') {
+  const surface = resolveWorkspaceSurface(activeTab, { hasProject: Boolean(selectedProject), isMobile, isLoading });
+  if (surface === 'collections') {
+    return (
+      <ErrorBoundary showDetails>
+        <React.Suspense fallback={panelFallback}>
+          <CollectionsWorkspace onNewTask={() => setActiveTab('dashboard')} />
+        </React.Suspense>
+      </ErrorBoundary>
+    );
+  }
+
+  if (surface === 'fleet') {
     return (
       <div className="leocodebox-workspace-enter h-full overflow-hidden">
         <ErrorBoundary showDetails>
@@ -185,19 +198,19 @@ function MainContent({
     );
   }
 
-  if (activeTab === 'dashboard' || (!isLoading && !selectedProject && !isMobile && activeTab !== 'missions')) {
+  if (surface === 'new-task') {
     return (
       <div className="leocodebox-workspace-enter h-full overflow-hidden">
         <ErrorBoundary showDetails>
           <React.Suspense fallback={panelFallback}>
-            <TaskStartView project={selectedProject} />
+            <TaskStartView project={selectedProject} onOpenLibrary={() => setActiveTab('collections')} />
           </React.Suspense>
         </ErrorBoundary>
       </div>
     );
   }
 
-  if (isLoading) {
+  if (surface === 'loading') {
     return <MainContentStateView mode="loading" isMobile={isMobile} onMenuClick={onMenuClick} />;
   }
 

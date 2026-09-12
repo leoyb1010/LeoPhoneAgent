@@ -1,10 +1,11 @@
+import { once } from 'node:events';
 import fs from 'node:fs';
 import path from 'node:path';
 
 import express from 'express';
 
 import { findAppRoot, getModuleDir } from '../../utils/runtime-paths.js';
-import { bindFrontmostToSession, exactWindows } from '../leocodebox/index.js';
+import { bindFrontmostToSession, exactWindowCapabilities, exactWindows } from '../leocodebox/index.js';
 
 import { requireHarnessKey } from './harness-auth.js';
 import { HarnessRequestError, getHarnessManager } from './harness-session.service.js';
@@ -42,7 +43,8 @@ router.get('/health', (_req, res) => {
   res.json({ status: 'ok', platform: 'leoagent', version: VERSION, server: 'leocodebox', app_version: APP_VERSION });
 });
 
-router.get('/v1/capabilities', requireHarnessKey, (_req, res) => {
+router.get('/v1/capabilities', requireHarnessKey, async (_req, res) => {
+  const windows = await exactWindowCapabilities({ timeoutMs: 750 });
   res.json({
     object: 'leoagent.capabilities',
     platform: 'leoagent',
@@ -58,8 +60,9 @@ router.get('/v1/capabilities', requireHarnessKey, (_req, res) => {
       session_digest: true,
       task_receipts: true,
       artifacts: true,
-      exact_window: true,
+      exact_window: windows.available,
     },
+    window_capabilities: windows,
     harnesses: availableHarnesses(),
   });
 });
@@ -67,6 +70,11 @@ router.get('/v1/capabilities', requireHarnessKey, (_req, res) => {
 router.get('/v1/grok/token', requireHarnessKey, async (_req, res) => {
   const result = await fetchGrokToken();
   res.status(result.status).json(result.body);
+});
+
+router.use('/harness', requireHarnessKey, async (_req, _res, next) => {
+  await getHarnessManager().ready();
+  next();
 });
 
 router.get('/harness/sessions', requireHarnessKey, (_req, res) => {
@@ -80,15 +88,14 @@ router.post('/harness/sessions', requireHarnessKey, async (req, res) => {
   const prompt = body.prompt == null ? null : String(body.prompt);
   try {
     const session = await getHarnessManager().create({ harness, cwd, prompt });
-    try {
-      const snap = bindFrontmostToSession(session.sessionId);
-      if (snap) {
-        session.emit({ event: 'window.bound', ...(exactWindows.summary(session.sessionId) ?? {}) });
-      }
-    } catch {
-      // Accessibility off → session still runs; fleet just has no window line.
-    }
     res.status(202).json({ session_id: session.sessionId, harness, status: session.status, window: session.summary().window });
+    // Observation is optional enrichment, never a synchronous 4-second gate on
+    // starting an agent. The bounded native process cannot block the event loop.
+    void bindFrontmostToSession(session.sessionId, { timeoutMs: 750 }).then((snapshot) => {
+      if (snapshot) session.emit({ event: 'window.bound', ...(exactWindows.summary(session.sessionId) ?? {}) });
+    }).catch(() => {
+      // Missing helper/TCC or a gone window leaves the run fully usable.
+    });
   } catch (error) {
     if (error instanceof HarnessRequestError) {
       jsonError(res, 400, error.message);
@@ -117,19 +124,20 @@ router.get('/harness/sessions/:sessionId/events', requireHarnessKey, async (req,
   res.flushHeaders();
 
   let closed = false;
-  res.on('close', () => { closed = true; });
+  const abort = new AbortController();
+  res.on('close', () => { closed = true; abort.abort(); });
   // SSE 注释帧保活:iOS 与中继都只认 `data:` 前缀,注释帧被安全跳过。
   const keepAlive = setInterval(() => {
     if (!closed) res.write(': keep-alive\n\n');
   }, 25_000);
 
   try {
-    // First frame names the watermark so a reconnect can say resume=ok/gap
-    // instead of silently skipping a hole. Mac log is unbounded → always ok.
+    // Resume acknowledges the requested cursor; journal control frames report
+    // missing ranges and persistence failures independently of event sequence.
     res.write(`data: ${JSON.stringify(resumeEnvelope(after, 0))}\n\n`);
-    for await (const event of session.subscribe(after)) {
+    for await (const event of session.subscribe(after, { signal: abort.signal, journalStatus: req.query.journal_status === '1' })) {
       if (closed) break;
-      res.write(`data: ${JSON.stringify(event)}\n\n`);
+      if (!res.write(`data: ${JSON.stringify(event)}\n\n`)) await once(res, 'drain', { signal: abort.signal });
     }
   } catch {
     // 客户端走了是常态;会话继续跑,日志继续长,按 seq 续传即可。
@@ -209,18 +217,18 @@ router.post('/harness/sessions/:sessionId/stop', requireHarnessKey, async (req, 
 
 // [T-leophone-digest] 会话摘要:接管一个长会话时先拉它,再从 seq 水位
 // 增量跟随,不必从 0 全量回放上千条 NDJSON。
-router.get('/harness/sessions/:sessionId/digest', requireHarnessKey, (req, res) => {
+router.get('/harness/sessions/:sessionId/digest', requireHarnessKey, async (req, res) => {
   const session = getHarnessManager().get(req.params.sessionId);
   if (!session) {
     jsonError(res, 404, 'No such session');
     return;
   }
-  res.json({ object: 'leoagent.digest', ...buildDigest(session) });
+  res.json({ object: 'leoagent.digest', ...await buildDigest(session) });
 });
 
 // [T-leophone-digest] 任务收据:终态会话的可核对凭证(做了什么、动了哪些
 // 文件、谁批了什么、产物)。非终态会话明确 409,不出半截收据。
-router.get('/harness/sessions/:sessionId/receipt', requireHarnessKey, (req, res) => {
+router.get('/harness/sessions/:sessionId/receipt', requireHarnessKey, async (req, res) => {
   const session = getHarnessManager().get(req.params.sessionId);
   if (!session) {
     jsonError(res, 404, 'No such session');
@@ -230,17 +238,24 @@ router.get('/harness/sessions/:sessionId/receipt', requireHarnessKey, (req, res)
     jsonError(res, 409, `Session is still ${session.status}; receipt is issued at terminal state only`);
     return;
   }
-  res.json(buildReceipt(session));
+  try { res.json(await buildReceipt(session)); }
+  catch (error) {
+    if (error instanceof Error && error.message === 'JOURNAL_NOT_DURABLE') {
+      res.status(503).json({ error: 'JOURNAL_NOT_DURABLE', journal: session.journalHealth() });
+      return;
+    }
+    throw error;
+  }
 });
 
 // [T-leophone-artifacts] 会话产物清单 + 下载。大文件不进事件流、不进推送。
-router.get('/harness/sessions/:sessionId/artifacts', requireHarnessKey, (req, res) => {
+router.get('/harness/sessions/:sessionId/artifacts', requireHarnessKey, async (req, res) => {
   const session = getHarnessManager().get(req.params.sessionId);
   if (!session) {
     jsonError(res, 404, 'No such session');
     return;
   }
-  res.json({ object: 'leoagent.artifacts', session_id: req.params.sessionId, artifacts: listArtifacts(session) });
+  res.json({ object: 'leoagent.artifacts', session_id: req.params.sessionId, artifacts: await listArtifacts(session) });
 });
 
 router.get('/harness/sessions/:sessionId/artifacts/:name', requireHarnessKey, (req, res) => {

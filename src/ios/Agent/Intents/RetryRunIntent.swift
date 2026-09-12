@@ -141,9 +141,10 @@ struct RetryRunIntent: AppIntent {
         }
 
         // Retry from that message (replacement attachments override the original ones)
-        vm.retryFromMessage(targetMessage.id, replacementAttachments: replacementAttachments)
-
         let sid = vm.sessionId ?? session.id
+        let runId = try SendPromptIntent.dispatchRun(vm: vm, sessionId: sid, pendingId: pendingId) {
+            vm.retryFromMessage(targetMessage.id, replacementAttachments: replacementAttachments)
+        }
 
         // Resolve model name
         var modelName = vm.selectedModel.displayName
@@ -169,54 +170,29 @@ struct RetryRunIntent: AppIntent {
         )
 
         if waitForResult {
-            for await processing in vm.$isProcessing.values {
-                if !processing { break }
-            }
-
-            // [T-shortcuts-diag-and-pending] Loop finished.
-            ShortcutRunTracker.markCompleted(recordId: pendingId, reason: "waitForResult.done")
-
-            let responseText = SendPromptIntent.extractResponseText(from: vm)
-
-            ShortcutNotification.post(
-                id: "shortcut-retry-done-\(sid)",
-                title: "LeoPhoneAgent: Retry Done",
-                body: "\(modelName): \(String(responseText.prefix(200)))",
-                sessionId: sid
-            )
+            let settled = await SendPromptIntent.settleRun(
+                sessionId: sid, runId: runId, pendingId: pendingId,
+                title: "LeoPhoneAgent Retry", notificationId: "shortcut-retry-done")
+            let responseText = settled.text
 
             let result = SendPromptResult(
                 sessionId: sid,
                 modelName: modelName,
-                status: "Completed",
+                status: settled.outcome.shortcutStatus,
                 isNewSession: false,
                 prompt: targetMessage.content,
                 responseText: responseText,
-                artifactFileNames: await SendPromptResult.artifactNames(for: sid)
+                artifactFileNames: await SendPromptResult.artifactNames(for: sid),
+                runId: runId
             )
             return .result(value: result, dialog: "\(responseText.prefix(500))")
         }
 
         // Async mode
-        let capturedModelName = modelName
-        let capturedSid = sid
-        let capturedPendingId = pendingId
         Task { @MainActor in
-            for await processing in vm.$isProcessing.values {
-                if !processing { break }
-            }
-
-            // [T-shortcuts-diag-and-pending] Loop finished.
-            ShortcutRunTracker.markCompleted(recordId: capturedPendingId, reason: "async.done")
-
-            let summary = String(SendPromptIntent.extractResponseText(from: vm).prefix(200))
-
-            ShortcutNotification.post(
-                id: "shortcut-retry-done-\(capturedSid)",
-                title: "LeoPhoneAgent: Retry Done",
-                body: "\(capturedModelName): \(summary)",
-                sessionId: capturedSid
-            )
+            _ = await SendPromptIntent.settleRun(
+                sessionId: sid, runId: runId, pendingId: pendingId,
+                title: "LeoPhoneAgent Retry", notificationId: "shortcut-retry-done")
         }
 
         let result = SendPromptResult(
@@ -224,7 +200,8 @@ struct RetryRunIntent: AppIntent {
             modelName: modelName,
             status: "Retrying",
             isNewSession: false,
-            prompt: targetMessage.content
+            prompt: targetMessage.content,
+            runId: runId
         )
 
         return .result(value: result, dialog: "Retrying from message: \(promptPreview)\(targetMessage.content.count > 50 ? "…" : "")")

@@ -372,7 +372,8 @@
     "openLeoapi": "Leoapi gateway",
     "openLocalLog": "Local log",
     "goMissions": "Quick tasks",
-    "goConsole": "Nouvelle tâche"
+    "goConsole": "Nouvelle tâche",
+    "goCollections": "Ouvrir la bibliothèque"
   },
   "workbench": {
     "localMachine": "Local · {{name}}",
@@ -432,7 +433,16 @@
     "consoleTooltip": "Console · choisir un agent, lancer une tâche",
     "agentLockedTooltip": "Cette session a été créée avec lui. Pour changer d’agent, lancez une nouvelle tâche depuis la console.",
     "agentLockedLabel": "Agent de la session : {{agent}}",
-    "agentLockedMark": "cette session"
+    "agentLockedMark": "cette session",
+    "remoteLog": "Sortie distante (400 dernières lignes)",
+    "remoteLatest": "Nouvelle sortie · Revenir à la fin",
+    "journal": {
+      "unknown": "État de sauvegarde inconnu",
+      "pending": "Enregistrement du journal",
+      "durable": "Journal enregistré",
+      "degraded": "Journal incomplet"
+    },
+    "journalDetail": "Enregistré {{durable}} / reçu {{latest}} · {{missing}} plages manquantes"
   },
   "dashboard": {
     "newTaskTitle": "Nouvelle tâche",
@@ -449,5 +459,16 @@
     "newTaskPlaceholder": "Demander à {{agent}} de faire quelque chose dans {{target}}…",
     "newTaskStart": "Démarrer la session",
     "newTaskNeedProject": "Ajoutez d’abord un répertoire de projet — une tâche a besoin d’un point de chute."
+  },
+  "taskStart": {
+    "title": "Que souhaitez-vous accomplir ?",
+    "description": "Décrivez une tâche ci-dessus, puis choisissez son projet et son appareil avant de la lancer.",
+    "examples": "Par exemple : vérifier les derniers changements de code ou organiser les notes du projet.",
+    "projectLabel": "Projet actuel",
+    "noProject": "Choisissez un projet quand vous êtes prêt.",
+    "changeProject": "Changer le projet de la tâche",
+    "libraryTitle": "Bibliothèque",
+    "libraryDescription": "Enregistrez, retrouvez et lisez vos documents.",
+    "shortcuts": "⌘N Nouvelle tâche · ⌘K Recherche et navigation · ⌘, Paramètres"
   }
 }

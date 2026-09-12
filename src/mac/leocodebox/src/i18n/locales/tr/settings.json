@@ -635,5 +635,9 @@
     "placeholder": "Search settings",
     "noResults": "No matching settings",
     "clear": "Clear"
+  },
+  "agentDefaults": {
+    "title": "Yeni görev varsayılanları",
+    "saveFailed": "Varsayılanlar kaydedilemedi"
   }
 }

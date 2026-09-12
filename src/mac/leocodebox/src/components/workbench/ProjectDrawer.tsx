@@ -1,8 +1,7 @@
-import { useEffect } from 'react';
-import ReactDOM from 'react-dom';
 import { X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { Dialog, DialogContent } from '../../shared/view/ui/Dialog';
 import Sidebar from '../sidebar/view/Sidebar';
 
 type SidebarProps = Parameters<typeof Sidebar>[0];
@@ -24,29 +23,12 @@ type ProjectDrawerProps = {
 export default function ProjectDrawer({ open, onClose, sidebarProps }: ProjectDrawerProps) {
   const { t } = useTranslation();
 
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
-  // 同 LeoapiPanel:portal 到 body,避免被外壳的层级兜底规则拉回文档流。
-  return ReactDOM.createPortal(
-    <>
-      <button
-        type="button"
-        aria-label={t('workbench.closeProjects', { defaultValue: '关闭项目' })}
-        onClick={onClose}
-        className="wb-anim-fade fixed inset-0 z-[54] cursor-default bg-black/35 backdrop-blur-[2px]"
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
+  return (
+    <Dialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
+      <DialogContent
+        placement="left"
         aria-label={t('workbench.projects', { defaultValue: '项目' })}
-        className="wb-anim-inspector fixed bottom-0 left-0 top-0 z-[55] flex w-[320px] max-w-[92vw] flex-col border-r border-border bg-card shadow-elevation-3"
+        className="bg-card shadow-elevation-3"
       >
         <div className="flex h-[46px] flex-none items-center border-b border-border px-4">
           <span className="text-[13px] font-bold text-foreground">{t('workbench.projects', { defaultValue: '项目' })}</span>
@@ -57,8 +39,7 @@ export default function ProjectDrawer({ open, onClose, sidebarProps }: ProjectDr
         <div className="min-h-0 flex-1">
           <Sidebar {...sidebarProps} />
         </div>
-      </div>
-    </>,
-    document.body,
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -9,11 +9,17 @@ import UserNotifications
 /// the stop sweep to cancel yet.
 enum QuickTaskIntentError: LocalizedError {
     case cancelledBeforeStart
+    case notStarted
+    case sessionBusy
 
     var errorDescription: String? {
         switch self {
         case .cancelledBeforeStart:
             return String(localized: "Stopped before the task started.")
+        case .notStarted:
+            return String(localized: "任务未启动，请检查模型、附件或会话状态。")
+        case .sessionBusy:
+            return String(localized: "会话仍在处理，请稍后重试。")
         }
     }
 }
@@ -149,9 +155,10 @@ struct QuickTaskIntent: AppIntent {
 
         let renderedPrompt = definition.renderedPrompt(inputValues: inputValues)
         vm.inputText = renderedPrompt
-        vm.send()
-
         let sid = vm.sessionId ?? "unknown"
+        let runId = try SendPromptIntent.dispatchRun(vm: vm, sessionId: sid, pendingId: pendingId) {
+            vm.send()
+        }
 
         // Resolve model name
         var modelName = vm.selectedModel.displayName
@@ -179,57 +186,30 @@ struct QuickTaskIntent: AppIntent {
         )
 
         if waitForResult {
-            // Synchronous mode: wait for the agent to finish
-            for await processing in vm.$isProcessing.values {
-                if !processing { break }
-            }
-
-            // [T-shortcuts-diag-and-pending] Loop finished.
-            ShortcutRunTracker.markCompleted(recordId: pendingId, reason: "waitForResult.done")
-
-            let responseText = SendPromptIntent.extractResponseText(from: vm)
-
-            ShortcutNotification.post(
-                id: "shortcut-done-\(sid)",
-                title: "LeoPhoneAgent: \(taskName) Done",
-                body: "\(modelName): \(String(responseText.prefix(200)))",
-                sessionId: sid
-            )
+            let settled = await SendPromptIntent.settleRun(
+                sessionId: sid, runId: runId, pendingId: pendingId,
+                title: "LeoPhoneAgent: \(taskName)", notificationId: "shortcut-done")
+            let responseText = settled.text
 
             let result = SendPromptResult(
                 sessionId: sid,
                 modelName: modelName,
-                status: "Completed",
+                status: settled.outcome.shortcutStatus,
                 isNewSession: true,
                 prompt: renderedPrompt,
                 responseText: responseText,
                 outputMode: definition.outputMode.rawValue,
-                artifactFileNames: await SendPromptResult.artifactNames(for: sid)
+                artifactFileNames: await SendPromptResult.artifactNames(for: sid),
+                runId: runId
             )
             return .result(value: result, dialog: "\(responseText.prefix(500))")
         }
 
         // Async mode: return immediately
-        let capturedModelName = modelName
-        let capturedSid = sid
-        let capturedTaskName = taskName
-        let capturedPendingId = pendingId
         Task { @MainActor in
-            for await processing in vm.$isProcessing.values {
-                if !processing { break }
-            }
-
-            // [T-shortcuts-diag-and-pending] Loop finished.
-            ShortcutRunTracker.markCompleted(recordId: capturedPendingId, reason: "async.done")
-
-            let summary = String(SendPromptIntent.extractResponseText(from: vm).prefix(200))
-
-            ShortcutNotification.post(
-                id: "shortcut-done-\(capturedSid)",
-                title: "LeoPhoneAgent: \(capturedTaskName) Done",
-                body: "\(capturedModelName): \(summary)",
-                sessionId: capturedSid
-            )
+            _ = await SendPromptIntent.settleRun(
+                sessionId: sid, runId: runId, pendingId: pendingId,
+                title: "LeoPhoneAgent: \(taskName)", notificationId: "shortcut-done")
         }
 
         let result = SendPromptResult(
@@ -238,7 +218,8 @@ struct QuickTaskIntent: AppIntent {
             status: "Running",
             isNewSession: true,
             prompt: renderedPrompt,
-            outputMode: definition.outputMode.rawValue
+            outputMode: definition.outputMode.rawValue,
+            runId: runId
         )
 
         return .result(value: result, dialog: "\(taskName) started with \(modelName).")
