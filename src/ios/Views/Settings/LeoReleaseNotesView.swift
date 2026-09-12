@@ -12,6 +12,17 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.36.0",
+            date: "2026-09-12",
+            title: "系统转写与语言资源，录音中断更可靠",
+            highlights: [
+                "支持的设备与语言可使用 SpeechAnalyzer 本机转写；新增系统语言资源查询、主动下载、取消及刷新入口，资源不足时明确说明。",
+                "明确的自动和离线选择优先于分组；新默认语音分组使用自动模式，未开启自动联网许可时不联网回退。已有分组配置保留。",
+                "停止录音、关闭面板或进入后台后，迟到的权限回调不会重新打开麦克风；中断恢复尊重系统标记，路由变化回到主线程处理。",
+                "语音结果显示本机或允许联网的执行位置，并区分最终与部分结果；远程控制台显示日志保存状态，状态通知不会推进事件游标。"
+            ]
+        ),
+        LeoRelease(
             version: "1.35.0",
             date: "2026-09-12",
             title: "本机能力统一授权，任务结果准确可查",
