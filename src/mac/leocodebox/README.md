@@ -1,5 +1,7 @@
 # LeoPhoneAgent · Mac
 
+**当前版本：Mac 1.85.0（2026-09-12）**。Developer ID 签名、Apple 公证与 App/DMG 钉章已完成；[下载与热更新](https://github.com/leoyb1010/leocodebox-updates/releases/tag/v1.85.0)，[验收记录](../../../docs/upgrade-2026-09-12/MAC_1.85.0_RELEASE.md)。下文 1.80.0 的未公证说明为历史记录，不适用于当前版本。
+
 ![leocodebox 本地 Agent 工作台](public/visuals/release/readme-hero.webp)
 
 ![version](https://img.shields.io/badge/source-1.80.0-blue)
@@ -15,7 +17,7 @@
 
 ## ⬇️ 下载
 
-[![下载 DMG](https://img.shields.io/badge/下载-LeoPhoneAgent%20Mac%201.80.0%20(arm64)-brightgreen?style=for-the-badge)](https://github.com/leoyb1010/leocodebox-updates/releases/latest)
+[![下载 DMG](https://img.shields.io/badge/下载-LeoPhoneAgent%20Mac%201.85.0%20(arm64)-brightgreen?style=for-the-badge)](https://github.com/leoyb1010/leocodebox-updates/releases/latest)
 
 - **最新版本**：<https://github.com/leoyb1010/leocodebox-updates/releases/latest>
 - **当前源码版本**：`1.80.0`
