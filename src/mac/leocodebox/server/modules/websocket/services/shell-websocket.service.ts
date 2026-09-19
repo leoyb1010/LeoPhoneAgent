@@ -115,10 +115,15 @@ function resolveResumeSessionId(
   return resolvedSessionId;
 }
 
+function defaultInteractiveShell(): string {
+  if (os.platform() === 'win32') return 'powershell.exe';
+  return 'exec "${SHELL:-/bin/zsh}" -il';
+}
+
 /**
  * Resolves provider command line for plain shell and agent-backed shell modes.
  */
-function buildShellCommand(
+export function buildShellCommand(
   message: ShellIncomingMessage,
   dependencies: ShellWebSocketDependencies
 ): string {
@@ -132,7 +137,9 @@ function buildShellCommand(
     provider === 'plain-shell';
 
   if (isPlainShell) {
-    return initialCommand;
+    // 2.0 的终端抽屉只给 cwd 不给命令:空命令会变成 `bash -c ""`,壳一开就退出。
+    // 没有命令就起用户自己的交互登录 shell。
+    return initialCommand || defaultInteractiveShell();
   }
 
   if (provider === 'cursor') {
