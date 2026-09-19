@@ -27,6 +27,7 @@ import leocodeboxRoutes, { startHealthMonitor } from './modules/leocodebox/index
 import leophoneRoutes, { startLeophoneRelayClient } from './modules/leophone/index.js';
 import fleetRoutes from './modules/leophone/fleet.routes.js';
 import workbenchRoutes from './modules/leophone/workbench.routes.js';
+import { telegramChannel } from './modules/leophone/telegram.service.js';
 import treasuryRoutes from './modules/leophone/treasury.routes.js';
 import { startDailyUsageSummary } from './modules/usage/index.js';
 import providerRoutes from './modules/providers/provider.routes.js';
@@ -288,6 +289,8 @@ if (process.env.LEOCODEBOX_LOCAL_ONLY === '1') {
   startHealthMonitor();
   // 出站注册到 LeoPhoneAgent 自营中继(配置存在时);手机经原路径直达本机。
   startLeophoneRelayClient();
+  // 2.0 通道:Telegram 长轮询(配置里启用了才真的跑)。
+  telegramChannel.start();
 }
 
 startDailyUsageSummary();

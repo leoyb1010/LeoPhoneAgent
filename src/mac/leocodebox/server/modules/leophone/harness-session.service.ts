@@ -61,13 +61,23 @@ const PUSHABLE_EVENTS = new Set([
  */
 type HarnessEventSink = (event: Record<string, unknown>) => void;
 let eventSink: HarnessEventSink | null = null;
+/** 除中继之外的外推者(Telegram 等通道)。一个坏掉不影响其余。 */
+const extraSinks = new Set<HarnessEventSink>();
 
 export function setHarnessEventSink(sink: HarnessEventSink | null): void {
   eventSink = sink;
 }
 
+export function addHarnessEventSink(sink: HarnessEventSink): () => void {
+  extraSinks.add(sink);
+  return () => { extraSinks.delete(sink); };
+}
+
 function pushHarnessEvent(event: Record<string, unknown>): void {
-  eventSink?.(event);
+  try { eventSink?.(event); } catch { /* 一个外推者出错不影响其余 */ }
+  for (const sink of extraSinks) {
+    try { sink(event); } catch { /* same */ }
+  }
 }
 const MAX_LIVE_SESSIONS = 16;
 /** 进程仍在、可续聊或可审批。`idle` 是 stream-json 回合结束后的活会话,不是终态。 */

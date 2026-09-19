@@ -413,7 +413,7 @@ export default function App2() {
             </div>
           ))}
           {view === 'devices' && <DevicesPage local={local} fleet={fleet} toast={toast} onNewOn={(m) => { setNewBox({ open: true, machine: m }); setView('home'); }} />}
-          {view === 'channels' && <ChannelsPage />}
+          {view === 'channels' && <ChannelsPage toast={toast} models={configuredModels} />}
           {view === 'settings' && <SettingsPage toast={toast} onProvidersChanged={() => void refreshProviders()} />}
         </main>
       </div>

@@ -10,6 +10,7 @@ import { HarnessRequestError, getHarnessManager, type HarnessSession } from './h
 import { availableHarnesses } from './harness-specs.js';
 import { PI_AUTH_PATH, PI_HOME, authStatus, clearAuth, ensureDirs, setApiKey } from './pi-runtime.js';
 import { resumeEnvelope } from './resume-envelope.js';
+import { telegramChannel } from './telegram.service.js';
 
 // 2.0 工作台的本机 API。挂在 /api 下、走桌面本地鉴权,给渲染层用;
 // 手机那条 Bearer harness-key 的路(leophone.routes)原样不动。
@@ -352,6 +353,34 @@ router.post('/leophone/pi/providers/:providerId/logout', async (req, res) => {
   } catch (error) {
     jsonError(res, 500, error instanceof Error ? error.message : String(error));
   }
+});
+
+// -- 通道:Telegram ---------------------------------------------------------------
+
+router.get('/leophone/channels', (_req, res) => {
+  res.json({ telegram: telegramChannel.status() });
+});
+
+router.put('/leophone/channels/telegram', (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const next = telegramChannel.update({
+    enabled: body.enabled as boolean | undefined,
+    token: body.token as string | undefined,
+    apiBase: body.apiBase as string | undefined,
+    defaultCwd: body.defaultCwd as string | undefined,
+    model: body.model as string | null | undefined,
+    policy: body.policy as string | undefined,
+  });
+  res.json({ ok: true, telegram: { ...telegramChannel.status(), tokenSet: Boolean(next.token) } });
+});
+
+router.post('/leophone/channels/telegram/pairing', (_req, res) => {
+  res.json({ ok: true, code: telegramChannel.newPairingCode(), expiresInMs: 10 * 60 * 1000 });
+});
+
+router.delete('/leophone/channels/telegram/chats/:chatId', (req, res) => {
+  telegramChannel.removeChat(Number(req.params.chatId));
+  res.json({ ok: true, telegram: telegramChannel.status() });
 });
 
 export default router;
