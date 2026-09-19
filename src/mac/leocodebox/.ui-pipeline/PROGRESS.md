@@ -20,9 +20,9 @@
 ## 阶段
 - [x] 0 PoC(e4b882da):pi 内置运行时 + 审批 extension + REST 跑通(mock 模型:四条审批路径全过);iPhone 经 relay 的验证留到装机后
 - [x] 1 新壳(020d469e):src/v2 + /api/leophone/local/* + /api/leophone/pi/providers;浏览器里跑通 新建→审批→执行;旧界面暂在 /legacy
-- [ ] 2 迁移与删除
-- [ ] 3 Telegram
-- [ ] 4 发版:bump 2.0.0-alpha.1 + LEO_RELEASE_NOTES + 签名公证 + 装机 + 热更新
+- [x] 2 删除(e02f4c9d):七块旧功能 + 旧 IDE 壳 + 死 contexts/hooks;组件 273 → 105;server taskmaster / 插件加载器删除
+- [x] 3 Telegram(02aa2909):telegram.service 长轮询 + 配对 + 审批卡 + 完成回复;设置页 OAuth 登录面板;mock Bot API 全链路验证
+- [ ] 4 发版:2.0.0(8eaa038c)版本与更新记录已提交;签名 DMG 构建中(/tmp/leo2/build.log)→ 公证 notarize-mac.sh → finalize → gh release 到 leocodebox-updates → 装机 → 首启弹「本次更新」→ iPhone 经中继看到会话
 
 ## 验证记录
 (逐步追加)
