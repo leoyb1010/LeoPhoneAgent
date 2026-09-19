@@ -215,14 +215,16 @@ test('pi dialect: deltas and select approval round-trip', async () => {
   }).events;
   assert.deepEqual(delta[0], { event: 'message.delta', delta: 'x' });
 
+  // 真实协议(pi docs/rpc.md):select 带 title + options,答复用 value。
   const approval = dialect.translateLine({
     type: 'extension_ui_request', method: 'select', id: 'ui1',
-    message: '选一个', choices: ['继续', '放弃'],
+    title: '选一个', options: ['继续', '放弃'],
   }).events[0];
   assert.deepEqual(approval.choices, ['继续', '放弃']);
+  assert.equal(approval.command, '选一个');
   // CLI 自带标签原样返回
   const chosen = dialect.approvalPayload(approval, '继续') as Record<string, any>;
-  assert.equal(chosen.result, '继续');
+  assert.deepEqual(chosen, { id: 'ui1', type: 'extension_ui_response', value: '继续' });
 });
 
 // --------------------------------------------------------------------------

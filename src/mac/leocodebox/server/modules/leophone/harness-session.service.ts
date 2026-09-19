@@ -22,7 +22,9 @@ import {
   type HarnessEvent,
 } from './harness-dialects.js';
 import { HarnessJournal, type JournalHealth, type JournalOptions } from './harness-journal.js';
-import { HARNESSES, resolveExecutable, type HarnessSpec } from './harness-specs.js';
+import { HARNESSES, resolveExecutable, type HarnessLaunchContext, type HarnessModel, type HarnessSpec } from './harness-specs.js';
+import { LEOAGENT_HOME } from './leoagent-home.js';
+import { normalizePolicy, writePolicy, type ApprovalPolicy } from './pi-runtime.js';
 
 // LeoPhoneAgent harness 会话宿主——leoagent(Python)HarnessManager/HarnessSession
 // 的 TS 移植,跑在 leocodebox 服务进程里。三条设计约束原样保留:
@@ -35,10 +37,7 @@ import { HARNESSES, resolveExecutable, type HarnessSpec } from './harness-specs.
 // 相对原版的一处升级:claude/codex 会话的子进程环境经过 Leoapi 的
 // applyActiveSwitchEnv——手机发起的会话自动跟随当前激活节点与故障转移。
 
-export const LEOAGENT_HOME = (() => {
-  const fromEnv = (process.env.LEOAGENT_HOME || '').trim();
-  return fromEnv ? fromEnv.replace(/^~(?=$|\/)/, os.homedir()) : path.join(os.homedir(), '.leoagent');
-})();
+export { LEOAGENT_HOME };
 
 const SESSIONS_DIR = path.join(LEOAGENT_HOME, 'harness-sessions');
 
@@ -91,6 +90,9 @@ export class HarnessSession {
   readonly spec: HarnessSpec;
   readonly cwd: string;
   readonly logPath: string;
+  /** 2.0 内核会话的模型与审批策略;旧 CLI 会话为 null / default。 */
+  model: HarnessModel | null = null;
+  policy: ApprovalPolicy = 'default';
   seq = 0;
   status = 'starting';
   // 按审批 id 存,不是单槽:CLI 可能在第一个审批未答复时抛出第二个,
@@ -102,11 +104,13 @@ export class HarnessSession {
   private proc: ChildProcessWithoutNullStreams | null = null;
   private readonly journal: HarnessJournal;
 
-  constructor(args: { sessionId: string; spec: HarnessSpec; cwd: string; logPath: string; seq?: number; status?: string; journalOptions?: JournalOptions; journal?: HarnessJournal }) {
+  constructor(args: { sessionId: string; spec: HarnessSpec; cwd: string; logPath: string; model?: HarnessModel | null; policy?: string; seq?: number; status?: string; journalOptions?: JournalOptions; journal?: HarnessJournal }) {
     this.sessionId = args.sessionId;
     this.spec = args.spec;
     this.cwd = args.cwd;
     this.logPath = args.logPath;
+    this.model = args.model ?? null;
+    this.policy = normalizePolicy(args.policy);
     this.journal = args.journal ?? new HarnessJournal(args.logPath, {
       ...args.journalOptions,
       onCommitted: (event) => {
@@ -282,9 +286,12 @@ export class HarnessSession {
       env = await applyActiveSwitchEnv(env, this.spec.switchTarget);
     }
 
-    const proc = spawn(executable, this.spec.args.map((arg) => (
-      arg.replaceAll('{cwd}', this.cwd).replaceAll('{prompt}', initialPrompt ?? '')
-    )), {
+    const launch = this.launchContext();
+    if (this.spec.buildEnv) env = this.spec.buildEnv(env, launch);
+    const argv = this.spec.buildArgs
+      ? this.spec.buildArgs(launch)
+      : this.spec.args.map((arg) => arg.replaceAll('{cwd}', this.cwd).replaceAll('{prompt}', initialPrompt ?? ''));
+    const proc = spawn(executable, argv, {
       cwd: this.cwd,
       env: env as NodeJS.ProcessEnv,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -466,6 +473,18 @@ export class HarnessSession {
     if (proc && proc.exitCode === null) this.killProcessGroup('SIGTERM');
   }
 
+  launchContext(): HarnessLaunchContext {
+    return { sessionId: this.sessionId, cwd: this.cwd, home: LEOAGENT_HOME, model: this.model, policy: this.policy };
+  }
+
+  /** 改本会话的审批策略:落到策略文件(pi extension 每次工具调用都读),并写进日志让各端同步。 */
+  setPolicy(input: unknown): ApprovalPolicy {
+    this.policy = normalizePolicy(input);
+    if (this.spec.key === 'pi') writePolicy(this.sessionId, this.policy);
+    this.emit({ event: 'session.policy', policy: this.policy });
+    return this.policy;
+  }
+
   summary(): Record<string, unknown> {
     return {
       session_id: this.sessionId,
@@ -473,6 +492,8 @@ export class HarnessSession {
       name: this.spec.displayName,
       cwd: this.cwd,
       status: this.status,
+      model: this.model ? `${this.model.provider}/${this.model.modelId}` : null,
+      policy: this.policy,
       seq: this.seq,
       journal: this.journal.health(),
       window: exactWindows.summary(this.sessionId),
@@ -525,12 +546,16 @@ export class HarnessManager {
       const first = (await journal.readPage(0, { limit: 1 })).events[0];
       const harnessKey = first?.event === EVENT_SESSION_CREATED ? String(first.harness ?? '?') : '?';
       const cwd = first?.event === EVENT_SESSION_CREATED ? String(first.cwd ?? '?') : '?';
+      const modelStr = first?.event === EVENT_SESSION_CREATED && typeof first.model === 'string' ? first.model : '';
+      const slash = modelStr.indexOf('/');
+      const model = slash > 0 ? { provider: modelStr.slice(0, slash), modelId: modelStr.slice(slash + 1) } : null;
+      const policy = first?.event === EVENT_SESSION_CREATED && typeof first.policy === 'string' ? first.policy : undefined;
       const spec = HARNESSES[harnessKey] ?? {
         key: harnessKey, displayName: harnessKey, executable: '', args: [], dialect: 'claude_stream_json' as const,
       };
       const sessionId = entry.slice(0, -'.ndjson'.length);
       this.sessions.set(sessionId, new HarnessSession({
-        sessionId, spec, cwd, logPath, journal, seq: journal.health().latest_seq, status: 'orphaned',
+        sessionId, spec, cwd, logPath, journal, model, policy, seq: journal.health().latest_seq, status: 'orphaned',
       }));
     }
   }
@@ -543,7 +568,7 @@ export class HarnessManager {
     return count;
   }
 
-  async create(args: { harness: string; cwd: string; prompt?: string | null }): Promise<HarnessSession> {
+  async create(args: { harness: string; cwd: string; prompt?: string | null; model?: HarnessModel | null; policy?: string }): Promise<HarnessSession> {
     await this.ready();
     const spec = HARNESSES[args.harness];
     if (!spec) throw new HarnessRequestError(`unknown harness: ${args.harness}`);
@@ -569,12 +594,18 @@ export class HarnessManager {
     const session = new HarnessSession({
       sessionId, spec, cwd: workDir,
       logPath: path.join(this.sessionsDir, `${sessionId}.ndjson`),
+      model: spec.selectsModel ? (args.model ?? null) : null,
+      policy: args.policy,
     });
     // 日志第一行为会话命名,召回的会话才知道自己是谁。注册只在成功启动
     // 之后:spawn 失败绝不能留下永久的僵尸条目。
-    session.emit({ event: EVENT_SESSION_CREATED, harness: spec.key, name: spec.displayName, cwd: workDir });
+    session.emit({
+      event: EVENT_SESSION_CREATED, harness: spec.key, name: spec.displayName, cwd: workDir,
+      model: session.model ? `${session.model.provider}/${session.model.modelId}` : null, policy: session.policy,
+    });
     try {
       if (args.prompt && spec.promptInArgs) session.emit({ event: EVENT_USER_MESSAGE, text: args.prompt });
+      await spec.prepare?.(session.launchContext());
       await session.start(args.prompt);
       if (args.prompt && !spec.promptInArgs) await session.send(args.prompt);
     } catch (error) {

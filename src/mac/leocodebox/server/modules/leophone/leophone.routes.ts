@@ -81,13 +81,31 @@ router.get('/harness/sessions', requireHarnessKey, (_req, res) => {
   res.json({ sessions: getHarnessManager().list() });
 });
 
+/** 接受 "provider/modelId" 字符串或 { provider, modelId | model } 对象;都没有就交给运行时默认。 */
+function parseModel(input: unknown): { provider: string; modelId: string } | null {
+  if (typeof input === 'string') {
+    const slash = input.indexOf('/');
+    if (slash > 0) return { provider: input.slice(0, slash).trim(), modelId: input.slice(slash + 1).trim() };
+    return null;
+  }
+  if (input && typeof input === 'object') {
+    const obj = input as Record<string, unknown>;
+    const provider = String(obj.provider ?? '').trim();
+    const modelId = String(obj.modelId ?? obj.model ?? '').trim();
+    if (provider && modelId) return { provider, modelId };
+  }
+  return null;
+}
+
 router.post('/harness/sessions', requireHarnessKey, async (req, res) => {
   const body = (req.body ?? {}) as Record<string, unknown>;
   const harness = String(body.harness ?? '');
   const cwd = String(body.cwd ?? '') || '~';
   const prompt = body.prompt == null ? null : String(body.prompt);
+  const model = parseModel(body.model);
+  const policy = body.policy == null ? undefined : String(body.policy);
   try {
-    const session = await getHarnessManager().create({ harness, cwd, prompt });
+    const session = await getHarnessManager().create({ harness, cwd, prompt, model, policy });
     res.status(202).json({ session_id: session.sessionId, harness, status: session.status, window: session.summary().window });
     // Observation is optional enrichment, never a synchronous 4-second gate on
     // starting an agent. The bounded native process cannot block the event loop.
@@ -167,6 +185,16 @@ router.post('/harness/sessions/:sessionId/send', requireHarnessKey, async (req, 
     return;
   }
   res.json({ ok: true, seq: session.seq });
+});
+
+router.post('/harness/sessions/:sessionId/policy', requireHarnessKey, (req, res) => {
+  const session = getHarnessManager().get(req.params.sessionId);
+  if (!session) {
+    jsonError(res, 404, 'No such session');
+    return;
+  }
+  const policy = session.setPolicy(((req.body ?? {}) as Record<string, unknown>).policy);
+  res.json({ ok: true, policy });
 });
 
 router.post('/harness/sessions/:sessionId/approval', requireHarnessKey, async (req, res) => {

@@ -1,11 +1,24 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import * as piRuntime from './pi-runtime.js';
+
 // LeoPhoneAgent harness 协议的 CLI 规格表——与 leoagent(Python) 的 HARNESSES
 // 逐项对齐:同样的 argv、同样的方言。手机端按 key 选择,服务端只申报本机
 // 真实可启动的条目。
 
 export type HarnessDialectKind = 'claude_stream_json' | 'codex_app_server' | 'pi_rpc' | 'grok_acp';
+
+export interface HarnessModel { provider: string; modelId: string }
+
+/** 启动一条会话时交给 spec 钩子的上下文。 */
+export interface HarnessLaunchContext {
+  sessionId: string;
+  cwd: string;
+  home: string;
+  model: HarnessModel | null;
+  policy: string;
+}
 
 export interface HarnessSpec {
   key: string;
@@ -19,6 +32,16 @@ export interface HarnessSpec {
   switchTarget?: 'claude' | 'codex';
   /** One-shot CLIs such as Cursor receive the first prompt as an argv value. */
   promptInArgs?: boolean;
+  /** 应用自带运行时:不查 PATH,自己给出可执行路径(null = 本构建里没有)。 */
+  resolve?: () => string | null;
+  /** 按会话构造 argv;有它就不用 args 模板。 */
+  buildArgs?: (ctx: HarnessLaunchContext) => string[];
+  /** 按会话补子进程环境。 */
+  buildEnv?: (env: Record<string, string | undefined>, ctx: HarnessLaunchContext) => Record<string, string | undefined>;
+  /** 启动前的落盘准备(策略文件、extension 等)。 */
+  prepare?: (ctx: HarnessLaunchContext) => Promise<void> | void;
+  /** 是否接受 model / policy 参数(2.0 内核)。 */
+  selectsModel?: boolean;
 }
 
 export const HARNESSES: Record<string, HarnessSpec> = {
@@ -52,9 +75,15 @@ export const HARNESSES: Record<string, HarnessSpec> = {
   pi: {
     key: 'pi',
     displayName: 'pi',
+    // 2.0 内核:不是外装的 pi CLI,而是打进应用的 rpc-entry,用宿主 Node 跑。
     executable: 'pi',
     args: ['--mode', 'rpc'],
     dialect: 'pi_rpc',
+    selectsModel: true,
+    resolve: () => piRuntime.resolveCommand()?.command ?? null,
+    buildArgs: (ctx) => piRuntime.buildArgs(ctx),
+    buildEnv: (env, ctx) => piRuntime.buildEnv(env, ctx),
+    prepare: (ctx) => piRuntime.prepare(ctx),
   },
   grok: {
     key: 'grok',
@@ -91,6 +120,7 @@ function isExecutableFile(candidate: string): boolean {
  * 提供一个启动即失败的选项。
  */
 export function resolveExecutable(spec: HarnessSpec): string | null {
+  if (spec.resolve) return spec.resolve();
   if (spec.pathEnvVar) {
     const pinned = (process.env[spec.pathEnvVar] || '').trim();
     if (pinned && isExecutableFile(pinned)) return pinned;

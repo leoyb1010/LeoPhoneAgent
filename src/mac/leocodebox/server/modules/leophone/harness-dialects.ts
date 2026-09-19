@@ -189,34 +189,61 @@ export class PiRpcDialect implements HarnessDialect {
         out.push({ event: EVENT_REASONING, text: ev.delta });
       }
     } else if (kind === 'tool_execution_start') {
+      const args = asObject(obj.args);
       out.push({
         event: EVENT_TOOL_STARTED,
         tool: obj.toolName || 'tool',
-        preview: JSON.stringify(asObject(obj.args)).slice(0, 200),
+        tool_use_id: obj.toolCallId,
+        preview: piToolPreview(str(obj.toolName), args),
+        args,
       });
     } else if (kind === 'tool_execution_end') {
       out.push({
         event: EVENT_TOOL_COMPLETED,
         tool: obj.toolName || 'tool',
+        tool_use_id: obj.toolCallId,
         error: Boolean(obj.isError),
+        output: piResultPreview(obj.result),
       });
     } else if (kind === 'extension_ui_request') {
       // pi 会阻塞等这些,所以在我们的词汇里正是审批。
-      if (obj.method === 'confirm' || obj.method === 'select') {
+      // 协议(docs/rpc.md):select 带 title + options,答 { value };
+      // confirm 带 title + message,答 { confirmed }。旧实现读的是 choices / result,
+      // 与真实协议对不上,审批永远送不回去。
+      const method = str(obj.method);
+      if (method === 'select' || method === 'confirm') {
+        const structured = parseLeoApprovalTitle(obj.title);
+        const options = asArray(obj.options).map(str);
         out.push({
           event: EVENT_APPROVAL_REQUEST,
-          command: str(obj.message),
-          description: '',
-          choices: asArray(obj.choices).length > 0 ? obj.choices : ['once', 'deny'],
+          title: structured?.title ?? str(obj.title),
+          command: structured?.command ?? (method === 'confirm' ? str(obj.message) : str(obj.title)),
+          tool: structured?.tool ?? '',
+          cwd: structured?.cwd ?? '',
+          host: structured?.host ?? '',
+          scope: structured?.scope ?? '',
+          args: structured?.args ?? null,
+          description: method === 'confirm' ? str(obj.message) : '',
+          choices: method === 'select' && options.length > 0 ? options : ['once', 'deny'],
           request_id: obj.id,
+          method,
           raw: obj,
         });
       }
-    } else if (kind === 'turn_end' || kind === 'response') {
-      out.push({ event: EVENT_RUN_COMPLETED, output: obj.text || '', usage: {} });
+    } else if (kind === 'agent_end') {
+      // 一次 prompt 的整个回合结束;中间的 turn_end 只是工具循环里的一拍,不算完成。
+      out.push({ event: EVENT_RUN_COMPLETED, output: '', usage: {} });
+    } else if (kind === 'error') {
+      out.push({ event: EVENT_RUN_FAILED, error: str(obj.message ?? obj.error ?? 'error') });
+    } else if (kind === 'response' && obj.success === false && (obj.command === 'prompt' || obj.command === 'steer' || obj.command === 'follow_up')) {
+      // 我们发的 prompt 被拒(典型:没配密钥)。不映射的话会话永远显示 running,
+      // 各端都在等一个不会来的回复。
+      out.push({ event: EVENT_RUN_FAILED, error: str(obj.error ?? 'prompt rejected') });
     }
 
-    if (out.length === 0 && kind) {
+    // 高频进度帧(非文本的 message_update、工具输出流)不进日志:对各端没有行动
+    // 价值,只会把 NDJSON 和 SSE 灌满。生命周期帧(agent_start / turn_end 等)保留透传。
+    if (out.length === 0 && kind && !PI_SILENT_KINDS.has(str(kind))) {
       out.push({ event: `harness.${str(kind)}`, raw: obj });
     }
     return { events: out, outFrames: [] };
@@ -229,10 +256,48 @@ export class PiRpcDialect implements HarnessDialect {
   approvalPayload(pending: JsonObject, choice: string): unknown | null {
     const requestId = pending.request_id;
     if (requestId == null) return null;
-    // `select` 提示带自己的标签且要求原样返回;`confirm` 要布尔值。
-    const cliChoices = asArray(asObject(pending.raw).choices).map(str);
-    const result: unknown = cliChoices.includes(choice) ? choice : choiceAllowed(choice);
-    return { id: requestId, type: 'extension_ui_response', result };
+    if (pending.method === 'confirm') {
+      return { id: requestId, type: 'extension_ui_response', confirmed: choiceAllowed(choice) };
+    }
+    // select:原样回选项标签;客户端说的是我们词汇里的 once / always / deny 时按语义映射。
+    const options = asArray(pending.choices).map(str);
+    let value: string;
+    if (options.includes(choice)) value = choice;
+    else if (choiceAllowed(choice)) value = options.find((o) => o !== 'deny') ?? options[0] ?? 'once';
+    else value = options.includes('deny') ? 'deny' : (options[options.length - 1] ?? 'deny');
+    return { id: requestId, type: 'extension_ui_response', value };
+  }
+}
+
+const PI_SILENT_KINDS = new Set(['message_update', 'tool_execution_update']);
+
+function piToolPreview(tool: string, args: JsonObject): string {
+  if (tool === 'bash') return str(args.command).slice(0, 400);
+  if (tool === 'edit' || tool === 'write' || tool === 'read') return str(args.path);
+  return JSON.stringify(args).slice(0, 200);
+}
+
+function piResultPreview(result: unknown): string {
+  if (typeof result === 'string') return result.slice(0, 2000);
+  const obj = asObject(result);
+  const texts = asArray(obj.content).map((c) => str(asObject(c).text)).filter(Boolean);
+  if (texts.length > 0) return texts.join('\n').slice(0, 2000);
+  if (typeof obj.text === 'string') return obj.text.slice(0, 2000);
+  return '';
+}
+
+/** leo-approval extension 把结构化信息塞在 select 的 title 里(JSON,leo:1);其他 extension 的 select 原样透传。 */
+function parseLeoApprovalTitle(title: unknown): { title: string; command: string; tool: string; cwd: string; host: string; scope: string; args: unknown } | null {
+  if (typeof title !== 'string' || !title.startsWith('{')) return null;
+  try {
+    const parsed = JSON.parse(title) as JsonObject;
+    if (parsed.leo !== 1) return null;
+    return {
+      title: str(parsed.title), command: str(parsed.command), tool: str(parsed.tool), cwd: str(parsed.cwd),
+      host: str(parsed.host), scope: str(parsed.scope), args: parsed.args ?? null,
+    };
+  } catch {
+    return null;
   }
 }
 
