@@ -12,3 +12,8 @@ Mode: Operate · Level 1(原型→实现的首轮)。证据来自 vite + 隔离 
 
 ## 未在渲染层验证(留给装机后)
 - Electron 内的终端 PTY 行为(浏览器里 shell 立即 exit 0,疑为 dev 代理);iPhone 经中继看到 pi 会话;OAuth 真实登录;真实 Telegram bot。
+
+## 装机后补证(2026-09-19)
+- 打包 app 里终端抽屉曾立即退出(见 PROGRESS 阶段 4),已修复并在打包 app 内验证:`echo pkg-ok && pwd` 正常执行。
+- 正式安装的 2.0.0 首启:本次更新弹层 v2.0.0 出现、`.leo2` 壳渲染、本机服务 2.0.0 健康、中继在线。
+- 仍未验证:真实 OAuth 登录、真实 Telegram bot、iPhone 端与 pi 会话的联动、本机热更新路径(本机为 DMG 直装)。

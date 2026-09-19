@@ -33,3 +33,10 @@
 - mock 模型:`node scripts/mock-openai-server.mjs 39998 "ls -la"`,`/tmp/leo2/home/pi/models.json` 注册 provider mock(baseUrl http://127.0.0.1:39998/v1, api openai-completions)
 - 单测:`TSX_TSCONFIG_PATH=server/tsconfig.json node --import tsx --test server/modules/leophone/*.test.ts`
 
+## 阶段 4 · 交付记录(2026-09-19 22:28)
+
+- 构建:`desktop:dist:mac:signed`,verify:release-notes 3/3;签名 Developer ID (48H5Y3LNUK);公证两次 Accepted、已 staple;ZIP sha512 与 latest-mac.yml 一致。
+- 打包冒烟(隔离 profile + mock 模型)发现终端抽屉一开就 "exited with code 0":2.0 抽屉以 plain shell 打开但没给命令,服务端返回空命令 → `bash -c ""`。修复 `70e20236`(plain shell 无命令时起 `exec "${SHELL:-/bin/zsh}" -il`),单测 3/3,浏览器与打包 app 里都验证到提示符 + 命令执行。重建后重新公证。
+- 装机:旧 1.74.2 移到废纸篓,2.0.0 装入 /Applications;Gatekeeper `Notarized Developer ID`;首启弹出「本次更新 · v2.0.0 · 2026-09-19」(CDP 读 DOM + 截图 /tmp/leo2/installed-whatsnew.png),2.0 壳正常,中继显示远程 2 台在线。
+- 发布:https://github.com/leoyb1010/leocodebox-updates/releases/tag/v2.0.0(资产:latest-mac.yml, leocodebox-2.0.0-mac-arm64.dmg, leocodebox-2.0.0-mac-arm64.zip);feed `releases/latest/download/latest-mac.yml` 已指向 2.0.0 —— 其他 Mac 下次启动可热更新。本机是 DMG 直装,未走热更新路径。
+- 环境坑:项目在 iCloud 里,node_modules 有 38,323/78,864 个文件被驱逐,stage 拷贝和 commitlint 都会卡在按需下载上;用 `brctl download` 批量预拉后恢复。
