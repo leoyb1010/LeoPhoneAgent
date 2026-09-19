@@ -17,6 +17,17 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.0.0',
+    date: '2026-09-19',
+    items: [
+      '全新界面:只剩主控、设备、通道、设置和 ⌘K。会话是一条按机器分组的流水,需要你确认的地方是整个界面唯一发亮的橙色卡;终端、文件、本次改动、浏览器变成右侧抽屉,不再是一排并列的 tab。',
+      '内核换成应用自带的 pi 运行时,不再依赖外装的 Claude Code / Codex CLI。模型只是会话的一个属性,会话头点一下就换、上下文不变;审批策略四档(默认 / 接受编辑 / 计划 / 全自动),「本会话允许」按主机 + 完整命令绑定。手机端协议一字未改。',
+      '模型全接:设置页列出 pi-ai 全部供应商。Anthropic、OpenAI Codex、GitHub Copilot、OpenRouter 支持订阅 OAuth 登录;智谱 GLM、Moonshot、xAI 等粘贴密钥。凭据只存在本机 ~/.leoagent/pi/auth.json。首次进入请先在设置里登录或添加密钥。',
+      'Telegram 通道:在设置里填 bot token、生成配对码,在聊天里发 /pair 配对后,说一句话就是在这台 Mac 上开一条会话;需要确认的操作会以同一张卡推到 Telegram,点按钮就是批准。',
+      '删除了任务、PRD、项目向导、missions、Agent Hub、skills、plugins 七块与旧的 IDE 壳;中继、语音、MCP、通知等旧版设置从设置页的「更多设置」进入。',
+    ],
+  },
+  {
     version: '1.85.0',
     date: '2026-09-12',
     items: [
