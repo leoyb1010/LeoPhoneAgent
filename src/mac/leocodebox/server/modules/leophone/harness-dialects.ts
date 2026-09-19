@@ -235,6 +235,11 @@ export class PiRpcDialect implements HarnessDialect {
       out.push({ event: EVENT_RUN_COMPLETED, output: '', usage: {} });
     } else if (kind === 'error') {
       out.push({ event: EVENT_RUN_FAILED, error: str(obj.message ?? obj.error ?? 'error') });
+    } else if (kind === 'response' && obj.success === true && obj.command === 'set_model') {
+      const data = asObject(obj.data);
+      out.push({ event: 'session.model', provider: str(data.provider), model_id: str(data.id ?? data.modelId), raw: obj });
+    } else if (kind === 'response' && obj.success === true && obj.command === 'compact') {
+      out.push({ event: 'session.compacted', raw: obj });
     } else if (kind === 'response' && obj.success === false && (obj.command === 'prompt' || obj.command === 'steer' || obj.command === 'follow_up')) {
       // 我们发的 prompt 被拒(典型:没配密钥)。不映射的话会话永远显示 running,
       // 各端都在等一个不会来的回复。

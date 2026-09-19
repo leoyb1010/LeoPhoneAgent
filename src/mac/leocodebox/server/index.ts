@@ -28,6 +28,7 @@ import pluginsRoutes from './routes/plugins.js';
 import leocodeboxRoutes, { startHealthMonitor } from './modules/leocodebox/index.js';
 import leophoneRoutes, { startLeophoneRelayClient } from './modules/leophone/index.js';
 import fleetRoutes from './modules/leophone/fleet.routes.js';
+import workbenchRoutes from './modules/leophone/workbench.routes.js';
 import treasuryRoutes from './modules/leophone/treasury.routes.js';
 import { startDailyUsageSummary } from './modules/usage/index.js';
 import providerRoutes from './modules/providers/provider.routes.js';
@@ -123,6 +124,8 @@ app.use('/api/auth', authRoutes);
 // Keep this broad /api router after the public auth router; otherwise its
 // authenticateToken middleware intercepts login and local-bootstrap exchange.
 app.use('/api', authenticateToken, fleetRoutes);
+// 2.0 工作台:本机会话直连 HarnessManager(不经中继)+ pi 供应商设置。
+app.use('/api', authenticateToken, workbenchRoutes);
 app.use('/api/treasury', authenticateToken, treasuryRoutes);
 
 // Projects API Routes (protected)

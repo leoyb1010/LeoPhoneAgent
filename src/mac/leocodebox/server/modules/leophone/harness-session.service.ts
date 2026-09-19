@@ -93,6 +93,12 @@ export class HarnessSession {
   /** 2.0 内核会话的模型与审批策略;旧 CLI 会话为 null / default。 */
   model: HarnessModel | null = null;
   policy: ApprovalPolicy = 'default';
+  /** 首条用户消息裁成标题;各端列表靠它认人。 */
+  title = '';
+  /** 最后一件有行动价值的事(用户说话 / 工具开跑 / 待批 / 终态),供列表一行摘要。 */
+  lastEvent: Record<string, unknown> | null = null;
+  createdAt = Date.now() / 1000;
+  updatedAt = Date.now() / 1000;
   seq = 0;
   status = 'starting';
   // 按审批 id 存,不是单槽:CLI 可能在第一个审批未答复时抛出第二个,
@@ -179,6 +185,24 @@ export class HarnessSession {
           this.status = 'idle';
         }
       }
+    }
+
+    this.updatedAt = Number(enriched.timestamp);
+    if (name === EVENT_USER_MESSAGE) {
+      const text = String(enriched.text ?? '').replace(/\s+/g, ' ').trim();
+      if (!this.title) this.title = text.slice(0, 80);
+      this.lastEvent = { event: name, text: text.slice(0, 120), timestamp: enriched.timestamp };
+    } else if (name === EVENT_TOOL_STARTED) {
+      this.lastEvent = { event: name, text: `${String(enriched.tool ?? 'tool')} ${String(enriched.preview ?? '').slice(0, 100)}`.trim(), timestamp: enriched.timestamp };
+    } else if (name === EVENT_APPROVAL_REQUEST) {
+      this.lastEvent = { event: name, text: String(enriched.command ?? '').slice(0, 120), timestamp: enriched.timestamp };
+    } else if (name === EVENT_RUN_COMPLETED || name === EVENT_RUN_FAILED || name === EVENT_RUN_CANCELLED) {
+      this.lastEvent = { event: name, text: String(enriched.error ?? enriched.output ?? '').slice(0, 120), timestamp: enriched.timestamp };
+    } else if (name === 'session.model') {
+      // pi 的 set_model 成功回执:会话的模型属性跟着变,上下文不变。
+      const provider = String(enriched.provider ?? '');
+      const modelId = String(enriched.model_id ?? '');
+      if (provider && modelId) this.model = { provider, modelId };
     }
 
     enriched.durability = this.journal.enqueue(enriched, PUSHABLE_EVENTS.has(name));
@@ -372,6 +396,17 @@ export class HarnessSession {
     }
   }
 
+  /**
+   * 2.0 内核会话的原生命令通道(set_model / compact / abort / steer …)。只有活着的
+   * pi 会话才收;回执经方言映射成 session.* 事件回到各端。
+   */
+  sendFrame(frame: unknown): boolean {
+    if (this.spec.key !== 'pi') return false;
+    if (!this.isLive || !this.proc || !this.proc.stdin || this.proc.stdin.destroyed || this.proc.exitCode !== null) return false;
+    this.writeFrames([frame]);
+    return true;
+  }
+
   /** 给运行中的会话追加指令。 */
   async send(text: string): Promise<void> {
     if (this.spec.promptInArgs) {
@@ -494,6 +529,10 @@ export class HarnessSession {
       status: this.status,
       model: this.model ? `${this.model.provider}/${this.model.modelId}` : null,
       policy: this.policy,
+      title: this.title,
+      last_event: this.lastEvent,
+      created_at: this.createdAt,
+      updated_at: this.updatedAt,
       seq: this.seq,
       journal: this.journal.health(),
       window: exactWindows.summary(this.sessionId),
@@ -554,9 +593,23 @@ export class HarnessManager {
         key: harnessKey, displayName: harnessKey, executable: '', args: [], dialect: 'claude_stream_json' as const,
       };
       const sessionId = entry.slice(0, -'.ndjson'.length);
-      this.sessions.set(sessionId, new HarnessSession({
+      const restored = new HarnessSession({
         sessionId, spec, cwd, logPath, journal, model, policy, seq: journal.health().latest_seq, status: 'orphaned',
-      }));
+      });
+      if (first?.timestamp != null) restored.createdAt = Number(first.timestamp);
+      // 标题与最近一件事从日志头几行/尾行补回来,列表不至于全是空行。
+      const head = await journal.readPage(0, { limit: 8 });
+      for (const ev of head.events) {
+        if (ev.event === EVENT_USER_MESSAGE) { restored.title = String(ev.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 80); break; }
+      }
+      const latestSeq = journal.health().latest_seq;
+      if (latestSeq > 0) {
+        const tail = await journal.readPage(Math.max(0, latestSeq - 1), { limit: 1 });
+        const lastEv = tail.events[tail.events.length - 1];
+        if (lastEv?.timestamp != null) restored.updatedAt = Number(lastEv.timestamp);
+        if (lastEv) restored.lastEvent = { event: lastEv.event, text: String(lastEv.text ?? lastEv.command ?? lastEv.error ?? '').slice(0, 120), timestamp: lastEv.timestamp };
+      }
+      this.sessions.set(sessionId, restored);
     }
   }
 

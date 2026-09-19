@@ -10,6 +10,7 @@ import { WebSocketProvider } from './contexts/WebSocketContext';
 import { PluginsProvider } from './contexts/PluginsContext';
 import { PreferencesProvider } from './contexts/PreferencesContext';
 import AppContent from './components/app/AppContent';
+import App2 from './v2/App2';
 import i18n from './i18n/config.js';
 
 const DEPLOYMENT_ASSET_DIRECTORIES = new Set(['assets', 'static', 'icons', 'images']);
@@ -118,7 +119,9 @@ export default function App() {
                     <WhatsNewModal />
                     <Router basename={routerBasename}>
                       <Routes>
-                        <Route path="/" element={<AppContent />} />
+                        {/* 2.0 壳是默认界面;旧界面暂留在 /legacy,阶段 2 删除。 */}
+                        <Route path="/" element={<App2 />} />
+                        <Route path="/legacy" element={<AppContent />} />
                         <Route path="/session/:sessionId" element={<AppContent />} />
                       </Routes>
                     </Router>
