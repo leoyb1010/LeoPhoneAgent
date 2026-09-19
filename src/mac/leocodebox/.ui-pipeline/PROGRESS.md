@@ -18,11 +18,18 @@
 - pi 包已装:@earendil-works/pi-coding-agent@0.85.1 / pi-agent-core / pi-ai(node ≥22.19;本机 22.22)
 
 ## 阶段
-- [ ] 0 PoC:pi 内置运行时 + 审批 extension + REST 跑通 + iPhone 经 relay 看到并批准
-- [ ] 1 新壳:主控 / 设备 / 通道 / 设置 + ⌘K + 抽屉(React,src/v2)
+- [x] 0 PoC(e4b882da):pi 内置运行时 + 审批 extension + REST 跑通(mock 模型:四条审批路径全过);iPhone 经 relay 的验证留到装机后
+- [x] 1 新壳(020d469e):src/v2 + /api/leophone/local/* + /api/leophone/pi/providers;浏览器里跑通 新建→审批→执行;旧界面暂在 /legacy
 - [ ] 2 迁移与删除
 - [ ] 3 Telegram
 - [ ] 4 发版:bump 2.0.0-alpha.1 + LEO_RELEASE_NOTES + 签名公证 + 装机 + 热更新
 
 ## 验证记录
 (逐步追加)
+
+## 测试环境怎么起(不碰真实 app)
+- 服务:`ELECTRON_RUN_AS_NODE=1 TSX_TSCONFIG_PATH=server/tsconfig.json LEOCODEBOX_LOCAL_ONLY=1 CLOUDCLI_DESKTOP_LOCAL_ONLY=1 LEOCODEBOX_LOCAL_AUTH_TOKEN=leo2-local-dev-token-0123456789 LEOAGENT_HOME=/tmp/leo2/home LEOAGENT_KEY=leo-test-key-0123456789 SERVER_PORT=39999 PORT=39999 npx electron --import tsx server/index.ts`(必须用 Electron 的 node:better-sqlite3 是按 Electron 编的)
+- 渲染:`SERVER_PORT=39999 npx vite --port 5175 --host 127.0.0.1`;浏览器里 `localStorage.auth-token = leo2-local-dev-token-0123456789`
+- mock 模型:`node scripts/mock-openai-server.mjs 39998 "ls -la"`,`/tmp/leo2/home/pi/models.json` 注册 provider mock(baseUrl http://127.0.0.1:39998/v1, api openai-completions)
+- 单测:`TSX_TSCONFIG_PATH=server/tsconfig.json node --import tsx --test server/modules/leophone/*.test.ts`
+

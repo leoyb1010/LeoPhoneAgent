@@ -17,7 +17,6 @@ import { sessionsDb } from '@/modules/database/index.js';
 
 import { IS_PLATFORM } from '../constants/config.js';
 import { authenticateWebSocket, IS_LOCAL_ONLY_AUTH } from '../middleware/auth.js';
-import { getPluginPort } from '../utils/plugin-process-manager.js';
 import {
   extractUrlsFromText,
   normalizeDetectedUrl,
@@ -57,7 +56,8 @@ export function attachWebSocketRuntime(server: HttpServer, app: Express) {
       extractUrlsFromText,
       shouldAutoOpenUrlFromOutput,
     },
-    getPluginPort,
+    // 插件子进程已随 2.0 移除;网页终端一类的插件端口不再存在。
+    getPluginPort: () => null,
   });
   app.locals.wss = wss;
   return wss;

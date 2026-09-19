@@ -2,7 +2,12 @@ import { lazy, Suspense, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 
 import type { Project } from '../../../types/app';
-import { normalizeProjectForSettings } from '../../sidebar/utils/utils';
+
+/** 旧侧栏的项目归一化:设置页只要 displayName / fullPath 两个字段可靠即可。 */
+function normalizeProjectForSettings<T extends { projectId: string; displayName?: string; fullPath?: string; path?: string }>(project: T): T & { name: string; displayName: string; fullPath: string } {
+  const displayName = project.displayName || project.projectId;
+  return { ...project, name: displayName, displayName, fullPath: project.fullPath || project.path || '' };
+}
 
 const Settings = lazy(() => import('./Settings'));
 

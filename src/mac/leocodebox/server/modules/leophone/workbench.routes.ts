@@ -1,7 +1,9 @@
+import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import os from 'node:os';
 import path from 'node:path';
 import express from 'express';
+import type { AuthInteraction, AuthPrompt } from '@earendil-works/pi-ai';
 import { ModelRuntime } from '@earendil-works/pi-coding-agent';
 
 import { HarnessRequestError, getHarnessManager, type HarnessSession } from './harness-session.service.js';
@@ -265,6 +267,91 @@ router.delete('/leophone/pi/providers/:providerId/key', (req, res) => {
   clearAuth(req.params.providerId);
   resetModelRuntime();
   res.json({ ok: true, provider: req.params.providerId, auth: authStatus() });
+});
+
+// -- OAuth 登录(pi-ai 内置流程) ---------------------------------------------
+//
+// 登录是一场对话:pi-ai 会 notify(auth_url / device_code / progress / info),偶尔
+// prompt(要你输个码或选一项)。渲染层轮询 flow 状态,把这些原样画出来;要答什么
+// 走 answer。凭据落在我们自己的 auth.json(authPath),登完重建运行时即可生效。
+
+type LoginFlow = {
+  id: string;
+  provider: string;
+  type: 'oauth' | 'api_key';
+  status: 'running' | 'done' | 'error' | 'cancelled';
+  startedAt: number;
+  events: Array<Record<string, unknown>>;
+  prompt: { id: string; type: string; message: string; placeholder?: string; options?: unknown } | null;
+  resolvePrompt: ((value: string) => void) | null;
+  error?: string;
+  abort: AbortController;
+};
+const loginFlows = new Map<string, LoginFlow>();
+
+function pruneLoginFlows(): void {
+  const cutoff = Date.now() - 30 * 60 * 1000;
+  for (const [id, flow] of loginFlows) if (flow.startedAt < cutoff && flow.status !== 'running') loginFlows.delete(id);
+}
+
+router.post('/leophone/pi/providers/:providerId/login', async (req, res) => {
+  pruneLoginFlows();
+  const providerId = req.params.providerId;
+  const type = String(((req.body ?? {}) as Record<string, unknown>).type ?? 'oauth') === 'api_key' ? 'api_key' : 'oauth';
+  let runtime: ModelRuntime;
+  try { runtime = await modelRuntime(); } catch (error) { jsonError(res, 500, error instanceof Error ? error.message : String(error)); return; }
+  const flow: LoginFlow = { id: randomUUID(), provider: providerId, type, status: 'running', startedAt: Date.now(), events: [], prompt: null, resolvePrompt: null, abort: new AbortController() };
+  loginFlows.set(flow.id, flow);
+  const interaction: AuthInteraction = {
+    signal: flow.abort.signal,
+    prompt: (prompt: AuthPrompt) => new Promise<string>((resolve, reject) => {
+      const p = prompt as unknown as { type: string; message: string; placeholder?: string; options?: unknown };
+      flow.prompt = { id: randomUUID(), type: p.type, message: p.message, placeholder: p.placeholder, options: p.options };
+      flow.resolvePrompt = (value) => { flow.prompt = null; flow.resolvePrompt = null; resolve(value); };
+      flow.abort.signal.addEventListener('abort', () => reject(new Error('cancelled')), { once: true });
+    }),
+    notify: (event) => { flow.events.push({ ...(event as unknown as Record<string, unknown>), at: Date.now() }); },
+  };
+  void runtime.login(providerId, type, interaction)
+    .then(() => { flow.status = 'done'; resetModelRuntime(); })
+    .catch((error) => {
+      flow.status = flow.abort.signal.aborted ? 'cancelled' : 'error';
+      flow.error = error instanceof Error ? error.message : String(error);
+    });
+  res.status(202).json({ flow_id: flow.id });
+});
+
+router.get('/leophone/pi/login/:flowId', (req, res) => {
+  const flow = loginFlows.get(req.params.flowId);
+  if (!flow) { jsonError(res, 404, 'No such login flow'); return; }
+  res.json({ id: flow.id, provider: flow.provider, type: flow.type, status: flow.status, events: flow.events, prompt: flow.prompt, error: flow.error ?? null });
+});
+
+router.post('/leophone/pi/login/:flowId/answer', (req, res) => {
+  const flow = loginFlows.get(req.params.flowId);
+  if (!flow) { jsonError(res, 404, 'No such login flow'); return; }
+  if (!flow.resolvePrompt) { jsonError(res, 409, 'Nothing to answer right now'); return; }
+  flow.resolvePrompt(String(((req.body ?? {}) as Record<string, unknown>).value ?? ''));
+  res.json({ ok: true });
+});
+
+router.post('/leophone/pi/login/:flowId/cancel', (req, res) => {
+  const flow = loginFlows.get(req.params.flowId);
+  if (!flow) { jsonError(res, 404, 'No such login flow'); return; }
+  flow.abort.abort();
+  res.json({ ok: true });
+});
+
+router.post('/leophone/pi/providers/:providerId/logout', async (req, res) => {
+  try {
+    const runtime = await modelRuntime();
+    await runtime.logout(req.params.providerId);
+    clearAuth(req.params.providerId);
+    resetModelRuntime();
+    res.json({ ok: true, auth: authStatus() });
+  } catch (error) {
+    jsonError(res, 500, error instanceof Error ? error.message : String(error));
+  }
 });
 
 export default router;

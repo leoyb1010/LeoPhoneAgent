@@ -10,7 +10,6 @@ import { closeSessionsWatcher, initializeSessionsWatcher } from '@/modules/provi
 import { IS_LOCAL_ONLY_AUTH } from '../middleware/auth.js';
 import { configureWebPush } from '../services/vapid-keys.js';
 import { c } from '../utils/colors.js';
-import { startEnabledPluginServers, stopAllPlugins } from '../utils/plugin-process-manager.js';
 import { getConnectableHost } from '../shared/network-hosts.js';
 
 const SERVER_PORT = Number.parseInt(process.env.SERVER_PORT || '', 10) || 3001;
@@ -94,13 +93,11 @@ export async function startServerLifecycle({ server, appRoot, installMode, runni
       console.log(`${c.tip('[TIP]')}  Run "leocodebox status" for full configuration details`);
       console.log('');
       await initializeSessionsWatcher();
-      startEnabledPluginServers().catch((error) => console.error('[Plugins] Error during startup:', errorMessage(error)));
     });
 
     const shutdownRuntimeServices = async () => {
       try { await closeSessionsWatcher(); } catch (error) { console.error('[Sessions] Error closing sessions watcher during shutdown:', errorMessage(error)); }
       try { await browserUseService.stopAllSessions(); } catch (error) { console.error('[Browser] Error stopping sessions during shutdown:', errorMessage(error)); }
-      try { await stopAllPlugins(); } catch (error) { console.error('[Plugins] Error stopping plugins during shutdown:', errorMessage(error)); }
       try { await removeLocalServerMarker(); } catch (error) { console.error('[Local Server] Error removing server marker during shutdown:', errorMessage(error)); }
       process.exit(0);
     };

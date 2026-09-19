@@ -53,21 +53,17 @@ export const SETTINGS_TAB_GROUP_KEYS: Record<SettingsMainTabGroup, string> = {
 export const SETTINGS_MAIN_TABS: SettingsMainTabMeta[] = [
   // 智能体:先装好、再定档案、再接工具与技能。
   { id: 'agents', label: 'Agents', labelKey: 'mainTabs.agents', group: 'agent', keywords: 'agents subagents claude code defaults model permission 智能体 本机智能体 新任务 默认 模型 权限', icon: Bot },
-  { id: 'agentHub', label: 'Agent Hub', labelKey: 'mainTabs.agentHub', group: 'agent', keywords: 'agent hub profiles presets 智能体 档案 launch', icon: Boxes },
   { id: 'mcp', label: 'MCP', labelKey: 'mainTabs.mcp', group: 'agent', keywords: 'mcp servers model context protocol tools 工具', icon: Server },
-  { id: 'skills', label: 'Skills', labelKey: 'mainTabs.skills', group: 'agent', keywords: 'skills abilities SKILL.md 技能', icon: Sparkles },
 
   // 工作区:外观从「系统」搬进来——它调的是这台机器的工作环境,不是系统能力。
   { id: 'appearance', label: 'Appearance', labelKey: 'mainTabs.appearance', group: 'workspace', keywords: 'appearance theme dark light language density 外观 主题 语言 密度', icon: Palette },
   { id: 'git', label: 'Git', labelKey: 'mainTabs.git', group: 'workspace', keywords: 'git github commits 提交 分支 代码仓库', icon: GitBranch },
-  { id: 'tasks', label: 'Tasks', labelKey: 'mainTabs.tasks', group: 'workspace', keywords: 'tasks taskmaster 任务', icon: ListChecks },
   { id: 'browser', label: 'Browser', labelKey: 'mainTabs.browser', group: 'workspace', keywords: 'browser playwright chromium automation 浏览器', icon: MonitorPlay },
   { id: 'voice', label: 'Voice', labelKey: 'mainTabs.voice', group: 'workspace', keywords: 'voice speech dictation microphone 语音', icon: Mic },
 
   // 系统:插件从「智能体」搬过来——它扩的是工作台本身,不是某个 Agent。
   { id: 'api', label: 'API Tokens', labelKey: 'mainTabs.apiTokens', group: 'system', keywords: 'api tokens auth keys 密钥 令牌 接口 凭据', icon: KeyRound },
   { id: 'notifications', label: 'Notifications', labelKey: 'mainTabs.notifications', group: 'system', keywords: 'notifications alerts push 通知', icon: Bell },
-  { id: 'plugins', label: 'Plugins', labelKey: 'mainTabs.plugins', group: 'system', keywords: 'plugins extensions integrations 插件', icon: Plug },
   { id: 'storage', label: 'Storage', labelKey: 'mainTabs.storage', group: 'system', keywords: 'storage cache treasury disk cleanup 存储 缓存 藏宝阁 清理', icon: HardDrive },
   { id: 'about', label: 'About', labelKey: 'mainTabs.about', group: 'system', keywords: 'about version info 关于 版本 更新', icon: Info },
 ];

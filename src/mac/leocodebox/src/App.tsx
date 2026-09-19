@@ -4,12 +4,7 @@ import { I18nextProvider } from 'react-i18next';
 import { ThemeProvider } from './contexts/ThemeContext';
 import WhatsNewModal from './components/version-upgrade/view/WhatsNewModal';
 import { AuthProvider, ProtectedRoute } from './components/auth';
-import { TaskMasterProvider } from './contexts/TaskMasterContext';
-import { TasksSettingsProvider } from './contexts/TasksSettingsContext';
-import { WebSocketProvider } from './contexts/WebSocketContext';
-import { PluginsProvider } from './contexts/PluginsContext';
 import { PreferencesProvider } from './contexts/PreferencesContext';
-import AppContent from './components/app/AppContent';
 import App2 from './v2/App2';
 import i18n from './i18n/config.js';
 
@@ -111,25 +106,15 @@ export default function App() {
       <ThemeProvider>
         <AuthProvider>
           <ProtectedRoute>
-            <WebSocketProvider>
-              <PluginsProvider>
-                <TasksSettingsProvider>
-                  <TaskMasterProvider>
-                  <PreferencesProvider>
-                    <WhatsNewModal />
-                    <Router basename={routerBasename}>
-                      <Routes>
-                        {/* 2.0 壳是默认界面;旧界面暂留在 /legacy,阶段 2 删除。 */}
-                        <Route path="/" element={<App2 />} />
-                        <Route path="/legacy" element={<AppContent />} />
-                        <Route path="/session/:sessionId" element={<AppContent />} />
-                      </Routes>
-                    </Router>
-                  </PreferencesProvider>
-                  </TaskMasterProvider>
-                </TasksSettingsProvider>
-              </PluginsProvider>
-            </WebSocketProvider>
+            <PreferencesProvider>
+              <WhatsNewModal />
+              <Router basename={routerBasename}>
+                <Routes>
+                  <Route path="/" element={<App2 />} />
+                  <Route path="*" element={<App2 />} />
+                </Routes>
+              </Router>
+            </PreferencesProvider>
           </ProtectedRoute>
         </AuthProvider>
       </ThemeProvider>

@@ -16,7 +16,6 @@ import { findAppRoot, getModuleDir } from './utils/runtime-paths.js';
 import gitRoutes from './modules/git/index.js';
 import authRoutes from './routes/auth.js';
 import cursorRoutes from './routes/cursor.js';
-import taskmasterRoutes from './modules/taskmaster/index.js';
 import mcpUtilsRoutes from './routes/mcp-utils.js';
 import commandsRoutes from './routes/commands.js';
 import settingsRoutes from './routes/settings.js';
@@ -24,7 +23,6 @@ import agentRoutes from './modules/agent/index.js';
 import projectModuleRoutes from './modules/projects/projects.routes.js';
 import notificationRoutes from './modules/notifications/notifications.routes.js';
 import userRoutes from './routes/user.js';
-import pluginsRoutes from './routes/plugins.js';
 import leocodeboxRoutes, { startHealthMonitor } from './modules/leocodebox/index.js';
 import leophoneRoutes, { startLeophoneRelayClient } from './modules/leophone/index.js';
 import fleetRoutes from './modules/leophone/fleet.routes.js';
@@ -141,7 +139,6 @@ app.use('/api/git', authenticateToken, gitRoutes);
 app.use('/api/cursor', authenticateToken, cursorRoutes);
 
 // TaskMaster API Routes (protected)
-app.use('/api/taskmaster', authenticateToken, taskmasterRoutes);
 
 // MCP utilities
 app.use('/api/mcp-utils', authenticateToken, mcpUtilsRoutes);
@@ -157,8 +154,6 @@ app.use('/api/notifications', authenticateToken, notificationRoutes);
 // User API Routes (protected)
 app.use('/api/user', authenticateToken, userRoutes);
 
-// Plugins API Routes (protected)
-app.use('/api/plugins', authenticateToken, pluginsRoutes);
 
 // leocodebox local-only extensions: provider switch, feedback, update checks.
 app.use('/api/leocodebox', authenticateToken, leocodeboxRoutes);

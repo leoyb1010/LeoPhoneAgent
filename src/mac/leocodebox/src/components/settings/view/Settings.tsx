@@ -6,17 +6,13 @@ import ProviderLoginModal from '../../provider-auth/view/ProviderLoginModal';
 import { Button } from '../../../shared/view/ui';
 import SettingsSidebar from '../view/SettingsSidebar';
 import AgentsSettingsTab from '../view/tabs/agents-settings/AgentsSettingsTab';
-import AgentHubTab from '../view/tabs/AgentHubTab';
 import McpSettingsTab from '../view/tabs/McpSettingsTab';
-import SkillsSettingsTab from '../view/tabs/SkillsSettingsTab';
 import AppearanceSettingsTab from '../view/tabs/AppearanceSettingsTab';
 import CredentialsSettingsTab from '../view/tabs/api-settings/CredentialsSettingsTab';
 import VoiceSettingsTab from '../view/tabs/VoiceSettingsTab';
 import GitSettingsTab from '../view/tabs/git-settings/GitSettingsTab';
 import BrowserUseSettingsTab from '../view/tabs/browser-use-settings/BrowserUseSettingsTab';
 import NotificationsSettingsTab from '../view/tabs/NotificationsSettingsTab';
-import TasksSettingsTab from '../view/tabs/tasks-settings/TasksSettingsTab';
-import PluginSettingsTab from '../../plugins/view/PluginSettingsTab';
 import AboutTab from '../view/tabs/AboutTab';
 import StorageSettingsTab from '../view/tabs/StorageSettingsTab';
 import { useSettingsController } from '../hooks/useSettingsController';
@@ -266,13 +262,7 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
                 />
               )}
 
-              {activeTab === 'agentHub' && <AgentHubTab onClose={onClose} />}
-
               {activeTab === 'mcp' && <McpSettingsTab projects={projects} />}
-
-              {activeTab === 'skills' && <SkillsSettingsTab projects={projects} />}
-
-              {activeTab === 'tasks' && <TasksSettingsTab />}
 
               {activeTab === 'browser' && <BrowserUseSettingsTab />}
 
@@ -296,8 +286,6 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
 
 
               {activeTab === 'voice' && <VoiceSettingsTab />}
-
-              {activeTab === 'plugins' && <PluginSettingsTab />}
 
               {activeTab === 'storage' && <StorageSettingsTab />}
 
