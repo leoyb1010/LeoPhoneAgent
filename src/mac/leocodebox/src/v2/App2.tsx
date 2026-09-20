@@ -107,6 +107,7 @@ import { canMergeSessionBranch, mergeSessionToast } from './session-merge';
 import { isMissingSessionCwd, missingCwdToast } from './session-missing';
 import { canPackSessionChanges, packFileName, packSessionToast } from './session-pack';
 import { canFlushPeekOnSend, peekFlushedToast } from './session-peek-flush';
+import { peekDraftToRestore, peekMemoryFile, peekMemoryKey, writePeekMemory, type PeekMemory } from './session-peek-memory';
 import { lastFinishedEdit, peekReloadedToast, shouldReloadPeek } from './session-peek-sync';
 import { canUnpackSessionZip, unpackSessionToast, unpackZipName } from './session-unpack';
 import { canSeedSessionFile, clipSeedText, sanitizeSeedRel, seedSessionToast } from './session-seed';
@@ -304,6 +305,11 @@ export default function App2() {
   const autoCompacted = useRef(new Set<string>());
   const peekSyncSession = useRef('');
   const peekSyncSeen = useRef('');
+  const peekMem = useRef(new Map<string, PeekMemory>());
+  const peekMemSession = useRef('');
+  const peekRestore = useRef<{ file: string; draft: string } | null>(null);
+  const peekLive = useRef({ file: null as string | null, peek: null as string | null, draft: null as string | null });
+  peekLive.current = { file: focusFile, peek: filePeek, draft: filePeekDraft };
   const icloudWarned = useRef(new Set<string>());
   const missingWarned = useRef(new Set<string>());
   const [menu, setMenu] = useState<MenuState>(null);
@@ -817,12 +823,44 @@ export default function App2() {
 
   useEffect(() => {
     if (!isPeekDrawer(drawer)) {
+      writePeekMemory(peekMem.current, peekMemSession.current, peekLive.current);
       setFocusFile(null);
       setFilePeek(null);
+      setFilePeekDraft(null);
       setSessionArtifacts([]);
       setArtifactError(null);
+      return;
     }
+    const mem = peekMem.current.get(peekMemSession.current);
+    const file = peekMemoryFile(mem);
+    if (!file) return;
+    const draft = peekDraftToRestore(mem, file);
+    peekRestore.current = draft != null ? { file, draft } : null;
+    setFocusFile(file);
   }, [drawer]);
+
+  useEffect(() => {
+    const key = peekMemoryKey(active?.machine, active?.id);
+    if (peekMemSession.current === key) return;
+    writePeekMemory(peekMem.current, peekMemSession.current, peekLive.current);
+    peekMemSession.current = key;
+    if (!isPeekDrawer(drawer)) {
+      setFocusFile(null);
+      setFilePeek(null);
+      setFilePeekDraft(null);
+      return;
+    }
+    const mem = key ? peekMem.current.get(key) : undefined;
+    const file = peekMemoryFile(mem);
+    const draft = peekDraftToRestore(mem, file);
+    peekRestore.current = file && draft != null ? { file, draft } : null;
+    setFocusCommit(null);
+    setFocusFile(file);
+    if (!file) {
+      setFilePeek(null);
+      setFilePeekDraft(null);
+    }
+  }, [active?.id, active?.machine, drawer]);
 
   useEffect(() => {
     if (!isPeekDrawer(drawer) || !active) {
@@ -882,12 +920,24 @@ export default function App2() {
     void load().then((text) => {
       if (cancelled) return;
       setFilePeek(text);
-      setFilePeekDraft(text);
+      const restore = !focusCommit ? peekRestore.current : null;
+      if (restore && restore.file === String(focusFile ?? '').trim()) {
+        setFilePeekDraft(restore.draft);
+        peekRestore.current = null;
+      } else {
+        setFilePeekDraft(text);
+      }
     }).catch((error) => {
       if (cancelled) return;
       const text = `读不了:${humanizeError(error instanceof Error ? error.message : String(error))}`;
       setFilePeek(text);
-      setFilePeekDraft(text);
+      const restore = !focusCommit ? peekRestore.current : null;
+      if (restore && restore.file === String(focusFile ?? '').trim()) {
+        setFilePeekDraft(restore.draft);
+        peekRestore.current = null;
+      } else {
+        setFilePeekDraft(text);
+      }
     });
     return () => { cancelled = true; };
   }, [drawer, active, workspace?.projectId, workspace?.fullPath, focusFile, focusCommit, activeSummary?.cwd, peekTick]);
