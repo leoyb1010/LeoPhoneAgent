@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 
 import { sessionIncompleteLabel } from './session-incomplete.js';
+import { sessionToolFailed } from './session-tool-fail.js';
 import { sessionToolFullOutput } from './session-tool-full.js';
 import { sessionToolImages } from './session-tool-image.js';
 
@@ -263,7 +264,7 @@ export class PiRpcDialect implements HarnessDialect {
         event: EVENT_TOOL_COMPLETED,
         tool: obj.toolName || 'tool',
         tool_use_id: obj.toolCallId,
-        error: Boolean(obj.isError),
+        error: sessionToolFailed({ tool: str(obj.toolName), isError: obj.isError, result: obj.result }),
         output: sessionToolFullOutput(obj.result, piResultPreview(obj.result)),
         ...(images.length ? { images } : {}),
       });

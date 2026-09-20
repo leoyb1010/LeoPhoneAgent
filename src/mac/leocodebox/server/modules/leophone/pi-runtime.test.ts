@@ -256,6 +256,27 @@ test('输入栏 $ 的 bash 增量叠成 live delta,回执闭合工具', () => {
   assert.equal(done[0]?.output, 'PASS 1\nPASS 2\n');
 });
 
+test('命令没过会标红', () => {
+  const dialect = new PiRpcDialect();
+  const fail = dialect.translateLine({
+    type: 'tool_execution_end',
+    toolCallId: 'c1',
+    toolName: 'bash',
+    isError: false,
+    result: { content: [{ type: 'text', text: 'FAIL' }], details: { exitCode: 1 } },
+  }).events;
+  assert.equal(fail[0]?.event, EVENT_TOOL_COMPLETED);
+  assert.equal(fail[0]?.error, true);
+  const ok = dialect.translateLine({
+    type: 'tool_execution_end',
+    toolCallId: 'c2',
+    toolName: 'bash',
+    isError: false,
+    result: { content: [{ type: 'text', text: 'ok' }], details: { exitCode: 0 } },
+  }).events;
+  assert.equal(ok[0]?.error, false);
+});
+
 test('非文本的 message_update 不进日志;工具输出流只发 live delta;文本增量照常', () => {
   const dialect = new PiRpcDialect();
   assert.deepEqual(dialect.translateLine({ type: 'message_update', assistantMessageEvent: { type: 'toolcall_delta', delta: '{' } }).events, []);
