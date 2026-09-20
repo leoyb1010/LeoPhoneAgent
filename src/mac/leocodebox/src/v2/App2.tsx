@@ -135,7 +135,7 @@ export default function App2() {
   const [focusMachine, setFocusMachine] = useState<string | null>(null);
   const [whatsNew, setWhatsNew] = useState<ReturnType<typeof currentReleaseNote>>(null);
   const [flowFind, setFlowFind] = useState({ open: false, query: '', index: 0 });
-  const [windowOp, setWindowOp] = useState<{ label: string; draft: string } | null>(null);
+  const [windowOp, setWindowOp] = useState<{ label: string; draft: string; windows: Array<{ snapshotId: string; app: string; title: string; frontmost: boolean }>; peek: string | null } | null>(null);
   const [hiddenKeys, setHiddenKeys] = useState<string[]>(() => {
     try { return readHiddenSessionKeys(localStorage.getItem(HIDDEN_SESSIONS_KEY)); } catch { return []; }
   });
@@ -485,6 +485,23 @@ export default function App2() {
     else toast('没有待批');
   }, [sessionView.pendingApprovals, othersNeedingYou, approve, openSession, toast]);
 
+  const openWindowOp = useCallback(() => {
+    if (!active || active.machine !== 'local') return;
+    const label = windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window)) || '还没绑窗口';
+    setWindowOp({ label, draft: '', windows: [], peek: null });
+    void api.listSessionWindows(active).then((row) => {
+      setWindowOp((cur) => (cur ? { ...cur, windows: row.windows } : cur));
+    }).catch((error) => toast(humanizeError(error instanceof Error ? error.message : String(error)), true));
+    if (label !== '还没绑窗口') {
+      void api.peekBoundWindow(active).then((row) => {
+        const peek = row.image?.data ? `data:${row.image.mimeType || 'image/jpeg'};base64,${row.image.data}` : null;
+        setWindowOp((cur) => (cur ? { ...cur, peek, label: windowBoundLabel({ app: row.app, title: row.title }) || cur.label } : cur));
+      }).catch(() => {
+        // 没录屏权限时仍可绑、可点,只是看不见画面。
+      });
+    }
+  }, [active, activeSummary?.window, sessionView.window, toast]);
+
   const createSession = useCallback(async (input: { machine: string; cwd: string; prompt: string; model: string | null; policy: string }) => {
     if (input.machine === 'local' && (providers === null || usableModelsFromProviders(providers).length === 0)) {
       if (providers === null) return;
@@ -540,7 +557,8 @@ export default function App2() {
     { v: 'find', t: '在这条会话里找', sub: '⌘F' },
     { v: 'findhit', t: '复制当前命中', sub: '⌘C' },
     { v: '', t: '', sep: true },
-    ...(boundWindowChipKind(active?.machine ?? '', windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window))) === 'raise' ? [{ v: 'winclick', t: '点这个窗口', sub: windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window)) }] : []),
+    ...(active?.machine === 'local' ? [{ v: 'winbind', t: boundWindowChipKind(active.machine, windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window))) === 'raise' ? '换一扇窗' : '绑窗口', sub: windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window)) || '列出本机窗口' }] : []),
+    ...(boundWindowChipKind(active?.machine ?? '', windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window))) === 'raise' ? [{ v: 'winclick', t: '操作这个窗口', sub: windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window)) }] : []),
     ...(activeSummary?.cwd?.trim() ? [{ v: 'cwd', t: '复制目录', sub: activeSummary.cwd }] : []),
     ...((sessionView.title || activeSummary?.title || '').trim() ? [{ v: 'title', t: '复制标题', sub: (sessionView.title || activeSummary?.title || '').trim() }] : []),
     ...(canDrive ? [] : [{ v: 'continue', t: '在同一目录续写', sub: '新开会话' }]),
@@ -548,7 +566,7 @@ export default function App2() {
     ...(activeSummary && sessionCanForget(activeSummary.status) ? [{ v: 'forget', t: '从左栏拿掉', sub: active?.machine === 'local' ? '不再召回' : '只藏在这台 Mac' }] : []),
   ], (v) => {
     if (v === 'compact') void compact();
-    else if (v === 'winclick') setWindowOp({ label: windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window)), draft: '' });
+    else if (v === 'winbind' || v === 'winclick') openWindowOp();
     else if (v === 'stop') void stop();
     else if (v === 'continue') continueHere();
     else if (v === 'cwd') void copyCwd();
@@ -871,6 +889,8 @@ export default function App2() {
                     ) : null}
                     {boundWindowChipKind(active?.machine ?? '', boundWindowText) === 'raise' ? (
                       <button className="chip win" type="button" title={`${boundWindowText} · 点一下提到前面`} onClick={(e) => { e.stopPropagation(); void api.raiseBoundWindow(active!).then(() => toast('已提到前面')).catch((error) => toast(humanizeError(error instanceof Error ? error.message : String(error)), true)); }}>{boundWindowText}</button>
+                    ) : boundWindowChipKind(active?.machine ?? '', boundWindowText) === 'bind' ? (
+                      <button className="chip win" type="button" title="列出本机窗口再绑一扇" onClick={(e) => { e.stopPropagation(); openWindowOp(); }}>绑窗口</button>
                     ) : boundWindowChipKind(active?.machine ?? '', boundWindowText) === 'label' ? (
                       <span className="chip win" title="窗口在对面那台机器上,这里提不起来">{boundWindowText}</span>
                     ) : null}
@@ -1141,6 +1161,33 @@ export default function App2() {
           <div className="wn-box">
             <h2>操作这个窗口</h2>
             <p className="wn-ver">{windowOp.label}</p>
+            {windowOp.peek ? <img className="win-peek" src={windowOp.peek} alt={windowOp.label} /> : null}
+            {windowOp.windows.length > 0 ? (
+              <ul className="win-list">
+                {windowOp.windows.map((item) => (
+                  <li key={item.snapshotId}>
+                    <button
+                      type="button"
+                      className="link"
+                      disabled={!active}
+                      onClick={() => {
+                        if (!active) return;
+                        void api.bindSessionWindow(active, item.snapshotId).then((result) => {
+                          toast(`已绑 ${result.app}`);
+                          setWindowOp((cur) => (cur ? { ...cur, label: windowBoundLabel({ app: result.app, title: result.title }) || cur.label } : cur));
+                          void api.peekBoundWindow(active).then((row) => {
+                            const peek = row.image?.data ? `data:${row.image.mimeType || 'image/jpeg'};base64,${row.image.data}` : null;
+                            setWindowOp((cur) => (cur ? { ...cur, peek, label: windowBoundLabel({ app: row.app, title: row.title }) || cur.label } : cur));
+                          }).catch(() => undefined);
+                        }).catch((error) => toast(humanizeError(error instanceof Error ? error.message : String(error)), true));
+                      }}
+                    >
+                      {windowBoundLabel({ app: item.app, title: item.title }) || item.app}{item.frontmost ? ' · 前台' : ''}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : <p className="wn-ver">正在列出本机窗口…</p>}
             <button
               type="button"
               className="win-hit"

@@ -178,7 +178,8 @@ test('前台窗口绑定会落成系统行,摘要里的窗口也能读出来', (
   assert.equal(windowBoundLabel(boundWindowFromUnknown(null)), '');
   assert.equal(boundWindowChipKind('local', 'Finder · Documents'), 'raise');
   assert.equal(boundWindowChipKind('LeodeMac-mini-2', 'Finder · Documents'), 'label');
-  assert.equal(boundWindowChipKind('local', ''), 'none');
+  assert.equal(boundWindowChipKind('local', ''), 'bind');
+  assert.equal(boundWindowChipKind('fold', ''), 'none');
   const box = { left: 100, top: 50, width: 200, height: 100 };
   assert.deepEqual(clickPointFromElement(180, 80, box), { x: 0.4, y: 0.3 });
   assert.deepEqual(clickPointFromElement(100, 50, box), { x: 0.001, y: 0.001 });
@@ -210,9 +211,12 @@ test('2.0 壳接上了插话、回车开会话和前台窗口', () => {
   assert.match(app, /keyBoundWindow/);
   assert.match(app, /scrollBoundWindow/);
   assert.match(app, /dragBoundWindow/);
+  assert.match(app, /listSessionWindows/);
+  assert.match(app, /bindSessionWindow/);
+  assert.match(app, /peekBoundWindow/);
   assert.match(app, /WINDOW_KEY_BUTTONS/);
   assert.match(app, /点一下提到前面/);
-  assert.match(app, /点这个窗口/);
+  assert.match(app, /绑窗口/);
   assert.match(flow, /composerShouldSend/);
   assert.match(flow, /↩ 开始/);
 });

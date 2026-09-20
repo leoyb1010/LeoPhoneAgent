@@ -73,10 +73,10 @@ export function windowBoundLabel(input: BoundWindow | null | undefined): string 
   return title || app;
 }
 
-/** 本机绑过的窗口可以点起来;远程只标名字。 */
-export function boundWindowChipKind(machine: string, label: string): 'raise' | 'label' | 'none' {
-  if (!label.trim()) return 'none';
-  return machine === 'local' ? 'raise' : 'label';
+/** 本机没绑过也能点开去绑;绑过的提到前面;远程只标名字。 */
+export function boundWindowChipKind(machine: string, label: string): 'raise' | 'bind' | 'label' | 'none' {
+  if (machine === 'local') return label.trim() ? 'raise' : 'bind';
+  return label.trim() ? 'label' : 'none';
 }
 
 /** 按钮文案:跑着时显示插话。首句仍由内核按「还没开过一轮」走 prompt。 */

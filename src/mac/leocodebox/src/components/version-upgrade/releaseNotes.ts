@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.0.71',
+    date: '2026-09-20',
+    items: [
+      '本机会话可以列出窗口再绑上其中一扇，并读到画面；不会再误绑自己。',
+    ],
+  },
+  {
     version: '2.0.70',
     date: '2026-09-20',
     items: [

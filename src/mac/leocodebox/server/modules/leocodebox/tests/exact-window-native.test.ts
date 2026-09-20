@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import test from 'node:test';
 
-import { clickBoundSessionWindow, createMacWindowDriver, dragBoundSessionWindow, keyBoundSessionWindow, raiseBoundSessionWindow, scrollBoundSessionWindow, typeBoundSessionWindow } from '../exact-window-macos.js';
-import { ExactWindowStore, parseNormalizedClickPoint, parseWindowAction, parseWindowDrag, parseWindowNamedKey, parseWindowScroll, parseWindowTypeText, pickWritableWindowField, type WindowElement, type WindowObservation, type WindowActionReceipt } from '../exact-window.js';
+import { bindSessionWindow, clickBoundSessionWindow, createMacWindowDriver, dragBoundSessionWindow, keyBoundSessionWindow, listBindableSessionWindows, peekBoundSessionWindow, raiseBoundSessionWindow, scrollBoundSessionWindow, typeBoundSessionWindow } from '../exact-window-macos.js';
+import { ExactWindowStore, isOwnMacWindow, parseNormalizedClickPoint, parseWindowAction, parseWindowDrag, parseWindowNamedKey, parseWindowScroll, parseWindowTypeText, pickBindableWindow, pickWritableWindowField, type WindowElement, type WindowObservation, type WindowActionReceipt } from '../exact-window.js';
 
 const observation: WindowObservation = {
   app: 'Fixture', pid: 42, windowId: '7', title: 'Fixture window', bounds: '0,0,800,600', frontmost: true,
@@ -206,6 +207,43 @@ test('keyBoundSessionWindow 先提到前面再打具名键,未知键不会动手
   const missing = await keyBoundSessionWindow('hs_none', 'return', undefined, store, driver, listed);
   assert.equal(missing.ok, false);
   if (!missing.ok) assert.equal(missing.reason, 'unknown-snapshot');
+});
+
+test('自动绑跳过自己,工作台按快照绑并能读到画面', async () => {
+  assert.equal(isOwnMacWindow({ app: 'leocodebox', bundleId: 'com.leoyuan.leocodebox', pid: 1, frontmost: true }), true);
+  assert.equal(isOwnMacWindow({ app: 'Finder', bundleId: 'com.apple.finder', pid: 99, frontmost: true }), false);
+  const own = { ...observation, app: 'leocodebox', bundleId: 'com.leoyuan.leocodebox', pid: process.pid, frontmost: true };
+  const other = { ...observation, app: 'Finder', title: 'Documents', pid: 88, windowId: '9', bundleId: 'com.apple.finder', frontmost: false };
+  assert.equal(pickBindableWindow([own, other])?.app, 'Finder');
+  const store = new ExactWindowStore(() => 10_000, 'test');
+  const listed = async () => [own, other];
+  const rows = await listBindableSessionWindows(undefined, store, listed);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.app, 'Finder');
+  const bound = await bindSessionWindow('hs_bind', rows[0]?.snapshotId, undefined, store, listed);
+  assert.equal(bound.ok, true);
+  if (bound.ok) assert.equal(bound.app, 'Finder');
+  const self = await bindSessionWindow('hs_bind', store.capture(own).snapshotId, undefined, store, listed);
+  assert.equal(self.ok, false);
+  if (!self.ok) assert.equal(self.reason, 'invalid-request');
+  const jpeg = Buffer.from('fake-jpeg');
+  const data = jpeg.toString('base64');
+  const hash = createHash('sha256').update(jpeg).digest('hex');
+  const driver = createMacWindowDriver(async (request) => {
+    if (request.operation === 'observe') {
+      return {
+        protocolVersion: 1, ok: true,
+        observation: { ...other, frontmost: true, image: { mimeType: 'image/jpeg', data, width: 8, height: 6, scaleX: 1, scaleY: 1, hash } },
+      };
+    }
+    return { protocolVersion: 1, ok: true, windows: [other] };
+  });
+  const peeked = await peekBoundSessionWindow('hs_bind', undefined, store, driver, listed);
+  assert.equal(peeked.ok, true);
+  if (peeked.ok) {
+    assert.equal(peeked.app, 'Finder');
+    assert.equal(peeked.image?.data, data);
+  }
 });
 
 test('scrollBoundSessionWindow 和 dragBoundSessionWindow 先提到前面再动手,坏手势不会执行', async () => {

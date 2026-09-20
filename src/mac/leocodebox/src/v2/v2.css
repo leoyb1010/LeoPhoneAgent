@@ -332,6 +332,9 @@
 .leo2 .wn-entry ul{margin:0;padding:0 0 0 16px;color:var(--fg);font-size:13px;line-height:1.55}
 .leo2 .wn-entry li{margin:0 0 8px}
 .leo2 .wn-acts{display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:12px}
+.leo2 .win-peek{display:block;width:100%;max-height:180px;object-fit:contain;margin:10px 0 0;border:1px solid var(--line2);border-radius:8px;background:var(--bg2)}
+.leo2 .win-list{margin:10px 0 0;padding:0;list-style:none;max-height:160px;overflow:auto}
+.leo2 .win-list li{margin:0 0 6px}
 .leo2 .win-hit{display:block;width:100%;min-height:160px;margin:12px 0 0;border:1px dashed var(--line2);border-radius:10px;background:var(--bg2);color:var(--fg2);padding:16px;text-align:center;touch-action:none;overscroll-behavior:contain}
 .leo2 .win-type{display:block;width:100%;margin-top:12px;padding:8px 10px;border:1px solid var(--line2);border-radius:8px;background:var(--bg);resize:vertical}
 .leo2 .win-keys{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}

@@ -118,6 +118,12 @@ export const api = {
     getJson<{ content: string; name: string }>(`${sessionBase(target)}/artifacts/${encodeURIComponent(name)}/text`),
   send: (target: SessionTarget, text: string) => sendJson(`${sessionBase(target)}/send`, { text }),
   stop: (target: SessionTarget) => sendJson(`${sessionBase(target)}/stop`, {}),
+  listSessionWindows: (target: SessionTarget) =>
+    getJson<{ ok: true; windows: Array<{ snapshotId: string; app: string; title: string; pid: number; windowId: string; frontmost: boolean }> }>(`${sessionBase(target)}/windows`),
+  bindSessionWindow: (target: SessionTarget, snapshotId?: string) =>
+    sendJson<{ ok: true; app: string; title: string }>(`${sessionBase(target)}/window/bind`, snapshotId ? { snapshotId } : {}),
+  peekBoundWindow: (target: SessionTarget) =>
+    getJson<{ ok: true; app: string; title: string; image: { mimeType: string; data: string; width: number; height: number } | null }>(`${sessionBase(target)}/window/peek`),
   raiseBoundWindow: (target: SessionTarget) => sendJson<{ ok: true; app: string; title: string }>(`${sessionBase(target)}/window/raise`, {}),
   clickBoundWindow: (target: SessionTarget, point: { x: number; y: number }) =>
     sendJson<{ ok: true; app: string; title: string; x: number; y: number }>(`${sessionBase(target)}/window/click`, point),

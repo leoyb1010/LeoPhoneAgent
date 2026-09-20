@@ -5,7 +5,8 @@ import path from 'node:path';
 import { findAppRoot, getModuleDir } from '../../utils/runtime-paths.js';
 
 import {
-  exactWindows, parseNormalizedClickPoint, parseWindowDrag, parseWindowNamedKey, parseWindowScroll, parseWindowTypeText, pickWritableWindowField, WINDOW_SNAPSHOT_FRESH_MS, WindowOperationError,
+  exactWindows, isOwnMacWindow, parseNormalizedClickPoint, parseWindowDrag, parseWindowNamedKey, parseWindowScroll, parseWindowTypeText, pickBindableWindow, pickWritableWindowField, WINDOW_SNAPSHOT_FRESH_MS, WindowOperationError,
+  type BindableWindowRow,
   type ExactWindowDriver, type WindowAction, type WindowActionKind, type WindowActionReceipt,
   type WindowElement, type WindowFailureReason, type WindowObservation, type WindowOperationOptions,
   type WindowPermissions, type WindowRef, type WindowSnapshot,
@@ -164,11 +165,72 @@ export const listMacWindows = (options?: WindowOperationOptions) => macWindowDri
 export const captureListed = (row: ListedWindow): WindowSnapshot => exactWindows.capture(row);
 
 export async function bindFrontmostToSession(sessionId: string, options?: WindowOperationOptions): Promise<WindowSnapshot | null> {
-  const front = (await listMacWindows(options)).find((row) => row.frontmost);
+  const front = pickBindableWindow(await listMacWindows(options));
   if (!front) return null;
   const snap = captureListed(front);
   exactWindows.bindSession(sessionId, snap.snapshotId);
   return snap;
+}
+
+export async function listBindableSessionWindows(
+  options?: WindowOperationOptions,
+  store = exactWindows,
+  list = listMacWindows,
+): Promise<BindableWindowRow[]> {
+  const listed = await list(options);
+  return listed.filter((row) => !isOwnMacWindow(row) && row.onScreen !== false).slice(0, 32).map((row) => {
+    const snap = store.capture(row);
+    return { snapshotId: snap.snapshotId, app: row.app, title: row.title, pid: row.pid, windowId: row.windowId, frontmost: row.frontmost };
+  });
+}
+
+export async function bindSessionWindow(
+  sessionId: string,
+  snapshotId?: unknown,
+  options?: WindowOperationOptions,
+  store = exactWindows,
+  list = listMacWindows,
+): Promise<{ ok: true; app: string; title: string } | { ok: false; reason: string; message: string }> {
+  const wanted = typeof snapshotId === 'string' && snapshotId.trim() && snapshotId.length <= 128 ? snapshotId.trim() : undefined;
+  if (wanted) {
+    const snap = store.get(wanted);
+    if (!snap) return { ok: false, reason: 'unknown-snapshot', message: '没有这个窗口快照。' };
+    if (isOwnMacWindow(snap.ref)) return { ok: false, reason: 'invalid-request', message: '不能绑自己这扇窗。' };
+    store.bindSession(sessionId, snap.snapshotId);
+    return { ok: true, app: snap.ref.app, title: snap.ref.title };
+  }
+  const snap = await bindFrontmostToSession(sessionId, options);
+  if (!snap) return { ok: false, reason: 'window-gone', message: '没有可绑的其他窗口。' };
+  return { ok: true, app: snap.ref.app, title: snap.ref.title };
+}
+
+export async function peekBoundSessionWindow(
+  sessionId: string,
+  options?: WindowOperationOptions,
+  store = exactWindows,
+  driver = macWindowDriver,
+  list = listMacWindows,
+): Promise<{ ok: true; app: string; title: string; image: { mimeType: string; data: string; width: number; height: number } | null } | { ok: false; reason: string; message: string }> {
+  const bound = store.sessionSnapshot(sessionId);
+  if (!bound) return { ok: false, reason: 'unknown-snapshot', message: '这个会话还没有绑过窗口。' };
+  const listed = await list(options);
+  const match = listed.find((row) => row.pid === bound.ref.pid && row.windowId === bound.ref.windowId);
+  if (!match) return { ok: false, reason: 'window-gone', message: '绑过的窗口已经不在了。' };
+  let snap = store.capture(match);
+  store.bindSession(sessionId, snap.snapshotId);
+  try {
+    snap = await store.observe(snap.snapshotId, driver, { ...options, capture: true, elements: false });
+  } catch (error) {
+    if (error instanceof WindowOperationError && error.reason !== 'observation-unavailable' && error.reason !== 'permission-denied') {
+      return { ok: false, reason: error.reason, message: error.message };
+    }
+    return { ok: true, app: snap.ref.app, title: snap.ref.title, image: null };
+  }
+  const image = snap.observation?.image;
+  return {
+    ok: true, app: snap.ref.app, title: snap.ref.title,
+    image: image ? { mimeType: image.mimeType, data: image.data, width: image.width, height: image.height } : null,
+  };
 }
 
 /** 把会话绑过的那扇窗提到前面。快照只有 3 秒寿命,所以先按 pid/windowId 再认一次,再 focus。 */

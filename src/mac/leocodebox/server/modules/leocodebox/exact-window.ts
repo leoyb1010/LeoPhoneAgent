@@ -168,6 +168,28 @@ export function parseWindowTypeText(value: unknown): string | null {
 
 const WRITABLE_ROLES = new Set(['AXTextField', 'AXTextArea', 'AXComboBox']);
 
+export function isOwnMacWindow(row: { app?: string; bundleId?: string; pid?: number }): boolean {
+  const bundle = (row.bundleId ?? '').trim();
+  if (bundle === 'com.leoyuan.leocodebox') return true;
+  const app = (row.app ?? '').trim().toLowerCase();
+  if (app === 'leocodebox' || app.startsWith('leocodebox helper')) return true;
+  return row.pid === process.pid;
+}
+
+export function pickBindableWindow<T extends { frontmost: boolean; onScreen?: boolean; app?: string; bundleId?: string; pid?: number }>(rows: T[]): T | undefined {
+  const usable = rows.filter((row) => !isOwnMacWindow(row) && row.onScreen !== false);
+  return usable.find((row) => row.frontmost) ?? usable[0];
+}
+
+export type BindableWindowRow = {
+  snapshotId: string;
+  app: string;
+  title: string;
+  pid: number;
+  windowId: string;
+  frontmost: boolean;
+};
+
 export function pickWritableWindowField(elements: WindowElement[] | undefined, elementId?: string): WindowElement | null {
   const writable = (elements ?? []).filter((item) => item.enabled && item.settableValue && !item.redacted && WRITABLE_ROLES.has(item.role));
   if (elementId) return writable.find((item) => item.id === elementId) ?? null;
