@@ -83,6 +83,7 @@ import { autoCompactToast, shouldAutoCompact } from './session-autocompact';
 import { appendDictate, canDictate, clipDictateText, dictateListeningToast, dictateStoppedToast, dictateToast, dictateUnavailableToast, speechRecognitionCtor } from './session-dictate';
 import { canSpeakLastReply, speakLastReplyToast } from './session-speak';
 import { canRetryLastUser, lastUserPrompt, retryLastUserToast } from './session-retry';
+import { canRetryAfterModelSwitch, retryAfterModelSwitchToast } from './session-switch-send';
 import { canEditLastPrompt, editLastPromptDraft, editLastPromptToast } from './session-edit-prompt';
 import { denySessionToast } from './session-deny';
 import { canDenyAllHere, deniableApprovalIds, denyAllLabel, denyAllToast } from './session-deny-all';
@@ -2160,9 +2161,30 @@ export default function App2() {
     return active && withBusy(() => api.setPolicy(active, policy));
   }, [active, activeSummary?.cwd, withBusy]);
   const setModel = useCallback((provider: string, modelId: string) => {
+    if (!active) return;
     saveCwdHabit(activeSummary?.cwd, { model: `${provider}/${modelId}` });
-    return active && withBusy(() => api.rpc(active, { type: 'set_model', provider, modelId }));
-  }, [active, activeSummary?.cwd, withBusy]);
+    const next = `${provider}/${modelId}`;
+    const prompt = lastUserPrompt(sessionView.rows);
+    const wasBlocked = composerNeedsModelSwitch(sessionView.model, sessionFailTexts({
+      lastEventText: activeSummary?.last_event?.text,
+      rows: sessionView.rows,
+    }));
+    const retry = canRetryAfterModelSwitch({
+      machine: active.machine,
+      wasBlocked,
+      prevModel: sessionView.model,
+      nextModel: next,
+      prompt,
+    });
+    return withBusy(async () => {
+      await api.rpc(active, { type: 'set_model', provider, modelId });
+      if (!retry) return;
+      if (canResumeThenSend({ machine: active.machine, canResume: canResumeHere, prompt })) {
+        await api.continueLocal(active);
+      }
+      await api.send(active, prompt);
+    }, retry ? retryAfterModelSwitchToast() : undefined);
+  }, [active, activeSummary?.cwd, activeSummary?.last_event?.text, canResumeHere, sessionView.model, sessionView.rows, withBusy]);
   const setThinking = useCallback((level: string) => active && withBusy(() => api.rpc(active, { type: 'set_thinking_level', level })), [active, withBusy]);
   const compact = useCallback(() => active && withBusy(() => api.rpc(active, { type: 'compact' }), '压缩请求已发出'), [active, withBusy]);
   const abortTurn = useCallback(() => {
