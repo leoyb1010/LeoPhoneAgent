@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.1.48',
+    date: '2026-09-21',
+    items: [
+      '窗口在每个桌面都在。',
+    ],
+  },
+  {
     version: '2.1.47',
     date: '2026-09-21',
     items: [

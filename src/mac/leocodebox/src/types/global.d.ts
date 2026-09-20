@@ -18,6 +18,8 @@ declare global {
       setGlobalHotkey?: (on: boolean) => Promise<{ on?: boolean }>;
       getAlwaysOnTop?: () => Promise<{ on?: boolean }>;
       setAlwaysOnTop?: (on: boolean) => Promise<{ on?: boolean }>;
+      getVisibleOnAllWorkspaces?: () => Promise<{ on?: boolean }>;
+      setVisibleOnAllWorkspaces?: (on: boolean) => Promise<{ on?: boolean }>;
       getContentProtection?: () => Promise<{ on?: boolean }>;
       setContentProtection?: (on: boolean) => Promise<{ on?: boolean }>;
       playDoneSound?: () => Promise<{ ok?: boolean }>;

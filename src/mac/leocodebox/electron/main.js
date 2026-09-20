@@ -59,6 +59,19 @@ function setAlwaysOnTop(on) {
   return getAlwaysOnTop();
 }
 
+function getVisibleOnAllWorkspaces() {
+  const win = desktopWindow?.getMainWindow();
+  return { on: Boolean(win && !win.isDestroyed() && win.isVisibleOnAllWorkspaces()) };
+}
+
+function setVisibleOnAllWorkspaces(on) {
+  const win = desktopWindow?.getMainWindow();
+  if (win && !win.isDestroyed()) {
+    win.setVisibleOnAllWorkspaces(Boolean(on), { visibleOnFullScreen: true });
+  }
+  return getVisibleOnAllWorkspaces();
+}
+
 let contentProtectionOn = false;
 
 function getContentProtection() {
@@ -727,6 +740,9 @@ function registerIpcHandlers() {
   ));
   trustedHandle('leocodebox-desktop:always-on-top', async (_event, raw) => (
     raw === undefined || raw === null ? getAlwaysOnTop() : setAlwaysOnTop(Boolean(raw))
+  ));
+  trustedHandle('leocodebox-desktop:all-spaces', async (_event, raw) => (
+    raw === undefined || raw === null ? getVisibleOnAllWorkspaces() : setVisibleOnAllWorkspaces(Boolean(raw))
   ));
   trustedHandle('leocodebox-desktop:content-protection', async (_event, raw) => (
     raw === undefined || raw === null ? getContentProtection() : setContentProtection(Boolean(raw))

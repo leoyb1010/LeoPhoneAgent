@@ -107,6 +107,8 @@ if (isLocalHttpOrigin(window.location)) {
     setGlobalHotkey: (on) => ipcRenderer.invoke('leocodebox-desktop:global-hotkey', on),
     getAlwaysOnTop: () => ipcRenderer.invoke('leocodebox-desktop:always-on-top'),
     setAlwaysOnTop: (on) => ipcRenderer.invoke('leocodebox-desktop:always-on-top', on),
+    getVisibleOnAllWorkspaces: () => ipcRenderer.invoke('leocodebox-desktop:all-spaces'),
+    setVisibleOnAllWorkspaces: (on) => ipcRenderer.invoke('leocodebox-desktop:all-spaces', on),
     getContentProtection: () => ipcRenderer.invoke('leocodebox-desktop:content-protection'),
     setContentProtection: (on) => ipcRenderer.invoke('leocodebox-desktop:content-protection', on),
     playDoneSound: () => ipcRenderer.invoke('leocodebox-desktop:play-done-sound'),
