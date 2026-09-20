@@ -125,6 +125,8 @@ export const api = {
     sendJson<{ remote: string; branch: string }>(`${sessionBase(target)}/push`, {}),
   switchLocalBranch: (target: SessionTarget, name?: string) =>
     sendJson<{ branch: string; created: boolean }>(`${sessionBase(target)}/branch`, { name }),
+  initLocalRepo: (target: SessionTarget) =>
+    sendJson<{ root: string; created: boolean; branch: string }>(`${sessionBase(target)}/init`, {}),
   pullLocalRepo: (target: SessionTarget) =>
     sendJson<{ remote: string; branch: string; changed: boolean }>(`${sessionBase(target)}/pull`, {}),
   diffLocalFile: (target: SessionTarget, file: string) =>

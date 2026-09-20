@@ -17,6 +17,7 @@ import { writeSessionExport } from './session-export.js';
 import { revertSessionFile } from './session-revert.js';
 import { applySessionPatch } from './session-apply.js';
 import { switchSessionBranch } from './session-branch.js';
+import { initSessionRepo } from './session-init.js';
 import { packSessionChanges } from './session-pack.js';
 import { unpackSessionZip } from './session-unpack.js';
 import { seedSessionFile } from './session-seed.js';
@@ -637,6 +638,16 @@ router.post('/leophone/local/sessions/:sessionId/branch', async (req, res) => {
   if (!session) return;
   try {
     res.json(await switchSessionBranch(session.cwd, String(((req.body ?? {}) as Record<string, unknown>).name ?? '')));
+  } catch (error) {
+    jsonError(res, 409, error instanceof Error ? error.message : String(error));
+  }
+});
+
+router.post('/leophone/local/sessions/:sessionId/init', async (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  try {
+    res.json(await initSessionRepo(session.cwd));
   } catch (error) {
     jsonError(res, 409, error instanceof Error ? error.message : String(error));
   }

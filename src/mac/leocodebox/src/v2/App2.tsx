@@ -24,6 +24,7 @@ import { denySessionToast } from './session-deny';
 import { canMentionLastTool, lastToolOutput, mentionLastTool, mentionLastToolToast } from './session-mention-tool';
 import { applyPatchToast, canApplySessionPatch, clipApplyPatch } from './session-apply';
 import { canSwitchSessionBranch, sanitizeBranchName, switchSessionBranchToast } from './session-branch';
+import { canInitSessionRepo, initSessionToast } from './session-init';
 import { canPackSessionChanges, packFileName, packSessionToast } from './session-pack';
 import { canUnpackSessionZip, unpackSessionToast, unpackZipName } from './session-unpack';
 import { canSeedSessionFile, clipSeedText, sanitizeSeedRel, seedSessionToast } from './session-seed';
@@ -298,6 +299,7 @@ export default function App2() {
   const canDuplicateHere = canDuplicateSessionFile(active?.machine, focusFile);
   const canMkdirHere = canMkdirSessionFolder(active?.machine);
   const canBranchHere = canSwitchSessionBranch(active?.machine);
+  const canInitHere = canInitSessionRepo(active?.machine);
   const canMoveHere = canMoveSessionFile(active?.machine, focusFile);
   const canHaltBusy = canHaltBusySessions(allSessions);
   const canForgetEnded = canForgetEndedSessions(allSessions, pinnedKeys);
@@ -1011,6 +1013,17 @@ export default function App2() {
       toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
     }
   }, [active, branchName, canBranchHere, toast]);
+  const initRepo = useCallback(async () => {
+    if (!active || !canInitHere) return;
+    try {
+      const result = await api.initLocalRepo(active);
+      toast(initSessionToast(result.created, result.branch));
+      setPeekTick((tick) => tick + 1);
+      setDrawer((cur) => cur ?? 'diff');
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+    }
+  }, [active, canInitHere, toast]);
   const moveFile = useCallback(async (file = focusFile) => {
     if (!active || !canMoveSessionFile(active.machine, file)) {
       toast('先点开一份文件', true);
@@ -1339,6 +1352,7 @@ export default function App2() {
     ...(canSeedHere ? [{ v: 'seed', t: '建一个文件', sub: seedName.trim() || '剪贴板有字就写进去' }] : []),
     ...(canMkdirHere ? [{ v: 'mkdir', t: '建一个文件夹', sub: folderName.trim() || '写在这个会话目录里' }] : []),
     ...(canBranchHere ? [{ v: 'branch', t: '开这条分支', sub: sanitizeBranchName(branchName) }] : []),
+    ...(canInitHere ? [{ v: 'init', t: '做成仓库', sub: 'git init' }] : []),
     ...(canMoveHere ? [{ v: 'move', t: '挪进这个文件夹', sub: moveDest.trim() || '空的就是挪回目录根上' }] : []),
     ...(canMentionLast ? [{ v: 'lastreply', t: '带上上一句', sub: lastReply.slice(0, 40) }] : []),
     ...(canCopyLast ? [{ v: 'copyreply', t: '复制刚说的', sub: lastReply.slice(0, 40) }] : []),
@@ -1391,6 +1405,7 @@ export default function App2() {
     else if (v === 'seed') void seedFile();
     else if (v === 'mkdir') void mkdirFolder();
     else if (v === 'branch') void switchBranch();
+    else if (v === 'init') void initRepo();
     else if (v === 'move') void moveFile();
     else if (v === 'trash') void trashFile();
     else if (v === 'duplicate') void duplicateFile();
@@ -1526,6 +1541,7 @@ export default function App2() {
     ...(canSeedHere ? [{ g: '这条会话', t: '建一个文件', k: '新建', run: () => void seedFile() }] : []),
     ...(canMkdirHere ? [{ g: '这条会话', t: '建一个文件夹', k: folderName.trim() || '新建', run: () => void mkdirFolder() }] : []),
     ...(canBranchHere ? [{ g: '这条会话', t: '开这条分支', k: sanitizeBranchName(branchName), run: () => void switchBranch() }] : []),
+    ...(canInitHere ? [{ g: '这条会话', t: '做成仓库', k: 'init', run: () => void initRepo() }] : []),
     ...(canMoveHere ? [{ g: '这条会话', t: '挪进这个文件夹', k: moveDest.trim() || focusFile || '', run: () => void moveFile() }] : []),
     ...(canMentionLast ? [{ g: '这条会话', t: '带上上一句', k: lastReply.slice(0, 40), run: mentionLast }] : []),
     ...(canCopyLast ? [{ g: '这条会话', t: '复制刚说的', k: lastReply.slice(0, 40), run: () => void copyLastReply() }] : []),
@@ -1539,7 +1555,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -2052,6 +2068,7 @@ export default function App2() {
                     <button className="btn-s" type="submit">开这条分支</button>
                   </form>
                 ) : null}
+                {canInitHere ? <div className="local-files-commit"><button className="btn-s" type="button" onClick={() => { void initRepo(); }}>做成仓库</button></div> : null}
                 {canPushHere ? <div className="local-files-commit"><button className="btn-s" type="button" onClick={() => { void pushRepo(); }}>推到远端</button></div> : null}
                 {canPullHere ? <div className="local-files-commit"><button className="btn-s" type="button" onClick={() => { void pullRepo(); }}>拉回远端</button></div> : null}
                 {canApplyHere ? <div className="local-files-commit"><button className="btn-s" type="button" onClick={() => { void applyPatch(); }}>贴上补丁</button></div> : null}
@@ -2107,6 +2124,7 @@ export default function App2() {
                     <button className="btn-s" type="submit">开这条分支</button>
                   </form>
                 ) : null}
+                {canInitHere ? <div className="local-files-search"><button className="btn-s" type="button" onClick={() => { void initRepo(); }}>做成仓库</button></div> : null}
                 {canMoveHere ? (
                   <form className="local-files-search" onSubmit={(e) => { e.preventDefault(); void moveFile(); }}>
                     <input
