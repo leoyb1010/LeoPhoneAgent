@@ -104,6 +104,7 @@ import { canInitSessionRepo, initSessionToast } from './session-init';
 import { canMergeSessionBranch, mergeSessionToast } from './session-merge';
 import { isMissingSessionCwd, missingCwdToast } from './session-missing';
 import { canPackSessionChanges, packFileName, packSessionToast } from './session-pack';
+import { lastFinishedEdit, peekReloadedToast, shouldReloadPeek } from './session-peek-sync';
 import { canUnpackSessionZip, unpackSessionToast, unpackZipName } from './session-unpack';
 import { canSeedSessionFile, clipSeedText, sanitizeSeedRel, seedSessionToast } from './session-seed';
 import { canTrashSessionFile, trashSessionToast } from './session-trash';
@@ -298,6 +299,8 @@ export default function App2() {
   const compactPrev = useRef<Map<string, string>>(new Map());
   const compactPrimed = useRef(false);
   const autoCompacted = useRef(new Set<string>());
+  const peekSyncSession = useRef('');
+  const peekSyncSeen = useRef('');
   const icloudWarned = useRef(new Set<string>());
   const missingWarned = useRef(new Set<string>());
   const [menu, setMenu] = useState<MenuState>(null);
@@ -885,6 +888,26 @@ export default function App2() {
     });
     return () => { cancelled = true; };
   }, [drawer, active, workspace?.projectId, workspace?.fullPath, focusFile, focusCommit, activeSummary?.cwd, peekTick]);
+
+  const finishedEdit = lastFinishedEdit(sessionView.rows);
+  useEffect(() => {
+    const sessionKey = active ? `${active.machine}:${active.id}` : '';
+    if (peekSyncSession.current !== sessionKey) {
+      peekSyncSession.current = sessionKey;
+      peekSyncSeen.current = finishedEdit?.key ?? '';
+      return;
+    }
+    const seen = finishedEdit?.key ?? '';
+    if (peekSyncSeen.current === seen) return;
+    const dirty = filePeekDraft != null && filePeekDraft !== filePeek;
+    if (!shouldReloadPeek({ machine: active?.machine, focusFile, dirty, written: finishedEdit?.file })) {
+      peekSyncSeen.current = seen;
+      return;
+    }
+    peekSyncSeen.current = seen;
+    setPeekTick((tick) => tick + 1);
+    toast(peekReloadedToast(finishedEdit?.file));
+  }, [active, finishedEdit?.file, finishedEdit?.key, focusFile, filePeek, filePeekDraft, toast]);
 
   useEffect(() => {
     if (drawer !== 'diff' || !active || !canShowSessionLog(active.machine)) {
