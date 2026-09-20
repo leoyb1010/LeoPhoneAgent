@@ -20,6 +20,7 @@ import { canMentionLastReply, lastAiReply, mentionLastReply, mentionLastReplyToa
 import { canCopyLastReply, copyLastReplyToast } from './session-copy-reply';
 import { canRetryLastUser, lastUserPrompt, retryLastUserToast } from './session-retry';
 import { canEditLastPrompt, editLastPromptDraft, editLastPromptToast } from './session-edit-prompt';
+import { denySessionToast } from './session-deny';
 import { canMentionLastTool, lastToolOutput, mentionLastTool, mentionLastToolToast } from './session-mention-tool';
 import { applyPatchToast, canApplySessionPatch, clipApplyPatch } from './session-apply';
 import { canPackSessionChanges, packFileName, packSessionToast } from './session-pack';
@@ -1197,10 +1198,10 @@ export default function App2() {
       toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
     }
   }, [canRecallHere, recallForgotten, toast]);
-  const approveTarget = useCallback((target: SessionTarget, approvalId: string, choice: string) => (
-    withBusy(() => api.approve(target, approvalId, choice), approvalToast(choice))
+  const approveTarget = useCallback((target: SessionTarget, approvalId: string, choice: string, reason?: string) => (
+    withBusy(() => api.approve(target, approvalId, choice, reason), choice === 'deny' ? denySessionToast(reason ?? '') : approvalToast(choice))
   ), [withBusy]);
-  const approve = useCallback((approvalId: string, choice: string) => active && approveTarget(active, approvalId, choice), [active, approveTarget]);
+  const approve = useCallback((approvalId: string, choice: string, reason?: string) => active && approveTarget(active, approvalId, choice, reason), [active, approveTarget]);
   useEffect(() => onSessionNoticeAction((target) => {
     void approveTarget(target, target.approvalId, target.choice);
   }), [approveTarget]);

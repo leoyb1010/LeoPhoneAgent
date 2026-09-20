@@ -704,7 +704,8 @@ router.post('/leophone/local/sessions/:sessionId/approval', async (req, res) => 
     jsonError(res, 400, `Invalid choice; expected one of: ${allowed.join(', ')}`);
     return;
   }
-  const delivered = await session.respondToApproval(choice, approvalId);
+  const reason = typeof body.reason === 'string' ? body.reason : '';
+  const delivered = await session.respondToApproval(choice, approvalId, reason);
   if (!delivered) {
     jsonError(res, 502, 'Approval could not be delivered');
     return;

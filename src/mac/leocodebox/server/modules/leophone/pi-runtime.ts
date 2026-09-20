@@ -202,6 +202,32 @@ export function writePolicy(sessionId: string, policy: ApprovalPolicy, allow?: s
   fs.writeFileSync(policyFilePath(sessionId), JSON.stringify(next), { mode: 0o600 });
 }
 
+export const DENY_REASON_MAX = 200;
+
+export function clipDenyReason(text: string, limit = DENY_REASON_MAX): string {
+  return String(text ?? '').replace(/\u0000/g, '').replace(/\s+/g, ' ').trim().slice(0, limit);
+}
+
+export function denyReasonPath(policyFile: string): string {
+  return `${policyFile}.deny`;
+}
+
+export function writeDenyReasonAt(policyFile: string, reason: string): string {
+  const dest = denyReasonPath(policyFile);
+  const text = clipDenyReason(reason);
+  if (!text) {
+    try { fs.unlinkSync(dest); } catch { /* none */ }
+    return '';
+  }
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.writeFileSync(dest, text, { mode: 0o600 });
+  return dest;
+}
+
+export function writeDenyReason(sessionId: string, reason: string): string {
+  return writeDenyReasonAt(policyFilePath(sessionId), reason);
+}
+
 // -- 凭据(pi-ai auth.json 格式) ----------------------------------------------
 
 type AuthEntry = { type: 'api_key'; key: string } | { type: 'oauth'; [k: string]: unknown };
@@ -320,7 +346,17 @@ export default function (pi) {
       return;
     }
     if (choice === "once") return;
-    return { block: true, reason: choice === "deny" ? "用户拒绝了这条操作" : "审批未完成(超时或取消),这条操作没有执行" };
+    let why = "用户拒绝了这条操作";
+    if (choice === "deny") {
+      try {
+        const extra = fs.readFileSync(file + ".deny", "utf8").replace(/\u0000/g, "").replace(/\s+/g, " ").trim();
+        if (extra) why = extra.slice(0, 200);
+      } catch {}
+      try { fs.unlinkSync(file + ".deny"); } catch {}
+    } else {
+      why = "审批未完成(超时或取消),这条操作没有执行";
+    }
+    return { block: true, reason: why };
   });
 }
 `;

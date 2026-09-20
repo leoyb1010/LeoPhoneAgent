@@ -26,7 +26,7 @@ import {
 import { HarnessJournal, type JournalHealth, type JournalOptions } from './harness-journal.js';
 import { HARNESSES, resolveExecutable, type HarnessLaunchContext, type HarnessModel, type HarnessSpec } from './harness-specs.js';
 import { LEOAGENT_HOME } from './leoagent-home.js';
-import { findPiSessionFile, hasAnyPiAuth, normalizePolicy, piSessionResumable, writePolicy, type ApprovalPolicy } from './pi-runtime.js';
+import { clipDenyReason, findPiSessionFile, hasAnyPiAuth, normalizePolicy, piSessionResumable, writeDenyReason, writePolicy, type ApprovalPolicy } from './pi-runtime.js';
 import { applyOutgoingRules, readCwdRuleSidecar, writeCwdRuleSidecar } from './session-cwd-rule.js';
 import { readRuleSidecar, writeRuleSidecar } from './session-rule.js';
 import { clipSessionTitle, readTitleSidecar, writeTitleSidecar } from './session-title.js';
@@ -506,7 +506,7 @@ export class HarnessSession {
    * stdin 才返回 true;其余情况保持 pending——为一个没送到的答案报成功,
    * 会让客户端显示"已解决"而 CLI 永远阻塞。
    */
-  async respondToApproval(choice: string, approvalId?: string | null): Promise<boolean> {
+  async respondToApproval(choice: string, approvalId?: string | null, reason?: string): Promise<boolean> {
     let resolvedId = approvalId ?? null;
     let pending: HarnessEvent | undefined;
     if (resolvedId) {
@@ -517,12 +517,14 @@ export class HarnessSession {
       pending = first[1];
     }
     if (!pending || !this.isLive || !this.proc || !this.proc.stdin || this.proc.stdin.destroyed) return false;
-    const payload = this.dialect.approvalPayload(pending, choice);
+    const why = choice === 'deny' ? clipDenyReason(reason ?? '') : '';
+    if (choice === 'deny') writeDenyReason(this.sessionId, why);
+    const payload = this.dialect.approvalPayload(pending, choice, why);
     // 铸造的 id 客户端可寻址,但路由不回 CLI;假装可以只会清掉卡片而让
     // CLI 干等(approvalPayload 对缺 request_id 的 pending 返回 null)。
     if (payload == null) return false;
     this.writeFrames([payload]);
-    this.emit({ event: EVENT_APPROVAL_RESPONDED, choice, approval_id: resolvedId });
+    this.emit({ event: EVENT_APPROVAL_RESPONDED, choice, approval_id: resolvedId, ...(why ? { reason: why } : {}) });
     return true;
   }
 

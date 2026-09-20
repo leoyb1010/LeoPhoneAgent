@@ -203,6 +203,7 @@
 .leo2 .frow-ap .fl{color:var(--need-text);font-weight:600}
 .leo2 .frow-ap .cmd{display:block;background:var(--mono);padding:8px 10px;border-radius:8px;margin:8px 0 10px;white-space:pre-wrap;word-break:break-all;color:var(--fg)}
 .leo2 .ap-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.leo2 .ap-why{display:block;width:100%;margin-top:8px;box-sizing:border-box;background:transparent;border:1px solid var(--line);border-radius:6px;padding:6px 8px}
 .leo2 .ap-meta{margin-top:8px;font-size:11px;color:var(--fg3);line-height:1.6}
 .leo2 .ap-meta b{color:var(--fg2);font-weight:500}
 .leo2 .btn-p{background:var(--need);color:var(--need-ink);font-weight:600;height:28px;padding:0 12px;border-radius:8px;display:inline-flex;align-items:center}

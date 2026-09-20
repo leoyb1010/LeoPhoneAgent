@@ -338,7 +338,7 @@ router.post('/leophone/approvals/respond', async (req, res) => {
     res.status(409).json({ error: { message: 'relay not configured' } });
     return;
   }
-  const { machine, session_id: sessionId, approval_id: approvalId, choice } = req.body ?? {};
+  const { machine, session_id: sessionId, approval_id: approvalId, choice, reason } = req.body ?? {};
   if (![machine, sessionId, approvalId, choice].every((value) => typeof value === 'string' && value.length > 0 && value.length <= 512)) {
     res.status(400).json({ error: { message: 'machine/session_id/approval_id/choice required' } });
     return;
@@ -368,7 +368,7 @@ router.post('/leophone/approvals/respond', async (req, res) => {
     const result = await relayPost(
       `/m/${encodeURIComponent(machine)}/harness/sessions/${encodeURIComponent(sessionId)}/approval`,
       target,
-      { approval_id: approvalId, choice },
+      { approval_id: approvalId, choice, ...(typeof reason === 'string' && reason.trim() ? { reason } : {}) },
     );
     snapshotCache = null;
     res.json({ ok: true, result });

@@ -409,7 +409,8 @@ export function applyEvent(view: SessionView, event: HarnessEvent): SessionView 
       const approvalId = str(event.approval_id);
       const choice = str(event.choice);
       pendingApprovals.delete(approvalId);
-      const label = choice === 'deny' ? '已拒绝' : choice === 'session' || choice === 'always' ? '已批准,本会话内相同范围不再询问' : '已批准一次';
+      const why = str(event.reason).trim();
+      const label = choice === 'deny' ? (why ? `已拒绝:${why}` : '已拒绝') : choice === 'session' || choice === 'always' ? '已批准,本会话内相同范围不再询问' : '已批准一次';
       rows = rows.map((row) => (row.k === 'ap' && row.approvalId === approvalId
         ? { k: 'sys', key: row.key, text: `${label} · ${row.command.split('\n')[0]}`, tone: 'muted' }
         : row));

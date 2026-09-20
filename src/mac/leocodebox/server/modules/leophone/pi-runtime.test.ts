@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import {
   EVENT_APPROVAL_REQUEST,
@@ -8,7 +13,7 @@ import {
   EVENT_TOOL_STARTED,
   PiRpcDialect,
 } from './harness-dialects.js';
-import { normalizePolicy } from './pi-runtime.js';
+import { clipDenyReason, normalizePolicy, writeDenyReasonAt } from './pi-runtime.js';
 
 // 2.0 内核的协议契约:pi RPC 的 extension_ui_request 必须变成一张各端都能
 // 回答的审批卡,答复必须按 pi 真实协议回去(select → value,confirm → confirmed)。
@@ -121,4 +126,21 @@ test('审批策略的五种叫法统一成四种,认不出来回落到 default',
   assert.equal(normalizePolicy('跳过审批'), 'auto');
   assert.equal(normalizePolicy('whatever'), 'default');
   assert.equal(normalizePolicy(undefined), 'default');
+});
+
+test('拒绝的为什么会写到策略旁边，extension 会去读', () => {
+  const src = readFileSync(fileURLToPath(new URL('./pi-runtime.ts', import.meta.url)), 'utf8');
+  assert.match(src, /file \+ "\.deny"/);
+  assert.equal(clipDenyReason('  不要删  '), '不要删');
+});
+
+test('拒绝理由落盘，空的会清掉', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'leo-deny-'));
+  const policy = path.join(dir, 'hs_1.json');
+  await fs.writeFile(policy, '{}');
+  const dest = writeDenyReasonAt(policy, '不要删，改挪走');
+  assert.equal(await fs.readFile(dest, 'utf8'), '不要删，改挪走');
+  assert.equal(writeDenyReasonAt(policy, '  '), '');
+  await assert.rejects(() => fs.readFile(dest, 'utf8'));
+  await fs.rm(dir, { recursive: true, force: true });
 });

@@ -59,7 +59,7 @@ export interface HarnessDialect {
    * 审批答复 → CLI 自己方言的帧;null 表示无法送达(缺 request_id 等),
    * 调用方必须保持审批 pending 而不是假装已解决。
    */
-  approvalPayload(pending: JsonObject, choice: string): unknown | null;
+  approvalPayload(pending: JsonObject, choice: string, reason?: string): unknown | null;
 }
 
 function asObject(value: unknown): JsonObject {
@@ -164,7 +164,7 @@ export class ClaudeStreamJsonDialect implements HarnessDialect {
     };
   }
 
-  approvalPayload(pending: JsonObject, choice: string): unknown | null {
+  approvalPayload(pending: JsonObject, choice: string, reason?: string): unknown | null {
     const requestId = pending.request_id;
     if (requestId == null) return null;
     const allowed = choiceAllowed(choice);
@@ -172,7 +172,8 @@ export class ClaudeStreamJsonDialect implements HarnessDialect {
     // 形状会被 CLI 静默忽略——审批永远落不了地。
     const inner: JsonObject = { behavior: allowed ? 'allow' : 'deny' };
     if (!allowed) {
-      inner.message = 'denied by operator';
+      const why = String(reason ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+      inner.message = why || 'denied by operator';
     } else if (choice === 'always') {
       const suggestions = asObject(pending.raw).permission_suggestions;
       if (suggestions) inner.updatedPermissions = suggestions;
@@ -291,7 +292,7 @@ export class PiRpcDialect implements HarnessDialect {
     return { frames: [{ id: crypto.randomUUID(), type: 'prompt', message: text }] };
   }
 
-  approvalPayload(pending: JsonObject, choice: string): unknown | null {
+  approvalPayload(pending: JsonObject, choice: string, _reason?: string): unknown | null {
     const requestId = pending.request_id;
     if (requestId == null) return null;
     if (pending.method === 'confirm') {
@@ -470,7 +471,7 @@ export class CodexAppServerDialect implements HarnessDialect {
     return { queued: true };
   }
 
-  approvalPayload(pending: JsonObject, choice: string): unknown | null {
+  approvalPayload(pending: JsonObject, choice: string, _reason?: string): unknown | null {
     const requestId = pending.request_id;
     if (requestId == null) return null;
     const decisions: Record<string, string> = { once: 'accept', always: 'acceptForSession', deny: 'decline' };
@@ -601,7 +602,7 @@ export class GrokAcpDialect implements HarnessDialect {
     return { queued: true };
   }
 
-  approvalPayload(pending: JsonObject, choice: string): unknown | null {
+  approvalPayload(pending: JsonObject, choice: string, _reason?: string): unknown | null {
     const requestId = pending.request_id;
     if (requestId == null) return null;
     // 选项 id 由 CLI 提供(kind: allow_once/allow_always/reject_once…),

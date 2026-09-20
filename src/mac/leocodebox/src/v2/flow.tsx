@@ -29,7 +29,7 @@ export function Row({ row, model, query, onApprove, onDiff }: {
   row: FlowRow;
   model: string | null;
   query?: string;
-  onApprove: (id: string, choice: string) => unknown;
+  onApprove: (id: string, choice: string, reason?: string) => unknown;
   onDiff: () => void;
 }) {
   const [open, setOpen] = useState(row.k === 'think' ? false : undefined);
@@ -61,23 +61,34 @@ export function Row({ row, model, query, onApprove, onDiff }: {
         <div className="tool-line"><button className="tool-line" onClick={onDiff} style={{ gap: 10 }}><code><FindBits text={row.file} query={query} /></code>{row.running ? <span className="tool-meta run">进行中</span> : <span className={`tool-meta ${row.error ? 'err' : ''}`}>{row.error ? '失败' : '已改'}</span>}</button></div>
       </div></div>
     );
-    case 'ap': return (
-      <div className={`frow frow-ap${live}`}><div className="fl">需要确认</div><div className="fc">
-        <p><FindBits text={`${row.title || `要在 ${row.host || '这台机器'} 上执行`}${row.tool ? ` · ${row.tool}` : ''}`} query={query} /></p>
-        <code className="cmd"><FindBits text={row.command} query={query} /></code>
-        <div className="ap-actions">
-          {row.choices.includes('once') && <button className="btn-p" onClick={() => onApprove(row.approvalId, 'once')}>批准一次<kbd>⌘↩</kbd></button>}
-          {row.choices.includes('session') && <button className="btn" onClick={() => onApprove(row.approvalId, 'session')}>本会话允许</button>}
-          {row.choices.includes('always') && <button className="btn" onClick={() => onApprove(row.approvalId, 'always')}>总是允许</button>}
-          {row.choices.filter((c) => !['once', 'session', 'always', 'deny'].includes(c)).map((c) => <button key={c} className="btn" onClick={() => onApprove(row.approvalId, c)}>{c}</button>)}
-          {row.choices.includes('deny') && <button className="btn-g" onClick={() => onApprove(row.approvalId, 'deny')}>拒绝<kbd>Esc</kbd></button>}
-        </div>
-        <div className="ap-meta"><b>绑定:</b>{row.host || '本机'} + 这条完整命令,改一个字都要重新批准 · <b>同一张卡</b>已推到手机,任一端处理即可{row.cwd ? ` · ${row.cwd}` : ''}</div>
-      </div></div>
-    );
+    case 'ap': return <ApprovalRow row={row} query={query} live={live} onApprove={onApprove} />;
     case 'sys': return <div className="frow"><div className="fl" /><div className={`fc sys ${row.tone === 'remote' ? 'remote' : row.tone === 'error' ? 'error' : ''}`}><FindBits text={row.text} query={query} /></div></div>;
     default: return null;
   }
+}
+
+function ApprovalRow({ row, query, live, onApprove }: {
+  row: FlowRow & { k: 'ap' };
+  query?: string;
+  live: string;
+  onApprove: (id: string, choice: string, reason?: string) => unknown;
+}) {
+  const [why, setWhy] = useState('');
+  return (
+    <div className={`frow frow-ap${live}`}><div className="fl">需要确认</div><div className="fc">
+      <p><FindBits text={`${row.title || `要在 ${row.host || '这台机器'} 上执行`}${row.tool ? ` · ${row.tool}` : ''}`} query={query} /></p>
+      <code className="cmd"><FindBits text={row.command} query={query} /></code>
+      <div className="ap-actions">
+        {row.choices.includes('once') && <button className="btn-p" onClick={() => onApprove(row.approvalId, 'once')}>批准一次<kbd>⌘↩</kbd></button>}
+        {row.choices.includes('session') && <button className="btn" onClick={() => onApprove(row.approvalId, 'session')}>本会话允许</button>}
+        {row.choices.includes('always') && <button className="btn" onClick={() => onApprove(row.approvalId, 'always')}>总是允许</button>}
+        {row.choices.filter((c) => !['once', 'session', 'always', 'deny'].includes(c)).map((c) => <button key={c} className="btn" onClick={() => onApprove(row.approvalId, c)}>{c}</button>)}
+        {row.choices.includes('deny') && <button className="btn-g" onClick={() => onApprove(row.approvalId, 'deny', why)}>拒绝<kbd>Esc</kbd></button>}
+      </div>
+      {row.choices.includes('deny') ? <input className="ap-why" value={why} placeholder="拒绝的话，可以写为什么" onChange={(e) => setWhy(e.target.value)} /> : null}
+      <div className="ap-meta"><b>绑定:</b>{row.host || '本机'} + 这条完整命令,改一个字都要重新批准 · <b>同一张卡</b>已推到手机,任一端处理即可{row.cwd ? ` · ${row.cwd}` : ''}</div>
+    </div></div>
+  );
 }
 
 export type ModelChoice = { provider: string; providerName: string; id: string; name: string; reasoning?: boolean; contextWindow?: number | null };

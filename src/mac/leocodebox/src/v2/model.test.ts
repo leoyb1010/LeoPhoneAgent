@@ -27,6 +27,14 @@ test('同一 seq 再来一次不会把用户行画两遍', () => {
   assert.equal(again.rows, first.rows);
 });
 
+test('拒绝带上为什么会写进流水', () => {
+  const asked = applyEvent(emptyView(), { event: 'approval.request', approval_id: 'a1', command: 'rm build', choices: ['once', 'deny'] });
+  const denied = applyEvent(asked, { event: 'approval.responded', approval_id: 'a1', choice: 'deny', reason: '不要删，改挪走' });
+  assert.equal(denied.pendingApprovals.size, 0);
+  assert.equal(denied.rows[0]?.k, 'sys');
+  if (denied.rows[0]?.k === 'sys') assert.match(denied.rows[0].text, /不要删，改挪走/);
+});
+
 test('审批 Map 按事件拷贝,不会改写上一帧', () => {
   const first = applyEvent(emptyView(), { event: 'approval.request', approval_id: 'a1', command: 'ls', choices: ['once', 'deny'] });
   const second = applyEvent(first, { event: 'approval.request', approval_id: 'a2', command: 'rm', choices: ['once', 'deny'] });

@@ -224,7 +224,8 @@ router.post('/harness/sessions/:sessionId/approval', requireHarnessKey, async (r
     jsonError(res, 400, `Invalid choice; expected one of: ${allowed.join(', ')}`);
     return;
   }
-  const delivered = await session.respondToApproval(choice, approvalId);
+  const reason = typeof body.reason === 'string' ? body.reason : '';
+  const delivered = await session.respondToApproval(choice, approvalId, reason);
   if (!delivered) {
     // CLI 还在等的时候,客户端的卡片绝不能清掉。
     jsonError(res, 502, 'Approval could not be delivered to the CLI');
