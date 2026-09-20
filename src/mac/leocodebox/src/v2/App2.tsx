@@ -21,6 +21,7 @@ import { desktopLogsTools, openDesktopLogs } from './desktop-applogs';
 import { desktopRelaunchTools, relaunchDesktop } from './desktop-relaunch';
 import { clearDesktopCache, desktopCacheTools } from './desktop-cache';
 import { desktopCliTools, readCliInstall, writeCliInstall } from './desktop-cli';
+import { readLastAbrupt } from './desktop-crash';
 import { desktopExtraTools, openDesktopExtraWindow } from './desktop-extra';
 import { desktopLockTools, onAppLockChanged, readAppLock, writeAppLock } from './desktop-lock';
 import { desktopUpdater, runDesktopUpdate } from './desktop-update';
@@ -40,6 +41,7 @@ import { saveCwdHabit } from './session-cwd-habit';
 import { canMentionLastReply, lastAiReply, mentionLastReply, mentionLastReplyToast } from './session-reply';
 import { canCopyLastReply, copyLastReplyToast } from './session-copy-reply';
 import { canCopyTalk, copyTalkToast } from './session-copy-talk';
+import { lastAbruptToast } from './session-crash';
 import { canPrintTalk, clipPrintText, printTalkToast } from './session-print';
 import { canHideSecrets, hideSecretsToast } from './session-hide';
 import { canSetGlobalHotkey, globalHotkeyLabel, globalHotkeyToast } from './session-hotkey';
@@ -342,6 +344,11 @@ export default function App2() {
       window.removeEventListener('offline', goOff);
       window.removeEventListener('online', goOn);
     };
+  }, [toast]);
+  useEffect(() => {
+    void readLastAbrupt().then((hit) => {
+      if (hit) toast(lastAbruptToast(), true);
+    });
   }, [toast]);
   const warnIcloud = useCallback((cwd?: string | null) => {
     const path = String(cwd ?? '').trim();

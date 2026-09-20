@@ -1,7 +1,7 @@
 import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, Notification, powerMonitor, powerSaveBlocker, safeStorage, session, shell, systemPreferences, webContents } from 'electron';
 import updaterPackage from 'electron-updater';
 import { randomBytes } from 'node:crypto';
-import { constants as fsConstants, mkdirSync } from 'node:fs';
+import { constants as fsConstants, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFile, spawn } from 'node:child_process';
 import { access, chmod, copyFile, mkdir, readFile, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -16,6 +16,7 @@ import { DesktopNotificationsController } from './desktopNotifications.js';
 import { CLI_MARK, cliBinPaths, cliShimBody, cwdFromArgv, localBinDir, pathHasLocalBin, withLocalBinOnPath } from './cli-install.js';
 import { cwdStillThere } from './cwd-missing.js';
 import { dockMenuLabels } from './dock-menu.js';
+import { LAST_RUN_FILE, cleanLastRun, dirtyLastRun, lastRunWasAbrupt, parseLastRun } from './last-crash.js';
 import { resolveLeoSchemeCwd } from './leo-scheme.js';
 import { expandDesktopFolderPath, isDesktopFolderAllowed } from './local-folder.js';
 import { LocalServerController } from './localServer.js';
@@ -244,6 +245,7 @@ function moveToApplicationsFolder() {
 
 async function relaunchApp() {
   isQuitting = true;
+  finishLastRun();
   desktopNotifications?.stop();
   try {
     if (localServer && !localServer.getSettings().keepLocalServerRunning) {
@@ -370,7 +372,39 @@ let localServer = null;
 let desktopNotifications = null;
 let desktopUpdater = null;
 let isQuitting = false;
+let pendingAbrupt = false;
 let productVersion = null;
+
+function lastRunPath() {
+  return path.join(app.getPath('userData'), LAST_RUN_FILE);
+}
+
+function beginLastRun() {
+  try {
+    pendingAbrupt = lastRunWasAbrupt(parseLastRun(JSON.parse(readFileSync(lastRunPath(), 'utf8'))));
+  } catch {
+    pendingAbrupt = false;
+  }
+  try {
+    writeFileSync(lastRunPath(), `${JSON.stringify(dirtyLastRun())}\n`);
+  } catch {
+    pendingAbrupt = false;
+  }
+}
+
+function finishLastRun() {
+  try {
+    writeFileSync(lastRunPath(), `${JSON.stringify(cleanLastRun())}\n`);
+  } catch {
+    // 干净退出戳写不上也不拦退出。
+  }
+}
+
+function consumeLastAbrupt() {
+  const hit = pendingAbrupt;
+  pendingAbrupt = false;
+  return { abrupt: hit };
+}
 
 function getAppRoot() {
   return app.isPackaged ? app.getAppPath() : path.resolve(__dirname, '..');
@@ -970,6 +1004,7 @@ function registerIpcHandlers() {
   trustedHandle('leocodebox-desktop:switch-tab', async (_event, tabId) => desktopWindow.switchDesktopTab(tabId));
   trustedHandle('leocodebox-desktop:close-tab', async (_event, tabId) => desktopWindow.closeDesktopTab(tabId));
   trustedHandle('leocodebox-desktop:update-setting', async (_event, key, value) => updateDesktopSetting(key, value));
+  trustedHandle('leocodebox-desktop:last-crash', async () => consumeLastAbrupt());
   trustedHandle('leocodebox-desktop:cwd-exists', async (_event, raw) => ({
     exists: cwdStillThere(raw),
   }));
@@ -1152,6 +1187,7 @@ function registerAppEvents() {
         busyQuitAsking = false;
         if (response !== 1) return;
         isQuitting = true;
+        finishLastRun();
         desktopNotifications?.stop();
         if (localServer && !localServer.getSettings().keepLocalServerRunning) {
           void localServer.stopLocalServer().finally(() => app.quit());
@@ -1165,6 +1201,7 @@ function registerAppEvents() {
       return;
     }
     isQuitting = true;
+    finishLastRun();
     desktopNotifications?.stop();
     if (!localServer) return;
 
@@ -1358,6 +1395,7 @@ async function bootstrap() {
   process.title = APP_NAME;
 
   await app.whenReady();
+  beginLastRun();
   app.setName(APP_NAME);
   app.setAboutPanelOptions({
     applicationName: APP_NAME,

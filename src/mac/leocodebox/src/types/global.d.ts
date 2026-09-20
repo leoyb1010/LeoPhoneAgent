@@ -35,6 +35,7 @@ declare global {
       onAppLockChanged?: (callback: (row: { on?: boolean }) => void) => () => void;
       getCliInstall?: () => Promise<{ on?: boolean }>;
       setCliInstall?: (on: boolean) => Promise<{ on?: boolean }>;
+      lastAbrupt?: () => Promise<{ abrupt?: boolean }>;
       cwdExists?: (target: string) => Promise<{ exists?: boolean }>;
       pickFolder?: () => Promise<{ path?: string; cancelled?: boolean }>;
       revealPath?: (target: string) => Promise<{ path: string }>;

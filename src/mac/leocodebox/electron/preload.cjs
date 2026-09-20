@@ -128,6 +128,7 @@ if (isLocalHttpOrigin(window.location)) {
     },
     getCliInstall: () => ipcRenderer.invoke('leocodebox-desktop:cli-install'),
     setCliInstall: (on) => ipcRenderer.invoke('leocodebox-desktop:cli-install', on),
+    lastAbrupt: () => ipcRenderer.invoke('leocodebox-desktop:last-crash'),
     cwdExists: (target) => ipcRenderer.invoke('leocodebox-desktop:cwd-exists', target),
     pickFolder: () => ipcRenderer.invoke('leocodebox-desktop:pick-folder'),
     revealPath: (target) => ipcRenderer.invoke('leocodebox-desktop:reveal-path', target),
