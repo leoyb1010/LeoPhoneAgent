@@ -103,6 +103,8 @@ if (isLocalHttpOrigin(window.location)) {
     keepAwake: (on) => ipcRenderer.invoke('leocodebox-desktop:keep-awake', on),
     getOpenAtLogin: () => ipcRenderer.invoke('leocodebox-desktop:open-at-login'),
     setOpenAtLogin: (on) => ipcRenderer.invoke('leocodebox-desktop:open-at-login', on),
+    getGlobalHotkey: () => ipcRenderer.invoke('leocodebox-desktop:global-hotkey'),
+    setGlobalHotkey: (on) => ipcRenderer.invoke('leocodebox-desktop:global-hotkey', on),
     getAlwaysOnTop: () => ipcRenderer.invoke('leocodebox-desktop:always-on-top'),
     setAlwaysOnTop: (on) => ipcRenderer.invoke('leocodebox-desktop:always-on-top', on),
     getContentProtection: () => ipcRenderer.invoke('leocodebox-desktop:content-protection'),

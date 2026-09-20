@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.1.44',
+    date: '2026-09-21',
+    items: [
+      '能用快捷键唤出窗口。',
+    ],
+  },
+  {
     version: '2.1.43',
     date: '2026-09-21',
     items: [

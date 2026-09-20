@@ -48,6 +48,8 @@ test('装机壳把选目录和揭示接到工作台', () => {
   assert.match(preload, /keepAwake/);
   assert.match(preload, /getOpenAtLogin/);
   assert.match(preload, /setOpenAtLogin/);
+  assert.match(preload, /getGlobalHotkey/);
+  assert.match(preload, /setGlobalHotkey/);
   assert.match(preload, /getAlwaysOnTop/);
   assert.match(preload, /setAlwaysOnTop/);
   assert.match(preload, /getContentProtection/);

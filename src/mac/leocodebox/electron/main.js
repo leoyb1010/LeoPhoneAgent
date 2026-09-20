@@ -572,6 +572,26 @@ function applyGlobalHotkey() {
   return false;
 }
 
+function getGlobalHotkey() {
+  return { on: Boolean(localServer?.getSettings()?.globalHotkeyEnabled) };
+}
+
+async function setGlobalHotkey(on) {
+  await localServer.updateDesktopSetting('globalHotkeyEnabled', Boolean(on));
+  syncDesktopState();
+  if (!on) {
+    applyGlobalHotkey();
+    return { on: false };
+  }
+  const ok = applyGlobalHotkey();
+  if (!ok) {
+    await localServer.updateDesktopSetting('globalHotkeyEnabled', false);
+    syncDesktopState();
+    throw new Error('快捷键被占用');
+  }
+  return { on: true };
+}
+
 async function updateDesktopSetting(key, value) {
   const result = await localServer.updateDesktopSetting(key, value);
   syncDesktopState();
@@ -684,6 +704,9 @@ function registerIpcHandlers() {
   trustedHandle('leocodebox-desktop:keep-awake', async (_event, raw) => setKeepAwake(Boolean(raw)));
   trustedHandle('leocodebox-desktop:open-at-login', async (_event, raw) => (
     raw === undefined || raw === null ? getOpenAtLogin() : setOpenAtLogin(Boolean(raw))
+  ));
+  trustedHandle('leocodebox-desktop:global-hotkey', async (_event, raw) => (
+    raw === undefined || raw === null ? getGlobalHotkey() : setGlobalHotkey(Boolean(raw))
   ));
   trustedHandle('leocodebox-desktop:always-on-top', async (_event, raw) => (
     raw === undefined || raw === null ? getAlwaysOnTop() : setAlwaysOnTop(Boolean(raw))

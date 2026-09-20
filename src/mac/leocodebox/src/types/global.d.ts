@@ -14,6 +14,8 @@ declare global {
       keepAwake?: (on: boolean) => Promise<{ on?: boolean; blockers?: number }>;
       getOpenAtLogin?: () => Promise<{ on?: boolean }>;
       setOpenAtLogin?: (on: boolean) => Promise<{ on?: boolean }>;
+      getGlobalHotkey?: () => Promise<{ on?: boolean }>;
+      setGlobalHotkey?: (on: boolean) => Promise<{ on?: boolean }>;
       getAlwaysOnTop?: () => Promise<{ on?: boolean }>;
       setAlwaysOnTop?: (on: boolean) => Promise<{ on?: boolean }>;
       getContentProtection?: () => Promise<{ on?: boolean }>;
