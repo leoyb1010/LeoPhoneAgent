@@ -18,6 +18,7 @@ import { canMentionLastReply, lastAiReply, mentionLastReply, mentionLastReplyToa
 import { canRetryLastUser, lastUserPrompt, retryLastUserToast } from './session-retry';
 import { applyPatchToast, canApplySessionPatch, clipApplyPatch } from './session-apply';
 import { canPackSessionChanges, packFileName, packSessionToast } from './session-pack';
+import { canSeedSessionFile, clipSeedText, sanitizeSeedRel, seedSessionToast } from './session-seed';
 import { PINNED_SESSIONS_KEY, comparePinnedFirst, pinSessionToast, readPinnedSessionKeys, sessionIsPinned, togglePinnedSessionKey } from './session-pin';
 import { canSearchSession, searchQueryReady, searchSessionToast, type SessionSearchHit } from './session-search';
 import { canShowSessionLog, type SessionCommit } from './session-log';
@@ -168,6 +169,7 @@ export default function App2() {
   });
   const pinnedSet = useMemo(() => new Set(pinnedKeys), [pinnedKeys]);
   const [wsQuery, setWsQuery] = useState('');
+  const [seedName, setSeedName] = useState('');
   const [wsHits, setWsHits] = useState<SessionSearchHit[]>([]);
   const [wsTruncated, setWsTruncated] = useState(false);
   const wsSearchRef = useRef<HTMLInputElement | null>(null);
@@ -234,7 +236,7 @@ export default function App2() {
   const canDrive = Boolean(activeSummary && sessionCanDrive(activeSummary.status, sessionView.status));
   const canFollowUp = Boolean(active && composerCanFollowUp(active.machine, sessionView.status));
   const queuedFollowUps = pendingFollowUps(sessionView.rows);
-  useEffect(() => { setCommitDraft(null); setTitleEditing(false); setTitleDraft(null); }, [active?.machine, active?.id]);
+  useEffect(() => { setCommitDraft(null); setTitleEditing(false); setTitleDraft(null); setSeedName(''); }, [active?.machine, active?.id]);
   const pinFiles = useMemo(
     () => mergeFilePins(
       sessionView.rows.filter((row): row is FlowRow & { k: 'edit' } => row.k === 'edit'),
@@ -251,6 +253,7 @@ export default function App2() {
   const canRetryLast = canRetryLastUser({ canDrive, running: composerShowsSteer(sessionView.status), rows: sessionView.rows });
   const canApplyHere = canApplySessionPatch(active?.machine);
   const canPackHere = canPackSessionChanges(active?.machine);
+  const canSeedHere = canSeedSessionFile(active?.machine);
   const findHits = useMemo(() => flowFindHitKeys(sessionView.rows, flowFind.query), [sessionView.rows, flowFind.query]);
   const findIndex = findHits.length ? Math.min(Math.max(flowFind.index, 0), findHits.length - 1) : -1;
   const findKey = findIndex >= 0 ? findHits[findIndex] : null;
@@ -818,6 +821,22 @@ export default function App2() {
       toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
     }
   }, [active, activeSummary?.title, canPackHere, pinFiles, sessionView.title, toast]);
+  const seedFile = useCallback(async () => {
+    if (!active || !canSeedHere) return;
+    try {
+      let text = '';
+      try { text = clipSeedText(await navigator.clipboard.readText()); } catch { text = ''; }
+      const result = await api.seedLocalFile(active, { name: sanitizeSeedRel(seedName), text });
+      toast(seedSessionToast(result.file));
+      setSeedName('');
+      setPeekTick((tick) => tick + 1);
+      setFocusCommit(null);
+      setFocusFile(result.file);
+      setDrawer((cur) => cur ?? 'files');
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+    }
+  }, [active, canSeedHere, seedName, toast]);
   const beginRename = useCallback(() => {
     if (!canRenameSession(active?.machine)) return;
     setTitleDraft(sessionView.title || activeSummary?.title || '');
@@ -1027,6 +1046,7 @@ export default function App2() {
     ...(canShowSessionLog(active?.machine) ? [{ v: 'log', t: '最近提交', sub: activeSummary?.cwd || '会话目录' }] : []),
     ...(canApplyHere ? [{ v: 'apply', t: '贴上补丁', sub: '剪贴板里的 unified diff' }] : []),
     ...(canPackHere ? [{ v: 'pack', t: '带走这次改动', sub: '打成一份 zip' }] : []),
+    ...(canSeedHere ? [{ v: 'seed', t: '建一个文件', sub: seedName.trim() || '剪贴板有字就写进去' }] : []),
     ...(canMentionLast ? [{ v: 'lastreply', t: '带上上一句', sub: lastReply.slice(0, 40) }] : []),
     ...(canRetryLast ? [{ v: 'retrylast', t: '再发上一句', sub: lastPrompt.slice(0, 40) }] : []),
     ...(activeSummary?.cwd?.trim() ? [{ v: 'cwd', t: '复制目录', sub: activeSummary.cwd }] : []),
@@ -1061,6 +1081,7 @@ export default function App2() {
     else if (v === 'log') openLog();
     else if (v === 'apply') void applyPatch();
     else if (v === 'pack') void packChanges();
+    else if (v === 'seed') void seedFile();
     else if (v === 'lastreply') mentionLast();
     else if (v === 'retrylast') void retryLast();
     else if (v === 'cwd') void copyCwd();
@@ -1173,6 +1194,7 @@ export default function App2() {
     ...(canShowSessionLog(active?.machine) ? [{ g: '这条会话', t: '最近提交', k: activeSummary?.cwd || '', run: openLog }] : []),
     ...(canApplyHere ? [{ g: '这条会话', t: '贴上补丁', k: '剪贴板', run: () => void applyPatch() }] : []),
     ...(canPackHere ? [{ g: '这条会话', t: '带走这次改动', k: 'zip', run: () => void packChanges() }] : []),
+    ...(canSeedHere ? [{ g: '这条会话', t: '建一个文件', k: '新建', run: () => void seedFile() }] : []),
     ...(canMentionLast ? [{ g: '这条会话', t: '带上上一句', k: lastReply.slice(0, 40), run: mentionLast }] : []),
     ...(canRetryLast ? [{ g: '这条会话', t: '再发上一句', k: lastPrompt.slice(0, 40), run: () => void retryLast() }] : []),
     { g: '这条会话', t: '放入文件', k: '拖到输入框', run: () => void pickIntoSession() },
@@ -1182,7 +1204,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, commitFiles, canCommitHere, commitDraft, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, mentionLast, canMentionLast, lastReply, retryLast, canRetryLast, lastPrompt, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, commitFiles, canCommitHere, commitDraft, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, retryLast, canRetryLast, lastPrompt, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -1663,6 +1685,17 @@ export default function App2() {
                   />
                   <button className="btn-s" type="submit" disabled={!searchQueryReady(wsQuery)}>搜</button>
                 </form>
+                {canSeedHere ? (
+                  <form className="local-files-search" onSubmit={(e) => { e.preventDefault(); void seedFile(); }}>
+                    <input
+                      value={seedName}
+                      onChange={(e) => setSeedName(e.target.value)}
+                      placeholder="新文件名，比如 notes/idea.md"
+                      aria-label="新文件名"
+                    />
+                    <button className="btn-s" type="submit">建这个文件</button>
+                  </form>
+                ) : null}
                 {wsHits.length > 0 || wsTruncated ? (
                   <ul className="remote-files">
                     {wsHits.map((hit) => (

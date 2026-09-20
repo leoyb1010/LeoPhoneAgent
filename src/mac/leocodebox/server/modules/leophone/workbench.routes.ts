@@ -17,6 +17,7 @@ import { writeSessionExport } from './session-export.js';
 import { revertSessionFile } from './session-revert.js';
 import { applySessionPatch } from './session-apply.js';
 import { packSessionChanges } from './session-pack.js';
+import { seedSessionFile } from './session-seed.js';
 import { listSessionCommits, showSessionCommit } from './session-log.js';
 import { searchSessionCwd } from './session-search.js';
 import { ensureSessionWorkspace } from './session-workspace.js';
@@ -423,6 +424,17 @@ router.post('/leophone/local/sessions/:sessionId/file/revert', async (req, res) 
   const file = String(((req.body ?? {}) as Record<string, unknown>).file ?? '').trim();
   try {
     res.json(await revertSessionFile(session.cwd, file));
+  } catch (error) {
+    jsonError(res, 409, error instanceof Error ? error.message : String(error));
+  }
+});
+
+router.post('/leophone/local/sessions/:sessionId/seed', async (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  try {
+    res.json(await seedSessionFile(session.cwd, { name: String(body.name ?? ''), text: String(body.text ?? '') }));
   } catch (error) {
     jsonError(res, 409, error instanceof Error ? error.message : String(error));
   }

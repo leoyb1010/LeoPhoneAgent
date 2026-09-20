@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.0.95',
+    date: '2026-09-20',
+    items: [
+      '会话目录里可以当场建一个文件，剪贴板有字就写进去。',
+    ],
+  },
+  {
     version: '2.0.94',
     date: '2026-09-20',
     items: [
