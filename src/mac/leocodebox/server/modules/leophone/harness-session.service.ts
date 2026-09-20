@@ -28,6 +28,7 @@ import { HARNESSES, resolveExecutable, type HarnessLaunchContext, type HarnessMo
 import { LEOAGENT_HOME } from './leoagent-home.js';
 import { clipDenyReason, findPiSessionFile, hasAnyPiAuth, normalizePolicy, piSessionResumable, writeDenyReason, writePolicy, type ApprovalPolicy } from './pi-runtime.js';
 import { applyOutgoingRules, readCwdRuleSidecar, writeCwdRuleSidecar } from './session-cwd-rule.js';
+import { lastPromptSeq, rewindPiLastUser } from './session-rewind.js';
 import { readRuleSidecar, writeRuleSidecar } from './session-rule.js';
 import { clipSessionTitle, readTitleSidecar, writeTitleSidecar } from './session-title.js';
 
@@ -616,6 +617,36 @@ export class HarnessSession {
     await this.start();
   }
 
+  /**
+   * 拿掉上一轮用户 prompt 及之后的工具/回复。活着的进程先停再按截过的
+   * pi JSONL 拉起来,否则内核脑子里还留着那一轮。
+   */
+  async rewindLastTurn(): Promise<{ prompt: string }> {
+    if (this.spec.key !== 'pi') throw new HarnessRequestError('只有本机 pi 会话能拿掉上一轮');
+    if (this.status === 'starting' || this.status === 'running' || this.status === 'waiting_for_approval') {
+      throw new HarnessRequestError('先停这一轮再拿掉');
+    }
+    const wasLive = this.isLive;
+    if (wasLive) await this.stop();
+    await this.journal.flush();
+    const events: HarnessEvent[] = [];
+    for await (const ev of this.journal.replay(0)) events.push(ev);
+    const found = lastPromptSeq(events);
+    if (!found.seq) throw new HarnessRequestError('没有上一轮');
+    await this.journal.rewindBefore(found.seq);
+    this.seq = this.journal.health().persisted_seq;
+    this.pendingApprovals.clear();
+    this.promptTurns = 0;
+    const file = findPiSessionFile(this.sessionId, this.cwd, this.createdAt);
+    if (file) rewindPiLastUser(file);
+    this.emit({ event: 'session.rewound', text: found.prompt });
+    if (wasLive) {
+      const next = findPiSessionFile(this.sessionId, this.cwd, this.createdAt);
+      if (next) await this.continueWith(next);
+    }
+    return { prompt: found.prompt };
+  }
+
   /** 自己起的名字写进旁路文件,重启左栏还认得;事件流给正在看的端同步。 */
   setTitle(raw: string): string {
     const next = writeTitleSidecar(this.logPath, raw);
@@ -851,6 +882,13 @@ export class HarnessManager {
     if (!file) throw new HarnessRequestError('这条会话没有可续的内核记录。只能在同一目录新开。');
     await session.continueWith(file);
     return session;
+  }
+
+  async rewind(sessionId: string): Promise<{ prompt: string }> {
+    await this.ready();
+    const session = this.sessions.get(sessionId);
+    if (!session) throw new HarnessRequestError('No such session');
+    return session.rewindLastTurn();
   }
 
   get(sessionId: string): HarnessSession | undefined {

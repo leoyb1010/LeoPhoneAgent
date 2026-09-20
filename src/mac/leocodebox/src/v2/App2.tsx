@@ -71,6 +71,7 @@ import { canOpenAccessibility, openAccessibilityLabel, openAccessibilityToast } 
 import { canOpenLogs, openLogsLabel, openLogsToast } from './session-applogs';
 import { canRelaunch, relaunchBusy, relaunchBusyToast, relaunchLabel, relaunchToast } from './session-relaunch';
 import { canResumeThenSend, resumeThenSendLabel, resumeThenSendToast } from './session-resume-send';
+import { canRewindLastTurn, rewindLastTurnLabel, rewindLastTurnToast } from './session-rewind';
 import { canClearCache, clearCacheLabel, clearCacheToast } from './session-cache';
 import { canInstallCli, installCliLabel, installCliToast } from './session-cli';
 import { dockNewToast } from './session-dock';
@@ -530,6 +531,7 @@ export default function App2() {
   const lastPrompt = lastUserPrompt(sessionView.rows);
   const canRetryLast = canRetryLastUser({ canDrive, running: composerShowsSteer(sessionView.status), rows: sessionView.rows });
   const canEditLast = canEditLastPrompt(sessionView.rows);
+  const canRewindHere = canRewindLastTurn({ machine: active?.machine, status: sessionView.status, rows: sessionView.rows });
   const lastTool = lastToolOutput(sessionView.rows);
   const canMentionTool = canMentionLastTool(sessionView.rows);
   const lastWritten = lastWrittenFile(sessionView.rows);
@@ -1590,6 +1592,18 @@ export default function App2() {
     toast(editLastPromptToast());
     window.setTimeout(() => taRef.current?.focus(), 0);
   }, [draft, sessionView.rows, setDraft, toast]);
+  const rewindLast = useCallback(async () => {
+    if (!active || !canRewindHere) {
+      toast('现在不能拿掉上一轮', true);
+      return;
+    }
+    const prompt = lastUserPrompt(sessionView.rows);
+    await withBusy(async () => {
+      const result = await api.rewindLocal(active);
+      setDraft(result.prompt || prompt);
+    }, rewindLastTurnToast());
+    window.setTimeout(() => taRef.current?.focus(), 0);
+  }, [active, canRewindHere, sessionView.rows, setDraft, toast, withBusy]);
   const mentionTool = useCallback(() => {
     const text = lastToolOutput(sessionView.rows);
     if (!text) { toast('还没有刚打出来的', true); return; }
@@ -2311,6 +2325,7 @@ export default function App2() {
     ...(canSpeakLast ? [{ v: 'speaklast', t: '读出刚说的', sub: lastReply.slice(0, 40) }] : []),
     ...(canRetryLast ? [{ v: 'retrylast', t: '再发上一句', sub: lastPrompt.slice(0, 40) }] : []),
     ...(canEditLast ? [{ v: 'editlast', t: '改上一句', sub: lastPrompt.slice(0, 40) }] : []),
+    ...(canRewindHere ? [{ v: 'rewind', t: rewindLastTurnLabel(), sub: lastPrompt.slice(0, 40) }] : []),
     ...(canMentionTool ? [{ v: 'lasttool', t: '带上刚打出来的', sub: lastTool.slice(0, 40) }] : []),
     ...(canOpenWritten ? [{ v: 'lastwrite', t: '打开刚写的', sub: peekFileCaption(lastWritten) }] : []),
     ...(canJumpFail ? [{ v: 'lastfail', t: '看刚失败的', sub: lastFail && lastFail.k === 'edit' ? peekFileCaption(lastFail.file) : lastFail && lastFail.k === 'tool' ? (lastFail.preview || lastFail.tool) : '跳到那一行' }] : []),
@@ -2407,6 +2422,7 @@ export default function App2() {
     else if (v === 'copyreply') void copyLastReply();
     else if (v === 'retrylast') void retryLast();
     else if (v === 'editlast') editLastPrompt();
+    else if (v === 'rewind') void rewindLast();
     else if (v === 'lasttool') mentionTool();
     else if (v === 'lastwrite') openLastWritten();
     else if (v === 'lastfail') jumpLastFail();
@@ -2564,6 +2580,7 @@ export default function App2() {
     ...(canSpeakLast ? [{ g: '这条会话', t: '读出刚说的', k: lastReply.slice(0, 40), run: speakLast }] : []),
     ...(canRetryLast ? [{ g: '这条会话', t: '再发上一句', k: lastPrompt.slice(0, 40), run: () => void retryLast() }] : []),
     ...(canEditLast ? [{ g: '这条会话', t: '改上一句', k: lastPrompt.slice(0, 40), run: editLastPrompt }] : []),
+    ...(canRewindHere ? [{ g: '这条会话', t: rewindLastTurnLabel(), k: lastPrompt.slice(0, 40), run: () => { void rewindLast(); } }] : []),
     ...(canMentionTool ? [{ g: '这条会话', t: '带上刚打出来的', k: lastTool.slice(0, 40), run: mentionTool }] : []),
     ...(canOpenWritten ? [{ g: '这条会话', t: '打开刚写的', k: peekFileCaption(lastWritten), run: openLastWritten }] : []),
     ...(canJumpFail ? [{ g: '这条会话', t: '看刚失败的', k: lastFail && lastFail.k === 'edit' ? peekFileCaption(lastFail.file) : lastFail && lastFail.k === 'tool' ? (lastFail.preview || lastFail.tool) : '跳到那一行', run: jumpLastFail }] : []),
@@ -2592,7 +2609,7 @@ export default function App2() {
     ...(canAppsHere ? [{ g: '本机', t: moveToApplicationsLabel(inApplications), k: inApplications ? '现在在程序文件夹' : '从下载挪进去', run: () => void appsHere() }] : []),
     ...(canCheckUpdateHere ? [{ g: '本机', t: checkUpdateLabel(updateState), k: updateState?.latestVersion ? `现在 ${updateState.latestVersion}` : '看有没有新版本', run: () => void checkUpdateHere() }] : []),
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, approveAllPending, denyAllPending, canApproveAll, canDenyAll, pendingIds, denyIds, setModel, setPolicy, setThinking, compact, stop, abortTurn, canAbortTurnHere, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, themeMode, followSystemHere, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, importTalk, canImportHere, copyTalk, canCopyTalkHere, printTalk, canPrintTalkHere, toggleHideSecrets, canHideHere, hideSecretsOn, toggleOpenAtLogin, canOpenAtLoginHere, openAtLogin, toggleGlobalHotkey, canHotkeyHere, globalHotkey, toggleAlwaysOnTop, canAlwaysOnTopHere, alwaysOnTop, toggleAllSpaces, canAllSpacesHere, allSpaces, toggleContentProtection, canProtectHere, contentProtection, toggleDoneChime, canDoneChimeHere, doneChimeOn, openLogsHere, canOpenLogsHere, openA11yHere, canOpenA11yHere, relaunchHere, canRelaunchHere, extraHere, canExtraHere, emojiHere, canEmojiHere, clearCacheHere, canClearCacheHere, lockHere, canLockHere, appLocked, cliHere, canCliHere, cliInstalled, appsHere, canAppsHere, inApplications, checkUpdateHere, canCheckUpdateHere, updateState, dictateHere, canDictateHere, dictating, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, speakLast, canSpeakLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openLastWritten, canOpenWritten, lastWritten, jumpLastFail, canJumpFail, lastFail, openLastRead, canOpenRead, lastRead, openHere, canHere, herePeers, showPulse, canPulse, pulseLabel, forkHere, canFork, openTalkLink, canLinks, talkLinks, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, approveAllPending, denyAllPending, canApproveAll, canDenyAll, pendingIds, denyIds, setModel, setPolicy, setThinking, compact, stop, abortTurn, canAbortTurnHere, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, themeMode, followSystemHere, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, importTalk, canImportHere, copyTalk, canCopyTalkHere, printTalk, canPrintTalkHere, toggleHideSecrets, canHideHere, hideSecretsOn, toggleOpenAtLogin, canOpenAtLoginHere, openAtLogin, toggleGlobalHotkey, canHotkeyHere, globalHotkey, toggleAlwaysOnTop, canAlwaysOnTopHere, alwaysOnTop, toggleAllSpaces, canAllSpacesHere, allSpaces, toggleContentProtection, canProtectHere, contentProtection, toggleDoneChime, canDoneChimeHere, doneChimeOn, openLogsHere, canOpenLogsHere, openA11yHere, canOpenA11yHere, relaunchHere, canRelaunchHere, extraHere, canExtraHere, emojiHere, canEmojiHere, clearCacheHere, canClearCacheHere, lockHere, canLockHere, appLocked, cliHere, canCliHere, cliInstalled, appsHere, canAppsHere, inApplications, checkUpdateHere, canCheckUpdateHere, updateState, dictateHere, canDictateHere, dictating, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, speakLast, canSpeakLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, rewindLast, canRewindHere, mentionTool, canMentionTool, lastTool, openLastWritten, canOpenWritten, lastWritten, jumpLastFail, canJumpFail, lastFail, openLastRead, canOpenRead, lastRead, openHere, canHere, herePeers, showPulse, canPulse, pulseLabel, forkHere, canFork, openTalkLink, canLinks, talkLinks, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;

@@ -206,6 +206,8 @@ export const api = {
     sendJson<{ query: string; hits: Array<{ session_id: string; text: string }>; truncated: boolean }>('/api/leophone/local/talk', { query }),
   continueLocal: (target: SessionTarget) =>
     sendJson<{ ok: true; session_id: string; session: SessionSummary }>(`${sessionBase(target)}/continue`, {}),
+  rewindLocal: (target: SessionTarget) =>
+    sendJson<{ ok: true; prompt: string }>(`${sessionBase(target)}/rewind`, {}),
   approve: (target: SessionTarget, approvalId: string | null, choice: string, reason?: string) =>
     target.machine === 'local'
       ? sendJson(`${sessionBase(target)}/approval`, { approval_id: approvalId, choice, ...(reason?.trim() ? { reason } : {}) })

@@ -376,4 +376,44 @@ export class HarnessJournal {
     if (this.retryTimer) { clearTimeout(this.retryTimer); this.retryTimer = null; }
     return state;
   }
+
+  /** 丢掉 seq 以及之后的行。下一轮从截断处接着写。 */
+  async rewindBefore(seq: number): Promise<{ kept: number }> {
+    if (!Number.isSafeInteger(seq) || seq <= 0) throw new Error('没有上一轮');
+    await this.flush();
+    await this.initialize();
+    if (this.pending.length) throw new Error('journal still pending');
+    const end = this.committedOffset;
+    let cut = end;
+    for await (const row of journalLines(this.logPath, 0, end)) {
+      const event = eventFromLine(row.line);
+      if (event?.seq && event.seq >= seq) {
+        cut = row.start;
+        break;
+      }
+    }
+    if (cut < end) {
+      const handle = await fsp.open(this.logPath, 'r+');
+      try {
+        await handle.truncate(cut);
+        await handle.sync();
+      } finally { await handle.close(); }
+    }
+    this.latestSeq = 0;
+    this.persistedSeq = 0;
+    this.committedOffset = 0;
+    this.rowCount = 0;
+    this.stride = 128;
+    this.checkpoints = [];
+    this.gaps = [];
+    this.gapsTruncated = false;
+    this.uncertainAfter = null;
+    this.dropped = 0;
+    this.lastError = null;
+    this.initialized = null;
+    this.needsNewline = false;
+    this.repairOffset = null;
+    await this.initialize();
+    return { kept: this.persistedSeq };
+  }
 }

@@ -477,6 +477,22 @@ export function applyEvent(view: SessionView, event: HarnessEvent): SessionView 
       rows = [...closeStreaming(rows), { k: 'sys', key: nextKey(), text: '已停这一轮，会话还在', tone: 'muted' }];
       status = 'idle';
       break;
+    case 'session.rewound': {
+      const prompt = str(event.text).trim();
+      rows = closeStreaming(rows);
+      let cut = -1;
+      for (let i = rows.length - 1; i >= 0; i -= 1) {
+        const row = rows[i];
+        if (row.k !== 'user' || (row.mode ?? 'prompt') !== 'prompt') continue;
+        if (prompt && row.text.trim() !== prompt) continue;
+        cut = i;
+        break;
+      }
+      if (cut >= 0) rows = rows.slice(0, cut);
+      rows = [...rows, { k: 'sys', key: nextKey(), text: '上一轮已拿掉，上一句在输入栏', tone: 'muted' }];
+      if (status === 'running' || status === 'starting' || status === 'waiting_for_approval') status = 'idle';
+      break;
+    }
     case 'session.resumed':
       rows = [...closeStreaming(rows), { k: 'sys', key: nextKey(), text: '这条会话已接着上次的上下文继续。', tone: 'muted' }];
       status = 'starting';
