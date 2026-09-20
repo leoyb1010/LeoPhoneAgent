@@ -5,7 +5,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import type { Project } from '../types/app';
 
 import { api, type FleetOverview, type HarnessEvent, type LocalOverview, type ProviderInfo, type SessionSummary, type SessionTarget } from './api';
-import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerNeedsModelSwitch, composerPlaceholder, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, prettyModelName, providerOf, rankModelsForPicker, readHiddenSessionKeys, relativeTime, sessionCanDrive, sessionCanForget, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, windowBoundLabel, type FlowRow, type Group, type SessionView } from './model';
+import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerNeedsModelSwitch, composerPlaceholder, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, prettyModelName, providerOf, rankModelsForPicker, readHiddenSessionKeys, relativeTime, sessionCanDrive, sessionCanForget, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, windowBoundLabel, WINDOW_KEY_BUTTONS, type FlowRow, type Group, type SessionView } from './model';
 import { usableModelsFromProviders } from './settings-form';
 import { artifactNameFromPath, clipFilePeek, cwdChipLabel, isPeekDrawer, isWorkspaceDrawer, machineChipLabel, peekFileCaption, sessionFilePath, titlebarHomeCopy } from './local-files';
 import { REMOTE_DRAWER_ACTION_LABEL, isRemoteDrawerKind, mergeFilePins, remoteDrawerActions, remoteDrawerCopy } from './remote-drawer';
@@ -1171,6 +1171,22 @@ export default function App2() {
                 写入
               </button>
               <button className="link" type="button" onClick={() => setWindowOp(null)}>关闭</button>
+            </div>
+            <div className="win-keys">
+              {WINDOW_KEY_BUTTONS.map((item) => (
+                <button
+                  key={item.key}
+                  className="btn-s"
+                  type="button"
+                  disabled={!active}
+                  onClick={() => {
+                    if (!active) return;
+                    void api.keyBoundWindow(active, item.key).then((result) => toast(`已按 ${item.label} · ${result.app}`)).catch((error) => toast(humanizeError(error instanceof Error ? error.message : String(error)), true));
+                  }}
+                >
+                  {item.label}
+                </button>
+              ))}
             </div>
           </div>
         </div>

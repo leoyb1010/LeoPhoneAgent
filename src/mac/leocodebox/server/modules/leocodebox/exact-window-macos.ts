@@ -5,7 +5,7 @@ import path from 'node:path';
 import { findAppRoot, getModuleDir } from '../../utils/runtime-paths.js';
 
 import {
-  exactWindows, parseNormalizedClickPoint, parseWindowTypeText, pickWritableWindowField, WINDOW_SNAPSHOT_FRESH_MS, WindowOperationError,
+  exactWindows, parseNormalizedClickPoint, parseWindowNamedKey, parseWindowTypeText, pickWritableWindowField, WINDOW_SNAPSHOT_FRESH_MS, WindowOperationError,
   type ExactWindowDriver, type WindowAction, type WindowActionKind, type WindowActionReceipt,
   type WindowElement, type WindowFailureReason, type WindowObservation, type WindowOperationOptions,
   type WindowPermissions, type WindowRef, type WindowSnapshot,
@@ -259,12 +259,43 @@ export async function typeBoundSessionWindow(
   return { ok: true, app: result.snapshot.ref.app, title: result.snapshot.ref.title, elementId: field.id };
 }
 
+/** 往绑过的窗口打一个具名按键。先提到前面，回车/Esc/方向键走 HID，不靠 AX。 */
+export async function keyBoundSessionWindow(
+  sessionId: string,
+  value: unknown,
+  options?: WindowOperationOptions,
+  store = exactWindows,
+  driver = macWindowDriver,
+  list = listMacWindows,
+): Promise<{ ok: true; app: string; title: string; key: string } | { ok: false; reason: string; message: string }> {
+  const key = parseWindowNamedKey(value);
+  if (!key) return { ok: false, reason: 'invalid-request', message: '只接受回车、Esc、Tab、空格、删除和方向键。' };
+  const raised = await raiseBoundSessionWindow(sessionId, options, store, driver, list);
+  if (!raised.ok) return raised;
+  const current = store.sessionSnapshot(sessionId);
+  if (!current) return { ok: false, reason: 'unknown-snapshot', message: '这个会话还没有绑过窗口。' };
+  let snap = current;
+  if (store.isStale(snap) || !snap.frontmost) {
+    const listed = await list(options);
+    const { pid, windowId } = snap.ref;
+    const match = listed.find((row) => row.pid === pid && row.windowId === windowId);
+    if (!match) return { ok: false, reason: 'window-gone', message: '绑过的窗口已经不在了。' };
+    snap = store.capture(match);
+    store.bindSession(sessionId, snap.snapshotId);
+    if (!snap.frontmost) return { ok: false, reason: 'background-blocked', message: '窗口提到前面之后仍不在前台，不能按键。' };
+  }
+  const result = await store.act(snap.snapshotId, 'key', { name: 'key', key }, driver, options);
+  if (!result.ok) return { ok: false, reason: result.reason, message: result.message };
+  return { ok: true, app: result.snapshot.ref.app, title: result.snapshot.ref.title, key };
+}
+
 export async function exactWindowCapabilities(options?: WindowOperationOptions, driver = macWindowDriver) {
   try {
     const granted = await driver.permissions(options);
     return { available: true, protocolVersion: 1, readiness: 'requires-target-validation', permissions: granted, actions: {
       observe: true, capture: granted.screenCapture, ax: granted.accessibility, menu: granted.accessibility,
       coord: granted.accessibility && granted.screenCapture && granted.postEvents,
+      key: granted.accessibility && granted.postEvents,
     } };
   } catch (error) {
     return { available: false, protocolVersion: 1, reason: error instanceof WindowOperationError ? error.reason : 'helper-unavailable' };

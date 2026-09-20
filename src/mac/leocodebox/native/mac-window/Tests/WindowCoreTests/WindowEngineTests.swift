@@ -175,6 +175,27 @@ final class WindowEngineTests: XCTestCase {
         XCTAssertEqual(invalid.reason, "unsupported-action"); XCTAssertEqual(system.performed, 0)
     }
 
+    func testNamedKeyRequiresPostEventsAndStaysOnTheSameForegroundWindow() async {
+        let system = FixtureSystem()
+        system.granted.postEvents = false
+        let denied = await WindowEngine(system: system).handle(request(WindowAction(name: "key", key: "return"), kind: "key"))
+        XCTAssertEqual(denied.reason, "permission-denied")
+        XCTAssertEqual(system.performed, 0)
+        system.granted.postEvents = true
+        let unknown = await WindowEngine(system: system).handle(request(WindowAction(name: "key", key: "command"), kind: "key"))
+        XCTAssertEqual(unknown.reason, "unsupported-action")
+        XCTAssertEqual(system.performed, 0)
+        system.after.frontmost = false
+        let lost = await WindowEngine(system: system).handle(request(WindowAction(name: "key", key: "return"), kind: "key"))
+        XCTAssertEqual(lost.reason, "verification-failed")
+        XCTAssertEqual(lost.receipt?.attempted, true)
+        system.performed = 0
+        system.after.frontmost = true
+        let posted = await WindowEngine(system: system).handle(request(WindowAction(name: "key", key: "return"), kind: "key"))
+        XCTAssertTrue(posted.ok)
+        XCTAssertEqual(posted.receipt?.verification, "key-posted")
+    }
+
     func testCoordinateOutcomeIsUnknownIfForegroundChangesAfterInput() async {
         let system = FixtureSystem()
         let image = WindowImage(data: "", width: 800, height: 600, scaleX: 1, scaleY: 1, hash: "before-image")

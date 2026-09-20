@@ -202,6 +202,8 @@ test('2.0 壳接上了插话、回车开会话和前台窗口', () => {
   assert.match(app, /raiseBoundWindow/);
   assert.match(app, /clickBoundWindow/);
   assert.match(app, /typeBoundWindow/);
+  assert.match(app, /keyBoundWindow/);
+  assert.match(app, /WINDOW_KEY_BUTTONS/);
   assert.match(app, /点一下提到前面/);
   assert.match(app, /点这个窗口/);
   assert.match(flow, /composerShouldSend/);

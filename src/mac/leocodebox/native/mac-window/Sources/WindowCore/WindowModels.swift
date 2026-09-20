@@ -95,8 +95,10 @@ public struct WindowAction: Codable, Equatable, Sendable {
     public var x: Double?
     public var y: Double?
     public var coordinateSpace: String?
-    public init(name: String, elementId: String? = nil, value: String? = nil, path: [String]? = nil, x: Double? = nil, y: Double? = nil, coordinateSpace: String? = nil) {
-        self.name = name; self.elementId = elementId; self.value = value; self.path = path; self.x = x; self.y = y; self.coordinateSpace = coordinateSpace
+    public var key: String?
+    public static let namedKeys: Set<String> = ["return", "escape", "tab", "space", "up", "down", "left", "right", "delete"]
+    public init(name: String, elementId: String? = nil, value: String? = nil, path: [String]? = nil, x: Double? = nil, y: Double? = nil, coordinateSpace: String? = nil, key: String? = nil) {
+        self.name = name; self.elementId = elementId; self.value = value; self.path = path; self.x = x; self.y = y; self.coordinateSpace = coordinateSpace; self.key = key
     }
     public func supported(kind: String) -> Bool {
         switch (kind, name) {
@@ -106,6 +108,8 @@ public struct WindowAction: Codable, Equatable, Sendable {
         case ("menu", "select"): return path != nil && (2...6).contains(path!.count) && path!.allSatisfy { !$0.isEmpty && $0.count <= 160 }
         case ("coord", "click"):
             return coordinateSpace == "normalized-window" && x != nil && y != nil && x!.isFinite && y!.isFinite && x! > 0 && x! < 1 && y! > 0 && y! < 1
+        case ("key", "key"):
+            return key.map { Self.namedKeys.contains($0) } == true
         default: return false
         }
     }

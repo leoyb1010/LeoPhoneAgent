@@ -53,13 +53,16 @@ export type WindowSnapshot = {
   hash: string;
   observation?: WindowObservation;
 };
-export type WindowActionKind = 'ax' | 'menu' | 'coord';
+export const WINDOW_NAMED_KEYS = ['return', 'escape', 'tab', 'space', 'up', 'down', 'left', 'right', 'delete'] as const;
+export type WindowNamedKey = (typeof WINDOW_NAMED_KEYS)[number];
+export type WindowActionKind = 'ax' | 'menu' | 'coord' | 'key';
 export type WindowAction =
   | { name: 'focus' | 'minimize' }
   | { name: 'press'; elementId: string }
   | { name: 'setValue'; elementId: string; value: string }
   | { name: 'select'; path: string[] }
-  | { name: 'click'; x: number; y: number; coordinateSpace: 'normalized-window' };
+  | { name: 'click'; x: number; y: number; coordinateSpace: 'normalized-window' }
+  | { name: 'key'; key: WindowNamedKey };
 export type WindowActionReceipt = {
   attempted: boolean;
   verified: boolean;
@@ -106,7 +109,13 @@ export function parseWindowAction(kind: string, value: unknown): WindowAction | 
     && typeof action.y === 'number' && Number.isFinite(action.y) && action.y > 0 && action.y < 1) {
     return { name: 'click', x: action.x, y: action.y, coordinateSpace: 'normalized-window' };
   }
+  const namedKey = parseWindowNamedKey(action.key);
+  if (kind === 'key' && action.name === 'key' && namedKey) return { name: 'key', key: namedKey };
   return null;
+}
+
+export function parseWindowNamedKey(value: unknown): WindowNamedKey | null {
+  return typeof value === 'string' && (WINDOW_NAMED_KEYS as readonly string[]).includes(value) ? value as WindowNamedKey : null;
 }
 
 export function parseNormalizedClickPoint(x: unknown, y: unknown): { x: number; y: number } | null {
@@ -202,7 +211,9 @@ export class ExactWindowStore {
     const snap = this.snapshots.get(snapshotId);
     if (!snap) return { ok: false, reason: 'unknown-snapshot', message: '没有这个窗口快照。' };
     if (this.isStale(snap)) return { ok: false, reason: 'snapshot-expired', message: '窗口快照已过期，请先重观察，再执行。' };
-    if (!snap.frontmost && kind === 'coord') return { ok: false, reason: 'background-blocked', message: '坐标动作只允许当前前台窗口。' };
+    if (!snap.frontmost && (kind === 'coord' || kind === 'key')) {
+      return { ok: false, reason: 'background-blocked', message: kind === 'key' ? '按键只允许当前前台窗口。' : '坐标动作只允许当前前台窗口。' };
+    }
     const action = parseWindowAction(kind, value);
     if (!action || !driver) return { ok: false, reason: 'unsupported-action', message: '请提供当前原生窗口支持的明确动作；没有动作不会执行。' };
     try {

@@ -111,4 +111,14 @@ test('2.0 工作台本机新建同样先 202 再异步绑定前台窗口', () =>
   assert.match(source, /window\/click/);
   assert.match(source, /typeBoundSessionWindow/);
   assert.match(source, /window\/type/);
+  assert.match(source, /keyBoundSessionWindow/);
+  assert.match(source, /window\/key/);
+});
+
+test('装机包会带上窗口 helper,否则 /Applications 里点写按都是空的', () => {
+  const prepare = readFileSync('scripts/release/prepare-desktop-app.js', 'utf8');
+  const pack = readFileSync('package.json', 'utf8');
+  assert.match(prepare, /native\/mac-window\/bin\/leo-window-helper/);
+  assert.match(prepare, /native\/mac-window\/bin\/\*\*/);
+  assert.match(pack, /build-window-helper\.mjs/);
 });

@@ -85,6 +85,9 @@ import Foundation
         if action.name == "click" && (!permission.screenCapture || !permission.postEvents) {
             throw WindowFailure("permission-denied", "Coordinate input requires screen capture and event posting permissions.")
         }
+        if action.name == "key" && !permission.postEvents {
+            throw WindowFailure("permission-denied", "Named key input requires event posting permission.")
+        }
     }
     private func verifyIdentity(_ expected: WindowIdentity, _ actual: WindowObservation) throws {
         guard expected.pid == actual.pid, expected.windowId == actual.windowId,
@@ -116,6 +119,9 @@ import Foundation
         if ["press", "select", "click"].contains(action.name) {
             if let previous = before.stateHash, let current = after.stateHash, previous != current { return "observed-ui-change" }
             if let previous = before.image?.hash, let current = after.image?.hash, previous != current { return "observed-image-change" }
+        }
+        if action.name == "key" {
+            return after.frontmost && after.bounds == before.bounds ? "key-posted" : nil
         }
         return nil
     }

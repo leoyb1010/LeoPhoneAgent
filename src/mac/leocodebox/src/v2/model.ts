@@ -106,6 +106,18 @@ export function composerShouldFocus(input: {
 }
 
 /** 点选面里的像素 → 窗口内相对坐标。贴边会收进 (0,1),出框不算。 */
+export const WINDOW_KEY_BUTTONS = [
+  { key: 'return', label: '回车' },
+  { key: 'escape', label: 'Esc' },
+  { key: 'tab', label: 'Tab' },
+  { key: 'space', label: '空格' },
+  { key: 'up', label: '↑' },
+  { key: 'down', label: '↓' },
+  { key: 'left', label: '←' },
+  { key: 'right', label: '→' },
+  { key: 'delete', label: '删除' },
+] as const;
+
 export function clickPointFromElement(clientX: number, clientY: number, rect: { left: number; width: number; top: number; height: number }): { x: number; y: number } | null {
   if (!(rect.width > 0) || !(rect.height > 0)) return null;
   const rawX = (clientX - rect.left) / rect.width;

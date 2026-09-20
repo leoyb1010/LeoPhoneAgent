@@ -1,6 +1,6 @@
 {
   "name": "leocodebox",
-  "version": "2.0.68",
+  "version": "2.0.69",
   "productName": "leocodebox",
   "description": "LeoPhoneAgent Mac workstation for local coding agents",
   "type": "module",
@@ -39,7 +39,7 @@
     "desktop": "electron electron/main.js",
     "desktop:dev": "node scripts/desktop-dev.mjs",
     "browser:runtime:ensure": "node scripts/release/ensure-browser-runtime.mjs",
-    "desktop:stage": "npm run browser:runtime:ensure && node scripts/release/prepare-desktop-app.js",
+    "desktop:stage": "npm run browser:runtime:ensure && node scripts/native/build-window-helper.mjs && node scripts/release/prepare-desktop-app.js",
     "desktop:pack": "npm run build && npm run desktop:stage && electron-builder --projectDir .desktop-build/desktop-app --dir",
     "desktop:dist:mac": "npm run build && npm run desktop:stage && electron-builder --projectDir .desktop-build/desktop-app --mac dir && node scripts/release/build-signed-mac-dmg.js",
     "desktop:dist:mac:signed": "node scripts/release/require-signing-identity.js && npm run verify:release-notes && npm run build && npm run desktop:stage && electron-builder --projectDir .desktop-build/desktop-app --mac dir && node scripts/release/build-signed-mac-dmg.js",

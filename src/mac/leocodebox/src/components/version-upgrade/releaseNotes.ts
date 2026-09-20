@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.0.69',
+    date: '2026-09-20',
+    items: [
+      '本机绑过的窗口可以按回车、Esc 和方向键，装进去的应用里也能真正操作窗口。',
+    ],
+  },
+  {
     version: '2.0.68',
     date: '2026-09-20',
     items: [

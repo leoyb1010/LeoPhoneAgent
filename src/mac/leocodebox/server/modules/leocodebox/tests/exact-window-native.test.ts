@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { clickBoundSessionWindow, createMacWindowDriver, raiseBoundSessionWindow, typeBoundSessionWindow } from '../exact-window-macos.js';
-import { ExactWindowStore, parseNormalizedClickPoint, parseWindowAction, parseWindowTypeText, pickWritableWindowField, type WindowElement, type WindowObservation, type WindowActionReceipt } from '../exact-window.js';
+import { clickBoundSessionWindow, createMacWindowDriver, keyBoundSessionWindow, raiseBoundSessionWindow, typeBoundSessionWindow } from '../exact-window-macos.js';
+import { ExactWindowStore, parseNormalizedClickPoint, parseWindowAction, parseWindowNamedKey, parseWindowTypeText, pickWritableWindowField, type WindowElement, type WindowObservation, type WindowActionReceipt } from '../exact-window.js';
 
 const observation: WindowObservation = {
   app: 'Fixture', pid: 42, windowId: '7', title: 'Fixture window', bounds: '0,0,800,600', frontmost: true,
@@ -22,6 +22,8 @@ test('action parser rejects missing actions, arbitrary kinds/code, bad paths and
   assert.equal(parseNormalizedClickPoint(0, 0.5), null);
   assert.equal(parseNormalizedClickPoint('1', '0.2'), null);
   assert.deepEqual(parseNormalizedClickPoint('0.4', '0.6'), { x: 0.4, y: 0.6 });
+  assert.equal(parseWindowAction('key', { name: 'key', key: 'command' }), null);
+  assert.deepEqual(parseWindowAction('key', { name: 'key', key: 'return' }), { name: 'key', key: 'return' });
 });
 
 test('re-observation uses live native data and retains bindings only for the same window identity', async () => {
@@ -165,6 +167,39 @@ test('typeBoundSessionWindow 先提到前面再写入焦点框,空字不会动�
   if (result.ok) assert.equal(result.elementId, 'field-1');
   assert.deepEqual(names, ['focus', 'setValue']);
   const missing = await typeBoundSessionWindow('hs_none', 'hello', undefined, undefined, store, driver, listed);
+  assert.equal(missing.ok, false);
+  if (!missing.ok) assert.equal(missing.reason, 'unknown-snapshot');
+});
+
+test('keyBoundSessionWindow 先提到前面再打具名键,未知键不会动手', async () => {
+  const store = new ExactWindowStore(() => 10_000, 'test');
+  const captured = store.capture({ ...observation, frontmost: false });
+  store.bindSession('hs_key', captured.snapshotId);
+  const kinds: string[] = [];
+  const driver = createMacWindowDriver(async (request) => {
+    if (request.operation === 'act') {
+      kinds.push(String(request.kind));
+      const action = request.action as { name?: string; key?: string };
+      return {
+        protocolVersion: 1, ok: true, observation: { ...observation, frontmost: true },
+        receipt: { attempted: true, verified: true, verification: action.name === 'key' ? 'key-posted' : 'focused-readback', action: String(action.name), observedAt: 10_000 },
+      };
+    }
+    return { protocolVersion: 1, ok: true, windows: [{ ...observation, frontmost: true }] };
+  });
+  const listed = async () => [{ ...observation, frontmost: true }];
+  assert.equal(parseWindowNamedKey('command'), null);
+  assert.equal(parseWindowNamedKey('return'), 'return');
+  assert.equal(parseWindowAction('key', { name: 'key', key: 'enter' }), null);
+  const bad = await keyBoundSessionWindow('hs_key', 'enter', undefined, store, driver, listed);
+  assert.equal(bad.ok, false);
+  if (!bad.ok) assert.equal(bad.reason, 'invalid-request');
+  assert.deepEqual(kinds, []);
+  const result = await keyBoundSessionWindow('hs_key', 'return', undefined, store, driver, listed);
+  assert.equal(result.ok, true);
+  if (result.ok) assert.equal(result.key, 'return');
+  assert.deepEqual(kinds, ['ax', 'key']);
+  const missing = await keyBoundSessionWindow('hs_none', 'return', undefined, store, driver, listed);
   assert.equal(missing.ok, false);
   if (!missing.ok) assert.equal(missing.reason, 'unknown-snapshot');
 });

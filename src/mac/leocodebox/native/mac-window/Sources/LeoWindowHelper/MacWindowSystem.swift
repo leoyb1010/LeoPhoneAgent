@@ -335,6 +335,21 @@ import WindowCore
         guard AXIsProcessTrusted() else { throw WindowFailure("permission-denied", "Accessibility permission was revoked before input.") }
     }
 
+    private static func keyCode(_ name: String) -> CGKeyCode? {
+        switch name {
+        case "return": return 36
+        case "escape": return 53
+        case "tab": return 48
+        case "space": return 49
+        case "delete": return 51
+        case "left": return 123
+        case "right": return 124
+        case "down": return 125
+        case "up": return 126
+        default: return nil
+        }
+    }
+
     func perform(_ action: WindowAction, on window: WindowObservation, deadline: Double) async throws {
         guard AXIsProcessTrusted() else { throw WindowFailure("permission-denied", "Accessibility permission was revoked.") }
         let current = try selected(window.identity)
@@ -386,6 +401,21 @@ import WindowCore
             guard finalTarget.frontmost, !finalTarget.occluded, finalTarget.onScreen,
                   finalTarget.bounds == window.bounds, finalTarget.scale == window.scale else {
                 throw WindowFailure("window-changed", "The exact foreground target changed before coordinate input.")
+            }
+            try beforeInput(deadline)
+            down.post(tap: .cghidEventTap); up.post(tap: .cghidEventTap)
+        case "key":
+            guard CGPreflightPostEventAccess(), let name = action.key, let code = Self.keyCode(name) else {
+                throw WindowFailure("permission-denied", "Named key input requires event posting permission and an allowed key.")
+            }
+            guard let down = CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: true),
+                  let up = CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: false) else {
+                throw WindowFailure("execution-failed", "The key events could not be created.")
+            }
+            let finalTarget = try selected(window.identity)
+            guard finalTarget.frontmost, !finalTarget.occluded, finalTarget.onScreen,
+                  finalTarget.bounds == window.bounds, finalTarget.scale == window.scale else {
+                throw WindowFailure("window-changed", "The exact foreground target changed before key input.")
             }
             try beforeInput(deadline)
             down.post(tap: .cghidEventTap); up.post(tap: .cghidEventTap)

@@ -216,6 +216,7 @@ function buildDesktopPackageJson(copiedOptionalDependencies) {
         'public/**',
         'dist/**',
         'dist-server/**',
+        'native/mac-window/bin/**',
         'node_modules/**',
         // The Claude Agent SDK ships a ~226MB prebuilt CLI binary per platform,
         // but leocodebox always points the SDK at the user's own `claude`
@@ -266,6 +267,10 @@ await copyRequired('electron');
 await copyRequired('dist');
 await copyRequired('dist-server');
 await copyRequired('public');
+if (process.platform === 'darwin') {
+  await copyRequired('native/mac-window/bin/leo-window-helper');
+  await copyIfExists('native/mac-window/bin/leo-window-helper.sha256');
+}
 
 // public/visuals is a byte-for-byte duplicate of dist/visuals (Vite copies
 // public/* into dist/ at build, and the server serves both). Only brand/ is
