@@ -39,6 +39,8 @@ declare global {
       onDisplayChanged?: (callback: (row: { kind?: string; count?: number }) => void) => () => void;
       getMemory?: () => Promise<{ low?: boolean; can?: boolean }>;
       onMemoryChanged?: (callback: (row: { low?: boolean }) => void) => () => void;
+      getLoad?: () => Promise<{ busy?: boolean; can?: boolean }>;
+      onLoadChanged?: (callback: (row: { busy?: boolean }) => void) => () => void;
       onVolumeChanged?: (callback: (row: { kind?: string; count?: number }) => void) => () => void;
       onNetpathChanged?: (callback: () => void) => () => void;
       getAppLock?: () => Promise<{ on?: boolean }>;

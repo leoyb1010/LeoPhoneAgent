@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { constants as fsConstants, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFile, spawn } from 'node:child_process';
 import { access, chmod, copyFile, mkdir, readFile, rm, stat, unlink, writeFile } from 'node:fs/promises';
-import { homedir, networkInterfaces } from 'node:os';
+import { cpus, homedir, loadavg, networkInterfaces } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
@@ -25,6 +25,7 @@ import { resolveLeoSchemeCwd } from './leo-scheme.js';
 import { expandDesktopFolderPath, isDesktopFolderAllowed } from './local-folder.js';
 import { LocalServerController } from './localServer.js';
 import { disableConflictingLegacyLaunchAgent } from './legacyMigration.js';
+import { loadState } from './load.js';
 import { memoryState } from './memory.js';
 import { netpathShift, netpathState } from './netpath.js';
 import { accessibilityPaneUrls } from './privacy-pane.js';
@@ -158,6 +159,24 @@ function tickMemory() {
   if (memoryPrimed && lastMemory.low !== next.low && next.can) notifyMemory();
   lastMemory = next;
   memoryPrimed = true;
+}
+
+function getLoad() {
+  try { return loadState(loadavg(), cpus().length); } catch { return loadState(null, 0); }
+}
+
+function notifyLoad() {
+  desktopWindow?.sendToActiveView?.('leocodebox-desktop:load-changed', getLoad());
+}
+
+let lastLoad = { load: 0, ncpu: 0, can: false, busy: false };
+let loadPrimed = false;
+
+function tickLoad() {
+  const next = getLoad();
+  if (loadPrimed && lastLoad.busy !== next.busy && next.can) notifyLoad();
+  lastLoad = next;
+  loadPrimed = true;
 }
 
 function notifyIdleBack() {
@@ -1041,6 +1060,7 @@ function registerIpcHandlers() {
   trustedHandle('leocodebox-desktop:idle', async () => idleProbe(powerMonitor));
   trustedHandle('leocodebox-desktop:display', async () => getDisplay());
   trustedHandle('leocodebox-desktop:memory', async () => getMemory());
+  trustedHandle('leocodebox-desktop:load', async () => getLoad());
   trustedHandle('leocodebox-desktop:volume', async () => getVolume());
   trustedHandle('leocodebox-desktop:netpath', async () => getNetpath());
   trustedHandle('leocodebox-desktop:app-lock', async (_event, raw) => (
@@ -1605,6 +1625,9 @@ async function bootstrap() {
   tickMemory();
   const memoryTick = setInterval(tickMemory, 20_000);
   memoryTick.unref?.();
+  tickLoad();
+  const loadTick = setInterval(tickLoad, 20_000);
+  loadTick.unref?.();
   lastVolume = getVolume();
   if (typeof systemPreferences?.subscribeWorkspaceNotification === 'function') {
     systemPreferences.subscribeWorkspaceNotification('NSWorkspaceDidMountNotification', () => tickVolume());
