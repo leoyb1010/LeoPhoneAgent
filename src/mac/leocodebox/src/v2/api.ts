@@ -171,6 +171,7 @@ export const api = {
   menuBoundWindow: (target: SessionTarget, path: string[]) =>
     sendJson<{ ok: true; app: string; title: string; path: string[] }>(`${sessionBase(target)}/window/menu`, { path }),
   forget: (target: SessionTarget) => sendJson(`${sessionBase(target)}/forget`, {}),
+  haltBusyLocal: () => sendJson<{ ids: string[]; count: number }>('/api/leophone/local/halt', {}),
   continueLocal: (target: SessionTarget) =>
     sendJson<{ ok: true; session_id: string; session: SessionSummary }>(`${sessionBase(target)}/continue`, {}),
   approve: (target: SessionTarget, approvalId: string | null, choice: string) =>

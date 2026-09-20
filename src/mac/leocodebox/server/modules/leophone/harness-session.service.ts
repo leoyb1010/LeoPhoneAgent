@@ -823,6 +823,16 @@ export class HarnessManager {
     return { forgotten: dest };
   }
 
+  /** 停掉正在跑或等审批的会话，idle / 终态不动。 */
+  async haltBusy(): Promise<{ ids: string[] }> {
+    await this.ready();
+    const busy = [...this.sessions.values()].filter((session) => (
+      session.status === 'starting' || session.status === 'running' || session.status === 'waiting_for_approval'
+    ));
+    await Promise.allSettled(busy.map((session) => session.stop()));
+    return { ids: busy.map((session) => session.sessionId) };
+  }
+
   /** daemon 退出前收割全部子进程;孤儿 CLI 会永远占着工作目录。 */
   async shutdownAll(): Promise<void> {
     await this.ready();

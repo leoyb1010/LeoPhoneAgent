@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.0.96',
+    date: '2026-09-20',
+    items: [
+      '本机正在跑的会话可以一次停掉，不用一条一条点。',
+    ],
+  },
+  {
     version: '2.0.95',
     date: '2026-09-20',
     items: [
