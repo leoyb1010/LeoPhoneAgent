@@ -205,11 +205,13 @@ export async function clickBoundSessionWindow(
   if (!point) return { ok: false, reason: 'invalid-request', message: '点击位置必须是窗口内的相对坐标（0 到 1 之间，不含边）。' };
   const raised = await raiseBoundSessionWindow(sessionId, options, store, driver, list);
   if (!raised.ok) return raised;
-  let snap = store.sessionSnapshot(sessionId);
-  if (!snap) return { ok: false, reason: 'unknown-snapshot', message: '这个会话还没有绑过窗口。' };
+  const current = store.sessionSnapshot(sessionId);
+  if (!current) return { ok: false, reason: 'unknown-snapshot', message: '这个会话还没有绑过窗口。' };
+  let snap = current;
   if (store.isStale(snap) || !snap.frontmost) {
     const listed = await list(options);
-    const match = listed.find((row) => row.pid === snap.ref.pid && row.windowId === snap.ref.windowId);
+    const { pid, windowId } = snap.ref;
+    const match = listed.find((row) => row.pid === pid && row.windowId === windowId);
     if (!match) return { ok: false, reason: 'window-gone', message: '绑过的窗口已经不在了。' };
     snap = store.capture(match);
     store.bindSession(sessionId, snap.snapshotId);
