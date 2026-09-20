@@ -101,6 +101,7 @@ import { abortTurnLabel, abortTurnToast, canAbortTurn } from './session-abort';
 import { applyPatchToast, canApplySessionPatch, clipApplyPatch } from './session-apply';
 import { approveAllLabel, approveAllToast, canApproveAllHere, pendingApprovalIds } from './session-approve-all';
 import { canApproveOnEnter } from './session-approve-enter';
+import { canQueueAfterApprove, queueAfterApproveToast } from './session-approve-queue';
 import { canMoveToApplications, moveToApplicationsBusy, moveToApplicationsBusyToast, moveToApplicationsLabel, moveToApplicationsToast } from './session-apps';
 import { canSwitchSessionBranch, sanitizeBranchName, switchSessionBranchToast } from './session-branch';
 import { canInitSessionRepo, initSessionToast } from './session-init';
@@ -2245,9 +2246,22 @@ export default function App2() {
     }
     setPicker({ kind: 'link', query: '', index: 0 });
   }, [canLinks, talkLinks, toast]);
-  const approveTarget = useCallback((target: SessionTarget, approvalId: string, choice: string, reason?: string) => (
-    withBusy(() => api.approve(target, approvalId, choice, reason), choice === 'deny' ? denySessionToast(reason ?? '') : approvalToast(choice))
-  ), [withBusy]);
+  const approveTarget = useCallback((target: SessionTarget, approvalId: string, choice: string, reason?: string) => {
+    const text = draft.trim();
+    const queue = canQueueAfterApprove({
+      machine: target.machine,
+      sameSession: Boolean(active && target.machine === active.machine && target.id === active.id),
+      status: sessionView.status,
+      choice,
+      prompt: text,
+    });
+    return withBusy(async () => {
+      await api.approve(target, approvalId, choice, reason);
+      if (!queue) return;
+      setDraft('');
+      await api.rpc(target, { type: 'follow_up', message: text });
+    }, queue ? queueAfterApproveToast() : choice === 'deny' ? denySessionToast(reason ?? '') : approvalToast(choice));
+  }, [active, draft, sessionView.status, setDraft, withBusy]);
   const approve = useCallback((approvalId: string, choice: string, reason?: string) => active && approveTarget(active, approvalId, choice, reason), [active, approveTarget]);
   useEffect(() => onSessionNoticeAction((target) => {
     void approveTarget(target, target.approvalId, target.choice);
@@ -2300,10 +2314,21 @@ export default function App2() {
       toast('还没有一批待批', true);
       return;
     }
+    const text = draft.trim();
+    const queue = canQueueAfterApprove({
+      machine: active.machine,
+      sameSession: true,
+      status: sessionView.status,
+      choice: 'once',
+      prompt: text,
+    });
     await withBusy(async () => {
       for (const id of ids) await api.approve(active, id, 'once');
-    }, approveAllToast(ids.length));
-  }, [active, sessionView.pendingApprovals, toast, withBusy]);
+      if (!queue) return;
+      setDraft('');
+      await api.rpc(active, { type: 'follow_up', message: text });
+    }, queue ? queueAfterApproveToast() : approveAllToast(ids.length));
+  }, [active, draft, sessionView.pendingApprovals, sessionView.status, setDraft, toast, withBusy]);
   const denyAllPending = useCallback(async () => {
     const ids = deniableApprovalIds(sessionView.pendingApprovals.values());
     if (!active || !canDenyAllHere(active.machine, ids)) {
