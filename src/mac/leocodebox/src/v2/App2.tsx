@@ -21,6 +21,7 @@ import { canPackSessionChanges, packFileName, packSessionToast } from './session
 import { canUnpackSessionZip, unpackSessionToast, unpackZipName } from './session-unpack';
 import { canSeedSessionFile, clipSeedText, sanitizeSeedRel, seedSessionToast } from './session-seed';
 import { canHaltBusySessions, haltSessionsToast } from './session-halt';
+import { canForgetEndedSessions, endedLocalSessionIds, forgetEndedToast } from './session-forget';
 import { canPushSessionRepo, pushSessionToast } from './session-push';
 import { canPullSessionRepo, pullSessionToast } from './session-pull';
 import { canSearchSessionTalk, talkQueryReady } from './session-talk';
@@ -262,6 +263,7 @@ export default function App2() {
   const canUnpackHere = canUnpackSessionZip(active?.machine);
   const canSeedHere = canSeedSessionFile(active?.machine);
   const canHaltBusy = canHaltBusySessions(allSessions);
+  const canForgetEnded = canForgetEndedSessions(allSessions, pinnedKeys);
   const canPushHere = canPushSessionRepo(active?.machine);
   const canPullHere = canPullSessionRepo(active?.machine);
   const findHits = useMemo(() => flowFindHitKeys(sessionView.rows, flowFind.query), [sessionView.rows, flowFind.query]);
@@ -993,6 +995,18 @@ export default function App2() {
       toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
     }
   }, [canHaltBusy, refreshLocal, toast]);
+  const forgetEnded = useCallback(async () => {
+    if (!canForgetEnded) return;
+    const ids = endedLocalSessionIds(allSessions, pinnedKeys);
+    try {
+      const result = await api.forgetEndedLocal(ids);
+      for (const id of result.ids) hideSession({ machine: 'local', id });
+      toast(forgetEndedToast(result.count));
+      await refreshLocal();
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+    }
+  }, [allSessions, canForgetEnded, hideSession, pinnedKeys, refreshLocal, toast]);
   const approveTarget = useCallback((target: SessionTarget, approvalId: string, choice: string) => (
     withBusy(() => api.approve(target, approvalId, choice), approvalToast(choice))
   ), [withBusy]);
@@ -1126,6 +1140,7 @@ export default function App2() {
     ...(canDrive ? [] : [{ v: 'continue', t: '在同一目录新开', sub: '新开会话' }]),
     { v: 'compact', t: '压缩这条会话', sub: 'pi compact' }, { v: 'stop', t: '停止', sub: '进程组一起收' },
     ...(canHaltBusy ? [{ v: 'halt', t: '停掉正在跑的', sub: '本机正在跑的全部停掉' }] : []),
+    ...(canForgetEnded ? [{ v: 'forgetended', t: '清掉已经结束的', sub: '钉住的和进行中的不动' }] : []),
     ...(active ? [{ v: 'pin', t: sessionIsPinned(pinnedKeys, active.machine, active.id) ? '取消钉住' : '钉在左栏上面', sub: sessionView.title || activeSummary?.title || '' }] : []),
     ...(activeSummary && sessionCanForget(activeSummary.status) ? [{ v: 'forget', t: '从左栏拿掉', sub: active?.machine === 'local' ? '不再召回' : '只藏在这台 Mac' }] : []),
   ], (v) => {
@@ -1136,6 +1151,7 @@ export default function App2() {
     else if (v === 'winread') readBoundField();
     else if (v === 'stop') void stop();
     else if (v === 'halt') void haltBusy();
+    else if (v === 'forgetended') void forgetEnded();
     else if (v === 'resume') resumeHere();
     else if (v === 'continue') continueHere();
     else if (v === 'finder') void revealCwd();
@@ -1257,6 +1273,7 @@ export default function App2() {
     { g: '这条会话', t: '压缩这条会话', k: 'pi compact', run: () => void compact() },
     { g: '这条会话', t: '停止', k: '', run: () => void stop() },
     ...(canHaltBusy ? [{ g: '本机', t: '停掉正在跑的', k: '全部', run: () => void haltBusy() }] : []),
+    ...(canForgetEnded ? [{ g: '本机', t: '清掉已经结束的', k: '终态', run: () => void forgetEnded() }] : []),
     ...(active ? [{ g: '这条会话', t: sessionIsPinned(pinnedKeys, active.machine, active.id) ? '取消钉住' : '钉在左栏上面', k: '', run: () => togglePin(active) }] : []),
     ...(active && activeSummary && sessionCanForget(activeSummary.status) ? [{ g: '这条会话', t: '从左栏拿掉', k: '', run: () => void forgetSession(active) }] : []),
     { g: '这条会话', t: '用默认程序打开', k: focusFile || '', run: () => void openFocusFile() },
@@ -1281,7 +1298,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, haltBusy, canHaltBusy, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, retryLast, canRetryLast, lastPrompt, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, retryLast, canRetryLast, lastPrompt, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -1659,6 +1676,7 @@ export default function App2() {
                         {canOpenSessionPath(active?.machine, cwd) ? <button className="link" onClick={() => void openCwdTerm()}>在终端打开</button> : null}
                         {cwd ? <button className="link" onClick={() => void copyCwd()}>复制路径</button> : null}
                         {sessionCanForget(activeSummary.status) && active ? <button className="link dim" onClick={() => void forgetSession(active)}>从左栏拿掉</button> : null}
+                        {canForgetEnded ? <button className="link dim" onClick={() => void forgetEnded()}>清掉已经结束的</button> : null}
                       </div>
                     </div>
                   </div>

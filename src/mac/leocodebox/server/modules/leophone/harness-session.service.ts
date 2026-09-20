@@ -827,6 +827,19 @@ export class HarnessManager {
     return { forgotten: dest };
   }
 
+  /** 一次拿掉已经结束的会话。idle / 进行中不动。ids 有值时只收名单里的。 */
+  async forgetEnded(ids?: readonly string[]): Promise<{ ids: string[] }> {
+    await this.ready();
+    const wanted = ids ? new Set(ids.filter(Boolean)) : null;
+    const ended = [...this.sessions.values()].filter((session) => !session.isLive && (!wanted || wanted.has(session.sessionId)));
+    const forgotten: string[] = [];
+    for (const session of ended) {
+      await this.forget(session.sessionId);
+      forgotten.push(session.sessionId);
+    }
+    return { ids: forgotten };
+  }
+
   /** 停掉正在跑或等审批的会话，idle / 终态不动。 */
   async haltBusy(): Promise<{ ids: string[] }> {
     await this.ready();

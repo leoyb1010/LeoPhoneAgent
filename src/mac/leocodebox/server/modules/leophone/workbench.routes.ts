@@ -20,6 +20,7 @@ import { packSessionChanges } from './session-pack.js';
 import { unpackSessionZip } from './session-unpack.js';
 import { seedSessionFile } from './session-seed.js';
 import { haltBusyLocalSessions } from './session-halt.js';
+import { forgetEndedLocalSessions } from './session-forget.js';
 import { pushSessionRepo } from './session-push.js';
 import { pullSessionRepo } from './session-pull.js';
 import { searchLocalTalk } from './session-talk.js';
@@ -182,6 +183,17 @@ router.post('/leophone/local/talk', async (req, res) => {
 router.post('/leophone/local/halt', async (_req, res) => {
   try {
     res.json(await haltBusyLocalSessions());
+  } catch (error) {
+    jsonError(res, 409, error instanceof Error ? error.message : String(error));
+  }
+});
+
+router.post('/leophone/local/forget-ended', async (req, res) => {
+  try {
+    const ids = Array.isArray(((req.body ?? {}) as Record<string, unknown>).ids)
+      ? (((req.body ?? {}) as Record<string, unknown>).ids as unknown[]).map((id) => String(id ?? ''))
+      : undefined;
+    res.json(await forgetEndedLocalSessions(ids));
   } catch (error) {
     jsonError(res, 409, error instanceof Error ? error.message : String(error));
   }

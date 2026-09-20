@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.1.1',
+    date: '2026-09-20',
+    items: [
+      '已经结束的会话可以一次从左栏清掉，钉住的和进行中的不动。',
+    ],
+  },
+  {
     version: '2.1.0',
     date: '2026-09-20',
     items: [
