@@ -102,6 +102,8 @@ export const api = {
   removeCustomProvider: (providerId: string) =>
     sendJson(`/api/leophone/pi/custom-providers/${encodeURIComponent(providerId)}`, {}, 'DELETE'),
 
+  pickLocalFolder: () => sendJson<{ path?: string; cancelled?: boolean }>('/api/leophone/local/folder/pick', {}),
+  revealLocalPath: (target: string) => sendJson<{ ok: true; path: string }>('/api/leophone/local/folder/reveal', { path: target }),
   ensureWorkspace: (cwd: string) =>
     sendJson<{ projectId: string; path: string; fullPath: string; displayName: string }>('/api/leophone/local/workspace', { cwd }),
   readProjectFile: (projectId: string, filePath: string) =>

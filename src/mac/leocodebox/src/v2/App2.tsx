@@ -5,6 +5,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import type { Project } from '../types/app';
 
 import { api, type FleetOverview, type HarnessEvent, type LocalOverview, type ProviderInfo, type SessionSummary, type SessionTarget } from './api';
+import { pickSessionFolder, revealSessionPath } from './desktop-folder';
 import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerNeedsModelSwitch, composerPlaceholder, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, prettyModelName, providerOf, rankModelsForPicker, readHiddenSessionKeys, relativeTime, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, windowBoundLabel, windowPadGesture, WINDOW_KEY_BUTTONS, type FlowRow, type Group, type SessionView } from './model';
 import { usableModelsFromProviders } from './settings-form';
 import { artifactNameFromPath, clipFilePeek, cwdChipLabel, isPeekDrawer, isWorkspaceDrawer, machineChipLabel, peekFileCaption, sessionFilePath, titlebarHomeCopy } from './local-files';
@@ -420,6 +421,30 @@ export default function App2() {
     try { await navigator.clipboard.writeText(path); toast('已复制路径'); }
     catch { toast('复制失败', true); }
   }, [activeSummary, toast]);
+  const revealCwd = useCallback(async () => {
+    const path = activeSummary?.cwd?.trim();
+    if (!path) { toast('这条会话没有目录'); return; }
+    try { await revealSessionPath(path); toast('已在 Finder 打开'); }
+    catch (error) { toast(humanizeError(error instanceof Error ? error.message : String(error)), true); }
+  }, [activeSummary, toast]);
+  const revealFocusFile = useCallback(async () => {
+    const file = focusFile?.trim();
+    const root = activeSummary?.cwd ?? workspace?.fullPath ?? '';
+    const path = file ? sessionFilePath(root, file) : root;
+    if (!path) { toast('没有可打开的文件'); return; }
+    try { await revealSessionPath(path); toast('已在 Finder 显示'); }
+    catch (error) { toast(humanizeError(error instanceof Error ? error.message : String(error)), true); }
+  }, [activeSummary?.cwd, focusFile, toast, workspace?.fullPath]);
+  const pickFolder = useCallback(async () => {
+    try {
+      const next = await pickSessionFolder();
+      if (!next) return null;
+      return next;
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+      return null;
+    }
+  }, [toast]);
   const copyTitle = useCallback(async () => {
     const text = (sessionView.title || activeSummary?.title || '').trim();
     if (!text) { toast('这条会话还没有标题'); return; }
@@ -559,6 +584,7 @@ export default function App2() {
     { v: '', t: '', sep: true },
     ...(active?.machine === 'local' ? [{ v: 'winbind', t: boundWindowChipKind(active.machine, windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window))) === 'raise' ? '换一扇窗' : '绑窗口', sub: windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window)) || '列出本机窗口' }] : []),
     ...(boundWindowChipKind(active?.machine ?? '', windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window))) === 'raise' ? [{ v: 'winclick', t: '操作这个窗口', sub: windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window)) }] : []),
+    ...(activeSummary?.cwd?.trim() && active?.machine === 'local' ? [{ v: 'finder', t: '在 Finder 打开', sub: activeSummary.cwd }] : []),
     ...(activeSummary?.cwd?.trim() ? [{ v: 'cwd', t: '复制目录', sub: activeSummary.cwd }] : []),
     ...((sessionView.title || activeSummary?.title || '').trim() ? [{ v: 'title', t: '复制标题', sub: (sessionView.title || activeSummary?.title || '').trim() }] : []),
     ...(canDrive ? [] : [{ v: 'continue', t: '在同一目录续写', sub: '新开会话' }]),
@@ -569,6 +595,7 @@ export default function App2() {
     else if (v === 'winbind' || v === 'winclick') openWindowOp();
     else if (v === 'stop') void stop();
     else if (v === 'continue') continueHere();
+    else if (v === 'finder') void revealCwd();
     else if (v === 'cwd') void copyCwd();
     else if (v === 'title') void copyTitle();
     else if (v === 'find') { setFlowFind((cur) => ({ ...cur, open: true })); window.setTimeout(() => { flowFindRef.current?.focus(); flowFindRef.current?.select(); }, 0); }
@@ -656,6 +683,7 @@ export default function App2() {
     { g: '这条会话', t: '在同一目录续写', k: '新开会话', run: continueHere },
     { g: '这条会话', t: '复制标题', k: sessionView.title || activeSummary?.title || '', run: () => void copyTitle() },
     { g: '这条会话', t: '复制目录', k: activeSummary?.cwd || '', run: () => void copyCwd() },
+    ...(active?.machine === 'local' && activeSummary?.cwd?.trim() ? [{ g: '这条会话', t: '在 Finder 打开', k: activeSummary.cwd, run: () => void revealCwd() }] : []),
     { g: '这条会话', t: '压缩这条会话', k: 'pi compact', run: () => void compact() },
     { g: '这条会话', t: '停止', k: '', run: () => void stop() },
     ...(active && activeSummary && sessionCanForget(activeSummary.status) ? [{ g: '这条会话', t: '从左栏拿掉', k: '', run: () => void forgetSession(active) }] : []),
@@ -664,7 +692,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, forgetSession, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, copyCwd, copyFindHit, sessionView.title, stepFind]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, forgetSession, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, copyCwd, revealCwd, copyFindHit, sessionView.title, stepFind]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -753,7 +781,10 @@ export default function App2() {
     <div className="local-files-peek-wrap">
       <div className="local-files-peek-head">
         {peekFileCaption(focusFile) ? <b className="local-files-name">{peekFileCaption(focusFile)}</b> : <span />}
-        <button className="link" type="button" onClick={() => { void navigator.clipboard.writeText(filePeek); toast('已复制正文'); }}>复制正文</button>
+        <span className="local-files-peek-acts">
+          {active?.machine === 'local' && (focusFile || cwd) ? <button className="link" type="button" onClick={() => { void revealFocusFile(); }}>在 Finder 显示</button> : null}
+          <button className="link" type="button" onClick={() => { void navigator.clipboard.writeText(filePeek); toast('已复制正文'); }}>复制正文</button>
+        </span>
       </div>
       <pre className="local-files-peek">{filePeek}</pre>
     </div>
@@ -799,7 +830,7 @@ export default function App2() {
               <div className="srow-pill" aria-hidden />
               {newBox?.open && (
                 <NewSessionBox machine={newBox.machine} groups={groups} models={configuredModels} defaultCwd={newBox.cwd || activeSummary?.cwd || local?.home || '~'} initialPrompt={newBox.prompt} initialModel={newBox.model} recentCwds={recentCwds} busy={busy}
-                  onCancel={() => setNewBox(null)} onCreate={(input) => void createSession(input)} onOpenSettings={() => { setNewBox(null); setView('settings'); }} />
+                  onCancel={() => setNewBox(null)} onCreate={(input) => void createSession(input)} onOpenSettings={() => { setNewBox(null); setView('settings'); }} onPickFolder={pickFolder} />
               )}
               {(() => {
                 const visible = groups.map((g) => ({ g, ss: keepActiveSession(g.sessions, (s) => matchesFilter(s) && sessionMatchesQuery(s, railQuery), active?.machine === g.id ? active.id : null).sort((a, b) => (ORDER[a.status] ?? 9) - (ORDER[b.status] ?? 9) || b.updated_at - a.updated_at) })).filter((x) => x.ss.length > 0);
@@ -885,7 +916,7 @@ export default function App2() {
                     <button className="chip" onClick={(e) => { e.stopPropagation(); thinkMenu(); }} disabled={!canDrive}>思考 <b>{THINKING_LABEL[sessionView.thinking] ?? sessionView.thinking}</b><span className="car">▼</span></button>
                     <button className="chip" onClick={(e) => { e.stopPropagation(); policyMenu(); }} disabled={!canDrive}>审批 <b>{POLICY_LABEL[sessionView.policy] ?? sessionView.policy}</b><span className="car">▼</span></button>
                     {cwd ? (
-                      <button className="chip win" title={cwd} onClick={(e) => { e.stopPropagation(); void copyCwd(); }}>{cwdChipLabel(cwd)}</button>
+                      <button className="chip win" title={cwd} onClick={(e) => { e.stopPropagation(); if (active?.machine === 'local') void revealCwd(); else void copyCwd(); }}>{cwdChipLabel(cwd)}</button>
                     ) : null}
                     {boundWindowChipKind(active?.machine ?? '', boundWindowText) === 'raise' ? (
                       <button className="chip win" type="button" title={`${boundWindowText} · 点一下提到前面`} onClick={(e) => { e.stopPropagation(); void api.raiseBoundWindow(active!).then(() => toast('已提到前面')).catch((error) => toast(humanizeError(error instanceof Error ? error.message : String(error)), true)); }}>{boundWindowText}</button>
@@ -990,6 +1021,7 @@ export default function App2() {
                       <div className="composer-end-acts">
                         {needsSettings ? <button className="btn-s" onClick={() => setView('settings')}>去设置</button> : <button className="btn-s" onClick={continueHere}>在同一目录续写</button>}
                         {needsSettings ? <button className="link" onClick={continueHere}>仍要续写</button> : null}
+                        {cwd && active?.machine === 'local' ? <button className="link" onClick={() => void revealCwd()}>在 Finder 打开</button> : null}
                         {cwd ? <button className="link" onClick={() => void copyCwd()}>复制路径</button> : null}
                         {sessionCanForget(activeSummary.status) && active ? <button className="link dim" onClick={() => void forgetSession(active)}>从左栏拿掉</button> : null}
                       </div>

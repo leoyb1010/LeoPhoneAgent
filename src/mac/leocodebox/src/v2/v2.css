@@ -117,6 +117,7 @@
 .leo2 .newbox input,.leo2 .newbox select,.leo2 .newbox textarea{width:100%;background:var(--bg);border:1px solid var(--line2);border-radius:8px;padding:6px 8px;font-size:12px}
 .leo2 .newbox textarea{min-height:56px;resize:vertical}
 .leo2 .newbox .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.leo2 .newbox .cwd-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end}
 .leo2 .newbox .acts{display:flex;gap:8px;justify-content:flex-end}
 
 /* 主区:会话 */
@@ -301,6 +302,7 @@
 .leo2 .local-files .remote-files{flex:none;padding:10px 14px 0}
 .leo2 .local-files-peek-wrap{flex:none;margin:8px 14px 0;animation:leo2-rise var(--t-standard) var(--ease) both}
 .leo2 .local-files-peek-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin:0 0 6px}
+.leo2 .local-files-peek-acts{display:flex;gap:10px;flex-shrink:0}
 .leo2 .local-files-name{display:block;margin:0;font-size:11px;color:var(--fg3);font-weight:560}
 .leo2 .local-files-peek{max-height:36%;overflow:auto;margin:0;padding:10px 12px;border-radius:8px;background:var(--mono);color:var(--fg);font-size:12px;line-height:1.45;white-space:pre-wrap;word-break:break-word}
 .leo2 .local-files-tree{position:relative;flex:1;min-height:160px}

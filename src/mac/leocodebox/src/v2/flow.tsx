@@ -82,9 +82,10 @@ export function Row({ row, model, query, onApprove, onDiff }: {
 
 export type ModelChoice = { provider: string; providerName: string; id: string; name: string; reasoning?: boolean; contextWindow?: number | null };
 
-export function NewSessionBox({ machine, groups, models, defaultCwd, recentCwds, initialPrompt, initialModel, busy, onCancel, onCreate, onOpenSettings }: {
+export function NewSessionBox({ machine, groups, models, defaultCwd, recentCwds, initialPrompt, initialModel, busy, onCancel, onCreate, onOpenSettings, onPickFolder }: {
   machine: string; groups: Group[]; models: ModelChoice[]; defaultCwd: string; recentCwds?: string[]; initialPrompt?: string; initialModel?: string; busy: boolean;
   onCancel: () => void; onCreate: (input: { machine: string; cwd: string; prompt: string; model: string | null; policy: string }) => void; onOpenSettings: () => void;
+  onPickFolder?: () => Promise<string | null>;
 }) {
   const [target, setTarget] = useState(machine);
   const [cwd, setCwd] = useState(() => {
@@ -132,8 +133,13 @@ export function NewSessionBox({ machine, groups, models, defaultCwd, recentCwds,
         {initialModel && !models.some((m) => `${m.provider}/${m.id}` === initialModel) ? <option value={initialModel}>{prettyModelName(initialModel)} · 原会话</option> : null}
         {models.map((m) => <option key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>{prettyModelName(m.id, m.name)} · {m.providerName}{modelChoiceHint(m) ? ` · ${modelChoiceHint(m)}` : ''}</option>)}
       </select></div>
-      <div><label>目录</label><input value={cwd} onChange={(e) => setCwd(e.target.value)} className="mono" placeholder="~/项目路径" list="leo2-cwds" />
-        {recentCwds && recentCwds.length > 0 && <datalist id="leo2-cwds">{recentCwds.map((c) => <option key={c} value={c} />)}</datalist>}
+      <div className="cwd-row">
+        <div>
+          <label>目录</label>
+          <input value={cwd} onChange={(e) => setCwd(e.target.value)} className="mono" placeholder="~/项目路径" list="leo2-cwds" />
+          {recentCwds && recentCwds.length > 0 && <datalist id="leo2-cwds">{recentCwds.map((c) => <option key={c} value={c} />)}</datalist>}
+        </div>
+        {target === 'local' && onPickFolder ? <button type="button" className="btn-s" disabled={busy} onClick={() => { void onPickFolder().then((next) => { if (next) setCwd(next); }); }}>选择…</button> : null}
       </div>
       <div><label>第一句话</label><textarea autoFocus value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="要它做什么 · ↩ 开始,⇧↩ 换行" onKeyDown={(e) => { if (composerShouldSend(e) && prompt.trim()) { e.preventDefault(); submit(); } }} /></div>
       <div className="acts"><button className="btn-g" onClick={onCancel}>取消</button><button className="btn-s" onClick={submit} disabled={busy || !prompt.trim() || needModel}>开始</button></div>

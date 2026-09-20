@@ -11,6 +11,8 @@ declare global {
     leocodeboxDesktopTools?: {
       setThemeMode: (mode: 'system' | 'light' | 'dark') => Promise<unknown>;
       setRunningBadge?: (count: number) => Promise<unknown>;
+      pickFolder?: () => Promise<{ path?: string; cancelled?: boolean }>;
+      revealPath?: (target: string) => Promise<{ path: string }>;
       /** 桌面壳发过来的"打开某个东西":本地工具页 / 设置窗。 */
       onOpenModal: (
         callback: (tool: 'settings' | 'leoapi' | 'feedback') => void,

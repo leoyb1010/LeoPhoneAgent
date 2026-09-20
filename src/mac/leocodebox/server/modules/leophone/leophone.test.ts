@@ -445,6 +445,14 @@ test('workbench 本机 forget 路由只收已经结束的会话', () => {
   assert.match(source, /getHarnessManager\(\)\.forget/);
 });
 
+test('workbench 本机可以选目录并在 Finder 打开', () => {
+  const source = fs.readFileSync(new URL('./workbench.routes.ts', import.meta.url), 'utf8');
+  assert.match(source, /\/leophone\/local\/folder\/pick/);
+  assert.match(source, /\/leophone\/local\/folder\/reveal/);
+  assert.match(source, /pickLocalFolder/);
+  assert.match(source, /revealLocalPath/);
+});
+
 test('manager forget: 进行中的会话拒绝拿掉', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'leophone-forget-live-'));
   const session = new HarnessSession({

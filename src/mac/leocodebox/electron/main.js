@@ -2,12 +2,13 @@ import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, safeSto
 import updaterPackage from 'electron-updater';
 import { randomBytes } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
-import { readFile, rm, writeFile } from 'node:fs/promises';
+import { readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { DesktopWindowManager } from './desktopWindow.js';
 import { DesktopNotificationsController } from './desktopNotifications.js';
+import { expandDesktopFolderPath, isDesktopFolderAllowed } from './local-folder.js';
 import { LocalServerController } from './localServer.js';
 import { disableConflictingLegacyLaunchAgent } from './legacyMigration.js';
 import { readProductVersion } from './productMetadata.js';
@@ -560,6 +561,28 @@ function registerIpcHandlers() {
   trustedHandle('leocodebox-desktop:switch-tab', async (_event, tabId) => desktopWindow.switchDesktopTab(tabId));
   trustedHandle('leocodebox-desktop:close-tab', async (_event, tabId) => desktopWindow.closeDesktopTab(tabId));
   trustedHandle('leocodebox-desktop:update-setting', async (_event, key, value) => updateDesktopSetting(key, value));
+  trustedHandle('leocodebox-desktop:pick-folder', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const options = { title: '选择会话目录', properties: ['openDirectory', 'createDirectory'] };
+    const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+    if (result.canceled || !result.filePaths[0]) return { cancelled: true };
+    const picked = result.filePaths[0];
+    if (!isDesktopFolderAllowed(picked)) throw new Error('这个目录不能当会话工作区');
+    return { path: picked };
+  });
+  trustedHandle('leocodebox-desktop:reveal-path', async (_event, raw) => {
+    const target = path.resolve(expandDesktopFolderPath(String(raw ?? '')));
+    if (!isDesktopFolderAllowed(target)) throw new Error('这个路径不能打开');
+    const info = await stat(target).catch(() => null);
+    if (!info) throw new Error('这个路径不存在');
+    if (info.isDirectory()) {
+      const opened = await shell.openPath(target);
+      if (opened) throw new Error(opened);
+    } else {
+      shell.showItemInFolder(target);
+    }
+    return { path: target };
+  });
   // 云端 IPC 通道(connect-cloud / open-environment / refresh-environments ...)
   // 在 1.73.0 产品收缩时随云能力一起删掉了,这里不补空 handler:补了等于留下
   // 一个"调了什么都不发生"的接口,以后只会让人以为云还在。preload 与启动台

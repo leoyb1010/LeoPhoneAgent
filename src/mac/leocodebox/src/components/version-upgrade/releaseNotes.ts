@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.0.72',
+    date: '2026-09-20',
+    items: [
+      '本机会话可以用系统对话框选目录，并在 Finder 打开这个目录或当前文件。',
+    ],
+  },
+  {
     version: '2.0.71',
     date: '2026-09-20',
     items: [

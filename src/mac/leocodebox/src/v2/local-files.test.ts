@@ -69,6 +69,9 @@ test('顶栏目录芯片只留最后一段', () => {
   assert.match(app, /copyTitle/);
   assert.match(app, /t: '复制标题'/);
   assert.match(app, /t: '复制目录'/);
+  assert.match(app, /在 Finder 打开/);
+  assert.match(app, /revealSessionPath/);
+  assert.match(app, /pickSessionFolder/);
 });
 
 test('窗口顶条不重复长会话标题,只写主控和目录', () => {
