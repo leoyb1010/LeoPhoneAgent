@@ -550,6 +550,11 @@ export class DesktopWindowManager {
           { role: 'copy' },
           { role: 'paste' },
           { role: 'selectAll' },
+          { type: 'separator' },
+          {
+            label: '表情',
+            click: () => void this.actions.showEmojiPanel?.().catch((error) => this.actions.showError('弹不出表情', error)),
+          },
         ],
       },
       {

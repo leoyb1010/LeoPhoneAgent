@@ -16,6 +16,7 @@ import { DesktopNotificationsController } from './desktopNotifications.js';
 import { CLI_MARK, cliBinPaths, cliShimBody, cwdFromArgv, localBinDir, pathHasLocalBin, withLocalBinOnPath } from './cli-install.js';
 import { cwdStillThere } from './cwd-missing.js';
 import { dockMenuLabels } from './dock-menu.js';
+import { showEmojiPanel } from './emoji-panel.js';
 import { LAST_RUN_FILE, cleanLastRun, dirtyLastRun, lastRunWasAbrupt, parseLastRun } from './last-crash.js';
 import { resolveLeoSchemeCwd } from './leo-scheme.js';
 import { expandDesktopFolderPath, isDesktopFolderAllowed } from './local-folder.js';
@@ -915,6 +916,10 @@ function registerIpcHandlers() {
   trustedHandle('leocodebox-desktop:app-folder', async (_event, raw) => (
     raw === undefined || raw === null ? getAppFolder() : moveToApplicationsFolder()
   ));
+  trustedHandle('leocodebox-desktop:emoji-panel', async () => {
+    raiseMainWindow();
+    return showEmojiPanel(app);
+  });
   trustedHandle('leocodebox-desktop:extra-window', async () => {
     const url = localServer?.getLocalServerUrl();
     if (!url) throw new Error('本机服务还没起来');
@@ -1277,6 +1282,10 @@ async function createDesktopWindow() {
       openNotificationTarget,
       isAppQuitting: () => isQuitting,
       requestQuit: () => app.quit(),
+      showEmojiPanel: async () => {
+        raiseMainWindow();
+        return showEmojiPanel(app);
+      },
       openExtraWindow: async () => {
         const url = localServer?.getLocalServerUrl();
         if (!url) throw new Error('本机服务还没起来');

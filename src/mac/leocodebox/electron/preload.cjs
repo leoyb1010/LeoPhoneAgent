@@ -118,6 +118,7 @@ if (isLocalHttpOrigin(window.location)) {
     getAppFolder: () => ipcRenderer.invoke('leocodebox-desktop:app-folder'),
     moveToApplications: () => ipcRenderer.invoke('leocodebox-desktop:app-folder', true),
     openExtraWindow: () => ipcRenderer.invoke('leocodebox-desktop:extra-window'),
+    showEmojiPanel: () => ipcRenderer.invoke('leocodebox-desktop:emoji-panel'),
     clearCache: () => ipcRenderer.invoke('leocodebox-desktop:clear-cache'),
     getAppLock: () => ipcRenderer.invoke('leocodebox-desktop:app-lock'),
     setAppLock: (on) => ipcRenderer.invoke('leocodebox-desktop:app-lock', on),

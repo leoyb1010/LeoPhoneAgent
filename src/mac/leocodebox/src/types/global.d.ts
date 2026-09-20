@@ -29,6 +29,7 @@ declare global {
       getAppFolder?: () => Promise<{ in?: boolean; can?: boolean }>;
       moveToApplications?: () => Promise<{ moved?: boolean; already?: boolean }>;
       openExtraWindow?: () => Promise<{ ok?: boolean }>;
+      showEmojiPanel?: () => Promise<{ ok?: boolean }>;
       clearCache?: () => Promise<{ ok?: boolean }>;
       getAppLock?: () => Promise<{ on?: boolean }>;
       setAppLock?: (on: boolean) => Promise<{ on?: boolean }>;
