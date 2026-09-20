@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.0.78',
+    date: '2026-09-20',
+    items: [
+      '本机会话可以在系统自带的终端打开当前目录，接着用自己的 shell 干。',
+    ],
+  },
+  {
     version: '2.0.77',
     date: '2026-09-20',
     items: [

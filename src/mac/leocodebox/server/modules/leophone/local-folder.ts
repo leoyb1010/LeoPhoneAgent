@@ -21,6 +21,11 @@ export function openDefaultArgs(resolved: string): string[] {
   return [resolved];
 }
 
+/** 系统终端打开目录。文件落到它所在的目录，不把文件当 cwd。 */
+export function openTerminalArgs(resolvedDir: string): string[] {
+  return ['-a', 'Terminal', resolvedDir];
+}
+
 function defaultRunner(command: string, args: string[]): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -55,6 +60,18 @@ export async function openLocalPath(raw: string, run: FolderCommandRunner = defa
   const result = await run('/usr/bin/open', openDefaultArgs(resolved));
   if (result.code !== 0) throw new Error(result.stderr.trim() || '打不开这个路径');
   return { path: resolved };
+}
+
+export async function openLocalTerminal(raw: string, run: FolderCommandRunner = defaultRunner): Promise<{ path: string }> {
+  const resolved = resolveRevealablePath(raw);
+  const stats = await fs.stat(resolved).catch(() => null);
+  if (!stats) throw new Error('这个路径不存在');
+  const dir = resolveRevealablePath(stats.isDirectory() ? resolved : path.dirname(resolved));
+  const dirStats = await fs.stat(dir).catch(() => null);
+  if (!dirStats?.isDirectory()) throw new Error('这个路径没有可打开的目录');
+  const result = await run('/usr/bin/open', openTerminalArgs(dir));
+  if (result.code !== 0) throw new Error(result.stderr.trim() || '终端打不开这个目录');
+  return { path: dir };
 }
 
 export async function pickLocalFolder(run: FolderCommandRunner = defaultRunner): Promise<{ path: string } | { cancelled: true }> {

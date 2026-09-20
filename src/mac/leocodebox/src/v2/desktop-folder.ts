@@ -4,6 +4,7 @@ type DesktopFolderTools = {
   pickFolder?: () => Promise<{ path?: string; cancelled?: boolean }>;
   revealPath?: (target: string) => Promise<unknown>;
   openPath?: (target: string) => Promise<unknown>;
+  openTerm?: (target: string) => Promise<unknown>;
 };
 
 function desktopTools(): DesktopFolderTools | undefined {
@@ -47,4 +48,15 @@ export async function openSessionPath(target: string): Promise<void> {
     return;
   }
   await api.openLocalPath(next);
+}
+
+export async function openSessionTerm(target: string): Promise<void> {
+  const next = target.trim();
+  if (!next) throw new Error('没有路径');
+  const desktop = desktopTools()?.openTerm;
+  if (desktop) {
+    await desktop(next);
+    return;
+  }
+  await api.openLocalTerminal(next);
 }

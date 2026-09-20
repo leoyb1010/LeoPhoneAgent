@@ -10,7 +10,7 @@ import { bindFrontmostToSession, bindSessionWindow, clickBoundSessionWindow, dra
 
 import { HarnessRequestError, getHarnessManager, type HarnessSession } from './harness-session.service.js';
 import { copyDroppedFile, writeDroppedBytes } from './local-drop.js';
-import { openLocalPath, pickLocalFolder, revealLocalPath } from './local-folder.js';
+import { openLocalPath, openLocalTerminal, pickLocalFolder, revealLocalPath } from './local-folder.js';
 import { ensureSessionWorkspace } from './session-workspace.js';
 import { availableHarnesses } from './harness-specs.js';
 import { PI_AUTH_PATH, PI_MODELS_PATH, authStatus, clearAuth, ensureDirs, setApiKey } from './pi-runtime.js';
@@ -106,6 +106,20 @@ router.post('/leophone/local/folder/open', async (req, res) => {
   }
   try {
     const row = await openLocalPath(target);
+    res.json({ ok: true, path: row.path });
+  } catch (error) {
+    jsonError(res, 409, error instanceof Error ? error.message : String(error));
+  }
+});
+
+router.post('/leophone/local/folder/term', async (req, res) => {
+  const target = String(((req.body ?? {}) as Record<string, unknown>).path ?? '').trim();
+  if (!target) {
+    jsonError(res, 400, '路径不能为空');
+    return;
+  }
+  try {
+    const row = await openLocalTerminal(target);
     res.json({ ok: true, path: row.path });
   } catch (error) {
     jsonError(res, 409, error instanceof Error ? error.message : String(error));

@@ -2,8 +2,10 @@ import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Notific
 import updaterPackage from 'electron-updater';
 import { randomBytes } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
+import { execFile } from 'node:child_process';
 import { copyFile, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
 import { DesktopWindowManager } from './desktopWindow.js';
@@ -16,6 +18,7 @@ import { TabsController } from './tabs.js';
 import { isFirstPartyShellUrl } from './trustPolicy.js';
 import { DesktopUpdaterController, clearUpdaterTokenEnvironment } from './updater.js';
 
+const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const { autoUpdater } = updaterPackage;
 
@@ -654,6 +657,18 @@ function registerIpcHandlers() {
     const opened = await shell.openPath(target);
     if (opened) throw new Error(opened);
     return { path: target };
+  });
+  trustedHandle('leocodebox-desktop:open-term', async (_event, raw) => {
+    const target = path.resolve(expandDesktopFolderPath(String(raw ?? '')));
+    if (!isDesktopFolderAllowed(target)) throw new Error('这个路径不能打开');
+    const info = await stat(target).catch(() => null);
+    if (!info) throw new Error('这个路径不存在');
+    const dir = info.isDirectory() ? target : path.dirname(target);
+    if (!isDesktopFolderAllowed(dir)) throw new Error('这个路径不能打开');
+    const dirInfo = await stat(dir).catch(() => null);
+    if (!dirInfo?.isDirectory()) throw new Error('这个路径没有可打开的目录');
+    await execFileAsync('/usr/bin/open', ['-a', 'Terminal', dir]);
+    return { path: dir };
   });
   // 云端 IPC 通道(connect-cloud / open-environment / refresh-environments ...)
   // 在 1.73.0 产品收缩时随云能力一起删掉了,这里不补空 handler:补了等于留下

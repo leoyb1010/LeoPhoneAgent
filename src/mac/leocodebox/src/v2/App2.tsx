@@ -5,7 +5,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import type { Project } from '../types/app';
 
 import { api, type FleetOverview, type HarnessEvent, type LocalOverview, type ProviderInfo, type SessionSummary, type SessionTarget } from './api';
-import { canOpenSessionPath, openSessionPath, pickSessionFolder, revealSessionPath } from './desktop-folder';
+import { canOpenSessionPath, openSessionPath, openSessionTerm, pickSessionFolder, revealSessionPath } from './desktop-folder';
 import { dropBrowserFile, pasteSessionImage, pickSessionFiles } from './desktop-drop';
 import { onSessionNoticeClick, setDockNeedBadge, showSessionNotice } from './desktop-notice';
 import { canAcceptSessionDrop, mentionDroppedFile } from './session-drop';
@@ -561,6 +561,12 @@ export default function App2() {
     try { await revealSessionPath(path); toast('已在 Finder 显示'); }
     catch (error) { toast(humanizeError(error instanceof Error ? error.message : String(error)), true); }
   }, [activeSummary?.cwd, focusFile, toast, workspace?.fullPath]);
+  const openCwdTerm = useCallback(async () => {
+    const path = activeSummary?.cwd?.trim();
+    if (!canOpenSessionPath(active?.machine, path)) { toast('这条会话不能在终端打开', true); return; }
+    try { await openSessionTerm(path!); toast('已在终端打开'); }
+    catch (error) { toast(humanizeError(error instanceof Error ? error.message : String(error)), true); }
+  }, [active?.machine, activeSummary, toast]);
   const openFocusFile = useCallback(async () => {
     const file = focusFile?.trim();
     const root = activeSummary?.cwd ?? workspace?.fullPath ?? '';
@@ -738,7 +744,7 @@ export default function App2() {
     { v: '', t: '', sep: true },
     ...(active?.machine === 'local' ? [{ v: 'winbind', t: boundWindowChipKind(active.machine, windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window))) === 'raise' ? '换一扇窗' : '绑窗口', sub: windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window)) || '列出本机窗口' }] : []),
     ...(boundWindowChipKind(active?.machine ?? '', windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window))) === 'raise' ? [{ v: 'winclick', t: '操作这个窗口', sub: windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window)) }] : []),
-    ...(activeSummary?.cwd?.trim() && active?.machine === 'local' ? [{ v: 'finder', t: '在 Finder 打开', sub: activeSummary.cwd }] : []),
+    ...(activeSummary?.cwd?.trim() && active?.machine === 'local' ? [{ v: 'finder', t: '在 Finder 打开', sub: activeSummary.cwd }, { v: 'termapp', t: '在终端打开', sub: activeSummary.cwd }] : []),
     ...(activeSummary?.cwd?.trim() && active?.machine === 'local' ? [{ v: 'dropfile', t: '放入文件' }, { v: 'dropshot', t: '粘贴截图' }] : []),
     ...(active?.machine === 'local' && focusFile ? [{ v: 'openfile', t: '用默认程序打开', sub: peekFileCaption(focusFile) }, { v: 'savepeek', t: '写回当前文件', sub: '⌘S' }] : []),
     ...(activeSummary?.cwd?.trim() ? [{ v: 'cwd', t: '复制目录', sub: activeSummary.cwd }] : []),
@@ -752,6 +758,7 @@ export default function App2() {
     else if (v === 'stop') void stop();
     else if (v === 'continue') continueHere();
     else if (v === 'finder') void revealCwd();
+    else if (v === 'termapp') void openCwdTerm();
     else if (v === 'dropfile') void pickIntoSession();
     else if (v === 'dropshot') void pasteShot();
     else if (v === 'openfile') void openFocusFile();
@@ -844,7 +851,7 @@ export default function App2() {
     { g: '这条会话', t: '在同一目录续写', k: '新开会话', run: continueHere },
     { g: '这条会话', t: '复制标题', k: sessionView.title || activeSummary?.title || '', run: () => void copyTitle() },
     { g: '这条会话', t: '复制目录', k: activeSummary?.cwd || '', run: () => void copyCwd() },
-    ...(active?.machine === 'local' && activeSummary?.cwd?.trim() ? [{ g: '这条会话', t: '在 Finder 打开', k: activeSummary.cwd, run: () => void revealCwd() }] : []),
+    ...(active?.machine === 'local' && activeSummary?.cwd?.trim() ? [{ g: '这条会话', t: '在 Finder 打开', k: activeSummary.cwd, run: () => void revealCwd() }, { g: '这条会话', t: '在终端打开', k: activeSummary.cwd, run: () => void openCwdTerm() }] : []),
     { g: '这条会话', t: '压缩这条会话', k: 'pi compact', run: () => void compact() },
     { g: '这条会话', t: '停止', k: '', run: () => void stop() },
     ...(active && activeSummary && sessionCanForget(activeSummary.status) ? [{ g: '这条会话', t: '从左栏拿掉', k: '', run: () => void forgetSession(active) }] : []),
@@ -857,7 +864,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, forgetSession, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, copyCwd, revealCwd, copyFindHit, savePeek, openFocusFile, pickIntoSession, pasteShot, sessionView.title, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, forgetSession, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, copyCwd, revealCwd, openCwdTerm, copyFindHit, savePeek, openFocusFile, pickIntoSession, pasteShot, sessionView.title, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -953,6 +960,7 @@ export default function App2() {
           {canWritePeek ? <button className="link" type="button" disabled={!peekDirty} onClick={() => { void savePeek(); }}>{peekDirty ? '保存' : '已是最新'}</button> : null}
           {canOpenSessionPath(active?.machine, peekPath || cwd) ? <button className="link" type="button" onClick={() => { void openFocusFile(); }}>用默认程序打开</button> : null}
           {active?.machine === 'local' && (focusFile || cwd) ? <button className="link" type="button" onClick={() => { void revealFocusFile(); }}>在 Finder 显示</button> : null}
+          {canOpenSessionPath(active?.machine, cwd) ? <button className="link" type="button" onClick={() => { void openCwdTerm(); }}>在终端打开</button> : null}
           <button className="link" type="button" onClick={() => { void navigator.clipboard.writeText(filePeekDraft ?? filePeek); toast('已复制正文'); }}>复制正文</button>
         </span>
       </div>
@@ -1203,6 +1211,7 @@ export default function App2() {
                         {needsSettings ? <button className="btn-s" onClick={() => setView('settings')}>去设置</button> : <button className="btn-s" onClick={continueHere}>在同一目录续写</button>}
                         {needsSettings ? <button className="link" onClick={continueHere}>仍要续写</button> : null}
                         {cwd && active?.machine === 'local' ? <button className="link" onClick={() => void revealCwd()}>在 Finder 打开</button> : null}
+                        {canOpenSessionPath(active?.machine, cwd) ? <button className="link" onClick={() => void openCwdTerm()}>在终端打开</button> : null}
                         {cwd ? <button className="link" onClick={() => void copyCwd()}>复制路径</button> : null}
                         {sessionCanForget(activeSummary.status) && active ? <button className="link dim" onClick={() => void forgetSession(active)}>从左栏拿掉</button> : null}
                       </div>

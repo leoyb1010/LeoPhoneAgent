@@ -103,6 +103,7 @@ if (isLocalHttpOrigin(window.location)) {
     pickFolder: () => ipcRenderer.invoke('leocodebox-desktop:pick-folder'),
     revealPath: (target) => ipcRenderer.invoke('leocodebox-desktop:reveal-path', target),
     openPath: (target) => ipcRenderer.invoke('leocodebox-desktop:open-path', target),
+    openTerm: (target) => ipcRenderer.invoke('leocodebox-desktop:open-term', target),
     saveDrop: (input) => ipcRenderer.invoke('leocodebox-desktop:save-drop', input),
     clipboardImage: () => ipcRenderer.invoke('leocodebox-desktop:clipboard-image'),
     pickFiles: () => ipcRenderer.invoke('leocodebox-desktop:pick-files'),
