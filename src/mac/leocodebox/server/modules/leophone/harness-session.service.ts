@@ -27,6 +27,7 @@ import { HarnessJournal, type JournalHealth, type JournalOptions } from './harne
 import { HARNESSES, resolveExecutable, type HarnessLaunchContext, type HarnessModel, type HarnessSpec } from './harness-specs.js';
 import { LEOAGENT_HOME } from './leoagent-home.js';
 import { findPiSessionFile, hasAnyPiAuth, normalizePolicy, piSessionResumable, writePolicy, type ApprovalPolicy } from './pi-runtime.js';
+import { applySessionRule, readRuleSidecar, writeRuleSidecar } from './session-rule.js';
 import { clipSessionTitle, readTitleSidecar, writeTitleSidecar } from './session-title.js';
 
 // LeoPhoneAgent harness 会话宿主——leoagent(Python)HarnessManager/HarnessSession
@@ -108,6 +109,8 @@ export class HarnessSession {
   policy: ApprovalPolicy = 'default';
   /** 首条用户消息裁成标题;各端列表靠它认人。 */
   title = '';
+  /** 这条会话自己的规矩,每轮 prompt/steer/follow_up 发给内核时带着。 */
+  rule = '';
   /** 最后一件有行动价值的事(用户说话 / 工具开跑 / 待批 / 终态),供列表一行摘要。 */
   lastEvent: Record<string, unknown> | null = null;
   createdAt = Date.now() / 1000;
@@ -132,6 +135,7 @@ export class HarnessSession {
     this.logPath = args.logPath;
     this.model = args.model ?? null;
     this.policy = normalizePolicy(args.policy);
+    this.rule = readRuleSidecar(args.logPath);
     this.journal = args.journal ?? new HarnessJournal(args.logPath, {
       ...args.journalOptions,
       onCommitted: (event) => {
@@ -431,11 +435,14 @@ export class HarnessSession {
       : null;
     if (!raw) return false;
     const outgoing = raw.type === 'set_thinking_level' ? normalizeThinkingLevelFrame(raw) : raw;
-    this.writeFrames([outgoing]);
     if (outgoing.type === 'steer' || outgoing.type === 'follow_up') {
       const text = String(outgoing.message ?? '').trim();
-      if (text) this.emit({ event: EVENT_USER_MESSAGE, text, mode: outgoing.type });
+      if (text) {
+        outgoing.message = applySessionRule(text, this.rule);
+        this.emit({ event: EVENT_USER_MESSAGE, text, mode: outgoing.type });
+      }
     }
+    this.writeFrames([outgoing]);
     if (outgoing.type === 'set_thinking_level') {
       const level = String(outgoing.level ?? '').trim();
       if (level) this.emit({ event: 'session.thinking', level });
@@ -460,7 +467,7 @@ export class HarnessSession {
       }
       return;
     }
-    const result = this.dialect.userMessage(text);
+    const result = this.dialect.userMessage(applySessionRule(text, this.rule));
     if ('frames' in result) {
       this.writeFrames(result.frames);
     }
@@ -585,6 +592,14 @@ export class HarnessSession {
     return next;
   }
 
+  /** 自己写下的规矩写进旁路文件,之后每轮发给内核时带着。空的就是去掉。 */
+  setRule(raw: string): string {
+    const next = writeRuleSidecar(this.logPath, raw);
+    this.rule = next;
+    this.emit({ event: 'session.rule', rule: next });
+    return next;
+  }
+
   /** 改本会话的审批策略:落到策略文件(pi extension 每次工具调用都读),并写进日志让各端同步。 */
   setPolicy(input: unknown): ApprovalPolicy {
     this.policy = normalizePolicy(input);
@@ -603,6 +618,7 @@ export class HarnessSession {
       model: this.model ? `${this.model.provider}/${this.model.modelId}` : null,
       policy: this.policy,
       title: this.title,
+      rule: this.rule,
       last_event: this.lastEvent,
       created_at: this.createdAt,
       updated_at: this.updatedAt,

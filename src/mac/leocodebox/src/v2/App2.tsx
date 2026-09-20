@@ -14,6 +14,7 @@ import { canShowSessionDiff } from './session-diff';
 import { canExportSession, exportFileName, exportSessionToast, flowRowsToMarkdown } from './session-export';
 import { canRevertSessionFile, revertSessionFileToast } from './session-revert';
 import { canRenameSession, clipSessionTitle, renameSessionToast } from './session-title';
+import { canSetSessionRule, clipSessionRule, ruleSessionToast } from './session-rule';
 import { canMentionLastReply, lastAiReply, mentionLastReply, mentionLastReplyToast } from './session-reply';
 import { canRetryLastUser, lastUserPrompt, retryLastUserToast } from './session-retry';
 import { applyPatchToast, canApplySessionPatch, clipApplyPatch } from './session-apply';
@@ -146,6 +147,9 @@ export default function App2() {
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
   const titleEditRef = useRef<HTMLInputElement | null>(null);
+  const [ruleEditing, setRuleEditing] = useState(false);
+  const [ruleDraft, setRuleDraft] = useState<string | null>(null);
+  const ruleEditRef = useRef<HTMLTextAreaElement | null>(null);
   const [sessionArtifacts, setSessionArtifacts] = useState<Array<{ name: string }>>([]);
   const [artifactError, setArtifactError] = useState<string | null>(null);
   const [palette, setPalette] = useState<{ open: boolean; query: string; index: number }>({ open: false, query: '', index: 0 });
@@ -243,7 +247,7 @@ export default function App2() {
   const canDrive = Boolean(activeSummary && sessionCanDrive(activeSummary.status, sessionView.status));
   const canFollowUp = Boolean(active && composerCanFollowUp(active.machine, sessionView.status));
   const queuedFollowUps = pendingFollowUps(sessionView.rows);
-  useEffect(() => { setCommitDraft(null); setTitleEditing(false); setTitleDraft(null); setSeedName(''); }, [active?.machine, active?.id]);
+  useEffect(() => { setCommitDraft(null); setTitleEditing(false); setTitleDraft(null); setRuleEditing(false); setRuleDraft(null); setSeedName(''); }, [active?.machine, active?.id]);
   const pinFiles = useMemo(
     () => mergeFilePins(
       sessionView.rows.filter((row): row is FlowRow & { k: 'edit' } => row.k === 'edit'),
@@ -914,6 +918,25 @@ export default function App2() {
       toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
     }
   }, [active, activeSummary?.title, refreshLocal, sessionView.title, titleDraft, toast]);
+  const beginRule = useCallback(() => {
+    if (!canSetSessionRule(active?.machine)) return;
+    setRuleDraft(sessionView.rule || activeSummary?.rule || '');
+    setRuleEditing(true);
+    window.setTimeout(() => { ruleEditRef.current?.focus(); ruleEditRef.current?.select(); }, 0);
+  }, [active?.machine, activeSummary?.rule, sessionView.rule]);
+  const saveRule = useCallback(async () => {
+    if (!active || !canSetSessionRule(active.machine)) return;
+    const next = clipSessionRule(ruleDraft ?? sessionView.rule ?? activeSummary?.rule ?? '');
+    try {
+      const result = await api.setLocalSessionRule(active, next);
+      toast(ruleSessionToast(result.rule));
+      setRuleEditing(false);
+      setRuleDraft(null);
+      await refreshLocal();
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+    }
+  }, [active, activeSummary?.rule, refreshLocal, ruleDraft, sessionView.rule, toast]);
   const copyFindHit = useCallback(async () => {
     const row = sessionView.rows.find((item) => item.key === findKey);
     const text = flowFindHitText(row).trim();
@@ -1133,6 +1156,7 @@ export default function App2() {
     ...(canRetryLast ? [{ v: 'retrylast', t: '再发上一句', sub: lastPrompt.slice(0, 40) }] : []),
     ...(activeSummary?.cwd?.trim() ? [{ v: 'cwd', t: '复制目录', sub: activeSummary.cwd }] : []),
     ...(canRenameSession(active?.machine) ? [{ v: 'rename', t: '改标题', sub: sessionView.title || activeSummary?.title || '给这条会话起个名字' }] : []),
+    ...(canSetSessionRule(active?.machine) ? [{ v: 'rule', t: '这条会话的规矩', sub: (sessionView.rule || activeSummary?.rule || '之后每轮都会带着').split('\n')[0] }] : []),
     ...((sessionView.title || activeSummary?.title || '').trim() ? [{ v: 'title', t: '复制标题', sub: (sessionView.title || activeSummary?.title || '').trim() }] : []),
     ...(canResumeHere ? [{ v: 'resume', t: '接着这条会话', sub: '同一条上下文' }] : []),
     ...(canFollowUp && draft.trim() ? [{ v: 'follow', t: '接着（排队）', sub: '等这轮说完' }] : []),
@@ -1175,6 +1199,7 @@ export default function App2() {
     else if (v === 'retrylast') void retryLast();
     else if (v === 'cwd') void copyCwd();
     else if (v === 'rename') beginRename();
+    else if (v === 'rule') beginRule();
     else if (v === 'title') void copyTitle();
     else if (v === 'find') { setFlowFind((cur) => ({ ...cur, open: true })); window.setTimeout(() => { flowFindRef.current?.focus(); flowFindRef.current?.select(); }, 0); }
     else if (v === 'findhit') void copyFindHit();
@@ -1190,6 +1215,7 @@ export default function App2() {
       if (meta && e.key.toLowerCase() === 'k') { e.preventDefault(); setPalette((p) => ({ open: !p.open, query: '', index: 0 })); setPicker(null); return; }
       if (e.key === 'Escape') {
         if (titleEditing) { setTitleEditing(false); setTitleDraft(null); return; }
+        if (ruleEditing) { setRuleEditing(false); setRuleDraft(null); return; }
         if (picker) { setPicker(null); return; }
         if (palette.open) { setPalette({ open: false, query: '', index: 0 }); return; }
         if (menu) { setMenu(null); return; }
@@ -1247,7 +1273,7 @@ export default function App2() {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [palette.open, picker, menu, drawer, newBox, draft, send, approveFirstPending, view, sessionView.pendingApprovals, approve, allSessions, matchesFilter, active, openSession, beginLocalNew, flowFind.open, windowOp, stepFind, copyFindHit, savePeek, titleEditing]);
+  }, [palette.open, picker, menu, drawer, newBox, draft, send, approveFirstPending, view, sessionView.pendingApprovals, approve, allSessions, matchesFilter, active, openSession, beginLocalNew, flowFind.open, windowOp, stepFind, copyFindHit, savePeek, titleEditing, ruleEditing]);
 
   // -- 命令面板 ---------------------------------------------------------------
   type Command = { g: string; t: string; k: string; run: () => void };
@@ -1266,6 +1292,7 @@ export default function App2() {
     ...(canFollowUp && queuedFollowUps.length ? [{ g: '这条会话', t: '取消排队', k: `${queuedFollowUps.length} 句`, run: clearFollowUps }] : []),
     { g: '这条会话', t: '在同一目录新开', k: '新开会话', run: continueHere },
     ...(canRenameSession(active?.machine) ? [{ g: '这条会话', t: '改标题', k: sessionView.title || activeSummary?.title || '', run: beginRename }] : []),
+    ...(canSetSessionRule(active?.machine) ? [{ g: '这条会话', t: '这条会话的规矩', k: (sessionView.rule || activeSummary?.rule || '').split('\n')[0], run: beginRule }] : []),
     { g: '这条会话', t: '复制标题', k: sessionView.title || activeSummary?.title || '', run: () => void copyTitle() },
     { g: '这条会话', t: '复制目录', k: activeSummary?.cwd || '', run: () => void copyCwd() },
     ...(active?.machine === 'local' && activeSummary?.cwd?.trim() ? [{ g: '这条会话', t: '在 Finder 打开', k: activeSummary.cwd, run: () => void revealCwd() }, { g: '这条会话', t: '在终端打开', k: activeSummary.cwd, run: () => void openCwdTerm() }] : []),
@@ -1298,7 +1325,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, retryLast, canRetryLast, lastPrompt, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, retryLast, canRetryLast, lastPrompt, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -1548,6 +1575,28 @@ export default function App2() {
                         >{title || '新会话'}</h1>
                       )}
                       <span className="shead-state">{STATUS_LABEL[sessionView.status] ?? sessionView.status}{stream === 'reconnecting' ? ' · 重连中' : ''}</span>
+                      {canSetSessionRule(active?.machine) ? (
+                        ruleEditing ? (
+                          <textarea
+                            ref={ruleEditRef}
+                            className="title-edit"
+                            rows={2}
+                            value={ruleDraft ?? sessionView.rule ?? activeSummary?.rule ?? ''}
+                            aria-label="这条会话的规矩"
+                            placeholder="写一句规矩，空的就是去掉"
+                            onChange={(e) => setRuleDraft(e.target.value)}
+                            onBlur={() => void saveRule()}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void saveRule(); }
+                              if (e.key === 'Escape') { e.preventDefault(); setRuleEditing(false); setRuleDraft(null); }
+                            }}
+                          />
+                        ) : (
+                          <button className="link dim" type="button" onClick={beginRule}>
+                            {(sessionView.rule || activeSummary?.rule) ? `规矩 · ${(sessionView.rule || activeSummary?.rule || '').split('\n')[0]}` : '加一句规矩'}
+                          </button>
+                        )
+                      ) : null}
                     </div>
                   </div>
                   <div className="shead-r">

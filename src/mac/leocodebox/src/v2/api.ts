@@ -16,6 +16,7 @@ export type SessionSummary = {
   model: string | null;
   policy: string;
   title: string;
+  rule?: string;
   last_event: LastEvent;
   created_at: number;
   updated_at: number;
@@ -191,6 +192,8 @@ export const api = {
   setPolicy: (target: SessionTarget, policy: string) => sendJson(`${sessionBase(target)}/policy`, { policy }),
   renameLocalSession: (target: SessionTarget, title: string) =>
     sendJson<{ ok: true; title: string }>(`${sessionBase(target)}/title`, { title }),
+  setLocalSessionRule: (target: SessionTarget, rule: string) =>
+    sendJson<{ ok: true; rule: string }>(`${sessionBase(target)}/rule`, { rule }),
   rpc: (target: SessionTarget, frame: Record<string, unknown>) => sendJson(`${sessionBase(target)}/rpc`, frame),
 
   /**

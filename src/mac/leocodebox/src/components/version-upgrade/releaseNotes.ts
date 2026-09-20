@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.1.2',
+    date: '2026-09-20',
+    items: [
+      '这条会话可以写下规矩，之后每轮都会带着，关掉再开还在。',
+    ],
+  },
+  {
     version: '2.1.1',
     date: '2026-09-20',
     items: [

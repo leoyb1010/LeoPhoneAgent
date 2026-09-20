@@ -655,6 +655,17 @@ router.post('/leophone/local/sessions/:sessionId/title', (req, res) => {
   }
 });
 
+router.post('/leophone/local/sessions/:sessionId/rule', (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  try {
+    const rule = session.setRule(String(((req.body ?? {}) as Record<string, unknown>).rule ?? ''));
+    res.json({ ok: true, rule });
+  } catch (error) {
+    jsonError(res, 409, error instanceof Error ? error.message : String(error));
+  }
+});
+
 router.post('/leophone/local/sessions/:sessionId/policy', (req, res) => {
   const session = requireSession(req, res);
   if (!session) return;
