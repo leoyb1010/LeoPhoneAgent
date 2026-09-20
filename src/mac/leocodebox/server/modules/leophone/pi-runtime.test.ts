@@ -198,6 +198,22 @@ test('失败之后的 agent_settled 不再报完成', () => {
   assert.deepEqual(dialect.translateLine({ type: 'agent_settled' }).events, []);
 });
 
+test('没说完会停住', () => {
+  const dialect = new PiRpcDialect();
+  const usage = dialect.translateLine({
+    type: 'message_end',
+    message: { role: 'assistant', stopReason: 'max_tokens', usage: { totalTokens: 8000 } },
+  }).events;
+  assert.equal(usage.some((ev) => ev.event === 'session.usage'), false);
+  const { events } = dialect.translateLine({ type: 'agent_end' });
+  assert.equal(events[0].event, EVENT_RUN_FAILED);
+  assert.match(String(events[0].error), /没说完/);
+  assert.deepEqual(dialect.translateLine({ type: 'agent_settled' }).events, []);
+  const length = new PiRpcDialect();
+  length.translateLine({ type: 'message_end', message: { role: 'assistant', stopReason: 'length' } });
+  assert.equal(length.translateLine({ type: 'agent_end' }).events[0].event, EVENT_RUN_FAILED);
+});
+
 test('助手 stopReason=error 时 agent_end 是 run.failed,不是空白完成', () => {
   const dialect = new PiRpcDialect();
   dialect.translateLine({

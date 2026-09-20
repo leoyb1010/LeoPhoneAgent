@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 
+import { sessionIncompleteLabel } from './session-incomplete.js';
 import { sessionToolImages } from './session-tool-image.js';
 
 // 方言翻译层——把每个编码 CLI 各自的 JSON 协议翻成一套事件词汇表,与
@@ -406,7 +407,7 @@ export class PiRpcDialect implements HarnessDialect {
     } else if (kind === 'message_end') {
       const message = asObject(obj.message);
       const usage = asObject(message.usage);
-      if (str(message.role) === 'assistant' && str(message.stopReason) !== 'error') {
+      if (str(message.role) === 'assistant' && str(message.stopReason) !== 'error' && !sessionIncompleteLabel(str(message.stopReason))) {
         const totalTokens = Number(usage.totalTokens ?? 0);
         const input = Number(usage.input ?? 0);
         const output = Number(usage.output ?? 0);
@@ -453,9 +454,10 @@ const PI_SILENT_KINDS = new Set(['message_update', 'tool_execution_update', 'bas
 function assistantTurnError(obj: JsonObject): string {
   const message = asObject(obj.message);
   const err = str(message.errorMessage || message.error || obj.error);
-  if (str(message.stopReason) === 'error' || err) {
+  const incomplete = sessionIncompleteLabel(str(message.stopReason));
+  if (str(message.stopReason) === 'error' || err || incomplete) {
     if (str(obj.type) === 'message_start' || str(obj.type) === 'message_end' || str(obj.type) === 'turn_end') {
-      return err || '模型这一轮失败了';
+      return err || incomplete || '模型这一轮失败了';
     }
   }
   return '';
