@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, Notification, powerMonitor, powerSaveBlocker, safeStorage, session, shell, systemPreferences, webContents } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, Notification, powerMonitor, powerSaveBlocker, safeStorage, screen, session, shell, systemPreferences, webContents } from 'electron';
 import updaterPackage from 'electron-updater';
 import { randomBytes } from 'node:crypto';
 import { constants as fsConstants, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -16,6 +16,7 @@ import { DesktopWindowManager } from './desktopWindow.js';
 import { DesktopNotificationsController } from './desktopNotifications.js';
 import { CLI_MARK, cliBinPaths, cliShimBody, cwdFromArgv, localBinDir, pathHasLocalBin, withLocalBinOnPath } from './cli-install.js';
 import { cwdStillThere } from './cwd-missing.js';
+import { displayCount, displayShift } from './display.js';
 import { dockMenuLabels } from './dock-menu.js';
 import { showEmojiPanel } from './emoji-panel.js';
 import { idleCameBack, idleProbe } from './idle.js';
@@ -136,6 +137,23 @@ function notifyThermal() {
 function notifyIdleBack() {
   desktopWindow?.sendToActiveView?.('leocodebox-desktop:idle-back', { back: true });
 }
+
+function getDisplay() {
+  return displayCount(screen);
+}
+
+function notifyDisplay(kind) {
+  desktopWindow?.sendToActiveView?.('leocodebox-desktop:display-changed', { kind, ...getDisplay() });
+}
+
+function tickDisplay() {
+  const next = getDisplay();
+  const kind = displayShift(lastDisplay, next);
+  lastDisplay = next;
+  if (kind) notifyDisplay(kind);
+}
+
+let lastDisplay = { count: 0, can: false };
 
 let lastIdleProbe = idleProbe(powerMonitor);
 
@@ -961,6 +979,7 @@ function registerIpcHandlers() {
   trustedHandle('leocodebox-desktop:battery', async () => getBattery());
   trustedHandle('leocodebox-desktop:thermal', async () => getThermal());
   trustedHandle('leocodebox-desktop:idle', async () => idleProbe(powerMonitor));
+  trustedHandle('leocodebox-desktop:display', async () => getDisplay());
   trustedHandle('leocodebox-desktop:app-lock', async (_event, raw) => (
     raw === undefined || raw === null ? getAppLock() : writeAppLock(Boolean(raw))
   ));
@@ -1514,6 +1533,11 @@ async function bootstrap() {
   if (typeof powerMonitor?.getSystemIdleState === 'function') {
     const idleTick = setInterval(tickIdle, 15_000);
     idleTick.unref?.();
+  }
+  lastDisplay = getDisplay();
+  if (typeof screen?.on === 'function') {
+    screen.on('display-added', () => tickDisplay());
+    screen.on('display-removed', () => tickDisplay());
   }
   await openLocalInDesktop();
   flushLeoSchemes();
