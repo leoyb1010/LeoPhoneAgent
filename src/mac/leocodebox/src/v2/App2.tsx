@@ -79,6 +79,7 @@ import { canMoveToApplications, moveToApplicationsBusy, moveToApplicationsBusyTo
 import { canSwitchSessionBranch, sanitizeBranchName, switchSessionBranchToast } from './session-branch';
 import { canInitSessionRepo, initSessionToast } from './session-init';
 import { canMergeSessionBranch, mergeSessionToast } from './session-merge';
+import { isMissingSessionCwd, missingCwdToast } from './session-missing';
 import { canPackSessionChanges, packFileName, packSessionToast } from './session-pack';
 import { canUnpackSessionZip, unpackSessionToast, unpackZipName } from './session-unpack';
 import { canSeedSessionFile, clipSeedText, sanitizeSeedRel, seedSessionToast } from './session-seed';
@@ -263,6 +264,7 @@ export default function App2() {
   const compactPrimed = useRef(false);
   const autoCompacted = useRef(new Set<string>());
   const icloudWarned = useRef(new Set<string>());
+  const missingWarned = useRef(new Set<string>());
   const [menu, setMenu] = useState<MenuState>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [newBox, setNewBox] = useState<NewBoxState | null>(null);
@@ -346,6 +348,15 @@ export default function App2() {
     if (!isIcloudPath(path) || icloudWarned.current.has(path)) return;
     icloudWarned.current.add(path);
     toast(icloudCwdToast());
+  }, [toast]);
+  const warnMissing = useCallback(async (cwd?: string | null) => {
+    const path = String(cwd ?? '').trim();
+    if (!path || missingWarned.current.has(path)) return false;
+    const gone = await isMissingSessionCwd(path, typeof window === 'undefined' ? null : window.leocodeboxDesktopTools);
+    if (!gone) return false;
+    missingWarned.current.add(path);
+    toast(missingCwdToast(), true);
+    return true;
   }, [toast]);
 
   // -- 数据 ------------------------------------------------------------------
@@ -513,18 +524,21 @@ export default function App2() {
       setView('home');
       toast(leoSchemeToast(hit.title));
       warnIcloud(cwd);
+      void warnMissing(cwd);
       return;
     }
     setNewBox({ open: true, machine: 'local', cwd });
     setView('home');
     toast(leoSchemeToast());
     warnIcloud(cwd);
-  }), [toast, warnIcloud]);
+    void warnMissing(cwd);
+  }), [toast, warnIcloud, warnMissing]);
 
   useEffect(() => {
     if (active?.machine !== 'local') return;
     warnIcloud(activeSummary?.cwd);
-  }, [active?.machine, activeSummary?.cwd, warnIcloud]);
+    void warnMissing(activeSummary?.cwd);
+  }, [active?.machine, activeSummary?.cwd, warnIcloud, warnMissing]);
   useEffect(() => {
     void setDockNeedBadge(dockNeedBadge(allSessions.map((row) => row.s)));
   }, [allSessions]);
@@ -2017,6 +2031,7 @@ export default function App2() {
       toast(offlineToast(), true);
       return;
     }
+    if (input.machine === 'local' && await warnMissing(input.cwd)) return;
     if (input.machine === 'local' && (providers === null || usableModelsFromProviders(providers).length === 0)) {
       if (providers === null) return;
       setNewBox(null);
@@ -2037,7 +2052,7 @@ export default function App2() {
       }
       setNewBox(null); setView('home');
     });
-  }, [providers, withBusy, refreshFleet, toast, warnIcloud]);
+  }, [providers, withBusy, refreshFleet, toast, warnIcloud, warnMissing]);
 
   // -- 菜单 ------------------------------------------------------------------
   const openMenu = useCallback((el: HTMLElement, items: MenuItem[], onPick: (v: string) => void) => {

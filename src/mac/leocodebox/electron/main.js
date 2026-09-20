@@ -14,6 +14,7 @@ import { busyQuitCopy, shouldConfirmBusyQuit } from './busy-quit.js';
 import { DesktopWindowManager } from './desktopWindow.js';
 import { DesktopNotificationsController } from './desktopNotifications.js';
 import { CLI_MARK, cliBinPaths, cliShimBody, cwdFromArgv, localBinDir, pathHasLocalBin, withLocalBinOnPath } from './cli-install.js';
+import { cwdStillThere } from './cwd-missing.js';
 import { dockMenuLabels } from './dock-menu.js';
 import { resolveLeoSchemeCwd } from './leo-scheme.js';
 import { expandDesktopFolderPath, isDesktopFolderAllowed } from './local-folder.js';
@@ -969,6 +970,9 @@ function registerIpcHandlers() {
   trustedHandle('leocodebox-desktop:switch-tab', async (_event, tabId) => desktopWindow.switchDesktopTab(tabId));
   trustedHandle('leocodebox-desktop:close-tab', async (_event, tabId) => desktopWindow.closeDesktopTab(tabId));
   trustedHandle('leocodebox-desktop:update-setting', async (_event, key, value) => updateDesktopSetting(key, value));
+  trustedHandle('leocodebox-desktop:cwd-exists', async (_event, raw) => ({
+    exists: cwdStillThere(raw),
+  }));
   trustedHandle('leocodebox-desktop:pick-folder', async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender);
     const options = { title: '选择会话目录', properties: ['openDirectory', 'createDirectory'] };
