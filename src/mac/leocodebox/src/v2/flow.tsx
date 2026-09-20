@@ -41,7 +41,7 @@ export function Row({ row, model, query, hide, onApprove, onDiff, onOpen }: {
   onDiff: () => void;
   onOpen?: () => void;
 }) {
-  const [open, setOpen] = useState(row.k === 'think' ? false : undefined);
+  const [open, setOpen] = useState(row.k === 'think' ? false : row.k === 'tool' && row.running);
   const [thinkOpen, setThinkOpen] = useState(false);
   const live = isLiveRow(row) ? ' live' : '';
   switch (row.k) {

@@ -1,4 +1,5 @@
 import type { HarnessEvent, SessionSummary } from './api';
+import { clipLiveToolOutput } from './session-tool-live';
 
 // 把 harness 事件流折叠成"流水行"。一行一个对象:你 / 模型 / 工具 / 编辑 / 需要确认 / 系统。
 // 这套折叠规则是三端共用的词汇(iOS 与 Android 的列表也按同样的语义画),别在这里加只有 Mac 才懂的行。
@@ -396,6 +397,23 @@ export function applyEvent(view: SessionView, event: HarnessEvent): SessionView 
           ...(proposed ? { proposed } : {}),
         }]
         : [...rows, { k: 'tool', key: nextKey(), toolUseId: event.tool_use_id == null ? null : str(event.tool_use_id), tool, preview, output: '', running: true, error: false }];
+      break;
+    }
+    case 'tool.delta': {
+      const id = event.tool_use_id == null ? null : str(event.tool_use_id);
+      const output = clipLiveToolOutput(event.output);
+      if (!output) break;
+      let index = -1;
+      for (let i = rows.length - 1; i >= 0; i -= 1) {
+        const row = rows[i];
+        if ((row.k === 'tool' || row.k === 'edit') && row.running && (id == null || row.toolUseId == null || row.toolUseId === id)) { index = i; break; }
+      }
+      if (index >= 0) {
+        const row = rows[index] as FlowRow & { k: 'tool' | 'edit' };
+        if (row.output !== output) {
+          rows = [...rows.slice(0, index), { ...row, output }, ...rows.slice(index + 1)];
+        }
+      }
       break;
     }
     case 'tool.completed': {

@@ -10,6 +10,7 @@ import {
   EVENT_APPROVAL_REQUEST,
   EVENT_RUN_COMPLETED,
   EVENT_RUN_FAILED,
+  EVENT_TOOL_DELTA,
   EVENT_TOOL_STARTED,
   PiRpcDialect,
 } from './harness-dialects.js';
@@ -102,10 +103,13 @@ test('prompt 被 pi 拒绝(如没配密钥)→ run.failed,而不是永远 runnin
   assert.equal(dialect.translateLine({ type: 'response', command: 'prompt', success: true }).events[0].event, 'harness.response');
 });
 
-test('非文本的 message_update / 工具输出流不进日志;文本增量照常', () => {
+test('非文本的 message_update 不进日志;工具输出流只发 live delta;文本增量照常', () => {
   const dialect = new PiRpcDialect();
   assert.deepEqual(dialect.translateLine({ type: 'message_update', assistantMessageEvent: { type: 'toolcall_delta', delta: '{' } }).events, []);
-  assert.deepEqual(dialect.translateLine({ type: 'tool_execution_update', toolCallId: 'tc1', partialResult: 'x' }).events, []);
+  const live = dialect.translateLine({ type: 'tool_execution_update', toolCallId: 'tc1', partialResult: 'PASS 3\n' }).events;
+  assert.equal(live[0]?.event, EVENT_TOOL_DELTA);
+  assert.equal(live[0]?.output, 'PASS 3\n');
+  assert.deepEqual(dialect.translateLine({ type: 'tool_execution_update', toolCallId: 'tc1', partialResult: 'PASS 3\n' }).events, []);
   assert.equal(dialect.translateLine({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: '好' } }).events[0].event, 'message.delta');
 });
 

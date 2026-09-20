@@ -15,6 +15,7 @@ import {
   EVENT_RUN_FAILED,
   EVENT_SESSION_CREATED,
   EVENT_TOOL_COMPLETED,
+  EVENT_TOOL_DELTA,
   EVENT_TOOL_STARTED,
   EVENT_USER_MESSAGE,
   createDialect,
@@ -189,6 +190,29 @@ export class HarnessSession {
    * 保证(approval_id 曾在写后铸造,回放出的审批无法寻址)。
    */
   emit(event: HarnessEvent): void {
+    if (event.event === EVENT_TOOL_DELTA) {
+      const live: HarnessEvent = {
+        ...event,
+        session_id: this.sessionId,
+        timestamp: Date.now() / 1000,
+        ephemeral: true,
+      };
+      for (const sub of [...this.subscribers]) {
+        const last = sub.queue[sub.queue.length - 1];
+        if (last?.event === EVENT_TOOL_DELTA && last.tool_use_id === live.tool_use_id) {
+          sub.queue[sub.queue.length - 1] = live;
+        } else if (sub.queue.length >= 512) {
+          sub.closed = true;
+          this.subscribers.delete(sub);
+          sub.wake?.();
+          continue;
+        } else {
+          sub.queue.push(live);
+        }
+        sub.wake?.();
+      }
+      return;
+    }
     this.seq += 1;
     const enriched: HarnessEvent = { ...event, seq: this.seq, session_id: this.sessionId, timestamp: Date.now() / 1000 };
 

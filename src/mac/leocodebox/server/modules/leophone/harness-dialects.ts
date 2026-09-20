@@ -11,6 +11,7 @@ export const EVENT_MESSAGE_DELTA = 'message.delta';
 export const EVENT_REASONING = 'reasoning.available';
 export const EVENT_TOOL_STARTED = 'tool.started';
 export const EVENT_TOOL_COMPLETED = 'tool.completed';
+export const EVENT_TOOL_DELTA = 'tool.delta';
 export const EVENT_APPROVAL_REQUEST = 'approval.request';
 export const EVENT_APPROVAL_RESPONDED = 'approval.responded';
 export const EVENT_USER_MESSAGE = 'user.message';
@@ -191,6 +192,7 @@ export class ClaudeStreamJsonDialect implements HarnessDialect {
 
 export class PiRpcDialect implements HarnessDialect {
   private lastTurnError: string | null = null;
+  private lastToolDelta = new Map<string, { at: number; text: string }>();
 
   handshake(): unknown[] {
     return [];
@@ -219,7 +221,21 @@ export class PiRpcDialect implements HarnessDialect {
         preview: piToolPreview(str(obj.toolName), args),
         args,
       });
+    } else if (kind === 'tool_execution_update') {
+      const id = str(obj.toolCallId);
+      const output = piLivePreview(obj.partialResult ?? obj.result ?? obj.output);
+      if (id && output) {
+        const now = Date.now();
+        const prev = this.lastToolDelta.get(id);
+        if (!prev || prev.text !== output) {
+          if (!prev || now - prev.at >= 200 || output.length - prev.text.length >= 80) {
+            this.lastToolDelta.set(id, { at: now, text: output });
+            out.push({ event: EVENT_TOOL_DELTA, tool_use_id: id, output });
+          }
+        }
+      }
     } else if (kind === 'tool_execution_end') {
+      this.lastToolDelta.delete(str(obj.toolCallId));
       out.push({
         event: EVENT_TOOL_COMPLETED,
         tool: obj.toolName || 'tool',
@@ -334,6 +350,19 @@ function piResultPreview(result: unknown): string {
   if (texts.length > 0) return texts.join('\n').slice(0, 2000);
   if (typeof obj.text === 'string') return obj.text.slice(0, 2000);
   return '';
+}
+
+function piLivePreview(result: unknown): string {
+  let text = '';
+  if (typeof result === 'string') text = result;
+  else {
+    const obj = asObject(result);
+    const texts = asArray(obj.content).map((c) => str(asObject(c).text)).filter(Boolean);
+    if (texts.length > 0) text = texts.join('\n');
+    else if (typeof obj.text === 'string') text = obj.text;
+  }
+  text = text.replace(/\u0000/g, '');
+  return text.length > 2000 ? text.slice(-2000) : text;
 }
 
 /** leo-approval extension 把结构化信息塞在 select 的 title 里(JSON,leo:1);其他 extension 的 select 原样透传。 */
