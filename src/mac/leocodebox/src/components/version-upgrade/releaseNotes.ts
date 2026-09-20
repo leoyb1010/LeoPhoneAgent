@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.0.73',
+    date: '2026-09-20',
+    items: [
+      '本机文件预览可以改完写回磁盘，截断或远程产物不会乱动。',
+    ],
+  },
+  {
     version: '2.0.72',
     date: '2026-09-20',
     items: [

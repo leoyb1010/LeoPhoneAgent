@@ -21,6 +21,24 @@ export function clipFilePeek(text: string, limit = 80_000): string {
   return `${text.slice(0, limit)}\n…(后面还有 ${text.length - limit} 字)`;
 }
 
+export function isClippedFilePeek(text: string | null | undefined): boolean {
+  return /\n…\(后面还有 \d+ 字\)$/.test(text ?? '');
+}
+
+/** 只有本机项目里读完整正文的预览才能写回,截断/报错/远程产物都不动。 */
+export function peekCanWriteBack(input: {
+  machine?: string | null;
+  projectId?: string | null;
+  path?: string | null;
+  peek?: string | null;
+}): boolean {
+  if (input.machine !== 'local') return false;
+  if (!input.projectId?.trim() || !input.path?.trim()) return false;
+  const peek = input.peek ?? '';
+  if (!peek || peek === '正在读…' || peek.startsWith('读不了:')) return false;
+  return !isClippedFilePeek(peek);
+}
+
 /** 绝对路径或相对路径 → 产物清单用的 cwd 相对名。 */
 /** 预览上头只写文件名,不要整段绝对路径占一行。 */
 export function peekFileCaption(file: string | null | undefined): string {

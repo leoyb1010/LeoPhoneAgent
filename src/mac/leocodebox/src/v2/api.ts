@@ -108,6 +108,8 @@ export const api = {
     sendJson<{ projectId: string; path: string; fullPath: string; displayName: string }>('/api/leophone/local/workspace', { cwd }),
   readProjectFile: (projectId: string, filePath: string) =>
     getJson<{ content: string; path: string }>(`/api/projects/${encodeURIComponent(projectId)}/file?filePath=${encodeURIComponent(filePath)}`),
+  writeProjectFile: (projectId: string, filePath: string, content: string) =>
+    sendJson<{ success: boolean; path: string }>(`/api/projects/${encodeURIComponent(projectId)}/file`, { filePath, content }, 'PUT'),
   createLocalSession: (input: { cwd: string; prompt: string; model?: string | null; policy?: string; harness?: string }) =>
     sendJson<{ session_id: string; session: SessionSummary }>('/api/leophone/local/sessions', { harness: 'pi', ...input }),
   createRemoteSession: (input: { machine: string; prompt: string; cwd?: string; harness?: string; model?: string | null; policy?: string }) =>

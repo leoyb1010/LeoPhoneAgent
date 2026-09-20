@@ -8,7 +8,7 @@ import { api, type FleetOverview, type HarnessEvent, type LocalOverview, type Pr
 import { pickSessionFolder, revealSessionPath } from './desktop-folder';
 import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerNeedsModelSwitch, composerPlaceholder, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, prettyModelName, providerOf, rankModelsForPicker, readHiddenSessionKeys, relativeTime, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, windowBoundLabel, windowPadGesture, WINDOW_KEY_BUTTONS, type FlowRow, type Group, type SessionView } from './model';
 import { usableModelsFromProviders } from './settings-form';
-import { artifactNameFromPath, clipFilePeek, cwdChipLabel, isPeekDrawer, isWorkspaceDrawer, machineChipLabel, peekFileCaption, sessionFilePath, titlebarHomeCopy } from './local-files';
+import { artifactNameFromPath, clipFilePeek, cwdChipLabel, isPeekDrawer, isWorkspaceDrawer, machineChipLabel, peekCanWriteBack, peekFileCaption, sessionFilePath, titlebarHomeCopy } from './local-files';
 import { REMOTE_DRAWER_ACTION_LABEL, isRemoteDrawerKind, mergeFilePins, remoteDrawerActions, remoteDrawerCopy } from './remote-drawer';
 import { WhatsNewOverlay } from './WhatsNewOverlay';
 import { ChannelsPage, DevicesPage, SettingsPage } from './pages';
@@ -116,6 +116,7 @@ export default function App2() {
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [focusFile, setFocusFile] = useState<string | null>(null);
   const [filePeek, setFilePeek] = useState<string | null>(null);
+  const [filePeekDraft, setFilePeekDraft] = useState<string | null>(null);
   const [sessionArtifacts, setSessionArtifacts] = useState<Array<{ name: string }>>([]);
   const [artifactError, setArtifactError] = useState<string | null>(null);
   const [palette, setPalette] = useState<{ open: boolean; query: string; index: number }>({ open: false, query: '', index: 0 });
@@ -302,7 +303,10 @@ export default function App2() {
 
   useEffect(() => {
     if (!isPeekDrawer(drawer) || !active || !focusFile) {
-      if (!focusFile) setFilePeek(null);
+      if (!focusFile) {
+        setFilePeek(null);
+        setFilePeekDraft(null);
+      }
       return;
     }
     const cwd = activeSummary?.cwd ?? workspace?.fullPath ?? '';
@@ -311,6 +315,7 @@ export default function App2() {
     if (!localPath && !artifactName) return;
     let cancelled = false;
     setFilePeek('正在读…');
+    setFilePeekDraft('正在读…');
     const load = async (): Promise<string> => {
       if (active.machine === 'local' && workspace?.projectId && localPath) {
         try {
@@ -325,9 +330,14 @@ export default function App2() {
       return clipFilePeek(row.content ?? '');
     };
     void load().then((text) => {
-      if (!cancelled) setFilePeek(text);
+      if (cancelled) return;
+      setFilePeek(text);
+      setFilePeekDraft(text);
     }).catch((error) => {
-      if (!cancelled) setFilePeek(`读不了:${humanizeError(error instanceof Error ? error.message : String(error))}`);
+      if (cancelled) return;
+      const text = `读不了:${humanizeError(error instanceof Error ? error.message : String(error))}`;
+      setFilePeek(text);
+      setFilePeekDraft(text);
     });
     return () => { cancelled = true; };
   }, [drawer, active, workspace?.projectId, workspace?.fullPath, focusFile, activeSummary?.cwd]);
@@ -435,6 +445,21 @@ export default function App2() {
     try { await revealSessionPath(path); toast('已在 Finder 显示'); }
     catch (error) { toast(humanizeError(error instanceof Error ? error.message : String(error)), true); }
   }, [activeSummary?.cwd, focusFile, toast, workspace?.fullPath]);
+  const savePeek = useCallback(async () => {
+    const root = activeSummary?.cwd ?? workspace?.fullPath ?? '';
+    const path = focusFile ? sessionFilePath(root, focusFile) : '';
+    if (!workspace?.projectId || !peekCanWriteBack({ machine: active?.machine, projectId: workspace.projectId, path, peek: filePeek }) || filePeekDraft == null) {
+      toast('这份预览不能写回', true);
+      return;
+    }
+    try {
+      await api.writeProjectFile(workspace.projectId, path, filePeekDraft);
+      setFilePeek(filePeekDraft);
+      toast('已写回磁盘');
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+    }
+  }, [active?.machine, activeSummary?.cwd, filePeek, filePeekDraft, focusFile, toast, workspace?.fullPath, workspace?.projectId]);
   const pickFolder = useCallback(async () => {
     try {
       const next = await pickSessionFolder();
@@ -585,6 +610,7 @@ export default function App2() {
     ...(active?.machine === 'local' ? [{ v: 'winbind', t: boundWindowChipKind(active.machine, windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window))) === 'raise' ? '换一扇窗' : '绑窗口', sub: windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window)) || '列出本机窗口' }] : []),
     ...(boundWindowChipKind(active?.machine ?? '', windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window))) === 'raise' ? [{ v: 'winclick', t: '操作这个窗口', sub: windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window)) }] : []),
     ...(activeSummary?.cwd?.trim() && active?.machine === 'local' ? [{ v: 'finder', t: '在 Finder 打开', sub: activeSummary.cwd }] : []),
+    ...(active?.machine === 'local' && focusFile ? [{ v: 'savepeek', t: '写回当前文件', sub: '⌘S' }] : []),
     ...(activeSummary?.cwd?.trim() ? [{ v: 'cwd', t: '复制目录', sub: activeSummary.cwd }] : []),
     ...((sessionView.title || activeSummary?.title || '').trim() ? [{ v: 'title', t: '复制标题', sub: (sessionView.title || activeSummary?.title || '').trim() }] : []),
     ...(canDrive ? [] : [{ v: 'continue', t: '在同一目录续写', sub: '新开会话' }]),
@@ -596,6 +622,7 @@ export default function App2() {
     else if (v === 'stop') void stop();
     else if (v === 'continue') continueHere();
     else if (v === 'finder') void revealCwd();
+    else if (v === 'savepeek') void savePeek();
     else if (v === 'cwd') void copyCwd();
     else if (v === 'title') void copyTitle();
     else if (v === 'find') { setFlowFind((cur) => ({ ...cur, open: true })); window.setTimeout(() => { flowFindRef.current?.focus(); flowFindRef.current?.select(); }, 0); }
@@ -643,6 +670,7 @@ export default function App2() {
       if (meta && ['1', '2', '3'].includes(e.key)) { e.preventDefault(); setView((['home', 'devices', 'channels'] as View[])[Number(e.key) - 1]); return; }
       if (meta && e.key === ',') { e.preventDefault(); setView('settings'); return; }
       if (meta && e.key.toLowerCase() === 'n') { e.preventDefault(); beginLocalNew(); return; }
+      if (meta && e.key.toLowerCase() === 's' && isPeekDrawer(drawer)) { e.preventDefault(); void savePeek(); return; }
       if (meta && e.key.toLowerCase() === 'g' && flowFind.open) {
         e.preventDefault();
         stepFind(e.shiftKey ? -1 : 1);
@@ -666,7 +694,7 @@ export default function App2() {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [palette.open, picker, menu, drawer, newBox, draft, send, approveFirstPending, view, sessionView.pendingApprovals, approve, allSessions, matchesFilter, active, openSession, beginLocalNew, flowFind.open, windowOp, stepFind, copyFindHit]);
+  }, [palette.open, picker, menu, drawer, newBox, draft, send, approveFirstPending, view, sessionView.pendingApprovals, approve, allSessions, matchesFilter, active, openSession, beginLocalNew, flowFind.open, windowOp, stepFind, copyFindHit, savePeek]);
 
   // -- 命令面板 ---------------------------------------------------------------
   type Command = { g: string; t: string; k: string; run: () => void };
@@ -687,12 +715,13 @@ export default function App2() {
     { g: '这条会话', t: '压缩这条会话', k: 'pi compact', run: () => void compact() },
     { g: '这条会话', t: '停止', k: '', run: () => void stop() },
     ...(active && activeSummary && sessionCanForget(activeSummary.status) ? [{ g: '这条会话', t: '从左栏拿掉', k: '', run: () => void forgetSession(active) }] : []),
+    { g: '这条会话', t: '写回当前文件', k: '⌘S', run: () => void savePeek() },
     { g: '这条会话', t: '终端', k: '⌘T', run: () => setDrawer('term') }, { g: '这条会话', t: '文件', k: '⌘E', run: () => setDrawer('files') },
     { g: '这条会话', t: '本次改动', k: '⌘D', run: () => setDrawer('diff') }, { g: '这条会话', t: '浏览器', k: '⌘B', run: () => setDrawer('browser') },
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, forgetSession, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, copyCwd, revealCwd, copyFindHit, sessionView.title, stepFind]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, forgetSession, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, copyCwd, revealCwd, copyFindHit, savePeek, sessionView.title, stepFind]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -777,16 +806,25 @@ export default function App2() {
     : null;
   const drawerTitle = remoteCopy?.title
     ?? (drawer === 'diff' ? `本次改动${editRows.length ? ` · ${editRows.length}` : ''}` : ({ term: '终端', files: '文件', diff: '本次改动', browser: '浏览器' } as const)[drawer ?? 'term']);
+  const peekPath = focusFile ? sessionFilePath(cwd || workspace?.fullPath || '', focusFile) : '';
+  const canWritePeek = peekCanWriteBack({ machine: active?.machine, projectId: workspace?.projectId, path: peekPath, peek: filePeek });
+  const peekDirty = canWritePeek && filePeekDraft != null && filePeekDraft !== filePeek;
   const filePeekBlock = filePeek != null ? (
     <div className="local-files-peek-wrap">
       <div className="local-files-peek-head">
         {peekFileCaption(focusFile) ? <b className="local-files-name">{peekFileCaption(focusFile)}</b> : <span />}
         <span className="local-files-peek-acts">
+          {canWritePeek ? <button className="link" type="button" disabled={!peekDirty} onClick={() => { void savePeek(); }}>{peekDirty ? '保存' : '已是最新'}</button> : null}
           {active?.machine === 'local' && (focusFile || cwd) ? <button className="link" type="button" onClick={() => { void revealFocusFile(); }}>在 Finder 显示</button> : null}
-          <button className="link" type="button" onClick={() => { void navigator.clipboard.writeText(filePeek); toast('已复制正文'); }}>复制正文</button>
+          <button className="link" type="button" onClick={() => { void navigator.clipboard.writeText(filePeekDraft ?? filePeek); toast('已复制正文'); }}>复制正文</button>
         </span>
       </div>
-      <pre className="local-files-peek">{filePeek}</pre>
+      {canWritePeek ? (
+        <textarea className="local-files-peek" value={filePeekDraft ?? filePeek} spellCheck={false}
+          onChange={(e) => setFilePeekDraft(e.target.value)} />
+      ) : (
+        <pre className="local-files-peek">{filePeek}</pre>
+      )}
     </div>
   ) : null;
 

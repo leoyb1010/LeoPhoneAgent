@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
-import { artifactNameFromPath, clipFilePeek, cwdChipLabel, isPeekDrawer, isWorkspaceDrawer, machineChipLabel, peekFileCaption, sessionFilePath, titlebarHomeCopy } from './local-files';
+import { artifactNameFromPath, clipFilePeek, cwdChipLabel, isClippedFilePeek, isPeekDrawer, isWorkspaceDrawer, machineChipLabel, peekCanWriteBack, peekFileCaption, sessionFilePath, titlebarHomeCopy } from './local-files';
 
 test('会话文件路径:相对拼到 cwd,绝对的原样用', () => {
   assert.equal(sessionFilePath('/tmp/work', 'src/a.ts'), '/tmp/work/src/a.ts');
@@ -15,6 +15,26 @@ test('会话文件路径:相对拼到 cwd,绝对的原样用', () => {
 test('文件预览过长就截断,并说清后面还有多少', () => {
   assert.equal(clipFilePeek('短'), '短');
   assert.match(clipFilePeek('x'.repeat(90_000), 80_000), /后面还有 10000 字/);
+  assert.equal(isClippedFilePeek('短'), false);
+  assert.equal(isClippedFilePeek(clipFilePeek('x'.repeat(90_000), 80_000)), true);
+});
+
+test('只有本机读完整正文才能写回,截断和远程都不动', () => {
+  assert.equal(peekCanWriteBack({ machine: 'local', projectId: 'p1', path: '/tmp/a.ts', peek: 'hello' }), true);
+  assert.equal(peekCanWriteBack({ machine: 'fold', projectId: 'p1', path: '/tmp/a.ts', peek: 'hello' }), false);
+  assert.equal(peekCanWriteBack({ machine: 'local', projectId: '', path: '/tmp/a.ts', peek: 'hello' }), false);
+  assert.equal(peekCanWriteBack({ machine: 'local', projectId: 'p1', path: '', peek: 'hello' }), false);
+  assert.equal(peekCanWriteBack({ machine: 'local', projectId: 'p1', path: '/tmp/a.ts', peek: '正在读…' }), false);
+  assert.equal(peekCanWriteBack({ machine: 'local', projectId: 'p1', path: '/tmp/a.ts', peek: '读不了:没有文件名' }), false);
+  assert.equal(peekCanWriteBack({ machine: 'local', projectId: 'p1', path: '/tmp/a.ts', peek: clipFilePeek('x'.repeat(90_000), 80_000) }), false);
+  const app = readFileSync(fileURLToPath(new URL('./App2.tsx', import.meta.url)), 'utf8');
+  const api = readFileSync(fileURLToPath(new URL('./api.ts', import.meta.url)), 'utf8');
+  assert.match(app, /writeProjectFile/);
+  assert.match(app, /peekCanWriteBack/);
+  assert.match(app, /保存/);
+  assert.match(app, /写回当前文件/);
+  assert.match(api, /writeProjectFile/);
+  assert.match(api, /PUT/);
 });
 
 test('产物相对名:cwd 下的绝对路径削掉前缀,相对的原样', () => {

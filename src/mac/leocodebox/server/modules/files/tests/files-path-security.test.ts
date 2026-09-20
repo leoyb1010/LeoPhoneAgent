@@ -34,6 +34,24 @@ test('realpath validation rejects symlink escapes and permits missing descendant
   assert.equal(missing.realPath, path.join(await fs.realpath(root), 'new', 'file.txt'));
 });
 
+test('项目内文件可以写回,越界路径不能写', async (t) => {
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'leocodebox-files-write-'));
+  const root = path.join(temp, 'root');
+  await fs.mkdir(root);
+  const file = path.join(root, 'note.txt');
+  await fs.writeFile(file, 'old');
+  t.after(() => fs.rm(temp, { recursive: true, force: true }));
+
+  const inside = await assertRealPathWithinRoot(root, file);
+  assert.equal(inside.valid, true);
+  assert.ok(inside.realPath);
+  await fs.writeFile(inside.realPath, 'new from peek', 'utf8');
+  assert.equal(await fs.readFile(file, 'utf8'), 'new from peek');
+
+  const escaped = await assertRealPathWithinRoot(root, path.join(temp, 'outside.txt'));
+  assert.equal(escaped.valid, false);
+});
+
 test('file tree skips dependency and VCS directories', async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'leocodebox-file-tree-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
