@@ -303,24 +303,29 @@ export default function App2() {
 
   return (
     <div className={`leo2 ${isDarkMode ? '' : 'light'}`}>
+      {/* 顶条:窗口隐藏标题栏下,BrowserView 顶部 ~42px 收不到真实鼠标事件(实测),
+          所以这里只放"看"的东西:标题 + 状态。所有能点的都在左栏。 */}
       <header className="titlebar glass">
         <div />
-        <nav className="topnav" aria-label="主导航">
-          {([['home', '主控', '⌘1'], ['devices', '设备', '⌘2'], ['channels', '通道', '⌘3'], ['settings', '设置', '⌘,']] as Array<[View, string, string]>).map(([v, label, k]) => (
-            <button key={v} className={view === v ? 'on' : ''} onClick={() => setView(v)}>{label}<kbd>{k}</kbd></button>
-          ))}
-        </nav>
+        <div className="tb-title">
+          {view === 'home'
+            ? (activeSummary ? <><b>{title || '新会话'}</b><span className="tb-sub mono">{activeGroup?.name ?? active?.machine} · {cwd}</span></> : <b>主控</b>)
+            : <b>{{ devices: '设备', channels: '通道', settings: '设置' }[view]}</b>}
+        </div>
         <div className="tb-right">
           <span className="tb-status"><span className={`dot ${loadError ? 'err' : 'ok'}`} /><span>{loadError ? `本机服务:${loadError}` : `本机服务正常${fleet?.configured ? ` · 远程 ${groups.filter((g) => g.id !== 'local' && g.online).length} 台在线` : ''}`}</span></span>
-          <button className="tb-btn" onClick={() => setPalette({ open: true, query: '', index: 0 })} title="命令面板">⌘K</button>
-          <button className="tb-btn" onClick={toggleDarkMode} title="切换明暗">暗 / 亮</button>
         </div>
       </header>
 
-      <div className={`body ${view === 'home' ? '' : 'full'}`}>
-        {view === 'home' && (
+      <div className="body">
+        {(
           <aside className="rail" aria-label="会话">
             <div className="rail-top">
+              <nav className="topnav" aria-label="主导航">
+                {([['home', '主控', '⌘1'], ['devices', '设备', '⌘2'], ['channels', '通道', '⌘3'], ['settings', '设置', '⌘,']] as Array<[View, string, string]>).map(([v, label, k]) => (
+                  <button key={v} className={view === v ? 'on' : ''} onClick={() => setView(v)} title={k}>{label}</button>
+                ))}
+              </nav>
               <button className="btn-new" onClick={() => { void refreshProviders(); setNewBox((b) => (b?.open ? null : { open: true, machine: 'local' })); }}><span>+ 新会话</span><kbd>⌘N</kbd></button>
               <div className="chips">
                 {([['all', '全部'], ['active', '进行中'], ['need', '需要你'], ['err', '失败'], ['history', '历史']] as Array<[Filter, string]>).map(([f, label]) => (
@@ -331,7 +336,7 @@ export default function App2() {
             <div className="rail-list">
               {newBox?.open && (
                 <NewSessionBox machine={newBox.machine} groups={groups} models={configuredModels} defaultCwd={activeSummary?.cwd || local?.home || '~'} busy={busy}
-                  onCancel={() => setNewBox(null)} onCreate={(input) => void createSession(input)} />
+                  onCancel={() => setNewBox(null)} onCreate={(input) => void createSession(input)} onOpenSettings={() => { setNewBox(null); setView('settings'); }} />
               )}
               {(() => {
                 const visible = groups.map((g) => ({ g, ss: g.sessions.filter(matchesFilter).sort((a, b) => (ORDER[a.status] ?? 9) - (ORDER[b.status] ?? 9) || b.updated_at - a.updated_at) })).filter((x) => x.ss.length > 0);
@@ -358,6 +363,10 @@ export default function App2() {
                 ));
               })()}
             </div>
+            <div className="rail-foot">
+              <button className="tb-btn" onClick={() => setPalette({ open: true, query: '', index: 0 })} title="命令面板">⌘K 命令</button>
+              <button className="tb-btn" onClick={toggleDarkMode} title="切换明暗">{isDarkMode ? '亮色' : '暗色'}</button>
+            </div>
           </aside>
         )}
 
@@ -370,7 +379,7 @@ export default function App2() {
                 <header className="shead glass">
                   <div className="shead-l">
                     <span className={`dot ${statusDot(sessionView.status) === 'idle' ? '' : statusDot(sessionView.status)}`} />
-                    <div className="shead-t"><h1>{title || '新会话'}</h1><div className="shead-sub mono">{activeGroup?.name ?? active?.machine} · {cwd}</div></div>
+                    <span className="shead-state">{({ running: '进行中', starting: '启动中', waiting_for_approval: '需要你', idle: '空闲,可以接着说', completed: '已完成', failed: '失败', cancelled: '已停止', orphaned: '已失联' } as Record<string, string>)[sessionView.status] ?? sessionView.status}</span>
                   </div>
                   <div className="shead-r">
                     <button className="chip" onClick={(e) => { e.stopPropagation(); modelMenu(e.currentTarget); }} disabled={!canDrive || activeSummary.harness !== 'pi'}><b>{modelLabel(sessionView.model)}</b>{providerOf(sessionView.model) ? <span className="car">▼</span> : null}</button>
@@ -514,9 +523,9 @@ function Row({ row, model, onApprove, onDiff }: { row: FlowRow; model: string | 
   }
 }
 
-function NewSessionBox({ machine, groups, models, defaultCwd, busy, onCancel, onCreate }: {
+function NewSessionBox({ machine, groups, models, defaultCwd, busy, onCancel, onCreate, onOpenSettings }: {
   machine: string; groups: Group[]; models: Array<{ provider: string; providerName: string; id: string; name: string }>; defaultCwd: string; busy: boolean;
-  onCancel: () => void; onCreate: (input: { machine: string; cwd: string; prompt: string; model: string | null; policy: string }) => void;
+  onCancel: () => void; onCreate: (input: { machine: string; cwd: string; prompt: string; model: string | null; policy: string }) => void; onOpenSettings: () => void;
 }) {
   const [target, setTarget] = useState(machine);
   const [cwd, setCwd] = useState(defaultCwd);
@@ -525,20 +534,23 @@ function NewSessionBox({ machine, groups, models, defaultCwd, busy, onCancel, on
   const [prompt, setPrompt] = useState('');
   useEffect(() => { setTarget(machine); }, [machine]);
   useEffect(() => { if (!model && models[0]) setModel(`${models[0].provider}/${models[0].id}`); }, [models, model]);
-  const submit = () => { if (!prompt.trim()) return; onCreate({ machine: target, cwd: cwd.trim() || '~', prompt: prompt.trim(), model: model || null, policy }); };
+  // 本机会话跑的是自带的 pi 内核,没登录任何模型就开会话只会换来一句 "No API key"。
+  const needModel = target === 'local' && models.length === 0;
+  const submit = () => { if (!prompt.trim() || needModel) return; onCreate({ machine: target, cwd: cwd.trim() || '~', prompt: prompt.trim(), model: model || null, policy }); };
   return (
     <div className="newbox">
+      {needModel && <div className="newbox-warn"><b>还没有可用的模型。</b>先到「设置」登录一个供应商或粘贴密钥,再回来开会话。<button className="btn-s" onClick={onOpenSettings}>去设置</button></div>}
       <div className="row2">
         <div><label>机器</label><select value={target} onChange={(e) => setTarget(e.target.value)}>{groups.filter((g) => g.online).map((g) => <option key={g.id} value={g.id}>{g.name}{g.id === 'local' ? '(本机)' : ''}</option>)}</select></div>
         <div><label>审批</label><select value={policy} onChange={(e) => setPolicy(e.target.value)}>{(['default', 'accept_edits', 'plan', 'auto'] as const).map((p) => <option key={p} value={p}>{POLICY_LABEL[p]}</option>)}</select></div>
       </div>
       <div><label>模型</label><select value={model} onChange={(e) => setModel(e.target.value)}>
-        <option value="">默认模型(由运行时决定)</option>
+        {target !== 'local' && <option value="">由那台机器决定</option>}
         {models.map((m) => <option key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>{m.name} · {m.providerName}</option>)}
       </select></div>
       <div><label>目录</label><input value={cwd} onChange={(e) => setCwd(e.target.value)} className="mono" placeholder="~/项目路径" /></div>
       <div><label>第一句话</label><textarea autoFocus value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="要它做什么" onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') submit(); }} /></div>
-      <div className="acts"><button className="btn-g" onClick={onCancel}>取消</button><button className="btn-s" onClick={submit} disabled={busy || !prompt.trim()}>开始</button></div>
+      <div className="acts"><button className="btn-g" onClick={onCancel}>取消</button><button className="btn-s" onClick={submit} disabled={busy || !prompt.trim() || needModel}>开始</button></div>
     </div>
   );
 }

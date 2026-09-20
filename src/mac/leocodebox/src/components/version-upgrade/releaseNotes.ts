@@ -17,6 +17,15 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.0.1',
+    date: '2026-09-20',
+    items: [
+      '修复:顶栏的「主控 / 设备 / 通道 / 设置」和 ⌘K、明暗按钮在正式包里点不动 —— 窗口顶部 42px 在隐藏标题栏下收不到真实鼠标事件。现在顶条只显示标题和状态,导航、⌘K、明暗都在左栏,左栏在每个页面常驻。',
+      '修复:没登录任何模型也能开本机会话,结果只换来一句英文 "No API key"。现在新会话面板会直接告诉你先去设置登录,并给「去设置」按钮;pi 的报错也翻成能行动的中文。',
+      '修复:终端抽屉一打开就 "exited with code 0"(空命令跑了 bash -c "")。现在打开的是你的登录 shell。',
+    ],
+  },
+  {
     version: '2.0.0',
     date: '2026-09-19',
     items: [

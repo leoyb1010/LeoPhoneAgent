@@ -56,18 +56,20 @@
 @media (prefers-reduced-motion:reduce){.leo2 *{animation:none!important;transition:none!important}}
 
 /* 壳 */
-.leo2 .titlebar{display:grid;grid-template-columns:80px auto 1fr auto;align-items:center;border-bottom:1px solid var(--line);-webkit-app-region:drag;padding-right:12px;position:relative;z-index:5}
-.leo2 .topnav{display:flex;gap:2px;-webkit-app-region:no-drag}
-.leo2 .topnav button{padding:3px 10px;border-radius:7px;color:var(--fg2)}
+.leo2 .titlebar{display:grid;grid-template-columns:80px minmax(0,1fr) auto;align-items:center;height:44px;border-bottom:1px solid var(--line);-webkit-app-region:drag;padding-right:14px;position:relative;z-index:5;user-select:none}
+.leo2 .tb-title{display:flex;align-items:baseline;gap:10px;min-width:0;font-size:13px}
+.leo2 .tb-title b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.leo2 .tb-sub{font-size:11px;color:var(--fg3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.leo2 .topnav{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;padding:2px;border-radius:9px;background:var(--chip)}
+.leo2 .topnav button{padding:4px 0;border-radius:7px;color:var(--fg2);font-size:12px;text-align:center}
 .leo2 .topnav button:hover{color:var(--fg);background:var(--chip)}
 .leo2 .topnav button.on{background:var(--sel);color:var(--fg)}
 .leo2 .topnav button kbd{margin-left:6px;font-size:10px;color:var(--fg3)}
-.leo2 .tb-right{grid-column:4;display:flex;align-items:center;gap:8px;-webkit-app-region:no-drag}
+.leo2 .tb-right{grid-column:3;display:flex;align-items:center;gap:8px}
 .leo2 .tb-status{display:flex;align-items:center;gap:7px;color:var(--fg2);font-size:12px;margin-right:6px;white-space:nowrap}
 .leo2 .tb-btn{padding:3px 8px;border-radius:7px;color:var(--fg2);background:var(--chip);font-size:12px}
 .leo2 .tb-btn:hover{color:var(--fg)}
 .leo2 .body{display:grid;grid-template-columns:300px minmax(0,1fr);min-height:0}
-.leo2 .body.full{grid-template-columns:minmax(0,1fr)}
 @media (max-width:1100px){.leo2 .body{grid-template-columns:256px minmax(0,1fr)}}
 
 /* 左栏 */
@@ -83,7 +85,10 @@
 .leo2 .chip-f.on{background:var(--sel);color:var(--fg)}
 .leo2 .chip-f i{font-style:normal;color:var(--fg3);margin-left:3px;font-size:11px}
 .leo2 .chip-f.on i{color:var(--fg2)}
-.leo2 .rail-list{position:absolute;inset:0;overflow:auto;padding:84px 0 14px}
+.leo2 .rail-list{position:absolute;inset:0;overflow:auto;padding:118px 0 48px}
+.leo2 .rail-foot{position:absolute;left:0;right:0;bottom:0;z-index:2;display:flex;justify-content:space-between;gap:6px;padding:8px 12px;border-top:1px solid var(--line);background:var(--glass2);-webkit-backdrop-filter:blur(22px) saturate(1.5);backdrop-filter:blur(22px) saturate(1.5)}
+.leo2 .newbox-warn{padding:8px 10px;border-radius:8px;background:var(--warn-bg,rgba(255,159,10,.12));color:var(--fg);font-size:12px;line-height:1.5;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.leo2 .shead-state{font-size:12px;color:var(--fg2)}
 .leo2 .grp-h{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:7px;padding:12px 14px 5px;font-size:11px;color:var(--fg2);background:var(--bg2)}
 .leo2 .grp-h b{font-weight:500;color:var(--fg);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .leo2 .grp-h .role{color:var(--fg3)}

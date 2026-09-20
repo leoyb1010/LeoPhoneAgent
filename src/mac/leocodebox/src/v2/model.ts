@@ -127,7 +127,7 @@ export function applyEvent(view: SessionView, event: HarnessEvent): SessionView 
       status = 'idle';
       break;
     case 'run.failed':
-      rows = [...closeStreaming(rows), { k: 'sys', key: nextKey(), text: `失败:${str(event.error) || '未知错误'}`, tone: 'error' }];
+      rows = [...closeStreaming(rows), { k: 'sys', key: nextKey(), text: `失败:${humanizeError(str(event.error))}`, tone: 'error' }];
       status = 'failed';
       break;
     case 'run.cancelled':
@@ -202,4 +202,14 @@ export function lastLine(summary: Pick<SessionSummary, 'status' | 'last_event' |
     case 'run.cancelled': return '已停止';
     default: return ev.text;
   }
+}
+
+/** pi 的报错是给终端用户看的英文 + 文件路径;这里翻成一句能行动的话。 */
+export function humanizeError(raw: string): string {
+  const text = (raw || '').trim();
+  if (!text) return '未知错误';
+  if (/no api key/i.test(text)) return '这个模型还没有登录或密钥 —— 到「设置」登录一个供应商后再试';
+  if (/unknown (model|provider)/i.test(text)) return '这个模型不可用 —— 到「设置」里选一个已登录的模型';
+  if (/exited with code/i.test(text)) return `内核进程退出(${text})`;
+  return text.split('\n')[0].replace(/\s+See:.*$/i, '').slice(0, 200);
 }
