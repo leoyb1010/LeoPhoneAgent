@@ -13,6 +13,8 @@ declare global {
       setRunningBadge?: (count: number) => Promise<unknown>;
       pickFolder?: () => Promise<{ path?: string; cancelled?: boolean }>;
       revealPath?: (target: string) => Promise<{ path: string }>;
+      notify?: (payload: { title: string; body: string; sessionId?: string; machine?: string }) => Promise<{ shown?: boolean }>;
+      onNoticeClick?: (callback: (row: { sessionId?: string | null; machine?: string | null }) => void) => () => void;
       /** 桌面壳发过来的"打开某个东西":本地工具页 / 设置窗。 */
       onOpenModal: (
         callback: (tool: 'settings' | 'leoapi' | 'feedback') => void,

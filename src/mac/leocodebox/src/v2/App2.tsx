@@ -6,6 +6,8 @@ import type { Project } from '../types/app';
 
 import { api, type FleetOverview, type HarnessEvent, type LocalOverview, type ProviderInfo, type SessionSummary, type SessionTarget } from './api';
 import { pickSessionFolder, revealSessionPath } from './desktop-folder';
+import { onSessionNoticeClick, setDockNeedBadge, showSessionNotice } from './desktop-notice';
+import { dockNeedBadge, noticesFromSnapshot, sessionPathTarget } from './session-notice';
 import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerNeedsModelSwitch, composerPlaceholder, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, prettyModelName, providerOf, rankModelsForPicker, readHiddenSessionKeys, relativeTime, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, windowBoundLabel, windowPadGesture, WINDOW_KEY_BUTTONS, type FlowRow, type Group, type SessionView } from './model';
 import { usableModelsFromProviders } from './settings-form';
 import { artifactNameFromPath, clipFilePeek, cwdChipLabel, isPeekDrawer, isWorkspaceDrawer, machineChipLabel, peekCanWriteBack, peekFileCaption, sessionFilePath, titlebarHomeCopy } from './local-files';
@@ -233,6 +235,48 @@ export default function App2() {
   const matchesFilter = useCallback((s: SessionSummary) => sessionMatchesFilter(s, filter), [filter]);
 
   const othersNeedingYou = useMemo(() => allSessions.filter((x) => x.s.status === 'waiting_for_approval' && !(active && x.machine === active.machine && x.s.session_id === active.id)), [allSessions, active]);
+  const noticePrev = useRef<Map<string, string>>(new Map());
+  const noticePrimed = useRef(false);
+
+  useEffect(() => {
+    const fromPath = sessionPathTarget(window.location.pathname);
+    if (fromPath) {
+      setActive(fromPath);
+      setView('home');
+    }
+  }, []);
+
+  useEffect(() => onSessionNoticeClick((target) => {
+    setActive(target);
+    setView('home');
+  }), []);
+
+  useEffect(() => {
+    void setDockNeedBadge(dockNeedBadge(allSessions.map((row) => row.s)));
+  }, [allSessions]);
+
+  useEffect(() => {
+    const next = allSessions.map((row) => ({
+      key: sessionKey(row.machine, row.s.session_id),
+      machine: row.machine,
+      id: row.s.session_id,
+      status: row.s.status,
+      title: row.s.title || '新会话',
+      command: row.s.pending_approvals?.[0]?.command ?? row.s.last_event?.text ?? '',
+    }));
+    const { notices, map } = noticesFromSnapshot({
+      primed: noticePrimed.current,
+      prev: noticePrev.current,
+      next,
+      activeKey: active ? sessionKey(active.machine, active.id) : null,
+      windowFocused: document.hasFocus() && !document.hidden,
+    });
+    noticePrev.current = map;
+    noticePrimed.current = true;
+    for (const notice of notices) {
+      void showSessionNotice({ title: notice.title, body: notice.body, sessionId: notice.id, machine: notice.machine });
+    }
+  }, [allSessions, active]);
 
   // 首次进来没有选中会话:挑一条最需要看的。
   useEffect(() => {

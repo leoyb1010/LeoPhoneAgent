@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, safeStorage, session, shell, webContents } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Notification, safeStorage, session, shell, webContents } from 'electron';
 import updaterPackage from 'electron-updater';
 import { randomBytes } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
@@ -524,6 +524,26 @@ function registerIpcHandlers() {
       app.dock.setBadge(runningCount > 0 ? String(runningCount) : '');
     }
     return true;
+  });
+
+  trustedHandle('leocodebox-desktop:notify', async (event, payload) => {
+    if (!Notification.isSupported()) return { shown: false };
+    const title = String(payload?.title || APP_NAME).slice(0, 80);
+    const body = String(payload?.body || '').slice(0, 200);
+    const sessionId = payload?.sessionId ? String(payload.sessionId) : null;
+    const machine = payload?.machine ? String(payload.machine) : 'local';
+    const notice = new Notification({ title, body, silent: false });
+    notice.on('click', () => {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      if (win) {
+        if (win.isMinimized()) win.restore();
+        win.show();
+        win.focus();
+      }
+      event.sender.send('leocodebox-desktop:notice-click', { machine, sessionId });
+    });
+    notice.show();
+    return { shown: true };
   });
 
   trustedHandle('leocodebox-desktop:copy-diagnostics', async () => {

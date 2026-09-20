@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.0.74',
+    date: '2026-09-20',
+    items: [
+      '本机会话需要你批准、失败或跑完时会弹出系统通知，点一下回到那条会话；程序坞也会标出还在等你的条数。',
+    ],
+  },
+  {
     version: '2.0.73',
     date: '2026-09-20',
     items: [
