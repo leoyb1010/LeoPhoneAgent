@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 
+import { sessionAssistantBlocks, sessionAssistantNeedsText } from './session-assistant-text.js';
 import { sessionIncompleteLabel } from './session-incomplete.js';
 import { sessionToolFailed } from './session-tool-fail.js';
 import { sessionToolFullOutput } from './session-tool-full.js';
@@ -201,6 +202,8 @@ export class PiRpcDialect implements HarnessDialect {
   private lastTurnError: string | null = null;
   private skipSettledComplete = false;
   private lastToolDelta = new Map<string, { at: number; text: string }>();
+  private streamedAssistant = false;
+  private streamedThinking = false;
 
   handshake(): unknown[] {
     return [];
@@ -210,16 +213,22 @@ export class PiRpcDialect implements HarnessDialect {
     const out: HarnessEvent[] = [];
     const kind = obj.type;
     const turnError = assistantTurnError(obj);
-    if (kind === 'agent_start') {
-      this.lastTurnError = null;
-      this.skipSettledComplete = false;
+    if (kind === 'agent_start' || kind === 'message_start') {
+      if (kind === 'agent_start') {
+        this.lastTurnError = null;
+        this.skipSettledComplete = false;
+      }
+      this.streamedAssistant = false;
+      this.streamedThinking = false;
     } else if (turnError) this.lastTurnError = turnError;
 
     if (kind === 'message_update') {
       const ev = asObject(obj.assistantMessageEvent);
       if (ev.type === 'text_delta' && ev.delta) {
+        this.streamedAssistant = true;
         out.push({ event: EVENT_MESSAGE_DELTA, delta: ev.delta });
       } else if (ev.type === 'thinking_delta' && ev.delta) {
+        this.streamedThinking = true;
         out.push({ event: EVENT_REASONING, text: ev.delta });
       }
     } else if (kind === 'tool_execution_start') {
@@ -409,6 +418,13 @@ export class PiRpcDialect implements HarnessDialect {
     } else if (kind === 'message_end') {
       const message = asObject(obj.message);
       const usage = asObject(message.usage);
+      const blocks = sessionAssistantBlocks(message);
+      if (sessionAssistantNeedsText({ streamed: this.streamedAssistant, role: str(message.role), text: blocks.text })) {
+        out.push({ event: EVENT_MESSAGE_DELTA, delta: blocks.text });
+      }
+      if (sessionAssistantNeedsText({ streamed: this.streamedThinking, role: str(message.role), text: blocks.thinking })) {
+        out.push({ event: EVENT_REASONING, text: blocks.thinking });
+      }
       if (str(message.role) === 'assistant' && str(message.stopReason) !== 'error' && !sessionIncompleteLabel(str(message.stopReason))) {
         const totalTokens = Number(usage.totalTokens ?? 0);
         const input = Number(usage.input ?? 0);

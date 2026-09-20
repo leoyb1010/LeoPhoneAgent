@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   EVENT_APPROVAL_REQUEST,
+  EVENT_MESSAGE_DELTA,
   EVENT_RUN_COMPLETED,
   EVENT_RUN_FAILED,
   EVENT_SESSION_COMPACTING,
@@ -109,6 +110,27 @@ test('notify / extension_error 变成 session.note', () => {
   assert.equal(boom[0]?.event, 'session.note');
   assert.equal(boom[0]?.level, 'error');
   assert.equal(boom[0]?.text, 'hook failed');
+});
+
+test('没流出来的字也会出现', () => {
+  const dialect = new PiRpcDialect();
+  const first = dialect.translateLine({
+    type: 'message_end',
+    message: {
+      role: 'assistant',
+      stopReason: 'stop',
+      content: [{ type: 'text', text: '先改登录' }],
+    },
+  }).events;
+  assert.equal(first[0]?.event, EVENT_MESSAGE_DELTA);
+  assert.equal(first[0]?.delta, '先改登录');
+  const streamed = new PiRpcDialect();
+  streamed.translateLine({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: '先' } });
+  const again = streamed.translateLine({
+    type: 'message_end',
+    message: { role: 'assistant', stopReason: 'stop', content: [{ type: 'text', text: '先改登录' }] },
+  }).events;
+  assert.equal(again.some((ev) => ev.event === EVENT_MESSAGE_DELTA), false);
 });
 
 test('message_end 用量变成 session.usage', () => {
