@@ -30,6 +30,7 @@ import { canOpenLastWritten, lastWrittenFile, openLastWrittenToast } from './ses
 import { canJumpLastFail, jumpLastFailToast, lastFailedRow } from './session-fail';
 import { canOpenLastRead, lastReadFile, openLastReadToast, readFileFromRow } from './session-read';
 import { canForkSession, forkSeedText, forkSessionToast, forkTitle } from './session-fork';
+import { canImportTalk, importSeedText, importTalkName, importTalkToast, importTitle } from './session-import-talk';
 import { canShowSameCwd, sameCwdPickerHint, sameCwdSessions, sameCwdToast, type SameCwdSession } from './session-here';
 import { canOpenTalkLinks, sessionTalkLinks, talkLinkPickerHint, talkLinkToast } from './session-links';
 import { canShowSessionPulse, sessionPulseLabel, sessionPulseToast } from './session-pulse';
@@ -328,6 +329,7 @@ export default function App2() {
   const pulseLabel = sessionPulseLabel({ rows: sessionView.rows, createdAt: activeSummary?.created_at });
   const canPulse = canShowSessionPulse(active?.machine, sessionView.rows, activeSummary?.created_at);
   const canFork = canForkSession(active?.machine, activeSummary?.cwd, sessionView.rows);
+  const canImportHere = canImportTalk(active?.machine, activeSummary?.cwd);
   const talkLinks = useMemo(() => sessionTalkLinks(sessionView.rows), [sessionView.rows]);
   const canLinks = canOpenTalkLinks(active?.machine, talkLinks);
   const canApplyHere = canApplySessionPatch(active?.machine);
@@ -1466,6 +1468,36 @@ export default function App2() {
       toast(forkSessionToast(named));
     });
   }, [activeSummary, canFork, providers, sessionView.model, sessionView.policy, sessionView.rows, sessionView.title, toast, withBusy]);
+  const importTalk = useCallback(async () => {
+    const cwd = activeSummary?.cwd?.trim() ?? '';
+    if (!active || !canImportHere || !cwd) {
+      toast('这条接不回来', true);
+      return;
+    }
+    if (providers === null) return;
+    if (usableModelsFromProviders(providers).length === 0) {
+      setView('settings');
+      toast(humanizeError('还没有登录任何模型。先去设置里授权或填密钥。'), true);
+      return;
+    }
+    await withBusy(async () => {
+      const row = await api.importLocalTalk(active, { name: importTalkName(focusFile) });
+      const named = importTitle(row.name);
+      const created = await api.createLocalSession({
+        cwd,
+        prompt: importSeedText({ name: row.name, markdown: row.markdown }),
+        model: sessionView.model || activeSummary?.model,
+        policy: sessionView.policy,
+      });
+      try {
+        await api.renameLocalSession({ machine: 'local', id: created.session_id }, named);
+      } catch {
+        // 接回来的会话已经在跑,标题写不上也不挡接着干。
+      }
+      setActive({ machine: 'local', id: created.session_id });
+      toast(importTalkToast(row.name));
+    });
+  }, [active, activeSummary, canImportHere, focusFile, providers, sessionView.model, sessionView.policy, toast, withBusy]);
   const openTalkLink = useCallback((url?: string) => {
     const target = url?.trim() || (talkLinks.length === 1 ? talkLinks[0].url : '');
     if (target) {
@@ -1603,6 +1635,7 @@ export default function App2() {
     ...(canPushHere ? [{ v: 'push', t: '推到远端', sub: 'git push' }] : []),
     ...(canPullHere ? [{ v: 'pull', t: '拉回远端', sub: '只快进，不改历史' }] : []),
     ...(canExportHere ? [{ v: 'exporttalk', t: '记下这次对话', sub: exportFileName(sessionView.title || activeSummary?.title || '') }] : []),
+    ...(canImportHere ? [{ v: 'importtalk', t: '接回记下的对话', sub: importTalkName(focusFile) || '会话目录里最近记下的' }] : []),
     ...(canCopyTalkHere ? [{ v: 'copytalk', t: '复制这次对话', sub: '整段对话进剪贴板' }] : []),
     ...(canDictateHere ? [{ v: 'dictate', t: dictating ? '停住' : '对着说', sub: dictating ? '正在听' : '写进输入框' }] : []),
     ...(canSearchHere ? [{ v: 'searchcwd', t: '在目录里搜', sub: activeSummary?.cwd || '会话目录' }] : []),
@@ -1657,6 +1690,7 @@ export default function App2() {
     else if (v === 'here') openHere();
     else if (v === 'pulse') showPulse();
     else if (v === 'fork') void forkHere();
+    else if (v === 'importtalk') void importTalk();
     else if (v === 'links') openTalkLink();
     else if (v === 'speaklast') speakLast();
     else if (v === 'resume') resumeHere();
@@ -1824,6 +1858,7 @@ export default function App2() {
     ...(canPushHere ? [{ g: '这条会话', t: '推到远端', k: 'push', run: () => void pushRepo() }] : []),
     ...(canPullHere ? [{ g: '这条会话', t: '拉回远端', k: 'pull', run: () => void pullRepo() }] : []),
     ...(canExportHere ? [{ g: '这条会话', t: '记下这次对话', k: exportFileName(sessionView.title || activeSummary?.title || ''), run: () => void exportTalk() }] : []),
+    ...(canImportHere ? [{ g: '这条会话', t: '接回记下的对话', k: importTalkName(focusFile) || '最近记下的', run: () => void importTalk() }] : []),
     ...(canCopyTalkHere ? [{ g: '这条会话', t: '复制这次对话', k: '剪贴板', run: () => void copyTalk() }] : []),
     ...(canDictateHere ? [{ g: '这条会话', t: dictating ? '停住' : '对着说', k: dictating ? '正在听' : '写进输入框', run: dictateHere }] : []),
     ...(canSearchHere ? [{ g: '这条会话', t: '在目录里搜', k: activeSummary?.cwd || '', run: openSearch }] : []),
@@ -1853,7 +1888,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, copyTalk, canCopyTalkHere, dictateHere, canDictateHere, dictating, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, speakLast, canSpeakLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openLastWritten, canOpenWritten, lastWritten, jumpLastFail, canJumpFail, lastFail, openLastRead, canOpenRead, lastRead, openHere, canHere, herePeers, showPulse, canPulse, pulseLabel, forkHere, canFork, openTalkLink, canLinks, talkLinks, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, importTalk, canImportHere, copyTalk, canCopyTalkHere, dictateHere, canDictateHere, dictating, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, speakLast, canSpeakLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openLastWritten, canOpenWritten, lastWritten, jumpLastFail, canJumpFail, lastFail, openLastRead, canOpenRead, lastRead, openHere, canHere, herePeers, showPulse, canPulse, pulseLabel, forkHere, canFork, openTalkLink, canLinks, talkLinks, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -2299,6 +2334,7 @@ export default function App2() {
                         {canHere ? <button className="link" type="button" onClick={() => openHere()}>这个目录的会话</button> : null}
                         {canPulse ? <button className="link" type="button" onClick={showPulse}>这条聊了多少</button> : null}
                         {canFork ? <button className="link" type="button" onClick={() => void forkHere()}>从这里分一条</button> : null}
+                        {canImportHere ? <button className="link" type="button" onClick={() => { void importTalk(); }}>接回记下的对话</button> : null}
                         {canLinks ? <button className="link" type="button" onClick={() => openTalkLink()}>打开对话里的链接</button> : null}
                         {canCopyTalkHere ? <button className="link" type="button" onClick={() => { void copyTalk(); }}>复制这次对话</button> : null}
                         {canDictateHere ? <button className="link" type="button" onClick={dictateHere}>{dictating ? '停住' : '对着说'}</button> : null}

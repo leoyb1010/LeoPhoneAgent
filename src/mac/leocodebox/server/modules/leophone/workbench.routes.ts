@@ -14,6 +14,7 @@ import { openLocalPath, openLocalTerminal, pickLocalFolder, revealLocalPath } fr
 import { commitSessionFiles } from './session-commit.js';
 import { diffSessionFile } from './session-diff.js';
 import { writeSessionExport } from './session-export.js';
+import { readSessionImport } from './session-import.js';
 import { revertSessionFile } from './session-revert.js';
 import { applySessionPatch } from './session-apply.js';
 import { switchSessionBranch } from './session-branch.js';
@@ -619,6 +620,16 @@ router.post('/leophone/local/sessions/:sessionId/export', async (req, res) => {
       name: String(body.name ?? 'leo-对话.md'),
       markdown: String(body.markdown ?? ''),
     }));
+  } catch (error) {
+    jsonError(res, 409, error instanceof Error ? error.message : String(error));
+  }
+});
+
+router.post('/leophone/local/sessions/:sessionId/import', async (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  try {
+    res.json(await readSessionImport(session.cwd, String(((req.body ?? {}) as Record<string, unknown>).name ?? '')));
   } catch (error) {
     jsonError(res, 409, error instanceof Error ? error.message : String(error));
   }
