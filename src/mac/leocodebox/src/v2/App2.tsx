@@ -17,6 +17,7 @@ import { canRenameSession, clipSessionTitle, renameSessionToast } from './sessio
 import { canSetSessionRule, clipSessionRule, ruleSessionToast } from './session-rule';
 import { canSetCwdRule, clipCwdRule, cwdRuleToast } from './session-cwd-rule';
 import { canMentionLastReply, lastAiReply, mentionLastReply, mentionLastReplyToast } from './session-reply';
+import { canCopyLastReply, copyLastReplyToast } from './session-copy-reply';
 import { canRetryLastUser, lastUserPrompt, retryLastUserToast } from './session-retry';
 import { applyPatchToast, canApplySessionPatch, clipApplyPatch } from './session-apply';
 import { canPackSessionChanges, packFileName, packSessionToast } from './session-pack';
@@ -278,6 +279,7 @@ export default function App2() {
   const canSearchHere = canSearchSession(active?.machine);
   const lastReply = lastAiReply(sessionView.rows);
   const canMentionLast = canMentionLastReply(sessionView.rows);
+  const canCopyLast = canCopyLastReply(sessionView.rows);
   const lastPrompt = lastUserPrompt(sessionView.rows);
   const canRetryLast = canRetryLastUser({ canDrive, running: composerShowsSteer(sessionView.status), rows: sessionView.rows });
   const canApplyHere = canApplySessionPatch(active?.machine);
@@ -856,6 +858,12 @@ export default function App2() {
     toast(mentionLastReplyToast());
     window.setTimeout(() => taRef.current?.focus(), 0);
   }, [draft, sessionView.rows, setDraft, toast]);
+  const copyLastReply = useCallback(async () => {
+    const reply = lastAiReply(sessionView.rows);
+    if (!reply) { toast('还没有模型上一句', true); return; }
+    try { await navigator.clipboard.writeText(reply); toast(copyLastReplyToast()); }
+    catch { toast('复制失败', true); }
+  }, [sessionView.rows, toast]);
   const retryLast = useCallback(async () => {
     if (!active || !canRetryLast) return;
     const text = lastUserPrompt(sessionView.rows);
@@ -1297,6 +1305,7 @@ export default function App2() {
     ...(canMkdirHere ? [{ v: 'mkdir', t: '建一个文件夹', sub: folderName.trim() || '写在这个会话目录里' }] : []),
     ...(canMoveHere ? [{ v: 'move', t: '挪进这个文件夹', sub: moveDest.trim() || '空的就是挪回目录根上' }] : []),
     ...(canMentionLast ? [{ v: 'lastreply', t: '带上上一句', sub: lastReply.slice(0, 40) }] : []),
+    ...(canCopyLast ? [{ v: 'copyreply', t: '复制刚说的', sub: lastReply.slice(0, 40) }] : []),
     ...(canRetryLast ? [{ v: 'retrylast', t: '再发上一句', sub: lastPrompt.slice(0, 40) }] : []),
     ...(activeSummary?.cwd?.trim() ? [{ v: 'cwd', t: '复制目录', sub: activeSummary.cwd }] : []),
     ...(canRenameSession(active?.machine) ? [{ v: 'rename', t: '改标题', sub: sessionView.title || activeSummary?.title || '给这条会话起个名字' }] : []),
@@ -1347,6 +1356,7 @@ export default function App2() {
     else if (v === 'trash') void trashFile();
     else if (v === 'duplicate') void duplicateFile();
     else if (v === 'lastreply') mentionLast();
+    else if (v === 'copyreply') void copyLastReply();
     else if (v === 'retrylast') void retryLast();
     else if (v === 'cwd') void copyCwd();
     else if (v === 'rename') beginRename();
@@ -1476,6 +1486,7 @@ export default function App2() {
     ...(canMkdirHere ? [{ g: '这条会话', t: '建一个文件夹', k: folderName.trim() || '新建', run: () => void mkdirFolder() }] : []),
     ...(canMoveHere ? [{ g: '这条会话', t: '挪进这个文件夹', k: moveDest.trim() || focusFile || '', run: () => void moveFile() }] : []),
     ...(canMentionLast ? [{ g: '这条会话', t: '带上上一句', k: lastReply.slice(0, 40), run: mentionLast }] : []),
+    ...(canCopyLast ? [{ g: '这条会话', t: '复制刚说的', k: lastReply.slice(0, 40), run: () => void copyLastReply() }] : []),
     ...(canRetryLast ? [{ g: '这条会话', t: '再发上一句', k: lastPrompt.slice(0, 40), run: () => void retryLast() }] : []),
     { g: '这条会话', t: '放入文件', k: '拖到输入框', run: () => void pickIntoSession() },
     { g: '这条会话', t: '粘贴截图', k: '⌘V', run: () => void pasteShot() },
@@ -1484,7 +1495,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, retryLast, canRetryLast, lastPrompt, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, retryLast, canRetryLast, lastPrompt, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -1891,6 +1902,7 @@ export default function App2() {
                       <span className="composer-end-hint"><b>{endedComposerLead(activeSummary.status)}</b>{cwd ? ` · ${cwdChipLabel(cwd)}` : ''}</span>
                       <div className="composer-end-acts">
                         {canMentionLast ? <button className="link" type="button" onClick={mentionLast}>带上上一句</button> : null}
+                        {canCopyLast ? <button className="link" type="button" onClick={() => { void copyLastReply(); }}>复制刚说的</button> : null}
                         {needsSettings ? <button className="btn-s" onClick={() => setView('settings')}>去设置</button> : canResumeHere ? <button className="btn-s" onClick={resumeHere}>接着这条会话</button> : <button className="btn-s" onClick={continueHere}>在同一目录新开</button>}
                         {needsSettings ? <button className="link" onClick={continueHere}>仍要新开</button> : canResumeHere ? <button className="link" onClick={continueHere}>在同一目录新开</button> : null}
                         {cwd && active?.machine === 'local' ? <button className="link" onClick={() => void revealCwd()}>在 Finder 打开</button> : null}
