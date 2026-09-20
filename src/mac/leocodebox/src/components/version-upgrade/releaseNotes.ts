@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.0.75',
+    date: '2026-09-20',
+    items: [
+      '本机会话可以把文件或截图放进当前目录，路径写进输入框，模型就能读到。',
+    ],
+  },
+  {
     version: '2.0.74',
     date: '2026-09-20',
     items: [

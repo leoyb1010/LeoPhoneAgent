@@ -6,7 +6,9 @@ import type { Project } from '../types/app';
 
 import { api, type FleetOverview, type HarnessEvent, type LocalOverview, type ProviderInfo, type SessionSummary, type SessionTarget } from './api';
 import { pickSessionFolder, revealSessionPath } from './desktop-folder';
+import { dropBrowserFile, pasteSessionImage, pickSessionFiles } from './desktop-drop';
 import { onSessionNoticeClick, setDockNeedBadge, showSessionNotice } from './desktop-notice';
+import { canAcceptSessionDrop, mentionDroppedFile } from './session-drop';
 import { dockNeedBadge, noticesFromSnapshot, sessionPathTarget } from './session-notice';
 import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerNeedsModelSwitch, composerPlaceholder, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, prettyModelName, providerOf, rankModelsForPicker, readHiddenSessionKeys, relativeTime, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, windowBoundLabel, windowPadGesture, WINDOW_KEY_BUTTONS, type FlowRow, type Group, type SessionView } from './model';
 import { usableModelsFromProviders } from './settings-form';
@@ -452,6 +454,76 @@ export default function App2() {
     setView('home');
     setDrawer(null);
   }, [active, activeSummary, draft, sessionView.model]);
+  const ingestDroppedPaths = useCallback((paths: string[]) => {
+    if (!paths.length) return;
+    setDraft(paths.reduce((text, next) => mentionDroppedFile(text, next), draft));
+    toast(paths.length === 1 ? `已放入 ${paths[0]!.split('/').pop()}` : `已放入 ${paths.length} 个文件`);
+  }, [draft, setDraft, toast]);
+  const dropIntoCwd = useCallback(async (files: File[]) => {
+    const folder = activeSummary?.cwd?.trim() ?? '';
+    if (!canAcceptSessionDrop({ machine: active?.machine, cwd: folder })) {
+      toast('只有本机会话才能放入文件', true);
+      return;
+    }
+    try {
+      const paths: string[] = [];
+      for (const file of files) paths.push(await dropBrowserFile(folder, file));
+      ingestDroppedPaths(paths);
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+    }
+  }, [active?.machine, activeSummary?.cwd, ingestDroppedPaths, toast]);
+  const onComposerPaste = useCallback((event: { preventDefault: () => void; clipboardData: DataTransfer | null }) => {
+    const folder = activeSummary?.cwd?.trim() ?? '';
+    if (!canAcceptSessionDrop({ machine: active?.machine, cwd: folder })) return;
+    const data = event.clipboardData;
+    const files = [...(data?.files ?? [])];
+    const image = [...(data?.items ?? [])].find((item) => item.type.startsWith('image/'))?.getAsFile();
+    if (files.length) {
+      event.preventDefault();
+      void dropIntoCwd(files);
+      return;
+    }
+    if (image) {
+      event.preventDefault();
+      void dropIntoCwd([image]);
+      return;
+    }
+    if (data?.getData('text')) return;
+    event.preventDefault();
+    void pasteSessionImage(folder).then((path) => {
+      if (path) ingestDroppedPaths([path]);
+      else toast('剪贴板里没有图', true);
+    }).catch((error) => toast(humanizeError(error instanceof Error ? error.message : String(error)), true));
+  }, [active?.machine, activeSummary?.cwd, dropIntoCwd, ingestDroppedPaths, toast]);
+  const onComposerDrop = useCallback((event: { preventDefault: () => void; dataTransfer: DataTransfer }) => {
+    event.preventDefault();
+    const files = [...event.dataTransfer.files];
+    if (files.length) void dropIntoCwd(files);
+  }, [dropIntoCwd]);
+  const pickIntoSession = useCallback(async () => {
+    const folder = activeSummary?.cwd?.trim() ?? '';
+    if (!canAcceptSessionDrop({ machine: active?.machine, cwd: folder })) {
+      toast('只有本机会话才能放入文件', true);
+      return;
+    }
+    try { ingestDroppedPaths(await pickSessionFiles(folder)); }
+    catch (error) { toast(humanizeError(error instanceof Error ? error.message : String(error)), true); }
+  }, [active?.machine, activeSummary?.cwd, ingestDroppedPaths, toast]);
+  const pasteShot = useCallback(async () => {
+    const folder = activeSummary?.cwd?.trim() ?? '';
+    if (!canAcceptSessionDrop({ machine: active?.machine, cwd: folder })) {
+      toast('只有本机会话才能放入文件', true);
+      return;
+    }
+    try {
+      const path = await pasteSessionImage(folder);
+      if (path) ingestDroppedPaths([path]);
+      else toast('剪贴板里没有图', true);
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+    }
+  }, [active?.machine, activeSummary?.cwd, ingestDroppedPaths, toast]);
   const openTouchedFile = useCallback((file: string) => {
     const next = file.trim();
     if (next) setFocusFile(next);
@@ -654,6 +726,7 @@ export default function App2() {
     ...(active?.machine === 'local' ? [{ v: 'winbind', t: boundWindowChipKind(active.machine, windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window))) === 'raise' ? '换一扇窗' : '绑窗口', sub: windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window)) || '列出本机窗口' }] : []),
     ...(boundWindowChipKind(active?.machine ?? '', windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window))) === 'raise' ? [{ v: 'winclick', t: '操作这个窗口', sub: windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window)) }] : []),
     ...(activeSummary?.cwd?.trim() && active?.machine === 'local' ? [{ v: 'finder', t: '在 Finder 打开', sub: activeSummary.cwd }] : []),
+    ...(activeSummary?.cwd?.trim() && active?.machine === 'local' ? [{ v: 'dropfile', t: '放入文件' }, { v: 'dropshot', t: '粘贴截图' }] : []),
     ...(active?.machine === 'local' && focusFile ? [{ v: 'savepeek', t: '写回当前文件', sub: '⌘S' }] : []),
     ...(activeSummary?.cwd?.trim() ? [{ v: 'cwd', t: '复制目录', sub: activeSummary.cwd }] : []),
     ...((sessionView.title || activeSummary?.title || '').trim() ? [{ v: 'title', t: '复制标题', sub: (sessionView.title || activeSummary?.title || '').trim() }] : []),
@@ -666,6 +739,8 @@ export default function App2() {
     else if (v === 'stop') void stop();
     else if (v === 'continue') continueHere();
     else if (v === 'finder') void revealCwd();
+    else if (v === 'dropfile') void pickIntoSession();
+    else if (v === 'dropshot') void pasteShot();
     else if (v === 'savepeek') void savePeek();
     else if (v === 'cwd') void copyCwd();
     else if (v === 'title') void copyTitle();
@@ -760,12 +835,14 @@ export default function App2() {
     { g: '这条会话', t: '停止', k: '', run: () => void stop() },
     ...(active && activeSummary && sessionCanForget(activeSummary.status) ? [{ g: '这条会话', t: '从左栏拿掉', k: '', run: () => void forgetSession(active) }] : []),
     { g: '这条会话', t: '写回当前文件', k: '⌘S', run: () => void savePeek() },
+    { g: '这条会话', t: '放入文件', k: '拖到输入框', run: () => void pickIntoSession() },
+    { g: '这条会话', t: '粘贴截图', k: '⌘V', run: () => void pasteShot() },
     { g: '这条会话', t: '终端', k: '⌘T', run: () => setDrawer('term') }, { g: '这条会话', t: '文件', k: '⌘E', run: () => setDrawer('files') },
     { g: '这条会话', t: '本次改动', k: '⌘D', run: () => setDrawer('diff') }, { g: '这条会话', t: '浏览器', k: '⌘B', run: () => setDrawer('browser') },
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, forgetSession, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, copyCwd, revealCwd, copyFindHit, savePeek, sessionView.title, stepFind]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, forgetSession, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, copyCwd, revealCwd, copyFindHit, savePeek, pickIntoSession, pasteShot, sessionView.title, stepFind]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -1076,6 +1153,9 @@ export default function App2() {
                   <div className="composer">
                     <textarea ref={taRef} rows={1} value={draft} placeholder={composerPlaceholder(cwdChipLabel(cwd), false)}
                       onChange={(e) => { setDraft(e.target.value); const ta = e.target; ta.style.height = 'auto'; ta.style.height = `${Math.min(180, ta.scrollHeight)}px`; layoutFlow(); }}
+                      onPaste={onComposerPaste}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={onComposerDrop}
                       onKeyDown={(e) => { if (composerShouldSend(e) && draft.trim() && !needsModelSwitch) { e.preventDefault(); void send(); } }} />
                     {needsModelSwitch ? (
                       <div className="newbox-warn">
@@ -1097,6 +1177,9 @@ export default function App2() {
                   <div className="composer ended">
                     <textarea ref={taRef} rows={1} value={draft} placeholder={composerPlaceholder(cwdChipLabel(cwd), true)}
                       onChange={(e) => { setDraft(e.target.value); const ta = e.target; ta.style.height = 'auto'; ta.style.height = `${Math.min(180, ta.scrollHeight)}px`; layoutFlow(); }}
+                      onPaste={onComposerPaste}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={onComposerDrop}
                       onKeyDown={(e) => { if (composerShouldSend(e) && draft.trim() && !needsSettings) { e.preventDefault(); continueHere(); } }} />
                     <div className="composer-end">
                       <span className="composer-end-hint"><b>{endedComposerLead(activeSummary.status)}</b>{cwd ? ` · ${cwdChipLabel(cwd)}` : ''}</span>

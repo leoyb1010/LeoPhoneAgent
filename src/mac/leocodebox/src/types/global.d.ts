@@ -13,6 +13,9 @@ declare global {
       setRunningBadge?: (count: number) => Promise<unknown>;
       pickFolder?: () => Promise<{ path?: string; cancelled?: boolean }>;
       revealPath?: (target: string) => Promise<{ path: string }>;
+      saveDrop?: (input: { cwd: string; name?: string; content?: string; fromPath?: string }) => Promise<{ path: string; name: string }>;
+      clipboardImage?: () => Promise<{ empty?: boolean; name?: string; content?: string }>;
+      pickFiles?: () => Promise<{ cancelled?: boolean; paths?: string[] }>;
       notify?: (payload: { title: string; body: string; sessionId?: string; machine?: string }) => Promise<{ shown?: boolean }>;
       onNoticeClick?: (callback: (row: { sessionId?: string | null; machine?: string | null }) => void) => () => void;
       /** 桌面壳发过来的"打开某个东西":本地工具页 / 设置窗。 */

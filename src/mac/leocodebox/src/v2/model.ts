@@ -87,7 +87,7 @@ export function composerShowsSteer(status: string): boolean {
 export function composerPlaceholder(cwdLabel: string, ended: boolean): string {
   const where = cwdLabel.trim();
   if (ended) return where ? `下一句会带到 ${where} 的新会话… ↩ 续写,⇧↩ 换行` : '下一句会带到新会话的第一句话… ↩ 续写,⇧↩ 换行';
-  return where ? `对 ${where} 说点什么… ↩ 发送,⇧↩ 换行` : '对这条会话说点什么… ↩ 发送,⇧↩ 换行';
+  return where ? `对 ${where} 说点什么… ↩ 发送,⇧↩ 换行,可拖入文件` : '对这条会话说点什么… ↩ 发送,⇧↩ 换行';
 }
 
 /** 点开会话就能写。弹层、抽屉、新会话面板开着时别抢焦点。 */

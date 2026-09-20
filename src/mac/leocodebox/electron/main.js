@@ -2,7 +2,7 @@ import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Notific
 import updaterPackage from 'electron-updater';
 import { randomBytes } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
-import { readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -589,6 +589,49 @@ function registerIpcHandlers() {
     const picked = result.filePaths[0];
     if (!isDesktopFolderAllowed(picked)) throw new Error('这个目录不能当会话工作区');
     return { path: picked };
+  });
+  trustedHandle('leocodebox-desktop:save-drop', async (_event, raw) => {
+    const cwd = path.resolve(expandDesktopFolderPath(String(raw?.cwd ?? '')));
+    if (!isDesktopFolderAllowed(cwd)) throw new Error('这个目录不能放文件');
+    const fromPath = raw?.fromPath ? path.resolve(String(raw.fromPath)) : '';
+    const givenName = String(raw?.name || (fromPath ? path.basename(fromPath) : 'dropped.bin'));
+    const safeName = path.basename(givenName).replace(/[^\w.\u4e00-\u9fff-]+/g, '-').replace(/^\.+/, '').slice(0, 80) || 'dropped.bin';
+    let dest = path.resolve(cwd, safeName);
+    if (!dest.startsWith(`${cwd}${path.sep}`)) throw new Error('文件名不合法');
+    const exists = await stat(dest).catch(() => null);
+    if (exists) {
+      const ext = path.extname(dest);
+      const stem = ext ? dest.slice(0, -ext.length) : dest;
+      for (let i = 2; i < 50; i += 1) {
+        const next = `${stem}-${i}${ext}`;
+        if (!(await stat(next).catch(() => null))) { dest = next; break; }
+      }
+    }
+    if (fromPath) {
+      if (!isDesktopFolderAllowed(fromPath)) throw new Error('这个文件不能放入会话');
+      const info = await stat(fromPath).catch(() => null);
+      if (!info?.isFile()) throw new Error('只能放入普通文件');
+      if (info.size > 12 * 1024 * 1024) throw new Error('文件太大');
+      await copyFile(fromPath, dest);
+    } else {
+      const bytes = Buffer.from(String(raw?.content ?? ''), 'base64');
+      if (!bytes.length) throw new Error('空文件');
+      if (bytes.length > 12 * 1024 * 1024) throw new Error('文件太大');
+      await writeFile(dest, bytes);
+    }
+    return { path: dest, name: path.basename(dest) };
+  });
+  trustedHandle('leocodebox-desktop:clipboard-image', async () => {
+    const image = clipboard.readImage();
+    if (image.isEmpty()) return { empty: true };
+    return { name: `leo-paste-${Date.now()}.png`, content: image.toPNG().toString('base64') };
+  });
+  trustedHandle('leocodebox-desktop:pick-files', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const options = { title: '放入会话目录', properties: ['openFile', 'multiSelections'] };
+    const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+    if (result.canceled || !result.filePaths.length) return { cancelled: true };
+    return { paths: result.filePaths };
   });
   trustedHandle('leocodebox-desktop:reveal-path', async (_event, raw) => {
     const target = path.resolve(expandDesktopFolderPath(String(raw ?? '')));

@@ -102,6 +102,9 @@ if (isLocalHttpOrigin(window.location)) {
     setRunningBadge: (count) => ipcRenderer.invoke('leocodebox-desktop:set-running-badge', count),
     pickFolder: () => ipcRenderer.invoke('leocodebox-desktop:pick-folder'),
     revealPath: (target) => ipcRenderer.invoke('leocodebox-desktop:reveal-path', target),
+    saveDrop: (input) => ipcRenderer.invoke('leocodebox-desktop:save-drop', input),
+    clipboardImage: () => ipcRenderer.invoke('leocodebox-desktop:clipboard-image'),
+    pickFiles: () => ipcRenderer.invoke('leocodebox-desktop:pick-files'),
     notify: (payload) => ipcRenderer.invoke('leocodebox-desktop:notify', payload),
     onNoticeClick: (callback) => {
       const listener = (_event, row) => callback(row);
