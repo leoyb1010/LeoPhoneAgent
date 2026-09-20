@@ -70,6 +70,34 @@ function speakSessionText(raw) {
     return { ok: true, chars: text.length };
   });
 }
+
+function clipPrintText(raw) {
+  return String(raw ?? '').split('\0').join('').trim().slice(0, 200000);
+}
+
+function escapePrintHtml(text) {
+  return String(text ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function printSessionTalk(raw) {
+  const title = String(raw?.title ?? '这次对话').split('\0').join('').replace(/[<>]/g, '').trim().slice(0, 80) || '这次对话';
+  const text = clipPrintText(raw?.text ?? raw);
+  if (!text) throw new Error('还没有可打印的对话');
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapePrintHtml(title)}</title><style>body{font:14px/1.55 -apple-system,Helvetica,sans-serif;white-space:pre-wrap;padding:24px;color:#111}</style></head><body>${escapePrintHtml(text)}</body></html>`;
+  const win = new BrowserWindow({
+    show: false,
+    width: 800,
+    height: 1100,
+    webPreferences: { sandbox: true, contextIsolation: true },
+  });
+  return win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`).then(() => new Promise((resolve, reject) => {
+    win.webContents.print({ silent: false, printBackground: false }, (success, reason) => {
+      win.destroy();
+      if (!success && reason && reason !== 'cancelled') reject(new Error(reason));
+      else resolve({ printed: Boolean(success) });
+    });
+  }));
+}
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const { autoUpdater } = updaterPackage;
 
@@ -748,6 +776,7 @@ function registerIpcHandlers() {
     return { url: target };
   });
   trustedHandle('leocodebox-desktop:speak-text', async (_event, raw) => speakSessionText(raw));
+  trustedHandle('leocodebox-desktop:print-text', async (_event, raw) => printSessionTalk(raw));
   // 云端 IPC 通道(connect-cloud / open-environment / refresh-environments ...)
   // 在 1.73.0 产品收缩时随云能力一起删掉了,这里不补空 handler:补了等于留下
   // 一个"调了什么都不发生"的接口,以后只会让人以为云还在。preload 与启动台

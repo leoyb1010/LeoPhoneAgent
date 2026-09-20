@@ -107,6 +107,7 @@ if (isLocalHttpOrigin(window.location)) {
     openTerm: (target) => ipcRenderer.invoke('leocodebox-desktop:open-term', target),
     openUrl: (target) => ipcRenderer.invoke('leocodebox-desktop:open-url', target),
     speakText: (text) => ipcRenderer.invoke('leocodebox-desktop:speak-text', text),
+    printText: (payload) => ipcRenderer.invoke('leocodebox-desktop:print-text', payload),
     saveDrop: (input) => ipcRenderer.invoke('leocodebox-desktop:save-drop', input),
     clipboardImage: () => ipcRenderer.invoke('leocodebox-desktop:clipboard-image'),
     pickFiles: () => ipcRenderer.invoke('leocodebox-desktop:pick-files'),

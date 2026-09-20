@@ -18,6 +18,7 @@ declare global {
       openTerm?: (target: string) => Promise<{ path: string }>;
       openUrl?: (target: string) => Promise<{ url?: string }>;
       speakText?: (text: string) => Promise<{ ok?: boolean; chars?: number }>;
+      printText?: (payload: { title?: string; text: string }) => Promise<{ printed?: boolean }>;
       saveDrop?: (input: { cwd: string; name?: string; content?: string; fromPath?: string }) => Promise<{ path: string; name: string }>;
       clipboardImage?: () => Promise<{ empty?: boolean; name?: string; content?: string }>;
       pickFiles?: () => Promise<{ cancelled?: boolean; paths?: string[] }>;
