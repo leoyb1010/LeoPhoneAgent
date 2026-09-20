@@ -21,6 +21,7 @@ import { unpackSessionZip } from './session-unpack.js';
 import { seedSessionFile } from './session-seed.js';
 import { haltBusyLocalSessions } from './session-halt.js';
 import { forgetEndedLocalSessions } from './session-forget.js';
+import { listForgottenLocalSessions, recallForgottenLocalSession } from './session-recall.js';
 import { pushSessionRepo } from './session-push.js';
 import { pullSessionRepo } from './session-pull.js';
 import { searchLocalTalk } from './session-talk.js';
@@ -196,6 +197,26 @@ router.post('/leophone/local/forget-ended', async (req, res) => {
     res.json(await forgetEndedLocalSessions(ids));
   } catch (error) {
     jsonError(res, 409, error instanceof Error ? error.message : String(error));
+  }
+});
+
+router.post('/leophone/local/forgotten', async (_req, res) => {
+  try {
+    res.json(await listForgottenLocalSessions());
+  } catch (error) {
+    jsonError(res, 409, error instanceof Error ? error.message : String(error));
+  }
+});
+
+router.post('/leophone/local/sessions/:sessionId/recall', async (req, res) => {
+  try {
+    res.json(await recallForgottenLocalSession(req.params.sessionId));
+  } catch (error) {
+    if (error instanceof HarnessRequestError) {
+      jsonError(res, error.message === '没有这份拿掉的会话' ? 404 : 409, error.message);
+      return;
+    }
+    jsonError(res, 500, error instanceof Error ? error.message : String(error));
   }
 });
 

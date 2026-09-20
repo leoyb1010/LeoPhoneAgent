@@ -23,6 +23,7 @@ import { canUnpackSessionZip, unpackSessionToast, unpackZipName } from './sessio
 import { canSeedSessionFile, clipSeedText, sanitizeSeedRel, seedSessionToast } from './session-seed';
 import { canHaltBusySessions, haltSessionsToast } from './session-halt';
 import { canForgetEndedSessions, endedLocalSessionIds, forgetEndedToast } from './session-forget';
+import { canRecallForgotten, recallSessionToast, type ForgottenSession } from './session-recall';
 import { canPushSessionRepo, pushSessionToast } from './session-push';
 import { canPullSessionRepo, pullSessionToast } from './session-pull';
 import { canSearchSessionTalk, talkQueryReady } from './session-talk';
@@ -30,7 +31,7 @@ import { PINNED_SESSIONS_KEY, comparePinnedFirst, pinSessionToast, readPinnedSes
 import { canSearchSession, searchQueryReady, searchSessionToast, type SessionSearchHit } from './session-search';
 import { canShowSessionLog, type SessionCommit } from './session-log';
 import { approvalChoiceActions, approvalToast, dockNeedBadge, firstPendingApproval, noticeNotifyPayload, noticesFromSnapshot, sessionPathTarget } from './session-notice';
-import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerCanFollowUp, composerNeedsModelSwitch, composerPlaceholder, composerRunningHint, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, followUpToast, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mentionWindowRead, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, pendingFollowUps, prettyModelName, providerOf, queueClearedToast, rankModelsForPicker, readHiddenSessionKeys, relativeTime, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionCanResume, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, usableWindowMenus, windowBoundLabel, windowMenuLabel, windowPadGesture, WINDOW_KEY_BUTTONS, type FlowRow, type Group, type SessionView } from './model';
+import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, removeHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerCanFollowUp, composerNeedsModelSwitch, composerPlaceholder, composerRunningHint, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, followUpToast, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mentionWindowRead, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, pendingFollowUps, prettyModelName, providerOf, queueClearedToast, rankModelsForPicker, readHiddenSessionKeys, relativeTime, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionCanResume, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, usableWindowMenus, windowBoundLabel, windowMenuLabel, windowPadGesture, WINDOW_KEY_BUTTONS, type FlowRow, type Group, type SessionView } from './model';
 import { usableModelsFromProviders } from './settings-form';
 import { artifactNameFromPath, clipFilePeek, cwdChipLabel, isPeekDrawer, isWorkspaceDrawer, machineChipLabel, peekCanWriteBack, peekFileCaption, sessionFilePath, titlebarHomeCopy } from './local-files';
 import { REMOTE_DRAWER_ACTION_LABEL, isRemoteDrawerKind, mergeFilePins, remoteDrawerActions, remoteDrawerCopy } from './remote-drawer';
@@ -53,7 +54,7 @@ type NewBoxState = { open: boolean; machine: string; cwd?: string; prompt?: stri
 type Toast = { id: number; text: string; error: boolean };
 type MenuItem = { v: string; t: string; sub?: string; dot?: string; dim?: boolean; sep?: boolean };
 type MenuState = { x: number; y: number; items: MenuItem[]; onPick: (v: string) => void } | null;
-type PickerKind = 'model' | 'policy' | 'think' | null;
+type PickerKind = 'model' | 'policy' | 'think' | 'recall' | null;
 
 const ORDER: Record<string, number> = { waiting_for_approval: 0, running: 1, starting: 1, failed: 2, idle: 3, completed: 4, cancelled: 4, orphaned: 5 };
 
@@ -152,6 +153,7 @@ export default function App2() {
   const ruleEditRef = useRef<HTMLTextAreaElement | null>(null);
   const [sessionArtifacts, setSessionArtifacts] = useState<Array<{ name: string }>>([]);
   const [artifactError, setArtifactError] = useState<string | null>(null);
+  const [forgotten, setForgotten] = useState<ForgottenSession[]>([]);
   const [palette, setPalette] = useState<{ open: boolean; query: string; index: number }>({ open: false, query: '', index: 0 });
   const [menu, setMenu] = useState<MenuState>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -268,6 +270,7 @@ export default function App2() {
   const canSeedHere = canSeedSessionFile(active?.machine);
   const canHaltBusy = canHaltBusySessions(allSessions);
   const canForgetEnded = canForgetEndedSessions(allSessions, pinnedKeys);
+  const canRecallHere = canRecallForgotten('local');
   const canPushHere = canPushSessionRepo(active?.machine);
   const canPullHere = canPullSessionRepo(active?.machine);
   const findHits = useMemo(() => flowFindHitKeys(sessionView.rows, flowFind.query), [sessionView.rows, flowFind.query]);
@@ -1030,6 +1033,39 @@ export default function App2() {
       toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
     }
   }, [allSessions, canForgetEnded, hideSession, pinnedKeys, refreshLocal, toast]);
+  const recallForgotten = useCallback(async (sessionId: string) => {
+    try {
+      const result = await api.recallForgottenLocal(sessionId);
+      const key = sessionKey('local', result.session_id);
+      setHiddenKeys((prev) => {
+        const next = removeHiddenSessionKey(prev, key);
+        try { localStorage.setItem(HIDDEN_SESSIONS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+        return next;
+      });
+      toast(recallSessionToast(result.title));
+      setPicker(null);
+      await refreshLocal();
+      setActive({ machine: 'local', id: result.session_id });
+      setView('home');
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+    }
+  }, [refreshLocal, toast]);
+  const openRecall = useCallback(async () => {
+    if (!canRecallHere) return;
+    try {
+      const result = await api.listForgottenLocal();
+      if (!result.sessions.length) { toast('没有拿掉的会话'); return; }
+      if (result.sessions.length === 1) {
+        await recallForgotten(result.sessions[0].session_id);
+        return;
+      }
+      setForgotten(result.sessions);
+      setPicker({ kind: 'recall', query: '', index: 0 });
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+    }
+  }, [canRecallHere, recallForgotten, toast]);
   const approveTarget = useCallback((target: SessionTarget, approvalId: string, choice: string) => (
     withBusy(() => api.approve(target, approvalId, choice), approvalToast(choice))
   ), [withBusy]);
@@ -1165,6 +1201,7 @@ export default function App2() {
     { v: 'compact', t: '压缩这条会话', sub: 'pi compact' }, { v: 'stop', t: '停止', sub: '进程组一起收' },
     ...(canHaltBusy ? [{ v: 'halt', t: '停掉正在跑的', sub: '本机正在跑的全部停掉' }] : []),
     ...(canForgetEnded ? [{ v: 'forgetended', t: '清掉已经结束的', sub: '钉住的和进行中的不动' }] : []),
+    ...(canRecallHere ? [{ v: 'recall', t: '找回来', sub: '从左栏拿掉的会话' }] : []),
     ...(active ? [{ v: 'pin', t: sessionIsPinned(pinnedKeys, active.machine, active.id) ? '取消钉住' : '钉在左栏上面', sub: sessionView.title || activeSummary?.title || '' }] : []),
     ...(activeSummary && sessionCanForget(activeSummary.status) ? [{ v: 'forget', t: '从左栏拿掉', sub: active?.machine === 'local' ? '不再召回' : '只藏在这台 Mac' }] : []),
   ], (v) => {
@@ -1176,6 +1213,7 @@ export default function App2() {
     else if (v === 'stop') void stop();
     else if (v === 'halt') void haltBusy();
     else if (v === 'forgetended') void forgetEnded();
+    else if (v === 'recall') void openRecall();
     else if (v === 'resume') resumeHere();
     else if (v === 'continue') continueHere();
     else if (v === 'finder') void revealCwd();
@@ -1301,6 +1339,7 @@ export default function App2() {
     { g: '这条会话', t: '停止', k: '', run: () => void stop() },
     ...(canHaltBusy ? [{ g: '本机', t: '停掉正在跑的', k: '全部', run: () => void haltBusy() }] : []),
     ...(canForgetEnded ? [{ g: '本机', t: '清掉已经结束的', k: '终态', run: () => void forgetEnded() }] : []),
+    ...(canRecallHere ? [{ g: '本机', t: '找回来', k: '拿掉的', run: () => void openRecall() }] : []),
     ...(active ? [{ g: '这条会话', t: sessionIsPinned(pinnedKeys, active.machine, active.id) ? '取消钉住' : '钉在左栏上面', k: '', run: () => togglePin(active) }] : []),
     ...(active && activeSummary && sessionCanForget(activeSummary.status) ? [{ g: '这条会话', t: '从左栏拿掉', k: '', run: () => void forgetSession(active) }] : []),
     { g: '这条会话', t: '用默认程序打开', k: focusFile || '', run: () => void openFocusFile() },
@@ -1325,7 +1364,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, retryLast, canRetryLast, lastPrompt, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, retryLast, canRetryLast, lastPrompt, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -1349,8 +1388,17 @@ export default function App2() {
     if (picker.kind === 'policy') {
       return (['default', 'accept_edits', 'plan', 'auto'] as const).map((p) => ({ v: p, t: POLICY_LABEL[p], sub: '', g: '审批' }));
     }
+    if (picker.kind === 'recall') {
+      const items = forgotten.map((row) => ({
+        v: row.session_id,
+        t: row.title || row.session_id,
+        sub: row.cwd,
+        g: '拿掉的',
+      }));
+      return q ? items.filter((it) => `${it.t} ${it.sub} ${it.v}`.toLowerCase().includes(q)) : items;
+    }
     return THINKING_LEVELS.map((level) => ({ v: level, t: THINKING_LABEL[level], sub: level, g: '思考' }));
-  }, [picker, configuredModels]);
+  }, [picker, configuredModels, forgotten]);
   const runPicker = (index: number) => {
     const item = pickerItems[index];
     if (!picker || !item) return;
@@ -1359,6 +1407,7 @@ export default function App2() {
       const i = item.v.indexOf('/');
       void setModel(item.v.slice(0, i), item.v.slice(i + 1));
     } else if (picker.kind === 'policy') void setPolicy(item.v);
+    else if (picker.kind === 'recall') { void recallForgotten(item.v); return; }
     else void setThinking(item.v);
     setPicker(null);
   };
@@ -1726,6 +1775,7 @@ export default function App2() {
                         {cwd ? <button className="link" onClick={() => void copyCwd()}>复制路径</button> : null}
                         {sessionCanForget(activeSummary.status) && active ? <button className="link dim" onClick={() => void forgetSession(active)}>从左栏拿掉</button> : null}
                         {canForgetEnded ? <button className="link dim" onClick={() => void forgetEnded()}>清掉已经结束的</button> : null}
+                        {canRecallHere ? <button className="link" onClick={() => void openRecall()}>找回来</button> : null}
                       </div>
                     </div>
                   </div>
@@ -1917,9 +1967,9 @@ export default function App2() {
       )}
 
       {picker && (
-        <div className="palette" role="dialog" aria-modal="true" aria-label={picker.kind === 'model' ? '选择模型' : picker.kind === 'policy' ? '审批策略' : '思考深度'} onClick={(e) => { if (e.target === e.currentTarget) setPicker(null); }}>
+        <div className="palette" role="dialog" aria-modal="true" aria-label={picker.kind === 'model' ? '选择模型' : picker.kind === 'policy' ? '审批策略' : picker.kind === 'recall' ? '找回来' : '思考深度'} onClick={(e) => { if (e.target === e.currentTarget) setPicker(null); }}>
           <div className="pbox">
-            <input autoFocus placeholder={picker.kind === 'model' ? '搜索模型或供应商…' : '筛选…'} value={picker.query}
+            <input autoFocus placeholder={picker.kind === 'model' ? '搜索模型或供应商…' : picker.kind === 'recall' ? '找拿掉的会话…' : '筛选…'} value={picker.query}
               onChange={(e) => setPicker((p) => (p ? { ...p, query: e.target.value, index: 0 } : p))}
               onKeyDown={(e) => {
                 if (e.key === 'ArrowDown') { e.preventDefault(); setPicker((p) => (p ? { ...p, index: Math.min(pickerItems.length - 1, p.index + 1) } : p)); }

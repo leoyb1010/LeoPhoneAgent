@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.1.3',
+    date: '2026-09-20',
+    items: [
+      '从左栏拿掉的会话可以找回来。',
+    ],
+  },
+  {
     version: '2.1.2',
     date: '2026-09-20',
     items: [

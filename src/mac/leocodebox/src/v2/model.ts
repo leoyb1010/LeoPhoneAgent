@@ -792,6 +792,10 @@ export function addHiddenSessionKey(hidden: readonly string[], key: string): str
   return hidden.includes(key) ? [...hidden] : [...hidden, key];
 }
 
+export function removeHiddenSessionKey(hidden: readonly string[], key: string): string[] {
+  return hidden.filter((item) => item !== key);
+}
+
 export function sessionCanDrive(summaryStatus: string, viewStatus: string): boolean {
   if (TERMINAL.has(summaryStatus)) return false;
   return isLiveStatus(summaryStatus) || isLiveStatus(viewStatus);

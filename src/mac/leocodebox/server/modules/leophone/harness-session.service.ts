@@ -45,6 +45,24 @@ export { LEOAGENT_HOME };
 
 const SESSIONS_DIR = path.join(LEOAGENT_HOME, 'harness-sessions');
 
+function moveSessionSidecars(fromLog: string, toLog: string): void {
+  for (const ext of ['.title', '.rule']) {
+    const from = fromLog.replace(/\.ndjson$/i, ext);
+    const to = toLog.replace(/\.ndjson$/i, ext);
+    try {
+      if (fs.existsSync(from)) fs.renameSync(from, to);
+    } catch {
+      // sidecar is optional
+    }
+  }
+}
+
+function sanitizeForgottenId(raw: string): string {
+  const id = raw.trim();
+  if (!/^hs_[A-Za-z0-9_-]+$/.test(id)) throw new HarnessRequestError('会话不合法');
+  return id;
+}
+
 /**
  * [T-leophone-push] 值得推给手机的事件。
  *
@@ -668,55 +686,58 @@ export class HarnessManager {
   private async rehydrate(): Promise<void> {
     const entries = (await fs.promises.readdir(this.sessionsDir))
       .filter((name) => name.startsWith('hs_') && name.endsWith('.ndjson')).sort();
-    for (const entry of entries) {
-      const logPath = path.join(this.sessionsDir, entry);
-      const journal = new HarnessJournal(logPath);
-      await journal.initialize();
-      const first = (await journal.readPage(0, { limit: 1 })).events[0];
-      const harnessKey = first?.event === EVENT_SESSION_CREATED ? String(first.harness ?? '?') : '?';
-      const cwd = first?.event === EVENT_SESSION_CREATED ? String(first.cwd ?? '?') : '?';
-      const modelStr = first?.event === EVENT_SESSION_CREATED && typeof first.model === 'string' ? first.model : '';
-      const slash = modelStr.indexOf('/');
-      const model = slash > 0 ? { provider: modelStr.slice(0, slash), modelId: modelStr.slice(slash + 1) } : null;
-      const policy = first?.event === EVENT_SESSION_CREATED && typeof first.policy === 'string' ? first.policy : undefined;
-      const spec = HARNESSES[harnessKey] ?? {
-        key: harnessKey, displayName: harnessKey, executable: '', args: [], dialect: 'claude_stream_json' as const,
-      };
-      const sessionId = entry.slice(0, -'.ndjson'.length);
-      const restored = new HarnessSession({
-        sessionId, spec, cwd, logPath, journal, model, policy, seq: journal.health().latest_seq, status: 'orphaned',
-      });
-      if (first?.timestamp != null) restored.createdAt = Number(first.timestamp);
-      // 标题与最近一件事从日志头几行/尾行补回来,列表不至于全是空行。
-      const named = readTitleSidecar(logPath);
-      if (named) {
-        restored.title = named;
-      } else {
-        const head = await journal.readPage(0, { limit: 8 });
-        for (const ev of head.events) {
-          if (ev.event === EVENT_USER_MESSAGE && ev.mode !== 'steer' && ev.mode !== 'follow_up') {
-            restored.title = String(ev.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
-            break;
-          }
+    for (const entry of entries) await this.restoreFromLog(entry);
+  }
+
+  private async restoreFromLog(entry: string): Promise<HarnessSession> {
+    const logPath = path.join(this.sessionsDir, entry);
+    const journal = new HarnessJournal(logPath);
+    await journal.initialize();
+    const first = (await journal.readPage(0, { limit: 1 })).events[0];
+    const harnessKey = first?.event === EVENT_SESSION_CREATED ? String(first.harness ?? '?') : '?';
+    const cwd = first?.event === EVENT_SESSION_CREATED ? String(first.cwd ?? '?') : '?';
+    const modelStr = first?.event === EVENT_SESSION_CREATED && typeof first.model === 'string' ? first.model : '';
+    const slash = modelStr.indexOf('/');
+    const model = slash > 0 ? { provider: modelStr.slice(0, slash), modelId: modelStr.slice(slash + 1) } : null;
+    const policy = first?.event === EVENT_SESSION_CREATED && typeof first.policy === 'string' ? first.policy : undefined;
+    const spec = HARNESSES[harnessKey] ?? {
+      key: harnessKey, displayName: harnessKey, executable: '', args: [], dialect: 'claude_stream_json' as const,
+    };
+    const sessionId = entry.slice(0, -'.ndjson'.length);
+    const restored = new HarnessSession({
+      sessionId, spec, cwd, logPath, journal, model, policy, seq: journal.health().latest_seq, status: 'orphaned',
+    });
+    if (first?.timestamp != null) restored.createdAt = Number(first.timestamp);
+    // 标题与最近一件事从日志头几行/尾行补回来,列表不至于全是空行。
+    const named = readTitleSidecar(logPath);
+    if (named) {
+      restored.title = named;
+    } else {
+      const head = await journal.readPage(0, { limit: 8 });
+      for (const ev of head.events) {
+        if (ev.event === EVENT_USER_MESSAGE && ev.mode !== 'steer' && ev.mode !== 'follow_up') {
+          restored.title = String(ev.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
+          break;
         }
       }
-      const latestSeq = journal.health().latest_seq;
-      if (latestSeq > 0) {
-        const tail = await journal.readPage(Math.max(0, latestSeq - 1), { limit: 1 });
-        const lastEv = tail.events[tail.events.length - 1];
-        if (lastEv?.timestamp != null) restored.updatedAt = Number(lastEv.timestamp);
-        if (lastEv) {
-          const mode = lastEv.mode === 'steer' || lastEv.mode === 'follow_up' || lastEv.mode === 'prompt' ? lastEv.mode : undefined;
-          restored.lastEvent = {
-            event: lastEv.event,
-            text: String(lastEv.text ?? lastEv.command ?? lastEv.error ?? '').slice(0, 120),
-            timestamp: lastEv.timestamp,
-            ...(mode ? { mode } : {}),
-          };
-        }
-      }
-      this.sessions.set(sessionId, restored);
     }
+    const latestSeq = journal.health().latest_seq;
+    if (latestSeq > 0) {
+      const tail = await journal.readPage(Math.max(0, latestSeq - 1), { limit: 1 });
+      const lastEv = tail.events[tail.events.length - 1];
+      if (lastEv?.timestamp != null) restored.updatedAt = Number(lastEv.timestamp);
+      if (lastEv) {
+        const mode = lastEv.mode === 'steer' || lastEv.mode === 'follow_up' || lastEv.mode === 'prompt' ? lastEv.mode : undefined;
+        restored.lastEvent = {
+          event: lastEv.event,
+          text: String(lastEv.text ?? lastEv.command ?? lastEv.error ?? '').slice(0, 120),
+          timestamp: lastEv.timestamp,
+          ...(mode ? { mode } : {}),
+        };
+      }
+    }
+    this.sessions.set(sessionId, restored);
+    return restored;
   }
 
   private liveCount(): number {
@@ -823,7 +844,7 @@ export class HarnessManager {
 
   /**
    * 从左栏拿掉一条已经结束的会话:关日志、挪到 forgotten/,内存里删掉。
-   * 进行中的必须先停。不删文件,重启也不会再召回。
+   * 进行中的必须先停。不删文件;重启不会自动召回,要主动找回来。
    */
   async forget(sessionId: string): Promise<{ forgotten: string }> {
     await this.ready();
@@ -836,11 +857,66 @@ export class HarnessManager {
     const dest = path.join(forgottenDir, path.basename(session.logPath));
     try {
       if (fs.existsSync(session.logPath)) fs.renameSync(session.logPath, dest);
+      moveSessionSidecars(session.logPath, dest);
     } catch {
       // 文件已经不在也要把内存条目拿掉,否则左栏还挂着幽灵。
     }
     this.sessions.delete(sessionId);
     return { forgotten: dest };
+  }
+
+  async listForgotten(): Promise<Array<{ session_id: string; title: string; cwd: string; updated_at: number }>> {
+    await this.ready();
+    const dir = path.join(this.sessionsDir, 'forgotten');
+    let names: string[] = [];
+    try {
+      names = await fs.promises.readdir(dir);
+    } catch {
+      return [];
+    }
+    const out: Array<{ session_id: string; title: string; cwd: string; updated_at: number }> = [];
+    for (const name of names.filter((entry) => entry.startsWith('hs_') && entry.endsWith('.ndjson')).slice(0, 40)) {
+      const logPath = path.join(dir, name);
+      const journal = new HarnessJournal(logPath);
+      await journal.initialize();
+      const sessionId = name.slice(0, -'.ndjson'.length);
+      const titled = readTitleSidecar(logPath) || readTitleSidecar(path.join(this.sessionsDir, name));
+      let title = titled;
+      let cwd = '';
+      let updated = 0;
+      const head = await journal.readPage(0, { limit: 8 });
+      const first = head.events[0];
+      if (first?.event === EVENT_SESSION_CREATED) cwd = String(first.cwd ?? '');
+      if (!title) {
+        for (const ev of head.events) {
+          if (ev.event === EVENT_USER_MESSAGE && ev.mode !== 'steer' && ev.mode !== 'follow_up') {
+            title = String(ev.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
+            break;
+          }
+        }
+      }
+      const latest = journal.health().latest_seq;
+      if (latest > 0) {
+        const tail = await journal.readPage(Math.max(0, latest - 1), { limit: 1 });
+        updated = Number(tail.events.at(-1)?.timestamp ?? 0);
+      }
+      out.push({ session_id: sessionId, title: title || sessionId, cwd, updated_at: updated });
+    }
+    out.sort((a, b) => b.updated_at - a.updated_at);
+    return out;
+  }
+
+  async recall(sessionId: string): Promise<{ session_id: string; title: string }> {
+    await this.ready();
+    const id = sanitizeForgottenId(sessionId);
+    if (this.sessions.has(id)) throw new HarnessRequestError('已经在左栏');
+    const src = path.join(this.sessionsDir, 'forgotten', `${id}.ndjson`);
+    const dest = path.join(this.sessionsDir, `${id}.ndjson`);
+    if (!fs.existsSync(src)) throw new HarnessRequestError('没有这份拿掉的会话');
+    fs.renameSync(src, dest);
+    moveSessionSidecars(src, dest);
+    const restored = await this.restoreFromLog(`${id}.ndjson`);
+    return { session_id: restored.sessionId, title: restored.title };
   }
 
   /** 一次拿掉已经结束的会话。idle / 进行中不动。ids 有值时只收名单里的。 */

@@ -181,6 +181,10 @@ export const api = {
   haltBusyLocal: () => sendJson<{ ids: string[]; count: number }>('/api/leophone/local/halt', {}),
   forgetEndedLocal: (ids: string[]) =>
     sendJson<{ ids: string[]; count: number }>('/api/leophone/local/forget-ended', { ids }),
+  listForgottenLocal: () =>
+    sendJson<{ sessions: Array<{ session_id: string; title: string; cwd: string; updated_at: number }> }>('/api/leophone/local/forgotten', {}),
+  recallForgottenLocal: (sessionId: string) =>
+    sendJson<{ session_id: string; title: string }>(`/api/leophone/local/sessions/${encodeURIComponent(sessionId)}/recall`, {}),
   searchLocalTalk: (query: string) =>
     sendJson<{ query: string; hits: Array<{ session_id: string; text: string }>; truncated: boolean }>('/api/leophone/local/talk', { query }),
   continueLocal: (target: SessionTarget) =>
