@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react';
 
 import { LAST_CWD_KEY, LAST_MODEL_KEY, POLICY_LABEL, composerShouldSend, highlightQueryParts, isLiveRow, markupParts, modelChoiceHint, modelLikelyUnusable, pickInitialCwd, pickInitialModel, prettyModelName, userTurnLabel, type FlowRow, type Group } from './model';
 import { CWD_HABITS_KEY, pickCwdModel, pickCwdPolicy, saveCwdHabit } from './session-cwd-habit';
+import { hideSecrets } from './session-hide';
+
+function shown(text: string, hide?: boolean): string {
+  return hide ? hideSecrets(text) : text;
+}
 
 function FindBits({ text, query }: { text: string; query?: string }) {
   return (
@@ -26,10 +31,11 @@ export function FlowText({ text, query }: { text: string; query?: string }) {
   );
 }
 
-export function Row({ row, model, query, onApprove, onDiff, onOpen }: {
+export function Row({ row, model, query, hide, onApprove, onDiff, onOpen }: {
   row: FlowRow;
   model: string | null;
   query?: string;
+  hide?: boolean;
   onApprove: (id: string, choice: string, reason?: string) => unknown;
   onDiff: () => void;
   onOpen?: () => void;
@@ -40,13 +46,13 @@ export function Row({ row, model, query, onApprove, onDiff, onOpen }: {
   switch (row.k) {
     case 'user': {
       const mode = row.mode ?? 'prompt';
-      return <div className={`frow frow-user${mode === 'prompt' ? '' : ` frow-${mode}`}${live}`}><div className="fl">{userTurnLabel(mode)}</div><div className="fc"><FlowText text={row.text} query={query} /></div></div>;
+      return <div className={`frow frow-user${mode === 'prompt' ? '' : ` frow-${mode}`}${live}`}><div className="fl">{userTurnLabel(mode)}</div><div className="fc"><FlowText text={shown(row.text, hide)} query={query} /></div></div>;
     }
-    case 'ai': return <div className={`frow frow-ai${live}`}><div className="fl">{prettyModelName(model).split(' ')[0] || '模型'}</div><div className={`fc ${row.streaming ? 'streaming' : ''}`}><FlowText text={row.text} query={query} /></div></div>;
+    case 'ai': return <div className={`frow frow-ai${live}`}><div className="fl">{prettyModelName(model).split(' ')[0] || '模型'}</div><div className={`fc ${row.streaming ? 'streaming' : ''}`}><FlowText text={shown(row.text, hide)} query={query} /></div></div>;
     case 'think': return (
       <div className={`frow frow-think${live}`}><div className="fl">思考</div><div className="fc">
         <button className="think-toggle" onClick={() => setThinkOpen((v) => !v)}>{thinkOpen ? '收起思考' : row.streaming ? '正在想…' : '想过一步'}</button>
-        {thinkOpen ? <div className={`think-body ${row.streaming ? 'streaming' : ''}`}><FindBits text={row.text} query={query} /></div> : null}
+        {thinkOpen ? <div className={`think-body ${row.streaming ? 'streaming' : ''}`}><FindBits text={shown(row.text, hide)} query={query} /></div> : null}
       </div></div>
     );
     case 'tool': return (
@@ -54,27 +60,27 @@ export function Row({ row, model, query, onApprove, onDiff, onOpen }: {
         <div className="tool-line">
           {onOpen && !row.running ? (
             <button className="tool-line" onClick={onOpen} style={{ gap: 10 }}>
-              <code><FindBits text={row.preview || row.tool} query={query} /></code>
+              <code><FindBits text={shown(row.preview || row.tool, hide)} query={query} /></code>
               <span className={`tool-meta ${row.error ? 'err' : ''}`}>{row.error ? '失败' : '完成'}</span>
             </button>
           ) : (
             <>
-              <code><FindBits text={row.preview || row.tool} query={query} /></code>
+              <code><FindBits text={shown(row.preview || row.tool, hide)} query={query} /></code>
               {row.running ? <><span className="prog" /><span className="tool-meta run">运行中</span></> : <span className={`tool-meta ${row.error ? 'err' : ''}`}>{row.error ? '失败' : '完成'}</span>}
             </>
           )}
           {row.output ? <button className="tool-toggle" onClick={() => setOpen((o) => !o)}>{open ? '收起' : '展开'}</button> : null}
         </div>
-        {open && row.output ? <pre className="tool-out"><FindBits text={row.output} query={query} /></pre> : null}
+        {open && row.output ? <pre className="tool-out"><FindBits text={shown(row.output, hide)} query={query} /></pre> : null}
       </div></div>
     );
     case 'edit': return (
       <div className={`frow frow-edit${live}`}><div className="fl">{row.tool === 'write' ? '写入' : '编辑'}</div><div className="fc">
-        <div className="tool-line"><button className="tool-line" onClick={onDiff} style={{ gap: 10 }}><code><FindBits text={row.file} query={query} /></code>{row.running ? <span className="tool-meta run">进行中</span> : <span className={`tool-meta ${row.error ? 'err' : ''}`}>{row.error ? '失败' : '已改'}</span>}</button></div>
+        <div className="tool-line"><button className="tool-line" onClick={onDiff} style={{ gap: 10 }}><code><FindBits text={shown(row.file, hide)} query={query} /></code>{row.running ? <span className="tool-meta run">进行中</span> : <span className={`tool-meta ${row.error ? 'err' : ''}`}>{row.error ? '失败' : '已改'}</span>}</button></div>
       </div></div>
     );
     case 'ap': return <ApprovalRow row={row} query={query} live={live} onApprove={onApprove} />;
-    case 'sys': return <div className="frow"><div className="fl" /><div className={`fc sys ${row.tone === 'remote' ? 'remote' : row.tone === 'error' ? 'error' : ''}`}><FindBits text={row.text} query={query} /></div></div>;
+    case 'sys': return <div className="frow"><div className="fl" /><div className={`fc sys ${row.tone === 'remote' ? 'remote' : row.tone === 'error' ? 'error' : ''}`}><FindBits text={shown(row.text, hide)} query={query} /></div></div>;
     default: return null;
   }
 }
