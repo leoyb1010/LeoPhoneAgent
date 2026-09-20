@@ -119,6 +119,8 @@ export const api = {
     sendJson<{ action: 'restored' | 'removed'; file: string }>(`${sessionBase(target)}/file/revert`, { file }),
   commitLocalFiles: (target: SessionTarget, input: { message: string; files: string[] }) =>
     sendJson<{ hash: string; files: string[]; message: string }>(`${sessionBase(target)}/file/commit`, input),
+  pushLocalRepo: (target: SessionTarget) =>
+    sendJson<{ remote: string; branch: string }>(`${sessionBase(target)}/push`, {}),
   diffLocalFile: (target: SessionTarget, file: string) =>
     sendJson<{ file: string; kind: 'modified' | 'added' | 'clean' | 'binary'; patch: string }>(`${sessionBase(target)}/file/diff`, { file }),
   searchLocalCwd: (target: SessionTarget, query: string) =>
