@@ -304,6 +304,15 @@ async function clearLocalOnlyWebCaches() {
   });
 }
 
+async function clearWebCache() {
+  await clearLocalOnlyWebCaches();
+  await session.defaultSession.clearCache();
+  setTimeout(() => {
+    void desktopWindow?.reloadActiveTab();
+  }, 80);
+  return { ok: true };
+}
+
 function getDisplayTargetName() {
   return activeTarget?.name || APP_NAME;
 }
@@ -751,6 +760,7 @@ function registerIpcHandlers() {
   trustedHandle('leocodebox-desktop:open-logs', async () => openAppLogs());
   trustedHandle('leocodebox-desktop:open-accessibility', async () => openAccessibilityPrefs());
   trustedHandle('leocodebox-desktop:relaunch', async () => relaunchApp());
+  trustedHandle('leocodebox-desktop:clear-cache', async () => clearWebCache());
 
   trustedHandle('leocodebox-desktop:notify', async (event, payload) => {
     if (!Notification.isSupported()) return { shown: false };

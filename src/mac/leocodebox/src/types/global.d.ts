@@ -26,6 +26,7 @@ declare global {
       openLogs?: () => Promise<{ path?: string }>;
       openAccessibility?: () => Promise<{ ok?: boolean; url?: string }>;
       relaunch?: () => Promise<{ ok?: boolean }>;
+      clearCache?: () => Promise<{ ok?: boolean }>;
       pickFolder?: () => Promise<{ path?: string; cancelled?: boolean }>;
       revealPath?: (target: string) => Promise<{ path: string }>;
       openPath?: (target: string) => Promise<{ path: string }>;

@@ -115,6 +115,7 @@ if (isLocalHttpOrigin(window.location)) {
     openLogs: () => ipcRenderer.invoke('leocodebox-desktop:open-logs'),
     openAccessibility: () => ipcRenderer.invoke('leocodebox-desktop:open-accessibility'),
     relaunch: () => ipcRenderer.invoke('leocodebox-desktop:relaunch'),
+    clearCache: () => ipcRenderer.invoke('leocodebox-desktop:clear-cache'),
     pickFolder: () => ipcRenderer.invoke('leocodebox-desktop:pick-folder'),
     revealPath: (target) => ipcRenderer.invoke('leocodebox-desktop:reveal-path', target),
     openPath: (target) => ipcRenderer.invoke('leocodebox-desktop:open-path', target),
