@@ -267,6 +267,9 @@ export class HarnessSession {
       this.lastEvent = { event: name, text: `${String(enriched.tool ?? 'tool')} ${String(enriched.preview ?? '').slice(0, 100)}`.trim(), timestamp: enriched.timestamp };
     } else if (name === EVENT_APPROVAL_REQUEST) {
       this.lastEvent = { event: name, text: String(enriched.command ?? '').slice(0, 120), timestamp: enriched.timestamp };
+    } else if (name === 'session.compacting') {
+      if (this.status !== 'waiting_for_approval') this.status = 'running';
+      this.lastEvent = { event: name, text: '正在压缩上下文。', timestamp: enriched.timestamp };
     } else if (name === 'session.retrying') {
       if (this.status !== 'waiting_for_approval') this.status = 'running';
       this.lastEvent = {

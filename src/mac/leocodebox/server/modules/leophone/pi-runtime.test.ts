@@ -10,6 +10,7 @@ import {
   EVENT_APPROVAL_REQUEST,
   EVENT_RUN_COMPLETED,
   EVENT_RUN_FAILED,
+  EVENT_SESSION_COMPACTING,
   EVENT_SESSION_RETRYING,
   EVENT_TOOL_COMPLETED,
   EVENT_TOOL_DELTA,
@@ -86,6 +87,30 @@ test('过载 willRetry / auto_retry 不把会话打成完成', () => {
   assert.equal(start[0]?.attempt, 1);
   assert.deepEqual(dialect.translateLine({ type: 'auto_retry_end', success: true, attempt: 2 }).events, []);
   const dead = dialect.translateLine({ type: 'auto_retry_end', success: false, attempt: 3, finalError: '529 overloaded' }).events;
+  assert.equal(dead[0]?.event, EVENT_RUN_FAILED);
+});
+
+test('阈值压缩变成 session.compacting / session.compacted,不报完成', () => {
+  const dialect = new PiRpcDialect();
+  const start = dialect.translateLine({ type: 'compaction_start', reason: 'threshold' }).events;
+  assert.equal(start[0]?.event, EVENT_SESSION_COMPACTING);
+  const done = dialect.translateLine({
+    type: 'compaction_end',
+    reason: 'threshold',
+    result: { tokensBefore: 150000, estimatedTokensAfter: 32000 },
+    aborted: false,
+    willRetry: false,
+  }).events;
+  assert.equal(done[0]?.event, 'session.compacted');
+  assert.equal(done[0]?.tokensBefore, 150000);
+  assert.equal(done[0]?.tokensAfter, 32000);
+  assert.equal(done.some((event) => event.event === EVENT_RUN_COMPLETED), false);
+  const aborted = dialect.translateLine({ type: 'compaction_end', reason: 'manual', aborted: true, result: null }).events;
+  assert.equal(aborted[0]?.event, 'session.compacted');
+  assert.equal(aborted[0]?.aborted, true);
+  const dead = dialect.translateLine({
+    type: 'compaction_end', reason: 'overflow', result: null, aborted: false, errorMessage: 'quota exceeded',
+  }).events;
   assert.equal(dead[0]?.event, EVENT_RUN_FAILED);
 });
 

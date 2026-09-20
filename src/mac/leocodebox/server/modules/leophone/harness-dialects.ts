@@ -20,6 +20,7 @@ export const EVENT_RUN_COMPLETED = 'run.completed';
 export const EVENT_RUN_FAILED = 'run.failed';
 export const EVENT_RUN_CANCELLED = 'run.cancelled';
 export const EVENT_SESSION_RETRYING = 'session.retrying';
+export const EVENT_SESSION_COMPACTING = 'session.compacting';
 
 export type HarnessEvent = { event: string } & Record<string, unknown>;
 
@@ -312,6 +313,23 @@ export class PiRpcDialect implements HarnessDialect {
       });
     } else if (kind === 'auto_retry_end' && obj.success === false) {
       out.push({ event: EVENT_RUN_FAILED, error: str(obj.finalError ?? obj.errorMessage ?? 'retry failed') });
+    } else if (kind === 'compaction_start') {
+      out.push({ event: EVENT_SESSION_COMPACTING, reason: obj.reason });
+    } else if (kind === 'compaction_end') {
+      const result = asObject(obj.result);
+      if (obj.aborted) {
+        out.push({ event: 'session.compacted', aborted: true, reason: obj.reason });
+      } else if (!obj.result && obj.errorMessage) {
+        out.push({ event: EVENT_RUN_FAILED, error: str(obj.errorMessage) });
+      } else {
+        out.push({
+          event: 'session.compacted',
+          reason: obj.reason,
+          tokensBefore: result.tokensBefore,
+          tokensAfter: result.estimatedTokensAfter,
+          willRetry: obj.willRetry,
+        });
+      }
     } else if (kind === 'error') {
       out.push({ event: EVENT_RUN_FAILED, error: str(obj.message ?? obj.error ?? 'error') });
     } else if (kind === 'response' && obj.success === true && obj.command === 'set_model') {

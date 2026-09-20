@@ -1,4 +1,5 @@
 import type { HarnessEvent, SessionSummary } from './api';
+import { sessionCompactedLabel, sessionCompactingLabel } from './session-compact-live';
 import { sessionRetryLabel } from './session-overload';
 import { clipLiveToolOutput } from './session-tool-live';
 
@@ -517,8 +518,12 @@ export function applyEvent(view: SessionView, event: HarnessEvent): SessionView 
       }
       break;
     }
+    case 'session.compacting':
+      rows = [...closeStreaming(rows), { k: 'sys', key: nextKey(), text: sessionCompactingLabel(), tone: 'muted' }];
+      status = 'running';
+      break;
     case 'session.compacted':
-      rows = [...rows, { k: 'sys', key: nextKey(), text: '已压缩:早先的轮次折成一条摘要,上下文变轻了', tone: 'muted' }];
+      rows = [...rows, { k: 'sys', key: nextKey(), text: sessionCompactedLabel(event), tone: 'muted' }];
       break;
     case 'session.queue_cleared':
       rows = [...closeStreaming(rows), { k: 'sys', key: nextKey(), text: '已取消排队的下一句。', tone: 'muted' }];
@@ -655,6 +660,7 @@ export function lastLine(summary: Pick<SessionSummary, 'status' | 'last_event' |
     case 'reasoning.available': return '正在想…';
     case 'message.delta': return ev.text;
     case 'approval.request': return `需要确认:${ev.text.split('\n')[0]}`;
+    case 'session.compacting': return ev.text || sessionCompactingLabel();
     case 'session.retrying': return ev.text || sessionRetryLabel();
     case 'run.completed': return '已完成';
     case 'run.failed': return `失败 · ${humanizeError(ev.text)}`;
