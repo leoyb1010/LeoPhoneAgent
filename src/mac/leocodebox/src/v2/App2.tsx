@@ -99,6 +99,7 @@ import { PINNED_SESSIONS_KEY, comparePinnedFirst, pinSessionToast, readPinnedSes
 import { canSearchSession, searchQueryReady, searchSessionToast, type SessionSearchHit } from './session-search';
 import { canShowSessionLog, type SessionCommit } from './session-log';
 import { approvalChoiceActions, approvalToast, dockNeedBadge, firstPendingApproval, noticeNotifyPayload, noticesFromSnapshot, sessionPathTarget } from './session-notice';
+import { isBrowserOffline, offlineBanner, offlineToast, onlineToast } from './session-offline';
 import { HIDDEN_SESSIONS_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, removeHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerCanFollowUp, composerNeedsModelSwitch, composerPlaceholder, composerRunningHint, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, followUpToast, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mentionWindowRead, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, pendingFollowUps, prettyModelName, providerOf, queueClearedToast, rankModelsForPicker, readHiddenSessionKeys, relativeTime, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionCanResume, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, usableWindowMenus, windowBoundLabel, windowMenuLabel, windowPadGesture, WINDOW_KEY_BUTTONS, type FlowRow, type Group, type SessionView } from './model';
 import { usableModelsFromProviders } from './settings-form';
 import { artifactNameFromPath, clipFilePeek, cwdChipLabel, isPeekDrawer, isWorkspaceDrawer, machineChipLabel, peekCanWriteBack, peekFileCaption, sessionFilePath, titlebarHomeCopy } from './local-files';
@@ -253,6 +254,7 @@ export default function App2() {
   const [cliInstalled, setCliInstalled] = useState(false);
   const canAppsHere = canMoveToApplications(desktopAppsTools());
   const [inApplications, setInApplications] = useState(false);
+  const [netOffline, setNetOffline] = useState(() => typeof navigator !== 'undefined' && navigator.onLine === false);
   const canCheckUpdateHere = canCheckUpdate(desktopUpdater());
   const [updateState, setUpdateState] = useState<UpdateRow | null>(null);
   const chimePrev = useRef<Map<string, string>>(new Map());
@@ -323,6 +325,22 @@ export default function App2() {
     setToasts((t) => [...t, { id, text, error }]);
     window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), error ? 4000 : 2200);
   }, []);
+  useEffect(() => {
+    const goOff = () => {
+      setNetOffline(true);
+      toast(offlineToast(), true);
+    };
+    const goOn = () => {
+      setNetOffline(false);
+      toast(onlineToast());
+    };
+    window.addEventListener('offline', goOff);
+    window.addEventListener('online', goOn);
+    return () => {
+      window.removeEventListener('offline', goOff);
+      window.removeEventListener('online', goOn);
+    };
+  }, [toast]);
   const warnIcloud = useCallback((cwd?: string | null) => {
     const path = String(cwd ?? '').trim();
     if (!isIcloudPath(path) || icloudWarned.current.has(path)) return;
@@ -1420,6 +1438,10 @@ export default function App2() {
       toast('先换一个模型再发。当前这个账号用不了。', true);
       return;
     }
+    if (isBrowserOffline(typeof navigator === 'undefined' ? null : navigator)) {
+      toast(offlineToast(), true);
+      return;
+    }
     await withBusy(() => api.send(active, text), retryLastUserToast());
   }, [active, activeSummary?.last_event?.text, canRetryLast, sessionView.model, sessionView.rows, toast, withBusy]);
   const editLastPrompt = useCallback(() => {
@@ -1731,6 +1753,10 @@ export default function App2() {
       toast('先换一个模型再发。当前这个账号用不了。', true);
       return;
     }
+    if (isBrowserOffline(typeof navigator === 'undefined' ? null : navigator)) {
+      toast(offlineToast(), true);
+      return;
+    }
     setDraft('');
     await withBusy(() => api.send(active, text));
   }, [active, activeSummary, draft, sessionView.model, sessionView.rows, toast, withBusy, setDraft]);
@@ -1743,6 +1769,10 @@ export default function App2() {
     }));
     if (blocked) {
       toast('先换一个模型再发。当前这个账号用不了。', true);
+      return;
+    }
+    if (isBrowserOffline(typeof navigator === 'undefined' ? null : navigator)) {
+      toast(offlineToast(), true);
       return;
     }
     setDraft('');
@@ -1983,6 +2013,10 @@ export default function App2() {
   }, [active, setDraft, toast]);
 
   const createSession = useCallback(async (input: { machine: string; cwd: string; prompt: string; model: string | null; policy: string }) => {
+    if (input.machine === 'local' && isBrowserOffline(typeof navigator === 'undefined' ? null : navigator)) {
+      toast(offlineToast(), true);
+      return;
+    }
     if (input.machine === 'local' && (providers === null || usableModelsFromProviders(providers).length === 0)) {
       if (providers === null) return;
       setNewBox(null);
@@ -2687,6 +2721,11 @@ export default function App2() {
                     <button className="chip" onClick={(e) => { e.stopPropagation(); moreMenu(e.currentTarget); }}>⋯</button>
                   </div>
                 </header>
+                {netOffline ? (
+                  <div className="need-strip glass">
+                    <span className="cnt">{offlineBanner()}</span>
+                  </div>
+                ) : null}
                 {othersNeedingYou.length > 0 && (() => {
                   const first = othersNeedingYou[0];
                   const pending = firstPendingApproval(first.s);
