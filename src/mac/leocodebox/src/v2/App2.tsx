@@ -113,6 +113,7 @@ import { canFlushPeekOnSend, peekFlushedToast } from './session-peek-flush';
 import { clearPeekFileDraft, peekFileDraftToRestore, writePeekFileDraft } from './session-peek-files';
 import { peekDraftToRestore, peekMemoryFile, peekMemoryKey, writePeekMemory, type PeekMemory } from './session-peek-memory';
 import { canPeekPendingEdit, pendingEditFile } from './session-peek-pending';
+import { mentionPeekOnSend } from './session-peek-send';
 import { lastFinishedEdit, peekReloadedToast, shouldReloadPeek } from './session-peek-sync';
 import { canUnpackSessionZip, unpackSessionToast, unpackZipName } from './session-unpack';
 import { canSeedSessionFile, clipSeedText, sanitizeSeedRel, seedSessionToast } from './session-seed';
@@ -2041,7 +2042,14 @@ export default function App2() {
   }, [allSessions, hideSession, toast, withBusy]);
   const send = useCallback(async () => {
     if (!active) return;
-    const text = draft.trim(); if (!text) return;
+    const text = mentionPeekOnSend({
+      machine: active.machine,
+      drawer,
+      file: focusFile,
+      cwd: activeSummary?.cwd,
+      prompt: draft,
+    });
+    if (!text) return;
     const blocked = composerNeedsModelSwitch(sessionView.model, sessionFailTexts({
       lastEventText: activeSummary?.last_event?.text,
       rows: sessionView.rows,
@@ -2072,10 +2080,17 @@ export default function App2() {
       return;
     }
     await withBusy(() => api.send(active, text));
-  }, [active, activeSummary, canResumeHere, draft, flushPeekForSend, sessionView.model, sessionView.rows, sessionView.status, toast, withBusy, setDraft, warnBatterySend, warnThermalSend, warnMemorySend, warnLoadSend]);
+  }, [active, activeSummary, canResumeHere, draft, drawer, flushPeekForSend, focusFile, sessionView.model, sessionView.rows, sessionView.status, toast, withBusy, setDraft, warnBatterySend, warnThermalSend, warnMemorySend, warnLoadSend]);
   const followUp = useCallback(async () => {
     if (!active || !composerCanFollowUp(active.machine, sessionView.status)) return;
-    const text = draft.trim(); if (!text) return;
+    const text = mentionPeekOnSend({
+      machine: active.machine,
+      drawer,
+      file: focusFile,
+      cwd: activeSummary?.cwd,
+      prompt: draft,
+    });
+    if (!text) return;
     const blocked = composerNeedsModelSwitch(sessionView.model, sessionFailTexts({
       lastEventText: activeSummary?.last_event?.text,
       rows: sessionView.rows,
@@ -2095,7 +2110,7 @@ export default function App2() {
     warnLoadSend();
     setDraft('');
     await withBusy(() => api.rpc(active, { type: 'follow_up', message: text }), followUpToast());
-  }, [active, activeSummary, draft, flushPeekForSend, sessionView.model, sessionView.rows, sessionView.status, toast, withBusy, setDraft, warnBatterySend, warnThermalSend, warnMemorySend, warnLoadSend]);
+  }, [active, activeSummary, draft, drawer, flushPeekForSend, focusFile, sessionView.model, sessionView.rows, sessionView.status, toast, withBusy, setDraft, warnBatterySend, warnThermalSend, warnMemorySend, warnLoadSend]);
   const clearFollowUps = useCallback(() => {
     if (!active || !composerCanFollowUp(active.machine, sessionView.status)) return;
     void withBusy(() => api.rpc(active, { type: 'clear_queue' }), queueClearedToast());
