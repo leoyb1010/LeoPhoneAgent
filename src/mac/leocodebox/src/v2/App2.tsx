@@ -41,6 +41,7 @@ import { DONE_CHIME_KEY, canPlayDoneChime, chimesFromSnapshot, doneChimeLabel, d
 import { canOpenAccessibility, openAccessibilityLabel, openAccessibilityToast } from './session-a11y';
 import { canOpenLogs, openLogsLabel, openLogsToast } from './session-applogs';
 import { canRelaunch, relaunchBusy, relaunchBusyToast, relaunchLabel, relaunchToast } from './session-relaunch';
+import { followSystemLabel, followSystemToast } from './session-theme';
 import { leoSchemeToast, pickSchemeSession } from './session-scheme';
 import { autoCompactToast, shouldAutoCompact } from './session-autocompact';
 import { appendDictate, canDictate, clipDictateText, dictateListeningToast, dictateStoppedToast, dictateToast, dictateUnavailableToast, speechRecognitionCtor } from './session-dictate';
@@ -175,7 +176,7 @@ function useSessionStream(target: SessionTarget | null, seed: SessionSummary | n
 }
 
 export default function App2() {
-  const { isDarkMode, toggleDarkMode } = useTheme();
+  const { isDarkMode, themeMode, setThemeMode, toggleDarkMode } = useTheme();
   const [view, setView] = useState<View>('home');
   const [filter, setFilter] = useState<Filter>('all');
   const [railQuery, setRailQuery] = useState('');
@@ -1072,6 +1073,10 @@ export default function App2() {
       toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
     }
   }, [allSessions, canRelaunchHere, toast]);
+  const followSystemHere = useCallback(() => {
+    toast(followSystemToast(themeMode));
+    if (themeMode !== 'system') setThemeMode('system');
+  }, [setThemeMode, themeMode, toast]);
   const toggleAlwaysOnTop = useCallback(async () => {
     if (!canAlwaysOnTopHere) {
       toast('这台电脑现在钉不了窗口', true);
@@ -1891,6 +1896,7 @@ export default function App2() {
     ...(canOpenLogsHere ? [{ v: 'openlogs', t: openLogsLabel(), sub: '本机日志目录' }] : []),
     ...(canOpenA11yHere ? [{ v: 'opena11y', t: openAccessibilityLabel(), sub: '系统隐私设置' }] : []),
     ...(canRelaunchHere ? [{ v: 'relaunch', t: relaunchLabel(), sub: '整进程重来' }] : []),
+    { v: 'followsys', t: followSystemLabel(themeMode), sub: themeMode === 'system' ? '现在跟着 macOS' : '跟着 macOS 明暗' },
     ...(canDictateHere ? [{ v: 'dictate', t: dictating ? '停住' : '对着说', sub: dictating ? '正在听' : '写进输入框' }] : []),
     ...(canSearchHere ? [{ v: 'searchcwd', t: '在目录里搜', sub: activeSummary?.cwd || '会话目录' }] : []),
     ...(canShowSessionLog(active?.machine) ? [{ v: 'log', t: '最近提交', sub: activeSummary?.cwd || '会话目录' }] : []),
@@ -1971,6 +1977,7 @@ export default function App2() {
     else if (v === 'openlogs') void openLogsHere();
     else if (v === 'opena11y') void openA11yHere();
     else if (v === 'relaunch') void relaunchHere();
+    else if (v === 'followsys') followSystemHere();
     else if (v === 'dictate') dictateHere();
     else if (v === 'searchcwd') openSearch();
     else if (v === 'log') openLog();
@@ -2153,6 +2160,7 @@ export default function App2() {
     { g: '这条会话', t: '本次改动', k: '⌘D', run: () => setDrawer('diff') }, { g: '这条会话', t: '浏览器', k: '⌘B', run: () => setDrawer('browser') },
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
+    { g: '外观', t: followSystemLabel(themeMode), k: themeMode === 'system' ? '现在跟着 macOS' : '跟着 macOS 明暗', run: followSystemHere },
     ...(canOpenAtLoginHere ? [{ g: '本机', t: openAtLoginLabel(openAtLogin), k: openAtLogin ? '现在开机就开' : '登录后打开', run: () => void toggleOpenAtLogin() }] : []),
     ...(canHotkeyHere ? [{ g: '本机', t: globalHotkeyLabel(globalHotkey), k: globalHotkey ? '现在 Alt+Space' : 'Alt+Space 唤出窗口', run: () => void toggleGlobalHotkey() }] : []),
     ...(canAlwaysOnTopHere ? [{ g: '本机', t: alwaysOnTopLabel(alwaysOnTop), k: alwaysOnTop ? '现在钉着' : '盖过别的窗口', run: () => void toggleAlwaysOnTop() }] : []),
@@ -2162,7 +2170,7 @@ export default function App2() {
     ...(canOpenA11yHere ? [{ g: '本机', t: openAccessibilityLabel(), k: '系统隐私设置', run: () => void openA11yHere() }] : []),
     ...(canRelaunchHere ? [{ g: '本机', t: relaunchLabel(), k: '整进程重来', run: () => void relaunchHere() }] : []),
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, importTalk, canImportHere, copyTalk, canCopyTalkHere, printTalk, canPrintTalkHere, toggleHideSecrets, canHideHere, hideSecretsOn, toggleOpenAtLogin, canOpenAtLoginHere, openAtLogin, toggleGlobalHotkey, canHotkeyHere, globalHotkey, toggleAlwaysOnTop, canAlwaysOnTopHere, alwaysOnTop, toggleContentProtection, canProtectHere, contentProtection, toggleDoneChime, canDoneChimeHere, doneChimeOn, openLogsHere, canOpenLogsHere, openA11yHere, canOpenA11yHere, relaunchHere, canRelaunchHere, dictateHere, canDictateHere, dictating, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, speakLast, canSpeakLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openLastWritten, canOpenWritten, lastWritten, jumpLastFail, canJumpFail, lastFail, openLastRead, canOpenRead, lastRead, openHere, canHere, herePeers, showPulse, canPulse, pulseLabel, forkHere, canFork, openTalkLink, canLinks, talkLinks, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, themeMode, followSystemHere, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, importTalk, canImportHere, copyTalk, canCopyTalkHere, printTalk, canPrintTalkHere, toggleHideSecrets, canHideHere, hideSecretsOn, toggleOpenAtLogin, canOpenAtLoginHere, openAtLogin, toggleGlobalHotkey, canHotkeyHere, globalHotkey, toggleAlwaysOnTop, canAlwaysOnTopHere, alwaysOnTop, toggleContentProtection, canProtectHere, contentProtection, toggleDoneChime, canDoneChimeHere, doneChimeOn, openLogsHere, canOpenLogsHere, openA11yHere, canOpenA11yHere, relaunchHere, canRelaunchHere, dictateHere, canDictateHere, dictating, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, speakLast, canSpeakLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openLastWritten, canOpenWritten, lastWritten, jumpLastFail, canJumpFail, lastFail, openLastRead, canOpenRead, lastRead, openHere, canHere, herePeers, showPulse, canPulse, pulseLabel, forkHere, canFork, openTalkLink, canLinks, talkLinks, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -2621,6 +2629,7 @@ export default function App2() {
                         {canOpenLogsHere ? <button className="link" type="button" onClick={() => { void openLogsHere(); }}>{openLogsLabel()}</button> : null}
                         {canOpenA11yHere ? <button className="link" type="button" onClick={() => { void openA11yHere(); }}>{openAccessibilityLabel()}</button> : null}
                         {canRelaunchHere ? <button className="link" type="button" onClick={() => { void relaunchHere(); }}>{relaunchLabel()}</button> : null}
+                        <button className="link" type="button" onClick={followSystemHere}>{followSystemLabel(themeMode)}</button>
                         {canDictateHere ? <button className="link" type="button" onClick={dictateHere}>{dictating ? '停住' : '对着说'}</button> : null}
                         {canRecallHere ? <button className="link" onClick={() => void openRecall()}>找回来</button> : null}
                       </div>
