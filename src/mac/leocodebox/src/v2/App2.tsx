@@ -110,6 +110,7 @@ import { canInitSessionRepo, initSessionToast } from './session-init';
 import { canMergeSessionBranch, mergeSessionToast } from './session-merge';
 import { isMissingSessionCwd, missingCwdToast } from './session-missing';
 import { canPackSessionChanges, packFileName, packSessionToast } from './session-pack';
+import { shouldDropDirtyPeekOnApprove } from './session-peek-approve';
 import { canSendFromPeek } from './session-peek-cmd';
 import { canFlushPeekOnSend, peekFlushedToast } from './session-peek-flush';
 import { clearPeekFileDraft, peekFileDraftToRestore, writePeekFileDraft } from './session-peek-files';
@@ -2294,20 +2295,33 @@ export default function App2() {
   }, [canLinks, talkLinks, toast]);
   const approveTarget = useCallback((target: SessionTarget, approvalId: string, choice: string, reason?: string) => {
     const text = draft.trim();
+    const sameSession = Boolean(active && target.machine === active.machine && target.id === active.id);
     const queue = canQueueAfterApprove({
       machine: target.machine,
-      sameSession: Boolean(active && target.machine === active.machine && target.id === active.id),
+      sameSession,
       status: sessionView.status,
       choice,
       prompt: text,
     });
+    const dropPeek = shouldDropDirtyPeekOnApprove({
+      machine: target.machine,
+      sameSession,
+      choice,
+      dirty: filePeekDraft != null && filePeekDraft !== filePeek,
+      focusFile,
+      pendingFile: pendingEditFile(sessionView.rows),
+    });
     return withBusy(async () => {
       await api.approve(target, approvalId, choice, reason);
+      if (dropPeek) {
+        clearPeekFileDraft(peekFileDrafts.current, peekMemoryKey(target.machine, target.id), focusFile);
+        setFilePeekDraft(null);
+      }
       if (!queue) return;
       setDraft('');
       await api.rpc(target, { type: 'follow_up', message: text });
     }, queue ? queueAfterApproveToast() : choice === 'deny' ? denySessionToast(reason ?? '') : approvalToast(choice));
-  }, [active, draft, sessionView.status, setDraft, withBusy]);
+  }, [active, draft, filePeek, filePeekDraft, focusFile, sessionView.rows, sessionView.status, setDraft, withBusy]);
   const approve = useCallback((approvalId: string, choice: string, reason?: string) => active && approveTarget(active, approvalId, choice, reason), [active, approveTarget]);
   useEffect(() => onSessionNoticeAction((target) => {
     void approveTarget(target, target.approvalId, target.choice);
