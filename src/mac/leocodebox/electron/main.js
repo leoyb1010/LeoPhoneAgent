@@ -57,6 +57,19 @@ function setAlwaysOnTop(on) {
   return getAlwaysOnTop();
 }
 
+const DONE_CHIME = '/System/Library/Sounds/Glass.aiff';
+let chimeChild = null;
+
+function playDoneChime() {
+  if (chimeChild) {
+    try { chimeChild.kill('SIGTERM'); } catch { /* already gone */ }
+    chimeChild = null;
+  }
+  chimeChild = spawn('/usr/bin/afplay', ['-v', '0.45', DONE_CHIME], { stdio: 'ignore' });
+  chimeChild.on('exit', () => { chimeChild = null; });
+  return { ok: true };
+}
+
 let sayChild = null;
 let sayVoicePromise = null;
 
@@ -634,6 +647,7 @@ function registerIpcHandlers() {
   trustedHandle('leocodebox-desktop:always-on-top', async (_event, raw) => (
     raw === undefined || raw === null ? getAlwaysOnTop() : setAlwaysOnTop(Boolean(raw))
   ));
+  trustedHandle('leocodebox-desktop:play-done-sound', async () => playDoneChime());
 
   trustedHandle('leocodebox-desktop:notify', async (event, payload) => {
     if (!Notification.isSupported()) return { shown: false };
