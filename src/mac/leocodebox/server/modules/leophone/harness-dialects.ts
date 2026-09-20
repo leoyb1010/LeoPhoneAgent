@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 
 import { sessionIncompleteLabel } from './session-incomplete.js';
+import { sessionToolFullOutput } from './session-tool-full.js';
 import { sessionToolImages } from './session-tool-image.js';
 
 // 方言翻译层——把每个编码 CLI 各自的 JSON 协议翻成一套事件词汇表,与
@@ -263,7 +264,7 @@ export class PiRpcDialect implements HarnessDialect {
         tool: obj.toolName || 'tool',
         tool_use_id: obj.toolCallId,
         error: Boolean(obj.isError),
-        output: piResultPreview(obj.result),
+        output: sessionToolFullOutput(obj.result, piResultPreview(obj.result)),
         ...(images.length ? { images } : {}),
       });
     } else if (kind === 'extension_ui_request') {
@@ -387,7 +388,7 @@ export class PiRpcDialect implements HarnessDialect {
       const id = str(obj.id);
       this.lastToolDelta.delete(id);
       const data = asObject(obj.data);
-      const output = piResultPreview(data.output) || str(obj.error);
+      const output = sessionToolFullOutput(data, piResultPreview(data.output) || str(obj.error));
       out.push({
         event: EVENT_TOOL_COMPLETED,
         tool: 'bash',
