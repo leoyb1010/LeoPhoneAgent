@@ -28,6 +28,7 @@ import { HarnessJournal, type JournalHealth, type JournalOptions } from './harne
 import { HARNESSES, resolveExecutable, type HarnessLaunchContext, type HarnessModel, type HarnessSpec } from './harness-specs.js';
 import { LEOAGENT_HOME } from './leoagent-home.js';
 import { clipDenyReason, findPiSessionFile, hasAnyPiAuth, normalizePolicy, piSessionResumable, writeDenyReason, writePolicy, type ApprovalPolicy } from './pi-runtime.js';
+import { attachSessionCites, sessionCiteText } from './session-cite.js';
 import { applyOutgoingRules, readCwdRuleSidecar, writeCwdRuleSidecar } from './session-cwd-rule.js';
 import { lastPromptSeq, rewindPiLastUser } from './session-rewind.js';
 import { readRuleSidecar, writeRuleSidecar } from './session-rule.js';
@@ -505,6 +506,8 @@ export class HarnessSession {
       outgoing.message = applyOutgoingRules(text, this.rule, readCwdRuleSidecar(this.cwd) || this.cwdRule);
       const images = sessionImagesFromPrompt(text, this.cwd);
       if (images.length) outgoing.images = images;
+      const cited = sessionCiteText(text, this.cwd);
+      if (cited) outgoing.message = `${outgoing.message}\n\n${cited}`;
       if (outgoing.type === 'prompt') {
         this.promptTurns += 1;
         if (this.status === 'idle' || this.status === 'failed') this.status = 'running';
@@ -560,7 +563,7 @@ export class HarnessSession {
           ? frame as Record<string, unknown>
           : null;
         if (!row || row.type !== 'prompt') return frame;
-        return attachSessionImages(row, text, this.cwd);
+        return attachSessionCites(attachSessionImages(row, text, this.cwd), text, this.cwd);
       });
       this.writeFrames(frames);
     }
