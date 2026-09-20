@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.1.0',
+    date: '2026-09-20',
+    items: [
+      '会话目录里的 zip 可以解回文件，不会写到目录外面。',
+    ],
+  },
+  {
     version: '2.0.99',
     date: '2026-09-20',
     items: [

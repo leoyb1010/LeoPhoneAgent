@@ -17,6 +17,7 @@ import { writeSessionExport } from './session-export.js';
 import { revertSessionFile } from './session-revert.js';
 import { applySessionPatch } from './session-apply.js';
 import { packSessionChanges } from './session-pack.js';
+import { unpackSessionZip } from './session-unpack.js';
 import { seedSessionFile } from './session-seed.js';
 import { haltBusyLocalSessions } from './session-halt.js';
 import { pushSessionRepo } from './session-push.js';
@@ -467,6 +468,16 @@ router.post('/leophone/local/sessions/:sessionId/pack', async (req, res) => {
   const files = Array.isArray(body.files) ? body.files.map((file) => String(file ?? '')) : [];
   try {
     res.json(await packSessionChanges(session.cwd, { name: String(body.name ?? 'leo-改动.zip'), files }));
+  } catch (error) {
+    jsonError(res, 409, error instanceof Error ? error.message : String(error));
+  }
+});
+
+router.post('/leophone/local/sessions/:sessionId/unpack', async (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  try {
+    res.json(await unpackSessionZip(session.cwd, { name: String(((req.body ?? {}) as Record<string, unknown>).name ?? '') }));
   } catch (error) {
     jsonError(res, 409, error instanceof Error ? error.message : String(error));
   }

@@ -135,6 +135,8 @@ export const api = {
     sendJson<{ files: string[] }>(`${sessionBase(target)}/apply`, { patch }),
   packLocalChanges: (target: SessionTarget, input: { name: string; files?: string[] }) =>
     sendJson<{ path: string; name: string; files: string[] }>(`${sessionBase(target)}/pack`, input),
+  unpackLocalZip: (target: SessionTarget, input: { name?: string } = {}) =>
+    sendJson<{ name: string; files: string[] }>(`${sessionBase(target)}/unpack`, input),
   seedLocalFile: (target: SessionTarget, input: { name: string; text: string }) =>
     sendJson<{ path: string; file: string }>(`${sessionBase(target)}/seed`, input),
   exportLocalTalk: (target: SessionTarget, input: { name: string; markdown: string }) =>

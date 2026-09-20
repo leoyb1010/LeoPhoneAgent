@@ -18,6 +18,7 @@ import { canMentionLastReply, lastAiReply, mentionLastReply, mentionLastReplyToa
 import { canRetryLastUser, lastUserPrompt, retryLastUserToast } from './session-retry';
 import { applyPatchToast, canApplySessionPatch, clipApplyPatch } from './session-apply';
 import { canPackSessionChanges, packFileName, packSessionToast } from './session-pack';
+import { canUnpackSessionZip, unpackSessionToast, unpackZipName } from './session-unpack';
 import { canSeedSessionFile, clipSeedText, sanitizeSeedRel, seedSessionToast } from './session-seed';
 import { canHaltBusySessions, haltSessionsToast } from './session-halt';
 import { canPushSessionRepo, pushSessionToast } from './session-push';
@@ -258,6 +259,7 @@ export default function App2() {
   const canRetryLast = canRetryLastUser({ canDrive, running: composerShowsSteer(sessionView.status), rows: sessionView.rows });
   const canApplyHere = canApplySessionPatch(active?.machine);
   const canPackHere = canPackSessionChanges(active?.machine);
+  const canUnpackHere = canUnpackSessionZip(active?.machine);
   const canSeedHere = canSeedSessionFile(active?.machine);
   const canHaltBusy = canHaltBusySessions(allSessions);
   const canPushHere = canPushSessionRepo(active?.machine);
@@ -863,6 +865,17 @@ export default function App2() {
       toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
     }
   }, [active, activeSummary?.title, canPackHere, pinFiles, sessionView.title, toast]);
+  const unpackZip = useCallback(async () => {
+    if (!active || !canUnpackHere) return;
+    try {
+      const result = await api.unpackLocalZip(active, { name: unpackZipName(focusFile) });
+      toast(unpackSessionToast(result.name, result.files.length));
+      setPeekTick((tick) => tick + 1);
+      if (result.files[0]) { setFocusCommit(null); setFocusFile(result.files[0]); }
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+    }
+  }, [active, canUnpackHere, focusFile, toast]);
   const seedFile = useCallback(async () => {
     if (!active || !canSeedHere) return;
     try {
@@ -1100,6 +1113,7 @@ export default function App2() {
     ...(canShowSessionLog(active?.machine) ? [{ v: 'log', t: '最近提交', sub: activeSummary?.cwd || '会话目录' }] : []),
     ...(canApplyHere ? [{ v: 'apply', t: '贴上补丁', sub: '剪贴板里的 unified diff' }] : []),
     ...(canPackHere ? [{ v: 'pack', t: '带走这次改动', sub: '打成一份 zip' }] : []),
+    ...(canUnpackHere ? [{ v: 'unpack', t: '解开这份 zip', sub: unpackZipName(focusFile) || '会话目录里最近的 zip' }] : []),
     ...(canSeedHere ? [{ v: 'seed', t: '建一个文件', sub: seedName.trim() || '剪贴板有字就写进去' }] : []),
     ...(canMentionLast ? [{ v: 'lastreply', t: '带上上一句', sub: lastReply.slice(0, 40) }] : []),
     ...(canRetryLast ? [{ v: 'retrylast', t: '再发上一句', sub: lastPrompt.slice(0, 40) }] : []),
@@ -1139,6 +1153,7 @@ export default function App2() {
     else if (v === 'log') openLog();
     else if (v === 'apply') void applyPatch();
     else if (v === 'pack') void packChanges();
+    else if (v === 'unpack') void unpackZip();
     else if (v === 'seed') void seedFile();
     else if (v === 'lastreply') mentionLast();
     else if (v === 'retrylast') void retryLast();
@@ -1255,6 +1270,7 @@ export default function App2() {
     ...(canShowSessionLog(active?.machine) ? [{ g: '这条会话', t: '最近提交', k: activeSummary?.cwd || '', run: openLog }] : []),
     ...(canApplyHere ? [{ g: '这条会话', t: '贴上补丁', k: '剪贴板', run: () => void applyPatch() }] : []),
     ...(canPackHere ? [{ g: '这条会话', t: '带走这次改动', k: 'zip', run: () => void packChanges() }] : []),
+    ...(canUnpackHere ? [{ g: '这条会话', t: '解开这份 zip', k: unpackZipName(focusFile) || 'zip', run: () => void unpackZip() }] : []),
     ...(canSeedHere ? [{ g: '这条会话', t: '建一个文件', k: '新建', run: () => void seedFile() }] : []),
     ...(canMentionLast ? [{ g: '这条会话', t: '带上上一句', k: lastReply.slice(0, 40), run: mentionLast }] : []),
     ...(canRetryLast ? [{ g: '这条会话', t: '再发上一句', k: lastPrompt.slice(0, 40), run: () => void retryLast() }] : []),
@@ -1265,7 +1281,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, haltBusy, canHaltBusy, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, retryLast, canRetryLast, lastPrompt, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, haltBusy, canHaltBusy, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, retryLast, canRetryLast, lastPrompt, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -1731,6 +1747,7 @@ export default function App2() {
                 {canPullHere ? <div className="local-files-commit"><button className="btn-s" type="button" onClick={() => { void pullRepo(); }}>拉回远端</button></div> : null}
                 {canApplyHere ? <div className="local-files-commit"><button className="btn-s" type="button" onClick={() => { void applyPatch(); }}>贴上补丁</button></div> : null}
                 {canPackHere ? <div className="local-files-commit"><button className="btn-s" type="button" onClick={() => { void packChanges(); }}>带走这次改动</button></div> : null}
+                {canUnpackHere ? <div className="local-files-commit"><button className="btn-s" type="button" onClick={() => { void unpackZip(); }}>解开这份 zip</button></div> : null}
               </div>
             )
           ) : drawer === 'files' && active?.machine === 'local' ? (
@@ -1759,6 +1776,7 @@ export default function App2() {
                     <button className="btn-s" type="submit">建这个文件</button>
                   </form>
                 ) : null}
+                {canUnpackHere ? <div className="local-files-commit"><button className="btn-s" type="button" onClick={() => { void unpackZip(); }}>解开这份 zip</button></div> : null}
                 {wsHits.length > 0 || wsTruncated ? (
                   <ul className="remote-files">
                     {wsHits.map((hit) => (
