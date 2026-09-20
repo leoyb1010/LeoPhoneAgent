@@ -17,6 +17,7 @@ import { canRenameSession, clipSessionTitle, renameSessionToast } from './sessio
 import { canMentionLastReply, lastAiReply, mentionLastReply, mentionLastReplyToast } from './session-reply';
 import { PINNED_SESSIONS_KEY, comparePinnedFirst, pinSessionToast, readPinnedSessionKeys, sessionIsPinned, togglePinnedSessionKey } from './session-pin';
 import { canSearchSession, searchQueryReady, searchSessionToast, type SessionSearchHit } from './session-search';
+import { canShowSessionLog, type SessionCommit } from './session-log';
 import { approvalChoiceActions, approvalToast, dockNeedBadge, firstPendingApproval, noticeNotifyPayload, noticesFromSnapshot, sessionPathTarget } from './session-notice';
 import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerCanFollowUp, composerNeedsModelSwitch, composerPlaceholder, composerRunningHint, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, followUpToast, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mentionWindowRead, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, pendingFollowUps, prettyModelName, providerOf, queueClearedToast, rankModelsForPicker, readHiddenSessionKeys, relativeTime, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionCanResume, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, usableWindowMenus, windowBoundLabel, windowMenuLabel, windowPadGesture, WINDOW_KEY_BUTTONS, type FlowRow, type Group, type SessionView } from './model';
 import { usableModelsFromProviders } from './settings-form';
@@ -167,6 +168,9 @@ export default function App2() {
   const [wsHits, setWsHits] = useState<SessionSearchHit[]>([]);
   const [wsTruncated, setWsTruncated] = useState(false);
   const wsSearchRef = useRef<HTMLInputElement | null>(null);
+  const [commits, setCommits] = useState<SessionCommit[]>([]);
+  const [logError, setLogError] = useState<string | null>(null);
+  const [focusCommit, setFocusCommit] = useState<string | null>(null);
   const flowRef = useRef<HTMLDivElement | null>(null);
   const headRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLDivElement | null>(null);
@@ -389,22 +393,26 @@ export default function App2() {
   }, [drawer, active]);
 
   useEffect(() => {
-    if (!isPeekDrawer(drawer) || !active || !focusFile) {
-      if (!focusFile) {
+    if (!isPeekDrawer(drawer) || !active || (!focusFile && !focusCommit)) {
+      if (!focusFile && !focusCommit) {
         setFilePeek(null);
         setFilePeekDraft(null);
       }
       return;
     }
     const cwd = activeSummary?.cwd ?? workspace?.fullPath ?? '';
-    const localPath = sessionFilePath(cwd, focusFile);
-    const artifactName = artifactNameFromPath(cwd, focusFile);
-    if (!localPath && !artifactName) return;
+    const localPath = focusFile ? sessionFilePath(cwd, focusFile) : '';
+    const artifactName = focusFile ? artifactNameFromPath(cwd, focusFile) : '';
+    if (!focusCommit && !localPath && !artifactName) return;
     let cancelled = false;
     setFilePeek('正在读…');
     setFilePeekDraft('正在读…');
     const load = async (): Promise<string> => {
-      if (drawer === 'diff' && canShowSessionDiff(active.machine, focusFile)) {
+      if (drawer === 'diff' && focusCommit && canShowSessionLog(active.machine)) {
+        const row = await api.showLocalCommit(active, focusCommit);
+        return clipFilePeek(row.patch);
+      }
+      if (drawer === 'diff' && focusFile && canShowSessionDiff(active.machine, focusFile)) {
         const row = await api.diffLocalFile(active, focusFile);
         return clipFilePeek(row.patch);
       }
@@ -431,16 +439,34 @@ export default function App2() {
       setFilePeekDraft(text);
     });
     return () => { cancelled = true; };
-  }, [drawer, active, workspace?.projectId, workspace?.fullPath, focusFile, activeSummary?.cwd, peekTick]);
+  }, [drawer, active, workspace?.projectId, workspace?.fullPath, focusFile, focusCommit, activeSummary?.cwd, peekTick]);
 
   useEffect(() => {
-    if (!isPeekDrawer(drawer) || focusFile) return;
+    if (drawer !== 'diff' || !active || !canShowSessionLog(active.machine)) {
+      if (drawer !== 'diff') { setCommits([]); setLogError(null); setFocusCommit(null); }
+      return;
+    }
+    let cancelled = false;
+    void api.listLocalCommits(active).then((row) => {
+      if (cancelled) return;
+      setCommits(row.commits ?? []);
+      setLogError(null);
+    }).catch((error) => {
+      if (cancelled) return;
+      setCommits([]);
+      setLogError(humanizeError(error instanceof Error ? error.message : String(error)));
+    });
+    return () => { cancelled = true; };
+  }, [drawer, active, peekTick]);
+
+  useEffect(() => {
+    if (!isPeekDrawer(drawer) || focusFile || focusCommit) return;
     const first = mergeFilePins(
       sessionView.rows.filter((row): row is FlowRow & { k: 'edit' } => row.k === 'edit'),
       sessionArtifacts,
     )[0];
     if (first?.file) setFocusFile(first.file);
-  }, [drawer, focusFile, sessionView.rows, sessionArtifacts]);
+  }, [drawer, focusFile, focusCommit, sessionView.rows, sessionArtifacts]);
 
   // 头与输入区是悬浮玻璃,流水的内边距跟着它们的实际高度走。
   const layoutFlow = useCallback(() => {
@@ -468,7 +494,7 @@ export default function App2() {
   const [stickBottom, setStickBottom] = useState(true);
   const [unseen, setUnseen] = useState(0);
   const rowCountRef = useRef(0);
-  useEffect(() => { setStickBottom(true); setUnseen(0); rowCountRef.current = 0; setWsHits([]); setWsTruncated(false); }, [active?.machine, active?.id]);
+  useEffect(() => { setStickBottom(true); setUnseen(0); rowCountRef.current = 0; setWsHits([]); setWsTruncated(false); setCommits([]); setLogError(null); setFocusCommit(null); }, [active?.machine, active?.id]);
   useEffect(() => {
     const ta = taRef.current;
     if (!ta) return;
@@ -674,6 +700,7 @@ export default function App2() {
       const result = await api.commitLocalFiles(active, { message, files: pinFiles });
       toast(commitSessionFilesToast(result.hash));
       setCommitDraft(null);
+      setPeekTick((tick) => tick + 1);
     } catch (error) {
       toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
     }
@@ -718,6 +745,10 @@ export default function App2() {
     setDrawer('files');
     window.setTimeout(() => { wsSearchRef.current?.focus(); wsSearchRef.current?.select(); }, 0);
   }, [canSearchHere]);
+  const openLog = useCallback(() => {
+    if (!canShowSessionLog(active?.machine)) return;
+    setDrawer('diff');
+  }, [active?.machine]);
   const pickFolder = useCallback(async () => {
     try {
       const next = await pickSessionFolder();
@@ -947,6 +978,7 @@ export default function App2() {
     ...(canCommitHere ? [{ v: 'commitfiles', t: '记下这次改动', sub: defaultCommitMessage(commitDraft ?? (sessionView.title || activeSummary?.title || '')) }] : []),
     ...(canExportHere ? [{ v: 'exporttalk', t: '记下这次对话', sub: exportFileName(sessionView.title || activeSummary?.title || '') }] : []),
     ...(canSearchHere ? [{ v: 'searchcwd', t: '在目录里搜', sub: activeSummary?.cwd || '会话目录' }] : []),
+    ...(canShowSessionLog(active?.machine) ? [{ v: 'log', t: '最近提交', sub: activeSummary?.cwd || '会话目录' }] : []),
     ...(canMentionLast ? [{ v: 'lastreply', t: '带上上一句', sub: lastReply.slice(0, 40) }] : []),
     ...(activeSummary?.cwd?.trim() ? [{ v: 'cwd', t: '复制目录', sub: activeSummary.cwd }] : []),
     ...(canRenameSession(active?.machine) ? [{ v: 'rename', t: '改标题', sub: sessionView.title || activeSummary?.title || '给这条会话起个名字' }] : []),
@@ -977,6 +1009,7 @@ export default function App2() {
     else if (v === 'commitfiles') void commitFiles();
     else if (v === 'exporttalk') void exportTalk();
     else if (v === 'searchcwd') openSearch();
+    else if (v === 'log') openLog();
     else if (v === 'lastreply') mentionLast();
     else if (v === 'cwd') void copyCwd();
     else if (v === 'rename') beginRename();
@@ -1085,6 +1118,7 @@ export default function App2() {
     ...(canCommitHere ? [{ g: '这条会话', t: '记下这次改动', k: defaultCommitMessage(commitDraft ?? (sessionView.title || activeSummary?.title || '')), run: () => void commitFiles() }] : []),
     ...(canExportHere ? [{ g: '这条会话', t: '记下这次对话', k: exportFileName(sessionView.title || activeSummary?.title || ''), run: () => void exportTalk() }] : []),
     ...(canSearchHere ? [{ g: '这条会话', t: '在目录里搜', k: activeSummary?.cwd || '', run: openSearch }] : []),
+    ...(canShowSessionLog(active?.machine) ? [{ g: '这条会话', t: '最近提交', k: activeSummary?.cwd || '', run: openLog }] : []),
     ...(canMentionLast ? [{ g: '这条会话', t: '带上上一句', k: lastReply.slice(0, 40), run: mentionLast }] : []),
     { g: '这条会话', t: '放入文件', k: '拖到输入框', run: () => void pickIntoSession() },
     { g: '这条会话', t: '粘贴截图', k: '⌘V', run: () => void pasteShot() },
@@ -1093,7 +1127,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, commitFiles, canCommitHere, commitDraft, exportTalk, canExportHere, canSearchHere, openSearch, mentionLast, canMentionLast, lastReply, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, commitFiles, canCommitHere, commitDraft, exportTalk, canExportHere, canSearchHere, openSearch, openLog, mentionLast, canMentionLast, lastReply, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -1184,7 +1218,7 @@ export default function App2() {
   const filePeekBlock = filePeek != null ? (
     <div className="local-files-peek-wrap">
       <div className="local-files-peek-head">
-        {peekFileCaption(focusFile) ? <b className="local-files-name">{peekFileCaption(focusFile)}</b> : <span />}
+        {focusCommit ? <b className="local-files-name">{commits.find((row) => row.hash === focusCommit)?.subject || focusCommit}</b> : peekFileCaption(focusFile) ? <b className="local-files-name">{peekFileCaption(focusFile)}</b> : <span />}
         <span className="local-files-peek-acts">
           {canWritePeek ? <button className="link" type="button" disabled={!peekDirty} onClick={() => { void savePeek(); }}>{peekDirty ? '保存' : '已是最新'}</button> : null}
           {canRevertSessionFile(active?.machine, focusFile) ? <button className="link" type="button" onClick={() => { void revertFile(); }}>还原</button> : null}
@@ -1516,7 +1550,7 @@ export default function App2() {
               </div>
             </div>
           ) : drawer === 'diff' ? (
-            filePins.length === 0 && filePeek == null ? (
+            filePins.length === 0 && filePeek == null && commits.length === 0 && !logError ? (
               <div className="remote-hint"><b>这条会话还没有改动文件。</b><p>改过之后会出现在这里，点文件名看这次改了哪几行。</p></div>
             ) : (
               <div className="local-files">
@@ -1525,9 +1559,20 @@ export default function App2() {
                   <ul className="remote-files">
                     {filePins.map((row) => (
                       <li key={row.key}>
-                        <button className={`link ${focusFile === row.file ? 'on' : ''}`} onClick={() => setFocusFile(row.file)}><code>{row.file}</code></button>
+                        <button className={`link ${focusFile === row.file && !focusCommit ? 'on' : ''}`} onClick={() => { setFocusCommit(null); setFocusFile(row.file); }}><code>{row.file}</code></button>
                         <span>{row.state}</span>
                         {canRevertSessionFile(active?.machine, row.file) ? <button className="link" type="button" onClick={() => { void revertFile(row.file); }}>还原</button> : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {logError && !commits.length ? <p className="remote-hint">{logError}</p> : null}
+                {commits.length > 0 ? (
+                  <ul className="remote-files">
+                    {commits.map((row) => (
+                      <li key={row.hash}>
+                        <button className={`link ${focusCommit === row.hash ? 'on' : ''}`} type="button" onClick={() => { setFocusFile(null); setFocusCommit(row.hash); }}><code>{row.hash}</code></button>
+                        <span>{row.subject}</span>
                       </li>
                     ))}
                   </ul>

@@ -123,6 +123,10 @@ export const api = {
     sendJson<{ file: string; kind: 'modified' | 'added' | 'clean' | 'binary'; patch: string }>(`${sessionBase(target)}/file/diff`, { file }),
   searchLocalCwd: (target: SessionTarget, query: string) =>
     sendJson<{ query: string; hits: Array<{ file: string; line: number; text: string }>; truncated: boolean }>(`${sessionBase(target)}/search`, { query }),
+  listLocalCommits: (target: SessionTarget) =>
+    sendJson<{ commits: Array<{ hash: string; subject: string; at: number }> }>(`${sessionBase(target)}/log`, {}),
+  showLocalCommit: (target: SessionTarget, hash: string) =>
+    sendJson<{ hash: string; subject: string; patch: string }>(`${sessionBase(target)}/log`, { hash }),
   exportLocalTalk: (target: SessionTarget, input: { name: string; markdown: string }) =>
     sendJson<{ path: string; name: string }>(`${sessionBase(target)}/export`, input),
   createLocalSession: (input: { cwd: string; prompt: string; model?: string | null; policy?: string; harness?: string }) =>
