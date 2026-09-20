@@ -109,6 +109,7 @@ import { canInitSessionRepo, initSessionToast } from './session-init';
 import { canMergeSessionBranch, mergeSessionToast } from './session-merge';
 import { isMissingSessionCwd, missingCwdToast } from './session-missing';
 import { canPackSessionChanges, packFileName, packSessionToast } from './session-pack';
+import { canSendFromPeek } from './session-peek-cmd';
 import { canFlushPeekOnSend, peekFlushedToast } from './session-peek-flush';
 import { clearPeekFileDraft, peekFileDraftToRestore, writePeekFileDraft } from './session-peek-files';
 import { peekDraftToRestore, peekMemoryFile, peekMemoryKey, writePeekMemory, type PeekMemory } from './session-peek-memory';
@@ -2686,6 +2687,12 @@ export default function App2() {
       if (meta && e.key === 'Enter') {
         const ta = taRef.current;
         if (document.activeElement === ta && (draft.trim())) { e.preventDefault(); void send(); return; }
+        if (canSendFromPeek({
+          machine: active?.machine,
+          drawer,
+          composerFocused: document.activeElement === ta,
+          prompt: draft,
+        })) { e.preventDefault(); void send(); return; }
         if (document.activeElement !== ta) { e.preventDefault(); approveFirstPending(); }
         return;
       }
