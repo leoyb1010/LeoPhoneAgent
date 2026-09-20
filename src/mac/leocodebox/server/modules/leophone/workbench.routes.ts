@@ -22,6 +22,7 @@ import { seedSessionFile } from './session-seed.js';
 import { trashSessionFile } from './session-trash.js';
 import { duplicateSessionFile } from './session-duplicate.js';
 import { mkdirSessionFolder } from './session-mkdir.js';
+import { moveSessionFile } from './session-move.js';
 import { haltBusyLocalSessions } from './session-halt.js';
 import { forgetEndedLocalSessions } from './session-forget.js';
 import { listForgottenLocalSessions, recallForgottenLocalSession } from './session-recall.js';
@@ -524,6 +525,17 @@ router.post('/leophone/local/sessions/:sessionId/mkdir', async (req, res) => {
   if (!session) return;
   try {
     res.json(await mkdirSessionFolder(session.cwd, String(((req.body ?? {}) as Record<string, unknown>).name ?? '')));
+  } catch (error) {
+    jsonError(res, 409, error instanceof Error ? error.message : String(error));
+  }
+});
+
+router.post('/leophone/local/sessions/:sessionId/move', async (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  try {
+    res.json(await moveSessionFile(session.cwd, String(body.file ?? ''), body.to == null ? undefined : String(body.to)));
   } catch (error) {
     jsonError(res, 409, error instanceof Error ? error.message : String(error));
   }

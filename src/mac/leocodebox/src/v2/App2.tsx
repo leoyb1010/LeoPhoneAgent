@@ -25,6 +25,7 @@ import { canSeedSessionFile, clipSeedText, sanitizeSeedRel, seedSessionToast } f
 import { canTrashSessionFile, trashSessionToast } from './session-trash';
 import { canDuplicateSessionFile, duplicateSessionToast } from './session-duplicate';
 import { canMkdirSessionFolder, mkdirSessionToast, sanitizeFolderRel } from './session-mkdir';
+import { canMoveSessionFile, moveSessionToast, sanitizeMoveFolder } from './session-move';
 import { canHaltBusySessions, haltSessionsToast } from './session-halt';
 import { canForgetEndedSessions, endedLocalSessionIds, forgetEndedToast } from './session-forget';
 import { canRecallForgotten, recallSessionToast, type ForgottenSession } from './session-recall';
@@ -191,6 +192,7 @@ export default function App2() {
   const [wsQuery, setWsQuery] = useState('');
   const [seedName, setSeedName] = useState('');
   const [folderName, setFolderName] = useState('');
+  const [moveDest, setMoveDest] = useState('');
   const [wsHits, setWsHits] = useState<SessionSearchHit[]>([]);
   const [wsTruncated, setWsTruncated] = useState(false);
   const wsSearchRef = useRef<HTMLInputElement | null>(null);
@@ -279,6 +281,7 @@ export default function App2() {
   const canTrashHere = canTrashSessionFile(active?.machine, focusFile);
   const canDuplicateHere = canDuplicateSessionFile(active?.machine, focusFile);
   const canMkdirHere = canMkdirSessionFolder(active?.machine);
+  const canMoveHere = canMoveSessionFile(active?.machine, focusFile);
   const canHaltBusy = canHaltBusySessions(allSessions);
   const canForgetEnded = canForgetEndedSessions(allSessions, pinnedKeys);
   const canRecallHere = canRecallForgotten('local');
@@ -959,6 +962,23 @@ export default function App2() {
       toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
     }
   }, [active, canMkdirHere, folderName, toast]);
+  const moveFile = useCallback(async (file = focusFile) => {
+    if (!active || !canMoveSessionFile(active.machine, file)) {
+      toast('先点开一份文件', true);
+      return;
+    }
+    try {
+      const result = await api.moveLocalFile(active, file!.trim(), sanitizeMoveFolder(moveDest));
+      toast(moveSessionToast(result.file));
+      setMoveDest('');
+      setPeekTick((tick) => tick + 1);
+      setFocusCommit(null);
+      setFocusFile(result.file);
+      setDrawer((cur) => cur ?? 'files');
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+    }
+  }, [active, focusFile, moveDest, toast]);
   const beginRename = useCallback(() => {
     if (!canRenameSession(active?.machine)) return;
     setTitleDraft(sessionView.title || activeSummary?.title || '');
@@ -1269,6 +1289,7 @@ export default function App2() {
     ...(canUnpackHere ? [{ v: 'unpack', t: '解开这份 zip', sub: unpackZipName(focusFile) || '会话目录里最近的 zip' }] : []),
     ...(canSeedHere ? [{ v: 'seed', t: '建一个文件', sub: seedName.trim() || '剪贴板有字就写进去' }] : []),
     ...(canMkdirHere ? [{ v: 'mkdir', t: '建一个文件夹', sub: folderName.trim() || '写在这个会话目录里' }] : []),
+    ...(canMoveHere ? [{ v: 'move', t: '挪进这个文件夹', sub: moveDest.trim() || '空的就是挪回目录根上' }] : []),
     ...(canMentionLast ? [{ v: 'lastreply', t: '带上上一句', sub: lastReply.slice(0, 40) }] : []),
     ...(canRetryLast ? [{ v: 'retrylast', t: '再发上一句', sub: lastPrompt.slice(0, 40) }] : []),
     ...(activeSummary?.cwd?.trim() ? [{ v: 'cwd', t: '复制目录', sub: activeSummary.cwd }] : []),
@@ -1316,6 +1337,7 @@ export default function App2() {
     else if (v === 'unpack') void unpackZip();
     else if (v === 'seed') void seedFile();
     else if (v === 'mkdir') void mkdirFolder();
+    else if (v === 'move') void moveFile();
     else if (v === 'trash') void trashFile();
     else if (v === 'duplicate') void duplicateFile();
     else if (v === 'lastreply') mentionLast();
@@ -1446,6 +1468,7 @@ export default function App2() {
     ...(canUnpackHere ? [{ g: '这条会话', t: '解开这份 zip', k: unpackZipName(focusFile) || 'zip', run: () => void unpackZip() }] : []),
     ...(canSeedHere ? [{ g: '这条会话', t: '建一个文件', k: '新建', run: () => void seedFile() }] : []),
     ...(canMkdirHere ? [{ g: '这条会话', t: '建一个文件夹', k: folderName.trim() || '新建', run: () => void mkdirFolder() }] : []),
+    ...(canMoveHere ? [{ g: '这条会话', t: '挪进这个文件夹', k: moveDest.trim() || focusFile || '', run: () => void moveFile() }] : []),
     ...(canMentionLast ? [{ g: '这条会话', t: '带上上一句', k: lastReply.slice(0, 40), run: mentionLast }] : []),
     ...(canRetryLast ? [{ g: '这条会话', t: '再发上一句', k: lastPrompt.slice(0, 40), run: () => void retryLast() }] : []),
     { g: '这条会话', t: '放入文件', k: '拖到输入框', run: () => void pickIntoSession() },
@@ -1455,7 +1478,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, retryLast, canRetryLast, lastPrompt, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, retryLast, canRetryLast, lastPrompt, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -1562,6 +1585,7 @@ export default function App2() {
           {canRevertSessionFile(active?.machine, focusFile) ? <button className="link" type="button" onClick={() => { void revertFile(); }}>还原</button> : null}
           {canTrashHere ? <button className="link dim" type="button" onClick={() => { void trashFile(); }}>扔掉这份文件</button> : null}
           {canDuplicateHere ? <button className="link" type="button" onClick={() => { void duplicateFile(); }}>复制一份</button> : null}
+          {canMoveHere ? <button className="link" type="button" onClick={() => { void moveFile(); }}>挪进这个文件夹</button> : null}
           {canOpenSessionPath(active?.machine, peekPath || cwd) ? <button className="link" type="button" onClick={() => { void openFocusFile(); }}>用默认程序打开</button> : null}
           {active?.machine === 'local' && (focusFile || cwd) ? <button className="link" type="button" onClick={() => { void revealFocusFile(); }}>在 Finder 显示</button> : null}
           {canOpenSessionPath(active?.machine, cwd) ? <button className="link" type="button" onClick={() => { void openCwdTerm(); }}>在终端打开</button> : null}
@@ -1995,6 +2019,17 @@ export default function App2() {
                       aria-label="新文件夹名"
                     />
                     <button className="btn-s" type="submit">建这个文件夹</button>
+                  </form>
+                ) : null}
+                {canMoveHere ? (
+                  <form className="local-files-search" onSubmit={(e) => { e.preventDefault(); void moveFile(); }}>
+                    <input
+                      value={moveDest}
+                      onChange={(e) => setMoveDest(e.target.value)}
+                      placeholder="挪进哪个文件夹，空的就是目录根上"
+                      aria-label="挪进哪个文件夹"
+                    />
+                    <button className="btn-s" type="submit">挪进这个文件夹</button>
                   </form>
                 ) : null}
                 {canCwdRuleHere ? (

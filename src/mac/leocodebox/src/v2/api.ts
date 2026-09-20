@@ -147,6 +147,8 @@ export const api = {
     sendJson<{ file: string; from: string }>(`${sessionBase(target)}/duplicate`, { file, name }),
   mkdirLocalFolder: (target: SessionTarget, name?: string) =>
     sendJson<{ path: string; folder: string }>(`${sessionBase(target)}/mkdir`, { name }),
+  moveLocalFile: (target: SessionTarget, file: string, to?: string) =>
+    sendJson<{ from: string; file: string }>(`${sessionBase(target)}/move`, { file, to }),
   exportLocalTalk: (target: SessionTarget, input: { name: string; markdown: string }) =>
     sendJson<{ path: string; name: string }>(`${sessionBase(target)}/export`, input),
   createLocalSession: (input: { cwd: string; prompt: string; model?: string | null; policy?: string; harness?: string }) =>
