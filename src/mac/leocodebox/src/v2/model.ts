@@ -4,6 +4,7 @@ import { sessionCompactedLabel, sessionCompactingLabel } from './session-compact
 import { composerFillFromSkill, sessionFillLabel } from './session-fill';
 import { sessionRetryLabel } from './session-overload';
 import { skillNoteLabel, skillNoteTone } from './session-skill-note';
+import { toolImageDataUrls } from './session-tool-image';
 import { clipLiveToolOutput } from './session-tool-live';
 import { sessionUsageLabel } from './session-usage';
 
@@ -14,7 +15,7 @@ export type FlowRow =
   | { k: 'user'; key: string; text: string; mode?: UserTurnMode }
   | { k: 'ai'; key: string; text: string; streaming: boolean }
   | { k: 'think'; key: string; text: string; streaming: boolean }
-  | { k: 'tool'; key: string; toolUseId: string | null; tool: string; preview: string; output: string; running: boolean; error: boolean }
+  | { k: 'tool'; key: string; toolUseId: string | null; tool: string; preview: string; output: string; running: boolean; error: boolean; images?: string[] }
   | { k: 'edit'; key: string; toolUseId: string | null; tool: string; file: string; output: string; running: boolean; error: boolean; proposed?: string }
   | { k: 'ap'; key: string; approvalId: string; title: string; command: string; tool: string; cwd: string; host: string; choices: string[]; method?: string; placeholder?: string; prefill?: string }
   | { k: 'sys'; key: string; text: string; tone: 'muted' | 'remote' | 'error' };
@@ -435,7 +436,14 @@ export function applyEvent(view: SessionView, event: HarnessEvent): SessionView 
       }
       if (index >= 0) {
         const row = rows[index] as FlowRow & { k: 'tool' | 'edit' };
-        rows = [...rows.slice(0, index), { ...row, running: false, error: Boolean(event.error), output: str(event.output) }, ...rows.slice(index + 1)];
+        const images = row.k === 'tool' ? toolImageDataUrls(event.images) : [];
+        rows = [...rows.slice(0, index), {
+          ...row,
+          running: false,
+          error: Boolean(event.error),
+          output: str(event.output),
+          ...(row.k === 'tool' && images.length ? { images } : {}),
+        }, ...rows.slice(index + 1)];
       }
       break;
     }

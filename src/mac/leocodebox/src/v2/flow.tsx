@@ -74,6 +74,9 @@ export function Row({ row, model, query, hide, onApprove, onDiff, onOpen }: {
           {row.output ? <button className="tool-toggle" onClick={() => setOpen((o) => !o)}>{open ? '收起' : '展开'}</button> : null}
         </div>
         {open && row.output ? <pre className="tool-out"><FindBits text={shown(row.output, hide)} query={query} /></pre> : null}
+        {!hide && row.images?.length ? row.images.map((src, i) => (
+          <img key={i} alt="" src={src} style={{ display: 'block', maxWidth: '100%', marginTop: 8, borderRadius: 8 }} />
+        )) : null}
       </div></div>
     );
     case 'edit': return (

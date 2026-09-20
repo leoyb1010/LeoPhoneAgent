@@ -1,5 +1,7 @@
 import crypto from 'node:crypto';
 
+import { sessionToolImages } from './session-tool-image.js';
+
 // 方言翻译层——把每个编码 CLI 各自的 JSON 协议翻成一套事件词汇表,与
 // leoagent(Python 版 harness.py)逐帧对齐:手机端已经在渲染这套词汇,
 // 服务端换了宿主(leocodebox)之后事件形状必须一个字段都不差。
@@ -254,12 +256,14 @@ export class PiRpcDialect implements HarnessDialect {
       }
     } else if (kind === 'tool_execution_end') {
       this.lastToolDelta.delete(str(obj.toolCallId));
+      const images = sessionToolImages(obj.result);
       out.push({
         event: EVENT_TOOL_COMPLETED,
         tool: obj.toolName || 'tool',
         tool_use_id: obj.toolCallId,
         error: Boolean(obj.isError),
         output: piResultPreview(obj.result),
+        ...(images.length ? { images } : {}),
       });
     } else if (kind === 'extension_ui_request') {
       // pi 会阻塞等这些,所以在我们的词汇里正是审批。
