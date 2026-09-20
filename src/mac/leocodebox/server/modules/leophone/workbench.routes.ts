@@ -16,6 +16,7 @@ import { diffSessionFile } from './session-diff.js';
 import { writeSessionExport } from './session-export.js';
 import { revertSessionFile } from './session-revert.js';
 import { applySessionPatch } from './session-apply.js';
+import { packSessionChanges } from './session-pack.js';
 import { listSessionCommits, showSessionCommit } from './session-log.js';
 import { searchSessionCwd } from './session-search.js';
 import { ensureSessionWorkspace } from './session-workspace.js';
@@ -422,6 +423,18 @@ router.post('/leophone/local/sessions/:sessionId/file/revert', async (req, res) 
   const file = String(((req.body ?? {}) as Record<string, unknown>).file ?? '').trim();
   try {
     res.json(await revertSessionFile(session.cwd, file));
+  } catch (error) {
+    jsonError(res, 409, error instanceof Error ? error.message : String(error));
+  }
+});
+
+router.post('/leophone/local/sessions/:sessionId/pack', async (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const files = Array.isArray(body.files) ? body.files.map((file) => String(file ?? '')) : [];
+  try {
+    res.json(await packSessionChanges(session.cwd, { name: String(body.name ?? 'leo-改动.zip'), files }));
   } catch (error) {
     jsonError(res, 409, error instanceof Error ? error.message : String(error));
   }

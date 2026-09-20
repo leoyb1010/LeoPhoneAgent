@@ -129,6 +129,8 @@ export const api = {
     sendJson<{ hash: string; subject: string; patch: string }>(`${sessionBase(target)}/log`, { hash }),
   applyLocalPatch: (target: SessionTarget, patch: string) =>
     sendJson<{ files: string[] }>(`${sessionBase(target)}/apply`, { patch }),
+  packLocalChanges: (target: SessionTarget, input: { name: string; files?: string[] }) =>
+    sendJson<{ path: string; name: string; files: string[] }>(`${sessionBase(target)}/pack`, input),
   exportLocalTalk: (target: SessionTarget, input: { name: string; markdown: string }) =>
     sendJson<{ path: string; name: string }>(`${sessionBase(target)}/export`, input),
   createLocalSession: (input: { cwd: string; prompt: string; model?: string | null; policy?: string; harness?: string }) =>
