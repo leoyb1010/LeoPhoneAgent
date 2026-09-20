@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.0.87',
+    date: '2026-09-20',
+    items: [
+      '本机这条会话可以自己起名字，左栏认这个名字，关掉再开还在。',
+    ],
+  },
+  {
     version: '2.0.86',
     date: '2026-09-20',
     items: [

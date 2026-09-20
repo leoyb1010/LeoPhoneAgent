@@ -166,6 +166,8 @@ export const api = {
       ? sendJson(`${sessionBase(target)}/approval`, { approval_id: approvalId, choice })
       : sendJson('/api/leophone/approvals/respond', { machine: target.machine, session_id: target.id, approval_id: approvalId, choice }),
   setPolicy: (target: SessionTarget, policy: string) => sendJson(`${sessionBase(target)}/policy`, { policy }),
+  renameLocalSession: (target: SessionTarget, title: string) =>
+    sendJson<{ ok: true; title: string }>(`${sessionBase(target)}/title`, { title }),
   rpc: (target: SessionTarget, frame: Record<string, unknown>) => sendJson(`${sessionBase(target)}/rpc`, frame),
 
   /**

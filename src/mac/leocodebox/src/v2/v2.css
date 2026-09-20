@@ -130,6 +130,7 @@
 .leo2 .shead-t{min-width:0;flex:1}
 .leo2 .shead h1{font-size:15px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;max-width:100%}
 .leo2 .shead h1:hover{color:var(--fg)}
+.leo2 .shead-t input.title-edit{width:100%;min-width:0;padding:0;border:0;background:transparent;color:inherit;font:inherit;font-size:15px;font-weight:600;letter-spacing:-.01em;outline:none}
 .leo2 .shead-sub{font-size:11px;color:var(--fg3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
 .leo2 .shead-r{display:flex;gap:4px;flex:none}
 .leo2 .chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 9px;border-radius:7px;color:var(--fg2);white-space:nowrap;font-size:12px;background:var(--chip)}

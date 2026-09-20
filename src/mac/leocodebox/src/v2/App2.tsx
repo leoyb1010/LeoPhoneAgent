@@ -13,6 +13,7 @@ import { canCommitSessionFiles, commitSessionFilesToast, defaultCommitMessage } 
 import { canShowSessionDiff } from './session-diff';
 import { canExportSession, exportFileName, exportSessionToast, flowRowsToMarkdown } from './session-export';
 import { canRevertSessionFile, revertSessionFileToast } from './session-revert';
+import { canRenameSession, clipSessionTitle, renameSessionToast } from './session-title';
 import { approvalChoiceActions, approvalToast, dockNeedBadge, firstPendingApproval, noticeNotifyPayload, noticesFromSnapshot, sessionPathTarget } from './session-notice';
 import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerCanFollowUp, composerNeedsModelSwitch, composerPlaceholder, composerRunningHint, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, followUpToast, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mentionWindowRead, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, pendingFollowUps, prettyModelName, providerOf, queueClearedToast, rankModelsForPicker, readHiddenSessionKeys, relativeTime, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionCanResume, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, usableWindowMenus, windowBoundLabel, windowMenuLabel, windowPadGesture, WINDOW_KEY_BUTTONS, type FlowRow, type Group, type SessionView } from './model';
 import { usableModelsFromProviders } from './settings-form';
@@ -127,6 +128,9 @@ export default function App2() {
   const [filePeekDraft, setFilePeekDraft] = useState<string | null>(null);
   const [peekTick, setPeekTick] = useState(0);
   const [commitDraft, setCommitDraft] = useState<string | null>(null);
+  const [titleEditing, setTitleEditing] = useState(false);
+  const [titleDraft, setTitleDraft] = useState<string | null>(null);
+  const titleEditRef = useRef<HTMLInputElement | null>(null);
   const [sessionArtifacts, setSessionArtifacts] = useState<Array<{ name: string }>>([]);
   const [artifactError, setArtifactError] = useState<string | null>(null);
   const [palette, setPalette] = useState<{ open: boolean; query: string; index: number }>({ open: false, query: '', index: 0 });
@@ -212,7 +216,7 @@ export default function App2() {
   const canDrive = Boolean(activeSummary && sessionCanDrive(activeSummary.status, sessionView.status));
   const canFollowUp = Boolean(active && composerCanFollowUp(active.machine, sessionView.status));
   const queuedFollowUps = pendingFollowUps(sessionView.rows);
-  useEffect(() => { setCommitDraft(null); }, [active?.machine, active?.id]);
+  useEffect(() => { setCommitDraft(null); setTitleEditing(false); setTitleDraft(null); }, [active?.machine, active?.id]);
   const pinFiles = useMemo(
     () => mergeFilePins(
       sessionView.rows.filter((row): row is FlowRow & { k: 'edit' } => row.k === 'edit'),
@@ -699,6 +703,26 @@ export default function App2() {
     try { await navigator.clipboard.writeText(text); toast('已复制标题'); }
     catch { toast('复制失败', true); }
   }, [activeSummary?.title, sessionView.title, toast]);
+  const beginRename = useCallback(() => {
+    if (!canRenameSession(active?.machine)) return;
+    setTitleDraft(sessionView.title || activeSummary?.title || '');
+    setTitleEditing(true);
+    window.setTimeout(() => { titleEditRef.current?.focus(); titleEditRef.current?.select(); }, 0);
+  }, [active?.machine, activeSummary?.title, sessionView.title]);
+  const renameTitle = useCallback(async () => {
+    if (!active || !canRenameSession(active.machine)) return;
+    const next = clipSessionTitle(titleDraft ?? sessionView.title ?? activeSummary?.title ?? '');
+    if (!next) { toast('写一个标题', true); return; }
+    try {
+      const result = await api.renameLocalSession(active, next);
+      toast(renameSessionToast(result.title));
+      setTitleEditing(false);
+      setTitleDraft(null);
+      await refreshLocal();
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+    }
+  }, [active, activeSummary?.title, refreshLocal, sessionView.title, titleDraft, toast]);
   const copyFindHit = useCallback(async () => {
     const row = sessionView.rows.find((item) => item.key === findKey);
     const text = flowFindHitText(row).trim();
@@ -876,6 +900,7 @@ export default function App2() {
     ...(canCommitHere ? [{ v: 'commitfiles', t: '记下这次改动', sub: defaultCommitMessage(commitDraft ?? (sessionView.title || activeSummary?.title || '')) }] : []),
     ...(canExportHere ? [{ v: 'exporttalk', t: '记下这次对话', sub: exportFileName(sessionView.title || activeSummary?.title || '') }] : []),
     ...(activeSummary?.cwd?.trim() ? [{ v: 'cwd', t: '复制目录', sub: activeSummary.cwd }] : []),
+    ...(canRenameSession(active?.machine) ? [{ v: 'rename', t: '改标题', sub: sessionView.title || activeSummary?.title || '给这条会话起个名字' }] : []),
     ...((sessionView.title || activeSummary?.title || '').trim() ? [{ v: 'title', t: '复制标题', sub: (sessionView.title || activeSummary?.title || '').trim() }] : []),
     ...(canResumeHere ? [{ v: 'resume', t: '接着这条会话', sub: '同一条上下文' }] : []),
     ...(canFollowUp && draft.trim() ? [{ v: 'follow', t: '接着（排队）', sub: '等这轮说完' }] : []),
@@ -902,6 +927,7 @@ export default function App2() {
     else if (v === 'commitfiles') void commitFiles();
     else if (v === 'exporttalk') void exportTalk();
     else if (v === 'cwd') void copyCwd();
+    else if (v === 'rename') beginRename();
     else if (v === 'title') void copyTitle();
     else if (v === 'find') { setFlowFind((cur) => ({ ...cur, open: true })); window.setTimeout(() => { flowFindRef.current?.focus(); flowFindRef.current?.select(); }, 0); }
     else if (v === 'findhit') void copyFindHit();
@@ -915,6 +941,7 @@ export default function App2() {
       const meta = e.metaKey || e.ctrlKey;
       if (meta && e.key.toLowerCase() === 'k') { e.preventDefault(); setPalette((p) => ({ open: !p.open, query: '', index: 0 })); setPicker(null); return; }
       if (e.key === 'Escape') {
+        if (titleEditing) { setTitleEditing(false); setTitleDraft(null); return; }
         if (picker) { setPicker(null); return; }
         if (palette.open) { setPalette({ open: false, query: '', index: 0 }); return; }
         if (menu) { setMenu(null); return; }
@@ -972,7 +999,7 @@ export default function App2() {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [palette.open, picker, menu, drawer, newBox, draft, send, approveFirstPending, view, sessionView.pendingApprovals, approve, allSessions, matchesFilter, active, openSession, beginLocalNew, flowFind.open, windowOp, stepFind, copyFindHit, savePeek]);
+  }, [palette.open, picker, menu, drawer, newBox, draft, send, approveFirstPending, view, sessionView.pendingApprovals, approve, allSessions, matchesFilter, active, openSession, beginLocalNew, flowFind.open, windowOp, stepFind, copyFindHit, savePeek, titleEditing]);
 
   // -- 命令面板 ---------------------------------------------------------------
   type Command = { g: string; t: string; k: string; run: () => void };
@@ -990,6 +1017,7 @@ export default function App2() {
     ...(canFollowUp && draft.trim() ? [{ g: '这条会话', t: '接着（排队）', k: '等这轮说完', run: () => void followUp() }] : []),
     ...(canFollowUp && queuedFollowUps.length ? [{ g: '这条会话', t: '取消排队', k: `${queuedFollowUps.length} 句`, run: clearFollowUps }] : []),
     { g: '这条会话', t: '在同一目录新开', k: '新开会话', run: continueHere },
+    ...(canRenameSession(active?.machine) ? [{ g: '这条会话', t: '改标题', k: sessionView.title || activeSummary?.title || '', run: beginRename }] : []),
     { g: '这条会话', t: '复制标题', k: sessionView.title || activeSummary?.title || '', run: () => void copyTitle() },
     { g: '这条会话', t: '复制目录', k: activeSummary?.cwd || '', run: () => void copyCwd() },
     ...(active?.machine === 'local' && activeSummary?.cwd?.trim() ? [{ g: '这条会话', t: '在 Finder 打开', k: activeSummary.cwd, run: () => void revealCwd() }, { g: '这条会话', t: '在终端打开', k: activeSummary.cwd, run: () => void openCwdTerm() }] : []),
@@ -1009,7 +1037,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, commitFiles, canCommitHere, commitDraft, exportTalk, canExportHere, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, commitFiles, canCommitHere, commitDraft, exportTalk, canExportHere, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -1230,13 +1258,28 @@ export default function App2() {
                   <div className="shead-l">
                     <span className={`dot ${statusDotForSession({ status: sessionView.status, last_event: activeSummary?.last_event }) === 'idle' ? '' : statusDotForSession({ status: sessionView.status, last_event: activeSummary?.last_event })}`} />
                     <div className="shead-t">
-                      <h1
-                        role="button"
-                        tabIndex={0}
-                        title={`${title || '新会话'} · 点一下复制`}
-                        onClick={() => void copyTitle()}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void copyTitle(); } }}
-                      >{title || '新会话'}</h1>
+                      {titleEditing && canRenameSession(active?.machine) ? (
+                        <input
+                          ref={titleEditRef}
+                          className="title-edit"
+                          value={titleDraft ?? title}
+                          aria-label="改标题"
+                          onChange={(e) => setTitleDraft(e.target.value)}
+                          onBlur={() => void renameTitle()}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') { e.preventDefault(); void renameTitle(); }
+                            if (e.key === 'Escape') { e.preventDefault(); setTitleEditing(false); setTitleDraft(null); }
+                          }}
+                        />
+                      ) : (
+                        <h1
+                          role="button"
+                          tabIndex={0}
+                          title={canRenameSession(active?.machine) ? `${title || '新会话'} · 点一下改名` : `${title || '新会话'} · 点一下复制`}
+                          onClick={() => { if (canRenameSession(active?.machine)) beginRename(); else void copyTitle(); }}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (canRenameSession(active?.machine)) beginRename(); else void copyTitle(); } }}
+                        >{title || '新会话'}</h1>
+                      )}
                       <span className="shead-state">{STATUS_LABEL[sessionView.status] ?? sessionView.status}{stream === 'reconnecting' ? ' · 重连中' : ''}</span>
                     </div>
                   </div>

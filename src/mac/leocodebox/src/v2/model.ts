@@ -429,6 +429,14 @@ export function applyEvent(view: SessionView, event: HarnessEvent): SessionView 
       rows = [...closeStreaming(rows), { k: 'sys', key: nextKey(), text: '已停止。进程不在了,可以在同一目录开一条新的接着干。', tone: 'muted' }];
       status = 'cancelled';
       break;
+    case 'session.title': {
+      const next = str(event.title).replace(/[\r\n\u0000]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+      if (next) {
+        title = next;
+        rows = [...rows, { k: 'sys', key: nextKey(), text: `标题改成「${next}」`, tone: 'muted' }];
+      }
+      break;
+    }
     case 'session.policy':
       policy = str(event.policy) || policy;
       rows = [...rows, { k: 'sys', key: nextKey(), text: `审批策略改为「${POLICY_LABEL[policy] ?? policy}」`, tone: 'muted' }];
@@ -584,6 +592,7 @@ export function humanizeError(raw: string): string {
   if (/没有可看的改动/.test(text)) return '这个文件没有可看的改动';
   if (/不能记下对话/.test(text)) return '这个目录不能记下对话';
   if (/可记下的对话/.test(text)) return '还没有可记下的对话';
+  if (/写一个标题/.test(text)) return '写一个标题';
   if (/没有可记下/.test(text)) return '这些文件没有可记下的改动';
   if (/没有可还原/.test(text)) return '这个文件没有可还原的改动';
   if (/还没设置 git 用户名/.test(text)) return '这个仓库还没设置 git 用户名，没法记下';

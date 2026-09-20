@@ -520,6 +520,17 @@ router.post('/leophone/local/sessions/:sessionId/approval', async (req, res) => 
   res.json({ ok: true, choice, approval_id: approvalId ?? pending.approval_id ?? null });
 });
 
+router.post('/leophone/local/sessions/:sessionId/title', (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  try {
+    const title = session.setTitle(String(((req.body ?? {}) as Record<string, unknown>).title ?? ''));
+    res.json({ ok: true, title });
+  } catch (error) {
+    jsonError(res, 409, error instanceof Error ? error.message : String(error));
+  }
+});
+
 router.post('/leophone/local/sessions/:sessionId/policy', (req, res) => {
   const session = requireSession(req, res);
   if (!session) return;

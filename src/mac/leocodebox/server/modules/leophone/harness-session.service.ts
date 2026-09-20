@@ -27,6 +27,7 @@ import { HarnessJournal, type JournalHealth, type JournalOptions } from './harne
 import { HARNESSES, resolveExecutable, type HarnessLaunchContext, type HarnessModel, type HarnessSpec } from './harness-specs.js';
 import { LEOAGENT_HOME } from './leoagent-home.js';
 import { findPiSessionFile, hasAnyPiAuth, normalizePolicy, piSessionResumable, writePolicy, type ApprovalPolicy } from './pi-runtime.js';
+import { clipSessionTitle, readTitleSidecar, writeTitleSidecar } from './session-title.js';
 
 // LeoPhoneAgent harness 会话宿主——leoagent(Python)HarnessManager/HarnessSession
 // 的 TS 移植,跑在 leocodebox 服务进程里。三条设计约束原样保留:
@@ -222,6 +223,9 @@ export class HarnessSession {
       const provider = String(enriched.provider ?? '');
       const modelId = String(enriched.model_id ?? '');
       if (provider && modelId) this.model = { provider, modelId };
+    } else if (name === 'session.title') {
+      const next = clipSessionTitle(String(enriched.title ?? ''));
+      if (next) this.title = next;
     }
 
     enriched.durability = this.journal.enqueue(enriched, PUSHABLE_EVENTS.has(name));
@@ -573,6 +577,14 @@ export class HarnessSession {
     await this.start();
   }
 
+  /** 自己起的名字写进旁路文件,重启左栏还认得;事件流给正在看的端同步。 */
+  setTitle(raw: string): string {
+    const next = writeTitleSidecar(this.logPath, raw);
+    this.title = next;
+    this.emit({ event: 'session.title', title: next });
+    return next;
+  }
+
   /** 改本会话的审批策略:落到策略文件(pi extension 每次工具调用都读),并写进日志让各端同步。 */
   setPolicy(input: unknown): ApprovalPolicy {
     this.policy = normalizePolicy(input);
@@ -660,11 +672,16 @@ export class HarnessManager {
       });
       if (first?.timestamp != null) restored.createdAt = Number(first.timestamp);
       // 标题与最近一件事从日志头几行/尾行补回来,列表不至于全是空行。
-      const head = await journal.readPage(0, { limit: 8 });
-      for (const ev of head.events) {
-        if (ev.event === EVENT_USER_MESSAGE && ev.mode !== 'steer' && ev.mode !== 'follow_up') {
-          restored.title = String(ev.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
-          break;
+      const named = readTitleSidecar(logPath);
+      if (named) {
+        restored.title = named;
+      } else {
+        const head = await journal.readPage(0, { limit: 8 });
+        for (const ev of head.events) {
+          if (ev.event === EVENT_USER_MESSAGE && ev.mode !== 'steer' && ev.mode !== 'follow_up') {
+            restored.title = String(ev.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
+            break;
+          }
         }
       }
       const latestSeq = journal.health().latest_seq;
