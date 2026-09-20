@@ -472,6 +472,11 @@ export function applyEvent(view: SessionView, event: HarnessEvent): SessionView 
     case 'session.queue_cleared':
       rows = [...closeStreaming(rows), { k: 'sys', key: nextKey(), text: '已取消排队的下一句。', tone: 'muted' }];
       break;
+    case 'session.aborted':
+      pendingApprovals.clear();
+      rows = [...closeStreaming(rows), { k: 'sys', key: nextKey(), text: '已停这一轮，会话还在', tone: 'muted' }];
+      status = 'idle';
+      break;
     case 'session.resumed':
       rows = [...closeStreaming(rows), { k: 'sys', key: nextKey(), text: '这条会话已接着上次的上下文继续。', tone: 'muted' }];
       status = 'starting';

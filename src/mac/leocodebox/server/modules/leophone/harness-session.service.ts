@@ -472,6 +472,11 @@ export class HarnessSession {
     if (outgoing.type === 'clear_queue') {
       this.emit({ event: 'session.queue_cleared' });
     }
+    if (outgoing.type === 'abort') {
+      this.pendingApprovals.clear();
+      if (this.status === 'running' || this.status === 'starting' || this.status === 'waiting_for_approval') this.status = 'idle';
+      this.emit({ event: 'session.aborted' });
+    }
     return true;
   }
 
