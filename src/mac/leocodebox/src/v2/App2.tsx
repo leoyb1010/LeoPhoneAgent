@@ -108,6 +108,7 @@ import { isMissingSessionCwd, missingCwdToast } from './session-missing';
 import { canPackSessionChanges, packFileName, packSessionToast } from './session-pack';
 import { canFlushPeekOnSend, peekFlushedToast } from './session-peek-flush';
 import { peekDraftToRestore, peekMemoryFile, peekMemoryKey, writePeekMemory, type PeekMemory } from './session-peek-memory';
+import { canPeekPendingEdit, pendingEditFile } from './session-peek-pending';
 import { lastFinishedEdit, peekReloadedToast, shouldReloadPeek } from './session-peek-sync';
 import { canUnpackSessionZip, unpackSessionToast, unpackZipName } from './session-unpack';
 import { canSeedSessionFile, clipSeedText, sanitizeSeedRel, seedSessionToast } from './session-seed';
@@ -961,6 +962,24 @@ export default function App2() {
     setPeekTick((tick) => tick + 1);
     toast(peekReloadedToast(finishedEdit?.file));
   }, [active, finishedEdit?.file, finishedEdit?.key, focusFile, filePeek, filePeekDraft, toast]);
+
+  const pendingFile = pendingEditFile(sessionView.rows);
+  useEffect(() => {
+    const dirty = filePeekDraft != null && filePeekDraft !== filePeek;
+    if (!canPeekPendingEdit({
+      machine: active?.machine,
+      status: sessionView.status,
+      dirty,
+      focusFile,
+      pendingFile,
+    })) return;
+    const key = peekMemoryKey(active?.machine, active?.id);
+    writePeekMemory(peekMem.current, key, { file: pendingFile });
+    peekRestore.current = null;
+    setFocusCommit(null);
+    setFocusFile(pendingFile);
+    if (!isPeekDrawer(drawer)) setDrawer('files');
+  }, [active?.id, active?.machine, drawer, filePeek, filePeekDraft, focusFile, pendingFile, sessionView.status]);
 
   useEffect(() => {
     if (drawer !== 'diff' || !active || !canShowSessionLog(active.machine)) {
