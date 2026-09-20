@@ -494,12 +494,15 @@ export class HarnessSession {
       : null;
     if (!raw) return false;
     const outgoing = raw.type === 'set_thinking_level' ? normalizeThinkingLevelFrame(raw) : raw;
-    if (outgoing.type === 'steer' || outgoing.type === 'follow_up') {
+    if (outgoing.type === 'steer' || outgoing.type === 'follow_up' || outgoing.type === 'prompt') {
       const text = String(outgoing.message ?? '').trim();
-      if (text) {
-        outgoing.message = applyOutgoingRules(text, this.rule, readCwdRuleSidecar(this.cwd) || this.cwdRule);
-        this.emit({ event: EVENT_USER_MESSAGE, text, mode: outgoing.type });
+      if (!text) return false;
+      outgoing.message = applyOutgoingRules(text, this.rule, readCwdRuleSidecar(this.cwd) || this.cwdRule);
+      if (outgoing.type === 'prompt') {
+        this.promptTurns += 1;
+        if (this.status === 'idle' || this.status === 'failed') this.status = 'running';
       }
+      this.emit({ event: EVENT_USER_MESSAGE, text, mode: outgoing.type });
     }
     if (outgoing.type === 'bash') {
       const command = String(outgoing.command ?? '').trim();

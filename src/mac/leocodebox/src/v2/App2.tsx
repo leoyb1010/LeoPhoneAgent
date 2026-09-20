@@ -145,6 +145,7 @@ import { thermalCoolToast, thermalHotToast, thermalSendToast } from './session-t
 import { PINNED_SESSIONS_KEY, comparePinnedFirst, pinSessionToast, readPinnedSessionKeys, sessionIsPinned, togglePinnedSessionKey } from './session-pin';
 import { canSearchSession, searchQueryReady, searchSessionToast, type SessionSearchHit } from './session-search';
 import { canRunSessionBash, parseComposerBash } from './session-shell';
+import { canRunSessionSlash, parseComposerSlash } from './session-slash';
 import { canShowSessionLog, type SessionCommit } from './session-log';
 import { approvalChoiceActions, approvalToast, dockNeedBadge, firstPendingApproval, noticeNotifyPayload, noticesFromSnapshot, sessionPathTarget } from './session-notice';
 import { isBrowserOffline, offlineBanner, offlineToast, onlineToast } from './session-offline';
@@ -2115,6 +2116,10 @@ export default function App2() {
     warnMemorySend();
     warnLoadSend();
     setDraft('');
+    if (parseComposerSlash(text) && canRunSessionSlash({ machine: active.machine, status: sessionView.status, command: text })) {
+      await withBusy(() => api.rpc(active, { type: 'prompt', message: text }));
+      return;
+    }
     if (canQueueWhileWaiting({ machine: active.machine, status: sessionView.status, prompt: text })) {
       await withBusy(() => api.rpc(active, { type: 'follow_up', message: text }), followUpToast());
       return;
@@ -2156,6 +2161,10 @@ export default function App2() {
     warnMemorySend();
     warnLoadSend();
     setDraft('');
+    if (parseComposerSlash(text) && canRunSessionSlash({ machine: active.machine, status: sessionView.status, command: text })) {
+      await withBusy(() => api.rpc(active, { type: 'prompt', message: text }));
+      return;
+    }
     await withBusy(() => api.rpc(active, { type: 'follow_up', message: text }), followUpToast());
   }, [active, activeSummary, draft, drawer, flushPeekForSend, focusFile, sessionView.model, sessionView.rows, sessionView.status, toast, withBusy, setDraft, warnBatterySend, warnThermalSend, warnMemorySend, warnLoadSend]);
   const clearFollowUps = useCallback(() => {
