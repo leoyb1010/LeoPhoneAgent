@@ -20,6 +20,7 @@ import { desktopLogsTools, openDesktopLogs } from './desktop-applogs';
 import { desktopRelaunchTools, relaunchDesktop } from './desktop-relaunch';
 import { clearDesktopCache, desktopCacheTools } from './desktop-cache';
 import { desktopCliTools, readCliInstall, writeCliInstall } from './desktop-cli';
+import { desktopExtraTools, openDesktopExtraWindow } from './desktop-extra';
 import { desktopLockTools, onAppLockChanged, readAppLock, writeAppLock } from './desktop-lock';
 import { desktopUpdater, runDesktopUpdate } from './desktop-update';
 import { onDockNew } from './desktop-dock';
@@ -29,6 +30,7 @@ import { canAcceptSessionDrop, mentionDroppedFile } from './session-drop';
 import { canCommitSessionFiles, commitSessionFilesToast, defaultCommitMessage } from './session-commit';
 import { canShowSessionDiff } from './session-diff';
 import { canExportSession, exportFileName, exportSessionToast, flowRowsToMarkdown } from './session-export';
+import { canOpenExtraWindow, extraWindowLabel, extraWindowToast } from './session-extra';
 import { canRevertSessionFile, revertSessionFileToast } from './session-revert';
 import { canRenameSession, clipSessionTitle, renameSessionToast } from './session-title';
 import { canSetSessionRule, clipSessionRule, ruleSessionToast } from './session-rule';
@@ -240,6 +242,7 @@ export default function App2() {
   const canOpenLogsHere = canOpenLogs(desktopLogsTools());
   const canOpenA11yHere = canOpenAccessibility(desktopA11yTools());
   const canRelaunchHere = canRelaunch(desktopRelaunchTools());
+  const canExtraHere = canOpenExtraWindow(desktopExtraTools());
   const canClearCacheHere = canClearCache(desktopCacheTools());
   const canLockHere = canLockApp(desktopLockTools());
   const [appLocked, setAppLocked] = useState(false);
@@ -1113,6 +1116,18 @@ export default function App2() {
       toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
     }
   }, [allSessions, canRelaunchHere, toast]);
+  const extraHere = useCallback(async () => {
+    if (!canExtraHere) {
+      toast('这台电脑现在再开不了窗口', true);
+      return;
+    }
+    try {
+      await openDesktopExtraWindow();
+      toast(extraWindowToast());
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+    }
+  }, [canExtraHere, toast]);
   const clearCacheHere = useCallback(async () => {
     if (!canClearCacheHere) {
       toast('这台电脑现在清不掉缓存', true);
@@ -2011,6 +2026,7 @@ export default function App2() {
     ...(canOpenLogsHere ? [{ v: 'openlogs', t: openLogsLabel(), sub: '本机日志目录' }] : []),
     ...(canOpenA11yHere ? [{ v: 'opena11y', t: openAccessibilityLabel(), sub: '系统隐私设置' }] : []),
     ...(canRelaunchHere ? [{ v: 'relaunch', t: relaunchLabel(), sub: '整进程重来' }] : []),
+    ...(canExtraHere ? [{ v: 'extra', t: extraWindowLabel(), sub: '并排看另一条' }] : []),
     ...(canClearCacheHere ? [{ v: 'clearcache', t: clearCacheLabel(), sub: '网页缓存，不清会话' }] : []),
     ...(canLockHere ? [{ v: 'applock', t: lockLabel(appLocked), sub: appLocked ? '触控 ID 解锁' : '锁屏或走开后要解锁' }] : []),
     ...(canCliHere ? [{ v: 'cliinstall', t: installCliLabel(cliInstalled), sub: cliInstalled ? '终端里打 leocodebox' : '终端打开当前目录' }] : []),
@@ -2097,6 +2113,7 @@ export default function App2() {
     else if (v === 'openlogs') void openLogsHere();
     else if (v === 'opena11y') void openA11yHere();
     else if (v === 'relaunch') void relaunchHere();
+    else if (v === 'extra') void extraHere();
     else if (v === 'clearcache') void clearCacheHere();
     else if (v === 'applock') void lockHere();
     else if (v === 'cliinstall') void cliHere();
@@ -2294,12 +2311,13 @@ export default function App2() {
     ...(canOpenLogsHere ? [{ g: '本机', t: openLogsLabel(), k: '本机日志目录', run: () => void openLogsHere() }] : []),
     ...(canOpenA11yHere ? [{ g: '本机', t: openAccessibilityLabel(), k: '系统隐私设置', run: () => void openA11yHere() }] : []),
     ...(canRelaunchHere ? [{ g: '本机', t: relaunchLabel(), k: '整进程重来', run: () => void relaunchHere() }] : []),
+    ...(canExtraHere ? [{ g: '本机', t: extraWindowLabel(), k: '并排看另一条', run: () => void extraHere() }] : []),
     ...(canClearCacheHere ? [{ g: '本机', t: clearCacheLabel(), k: '网页缓存，不清会话', run: () => void clearCacheHere() }] : []),
     ...(canLockHere ? [{ g: '本机', t: lockLabel(appLocked), k: appLocked ? '触控 ID 解锁' : '锁屏或走开后要解锁', run: () => void lockHere() }] : []),
     ...(canCliHere ? [{ g: '本机', t: installCliLabel(cliInstalled), k: cliInstalled ? '终端里打 leocodebox' : '终端打开当前目录', run: () => void cliHere() }] : []),
     ...(canCheckUpdateHere ? [{ g: '本机', t: checkUpdateLabel(updateState), k: updateState?.latestVersion ? `现在 ${updateState.latestVersion}` : '看有没有新版本', run: () => void checkUpdateHere() }] : []),
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, themeMode, followSystemHere, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, importTalk, canImportHere, copyTalk, canCopyTalkHere, printTalk, canPrintTalkHere, toggleHideSecrets, canHideHere, hideSecretsOn, toggleOpenAtLogin, canOpenAtLoginHere, openAtLogin, toggleGlobalHotkey, canHotkeyHere, globalHotkey, toggleAlwaysOnTop, canAlwaysOnTopHere, alwaysOnTop, toggleAllSpaces, canAllSpacesHere, allSpaces, toggleContentProtection, canProtectHere, contentProtection, toggleDoneChime, canDoneChimeHere, doneChimeOn, openLogsHere, canOpenLogsHere, openA11yHere, canOpenA11yHere, relaunchHere, canRelaunchHere, clearCacheHere, canClearCacheHere, lockHere, canLockHere, appLocked, cliHere, canCliHere, cliInstalled, checkUpdateHere, canCheckUpdateHere, updateState, dictateHere, canDictateHere, dictating, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, speakLast, canSpeakLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openLastWritten, canOpenWritten, lastWritten, jumpLastFail, canJumpFail, lastFail, openLastRead, canOpenRead, lastRead, openHere, canHere, herePeers, showPulse, canPulse, pulseLabel, forkHere, canFork, openTalkLink, canLinks, talkLinks, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, themeMode, followSystemHere, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, importTalk, canImportHere, copyTalk, canCopyTalkHere, printTalk, canPrintTalkHere, toggleHideSecrets, canHideHere, hideSecretsOn, toggleOpenAtLogin, canOpenAtLoginHere, openAtLogin, toggleGlobalHotkey, canHotkeyHere, globalHotkey, toggleAlwaysOnTop, canAlwaysOnTopHere, alwaysOnTop, toggleAllSpaces, canAllSpacesHere, allSpaces, toggleContentProtection, canProtectHere, contentProtection, toggleDoneChime, canDoneChimeHere, doneChimeOn, openLogsHere, canOpenLogsHere, openA11yHere, canOpenA11yHere, relaunchHere, canRelaunchHere, extraHere, canExtraHere, clearCacheHere, canClearCacheHere, lockHere, canLockHere, appLocked, cliHere, canCliHere, cliInstalled, checkUpdateHere, canCheckUpdateHere, updateState, dictateHere, canDictateHere, dictating, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, speakLast, canSpeakLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openLastWritten, canOpenWritten, lastWritten, jumpLastFail, canJumpFail, lastFail, openLastRead, canOpenRead, lastRead, openHere, canHere, herePeers, showPulse, canPulse, pulseLabel, forkHere, canFork, openTalkLink, canLinks, talkLinks, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -2759,6 +2777,7 @@ export default function App2() {
                         {canOpenLogsHere ? <button className="link" type="button" onClick={() => { void openLogsHere(); }}>{openLogsLabel()}</button> : null}
                         {canOpenA11yHere ? <button className="link" type="button" onClick={() => { void openA11yHere(); }}>{openAccessibilityLabel()}</button> : null}
                         {canRelaunchHere ? <button className="link" type="button" onClick={() => { void relaunchHere(); }}>{relaunchLabel()}</button> : null}
+                        {canExtraHere ? <button className="link" type="button" onClick={() => { void extraHere(); }}>{extraWindowLabel()}</button> : null}
                         {canClearCacheHere ? <button className="link" type="button" onClick={() => { void clearCacheHere(); }}>{clearCacheLabel()}</button> : null}
                         {canLockHere ? <button className="link" type="button" onClick={() => { void lockHere(); }}>{lockLabel(appLocked)}</button> : null}
                         {canCliHere ? <button className="link" type="button" onClick={() => { void cliHere(); }}>{installCliLabel(cliInstalled)}</button> : null}

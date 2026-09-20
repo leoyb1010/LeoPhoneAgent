@@ -3,8 +3,9 @@ import { readFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { extraWindowBounds } from './extra-window.js';
 import { ViewHost } from './viewHost.js';
-import { DEFAULT_WINDOW, WINDOW_BOUNDS_FILE, sanitizeWindowBounds, snapshotWindowBounds } from './window-bounds.js';
+import { DEFAULT_WINDOW, MIN_WINDOW, WINDOW_BOUNDS_FILE, sanitizeWindowBounds, snapshotWindowBounds } from './window-bounds.js';
 import { DEFAULT_ZOOM, WINDOW_ZOOM_FILE, sanitizeZoomFactor, snapshotZoomFactor } from './window-zoom.js';
 
 const TITLEBAR_HEIGHT = 44;
@@ -63,6 +64,7 @@ export class DesktopWindowManager {
     this.tabs = tabs;
 
     this.mainWindow = null;
+    this.extraWindows = [];
     this.settingsWindow = null;
     this.launcherLoaded = false;
     this.contentViewResizeTimer = null;
@@ -585,6 +587,10 @@ export class DesktopWindowManager {
         submenu: [
           { role: 'minimize' },
           { role: 'zoom' },
+          {
+            label: '再开一个窗口',
+            click: () => void this.actions.openExtraWindow?.().catch((error) => this.actions.showError('再开不了窗口', error)),
+          },
           ...(process.platform === 'darwin' ? [{ type: 'separator' }, { role: 'front' }] : []),
         ],
       },
@@ -815,5 +821,40 @@ export class DesktopWindowManager {
 
     this.buildAppMenu();
     await this.showLauncher();
+  }
+
+  async openExtraWindow(url) {
+    const target = String(url ?? '').trim();
+    if (!target) throw new Error('本机服务还没起来');
+    const bounds = extraWindowBounds(this.mainWindow && !this.mainWindow.isDestroyed() ? this.mainWindow.getBounds() : null);
+    const win = new BrowserWindow({
+      ...bounds,
+      minWidth: MIN_WINDOW.width,
+      minHeight: MIN_WINDOW.height,
+      show: false,
+      backgroundColor: '#141514',
+      title: this.appName,
+      icon: this.getWindowIconPath(),
+      titleBarStyle: 'hidden',
+      ...(process.platform === 'darwin'
+        ? { trafficLightPosition: { x: 18, y: 17 } }
+        : {}),
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+        preload: this.getPreloadPath(),
+      },
+    });
+    this.extraWindows.push(win);
+    this.viewHost.configureChildWebContents(win.webContents);
+    this.attachZoom(win.webContents);
+    win.on('closed', () => {
+      this.extraWindows = this.extraWindows.filter((row) => row !== win);
+    });
+    await win.loadURL(target);
+    win.show();
+    win.focus();
+    return { ok: true };
   }
 }

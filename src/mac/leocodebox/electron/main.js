@@ -854,6 +854,12 @@ function registerIpcHandlers() {
   trustedHandle('leocodebox-desktop:open-logs', async () => openAppLogs());
   trustedHandle('leocodebox-desktop:open-accessibility', async () => openAccessibilityPrefs());
   trustedHandle('leocodebox-desktop:relaunch', async () => relaunchApp());
+  trustedHandle('leocodebox-desktop:extra-window', async () => {
+    const url = localServer?.getLocalServerUrl();
+    if (!url) throw new Error('本机服务还没起来');
+    if (!desktopWindow) throw new Error('窗口还没起来');
+    return desktopWindow.openExtraWindow(url);
+  });
   trustedHandle('leocodebox-desktop:clear-cache', async () => clearWebCache());
   trustedHandle('leocodebox-desktop:app-lock', async (_event, raw) => (
     raw === undefined || raw === null ? getAppLock() : writeAppLock(Boolean(raw))
@@ -1203,6 +1209,12 @@ async function createDesktopWindow() {
       openNotificationTarget,
       isAppQuitting: () => isQuitting,
       requestQuit: () => app.quit(),
+      openExtraWindow: async () => {
+        const url = localServer?.getLocalServerUrl();
+        if (!url) throw new Error('本机服务还没起来');
+        if (!desktopWindow) throw new Error('窗口还没起来');
+        return desktopWindow.openExtraWindow(url);
+      },
     },
   });
 
