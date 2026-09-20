@@ -25,12 +25,13 @@ export function FlowText({ text, query }: { text: string; query?: string }) {
   );
 }
 
-export function Row({ row, model, query, onApprove, onDiff }: {
+export function Row({ row, model, query, onApprove, onDiff, onOpen }: {
   row: FlowRow;
   model: string | null;
   query?: string;
   onApprove: (id: string, choice: string, reason?: string) => unknown;
   onDiff: () => void;
+  onOpen?: () => void;
 }) {
   const [open, setOpen] = useState(row.k === 'think' ? false : undefined);
   const [thinkOpen, setThinkOpen] = useState(false);
@@ -49,8 +50,18 @@ export function Row({ row, model, query, onApprove, onDiff }: {
     );
     case 'tool': return (
       <div className={`frow frow-tool${live}`}><div className="fl">$</div><div className="fc">
-        <div className="tool-line"><code><FindBits text={row.preview || row.tool} query={query} /></code>
-          {row.running ? <><span className="prog" /><span className="tool-meta run">运行中</span></> : <span className={`tool-meta ${row.error ? 'err' : ''}`}>{row.error ? '失败' : '完成'}</span>}
+        <div className="tool-line">
+          {onOpen && !row.running ? (
+            <button className="tool-line" onClick={onOpen} style={{ gap: 10 }}>
+              <code><FindBits text={row.preview || row.tool} query={query} /></code>
+              <span className={`tool-meta ${row.error ? 'err' : ''}`}>{row.error ? '失败' : '完成'}</span>
+            </button>
+          ) : (
+            <>
+              <code><FindBits text={row.preview || row.tool} query={query} /></code>
+              {row.running ? <><span className="prog" /><span className="tool-meta run">运行中</span></> : <span className={`tool-meta ${row.error ? 'err' : ''}`}>{row.error ? '失败' : '完成'}</span>}
+            </>
+          )}
           {row.output ? <button className="tool-toggle" onClick={() => setOpen((o) => !o)}>{open ? '收起' : '展开'}</button> : null}
         </div>
         {open && row.output ? <pre className="tool-out"><FindBits text={row.output} query={query} /></pre> : null}
