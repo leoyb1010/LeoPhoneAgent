@@ -103,6 +103,7 @@ import { applyPatchToast, canApplySessionPatch, clipApplyPatch } from './session
 import { approveAllLabel, approveAllToast, canApproveAllHere, pendingApprovalIds } from './session-approve-all';
 import { canApproveOnEnter } from './session-approve-enter';
 import { canQueueAfterApprove, queueAfterApproveToast } from './session-approve-queue';
+import { canApproveForSession, sessionApproveChoice } from './session-approve-session';
 import { canMoveToApplications, moveToApplicationsBusy, moveToApplicationsBusyToast, moveToApplicationsLabel, moveToApplicationsToast } from './session-apps';
 import { canSwitchSessionBranch, sanitizeBranchName, switchSessionBranchToast } from './session-branch';
 import { canInitSessionRepo, initSessionToast } from './session-init';
@@ -2685,6 +2686,17 @@ export default function App2() {
         return;
       }
       if (meta && e.key === 'Enter') {
+        const firstPending = sessionView.pendingApprovals.values().next().value as (FlowRow & { k: 'ap' }) | undefined;
+        const sessionChoice = sessionApproveChoice(firstPending?.choices);
+        if (e.shiftKey && firstPending && canApproveForSession({
+          machine: active?.machine,
+          status: sessionView.status,
+          choices: firstPending.choices,
+        }) && sessionChoice) {
+          e.preventDefault();
+          void approve(firstPending.approvalId, sessionChoice);
+          return;
+        }
         const ta = taRef.current;
         if (document.activeElement === ta && (draft.trim())) { e.preventDefault(); void send(); return; }
         if (canSendFromPeek({
@@ -2723,7 +2735,7 @@ export default function App2() {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [palette.open, picker, menu, drawer, newBox, draft, send, approveFirstPending, view, sessionView.pendingApprovals, approve, allSessions, matchesFilter, active, openSession, beginLocalNew, flowFind.open, windowOp, stepFind, copyFindHit, savePeek, titleEditing, ruleEditing, cwdRuleEditing]);
+  }, [palette.open, picker, menu, drawer, newBox, draft, send, approveFirstPending, view, sessionView.pendingApprovals, sessionView.status, approve, allSessions, matchesFilter, active, openSession, beginLocalNew, flowFind.open, windowOp, stepFind, copyFindHit, savePeek, titleEditing, ruleEditing, cwdRuleEditing]);
 
   // -- 命令面板 ---------------------------------------------------------------
   type Command = { g: string; t: string; k: string; run: () => void };
