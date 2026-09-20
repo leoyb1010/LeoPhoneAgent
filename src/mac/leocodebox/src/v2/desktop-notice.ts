@@ -1,7 +1,20 @@
 type DesktopNoticeTools = {
   setRunningBadge?: (count: number) => Promise<unknown>;
-  notify?: (payload: { title: string; body: string; sessionId?: string; machine?: string }) => Promise<{ shown?: boolean }>;
+  notify?: (payload: {
+    title: string;
+    body: string;
+    sessionId?: string;
+    machine?: string;
+    approvalId?: string;
+    actions?: Array<{ choice: string; label: string }>;
+  }) => Promise<{ shown?: boolean }>;
   onNoticeClick?: (callback: (row: { sessionId?: string | null; machine?: string | null }) => void) => () => void;
+  onNoticeAction?: (callback: (row: {
+    sessionId?: string | null;
+    machine?: string | null;
+    approvalId?: string | null;
+    choice?: string | null;
+  }) => void) => () => void;
 };
 
 function desktopTools(): DesktopNoticeTools | undefined {
@@ -19,10 +32,15 @@ export async function showSessionNotice(input: {
   body: string;
   sessionId: string;
   machine: string;
+  approvalId?: string;
+  actions?: Array<{ choice: string; label: string }>;
 }): Promise<void> {
   const notify = desktopTools()?.notify;
   if (notify) {
-    await notify({ title: input.title, body: input.body, sessionId: input.sessionId, machine: input.machine });
+    await notify({
+      title: input.title, body: input.body, sessionId: input.sessionId, machine: input.machine,
+      ...(input.approvalId && input.actions?.length ? { approvalId: input.approvalId, actions: input.actions } : {}),
+    });
     return;
   }
   if (typeof Notification === 'undefined' || Notification.permission === 'denied') return;
@@ -40,5 +58,22 @@ export function onSessionNoticeClick(callback: (target: { machine: string; id: s
     const id = row.sessionId?.trim();
     if (!id) return;
     callback({ machine: row.machine?.trim() || 'local', id });
+  });
+}
+
+export function onSessionNoticeAction(callback: (target: {
+  machine: string;
+  id: string;
+  approvalId: string;
+  choice: string;
+}) => void): () => void {
+  const listen = desktopTools()?.onNoticeAction;
+  if (!listen) return () => undefined;
+  return listen((row) => {
+    const id = row.sessionId?.trim();
+    const approvalId = row.approvalId?.trim();
+    const choice = row.choice?.trim();
+    if (!id || !approvalId || !choice) return;
+    callback({ machine: row.machine?.trim() || 'local', id, approvalId, choice });
   });
 }

@@ -5,6 +5,8 @@ export type NoticeSession = {
   status: string;
   title: string;
   command?: string;
+  approvalId?: string;
+  choices?: string[];
 };
 
 export type SessionNotice = {
@@ -14,7 +16,64 @@ export type SessionNotice = {
   kind: 'need' | 'failed' | 'done';
   title: string;
   body: string;
+  approvalId?: string;
+  choices?: string[];
 };
+
+export type PendingApproval = { approvalId: string; command: string; choices: string[] };
+export type ApprovalAction = { choice: string; label: string };
+
+export function firstPendingApproval(input: {
+  pending_approvals?: Array<{ approval_id?: string; command?: string; choices?: string[] }> | null;
+} | null | undefined): PendingApproval | null {
+  const first = input?.pending_approvals?.[0];
+  const approvalId = String(first?.approval_id ?? '').trim();
+  if (!approvalId) return null;
+  const choices = Array.isArray(first?.choices) && first.choices.length > 0
+    ? first.choices.map(String)
+    : ['once', 'deny'];
+  return { approvalId, command: String(first?.command ?? ''), choices };
+}
+
+export function approvalChoiceActions(choices: readonly string[]): ApprovalAction[] {
+  const out: ApprovalAction[] = [];
+  if (choices.includes('once')) out.push({ choice: 'once', label: '批准一次' });
+  if (choices.includes('session')) out.push({ choice: 'session', label: '本会话允许' });
+  if (choices.includes('always')) out.push({ choice: 'always', label: '总是允许' });
+  if (choices.includes('deny')) out.push({ choice: 'deny', label: '拒绝' });
+  return out;
+}
+
+/** 系统通知只留批准一次 / 拒绝,展开才好按。 */
+export function noticeBannerActions(notice: { kind?: string; choices?: readonly string[] }): ApprovalAction[] {
+  if (notice.kind !== 'need') return [];
+  const all = approvalChoiceActions(notice.choices ?? ['once', 'deny']);
+  return all.filter((row) => row.choice === 'once' || row.choice === 'deny');
+}
+
+export function noticeNotifyPayload(notice: SessionNotice): {
+  title: string;
+  body: string;
+  sessionId: string;
+  machine: string;
+  approvalId?: string;
+  actions?: ApprovalAction[];
+} {
+  const actions = noticeBannerActions(notice);
+  return {
+    title: notice.title,
+    body: notice.body,
+    sessionId: notice.id,
+    machine: notice.machine,
+    ...(notice.approvalId && actions.length ? { approvalId: notice.approvalId, actions } : {}),
+  };
+}
+
+export function approvalToast(choice: string): string {
+  if (choice === 'deny') return '已拒绝';
+  if (choice === 'session' || choice === 'always') return '已批准,本会话内相同范围不再询问';
+  return '已批准一次';
+}
 
 export function dockNeedBadge(sessions: ReadonlyArray<{ status: string }>): number {
   return sessions.filter((row) => row.status === 'waiting_for_approval').length;
@@ -33,6 +92,7 @@ function needNotice(row: NoticeSession, title: string): SessionNotice {
     kind: 'need',
     title,
     body: command ? `需要确认：${command}` : '会话在等你批准',
+    ...(row.approvalId ? { approvalId: row.approvalId, choices: row.choices ?? ['once', 'deny'] } : {}),
   };
 }
 

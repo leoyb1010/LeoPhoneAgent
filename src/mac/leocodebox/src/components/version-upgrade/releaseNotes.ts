@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.0.81',
+    date: '2026-09-20',
+    items: [
+      '别的会话要你批准时，顶栏和系统通知都能直接批或拒，不用先切过去。',
+    ],
+  },
+  {
     version: '2.0.80',
     date: '2026-09-20',
     items: [

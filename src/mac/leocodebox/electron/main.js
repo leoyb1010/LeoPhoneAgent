@@ -535,7 +535,20 @@ function registerIpcHandlers() {
     const body = String(payload?.body || '').slice(0, 200);
     const sessionId = payload?.sessionId ? String(payload.sessionId) : null;
     const machine = payload?.machine ? String(payload.machine) : 'local';
-    const notice = new Notification({ title, body, silent: false });
+    const approvalId = payload?.approvalId ? String(payload.approvalId) : null;
+    const rawActions = Array.isArray(payload?.actions) ? payload.actions : [];
+    const allowed = new Set(['once', 'session', 'always', 'deny']);
+    const actions = rawActions
+      .map((row) => ({
+        choice: String(row?.choice ?? '').trim(),
+        label: String(row?.label ?? row?.choice ?? '').trim().slice(0, 20),
+      }))
+      .filter((row) => allowed.has(row.choice) && row.label)
+      .slice(0, 2);
+    const notice = new Notification({
+      title, body, silent: false,
+      ...(actions.length ? { actions: actions.map((row) => ({ type: 'button', text: row.label })) } : {}),
+    });
     notice.on('click', () => {
       const win = BrowserWindow.fromWebContents(event.sender);
       if (win) {
@@ -544,6 +557,13 @@ function registerIpcHandlers() {
         win.focus();
       }
       event.sender.send('leocodebox-desktop:notice-click', { machine, sessionId });
+    });
+    notice.on('action', (_ignored, index) => {
+      const picked = actions[index];
+      if (!picked || !sessionId || !approvalId) return;
+      event.sender.send('leocodebox-desktop:notice-action', {
+        machine, sessionId, approvalId, choice: picked.choice,
+      });
     });
     notice.show();
     return { shown: true };

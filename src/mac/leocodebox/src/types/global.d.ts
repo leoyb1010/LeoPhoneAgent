@@ -18,8 +18,21 @@ declare global {
       saveDrop?: (input: { cwd: string; name?: string; content?: string; fromPath?: string }) => Promise<{ path: string; name: string }>;
       clipboardImage?: () => Promise<{ empty?: boolean; name?: string; content?: string }>;
       pickFiles?: () => Promise<{ cancelled?: boolean; paths?: string[] }>;
-      notify?: (payload: { title: string; body: string; sessionId?: string; machine?: string }) => Promise<{ shown?: boolean }>;
+      notify?: (payload: {
+        title: string;
+        body: string;
+        sessionId?: string;
+        machine?: string;
+        approvalId?: string;
+        actions?: Array<{ choice: string; label: string }>;
+      }) => Promise<{ shown?: boolean }>;
       onNoticeClick?: (callback: (row: { sessionId?: string | null; machine?: string | null }) => void) => () => void;
+      onNoticeAction?: (callback: (row: {
+        sessionId?: string | null;
+        machine?: string | null;
+        approvalId?: string | null;
+        choice?: string | null;
+      }) => void) => () => void;
       /** 桌面壳发过来的"打开某个东西":本地工具页 / 设置窗。 */
       onOpenModal: (
         callback: (tool: 'settings' | 'leoapi' | 'feedback') => void,

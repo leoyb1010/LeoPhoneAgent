@@ -113,6 +113,11 @@ if (isLocalHttpOrigin(window.location)) {
       ipcRenderer.on('leocodebox-desktop:notice-click', listener);
       return () => ipcRenderer.removeListener('leocodebox-desktop:notice-click', listener);
     },
+    onNoticeAction: (callback) => {
+      const listener = (_event, row) => callback(row);
+      ipcRenderer.on('leocodebox-desktop:notice-action', listener);
+      return () => ipcRenderer.removeListener('leocodebox-desktop:notice-action', listener);
+    },
     onOpenModal: (callback) => {
       const listener = (_event, tool) => callback(tool);
       ipcRenderer.on('leocodebox-desktop:open-modal', listener);

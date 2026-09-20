@@ -7,9 +7,9 @@ import type { Project } from '../types/app';
 import { api, type FleetOverview, type HarnessEvent, type LocalOverview, type ProviderInfo, type SessionSummary, type SessionTarget } from './api';
 import { canOpenSessionPath, openSessionPath, openSessionTerm, pickSessionFolder, revealSessionPath } from './desktop-folder';
 import { dropBrowserFile, pasteSessionImage, pickSessionFiles } from './desktop-drop';
-import { onSessionNoticeClick, setDockNeedBadge, showSessionNotice } from './desktop-notice';
+import { onSessionNoticeAction, onSessionNoticeClick, setDockNeedBadge, showSessionNotice } from './desktop-notice';
 import { canAcceptSessionDrop, mentionDroppedFile } from './session-drop';
-import { dockNeedBadge, noticesFromSnapshot, sessionPathTarget } from './session-notice';
+import { approvalChoiceActions, approvalToast, dockNeedBadge, firstPendingApproval, noticeNotifyPayload, noticesFromSnapshot, sessionPathTarget } from './session-notice';
 import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerNeedsModelSwitch, composerPlaceholder, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mentionWindowRead, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, prettyModelName, providerOf, rankModelsForPicker, readHiddenSessionKeys, relativeTime, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionCanResume, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, usableWindowMenus, windowBoundLabel, windowMenuLabel, windowPadGesture, WINDOW_KEY_BUTTONS, type FlowRow, type Group, type SessionView } from './model';
 import { usableModelsFromProviders } from './settings-form';
 import { artifactNameFromPath, clipFilePeek, cwdChipLabel, isPeekDrawer, isWorkspaceDrawer, machineChipLabel, peekCanWriteBack, peekFileCaption, sessionFilePath, titlebarHomeCopy } from './local-files';
@@ -258,14 +258,19 @@ export default function App2() {
   }, [allSessions]);
 
   useEffect(() => {
-    const next = allSessions.map((row) => ({
-      key: sessionKey(row.machine, row.s.session_id),
-      machine: row.machine,
-      id: row.s.session_id,
-      status: row.s.status,
-      title: row.s.title || '新会话',
-      command: row.s.pending_approvals?.[0]?.command ?? row.s.last_event?.text ?? '',
-    }));
+    const next = allSessions.map((row) => {
+      const pending = firstPendingApproval(row.s);
+      return {
+        key: sessionKey(row.machine, row.s.session_id),
+        machine: row.machine,
+        id: row.s.session_id,
+        status: row.s.status,
+        title: row.s.title || '新会话',
+        command: pending?.command ?? row.s.last_event?.text ?? '',
+        approvalId: pending?.approvalId,
+        choices: pending?.choices,
+      };
+    });
     const { notices, map } = noticesFromSnapshot({
       primed: noticePrimed.current,
       prev: noticePrev.current,
@@ -276,7 +281,7 @@ export default function App2() {
     noticePrev.current = map;
     noticePrimed.current = true;
     for (const notice of notices) {
-      void showSessionNotice({ title: notice.title, body: notice.body, sessionId: notice.id, machine: notice.machine });
+      void showSessionNotice(noticeNotifyPayload(notice));
     }
   }, [allSessions, active]);
 
@@ -660,7 +665,13 @@ export default function App2() {
     await withBusy(() => api.send(active, text));
   }, [active, activeSummary, draft, sessionView.model, sessionView.rows, toast, withBusy, setDraft]);
   const stop = useCallback(() => active && withBusy(() => api.stop(active), '已停止'), [active, withBusy]);
-  const approve = useCallback((approvalId: string, choice: string) => active && withBusy(() => api.approve(active, approvalId, choice)), [active, withBusy]);
+  const approveTarget = useCallback((target: SessionTarget, approvalId: string, choice: string) => (
+    withBusy(() => api.approve(target, approvalId, choice), approvalToast(choice))
+  ), [withBusy]);
+  const approve = useCallback((approvalId: string, choice: string) => active && approveTarget(active, approvalId, choice), [active, approveTarget]);
+  useEffect(() => onSessionNoticeAction((target) => {
+    void approveTarget(target, target.approvalId, target.choice);
+  }), [approveTarget]);
   const setPolicy = useCallback((policy: string) => active && withBusy(() => api.setPolicy(active, policy)), [active, withBusy]);
   const setModel = useCallback((provider: string, modelId: string) => {
     try { localStorage.setItem(LAST_MODEL_KEY, `${provider}/${modelId}`); } catch { /* ignore */ }
@@ -1137,12 +1148,17 @@ export default function App2() {
                 </header>
                 {othersNeedingYou.length > 0 && (() => {
                   const first = othersNeedingYou[0];
-                  const cmd = first.s.pending_approvals?.[0]?.command ?? first.s.last_event?.text ?? '';
+                  const pending = firstPendingApproval(first.s);
+                  const cmd = pending?.command ?? first.s.last_event?.text ?? '';
+                  const acts = approvalChoiceActions(pending?.choices ?? ['once', 'deny']);
                   return (
                     <div className="need-strip glass">
                       <span className="cnt">需要你 · {othersNeedingYou.length}</span>
                       <span className="it">{first.s.title || '会话'} —— 在 {machineChipLabel(first.machineName)} 上执行 <code>{cmd.split('\n')[0]}</code></span>
-                      <button className="go" onClick={() => openSession({ machine: first.machine, id: first.s.session_id })}>去处理 →</button>
+                      {pending ? acts.map((act) => (
+                        <button key={act.choice} className="go" type="button" onClick={() => void approveTarget({ machine: first.machine, id: first.s.session_id }, pending.approvalId, act.choice)}>{act.label}</button>
+                      )) : null}
+                      <button className="go" type="button" onClick={() => openSession({ machine: first.machine, id: first.s.session_id })}>去看</button>
                     </div>
                   );
                 })()}
