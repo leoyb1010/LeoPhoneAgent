@@ -15,6 +15,8 @@ declare global {
       revealPath?: (target: string) => Promise<{ path: string }>;
       openPath?: (target: string) => Promise<{ path: string }>;
       openTerm?: (target: string) => Promise<{ path: string }>;
+      openUrl?: (target: string) => Promise<{ url?: string }>;
+      speakText?: (text: string) => Promise<{ ok?: boolean; chars?: number }>;
       saveDrop?: (input: { cwd: string; name?: string; content?: string; fromPath?: string }) => Promise<{ path: string; name: string }>;
       clipboardImage?: () => Promise<{ empty?: boolean; name?: string; content?: string }>;
       pickFiles?: () => Promise<{ cancelled?: boolean; paths?: string[] }>;

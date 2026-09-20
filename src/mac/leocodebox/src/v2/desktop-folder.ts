@@ -1,5 +1,6 @@
 import { api } from './api';
 import { clipTalkUrl } from './session-links';
+import { clipSpeakText } from './session-speak';
 
 type DesktopFolderTools = {
   pickFolder?: () => Promise<{ path?: string; cancelled?: boolean }>;
@@ -7,6 +8,7 @@ type DesktopFolderTools = {
   openPath?: (target: string) => Promise<unknown>;
   openTerm?: (target: string) => Promise<unknown>;
   openUrl?: (target: string) => Promise<unknown>;
+  speakText?: (text: string) => Promise<unknown>;
 };
 
 function desktopTools(): DesktopFolderTools | undefined {
@@ -65,6 +67,24 @@ export async function openSessionUrl(target: string): Promise<void> {
     return;
   }
   throw new Error('打不开这个链接');
+}
+
+export async function speakSessionText(text: string): Promise<void> {
+  const next = clipSpeakText(text);
+  if (!next) throw new Error('没有可读的字');
+  const desktop = desktopTools()?.speakText;
+  if (desktop) {
+    await desktop(next);
+    return;
+  }
+  const synth = typeof window !== 'undefined' ? window.speechSynthesis : undefined;
+  if (!synth) throw new Error('只有装好的桌面端才能读出来');
+  synth.cancel();
+  const utterance = new SpeechSynthesisUtterance(next);
+  utterance.lang = 'zh-CN';
+  const voice = synth.getVoices().find((row) => /zh|Chinese|Ting|Meijia|Sinji/i.test(`${row.lang} ${row.name}`));
+  if (voice) utterance.voice = voice;
+  synth.speak(utterance);
 }
 
 export async function openSessionTerm(target: string): Promise<void> {

@@ -2,7 +2,7 @@ import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Notific
 import updaterPackage from 'electron-updater';
 import { randomBytes } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { copyFile, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -19,6 +19,39 @@ import { isFirstPartyShellUrl } from './trustPolicy.js';
 import { DesktopUpdaterController, clearUpdaterTokenEnvironment } from './updater.js';
 
 const execFileAsync = promisify(execFile);
+let sayChild = null;
+let sayVoicePromise = null;
+
+function pickSayVoice() {
+  if (sayVoicePromise) return sayVoicePromise;
+  sayVoicePromise = execFileAsync('/usr/bin/say', ['-v', '?']).then(({ stdout }) => {
+    const lines = String(stdout || '').split('\n');
+    for (const name of ['Tingting', 'Ting-Ting', 'Meijia', 'Sinji']) {
+      if (lines.some((line) => line.startsWith(`${name} `) || line.startsWith(`${name}\t`))) return name;
+    }
+    const zh = lines.find((line) => /zh_|中文|Chinese/i.test(line));
+    return zh ? zh.trim().split(/\s+/)[0] : '';
+  }).catch(() => '');
+  return sayVoicePromise;
+}
+
+function clipSpeakText(raw) {
+  return String(raw ?? '').split('\0').join('').replace(/\s+/g, ' ').trim().slice(0, 1800);
+}
+
+function speakSessionText(raw) {
+  const text = clipSpeakText(raw);
+  if (!text) throw new Error('没有可读的字');
+  if (sayChild) {
+    try { sayChild.kill('SIGTERM'); } catch { /* already gone */ }
+    sayChild = null;
+  }
+  return pickSayVoice().then((voice) => {
+    sayChild = spawn('/usr/bin/say', voice ? ['-v', voice, text] : [text], { stdio: 'ignore' });
+    sayChild.on('exit', () => { sayChild = null; });
+    return { ok: true, chars: text.length };
+  });
+}
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const { autoUpdater } = updaterPackage;
 
@@ -695,6 +728,7 @@ function registerIpcHandlers() {
     await openExternalUrl(target);
     return { url: target };
   });
+  trustedHandle('leocodebox-desktop:speak-text', async (_event, raw) => speakSessionText(raw));
   // 云端 IPC 通道(connect-cloud / open-environment / refresh-environments ...)
   // 在 1.73.0 产品收缩时随云能力一起删掉了,这里不补空 handler:补了等于留下
   // 一个"调了什么都不发生"的接口,以后只会让人以为云还在。preload 与启动台
