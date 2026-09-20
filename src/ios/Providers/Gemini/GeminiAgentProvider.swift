@@ -57,6 +57,9 @@ final class GeminiAgentProvider: AgentProvider {
                         case .thinkingDelta(let text):
                             continuation.yield(.thinkingDelta(text))
 
+                        case .inlineMedia(let mime, let data):
+                            continuation.yield(.imageOutput(data: data, mimeType: mime))
+
                         case .functionCall(let name, let args, let thoughtSignature):
                             // Reset text tracking — next text delta will start a new block
                             emittedTextStart = false

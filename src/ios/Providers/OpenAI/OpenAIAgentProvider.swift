@@ -274,6 +274,16 @@ final class OpenAIAgentProvider: AgentProvider {
                         if let text = delta["content"] as? String, !text.isEmpty {
                             emitParsed(thinkParser.consume(text))
                         }
+                        // OpenRouter / Gemini-兼容端点把生成的图片放在 delta.images[].image_url.url(data URL)。
+                        if let images = delta["images"] as? [[String: Any]] {
+                            for img in images {
+                                let urlString = (img["image_url"] as? [String: Any])?["url"] as? String
+                                    ?? img["url"] as? String ?? ""
+                                if let (mime, data) = Self.decodeDataURL(urlString) {
+                                    continuation.yield(.imageOutput(data: data, mimeType: mime))
+                                }
+                            }
+                        }
 
                         // Tool call deltas
                         if let toolCalls = delta["tool_calls"] as? [[String: Any]] {
@@ -385,9 +395,14 @@ final class OpenAIAgentProvider: AgentProvider {
         thinkingLevel: ThinkingLevel = .off
     ) async throws -> AsyncThrowingStream<AgentStreamEvent, Error> {
         let inputMessages = convertMessagesResponsesAPI(messages)
-        let responsesTools = convertToolsResponsesAPI(tools)
+        var responsesTools = convertToolsResponsesAPI(tools)
 
         let isCodexOAuth = !provider.forceResponsesAPI && provider.isOAuth && provider.customBaseURL == nil
+        // 官方 OpenAI / Codex 订阅走 Responses 时挂上内置 image_generation 工具:模型只在
+        // 用户要图时才调用,平时零成本。第三方 Responses 兼容端点不认识这个 type,会 400,所以只在官方端点开。
+        if provider.customBaseURL == nil, !model.id.hasPrefix("gpt-image") {
+            responsesTools.append(["type": "image_generation", "output_format": "png"])
+        }
 
         var body: [String: Any] = [
             "model": model.id,
@@ -553,6 +568,12 @@ final class OpenAIAgentProvider: AgentProvider {
 
                         case "response.output_item.done":
                             if let item = event["item"] as? [String: Any],
+                               (item["type"] as? String) == "image_generation_call",
+                               let b64 = item["result"] as? String,
+                               let data = Data(base64Encoded: b64), !data.isEmpty {
+                                let fmt = (item["output_format"] as? String) ?? "png"
+                                continuation.yield(.imageOutput(data: data, mimeType: "image/\(fmt == "jpeg" ? "jpeg" : fmt)"))
+                            } else if let item = event["item"] as? [String: Any],
                                let itemType = item["type"] as? String,
                                itemType == "reasoning" {
                                 // Encrypted-only reasoning items (no streamed
@@ -1930,4 +1951,14 @@ final class OpenAIAgentProvider: AgentProvider {
     private static func capResponsesId(_ id: String) -> String {
         id.count <= maxResponsesAPIIdLength ? id : String(id.prefix(maxResponsesAPIIdLength))
     }
+    /// `data:image/png;base64,....` → (mime, bytes)。不是 data URL 或解不开就返回 nil。
+    static func decodeDataURL(_ url: String) -> (String, Data)? {
+        guard url.hasPrefix("data:"), let comma = url.firstIndex(of: ",") else { return nil }
+        let header = url[url.index(url.startIndex, offsetBy: 5)..<comma]
+        guard header.hasSuffix(";base64") else { return nil }
+        let mime = String(header.dropLast(";base64".count))
+        guard let data = Data(base64Encoded: String(url[url.index(after: comma)...])), !data.isEmpty else { return nil }
+        return (mime.isEmpty ? "image/png" : mime, data)
+    }
+
 }

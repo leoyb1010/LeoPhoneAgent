@@ -294,7 +294,9 @@ final class SessionLockStore: ObservableObject {
     }
 
     var appLockIdleSeconds: Int {
-        get { defaults.object(forKey: SessionLockDefaultsKey.appLockIdleSeconds) as? Int ?? -1 }
+        // 默认 1 小时:解锁过一次,一小时内切出去再回来不重复要面容。
+        // 之前默认 -1(退出即锁),切个 App 回来就得再刷一次脸。
+        get { defaults.object(forKey: SessionLockDefaultsKey.appLockIdleSeconds) as? Int ?? 3600 }
         set {
             defaults.set(newValue, forKey: SessionLockDefaultsKey.appLockIdleSeconds)
             objectWillChange.send()

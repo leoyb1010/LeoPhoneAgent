@@ -183,6 +183,11 @@ final class GeminiProvider: LLMProvider {
         ]
         let thinkCfg = thinkingLevel.isEnabled ? elevatedThinkingConfig(level: thinkingLevel) : minimalThinkingConfig()
         if !thinkCfg.isEmpty { genConfig["thinkingConfig"] = thinkCfg }
+        // 能出图的模型不声明 IMAGE 模态就只会回文字。thinkingConfig 与图片模态互斥,出图时不带。
+        if model.modalityOverride?.contains(.imageOutput) == true {
+            genConfig["responseModalities"] = ["TEXT", "IMAGE"]
+            genConfig.removeValue(forKey: "thinkingConfig")
+        }
         body["generationConfig"] = genConfig
 
         if !tools.isEmpty {
@@ -616,6 +621,13 @@ final class GeminiProvider: LLMProvider {
                 let thoughtSig = part["thoughtSignature"] as? String
                 events.append(.functionCall(name: name, args: args, thoughtSignature: thoughtSig))
             }
+            // 出图模型(flash-image / pro-image)把结果放在 inlineData 里,和文本同一条流。
+            if let inline = part["inlineData"] as? [String: Any],
+               let mime = inline["mimeType"] as? String,
+               let b64 = inline["data"] as? String,
+               let data = Data(base64Encoded: b64), !data.isEmpty {
+                events.append(.inlineMedia(mimeType: mime, data: data))
+            }
         }
 
         // Check finish reason
@@ -773,6 +785,8 @@ final class GeminiProvider: LLMProvider {
                 parts.append("  → finishReason: \(reason)")
             case .thinkingDelta(let text):
                 parts.append("  thinkingDeltaChars: \(text.count)")
+            case .inlineMedia(let mime, let data):
+                parts.append("  inlineMedia: \(mime) bytes=\(data.count)")
             case .usage(let usage):
                 parts.append("  → usage: in=\(usage.inputTokens) out=\(usage.outputTokens)")
             case .done:
@@ -795,6 +809,8 @@ final class GeminiProvider: LLMProvider {
 enum GeminiStreamEvent {
     case textDelta(String)
     case thinkingDelta(String)
+    /// 模型产出的图片/音频(inlineData part)。
+    case inlineMedia(mimeType: String, data: Data)
     case functionCall(name: String, args: [String: Any], thoughtSignature: String?)
     case finishReason(String)
     case usage(LLMUsage)

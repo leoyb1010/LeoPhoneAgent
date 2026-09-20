@@ -90,6 +90,8 @@ enum AgentStreamEvent: @unchecked Sendable {
     case contentBlockStart(AgentBlockStart)
     /// Incremental text delta.
     case textDelta(String)
+    /// 模型直接产出的图片(Gemini inlineData / OpenAI image_generation / chat-completions delta.images)。
+    case imageOutput(data: Data, mimeType: String)
     /// Tool input update (for streaming JSON preview).
     /// `accumulated` is the full JSON so far, `name` is the tool name.
     case toolInputDelta(name: String, accumulated: String)

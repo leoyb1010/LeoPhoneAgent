@@ -531,6 +531,10 @@ struct MinisApp: App {
 
         case .background:
             backgroundEntryDate = Date()
+            // [T-restore-last-screen] 记住退后台时停留的页面:某个会话,或首页(空串)。
+            // 进程被系统杀掉后冷启动,ContentView 用它回到原处,而不是开一个新对话。
+            UserDefaults.standard.set(AIChatViewModel.activeSessionId ?? "", forKey: "home.lastOpenSessionId")
+            UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "home.lastOpenAt")
             let remaining = UIApplication.shared.backgroundTimeRemaining
             lifecycleLog.info("[Lifecycle] → Background (remaining: \(Self.formatTimeRemaining(remaining)))")
             CrashReporter.shared.updateMarkerPhase(phase: "background")

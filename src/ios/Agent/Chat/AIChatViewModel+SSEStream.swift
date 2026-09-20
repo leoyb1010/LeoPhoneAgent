@@ -290,20 +290,42 @@ extension AIChatViewModel {
         let stallTimeoutSeconds: TimeInterval = 120
         var _streamError: Error? = nil
         let iterBox = StreamIteratorBox(stream)
+        // [T-image-output] 模型直接产出的图片:先落盘成本会话的资源,再以 markdown 图片
+        // 走文本增量那条路 —— 渲染、持久化、复制、分享全都复用现成的。没有文本块时
+        // 先合成一个 contentBlockStart(.text),排在这个队列里。
+        var syntheticEvents: [AgentStreamEvent] = []
         do {
         while true {
-            let maybeEvent: AgentStreamEvent? = try await withThrowingTaskGroup(of: AgentStreamEvent?.self) { group in
-                group.addTask { try await iterBox.next() }
-                group.addTask {
-                    try await Task.sleep(nanoseconds: UInt64(stallTimeoutSeconds * 1_000_000_000))
-                    throw StreamStallError(seconds: Int(stallTimeoutSeconds))
+            let maybeEvent: AgentStreamEvent?
+            if !syntheticEvents.isEmpty {
+                maybeEvent = syntheticEvents.removeFirst()
+            } else {
+                maybeEvent = try await withThrowingTaskGroup(of: AgentStreamEvent?.self) { group in
+                    group.addTask { try await iterBox.next() }
+                    group.addTask {
+                        try await Task.sleep(nanoseconds: UInt64(stallTimeoutSeconds * 1_000_000_000))
+                        throw StreamStallError(seconds: Int(stallTimeoutSeconds))
+                    }
+                    let result = try await group.next()!
+                    group.cancelAll()
+                    return result
                 }
-                let result = try await group.next()!
-                group.cancelAll()
-                return result
             }
-            guard let event = maybeEvent else { break }
+            guard let rawEvent = maybeEvent else { break }
             try Task.checkCancellation()
+            var event = rawEvent
+            if case .imageOutput(let data, let mime) = rawEvent {
+                guard let sid = await MainActor.run(body: { self.sessionId }) else { continue }
+                let ref = await ChatStore.shared.saveMedia(data: data, mimeType: mime, sessionId: sid, subdir: "generated")
+                let fileName = (ref.relativePath as NSString).lastPathComponent
+                let markdown = "\n\n![生成的图片](leophoneagent://generated/\(fileName))\n\n"
+                if currentTextBlockIdx == nil {
+                    event = .contentBlockStart(.text)
+                    syntheticEvents.append(.textDelta(markdown))
+                } else {
+                    event = .textDelta(markdown)
+                }
+            }
             // [T-stream-mainthread] msgIdx 重定位只挂在**低频**事件上。
             //
             // 本函数显式标了 nonisolated,文件头也写着「keeps HPACK decoding and
@@ -901,6 +923,10 @@ extension AIChatViewModel {
                 #if DEBUG
                 result.iterationUsage.add(u)
                 #endif
+
+            case .imageOutput:
+                // 已在循环头部转成 contentBlockStart/textDelta,不会走到这里。
+                break
 
             case .done(let reason):
                 // Final flush of thinking block content

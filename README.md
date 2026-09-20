@@ -150,7 +150,8 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 版本/构建:`1.34.0 (109)`;Bundle ID `com.leoyuan.leophoneagent`
+- 版本/构建:`1.37.0 (112)`;Bundle ID `com.leoyuan.leophoneagent`
+- 1.37.0:冷启动回到退出时的页面;面容默认一小时免重复;出图模型直接在对话里回图(Gemini inlineData / OpenAI image_generation / delta.images);首页「系统快捷」可选按钮(手电筒 / 亮度 / 剪贴板 / 设备信息)
 - iPhone / iPad 本机动作：剪贴板读写和设备信息直接走系统能力，写入后读回核对；
   支持 Foundation Models 的设备用结构化生成整理收藏与语音任务
 - iPad 工作区：分屏、台前调度和窗口缩放按正文/侧栏实际可用空间切换单双栏，

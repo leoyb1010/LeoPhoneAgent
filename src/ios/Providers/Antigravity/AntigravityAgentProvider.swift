@@ -54,6 +54,9 @@ final class AntigravityAgentProvider: AgentProvider {
                             }
                             continuation.yield(.textDelta(text))
 
+                        case .inlineMedia(let mime, let data):
+                            continuation.yield(.imageOutput(data: data, mimeType: mime))
+
                         case .thinkingDelta(let text):
                             continuation.yield(.thinkingDelta(text))
 

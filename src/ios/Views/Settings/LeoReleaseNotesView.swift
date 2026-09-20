@@ -12,6 +12,17 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.37.0",
+            date: "2026-09-20",
+            title: "回到上次的页面、面容一小时免重复、模型直接出图、系统快捷",
+            highlights: [
+                "从后台回来(包括被系统杀掉后冷启动)回到退出时正在看的那条会话或首页,不再被带到一个新开的对话。一天以上没回来才按原来的规则处理。",
+                "面容解锁默认一小时内不再重复要求:解锁过一次,切出去再回来不刷脸;仍可在 设置 → 面容保护 里改成退出即锁或其他时长。",
+                "支持出图的模型直接把图片回在对话里:Gemini 出图模型(flash-image / pro-image)、官方 OpenAI / Codex 订阅的 image_generation、以及 OpenRouter 等兼容端点的 delta.images;图片保存为会话资源,可长按保存分享。",
+                "首页新增「系统快捷」一排可选按钮:手电筒、屏幕亮度、读剪贴板、设备信息,点右侧滑杆图标勾选要显示的按钮。音量 / Wi-Fi / 蓝牙 / 专注模式 iOS 不对第三方 App 开放,不做假按钮。"
+            ]
+        ),
+        LeoRelease(
             version: "1.36.0",
             date: "2026-09-12",
             title: "系统转写与语言资源，录音中断更可靠",

@@ -348,6 +348,8 @@ struct ContentView: View {
     @AppStorage("launchScreen") private var launchScreen: Int = 0
     @AppStorage("leo.homeCardsEnabled") private var homeCardsEnabled = true
     @AppStorage("leo.torchOn") private var torchOn = false
+    /// 首页「系统快捷」启用的按钮,逗号分隔,顺序即显示顺序。
+    @AppStorage("home.quickControls") private var quickControlsRaw = "torch,brightness,clipboard,device"
     @State private var torchSupported = false
     @State private var homeNativeResult: ActionRouter.ExecutionResult?
     @State private var homeNativeTask: Task<Void, Never>?
@@ -915,12 +917,18 @@ struct ContentView: View {
                     withTransaction(tx) { openSession(Self.makeNewSessionId()) }
                 } else {
                     // No share — normal launch screen behavior
+                    // [T-restore-last-screen] 退后台时记的那一页(MinisApp .background 写入)。
+                    // 空串 = 当时在首页;nil = 这一轮从没退过后台(全新安装/从没记过)。
+                    let lastOpen = UserDefaults.standard.string(forKey: "home.lastOpenSessionId")
+                    let lastOpenAt = UserDefaults.standard.double(forKey: "home.lastOpenAt")
+                    let lastOpenFresh = lastOpenAt > 0 && Date().timeIntervalSince1970 - lastOpenAt < 24 * 3600
+                    let restorable: ChatSession? = lastOpen.flatMap { id in id.isEmpty ? nil : sessions.first(where: { $0.id == id }) }
                     switch launchScreen {
                     case 1:
-                        if let latest = sessions.first {
+                        if let target = restorable ?? sessions.first {
                             var tx = Transaction()
                             tx.disablesAnimations = true
-                            withTransaction(tx) { openSession(latest.id) }
+                            withTransaction(tx) { openSession(target.id) }
                         }
                     case 2:
                         var tx = Transaction()
@@ -929,7 +937,14 @@ struct ContentView: View {
                     case 3:
                         break
                     default:
-                        if !sessions.isEmpty,
+                        if lastOpenFresh, let target = restorable {
+                            // 一天之内回来:回到退出时正在看的那条会话,上下文不丢。
+                            var tx = Transaction()
+                            tx.disablesAnimations = true
+                            withTransaction(tx) { openSession(target.id) }
+                        } else if lastOpenFresh, lastOpen == "" {
+                            // 退出时就在首页,那就留在首页。
+                        } else if !sessions.isEmpty,
                            let latest = sessions.first,
                            Date().timeIntervalSince(latest.updatedAt) > 15 * 60 {
                             var tx = Transaction()
@@ -1634,27 +1649,132 @@ struct ContentView: View {
         }
     }
 
+    /// 首页「系统快捷」:一排可选按钮,点一下直接操控系统能力,不经过模型。
+    /// 只放 iOS 允许第三方 App 真正做到的:手电筒、屏幕亮度、剪贴板、设备信息。
+    /// 音量 / Wi-Fi / 蓝牙 / 专注模式 / 低电量 iOS 不对第三方开放,不做假按钮。
+    private static let allQuickControls: [(id: String, label: String, icon: String)] = [
+        ("torch", "手电筒", "flashlight.on.fill"),
+        ("brightness", "亮度", "sun.max"),
+        ("clipboard", "读剪贴板", "doc.on.clipboard"),
+        ("device", "设备信息", "iphone"),
+    ]
+
+    private var enabledQuickControls: [String] {
+        let ids = quickControlsRaw.split(separator: ",").map(String.init)
+        return Self.allQuickControls.map(\.id).filter { ids.contains($0) }
+    }
+
+    private func toggleQuickControl(_ id: String) {
+        var ids = enabledQuickControls
+        if let i = ids.firstIndex(of: id) { ids.remove(at: i) } else { ids.append(id) }
+        quickControlsRaw = ids.joined(separator: ",")
+    }
+
+    private func setBrightness(_ level: Double) {
+        guard !homeRoutingInProgress else { return }
+        homeRoutingInProgress = true
+        Task { @MainActor in
+            defer { homeRoutingInProgress = false }
+            do {
+                let state = try await DeviceActions.shared.setBrightness(level)
+                withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) {
+                    homeNativeResult = .init(text: "屏幕亮度已设为 \(Int((state.level * 100).rounded()))%", outcome: .succeeded)
+                }
+                LeoHaptics.notification(.success)
+            } catch let error as DeviceActionError {
+                homeNativeResult = .init(text: error.message, outcome: .failed)
+                LeoHaptics.notification(.error)
+            } catch {
+                homeNativeResult = .init(text: "系统未能设置亮度。", outcome: .failed)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func quickControlButton(_ id: String) -> some View {
+        switch id {
+        case "torch":
+            Button {
+                let enabled = !DeviceActions.shared.statusTorch().enabled
+                runHomeNative(.init(path: .native, kind: .toggleFlashlight,
+                    hour: nil, minute: nil, tomorrow: false, label: enabled ? "on" : "off"))
+            } label: {
+                quickControlLabel(torchOn ? "关手电筒" : "手电筒", icon: torchOn ? "flashlight.off.fill" : "flashlight.on.fill", on: torchOn)
+            }
+            .buttonStyle(.plain)
+            .disabled(!torchSupported || homeRoutingInProgress)
+        case "brightness":
+            Menu {
+                ForEach([("25%", 0.25), ("50%", 0.5), ("75%", 0.75), ("100%", 1.0)], id: \.0) { item in
+                    Button(item.0) { setBrightness(item.1) }
+                }
+            } label: {
+                quickControlLabel("亮度", icon: "sun.max", on: false)
+            }
+            .disabled(homeRoutingInProgress)
+        case "clipboard":
+            Button {
+                runHomeNative(.init(path: .native, kind: .readClipboard, hour: nil, minute: nil, tomorrow: false, label: ""))
+            } label: { quickControlLabel("读剪贴板", icon: "doc.on.clipboard", on: false) }
+            .buttonStyle(.plain)
+            .disabled(homeRoutingInProgress)
+        case "device":
+            Button {
+                runHomeNative(.init(path: .native, kind: .deviceInfo, hour: nil, minute: nil, tomorrow: false, label: ""))
+            } label: { quickControlLabel("设备信息", icon: "iphone", on: false) }
+            .buttonStyle(.plain)
+            .disabled(homeRoutingInProgress)
+        default:
+            EmptyView()
+        }
+    }
+
+    private func quickControlLabel(_ text: String, icon: String, on: Bool) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .semibold))
+            Text(text)
+                .font(.system(size: 13, weight: .medium))
+        }
+        .foregroundStyle(on ? Color.accentColor : .primary)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color(.secondarySystemFill), in: Capsule())
+    }
+
     @ViewBuilder
     private var homeLikelySection: some View {
         if homeCardsEnabled, !isSelecting {
             Section {
-                Button {
-                    let enabled = !DeviceActions.shared.statusTorch().enabled
-                    runHomeNative(.init(path: .native, kind: .toggleFlashlight,
-                        hour: nil, minute: nil, tomorrow: false, label: enabled ? "on" : "off"))
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: torchOn ? "flashlight.off.fill" : "flashlight.on.fill")
-                            .foregroundStyle(.tint)
-                        Text(!torchSupported ? "此设备不支持手电筒" : torchOn ? "关掉手电筒" : "打开手电筒")
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(.primary)
-                        Spacer(minLength: 0)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(enabledQuickControls, id: \.self) { id in
+                            quickControlButton(id)
+                        }
+                        Menu {
+                            ForEach(Self.allQuickControls, id: \.id) { item in
+                                Button {
+                                    toggleQuickControl(item.id)
+                                } label: {
+                                    if enabledQuickControls.contains(item.id) {
+                                        Label(item.label, systemImage: "checkmark")
+                                    } else {
+                                        Text(item.label)
+                                    }
+                                }
+                            }
+                        } label: {
+                            Image(systemName: "slider.horizontal.3")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                                .padding(8)
+                        }
                     }
+                    .padding(.vertical, 2)
                 }
-                .buttonStyle(.plain)
-                .disabled(!torchSupported || homeRoutingInProgress)
                 .onAppear { refreshHomeDeviceState() }
+            } header: {
+                Text("系统快捷")
             }
         }
     }
