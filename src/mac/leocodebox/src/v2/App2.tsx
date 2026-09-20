@@ -15,6 +15,7 @@ import { canExportSession, exportFileName, exportSessionToast, flowRowsToMarkdow
 import { canRevertSessionFile, revertSessionFileToast } from './session-revert';
 import { canRenameSession, clipSessionTitle, renameSessionToast } from './session-title';
 import { canMentionLastReply, lastAiReply, mentionLastReply, mentionLastReplyToast } from './session-reply';
+import { PINNED_SESSIONS_KEY, comparePinnedFirst, pinSessionToast, readPinnedSessionKeys, sessionIsPinned, togglePinnedSessionKey } from './session-pin';
 import { approvalChoiceActions, approvalToast, dockNeedBadge, firstPendingApproval, noticeNotifyPayload, noticesFromSnapshot, sessionPathTarget } from './session-notice';
 import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerCanFollowUp, composerNeedsModelSwitch, composerPlaceholder, composerRunningHint, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, followUpToast, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mentionWindowRead, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, pendingFollowUps, prettyModelName, providerOf, queueClearedToast, rankModelsForPicker, readHiddenSessionKeys, relativeTime, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionCanResume, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, usableWindowMenus, windowBoundLabel, windowMenuLabel, windowPadGesture, WINDOW_KEY_BUTTONS, type FlowRow, type Group, type SessionView } from './model';
 import { usableModelsFromProviders } from './settings-form';
@@ -157,6 +158,10 @@ export default function App2() {
     try { return readHiddenSessionKeys(localStorage.getItem(HIDDEN_SESSIONS_KEY)); } catch { return []; }
   });
   const hiddenSet = useMemo(() => new Set(hiddenKeys), [hiddenKeys]);
+  const [pinnedKeys, setPinnedKeys] = useState<string[]>(() => {
+    try { return readPinnedSessionKeys(localStorage.getItem(PINNED_SESSIONS_KEY)); } catch { return []; }
+  });
+  const pinnedSet = useMemo(() => new Set(pinnedKeys), [pinnedKeys]);
   const flowRef = useRef<HTMLDivElement | null>(null);
   const headRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLDivElement | null>(null);
@@ -749,6 +754,15 @@ export default function App2() {
     });
     if (active?.machine === target.machine && active.id === target.id) setActive(null);
   }, [active]);
+  const togglePin = useCallback((target: SessionTarget) => {
+    const key = sessionKey(target.machine, target.id);
+    setPinnedKeys((prev) => {
+      const next = togglePinnedSessionKey(prev, key);
+      try { localStorage.setItem(PINNED_SESSIONS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      toast(pinSessionToast(next.includes(key)));
+      return next;
+    });
+  }, [toast]);
   const forgetSession = useCallback(async (target: SessionTarget) => {
     const summary = allSessions.find((x) => x.machine === target.machine && x.s.session_id === target.id)?.s;
     if (summary && !sessionCanForget(summary.status)) { toast('进行中的会话要先停止,再从左栏拿掉', true); return; }
@@ -918,6 +932,7 @@ export default function App2() {
     ...(canFollowUp && queuedFollowUps.length ? [{ v: 'clearq', t: '取消排队', sub: `${queuedFollowUps.length} 句` }] : []),
     ...(canDrive ? [] : [{ v: 'continue', t: '在同一目录新开', sub: '新开会话' }]),
     { v: 'compact', t: '压缩这条会话', sub: 'pi compact' }, { v: 'stop', t: '停止', sub: '进程组一起收' },
+    ...(active ? [{ v: 'pin', t: sessionIsPinned(pinnedKeys, active.machine, active.id) ? '取消钉住' : '钉在左栏上面', sub: sessionView.title || activeSummary?.title || '' }] : []),
     ...(activeSummary && sessionCanForget(activeSummary.status) ? [{ v: 'forget', t: '从左栏拿掉', sub: active?.machine === 'local' ? '不再召回' : '只藏在这台 Mac' }] : []),
   ], (v) => {
     if (v === 'compact') void compact();
@@ -943,6 +958,7 @@ export default function App2() {
     else if (v === 'title') void copyTitle();
     else if (v === 'find') { setFlowFind((cur) => ({ ...cur, open: true })); window.setTimeout(() => { flowFindRef.current?.focus(); flowFindRef.current?.select(); }, 0); }
     else if (v === 'findhit') void copyFindHit();
+    else if (v === 'pin' && active) togglePin(active);
     else if (v === 'forget' && active) void forgetSession(active);
     else if (v) setDrawer(v as DrawerKind);
   });
@@ -1036,6 +1052,7 @@ export default function App2() {
     ...(boundWindowChipKind(active?.machine ?? '', windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window))) === 'raise' ? [{ g: '这条会话', t: '读回窗口里的字', k: windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window)), run: () => readBoundField() }] : []),
     { g: '这条会话', t: '压缩这条会话', k: 'pi compact', run: () => void compact() },
     { g: '这条会话', t: '停止', k: '', run: () => void stop() },
+    ...(active ? [{ g: '这条会话', t: sessionIsPinned(pinnedKeys, active.machine, active.id) ? '取消钉住' : '钉在左栏上面', k: '', run: () => togglePin(active) }] : []),
     ...(active && activeSummary && sessionCanForget(activeSummary.status) ? [{ g: '这条会话', t: '从左栏拿掉', k: '', run: () => void forgetSession(active) }] : []),
     { g: '这条会话', t: '用默认程序打开', k: focusFile || '', run: () => void openFocusFile() },
     { g: '这条会话', t: '写回当前文件', k: '⌘S', run: () => void savePeek() },
@@ -1050,7 +1067,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, commitFiles, canCommitHere, commitDraft, exportTalk, canExportHere, mentionLast, canMentionLast, lastReply, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, commitFiles, canCommitHere, commitDraft, exportTalk, canExportHere, mentionLast, canMentionLast, lastReply, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -1203,7 +1220,7 @@ export default function App2() {
                   onCancel={() => setNewBox(null)} onCreate={(input) => void createSession(input)} onOpenSettings={() => { setNewBox(null); setView('settings'); }} onPickFolder={pickFolder} />
               )}
               {(() => {
-                const visible = groups.map((g) => ({ g, ss: keepActiveSession(g.sessions, (s) => matchesFilter(s) && sessionMatchesQuery(s, railQuery), active?.machine === g.id ? active.id : null).sort((a, b) => (ORDER[a.status] ?? 9) - (ORDER[b.status] ?? 9) || b.updated_at - a.updated_at) })).filter((x) => x.ss.length > 0);
+                const visible = groups.map((g) => ({ g, ss: keepActiveSession(g.sessions, (s) => matchesFilter(s) && sessionMatchesQuery(s, railQuery), active?.machine === g.id ? active.id : null).sort((a, b) => comparePinnedFirst(pinnedSet.has(sessionKey(g.id, a.session_id)), pinnedSet.has(sessionKey(g.id, b.session_id)), (ORDER[a.status] ?? 9) - (ORDER[b.status] ?? 9) || b.updated_at - a.updated_at)) })).filter((x) => x.ss.length > 0);
                 if (!local && !loadError) return <div className="rail-empty">连接本机服务…</div>;
                 if (visible.length === 0) return <div className="rail-empty">{railQuery.trim() ? `没有匹配「${railQuery.trim()}」的会话` : filter === 'all' ? '还没有会话 —— 点上面「+ 新会话」开始' : `没有${({ active: '进行中', need: '需要你', err: '失败', history: '历史' } as Record<string, string>)[filter]}的会话`}</div>;
                 const historyHint = hiddenHistoryHint(filter, counts.history, Boolean(activeSummary && isHistoryStatus(activeSummary.status)));
@@ -1218,19 +1235,25 @@ export default function App2() {
                       return (
                         <button key={s.session_id} className={`srow ${on ? 'on' : ''}`} onClick={() => openSession({ machine: g.id, id: s.session_id })}
                           onContextMenu={(e) => {
-                            if (!sessionCanForget(s.status)) return;
                             e.preventDefault();
                             e.stopPropagation();
+                            const pinned = pinnedSet.has(sessionKey(g.id, s.session_id));
                             setMenu({
                               x: Math.min(e.clientX, window.innerWidth - 270),
                               y: Math.min(e.clientY + 4, window.innerHeight - 80),
-                              items: [{ v: 'forget', t: '从左栏拿掉', sub: g.id === 'local' ? '不再召回' : '只藏在这台 Mac' }],
-                              onPick: (v) => { if (v === 'forget') void forgetSession({ machine: g.id, id: s.session_id }); },
+                              items: [
+                                { v: 'pin', t: pinned ? '取消钉住' : '钉在左栏上面', sub: s.title || '新会话' },
+                                ...(sessionCanForget(s.status) ? [{ v: 'forget', t: '从左栏拿掉', sub: g.id === 'local' ? '不再召回' : '只藏在这台 Mac' }] : []),
+                              ],
+                              onPick: (v) => {
+                                if (v === 'pin') togglePin({ machine: g.id, id: s.session_id });
+                                if (v === 'forget') void forgetSession({ machine: g.id, id: s.session_id });
+                              },
                             });
                           }}>
                           <span className={`dot ${dot === 'idle' ? '' : dot}${dot === 'need' ? ' ping' : ''}`} />
                           <div style={{ minWidth: 0 }}>
-                            <div className="srow-t"><span>{s.title || '新会话'}</span><span className="srow-m">{prettyModelName(s.model)}</span></div>
+                            <div className="srow-t"><span>{s.title || '新会话'}</span><span className="srow-m">{pinnedSet.has(sessionKey(g.id, s.session_id)) ? '钉 · ' : ''}{prettyModelName(s.model)}</span></div>
                             <div className={`srow-l ${dot === 'need' ? 'need' : dot === 'err' ? 'err' : ''}`}>{lastLine(s)}</div>
                           </div>
                           <span className="srow-time">{relativeTime(s.updated_at)}</span>
