@@ -30,6 +30,7 @@ import { canHideSecrets, hideSecretsToast } from './session-hide';
 import { canSetOpenAtLogin, openAtLoginLabel, openAtLoginToast } from './session-login';
 import { alwaysOnTopLabel, alwaysOnTopToast, canSetAlwaysOnTop } from './session-float';
 import { DONE_CHIME_KEY, canPlayDoneChime, chimesFromSnapshot, doneChimeLabel, doneChimeToast, readDoneChimeOn } from './session-chime';
+import { autoCompactToast, shouldAutoCompact } from './session-autocompact';
 import { appendDictate, canDictate, clipDictateText, dictateListeningToast, dictateStoppedToast, dictateToast, dictateUnavailableToast, speechRecognitionCtor } from './session-dictate';
 import { canSpeakLastReply, speakLastReplyToast } from './session-speak';
 import { canRetryLastUser, lastUserPrompt, retryLastUserToast } from './session-retry';
@@ -207,6 +208,9 @@ export default function App2() {
   const canDoneChimeHere = canPlayDoneChime(desktopChimeTools());
   const chimePrev = useRef<Map<string, string>>(new Map());
   const chimePrimed = useRef(false);
+  const compactPrev = useRef<Map<string, string>>(new Map());
+  const compactPrimed = useRef(false);
+  const autoCompacted = useRef(new Set<string>());
   const [menu, setMenu] = useState<MenuState>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [newBox, setNewBox] = useState<NewBoxState | null>(null);
@@ -479,6 +483,27 @@ export default function App2() {
       void playSessionChime().catch(() => undefined);
     }
   }, [allSessions, active, doneChimeOn, canDoneChimeHere]);
+  useEffect(() => {
+    for (const row of allSessions) {
+      const key = sessionKey(row.machine, row.s.session_id);
+      if (
+        shouldAutoCompact({
+          primed: compactPrimed.current,
+          machine: row.machine,
+          prevStatus: compactPrev.current.get(key),
+          nextStatus: row.s.status,
+          errorText: row.s.last_event?.text ?? lastLine(row.s),
+        }) && !autoCompacted.current.has(key)
+      ) {
+        autoCompacted.current.add(key);
+        void api.rpc({ machine: row.machine, id: row.s.session_id }, { type: 'compact' })
+          .then(() => toast(autoCompactToast()))
+          .catch(() => undefined);
+      }
+    }
+    compactPrev.current = new Map(allSessions.map((row) => [sessionKey(row.machine, row.s.session_id), row.s.status]));
+    compactPrimed.current = true;
+  }, [allSessions, toast]);
 
   // 首次进来没有选中会话:挑一条最需要看的。
   useEffect(() => {
