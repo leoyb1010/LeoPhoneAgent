@@ -85,8 +85,76 @@ export function buildArgs(ctx: HarnessLaunchContext): string[] {
   const entry = resolveRpcEntry();
   if (!entry) throw new Error('pi runtime is not bundled with this build');
   const args = [entry, '--session-dir', PI_SESSIONS_DIR];
+  if (ctx.resumeSession) args.push('--session', ctx.resumeSession);
+  else args.push('--session-id', ctx.sessionId);
   if (ctx.model) args.push('--provider', ctx.model.provider, '--model', ctx.model.modelId);
   return args;
+}
+
+export type PiSessionHeader = { id: string; cwd: string; timestamp: string };
+
+const RESUME_WINDOW_MS = 10 * 60 * 1000;
+
+export function readPiSessionHeader(file: string): PiSessionHeader | null {
+  try {
+    const first = fs.readFileSync(file, 'utf8').split('\n')[0] ?? '';
+    const row = JSON.parse(first) as { type?: string; id?: string; cwd?: string; timestamp?: string };
+    if (row.type !== 'session' || !row.id || !row.cwd) return null;
+    return { id: String(row.id), cwd: String(row.cwd), timestamp: String(row.timestamp ?? '') };
+  } catch {
+    return null;
+  }
+}
+
+export function sameSessionCwd(a: string, b: string): boolean {
+  const left = a.trim();
+  const right = b.trim();
+  if (!left || !right) return false;
+  if (left === right) return true;
+  try {
+    return fs.realpathSync(left) === fs.realpathSync(right);
+  } catch {
+    return path.resolve(left) === path.resolve(right);
+  }
+}
+
+/** 找到这条 harness 会话对应的 pi JSONL。先按 id,再按目录+开局时间。 */
+export function findPiSessionFile(
+  sessionId: string,
+  cwd: string,
+  createdAtSec: number,
+  sessionsDir = PI_SESSIONS_DIR,
+): string | null {
+  let names: string[] = [];
+  try {
+    names = fs.readdirSync(sessionsDir).filter((name) => name.endsWith('.jsonl'));
+  } catch {
+    return null;
+  }
+  const id = sessionId.trim();
+  let best: { file: string; delta: number } | null = null;
+  const createdMs = Number.isFinite(createdAtSec) ? createdAtSec * 1000 : Number.NaN;
+  for (const name of names) {
+    const file = path.join(sessionsDir, name);
+    const header = readPiSessionHeader(file);
+    if (!header) continue;
+    if (id && (header.id === id || name.includes(id))) return file;
+    if (!sameSessionCwd(header.cwd, cwd)) continue;
+    const ts = Date.parse(header.timestamp);
+    const delta = Number.isFinite(ts) && Number.isFinite(createdMs) ? Math.abs(ts - createdMs) : Number.POSITIVE_INFINITY;
+    if (!best || delta < best.delta) best = { file, delta };
+  }
+  if (best && best.delta <= RESUME_WINDOW_MS) return best.file;
+  return null;
+}
+
+export function piSessionResumable(
+  sessionId: string,
+  cwd: string,
+  createdAtSec: number,
+  sessionsDir = PI_SESSIONS_DIR,
+): boolean {
+  return findPiSessionFile(sessionId, cwd, createdAtSec, sessionsDir) != null;
 }
 
 export function buildEnv(

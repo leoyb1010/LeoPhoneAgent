@@ -416,6 +416,19 @@ router.post('/leophone/local/sessions/:sessionId/stop', async (req, res) => {
   res.json({ ok: true, status: session.status });
 });
 
+router.post('/leophone/local/sessions/:sessionId/continue', async (req, res) => {
+  try {
+    const session = await getHarnessManager().continue(req.params.sessionId);
+    res.json({ ok: true, session_id: session.sessionId, session: session.summary() });
+  } catch (error) {
+    if (error instanceof HarnessRequestError) {
+      jsonError(res, error.message === 'No such session' ? 404 : 409, error.message);
+      return;
+    }
+    jsonError(res, 500, error instanceof Error ? error.message : String(error));
+  }
+});
+
 router.post('/leophone/local/sessions/:sessionId/forget', async (req, res) => {
   try {
     await getHarnessManager().forget(req.params.sessionId);

@@ -419,6 +419,42 @@ test('manager rehydrate: previous-boot logs surface as orphaned sessions with ex
   );
 });
 
+test('manager continue: 非 pi / 没有内核记录 / 活着的会话都拒绝', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'leophone-continue-'));
+  fs.writeFileSync(path.join(dir, 'hs_old.ndjson'), `${JSON.stringify({
+    event: 'session.created', harness: 'codex', name: 'Codex CLI', cwd: os.tmpdir(), seq: 1, session_id: 'hs_old', timestamp: 1,
+  })}\n`);
+  const manager = new HarnessManager(dir);
+  await manager.ready();
+  await manager.continue('hs_old').then(
+    () => assert.fail('codex continue must reject'),
+    (error: Error) => assert.match(error.message, /只有本机 pi/),
+  );
+  await manager.continue('hs_missing').then(
+    () => assert.fail('missing continue must reject'),
+    (error: Error) => assert.match(error.message, /No such session/),
+  );
+
+  const piDir = fs.mkdtempSync(path.join(os.tmpdir(), 'leophone-continue-pi-'));
+  fs.writeFileSync(path.join(piDir, 'hs_pi.ndjson'), `${JSON.stringify({
+    event: 'session.created', harness: 'pi', name: 'pi', cwd: os.tmpdir(), model: 'xai/grok-4.6', policy: 'default', seq: 1, session_id: 'hs_pi', timestamp: Date.now() / 1000,
+  })}\n`);
+  const piManager = new HarnessManager(piDir);
+  await piManager.ready();
+  const orphaned = piManager.get('hs_pi');
+  assert.ok(orphaned);
+  assert.equal(orphaned.status, 'orphaned');
+  assert.equal(orphaned.summary().resumable, false);
+  await piManager.continue('hs_pi').then(
+    () => assert.fail('pi continue without file must reject'),
+    (error: Error) => assert.match(error.message, /没有可续的内核记录|还没有登录任何模型/),
+  );
+
+  const routes = fs.readFileSync(new URL('./workbench.routes.ts', import.meta.url), 'utf8');
+  assert.match(routes, /sessions\/:sessionId\/continue/);
+  assert.match(routes, /getHarnessManager\(\)\.continue/);
+});
+
 test('manager forget: 结束的会话挪到 forgotten,重启不再召回', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'leophone-forget-'));
   const lines = [

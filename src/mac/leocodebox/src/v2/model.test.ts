@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
-import { addHiddenSessionKey, applyEvent, boundWindowChipKind, boundWindowFromUnknown, clickPointFromElement, composerNeedsModelSwitch, composerPlaceholder, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHits, flowFindHitText, flowFindStatus, flowRowMatchesQuery, highlightQueryParts, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isLiveRow, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, markupParts, mentionWindowRead, mergeSameMachineSessions, modelChoiceHint, modelLabel, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, pickInitialCwd, pickInitialModel, prettyModelName, prettifyUnknownModel, rankModelsForPicker, readHiddenSessionKeys, rejectedCodexModelId, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionFailTexts, sessionKey, sessionLooksFailed, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDot, statusDotForSession, usableWindowMenus, userTurnLabel, userTurnMode, windowBoundLabel, windowMenuLabel, windowPadGesture } from './model';
+import { addHiddenSessionKey, applyEvent, boundWindowChipKind, boundWindowFromUnknown, clickPointFromElement, composerNeedsModelSwitch, composerPlaceholder, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHits, flowFindHitText, flowFindStatus, flowRowMatchesQuery, highlightQueryParts, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isLiveRow, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, markupParts, mentionWindowRead, mergeSameMachineSessions, modelChoiceHint, modelLabel, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, pickInitialCwd, pickInitialModel, prettyModelName, prettifyUnknownModel, rankModelsForPicker, readHiddenSessionKeys, rejectedCodexModelId, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionCanResume, sessionFailTexts, sessionKey, sessionLooksFailed, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDot, statusDotForSession, usableWindowMenus, userTurnLabel, userTurnMode, windowBoundLabel, windowMenuLabel, windowPadGesture } from './model';
 
 test('流水把思考事件折成独立行,后续 delta 续在同一行', () => {
   let view = emptyView();
@@ -149,7 +149,22 @@ test('只有正在发生的行才算 live,探测失败两轮才过期', () => {
   assert.equal(statusDotForSession({ status: 'idle', last_event: { event: 'run.failed' } }), 'err');
   assert.equal(statusDot('idle'), 'idle');
   assert.match(humanizeError('ETIMEDOUT connecting relay'), /超时|机器/);
-  assert.match(humanizeError('session is not running'), /续写/);
+  assert.match(humanizeError('session is not running'), /接着这条聊/);
+  assert.match(humanizeError('这条会话没有可续的内核记录。只能在同一目录新开。'), /没有可续的内核记录/);
+  assert.equal(sessionCanResume({ machine: 'local', harness: 'pi', status: 'orphaned', resumable: true }), true);
+  assert.equal(sessionCanResume({ machine: 'local', harness: 'pi', status: 'orphaned', resumable: false }), false);
+  assert.equal(sessionCanResume({ machine: 'fold', harness: 'pi', status: 'orphaned', resumable: true }), false);
+  assert.equal(sessionCanResume({ machine: 'local', harness: 'codex', status: 'orphaned', resumable: true }), false);
+  assert.equal(sessionCanResume({ machine: 'local', harness: 'pi', status: 'idle', resumable: true }), false);
+  const resumed = applyEvent(emptyView(), { event: 'session.resumed', cwd: '/tmp/x' });
+  assert.equal(resumed.status, 'starting');
+  const last = resumed.rows.at(-1);
+  assert.equal(last?.k, 'sys');
+  if (last?.k === 'sys') assert.match(last.text, /接着上次的上下文/);
+  const app = readFileSync(fileURLToPath(new URL('./App2.tsx', import.meta.url)), 'utf8');
+  assert.match(app, /continueLocal/);
+  assert.match(app, /接着这条会话/);
+  assert.match(app, /sessionCanResume/);
   assert.match(humanizeError('ECONNREFUSED http://127.0.0.1:5020/v1'), /连不上/);
   assert.match(humanizeError('HTTP 502 bad gateway'), /暂时不可用/);
   const rail = keepActiveSession(

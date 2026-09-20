@@ -18,6 +18,8 @@ export interface HarnessLaunchContext {
   home: string;
   model: HarnessModel | null;
   policy: string;
+  /** 续聊时指向已有的 pi 会话文件;没有就按 sessionId 新建。 */
+  resumeSession?: string;
 }
 
 export interface HarnessSpec {

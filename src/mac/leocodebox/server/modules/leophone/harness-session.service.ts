@@ -26,7 +26,7 @@ import {
 import { HarnessJournal, type JournalHealth, type JournalOptions } from './harness-journal.js';
 import { HARNESSES, resolveExecutable, type HarnessLaunchContext, type HarnessModel, type HarnessSpec } from './harness-specs.js';
 import { LEOAGENT_HOME } from './leoagent-home.js';
-import { hasAnyPiAuth, normalizePolicy, writePolicy, type ApprovalPolicy } from './pi-runtime.js';
+import { findPiSessionFile, hasAnyPiAuth, normalizePolicy, piSessionResumable, writePolicy, type ApprovalPolicy } from './pi-runtime.js';
 
 // LeoPhoneAgent harness 会话宿主——leoagent(Python)HarnessManager/HarnessSession
 // 的 TS 移植,跑在 leocodebox 服务进程里。三条设计约束原样保留:
@@ -121,6 +121,7 @@ export class HarnessSession {
   private readonly dialect: HarnessDialect;
   private proc: ChildProcessWithoutNullStreams | null = null;
   private promptTurns = 0;
+  private resumeSession: string | null = null;
   private readonly journal: HarnessJournal;
 
   constructor(args: { sessionId: string; spec: HarnessSpec; cwd: string; logPath: string; model?: HarnessModel | null; policy?: string; seq?: number; status?: string; journalOptions?: JournalOptions; journal?: HarnessJournal }) {
@@ -547,7 +548,26 @@ export class HarnessSession {
   }
 
   launchContext(): HarnessLaunchContext {
-    return { sessionId: this.sessionId, cwd: this.cwd, home: LEOAGENT_HOME, model: this.model, policy: this.policy };
+    return {
+      sessionId: this.sessionId, cwd: this.cwd, home: LEOAGENT_HOME, model: this.model, policy: this.policy,
+      ...(this.resumeSession ? { resumeSession: this.resumeSession } : {}),
+    };
+  }
+
+  /**
+   * 把已经结束/失联的本机 pi 会话再拉起来,走同一份内核 JSONL。
+   * 没有对应文件就拒绝,绝不假装新开一条还叫续聊。
+   */
+  async continueWith(file: string): Promise<void> {
+    if (this.isLive) throw new HarnessRequestError('session is still running');
+    if (this.spec.key !== 'pi') throw new HarnessRequestError('只有本机 pi 会话能接着这条聊');
+    if (this.proc && this.proc.exitCode === null) throw new HarnessRequestError('session is still running');
+    this.resumeSession = file;
+    this.pendingApprovals.clear();
+    this.status = 'starting';
+    this.emit({ event: 'session.resumed', cwd: this.cwd, path: file });
+    await this.spec.prepare?.(this.launchContext());
+    await this.start();
   }
 
   /** 改本会话的审批策略:落到策略文件(pi extension 每次工具调用都读),并写进日志让各端同步。 */
@@ -580,6 +600,7 @@ export class HarnessSession {
         command: event.command ?? '',
         choices: event.choices ?? [],
       })),
+      resumable: this.spec.key === 'pi' && !this.isLive && piSessionResumable(this.sessionId, this.cwd, this.createdAt),
     };
   }
 }
@@ -723,6 +744,32 @@ export class HarnessManager {
       throw new HarnessRequestError(`failed to start ${spec.displayName}: ${error instanceof Error ? error.message : String(error)}`);
     }
     this.sessions.set(sessionId, session);
+    return session;
+  }
+
+  /**
+   * 失联/结束后把同一条 pi 会话拉起来。没有内核记录就老实说,不新开。
+   */
+  async continue(sessionId: string): Promise<HarnessSession> {
+    await this.ready();
+    const session = this.sessions.get(sessionId);
+    if (!session) throw new HarnessRequestError('No such session');
+    if (session.isLive) throw new HarnessRequestError('session is still running');
+    if (session.spec.key !== 'pi') throw new HarnessRequestError('只有本机 pi 会话能接着这条聊');
+    if (!hasAnyPiAuth()) throw new HarnessRequestError('还没有登录任何模型。先去设置里授权或填密钥。');
+    let isDir = false;
+    try {
+      isDir = fs.statSync(session.cwd).isDirectory();
+    } catch {
+      isDir = false;
+    }
+    if (!isDir) throw new HarnessRequestError(`not a directory: ${session.cwd}`);
+    if (this.liveCount() >= MAX_LIVE_SESSIONS) {
+      throw new HarnessRequestError(`too many live sessions (max ${MAX_LIVE_SESSIONS})`);
+    }
+    const file = findPiSessionFile(session.sessionId, session.cwd, session.createdAt);
+    if (!file) throw new HarnessRequestError('这条会话没有可续的内核记录。只能在同一目录新开。');
+    await session.continueWith(file);
     return session;
   }
 

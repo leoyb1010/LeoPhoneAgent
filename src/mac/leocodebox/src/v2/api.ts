@@ -23,6 +23,7 @@ export type SessionSummary = {
   waiting_for_approval: boolean;
   pending_approvals: Array<{ approval_id: string; command: string; choices: string[] }>;
   window?: { app?: string; title?: string; snapshotId?: string; snapshot_id?: string } | null;
+  resumable?: boolean;
 };
 
 export type LocalOverview = {
@@ -150,6 +151,8 @@ export const api = {
   menuBoundWindow: (target: SessionTarget, path: string[]) =>
     sendJson<{ ok: true; app: string; title: string; path: string[] }>(`${sessionBase(target)}/window/menu`, { path }),
   forget: (target: SessionTarget) => sendJson(`${sessionBase(target)}/forget`, {}),
+  continueLocal: (target: SessionTarget) =>
+    sendJson<{ ok: true; session_id: string; session: SessionSummary }>(`${sessionBase(target)}/continue`, {}),
   approve: (target: SessionTarget, approvalId: string | null, choice: string) =>
     target.machine === 'local'
       ? sendJson(`${sessionBase(target)}/approval`, { approval_id: approvalId, choice })

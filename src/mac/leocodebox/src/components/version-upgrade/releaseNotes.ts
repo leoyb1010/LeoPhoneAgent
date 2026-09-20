@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.0.80',
+    date: '2026-09-20',
+    items: [
+      '本机已经结束或失联的会话可以接着原来的上下文继续聊，不用在同一目录再开一条丢掉记忆。',
+    ],
+  },
+  {
     version: '2.0.79',
     date: '2026-09-20',
     items: [

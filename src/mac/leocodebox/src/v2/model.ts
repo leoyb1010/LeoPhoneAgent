@@ -410,6 +410,10 @@ export function applyEvent(view: SessionView, event: HarnessEvent): SessionView 
     case 'session.compacted':
       rows = [...rows, { k: 'sys', key: nextKey(), text: '已压缩:早先的轮次折成一条摘要,上下文变轻了', tone: 'muted' }];
       break;
+    case 'session.resumed':
+      rows = [...closeStreaming(rows), { k: 'sys', key: nextKey(), text: '这条会话已接着上次的上下文继续。', tone: 'muted' }];
+      status = 'starting';
+      break;
     case 'window.bound': {
       const next = boundWindowFromUnknown(event);
       if (next) {
@@ -528,7 +532,8 @@ export function lastLine(summary: Pick<SessionSummary, 'status' | 'last_event' |
 export function humanizeError(raw: string): string {
   const text = (raw || '').trim();
   if (!text) return '未知错误';
-  if (/session is not running/i.test(text)) return '这条会话的进程已经不在了 —— 用「在同一目录续写」接着干';
+  if (/session is not running/i.test(text)) return '这条会话的进程已经不在了 —— 有内核记录就接着这条聊,没有就在同一目录新开';
+  if (/没有可续的内核记录/.test(text)) return '这条会话没有可续的内核记录 —— 只能在同一目录新开';
   if (/session is still running/i.test(text)) return '先停止这条会话,再从左栏拿掉';
   if (/one-shot|start a new task/i.test(text)) return '这类会话发完就结束,要继续请开一条新的';
   if (/还没有登录任何模型/.test(text)) return '还没有登录任何模型 —— 先到「设置」授权或填密钥';
@@ -568,9 +573,9 @@ export function nextProbeHealth(fails: number, ok: boolean, staleAfter = 2): { f
 }
 
 export function endedSessionHint(status: string): string {
-  if (status === 'orphaned') return '这是上次留下的记录,进程已不在。可以在同一目录开一条新的接着干。';
-  if (status === 'failed') return '这条会话失败了。可以在同一目录开一条新的接着干。';
-  return '这条会话已经结束。可以在同一目录开一条新的接着干。';
+  if (status === 'orphaned') return '这是上次留下的记录,进程已不在。有内核记录就可以接着这条聊。';
+  if (status === 'failed') return '这条会话失败了。有内核记录就可以接着这条聊。';
+  return '这条会话已经结束。有内核记录就可以接着这条聊。';
 }
 
 export function endedComposerLead(status: string): string {
@@ -689,6 +694,19 @@ const TERMINAL = new Set(['completed', 'cancelled', 'orphaned', 'failed']);
 
 export function sessionCanForget(status: string): boolean {
   return TERMINAL.has(status);
+}
+
+/** 本机 pi 终态且服务端找到了对应的会话文件,才能真续,不能拿新开会话冒充。 */
+export function sessionCanResume(input: {
+  machine?: string | null;
+  harness?: string | null;
+  status: string;
+  resumable?: boolean;
+}): boolean {
+  if (!TERMINAL.has(input.status)) return false;
+  if (input.machine && input.machine !== 'local') return false;
+  if (input.harness && input.harness !== 'pi') return false;
+  return input.resumable === true;
 }
 
 export const HIDDEN_SESSIONS_KEY = 'leo2.hiddenSessions';
