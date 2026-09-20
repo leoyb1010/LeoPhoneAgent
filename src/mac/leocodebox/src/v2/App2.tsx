@@ -100,6 +100,7 @@ import { canShowSessionPulse, sessionPulseLabel, sessionPulseToast } from './ses
 import { abortTurnLabel, abortTurnToast, canAbortTurn } from './session-abort';
 import { applyPatchToast, canApplySessionPatch, clipApplyPatch } from './session-apply';
 import { approveAllLabel, approveAllToast, canApproveAllHere, pendingApprovalIds } from './session-approve-all';
+import { canApproveOnEnter } from './session-approve-enter';
 import { canMoveToApplications, moveToApplicationsBusy, moveToApplicationsBusyToast, moveToApplicationsLabel, moveToApplicationsToast } from './session-apps';
 import { canSwitchSessionBranch, sanitizeBranchName, switchSessionBranchToast } from './session-branch';
 import { canInitSessionRepo, initSessionToast } from './session-init';
@@ -3155,7 +3156,18 @@ export default function App2() {
                       onPaste={onComposerPaste}
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={onComposerDrop}
-                      onKeyDown={(e) => { if (composerShouldSend(e) && draft.trim() && !needsModelSwitch) { e.preventDefault(); if (canQueueOnEnter({ machine: active?.machine, status: sessionView.status, prompt: draft })) void followUp(); else void send(); } }} />
+                      onKeyDown={(e) => {
+                        if (!composerShouldSend(e) || needsModelSwitch) return;
+                        if (canApproveOnEnter({ machine: active?.machine, status: sessionView.status, pendingCount: sessionView.pendingApprovals.size })) {
+                          e.preventDefault();
+                          approveFirstPending();
+                          return;
+                        }
+                        if (!draft.trim()) return;
+                        e.preventDefault();
+                        if (canQueueOnEnter({ machine: active?.machine, status: sessionView.status, prompt: draft })) void followUp();
+                        else void send();
+                      }} />
                     {needsModelSwitch ? (
                       <div className="newbox-warn">
                         <b>这个模型当前账号用不了。</b>
