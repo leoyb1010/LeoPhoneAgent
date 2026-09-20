@@ -109,6 +109,7 @@ import { canMergeSessionBranch, mergeSessionToast } from './session-merge';
 import { isMissingSessionCwd, missingCwdToast } from './session-missing';
 import { canPackSessionChanges, packFileName, packSessionToast } from './session-pack';
 import { canFlushPeekOnSend, peekFlushedToast } from './session-peek-flush';
+import { clearPeekFileDraft, peekFileDraftToRestore, writePeekFileDraft } from './session-peek-files';
 import { peekDraftToRestore, peekMemoryFile, peekMemoryKey, writePeekMemory, type PeekMemory } from './session-peek-memory';
 import { canPeekPendingEdit, pendingEditFile } from './session-peek-pending';
 import { lastFinishedEdit, peekReloadedToast, shouldReloadPeek } from './session-peek-sync';
@@ -313,6 +314,8 @@ export default function App2() {
   const peekRestore = useRef<{ file: string; draft: string } | null>(null);
   const peekLive = useRef({ file: null as string | null, peek: null as string | null, draft: null as string | null });
   peekLive.current = { file: focusFile, peek: filePeek, draft: filePeekDraft };
+  const peekFileDrafts = useRef(new Map<string, Map<string, string>>());
+  const peekFilePrev = useRef({ session: '', file: null as string | null });
   const icloudWarned = useRef(new Set<string>());
   const missingWarned = useRef(new Set<string>());
   const [menu, setMenu] = useState<MenuState>(null);
@@ -866,6 +869,15 @@ export default function App2() {
   }, [active?.id, active?.machine, drawer]);
 
   useEffect(() => {
+    const session = peekMemoryKey(active?.machine, active?.id);
+    const prev = peekFilePrev.current;
+    if (prev.session && prev.file && (prev.session !== session || prev.file !== focusFile)) {
+      writePeekFileDraft(peekFileDrafts.current, prev.session, prev.file, peekLive.current.peek, peekLive.current.draft);
+    }
+    peekFilePrev.current = { session, file: focusFile };
+  }, [active?.id, active?.machine, focusFile]);
+
+  useEffect(() => {
     if (!isPeekDrawer(drawer) || !active) {
       setSessionArtifacts([]);
       setArtifactError(null);
@@ -924,9 +936,14 @@ export default function App2() {
       if (cancelled) return;
       setFilePeek(text);
       const restore = !focusCommit ? peekRestore.current : null;
+      const fromFiles = !focusCommit
+        ? peekFileDraftToRestore(peekFileDrafts.current, peekMemoryKey(active.machine, active.id), focusFile)
+        : null;
       if (restore && restore.file === String(focusFile ?? '').trim()) {
         setFilePeekDraft(restore.draft);
         peekRestore.current = null;
+      } else if (fromFiles != null) {
+        setFilePeekDraft(fromFiles);
       } else {
         setFilePeekDraft(text);
       }
@@ -935,9 +952,14 @@ export default function App2() {
       const text = `读不了:${humanizeError(error instanceof Error ? error.message : String(error))}`;
       setFilePeek(text);
       const restore = !focusCommit ? peekRestore.current : null;
+      const fromFiles = !focusCommit
+        ? peekFileDraftToRestore(peekFileDrafts.current, peekMemoryKey(active.machine, active.id), focusFile)
+        : null;
       if (restore && restore.file === String(focusFile ?? '').trim()) {
         setFilePeekDraft(restore.draft);
         peekRestore.current = null;
+      } else if (fromFiles != null) {
+        setFilePeekDraft(fromFiles);
       } else {
         setFilePeekDraft(text);
       }
@@ -1208,11 +1230,12 @@ export default function App2() {
     try {
       await api.writeProjectFile(workspace.projectId, path, filePeekDraft);
       setFilePeek(filePeekDraft);
+      clearPeekFileDraft(peekFileDrafts.current, peekMemoryKey(active?.machine, active?.id), focusFile);
       toast('已写回磁盘');
     } catch (error) {
       toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
     }
-  }, [active?.machine, activeSummary?.cwd, filePeek, filePeekDraft, focusFile, toast, workspace?.fullPath, workspace?.projectId]);
+  }, [active?.id, active?.machine, activeSummary?.cwd, filePeek, filePeekDraft, focusFile, toast, workspace?.fullPath, workspace?.projectId]);
   const flushPeekForSend = useCallback(async (): Promise<boolean> => {
     const root = activeSummary?.cwd ?? workspace?.fullPath ?? '';
     const path = focusFile ? sessionFilePath(root, focusFile) : '';
@@ -1227,13 +1250,14 @@ export default function App2() {
     try {
       await api.writeProjectFile(projectId, path, filePeekDraft);
       setFilePeek(filePeekDraft);
+      clearPeekFileDraft(peekFileDrafts.current, peekMemoryKey(active?.machine, active?.id), focusFile);
       toast(peekFlushedToast(focusFile));
       return true;
     } catch (error) {
       toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
       return false;
     }
-  }, [active?.machine, activeSummary?.cwd, filePeek, filePeekDraft, focusFile, toast, workspace?.fullPath, workspace?.projectId]);
+  }, [active?.id, active?.machine, activeSummary?.cwd, filePeek, filePeekDraft, focusFile, toast, workspace?.fullPath, workspace?.projectId]);
   const revertFile = useCallback(async (file = focusFile) => {
     if (!active || !canRevertSessionFile(active.machine, file)) {
       toast('这份改动不能还原', true);
