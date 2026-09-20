@@ -176,6 +176,8 @@ export const api = {
     sendJson<{ ok: true; app: string; title: string; path: string[] }>(`${sessionBase(target)}/window/menu`, { path }),
   forget: (target: SessionTarget) => sendJson(`${sessionBase(target)}/forget`, {}),
   haltBusyLocal: () => sendJson<{ ids: string[]; count: number }>('/api/leophone/local/halt', {}),
+  searchLocalTalk: (query: string) =>
+    sendJson<{ query: string; hits: Array<{ session_id: string; text: string }>; truncated: boolean }>('/api/leophone/local/talk', { query }),
   continueLocal: (target: SessionTarget) =>
     sendJson<{ ok: true; session_id: string; session: SessionSummary }>(`${sessionBase(target)}/continue`, {}),
   approve: (target: SessionTarget, approvalId: string | null, choice: string) =>

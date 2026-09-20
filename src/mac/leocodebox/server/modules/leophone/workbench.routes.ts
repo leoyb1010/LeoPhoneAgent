@@ -21,6 +21,7 @@ import { seedSessionFile } from './session-seed.js';
 import { haltBusyLocalSessions } from './session-halt.js';
 import { pushSessionRepo } from './session-push.js';
 import { pullSessionRepo } from './session-pull.js';
+import { searchLocalTalk } from './session-talk.js';
 import { listSessionCommits, showSessionCommit } from './session-log.js';
 import { searchSessionCwd } from './session-search.js';
 import { ensureSessionWorkspace } from './session-workspace.js';
@@ -166,6 +167,14 @@ router.post('/leophone/local/workspace', async (req, res) => {
     res.json(await ensureSessionWorkspace(cwd));
   } catch (error) {
     jsonError(res, 400, error instanceof Error ? error.message : String(error));
+  }
+});
+
+router.post('/leophone/local/talk', async (req, res) => {
+  try {
+    res.json(await searchLocalTalk(String(((req.body ?? {}) as Record<string, unknown>).query ?? '')));
+  } catch (error) {
+    jsonError(res, 409, error instanceof Error ? error.message : String(error));
   }
 });
 

@@ -22,6 +22,7 @@ import { canSeedSessionFile, clipSeedText, sanitizeSeedRel, seedSessionToast } f
 import { canHaltBusySessions, haltSessionsToast } from './session-halt';
 import { canPushSessionRepo, pushSessionToast } from './session-push';
 import { canPullSessionRepo, pullSessionToast } from './session-pull';
+import { canSearchSessionTalk, talkQueryReady } from './session-talk';
 import { PINNED_SESSIONS_KEY, comparePinnedFirst, pinSessionToast, readPinnedSessionKeys, sessionIsPinned, togglePinnedSessionKey } from './session-pin';
 import { canSearchSession, searchQueryReady, searchSessionToast, type SessionSearchHit } from './session-search';
 import { canShowSessionLog, type SessionCommit } from './session-log';
@@ -124,6 +125,7 @@ export default function App2() {
   const [view, setView] = useState<View>('home');
   const [filter, setFilter] = useState<Filter>('all');
   const [railQuery, setRailQuery] = useState('');
+  const [talkIds, setTalkIds] = useState<string[]>([]);
   const [local, setLocal] = useState<LocalOverview | null>(null);
   const [fleet, setFleet] = useState<FleetOverview | null>(null);
   const [fleetHealth, setFleetHealth] = useState({ fails: 0, stale: false });
@@ -347,6 +349,21 @@ export default function App2() {
     const pick = [...allSessions].sort((a, b) => (ORDER[a.s.status] ?? 9) - (ORDER[b.s.status] ?? 9) || b.s.updated_at - a.s.updated_at)[0];
     if (pick) setActive({ machine: pick.machine, id: pick.s.session_id });
   }, [active, allSessions]);
+  useEffect(() => {
+    if (!talkQueryReady(railQuery) || !canSearchSessionTalk('local')) {
+      setTalkIds([]);
+      return undefined;
+    }
+    const q = railQuery.trim();
+    const timer = window.setTimeout(() => {
+      void api.searchLocalTalk(q).then((result) => {
+        if (q === railQuery.trim()) setTalkIds(result.hits.map((hit) => hit.session_id));
+      }).catch(() => {
+        if (q === railQuery.trim()) setTalkIds([]);
+      });
+    }, 200);
+    return () => window.clearTimeout(timer);
+  }, [railQuery]);
 
   useEffect(() => {
     if (!isWorkspaceDrawer(drawer) || !active || active.machine !== 'local') {
@@ -1392,7 +1409,7 @@ export default function App2() {
                   <button key={f} className={`chip-f ${filter === f ? 'on' : ''}`} onClick={() => setFilter(f)}>{label}<i>{counts[f]}</i></button>
                 ))}
               </div>
-              <input className="rail-find" type="search" value={railQuery} onChange={(e) => setRailQuery(e.target.value)} placeholder="找会话" aria-label="找会话" />
+              <input className="rail-find" type="search" value={railQuery} onChange={(e) => setRailQuery(e.target.value)} placeholder="找会话或说过的话" aria-label="找会话或说过的话" />
             </div>
             <div className="rail-list" ref={railListRef}>
               <div className="srow-pill" aria-hidden />
@@ -1401,7 +1418,7 @@ export default function App2() {
                   onCancel={() => setNewBox(null)} onCreate={(input) => void createSession(input)} onOpenSettings={() => { setNewBox(null); setView('settings'); }} onPickFolder={pickFolder} />
               )}
               {(() => {
-                const visible = groups.map((g) => ({ g, ss: keepActiveSession(g.sessions, (s) => matchesFilter(s) && sessionMatchesQuery(s, railQuery), active?.machine === g.id ? active.id : null).sort((a, b) => comparePinnedFirst(pinnedSet.has(sessionKey(g.id, a.session_id)), pinnedSet.has(sessionKey(g.id, b.session_id)), (ORDER[a.status] ?? 9) - (ORDER[b.status] ?? 9) || b.updated_at - a.updated_at)) })).filter((x) => x.ss.length > 0);
+                const visible = groups.map((g) => ({ g, ss: keepActiveSession(g.sessions, (s) => matchesFilter(s) && (sessionMatchesQuery(s, railQuery) || (g.id === 'local' && talkIds.includes(s.session_id))), active?.machine === g.id ? active.id : null).sort((a, b) => comparePinnedFirst(pinnedSet.has(sessionKey(g.id, a.session_id)), pinnedSet.has(sessionKey(g.id, b.session_id)), (ORDER[a.status] ?? 9) - (ORDER[b.status] ?? 9) || b.updated_at - a.updated_at)) })).filter((x) => x.ss.length > 0);
                 if (!local && !loadError) return <div className="rail-empty">连接本机服务…</div>;
                 if (visible.length === 0) return <div className="rail-empty">{railQuery.trim() ? `没有匹配「${railQuery.trim()}」的会话` : filter === 'all' ? '还没有会话 —— 点上面「+ 新会话」开始' : `没有${({ active: '进行中', need: '需要你', err: '失败', history: '历史' } as Record<string, string>)[filter]}的会话`}</div>;
                 const historyHint = hiddenHistoryHint(filter, counts.history, Boolean(activeSummary && isHistoryStatus(activeSummary.status)));

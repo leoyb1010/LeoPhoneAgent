@@ -801,6 +801,10 @@ export class HarnessManager {
     return [...this.sessions.values()].map((session) => session.summary());
   }
 
+  talkLogs(): Array<{ sessionId: string; logPath: string }> {
+    return [...this.sessions.values()].map((session) => ({ sessionId: session.sessionId, logPath: session.logPath }));
+  }
+
   /**
    * 从左栏拿掉一条已经结束的会话:关日志、挪到 forgotten/,内存里删掉。
    * 进行中的必须先停。不删文件,重启也不会再召回。
