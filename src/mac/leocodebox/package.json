@@ -1,6 +1,6 @@
 {
   "name": "leocodebox",
-  "version": "2.1.52",
+  "version": "2.1.53",
   "productName": "leocodebox",
   "description": "LeoPhoneAgent Mac workstation for local coding agents",
   "type": "module",
@@ -122,6 +122,17 @@
             "CFBundleURLName": "com.leoyuan.leocodebox",
             "CFBundleURLSchemes": [
               "leocodebox"
+            ]
+          }
+        ],
+        "CFBundleDocumentTypes": [
+          {
+            "CFBundleTypeName": "Folders",
+            "CFBundleTypeRole": "Viewer",
+            "LSHandlerRank": "Alternate",
+            "LSItemContentTypes": [
+              "public.folder",
+              "public.directory"
             ]
           }
         ]

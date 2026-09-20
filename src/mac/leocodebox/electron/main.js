@@ -20,6 +20,7 @@ import { LocalServerController } from './localServer.js';
 import { disableConflictingLegacyLaunchAgent } from './legacyMigration.js';
 import { accessibilityPaneUrls } from './privacy-pane.js';
 import { readProductVersion } from './productMetadata.js';
+import { cwdFromDroppedPath, rememberRecentCwd } from './recent-docs.js';
 import { TabsController } from './tabs.js';
 import { isFirstPartyShellUrl } from './trustPolicy.js';
 import { DesktopUpdaterController, clearUpdaterTokenEnvironment } from './updater.js';
@@ -943,6 +944,7 @@ function registerIpcHandlers() {
     if (result.canceled || !result.filePaths[0]) return { cancelled: true };
     const picked = result.filePaths[0];
     if (!isDesktopFolderAllowed(picked)) throw new Error('这个目录不能当会话工作区');
+    rememberRecentCwd(app, picked);
     return { path: picked };
   });
   trustedHandle('leocodebox-desktop:save-drop', async (_event, raw) => {
@@ -1263,6 +1265,7 @@ function enqueueOpenCwd(raw) {
   const text = String(raw ?? '').trim();
   if (!text || !isDesktopFolderAllowed(text)) return;
   const cwd = expandDesktopFolderPath(text);
+  rememberRecentCwd(app, cwd);
   enqueueLeoScheme(`leocodebox://open?cwd=${encodeURIComponent(cwd)}`);
 }
 
@@ -1283,6 +1286,13 @@ function registerLeoScheme() {
     enqueueLeoScheme(url);
   });
   ingestArgv(process.argv);
+}
+
+function registerOpenFile() {
+  app.on('open-file', (event, filePath) => {
+    event.preventDefault();
+    enqueueOpenCwd(cwdFromDroppedPath(filePath));
+  });
 }
 
 function registerSingleInstance() {
@@ -1386,6 +1396,7 @@ async function bootstrap() {
 }
 
 registerLeoScheme();
+registerOpenFile();
 if (registerSingleInstance()) {
   bootstrap().catch(async (error) => {
     await showError('leocodebox failed to start', error);

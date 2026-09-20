@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.1.53',
+    date: '2026-09-21',
+    items: [
+      '把目录丢到程序坞就能开。',
+    ],
+  },
+  {
     version: '2.1.52',
     date: '2026-09-21',
     items: [
