@@ -11,6 +11,7 @@ import { onSessionNoticeAction, onSessionNoticeClick, setDockNeedBadge, showSess
 import { canAcceptSessionDrop, mentionDroppedFile } from './session-drop';
 import { canCommitSessionFiles, commitSessionFilesToast, defaultCommitMessage } from './session-commit';
 import { canShowSessionDiff } from './session-diff';
+import { canExportSession, exportFileName, exportSessionToast, flowRowsToMarkdown } from './session-export';
 import { canRevertSessionFile, revertSessionFileToast } from './session-revert';
 import { approvalChoiceActions, approvalToast, dockNeedBadge, firstPendingApproval, noticeNotifyPayload, noticesFromSnapshot, sessionPathTarget } from './session-notice';
 import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerCanFollowUp, composerNeedsModelSwitch, composerPlaceholder, composerRunningHint, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, followUpToast, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mentionWindowRead, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, pendingFollowUps, prettyModelName, providerOf, queueClearedToast, rankModelsForPicker, readHiddenSessionKeys, relativeTime, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionCanResume, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, usableWindowMenus, windowBoundLabel, windowMenuLabel, windowPadGesture, WINDOW_KEY_BUTTONS, type FlowRow, type Group, type SessionView } from './model';
@@ -220,6 +221,7 @@ export default function App2() {
     [sessionArtifacts, sessionView.rows],
   );
   const canCommitHere = canCommitSessionFiles(active?.machine, pinFiles);
+  const canExportHere = canExportSession(active?.machine, sessionView.rows);
   const findHits = useMemo(() => flowFindHitKeys(sessionView.rows, flowFind.query), [sessionView.rows, flowFind.query]);
   const findIndex = findHits.length ? Math.min(Math.max(flowFind.index, 0), findHits.length - 1) : -1;
   const findKey = findIndex >= 0 ? findHits[findIndex] : null;
@@ -658,6 +660,29 @@ export default function App2() {
       toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
     }
   }, [active, activeSummary?.title, commitDraft, pinFiles, sessionView.title, toast]);
+  const exportTalk = useCallback(async () => {
+    if (!active || !canExportSession(active.machine, sessionView.rows)) {
+      toast('还没有可记下的对话', true);
+      return;
+    }
+    const title = sessionView.title || activeSummary?.title || '';
+    try {
+      const result = await api.exportLocalTalk(active, {
+        name: exportFileName(title),
+        markdown: flowRowsToMarkdown({
+          title,
+          cwd: activeSummary?.cwd,
+          model: prettyModelName(sessionView.model),
+          rows: sessionView.rows,
+        }),
+      });
+      toast(exportSessionToast(result.name));
+      setDraft(mentionDroppedFile(draft, result.path));
+      setPeekTick((tick) => tick + 1);
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+    }
+  }, [active, activeSummary?.cwd, activeSummary?.title, draft, sessionView.model, sessionView.rows, sessionView.title, setDraft, toast]);
   const pickFolder = useCallback(async () => {
     try {
       const next = await pickSessionFolder();
@@ -849,6 +874,7 @@ export default function App2() {
     ...(activeSummary?.cwd?.trim() && active?.machine === 'local' ? [{ v: 'dropfile', t: '放入文件' }, { v: 'dropshot', t: '粘贴截图' }] : []),
     ...(active?.machine === 'local' && focusFile ? [{ v: 'openfile', t: '用默认程序打开', sub: peekFileCaption(focusFile) }, { v: 'savepeek', t: '写回当前文件', sub: '⌘S' }, { v: 'revertfile', t: '还原这次改动', sub: peekFileCaption(focusFile) }] : []),
     ...(canCommitHere ? [{ v: 'commitfiles', t: '记下这次改动', sub: defaultCommitMessage(commitDraft ?? (sessionView.title || activeSummary?.title || '')) }] : []),
+    ...(canExportHere ? [{ v: 'exporttalk', t: '记下这次对话', sub: exportFileName(sessionView.title || activeSummary?.title || '') }] : []),
     ...(activeSummary?.cwd?.trim() ? [{ v: 'cwd', t: '复制目录', sub: activeSummary.cwd }] : []),
     ...((sessionView.title || activeSummary?.title || '').trim() ? [{ v: 'title', t: '复制标题', sub: (sessionView.title || activeSummary?.title || '').trim() }] : []),
     ...(canResumeHere ? [{ v: 'resume', t: '接着这条会话', sub: '同一条上下文' }] : []),
@@ -874,6 +900,7 @@ export default function App2() {
     else if (v === 'savepeek') void savePeek();
     else if (v === 'revertfile') void revertFile();
     else if (v === 'commitfiles') void commitFiles();
+    else if (v === 'exporttalk') void exportTalk();
     else if (v === 'cwd') void copyCwd();
     else if (v === 'title') void copyTitle();
     else if (v === 'find') { setFlowFind((cur) => ({ ...cur, open: true })); window.setTimeout(() => { flowFindRef.current?.focus(); flowFindRef.current?.select(); }, 0); }
@@ -974,6 +1001,7 @@ export default function App2() {
     { g: '这条会话', t: '写回当前文件', k: '⌘S', run: () => void savePeek() },
     ...(canRevertSessionFile(active?.machine, focusFile) ? [{ g: '这条会话', t: '还原这次改动', k: focusFile || '', run: () => void revertFile() }] : []),
     ...(canCommitHere ? [{ g: '这条会话', t: '记下这次改动', k: defaultCommitMessage(commitDraft ?? (sessionView.title || activeSummary?.title || '')), run: () => void commitFiles() }] : []),
+    ...(canExportHere ? [{ g: '这条会话', t: '记下这次对话', k: exportFileName(sessionView.title || activeSummary?.title || ''), run: () => void exportTalk() }] : []),
     { g: '这条会话', t: '放入文件', k: '拖到输入框', run: () => void pickIntoSession() },
     { g: '这条会话', t: '粘贴截图', k: '⌘V', run: () => void pasteShot() },
     { g: '这条会话', t: '终端', k: '⌘T', run: () => setDrawer('term') }, { g: '这条会话', t: '文件', k: '⌘E', run: () => setDrawer('files') },
@@ -981,7 +1009,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, commitFiles, canCommitHere, commitDraft, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, commitFiles, canCommitHere, commitDraft, exportTalk, canExportHere, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;

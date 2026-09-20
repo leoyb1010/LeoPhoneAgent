@@ -121,6 +121,8 @@ export const api = {
     sendJson<{ hash: string; files: string[]; message: string }>(`${sessionBase(target)}/file/commit`, input),
   diffLocalFile: (target: SessionTarget, file: string) =>
     sendJson<{ file: string; kind: 'modified' | 'added' | 'clean' | 'binary'; patch: string }>(`${sessionBase(target)}/file/diff`, { file }),
+  exportLocalTalk: (target: SessionTarget, input: { name: string; markdown: string }) =>
+    sendJson<{ path: string; name: string }>(`${sessionBase(target)}/export`, input),
   createLocalSession: (input: { cwd: string; prompt: string; model?: string | null; policy?: string; harness?: string }) =>
     sendJson<{ session_id: string; session: SessionSummary }>('/api/leophone/local/sessions', { harness: 'pi', ...input }),
   createRemoteSession: (input: { machine: string; prompt: string; cwd?: string; harness?: string; model?: string | null; policy?: string }) =>

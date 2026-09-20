@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.0.86',
+    date: '2026-09-20',
+    items: [
+      '这次对话可以存成会话目录里的一份 markdown，带走或接着改都行。',
+    ],
+  },
+  {
     version: '2.0.85',
     date: '2026-09-20',
     items: [
