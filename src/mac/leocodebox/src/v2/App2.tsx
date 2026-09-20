@@ -25,6 +25,7 @@ import { canMentionLastTool, lastToolOutput, mentionLastTool, mentionLastToolToa
 import { canOpenLastWritten, lastWrittenFile, openLastWrittenToast } from './session-written';
 import { canJumpLastFail, jumpLastFailToast, lastFailedRow } from './session-fail';
 import { canOpenLastRead, lastReadFile, openLastReadToast, readFileFromRow } from './session-read';
+import { canForkSession, forkSeedText, forkSessionToast, forkTitle } from './session-fork';
 import { canShowSameCwd, sameCwdPickerHint, sameCwdSessions, sameCwdToast, type SameCwdSession } from './session-here';
 import { canShowSessionPulse, sessionPulseLabel, sessionPulseToast } from './session-pulse';
 import { applyPatchToast, canApplySessionPatch, clipApplyPatch } from './session-apply';
@@ -313,6 +314,7 @@ export default function App2() {
   const canHere = canShowSameCwd(active?.machine, herePeers);
   const pulseLabel = sessionPulseLabel({ rows: sessionView.rows, createdAt: activeSummary?.created_at });
   const canPulse = canShowSessionPulse(active?.machine, sessionView.rows, activeSummary?.created_at);
+  const canFork = canForkSession(active?.machine, activeSummary?.cwd, sessionView.rows);
   const canApplyHere = canApplySessionPatch(active?.machine);
   const canPackHere = canPackSessionChanges(active?.machine);
   const canUnpackHere = canUnpackSessionZip(active?.machine);
@@ -1342,6 +1344,41 @@ export default function App2() {
     }
     toast(sessionPulseToast(pulseLabel));
   }, [canPulse, pulseLabel, toast]);
+  const forkHere = useCallback(async () => {
+    const cwd = activeSummary?.cwd?.trim() ?? '';
+    if (!canFork || !cwd) {
+      toast('这条还分不出来');
+      return;
+    }
+    if (providers === null) return;
+    if (usableModelsFromProviders(providers).length === 0) {
+      setView('settings');
+      toast(humanizeError('还没有登录任何模型。先去设置里授权或填密钥。'), true);
+      return;
+    }
+    const named = forkTitle(sessionView.title || activeSummary?.title);
+    const seed = forkSeedText({
+      title: sessionView.title || activeSummary?.title,
+      cwd,
+      model: sessionView.model || activeSummary?.model,
+      rows: sessionView.rows,
+    });
+    await withBusy(async () => {
+      const created = await api.createLocalSession({
+        cwd,
+        prompt: seed,
+        model: sessionView.model || activeSummary?.model,
+        policy: sessionView.policy,
+      });
+      try {
+        await api.renameLocalSession({ machine: 'local', id: created.session_id }, named);
+      } catch {
+        // 分出来的会话已经在跑,标题写不上也不挡接着干。
+      }
+      setActive({ machine: 'local', id: created.session_id });
+      toast(forkSessionToast(named));
+    });
+  }, [activeSummary, canFork, providers, sessionView.model, sessionView.policy, sessionView.rows, sessionView.title, toast, withBusy]);
   const approveTarget = useCallback((target: SessionTarget, approvalId: string, choice: string, reason?: string) => (
     withBusy(() => api.approve(target, approvalId, choice, reason), choice === 'deny' ? denySessionToast(reason ?? '') : approvalToast(choice))
   ), [withBusy]);
@@ -1493,6 +1530,7 @@ export default function App2() {
     ...(canForgetEnded ? [{ v: 'forgetended', t: '清掉已经结束的', sub: '钉住的和进行中的不动' }] : []),
     ...(canHere ? [{ v: 'here', t: '这个目录的会话', sub: sameCwdPickerHint(herePeers.length) }] : []),
     ...(canPulse ? [{ v: 'pulse', t: '这条聊了多少', sub: pulseLabel }] : []),
+    ...(canFork ? [{ v: 'fork', t: '从这里分一条', sub: forkTitle(sessionView.title || activeSummary?.title) }] : []),
     ...(canRecallHere ? [{ v: 'recall', t: '找回来', sub: '从左栏拿掉的会话' }] : []),
     ...(active ? [{ v: 'pin', t: sessionIsPinned(pinnedKeys, active.machine, active.id) ? '取消钉住' : '钉在左栏上面', sub: sessionView.title || activeSummary?.title || '' }] : []),
     ...(activeSummary && sessionCanForget(activeSummary.status) ? [{ v: 'forget', t: '从左栏拿掉', sub: active?.machine === 'local' ? '不再召回' : '只藏在这台 Mac' }] : []),
@@ -1508,6 +1546,7 @@ export default function App2() {
     else if (v === 'recall') void openRecall();
     else if (v === 'here') openHere();
     else if (v === 'pulse') showPulse();
+    else if (v === 'fork') void forkHere();
     else if (v === 'resume') resumeHere();
     else if (v === 'continue') continueHere();
     else if (v === 'finder') void revealCwd();
@@ -1657,6 +1696,7 @@ export default function App2() {
     ...(canForgetEnded ? [{ g: '本机', t: '清掉已经结束的', k: '终态', run: () => void forgetEnded() }] : []),
     ...(canHere ? [{ g: '这条会话', t: '这个目录的会话', k: sameCwdPickerHint(herePeers.length), run: () => openHere() }] : []),
     ...(canPulse ? [{ g: '这条会话', t: '这条聊了多少', k: pulseLabel, run: showPulse }] : []),
+    ...(canFork ? [{ g: '这条会话', t: '从这里分一条', k: forkTitle(sessionView.title || activeSummary?.title), run: () => void forkHere() }] : []),
     ...(canRecallHere ? [{ g: '本机', t: '找回来', k: '拿掉的', run: () => void openRecall() }] : []),
     ...(active ? [{ g: '这条会话', t: sessionIsPinned(pinnedKeys, active.machine, active.id) ? '取消钉住' : '钉在左栏上面', k: '', run: () => togglePin(active) }] : []),
     ...(active && activeSummary && sessionCanForget(activeSummary.status) ? [{ g: '这条会话', t: '从左栏拿掉', k: '', run: () => void forgetSession(active) }] : []),
@@ -1695,7 +1735,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openLastWritten, canOpenWritten, lastWritten, jumpLastFail, canJumpFail, lastFail, openLastRead, canOpenRead, lastRead, openHere, canHere, herePeers, showPulse, canPulse, pulseLabel, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openLastWritten, canOpenWritten, lastWritten, jumpLastFail, canJumpFail, lastFail, openLastRead, canOpenRead, lastRead, openHere, canHere, herePeers, showPulse, canPulse, pulseLabel, forkHere, canFork, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -2129,6 +2169,7 @@ export default function App2() {
                         {canForgetEnded ? <button className="link dim" onClick={() => void forgetEnded()}>清掉已经结束的</button> : null}
                         {canHere ? <button className="link" type="button" onClick={() => openHere()}>这个目录的会话</button> : null}
                         {canPulse ? <button className="link" type="button" onClick={showPulse}>这条聊了多少</button> : null}
+                        {canFork ? <button className="link" type="button" onClick={() => void forkHere()}>从这里分一条</button> : null}
                         {canRecallHere ? <button className="link" onClick={() => void openRecall()}>找回来</button> : null}
                       </div>
                     </div>
