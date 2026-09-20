@@ -90,7 +90,7 @@ export function composerShowsSteer(status: string): boolean {
 
 /** 本机 pi 才能排队。远程没有 follow_up RPC。 */
 export function composerCanFollowUp(machine: string | null | undefined, status: string): boolean {
-  return machine === 'local' && composerShowsSteer(status);
+  return machine === 'local' && (composerShowsSteer(status) || status === 'waiting_for_approval');
 }
 
 export function composerRunningHint(modelLabel: string, canFollowUp: boolean): string {

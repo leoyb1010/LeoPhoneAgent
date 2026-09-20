@@ -236,6 +236,7 @@ test('进行中才显示插话,空闲仍是发送', () => {
 test('本机进行中才能排队下一句,远程仍只有插话', () => {
   assert.equal(composerCanFollowUp('local', 'running'), true);
   assert.equal(composerCanFollowUp('local', 'starting'), true);
+  assert.equal(composerCanFollowUp('local', 'waiting_for_approval'), true);
   assert.equal(composerCanFollowUp('local', 'idle'), false);
   assert.equal(composerCanFollowUp('fold', 'running'), false);
   assert.match(composerRunningHint('Grok 4.6', true), /接着会排在后面/);

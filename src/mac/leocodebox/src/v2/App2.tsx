@@ -91,6 +91,7 @@ import { canMentionLastTool, lastToolOutput, mentionLastTool, mentionLastToolToa
 import { canOpenLastWritten, lastWrittenFile, openLastWrittenToast } from './session-written';
 import { canJumpLastFail, jumpLastFailToast, lastFailedRow } from './session-fail';
 import { canQueueOnEnter } from './session-follow-enter';
+import { canQueueWhileWaiting } from './session-follow-wait';
 import { canOpenLastRead, lastReadFile, openLastReadToast, readFileFromRow } from './session-read';
 import { canForkSession, forkSeedText, forkSessionToast, forkTitle } from './session-fork';
 import { canImportTalk, importSeedText, importTalkName, importTalkToast, importTitle } from './session-import-talk';
@@ -2059,6 +2060,10 @@ export default function App2() {
     warnMemorySend();
     warnLoadSend();
     setDraft('');
+    if (canQueueWhileWaiting({ machine: active.machine, status: sessionView.status, prompt: text })) {
+      await withBusy(() => api.rpc(active, { type: 'follow_up', message: text }), followUpToast());
+      return;
+    }
     if (canResumeThenSend({ machine: active.machine, canResume: canResumeHere, prompt: text })) {
       await withBusy(async () => {
         await api.continueLocal(active);
@@ -2067,7 +2072,7 @@ export default function App2() {
       return;
     }
     await withBusy(() => api.send(active, text));
-  }, [active, activeSummary, canResumeHere, draft, flushPeekForSend, sessionView.model, sessionView.rows, toast, withBusy, setDraft, warnBatterySend, warnThermalSend, warnMemorySend, warnLoadSend]);
+  }, [active, activeSummary, canResumeHere, draft, flushPeekForSend, sessionView.model, sessionView.rows, sessionView.status, toast, withBusy, setDraft, warnBatterySend, warnThermalSend, warnMemorySend, warnLoadSend]);
   const followUp = useCallback(async () => {
     if (!active || !composerCanFollowUp(active.machine, sessionView.status)) return;
     const text = draft.trim(); if (!text) return;
