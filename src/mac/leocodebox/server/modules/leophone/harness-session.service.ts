@@ -607,6 +607,9 @@ export class HarnessSession {
     if (this.proc && this.proc.exitCode === null) throw new HarnessRequestError('session is still running');
     this.resumeSession = file;
     this.pendingApprovals.clear();
+    // 新拉起的进程还没开回合。promptTurns 若仍记着上一进程的轮次,
+    // 第一句会走 steer,内核只入队、永远不开回合。
+    this.promptTurns = 0;
     this.status = 'starting';
     this.emit({ event: 'session.resumed', cwd: this.cwd, path: file });
     await this.spec.prepare?.(this.launchContext());

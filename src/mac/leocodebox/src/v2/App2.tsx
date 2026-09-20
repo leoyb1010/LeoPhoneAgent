@@ -70,6 +70,7 @@ import { DONE_CHIME_KEY, canPlayDoneChime, chimesFromSnapshot, doneChimeLabel, d
 import { canOpenAccessibility, openAccessibilityLabel, openAccessibilityToast } from './session-a11y';
 import { canOpenLogs, openLogsLabel, openLogsToast } from './session-applogs';
 import { canRelaunch, relaunchBusy, relaunchBusyToast, relaunchLabel, relaunchToast } from './session-relaunch';
+import { canResumeThenSend, resumeThenSendLabel, resumeThenSendToast } from './session-resume-send';
 import { canClearCache, clearCacheLabel, clearCacheToast } from './session-cache';
 import { canInstallCli, installCliLabel, installCliToast } from './session-cli';
 import { dockNewToast } from './session-dock';
@@ -1900,8 +1901,15 @@ export default function App2() {
     warnMemorySend();
     warnLoadSend();
     setDraft('');
+    if (canResumeThenSend({ machine: active.machine, canResume: canResumeHere, prompt: text })) {
+      await withBusy(async () => {
+        await api.continueLocal(active);
+        await api.send(active, text);
+      }, resumeThenSendToast());
+      return;
+    }
     await withBusy(() => api.send(active, text));
-  }, [active, activeSummary, draft, sessionView.model, sessionView.rows, toast, withBusy, setDraft, warnBatterySend, warnThermalSend, warnMemorySend, warnLoadSend]);
+  }, [active, activeSummary, canResumeHere, draft, sessionView.model, sessionView.rows, toast, withBusy, setDraft, warnBatterySend, warnThermalSend, warnMemorySend, warnLoadSend]);
   const followUp = useCallback(async () => {
     if (!active || !composerCanFollowUp(active.machine, sessionView.status)) return;
     const text = draft.trim(); if (!text) return;
@@ -3013,7 +3021,7 @@ export default function App2() {
                       onPaste={onComposerPaste}
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={onComposerDrop}
-                      onKeyDown={(e) => { if (composerShouldSend(e) && draft.trim() && !needsSettings) { e.preventDefault(); if (canResumeHere) resumeHere(); else continueHere(); } }} />
+                      onKeyDown={(e) => { if (composerShouldSend(e) && draft.trim() && !needsSettings) { e.preventDefault(); if (canResumeThenSend({ machine: active?.machine, canResume: canResumeHere, prompt: draft })) void send(); else if (canResumeHere) resumeHere(); else continueHere(); } }} />
                     <div className="composer-end">
                       <span className="composer-end-hint"><b>{endedComposerLead(activeSummary.status)}</b>{cwd ? ` · ${cwdChipLabel(cwd)}` : ''}</span>
                       <div className="composer-end-acts">
@@ -3025,7 +3033,7 @@ export default function App2() {
                         {canOpenWritten ? <button className="link" type="button" onClick={openLastWritten}>打开刚写的</button> : null}
                         {canJumpFail ? <button className="link" type="button" onClick={jumpLastFail}>看刚失败的</button> : null}
                         {canOpenRead ? <button className="link" type="button" onClick={openLastRead}>打开刚读的</button> : null}
-                        {needsSettings ? <button className="btn-s" onClick={() => setView('settings')}>去设置</button> : canResumeHere ? <button className="btn-s" onClick={resumeHere}>接着这条会话</button> : <button className="btn-s" onClick={continueHere}>在同一目录新开</button>}
+                        {needsSettings ? <button className="btn-s" onClick={() => setView('settings')}>去设置</button> : canResumeThenSend({ machine: active?.machine, canResume: canResumeHere, prompt: draft }) ? <button className="btn-s" type="button" onClick={() => { void send(); }}>{resumeThenSendLabel()}</button> : canResumeHere ? <button className="btn-s" onClick={resumeHere}>接着这条会话</button> : <button className="btn-s" onClick={continueHere}>在同一目录新开</button>}
                         {needsSettings ? <button className="link" onClick={continueHere}>仍要新开</button> : canResumeHere ? <button className="link" onClick={continueHere}>在同一目录新开</button> : null}
                         {cwd && active?.machine === 'local' ? <button className="link" onClick={() => void revealCwd()}>在 Finder 打开</button> : null}
                         {canOpenSessionPath(active?.machine, cwd) ? <button className="link" onClick={() => void openCwdTerm()}>在终端打开</button> : null}
