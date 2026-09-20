@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.1.93',
+    date: '2026-09-21',
+    items: [
+      '排队的上一句能拿回来。',
+    ],
+  },
+  {
     version: '2.1.92',
     date: '2026-09-21',
     items: [

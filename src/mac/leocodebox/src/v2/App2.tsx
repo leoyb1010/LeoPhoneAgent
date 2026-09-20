@@ -93,6 +93,7 @@ import { canOpenLastWritten, lastWrittenFile, openLastWrittenToast } from './ses
 import { canJumpLastFail, jumpLastFailToast, lastFailedRow } from './session-fail';
 import { canQueueOnEnter } from './session-follow-enter';
 import { canQueueWhileWaiting } from './session-follow-wait';
+import { canRetractFollowUp, retractLastFollowUp } from './session-queue-retract';
 import { canOpenLastRead, lastReadFile, openLastReadToast, readFileFromRow } from './session-read';
 import { canForkSession, forkSeedText, forkSessionToast, forkTitle } from './session-fork';
 import { canImportTalk, importSeedText, importTalkName, importTalkToast, importTitle } from './session-import-talk';
@@ -2148,6 +2149,20 @@ export default function App2() {
     if (!active || !composerCanFollowUp(active.machine, sessionView.status)) return;
     void withBusy(() => api.rpc(active, { type: 'clear_queue' }), queueClearedToast());
   }, [active, sessionView.status, withBusy]);
+  const retractLastQueued = useCallback(() => {
+    if (!active || busy || !canFollowUp) return;
+    const queued = pendingFollowUps(sessionView.rows);
+    if (!canRetractFollowUp({ machine: active.machine, draft, queued })) return;
+    const pulled = retractLastFollowUp(queued);
+    if (!pulled) return;
+    void withBusy(async () => {
+      await api.rpc(active, { type: 'clear_queue' });
+      for (const item of pulled.rest) {
+        await api.rpc(active, { type: 'follow_up', message: item.text });
+      }
+      setDraft(pulled.text);
+    });
+  }, [active, busy, canFollowUp, draft, sessionView.rows, setDraft, withBusy]);
   const stopTarget = useCallback(async (target: SessionTarget, title?: string | null) => {
     if (target.machine !== 'local') return;
     try {
@@ -3308,6 +3323,13 @@ export default function App2() {
                       onKeyDown={(e) => {
                         if (e.key === 'Tab' && !e.altKey && !e.metaKey && !e.ctrlKey && completeFileMention(e.currentTarget)) {
                           e.preventDefault();
+                          return;
+                        }
+                        if (e.key === 'Backspace' && !e.altKey && !e.metaKey && !e.ctrlKey
+                          && canRetractFollowUp({ machine: active?.machine, draft, queued: queuedFollowUps })
+                          && canFollowUp) {
+                          e.preventDefault();
+                          retractLastQueued();
                           return;
                         }
                         if (!composerShouldSend(e) || needsModelSwitch) return;
