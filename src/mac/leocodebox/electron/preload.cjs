@@ -148,6 +148,11 @@ if (isLocalHttpOrigin(window.location)) {
       ipcRenderer.on('leocodebox-desktop:memory-changed', listener);
       return () => ipcRenderer.removeListener('leocodebox-desktop:memory-changed', listener);
     },
+    onVolumeChanged: (callback) => {
+      const listener = (_event, row) => callback(row);
+      ipcRenderer.on('leocodebox-desktop:volume-changed', listener);
+      return () => ipcRenderer.removeListener('leocodebox-desktop:volume-changed', listener);
+    },
     getAppLock: () => ipcRenderer.invoke('leocodebox-desktop:app-lock'),
     setAppLock: (on) => ipcRenderer.invoke('leocodebox-desktop:app-lock', on),
     onAppLockChanged: (callback) => {

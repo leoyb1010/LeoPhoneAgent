@@ -1,7 +1,7 @@
 import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, Notification, powerMonitor, powerSaveBlocker, safeStorage, screen, session, shell, systemPreferences, webContents } from 'electron';
 import updaterPackage from 'electron-updater';
 import { randomBytes } from 'node:crypto';
-import { constants as fsConstants, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { constants as fsConstants, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFile, spawn } from 'node:child_process';
 import { access, chmod, copyFile, mkdir, readFile, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -33,6 +33,7 @@ import { TabsController } from './tabs.js';
 import { thermalState } from './thermal.js';
 import { isFirstPartyShellUrl } from './trustPolicy.js';
 import { DesktopUpdaterController, clearUpdaterTokenEnvironment } from './updater.js';
+import { readVolumeDir, volumeCount, volumeShift } from './volume.js';
 
 const execFileAsync = promisify(execFile);
 const keepAwakeIds = [];
@@ -178,6 +179,23 @@ function tickDisplay() {
 }
 
 let lastDisplay = { count: 0, can: false };
+
+function getVolume() {
+  return volumeCount(readVolumeDir(readdirSync));
+}
+
+function notifyVolume(kind) {
+  desktopWindow?.sendToActiveView?.('leocodebox-desktop:volume-changed', { kind, ...getVolume() });
+}
+
+function tickVolume() {
+  const next = getVolume();
+  const kind = volumeShift(lastVolume, next);
+  lastVolume = next;
+  if (kind && next.can) notifyVolume(kind);
+}
+
+let lastVolume = { count: 0, can: false, names: [] };
 
 let lastIdleProbe = idleProbe(powerMonitor);
 
@@ -1005,6 +1023,7 @@ function registerIpcHandlers() {
   trustedHandle('leocodebox-desktop:idle', async () => idleProbe(powerMonitor));
   trustedHandle('leocodebox-desktop:display', async () => getDisplay());
   trustedHandle('leocodebox-desktop:memory', async () => getMemory());
+  trustedHandle('leocodebox-desktop:volume', async () => getVolume());
   trustedHandle('leocodebox-desktop:app-lock', async (_event, raw) => (
     raw === undefined || raw === null ? getAppLock() : writeAppLock(Boolean(raw))
   ));
@@ -1567,6 +1586,13 @@ async function bootstrap() {
   tickMemory();
   const memoryTick = setInterval(tickMemory, 20_000);
   memoryTick.unref?.();
+  lastVolume = getVolume();
+  if (typeof systemPreferences?.subscribeWorkspaceNotification === 'function') {
+    systemPreferences.subscribeWorkspaceNotification('NSWorkspaceDidMountNotification', () => tickVolume());
+    systemPreferences.subscribeWorkspaceNotification('NSWorkspaceDidUnmountNotification', () => tickVolume());
+  }
+  const volumeTick = setInterval(tickVolume, 8_000);
+  volumeTick.unref?.();
   await openLocalInDesktop();
   flushLeoSchemes();
   // The local server URL only exists now, so (re)connect the notification
