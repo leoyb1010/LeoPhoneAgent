@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.1.90',
+    date: '2026-09-21',
+    items: [
+      '输入栏 @ 再按 Tab 能带上文件。',
+    ],
+  },
+  {
     version: '2.1.89',
     date: '2026-09-21',
     items: [

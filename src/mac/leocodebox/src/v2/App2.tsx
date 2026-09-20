@@ -87,6 +87,7 @@ import { canRetryAfterModelSwitch, retryAfterModelSwitchToast } from './session-
 import { canEditLastPrompt, editLastPromptDraft, editLastPromptToast } from './session-edit-prompt';
 import { denySessionToast } from './session-deny';
 import { canDenyAllHere, deniableApprovalIds, denyAllLabel, denyAllToast } from './session-deny-all';
+import { applyFileMention, canCompleteFileMention, fileMentionToken, matchMentionFiles, mentionableSessionFiles } from './session-mention-file';
 import { canMentionLastTool, lastToolOutput, mentionLastTool, mentionLastToolToast } from './session-mention-tool';
 import { canOpenLastWritten, lastWrittenFile, openLastWrittenToast } from './session-written';
 import { canJumpLastFail, jumpLastFailToast, lastFailedRow } from './session-fail';
@@ -2044,6 +2045,26 @@ export default function App2() {
     hideSession(target);
     toast('已从这台 Mac 的左栏拿掉。那台机器上的记录还在。');
   }, [allSessions, hideSession, toast, withBusy]);
+  const completeFileMention = useCallback((ta: HTMLTextAreaElement) => {
+    const cursor = ta.selectionStart;
+    const files = mentionableSessionFiles([
+      focusFile,
+      lastWritten,
+      lastRead,
+      ...sessionView.rows.filter((row): row is FlowRow & { k: 'edit' } => row.k === 'edit').map((row) => row.file),
+    ]);
+    if (!canCompleteFileMention({ machine: active?.machine, prompt: draft, cursor, files })) return false;
+    const token = fileMentionToken(draft, cursor);
+    const file = token ? matchMentionFiles(files, token.query)[0] : '';
+    if (!token || !file) return false;
+    setDraft(applyFileMention(draft, token, file, cursor));
+    window.setTimeout(() => {
+      const pos = token.start + file.length;
+      ta.selectionStart = ta.selectionEnd = pos;
+      ta.focus({ preventScroll: true });
+    }, 0);
+    return true;
+  }, [active?.machine, draft, focusFile, lastRead, lastWritten, sessionView.rows, setDraft]);
   const send = useCallback(async () => {
     if (!active) return;
     const text = mentionPeekOnSend({
@@ -3270,6 +3291,10 @@ export default function App2() {
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={onComposerDrop}
                       onKeyDown={(e) => {
+                        if (e.key === 'Tab' && !e.altKey && !e.metaKey && !e.ctrlKey && completeFileMention(e.currentTarget)) {
+                          e.preventDefault();
+                          return;
+                        }
                         if (!composerShouldSend(e) || needsModelSwitch) return;
                         if (canApproveOnEnter({ machine: active?.machine, status: sessionView.status, pendingCount: sessionView.pendingApprovals.size })) {
                           e.preventDefault();
@@ -3304,7 +3329,18 @@ export default function App2() {
                       onPaste={onComposerPaste}
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={onComposerDrop}
-                      onKeyDown={(e) => { if (composerShouldSend(e) && draft.trim() && !needsSettings) { e.preventDefault(); if (canResumeThenSend({ machine: active?.machine, canResume: canResumeHere, prompt: draft })) void send(); else if (canResumeHere) resumeHere(); else continueHere(); } }} />
+                      onKeyDown={(e) => {
+                        if (e.key === 'Tab' && !e.altKey && !e.metaKey && !e.ctrlKey && completeFileMention(e.currentTarget)) {
+                          e.preventDefault();
+                          return;
+                        }
+                        if (composerShouldSend(e) && draft.trim() && !needsSettings) {
+                          e.preventDefault();
+                          if (canResumeThenSend({ machine: active?.machine, canResume: canResumeHere, prompt: draft })) void send();
+                          else if (canResumeHere) resumeHere();
+                          else continueHere();
+                        }
+                      }} />
                     <div className="composer-end">
                       <span className="composer-end-hint"><b>{endedComposerLead(activeSummary.status)}</b>{cwd ? ` · ${cwdChipLabel(cwd)}` : ''}</span>
                       <div className="composer-end-acts">
