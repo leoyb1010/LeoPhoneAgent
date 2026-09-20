@@ -16,6 +16,7 @@ import { desktopSpacesTools, readAllSpaces, writeAllSpaces } from './desktop-spa
 import { desktopProtectTools, readContentProtection, writeContentProtection } from './desktop-protect';
 import { desktopChimeTools, playSessionChime } from './desktop-chime';
 import { desktopA11yTools, openDesktopAccessibility } from './desktop-a11y';
+import { desktopAppsTools, moveDesktopToApplications, readAppFolder } from './desktop-apps';
 import { desktopLogsTools, openDesktopLogs } from './desktop-applogs';
 import { desktopRelaunchTools, relaunchDesktop } from './desktop-relaunch';
 import { clearDesktopCache, desktopCacheTools } from './desktop-cache';
@@ -73,6 +74,7 @@ import { canShowSameCwd, sameCwdPickerHint, sameCwdSessions, sameCwdToast, type 
 import { canOpenTalkLinks, sessionTalkLinks, talkLinkPickerHint, talkLinkToast } from './session-links';
 import { canShowSessionPulse, sessionPulseLabel, sessionPulseToast } from './session-pulse';
 import { applyPatchToast, canApplySessionPatch, clipApplyPatch } from './session-apply';
+import { canMoveToApplications, moveToApplicationsBusy, moveToApplicationsBusyToast, moveToApplicationsLabel, moveToApplicationsToast } from './session-apps';
 import { canSwitchSessionBranch, sanitizeBranchName, switchSessionBranchToast } from './session-branch';
 import { canInitSessionRepo, initSessionToast } from './session-init';
 import { canMergeSessionBranch, mergeSessionToast } from './session-merge';
@@ -248,6 +250,8 @@ export default function App2() {
   const [appLocked, setAppLocked] = useState(false);
   const canCliHere = canInstallCli(desktopCliTools());
   const [cliInstalled, setCliInstalled] = useState(false);
+  const canAppsHere = canMoveToApplications(desktopAppsTools());
+  const [inApplications, setInApplications] = useState(false);
   const canCheckUpdateHere = canCheckUpdate(desktopUpdater());
   const [updateState, setUpdateState] = useState<UpdateRow | null>(null);
   const chimePrev = useRef<Map<string, string>>(new Map());
@@ -524,6 +528,10 @@ export default function App2() {
     if (!canCliHere) return;
     void readCliInstall().then(setCliInstalled).catch(() => setCliInstalled(false));
   }, [canCliHere]);
+  useEffect(() => {
+    if (!canAppsHere) return;
+    void readAppFolder().then(setInApplications).catch(() => setInApplications(false));
+  }, [canAppsHere]);
   useEffect(() => {
     if (!canCheckUpdateHere) return undefined;
     const bridge = desktopUpdater();
@@ -1166,6 +1174,23 @@ export default function App2() {
       toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
     }
   }, [canCliHere, cliInstalled, toast]);
+  const appsHere = useCallback(async () => {
+    if (!canAppsHere) {
+      toast('这台电脑现在挪不进程序文件夹', true);
+      return;
+    }
+    if (moveToApplicationsBusy(allSessions)) {
+      toast(moveToApplicationsBusyToast(), true);
+      return;
+    }
+    try {
+      const result = await moveDesktopToApplications();
+      setInApplications(Boolean(result.already || !result.moved));
+      toast(moveToApplicationsToast(Boolean(result.already)));
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+    }
+  }, [allSessions, canAppsHere, toast]);
   const checkUpdateHere = useCallback(async () => {
     if (!canCheckUpdateHere) {
       toast('这台电脑现在不能检查更新', true);
@@ -2030,6 +2055,7 @@ export default function App2() {
     ...(canClearCacheHere ? [{ v: 'clearcache', t: clearCacheLabel(), sub: '网页缓存，不清会话' }] : []),
     ...(canLockHere ? [{ v: 'applock', t: lockLabel(appLocked), sub: appLocked ? '触控 ID 解锁' : '锁屏或走开后要解锁' }] : []),
     ...(canCliHere ? [{ v: 'cliinstall', t: installCliLabel(cliInstalled), sub: cliInstalled ? '终端里打 leocodebox' : '终端打开当前目录' }] : []),
+    ...(canAppsHere ? [{ v: 'appfolder', t: moveToApplicationsLabel(inApplications), sub: inApplications ? '现在在程序文件夹' : '从下载挪进去' }] : []),
     ...(canCheckUpdateHere ? [{ v: 'checkup', t: checkUpdateLabel(updateState), sub: updateState?.latestVersion ? `现在 ${updateState.latestVersion}` : '看有没有新版本' }] : []),
     { v: 'followsys', t: followSystemLabel(themeMode), sub: themeMode === 'system' ? '现在跟着 macOS' : '跟着 macOS 明暗' },
     ...(canDictateHere ? [{ v: 'dictate', t: dictating ? '停住' : '对着说', sub: dictating ? '正在听' : '写进输入框' }] : []),
@@ -2117,6 +2143,7 @@ export default function App2() {
     else if (v === 'clearcache') void clearCacheHere();
     else if (v === 'applock') void lockHere();
     else if (v === 'cliinstall') void cliHere();
+    else if (v === 'appfolder') void appsHere();
     else if (v === 'checkup') void checkUpdateHere();
     else if (v === 'followsys') followSystemHere();
     else if (v === 'dictate') dictateHere();
@@ -2315,9 +2342,10 @@ export default function App2() {
     ...(canClearCacheHere ? [{ g: '本机', t: clearCacheLabel(), k: '网页缓存，不清会话', run: () => void clearCacheHere() }] : []),
     ...(canLockHere ? [{ g: '本机', t: lockLabel(appLocked), k: appLocked ? '触控 ID 解锁' : '锁屏或走开后要解锁', run: () => void lockHere() }] : []),
     ...(canCliHere ? [{ g: '本机', t: installCliLabel(cliInstalled), k: cliInstalled ? '终端里打 leocodebox' : '终端打开当前目录', run: () => void cliHere() }] : []),
+    ...(canAppsHere ? [{ g: '本机', t: moveToApplicationsLabel(inApplications), k: inApplications ? '现在在程序文件夹' : '从下载挪进去', run: () => void appsHere() }] : []),
     ...(canCheckUpdateHere ? [{ g: '本机', t: checkUpdateLabel(updateState), k: updateState?.latestVersion ? `现在 ${updateState.latestVersion}` : '看有没有新版本', run: () => void checkUpdateHere() }] : []),
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, themeMode, followSystemHere, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, importTalk, canImportHere, copyTalk, canCopyTalkHere, printTalk, canPrintTalkHere, toggleHideSecrets, canHideHere, hideSecretsOn, toggleOpenAtLogin, canOpenAtLoginHere, openAtLogin, toggleGlobalHotkey, canHotkeyHere, globalHotkey, toggleAlwaysOnTop, canAlwaysOnTopHere, alwaysOnTop, toggleAllSpaces, canAllSpacesHere, allSpaces, toggleContentProtection, canProtectHere, contentProtection, toggleDoneChime, canDoneChimeHere, doneChimeOn, openLogsHere, canOpenLogsHere, openA11yHere, canOpenA11yHere, relaunchHere, canRelaunchHere, extraHere, canExtraHere, clearCacheHere, canClearCacheHere, lockHere, canLockHere, appLocked, cliHere, canCliHere, cliInstalled, checkUpdateHere, canCheckUpdateHere, updateState, dictateHere, canDictateHere, dictating, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, speakLast, canSpeakLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openLastWritten, canOpenWritten, lastWritten, jumpLastFail, canJumpFail, lastFail, openLastRead, canOpenRead, lastRead, openHere, canHere, herePeers, showPulse, canPulse, pulseLabel, forkHere, canFork, openTalkLink, canLinks, talkLinks, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, themeMode, followSystemHere, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, importTalk, canImportHere, copyTalk, canCopyTalkHere, printTalk, canPrintTalkHere, toggleHideSecrets, canHideHere, hideSecretsOn, toggleOpenAtLogin, canOpenAtLoginHere, openAtLogin, toggleGlobalHotkey, canHotkeyHere, globalHotkey, toggleAlwaysOnTop, canAlwaysOnTopHere, alwaysOnTop, toggleAllSpaces, canAllSpacesHere, allSpaces, toggleContentProtection, canProtectHere, contentProtection, toggleDoneChime, canDoneChimeHere, doneChimeOn, openLogsHere, canOpenLogsHere, openA11yHere, canOpenA11yHere, relaunchHere, canRelaunchHere, extraHere, canExtraHere, clearCacheHere, canClearCacheHere, lockHere, canLockHere, appLocked, cliHere, canCliHere, cliInstalled, appsHere, canAppsHere, inApplications, checkUpdateHere, canCheckUpdateHere, updateState, dictateHere, canDictateHere, dictating, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, speakLast, canSpeakLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openLastWritten, canOpenWritten, lastWritten, jumpLastFail, canJumpFail, lastFail, openLastRead, canOpenRead, lastRead, openHere, canHere, herePeers, showPulse, canPulse, pulseLabel, forkHere, canFork, openTalkLink, canLinks, talkLinks, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -2781,6 +2809,7 @@ export default function App2() {
                         {canClearCacheHere ? <button className="link" type="button" onClick={() => { void clearCacheHere(); }}>{clearCacheLabel()}</button> : null}
                         {canLockHere ? <button className="link" type="button" onClick={() => { void lockHere(); }}>{lockLabel(appLocked)}</button> : null}
                         {canCliHere ? <button className="link" type="button" onClick={() => { void cliHere(); }}>{installCliLabel(cliInstalled)}</button> : null}
+                        {canAppsHere ? <button className="link" type="button" onClick={() => { void appsHere(); }}>{moveToApplicationsLabel(inApplications)}</button> : null}
                         {canCheckUpdateHere ? <button className="link" type="button" onClick={() => { void checkUpdateHere(); }}>{checkUpdateLabel(updateState)}</button> : null}
                         <button className="link" type="button" onClick={followSystemHere}>{followSystemLabel(themeMode)}</button>
                         {canDictateHere ? <button className="link" type="button" onClick={dictateHere}>{dictating ? '停住' : '对着说'}</button> : null}

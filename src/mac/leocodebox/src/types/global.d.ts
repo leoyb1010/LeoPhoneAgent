@@ -26,6 +26,8 @@ declare global {
       openLogs?: () => Promise<{ path?: string }>;
       openAccessibility?: () => Promise<{ ok?: boolean; url?: string }>;
       relaunch?: () => Promise<{ ok?: boolean }>;
+      getAppFolder?: () => Promise<{ in?: boolean; can?: boolean }>;
+      moveToApplications?: () => Promise<{ moved?: boolean; already?: boolean }>;
       openExtraWindow?: () => Promise<{ ok?: boolean }>;
       clearCache?: () => Promise<{ ok?: boolean }>;
       getAppLock?: () => Promise<{ on?: boolean }>;

@@ -9,6 +9,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
+import { appFolderState, shouldReplaceExistingApp } from './app-folder.js';
 import { busyQuitCopy, shouldConfirmBusyQuit } from './busy-quit.js';
 import { DesktopWindowManager } from './desktopWindow.js';
 import { DesktopNotificationsController } from './desktopNotifications.js';
@@ -216,6 +217,28 @@ async function openAccessibilityPrefs() {
     }
   }
   throw new Error(lastError || '打不开辅助功能设置');
+}
+
+function getAppFolder() {
+  return appFolderState(app);
+}
+
+function moveToApplicationsFolder() {
+  const state = getAppFolder();
+  if (!state.can) throw new Error('这台电脑现在挪不进程序文件夹');
+  if (state.in) return { moved: false, already: true };
+  let blocked = '';
+  const moved = app.moveToApplicationsFolder({
+    conflictHandler: (conflictType) => {
+      if (!shouldReplaceExistingApp(conflictType)) {
+        blocked = '程序文件夹里已有 leocodebox';
+        return false;
+      }
+      return true;
+    },
+  });
+  if (blocked) throw new Error(blocked);
+  return { moved: Boolean(moved), already: false };
 }
 
 async function relaunchApp() {
@@ -854,6 +877,9 @@ function registerIpcHandlers() {
   trustedHandle('leocodebox-desktop:open-logs', async () => openAppLogs());
   trustedHandle('leocodebox-desktop:open-accessibility', async () => openAccessibilityPrefs());
   trustedHandle('leocodebox-desktop:relaunch', async () => relaunchApp());
+  trustedHandle('leocodebox-desktop:app-folder', async (_event, raw) => (
+    raw === undefined || raw === null ? getAppFolder() : moveToApplicationsFolder()
+  ));
   trustedHandle('leocodebox-desktop:extra-window', async () => {
     const url = localServer?.getLocalServerUrl();
     if (!url) throw new Error('本机服务还没起来');
