@@ -690,6 +690,11 @@ function registerIpcHandlers() {
     await execFileAsync('/usr/bin/open', ['-a', 'Terminal', dir]);
     return { path: dir };
   });
+  trustedHandle('leocodebox-desktop:open-url', async (_event, raw) => {
+    const target = String(raw ?? '').trim();
+    await openExternalUrl(target);
+    return { url: target };
+  });
   // 云端 IPC 通道(connect-cloud / open-environment / refresh-environments ...)
   // 在 1.73.0 产品收缩时随云能力一起删掉了,这里不补空 handler:补了等于留下
   // 一个"调了什么都不发生"的接口,以后只会让人以为云还在。preload 与启动台

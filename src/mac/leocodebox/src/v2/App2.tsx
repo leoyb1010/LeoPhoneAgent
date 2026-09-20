@@ -5,7 +5,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import type { Project } from '../types/app';
 
 import { api, type FleetOverview, type HarnessEvent, type LocalOverview, type ProviderInfo, type SessionSummary, type SessionTarget } from './api';
-import { canOpenSessionPath, openSessionPath, openSessionTerm, pickSessionFolder, revealSessionPath } from './desktop-folder';
+import { canOpenSessionPath, openSessionPath, openSessionTerm, openSessionUrl, pickSessionFolder, revealSessionPath } from './desktop-folder';
 import { dropBrowserFile, pasteSessionImage, pickSessionFiles } from './desktop-drop';
 import { onSessionNoticeAction, onSessionNoticeClick, setDockNeedBadge, showSessionNotice } from './desktop-notice';
 import { canAcceptSessionDrop, mentionDroppedFile } from './session-drop';
@@ -28,6 +28,7 @@ import { canJumpLastFail, jumpLastFailToast, lastFailedRow } from './session-fai
 import { canOpenLastRead, lastReadFile, openLastReadToast, readFileFromRow } from './session-read';
 import { canForkSession, forkSeedText, forkSessionToast, forkTitle } from './session-fork';
 import { canShowSameCwd, sameCwdPickerHint, sameCwdSessions, sameCwdToast, type SameCwdSession } from './session-here';
+import { canOpenTalkLinks, sessionTalkLinks, talkLinkPickerHint, talkLinkToast } from './session-links';
 import { canShowSessionPulse, sessionPulseLabel, sessionPulseToast } from './session-pulse';
 import { applyPatchToast, canApplySessionPatch, clipApplyPatch } from './session-apply';
 import { canSwitchSessionBranch, sanitizeBranchName, switchSessionBranchToast } from './session-branch';
@@ -75,7 +76,7 @@ type NewBoxState = { open: boolean; machine: string; cwd?: string; prompt?: stri
 type Toast = { id: number; text: string; error: boolean };
 type MenuItem = { v: string; t: string; sub?: string; dot?: string; dim?: boolean; sep?: boolean };
 type MenuState = { x: number; y: number; items: MenuItem[]; onPick: (v: string) => void } | null;
-type PickerKind = 'model' | 'policy' | 'think' | 'recall' | 'here' | null;
+type PickerKind = 'model' | 'policy' | 'think' | 'recall' | 'here' | 'link' | null;
 
 const ORDER: Record<string, number> = { waiting_for_approval: 0, running: 1, starting: 1, failed: 2, idle: 3, completed: 4, cancelled: 4, orphaned: 5 };
 
@@ -316,6 +317,8 @@ export default function App2() {
   const pulseLabel = sessionPulseLabel({ rows: sessionView.rows, createdAt: activeSummary?.created_at });
   const canPulse = canShowSessionPulse(active?.machine, sessionView.rows, activeSummary?.created_at);
   const canFork = canForkSession(active?.machine, activeSummary?.cwd, sessionView.rows);
+  const talkLinks = useMemo(() => sessionTalkLinks(sessionView.rows), [sessionView.rows]);
+  const canLinks = canOpenTalkLinks(active?.machine, talkLinks);
   const canApplyHere = canApplySessionPatch(active?.machine);
   const canPackHere = canPackSessionChanges(active?.machine);
   const canUnpackHere = canUnpackSessionZip(active?.machine);
@@ -1380,6 +1383,21 @@ export default function App2() {
       toast(forkSessionToast(named));
     });
   }, [activeSummary, canFork, providers, sessionView.model, sessionView.policy, sessionView.rows, sessionView.title, toast, withBusy]);
+  const openTalkLink = useCallback((url?: string) => {
+    const target = url?.trim() || (talkLinks.length === 1 ? talkLinks[0].url : '');
+    if (target) {
+      void openSessionUrl(target).then(() => {
+        setPicker(null);
+        toast(talkLinkToast(target));
+      }).catch((error) => toast(humanizeError(error instanceof Error ? error.message : String(error)), true));
+      return;
+    }
+    if (!canLinks) {
+      toast('这条没有链接');
+      return;
+    }
+    setPicker({ kind: 'link', query: '', index: 0 });
+  }, [canLinks, talkLinks, toast]);
   const approveTarget = useCallback((target: SessionTarget, approvalId: string, choice: string, reason?: string) => (
     withBusy(() => api.approve(target, approvalId, choice, reason), choice === 'deny' ? denySessionToast(reason ?? '') : approvalToast(choice))
   ), [withBusy]);
@@ -1536,6 +1554,7 @@ export default function App2() {
     ...(canHere ? [{ v: 'here', t: '这个目录的会话', sub: sameCwdPickerHint(herePeers.length) }] : []),
     ...(canPulse ? [{ v: 'pulse', t: '这条聊了多少', sub: pulseLabel }] : []),
     ...(canFork ? [{ v: 'fork', t: '从这里分一条', sub: forkTitle(sessionView.title || activeSummary?.title) }] : []),
+    ...(canLinks ? [{ v: 'links', t: '打开对话里的链接', sub: talkLinkPickerHint(talkLinks.length) }] : []),
     ...(canRecallHere ? [{ v: 'recall', t: '找回来', sub: '从左栏拿掉的会话' }] : []),
     ...(active ? [{ v: 'pin', t: sessionIsPinned(pinnedKeys, active.machine, active.id) ? '取消钉住' : '钉在左栏上面', sub: sessionView.title || activeSummary?.title || '' }] : []),
     ...(activeSummary && sessionCanForget(activeSummary.status) ? [{ v: 'forget', t: '从左栏拿掉', sub: active?.machine === 'local' ? '不再召回' : '只藏在这台 Mac' }] : []),
@@ -1552,6 +1571,7 @@ export default function App2() {
     else if (v === 'here') openHere();
     else if (v === 'pulse') showPulse();
     else if (v === 'fork') void forkHere();
+    else if (v === 'links') openTalkLink();
     else if (v === 'resume') resumeHere();
     else if (v === 'continue') continueHere();
     else if (v === 'finder') void revealCwd();
@@ -1702,6 +1722,7 @@ export default function App2() {
     ...(canHere ? [{ g: '这条会话', t: '这个目录的会话', k: sameCwdPickerHint(herePeers.length), run: () => openHere() }] : []),
     ...(canPulse ? [{ g: '这条会话', t: '这条聊了多少', k: pulseLabel, run: showPulse }] : []),
     ...(canFork ? [{ g: '这条会话', t: '从这里分一条', k: forkTitle(sessionView.title || activeSummary?.title), run: () => void forkHere() }] : []),
+    ...(canLinks ? [{ g: '这条会话', t: '打开对话里的链接', k: talkLinkPickerHint(talkLinks.length), run: () => openTalkLink() }] : []),
     ...(canRecallHere ? [{ g: '本机', t: '找回来', k: '拿掉的', run: () => void openRecall() }] : []),
     ...(active ? [{ g: '这条会话', t: sessionIsPinned(pinnedKeys, active.machine, active.id) ? '取消钉住' : '钉在左栏上面', k: '', run: () => togglePin(active) }] : []),
     ...(active && activeSummary && sessionCanForget(activeSummary.status) ? [{ g: '这条会话', t: '从左栏拿掉', k: '', run: () => void forgetSession(active) }] : []),
@@ -1740,7 +1761,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openLastWritten, canOpenWritten, lastWritten, jumpLastFail, canJumpFail, lastFail, openLastRead, canOpenRead, lastRead, openHere, canHere, herePeers, showPulse, canPulse, pulseLabel, forkHere, canFork, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openLastWritten, canOpenWritten, lastWritten, jumpLastFail, canJumpFail, lastFail, openLastRead, canOpenRead, lastRead, openHere, canHere, herePeers, showPulse, canPulse, pulseLabel, forkHere, canFork, openTalkLink, canLinks, talkLinks, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -1782,8 +1803,17 @@ export default function App2() {
       }));
       return q ? items.filter((it) => `${it.t} ${it.sub} ${it.v}`.toLowerCase().includes(q)) : items;
     }
+    if (picker.kind === 'link') {
+      const items = talkLinks.map((row) => ({
+        v: row.url,
+        t: row.label,
+        sub: row.url,
+        g: '链接',
+      }));
+      return q ? items.filter((it) => `${it.t} ${it.sub}`.toLowerCase().includes(q)) : items;
+    }
     return THINKING_LEVELS.map((level) => ({ v: level, t: THINKING_LABEL[level], sub: level, g: '思考' }));
-  }, [picker, configuredModels, forgotten, hereRows]);
+  }, [picker, configuredModels, forgotten, hereRows, talkLinks]);
   const runPicker = (index: number) => {
     const item = pickerItems[index];
     if (!picker || !item) return;
@@ -1794,6 +1824,7 @@ export default function App2() {
     } else if (picker.kind === 'policy') void setPolicy(item.v);
     else if (picker.kind === 'recall') { void recallForgotten(item.v); return; }
     else if (picker.kind === 'here') { openHere(item.v); return; }
+    else if (picker.kind === 'link') { openTalkLink(item.v); return; }
     else void setThinking(item.v);
     setPicker(null);
   };
@@ -2175,6 +2206,7 @@ export default function App2() {
                         {canHere ? <button className="link" type="button" onClick={() => openHere()}>这个目录的会话</button> : null}
                         {canPulse ? <button className="link" type="button" onClick={showPulse}>这条聊了多少</button> : null}
                         {canFork ? <button className="link" type="button" onClick={() => void forkHere()}>从这里分一条</button> : null}
+                        {canLinks ? <button className="link" type="button" onClick={() => openTalkLink()}>打开对话里的链接</button> : null}
                         {canRecallHere ? <button className="link" onClick={() => void openRecall()}>找回来</button> : null}
                       </div>
                     </div>
@@ -2441,9 +2473,9 @@ export default function App2() {
       )}
 
       {picker && (
-        <div className="palette" role="dialog" aria-modal="true" aria-label={picker.kind === 'model' ? '选择模型' : picker.kind === 'policy' ? '审批策略' : picker.kind === 'recall' ? '找回来' : picker.kind === 'here' ? '这个目录的会话' : '思考深度'} onClick={(e) => { if (e.target === e.currentTarget) setPicker(null); }}>
+        <div className="palette" role="dialog" aria-modal="true" aria-label={picker.kind === 'model' ? '选择模型' : picker.kind === 'policy' ? '审批策略' : picker.kind === 'recall' ? '找回来' : picker.kind === 'here' ? '这个目录的会话' : picker.kind === 'link' ? '对话里的链接' : '思考深度'} onClick={(e) => { if (e.target === e.currentTarget) setPicker(null); }}>
           <div className="pbox">
-            <input autoFocus placeholder={picker.kind === 'model' ? '搜索模型或供应商…' : picker.kind === 'recall' ? '找拿掉的会话…' : picker.kind === 'here' ? '找同目录会话…' : '筛选…'} value={picker.query}
+            <input autoFocus placeholder={picker.kind === 'model' ? '搜索模型或供应商…' : picker.kind === 'recall' ? '找拿掉的会话…' : picker.kind === 'here' ? '找同目录会话…' : picker.kind === 'link' ? '找链接…' : '筛选…'} value={picker.query}
               onChange={(e) => setPicker((p) => (p ? { ...p, query: e.target.value, index: 0 } : p))}
               onKeyDown={(e) => {
                 if (e.key === 'ArrowDown') { e.preventDefault(); setPicker((p) => (p ? { ...p, index: Math.min(pickerItems.length - 1, p.index + 1) } : p)); }

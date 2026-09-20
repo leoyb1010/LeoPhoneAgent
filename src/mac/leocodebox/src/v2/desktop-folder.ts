@@ -1,10 +1,12 @@
 import { api } from './api';
+import { clipTalkUrl } from './session-links';
 
 type DesktopFolderTools = {
   pickFolder?: () => Promise<{ path?: string; cancelled?: boolean }>;
   revealPath?: (target: string) => Promise<unknown>;
   openPath?: (target: string) => Promise<unknown>;
   openTerm?: (target: string) => Promise<unknown>;
+  openUrl?: (target: string) => Promise<unknown>;
 };
 
 function desktopTools(): DesktopFolderTools | undefined {
@@ -48,6 +50,21 @@ export async function openSessionPath(target: string): Promise<void> {
     return;
   }
   await api.openLocalPath(next);
+}
+
+export async function openSessionUrl(target: string): Promise<void> {
+  const next = clipTalkUrl(target);
+  if (!next) throw new Error('这个链接不能打开');
+  const desktop = desktopTools()?.openUrl;
+  if (desktop) {
+    await desktop(next);
+    return;
+  }
+  if (typeof window !== 'undefined') {
+    window.open(next, '_blank', 'noopener,noreferrer');
+    return;
+  }
+  throw new Error('打不开这个链接');
 }
 
 export async function openSessionTerm(target: string): Promise<void> {
