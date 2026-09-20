@@ -111,6 +111,25 @@ test('notify / extension_error 变成 session.note', () => {
   assert.equal(boom[0]?.text, 'hook failed');
 });
 
+test('message_end 用量变成 session.usage', () => {
+  const dialect = new PiRpcDialect();
+  const { events } = dialect.translateLine({
+    type: 'message_end',
+    message: {
+      role: 'assistant',
+      stopReason: 'stop',
+      usage: { input: 8000, output: 400, cacheRead: 0, cacheWrite: 0, totalTokens: 12400 },
+    },
+  });
+  assert.equal(events[0]?.event, 'session.usage');
+  assert.equal(events[0]?.totalTokens, 12400);
+  const empty = dialect.translateLine({
+    type: 'message_end',
+    message: { role: 'user', content: 'hi' },
+  }).events;
+  assert.equal(empty.some((ev) => ev.event === 'session.usage' || String(ev.event).startsWith('harness.')), false);
+});
+
 test('set_editor_text 变成 session.draft_fill', () => {
   const dialect = new PiRpcDialect();
   const { events } = dialect.translateLine({

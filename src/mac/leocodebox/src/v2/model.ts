@@ -5,6 +5,7 @@ import { composerFillFromSkill, sessionFillLabel } from './session-fill';
 import { sessionRetryLabel } from './session-overload';
 import { skillNoteLabel, skillNoteTone } from './session-skill-note';
 import { clipLiveToolOutput } from './session-tool-live';
+import { sessionUsageLabel } from './session-usage';
 
 // 把 harness 事件流折叠成"流水行"。一行一个对象:你 / 模型 / 工具 / 编辑 / 需要确认 / 系统。
 // 这套折叠规则是三端共用的词汇(iOS 与 Android 的列表也按同样的语义画),别在这里加只有 Mac 才懂的行。
@@ -592,6 +593,11 @@ export function applyEvent(view: SessionView, event: HarnessEvent): SessionView 
         tone: skillNoteTone(event.level),
       }];
       break;
+    case 'session.usage': {
+      const text = sessionUsageLabel(event);
+      if (text) rows = [...rows, { k: 'sys', key: nextKey(), text, tone: 'muted' }];
+      break;
+    }
     default:
       break;
   }
@@ -688,6 +694,7 @@ export function lastLine(summary: Pick<SessionSummary, 'status' | 'last_event' |
     case 'session.compacting': return ev.text || sessionCompactingLabel();
     case 'session.note': return ev.text || skillNoteLabel();
     case 'session.retrying': return ev.text || sessionRetryLabel();
+    case 'session.usage': return ev.text || sessionUsageLabel();
     case 'run.completed': return '已完成';
     case 'run.failed': return `失败 · ${humanizeError(ev.text)}`;
     case 'run.cancelled': return '已停止';

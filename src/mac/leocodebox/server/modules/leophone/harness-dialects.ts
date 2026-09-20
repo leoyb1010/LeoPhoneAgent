@@ -399,6 +399,17 @@ export class PiRpcDialect implements HarnessDialect {
       // 各端都在等一个不会来的回复。
       this.skipSettledComplete = true;
       out.push({ event: EVENT_RUN_FAILED, error: str(obj.error ?? 'prompt rejected') });
+    } else if (kind === 'message_end') {
+      const message = asObject(obj.message);
+      const usage = asObject(message.usage);
+      if (str(message.role) === 'assistant' && str(message.stopReason) !== 'error') {
+        const totalTokens = Number(usage.totalTokens ?? 0);
+        const input = Number(usage.input ?? 0);
+        const output = Number(usage.output ?? 0);
+        if (totalTokens > 0 || input > 0 || output > 0) {
+          out.push({ event: 'session.usage', totalTokens, input, output });
+        }
+      }
     }
 
     // 高频进度帧(非文本的 message_update、工具输出流)不进日志:对各端没有行动
@@ -433,7 +444,7 @@ export class PiRpcDialect implements HarnessDialect {
   }
 }
 
-const PI_SILENT_KINDS = new Set(['message_update', 'tool_execution_update', 'bash_execution_update', 'auto_retry_end', 'agent_end', 'agent_settled']);
+const PI_SILENT_KINDS = new Set(['message_update', 'tool_execution_update', 'bash_execution_update', 'auto_retry_end', 'agent_end', 'agent_settled', 'message_end']);
 
 function assistantTurnError(obj: JsonObject): string {
   const message = asObject(obj.message);

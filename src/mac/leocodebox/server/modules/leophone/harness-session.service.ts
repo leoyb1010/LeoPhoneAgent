@@ -270,6 +270,10 @@ export class HarnessSession {
       this.lastEvent = { event: name, text: String(enriched.command ?? '').slice(0, 120), timestamp: enriched.timestamp };
     } else if (name === 'session.note') {
       this.lastEvent = { event: name, text: String(enriched.text ?? '').slice(0, 120), timestamp: enriched.timestamp };
+    } else if (name === 'session.usage') {
+      const total = Number(enriched.totalTokens ?? 0);
+      const text = total > 0 ? `这一轮 ${total >= 1000 ? `${Math.round(total / 1000)}K` : String(Math.round(total))}。` : '';
+      this.lastEvent = { event: name, text, timestamp: enriched.timestamp };
     } else if (name === 'session.compacting') {
       if (this.status !== 'waiting_for_approval') this.status = 'running';
       this.lastEvent = { event: name, text: '正在压缩上下文。', timestamp: enriched.timestamp };
