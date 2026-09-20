@@ -3,7 +3,7 @@ import updaterPackage from 'electron-updater';
 import { randomBytes } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { execFile, spawn } from 'node:child_process';
-import { copyFile, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
@@ -68,6 +68,14 @@ function playDoneChime() {
   chimeChild = spawn('/usr/bin/afplay', ['-v', '0.45', DONE_CHIME], { stdio: 'ignore' });
   chimeChild.on('exit', () => { chimeChild = null; });
   return { ok: true };
+}
+
+async function openAppLogs() {
+  const logs = app.getPath('logs');
+  await mkdir(logs, { recursive: true });
+  const opened = await shell.openPath(logs);
+  if (opened) throw new Error(opened);
+  return { path: logs };
 }
 
 let sayChild = null;
@@ -648,6 +656,7 @@ function registerIpcHandlers() {
     raw === undefined || raw === null ? getAlwaysOnTop() : setAlwaysOnTop(Boolean(raw))
   ));
   trustedHandle('leocodebox-desktop:play-done-sound', async () => playDoneChime());
+  trustedHandle('leocodebox-desktop:open-logs', async () => openAppLogs());
 
   trustedHandle('leocodebox-desktop:notify', async (event, payload) => {
     if (!Notification.isSupported()) return { shown: false };

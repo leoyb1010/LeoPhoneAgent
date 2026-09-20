@@ -17,6 +17,7 @@ declare global {
       getAlwaysOnTop?: () => Promise<{ on?: boolean }>;
       setAlwaysOnTop?: (on: boolean) => Promise<{ on?: boolean }>;
       playDoneSound?: () => Promise<{ ok?: boolean }>;
+      openLogs?: () => Promise<{ path?: string }>;
       pickFolder?: () => Promise<{ path?: string; cancelled?: boolean }>;
       revealPath?: (target: string) => Promise<{ path: string }>;
       openPath?: (target: string) => Promise<{ path: string }>;
