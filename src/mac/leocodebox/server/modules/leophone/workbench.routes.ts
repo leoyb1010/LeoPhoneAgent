@@ -20,6 +20,7 @@ import { packSessionChanges } from './session-pack.js';
 import { seedSessionFile } from './session-seed.js';
 import { haltBusyLocalSessions } from './session-halt.js';
 import { pushSessionRepo } from './session-push.js';
+import { pullSessionRepo } from './session-pull.js';
 import { listSessionCommits, showSessionCommit } from './session-log.js';
 import { searchSessionCwd } from './session-search.js';
 import { ensureSessionWorkspace } from './session-workspace.js';
@@ -515,6 +516,16 @@ router.post('/leophone/local/sessions/:sessionId/export', async (req, res) => {
       name: String(body.name ?? 'leo-对话.md'),
       markdown: String(body.markdown ?? ''),
     }));
+  } catch (error) {
+    jsonError(res, 409, error instanceof Error ? error.message : String(error));
+  }
+});
+
+router.post('/leophone/local/sessions/:sessionId/pull', async (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  try {
+    res.json(await pullSessionRepo(session.cwd));
   } catch (error) {
     jsonError(res, 409, error instanceof Error ? error.message : String(error));
   }

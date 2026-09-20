@@ -121,6 +121,8 @@ export const api = {
     sendJson<{ hash: string; files: string[]; message: string }>(`${sessionBase(target)}/file/commit`, input),
   pushLocalRepo: (target: SessionTarget) =>
     sendJson<{ remote: string; branch: string }>(`${sessionBase(target)}/push`, {}),
+  pullLocalRepo: (target: SessionTarget) =>
+    sendJson<{ remote: string; branch: string; changed: boolean }>(`${sessionBase(target)}/pull`, {}),
   diffLocalFile: (target: SessionTarget, file: string) =>
     sendJson<{ file: string; kind: 'modified' | 'added' | 'clean' | 'binary'; patch: string }>(`${sessionBase(target)}/file/diff`, { file }),
   searchLocalCwd: (target: SessionTarget, query: string) =>
