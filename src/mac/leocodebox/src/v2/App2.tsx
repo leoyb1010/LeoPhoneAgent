@@ -22,6 +22,7 @@ import { canRetryLastUser, lastUserPrompt, retryLastUserToast } from './session-
 import { canEditLastPrompt, editLastPromptDraft, editLastPromptToast } from './session-edit-prompt';
 import { denySessionToast } from './session-deny';
 import { canMentionLastTool, lastToolOutput, mentionLastTool, mentionLastToolToast } from './session-mention-tool';
+import { canOpenLastWritten, lastWrittenFile, openLastWrittenToast } from './session-written';
 import { applyPatchToast, canApplySessionPatch, clipApplyPatch } from './session-apply';
 import { canSwitchSessionBranch, sanitizeBranchName, switchSessionBranchToast } from './session-branch';
 import { canInitSessionRepo, initSessionToast } from './session-init';
@@ -293,6 +294,8 @@ export default function App2() {
   const canEditLast = canEditLastPrompt(sessionView.rows);
   const lastTool = lastToolOutput(sessionView.rows);
   const canMentionTool = canMentionLastTool(sessionView.rows);
+  const lastWritten = lastWrittenFile(sessionView.rows);
+  const canOpenWritten = canOpenLastWritten(active?.machine, sessionView.rows);
   const canApplyHere = canApplySessionPatch(active?.machine);
   const canPackHere = canPackSessionChanges(active?.machine);
   const canUnpackHere = canUnpackSessionZip(active?.machine);
@@ -906,6 +909,17 @@ export default function App2() {
     toast(mentionLastToolToast());
     window.setTimeout(() => taRef.current?.focus(), 0);
   }, [draft, sessionView.rows, setDraft, toast]);
+  const openLastWritten = useCallback(() => {
+    const file = lastWrittenFile(sessionView.rows);
+    if (!file || !canOpenWritten) {
+      toast('还没有刚写下的文件', true);
+      return;
+    }
+    setFocusCommit(null);
+    setFocusFile(file);
+    setDrawer('files');
+    toast(openLastWrittenToast(file));
+  }, [canOpenWritten, sessionView.rows, toast]);
   const applyPatch = useCallback(async () => {
     if (!active || !canApplyHere) return;
     try {
@@ -1392,6 +1406,7 @@ export default function App2() {
     ...(canRetryLast ? [{ v: 'retrylast', t: '再发上一句', sub: lastPrompt.slice(0, 40) }] : []),
     ...(canEditLast ? [{ v: 'editlast', t: '改上一句', sub: lastPrompt.slice(0, 40) }] : []),
     ...(canMentionTool ? [{ v: 'lasttool', t: '带上刚打出来的', sub: lastTool.slice(0, 40) }] : []),
+    ...(canOpenWritten ? [{ v: 'lastwrite', t: '打开刚写的', sub: peekFileCaption(lastWritten) }] : []),
     ...(activeSummary?.cwd?.trim() ? [{ v: 'cwd', t: '复制目录', sub: activeSummary.cwd }] : []),
     ...(canRenameSession(active?.machine) ? [{ v: 'rename', t: '改标题', sub: sessionView.title || activeSummary?.title || '给这条会话起个名字' }] : []),
     ...(canSetSessionRule(active?.machine) ? [{ v: 'rule', t: '这条会话的规矩', sub: (sessionView.rule || activeSummary?.rule || '之后每轮都会带着').split('\n')[0] }] : []),
@@ -1448,6 +1463,7 @@ export default function App2() {
     else if (v === 'retrylast') void retryLast();
     else if (v === 'editlast') editLastPrompt();
     else if (v === 'lasttool') mentionTool();
+    else if (v === 'lastwrite') openLastWritten();
     else if (v === 'cwd') void copyCwd();
     else if (v === 'rename') beginRename();
     else if (v === 'rule') beginRule();
@@ -1589,6 +1605,7 @@ export default function App2() {
     ...(canRetryLast ? [{ g: '这条会话', t: '再发上一句', k: lastPrompt.slice(0, 40), run: () => void retryLast() }] : []),
     ...(canEditLast ? [{ g: '这条会话', t: '改上一句', k: lastPrompt.slice(0, 40), run: editLastPrompt }] : []),
     ...(canMentionTool ? [{ g: '这条会话', t: '带上刚打出来的', k: lastTool.slice(0, 40), run: mentionTool }] : []),
+    ...(canOpenWritten ? [{ g: '这条会话', t: '打开刚写的', k: peekFileCaption(lastWritten), run: openLastWritten }] : []),
     { g: '这条会话', t: '放入文件', k: '拖到输入框', run: () => void pickIntoSession() },
     { g: '这条会话', t: '粘贴截图', k: '⌘V', run: () => void pasteShot() },
     { g: '这条会话', t: '终端', k: '⌘T', run: () => setDrawer('term') }, { g: '这条会话', t: '文件', k: '⌘E', run: () => setDrawer('files') },
@@ -1596,7 +1613,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openLastWritten, canOpenWritten, lastWritten, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -2008,6 +2025,7 @@ export default function App2() {
                         {canCopyLast ? <button className="link" type="button" onClick={() => { void copyLastReply(); }}>复制刚说的</button> : null}
                         {canEditLast ? <button className="link" type="button" onClick={editLastPrompt}>改上一句</button> : null}
                         {canMentionTool ? <button className="link" type="button" onClick={mentionTool}>带上刚打出来的</button> : null}
+                        {canOpenWritten ? <button className="link" type="button" onClick={openLastWritten}>打开刚写的</button> : null}
                         {needsSettings ? <button className="btn-s" onClick={() => setView('settings')}>去设置</button> : canResumeHere ? <button className="btn-s" onClick={resumeHere}>接着这条会话</button> : <button className="btn-s" onClick={continueHere}>在同一目录新开</button>}
                         {needsSettings ? <button className="link" onClick={continueHere}>仍要新开</button> : canResumeHere ? <button className="link" onClick={continueHere}>在同一目录新开</button> : null}
                         {cwd && active?.machine === 'local' ? <button className="link" onClick={() => void revealCwd()}>在 Finder 打开</button> : null}
