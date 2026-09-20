@@ -16,6 +16,7 @@ import { canRevertSessionFile, revertSessionFileToast } from './session-revert';
 import { canRenameSession, clipSessionTitle, renameSessionToast } from './session-title';
 import { canMentionLastReply, lastAiReply, mentionLastReply, mentionLastReplyToast } from './session-reply';
 import { canRetryLastUser, lastUserPrompt, retryLastUserToast } from './session-retry';
+import { applyPatchToast, canApplySessionPatch, clipApplyPatch } from './session-apply';
 import { PINNED_SESSIONS_KEY, comparePinnedFirst, pinSessionToast, readPinnedSessionKeys, sessionIsPinned, togglePinnedSessionKey } from './session-pin';
 import { canSearchSession, searchQueryReady, searchSessionToast, type SessionSearchHit } from './session-search';
 import { canShowSessionLog, type SessionCommit } from './session-log';
@@ -247,6 +248,7 @@ export default function App2() {
   const canMentionLast = canMentionLastReply(sessionView.rows);
   const lastPrompt = lastUserPrompt(sessionView.rows);
   const canRetryLast = canRetryLastUser({ canDrive, running: composerShowsSteer(sessionView.status), rows: sessionView.rows });
+  const canApplyHere = canApplySessionPatch(active?.machine);
   const findHits = useMemo(() => flowFindHitKeys(sessionView.rows, flowFind.query), [sessionView.rows, flowFind.query]);
   const findIndex = findHits.length ? Math.min(Math.max(flowFind.index, 0), findHits.length - 1) : -1;
   const findKey = findIndex >= 0 ? findHits[findIndex] : null;
@@ -789,6 +791,20 @@ export default function App2() {
     }
     await withBusy(() => api.send(active, text), retryLastUserToast());
   }, [active, activeSummary?.last_event?.text, canRetryLast, sessionView.model, sessionView.rows, toast, withBusy]);
+  const applyPatch = useCallback(async () => {
+    if (!active || !canApplyHere) return;
+    try {
+      const raw = await navigator.clipboard.readText();
+      const patch = clipApplyPatch(raw);
+      const result = await api.applyLocalPatch(active, patch);
+      toast(applyPatchToast(result.files));
+      setPeekTick((tick) => tick + 1);
+      if (result.files[0]) { setFocusCommit(null); setFocusFile(result.files[0]); }
+      setDrawer((cur) => cur ?? 'diff');
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+    }
+  }, [active, canApplyHere, toast]);
   const beginRename = useCallback(() => {
     if (!canRenameSession(active?.machine)) return;
     setTitleDraft(sessionView.title || activeSummary?.title || '');
@@ -996,6 +1012,7 @@ export default function App2() {
     ...(canExportHere ? [{ v: 'exporttalk', t: '记下这次对话', sub: exportFileName(sessionView.title || activeSummary?.title || '') }] : []),
     ...(canSearchHere ? [{ v: 'searchcwd', t: '在目录里搜', sub: activeSummary?.cwd || '会话目录' }] : []),
     ...(canShowSessionLog(active?.machine) ? [{ v: 'log', t: '最近提交', sub: activeSummary?.cwd || '会话目录' }] : []),
+    ...(canApplyHere ? [{ v: 'apply', t: '贴上补丁', sub: '剪贴板里的 unified diff' }] : []),
     ...(canMentionLast ? [{ v: 'lastreply', t: '带上上一句', sub: lastReply.slice(0, 40) }] : []),
     ...(canRetryLast ? [{ v: 'retrylast', t: '再发上一句', sub: lastPrompt.slice(0, 40) }] : []),
     ...(activeSummary?.cwd?.trim() ? [{ v: 'cwd', t: '复制目录', sub: activeSummary.cwd }] : []),
@@ -1028,6 +1045,7 @@ export default function App2() {
     else if (v === 'exporttalk') void exportTalk();
     else if (v === 'searchcwd') openSearch();
     else if (v === 'log') openLog();
+    else if (v === 'apply') void applyPatch();
     else if (v === 'lastreply') mentionLast();
     else if (v === 'retrylast') void retryLast();
     else if (v === 'cwd') void copyCwd();
@@ -1138,6 +1156,7 @@ export default function App2() {
     ...(canExportHere ? [{ g: '这条会话', t: '记下这次对话', k: exportFileName(sessionView.title || activeSummary?.title || ''), run: () => void exportTalk() }] : []),
     ...(canSearchHere ? [{ g: '这条会话', t: '在目录里搜', k: activeSummary?.cwd || '', run: openSearch }] : []),
     ...(canShowSessionLog(active?.machine) ? [{ g: '这条会话', t: '最近提交', k: activeSummary?.cwd || '', run: openLog }] : []),
+    ...(canApplyHere ? [{ g: '这条会话', t: '贴上补丁', k: '剪贴板', run: () => void applyPatch() }] : []),
     ...(canMentionLast ? [{ g: '这条会话', t: '带上上一句', k: lastReply.slice(0, 40), run: mentionLast }] : []),
     ...(canRetryLast ? [{ g: '这条会话', t: '再发上一句', k: lastPrompt.slice(0, 40), run: () => void retryLast() }] : []),
     { g: '这条会话', t: '放入文件', k: '拖到输入框', run: () => void pickIntoSession() },
@@ -1147,7 +1166,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, commitFiles, canCommitHere, commitDraft, exportTalk, canExportHere, canSearchHere, openSearch, openLog, mentionLast, canMentionLast, lastReply, retryLast, canRetryLast, lastPrompt, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, commitFiles, canCommitHere, commitDraft, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, mentionLast, canMentionLast, lastReply, retryLast, canRetryLast, lastPrompt, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -1609,6 +1628,7 @@ export default function App2() {
                     <button className="btn-s" type="button" onClick={() => { void commitFiles(); }}>记下这次改动</button>
                   </div>
                 ) : null}
+                {canApplyHere ? <div className="local-files-commit"><button className="btn-s" type="button" onClick={() => { void applyPatch(); }}>贴上补丁</button></div> : null}
               </div>
             )
           ) : drawer === 'files' && active?.machine === 'local' ? (

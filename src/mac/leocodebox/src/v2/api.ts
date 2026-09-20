@@ -127,6 +127,8 @@ export const api = {
     sendJson<{ commits: Array<{ hash: string; subject: string; at: number }> }>(`${sessionBase(target)}/log`, {}),
   showLocalCommit: (target: SessionTarget, hash: string) =>
     sendJson<{ hash: string; subject: string; patch: string }>(`${sessionBase(target)}/log`, { hash }),
+  applyLocalPatch: (target: SessionTarget, patch: string) =>
+    sendJson<{ files: string[] }>(`${sessionBase(target)}/apply`, { patch }),
   exportLocalTalk: (target: SessionTarget, input: { name: string; markdown: string }) =>
     sendJson<{ path: string; name: string }>(`${sessionBase(target)}/export`, input),
   createLocalSession: (input: { cwd: string; prompt: string; model?: string | null; policy?: string; harness?: string }) =>

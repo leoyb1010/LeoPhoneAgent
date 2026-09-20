@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.0.93',
+    date: '2026-09-20',
+    items: [
+      '别人给的补丁可以贴进会话目录，改动立刻落地。',
+    ],
+  },
+  {
     version: '2.0.92',
     date: '2026-09-20',
     items: [

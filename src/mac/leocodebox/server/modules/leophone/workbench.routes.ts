@@ -15,6 +15,7 @@ import { commitSessionFiles } from './session-commit.js';
 import { diffSessionFile } from './session-diff.js';
 import { writeSessionExport } from './session-export.js';
 import { revertSessionFile } from './session-revert.js';
+import { applySessionPatch } from './session-apply.js';
 import { listSessionCommits, showSessionCommit } from './session-log.js';
 import { searchSessionCwd } from './session-search.js';
 import { ensureSessionWorkspace } from './session-workspace.js';
@@ -421,6 +422,17 @@ router.post('/leophone/local/sessions/:sessionId/file/revert', async (req, res) 
   const file = String(((req.body ?? {}) as Record<string, unknown>).file ?? '').trim();
   try {
     res.json(await revertSessionFile(session.cwd, file));
+  } catch (error) {
+    jsonError(res, 409, error instanceof Error ? error.message : String(error));
+  }
+});
+
+router.post('/leophone/local/sessions/:sessionId/apply', async (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  const patch = String(((req.body ?? {}) as Record<string, unknown>).patch ?? '');
+  try {
+    res.json(await applySessionPatch(session.cwd, patch));
   } catch (error) {
     jsonError(res, 409, error instanceof Error ? error.message : String(error));
   }
