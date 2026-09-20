@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.1.56',
+    date: '2026-09-21',
+    items: [
+      'iCloud 目录会提醒。',
+    ],
+  },
+  {
     version: '2.1.55',
     date: '2026-09-21',
     items: [

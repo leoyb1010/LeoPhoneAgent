@@ -43,6 +43,7 @@ import { canCopyTalk, copyTalkToast } from './session-copy-talk';
 import { canPrintTalk, clipPrintText, printTalkToast } from './session-print';
 import { canHideSecrets, hideSecretsToast } from './session-hide';
 import { canSetGlobalHotkey, globalHotkeyLabel, globalHotkeyToast } from './session-hotkey';
+import { icloudCwdToast, isIcloudPath } from './session-icloud';
 import { canSetOpenAtLogin, openAtLoginLabel, openAtLoginToast } from './session-login';
 import { alwaysOnTopLabel, alwaysOnTopToast, canSetAlwaysOnTop } from './session-float';
 import { allSpacesLabel, allSpacesToast, canSetAllSpaces } from './session-spaces';
@@ -259,6 +260,7 @@ export default function App2() {
   const compactPrev = useRef<Map<string, string>>(new Map());
   const compactPrimed = useRef(false);
   const autoCompacted = useRef(new Set<string>());
+  const icloudWarned = useRef(new Set<string>());
   const [menu, setMenu] = useState<MenuState>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [newBox, setNewBox] = useState<NewBoxState | null>(null);
@@ -321,6 +323,12 @@ export default function App2() {
     setToasts((t) => [...t, { id, text, error }]);
     window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), error ? 4000 : 2200);
   }, []);
+  const warnIcloud = useCallback((cwd?: string | null) => {
+    const path = String(cwd ?? '').trim();
+    if (!isIcloudPath(path) || icloudWarned.current.has(path)) return;
+    icloudWarned.current.add(path);
+    toast(icloudCwdToast());
+  }, [toast]);
 
   // -- 数据 ------------------------------------------------------------------
   const refreshLocal = useCallback(async () => {
@@ -486,13 +494,19 @@ export default function App2() {
       setActive({ machine: 'local', id: hit.session_id });
       setView('home');
       toast(leoSchemeToast(hit.title));
+      warnIcloud(cwd);
       return;
     }
     setNewBox({ open: true, machine: 'local', cwd });
     setView('home');
     toast(leoSchemeToast());
-  }), [toast]);
+    warnIcloud(cwd);
+  }), [toast, warnIcloud]);
 
+  useEffect(() => {
+    if (active?.machine !== 'local') return;
+    warnIcloud(activeSummary?.cwd);
+  }, [active?.machine, activeSummary?.cwd, warnIcloud]);
   useEffect(() => {
     void setDockNeedBadge(dockNeedBadge(allSessions.map((row) => row.s)));
   }, [allSessions]);
@@ -1358,12 +1372,13 @@ export default function App2() {
     try {
       const next = await pickSessionFolder();
       if (!next) return null;
+      warnIcloud(next);
       return next;
     } catch (error) {
       toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
       return null;
     }
-  }, [toast]);
+  }, [toast, warnIcloud]);
   const copyTitle = useCallback(async () => {
     const text = (sessionView.title || activeSummary?.title || '').trim();
     if (!text) { toast('这条会话还没有标题'); return; }
@@ -1977,6 +1992,7 @@ export default function App2() {
     }
     await withBusy(async () => {
       if (input.machine === 'local') {
+        warnIcloud(input.cwd);
         saveCwdHabit(input.cwd, { model: input.model, policy: input.policy });
         const created = await api.createLocalSession({ cwd: input.cwd, prompt: input.prompt, model: input.model, policy: input.policy });
         setActive({ machine: 'local', id: created.session_id });
@@ -1987,7 +2003,7 @@ export default function App2() {
       }
       setNewBox(null); setView('home');
     });
-  }, [providers, withBusy, refreshFleet, toast]);
+  }, [providers, withBusy, refreshFleet, toast, warnIcloud]);
 
   // -- 菜单 ------------------------------------------------------------------
   const openMenu = useCallback((el: HTMLElement, items: MenuItem[], onPick: (v: string) => void) => {
