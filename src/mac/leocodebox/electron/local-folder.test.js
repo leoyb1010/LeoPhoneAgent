@@ -22,6 +22,8 @@ test('装机壳把选目录和揭示接到工作台', () => {
   assert.match(main, /leocodebox-desktop:open-term/);
   assert.match(main, /leocodebox-desktop:open-url/);
   assert.match(main, /leocodebox-desktop:speak-text/);
+  assert.match(main, /leocodebox-desktop:keep-awake/);
+  assert.match(main, /powerSaveBlocker/);
   assert.match(main, /\/usr\/bin\/say/);
   assert.match(main, /showOpenDialog/);
   assert.match(main, /showItemInFolder|openPath/);
@@ -32,4 +34,5 @@ test('装机壳把选目录和揭示接到工作台', () => {
   assert.match(preload, /openTerm/);
   assert.match(preload, /openUrl/);
   assert.match(preload, /speakText/);
+  assert.match(preload, /keepAwake/);
 });

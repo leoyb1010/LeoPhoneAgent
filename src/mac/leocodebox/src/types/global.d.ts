@@ -11,6 +11,7 @@ declare global {
     leocodeboxDesktopTools?: {
       setThemeMode: (mode: 'system' | 'light' | 'dark') => Promise<unknown>;
       setRunningBadge?: (count: number) => Promise<unknown>;
+      keepAwake?: (on: boolean) => Promise<{ on?: boolean; blockers?: number }>;
       pickFolder?: () => Promise<{ path?: string; cancelled?: boolean }>;
       revealPath?: (target: string) => Promise<{ path: string }>;
       openPath?: (target: string) => Promise<{ path: string }>;

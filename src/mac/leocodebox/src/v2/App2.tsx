@@ -8,6 +8,7 @@ import { api, type FleetOverview, type HarnessEvent, type LocalOverview, type Pr
 import { canOpenSessionPath, openSessionPath, openSessionTerm, openSessionUrl, pickSessionFolder, revealSessionPath, speakSessionText } from './desktop-folder';
 import { dropBrowserFile, pasteSessionImage, pickSessionFiles } from './desktop-drop';
 import { onSessionNoticeAction, onSessionNoticeClick, setDockNeedBadge, showSessionNotice } from './desktop-notice';
+import { setSessionKeepAwake } from './desktop-awake';
 import { canAcceptSessionDrop, mentionDroppedFile } from './session-drop';
 import { canCommitSessionFiles, commitSessionFilesToast, defaultCommitMessage } from './session-commit';
 import { canShowSessionDiff } from './session-diff';
@@ -47,6 +48,7 @@ import { canMkdirSessionFolder, mkdirSessionToast, sanitizeFolderRel } from './s
 import { canMoveSessionFile, moveSessionToast, sanitizeMoveFolder } from './session-move';
 import { DRAFTS_KEY, readPersistedDrafts, writePersistedDrafts } from './session-draft';
 import { canHaltBusySessions, haltSessionsToast } from './session-halt';
+import { shouldKeepAwake } from './session-awake';
 import { canStopSession, stopSessionToast, stoppableLocalSessions } from './session-stop';
 import { canForgetEndedSessions, endedLocalSessionIds, forgetEndedToast } from './session-forget';
 import { canRecallForgotten, recallSessionToast, type ForgottenSession } from './session-recall';
@@ -405,6 +407,9 @@ export default function App2() {
 
   useEffect(() => {
     void setDockNeedBadge(dockNeedBadge(allSessions.map((row) => row.s)));
+  }, [allSessions]);
+  useEffect(() => {
+    void setSessionKeepAwake(shouldKeepAwake(allSessions));
   }, [allSessions]);
 
   useEffect(() => {

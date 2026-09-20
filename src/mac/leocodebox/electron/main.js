@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Notification, safeStorage, session, shell, webContents } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Notification, powerSaveBlocker, safeStorage, session, shell, webContents } from 'electron';
 import updaterPackage from 'electron-updater';
 import { randomBytes } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
@@ -19,6 +19,23 @@ import { isFirstPartyShellUrl } from './trustPolicy.js';
 import { DesktopUpdaterController, clearUpdaterTokenEnvironment } from './updater.js';
 
 const execFileAsync = promisify(execFile);
+const keepAwakeIds = [];
+
+function setKeepAwake(on) {
+  if (on) {
+    if (!keepAwakeIds.length) {
+      keepAwakeIds.push(powerSaveBlocker.start('prevent-display-sleep'));
+      keepAwakeIds.push(powerSaveBlocker.start('prevent-app-suspension'));
+    }
+  } else {
+    for (const id of keepAwakeIds) {
+      if (powerSaveBlocker.isStarted(id)) powerSaveBlocker.stop(id);
+    }
+    keepAwakeIds.length = 0;
+  }
+  return { on: Boolean(on), blockers: keepAwakeIds.length };
+}
+
 let sayChild = null;
 let sayVoicePromise = null;
 
@@ -561,6 +578,7 @@ function registerIpcHandlers() {
     }
     return true;
   });
+  trustedHandle('leocodebox-desktop:keep-awake', async (_event, raw) => setKeepAwake(Boolean(raw)));
 
   trustedHandle('leocodebox-desktop:notify', async (event, payload) => {
     if (!Notification.isSupported()) return { shown: false };
@@ -825,6 +843,7 @@ function registerAppEvents() {
   app.on('will-quit', () => {
     // Electron clears these on exit anyway; unregister explicitly for safety.
     globalShortcut.unregisterAll();
+    setKeepAwake(false);
   });
 }
 
