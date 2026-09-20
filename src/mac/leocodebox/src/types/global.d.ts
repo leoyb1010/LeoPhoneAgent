@@ -16,6 +16,8 @@ declare global {
       setOpenAtLogin?: (on: boolean) => Promise<{ on?: boolean }>;
       getAlwaysOnTop?: () => Promise<{ on?: boolean }>;
       setAlwaysOnTop?: (on: boolean) => Promise<{ on?: boolean }>;
+      getContentProtection?: () => Promise<{ on?: boolean }>;
+      setContentProtection?: (on: boolean) => Promise<{ on?: boolean }>;
       playDoneSound?: () => Promise<{ ok?: boolean }>;
       openLogs?: () => Promise<{ path?: string }>;
       pickFolder?: () => Promise<{ path?: string; cancelled?: boolean }>;

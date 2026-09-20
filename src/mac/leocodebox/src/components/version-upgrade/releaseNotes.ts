@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.1.41',
+    date: '2026-09-21',
+    items: [
+      '分享屏幕时能藏住窗口。',
+    ],
+  },
+  {
     version: '2.1.40',
     date: '2026-09-21',
     items: [

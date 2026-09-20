@@ -58,6 +58,24 @@ function setAlwaysOnTop(on) {
   return getAlwaysOnTop();
 }
 
+let contentProtectionOn = false;
+
+function getContentProtection() {
+  const win = desktopWindow?.getMainWindow();
+  if (!win || win.isDestroyed()) return { on: false };
+  const on = typeof win.isContentProtectionEnabled === 'function'
+    ? win.isContentProtectionEnabled()
+    : Boolean(contentProtectionOn);
+  return { on };
+}
+
+function setContentProtection(on) {
+  const win = desktopWindow?.getMainWindow();
+  contentProtectionOn = Boolean(on);
+  if (win && !win.isDestroyed()) win.setContentProtection(contentProtectionOn);
+  return getContentProtection();
+}
+
 const DONE_CHIME = '/System/Library/Sounds/Glass.aiff';
 let chimeChild = null;
 
@@ -655,6 +673,9 @@ function registerIpcHandlers() {
   ));
   trustedHandle('leocodebox-desktop:always-on-top', async (_event, raw) => (
     raw === undefined || raw === null ? getAlwaysOnTop() : setAlwaysOnTop(Boolean(raw))
+  ));
+  trustedHandle('leocodebox-desktop:content-protection', async (_event, raw) => (
+    raw === undefined || raw === null ? getContentProtection() : setContentProtection(Boolean(raw))
   ));
   trustedHandle('leocodebox-desktop:play-done-sound', async () => playDoneChime());
   trustedHandle('leocodebox-desktop:open-logs', async () => openAppLogs());

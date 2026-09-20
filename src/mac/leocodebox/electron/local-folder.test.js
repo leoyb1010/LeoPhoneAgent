@@ -27,6 +27,7 @@ test('装机壳把选目录和揭示接到工作台', () => {
   assert.match(main, /leocodebox-desktop:keep-awake/);
   assert.match(main, /leocodebox-desktop:open-at-login/);
   assert.match(main, /leocodebox-desktop:always-on-top/);
+  assert.match(main, /leocodebox-desktop:content-protection/);
   assert.match(main, /leocodebox-desktop:play-done-sound/);
   assert.match(main, /leocodebox-desktop:open-logs/);
   assert.match(main, /setLoginItemSettings/);
@@ -49,6 +50,8 @@ test('装机壳把选目录和揭示接到工作台', () => {
   assert.match(preload, /setOpenAtLogin/);
   assert.match(preload, /getAlwaysOnTop/);
   assert.match(preload, /setAlwaysOnTop/);
+  assert.match(preload, /getContentProtection/);
+  assert.match(preload, /setContentProtection/);
   assert.match(preload, /playDoneSound/);
   assert.match(preload, /openLogs/);
 });

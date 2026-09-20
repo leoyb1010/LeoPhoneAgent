@@ -11,6 +11,7 @@ import { onSessionNoticeAction, onSessionNoticeClick, setDockNeedBadge, showSess
 import { setSessionKeepAwake } from './desktop-awake';
 import { desktopLoginTools, readOpenAtLogin, writeOpenAtLogin } from './desktop-login';
 import { desktopFloatTools, readAlwaysOnTop, writeAlwaysOnTop } from './desktop-float';
+import { desktopProtectTools, readContentProtection, writeContentProtection } from './desktop-protect';
 import { desktopChimeTools, playSessionChime } from './desktop-chime';
 import { desktopLogsTools, openDesktopLogs } from './desktop-applogs';
 import { onLeoScheme } from './desktop-scheme';
@@ -31,6 +32,7 @@ import { canPrintTalk, clipPrintText, printTalkToast } from './session-print';
 import { canHideSecrets, hideSecretsToast } from './session-hide';
 import { canSetOpenAtLogin, openAtLoginLabel, openAtLoginToast } from './session-login';
 import { alwaysOnTopLabel, alwaysOnTopToast, canSetAlwaysOnTop } from './session-float';
+import { canSetContentProtection, contentProtectionLabel, contentProtectionToast } from './session-protect';
 import { DONE_CHIME_KEY, canPlayDoneChime, chimesFromSnapshot, doneChimeLabel, doneChimeToast, readDoneChimeOn } from './session-chime';
 import { canOpenLogs, openLogsLabel, openLogsToast } from './session-applogs';
 import { leoSchemeToast, pickSchemeSession } from './session-scheme';
@@ -206,6 +208,8 @@ export default function App2() {
   const canOpenAtLoginHere = canSetOpenAtLogin(desktopLoginTools());
   const [alwaysOnTop, setAlwaysOnTop] = useState(false);
   const canAlwaysOnTopHere = canSetAlwaysOnTop(desktopFloatTools());
+  const [contentProtection, setContentProtection] = useState(false);
+  const canProtectHere = canSetContentProtection(desktopProtectTools());
   const [doneChimeOn, setDoneChimeOn] = useState(() => {
     try { return readDoneChimeOn(localStorage.getItem(DONE_CHIME_KEY)); } catch { return true; }
   });
@@ -464,6 +468,10 @@ export default function App2() {
     if (!canAlwaysOnTopHere) return;
     void readAlwaysOnTop().then(setAlwaysOnTop).catch(() => setAlwaysOnTop(false));
   }, [canAlwaysOnTopHere]);
+  useEffect(() => {
+    if (!canProtectHere) return;
+    void readContentProtection().then(setContentProtection).catch(() => setContentProtection(false));
+  }, [canProtectHere]);
 
   useEffect(() => {
     const next = allSessions.map((row) => {
@@ -1034,6 +1042,19 @@ export default function App2() {
       toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
     }
   }, [canAlwaysOnTopHere, alwaysOnTop, toast]);
+  const toggleContentProtection = useCallback(async () => {
+    if (!canProtectHere) {
+      toast('这台电脑现在藏不住窗口', true);
+      return;
+    }
+    try {
+      const next = await writeContentProtection(!contentProtection);
+      setContentProtection(next);
+      toast(contentProtectionToast(next));
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+    }
+  }, [canProtectHere, contentProtection, toast]);
   const toggleDoneChime = useCallback(() => {
     if (!canDoneChimeHere) {
       toast('这台电脑现在响不了', true);
@@ -1809,6 +1830,7 @@ export default function App2() {
     ...(canHideHere ? [{ v: 'hidesecrets', t: hideSecretsOn ? '显示密钥' : '藏住密钥', sub: hideSecretsOn ? '现在藏着' : '只藏显示' }] : []),
     ...(canOpenAtLoginHere ? [{ v: 'openatlogin', t: openAtLoginLabel(openAtLogin), sub: openAtLogin ? '现在开机就开' : '登录后打开' }] : []),
     ...(canAlwaysOnTopHere ? [{ v: 'alwaysontop', t: alwaysOnTopLabel(alwaysOnTop), sub: alwaysOnTop ? '现在钉着' : '盖过别的窗口' }] : []),
+    ...(canProtectHere ? [{ v: 'protect', t: contentProtectionLabel(contentProtection), sub: contentProtection ? '现在分享时是黑的' : '录屏和分享里藏住' }] : []),
     ...(canDoneChimeHere ? [{ v: 'donechime', t: doneChimeLabel(doneChimeOn), sub: doneChimeOn ? '现在跑完会响' : '跑完不响' }] : []),
     ...(canOpenLogsHere ? [{ v: 'openlogs', t: openLogsLabel(), sub: '本机日志目录' }] : []),
     ...(canDictateHere ? [{ v: 'dictate', t: dictating ? '停住' : '对着说', sub: dictating ? '正在听' : '写进输入框' }] : []),
@@ -1885,6 +1907,7 @@ export default function App2() {
     else if (v === 'hidesecrets') toggleHideSecrets();
     else if (v === 'openatlogin') void toggleOpenAtLogin();
     else if (v === 'alwaysontop') void toggleAlwaysOnTop();
+    else if (v === 'protect') void toggleContentProtection();
     else if (v === 'donechime') toggleDoneChime();
     else if (v === 'openlogs') void openLogsHere();
     else if (v === 'dictate') dictateHere();
@@ -2071,10 +2094,11 @@ export default function App2() {
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...(canOpenAtLoginHere ? [{ g: '本机', t: openAtLoginLabel(openAtLogin), k: openAtLogin ? '现在开机就开' : '登录后打开', run: () => void toggleOpenAtLogin() }] : []),
     ...(canAlwaysOnTopHere ? [{ g: '本机', t: alwaysOnTopLabel(alwaysOnTop), k: alwaysOnTop ? '现在钉着' : '盖过别的窗口', run: () => void toggleAlwaysOnTop() }] : []),
+    ...(canProtectHere ? [{ g: '本机', t: contentProtectionLabel(contentProtection), k: contentProtection ? '现在分享时是黑的' : '录屏和分享里藏住', run: () => void toggleContentProtection() }] : []),
     ...(canDoneChimeHere ? [{ g: '本机', t: doneChimeLabel(doneChimeOn), k: doneChimeOn ? '现在跑完会响' : '跑完不响', run: () => toggleDoneChime() }] : []),
     ...(canOpenLogsHere ? [{ g: '本机', t: openLogsLabel(), k: '本机日志目录', run: () => void openLogsHere() }] : []),
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, importTalk, canImportHere, copyTalk, canCopyTalkHere, printTalk, canPrintTalkHere, toggleHideSecrets, canHideHere, hideSecretsOn, toggleOpenAtLogin, canOpenAtLoginHere, openAtLogin, toggleAlwaysOnTop, canAlwaysOnTopHere, alwaysOnTop, toggleDoneChime, canDoneChimeHere, doneChimeOn, openLogsHere, canOpenLogsHere, dictateHere, canDictateHere, dictating, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, speakLast, canSpeakLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openLastWritten, canOpenWritten, lastWritten, jumpLastFail, canJumpFail, lastFail, openLastRead, canOpenRead, lastRead, openHere, canHere, herePeers, showPulse, canPulse, pulseLabel, forkHere, canFork, openTalkLink, canLinks, talkLinks, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, importTalk, canImportHere, copyTalk, canCopyTalkHere, printTalk, canPrintTalkHere, toggleHideSecrets, canHideHere, hideSecretsOn, toggleOpenAtLogin, canOpenAtLoginHere, openAtLogin, toggleAlwaysOnTop, canAlwaysOnTopHere, alwaysOnTop, toggleContentProtection, canProtectHere, contentProtection, toggleDoneChime, canDoneChimeHere, doneChimeOn, openLogsHere, canOpenLogsHere, dictateHere, canDictateHere, dictating, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, speakLast, canSpeakLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openLastWritten, canOpenWritten, lastWritten, jumpLastFail, canJumpFail, lastFail, openLastRead, canOpenRead, lastRead, openHere, canHere, herePeers, showPulse, canPulse, pulseLabel, forkHere, canFork, openTalkLink, canLinks, talkLinks, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -2527,6 +2551,7 @@ export default function App2() {
                         {canHideHere ? <button className="link" type="button" onClick={toggleHideSecrets}>{hideSecretsOn ? '显示密钥' : '藏住密钥'}</button> : null}
                         {canOpenAtLoginHere ? <button className="link" type="button" onClick={() => { void toggleOpenAtLogin(); }}>{openAtLoginLabel(openAtLogin)}</button> : null}
                         {canAlwaysOnTopHere ? <button className="link" type="button" onClick={() => { void toggleAlwaysOnTop(); }}>{alwaysOnTopLabel(alwaysOnTop)}</button> : null}
+                        {canProtectHere ? <button className="link" type="button" onClick={() => { void toggleContentProtection(); }}>{contentProtectionLabel(contentProtection)}</button> : null}
                         {canDoneChimeHere ? <button className="link" type="button" onClick={toggleDoneChime}>{doneChimeLabel(doneChimeOn)}</button> : null}
                         {canOpenLogsHere ? <button className="link" type="button" onClick={() => { void openLogsHere(); }}>{openLogsLabel()}</button> : null}
                         {canDictateHere ? <button className="link" type="button" onClick={dictateHere}>{dictating ? '停住' : '对着说'}</button> : null}
