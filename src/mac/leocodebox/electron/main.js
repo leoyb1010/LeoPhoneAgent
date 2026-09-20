@@ -37,6 +37,15 @@ function setKeepAwake(on) {
   return { on: Boolean(on), blockers: keepAwakeIds.length };
 }
 
+function getOpenAtLogin() {
+  return { on: Boolean(app.getLoginItemSettings().openAtLogin) };
+}
+
+function setOpenAtLogin(on) {
+  app.setLoginItemSettings({ openAtLogin: Boolean(on) });
+  return getOpenAtLogin();
+}
+
 let sayChild = null;
 let sayVoicePromise = null;
 
@@ -608,6 +617,9 @@ function registerIpcHandlers() {
     return true;
   });
   trustedHandle('leocodebox-desktop:keep-awake', async (_event, raw) => setKeepAwake(Boolean(raw)));
+  trustedHandle('leocodebox-desktop:open-at-login', async (_event, raw) => (
+    raw === undefined || raw === null ? getOpenAtLogin() : setOpenAtLogin(Boolean(raw))
+  ));
 
   trustedHandle('leocodebox-desktop:notify', async (event, payload) => {
     if (!Notification.isSupported()) return { shown: false };

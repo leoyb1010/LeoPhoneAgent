@@ -101,6 +101,8 @@ if (isLocalHttpOrigin(window.location)) {
     setThemeMode: (mode) => ipcRenderer.invoke('leocodebox-desktop:set-theme-mode', mode),
     setRunningBadge: (count) => ipcRenderer.invoke('leocodebox-desktop:set-running-badge', count),
     keepAwake: (on) => ipcRenderer.invoke('leocodebox-desktop:keep-awake', on),
+    getOpenAtLogin: () => ipcRenderer.invoke('leocodebox-desktop:open-at-login'),
+    setOpenAtLogin: (on) => ipcRenderer.invoke('leocodebox-desktop:open-at-login', on),
     pickFolder: () => ipcRenderer.invoke('leocodebox-desktop:pick-folder'),
     revealPath: (target) => ipcRenderer.invoke('leocodebox-desktop:reveal-path', target),
     openPath: (target) => ipcRenderer.invoke('leocodebox-desktop:open-path', target),
