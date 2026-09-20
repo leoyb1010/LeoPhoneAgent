@@ -16,6 +16,7 @@ import { canRevertSessionFile, revertSessionFileToast } from './session-revert';
 import { canRenameSession, clipSessionTitle, renameSessionToast } from './session-title';
 import { canSetSessionRule, clipSessionRule, ruleSessionToast } from './session-rule';
 import { canSetCwdRule, clipCwdRule, cwdRuleToast } from './session-cwd-rule';
+import { saveCwdHabit } from './session-cwd-habit';
 import { canMentionLastReply, lastAiReply, mentionLastReply, mentionLastReplyToast } from './session-reply';
 import { canCopyLastReply, copyLastReplyToast } from './session-copy-reply';
 import { canRetryLastUser, lastUserPrompt, retryLastUserToast } from './session-retry';
@@ -51,7 +52,7 @@ import { PINNED_SESSIONS_KEY, comparePinnedFirst, pinSessionToast, readPinnedSes
 import { canSearchSession, searchQueryReady, searchSessionToast, type SessionSearchHit } from './session-search';
 import { canShowSessionLog, type SessionCommit } from './session-log';
 import { approvalChoiceActions, approvalToast, dockNeedBadge, firstPendingApproval, noticeNotifyPayload, noticesFromSnapshot, sessionPathTarget } from './session-notice';
-import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, removeHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerCanFollowUp, composerNeedsModelSwitch, composerPlaceholder, composerRunningHint, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, followUpToast, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mentionWindowRead, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, pendingFollowUps, prettyModelName, providerOf, queueClearedToast, rankModelsForPicker, readHiddenSessionKeys, relativeTime, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionCanResume, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, usableWindowMenus, windowBoundLabel, windowMenuLabel, windowPadGesture, WINDOW_KEY_BUTTONS, type FlowRow, type Group, type SessionView } from './model';
+import { HIDDEN_SESSIONS_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, removeHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerCanFollowUp, composerNeedsModelSwitch, composerPlaceholder, composerRunningHint, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, followUpToast, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mentionWindowRead, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, pendingFollowUps, prettyModelName, providerOf, queueClearedToast, rankModelsForPicker, readHiddenSessionKeys, relativeTime, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionCanResume, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, usableWindowMenus, windowBoundLabel, windowMenuLabel, windowPadGesture, WINDOW_KEY_BUTTONS, type FlowRow, type Group, type SessionView } from './model';
 import { usableModelsFromProviders } from './settings-form';
 import { artifactNameFromPath, clipFilePeek, cwdChipLabel, isPeekDrawer, isWorkspaceDrawer, machineChipLabel, peekCanWriteBack, peekFileCaption, sessionFilePath, titlebarHomeCopy } from './local-files';
 import { REMOTE_DRAWER_ACTION_LABEL, isRemoteDrawerKind, mergeFilePins, remoteDrawerActions, remoteDrawerCopy } from './remote-drawer';
@@ -1386,11 +1387,14 @@ export default function App2() {
   useEffect(() => onSessionNoticeAction((target) => {
     void approveTarget(target, target.approvalId, target.choice);
   }), [approveTarget]);
-  const setPolicy = useCallback((policy: string) => active && withBusy(() => api.setPolicy(active, policy)), [active, withBusy]);
+  const setPolicy = useCallback((policy: string) => {
+    saveCwdHabit(activeSummary?.cwd, { policy });
+    return active && withBusy(() => api.setPolicy(active, policy));
+  }, [active, activeSummary?.cwd, withBusy]);
   const setModel = useCallback((provider: string, modelId: string) => {
-    try { localStorage.setItem(LAST_MODEL_KEY, `${provider}/${modelId}`); } catch { /* ignore */ }
+    saveCwdHabit(activeSummary?.cwd, { model: `${provider}/${modelId}` });
     return active && withBusy(() => api.rpc(active, { type: 'set_model', provider, modelId }));
-  }, [active, withBusy]);
+  }, [active, activeSummary?.cwd, withBusy]);
   const setThinking = useCallback((level: string) => active && withBusy(() => api.rpc(active, { type: 'set_thinking_level', level })), [active, withBusy]);
   const compact = useCallback(() => active && withBusy(() => api.rpc(active, { type: 'compact' }), '压缩请求已发出'), [active, withBusy]);
   const approveFirstPending = useCallback(() => {
@@ -1441,6 +1445,7 @@ export default function App2() {
     }
     await withBusy(async () => {
       if (input.machine === 'local') {
+        saveCwdHabit(input.cwd, { model: input.model, policy: input.policy });
         const created = await api.createLocalSession({ cwd: input.cwd, prompt: input.prompt, model: input.model, policy: input.policy });
         setActive({ machine: 'local', id: created.session_id });
       } else {

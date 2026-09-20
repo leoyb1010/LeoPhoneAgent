@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { LAST_CWD_KEY, LAST_MODEL_KEY, POLICY_LABEL, composerShouldSend, highlightQueryParts, isLiveRow, markupParts, modelChoiceHint, modelLikelyUnusable, pickInitialCwd, pickInitialModel, prettyModelName, userTurnLabel, type FlowRow, type Group } from './model';
+import { CWD_HABITS_KEY, pickCwdModel, pickCwdPolicy, saveCwdHabit } from './session-cwd-habit';
 
 function FindBits({ text, query }: { text: string; query?: string }) {
   return (
@@ -114,10 +115,25 @@ export function NewSessionBox({ machine, groups, models, defaultCwd, recentCwds,
     try { return pickInitialCwd(defaultCwd, localStorage.getItem(LAST_CWD_KEY) || ''); } catch { return pickInitialCwd(defaultCwd, ''); }
   });
   const [model, setModel] = useState<string>(() => {
-    try { return pickInitialModel(models, initialModel || localStorage.getItem(LAST_MODEL_KEY) || ''); } catch { return pickInitialModel(models, initialModel || ''); }
+    try {
+      const startCwd = pickInitialCwd(defaultCwd, localStorage.getItem(LAST_CWD_KEY) || '');
+      return pickInitialModel(models, pickCwdModel({
+        cwd: startCwd,
+        habits: localStorage.getItem(CWD_HABITS_KEY),
+        explicit: initialModel,
+        fallback: localStorage.getItem(LAST_MODEL_KEY),
+      }));
+    } catch { return pickInitialModel(models, initialModel || ''); }
   });
   const [policy, setPolicy] = useState(() => {
-    try { return localStorage.getItem('leo2.defaultPolicy') || 'default'; } catch { return 'default'; }
+    try {
+      const startCwd = pickInitialCwd(defaultCwd, localStorage.getItem(LAST_CWD_KEY) || '');
+      return pickCwdPolicy({
+        cwd: startCwd,
+        habits: localStorage.getItem(CWD_HABITS_KEY),
+        fallback: localStorage.getItem('leo2.defaultPolicy') || 'default',
+      }) || 'default';
+    } catch { return 'default'; }
   });
   const [prompt, setPrompt] = useState(initialPrompt ?? '');
   useEffect(() => { setTarget(machine); }, [machine]);
@@ -127,20 +143,39 @@ export function NewSessionBox({ machine, groups, models, defaultCwd, recentCwds,
   }, [defaultCwd]);
   useEffect(() => { setPrompt(initialPrompt ?? ''); }, [initialPrompt]);
   useEffect(() => {
-    const remembered = (() => { try { return initialModel || localStorage.getItem(LAST_MODEL_KEY) || ''; } catch { return initialModel || ''; } })();
+    const remembered = (() => {
+      try {
+        return pickCwdModel({
+          cwd,
+          habits: localStorage.getItem(CWD_HABITS_KEY),
+          explicit: initialModel,
+          fallback: localStorage.getItem(LAST_MODEL_KEY),
+        });
+      } catch { return initialModel || ''; }
+    })();
     if (models.length === 0) return;
     if (model && models.some((m) => `${m.provider}/${m.id}` === model) && !modelLikelyUnusable(model)) return;
     setModel(pickInitialModel(models, remembered));
-  }, [models, model, initialModel]);
+  }, [models, model, initialModel, cwd]);
+  const applyCwd = (next: string) => {
+    setCwd(next);
+    try {
+      const habits = localStorage.getItem(CWD_HABITS_KEY);
+      const nextModel = pickCwdModel({ cwd: next, habits, fallback: model || localStorage.getItem(LAST_MODEL_KEY) });
+      if (nextModel) setModel(pickInitialModel(models, nextModel));
+      const nextPolicy = pickCwdPolicy({ cwd: next, habits, fallback: policy });
+      if (nextPolicy) setPolicy(nextPolicy);
+    } catch { /* ignore */ }
+  };
   const needModel = target === 'local' && models.length === 0;
   const submit = () => {
     if (!prompt.trim() || needModel) return;
+    const nextCwd = cwd.trim();
     try {
-      if (model) localStorage.setItem(LAST_MODEL_KEY, model);
-      const nextCwd = cwd.trim();
+      saveCwdHabit(nextCwd, { model, policy });
       if (nextCwd) localStorage.setItem(LAST_CWD_KEY, nextCwd);
     } catch { /* ignore */ }
-    onCreate({ machine: target, cwd: cwd.trim() || '~', prompt: prompt.trim(), model: model || null, policy });
+    onCreate({ machine: target, cwd: nextCwd || '~', prompt: prompt.trim(), model: model || null, policy });
   };
   return (
     <div className="newbox">
@@ -158,10 +193,10 @@ export function NewSessionBox({ machine, groups, models, defaultCwd, recentCwds,
       <div className="cwd-row">
         <div>
           <label>目录</label>
-          <input value={cwd} onChange={(e) => setCwd(e.target.value)} className="mono" placeholder="~/项目路径" list="leo2-cwds" />
+          <input value={cwd} onChange={(e) => applyCwd(e.target.value)} className="mono" placeholder="~/项目路径" list="leo2-cwds" />
           {recentCwds && recentCwds.length > 0 && <datalist id="leo2-cwds">{recentCwds.map((c) => <option key={c} value={c} />)}</datalist>}
         </div>
-        {target === 'local' && onPickFolder ? <button type="button" className="btn-s" disabled={busy} onClick={() => { void onPickFolder().then((next) => { if (next) setCwd(next); }); }}>选择…</button> : null}
+        {target === 'local' && onPickFolder ? <button type="button" className="btn-s" disabled={busy} onClick={() => { void onPickFolder().then((next) => { if (next) applyCwd(next); }); }}>选择…</button> : null}
       </div>
       <div><label>第一句话</label><textarea autoFocus value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="要它做什么 · ↩ 开始,⇧↩ 换行" onKeyDown={(e) => { if (composerShouldSend(e) && prompt.trim()) { e.preventDefault(); submit(); } }} /></div>
       <div className="acts"><button className="btn-g" onClick={onCancel}>取消</button><button className="btn-s" onClick={submit} disabled={busy || !prompt.trim() || needModel}>开始</button></div>
