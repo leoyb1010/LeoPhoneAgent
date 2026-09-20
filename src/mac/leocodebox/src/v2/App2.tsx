@@ -17,6 +17,7 @@ import { desktopChimeTools, playSessionChime } from './desktop-chime';
 import { desktopA11yTools, openDesktopAccessibility } from './desktop-a11y';
 import { desktopLogsTools, openDesktopLogs } from './desktop-applogs';
 import { desktopRelaunchTools, relaunchDesktop } from './desktop-relaunch';
+import { desktopUpdater, runDesktopUpdate } from './desktop-update';
 import { onLeoScheme } from './desktop-scheme';
 import { printSessionTalk } from './desktop-print';
 import { canAcceptSessionDrop, mentionDroppedFile } from './session-drop';
@@ -42,6 +43,7 @@ import { canOpenAccessibility, openAccessibilityLabel, openAccessibilityToast } 
 import { canOpenLogs, openLogsLabel, openLogsToast } from './session-applogs';
 import { canRelaunch, relaunchBusy, relaunchBusyToast, relaunchLabel, relaunchToast } from './session-relaunch';
 import { followSystemLabel, followSystemToast } from './session-theme';
+import { canCheckUpdate, checkUpdateLabel, checkUpdateToast, nextUpdateAction, type UpdateRow } from './session-update';
 import { leoSchemeToast, pickSchemeSession } from './session-scheme';
 import { autoCompactToast, shouldAutoCompact } from './session-autocompact';
 import { appendDictate, canDictate, clipDictateText, dictateListeningToast, dictateStoppedToast, dictateToast, dictateUnavailableToast, speechRecognitionCtor } from './session-dictate';
@@ -226,6 +228,8 @@ export default function App2() {
   const canOpenLogsHere = canOpenLogs(desktopLogsTools());
   const canOpenA11yHere = canOpenAccessibility(desktopA11yTools());
   const canRelaunchHere = canRelaunch(desktopRelaunchTools());
+  const canCheckUpdateHere = canCheckUpdate(desktopUpdater());
+  const [updateState, setUpdateState] = useState<UpdateRow | null>(null);
   const chimePrev = useRef<Map<string, string>>(new Map());
   const chimePrimed = useRef(false);
   const compactPrev = useRef<Map<string, string>>(new Map());
@@ -487,6 +491,12 @@ export default function App2() {
     if (!canProtectHere) return;
     void readContentProtection().then(setContentProtection).catch(() => setContentProtection(false));
   }, [canProtectHere]);
+  useEffect(() => {
+    if (!canCheckUpdateHere) return undefined;
+    const bridge = desktopUpdater();
+    void bridge?.getState?.().then(setUpdateState).catch(() => setUpdateState(null));
+    return bridge?.onStateChanged?.((row) => setUpdateState(row));
+  }, [canCheckUpdateHere]);
 
   useEffect(() => {
     const next = allSessions.map((row) => {
@@ -1073,6 +1083,25 @@ export default function App2() {
       toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
     }
   }, [allSessions, canRelaunchHere, toast]);
+  const checkUpdateHere = useCallback(async () => {
+    if (!canCheckUpdateHere) {
+      toast('这台电脑现在不能检查更新', true);
+      return;
+    }
+    const action = nextUpdateAction(updateState);
+    if (action === 'wait') {
+      toast(checkUpdateToast(updateState));
+      return;
+    }
+    try {
+      const row = await runDesktopUpdate(action);
+      setUpdateState(row);
+      const failed = Boolean(row.error || row.status === 'error' || row.status === 'authentication-required' || row.status === 'development-build');
+      toast(checkUpdateToast(row), failed);
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+    }
+  }, [canCheckUpdateHere, toast, updateState]);
   const followSystemHere = useCallback(() => {
     toast(followSystemToast(themeMode));
     if (themeMode !== 'system') setThemeMode('system');
@@ -1896,6 +1925,7 @@ export default function App2() {
     ...(canOpenLogsHere ? [{ v: 'openlogs', t: openLogsLabel(), sub: '本机日志目录' }] : []),
     ...(canOpenA11yHere ? [{ v: 'opena11y', t: openAccessibilityLabel(), sub: '系统隐私设置' }] : []),
     ...(canRelaunchHere ? [{ v: 'relaunch', t: relaunchLabel(), sub: '整进程重来' }] : []),
+    ...(canCheckUpdateHere ? [{ v: 'checkup', t: checkUpdateLabel(updateState), sub: updateState?.latestVersion ? `现在 ${updateState.latestVersion}` : '看有没有新版本' }] : []),
     { v: 'followsys', t: followSystemLabel(themeMode), sub: themeMode === 'system' ? '现在跟着 macOS' : '跟着 macOS 明暗' },
     ...(canDictateHere ? [{ v: 'dictate', t: dictating ? '停住' : '对着说', sub: dictating ? '正在听' : '写进输入框' }] : []),
     ...(canSearchHere ? [{ v: 'searchcwd', t: '在目录里搜', sub: activeSummary?.cwd || '会话目录' }] : []),
@@ -1977,6 +2007,7 @@ export default function App2() {
     else if (v === 'openlogs') void openLogsHere();
     else if (v === 'opena11y') void openA11yHere();
     else if (v === 'relaunch') void relaunchHere();
+    else if (v === 'checkup') void checkUpdateHere();
     else if (v === 'followsys') followSystemHere();
     else if (v === 'dictate') dictateHere();
     else if (v === 'searchcwd') openSearch();
@@ -2169,8 +2200,9 @@ export default function App2() {
     ...(canOpenLogsHere ? [{ g: '本机', t: openLogsLabel(), k: '本机日志目录', run: () => void openLogsHere() }] : []),
     ...(canOpenA11yHere ? [{ g: '本机', t: openAccessibilityLabel(), k: '系统隐私设置', run: () => void openA11yHere() }] : []),
     ...(canRelaunchHere ? [{ g: '本机', t: relaunchLabel(), k: '整进程重来', run: () => void relaunchHere() }] : []),
+    ...(canCheckUpdateHere ? [{ g: '本机', t: checkUpdateLabel(updateState), k: updateState?.latestVersion ? `现在 ${updateState.latestVersion}` : '看有没有新版本', run: () => void checkUpdateHere() }] : []),
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, themeMode, followSystemHere, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, importTalk, canImportHere, copyTalk, canCopyTalkHere, printTalk, canPrintTalkHere, toggleHideSecrets, canHideHere, hideSecretsOn, toggleOpenAtLogin, canOpenAtLoginHere, openAtLogin, toggleGlobalHotkey, canHotkeyHere, globalHotkey, toggleAlwaysOnTop, canAlwaysOnTopHere, alwaysOnTop, toggleContentProtection, canProtectHere, contentProtection, toggleDoneChime, canDoneChimeHere, doneChimeOn, openLogsHere, canOpenLogsHere, openA11yHere, canOpenA11yHere, relaunchHere, canRelaunchHere, dictateHere, canDictateHere, dictating, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, speakLast, canSpeakLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openLastWritten, canOpenWritten, lastWritten, jumpLastFail, canJumpFail, lastFail, openLastRead, canOpenRead, lastRead, openHere, canHere, herePeers, showPulse, canPulse, pulseLabel, forkHere, canFork, openTalkLink, canLinks, talkLinks, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, themeMode, followSystemHere, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, importTalk, canImportHere, copyTalk, canCopyTalkHere, printTalk, canPrintTalkHere, toggleHideSecrets, canHideHere, hideSecretsOn, toggleOpenAtLogin, canOpenAtLoginHere, openAtLogin, toggleGlobalHotkey, canHotkeyHere, globalHotkey, toggleAlwaysOnTop, canAlwaysOnTopHere, alwaysOnTop, toggleContentProtection, canProtectHere, contentProtection, toggleDoneChime, canDoneChimeHere, doneChimeOn, openLogsHere, canOpenLogsHere, openA11yHere, canOpenA11yHere, relaunchHere, canRelaunchHere, checkUpdateHere, canCheckUpdateHere, updateState, dictateHere, canDictateHere, dictating, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, speakLast, canSpeakLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openLastWritten, canOpenWritten, lastWritten, jumpLastFail, canJumpFail, lastFail, openLastRead, canOpenRead, lastRead, openHere, canHere, herePeers, showPulse, canPulse, pulseLabel, forkHere, canFork, openTalkLink, canLinks, talkLinks, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -2629,6 +2661,7 @@ export default function App2() {
                         {canOpenLogsHere ? <button className="link" type="button" onClick={() => { void openLogsHere(); }}>{openLogsLabel()}</button> : null}
                         {canOpenA11yHere ? <button className="link" type="button" onClick={() => { void openA11yHere(); }}>{openAccessibilityLabel()}</button> : null}
                         {canRelaunchHere ? <button className="link" type="button" onClick={() => { void relaunchHere(); }}>{relaunchLabel()}</button> : null}
+                        {canCheckUpdateHere ? <button className="link" type="button" onClick={() => { void checkUpdateHere(); }}>{checkUpdateLabel(updateState)}</button> : null}
                         <button className="link" type="button" onClick={followSystemHere}>{followSystemLabel(themeMode)}</button>
                         {canDictateHere ? <button className="link" type="button" onClick={dictateHere}>{dictating ? '停住' : '对着说'}</button> : null}
                         {canRecallHere ? <button className="link" onClick={() => void openRecall()}>找回来</button> : null}
@@ -2641,7 +2674,7 @@ export default function App2() {
           ))}
           {view === 'devices' && <DevicesPage local={local} fleet={fleet} stale={fleetHealth.stale} toast={toast} focusMachine={focusMachine} onNewOn={(m) => { setFocusMachine(null); if (m === 'local') beginLocalNew(); else { setNewBox({ open: true, machine: m }); setView('home'); } }} onOpenRelay={() => { setOpenLegacy(true); setView('settings'); }} />}
           {view === 'channels' && <ChannelsPage toast={toast} models={configuredModels} />}
-          {view === 'settings' && <SettingsPage toast={toast} onProvidersChanged={() => void refreshProviders()} openLegacy={openLegacy} onLegacyClosed={() => setOpenLegacy(false)} onShowWhatsNew={() => setWhatsNew(currentReleaseNote() ?? LEO_RELEASE_NOTES[0] ?? null)} />}
+          {view === 'settings' && <SettingsPage toast={toast} onProvidersChanged={() => void refreshProviders()} openLegacy={openLegacy} onLegacyClosed={() => setOpenLegacy(false)} onShowWhatsNew={() => setWhatsNew(currentReleaseNote() ?? LEO_RELEASE_NOTES[0] ?? null)} onCheckUpdate={canCheckUpdateHere ? () => { void checkUpdateHere(); } : undefined} checkUpdateLabel={checkUpdateLabel(updateState)} />}
         </main>
       </div>
 
