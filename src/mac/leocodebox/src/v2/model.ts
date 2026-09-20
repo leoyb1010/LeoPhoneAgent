@@ -23,6 +23,7 @@ export type SessionView = {
   thinking: string;
   title: string;
   rule: string;
+  cwdRule: string;
   window: BoundWindow | null;
   pendingApprovals: Map<string, FlowRow & { k: 'ap' }>;
 };
@@ -46,6 +47,7 @@ export function emptyView(summary?: SessionSummary | null): SessionView {
     thinking: 'off',
     title: summary?.title ?? '',
     rule: summary?.rule ?? '',
+    cwdRule: summary?.cwd_rule ?? '',
     window: boundWindowFromUnknown(summary?.window),
     pendingApprovals: new Map(),
   };
@@ -338,7 +340,7 @@ export function applyEvent(view: SessionView, event: HarnessEvent): SessionView 
   if (typeof event.seq === 'number' && event.seq > 0 && event.seq <= view.seq) return view;
   const seq = typeof event.seq === 'number' ? event.seq : view.seq;
   let rows = view.rows;
-  let { status, policy, model, thinking, title, rule, window: bound } = view;
+  let { status, policy, model, thinking, title, rule, cwdRule, window: bound } = view;
   const pendingApprovals = new Map(view.pendingApprovals);
 
   switch (name) {
@@ -445,6 +447,12 @@ export function applyEvent(view: SessionView, event: HarnessEvent): SessionView 
       rows = [...rows, { k: 'sys', key: nextKey(), text: next ? `规矩改成「${next.split('\n')[0]}」` : '已去掉这条会话的规矩', tone: 'muted' }];
       break;
     }
+    case 'session.cwd_rule': {
+      const next = str(event.cwd_rule).replace(/\u0000/g, '').replace(/\r\n/g, '\n').trim().slice(0, 400);
+      cwdRule = next;
+      rows = [...rows, { k: 'sys', key: nextKey(), text: next ? `目录规矩改成「${next.split('\n')[0]}」` : '已去掉这个目录的规矩', tone: 'muted' }];
+      break;
+    }
     case 'session.policy':
       policy = str(event.policy) || policy;
       rows = [...rows, { k: 'sys', key: nextKey(), text: `审批策略改为「${POLICY_LABEL[policy] ?? policy}」`, tone: 'muted' }];
@@ -484,7 +492,7 @@ export function applyEvent(view: SessionView, event: HarnessEvent): SessionView 
     default:
       break;
   }
-  return { rows, seq: Math.max(view.seq, seq), status, policy, model, thinking, title, rule, window: bound, pendingApprovals };
+  return { rows, seq: Math.max(view.seq, seq), status, policy, model, thinking, title, rule, cwdRule, window: bound, pendingApprovals };
 }
 
 export function modelLabel(model: string | null | undefined): string {

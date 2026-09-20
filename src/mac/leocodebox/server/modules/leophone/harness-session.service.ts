@@ -27,7 +27,8 @@ import { HarnessJournal, type JournalHealth, type JournalOptions } from './harne
 import { HARNESSES, resolveExecutable, type HarnessLaunchContext, type HarnessModel, type HarnessSpec } from './harness-specs.js';
 import { LEOAGENT_HOME } from './leoagent-home.js';
 import { findPiSessionFile, hasAnyPiAuth, normalizePolicy, piSessionResumable, writePolicy, type ApprovalPolicy } from './pi-runtime.js';
-import { applySessionRule, readRuleSidecar, writeRuleSidecar } from './session-rule.js';
+import { applyOutgoingRules, readCwdRuleSidecar, writeCwdRuleSidecar } from './session-cwd-rule.js';
+import { readRuleSidecar, writeRuleSidecar } from './session-rule.js';
 import { clipSessionTitle, readTitleSidecar, writeTitleSidecar } from './session-title.js';
 
 // LeoPhoneAgent harness 会话宿主——leoagent(Python)HarnessManager/HarnessSession
@@ -129,6 +130,8 @@ export class HarnessSession {
   title = '';
   /** 这条会话自己的规矩,每轮 prompt/steer/follow_up 发给内核时带着。 */
   rule = '';
+  /** 这个目录的规矩,同一 cwd 新开的会话也会带着。 */
+  cwdRule = '';
   /** 最后一件有行动价值的事(用户说话 / 工具开跑 / 待批 / 终态),供列表一行摘要。 */
   lastEvent: Record<string, unknown> | null = null;
   createdAt = Date.now() / 1000;
@@ -154,6 +157,7 @@ export class HarnessSession {
     this.model = args.model ?? null;
     this.policy = normalizePolicy(args.policy);
     this.rule = readRuleSidecar(args.logPath);
+    this.cwdRule = readCwdRuleSidecar(args.cwd);
     this.journal = args.journal ?? new HarnessJournal(args.logPath, {
       ...args.journalOptions,
       onCommitted: (event) => {
@@ -456,7 +460,7 @@ export class HarnessSession {
     if (outgoing.type === 'steer' || outgoing.type === 'follow_up') {
       const text = String(outgoing.message ?? '').trim();
       if (text) {
-        outgoing.message = applySessionRule(text, this.rule);
+        outgoing.message = applyOutgoingRules(text, this.rule, readCwdRuleSidecar(this.cwd) || this.cwdRule);
         this.emit({ event: EVENT_USER_MESSAGE, text, mode: outgoing.type });
       }
     }
@@ -485,7 +489,7 @@ export class HarnessSession {
       }
       return;
     }
-    const result = this.dialect.userMessage(applySessionRule(text, this.rule));
+    const result = this.dialect.userMessage(applyOutgoingRules(text, this.rule, readCwdRuleSidecar(this.cwd) || this.cwdRule));
     if ('frames' in result) {
       this.writeFrames(result.frames);
     }
@@ -618,6 +622,14 @@ export class HarnessSession {
     return next;
   }
 
+  /** 这个目录的规矩写在本机旁路文件,同一 cwd 的会话共享。空的就是去掉。 */
+  setCwdRule(raw: string): string {
+    const next = writeCwdRuleSidecar(this.cwd, raw);
+    this.cwdRule = next;
+    this.emit({ event: 'session.cwd_rule', cwd_rule: next });
+    return next;
+  }
+
   /** 改本会话的审批策略:落到策略文件(pi extension 每次工具调用都读),并写进日志让各端同步。 */
   setPolicy(input: unknown): ApprovalPolicy {
     this.policy = normalizePolicy(input);
@@ -637,6 +649,7 @@ export class HarnessSession {
       policy: this.policy,
       title: this.title,
       rule: this.rule,
+      cwd_rule: this.cwdRule || readCwdRuleSidecar(this.cwd),
       last_event: this.lastEvent,
       created_at: this.createdAt,
       updated_at: this.updatedAt,

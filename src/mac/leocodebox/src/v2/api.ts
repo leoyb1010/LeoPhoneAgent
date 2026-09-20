@@ -17,6 +17,7 @@ export type SessionSummary = {
   policy: string;
   title: string;
   rule?: string;
+  cwd_rule?: string;
   last_event: LastEvent;
   created_at: number;
   updated_at: number;
@@ -198,6 +199,8 @@ export const api = {
     sendJson<{ ok: true; title: string }>(`${sessionBase(target)}/title`, { title }),
   setLocalSessionRule: (target: SessionTarget, rule: string) =>
     sendJson<{ ok: true; rule: string }>(`${sessionBase(target)}/rule`, { rule }),
+  setLocalCwdRule: (target: SessionTarget, cwd_rule: string) =>
+    sendJson<{ ok: true; cwd_rule: string }>(`${sessionBase(target)}/cwd-rule`, { cwd_rule }),
   rpc: (target: SessionTarget, frame: Record<string, unknown>) => sendJson(`${sessionBase(target)}/rpc`, frame),
 
   /**

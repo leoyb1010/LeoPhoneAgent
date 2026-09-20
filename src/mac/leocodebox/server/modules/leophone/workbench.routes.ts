@@ -687,6 +687,17 @@ router.post('/leophone/local/sessions/:sessionId/rule', (req, res) => {
   }
 });
 
+router.post('/leophone/local/sessions/:sessionId/cwd-rule', (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  try {
+    const cwd_rule = session.setCwdRule(String(((req.body ?? {}) as Record<string, unknown>).cwd_rule ?? ''));
+    res.json({ ok: true, cwd_rule });
+  } catch (error) {
+    jsonError(res, 409, error instanceof Error ? error.message : String(error));
+  }
+});
+
 router.post('/leophone/local/sessions/:sessionId/policy', (req, res) => {
   const session = requireSession(req, res);
   if (!session) return;

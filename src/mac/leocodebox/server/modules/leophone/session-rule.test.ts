@@ -9,7 +9,7 @@ import { applySessionRule, readRuleSidecar, writeRuleSidecar } from './session-r
 test('管理器接上了 setRule，路由挂在本机 rule', () => {
   const service = fs.readFileSync(new URL('./harness-session.service.ts', import.meta.url), 'utf8');
   assert.match(service, /setRule\(/);
-  assert.match(service, /applySessionRule/);
+  assert.match(service, /applyOutgoingRules/);
   const routes = fs.readFileSync(new URL('./workbench.routes.ts', import.meta.url), 'utf8');
   assert.match(routes, /\/sessions\/:sessionId\/rule/);
   assert.match(routes, /setRule/);
