@@ -387,7 +387,8 @@ export class HarnessJournal {
     let cut = end;
     for await (const row of journalLines(this.logPath, 0, end)) {
       const event = eventFromLine(row.line);
-      if (event?.seq && event.seq >= seq) {
+      const eventSeq = Number(event?.seq);
+      if (event && Number.isSafeInteger(eventSeq) && eventSeq >= seq) {
         cut = row.start;
         break;
       }

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 
 import { EVENT_USER_MESSAGE, type HarnessEvent } from './harness-dialects.js';
 
-export function lastPromptSeq(events: readonly Pick<HarnessEvent, 'event' | 'mode' | 'seq' | 'text'>[]): {
+export function lastPromptSeq(events: readonly HarnessEvent[]): {
   seq: number;
   prompt: string;
 } {
@@ -11,8 +11,9 @@ export function lastPromptSeq(events: readonly Pick<HarnessEvent, 'event' | 'mod
   for (const ev of events) {
     if (ev.event !== EVENT_USER_MESSAGE) continue;
     if (ev.mode === 'steer' || ev.mode === 'follow_up') continue;
-    if (typeof ev.seq !== 'number' || ev.seq <= 0) continue;
-    seq = ev.seq;
+    const next = Number(ev.seq);
+    if (!Number.isSafeInteger(next) || next <= 0) continue;
+    seq = next;
     prompt = String(ev.text ?? '').trim();
   }
   return { seq, prompt };
