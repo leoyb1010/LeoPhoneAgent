@@ -267,7 +267,25 @@ export class PiRpcDialect implements HarnessDialect {
       // confirm 带 title + message,答 { confirmed }。旧实现读的是 choices / result,
       // 与真实协议对不上,审批永远送不回去。
       const method = str(obj.method);
-      if (method === 'select' || method === 'confirm') {
+      if (method === 'input' || method === 'editor') {
+        out.push({
+          event: EVENT_APPROVAL_REQUEST,
+          title: str(obj.title) || '需要你答一句',
+          command: str(obj.placeholder || obj.prefill || obj.title),
+          tool: '',
+          cwd: '',
+          host: '',
+          scope: '',
+          args: null,
+          description: str(obj.placeholder || obj.prefill),
+          choices: ['reply', 'deny'],
+          request_id: obj.id,
+          method,
+          placeholder: str(obj.placeholder),
+          prefill: str(obj.prefill),
+          raw: obj,
+        });
+      } else if (method === 'select' || method === 'confirm') {
         const structured = parseLeoApprovalTitle(obj.title);
         const options = asArray(obj.options).map(str);
         out.push({
@@ -394,6 +412,10 @@ export class PiRpcDialect implements HarnessDialect {
     if (requestId == null) return null;
     if (pending.method === 'confirm') {
       return { id: requestId, type: 'extension_ui_response', confirmed: choiceAllowed(choice) };
+    }
+    if (pending.method === 'input' || pending.method === 'editor') {
+      if (choice === 'deny') return { id: requestId, type: 'extension_ui_response', cancelled: true };
+      return { id: requestId, type: 'extension_ui_response', value: String(_reason ?? '') };
     }
     // select:原样回选项标签;客户端说的是我们词汇里的 once / always / deny 时按语义映射。
     const options = asArray(pending.choices).map(str);

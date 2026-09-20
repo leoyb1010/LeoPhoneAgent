@@ -102,6 +102,7 @@ import { canOpenTalkLinks, sessionTalkLinks, talkLinkPickerHint, talkLinkToast }
 import { canShowSessionPulse, sessionPulseLabel, sessionPulseToast } from './session-pulse';
 import { abortTurnLabel, abortTurnToast, canAbortTurn } from './session-abort';
 import { applyPatchToast, canApplySessionPatch, clipApplyPatch } from './session-apply';
+import { isAskMethod } from './session-ask';
 import { approveAllLabel, approveAllToast, canApproveAllHere, pendingApprovalIds } from './session-approve-all';
 import { canApproveOnEnter } from './session-approve-enter';
 import { canQueueAfterApprove, queueAfterApproveToast } from './session-approve-queue';
@@ -2416,6 +2417,7 @@ export default function App2() {
   }, [active, canAbortTurnHere, withBusy]);
   const approveFirstPending = useCallback(() => {
     const first = sessionView.pendingApprovals.values().next().value as (FlowRow & { k: 'ap' }) | undefined;
+    if (first && isAskMethod(first.method)) return;
     if (first) void approve(first.approvalId, 'once');
     else if (othersNeedingYou[0]) openSession({ machine: othersNeedingYou[0].machine, id: othersNeedingYou[0].s.session_id });
     else toast('没有待批');
@@ -3340,7 +3342,12 @@ export default function App2() {
                           return;
                         }
                         if (!composerShouldSend(e) || needsModelSwitch) return;
-                        if (canApproveOnEnter({ machine: active?.machine, status: sessionView.status, pendingCount: sessionView.pendingApprovals.size })) {
+                        if (canApproveOnEnter({
+                          machine: active?.machine,
+                          status: sessionView.status,
+                          pendingCount: sessionView.pendingApprovals.size,
+                          askFirst: isAskMethod((sessionView.pendingApprovals.values().next().value as (FlowRow & { k: 'ap' }) | undefined)?.method),
+                        })) {
                           e.preventDefault();
                           approveFirstPending();
                           return;

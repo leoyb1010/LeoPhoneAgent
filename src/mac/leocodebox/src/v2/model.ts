@@ -1,4 +1,5 @@
 import type { HarnessEvent, SessionSummary } from './api';
+import { askRespondedLabel, isAskMethod } from './session-ask';
 import { sessionCompactedLabel, sessionCompactingLabel } from './session-compact-live';
 import { sessionRetryLabel } from './session-overload';
 import { clipLiveToolOutput } from './session-tool-live';
@@ -12,7 +13,7 @@ export type FlowRow =
   | { k: 'think'; key: string; text: string; streaming: boolean }
   | { k: 'tool'; key: string; toolUseId: string | null; tool: string; preview: string; output: string; running: boolean; error: boolean }
   | { k: 'edit'; key: string; toolUseId: string | null; tool: string; file: string; output: string; running: boolean; error: boolean; proposed?: string }
-  | { k: 'ap'; key: string; approvalId: string; title: string; command: string; tool: string; cwd: string; host: string; choices: string[] }
+  | { k: 'ap'; key: string; approvalId: string; title: string; command: string; tool: string; cwd: string; host: string; choices: string[]; method?: string; placeholder?: string; prefill?: string }
   | { k: 'sys'; key: string; text: string; tone: 'muted' | 'remote' | 'error' };
 
 export type BoundWindow = { app?: string; title?: string; snapshotId?: string };
@@ -437,6 +438,9 @@ export function applyEvent(view: SessionView, event: HarnessEvent): SessionView 
         k: 'ap', key: nextKey(), approvalId,
         title: str(event.title), command: str(event.command), tool: str(event.tool), cwd: str(event.cwd), host: str(event.host),
         choices: Array.isArray(event.choices) && event.choices.length > 0 ? event.choices.map(String) : ['once', 'deny'],
+        ...(str(event.method) ? { method: str(event.method) } : {}),
+        ...(str(event.placeholder) ? { placeholder: str(event.placeholder) } : {}),
+        ...(str(event.prefill) ? { prefill: str(event.prefill) } : {}),
       };
       rows = [...closeStreaming(rows), row];
       const proposed = editProposalContent(event.args);
@@ -452,9 +456,12 @@ export function applyEvent(view: SessionView, event: HarnessEvent): SessionView 
     case 'approval.responded': {
       const approvalId = str(event.approval_id);
       const choice = str(event.choice);
+      const asked = [...pendingApprovals.values()].some((row) => row.approvalId === approvalId && isAskMethod(row.method));
       pendingApprovals.delete(approvalId);
       const why = str(event.reason).trim();
-      const label = choice === 'deny' ? (why ? `已拒绝:${why}` : '已拒绝') : choice === 'session' || choice === 'always' ? '已批准,本会话内相同范围不再询问' : '已批准一次';
+      const label = asked
+        ? (askRespondedLabel(choice, why) ?? '已跳过这个问题')
+        : (choice === 'deny' ? (why ? `已拒绝:${why}` : '已拒绝') : choice === 'session' || choice === 'always' ? '已批准,本会话内相同范围不再询问' : '已批准一次');
       rows = rows.map((row) => (row.k === 'ap' && row.approvalId === approvalId
         ? { k: 'sys', key: row.key, text: `${label} · ${row.command.split('\n')[0]}`, tone: 'muted' }
         : row));

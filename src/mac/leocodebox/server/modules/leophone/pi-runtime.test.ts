@@ -72,6 +72,29 @@ test('confirm 的答复回 confirmed 布尔', () => {
   assert.deepEqual(dialect.approvalPayload(events[0], 'deny'), { id: 'ui-3', type: 'extension_ui_response', confirmed: false });
 });
 
+test('input/editor 问句变成审批卡,答 value,跳过 cancelled', () => {
+  const dialect = new PiRpcDialect();
+  const asked = dialect.translateLine({
+    type: 'extension_ui_request', id: 'ui-4', method: 'input', title: '测哪个文件', placeholder: '路径',
+  }).events;
+  assert.equal(asked[0]?.event, EVENT_APPROVAL_REQUEST);
+  assert.equal(asked[0]?.method, 'input');
+  assert.deepEqual(asked[0]?.choices, ['reply', 'deny']);
+  assert.deepEqual(dialect.approvalPayload(asked[0], 'reply', 'src/a.ts'), {
+    id: 'ui-4', type: 'extension_ui_response', value: 'src/a.ts',
+  });
+  assert.deepEqual(dialect.approvalPayload(asked[0], 'deny'), {
+    id: 'ui-4', type: 'extension_ui_response', cancelled: true,
+  });
+  const editor = dialect.translateLine({
+    type: 'extension_ui_request', id: 'ui-5', method: 'editor', title: '改这段', prefill: 'old',
+  }).events[0];
+  assert.equal(editor.method, 'editor');
+  assert.deepEqual(dialect.approvalPayload(editor, 'reply', 'new'), {
+    id: 'ui-5', type: 'extension_ui_response', value: 'new',
+  });
+});
+
 test('缺 request_id 的 pending 不能伪装成已送达', () => {
   assert.equal(new PiRpcDialect().approvalPayload({ method: 'select', choices: ['once'] }, 'once'), null);
 });

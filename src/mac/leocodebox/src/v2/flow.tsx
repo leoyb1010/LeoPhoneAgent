@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { LAST_CWD_KEY, LAST_MODEL_KEY, POLICY_LABEL, composerShouldSend, highlightQueryParts, isLiveRow, markupParts, modelChoiceHint, modelLikelyUnusable, pickInitialCwd, pickInitialModel, prettyModelName, userTurnLabel, type FlowRow, type Group } from './model';
+import { isAskMethod } from './session-ask';
 import { CWD_HABITS_KEY, pickCwdModel, pickCwdPolicy, saveCwdHabit } from './session-cwd-habit';
 import { hideSecrets } from './session-hide';
 import { canSubmitNewSession, openIdleLabel } from './session-open-idle';
@@ -92,7 +93,20 @@ function ApprovalRow({ row, query, live, onApprove }: {
   live: string;
   onApprove: (id: string, choice: string, reason?: string) => unknown;
 }) {
-  const [why, setWhy] = useState('');
+  const [why, setWhy] = useState(row.prefill ?? '');
+  if (isAskMethod(row.method) || row.choices.includes('reply')) {
+    return (
+      <div className={`frow frow-ap${live}`}><div className="fl">问你</div><div className="fc">
+        <p><FindBits text={row.title || '需要你答一句'} query={query} /></p>
+        {row.command ? <code className="cmd"><FindBits text={row.command} query={query} /></code> : null}
+        <textarea className="ap-why" value={why} placeholder={row.placeholder || '写在这里'} onChange={(e) => setWhy(e.target.value)} rows={row.method === 'editor' ? 6 : 2} />
+        <div className="ap-actions">
+          <button className="btn-p" onClick={() => onApprove(row.approvalId, 'reply', why)}>回答</button>
+          <button className="btn-g" onClick={() => onApprove(row.approvalId, 'deny')}>跳过<kbd>Esc</kbd></button>
+        </div>
+      </div></div>
+    );
+  }
   return (
     <div className={`frow frow-ap${live}`}><div className="fl">需要确认</div><div className="fc">
       <p><FindBits text={`${row.title || `要在 ${row.host || '这台机器'} 上执行`}${row.tool ? ` · ${row.tool}` : ''}`} query={query} /></p>
