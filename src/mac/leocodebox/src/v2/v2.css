@@ -306,6 +306,8 @@
 .leo2 .local-files-name{display:block;margin:0;font-size:11px;color:var(--fg3);font-weight:560}
 .leo2 .local-files-peek{display:block;width:100%;min-height:120px;max-height:36%;overflow:auto;margin:0;padding:10px 12px;border:0;border-radius:8px;background:var(--mono);color:var(--fg);font-size:12px;line-height:1.45;white-space:pre-wrap;word-break:break-word;resize:vertical}
 .leo2 .local-files-tree{position:relative;flex:1;min-height:160px}
+.leo2 .local-files-commit{display:flex;gap:8px;align-items:center;margin:10px 0 0}
+.leo2 .local-files-commit input{flex:1;min-width:0;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:13px inherit}
 .leo2 .remote-files .link.on{color:var(--fg)}
 .leo2 .dl{white-space:pre-wrap;word-break:break-all;padding:0 8px;line-height:1.6;font-family:"SF Mono",Menlo,monospace;font-size:12px;color:var(--fg2)}
 .leo2 .dl.h{color:var(--fg3);margin:10px 0 4px;font-family:inherit}

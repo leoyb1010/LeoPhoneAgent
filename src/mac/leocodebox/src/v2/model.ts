@@ -578,8 +578,11 @@ export function humanizeError(raw: string): string {
   if (/already processing|streamingBehavior/i.test(text)) {
     return '模型还在跑。插话会插进这一轮；接着会排在后面等它说完';
   }
+  if (/没有 git/.test(text) && /记下/.test(text)) return '这个目录没有 git，没法记下这次改动';
   if (/没有 git/.test(text)) return '这个目录没有 git，没法还原到改之前';
+  if (/没有可记下/.test(text)) return '这些文件没有可记下的改动';
   if (/没有可还原/.test(text)) return '这个文件没有可还原的改动';
+  if (/还没设置 git 用户名/.test(text)) return '这个仓库还没设置 git 用户名，没法记下';
   if (/not supported when using Codex with a ChatGPT account/i.test(text)) {
     return '当前 ChatGPT 登录用不了这个模型 —— 换一个再试';
   }

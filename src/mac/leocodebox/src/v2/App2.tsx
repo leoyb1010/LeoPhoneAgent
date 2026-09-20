@@ -9,6 +9,7 @@ import { canOpenSessionPath, openSessionPath, openSessionTerm, pickSessionFolder
 import { dropBrowserFile, pasteSessionImage, pickSessionFiles } from './desktop-drop';
 import { onSessionNoticeAction, onSessionNoticeClick, setDockNeedBadge, showSessionNotice } from './desktop-notice';
 import { canAcceptSessionDrop, mentionDroppedFile } from './session-drop';
+import { canCommitSessionFiles, commitSessionFilesToast, defaultCommitMessage } from './session-commit';
 import { canRevertSessionFile, revertSessionFileToast } from './session-revert';
 import { approvalChoiceActions, approvalToast, dockNeedBadge, firstPendingApproval, noticeNotifyPayload, noticesFromSnapshot, sessionPathTarget } from './session-notice';
 import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerCanFollowUp, composerNeedsModelSwitch, composerPlaceholder, composerRunningHint, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, followUpToast, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mentionWindowRead, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, pendingFollowUps, prettyModelName, providerOf, queueClearedToast, rankModelsForPicker, readHiddenSessionKeys, relativeTime, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionCanResume, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, usableWindowMenus, windowBoundLabel, windowMenuLabel, windowPadGesture, WINDOW_KEY_BUTTONS, type FlowRow, type Group, type SessionView } from './model';
@@ -123,6 +124,7 @@ export default function App2() {
   const [filePeek, setFilePeek] = useState<string | null>(null);
   const [filePeekDraft, setFilePeekDraft] = useState<string | null>(null);
   const [peekTick, setPeekTick] = useState(0);
+  const [commitDraft, setCommitDraft] = useState<string | null>(null);
   const [sessionArtifacts, setSessionArtifacts] = useState<Array<{ name: string }>>([]);
   const [artifactError, setArtifactError] = useState<string | null>(null);
   const [palette, setPalette] = useState<{ open: boolean; query: string; index: number }>({ open: false, query: '', index: 0 });
@@ -208,6 +210,15 @@ export default function App2() {
   const canDrive = Boolean(activeSummary && sessionCanDrive(activeSummary.status, sessionView.status));
   const canFollowUp = Boolean(active && composerCanFollowUp(active.machine, sessionView.status));
   const queuedFollowUps = pendingFollowUps(sessionView.rows);
+  useEffect(() => { setCommitDraft(null); }, [active?.machine, active?.id]);
+  const pinFiles = useMemo(
+    () => mergeFilePins(
+      sessionView.rows.filter((row): row is FlowRow & { k: 'edit' } => row.k === 'edit'),
+      sessionArtifacts,
+    ).map((row) => row.file),
+    [sessionArtifacts, sessionView.rows],
+  );
+  const canCommitHere = canCommitSessionFiles(active?.machine, pinFiles);
   const findHits = useMemo(() => flowFindHitKeys(sessionView.rows, flowFind.query), [sessionView.rows, flowFind.query]);
   const findIndex = findHits.length ? Math.min(Math.max(flowFind.index, 0), findHits.length - 1) : -1;
   const findKey = findIndex >= 0 ? findHits[findIndex] : null;
@@ -628,6 +639,20 @@ export default function App2() {
       toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
     }
   }, [active, focusFile, toast]);
+  const commitFiles = useCallback(async () => {
+    if (!active || !canCommitSessionFiles(active.machine, pinFiles)) {
+      toast('还没有可记下的改动', true);
+      return;
+    }
+    const message = defaultCommitMessage(commitDraft ?? sessionView.title || activeSummary?.title || '');
+    try {
+      const result = await api.commitLocalFiles(active, { message, files: pinFiles });
+      toast(commitSessionFilesToast(result.hash));
+      setCommitDraft(null);
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+    }
+  }, [active, activeSummary?.title, commitDraft, pinFiles, sessionView.title, toast]);
   const pickFolder = useCallback(async () => {
     try {
       const next = await pickSessionFolder();
@@ -818,6 +843,7 @@ export default function App2() {
     ...(activeSummary?.cwd?.trim() && active?.machine === 'local' ? [{ v: 'finder', t: '在 Finder 打开', sub: activeSummary.cwd }, { v: 'termapp', t: '在终端打开', sub: activeSummary.cwd }] : []),
     ...(activeSummary?.cwd?.trim() && active?.machine === 'local' ? [{ v: 'dropfile', t: '放入文件' }, { v: 'dropshot', t: '粘贴截图' }] : []),
     ...(active?.machine === 'local' && focusFile ? [{ v: 'openfile', t: '用默认程序打开', sub: peekFileCaption(focusFile) }, { v: 'savepeek', t: '写回当前文件', sub: '⌘S' }, { v: 'revertfile', t: '还原这次改动', sub: peekFileCaption(focusFile) }] : []),
+    ...(canCommitHere ? [{ v: 'commitfiles', t: '记下这次改动', sub: defaultCommitMessage(commitDraft ?? sessionView.title || activeSummary?.title || '') }] : []),
     ...(activeSummary?.cwd?.trim() ? [{ v: 'cwd', t: '复制目录', sub: activeSummary.cwd }] : []),
     ...((sessionView.title || activeSummary?.title || '').trim() ? [{ v: 'title', t: '复制标题', sub: (sessionView.title || activeSummary?.title || '').trim() }] : []),
     ...(canResumeHere ? [{ v: 'resume', t: '接着这条会话', sub: '同一条上下文' }] : []),
@@ -842,6 +868,7 @@ export default function App2() {
     else if (v === 'openfile') void openFocusFile();
     else if (v === 'savepeek') void savePeek();
     else if (v === 'revertfile') void revertFile();
+    else if (v === 'commitfiles') void commitFiles();
     else if (v === 'cwd') void copyCwd();
     else if (v === 'title') void copyTitle();
     else if (v === 'find') { setFlowFind((cur) => ({ ...cur, open: true })); window.setTimeout(() => { flowFindRef.current?.focus(); flowFindRef.current?.select(); }, 0); }
@@ -941,6 +968,7 @@ export default function App2() {
     { g: '这条会话', t: '用默认程序打开', k: focusFile || '', run: () => void openFocusFile() },
     { g: '这条会话', t: '写回当前文件', k: '⌘S', run: () => void savePeek() },
     ...(canRevertSessionFile(active?.machine, focusFile) ? [{ g: '这条会话', t: '还原这次改动', k: focusFile || '', run: () => void revertFile() }] : []),
+    ...(canCommitHere ? [{ g: '这条会话', t: '记下这次改动', k: defaultCommitMessage(commitDraft ?? sessionView.title || activeSummary?.title || ''), run: () => void commitFiles() }] : []),
     { g: '这条会话', t: '放入文件', k: '拖到输入框', run: () => void pickIntoSession() },
     { g: '这条会话', t: '粘贴截图', k: '⌘V', run: () => void pasteShot() },
     { g: '这条会话', t: '终端', k: '⌘T', run: () => setDrawer('term') }, { g: '这条会话', t: '文件', k: '⌘E', run: () => setDrawer('files') },
@@ -948,7 +976,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, commitFiles, canCommitHere, commitDraft, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -1366,6 +1394,17 @@ export default function App2() {
                   </ul>
                 ) : null}
                 {filePeekBlock}
+                {canCommitHere ? (
+                  <div className="local-files-commit">
+                    <input
+                      value={commitDraft ?? defaultCommitMessage(title)}
+                      onChange={(e) => setCommitDraft(e.target.value)}
+                      placeholder="这次改了什么"
+                      aria-label="这次改了什么"
+                    />
+                    <button className="btn-s" type="button" onClick={() => { void commitFiles(); }}>记下这次改动</button>
+                  </div>
+                ) : null}
               </div>
             )
           ) : drawer === 'files' && active?.machine === 'local' ? (

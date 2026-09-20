@@ -117,6 +117,8 @@ export const api = {
     sendJson<{ success: boolean; path: string }>(`/api/projects/${encodeURIComponent(projectId)}/file`, { filePath, content }, 'PUT'),
   revertLocalFile: (target: SessionTarget, file: string) =>
     sendJson<{ action: 'restored' | 'removed'; file: string }>(`${sessionBase(target)}/file/revert`, { file }),
+  commitLocalFiles: (target: SessionTarget, input: { message: string; files: string[] }) =>
+    sendJson<{ hash: string; files: string[]; message: string }>(`${sessionBase(target)}/file/commit`, input),
   createLocalSession: (input: { cwd: string; prompt: string; model?: string | null; policy?: string; harness?: string }) =>
     sendJson<{ session_id: string; session: SessionSummary }>('/api/leophone/local/sessions', { harness: 'pi', ...input }),
   createRemoteSession: (input: { machine: string; prompt: string; cwd?: string; harness?: string; model?: string | null; policy?: string }) =>
