@@ -11,6 +11,7 @@ import { bindFrontmostToSession, bindSessionWindow, clickBoundSessionWindow, dra
 import { HarnessRequestError, getHarnessManager, type HarnessSession } from './harness-session.service.js';
 import { copyDroppedFile, writeDroppedBytes } from './local-drop.js';
 import { openLocalPath, openLocalTerminal, pickLocalFolder, revealLocalPath } from './local-folder.js';
+import { revertSessionFile } from './session-revert.js';
 import { ensureSessionWorkspace } from './session-workspace.js';
 import { availableHarnesses } from './harness-specs.js';
 import { PI_AUTH_PATH, PI_MODELS_PATH, authStatus, clearAuth, ensureDirs, setApiKey } from './pi-runtime.js';
@@ -407,6 +408,17 @@ router.post('/leophone/local/sessions/:sessionId/window/menu', async (req, res) 
   }
   session.emit({ event: 'window.bound', ...(exactWindows.summary(session.sessionId) ?? {}) });
   res.json({ ok: true, app: result.app, title: result.title, path: result.path });
+});
+
+router.post('/leophone/local/sessions/:sessionId/file/revert', async (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  const file = String(((req.body ?? {}) as Record<string, unknown>).file ?? '').trim();
+  try {
+    res.json(await revertSessionFile(session.cwd, file));
+  } catch (error) {
+    jsonError(res, 409, error instanceof Error ? error.message : String(error));
+  }
 });
 
 router.post('/leophone/local/sessions/:sessionId/stop', async (req, res) => {

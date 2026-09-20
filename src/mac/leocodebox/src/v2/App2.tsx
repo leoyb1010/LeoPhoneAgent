@@ -9,6 +9,7 @@ import { canOpenSessionPath, openSessionPath, openSessionTerm, pickSessionFolder
 import { dropBrowserFile, pasteSessionImage, pickSessionFiles } from './desktop-drop';
 import { onSessionNoticeAction, onSessionNoticeClick, setDockNeedBadge, showSessionNotice } from './desktop-notice';
 import { canAcceptSessionDrop, mentionDroppedFile } from './session-drop';
+import { canRevertSessionFile, revertSessionFileToast } from './session-revert';
 import { approvalChoiceActions, approvalToast, dockNeedBadge, firstPendingApproval, noticeNotifyPayload, noticesFromSnapshot, sessionPathTarget } from './session-notice';
 import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerCanFollowUp, composerNeedsModelSwitch, composerPlaceholder, composerRunningHint, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, followUpToast, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mentionWindowRead, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, pendingFollowUps, prettyModelName, providerOf, queueClearedToast, rankModelsForPicker, readHiddenSessionKeys, relativeTime, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionCanResume, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, usableWindowMenus, windowBoundLabel, windowMenuLabel, windowPadGesture, WINDOW_KEY_BUTTONS, type FlowRow, type Group, type SessionView } from './model';
 import { usableModelsFromProviders } from './settings-form';
@@ -121,6 +122,7 @@ export default function App2() {
   const [focusFile, setFocusFile] = useState<string | null>(null);
   const [filePeek, setFilePeek] = useState<string | null>(null);
   const [filePeekDraft, setFilePeekDraft] = useState<string | null>(null);
+  const [peekTick, setPeekTick] = useState(0);
   const [sessionArtifacts, setSessionArtifacts] = useState<Array<{ name: string }>>([]);
   const [artifactError, setArtifactError] = useState<string | null>(null);
   const [palette, setPalette] = useState<{ open: boolean; query: string; index: number }>({ open: false, query: '', index: 0 });
@@ -393,7 +395,7 @@ export default function App2() {
       setFilePeekDraft(text);
     });
     return () => { cancelled = true; };
-  }, [drawer, active, workspace?.projectId, workspace?.fullPath, focusFile, activeSummary?.cwd]);
+  }, [drawer, active, workspace?.projectId, workspace?.fullPath, focusFile, activeSummary?.cwd, peekTick]);
 
   useEffect(() => {
     if (!isPeekDrawer(drawer) || focusFile) return;
@@ -607,6 +609,25 @@ export default function App2() {
       toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
     }
   }, [active?.machine, activeSummary?.cwd, filePeek, filePeekDraft, focusFile, toast, workspace?.fullPath, workspace?.projectId]);
+  const revertFile = useCallback(async (file = focusFile) => {
+    if (!active || !canRevertSessionFile(active.machine, file)) {
+      toast('这份改动不能还原', true);
+      return;
+    }
+    try {
+      const result = await api.revertLocalFile(active, file!.trim());
+      toast(revertSessionFileToast(result.action));
+      if (result.action === 'removed' && focusFile === file) {
+        setFocusFile(null);
+        setFilePeek(null);
+        setFilePeekDraft(null);
+      } else {
+        setPeekTick((tick) => tick + 1);
+      }
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+    }
+  }, [active, focusFile, toast]);
   const pickFolder = useCallback(async () => {
     try {
       const next = await pickSessionFolder();
@@ -796,7 +817,7 @@ export default function App2() {
     ...(boundWindowChipKind(active?.machine ?? '', windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window))) === 'raise' ? [{ v: 'winclick', t: '操作这个窗口', sub: windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window)) }, { v: 'winread', t: '读回窗口里的字', sub: windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window)) }] : []),
     ...(activeSummary?.cwd?.trim() && active?.machine === 'local' ? [{ v: 'finder', t: '在 Finder 打开', sub: activeSummary.cwd }, { v: 'termapp', t: '在终端打开', sub: activeSummary.cwd }] : []),
     ...(activeSummary?.cwd?.trim() && active?.machine === 'local' ? [{ v: 'dropfile', t: '放入文件' }, { v: 'dropshot', t: '粘贴截图' }] : []),
-    ...(active?.machine === 'local' && focusFile ? [{ v: 'openfile', t: '用默认程序打开', sub: peekFileCaption(focusFile) }, { v: 'savepeek', t: '写回当前文件', sub: '⌘S' }] : []),
+    ...(active?.machine === 'local' && focusFile ? [{ v: 'openfile', t: '用默认程序打开', sub: peekFileCaption(focusFile) }, { v: 'savepeek', t: '写回当前文件', sub: '⌘S' }, { v: 'revertfile', t: '还原这次改动', sub: peekFileCaption(focusFile) }] : []),
     ...(activeSummary?.cwd?.trim() ? [{ v: 'cwd', t: '复制目录', sub: activeSummary.cwd }] : []),
     ...((sessionView.title || activeSummary?.title || '').trim() ? [{ v: 'title', t: '复制标题', sub: (sessionView.title || activeSummary?.title || '').trim() }] : []),
     ...(canResumeHere ? [{ v: 'resume', t: '接着这条会话', sub: '同一条上下文' }] : []),
@@ -820,6 +841,7 @@ export default function App2() {
     else if (v === 'dropshot') void pasteShot();
     else if (v === 'openfile') void openFocusFile();
     else if (v === 'savepeek') void savePeek();
+    else if (v === 'revertfile') void revertFile();
     else if (v === 'cwd') void copyCwd();
     else if (v === 'title') void copyTitle();
     else if (v === 'find') { setFlowFind((cur) => ({ ...cur, open: true })); window.setTimeout(() => { flowFindRef.current?.focus(); flowFindRef.current?.select(); }, 0); }
@@ -918,6 +940,7 @@ export default function App2() {
     ...(active && activeSummary && sessionCanForget(activeSummary.status) ? [{ g: '这条会话', t: '从左栏拿掉', k: '', run: () => void forgetSession(active) }] : []),
     { g: '这条会话', t: '用默认程序打开', k: focusFile || '', run: () => void openFocusFile() },
     { g: '这条会话', t: '写回当前文件', k: '⌘S', run: () => void savePeek() },
+    ...(canRevertSessionFile(active?.machine, focusFile) ? [{ g: '这条会话', t: '还原这次改动', k: focusFile || '', run: () => void revertFile() }] : []),
     { g: '这条会话', t: '放入文件', k: '拖到输入框', run: () => void pickIntoSession() },
     { g: '这条会话', t: '粘贴截图', k: '⌘V', run: () => void pasteShot() },
     { g: '这条会话', t: '终端', k: '⌘T', run: () => setDrawer('term') }, { g: '这条会话', t: '文件', k: '⌘E', run: () => setDrawer('files') },
@@ -925,7 +948,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -1019,6 +1042,7 @@ export default function App2() {
         {peekFileCaption(focusFile) ? <b className="local-files-name">{peekFileCaption(focusFile)}</b> : <span />}
         <span className="local-files-peek-acts">
           {canWritePeek ? <button className="link" type="button" disabled={!peekDirty} onClick={() => { void savePeek(); }}>{peekDirty ? '保存' : '已是最新'}</button> : null}
+          {canRevertSessionFile(active?.machine, focusFile) ? <button className="link" type="button" onClick={() => { void revertFile(); }}>还原</button> : null}
           {canOpenSessionPath(active?.machine, peekPath || cwd) ? <button className="link" type="button" onClick={() => { void openFocusFile(); }}>用默认程序打开</button> : null}
           {active?.machine === 'local' && (focusFile || cwd) ? <button className="link" type="button" onClick={() => { void revealFocusFile(); }}>在 Finder 显示</button> : null}
           {canOpenSessionPath(active?.machine, cwd) ? <button className="link" type="button" onClick={() => { void openCwdTerm(); }}>在终端打开</button> : null}
@@ -1336,6 +1360,7 @@ export default function App2() {
                       <li key={row.key}>
                         <button className={`link ${focusFile === row.file ? 'on' : ''}`} onClick={() => setFocusFile(row.file)}><code>{row.file}</code></button>
                         <span>{row.state}</span>
+                        {canRevertSessionFile(active?.machine, row.file) ? <button className="link" type="button" onClick={() => { void revertFile(row.file); }}>还原</button> : null}
                       </li>
                     ))}
                   </ul>
@@ -1354,6 +1379,7 @@ export default function App2() {
                       <li key={row.key}>
                         <button className={`link ${focusFile === row.file ? 'on' : ''}`} onClick={() => setFocusFile(row.file)}><code>{row.file}</code></button>
                         <span>{row.state}</span>
+                        {canRevertSessionFile(active?.machine, row.file) ? <button className="link" type="button" onClick={() => { void revertFile(row.file); }}>还原</button> : null}
                       </li>
                     ))}
                   </ul>

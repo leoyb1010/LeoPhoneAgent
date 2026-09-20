@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.0.83',
+    date: '2026-09-20',
+    items: [
+      '本次改动里的文件可以一键还原到改之前。新建的会删掉，改过的回到 git 里上一版。',
+    ],
+  },
+  {
     version: '2.0.82',
     date: '2026-09-20',
     items: [
