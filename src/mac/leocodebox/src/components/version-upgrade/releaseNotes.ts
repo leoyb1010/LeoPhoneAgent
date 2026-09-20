@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.1.5',
+    date: '2026-09-20',
+    items: [
+      '看着的这份文件可以扔掉，不会写到目录外面。',
+    ],
+  },
+  {
     version: '2.1.4',
     date: '2026-09-20',
     items: [

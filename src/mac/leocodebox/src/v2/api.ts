@@ -141,6 +141,8 @@ export const api = {
     sendJson<{ name: string; files: string[] }>(`${sessionBase(target)}/unpack`, input),
   seedLocalFile: (target: SessionTarget, input: { name: string; text: string }) =>
     sendJson<{ path: string; file: string }>(`${sessionBase(target)}/seed`, input),
+  trashLocalFile: (target: SessionTarget, file: string) =>
+    sendJson<{ file: string }>(`${sessionBase(target)}/trash`, { file }),
   exportLocalTalk: (target: SessionTarget, input: { name: string; markdown: string }) =>
     sendJson<{ path: string; name: string }>(`${sessionBase(target)}/export`, input),
   createLocalSession: (input: { cwd: string; prompt: string; model?: string | null; policy?: string; harness?: string }) =>
