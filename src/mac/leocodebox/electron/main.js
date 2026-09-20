@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Notification, powerSaveBlocker, safeStorage, session, shell, webContents } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Notification, powerMonitor, powerSaveBlocker, safeStorage, session, shell, systemPreferences, webContents } from 'electron';
 import updaterPackage from 'electron-updater';
 import { randomBytes } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
@@ -88,6 +88,39 @@ function setContentProtection(on) {
   contentProtectionOn = Boolean(on);
   if (win && !win.isDestroyed()) win.setContentProtection(contentProtectionOn);
   return getContentProtection();
+}
+
+let appLocked = false;
+
+function canPromptAppUnlock() {
+  return process.platform === 'darwin'
+    && typeof systemPreferences.canPromptTouchID === 'function'
+    && systemPreferences.canPromptTouchID();
+}
+
+function getAppLock() {
+  return { on: Boolean(appLocked), touchId: canPromptAppUnlock() };
+}
+
+function notifyAppLock() {
+  desktopWindow?.sendToActiveView?.('leocodebox-desktop:app-lock-changed', getAppLock());
+}
+
+function setAppLock(on) {
+  appLocked = Boolean(on);
+  notifyAppLock();
+  return getAppLock();
+}
+
+async function writeAppLock(on) {
+  if (!on && appLocked && canPromptAppUnlock()) {
+    try {
+      await systemPreferences.promptTouchID('解锁 leocodebox');
+    } catch {
+      throw new Error('没有通过触控 ID');
+    }
+  }
+  return setAppLock(on);
 }
 
 const DONE_CHIME = '/System/Library/Sounds/Glass.aiff';
@@ -761,6 +794,9 @@ function registerIpcHandlers() {
   trustedHandle('leocodebox-desktop:open-accessibility', async () => openAccessibilityPrefs());
   trustedHandle('leocodebox-desktop:relaunch', async () => relaunchApp());
   trustedHandle('leocodebox-desktop:clear-cache', async () => clearWebCache());
+  trustedHandle('leocodebox-desktop:app-lock', async (_event, raw) => (
+    raw === undefined || raw === null ? getAppLock() : writeAppLock(Boolean(raw))
+  ));
 
   trustedHandle('leocodebox-desktop:notify', async (event, payload) => {
     if (!Notification.isSupported()) return { shown: false };
@@ -1234,6 +1270,11 @@ async function bootstrap() {
   await createDesktopWindow();
   // Settings are already loaded and the window exists; arm the global hotkey.
   applyGlobalHotkey();
+  if (process.platform === 'darwin' && typeof powerMonitor?.on === 'function') {
+    powerMonitor.on('lock-screen', () => {
+      setAppLock(true);
+    });
+  }
   await openLocalInDesktop();
   flushLeoSchemes();
   // The local server URL only exists now, so (re)connect the notification

@@ -116,6 +116,13 @@ if (isLocalHttpOrigin(window.location)) {
     openAccessibility: () => ipcRenderer.invoke('leocodebox-desktop:open-accessibility'),
     relaunch: () => ipcRenderer.invoke('leocodebox-desktop:relaunch'),
     clearCache: () => ipcRenderer.invoke('leocodebox-desktop:clear-cache'),
+    getAppLock: () => ipcRenderer.invoke('leocodebox-desktop:app-lock'),
+    setAppLock: (on) => ipcRenderer.invoke('leocodebox-desktop:app-lock', on),
+    onAppLockChanged: (callback) => {
+      const listener = (_event, row) => callback(row);
+      ipcRenderer.on('leocodebox-desktop:app-lock-changed', listener);
+      return () => ipcRenderer.removeListener('leocodebox-desktop:app-lock-changed', listener);
+    },
     pickFolder: () => ipcRenderer.invoke('leocodebox-desktop:pick-folder'),
     revealPath: (target) => ipcRenderer.invoke('leocodebox-desktop:reveal-path', target),
     openPath: (target) => ipcRenderer.invoke('leocodebox-desktop:open-path', target),

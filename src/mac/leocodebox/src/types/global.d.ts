@@ -27,6 +27,9 @@ declare global {
       openAccessibility?: () => Promise<{ ok?: boolean; url?: string }>;
       relaunch?: () => Promise<{ ok?: boolean }>;
       clearCache?: () => Promise<{ ok?: boolean }>;
+      getAppLock?: () => Promise<{ on?: boolean }>;
+      setAppLock?: (on: boolean) => Promise<{ on?: boolean }>;
+      onAppLockChanged?: (callback: (row: { on?: boolean }) => void) => () => void;
       pickFolder?: () => Promise<{ path?: string; cancelled?: boolean }>;
       revealPath?: (target: string) => Promise<{ path: string }>;
       openPath?: (target: string) => Promise<{ path: string }>;
