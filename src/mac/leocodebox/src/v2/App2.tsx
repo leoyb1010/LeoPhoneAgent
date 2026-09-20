@@ -142,6 +142,7 @@ import { canSearchSessionTalk, talkQueryReady } from './session-talk';
 import { thermalCoolToast, thermalHotToast, thermalSendToast } from './session-thermal';
 import { PINNED_SESSIONS_KEY, comparePinnedFirst, pinSessionToast, readPinnedSessionKeys, sessionIsPinned, togglePinnedSessionKey } from './session-pin';
 import { canSearchSession, searchQueryReady, searchSessionToast, type SessionSearchHit } from './session-search';
+import { canRunSessionBash, parseComposerBash } from './session-shell';
 import { canShowSessionLog, type SessionCommit } from './session-log';
 import { approvalChoiceActions, approvalToast, dockNeedBadge, firstPendingApproval, noticeNotifyPayload, noticesFromSnapshot, sessionPathTarget } from './session-notice';
 import { isBrowserOffline, offlineBanner, offlineToast, onlineToast } from './session-offline';
@@ -2076,6 +2077,12 @@ export default function App2() {
   }, [active?.machine, draft, focusFile, lastRead, lastWritten, sessionView.rows, setDraft]);
   const send = useCallback(async () => {
     if (!active) return;
+    const shell = parseComposerBash(draft);
+    if (shell && canRunSessionBash({ machine: active.machine, status: sessionView.status, command: shell })) {
+      setDraft('');
+      await withBusy(() => api.rpc(active, { type: 'bash', command: shell, id: crypto.randomUUID() }));
+      return;
+    }
     const text = mentionPeekOnSend({
       machine: active.machine,
       drawer,

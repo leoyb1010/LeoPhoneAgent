@@ -234,6 +234,19 @@ export class PiRpcDialect implements HarnessDialect {
           }
         }
       }
+    } else if (kind === 'bash_execution_update') {
+      const id = str(obj.id);
+      const chunk = piLivePreview(obj.delta ?? obj.output ?? obj.partialResult);
+      if (id && chunk) {
+        const now = Date.now();
+        const prev = this.lastToolDelta.get(id);
+        const output = piLivePreview((prev?.text ?? '') + chunk);
+        if (output && output !== prev?.text) {
+          const emit = !prev || now - prev.at >= 200 || output.length - prev.text.length >= 80;
+          this.lastToolDelta.set(id, { at: emit ? now : (prev?.at ?? now), text: output });
+          if (emit) out.push({ event: EVENT_TOOL_DELTA, tool_use_id: id, output });
+        }
+      }
     } else if (kind === 'tool_execution_end') {
       this.lastToolDelta.delete(str(obj.toolCallId));
       out.push({
@@ -286,6 +299,18 @@ export class PiRpcDialect implements HarnessDialect {
       out.push({ event: 'session.model', provider: str(data.provider), model_id: str(data.id ?? data.modelId), raw: obj });
     } else if (kind === 'response' && obj.success === true && obj.command === 'compact') {
       out.push({ event: 'session.compacted', raw: obj });
+    } else if (kind === 'response' && obj.command === 'bash') {
+      const id = str(obj.id);
+      this.lastToolDelta.delete(id);
+      const data = asObject(obj.data);
+      const output = piResultPreview(data.output) || str(obj.error);
+      out.push({
+        event: EVENT_TOOL_COMPLETED,
+        tool: 'bash',
+        tool_use_id: id,
+        error: obj.success === false || (data.exitCode != null && Number(data.exitCode) !== 0),
+        output,
+      });
     } else if (kind === 'response' && obj.success === true && obj.command === 'set_thinking_level') {
       const data = asObject(obj.data);
       const level = str(data.thinkingLevel ?? data.level ?? data.thinking_level);
@@ -324,7 +349,7 @@ export class PiRpcDialect implements HarnessDialect {
   }
 }
 
-const PI_SILENT_KINDS = new Set(['message_update', 'tool_execution_update']);
+const PI_SILENT_KINDS = new Set(['message_update', 'tool_execution_update', 'bash_execution_update']);
 
 function assistantTurnError(obj: JsonObject): string {
   const message = asObject(obj.message);

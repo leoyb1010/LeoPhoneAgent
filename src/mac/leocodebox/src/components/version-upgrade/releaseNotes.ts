@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.1.95',
+    date: '2026-09-21',
+    items: [
+      '输入栏 $ 能把命令跑进会话。',
+    ],
+  },
+  {
     version: '2.1.94',
     date: '2026-09-21',
     items: [

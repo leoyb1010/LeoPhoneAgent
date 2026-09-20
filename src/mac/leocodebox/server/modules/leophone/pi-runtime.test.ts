@@ -10,6 +10,7 @@ import {
   EVENT_APPROVAL_REQUEST,
   EVENT_RUN_COMPLETED,
   EVENT_RUN_FAILED,
+  EVENT_TOOL_COMPLETED,
   EVENT_TOOL_DELTA,
   EVENT_TOOL_STARTED,
   PiRpcDialect,
@@ -101,6 +102,24 @@ test('prompt 被 pi 拒绝(如没配密钥)→ run.failed,而不是永远 runnin
   assert.equal(events[0].event, 'run.failed');
   assert.match(String(events[0].error), /No API key/);
   assert.equal(dialect.translateLine({ type: 'response', command: 'prompt', success: true }).events[0].event, 'harness.response');
+});
+
+test('输入栏 $ 的 bash 增量叠成 live delta,回执闭合工具', () => {
+  const dialect = new PiRpcDialect();
+  const first = dialect.translateLine({ type: 'bash_execution_update', id: 'sh1', delta: 'PASS 1\n' }).events;
+  assert.equal(first[0]?.event, EVENT_TOOL_DELTA);
+  assert.equal(first[0]?.output, 'PASS 1\n');
+  const more = `${'ok '.repeat(40)}\n`;
+  const second = dialect.translateLine({ type: 'bash_execution_update', id: 'sh1', delta: more }).events;
+  assert.equal(second[0]?.event, EVENT_TOOL_DELTA);
+  assert.equal(String(second[0]?.output).startsWith('PASS 1\n'), true);
+  const done = dialect.translateLine({
+    type: 'response', command: 'bash', success: true, id: 'sh1',
+    data: { output: 'PASS 1\nPASS 2\n', exitCode: 0 },
+  }).events;
+  assert.equal(done[0]?.event, EVENT_TOOL_COMPLETED);
+  assert.equal(done[0]?.error, false);
+  assert.equal(done[0]?.output, 'PASS 1\nPASS 2\n');
 });
 
 test('非文本的 message_update 不进日志;工具输出流只发 live delta;文本增量照常', () => {

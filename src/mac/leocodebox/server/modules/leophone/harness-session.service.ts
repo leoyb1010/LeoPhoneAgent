@@ -489,6 +489,18 @@ export class HarnessSession {
         this.emit({ event: EVENT_USER_MESSAGE, text, mode: outgoing.type });
       }
     }
+    if (outgoing.type === 'bash') {
+      const command = String(outgoing.command ?? '').trim();
+      if (!command) return false;
+      outgoing.command = command;
+      outgoing.id = String(outgoing.id ?? '').trim() || crypto.randomUUID();
+      this.emit({
+        event: EVENT_TOOL_STARTED,
+        tool: 'bash',
+        tool_use_id: outgoing.id,
+        preview: command.slice(0, 400),
+      });
+    }
     this.writeFrames([outgoing]);
     if (outgoing.type === 'set_thinking_level') {
       const level = String(outgoing.level ?? '').trim();

@@ -811,7 +811,7 @@ router.post('/leophone/local/sessions/:sessionId/policy', (req, res) => {
 });
 
 /** pi 原生命令(白名单):换模型 / 压缩 / 中止 / 插话 / 排队 / 取消排队 / 思考深度。回执经事件流回来。 */
-const RPC_ALLOWED = new Set(['set_model', 'compact', 'abort', 'steer', 'follow_up', 'set_thinking_level', 'clear_queue']);
+const RPC_ALLOWED = new Set(['set_model', 'compact', 'abort', 'steer', 'follow_up', 'set_thinking_level', 'clear_queue', 'bash']);
 router.post('/leophone/local/sessions/:sessionId/rpc', (req, res) => {
   const session = requireSession(req, res);
   if (!session) return;
