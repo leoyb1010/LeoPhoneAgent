@@ -35,6 +35,10 @@ node_modules/
 /.claude/worktrees/
 /.claude/*.diff
 
+# desktop:dev helper binary is a hard-link/copy of Electron; keep only Info.plist
+scripts/dev-backend.app/Contents/MacOS/dev-backend
+scripts/dev-backend.app/Contents/Frameworks
+
 # [T-hygiene] 运行时产物,真实路径在 ~/.leocodebox/;仓库根这份是本地跑出来的
 database/
 # macOS Finder 复制残留(曾有两张 favicon/logo 被提交进来)

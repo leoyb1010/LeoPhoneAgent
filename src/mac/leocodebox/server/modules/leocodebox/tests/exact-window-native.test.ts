@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createMacWindowDriver } from '../exact-window-macos.js';
+import { createMacWindowDriver, raiseBoundSessionWindow } from '../exact-window-macos.js';
 import { ExactWindowStore, parseWindowAction, type WindowObservation, type WindowActionReceipt } from '../exact-window.js';
 
 const observation: WindowObservation = {
@@ -60,6 +60,25 @@ test('only a verified native result produces an action receipt and replacement s
   const result = await store.act(captured.snapshotId, 'ax', { name: 'minimize' }, verified);
   assert.equal(result.ok, true);
   if (result.ok) { assert.equal(result.snapshot.frontmost, false); assert.equal(result.receipt.verification, 'minimized-readback'); }
+});
+
+test('raiseBoundSessionWindow 过期快照也会按 pid 再认一次再 focus', async () => {
+  const store = new ExactWindowStore(() => 10_000, 'test');
+  const captured = store.capture(observation);
+  store.bindSession('hs_raise', captured.snapshotId);
+  const driver = createMacWindowDriver(async () => ({
+    protocolVersion: 1, ok: true, observation: { ...observation, frontmost: true },
+    receipt: { attempted: true, verified: true, verification: 'focused-readback', action: 'focus', observedAt: 10_000 },
+  }));
+  const result = await raiseBoundSessionWindow('hs_raise', undefined, store, driver, async () => [observation]);
+  assert.equal(result.ok, true);
+  if (result.ok) assert.equal(result.app, 'Fixture');
+  const missing = await raiseBoundSessionWindow('hs_none', undefined, store, driver, async () => [observation]);
+  assert.equal(missing.ok, false);
+  if (!missing.ok) assert.equal(missing.reason, 'unknown-snapshot');
+  const gone = await raiseBoundSessionWindow('hs_raise', undefined, store, driver, async () => []);
+  assert.equal(gone.ok, false);
+  if (!gone.ok) assert.equal(gone.reason, 'window-gone');
 });
 
 test('malformed native IPC output cannot enter the snapshot store', async () => {

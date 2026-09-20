@@ -32,6 +32,22 @@ export interface DialectResult {
 /** 用户输入在各方言下的去向:立即可写的帧,或"会话 id 未就绪,已排队"。 */
 export type UserMessageResult = { frames: unknown[] } | { queued: true };
 
+/**
+ * pi 只有在「已经开过一轮、这一轮还在跑」时才走 steer。
+ * 进程 spawn 后 status 立刻是 running,首句若也走 steer,内核只会入队、永远不开回合。
+ */
+export function piTurnCommandType(status: string, promptTurns = 0): 'prompt' | 'steer' {
+  if (promptTurns > 0 && (status === 'running' || status === 'starting')) return 'steer';
+  return 'prompt';
+}
+
+/** pi set_thinking_level 要的是 level,旧客户端若仍发 thinkingLevel 在这里对齐。 */
+export function normalizeThinkingLevelFrame(frame: Record<string, unknown>): Record<string, unknown> {
+  const level = String(frame.level ?? frame.thinkingLevel ?? '').trim();
+  if (!level) return { ...frame };
+  return { ...frame, type: 'set_thinking_level', level };
+}
+
 export interface HarnessDialect {
   /** 启动后立即写入 stdin 的帧(JSON-RPC 类方言的握手)。 */
   handshake(): unknown[];
@@ -173,6 +189,8 @@ export class ClaudeStreamJsonDialect implements HarnessDialect {
 // --------------------------------------------------------------------------
 
 export class PiRpcDialect implements HarnessDialect {
+  private lastTurnError: string | null = null;
+
   handshake(): unknown[] {
     return [];
   }
@@ -180,6 +198,9 @@ export class PiRpcDialect implements HarnessDialect {
   translateLine(obj: JsonObject): DialectResult {
     const out: HarnessEvent[] = [];
     const kind = obj.type;
+    const turnError = assistantTurnError(obj);
+    if (kind === 'agent_start') this.lastTurnError = null;
+    else if (turnError) this.lastTurnError = turnError;
 
     if (kind === 'message_update') {
       const ev = asObject(obj.assistantMessageEvent);
@@ -232,7 +253,15 @@ export class PiRpcDialect implements HarnessDialect {
       }
     } else if (kind === 'agent_end') {
       // 一次 prompt 的整个回合结束;中间的 turn_end 只是工具循环里的一拍,不算完成。
-      out.push({ event: EVENT_RUN_COMPLETED, output: '', usage: {} });
+      // 助手把 stopReason=error 写在 message_* 上时,不能再报 run.completed,否则
+      // 会话变 idle、流水是空白,ChatGPT 账号拒掉的模型就像「成功说完了」。
+      if (this.lastTurnError) {
+        const error = this.lastTurnError;
+        this.lastTurnError = null;
+        out.push({ event: EVENT_RUN_FAILED, error });
+      } else {
+        out.push({ event: EVENT_RUN_COMPLETED, output: '', usage: {} });
+      }
     } else if (kind === 'error') {
       out.push({ event: EVENT_RUN_FAILED, error: str(obj.message ?? obj.error ?? 'error') });
     } else if (kind === 'response' && obj.success === true && obj.command === 'set_model') {
@@ -240,6 +269,10 @@ export class PiRpcDialect implements HarnessDialect {
       out.push({ event: 'session.model', provider: str(data.provider), model_id: str(data.id ?? data.modelId), raw: obj });
     } else if (kind === 'response' && obj.success === true && obj.command === 'compact') {
       out.push({ event: 'session.compacted', raw: obj });
+    } else if (kind === 'response' && obj.success === true && obj.command === 'set_thinking_level') {
+      const data = asObject(obj.data);
+      const level = str(data.thinkingLevel ?? data.level ?? data.thinking_level);
+      if (level) out.push({ event: 'session.thinking', level, raw: obj });
     } else if (kind === 'response' && obj.success === false && (obj.command === 'prompt' || obj.command === 'steer' || obj.command === 'follow_up')) {
       // 我们发的 prompt 被拒(典型:没配密钥)。不映射的话会话永远显示 running,
       // 各端都在等一个不会来的回复。
@@ -275,6 +308,17 @@ export class PiRpcDialect implements HarnessDialect {
 }
 
 const PI_SILENT_KINDS = new Set(['message_update', 'tool_execution_update']);
+
+function assistantTurnError(obj: JsonObject): string {
+  const message = asObject(obj.message);
+  const err = str(message.errorMessage || message.error || obj.error);
+  if (str(message.stopReason) === 'error' || err) {
+    if (str(obj.type) === 'message_start' || str(obj.type) === 'message_end' || str(obj.type) === 'turn_end') {
+      return err || '模型这一轮失败了';
+    }
+  }
+  return '';
+}
 
 function piToolPreview(tool: string, args: JsonObject): string {
   if (tool === 'bash') return str(args.command).slice(0, 400);

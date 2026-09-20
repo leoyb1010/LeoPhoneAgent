@@ -2,10 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-test('settings host remains mounted at app level on new-task and fleet routes', () => {
-  const appContent = readFileSync('src/components/app/AppContent.tsx', 'utf8');
-  const sidebarModals = readFileSync('src/components/sidebar/view/subcomponents/SidebarModals.tsx', 'utf8');
+test('legacy SettingsHost is opened from the 2.0 settings page, not a second sidebar', () => {
+  const settingsPage = readFileSync('src/v2/pages.tsx', 'utf8');
+  const app = readFileSync('src/App.tsx', 'utf8');
 
-  assert.match(appContent, /<SettingsHost\s/);
-  assert.doesNotMatch(sidebarModals, /showSettings/);
+  assert.match(settingsPage, /LegacySettings/);
+  assert.match(settingsPage, /更多设置/);
+  assert.match(settingsPage, /再看一次/);
+  assert.match(app, /App2/);
+  assert.doesNotMatch(app, /showSettings/);
+  assert.doesNotMatch(app, /WhatsNewModal/);
 });

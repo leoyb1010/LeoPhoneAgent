@@ -1,16 +1,22 @@
 import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import os from 'node:os';
-import path from 'node:path';
+
 import express from 'express';
 import type { AuthInteraction, AuthPrompt } from '@earendil-works/pi-ai';
 import { ModelRuntime } from '@earendil-works/pi-coding-agent';
 
+import { bindFrontmostToSession, exactWindows, raiseBoundSessionWindow } from '../leocodebox/index.js';
+
 import { HarnessRequestError, getHarnessManager, type HarnessSession } from './harness-session.service.js';
+import { ensureSessionWorkspace } from './session-workspace.js';
 import { availableHarnesses } from './harness-specs.js';
-import { PI_AUTH_PATH, PI_HOME, authStatus, clearAuth, ensureDirs, setApiKey } from './pi-runtime.js';
+import { PI_AUTH_PATH, PI_MODELS_PATH, authStatus, clearAuth, ensureDirs, setApiKey } from './pi-runtime.js';
+import { ModelsJsonError, listCustomProviderIds, removeCustomProvider, upsertCustomModel, upsertCustomProvider } from './pi-models.js';
+import { describeProvider, refreshOAuthCatalogs, sketchProviderAuth } from './pi-provider-catalog.js';
 import { resumeEnvelope } from './resume-envelope.js';
 import { telegramChannel } from './telegram.service.js';
+import { listArtifacts, readArtifactText } from './harness-artifacts.service.js';
 
 // 2.0 工作台的本机 API。挂在 /api 下、走桌面本地鉴权,给渲染层用;
 // 手机那条 Bearer harness-key 的路(leophone.routes)原样不动。
@@ -68,6 +74,19 @@ router.get('/leophone/local', async (_req, res) => {
 
 // -- 本机会话 -----------------------------------------------------------------
 
+router.post('/leophone/local/workspace', async (req, res) => {
+  const cwd = String(((req.body ?? {}) as Record<string, unknown>).cwd ?? '').trim();
+  if (!cwd) {
+    jsonError(res, 400, '目录不能为空');
+    return;
+  }
+  try {
+    res.json(await ensureSessionWorkspace(cwd));
+  } catch (error) {
+    jsonError(res, 400, error instanceof Error ? error.message : String(error));
+  }
+});
+
 router.post('/leophone/local/sessions', async (req, res) => {
   const body = (req.body ?? {}) as Record<string, unknown>;
   const harness = String(body.harness ?? 'pi');
@@ -78,6 +97,11 @@ router.post('/leophone/local/sessions', async (req, res) => {
   try {
     const session = await getHarnessManager().create({ harness, cwd, prompt, model, policy });
     res.status(202).json({ session_id: session.sessionId, session: session.summary() });
+    void bindFrontmostToSession(session.sessionId, { timeoutMs: 750 }).then((snapshot) => {
+      if (snapshot) session.emit({ event: 'window.bound', ...(exactWindows.summary(session.sessionId) ?? {}) });
+    }).catch(() => {
+      // 没有辅助进程 / TCC / 前台窗口时,会话照常能用。
+    });
   } catch (error) {
     if (error instanceof HarnessRequestError) {
       jsonError(res, 400, error.message);
@@ -91,6 +115,27 @@ router.get('/leophone/local/sessions/:sessionId', (req, res) => {
   const session = requireSession(req, res);
   if (!session) return;
   res.json(session.summary());
+});
+
+router.get('/leophone/local/sessions/:sessionId/artifacts', async (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  res.json({ object: 'leoagent.artifacts', session_id: session.sessionId, artifacts: await listArtifacts(session) });
+});
+
+router.get('/leophone/local/sessions/:sessionId/artifacts/:name/text', (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  const text = readArtifactText(session, req.params.name);
+  if (!text) {
+    jsonError(res, 404, 'No such artifact');
+    return;
+  }
+  if (!text.ok) {
+    jsonError(res, 415, text.error);
+    return;
+  }
+  res.json({ name: text.name, content: text.content, truncated: text.truncated });
 });
 
 /** 与手机同一套语义:先按 ?after=N 回放,再实时跟随;注释帧保活。 */
@@ -143,11 +188,36 @@ router.post('/leophone/local/sessions/:sessionId/send', async (req, res) => {
   }
 });
 
+router.post('/leophone/local/sessions/:sessionId/window/raise', async (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  const result = await raiseBoundSessionWindow(session.sessionId, { timeoutMs: 1500 });
+  if (!result.ok) {
+    jsonError(res, result.reason === 'unknown-snapshot' ? 404 : 409, result.message);
+    return;
+  }
+  session.emit({ event: 'window.bound', ...(exactWindows.summary(session.sessionId) ?? {}) });
+  res.json({ ok: true, app: result.app, title: result.title });
+});
+
 router.post('/leophone/local/sessions/:sessionId/stop', async (req, res) => {
   const session = requireSession(req, res);
   if (!session) return;
   await session.stop();
   res.json({ ok: true, status: session.status });
+});
+
+router.post('/leophone/local/sessions/:sessionId/forget', async (req, res) => {
+  try {
+    await getHarnessManager().forget(req.params.sessionId);
+    res.json({ ok: true });
+  } catch (error) {
+    if (error instanceof HarnessRequestError) {
+      jsonError(res, error.message === 'No such session' ? 404 : 409, error.message);
+      return;
+    }
+    jsonError(res, 500, error instanceof Error ? error.message : String(error));
+  }
 });
 
 router.post('/leophone/local/sessions/:sessionId/approval', async (req, res) => {
@@ -208,9 +278,10 @@ let runtimePromise: Promise<ModelRuntime> | null = null;
 function modelRuntime(): Promise<ModelRuntime> {
   if (!runtimePromise) {
     ensureDirs();
+    // 创建时不拉网:OAuth 目录在 GET /providers 和登录成功后按提供方刷新。
     runtimePromise = ModelRuntime.create({
       authPath: PI_AUTH_PATH,
-      modelsPath: path.join(PI_HOME, 'models.json'),
+      modelsPath: PI_MODELS_PATH,
       allowModelNetwork: false,
       refreshOnCreate: false,
     });
@@ -223,35 +294,79 @@ function resetModelRuntime(): void {
   runtimePromise = null;
 }
 
-function describeProvider(runtime: ModelRuntime, provider: { id: string } & Record<string, unknown>) {
-  const id = provider.id;
-  let status: unknown = null;
-  try { status = runtime.getProviderAuthStatus(id); } catch { status = null; }
-  // models.json 里写死了 apiKey 的自定义供应商(本地网关、mock)也算配置好了。
-  const registered = runtime.getRegisteredProviderConfig(id) as { apiKey?: unknown } | undefined;
-  const inlineKey = Boolean(registered?.apiKey);
-  return {
-    id,
-    name: typeof provider.name === 'string' ? provider.name : id,
-    oauth: Boolean((provider as { auth?: { oauth?: unknown } }).auth?.oauth),
-    // getProviderAuthStatus 是最准的口径(含 models.json 内联密钥);其余两条做兜底。
-    configured: Boolean((status as { configured?: boolean } | null)?.configured) || runtime.hasConfiguredAuth(id) || inlineKey,
-    usingOAuth: runtime.isUsingOAuth(id),
-    usingSubscription: runtime.isUsingSubscription(id),
-    status,
-    models: runtime.getModels(id).map((m) => ({ id: m.id, name: (m as { name?: string }).name ?? m.id })),
-  };
-}
-
 router.get('/leophone/pi/providers', async (_req, res) => {
   try {
     const runtime = await modelRuntime();
-    const providers = runtime.getProviders().map((p) => describeProvider(runtime, p as unknown as { id: string } & Record<string, unknown>));
-    res.json({ providers, auth: authStatus() });
+    const customIds = new Set(listCustomProviderIds());
+    const storedAuth = authStatus();
+    const raw = runtime.getProviders().map((p) => p as unknown as { id: string; name?: string; auth?: { oauth?: unknown } });
+    const oauthIds = raw
+      .map((p) => sketchProviderAuth(runtime, p, customIds, storedAuth))
+      .filter((p) => p.oauth && p.configured)
+      .map((p) => p.id);
+    const signal = AbortSignal.timeout(8_000);
+    try {
+      await refreshOAuthCatalogs(runtime, oauthIds, signal);
+    } catch {
+      // 提供方列表仍按运行时当前返回值画,不回落到本地预设表。
+    }
+    const providers = await Promise.all(raw.map((p) => describeProvider(runtime, p, customIds, storedAuth, { refreshOAuth: false, signal })));
+    providers.sort((a, b) => Number(b.configured) - Number(a.configured) || Number(b.oauth) - Number(a.oauth) || a.name.localeCompare(b.name, 'zh'));
+    res.json({ providers, auth: storedAuth, custom: [...customIds] });
   } catch (error) {
     jsonError(res, 500, error instanceof Error ? error.message : String(error));
   }
 });
+
+router.put('/leophone/pi/custom-providers', (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const models = Array.isArray(body.models)
+    ? (body.models as Array<Record<string, unknown>>).map((m) => ({ id: String(m.id ?? ''), name: m.name == null ? undefined : String(m.name) }))
+    : (body.modelId ? [{ id: String(body.modelId), name: body.modelName == null ? undefined : String(body.modelName) }] : undefined);
+  try {
+    const provider = upsertCustomProvider({
+      id: String(body.id ?? ''),
+      name: body.name == null ? undefined : String(body.name),
+      baseUrl: String(body.baseUrl ?? ''),
+      api: body.api == null ? undefined : String(body.api),
+      models,
+    });
+    const key = String(body.key ?? '').trim();
+    if (key) setApiKey(assertSafeCustomId(String(body.id ?? '')), key);
+    resetModelRuntime();
+    res.json({ ok: true, provider: { id: String(body.id ?? '').trim().toLowerCase(), ...provider, apiKey: undefined } });
+  } catch (error) {
+    jsonError(res, error instanceof ModelsJsonError ? 400 : 500, error instanceof Error ? error.message : String(error));
+  }
+});
+
+router.put('/leophone/pi/custom-providers/:providerId/models', (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  try {
+    const provider = upsertCustomModel(req.params.providerId, { id: String(body.id ?? ''), name: body.name == null ? undefined : String(body.name) });
+    resetModelRuntime();
+    res.json({ ok: true, provider: { id: req.params.providerId, ...provider, apiKey: undefined } });
+  } catch (error) {
+    jsonError(res, error instanceof ModelsJsonError ? 400 : 500, error instanceof Error ? error.message : String(error));
+  }
+});
+
+router.delete('/leophone/pi/custom-providers/:providerId', (req, res) => {
+  try {
+    const removed = removeCustomProvider(req.params.providerId);
+    if (removed) {
+      clearAuth(req.params.providerId);
+      resetModelRuntime();
+    }
+    res.json({ ok: true, removed });
+  } catch (error) {
+    jsonError(res, error instanceof ModelsJsonError ? 400 : 500, error instanceof Error ? error.message : String(error));
+  }
+});
+
+function assertSafeCustomId(id: string): string {
+  return String(id ?? '').trim().toLowerCase();
+}
 
 router.put('/leophone/pi/providers/:providerId/key', (req, res) => {
   const key = String(((req.body ?? {}) as Record<string, unknown>).key ?? '').trim();
@@ -314,7 +429,11 @@ router.post('/leophone/pi/providers/:providerId/login', async (req, res) => {
     notify: (event) => { flow.events.push({ ...(event as unknown as Record<string, unknown>), at: Date.now() }); },
   };
   void runtime.login(providerId, type, interaction)
-    .then(() => { flow.status = 'done'; resetModelRuntime(); })
+    .then(async () => {
+      try { await refreshOAuthCatalogs(runtime, [providerId]); } catch { /* 登录已成功;目录下次重载再拉 */ }
+      flow.status = 'done';
+      resetModelRuntime();
+    })
     .catch((error) => {
       flow.status = flow.abort.signal.aborted ? 'cancelled' : 'error';
       flow.error = error instanceof Error ? error.message : String(error);

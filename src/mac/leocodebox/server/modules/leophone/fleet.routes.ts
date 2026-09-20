@@ -414,6 +414,43 @@ router.post('/leophone/fleet/sessions', async (req, res) => {
   }
 });
 
+export function sessionFromFleetSnapshot(
+  machines: ReadonlyArray<{ name: string; sessions: Array<Record<string, unknown>> }>,
+  machine: string,
+  sessionId: string,
+): Record<string, unknown> | null {
+  const row = machines.find((item) => item.name === machine);
+  const session = row?.sessions.find((item) => String(item.session_id ?? '') === sessionId);
+  return session ?? null;
+}
+
+router.get('/leophone/fleet/machines/:machine/sessions/:sessionId', async (req, res) => {
+  const target = relayTarget();
+  if (!target) {
+    res.status(409).json({ error: { message: '未配置中继' } });
+    return;
+  }
+  try {
+    try {
+      const result = await relayFetch(fleetSessionRelayPath(req.params.machine, req.params.sessionId), target);
+      res.json(result);
+      return;
+    } catch (error) {
+      if (!(error instanceof Error) || !/\brelay 404\b/.test(error.message)) throw error;
+    }
+    const found = sessionFromFleetSnapshot(await loadFleetSnapshot(target, true), req.params.machine, req.params.sessionId);
+    if (!found) {
+      res.status(404).json({ error: { message: 'relay 404' } });
+      return;
+    }
+    res.json(found);
+  } catch (error) {
+    res.status(502).json({
+      error: { message: error instanceof Error ? error.message : 'relay unreachable' },
+    });
+  }
+});
+
 /** 接管:先回放 `after` 之前的全部事件,再实时跟随。SSE 原样透传。 */
 router.get('/leophone/fleet/machines/:machine/sessions/:sessionId/events', async (req, res) => {
   const target = relayTarget();
@@ -460,6 +497,94 @@ router.get('/leophone/fleet/machines/:machine/sessions/:sessionId/events', async
       return;
     }
     res.end();
+  }
+});
+
+/** 远程会话产物:清单走 JSON,正文优先 /text,旧 leoagent 没有 /text 时回退二进制。 */
+export function fleetSessionRelayPath(machine: string, sessionId: string, suffix = ''): string {
+  const base = `/m/${encodeURIComponent(machine)}/harness/sessions/${encodeURIComponent(sessionId)}`;
+  return suffix ? `${base}${suffix.startsWith('/') ? suffix : `/${suffix}`}` : base;
+}
+
+export function fleetArtifactRelayPath(machine: string, sessionId: string, name?: string): string {
+  const base = `${fleetSessionRelayPath(machine, sessionId)}/artifacts`;
+  return name ? `${base}/${encodeURIComponent(name)}/text` : base;
+}
+
+export function fleetArtifactBinaryPath(machine: string, sessionId: string, name: string): string {
+  return `${fleetSessionRelayPath(machine, sessionId)}/artifacts/${encodeURIComponent(name)}`;
+}
+
+export function peekTextFromBytes(name: string, bytes: Uint8Array, limit = 80_000): { name: string; content: string; truncated: boolean } {
+  if (bytes.includes(0)) throw new Error('这个文件不是文本,没法在这里打开');
+  const raw = Buffer.from(bytes).toString('utf8');
+  if (raw.length <= limit) return { name, content: raw, truncated: false };
+  return { name, content: `${raw.slice(0, limit)}\n…(后面还有 ${raw.length - limit} 字)`, truncated: true };
+}
+
+export async function readFleetArtifactText(input: {
+  machine: string;
+  sessionId: string;
+  name: string;
+  fetchJson: (path: string) => Promise<unknown>;
+  fetchBytes: (path: string) => Promise<Uint8Array>;
+}): Promise<{ name: string; content: string; truncated: boolean }> {
+  try {
+    const json = await input.fetchJson(fleetArtifactRelayPath(input.machine, input.sessionId, input.name));
+    if (json && typeof json === 'object' && typeof (json as { content?: unknown }).content === 'string') {
+      const row = json as { name?: unknown; content: string; truncated?: unknown };
+      return { name: typeof row.name === 'string' ? row.name : input.name, content: row.content, truncated: Boolean(row.truncated) };
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (!/\brelay (404|415)\b/.test(message)) throw error;
+  }
+  return peekTextFromBytes(input.name, await input.fetchBytes(fleetArtifactBinaryPath(input.machine, input.sessionId, input.name)));
+}
+
+router.get('/leophone/fleet/machines/:machine/sessions/:sessionId/artifacts', async (req, res) => {
+  const target = relayTarget();
+  if (!target) {
+    res.status(409).json({ error: { message: '未配置中继' } });
+    return;
+  }
+  try {
+    const result = await relayFetch(fleetArtifactRelayPath(req.params.machine, req.params.sessionId), target);
+    res.json(result);
+  } catch (error) {
+    const status = error instanceof Error && /\brelay 404\b/.test(error.message) ? 404 : 502;
+    res.status(status).json({
+      error: { message: error instanceof Error ? error.message : 'relay unreachable' },
+    });
+  }
+});
+
+router.get('/leophone/fleet/machines/:machine/sessions/:sessionId/artifacts/:name/text', async (req, res) => {
+  const target = relayTarget();
+  if (!target) {
+    res.status(409).json({ error: { message: '未配置中继' } });
+    return;
+  }
+  try {
+    const result = await readFleetArtifactText({
+      machine: req.params.machine,
+      sessionId: req.params.sessionId,
+      name: req.params.name,
+      fetchJson: (path) => relayFetch(path, target),
+      fetchBytes: async (path) => {
+        const res = await fetch(`${target.base}${path}`, {
+          headers: { authorization: `Bearer ${target.key}` },
+          signal: AbortSignal.timeout(ASSET_TIMEOUT_MS),
+        });
+        if (!res.ok) throw new Error(`relay ${res.status}`);
+        return new Uint8Array(await res.arrayBuffer());
+      },
+    });
+    res.json(result);
+  } catch (error) {
+    res.status(502).json({
+      error: { message: error instanceof Error ? error.message : 'relay unreachable' },
+    });
   }
 });
 

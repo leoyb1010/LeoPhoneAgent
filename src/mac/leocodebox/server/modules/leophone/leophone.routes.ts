@@ -12,7 +12,7 @@ import { HarnessRequestError, getHarnessManager } from './harness-session.servic
 import { availableHarnesses } from './harness-specs.js';
 import { fetchGrokToken } from './grok-token.service.js';
 import { buildDigest, buildReceipt, isTerminal } from './harness-digest.service.js';
-import { listArtifacts, readArtifact } from './harness-artifacts.service.js';
+import { listArtifacts, readArtifact, readArtifactText } from './harness-artifacts.service.js';
 import { resumeEnvelope } from './resume-envelope.js';
 
 // LeoPhoneAgent harness 协议的 HTTP/SSE 面——与 leoagent(Python server.py)
@@ -284,6 +284,24 @@ router.get('/harness/sessions/:sessionId/artifacts', requireHarnessKey, async (r
     return;
   }
   res.json({ object: 'leoagent.artifacts', session_id: req.params.sessionId, artifacts: await listArtifacts(session) });
+});
+
+router.get('/harness/sessions/:sessionId/artifacts/:name/text', requireHarnessKey, (req, res) => {
+  const session = getHarnessManager().get(req.params.sessionId);
+  if (!session) {
+    jsonError(res, 404, 'No such session');
+    return;
+  }
+  const text = readArtifactText(session, req.params.name);
+  if (!text) {
+    jsonError(res, 404, 'No such artifact');
+    return;
+  }
+  if (!text.ok) {
+    jsonError(res, 415, text.error);
+    return;
+  }
+  res.json({ name: text.name, content: text.content, truncated: text.truncated });
 });
 
 router.get('/harness/sessions/:sessionId/artifacts/:name', requireHarnessKey, (req, res) => {

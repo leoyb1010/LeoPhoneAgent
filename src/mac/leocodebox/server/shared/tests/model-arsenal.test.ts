@@ -30,6 +30,14 @@ test('unknown models degrade to null (never a fabricated value)', () => {
   assert.equal(arsenalPrice('mystery', 'totally-unknown-model'), null);
 });
 
+test('arsenal prefers current 2026 ids over older same-family prefixes', () => {
+  assert.equal(getArsenalModel('claude', 'anthropic/claude-opus-5')?.id, 'claude-opus-5');
+  assert.equal(getArsenalModel('claude', 'claude-sonnet-4-6')?.id, 'claude-sonnet-4-6');
+  assert.equal(getArsenalModel('codex', 'gpt-5.6-sol')?.id, 'gpt-5.6-sol');
+  assert.equal(getArsenalModel('grok', 'grok-4.6')?.id, 'grok-4.6');
+  assert.equal(getArsenalModel('gemini', 'gemini-3.8-flash')?.id, 'gemini-3.8-flash');
+});
+
 test('arsenal exposes a non-trivial, well-formed catalog', () => {
   const all = listArsenal();
   assert.ok(all.length >= 30, `expected >=30 models, got ${all.length}`);

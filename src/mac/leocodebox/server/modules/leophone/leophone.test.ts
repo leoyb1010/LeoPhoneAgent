@@ -9,11 +9,14 @@ import {
   CodexAppServerDialect,
   GrokAcpDialect,
   PiRpcDialect,
+  normalizeThinkingLevelFrame,
+  piTurnCommandType,
 } from './harness-dialects.js';
 import { buildDigest, buildReceipt, isTerminal } from './harness-digest.service.js';
-import { listArtifacts, readArtifact } from './harness-artifacts.service.js';
+import { listArtifacts, readArtifact, readArtifactText } from './harness-artifacts.service.js';
 import { HarnessManager, HarnessSession, isLiveHarnessStatus } from './harness-session.service.js';
-import { buildRemoteCreateBody, parseEventsAfter } from './fleet.routes.js';
+import { hasAnyPiAuth } from './pi-runtime.js';
+import { buildRemoteCreateBody, fleetArtifactBinaryPath, fleetArtifactRelayPath, fleetSessionRelayPath, parseEventsAfter, peekTextFromBytes, readFleetArtifactText, sessionFromFleetSnapshot } from './fleet.routes.js';
 import { HARNESSES, type HarnessSpec } from './harness-specs.js';
 import { resumeEnvelope } from './resume-envelope.js';
 
@@ -208,6 +211,26 @@ test('grok dialect: session capture, prompt lifecycle, permission options', asyn
 // pi 方言(抽查)
 // --------------------------------------------------------------------------
 
+test('pi 正在跑时下一句是 steer,思考深度字段是 level', async () => {
+  assert.equal(piTurnCommandType('running', 0), 'prompt');
+  assert.equal(piTurnCommandType('starting', 0), 'prompt');
+  assert.equal(piTurnCommandType('running', 1), 'steer');
+  assert.equal(piTurnCommandType('starting', 1), 'steer');
+  assert.equal(piTurnCommandType('idle', 1), 'prompt');
+  assert.equal(piTurnCommandType('waiting_for_approval', 1), 'prompt');
+  assert.deepEqual(normalizeThinkingLevelFrame({ type: 'set_thinking_level', thinkingLevel: 'high' }), {
+    type: 'set_thinking_level', thinkingLevel: 'high', level: 'high',
+  });
+  const dialect = new PiRpcDialect();
+  const empty = dialect.translateLine({ type: 'response', success: true, command: 'set_thinking_level' }).events;
+  assert.ok(empty.every((event) => event.event !== 'session.thinking'));
+  const withLevel = dialect.translateLine({
+    type: 'response', success: true, command: 'set_thinking_level', data: { level: 'low' },
+  }).events;
+  assert.equal(withLevel[0]?.event, 'session.thinking');
+  assert.equal(withLevel[0]?.level, 'low');
+});
+
 test('pi dialect: deltas and select approval round-trip', async () => {
   const dialect = new PiRpcDialect();
   const delta = dialect.translateLine({
@@ -396,6 +419,52 @@ test('manager rehydrate: previous-boot logs surface as orphaned sessions with ex
   );
 });
 
+test('manager forget: 结束的会话挪到 forgotten,重启不再召回', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'leophone-forget-'));
+  const lines = [
+    { event: 'session.created', harness: 'codex', name: 'Codex CLI', cwd: '/tmp/x', seq: 1, session_id: 'hs_old', timestamp: 1 },
+    { event: 'run.completed', seq: 2, session_id: 'hs_old', timestamp: 2 },
+  ];
+  fs.writeFileSync(path.join(dir, 'hs_old.ndjson'), lines.map((line) => JSON.stringify(line)).join('\n') + '\n');
+  const manager = new HarnessManager(dir);
+  await manager.ready();
+  assert.ok(manager.get('hs_old'));
+  const result = await manager.forget('hs_old');
+  assert.equal(manager.get('hs_old'), undefined);
+  assert.equal(manager.list().length, 0);
+  assert.equal(fs.existsSync(path.join(dir, 'hs_old.ndjson')), false);
+  assert.equal(fs.existsSync(result.forgotten), true);
+  const again = new HarnessManager(dir);
+  await again.ready();
+  assert.equal(again.get('hs_old'), undefined);
+});
+
+test('workbench 本机 forget 路由只收已经结束的会话', () => {
+  const source = fs.readFileSync(new URL('./workbench.routes.ts', import.meta.url), 'utf8');
+  assert.match(source, /\/leophone\/local\/sessions\/:sessionId\/forget/);
+  assert.match(source, /getHarnessManager\(\)\.forget/);
+});
+
+test('manager forget: 进行中的会话拒绝拿掉', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'leophone-forget-live-'));
+  const session = new HarnessSession({
+    sessionId: 'hs_live', spec: FAKE_SPEC, cwd: '/tmp', logPath: path.join(dir, 'hs_live.ndjson'), status: 'running',
+  });
+  const manager = new HarnessManager(dir);
+  await manager.ready();
+  manager.sessions.set('hs_live', session);
+  await assert.rejects(() => manager.forget('hs_live'), /still running/);
+  assert.ok(manager.get('hs_live'));
+});
+
+test('没登录任何模型就不能开本机 pi 会话', () => {
+  assert.equal(hasAnyPiAuth({}), false);
+  assert.equal(hasAnyPiAuth({ anthropic: 'oauth' }), true);
+  const source = fs.readFileSync(new URL('./harness-session.service.ts', import.meta.url), 'utf8');
+  assert.match(source, /hasAnyPiAuth/);
+  assert.match(source, /还没有登录任何模型/);
+});
+
 // --------------------------------------------------------------------------
 // [T-leophone-digest] 摘要 / 收据 / 产物
 // --------------------------------------------------------------------------
@@ -472,6 +541,42 @@ test('artifacts: 只列 cwd 内真实存在的文件,越界一律拒绝', async 
   assert.ok(readArtifact(session, 'report.md'), 'cwd 内的产物可读');
   assert.equal(readArtifact(session, '../../etc/passwd'), null, '路径穿越必须被拒');
   assert.equal(readArtifact(session, '/etc/passwd'), null, '绝对路径必须被拒');
+  const text = readArtifactText(session, 'report.md');
+  assert.ok(text && text.ok);
+  assert.equal(text.content, '# hi');
+  assert.equal(readArtifactText(session, '../../etc/passwd'), null);
+});
+
+test('旧 leoagent 没有单条 GET 时,摘要从舰队快照补', () => {
+  const found = sessionFromFleetSnapshot([
+    { name: 'Fold', sessions: [{ session_id: 'hs_1', status: 'running' }] },
+  ], 'Fold', 'hs_1');
+  assert.equal(found?.status, 'running');
+  assert.equal(sessionFromFleetSnapshot([{ name: 'Fold', sessions: [] }], 'Fold', 'hs_1'), null);
+});
+
+test('fleet 产物路径走中继 JSON,正文挂 /text', () => {
+  assert.equal(fleetSessionRelayPath('Fold', 'hs_1'), '/m/Fold/harness/sessions/hs_1');
+  assert.equal(fleetArtifactRelayPath('Fold', 'hs_1'), '/m/Fold/harness/sessions/hs_1/artifacts');
+  assert.equal(fleetArtifactRelayPath('Fold', 'hs_1', 'src/a.ts'), '/m/Fold/harness/sessions/hs_1/artifacts/src%2Fa.ts/text');
+  assert.equal(fleetArtifactBinaryPath('Fold', 'hs_1', 'src/a.ts'), '/m/Fold/harness/sessions/hs_1/artifacts/src%2Fa.ts');
+});
+
+test('远程产物正文:有 /text 用 JSON,404 就回退二进制', async () => {
+  assert.deepEqual(peekTextFromBytes('a.txt', Buffer.from('2.0.33-ok\n')), { name: 'a.txt', content: '2.0.33-ok\n', truncated: false });
+  assert.throws(() => peekTextFromBytes('a.bin', Buffer.from([1, 0, 2])), /不是文本/);
+  const fromText = await readFleetArtifactText({
+    machine: 'Fold', sessionId: 'hs_1', name: 'a.txt',
+    fetchJson: async () => ({ name: 'a.txt', content: 'via-text', truncated: false }),
+    fetchBytes: async () => { throw new Error('should not hit binary'); },
+  });
+  assert.equal(fromText.content, 'via-text');
+  const fromBin = await readFleetArtifactText({
+    machine: 'Fold', sessionId: 'hs_1', name: 'a.txt',
+    fetchJson: async () => { throw new Error('relay 404'); },
+    fetchBytes: async () => Buffer.from('via-bin'),
+  });
+  assert.equal(fromBin.content, 'via-bin');
 });
 
 test('resume envelope: ok when after is at or past the watermark, gap otherwise', async () => {

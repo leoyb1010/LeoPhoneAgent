@@ -5,7 +5,7 @@ import { authenticatedFetch } from '../utils/apiClient';
 
 export type SessionTarget = { machine: 'local' | string; id: string };
 
-export type LastEvent = { event: string; text: string; timestamp: number } | null;
+export type LastEvent = { event: string; text: string; timestamp: number; mode?: string } | null;
 
 export type SessionSummary = {
   session_id: string;
@@ -22,6 +22,7 @@ export type SessionSummary = {
   seq: number;
   waiting_for_approval: boolean;
   pending_approvals: Array<{ approval_id: string; command: string; choices: string[] }>;
+  window?: { app?: string; title?: string; snapshotId?: string; snapshot_id?: string } | null;
 };
 
 export type LocalOverview = {
@@ -50,11 +51,13 @@ export type ProviderInfo = {
   id: string;
   name: string;
   oauth: boolean;
+  custom?: boolean;
+  baseUrl?: string | null;
   configured: boolean;
   usingOAuth: boolean;
   usingSubscription: boolean;
   status: unknown;
-  models: Array<{ id: string; name: string }>;
+  models: Array<{ id: string; name: string; reasoning?: boolean; contextWindow?: number | null }>;
 };
 
 export type HarnessEvent = { event: string; seq?: number; session_id?: string; timestamp?: number } & Record<string, unknown>;
@@ -92,15 +95,31 @@ export const api = {
   providers: () => getJson<{ providers: ProviderInfo[]; auth: Record<string, string> }>('/api/leophone/pi/providers'),
   setProviderKey: (providerId: string, key: string) => sendJson(`/api/leophone/pi/providers/${encodeURIComponent(providerId)}/key`, { key }, 'PUT'),
   clearProviderKey: (providerId: string) => sendJson(`/api/leophone/pi/providers/${encodeURIComponent(providerId)}/key`, {}, 'DELETE'),
+  upsertCustomProvider: (input: { id: string; name?: string; baseUrl: string; api?: string; key?: string; modelId?: string; modelName?: string }) =>
+    sendJson('/api/leophone/pi/custom-providers', input, 'PUT'),
+  addCustomModel: (providerId: string, input: { id: string; name?: string }) =>
+    sendJson(`/api/leophone/pi/custom-providers/${encodeURIComponent(providerId)}/models`, input, 'PUT'),
+  removeCustomProvider: (providerId: string) =>
+    sendJson(`/api/leophone/pi/custom-providers/${encodeURIComponent(providerId)}`, {}, 'DELETE'),
 
+  ensureWorkspace: (cwd: string) =>
+    sendJson<{ projectId: string; path: string; fullPath: string; displayName: string }>('/api/leophone/local/workspace', { cwd }),
+  readProjectFile: (projectId: string, filePath: string) =>
+    getJson<{ content: string; path: string }>(`/api/projects/${encodeURIComponent(projectId)}/file?filePath=${encodeURIComponent(filePath)}`),
   createLocalSession: (input: { cwd: string; prompt: string; model?: string | null; policy?: string; harness?: string }) =>
     sendJson<{ session_id: string; session: SessionSummary }>('/api/leophone/local/sessions', { harness: 'pi', ...input }),
   createRemoteSession: (input: { machine: string; prompt: string; cwd?: string; harness?: string; model?: string | null; policy?: string }) =>
     sendJson<{ session_id: string }>('/api/leophone/fleet/sessions', { harness: 'pi', ...input }),
 
   summary: (target: SessionTarget) => getJson<SessionSummary>(sessionBase(target)),
+  listArtifacts: (target: SessionTarget) =>
+    getJson<{ artifacts: Array<{ name: string; size: number; mime: string }> }>(`${sessionBase(target)}/artifacts`),
+  readSessionArtifact: (target: SessionTarget, name: string) =>
+    getJson<{ content: string; name: string }>(`${sessionBase(target)}/artifacts/${encodeURIComponent(name)}/text`),
   send: (target: SessionTarget, text: string) => sendJson(`${sessionBase(target)}/send`, { text }),
   stop: (target: SessionTarget) => sendJson(`${sessionBase(target)}/stop`, {}),
+  raiseBoundWindow: (target: SessionTarget) => sendJson<{ ok: true; app: string; title: string }>(`${sessionBase(target)}/window/raise`, {}),
+  forget: (target: SessionTarget) => sendJson(`${sessionBase(target)}/forget`, {}),
   approve: (target: SessionTarget, approvalId: string | null, choice: string) =>
     target.machine === 'local'
       ? sendJson(`${sessionBase(target)}/approval`, { approval_id: approvalId, choice })
@@ -112,7 +131,7 @@ export const api = {
    * 订阅一条会话的事件流:先按 after 回放,再实时跟随。返回取消函数。
    * 用 fetch + reader 而不是 EventSource:后者带不上本地鉴权头。
    */
-  subscribe(target: SessionTarget, after: number, onEvent: (event: HarnessEvent) => void, onClose?: (error?: Error) => void): () => void {
+  subscribe(target: SessionTarget, after: number, onEvent: (event: HarnessEvent) => void, onClose?: (error?: Error) => void, onOpen?: () => void): () => void {
     const controller = new AbortController();
     (async () => {
       try {
@@ -121,6 +140,7 @@ export const api = {
           signal: controller.signal,
         });
         if (!response.ok || !response.body) throw new Error(await readError(response));
+        onOpen?.();
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';

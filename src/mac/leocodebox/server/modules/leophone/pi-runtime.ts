@@ -24,6 +24,7 @@ export const PI_EXTENSIONS_DIR = path.join(PI_HOME, 'extensions');
 export const PI_SESSIONS_DIR = path.join(PI_HOME, 'sessions');
 export const PI_POLICY_DIR = path.join(PI_HOME, 'policy');
 export const PI_AUTH_PATH = path.join(PI_HOME, 'auth.json');
+export const PI_MODELS_PATH = path.join(PI_HOME, 'models.json');
 
 export type ApprovalPolicy = 'default' | 'accept_edits' | 'plan' | 'auto';
 
@@ -169,6 +170,11 @@ export function authStatus(): Record<string, 'api_key' | 'oauth'> {
     if (entry && typeof entry === 'object' && (entry.type === 'api_key' || entry.type === 'oauth')) out[provider] = entry.type;
   }
   return out;
+}
+
+/** 本机 pi 会话能不能开:至少一家供应商已经登录或填了密钥。 */
+export function hasAnyPiAuth(status: Record<string, string> = authStatus()): boolean {
+  return Object.keys(status).length > 0;
 }
 
 // -- 落盘 -------------------------------------------------------------------

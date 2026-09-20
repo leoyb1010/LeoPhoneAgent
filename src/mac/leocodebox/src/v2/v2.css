@@ -57,9 +57,9 @@
 
 /* 壳 */
 .leo2 .titlebar{display:grid;grid-template-columns:80px minmax(0,1fr) auto;align-items:center;height:44px;border-bottom:1px solid var(--line);-webkit-app-region:drag;padding-right:14px;position:relative;z-index:5;user-select:none}
-.leo2 .tb-title{display:flex;align-items:baseline;gap:10px;min-width:0;font-size:13px}
-.leo2 .tb-title b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.leo2 .tb-sub{font-size:11px;color:var(--fg3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.leo2 .tb-title{display:flex;align-items:baseline;gap:10px;min-width:0;font-size:13px;overflow:hidden}
+.leo2 .tb-title b{flex:none;font-weight:600;white-space:nowrap}
+.leo2 .tb-sub{min-width:0;flex:1;font-size:11px;color:var(--fg3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .leo2 .topnav{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;padding:2px;border-radius:9px;background:var(--chip)}
 .leo2 .topnav button{padding:4px 0;border-radius:7px;color:var(--fg2);font-size:12px;text-align:center}
 .leo2 .topnav button:hover{color:var(--fg);background:var(--chip)}
@@ -80,12 +80,15 @@
 .leo2 .btn-new kbd{font-size:11px;color:var(--fg3)}
 .leo2 .chips{display:flex;gap:2px;overflow:auto;scrollbar-width:none}
 .leo2 .chips::-webkit-scrollbar{display:none}
-.leo2 .chip-f{padding:2px 8px;border-radius:999px;color:var(--fg2);font-size:12px;white-space:nowrap}
+.leo2 .chip-f{padding:2px 8px;border-radius:999px;color:var(--fg2);font-size:12px;white-space:nowrap;transition:background-color var(--t-quick) var(--ease),color var(--t-quick) var(--ease)}
 .leo2 .chip-f:hover{color:var(--fg)}
 .leo2 .chip-f.on{background:var(--sel);color:var(--fg)}
 .leo2 .chip-f i{font-style:normal;color:var(--fg3);margin-left:3px;font-size:11px}
 .leo2 .chip-f.on i{color:var(--fg2)}
-.leo2 .rail-list{position:absolute;inset:0;overflow:auto;padding:118px 0 48px}
+.leo2 .rail-find{width:100%;height:28px;border:0;border-radius:8px;padding:0 10px;background:var(--chip);color:var(--fg);font:inherit;font-size:12px}
+.leo2 .rail-find::placeholder{color:var(--fg3)}
+.leo2 .rail-find:focus{outline:none;box-shadow:0 0 0 2px var(--sel)}
+.leo2 .rail-list{position:absolute;inset:0;overflow:auto;padding:154px 0 48px}
 .leo2 .rail-foot{position:absolute;left:0;right:0;bottom:0;z-index:2;display:flex;justify-content:space-between;gap:6px;padding:8px 12px;border-top:1px solid var(--line);background:var(--glass2);-webkit-backdrop-filter:blur(22px) saturate(1.5);backdrop-filter:blur(22px) saturate(1.5)}
 .leo2 .newbox-warn{padding:8px 10px;border-radius:8px;background:var(--warn-bg,rgba(255,159,10,.12));color:var(--fg);font-size:12px;line-height:1.5;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
 .leo2 .shead-state{font-size:12px;color:var(--fg2)}
@@ -93,7 +96,7 @@
 .leo2 .grp-h b{font-weight:500;color:var(--fg);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .leo2 .grp-h .role{color:var(--fg3)}
 .leo2 .grp-h .cnt{margin-left:auto;color:var(--fg3)}
-.leo2 .srow{position:relative;z-index:1;display:grid;grid-template-columns:8px 1fr auto;gap:8px;padding:8px 10px;margin:0 6px;border-radius:8px;align-items:start;width:calc(100% - 12px);color:var(--fg)}
+.leo2 .srow{position:relative;z-index:1;display:grid;grid-template-columns:8px 1fr auto;gap:8px;padding:8px 10px;margin:0 6px;border-radius:8px;align-items:start;width:calc(100% - 12px);color:var(--fg);transition:background-color var(--t-quick) var(--ease),opacity var(--t-standard) var(--ease)}
 .leo2 .srow:hover{background:color-mix(in srgb,var(--sel) 55%,transparent)}
 .leo2 .srow.on{background:var(--sel)}
 .leo2 .srow .dot{margin-top:6px}
@@ -105,9 +108,11 @@
 .leo2 .srow-l.err{color:var(--err-text)}
 .leo2 .srow-time{font-size:11px;color:var(--fg3);padding-top:2px}
 .leo2 .rail-empty{padding:28px 14px;color:var(--fg3);text-align:center;font-size:12px}
+.leo2 .rail-more{display:block;width:calc(100% - 16px);margin:4px 8px 12px;padding:7px 8px;border-radius:8px;color:var(--fg3);font-size:12px;text-align:center;animation:leo2-rise var(--t-standard) var(--ease) both}
+.leo2 .rail-more:hover{color:var(--fg);background:var(--chip)}
 
 /* 新会话面板(左栏顶部展开) */
-.leo2 .newbox{padding:10px 12px 12px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:8px;background:var(--bg2)}
+.leo2 .newbox{padding:10px 12px 12px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:8px;background:var(--bg2);animation:leo2-rise var(--t-panel) var(--ease) both}
 .leo2 .newbox label{font-size:11px;color:var(--fg3);display:block;margin-bottom:3px}
 .leo2 .newbox input,.leo2 .newbox select,.leo2 .newbox textarea{width:100%;background:var(--bg);border:1px solid var(--line2);border-radius:8px;padding:6px 8px;font-size:12px}
 .leo2 .newbox textarea{min-height:56px;resize:vertical}
@@ -120,29 +125,66 @@
 .leo2 .sess{position:absolute;inset:0}
 .leo2 .shead-wrap{position:absolute;top:0;left:0;right:0;z-index:3}
 .leo2 .shead{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 20px;border-bottom:1px solid var(--line);min-height:56px}
-.leo2 .shead-l{display:flex;align-items:center;gap:10px;min-width:0}
-.leo2 .shead-t{min-width:0}
-.leo2 .shead h1{font-size:15px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.leo2 .shead-l{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
+.leo2 .shead-t{min-width:0;flex:1}
+.leo2 .shead h1{font-size:15px;font-weight:600;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;max-width:100%}
+.leo2 .shead h1:hover{color:var(--fg)}
 .leo2 .shead-sub{font-size:11px;color:var(--fg3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
 .leo2 .shead-r{display:flex;gap:4px;flex:none}
 .leo2 .chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 9px;border-radius:7px;color:var(--fg2);white-space:nowrap;font-size:12px;background:var(--chip)}
 .leo2 .chip:hover{color:var(--fg);background:var(--sel)}
+.leo2 .chip.win{max-width:22ch;overflow:hidden;text-overflow:ellipsis;cursor:default;animation:leo2-rise var(--t-quick) var(--ease) both}
+.leo2 button.chip.win{cursor:pointer}
+.leo2 .chip.win:hover{background:var(--chip);color:var(--fg2)}
 .leo2 .chip b{color:var(--fg);font-weight:500}
 .leo2 .chip .car{font-size:9px;color:var(--fg3)}
-.leo2 .need-strip{display:flex;align-items:center;gap:12px;padding:8px 20px;background:color-mix(in srgb,var(--need) 10%,transparent);border-bottom:1px solid color-mix(in srgb,var(--need) 35%,transparent);overflow:hidden}
+.leo2 .flow-find{display:flex;align-items:center;gap:6px;padding:6px 20px;border-bottom:1px solid var(--line);background:var(--bg2);animation:leo2-rise var(--t-standard) var(--ease) both}
+.leo2 .flow-find input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line2);border-radius:7px;padding:5px 8px;font:12px inherit;color:var(--fg)}
+.leo2 .flow-find-hits{color:var(--fg3);font-size:11px;flex:none;white-space:nowrap}
+.leo2 .flow-find-acts{display:flex;align-items:center;gap:2px;flex:none}
+.leo2 .flow-find-acts .link{padding:2px 5px}
+.leo2 .frow-miss{opacity:.28}
+.leo2 .frow-hit{border-radius:10px;outline:1px solid color-mix(in srgb,var(--need) 45%,transparent);background:color-mix(in srgb,var(--need) 10%,transparent);animation:leo2-rise var(--t-quick) var(--ease) both}
+.leo2 .need-strip{display:flex;align-items:center;gap:12px;padding:8px 20px;background:color-mix(in srgb,var(--need) 10%,transparent);border-bottom:1px solid color-mix(in srgb,var(--need) 35%,transparent);overflow:hidden;animation:leo2-rise var(--t-standard) var(--ease) both}
 .leo2 .need-strip .cnt{color:var(--need-text);font-weight:600;flex:none}
 .leo2 .need-strip .it{color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
 .leo2 .need-strip .it code{background:color-mix(in srgb,var(--need) 16%,transparent);padding:1px 6px;border-radius:4px}
 .leo2 .need-strip .go{color:var(--need-text);text-decoration:underline;text-underline-offset:3px;flex:none}
-.leo2 .flow{position:absolute;inset:0;overflow:auto;padding:16px 24px;scroll-padding-top:80px}
-.leo2 .flow-in{max-width:860px}
-.leo2 .frow{display:grid;grid-template-columns:56px 1fr;gap:16px;padding:11px 0;border-bottom:1px solid var(--line);animation:leo2-rise var(--t-standard) var(--ease) both}
+.leo2 .flow{position:absolute;inset:0;overflow:auto;padding:16px 32px;scroll-padding-top:80px}
+.leo2 .flow-in{max-width:720px;margin:0 auto}
+.leo2.light .shead{box-shadow:0 1px 0 rgba(28,29,31,.06)}
+.leo2.light .flow{background:linear-gradient(180deg,color-mix(in srgb,var(--bg2) 88%,transparent),transparent 140px),var(--bg)}
+.leo2 .jump-latest{position:sticky;bottom:8px;left:50%;transform:translateX(-50%);display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 12px;border-radius:999px;background:var(--fg);color:var(--bg);font-size:12px;font-weight:600;box-shadow:var(--shadow-f);animation:leo2-toast var(--t-standard) var(--spring)}
+.leo2 .jump-latest kbd{opacity:.7}
+.leo2 .frow{display:grid;grid-template-columns:56px 1fr;gap:16px;padding:11px 0;border-bottom:1px solid var(--line)}
+.leo2 .frow.live{animation:leo2-rise var(--t-standard) var(--ease) both}
 .leo2 .frow:last-child{border-bottom:0}
 .leo2 .fl{font-size:11px;color:var(--fg3);padding-top:3px;text-align:right;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .leo2 .frow-user .fl{color:var(--fg2)}
 .leo2 .frow-user .fc{color:var(--fg);white-space:pre-wrap;word-break:break-word}
+.leo2 .frow-steer{animation:leo2-rise var(--t-standard) var(--ease) both}
+.leo2 .frow-steer .fl{color:var(--need-text);font-weight:500}
+.leo2 .frow-steer .fc{box-shadow:inset 2px 0 0 color-mix(in srgb,var(--need) 55%,transparent);padding-left:10px}
+.leo2 .frow-follow_up .fl{color:var(--remote-text)}
 .leo2 .frow-ai .fc{max-width:72ch;white-space:pre-wrap;word-break:break-word}
 .leo2 .frow-ai .fc.streaming::after{content:"";display:inline-block;width:6px;height:13px;margin-left:2px;background:var(--fg2);vertical-align:-2px;animation:leo2-breathe 1s ease-in-out infinite}
+.leo2 .frow-think .fl{color:var(--fg3)}
+.leo2 .think-toggle{font-size:12px;color:var(--fg3);text-decoration:underline;text-underline-offset:3px}
+.leo2 .think-toggle:hover{color:var(--fg2)}
+.leo2 .think-body{margin-top:6px;color:var(--fg2);font-size:12px;line-height:1.55;white-space:pre-wrap;word-break:break-word;max-width:72ch}
+.leo2 .think-body.streaming::after{content:"";display:inline-block;width:6px;height:13px;margin-left:2px;background:var(--fg3);vertical-align:-2px;animation:leo2-breathe 1s ease-in-out infinite}
+.leo2 .models-toggle{color:var(--fg3);background:none;border:0;cursor:pointer;padding:0}
+.leo2 .models-toggle:hover{color:var(--fg)}
+.leo2 .model-catalog{display:grid;gap:0;padding:0 8px 8px 30px}
+.leo2 .catalog-filter{width:100%;margin:4px 0 8px;background:var(--bg);border:1px solid var(--line2);border-radius:7px;padding:5px 8px;font:12px inherit;color:var(--fg)}
+.leo2 .catalog-filter:focus{outline:none;border-color:color-mix(in srgb,var(--focus) 60%,var(--line2))}
+.leo2 .more-providers{margin:8px 8px 4px;font:12px inherit}
+.leo2 .model-empty{padding:8px 0;color:var(--fg3);font-size:12px}
+.leo2 .model-item{display:grid;grid-template-columns:8px 1.2fr 1.4fr .8fr;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:12px;color:var(--fg2)}
+.leo2 .model-item b{color:var(--fg);font-weight:500}
+.leo2 .model-item:last-child{border-bottom:0}
+.leo2 .add-model{padding:8px 8px 12px 30px}
+.leo2 .custom-box{margin:8px 0 4px;border:1px solid var(--line2);border-radius:12px}
 .leo2 .frow-tool .fl,.leo2 .frow-edit .fl{font-family:"SF Mono",Menlo,monospace}
 .leo2 .tool-line{display:flex;align-items:center;gap:10px;min-height:24px;flex-wrap:wrap}
 .leo2 .tool-line code{background:var(--mono);padding:2px 8px;border-radius:5px;color:var(--fg);white-space:pre-wrap;word-break:break-all}
@@ -155,6 +197,7 @@
 .leo2 .tool-toggle:hover{color:var(--fg)}
 .leo2 .tool-out{margin-top:8px;background:var(--mono);padding:10px 12px;border-radius:8px;white-space:pre-wrap;word-break:break-word;color:var(--fg2);max-height:280px;overflow:auto;line-height:1.55;font-family:"SF Mono",Menlo,monospace;font-size:12px}
 .leo2 .frow-ap{background:color-mix(in srgb,var(--need) 7%,transparent);border:1px solid color-mix(in srgb,var(--need) 30%,transparent);box-shadow:inset 0 1px 0 rgba(255,255,255,.04);border-radius:12px;margin:8px -12px;padding:12px;overflow:hidden}
+.leo2 .frow-ap.live{animation:leo2-rise var(--t-emphasis) var(--ease) both}
 .leo2 .frow-ap .fl{color:var(--need-text);font-weight:600}
 .leo2 .frow-ap .cmd{display:block;background:var(--mono);padding:8px 10px;border-radius:8px;margin:8px 0 10px;white-space:pre-wrap;word-break:break-all;color:var(--fg)}
 .leo2 .ap-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -172,23 +215,46 @@
 .leo2 .fc.sys{color:var(--fg3);font-size:12px}
 .leo2 .fc.sys.remote{color:var(--remote-text)}
 .leo2 .fc.sys.error{color:var(--err-text)}
-.leo2 .empty-main{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--fg3);flex-direction:column;gap:8px}
+.leo2 .empty-main{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--fg3);flex-direction:column;gap:8px;text-align:center;padding:24px;animation:leo2-rise var(--t-panel) var(--ease) both}
 .leo2 .empty-main b{color:var(--fg2);font-weight:500}
+.leo2 .empty-main .btn-s{margin-top:6px}
+.leo2 .empty-main.in-flow{position:relative;min-height:240px;inset:auto}
+.leo2 .inline-select{width:100%;max-width:360px;background:var(--bg);border:1px solid var(--line2);border-radius:7px;padding:4px 8px;font:12px inherit;color:var(--fg)}
 
 /* 输入区 */
-.leo2 .composer-wrap{position:absolute;left:0;right:0;bottom:0;z-index:3;padding:12px 24px 16px;pointer-events:none}
-.leo2 .composer{pointer-events:auto;max-width:860px;border:1px solid var(--line2);border-radius:12px;padding:10px 12px 8px;background:var(--glass);-webkit-backdrop-filter:blur(22px) saturate(1.5);backdrop-filter:blur(22px) saturate(1.5);box-shadow:0 8px 28px rgba(0,0,0,.18);transition:border-color var(--t-standard) var(--ease),box-shadow var(--t-standard) var(--ease)}
+.leo2 .composer-wrap{position:absolute;left:0;right:0;bottom:0;z-index:3;padding:12px 24px 16px;pointer-events:none;display:flex;justify-content:center}
+.leo2 .composer-wrap.find-away{display:none}
+.leo2 .composer{pointer-events:auto;width:100%;max-width:720px;border:1px solid var(--line2);border-radius:12px;padding:10px 12px 8px;background:var(--glass);-webkit-backdrop-filter:blur(22px) saturate(1.5);backdrop-filter:blur(22px) saturate(1.5);box-shadow:0 8px 28px rgba(0,0,0,.18);transition:border-color var(--t-standard) var(--ease),box-shadow var(--t-standard) var(--ease);animation:leo2-rise var(--t-standard) var(--ease) both}
 .leo2 .composer:focus-within{border-color:color-mix(in srgb,var(--focus) 60%,var(--line2));box-shadow:0 8px 28px rgba(0,0,0,.18),0 0 0 3px color-mix(in srgb,var(--focus) 18%,transparent)}
 .leo2 .composer textarea{width:100%;min-height:44px;max-height:180px;resize:none;background:transparent;border:0;color:var(--fg);font:inherit;line-height:1.5;padding:2px 0}
 .leo2 .composer textarea:focus{outline:none}
 .leo2 .composer-bar{display:flex;align-items:center;gap:6px;margin-top:4px}
+.leo2 .composer-acts{display:flex;align-items:center;gap:6px;flex:none}
 .leo2 .cb{height:26px;padding:0 8px;border-radius:7px;color:var(--fg2);font-size:12px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;flex:none}
 .leo2 .cb:hover{color:var(--fg);background:var(--chip)}
 .leo2 .cb.info{flex:1;min-width:0;display:block;line-height:26px;overflow:hidden;text-overflow:ellipsis;cursor:default}
 .leo2 .cb.info:hover{background:none;color:var(--fg2)}
+.leo2 .composer.ended{padding:8px 12px 8px}
+.leo2 .composer.ended textarea{min-height:36px}
+.leo2 .composer-end{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;color:var(--fg2);font-size:12px;line-height:1.3;margin-top:4px}
+.leo2 .composer-end-hint{min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.leo2 .composer-end b{color:var(--fg);font-weight:560}
+.leo2 .composer-end-acts{display:flex;align-items:center;gap:12px;margin-top:0;flex:none}
+.leo2 mark.find-hit{background:color-mix(in srgb,var(--need) 38%,transparent);color:inherit;border-radius:3px;padding:0 1px}
+.leo2 .frow-hit mark.find-hit{background:color-mix(in srgb,var(--need) 58%,transparent)}
+.leo2 .remote-hint{padding:22px 20px;max-width:42ch;color:var(--fg2);line-height:1.55;animation:leo2-rise var(--t-panel) var(--ease) both}
+.leo2 .remote-hint b{display:block;color:var(--fg);font-weight:560;margin-bottom:8px}
+.leo2 .remote-hint p{margin:0 0 14px}
+.leo2 .remote-hint code{font-size:12px;color:var(--fg)}
+.leo2 .remote-acts{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.leo2 .remote-files{margin:0 0 14px;padding:0;list-style:none;border:1px solid var(--line);border-radius:10px;overflow:hidden;animation:leo2-rise var(--t-standard) var(--ease) both}
+.leo2 .remote-files li{display:flex;justify-content:space-between;gap:12px;padding:8px 10px;border-bottom:1px solid var(--line);font-size:12px}
+.leo2 .remote-files li:last-child{border-bottom:0}
+.leo2 .remote-files code{color:var(--fg)}
+.leo2 .remote-files span{color:var(--fg3);flex:none}
 
 /* 页面 */
-.leo2 .page{position:absolute;inset:0;overflow:auto;padding:24px 28px 40px}
+.leo2 .page{position:absolute;inset:0;overflow:auto;padding:24px 28px 40px;animation:leo2-rise var(--t-panel) var(--ease) both}
 .leo2 .page-in{max-width:980px}
 .leo2 .page-h{display:flex;align-items:baseline;gap:12px;margin-bottom:6px}
 .leo2 .page-h h1{font-size:20px;font-weight:600;letter-spacing:-.02em}
@@ -197,9 +263,12 @@
 .leo2 .sec{margin:26px 0 4px;font-size:11px;color:var(--fg3);letter-spacing:.04em}
 .leo2 .trow{display:grid;grid-template-columns:8px 1.7fr .7fr 1.1fr .9fr auto;gap:14px;align-items:center;padding:12px 8px;border-bottom:1px solid var(--line);transition:background-color var(--t-quick)}
 .leo2 .trow:hover{background:color-mix(in srgb,var(--sel) 50%,transparent)}
+.leo2 .trow.on{background:var(--sel)}
 .leo2 .trow.h{color:var(--fg3);font-size:11px;padding:6px 8px}.leo2 .trow.h:hover{background:none}
 .leo2 .trow .name{font-weight:500}
 .leo2 .trow .sub{font-size:11px;color:var(--fg3);font-weight:400}
+.leo2 .note-list{margin:8px 8px 0 30px;padding:0 0 0 18px;color:var(--fg2);font-size:12px;line-height:1.55;max-width:72ch}
+.leo2 .note-list li{margin:0 0 6px}
 .leo2 .trow .acts{display:flex;gap:12px;align-items:center}
 .leo2 .link{color:var(--fg2);text-decoration:underline;text-underline-offset:3px;white-space:nowrap}
 .leo2 .link:hover{color:var(--fg)}
@@ -220,14 +289,22 @@
 .leo2 .keyform input{width:260px;background:var(--bg);border:1px solid var(--line2);border-radius:7px;padding:4px 8px;font-size:12px;font-family:"SF Mono",Menlo,monospace}
 
 /* 抽屉 / 面板 / 菜单 / 提示 */
-.leo2 .drawer{position:fixed;top:38px;right:0;bottom:0;width:min(560px,60vw);background:var(--bg2);border-left:1px solid var(--line2);transform:translateX(102%);transition:transform var(--t-panel) var(--spring);z-index:20;display:flex;flex-direction:column}
-.leo2 .drawer.open{transform:none}
+.leo2 .drawer{position:fixed;top:38px;right:0;bottom:0;width:min(560px,60vw);background:var(--bg2);border-left:1px solid var(--line2);transform:translateX(102%);visibility:hidden;pointer-events:none;transition:transform var(--t-panel) var(--spring),visibility 0s linear var(--t-panel);z-index:20;display:flex;flex-direction:column}
+.leo2 .drawer.open{transform:none;visibility:visible;pointer-events:auto;transition:transform var(--t-panel) var(--spring),visibility 0s}
 .leo2 .drawer header{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-bottom:1px solid var(--line);font-weight:500;flex:none}
 .leo2 .drawer header .link{font-weight:400}
 .leo2 .drawer-body{overflow:auto;flex:1;min-height:0;position:relative}
 .leo2 .drawer-body.pad{padding:12px 16px}
 .leo2 .drawer-host{position:absolute;inset:0;display:flex;flex-direction:column}
 .leo2 .drawer-host>*{flex:1;min-height:0}
+.leo2 .local-files{display:flex;flex-direction:column;height:100%;min-height:0}
+.leo2 .local-files .remote-files{flex:none;padding:10px 14px 0}
+.leo2 .local-files-peek-wrap{flex:none;margin:8px 14px 0;animation:leo2-rise var(--t-standard) var(--ease) both}
+.leo2 .local-files-peek-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin:0 0 6px}
+.leo2 .local-files-name{display:block;margin:0;font-size:11px;color:var(--fg3);font-weight:560}
+.leo2 .local-files-peek{max-height:36%;overflow:auto;margin:0;padding:10px 12px;border-radius:8px;background:var(--mono);color:var(--fg);font-size:12px;line-height:1.45;white-space:pre-wrap;word-break:break-word}
+.leo2 .local-files-tree{position:relative;flex:1;min-height:160px}
+.leo2 .remote-files .link.on{color:var(--fg)}
 .leo2 .dl{white-space:pre-wrap;word-break:break-all;padding:0 8px;line-height:1.6;font-family:"SF Mono",Menlo,monospace;font-size:12px;color:var(--fg2)}
 .leo2 .dl.h{color:var(--fg3);margin:10px 0 4px;font-family:inherit}
 .leo2 .palette{position:fixed;inset:0;background:rgba(0,0,0,.28);z-index:30;display:flex;justify-content:center;align-items:flex-start;padding-top:12vh;-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px)}
@@ -247,4 +324,12 @@
 .leo2 .mi.dim{color:var(--fg3)}
 .leo2 .msep{height:1px;background:var(--line);margin:4px 6px}
 .leo2 .toast{position:fixed;left:50%;top:50px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:10px;font-size:12px;box-shadow:var(--shadow-f);z-index:40;animation:leo2-toast var(--t-standard) var(--spring);max-width:70vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.leo2 .wn{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:24px}
+.leo2 .wn-mask{position:absolute;inset:0;background:rgba(0,0,0,.4);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+.leo2 .wn-box{position:relative;width:min(440px,92vw);max-height:80vh;overflow:auto;background:var(--bg3);border:1px solid var(--line2);border-radius:14px;box-shadow:var(--shadow-f);padding:22px 22px 18px;animation:leo2-pin var(--t-panel) var(--spring) both}
+.leo2 .wn-box h2{font-size:16px;font-weight:560;margin:0 0 4px}
+.leo2 .wn-ver{font-size:12px;color:var(--fg3);margin:14px 0 8px}
+.leo2 .wn-entry ul{margin:0;padding:0 0 0 16px;color:var(--fg);font-size:13px;line-height:1.55}
+.leo2 .wn-entry li{margin:0 0 8px}
+.leo2 .wn-acts{display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:12px}
 .leo2 .toast.error{background:var(--err);color:#fff}

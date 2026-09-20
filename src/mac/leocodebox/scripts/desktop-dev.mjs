@@ -3,14 +3,19 @@ import { randomBytes } from 'node:crypto';
 import http from 'node:http';
 import net from 'node:net';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { ensureDevBackendHelper } from './ensure-dev-backend-helper.mjs';
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const electronBinary = process.platform === 'darwin'
   ? path.join(projectRoot, 'node_modules/electron/dist/Electron.app/Contents/MacOS/Electron')
   : path.join(projectRoot, 'node_modules/.bin/electron');
-const tsxCli = path.join(projectRoot, 'node_modules/tsx/dist/cli.mjs');
+const tsxLoader = pathToFileURL(path.join(projectRoot, 'node_modules/tsx/dist/loader.mjs')).href;
+const tsxPreflight = path.join(projectRoot, 'node_modules/tsx/dist/preflight.cjs');
 const viteCli = path.join(projectRoot, 'node_modules/vite/bin/vite.js');
+const macBackendHelper = process.platform === 'darwin'
+  ? ensureDevBackendHelper(projectRoot)
+  : electronBinary;
 const developmentToken = randomBytes(32).toString('base64url');
 
 const sharedEnvironment = {
@@ -19,6 +24,7 @@ const sharedEnvironment = {
   SERVER_PORT: '38473',
   LEOCODEBOX_LOCAL_ONLY: '1',
   LEOCODEBOX_LOCAL_AUTH_TOKEN: developmentToken,
+  TSX_TSCONFIG_PATH: path.join(projectRoot, 'server/tsconfig.json'),
 };
 const desktopEnvironment = {
   ...sharedEnvironment,
@@ -99,9 +105,10 @@ try {
   process.exit(1);
 }
 
+const backendArgs = ['--require', tsxPreflight, '--import', tsxLoader, 'server/index.ts'];
 const server = start(
-  electronBinary,
-  [tsxCli, '--tsconfig', 'server/tsconfig.json', 'server/index.ts'],
+  macBackendHelper,
+  backendArgs,
   { ...sharedEnvironment, ELECTRON_RUN_AS_NODE: '1' },
 );
 const client = start(process.execPath, [viteCli, '--host', '127.0.0.1', '--strictPort']);

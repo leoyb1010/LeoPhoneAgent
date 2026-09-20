@@ -1,10 +1,17 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { LEO_RELEASE_NOTES, currentAppVersion, currentReleaseNote, markWhatsNewSeen, shouldShowWhatsNew } from '../components/version-upgrade/releaseNotes';
 import { useTheme } from '../contexts/ThemeContext';
 import type { Project } from '../types/app';
+
 import { api, type FleetOverview, type HarnessEvent, type LocalOverview, type ProviderInfo, type SessionSummary, type SessionTarget } from './api';
-import { POLICY_LABEL, applyEvent, emptyView, lastLine, modelLabel, providerOf, relativeTime, statusDot, type FlowRow, type SessionView } from './model';
-import { ChannelsPage, DevicesPage, SettingsPage, readDefaultPolicy } from './pages';
+import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, applyEvent, boundWindowFromUnknown, composerNeedsModelSwitch, composerPlaceholder, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, prettyModelName, providerOf, rankModelsForPicker, readHiddenSessionKeys, relativeTime, sessionCanDrive, sessionCanForget, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, windowBoundLabel, type FlowRow, type Group, type SessionView } from './model';
+import { usableModelsFromProviders } from './settings-form';
+import { artifactNameFromPath, clipFilePeek, cwdChipLabel, isPeekDrawer, isWorkspaceDrawer, machineChipLabel, peekFileCaption, sessionFilePath, titlebarHomeCopy } from './local-files';
+import { REMOTE_DRAWER_ACTION_LABEL, isRemoteDrawerKind, mergeFilePins, remoteDrawerActions, remoteDrawerCopy } from './remote-drawer';
+import { WhatsNewOverlay } from './WhatsNewOverlay';
+import { ChannelsPage, DevicesPage, SettingsPage } from './pages';
+import { NewSessionBox, Row, type ModelChoice } from './flow';
 import './v2.css';
 
 // 2.0 壳:主控(会话流水)· 设备 · 通道 · 设置 · ⌘K。
@@ -17,15 +24,13 @@ const BrowserUsePanel = lazy(() => import('../components/browser-use/view/Browse
 type View = 'home' | 'devices' | 'channels' | 'settings';
 type Filter = 'all' | 'active' | 'need' | 'err' | 'history';
 type DrawerKind = 'term' | 'files' | 'diff' | 'browser' | null;
+type NewBoxState = { open: boolean; machine: string; cwd?: string; prompt?: string; model?: string };
 type Toast = { id: number; text: string; error: boolean };
 type MenuItem = { v: string; t: string; sub?: string; dot?: string; dim?: boolean; sep?: boolean };
 type MenuState = { x: number; y: number; items: MenuItem[]; onPick: (v: string) => void } | null;
-
-type Group = { id: string; name: string; role: '本机' | '被控'; online: boolean; sessions: SessionSummary[] };
+type PickerKind = 'model' | 'policy' | 'think' | null;
 
 const ORDER: Record<string, number> = { waiting_for_approval: 0, running: 1, starting: 1, failed: 2, idle: 3, completed: 4, cancelled: 4, orphaned: 5 };
-const HISTORY = new Set(['orphaned', 'completed', 'cancelled']);
-const isLive = (s: string) => s === 'running' || s === 'starting' || s === 'waiting_for_approval' || s === 'idle';
 
 function normalizeRemote(s: Partial<SessionSummary> & { session_id: string; status: string }): SessionSummary {
   return {
@@ -46,12 +51,16 @@ function useInterval(fn: () => void, ms: number): void {
 }
 
 /** 会话事件流:先回放再跟随;断了按最后 seq 续传。 */
-function useSessionStream(target: SessionTarget | null, seed: SessionSummary | null): SessionView {
+function useSessionStream(target: SessionTarget | null, seed: SessionSummary | null): { view: SessionView; stream: 'off' | 'live' | 'reconnecting' } {
   const [view, setView] = useState<SessionView>(() => emptyView(seed));
+  const [stream, setStream] = useState<'off' | 'live' | 'reconnecting'>('off');
   const seqRef = useRef(0);
+  const statusRef = useRef(seed?.status ?? '');
   useEffect(() => {
     seqRef.current = 0;
+    statusRef.current = seed?.status ?? '';
     setView(emptyView(seed));
+    setStream(target && shouldReconnectSessionStream(seed?.status) ? 'reconnecting' : 'off');
     if (!target) return undefined;
     let cancelled = false;
     let stop: (() => void) | null = null;
@@ -60,10 +69,21 @@ function useSessionStream(target: SessionTarget | null, seed: SessionSummary | n
       if (cancelled) return;
       stop = api.subscribe(target, seqRef.current, (event: HarnessEvent) => {
         if (typeof event.seq === 'number') seqRef.current = Math.max(seqRef.current, event.seq);
-        setView((prev) => applyEvent(prev, event));
+        setView((prev) => {
+          const next = applyEvent(prev, event);
+          statusRef.current = next.status;
+          return next;
+        });
       }, () => {
         if (cancelled) return;
+        if (!shouldReconnectSessionStream(statusRef.current)) {
+          setStream('off');
+          return;
+        }
+        setStream('reconnecting');
         timer = window.setTimeout(connect, 1500);
+      }, () => {
+        if (!cancelled && shouldReconnectSessionStream(statusRef.current)) setStream('live');
       });
     };
     connect();
@@ -75,31 +95,57 @@ function useSessionStream(target: SessionTarget | null, seed: SessionSummary | n
     // seed 只用于初始化;切换会话由 target 驱动。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target?.machine, target?.id]);
-  return view;
+  return { view, stream };
 }
 
 export default function App2() {
   const { isDarkMode, toggleDarkMode } = useTheme();
   const [view, setView] = useState<View>('home');
   const [filter, setFilter] = useState<Filter>('all');
+  const [railQuery, setRailQuery] = useState('');
   const [local, setLocal] = useState<LocalOverview | null>(null);
   const [fleet, setFleet] = useState<FleetOverview | null>(null);
+  const [fleetHealth, setFleetHealth] = useState({ fails: 0, stale: false });
   const [loadError, setLoadError] = useState<string | null>(null);
   const [active, setActive] = useState<SessionTarget | null>(() => {
     try { const raw = localStorage.getItem('leo2.active'); return raw ? (JSON.parse(raw) as SessionTarget) : null; } catch { return null; }
   });
   const [drawer, setDrawer] = useState<DrawerKind>(null);
+  const [workspace, setWorkspace] = useState<Project | null>(null);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [focusFile, setFocusFile] = useState<string | null>(null);
+  const [filePeek, setFilePeek] = useState<string | null>(null);
+  const [sessionArtifacts, setSessionArtifacts] = useState<Array<{ name: string }>>([]);
+  const [artifactError, setArtifactError] = useState<string | null>(null);
   const [palette, setPalette] = useState<{ open: boolean; query: string; index: number }>({ open: false, query: '', index: 0 });
   const [menu, setMenu] = useState<MenuState>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [newBox, setNewBox] = useState<{ open: boolean; machine: string } | null>(null);
-  const [providers, setProviders] = useState<ProviderInfo[]>([]);
-  const [draft, setDraft] = useState('');
+  const [newBox, setNewBox] = useState<NewBoxState | null>(null);
+  const [providers, setProviders] = useState<ProviderInfo[] | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const draftKey = active ? `${active.machine}:${active.id}` : '';
+  const draft = draftKey ? (drafts[draftKey] ?? '') : '';
+  const setDraft = useCallback((text: string) => {
+    if (!draftKey) return;
+    setDrafts((d) => (d[draftKey] === text ? d : { ...d, [draftKey]: text }));
+  }, [draftKey]);
   const [busy, setBusy] = useState(false);
+  const [picker, setPicker] = useState<{ kind: Exclude<PickerKind, null>; query: string; index: number } | null>(null);
+  const [openLegacy, setOpenLegacy] = useState(false);
+  const [focusMachine, setFocusMachine] = useState<string | null>(null);
+  const [whatsNew, setWhatsNew] = useState<ReturnType<typeof currentReleaseNote>>(null);
+  const [flowFind, setFlowFind] = useState({ open: false, query: '', index: 0 });
+  const [hiddenKeys, setHiddenKeys] = useState<string[]>(() => {
+    try { return readHiddenSessionKeys(localStorage.getItem(HIDDEN_SESSIONS_KEY)); } catch { return []; }
+  });
+  const hiddenSet = useMemo(() => new Set(hiddenKeys), [hiddenKeys]);
   const flowRef = useRef<HTMLDivElement | null>(null);
   const headRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLDivElement | null>(null);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
+  const railListRef = useRef<HTMLDivElement | null>(null);
+  const drawerCloseRef = useRef<HTMLButtonElement | null>(null);
+  const flowFindRef = useRef<HTMLInputElement | null>(null);
 
   const toast = useCallback((text: string, error = false) => {
     const id = Date.now() + Math.random();
@@ -112,52 +158,75 @@ export default function App2() {
     try { setLocal(await api.local()); setLoadError(null); } catch (e) { setLoadError(e instanceof Error ? e.message : String(e)); }
   }, []);
   const refreshFleet = useCallback(async () => {
-    try { setFleet(await api.fleet()); } catch { /* 中继没配或不可达:只影响远程分组 */ }
+    try {
+      setFleet(await api.fleet());
+      setFleetHealth((prev) => nextProbeHealth(prev.fails, true));
+    } catch {
+      setFleetHealth((prev) => nextProbeHealth(prev.fails, false));
+    }
   }, []);
   const refreshProviders = useCallback(async () => {
-    try { setProviders((await api.providers()).providers); } catch { /* 设置页会再报 */ }
+    try { setProviders((await api.providers()).providers); } catch { setProviders((prev) => prev ?? []); }
   }, []);
   useEffect(() => { void refreshLocal(); void refreshFleet(); void refreshProviders(); }, [refreshLocal, refreshFleet, refreshProviders]);
+  const appVersion = currentAppVersion();
+  useEffect(() => { if (shouldShowWhatsNew()) setWhatsNew(currentReleaseNote()); }, [appVersion]);
   useInterval(() => { void refreshLocal(); }, 4000);
   useInterval(() => { void refreshFleet(); }, 12000);
   useEffect(() => { try { localStorage.setItem('leo2.active', JSON.stringify(active)); } catch { /* ignore */ } }, [active]);
 
   const groups = useMemo<Group[]>(() => {
-    const out: Group[] = [];
-    if (local) out.push({ id: 'local', name: local.name, role: '本机', online: true, sessions: local.sessions });
+    const extras: SessionSummary[] = [];
+    const remotes: Group[] = [];
     for (const m of fleet?.machines ?? []) {
-      if (local && (m.name === local.name || m.name === fleet?.localName)) continue;
-      out.push({ id: m.name, name: m.name, role: '被控', online: m.online && m.reachable, sessions: m.sessions.map(normalizeRemote) });
+      if (local && (isSameMachineName(m.name, local.name) || isSameMachineName(m.name, fleet?.localName))) {
+        extras.push(...m.sessions.map(normalizeRemote));
+        continue;
+      }
+      remotes.push({ id: m.name, name: m.name, role: '被控', online: m.online && m.reachable, stale: fleetHealth.stale, sessions: m.sessions.map(normalizeRemote) });
     }
+    const out: Group[] = [];
+    if (local) out.push({ id: 'local', name: local.name, role: '本机', online: true, sessions: mergeSameMachineSessions(local.sessions, extras) });
+    out.push(...remotes);
     return out;
-  }, [local, fleet]);
+  }, [local, fleet, fleetHealth.stale]);
 
-  const allSessions = useMemo(() => groups.flatMap((g) => g.sessions.map((s) => ({ machine: g.id, machineName: g.name, s }))), [groups]);
+  const allSessions = useMemo(() => groups.flatMap((g) => g.sessions.map((s) => ({ machine: g.id, machineName: g.name, s }))).filter((x) => !hiddenSet.has(sessionKey(x.machine, x.s.session_id))), [groups, hiddenSet]);
   const activeEntry = useMemo(() => allSessions.find((x) => active && x.machine === active.machine && x.s.session_id === active.id) ?? null, [allSessions, active]);
   const activeSummary = activeEntry?.s ?? null;
-  const sessionView = useSessionStream(active, activeSummary);
+  const { view: sessionView, stream } = useSessionStream(active, activeSummary);
+  const canDrive = Boolean(activeSummary && sessionCanDrive(activeSummary.status, sessionView.status));
+  const findHits = useMemo(() => flowFindHitKeys(sessionView.rows, flowFind.query), [sessionView.rows, flowFind.query]);
+  const findIndex = findHits.length ? Math.min(Math.max(flowFind.index, 0), findHits.length - 1) : -1;
+  const findKey = findIndex >= 0 ? findHits[findIndex] : null;
+  const stepFind = useCallback((dir: 1 | -1) => {
+    setFlowFind((cur) => {
+      const keys = flowFindHitKeys(sessionView.rows, cur.query);
+      return { ...cur, open: true, index: nextFlowFindIndex(keys.length, cur.index, dir) };
+    });
+  }, [sessionView.rows]);
+  useEffect(() => {
+    if (!flowFind.open || !findKey) return;
+    const el = document.querySelector(`[data-flow-key="${CSS.escape(findKey)}"]`);
+    el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [findKey, flowFind.open]);
+  useEffect(() => {
+    setFlowFind({ open: false, query: '', index: 0 });
+  }, [active?.machine, active?.id]);
 
   const counts = useMemo(() => {
-    const live = allSessions.filter((x) => !HISTORY.has(x.s.status));
+    const rows = allSessions.map((x) => x.s);
+    const activeId = active?.id;
     return {
-      all: live.length,
-      active: live.filter((x) => x.s.status === 'running' || x.s.status === 'starting' || x.s.status === 'waiting_for_approval').length,
-      need: live.filter((x) => x.s.status === 'waiting_for_approval').length,
-      err: live.filter((x) => x.s.status === 'failed').length,
-      history: allSessions.filter((x) => HISTORY.has(x.s.status)).length,
+      all: countFilteredSessions(rows, 'all', activeId),
+      active: countFilteredSessions(rows, 'active', activeId),
+      need: countFilteredSessions(rows, 'need', activeId),
+      err: countFilteredSessions(rows, 'err', activeId),
+      history: countFilteredSessions(rows, 'history', activeId),
     };
-  }, [allSessions]);
+  }, [allSessions, active?.id]);
 
-  const matchesFilter = useCallback((s: SessionSummary) => {
-    switch (filter) {
-      case 'all': return !HISTORY.has(s.status);
-      case 'active': return s.status === 'running' || s.status === 'starting' || s.status === 'waiting_for_approval';
-      case 'need': return s.status === 'waiting_for_approval';
-      case 'err': return s.status === 'failed';
-      case 'history': return HISTORY.has(s.status);
-      default: return true;
-    }
-  }, [filter]);
+  const matchesFilter = useCallback((s: SessionSummary) => sessionMatchesFilter(s, filter), [filter]);
 
   const othersNeedingYou = useMemo(() => allSessions.filter((x) => x.s.status === 'waiting_for_approval' && !(active && x.machine === active.machine && x.s.session_id === active.id)), [allSessions, active]);
 
@@ -168,38 +237,244 @@ export default function App2() {
     if (pick) setActive({ machine: pick.machine, id: pick.s.session_id });
   }, [active, allSessions]);
 
+  useEffect(() => {
+    if (!isWorkspaceDrawer(drawer) || !active || active.machine !== 'local') {
+      if (!isWorkspaceDrawer(drawer)) {
+        setWorkspace(null);
+        setWorkspaceError(null);
+      }
+      return;
+    }
+    const nextCwd = activeSummary?.cwd?.trim();
+    if (!nextCwd) {
+      setWorkspace(null);
+      setWorkspaceError('这条会话没有目录');
+      return;
+    }
+    let cancelled = false;
+    setWorkspace(null);
+    setWorkspaceError(null);
+    void api.ensureWorkspace(nextCwd).then((row) => {
+      if (cancelled) return;
+      setWorkspace({
+        projectId: row.projectId,
+        displayName: row.displayName,
+        fullPath: row.fullPath,
+        path: row.path,
+      });
+    }).catch((error) => {
+      if (cancelled) return;
+      setWorkspaceError(humanizeError(error instanceof Error ? error.message : String(error)));
+    });
+    return () => { cancelled = true; };
+  }, [drawer, active, activeSummary?.cwd]);
+
+  useEffect(() => {
+    if (!isPeekDrawer(drawer)) {
+      setFocusFile(null);
+      setFilePeek(null);
+      setSessionArtifacts([]);
+      setArtifactError(null);
+    }
+  }, [drawer]);
+
+  useEffect(() => {
+    if (!isPeekDrawer(drawer) || !active) {
+      setSessionArtifacts([]);
+      setArtifactError(null);
+      return;
+    }
+    let cancelled = false;
+    setArtifactError(null);
+    void api.listArtifacts(active).then((row) => {
+      if (!cancelled) setSessionArtifacts(row.artifacts ?? []);
+    }).catch((error) => {
+      if (!cancelled) {
+        setSessionArtifacts([]);
+        setArtifactError(humanizeError(error instanceof Error ? error.message : String(error)));
+      }
+    });
+    return () => { cancelled = true; };
+  }, [drawer, active]);
+
+  useEffect(() => {
+    if (!isPeekDrawer(drawer) || !active || !focusFile) {
+      if (!focusFile) setFilePeek(null);
+      return;
+    }
+    const cwd = activeSummary?.cwd ?? workspace?.fullPath ?? '';
+    const localPath = sessionFilePath(cwd, focusFile);
+    const artifactName = artifactNameFromPath(cwd, focusFile);
+    if (!localPath && !artifactName) return;
+    let cancelled = false;
+    setFilePeek('正在读…');
+    const load = async (): Promise<string> => {
+      if (active.machine === 'local' && workspace?.projectId && localPath) {
+        try {
+          const row = await api.readProjectFile(workspace.projectId, localPath);
+          return clipFilePeek(row.content ?? '');
+        } catch {
+          // 项目树读不到时再走会话产物。
+        }
+      }
+      if (!artifactName) throw new Error('没有文件名');
+      const row = await api.readSessionArtifact(active, artifactName);
+      return clipFilePeek(row.content ?? '');
+    };
+    void load().then((text) => {
+      if (!cancelled) setFilePeek(text);
+    }).catch((error) => {
+      if (!cancelled) setFilePeek(`读不了:${humanizeError(error instanceof Error ? error.message : String(error))}`);
+    });
+    return () => { cancelled = true; };
+  }, [drawer, active, workspace?.projectId, workspace?.fullPath, focusFile, activeSummary?.cwd]);
+
+  useEffect(() => {
+    if (!isPeekDrawer(drawer) || focusFile) return;
+    const first = mergeFilePins(
+      sessionView.rows.filter((row): row is FlowRow & { k: 'edit' } => row.k === 'edit'),
+      sessionArtifacts,
+    )[0];
+    if (first?.file) setFocusFile(first.file);
+  }, [drawer, focusFile, sessionView.rows, sessionArtifacts]);
+
   // 头与输入区是悬浮玻璃,流水的内边距跟着它们的实际高度走。
   const layoutFlow = useCallback(() => {
     const flow = flowRef.current; if (!flow) return;
     flow.style.paddingTop = `${(headRef.current?.offsetHeight ?? 56) + 16}px`;
     flow.style.paddingBottom = `${(composerRef.current?.offsetHeight ?? 90) + 8}px`;
   }, []);
-  useEffect(() => { layoutFlow(); window.addEventListener('resize', layoutFlow); return () => window.removeEventListener('resize', layoutFlow); }, [layoutFlow, view, othersNeedingYou.length, sessionView.rows.length]);
-  const stickBottomRef = useRef(true);
+  useEffect(() => { layoutFlow(); window.addEventListener('resize', layoutFlow); return () => window.removeEventListener('resize', layoutFlow); }, [layoutFlow, view, othersNeedingYou.length, sessionView.rows.length, canDrive, flowFind.open]);
+  useEffect(() => { if (drawer) drawerCloseRef.current?.focus(); }, [drawer]);
   useEffect(() => {
-    const flow = flowRef.current; if (!flow || !stickBottomRef.current) return;
-    flow.scrollTop = flow.scrollHeight;
-  }, [sessionView.rows, view]);
+    if (!drawer) return undefined;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const root = document.querySelector('.leo2 .drawer.open') as HTMLElement | null;
+      if (!root) return;
+      const list = [...root.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')].filter((el) => !el.hasAttribute('disabled'));
+      const next = nextFocusIndex(list.length, list.indexOf(document.activeElement as HTMLElement), e.shiftKey);
+      if (next < 0 || !list[next]) return;
+      e.preventDefault();
+      list[next].focus();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [drawer]);
+  const [stickBottom, setStickBottom] = useState(true);
+  const [unseen, setUnseen] = useState(0);
+  const rowCountRef = useRef(0);
+  useEffect(() => { setStickBottom(true); setUnseen(0); rowCountRef.current = 0; }, [active?.machine, active?.id]);
+  useEffect(() => {
+    const ta = taRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = `${Math.min(180, ta.scrollHeight)}px`;
+    layoutFlow();
+  }, [draftKey, draft, layoutFlow]);
+  useEffect(() => {
+    const flow = flowRef.current;
+    if (!flow) return;
+    const grew = sessionView.rows.length > rowCountRef.current;
+    rowCountRef.current = sessionView.rows.length;
+    setUnseen((n) => nextUnseen(n, grew, stickBottom));
+    if (stickBottom) flow.scrollTop = flow.scrollHeight;
+  }, [sessionView.rows, view, stickBottom]);
 
   // -- 动作 ------------------------------------------------------------------
   const openSession = useCallback((target: SessionTarget) => { setActive(target); setView('home'); }, []);
   const withBusy = useCallback(async (fn: () => Promise<unknown>, okText?: string) => {
     setBusy(true);
     try { await fn(); if (okText) toast(okText); await refreshLocal(); }
-    catch (e) { toast(e instanceof Error ? e.message : String(e), true); }
+    catch (e) { toast(humanizeError(e instanceof Error ? e.message : String(e)), true); }
     finally { setBusy(false); }
   }, [toast, refreshLocal]);
 
+  const continueHere = useCallback(() => {
+    setNewBox(continueSessionDraft({ machine: active?.machine, cwd: activeSummary?.cwd, prompt: draft, model: sessionView.model || activeSummary?.model }));
+    setView('home');
+    setDrawer(null);
+  }, [active, activeSummary, draft, sessionView.model]);
+  const openTouchedFile = useCallback((file: string) => {
+    const next = file.trim();
+    if (next) setFocusFile(next);
+    setDrawer('files');
+  }, []);
+  const newOnMachine = useCallback(() => {
+    const machine = active?.machine && active.machine !== 'local' ? active.machine : 'local';
+    setNewBox({ open: true, machine, cwd: activeSummary?.cwd || undefined });
+    setView('home');
+    setDrawer(null);
+  }, [active, activeSummary]);
+  const showDevice = useCallback(() => {
+    const machine = active?.machine && active.machine !== 'local' ? active.machine : 'local';
+    setFocusMachine(machine);
+    setView('devices');
+    setDrawer(null);
+  }, [active]);
+  const copyCwd = useCallback(async () => {
+    const path = activeSummary?.cwd?.trim();
+    if (!path) { toast('这条会话没有目录'); return; }
+    try { await navigator.clipboard.writeText(path); toast('已复制路径'); }
+    catch { toast('复制失败', true); }
+  }, [activeSummary, toast]);
+  const copyTitle = useCallback(async () => {
+    const text = (sessionView.title || activeSummary?.title || '').trim();
+    if (!text) { toast('这条会话还没有标题'); return; }
+    try { await navigator.clipboard.writeText(text); toast('已复制标题'); }
+    catch { toast('复制失败', true); }
+  }, [activeSummary?.title, sessionView.title, toast]);
+  const copyFindHit = useCallback(async () => {
+    const row = sessionView.rows.find((item) => item.key === findKey);
+    const text = flowFindHitText(row).trim();
+    if (!text) { toast('没有可复制的命中'); return; }
+    try { await navigator.clipboard.writeText(text); toast('已复制命中'); }
+    catch { toast('复制失败', true); }
+  }, [findKey, sessionView.rows, toast]);
+  const hideSession = useCallback((target: SessionTarget) => {
+    const key = sessionKey(target.machine, target.id);
+    setHiddenKeys((prev) => {
+      const next = addHiddenSessionKey(prev, key);
+      try { localStorage.setItem(HIDDEN_SESSIONS_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+    if (active?.machine === target.machine && active.id === target.id) setActive(null);
+  }, [active]);
+  const forgetSession = useCallback(async (target: SessionTarget) => {
+    const summary = allSessions.find((x) => x.machine === target.machine && x.s.session_id === target.id)?.s;
+    if (summary && !sessionCanForget(summary.status)) { toast('进行中的会话要先停止,再从左栏拿掉', true); return; }
+    if (target.machine === 'local') {
+      await withBusy(async () => {
+        await api.forget(target);
+        hideSession(target);
+      }, '已从左栏拿掉。日志还在本机,只是不再召回。');
+      return;
+    }
+    hideSession(target);
+    toast('已从这台 Mac 的左栏拿掉。那台机器上的记录还在。');
+  }, [allSessions, hideSession, toast, withBusy]);
   const send = useCallback(async () => {
     if (!active) return;
     const text = draft.trim(); if (!text) return;
+    const blocked = composerNeedsModelSwitch(sessionView.model, sessionFailTexts({
+      lastEventText: activeSummary?.last_event?.text,
+      rows: sessionView.rows,
+    }));
+    if (blocked) {
+      toast('先换一个模型再发。当前这个账号用不了。', true);
+      return;
+    }
     setDraft('');
     await withBusy(() => api.send(active, text));
-  }, [active, draft, withBusy]);
+  }, [active, activeSummary, draft, sessionView.model, sessionView.rows, toast, withBusy, setDraft]);
   const stop = useCallback(() => active && withBusy(() => api.stop(active), '已停止'), [active, withBusy]);
   const approve = useCallback((approvalId: string, choice: string) => active && withBusy(() => api.approve(active, approvalId, choice)), [active, withBusy]);
   const setPolicy = useCallback((policy: string) => active && withBusy(() => api.setPolicy(active, policy)), [active, withBusy]);
-  const setModel = useCallback((provider: string, modelId: string) => active && withBusy(() => api.rpc(active, { type: 'set_model', provider, modelId })), [active, withBusy]);
+  const setModel = useCallback((provider: string, modelId: string) => {
+    try { localStorage.setItem(LAST_MODEL_KEY, `${provider}/${modelId}`); } catch { /* ignore */ }
+    return active && withBusy(() => api.rpc(active, { type: 'set_model', provider, modelId }));
+  }, [active, withBusy]);
+  const setThinking = useCallback((level: string) => active && withBusy(() => api.rpc(active, { type: 'set_thinking_level', level })), [active, withBusy]);
   const compact = useCallback(() => active && withBusy(() => api.rpc(active, { type: 'compact' }), '压缩请求已发出'), [active, withBusy]);
   const approveFirstPending = useCallback(() => {
     const first = sessionView.pendingApprovals.values().next().value as (FlowRow & { k: 'ap' }) | undefined;
@@ -209,6 +484,13 @@ export default function App2() {
   }, [sessionView.pendingApprovals, othersNeedingYou, approve, openSession, toast]);
 
   const createSession = useCallback(async (input: { machine: string; cwd: string; prompt: string; model: string | null; policy: string }) => {
+    if (input.machine === 'local' && (providers === null || usableModelsFromProviders(providers).length === 0)) {
+      if (providers === null) return;
+      setNewBox(null);
+      setView('settings');
+      toast(humanizeError('还没有登录任何模型。先去设置里授权或填密钥。'), true);
+      return;
+    }
     await withBusy(async () => {
       if (input.machine === 'local') {
         const created = await api.createLocalSession({ cwd: input.cwd, prompt: input.prompt, model: input.model, policy: input.policy });
@@ -220,7 +502,7 @@ export default function App2() {
       }
       setNewBox(null); setView('home');
     });
-  }, [withBusy, refreshFleet]);
+  }, [providers, withBusy, refreshFleet, toast]);
 
   // -- 菜单 ------------------------------------------------------------------
   const openMenu = useCallback((el: HTMLElement, items: MenuItem[], onPick: (v: string) => void) => {
@@ -234,28 +516,74 @@ export default function App2() {
     return () => { window.clearTimeout(id); document.removeEventListener('click', close); };
   }, [menu]);
 
-  const configuredModels = useMemo(() => providers.filter((p) => p.configured).flatMap((p) => p.models.map((m) => ({ provider: p.id, providerName: p.name, id: m.id, name: m.name }))), [providers]);
+  const configuredModels = useMemo<ModelChoice[]>(() => rankModelsForPicker(usableModelsFromProviders(providers ?? []), modelLikelyUnusable), [providers]);
+  const recentCwds = useMemo(() => [...new Set(allSessions.map((x) => x.s.cwd).filter(Boolean))].slice(0, 10), [allSessions]);
+  const beginLocalNew = useCallback(() => {
+    void refreshProviders();
+    if (providers === null) return;
+    if (localCreateNeedsSettings(configuredModels.length)) {
+      setNewBox(null);
+      setView('settings');
+      return;
+    }
+    setNewBox((current) => (current?.open ? null : { open: true, machine: 'local' }));
+    setView('home');
+  }, [configuredModels.length, providers, refreshProviders]);
 
-  const modelMenu = (el: HTMLElement) => {
-    const items: MenuItem[] = configuredModels.length
-      ? configuredModels.map((m) => ({ v: `${m.provider}/${m.id}`, t: m.name, sub: m.providerName, dot: sessionView.model === `${m.provider}/${m.id}` ? 'ok' : '' }))
-      : [{ v: '', t: '还没有可用模型', sub: '去设置里添加密钥', dim: true }];
-    openMenu(el, items, (v) => { if (!v) { setView('settings'); return; } const i = v.indexOf('/'); void setModel(v.slice(0, i), v.slice(i + 1)); });
-  };
-  const policyMenu = (el: HTMLElement) => openMenu(el, (['default', 'accept_edits', 'plan', 'auto'] as const).map((p) => ({ v: p, t: POLICY_LABEL[p], dot: sessionView.policy === p ? 'ok' : '' })), (v) => void setPolicy(v));
+  const modelMenu = () => setPicker({ kind: 'model', query: '', index: 0 });
+  const policyMenu = () => setPicker({ kind: 'policy', query: '', index: 0 });
+  const thinkMenu = () => setPicker({ kind: 'think', query: '', index: 0 });
   const moreMenu = (el: HTMLElement) => openMenu(el, [
     { v: 'term', t: '终端', sub: '⌘T' }, { v: 'files', t: '文件', sub: '⌘E' }, { v: 'diff', t: '本次改动', sub: '⌘D' }, { v: 'browser', t: '浏览器', sub: '⌘B' },
+    { v: 'find', t: '在这条会话里找', sub: '⌘F' },
+    { v: 'findhit', t: '复制当前命中', sub: '⌘C' },
     { v: '', t: '', sep: true },
+    ...(activeSummary?.cwd?.trim() ? [{ v: 'cwd', t: '复制目录', sub: activeSummary.cwd }] : []),
+    ...((sessionView.title || activeSummary?.title || '').trim() ? [{ v: 'title', t: '复制标题', sub: (sessionView.title || activeSummary?.title || '').trim() }] : []),
+    ...(canDrive ? [] : [{ v: 'continue', t: '在同一目录续写', sub: '新开会话' }]),
     { v: 'compact', t: '压缩这条会话', sub: 'pi compact' }, { v: 'stop', t: '停止', sub: '进程组一起收' },
-  ], (v) => { if (v === 'compact') void compact(); else if (v === 'stop') void stop(); else if (v) setDrawer(v as DrawerKind); });
+    ...(activeSummary && sessionCanForget(activeSummary.status) ? [{ v: 'forget', t: '从左栏拿掉', sub: active?.machine === 'local' ? '不再召回' : '只藏在这台 Mac' }] : []),
+  ], (v) => {
+    if (v === 'compact') void compact();
+    else if (v === 'stop') void stop();
+    else if (v === 'continue') continueHere();
+    else if (v === 'cwd') void copyCwd();
+    else if (v === 'title') void copyTitle();
+    else if (v === 'find') { setFlowFind((cur) => ({ ...cur, open: true })); window.setTimeout(() => { flowFindRef.current?.focus(); flowFindRef.current?.select(); }, 0); }
+    else if (v === 'findhit') void copyFindHit();
+    else if (v === 'forget' && active) void forgetSession(active);
+    else if (v) setDrawer(v as DrawerKind);
+  });
 
   // -- 键盘 ------------------------------------------------------------------
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const meta = e.metaKey || e.ctrlKey;
-      if (meta && e.key.toLowerCase() === 'k') { e.preventDefault(); setPalette((p) => ({ open: !p.open, query: '', index: 0 })); return; }
-      if (palette.open) return;
-      if (e.key === 'Escape') { if (menu) { setMenu(null); return; } if (drawer) { setDrawer(null); return; } if (newBox) { setNewBox(null); return; } return; }
+      if (meta && e.key.toLowerCase() === 'k') { e.preventDefault(); setPalette((p) => ({ open: !p.open, query: '', index: 0 })); setPicker(null); return; }
+      if (e.key === 'Escape') {
+        if (picker) { setPicker(null); return; }
+        if (palette.open) { setPalette({ open: false, query: '', index: 0 }); return; }
+        if (menu) { setMenu(null); return; }
+        if (flowFind.open) { setFlowFind({ open: false, query: '', index: 0 }); return; }
+        if (drawer) { setDrawer(null); return; }
+        if (newBox) { setNewBox(null); return; }
+        const first = sessionView.pendingApprovals.values().next().value as (FlowRow & { k: 'ap' }) | undefined;
+        if (first?.choices.includes('deny')) { e.preventDefault(); void approve(first.approvalId, 'deny'); }
+        return;
+      }
+      if (palette.open || picker) return;
+      if (!meta && (e.key === 'ArrowDown' || e.key === 'ArrowUp') && document.activeElement !== taRef.current) {
+        if (flowFind.open) {
+          e.preventDefault();
+          stepFind(e.key === 'ArrowDown' ? 1 : -1);
+          return;
+        }
+        const list = allSessions.filter((x) => matchesFilter(x.s) || Boolean(active && x.machine === active.machine && x.s.session_id === active.id));
+        const current = list.findIndex((x) => active && x.machine === active.machine && x.s.session_id === active.id);
+        const next = nextSessionIndex(list.length, current, e.key === 'ArrowDown' ? 1 : -1);
+        if (next >= 0 && list[next]) { e.preventDefault(); openSession({ machine: list[next].machine, id: list[next].s.session_id }); }
+        return;
+      }
       if (meta && e.key === 'Enter') {
         const ta = taRef.current;
         if (document.activeElement === ta && (draft.trim())) { e.preventDefault(); void send(); return; }
@@ -264,42 +592,148 @@ export default function App2() {
       }
       if (meta && ['1', '2', '3'].includes(e.key)) { e.preventDefault(); setView((['home', 'devices', 'channels'] as View[])[Number(e.key) - 1]); return; }
       if (meta && e.key === ',') { e.preventDefault(); setView('settings'); return; }
-      if (meta && e.key.toLowerCase() === 'n') { e.preventDefault(); setNewBox({ open: true, machine: 'local' }); setView('home'); return; }
+      if (meta && e.key.toLowerCase() === 'n') { e.preventDefault(); beginLocalNew(); return; }
+      if (meta && e.key.toLowerCase() === 'g' && flowFind.open) {
+        e.preventDefault();
+        stepFind(e.shiftKey ? -1 : 1);
+        return;
+      }
+      if (meta && e.key.toLowerCase() === 'c' && flowFind.open) {
+        const input = flowFindRef.current;
+        if (input && document.activeElement === input && input.selectionStart !== input.selectionEnd) return;
+        if (window.getSelection()?.toString()) return;
+        e.preventDefault();
+        void copyFindHit();
+        return;
+      }
+      if (meta && e.key.toLowerCase() === 'f' && view === 'home' && active) {
+        e.preventDefault();
+        setFlowFind((cur) => ({ ...cur, open: true }));
+        window.setTimeout(() => { flowFindRef.current?.focus(); flowFindRef.current?.select(); }, 0);
+        return;
+      }
       if (meta && view === 'home' && ['t', 'd', 'e', 'b'].includes(e.key.toLowerCase())) { e.preventDefault(); setDrawer(({ t: 'term', d: 'diff', e: 'files', b: 'browser' } as Record<string, DrawerKind>)[e.key.toLowerCase()]); }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [palette.open, menu, drawer, newBox, draft, send, approveFirstPending, view]);
+  }, [palette.open, picker, menu, drawer, newBox, draft, send, approveFirstPending, view, sessionView.pendingApprovals, approve, allSessions, matchesFilter, active, openSession, beginLocalNew, flowFind.open, stepFind, copyFindHit]);
 
   // -- 命令面板 ---------------------------------------------------------------
   type Command = { g: string; t: string; k: string; run: () => void };
   const commands = useMemo<Command[]>(() => [
-    { g: '会话', t: '新会话…', k: '⌘N', run: () => { setNewBox({ open: true, machine: 'local' }); setView('home'); } },
+    { g: '会话', t: '新会话…', k: '⌘N', run: beginLocalNew },
     ...groups.filter((g) => g.online && g.id !== 'local').map((g) => ({ g: '会话', t: `在 ${g.name} 上新会话`, k: g.role, run: () => { setNewBox({ open: true, machine: g.id }); setView('home'); } })),
     { g: '审批', t: '批准最近一条待批', k: '⌘↩', run: approveFirstPending },
-    ...configuredModels.map((m) => ({ g: '模型', t: `切换模型:${m.name}`, k: m.providerName, run: () => void setModel(m.provider, m.id) })),
+    ...configuredModels.map((m) => ({ g: '模型', t: `切换模型:${prettyModelName(m.id, m.name)}`, k: m.providerName, run: () => void setModel(m.provider, m.id) })),
     ...(['default', 'accept_edits', 'plan', 'auto'] as const).map((p) => ({ g: '审批策略', t: POLICY_LABEL[p], k: '本会话', run: () => void setPolicy(p) })),
+    ...THINKING_LEVELS.map((level) => ({ g: '思考', t: `思考深度:${THINKING_LABEL[level]}`, k: level, run: () => void setThinking(level) })),
+    { g: '这条会话', t: '在这条会话里找', k: '⌘F', run: () => { if (!active) return; setView('home'); setFlowFind((cur) => ({ ...cur, open: true })); window.setTimeout(() => { flowFindRef.current?.focus(); flowFindRef.current?.select(); }, 0); } },
+    { g: '这条会话', t: '下一条查找', k: '⌘G', run: () => { if (!active) return; setView('home'); stepFind(1); } },
+    { g: '这条会话', t: '复制当前命中', k: '⌘C', run: () => { if (!active) return; void copyFindHit(); } },
+    { g: '这条会话', t: '在同一目录续写', k: '新开会话', run: continueHere },
+    { g: '这条会话', t: '复制标题', k: sessionView.title || activeSummary?.title || '', run: () => void copyTitle() },
+    { g: '这条会话', t: '复制目录', k: activeSummary?.cwd || '', run: () => void copyCwd() },
     { g: '这条会话', t: '压缩这条会话', k: 'pi compact', run: () => void compact() },
     { g: '这条会话', t: '停止', k: '', run: () => void stop() },
+    ...(active && activeSummary && sessionCanForget(activeSummary.status) ? [{ g: '这条会话', t: '从左栏拿掉', k: '', run: () => void forgetSession(active) }] : []),
     { g: '这条会话', t: '终端', k: '⌘T', run: () => setDrawer('term') }, { g: '这条会话', t: '文件', k: '⌘E', run: () => setDrawer('files') },
     { g: '这条会话', t: '本次改动', k: '⌘D', run: () => setDrawer('diff') }, { g: '这条会话', t: '浏览器', k: '⌘B', run: () => setDrawer('browser') },
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, compact, stop, isDarkMode, toggleDarkMode, openSession]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, forgetSession, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, copyCwd, copyFindHit, sessionView.title, stepFind]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
   }, [commands, palette.query]);
   const runCommand = (index: number) => { const c = filteredCommands[index]; setPalette({ open: false, query: '', index: 0 }); c?.run(); };
 
+  const pickerItems = useMemo(() => {
+    if (!picker) return [] as Array<{ v: string; t: string; sub: string; g: string }>;
+    const q = picker.query.trim().toLowerCase();
+    if (picker.kind === 'model') {
+      const items = configuredModels.length
+        ? configuredModels.map((m) => ({
+          v: `${m.provider}/${m.id}`,
+          t: prettyModelName(m.id, m.name),
+          sub: [m.providerName, modelChoiceHint(m), m.reasoning ? '思考' : '', formatContextWindow(m.contextWindow)].filter(Boolean).join(' · '),
+          g: m.providerName,
+        }))
+        : [{ v: '', t: '还没有可用模型', sub: '去设置里登录或录入兼容接口', g: '模型' }];
+      return q ? items.filter((it) => `${it.t} ${it.sub} ${it.v}`.toLowerCase().includes(q)) : items;
+    }
+    if (picker.kind === 'policy') {
+      return (['default', 'accept_edits', 'plan', 'auto'] as const).map((p) => ({ v: p, t: POLICY_LABEL[p], sub: '', g: '审批' }));
+    }
+    return THINKING_LEVELS.map((level) => ({ v: level, t: THINKING_LABEL[level], sub: level, g: '思考' }));
+  }, [picker, configuredModels]);
+  const runPicker = (index: number) => {
+    const item = pickerItems[index];
+    if (!picker || !item) return;
+    if (picker.kind === 'model') {
+      if (!item.v) { setView('settings'); setPicker(null); return; }
+      const i = item.v.indexOf('/');
+      void setModel(item.v.slice(0, i), item.v.slice(i + 1));
+    } else if (picker.kind === 'policy') void setPolicy(item.v);
+    else void setThinking(item.v);
+    setPicker(null);
+  };
+  useEffect(() => {
+    const list = railListRef.current;
+    const on = list?.querySelector('.srow.on') as HTMLElement | null;
+    if (!list) return;
+    if (!on) { list.style.removeProperty('--pill-y'); list.style.removeProperty('--pill-h'); return; }
+    list.style.setProperty('--pill-y', `${on.offsetTop}px`);
+    list.style.setProperty('--pill-h', `${on.offsetHeight}px`);
+  }, [active, filter, allSessions, newBox, view]);
+  useEffect(() => {
+    if (!newBox?.open) return;
+    railListRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [newBox?.open]);
+  useEffect(() => {
+    if (!composerShouldFocus({
+      hasSession: Boolean(active),
+      view,
+      drawer,
+      newBoxOpen: Boolean(newBox?.open),
+      paletteOpen: palette.open,
+      pickerOpen: Boolean(picker),
+      whatsNewOpen: Boolean(whatsNew),
+      flowFindOpen: flowFind.open,
+    })) return;
+    taRef.current?.focus({ preventScroll: true });
+  }, [active, view, drawer, newBox?.open, palette.open, picker, whatsNew, flowFind.open]);
+
   // -- 渲染 ------------------------------------------------------------------
   const activeGroup = active ? groups.find((g) => g.id === active.machine) ?? null : null;
   const title = sessionView.title || activeSummary?.title || (activeSummary ? '新会话' : '');
   const cwd = activeSummary?.cwd ?? '';
-  const project: Project | null = activeSummary ? { projectId: `harness-${activeSummary.session_id}`, displayName: title || activeSummary.session_id, fullPath: cwd, path: cwd } : null;
+  const boundWindowText = windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window));
+  const failTexts = sessionFailTexts({
+    lastEventText: activeSummary?.last_event?.text,
+    rows: sessionView.rows,
+  });
+  const needsSettings = sessionNeedsSettings(failTexts);
+  const needsModelSwitch = composerNeedsModelSwitch(sessionView.model, failTexts);
+  const project: Project | null = activeSummary && cwd
+    ? { projectId: workspace?.projectId || '', displayName: workspace?.displayName || title || cwd, fullPath: workspace?.fullPath || cwd, path: workspace?.path || cwd }
+    : null;
   const editRows = sessionView.rows.filter((r): r is FlowRow & { k: 'edit' } => r.k === 'edit');
-  const canDrive = activeSummary ? isLive(activeSummary.status) || isLive(sessionView.status) : false;
+  const filePins = mergeFilePins(editRows, sessionArtifacts);
+  const remoteCopy = drawer && active?.machine !== 'local' && isRemoteDrawerKind(drawer)
+    ? remoteDrawerCopy(drawer, { machineName: machineChipLabel(activeGroup?.name ?? active?.machine) || '远程', cwd })
+    : null;
+  const drawerTitle = remoteCopy?.title
+    ?? (drawer === 'diff' ? `本次改动${editRows.length ? ` · ${editRows.length}` : ''}` : ({ term: '终端', files: '文件', diff: '本次改动', browser: '浏览器' } as const)[drawer ?? 'term']);
+  const filePeekBlock = filePeek != null ? (
+    <div className="local-files-peek-wrap">
+      <div className="local-files-peek-head">
+        {peekFileCaption(focusFile) ? <b className="local-files-name">{peekFileCaption(focusFile)}</b> : <span />}
+        <button className="link" type="button" onClick={() => { void navigator.clipboard.writeText(filePeek); toast('已复制正文'); }}>复制正文</button>
+      </div>
+      <pre className="local-files-peek">{filePeek}</pre>
+    </div>
+  ) : null;
 
   return (
     <div className={`leo2 ${isDarkMode ? '' : 'light'}`}>
@@ -309,11 +743,14 @@ export default function App2() {
         <div />
         <div className="tb-title">
           {view === 'home'
-            ? (activeSummary ? <><b>{title || '新会话'}</b><span className="tb-sub mono">{activeGroup?.name ?? active?.machine} · {cwd}</span></> : <b>主控</b>)
+            ? (() => {
+                const tb = titlebarHomeCopy({ hasSession: Boolean(activeSummary), machineName: activeGroup?.name ?? active?.machine, cwd });
+                return <><b>{tb.title}</b>{tb.sub ? <span className="tb-sub mono">{tb.sub}</span> : null}</>;
+              })()
             : <b>{{ devices: '设备', channels: '通道', settings: '设置' }[view]}</b>}
         </div>
         <div className="tb-right">
-          <span className="tb-status"><span className={`dot ${loadError ? 'err' : 'ok'}`} /><span>{loadError ? `本机服务:${loadError}` : `本机服务正常${fleet?.configured ? ` · 远程 ${groups.filter((g) => g.id !== 'local' && g.online).length} 台在线` : ''}`}</span></span>
+          <span className="tb-status"><span className={`dot ${loadError ? 'err' : fleetHealth.stale ? 'need' : 'ok'}`} /><span>{loadError ? `本机服务:${loadError}` : `本机服务正常${fleet?.configured ? (fleetHealth.stale ? ' · 远程状态待确认' : ` · 远程 ${groups.filter((g) => g.id !== 'local' && g.online).length} 台在线`) : ''}`}</span></span>
         </div>
       </header>
 
@@ -326,33 +763,49 @@ export default function App2() {
                   <button key={v} className={view === v ? 'on' : ''} onClick={() => setView(v)} title={k}>{label}</button>
                 ))}
               </nav>
-              <button className="btn-new" onClick={() => { void refreshProviders(); setNewBox((b) => (b?.open ? null : { open: true, machine: 'local' })); }}><span>+ 新会话</span><kbd>⌘N</kbd></button>
+              <button className="btn-new" onClick={beginLocalNew}><span>+ 新会话</span><kbd>⌘N</kbd></button>
               <div className="chips">
                 {([['all', '全部'], ['active', '进行中'], ['need', '需要你'], ['err', '失败'], ['history', '历史']] as Array<[Filter, string]>).map(([f, label]) => (
                   <button key={f} className={`chip-f ${filter === f ? 'on' : ''}`} onClick={() => setFilter(f)}>{label}<i>{counts[f]}</i></button>
                 ))}
               </div>
+              <input className="rail-find" type="search" value={railQuery} onChange={(e) => setRailQuery(e.target.value)} placeholder="找会话" aria-label="找会话" />
             </div>
-            <div className="rail-list">
+            <div className="rail-list" ref={railListRef}>
+              <div className="srow-pill" aria-hidden />
               {newBox?.open && (
-                <NewSessionBox machine={newBox.machine} groups={groups} models={configuredModels} defaultCwd={activeSummary?.cwd || local?.home || '~'} busy={busy}
+                <NewSessionBox machine={newBox.machine} groups={groups} models={configuredModels} defaultCwd={newBox.cwd || activeSummary?.cwd || local?.home || '~'} initialPrompt={newBox.prompt} initialModel={newBox.model} recentCwds={recentCwds} busy={busy}
                   onCancel={() => setNewBox(null)} onCreate={(input) => void createSession(input)} onOpenSettings={() => { setNewBox(null); setView('settings'); }} />
               )}
               {(() => {
-                const visible = groups.map((g) => ({ g, ss: g.sessions.filter(matchesFilter).sort((a, b) => (ORDER[a.status] ?? 9) - (ORDER[b.status] ?? 9) || b.updated_at - a.updated_at) })).filter((x) => x.ss.length > 0);
+                const visible = groups.map((g) => ({ g, ss: keepActiveSession(g.sessions, (s) => matchesFilter(s) && sessionMatchesQuery(s, railQuery), active?.machine === g.id ? active.id : null).sort((a, b) => (ORDER[a.status] ?? 9) - (ORDER[b.status] ?? 9) || b.updated_at - a.updated_at) })).filter((x) => x.ss.length > 0);
                 if (!local && !loadError) return <div className="rail-empty">连接本机服务…</div>;
-                if (visible.length === 0) return <div className="rail-empty">{filter === 'all' ? '还没有会话 —— 点上面「+ 新会话」开始' : `没有${({ active: '进行中', need: '需要你', err: '失败', history: '历史' } as Record<string, string>)[filter]}的会话`}</div>;
-                return visible.map(({ g, ss }) => (
+                if (visible.length === 0) return <div className="rail-empty">{railQuery.trim() ? `没有匹配「${railQuery.trim()}」的会话` : filter === 'all' ? '还没有会话 —— 点上面「+ 新会话」开始' : `没有${({ active: '进行中', need: '需要你', err: '失败', history: '历史' } as Record<string, string>)[filter]}的会话`}</div>;
+                const historyHint = hiddenHistoryHint(filter, counts.history, Boolean(activeSummary && isHistoryStatus(activeSummary.status)));
+                return (
+                  <>
+                    {visible.map(({ g, ss }) => (
                   <div key={g.id}>
-                    <div className="grp-h"><span className={`dot ${g.online ? 'ok' : 'off'}`} /><b title={g.name}>{g.name}</b><span className="role">{g.role}</span><span className="cnt">{ss.length}</span></div>
+                    <div className="grp-h"><span className={`dot ${g.stale ? 'need' : g.online ? 'ok' : 'off'}`} /><b title={g.name}>{machineChipLabel(g.name)}</b><span className="role">{g.stale ? '待确认' : g.role}</span><span className="cnt">{ss.length}</span></div>
                     {ss.map((s) => {
                       const on = active?.machine === g.id && active.id === s.session_id;
-                      const dot = statusDot(s.status);
+                      const dot = statusDotForSession(s);
                       return (
-                        <button key={s.session_id} className={`srow ${on ? 'on' : ''}`} onClick={() => openSession({ machine: g.id, id: s.session_id })}>
-                          <span className={`dot ${dot === 'idle' ? '' : dot}`} />
+                        <button key={s.session_id} className={`srow ${on ? 'on' : ''}`} onClick={() => openSession({ machine: g.id, id: s.session_id })}
+                          onContextMenu={(e) => {
+                            if (!sessionCanForget(s.status)) return;
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setMenu({
+                              x: Math.min(e.clientX, window.innerWidth - 270),
+                              y: Math.min(e.clientY + 4, window.innerHeight - 80),
+                              items: [{ v: 'forget', t: '从左栏拿掉', sub: g.id === 'local' ? '不再召回' : '只藏在这台 Mac' }],
+                              onPick: (v) => { if (v === 'forget') void forgetSession({ machine: g.id, id: s.session_id }); },
+                            });
+                          }}>
+                          <span className={`dot ${dot === 'idle' ? '' : dot}${dot === 'need' ? ' ping' : ''}`} />
                           <div style={{ minWidth: 0 }}>
-                            <div className="srow-t"><span>{s.title || '新会话'}</span><span className="srow-m">{modelLabel(s.model)}</span></div>
+                            <div className="srow-t"><span>{s.title || '新会话'}</span><span className="srow-m">{prettyModelName(s.model)}</span></div>
                             <div className={`srow-l ${dot === 'need' ? 'need' : dot === 'err' ? 'err' : ''}`}>{lastLine(s)}</div>
                           </div>
                           <span className="srow-time">{relativeTime(s.updated_at)}</span>
@@ -360,7 +813,10 @@ export default function App2() {
                       );
                     })}
                   </div>
-                ));
+                    ))}
+                    {historyHint ? <button className="rail-more" type="button" onClick={() => setFilter('history')}>{historyHint}</button> : null}
+                  </>
+                );
               })()}
             </div>
             <div className="rail-foot">
@@ -372,18 +828,46 @@ export default function App2() {
 
         <main className={`main ${drawer ? 'dim' : ''}`}>
           {view === 'home' && (!activeSummary ? (
-            <div className="empty-main"><b>{loadError ? '连不上本机服务' : '还没有会话'}</b><span>{loadError ? loadError : '⌘N 新建一条,或在左栏选一条继续'}</span></div>
+            <div className="empty-main">{(() => {
+              const empty = homeEmptyCopy({ loadError, modelCount: configuredModels.length, providersReady: providers !== null });
+              return (
+                <>
+                  <b>{empty.title}</b>
+                  <span>{empty.hint}</span>
+                  {empty.action === 'retry' ? <button className="btn-s" onClick={() => { void refreshLocal(); void refreshFleet(); }}>重试</button> : null}
+                  {empty.action === 'settings' ? <button className="btn-s" onClick={() => setView('settings')}>去设置</button> : null}
+                </>
+              );
+            })()}</div>
           ) : (
             <div className="sess">
               <div className="shead-wrap" ref={headRef}>
                 <header className="shead glass">
                   <div className="shead-l">
-                    <span className={`dot ${statusDot(sessionView.status) === 'idle' ? '' : statusDot(sessionView.status)}`} />
-                    <span className="shead-state">{({ running: '进行中', starting: '启动中', waiting_for_approval: '需要你', idle: '空闲,可以接着说', completed: '已完成', failed: '失败', cancelled: '已停止', orphaned: '已失联' } as Record<string, string>)[sessionView.status] ?? sessionView.status}</span>
+                    <span className={`dot ${statusDotForSession({ status: sessionView.status, last_event: activeSummary?.last_event }) === 'idle' ? '' : statusDotForSession({ status: sessionView.status, last_event: activeSummary?.last_event })}`} />
+                    <div className="shead-t">
+                      <h1
+                        role="button"
+                        tabIndex={0}
+                        title={`${title || '新会话'} · 点一下复制`}
+                        onClick={() => void copyTitle()}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void copyTitle(); } }}
+                      >{title || '新会话'}</h1>
+                      <span className="shead-state">{STATUS_LABEL[sessionView.status] ?? sessionView.status}{stream === 'reconnecting' ? ' · 重连中' : ''}</span>
+                    </div>
                   </div>
                   <div className="shead-r">
-                    <button className="chip" onClick={(e) => { e.stopPropagation(); modelMenu(e.currentTarget); }} disabled={!canDrive || activeSummary.harness !== 'pi'}><b>{modelLabel(sessionView.model)}</b>{providerOf(sessionView.model) ? <span className="car">▼</span> : null}</button>
-                    <button className="chip" onClick={(e) => { e.stopPropagation(); policyMenu(e.currentTarget); }} disabled={!canDrive}>审批 <b>{POLICY_LABEL[sessionView.policy] ?? sessionView.policy}</b><span className="car">▼</span></button>
+                    <button className="chip" onClick={(e) => { e.stopPropagation(); modelMenu(); }} disabled={!canDrive || activeSummary.harness !== 'pi'}><b>{prettyModelName(sessionView.model)}</b>{providerOf(sessionView.model) ? <span className="car">▼</span> : null}</button>
+                    <button className="chip" onClick={(e) => { e.stopPropagation(); thinkMenu(); }} disabled={!canDrive}>思考 <b>{THINKING_LABEL[sessionView.thinking] ?? sessionView.thinking}</b><span className="car">▼</span></button>
+                    <button className="chip" onClick={(e) => { e.stopPropagation(); policyMenu(); }} disabled={!canDrive}>审批 <b>{POLICY_LABEL[sessionView.policy] ?? sessionView.policy}</b><span className="car">▼</span></button>
+                    {cwd ? (
+                      <button className="chip win" title={cwd} onClick={(e) => { e.stopPropagation(); void copyCwd(); }}>{cwdChipLabel(cwd)}</button>
+                    ) : null}
+                    {boundWindowChipKind(active?.machine ?? '', boundWindowText) === 'raise' ? (
+                      <button className="chip win" type="button" title={`${boundWindowText} · 点一下提到前面`} onClick={(e) => { e.stopPropagation(); void api.raiseBoundWindow(active!).then(() => toast('已提到前面')).catch((error) => toast(humanizeError(error instanceof Error ? error.message : String(error)), true)); }}>{boundWindowText}</button>
+                    ) : boundWindowChipKind(active?.machine ?? '', boundWindowText) === 'label' ? (
+                      <span className="chip win" title="窗口在对面那台机器上,这里提不起来">{boundWindowText}</span>
+                    ) : null}
                     <button className="chip" onClick={(e) => { e.stopPropagation(); moreMenu(e.currentTarget); }}>⋯</button>
                   </div>
                 </header>
@@ -393,61 +877,201 @@ export default function App2() {
                   return (
                     <div className="need-strip glass">
                       <span className="cnt">需要你 · {othersNeedingYou.length}</span>
-                      <span className="it">{first.s.title || '会话'} —— 在 {first.machineName} 上执行 <code>{cmd.split('\n')[0]}</code></span>
+                      <span className="it">{first.s.title || '会话'} —— 在 {machineChipLabel(first.machineName)} 上执行 <code>{cmd.split('\n')[0]}</code></span>
                       <button className="go" onClick={() => openSession({ machine: first.machine, id: first.s.session_id })}>去处理 →</button>
                     </div>
                   );
                 })()}
-              </div>
-              <div className="flow" ref={flowRef} onScroll={(e) => { const el = e.currentTarget; stickBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40; }}>
-                <div className="flow-in">
-                  {sessionView.rows.length === 0 && <div className="fc sys" style={{ padding: '8px 0' }}>{activeSummary.status === 'orphaned' ? '这是上次运行留下的记录,进程已不在;要继续请新建会话。' : '等待事件…'}</div>}
-                  {sessionView.rows.map((row) => <Row key={row.key} row={row} model={sessionView.model} onApprove={approve} onDiff={() => setDrawer('diff')} />)}
-                </div>
-              </div>
-              <div className="composer-wrap" ref={composerRef}>
-                <div className="composer">
-                  <textarea ref={taRef} rows={1} value={draft} disabled={!canDrive} placeholder={canDrive ? '对这条会话说点什么… ⌘↩ 发送,⇧↩ 换行' : '这条会话已经结束,不能续写'}
-                    onChange={(e) => { setDraft(e.target.value); const ta = e.target; ta.style.height = 'auto'; ta.style.height = `${Math.min(180, ta.scrollHeight)}px`; layoutFlow(); }} />
-                  <div className="composer-bar">
-                    <button className="cb" onClick={() => toast('附件:下一步接入')}>+ 附件</button>
-                    <button className="cb" onClick={() => toast('语音追问:下一步接入')}>语音</button>
-                    <span className="cb info">{activeGroup?.name ?? ''} · {modelLabel(sessionView.model)} · {POLICY_LABEL[sessionView.policy] ?? sessionView.policy}</span>
-                    {sessionView.status === 'running' || sessionView.status === 'starting'
-                      ? <button className="btn-s stop" onClick={() => void stop()} disabled={busy}>停止</button>
-                      : <button className="btn-s" onClick={() => void send()} disabled={busy || !canDrive || !draft.trim()}>发送</button>}
+                {flowFind.open ? (
+                  <div className="flow-find">
+                    <input
+                      ref={flowFindRef}
+                      value={flowFind.query}
+                      onChange={(e) => setFlowFind((cur) => ({ ...cur, query: e.target.value, index: 0 }))}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') { e.preventDefault(); stepFind(e.shiftKey ? -1 : 1); }
+                        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') e.preventDefault();
+                      }}
+                      placeholder="在这条会话里找"
+                      aria-label="在这条会话里找"
+                    />
+                    <span className="flow-find-hits">{flowFind.query.trim() ? flowFindStatus(findHits.length, findIndex) : flowFindEmptyHint()}</span>
+                    <div className="flow-find-acts">
+                      <button className="link" type="button" title="上一条" aria-label="上一条" disabled={!findHits.length} onClick={() => stepFind(-1)}>{flowFindActLabel('prev')}</button>
+                      <button className="link" type="button" title="下一条" aria-label="下一条" disabled={!findHits.length} onClick={() => stepFind(1)}>{flowFindActLabel('next')}</button>
+                      <button className="link" type="button" title="复制当前命中" disabled={!findHits.length} onClick={() => void copyFindHit()}>{flowFindActLabel('copy')}</button>
+                      <button className="link" type="button" title="关闭查找" onClick={() => setFlowFind({ open: false, query: '', index: 0 })}>{flowFindActLabel('close')}</button>
+                    </div>
                   </div>
+                ) : null}
+              </div>
+              <div className="flow" ref={flowRef} onScroll={(e) => { const el = e.currentTarget; setStickBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 40); }}>
+                <div className="flow-in">
+                  {needsSettings && !canDrive ? (
+                    <div className="empty-main in-flow">
+                      <b>{settingsNeededCopy().title}</b>
+                      <span>{settingsNeededCopy().hint}</span>
+                      <button className="btn-s" onClick={() => setView('settings')}>去设置</button>
+                    </div>
+                  ) : (
+                    <>
+                      {sessionView.rows.length === 0 && <div className="fc sys" style={{ padding: '8px 0' }}>{canDrive ? '等待事件…' : endedSessionHint(activeSummary.status)}</div>}
+                      {sessionView.rows.map((row) => (
+                        <div
+                          key={row.key}
+                          data-flow-key={row.key}
+                          className={flowFind.query.trim() && !flowRowMatchesQuery(row, flowFind.query) ? 'frow-miss' : findKey === row.key ? 'frow-hit' : undefined}
+                        >
+                          <Row row={row} model={sessionView.model} query={flowFind.query} onApprove={approve} onDiff={() => openTouchedFile(row.k === 'edit' ? row.file : '')} />
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </div>
+                {!stickBottom && unseen > 0 && (
+                  <button className="jump-latest" onClick={() => { setStickBottom(true); const flow = flowRef.current; if (flow) flow.scrollTop = flow.scrollHeight; }}>最新 {unseen}<kbd>↓</kbd></button>
+                )}
+              </div>
+              <div className={`composer-wrap${flowFind.open ? ' find-away' : ''}`} ref={composerRef} aria-hidden={flowFind.open || undefined}>
+                {canDrive ? (
+                  <div className="composer">
+                    <textarea ref={taRef} rows={1} value={draft} placeholder={composerPlaceholder(cwdChipLabel(cwd), false)}
+                      onChange={(e) => { setDraft(e.target.value); const ta = e.target; ta.style.height = 'auto'; ta.style.height = `${Math.min(180, ta.scrollHeight)}px`; layoutFlow(); }}
+                      onKeyDown={(e) => { if (composerShouldSend(e) && draft.trim() && !needsModelSwitch) { e.preventDefault(); void send(); } }} />
+                    {needsModelSwitch ? (
+                      <div className="newbox-warn">
+                        <b>这个模型当前账号用不了。</b>
+                        换一个再继续。会话还在，不用新开。
+                        <button className="btn-s" onClick={modelMenu}>换模型</button>
+                      </div>
+                    ) : null}
+                    <div className="composer-bar">
+                      <span className="cb info">{stream === 'reconnecting' ? '事件流在重连,发出去的话会等接通。' : needsModelSwitch ? `先换一个模型,再以这条会话继续 · 现在是 ${prettyModelName(sessionView.model)}` : composerShowsSteer(sessionView.status) ? `模型还在跑。现在发出去的是插话,会插进当前这一轮 · ${prettyModelName(sessionView.model)}` : `将在 ${machineChipLabel(activeGroup?.name) || '这台机器'} 上以 ${prettyModelName(sessionView.model)} 继续 · 审批:${POLICY_LABEL[sessionView.policy] ?? sessionView.policy}`}</span>
+                      <span className="composer-acts">
+                        {composerShowsSteer(sessionView.status)
+                          ? <><button className="btn-s" onClick={() => void send()} disabled={busy || !draft.trim() || needsModelSwitch}>插话</button><button className="btn-s stop" onClick={() => void stop()} disabled={busy}>停止</button></>
+                          : <button className="btn-s" onClick={() => void send()} disabled={busy || !draft.trim() || needsModelSwitch}>发送</button>}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="composer ended">
+                    <textarea ref={taRef} rows={1} value={draft} placeholder={composerPlaceholder(cwdChipLabel(cwd), true)}
+                      onChange={(e) => { setDraft(e.target.value); const ta = e.target; ta.style.height = 'auto'; ta.style.height = `${Math.min(180, ta.scrollHeight)}px`; layoutFlow(); }}
+                      onKeyDown={(e) => { if (composerShouldSend(e) && draft.trim() && !needsSettings) { e.preventDefault(); continueHere(); } }} />
+                    <div className="composer-end">
+                      <span className="composer-end-hint"><b>{endedComposerLead(activeSummary.status)}</b>{cwd ? ` · ${cwdChipLabel(cwd)}` : ''}</span>
+                      <div className="composer-end-acts">
+                        {needsSettings ? <button className="btn-s" onClick={() => setView('settings')}>去设置</button> : <button className="btn-s" onClick={continueHere}>在同一目录续写</button>}
+                        {needsSettings ? <button className="link" onClick={continueHere}>仍要续写</button> : null}
+                        {cwd ? <button className="link" onClick={() => void copyCwd()}>复制路径</button> : null}
+                        {sessionCanForget(activeSummary.status) && active ? <button className="link dim" onClick={() => void forgetSession(active)}>从左栏拿掉</button> : null}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ))}
-          {view === 'devices' && <DevicesPage local={local} fleet={fleet} toast={toast} onNewOn={(m) => { setNewBox({ open: true, machine: m }); setView('home'); }} />}
+          {view === 'devices' && <DevicesPage local={local} fleet={fleet} stale={fleetHealth.stale} toast={toast} focusMachine={focusMachine} onNewOn={(m) => { setFocusMachine(null); if (m === 'local') beginLocalNew(); else { setNewBox({ open: true, machine: m }); setView('home'); } }} onOpenRelay={() => { setOpenLegacy(true); setView('settings'); }} />}
           {view === 'channels' && <ChannelsPage toast={toast} models={configuredModels} />}
-          {view === 'settings' && <SettingsPage toast={toast} onProvidersChanged={() => void refreshProviders()} />}
+          {view === 'settings' && <SettingsPage toast={toast} onProvidersChanged={() => void refreshProviders()} openLegacy={openLegacy} onLegacyClosed={() => setOpenLegacy(false)} onShowWhatsNew={() => setWhatsNew(currentReleaseNote() ?? LEO_RELEASE_NOTES[0] ?? null)} />}
         </main>
       </div>
 
-      <aside className={`drawer ${drawer ? 'open' : ''}`} aria-hidden={!drawer}>
-        <header><span>{{ term: '终端', files: '文件', diff: '本次改动', browser: '浏览器' }[drawer ?? 'term']}{activeGroup ? ` · ${activeGroup.name}` : ''}</span><button className="link" onClick={() => setDrawer(null)}>关闭<kbd>Esc</kbd></button></header>
+      <aside className={`drawer ${drawer ? 'open' : ''}`} role={drawer ? 'dialog' : undefined} aria-modal={drawer ? true : undefined} aria-hidden={!drawer} aria-label={drawer ? `${drawerTitle}${activeGroup ? ` · ${machineChipLabel(activeGroup.name)}` : ''}` : undefined}>
+        <header><span>{drawerTitle}{activeGroup ? ` · ${machineChipLabel(activeGroup.name)}` : ''}</span><button ref={drawerCloseRef} className="link" onClick={() => setDrawer(null)}>关闭<kbd>Esc</kbd></button></header>
         <div className={`drawer-body ${drawer === 'diff' ? 'pad' : ''}`}>
-          {drawer && (active?.machine !== 'local' && drawer !== 'diff') ? (
-            <div style={{ padding: 16, color: 'var(--fg3)' }}>远程机器的终端 / 文件在这一版还没接;先在那台机器上开。</div>
+          {remoteCopy ? (
+            <div className="remote-hint">
+              <b>{remoteCopy.lead}</b>
+              <p>{remoteCopy.body}</p>
+              {drawer === 'files' && artifactError ? <p>{artifactError}</p> : null}
+              {drawer === 'files' && filePins.length > 0 ? (
+                <>
+                  <ul className="remote-files">
+                    {filePins.map((row) => (
+                      <li key={row.key}>
+                        <button className={`link ${focusFile === row.file ? 'on' : ''}`} onClick={() => setFocusFile(row.file)}><code>{row.file}</code></button>
+                        <span>{row.state}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {filePeekBlock}
+                </>
+              ) : null}
+              <div className="remote-acts">
+                {remoteDrawerActions({ cwd }).map((action) => {
+                  const label = REMOTE_DRAWER_ACTION_LABEL[action];
+                  const run = action === 'copy-cwd' ? () => void copyCwd() : action === 'continue' ? continueHere : action === 'new-on-machine' ? newOnMachine : showDevice;
+                  return action === 'copy-cwd' || action === 'continue'
+                    ? <button key={action} className="btn-s" onClick={run}>{label}</button>
+                    : <button key={action} className="btn" onClick={run}>{label}</button>;
+                })}
+              </div>
+            </div>
           ) : drawer === 'diff' ? (
-            editRows.length === 0 ? <div style={{ color: 'var(--fg3)' }}>这条会话还没有改动文件。</div> : editRows.map((r) => (
-              <div key={r.key}><div className="dl h">{r.tool} · {r.file}{r.error ? ' · 失败' : ''}</div><div className="dl">{r.output || (r.running ? '进行中…' : '(无输出)')}</div></div>
-            ))
-          ) : drawer && project ? (
+            filePins.length === 0 && filePeek == null ? (
+              <div className="remote-hint"><b>这条会话还没有改动文件。</b><p>改过之后会出现在这里，点文件名看正文，不再只倒工具输出。</p></div>
+            ) : (
+              <div className="local-files">
+                {artifactError ? <p className="remote-hint">{artifactError}</p> : null}
+                {filePins.length > 0 ? (
+                  <ul className="remote-files">
+                    {filePins.map((row) => (
+                      <li key={row.key}>
+                        <button className={`link ${focusFile === row.file ? 'on' : ''}`} onClick={() => setFocusFile(row.file)}><code>{row.file}</code></button>
+                        <span>{row.state}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {filePeekBlock}
+              </div>
+            )
+          ) : drawer === 'files' && active?.machine === 'local' ? (
+            workspaceError ? (
+              <div className="remote-hint"><b>打不开这个目录。</b><p>{workspaceError}</p></div>
+            ) : workspace?.projectId ? (
+              <div className="local-files">
+                {filePins.length > 0 ? (
+                  <ul className="remote-files">
+                    {filePins.map((row) => (
+                      <li key={row.key}>
+                        <button className={`link ${focusFile === row.file ? 'on' : ''}`} onClick={() => setFocusFile(row.file)}><code>{row.file}</code></button>
+                        <span>{row.state}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {filePeekBlock}
+                <div className="drawer-host local-files-tree"><Suspense fallback={<div style={{ padding: 16, color: 'var(--fg3)' }}>加载中…</div>}>
+                  <FileTree selectedProject={workspace} onFileOpen={(filePath) => setFocusFile(filePath)} />
+                </Suspense></div>
+              </div>
+            ) : (
+              <div style={{ padding: 16, color: 'var(--fg3)' }}>正在打开目录…</div>
+            )
+          ) : drawer === 'term' && active?.machine === 'local' ? (
+            workspaceError ? (
+              <div className="remote-hint"><b>打不开这个目录。</b><p>{workspaceError}</p></div>
+            ) : workspace?.projectId ? (
+              <div className="drawer-host"><Suspense fallback={<div style={{ padding: 16, color: 'var(--fg3)' }}>加载中…</div>}>
+                <Shell selectedProject={workspace} isPlainShell autoConnect isActive minimal />
+              </Suspense></div>
+            ) : (
+              <div style={{ padding: 16, color: 'var(--fg3)' }}>正在打开目录…</div>
+            )
+          ) : drawer === 'browser' && project ? (
             <div className="drawer-host"><Suspense fallback={<div style={{ padding: 16, color: 'var(--fg3)' }}>加载中…</div>}>
-              {drawer === 'term' && <Shell selectedProject={project} isPlainShell autoConnect isActive minimal />}
-              {drawer === 'files' && <FileTree selectedProject={project} />}
-              {drawer === 'browser' && <BrowserUsePanel isVisible />}
+              <BrowserUsePanel isVisible />
             </Suspense></div>
           ) : null}
         </div>
       </aside>
 
       {palette.open && (
-        <div className="palette" role="dialog" aria-label="命令面板" onClick={(e) => { if (e.target === e.currentTarget) setPalette({ open: false, query: '', index: 0 }); }}>
+        <div className="palette" role="dialog" aria-modal="true" aria-label="命令面板" onClick={(e) => { if (e.target === e.currentTarget) setPalette({ open: false, query: '', index: 0 }); }}>
           <div className="pbox">
             <input autoFocus placeholder="命令、会话或设备…  ↑↓ 选择  ↩ 执行" value={palette.query}
               onChange={(e) => setPalette((p) => ({ ...p, query: e.target.value, index: 0 }))}
@@ -470,6 +1094,30 @@ export default function App2() {
         </div>
       )}
 
+      {picker && (
+        <div className="palette" role="dialog" aria-modal="true" aria-label={picker.kind === 'model' ? '选择模型' : picker.kind === 'policy' ? '审批策略' : '思考深度'} onClick={(e) => { if (e.target === e.currentTarget) setPicker(null); }}>
+          <div className="pbox">
+            <input autoFocus placeholder={picker.kind === 'model' ? '搜索模型或供应商…' : '筛选…'} value={picker.query}
+              onChange={(e) => setPicker((p) => (p ? { ...p, query: e.target.value, index: 0 } : p))}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowDown') { e.preventDefault(); setPicker((p) => (p ? { ...p, index: Math.min(pickerItems.length - 1, p.index + 1) } : p)); }
+                else if (e.key === 'ArrowUp') { e.preventDefault(); setPicker((p) => (p ? { ...p, index: Math.max(0, p.index - 1) } : p)); }
+                else if (e.key === 'Enter') { e.preventDefault(); runPicker(picker.index); }
+                else if (e.key === 'Escape') { setPicker(null); }
+              }} />
+            <div className="plist">
+              {pickerItems.length === 0 && <div className="pempty">没有匹配的项</div>}
+              {pickerItems.map((it, i) => (
+                <div key={`${it.g}-${it.v}-${i}`}>
+                  {(i === 0 || pickerItems[i - 1].g !== it.g) && <div className="psec">{it.g}</div>}
+                  <button className={`pli ${i === picker.index ? 'on' : ''}`} onMouseEnter={() => setPicker((p) => (p ? { ...p, index: i } : p))} onClick={() => runPicker(i)}><span>{it.t}</span><span className="k">{it.sub}</span></button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {menu && (
         <div className="menu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
           {menu.items.map((it, i) => it.sep ? <div className="msep" key={`sep-${i}`} /> : (
@@ -481,76 +1129,7 @@ export default function App2() {
       )}
 
       {toasts.map((t) => <div key={t.id} className={`toast ${t.error ? 'error' : ''}`}>{t.text}</div>)}
-    </div>
-  );
-}
-
-function Row({ row, model, onApprove, onDiff }: { row: FlowRow; model: string | null; onApprove: (id: string, choice: string) => unknown; onDiff: () => void }) {
-  const [open, setOpen] = useState(false);
-  switch (row.k) {
-    case 'user': return <div className="frow frow-user"><div className="fl">你</div><div className="fc">{row.text}</div></div>;
-    case 'ai': return <div className="frow frow-ai"><div className="fl">{modelLabel(model).split(' ')[0] || '模型'}</div><div className={`fc ${row.streaming ? 'streaming' : ''}`}>{row.text}</div></div>;
-    case 'tool': return (
-      <div className="frow frow-tool"><div className="fl">$</div><div className="fc">
-        <div className="tool-line"><code>{row.preview || row.tool}</code>
-          {row.running ? <><span className="prog" /><span className="tool-meta run">运行中</span></> : <span className={`tool-meta ${row.error ? 'err' : ''}`}>{row.error ? '失败' : '完成'}</span>}
-          {row.output ? <button className="tool-toggle" onClick={() => setOpen((o) => !o)}>{open ? '收起' : '展开'}</button> : null}
-        </div>
-        {open && row.output ? <pre className="tool-out">{row.output}</pre> : null}
-      </div></div>
-    );
-    case 'edit': return (
-      <div className="frow frow-edit"><div className="fl">{row.tool === 'write' ? '写入' : '编辑'}</div><div className="fc">
-        <div className="tool-line"><button className="tool-line" onClick={onDiff} style={{ gap: 10 }}><code>{row.file}</code>{row.running ? <span className="tool-meta run">进行中</span> : <span className={`tool-meta ${row.error ? 'err' : ''}`}>{row.error ? '失败' : '已改'}</span>}</button></div>
-      </div></div>
-    );
-    case 'ap': return (
-      <div className="frow frow-ap"><div className="fl">需要确认</div><div className="fc">
-        <p>{row.title || `要在 ${row.host || '这台机器'} 上执行`}{row.tool ? ` · ${row.tool}` : ''}</p>
-        <code className="cmd">{row.command}</code>
-        <div className="ap-actions">
-          {row.choices.includes('once') && <button className="btn-p" onClick={() => onApprove(row.approvalId, 'once')}>批准一次<kbd>⌘↩</kbd></button>}
-          {row.choices.includes('session') && <button className="btn" onClick={() => onApprove(row.approvalId, 'session')}>本会话允许</button>}
-          {row.choices.includes('always') && <button className="btn" onClick={() => onApprove(row.approvalId, 'always')}>总是允许</button>}
-          {row.choices.filter((c) => !['once', 'session', 'always', 'deny'].includes(c)).map((c) => <button key={c} className="btn" onClick={() => onApprove(row.approvalId, c)}>{c}</button>)}
-          {row.choices.includes('deny') && <button className="btn-g" onClick={() => onApprove(row.approvalId, 'deny')}>拒绝</button>}
-        </div>
-        <div className="ap-meta"><b>绑定:</b>{row.host || '本机'} + 这条完整命令,改一个字都要重新批准 · <b>同一张卡</b>已推到手机,任一端处理即可{row.cwd ? ` · ${row.cwd}` : ''}</div>
-      </div></div>
-    );
-    case 'sys': return <div className="frow"><div className="fl" /><div className={`fc sys ${row.tone === 'remote' ? 'remote' : row.tone === 'error' ? 'error' : ''}`}>{row.text}</div></div>;
-    default: return null;
-  }
-}
-
-function NewSessionBox({ machine, groups, models, defaultCwd, busy, onCancel, onCreate, onOpenSettings }: {
-  machine: string; groups: Group[]; models: Array<{ provider: string; providerName: string; id: string; name: string }>; defaultCwd: string; busy: boolean;
-  onCancel: () => void; onCreate: (input: { machine: string; cwd: string; prompt: string; model: string | null; policy: string }) => void; onOpenSettings: () => void;
-}) {
-  const [target, setTarget] = useState(machine);
-  const [cwd, setCwd] = useState(defaultCwd);
-  const [model, setModel] = useState<string>(models[0] ? `${models[0].provider}/${models[0].id}` : '');
-  const [policy, setPolicy] = useState(readDefaultPolicy());
-  const [prompt, setPrompt] = useState('');
-  useEffect(() => { setTarget(machine); }, [machine]);
-  useEffect(() => { if (!model && models[0]) setModel(`${models[0].provider}/${models[0].id}`); }, [models, model]);
-  // 本机会话跑的是自带的 pi 内核,没登录任何模型就开会话只会换来一句 "No API key"。
-  const needModel = target === 'local' && models.length === 0;
-  const submit = () => { if (!prompt.trim() || needModel) return; onCreate({ machine: target, cwd: cwd.trim() || '~', prompt: prompt.trim(), model: model || null, policy }); };
-  return (
-    <div className="newbox">
-      {needModel && <div className="newbox-warn"><b>还没有可用的模型。</b>先到「设置」登录一个供应商或粘贴密钥,再回来开会话。<button className="btn-s" onClick={onOpenSettings}>去设置</button></div>}
-      <div className="row2">
-        <div><label>机器</label><select value={target} onChange={(e) => setTarget(e.target.value)}>{groups.filter((g) => g.online).map((g) => <option key={g.id} value={g.id}>{g.name}{g.id === 'local' ? '(本机)' : ''}</option>)}</select></div>
-        <div><label>审批</label><select value={policy} onChange={(e) => setPolicy(e.target.value)}>{(['default', 'accept_edits', 'plan', 'auto'] as const).map((p) => <option key={p} value={p}>{POLICY_LABEL[p]}</option>)}</select></div>
-      </div>
-      <div><label>模型</label><select value={model} onChange={(e) => setModel(e.target.value)}>
-        {target !== 'local' && <option value="">由那台机器决定</option>}
-        {models.map((m) => <option key={`${m.provider}/${m.id}`} value={`${m.provider}/${m.id}`}>{m.name} · {m.providerName}</option>)}
-      </select></div>
-      <div><label>目录</label><input value={cwd} onChange={(e) => setCwd(e.target.value)} className="mono" placeholder="~/项目路径" /></div>
-      <div><label>第一句话</label><textarea autoFocus value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="要它做什么" onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') submit(); }} /></div>
-      <div className="acts"><button className="btn-g" onClick={onCancel}>取消</button><button className="btn-s" onClick={submit} disabled={busy || !prompt.trim() || needModel}>开始</button></div>
+      {whatsNew && <WhatsNewOverlay note={whatsNew} onDismiss={() => { markWhatsNewSeen(); setWhatsNew(null); }} />}
     </div>
   );
 }

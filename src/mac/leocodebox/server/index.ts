@@ -12,7 +12,7 @@ import { AppError } from '@/shared/utils.js';
 import { getConnectableHost } from '@/shared/network-hosts.js';
 import { logger } from '@/modules/logging/index.js';
 
-import { findAppRoot, getModuleDir } from './utils/runtime-paths.js';
+import { detectInstallMode, findAppRoot, getModuleDir } from './utils/runtime-paths.js';
 import gitRoutes from './modules/git/index.js';
 import authRoutes from './routes/auth.js';
 import cursorRoutes from './routes/cursor.js';
@@ -54,7 +54,7 @@ const __dirname = getModuleDir(import.meta.url);
 // Resolving the app root once keeps every repo-level lookup below aligned across both layouts.
 const APP_ROOT = findAppRoot(__dirname);
 const VITE_PORT = Number.parseInt(process.env.VITE_PORT || '', 10) || 5173;
-const installMode = fs.existsSync(path.join(APP_ROOT, '.git')) ? 'git' : 'npm';
+const installMode = detectInstallMode(APP_ROOT);
 // Version of the code that is actually running, captured once at process
 // startup. This intentionally does NOT re-read package.json per request: after
 // an update replaces the files on disk, package.json reflects the NEW version

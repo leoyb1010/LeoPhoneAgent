@@ -2,7 +2,6 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import { I18nextProvider } from 'react-i18next';
 
 import { ThemeProvider } from './contexts/ThemeContext';
-import WhatsNewModal from './components/version-upgrade/view/WhatsNewModal';
 import { AuthProvider, ProtectedRoute } from './components/auth';
 import { PreferencesProvider } from './contexts/PreferencesContext';
 import App2 from './v2/App2';
@@ -107,7 +106,6 @@ export default function App() {
         <AuthProvider>
           <ProtectedRoute>
             <PreferencesProvider>
-              <WhatsNewModal />
               <Router basename={routerBasename}>
                 <Routes>
                   <Route path="/" element={<App2 />} />

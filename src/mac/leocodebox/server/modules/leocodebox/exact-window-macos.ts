@@ -171,6 +171,26 @@ export async function bindFrontmostToSession(sessionId: string, options?: Window
   return snap;
 }
 
+/** 把会话绑过的那扇窗提到前面。快照只有 3 秒寿命,所以先按 pid/windowId 再认一次,再 focus。 */
+export async function raiseBoundSessionWindow(
+  sessionId: string,
+  options?: WindowOperationOptions,
+  store = exactWindows,
+  driver = macWindowDriver,
+  list = listMacWindows,
+): Promise<{ ok: true; app: string; title: string } | { ok: false; reason: string; message: string }> {
+  const bound = store.sessionSnapshot(sessionId);
+  if (!bound) return { ok: false, reason: 'unknown-snapshot', message: '这个会话还没有绑过窗口。' };
+  const listed = await list(options);
+  const match = listed.find((row) => row.pid === bound.ref.pid && row.windowId === bound.ref.windowId);
+  if (!match) return { ok: false, reason: 'window-gone', message: '绑过的窗口已经不在了。' };
+  const fresh = store.capture(match);
+  store.bindSession(sessionId, fresh.snapshotId);
+  const result = await store.act(fresh.snapshotId, 'ax', { name: 'focus' }, driver, options);
+  if (!result.ok) return { ok: false, reason: result.reason, message: result.message };
+  return { ok: true, app: result.snapshot.ref.app, title: result.snapshot.ref.title };
+}
+
 export async function exactWindowCapabilities(options?: WindowOperationOptions, driver = macWindowDriver) {
   try {
     const granted = await driver.permissions(options);

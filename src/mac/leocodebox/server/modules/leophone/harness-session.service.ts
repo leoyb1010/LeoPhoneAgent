@@ -18,13 +18,15 @@ import {
   EVENT_TOOL_STARTED,
   EVENT_USER_MESSAGE,
   createDialect,
+  normalizeThinkingLevelFrame,
+  piTurnCommandType,
   type HarnessDialect,
   type HarnessEvent,
 } from './harness-dialects.js';
 import { HarnessJournal, type JournalHealth, type JournalOptions } from './harness-journal.js';
 import { HARNESSES, resolveExecutable, type HarnessLaunchContext, type HarnessModel, type HarnessSpec } from './harness-specs.js';
 import { LEOAGENT_HOME } from './leoagent-home.js';
-import { normalizePolicy, writePolicy, type ApprovalPolicy } from './pi-runtime.js';
+import { hasAnyPiAuth, normalizePolicy, writePolicy, type ApprovalPolicy } from './pi-runtime.js';
 
 // LeoPhoneAgent harness 会话宿主——leoagent(Python)HarnessManager/HarnessSession
 // 的 TS 移植,跑在 leocodebox 服务进程里。三条设计约束原样保留:
@@ -118,6 +120,7 @@ export class HarnessSession {
   private readonly toolNames = new Map<string, string>();
   private readonly dialect: HarnessDialect;
   private proc: ChildProcessWithoutNullStreams | null = null;
+  private promptTurns = 0;
   private readonly journal: HarnessJournal;
 
   constructor(args: { sessionId: string; spec: HarnessSpec; cwd: string; logPath: string; model?: HarnessModel | null; policy?: string; seq?: number; status?: string; journalOptions?: JournalOptions; journal?: HarnessJournal }) {
@@ -201,7 +204,12 @@ export class HarnessSession {
     if (name === EVENT_USER_MESSAGE) {
       const text = String(enriched.text ?? '').replace(/\s+/g, ' ').trim();
       if (!this.title) this.title = text.slice(0, 80);
-      this.lastEvent = { event: name, text: text.slice(0, 120), timestamp: enriched.timestamp };
+      const mode = enriched.mode === 'steer' || enriched.steer === true
+        ? 'steer'
+        : enriched.mode === 'follow_up'
+          ? 'follow_up'
+          : 'prompt';
+      this.lastEvent = { event: name, text: text.slice(0, 120), timestamp: enriched.timestamp, mode };
     } else if (name === EVENT_TOOL_STARTED) {
       this.lastEvent = { event: name, text: `${String(enriched.tool ?? 'tool')} ${String(enriched.preview ?? '').slice(0, 100)}`.trim(), timestamp: enriched.timestamp };
     } else if (name === EVENT_APPROVAL_REQUEST) {
@@ -413,11 +421,24 @@ export class HarnessSession {
   sendFrame(frame: unknown): boolean {
     if (this.spec.key !== 'pi') return false;
     if (!this.isLive || !this.proc || !this.proc.stdin || this.proc.stdin.destroyed || this.proc.exitCode !== null) return false;
-    this.writeFrames([frame]);
+    const raw = frame && typeof frame === 'object' && !Array.isArray(frame)
+      ? { ...(frame as Record<string, unknown>) }
+      : null;
+    if (!raw) return false;
+    const outgoing = raw.type === 'set_thinking_level' ? normalizeThinkingLevelFrame(raw) : raw;
+    this.writeFrames([outgoing]);
+    if (outgoing.type === 'steer' || outgoing.type === 'follow_up') {
+      const text = String(outgoing.message ?? '').trim();
+      if (text) this.emit({ event: EVENT_USER_MESSAGE, text, mode: outgoing.type });
+    }
+    if (outgoing.type === 'set_thinking_level') {
+      const level = String(outgoing.level ?? '').trim();
+      if (level) this.emit({ event: 'session.thinking', level });
+    }
     return true;
   }
 
-  /** 给运行中的会话追加指令。 */
+  /** 给运行中的会话追加指令。已经开过一轮且还在跑时走 steer,首句仍是 prompt。 */
   async send(text: string): Promise<void> {
     if (this.spec.promptInArgs) {
       throw new Error(`${this.spec.displayName} remote sessions are one-shot; start a new task to continue`);
@@ -425,15 +446,22 @@ export class HarnessSession {
     if (!this.isLive || !this.proc || !this.proc.stdin || this.proc.stdin.destroyed || this.proc.exitCode !== null) {
       throw new Error('session is not running');
     }
+    if (this.spec.key === 'pi' && piTurnCommandType(this.status, this.promptTurns) === 'steer') {
+      if (!this.sendFrame({ type: 'steer', message: text })) {
+        throw new Error('session is not running');
+      }
+      return;
+    }
     const result = this.dialect.userMessage(text);
     if ('frames' in result) {
       this.writeFrames(result.frames);
     }
+    this.promptTurns += 1;
     // queued:会话 id 还没回来,方言已排队,id 一到由翻译层代发。
     if (this.status === 'idle') this.status = 'running';
     // 也进持久日志:不然对话的用户半边只存在于打字的那台设备上,
     // 重连回放出一份只有答案没有问题的转录。
-    this.emit({ event: EVENT_USER_MESSAGE, text });
+    this.emit({ event: EVENT_USER_MESSAGE, text, mode: 'prompt' });
   }
 
   /**
@@ -610,14 +638,25 @@ export class HarnessManager {
       // 标题与最近一件事从日志头几行/尾行补回来,列表不至于全是空行。
       const head = await journal.readPage(0, { limit: 8 });
       for (const ev of head.events) {
-        if (ev.event === EVENT_USER_MESSAGE) { restored.title = String(ev.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 80); break; }
+        if (ev.event === EVENT_USER_MESSAGE && ev.mode !== 'steer' && ev.mode !== 'follow_up') {
+          restored.title = String(ev.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
+          break;
+        }
       }
       const latestSeq = journal.health().latest_seq;
       if (latestSeq > 0) {
         const tail = await journal.readPage(Math.max(0, latestSeq - 1), { limit: 1 });
         const lastEv = tail.events[tail.events.length - 1];
         if (lastEv?.timestamp != null) restored.updatedAt = Number(lastEv.timestamp);
-        if (lastEv) restored.lastEvent = { event: lastEv.event, text: String(lastEv.text ?? lastEv.command ?? lastEv.error ?? '').slice(0, 120), timestamp: lastEv.timestamp };
+        if (lastEv) {
+          const mode = lastEv.mode === 'steer' || lastEv.mode === 'follow_up' || lastEv.mode === 'prompt' ? lastEv.mode : undefined;
+          restored.lastEvent = {
+            event: lastEv.event,
+            text: String(lastEv.text ?? lastEv.command ?? lastEv.error ?? '').slice(0, 120),
+            timestamp: lastEv.timestamp,
+            ...(mode ? { mode } : {}),
+          };
+        }
       }
       this.sessions.set(sessionId, restored);
     }
@@ -652,6 +691,9 @@ export class HarnessManager {
     if (this.liveCount() >= MAX_LIVE_SESSIONS) {
       throw new HarnessRequestError(`too many live sessions (max ${MAX_LIVE_SESSIONS})`);
     }
+    if (spec.key === 'pi' && !hasAnyPiAuth()) {
+      throw new HarnessRequestError('还没有登录任何模型。先去设置里授权或填密钥。');
+    }
 
     const sessionId = `hs_${crypto.randomBytes(16).toString('hex')}`;
     const session = new HarnessSession({
@@ -667,7 +709,7 @@ export class HarnessManager {
       model: session.model ? `${session.model.provider}/${session.model.modelId}` : null, policy: session.policy,
     });
     try {
-      if (args.prompt && spec.promptInArgs) session.emit({ event: EVENT_USER_MESSAGE, text: args.prompt });
+      if (args.prompt && spec.promptInArgs) session.emit({ event: EVENT_USER_MESSAGE, text: args.prompt, mode: 'prompt' });
       await spec.prepare?.(session.launchContext());
       await session.start(args.prompt);
       if (args.prompt && !spec.promptInArgs) await session.send(args.prompt);
@@ -690,6 +732,28 @@ export class HarnessManager {
 
   list(): Array<Record<string, unknown>> {
     return [...this.sessions.values()].map((session) => session.summary());
+  }
+
+  /**
+   * 从左栏拿掉一条已经结束的会话:关日志、挪到 forgotten/,内存里删掉。
+   * 进行中的必须先停。不删文件,重启也不会再召回。
+   */
+  async forget(sessionId: string): Promise<{ forgotten: string }> {
+    await this.ready();
+    const session = this.sessions.get(sessionId);
+    if (!session) throw new HarnessRequestError('No such session');
+    if (session.isLive) throw new HarnessRequestError('session is still running');
+    await session.closeJournal();
+    const forgottenDir = path.join(this.sessionsDir, 'forgotten');
+    fs.mkdirSync(forgottenDir, { recursive: true, mode: 0o700 });
+    const dest = path.join(forgottenDir, path.basename(session.logPath));
+    try {
+      if (fs.existsSync(session.logPath)) fs.renameSync(session.logPath, dest);
+    } catch {
+      // 文件已经不在也要把内存条目拿掉,否则左栏还挂着幽灵。
+    }
+    this.sessions.delete(sessionId);
+    return { forgotten: dest };
   }
 
   /** daemon 退出前收割全部子进程;孤儿 CLI 会永远占着工作目录。 */

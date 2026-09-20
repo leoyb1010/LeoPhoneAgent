@@ -1,3 +1,4 @@
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -34,4 +35,11 @@ export function findAppRoot(startDir: string): string {
   return path.basename(parentOfServerRoot) === 'dist-server'
     ? path.dirname(parentOfServerRoot)
     : parentOfServerRoot;
+}
+
+/** 健康检查用:仓库是 git,装进 .app 是 bundled,其余当 npm。 */
+export function detectInstallMode(appRoot: string, exists: (file: string) => boolean = (file) => fs.existsSync(file)): 'git' | 'bundled' | 'npm' {
+  if (exists(path.join(appRoot, '.git'))) return 'git';
+  if (appRoot.includes(`${path.sep}Contents${path.sep}Resources`)) return 'bundled';
+  return 'npm';
 }

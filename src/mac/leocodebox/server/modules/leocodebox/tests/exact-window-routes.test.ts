@@ -97,3 +97,14 @@ test('session creation acknowledges before optional native observation and has a
   assert.match(create, /void bindFrontmostToSession\(session\.sessionId, \{ timeoutMs: 750 \}\)/);
   assert.doesNotMatch(create, /await bindFrontmostToSession/);
 });
+
+test('2.0 工作台本机新建同样先 202 再异步绑定前台窗口', () => {
+  const source = readFileSync('server/modules/leophone/workbench.routes.ts', 'utf8');
+  const create = source.slice(source.indexOf("router.post('/leophone/local/sessions'"), source.indexOf("router.get('/leophone/local/sessions/:sessionId'"));
+  assert.ok(create.indexOf('res.status(202).json') < create.indexOf('bindFrontmostToSession('));
+  assert.match(create, /void bindFrontmostToSession\(session\.sessionId, \{ timeoutMs: 750 \}\)/);
+  assert.doesNotMatch(create, /await bindFrontmostToSession/);
+  assert.match(create, /window\.bound/);
+  assert.match(source, /raiseBoundSessionWindow/);
+  assert.match(source, /window\/raise/);
+});

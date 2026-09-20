@@ -111,6 +111,37 @@ export async function listArtifacts(session: HarnessSession): Promise<ArtifactIn
 
 export type ArtifactFile = ArtifactInfo & { path: string };
 
+const TEXT_MIME = /^(text\/|application\/(json|javascript|xml|x-sh|toml|yaml)|application\/.*\+json)/;
+const TEXT_EXT = new Set([
+  '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.py', '.swift', '.go', '.rs',
+  '.java', '.kt', '.css', '.html', '.xml', '.yml', '.yaml', '.toml', '.sh',
+  '.zsh', '.bash', '.json', '.md', '.txt', '.log', '.csv', '.env',
+]);
+
+export function isPeekableArtifact(info: Pick<ArtifactInfo, 'name' | 'mime'>): boolean {
+  if (TEXT_MIME.test(info.mime.split(';')[0] ?? '')) return true;
+  return TEXT_EXT.has(path.extname(info.name).toLowerCase());
+}
+
+export type ArtifactText =
+  | { ok: true; name: string; content: string; truncated: boolean }
+  | { ok: false; error: string };
+
+/** 按相对名读正文。越界/不存在返回 null;二进制返回 error。 */
+export function readArtifactText(session: HarnessSession, name: string, limit = 80_000): ArtifactText | null {
+  const file = readArtifact(session, name);
+  if (!file) return null;
+  if (!isPeekableArtifact(file)) return { ok: false, error: '这个文件不是文本,没法在这里打开' };
+  const raw = fs.readFileSync(file.path, 'utf8');
+  if (raw.length <= limit) return { ok: true, name: file.name, content: raw, truncated: false };
+  return {
+    ok: true,
+    name: file.name,
+    content: `${raw.slice(0, limit)}\n…(后面还有 ${raw.length - limit} 字)`,
+    truncated: true,
+  };
+}
+
 /** 按清单里的相对名取一个产物;越界/不存在返回 null。 */
 export function readArtifact(session: HarnessSession, name: string): ArtifactFile | null {
   const root = sessionRoot(session);
