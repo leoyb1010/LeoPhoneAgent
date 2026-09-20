@@ -83,6 +83,7 @@ import { canSpeakLastReply, speakLastReplyToast } from './session-speak';
 import { canRetryLastUser, lastUserPrompt, retryLastUserToast } from './session-retry';
 import { canEditLastPrompt, editLastPromptDraft, editLastPromptToast } from './session-edit-prompt';
 import { denySessionToast } from './session-deny';
+import { canDenyAllHere, deniableApprovalIds, denyAllLabel, denyAllToast } from './session-deny-all';
 import { canMentionLastTool, lastToolOutput, mentionLastTool, mentionLastToolToast } from './session-mention-tool';
 import { canOpenLastWritten, lastWrittenFile, openLastWrittenToast } from './session-written';
 import { canJumpLastFail, jumpLastFailToast, lastFailedRow } from './session-fail';
@@ -549,7 +550,9 @@ export default function App2() {
   const canApplyHere = canApplySessionPatch(active?.machine);
   const canAbortTurnHere = canAbortTurn(active?.machine, sessionView.status);
   const pendingIds = useMemo(() => pendingApprovalIds(sessionView.pendingApprovals.values()), [sessionView.pendingApprovals]);
+  const denyIds = useMemo(() => deniableApprovalIds(sessionView.pendingApprovals.values()), [sessionView.pendingApprovals]);
   const canApproveAll = canApproveAllHere(active?.machine, pendingIds);
+  const canDenyAll = canDenyAllHere(active?.machine, denyIds);
   const canPackHere = canPackSessionChanges(active?.machine);
   const canUnpackHere = canUnpackSessionZip(active?.machine);
   const canSeedHere = canSeedSessionFile(active?.machine);
@@ -2136,6 +2139,16 @@ export default function App2() {
       for (const id of ids) await api.approve(active, id, 'once');
     }, approveAllToast(ids.length));
   }, [active, sessionView.pendingApprovals, toast, withBusy]);
+  const denyAllPending = useCallback(async () => {
+    const ids = deniableApprovalIds(sessionView.pendingApprovals.values());
+    if (!active || !canDenyAllHere(active.machine, ids)) {
+      toast('还没有一批待批', true);
+      return;
+    }
+    await withBusy(async () => {
+      for (const id of ids) await api.approve(active, id, 'deny');
+    }, denyAllToast(ids.length));
+  }, [active, sessionView.pendingApprovals, toast, withBusy]);
 
   const openWindowOp = useCallback(() => {
     if (!active || active.machine !== 'local') return;
@@ -2305,6 +2318,7 @@ export default function App2() {
     { v: 'compact', t: '压缩这条会话', sub: 'pi compact' }, { v: 'stop', t: '停止', sub: '进程组一起收' },
     ...(canAbortTurnHere ? [{ v: 'abortturn', t: abortTurnLabel(), sub: '这一轮停，进程还在' }] : []),
     ...(canApproveAll ? [{ v: 'approveall', t: approveAllLabel(), sub: `${pendingIds.length} 条待批` }] : []),
+    ...(canDenyAll ? [{ v: 'denyall', t: denyAllLabel(), sub: `${denyIds.length} 条待批` }] : []),
     ...(canHaltBusy ? [{ v: 'halt', t: '停掉正在跑的', sub: '本机正在跑的全部停掉' }] : []),
     ...(canForgetEnded ? [{ v: 'forgetended', t: '清掉已经结束的', sub: '钉住的和进行中的不动' }] : []),
     ...(canHere ? [{ v: 'here', t: '这个目录的会话', sub: sameCwdPickerHint(herePeers.length) }] : []),
@@ -2323,6 +2337,7 @@ export default function App2() {
     else if (v === 'stop') void stop();
     else if (v === 'abortturn') void abortTurn();
     else if (v === 'approveall') void approveAllPending();
+    else if (v === 'denyall') void denyAllPending();
     else if (v === 'halt') void haltBusy();
     else if (v === 'forgetended') void forgetEnded();
     else if (v === 'recall') void openRecall();
@@ -2474,6 +2489,7 @@ export default function App2() {
     ...groups.filter((g) => g.online && g.id !== 'local').map((g) => ({ g: '会话', t: `在 ${g.name} 上新会话`, k: g.role, run: () => { setNewBox({ open: true, machine: g.id }); setView('home'); } })),
     { g: '审批', t: '批准最近一条待批', k: '⌘↩', run: approveFirstPending },
     ...(canApproveAll ? [{ g: '审批', t: approveAllLabel(), k: `${pendingIds.length} 条待批`, run: () => { void approveAllPending(); } }] : []),
+    ...(canDenyAll ? [{ g: '审批', t: denyAllLabel(), k: `${denyIds.length} 条待批`, run: () => { void denyAllPending(); } }] : []),
     ...configuredModels.map((m) => ({ g: '模型', t: `切换模型:${prettyModelName(m.id, m.name)}`, k: m.providerName, run: () => void setModel(m.provider, m.id) })),
     ...(['default', 'accept_edits', 'plan', 'auto'] as const).map((p) => ({ g: '审批策略', t: POLICY_LABEL[p], k: '本会话', run: () => void setPolicy(p) })),
     ...THINKING_LEVELS.map((level) => ({ g: '思考', t: `思考深度:${THINKING_LABEL[level]}`, k: level, run: () => void setThinking(level) })),
@@ -2567,7 +2583,7 @@ export default function App2() {
     ...(canAppsHere ? [{ g: '本机', t: moveToApplicationsLabel(inApplications), k: inApplications ? '现在在程序文件夹' : '从下载挪进去', run: () => void appsHere() }] : []),
     ...(canCheckUpdateHere ? [{ g: '本机', t: checkUpdateLabel(updateState), k: updateState?.latestVersion ? `现在 ${updateState.latestVersion}` : '看有没有新版本', run: () => void checkUpdateHere() }] : []),
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, approveAllPending, canApproveAll, pendingIds, setModel, setPolicy, setThinking, compact, stop, abortTurn, canAbortTurnHere, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, themeMode, followSystemHere, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, importTalk, canImportHere, copyTalk, canCopyTalkHere, printTalk, canPrintTalkHere, toggleHideSecrets, canHideHere, hideSecretsOn, toggleOpenAtLogin, canOpenAtLoginHere, openAtLogin, toggleGlobalHotkey, canHotkeyHere, globalHotkey, toggleAlwaysOnTop, canAlwaysOnTopHere, alwaysOnTop, toggleAllSpaces, canAllSpacesHere, allSpaces, toggleContentProtection, canProtectHere, contentProtection, toggleDoneChime, canDoneChimeHere, doneChimeOn, openLogsHere, canOpenLogsHere, openA11yHere, canOpenA11yHere, relaunchHere, canRelaunchHere, extraHere, canExtraHere, emojiHere, canEmojiHere, clearCacheHere, canClearCacheHere, lockHere, canLockHere, appLocked, cliHere, canCliHere, cliInstalled, appsHere, canAppsHere, inApplications, checkUpdateHere, canCheckUpdateHere, updateState, dictateHere, canDictateHere, dictating, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, speakLast, canSpeakLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openLastWritten, canOpenWritten, lastWritten, jumpLastFail, canJumpFail, lastFail, openLastRead, canOpenRead, lastRead, openHere, canHere, herePeers, showPulse, canPulse, pulseLabel, forkHere, canFork, openTalkLink, canLinks, talkLinks, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, approveAllPending, denyAllPending, canApproveAll, canDenyAll, pendingIds, denyIds, setModel, setPolicy, setThinking, compact, stop, abortTurn, canAbortTurnHere, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, themeMode, followSystemHere, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, importTalk, canImportHere, copyTalk, canCopyTalkHere, printTalk, canPrintTalkHere, toggleHideSecrets, canHideHere, hideSecretsOn, toggleOpenAtLogin, canOpenAtLoginHere, openAtLogin, toggleGlobalHotkey, canHotkeyHere, globalHotkey, toggleAlwaysOnTop, canAlwaysOnTopHere, alwaysOnTop, toggleAllSpaces, canAllSpacesHere, allSpaces, toggleContentProtection, canProtectHere, contentProtection, toggleDoneChime, canDoneChimeHere, doneChimeOn, openLogsHere, canOpenLogsHere, openA11yHere, canOpenA11yHere, relaunchHere, canRelaunchHere, extraHere, canExtraHere, emojiHere, canEmojiHere, clearCacheHere, canClearCacheHere, lockHere, canLockHere, appLocked, cliHere, canCliHere, cliInstalled, appsHere, canAppsHere, inApplications, checkUpdateHere, canCheckUpdateHere, updateState, dictateHere, canDictateHere, dictating, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, speakLast, canSpeakLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openLastWritten, canOpenWritten, lastWritten, jumpLastFail, canJumpFail, lastFail, openLastRead, canOpenRead, lastRead, openHere, canHere, herePeers, showPulse, canPulse, pulseLabel, forkHere, canFork, openTalkLink, canLinks, talkLinks, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
