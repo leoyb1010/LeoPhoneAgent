@@ -114,6 +114,7 @@ import { canPackSessionChanges, packFileName, packSessionToast } from './session
 import { shouldDropDirtyPeekOnApprove } from './session-peek-approve';
 import { canSendFromPeek } from './session-peek-cmd';
 import { canFlushPeekOnSend, peekFlushedToast } from './session-peek-flush';
+import { canPeekLiveEdit } from './session-peek-live';
 import { clearPeekFileDraft, peekFileDraftToRestore, writePeekFileDraft } from './session-peek-files';
 import { peekDraftToRestore, peekMemoryFile, peekMemoryKey, writePeekMemory, type PeekMemory } from './session-peek-memory';
 import { canPeekPendingEdit, pendingEditFile } from './session-peek-pending';
@@ -1003,6 +1004,12 @@ export default function App2() {
       dirty,
       focusFile,
       pendingFile,
+    }) && !canPeekLiveEdit({
+      machine: active?.machine,
+      status: sessionView.status,
+      dirty,
+      focusFile,
+      liveFile: pendingFile,
     })) return;
     const key = peekMemoryKey(active?.machine, active?.id);
     writePeekMemory(peekMem.current, key, { file: pendingFile });
