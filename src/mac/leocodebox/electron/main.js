@@ -1134,6 +1134,7 @@ function registerIpcHandlers() {
       try {
         desktopNotifications?.stop();
         await localServer?.stopLocalServer();
+        finishLastRun();
       } catch (error) {
         isQuitting = false;
         throw error;
