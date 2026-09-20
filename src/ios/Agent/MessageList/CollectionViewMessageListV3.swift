@@ -9,6 +9,14 @@ extension Notification.Name {
     static let messageListNeedsResnapshot = Notification.Name("messageListNeedsResnapshot")
 }
 
+/// [T-new-message-pill] Set by the coordinator when streamed text / new items
+/// land while the user is browsing (scrollMode != .autoScrolling); cleared the
+/// moment the list is back at (or auto-following) the bottom. Lives outside the
+/// VM so the UIKit list stays the single writer.
+final class MessageListFollowState: ObservableObject {
+    @Published var hasUnseenContent = false
+}
+
 // MARK: - CollectionViewMessageListV3
 
 /// V3 message list: builds on V2's cell-per-block model but simplifies
@@ -34,6 +42,12 @@ struct CollectionViewMessageListV3: UIViewControllerRepresentable {
     var maxContentWidth: CGFloat
     var floatingBarHeight: CGFloat
     var inputBarHeight: CGFloat
+    /// [T-delete-from-here] User-message long-press → "从此处删除" (confirm +
+    /// truncate happen in AIChatView / the view model).
+    var onDeleteFromHere: ((UUID) -> Void)? = nil
+    /// [T-new-message-pill] Shared "content arrived below the fold" flag the
+    /// coordinator drives; AIChatView renders the "↓ 新消息" pill from it.
+    var followState: MessageListFollowState? = nil
 
     func makeUIViewController(context: Context) -> MessageListViewController {
         let vc = MessageListViewController()
@@ -70,6 +84,8 @@ struct CollectionViewMessageListV3: UIViewControllerRepresentable {
         coord.onRevertCompact = onRevertCompact
         coord.onForceSync = onForceSync
         coord.onScreenshotImage = onScreenshotImage
+        coord.onDeleteFromHere = onDeleteFromHere
+        coord.followState = followState
         coord.maxContentWidth = maxContentWidth
 
         // Bottom inset base = input bar + tool bar overlay height + breathing room.
@@ -854,7 +870,8 @@ private struct BridgedWholeMessageV3: View {
             onCopyScreenshot: bridge.onCopyScreenshot,
             onShowCompactSummary: bridge.onShowCompactSummary,
             browserPool: nil,
-            toolSnapshots: []
+            toolSnapshots: [],
+            onDeleteFromHere: bridge.onDeleteFromHere
         )
         .frame(maxWidth: maxWidth > 0 ? maxWidth : nil)
         .frame(maxWidth: .infinity)
@@ -893,6 +910,17 @@ extension CollectionViewMessageListV3 {
         var onRevertCompact: (() -> Void)?
         var onForceSync: (() -> Void)?
         var onScreenshotImage: ((UIImage) -> Void)?
+        var onDeleteFromHere: ((UUID) -> Void)?
+        /// [T-new-message-pill] Owned by AIChatView (@StateObject); weak so the
+        /// long-lived coordinator never pins a view's state object.
+        weak var followState: MessageListFollowState?
+
+        /// [T-new-message-pill] Change-gated write so per-tick callers
+        /// (streaming flush, scrollViewDidScroll) never spam objectWillChange.
+        private func setUnseenContent(_ value: Bool) {
+            guard let followState, followState.hasUnseenContent != value else { return }
+            followState.hasUnseenContent = value
+        }
         var maxContentWidth: CGFloat = 0
         var lastInputFocused: Bool = false
 
@@ -912,6 +940,8 @@ extension CollectionViewMessageListV3 {
                 // grow) and skip that adjustment while the user browses.
                 // [T-ios-stream-natural-transitions]
                 viewController?.messageListLayout?.isAutoScrollPinning = (scrollMode == .autoScrolling)
+                // [T-new-message-pill] Following again → nothing is "unseen".
+                if scrollMode == .autoScrolling { setUnseenContent(false) }
             }
         }
         /// True during settleAfterInteraction flush — suppresses contentSize KVO offset changes.
@@ -1522,6 +1552,7 @@ extension CollectionViewMessageListV3 {
             let retryLast = onRetryLast
             let edit = onEdit
             let compact = onCompact
+            let deleteFromHere = onDeleteFromHere
             let forceSync = onForceSync
             bridge.onForceSync = forceSync
 
@@ -1538,7 +1569,7 @@ extension CollectionViewMessageListV3 {
             }
 
             if message.isCompactedHistory || message.role == .compactDivider || message.role == .systemInfo {
-                bridge.onRetry = nil; bridge.onEdit = nil; bridge.onCompact = nil
+                bridge.onRetry = nil; bridge.onEdit = nil; bridge.onCompact = nil; bridge.onDeleteFromHere = nil
             } else if !vm.isProcessing && !vm.isCompacting {
                 if message.role == .user {
                     bridge.onRetry = { retryMsg?(message.id) }
@@ -1549,8 +1580,10 @@ extension CollectionViewMessageListV3 {
                 }
                 bridge.onEdit = message.role == .user ? { edit?(message.id) } : nil
                 bridge.onCompact = { compact?(message.id) }
+                // [T-delete-from-here] Only real user bubbles; gated like Retry/Edit.
+                bridge.onDeleteFromHere = message.role == .user ? { deleteFromHere?(message.id) } : nil
             } else {
-                bridge.onRetry = nil; bridge.onEdit = nil; bridge.onCompact = nil
+                bridge.onRetry = nil; bridge.onEdit = nil; bridge.onCompact = nil; bridge.onDeleteFromHere = nil
             }
         }
 
@@ -2093,6 +2126,11 @@ extension CollectionViewMessageListV3 {
 
             if scrollMode == .autoScrolling {
                 scheduleCoalescedScroll()
+            } else {
+                // [T-new-message-pill] Streamed text grew below the fold while
+                // the user reads further up (this path only runs on content
+                // change while isProcessing).
+                setUnseenContent(true)
             }
         }
 
@@ -2614,6 +2652,16 @@ extension CollectionViewMessageListV3 {
             let oldSet = Set(previousSnapshotIds)
             let inserted = newItems.filter { !oldSet.contains($0) }
             previousSnapshotIds = newItems
+            // [T-new-message-pill] New content rows appended while browsing.
+            // Footers (typing indicator / usage toggle) don't count — they
+            // come and go without any new message content. A sync reload /
+            // loadSession() rebuilds every ChatMessage with fresh UUIDs, so
+            // "inserted == everything" there is not new content either:
+            // require an existing snapshot and a non-sessionLoad caller.
+            if scrollMode != .autoScrolling, oldCount > 0, caller != "bind3-sessionLoad",
+               inserted.contains(where: { if case .assistantFooter = $0 { return false }; return true }) {
+                setUnseenContent(true)
+            }
 
             let snapLog = AppLogger(category: "SnapshotDiag")
             let blockItems = newItems.filter { if case .assistantBlock = $0 { return true }; return false }
@@ -3556,6 +3604,7 @@ extension CollectionViewMessageListV3 {
         func syncScrollFlags() {
             guard let vm else { return }
             let nb = isNearBottom()
+            if nb { setUnseenContent(false) }
             if vm.isNearBottom != nb {
                 AppLogger(category: "ScrollDiag").info("[ScrollDiag][syncScrollFlags] isNearBottom \(vm.isNearBottom)→\(nb) \(Self.nbDump(viewController?.collectionView))")
                 vm.isNearBottom = nb
@@ -4375,6 +4424,7 @@ extension CollectionViewMessageListV3 {
                 // pass on the SwiftUI update thread. On iPhone 8 this was
                 // burning 100% of one CPU core every scroll frame.
                 let nb = isNearBottom()
+                if nb { setUnseenContent(false) }
                 if vm.isNearBottom != nb {
                     #if DEBUG
                     // Diagnostics: record every isNearBottom TRANSITION with the

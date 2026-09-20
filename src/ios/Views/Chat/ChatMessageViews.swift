@@ -112,6 +112,9 @@ struct ChatMessageRow: View {
     var onRevertCompact: (() -> Void)?
     var browserPool: BrowserTabPool?
     var toolSnapshots: [ToolSnapshotItem] = []
+    /// [T-delete-from-here] User-row menu "从此处删除" (nil hides the item).
+    /// Wired from the V3 list; confirmation + truncation live upstream.
+    var onDeleteFromHere: (() -> Void)?
     @State private var showUsage = false
     @State private var showCompactSummary = false
     /// Two-phase token usage reveal: space expands first, then content fades in.
@@ -373,6 +376,16 @@ struct ChatMessageRow: View {
                         onRetry()
                     } label: {
                         Label("Retry", systemImage: "arrow.counterclockwise")
+                    }
+                }
+                if let onDeleteFromHere {
+                    // [T-delete-from-here] Drops this message and everything
+                    // after it (confirmed upstream).
+                    Divider()
+                    Button(role: .destructive) {
+                        onDeleteFromHere()
+                    } label: {
+                        Label("从此处删除", systemImage: "trash")
                     }
                 }
                 if let onCompact {

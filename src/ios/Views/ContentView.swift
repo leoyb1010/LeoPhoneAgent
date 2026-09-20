@@ -216,6 +216,11 @@ struct ContentView: View {
 
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// [T-home-zoom-transition] Session row ↔ session page zoom (iPhone stack).
+    @Namespace private var zoomNS
+    /// [T-home-sensory-feedback] Same key as `LeoHaptics`, so the declarative
+    /// `.sensoryFeedback` pulses below honour the in-app haptics toggle too.
+    @AppStorage(LeoHaptics.enabledDefaultsKey) private var hapticsEnabled: Bool = true
     @EnvironmentObject var shareCoordinator: ShareCoordinator
     @ObservedObject private var deepLink = DeepLinkCoordinator.shared
     /// Subscribe to the router so changes to its `@Published` fields are
@@ -504,6 +509,32 @@ struct ContentView: View {
             // [T-motion-effects] Toast Overshoot: a small spring overshoot on
             // entry reads as "arrived", not "faded in".
             .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.72), value: forceSyncToast)
+            // [T-home-sensory-feedback] Declarative haptics for the home shell:
+            // state-driven, so they fire no matter which surface (prompt card
+            // or 系统快捷 row) produced the result. Replaces the per-call-site
+            // `LeoHaptics.notification` in setBrightness / runHomeNative so a
+            // result pulses exactly once.
+            .sensoryFeedback(trigger: HomeResultPulse(homeNativeResult)) { _, new in
+                guard hapticsEnabled else { return nil }
+                switch new?.outcome {
+                case .succeeded: return .success
+                case .failed: return .error
+                default: return nil
+                }
+            }
+            // One light tick when a NATIVE action starts, wherever it was
+            // started from (prompt card or 系统快捷 row, on or off screen).
+            // Counter, not homeRoutingInProgress: that flag is shared with
+            // the Mac send path, which has its own haptic.
+            .sensoryFeedback(.impact(weight: .light), trigger: homeNativeStartCount) { _, _ in hapticsEnabled }
+            .sensoryFeedback(.selection, trigger: quickControlsRaw) { _, _ in hapticsEnabled }
+            // [T-home-sheet-detents] The non-modal sheets hang off rootLayout,
+            // above the NavigationStack: a push behind them must dismiss them
+            // or a chat lands underneath a still-presented sheet.
+            .onChange(of: navigationPath.count) { _, _ in
+                showCommandPalette = false
+                showAlarmList = false
+            }
             .onChange(of: wide) { newWide in
                 migrateNavigationState(toWide: newWide)
                 isWideLayout = newWide
@@ -708,6 +739,10 @@ struct ContentView: View {
                     _ = key
                 }
             )
+            // [T-home-sheet-detents] A jump list, not an editor: half-height
+            // by default. Pick-or-cancel, so no background interaction — a
+            // row tapped behind it would push a chat under the sheet.
+            .presentationDetents([.medium, .large])
         }
         .fullScreenCover(isPresented: $showTerminal) {
                 NavigationStack {
@@ -716,6 +751,10 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showAlarmList, onDismiss: { fetchAlarmsIfNeeded() }) {
                 AlarmListView()
+                    // [T-home-sheet-detents] Short list; the home shell stays
+                    // usable behind it at the medium detent.
+                    .presentationDetents([.medium, .large])
+                    .presentationBackgroundInteraction(.enabled(upThrough: .medium))
             }
             .fileImporter(isPresented: $showSessionImporter, allowedContentTypes: [.json, .zip], allowsMultipleSelection: false) { result in
                 if case .success(let urls) = result, let url = urls.first {
@@ -1236,7 +1275,7 @@ struct ContentView: View {
                                 .id(id)
                         }
                     } else {
-                        AIChatView(sessionId: Self.isNewSessionId(id) ? nil : id, draftId: Self.isNewSessionId(id) ? id : nil, initialGroupId: Self.extractGroupId(from: id))
+                        let chat = AIChatView(sessionId: Self.isNewSessionId(id) ? nil : id, draftId: Self.isNewSessionId(id) ? id : nil, initialGroupId: Self.extractGroupId(from: id))
                             .id(id)
                             .onAppear {
                                 if currentStackSessionId != id { currentStackSessionId = id }
@@ -1244,6 +1283,18 @@ struct ContentView: View {
                                 shareLog.info("🔄SESSION stackNav APPEAR id=\(id)")
                             }
                             .onDisappear { shareLog.info("🔄SESSION stackNav DISAPPEAR id=\(id)") }
+                        // [T-home-zoom-transition] Zoom out of the tapped row for
+                        // real sessions only: drafts have no row to zoom from, and
+                        // Reduce Motion gets the stock push. `navigationTransition`
+                        // takes a concrete transition type, so this has to be a
+                        // structural branch; `isNewSessionId` is fixed per id, and
+                        // Reduce Motion flipping while a chat is pushed is the one
+                        // input that would remount the chat view.
+                        if reduceMotion || Self.isNewSessionId(id) {
+                            chat.navigationTransition(.automatic)
+                        } else {
+                            chat.navigationTransition(.zoom(sourceID: id, in: zoomNS))
+                        }
                     }
                 }
         }
@@ -1673,6 +1724,10 @@ struct ContentView: View {
     private func setBrightness(_ level: Double) {
         guard !homeRoutingInProgress else { return }
         homeRoutingInProgress = true
+        homeNativeStartCount += 1
+        // nil first so an identical consecutive result still changes the
+        // HomeResultPulse trigger and pulses (mirrors runHomeNative).
+        homeNativeResult = nil
         Task { @MainActor in
             defer { homeRoutingInProgress = false }
             do {
@@ -1680,10 +1735,8 @@ struct ContentView: View {
                 withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) {
                     homeNativeResult = .init(text: "屏幕亮度已设为 \(Int((state.level * 100).rounded()))%", outcome: .succeeded)
                 }
-                LeoHaptics.notification(.success)
             } catch let error as DeviceActionError {
                 homeNativeResult = .init(text: error.message, outcome: .failed)
-                LeoHaptics.notification(.error)
             } catch {
                 homeNativeResult = .init(text: "系统未能设置亮度。", outcome: .failed)
             }
@@ -1824,6 +1877,10 @@ struct ContentView: View {
                                         }
                                     }
                                 }
+                                // [T-home-zoom-transition] Source frame for the
+                                // row → session zoom; the destination opts in
+                                // per id (see stackLayout).
+                                .matchedTransitionSource(id: session.id, in: zoomNS)
                                 .background(
                                     NavigationLink(value: session.id) { EmptyView() }
                                         .opacity(0)
@@ -2742,10 +2799,28 @@ struct ContentView: View {
     @State private var homeExecutionTarget: HomeExecutionTarget = .iphone
     @State private var homeRoutingError: String?
     @State private var homeRoutingInProgress = false
+    /// [T-home-sensory-feedback] Bumped when a NATIVE action starts (not the
+    /// Mac path, which keeps its own single haptic); drives the start tick.
+    @State private var homeNativeStartCount = 0
 
     private enum HomeExecutionTarget: Equatable {
         case iphone
         case mac(hostId: String, cliKey: String, cliName: String)
+    }
+
+    /// [T-home-sensory-feedback] Equatable projection of the last native
+    /// quick-action result so it can drive `.sensoryFeedback`
+    /// (`ActionRouter.ExecutionResult` is not Equatable and belongs to the
+    /// agent layer). `text` is part of the key so back-to-back results with
+    /// the same outcome (brightness 25% → 50%) still each pulse.
+    private struct HomeResultPulse: Equatable {
+        let text: String
+        let outcome: AgentRunOutcome
+        init?(_ result: ActionRouter.ExecutionResult?) {
+            guard let result else { return nil }
+            text = result.text
+            outcome = result.outcome
+        }
     }
 
     struct MacChatTarget: Identifiable {
@@ -3324,6 +3399,7 @@ struct ContentView: View {
     private func runHomeNative(_ route: ActionRouter.Decision, clearingPrompt: String? = nil) {
         guard !homeRoutingInProgress else { return }
         homeRoutingInProgress = true
+        homeNativeStartCount += 1
         homeRoutingError = nil
         homeNativeResult = nil
         homeNativeTask = Task { @MainActor in
@@ -3336,14 +3412,12 @@ struct ContentView: View {
                 ?? .init(text: AgentRunOutcome.unknown.summary, outcome: .unknown)
             guard !Task.isCancelled else { return }
             withAnimation(LeoMotion.snappy(reduceMotion: reduceMotion)) { homeNativeResult = result }
-            if result.outcome == .succeeded {
-                if let clearingPrompt,
-                   homePrompt.trimmingCharacters(in: .whitespacesAndNewlines) == clearingPrompt {
-                    homePrompt = ""
-                }
-                LeoHaptics.notification(.success)
-            } else if result.outcome == .failed {
-                LeoHaptics.notification(.error)
+            // Success / failure haptics: the root `.sensoryFeedback` on
+            // homeNativeResult fires them. [T-home-sensory-feedback]
+            if result.outcome == .succeeded,
+               let clearingPrompt,
+               homePrompt.trimmingCharacters(in: .whitespacesAndNewlines) == clearingPrompt {
+                homePrompt = ""
             }
         }
     }

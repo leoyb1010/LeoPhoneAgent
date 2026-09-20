@@ -324,6 +324,11 @@ struct AIChatView: View {
     @State private var isForcePulling = false
     @State private var forcePullToast: String?
     @State private var compactConfirmMessageId: UUID?
+    /// [T-delete-from-here] User message awaiting the "从此处删除" confirmation.
+    @State private var deleteFromHereMessageId: UUID?
+    /// [T-new-message-pill] Driven by the UIKit list coordinator; read by the
+    /// "↓ 新消息" pill overlay.
+    @StateObject private var listFollowState = MessageListFollowState()
     /// True while unsent share-extension content is in the input bar.
     @State private var hasInjectedShareContent = false
     @State private var showModelPicker = false
@@ -804,6 +809,27 @@ struct AIChatView: View {
         } message: {
             Text(String(localized: "Messages above this point will be compacted into a summary. This cannot be undone."))
         }
+        // [T-delete-from-here] Destructive, so confirm first; the view model
+        // re-checks isProcessing at commit time and reports `.busy`.
+        .confirmationDialog("从此处删除", isPresented: Binding(
+            get: { deleteFromHereMessageId != nil },
+            set: { if !$0 { deleteFromHereMessageId = nil } }
+        ), titleVisibility: .visible) {
+            Button("删除此条及之后的消息", role: .destructive) {
+                guard let id = deleteFromHereMessageId else { return }
+                switch vm.deleteFromHere(id) {
+                case .deleted:
+                    LeoHaptics.notification(.success)
+                case .busy:
+                    flashToast("正在生成，先停止再删除")
+                case .notFound:
+                    flashToast("这条消息无法删除")
+                }
+            }
+            Button(String(localized: "Cancel"), role: .cancel) {}
+        } message: {
+            Text("将删除这条消息以及之后的全部消息，无法撤销。")
+        }
         .environment(\.leoOpenURL, LeoOpenURLAction { url in
             handleMinisURLTap(url)
         })
@@ -987,9 +1013,12 @@ struct AIChatView: View {
         }
         .sheet(isPresented: $showMoveToSheet) {
             MoveToSessionSheet(currentSessionId: vm.sessionId) { targetId in
-                // Stash current input into ViewModelCache
+                // Stash current input into ViewModelCache.
+                // [T-long-paste-fold] Expand folded pastes first: the target VM
+                // has no `pastedBlocks`, and clearing `inputText` below prunes
+                // the source blocks, so a raw token would arrive as "[Pasted#N]".
                 ViewModelCache.pendingTransfer = .init(
-                    inputText: vm.inputText,
+                    inputText: vm.expandPastedBlocks(in: vm.inputText),
                     attachments: vm.attachments
                 )
                 // Clear current VM input
@@ -2477,7 +2506,13 @@ struct AIChatView: View {
                 },
                 maxContentWidth: maxContentWidth ?? 0,
                 floatingBarHeight: floatingBarHeight,
-                inputBarHeight: inputBarHeight
+                inputBarHeight: inputBarHeight,
+                onDeleteFromHere: { [self] msgId in
+                    // The list bridge nils this action while a turn runs, so
+                    // the menu item is hidden rather than refused here.
+                    deleteFromHereMessageId = msgId
+                },
+                followState: listFollowState
             )
             // Empty/loading overlay for tap-to-dismiss-keyboard.
             // Placed BEFORE the directory timeline in the ZStack so the
@@ -2541,12 +2576,16 @@ struct AIChatView: View {
                     // Scroll to bottom — ORIGINAL behavior: shown whenever not
                     // near the bottom (within the 20pt nearBottom threshold), so
                     // it appears as soon as you leave the bottom.
-                    Button {
-                        vm.forceScrollToBottom.send()
-                    } label: {
-                        scrollFloatingButtonLabel("chevron.down")
+                    // [T-new-message-pill] One jump-to-bottom control at a time:
+                    // the pill replaces the disc while unseen content exists.
+                    if !newMessagePillVisible {
+                        Button {
+                            vm.forceScrollToBottom.send()
+                        } label: {
+                            scrollFloatingButtonLabel("chevron.down")
+                        }
+                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
                     }
-                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
                 }
                 .padding(.trailing, 4)
                 .frame(maxWidth: maxContentWidth ?? .infinity, alignment: .trailing)
@@ -2559,6 +2598,37 @@ struct AIChatView: View {
                 .capsuleProtectedFrame("scrollButtons")
             }
         }
+        // [T-new-message-pill] "↓ 新消息": streamed content landed below the
+        // fold while the user reads further up. Bottom-centre so it never
+        // collides with the trailing ↑/↓ discs. Tap → jump to bottom; the
+        // coordinator clears the flag once the list follows again. Plain
+        // fade only (no bounce); LeoMotion returns nil under Reduce Motion.
+        .overlay(alignment: .bottom) {
+            if newMessagePillVisible {
+                Button {
+                    vm.forceScrollToBottom.send()
+                    LeoHaptics.selection()
+                } label: {
+                    Label("新消息", systemImage: "arrow.down")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(.regularMaterial, in: Capsule())
+                        .overlay(Capsule().stroke(Color.gray.opacity(0.35), lineWidth: 0.5))
+                        .shadow(color: .black.opacity(0.12), radius: 4, y: 2)
+                        // 44pt hit area around the ~32pt visual capsule.
+                        .frame(minHeight: 44)
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.bottom, inputBarHeight + (hasFloatingPreview ? 80 : 12))
+                .transition(.opacity)
+                .accessibilityLabel("有新消息，跳到底部")
+                .capsuleProtectedFrame("newMessagePill")
+            }
+        }
+        .animation(LeoMotion.standardEase(reduceMotion: reduceMotion), value: newMessagePillVisible)
         // [T-browser-download-ux-v2] Floating download button — same visual
         // family as the scroll buttons, stacked ABOVE their slot (the scroll
         // group can show up to two 36pt buttons + spacing, so offset by 92pt)
@@ -2574,6 +2644,23 @@ struct AIChatView: View {
             .padding(.bottom, inputBarHeight + (hasFloatingPreview ? 80 : 12) + 92)
             .animation(.easeInOut(duration: 0.2), value: hasFloatingPreview)
             .capsuleProtectedFrame("downloadButton")
+        }
+    }
+
+    /// [T-new-message-pill] Single gate for the pill: unseen content AND the
+    /// user is actually off the bottom (isNearBottom is the same reading the
+    /// ↓ disc uses, so the two never disagree).
+    private var newMessagePillVisible: Bool {
+        listFollowState.hasUnseenContent && !vm.isNearBottom && !vm.messages.isEmpty
+    }
+
+    /// [T-delete-from-here] Brief top toast on the existing forcePullToast
+    /// slot (same capsule + animation), auto-cleared after 2s. The equality
+    /// guard keeps a later, unrelated toast from being cleared early.
+    private func flashToast(_ message: String) {
+        forcePullToast = message
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            if forcePullToast == message { forcePullToast = nil }
         }
     }
 
@@ -3456,7 +3543,9 @@ struct AIChatView: View {
     }
 
     private func applyRewrite(_ style: LocalBrain.RewriteStyle) {
-        let original = vm.inputText
+        // [T-long-paste-fold] Rewrite the expanded text, not the tokens; the
+        // result no longer carries `[Pasted#N]`, so drop the blocks with it.
+        let original = vm.expandPastedBlocks(in: vm.inputText)
         guard !original.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         rewriting = true
         LeoHaptics.selection()
@@ -3465,7 +3554,10 @@ struct AIChatView: View {
             await MainActor.run {
                 rewriting = false
                 // 本机模型不可用或返回空:原文一个字不动。
-                if let result, !result.isEmpty { vm.inputText = result }
+                if let result, !result.isEmpty {
+                    vm.inputText = result
+                    vm.pastedBlocks.removeAll()
+                }
             }
         }
     }
@@ -6337,5 +6429,94 @@ extension AIChatView {
         4. 最后给我一句话总结这个技能做什么，并提醒我可在技能页从该文件安装。
         """
         vm.send()
+    }
+}
+
+// MARK: - Delete From Here (view-model extension)
+//
+// Lives here instead of its own `AIChatViewModel+DeleteFromHere.swift` because
+// Agent/Chat is NOT a file-system-synchronized group in the .xcodeproj — a new
+// file would need a pbxproj registration to compile. Move it out once that
+// registration exists; nothing here depends on the view.
+private let deleteFromHereLogger = AppLogger(category: "AIChatVM")
+
+// [T-delete-from-here] "从此处删除" (borrowed from OpenMinis 1.13): remove a
+// user message and everything after it from the UI list, the agent history
+// and the persisted rows. Mirrors retryFromMessage's truncation contract
+// (user-bubble ordinal → agentHistory anchor → keepCount == row index) but
+// cuts AT the anchor instead of after it, and never re-runs.
+extension AIChatViewModel {
+    enum DeleteFromHereResult {
+        case deleted
+        /// A turn is streaming / compacting — the caller shows "先停止再删除".
+        case busy
+        /// Not a deletable user message, or UI↔history anchor mismatch.
+        case notFound
+    }
+
+    @discardableResult
+    func deleteFromHere(_ messageId: UUID) -> DeleteFromHereResult {
+        guard !isProcessing, !isCompacting else { return .busy }
+        guard let idx = messages.firstIndex(where: { $0.id == messageId }),
+              messages[idx].role == .user,
+              !messages[idx].isCompactedHistory else { return .notFound }
+
+        // Anchor in agentHistory: the N-th user BUBBLE (synthetic user-role
+        // entries don't count — see isUserBubbleEntry).
+        let targetUserCount = messages[...idx].filter { $0.role == .user }.count
+        var usersSeen = 0
+        var cutAt = -1
+        for (i, entry) in agentHistory.enumerated() where Self.isUserBubbleEntry(entry) {
+            usersSeen += 1
+            if usersSeen == targetUserCount { cutAt = i; break }
+        }
+        // Unlike retry (which fails OPEN and keeps history), a destructive
+        // delete must fail CLOSED: a UI↔history mismatch means we cannot say
+        // which rows to drop, so drop nothing.
+        guard cutAt >= 0 else {
+            deleteFromHereLogger.error("[DeleteFromHere] anchor NOT FOUND (targetUserCount=\(targetUserCount), history=\(self.agentHistory.count)) — nothing deleted")
+            return .notFound
+        }
+
+        // Guard the truncation window against a deferred sync reload (same
+        // flag retryFromMessage uses); released once the DB cut lands.
+        isTruncatingForRetry = true
+        canResume = false
+        if let editing = editingMessageIndex, editing >= idx { editingMessageIndex = nil }
+
+        messages.removeSubrange(idx...)
+        if !transitionSuspended { objectWillChange.send() }
+        agentHistory.removeSubrange(cutAt...)
+
+        // Keep toolSnapshots to those still referenced by a surviving block.
+        toolSnapshots = messages
+            .filter { $0.role == .assistant }
+            .flatMap { msg in
+                msg.blocks.compactMap { block -> ToolSnapshotItem? in
+                    guard let tuId = block.toolUseId else { return nil }
+                    return toolSnapshots.first(where: { $0.id == tuId })
+                }
+            }
+
+        let rowIndex = agentHistory.count   // == cutAt: rows 0..<cutAt survive
+        deleteFromHereLogger.info("[DeleteFromHere] sid=\(self.sessionId?.prefix(8) ?? "nil") uiIdx=\(idx) rowIndex=\(rowIndex) uiCount=\(self.messages.count)")
+        if let sessionId {
+            Task { @MainActor [weak self] in
+                await ChatStore.shared.deleteMessagesFromHere(sessionId: sessionId, fromRowIndex: rowIndex)
+                // Re-baseline the sync watermarks from the cut DB: unlike
+                // retry there is no rerun to refresh them, and a stale
+                // count/hash makes the next reloadMessagesFromDB flag a
+                // removal and run a wholesale loadSession() for rows that
+                // are already correct on screen.
+                let db = await ChatStore.shared.loadMessages(sessionId: sessionId)
+                self?.lastKnownDbSortOrder = db.last?.sortOrder ?? 0
+                self?.lastKnownDbCount = db.count
+                self?.lastKnownDbOrderHash = AIChatViewModel.computeOrderHash(of: db)
+                self?.isTruncatingForRetry = false
+            }
+        } else {
+            isTruncatingForRetry = false
+        }
+        return .deleted
     }
 }

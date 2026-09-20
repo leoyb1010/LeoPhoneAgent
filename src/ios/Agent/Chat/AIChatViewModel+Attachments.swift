@@ -453,3 +453,75 @@ extension AIChatViewModel {
         return (parts, metas)
     }
 }
+
+// MARK: - Long-paste folding
+
+/// [T-long-paste-fold] One folded paste. The draft only carries `token`;
+/// `expandPastedBlocks(in:)` splices `text` back in at send time, so the
+/// composer stays readable and the model still receives every character.
+struct PastedBlock: Identifiable, Equatable {
+    let id: UUID
+    /// 1-based, unique among live blocks; shown as `[Pasted#N]`.
+    let index: Int
+    let text: String
+    /// First non-blank line, at most 60 characters.
+    let preview: String
+    let charCount: Int
+
+    var token: String { "[Pasted#\(index)]" }
+}
+
+extension AIChatViewModel {
+
+    /// Fold `text` into a new block and hand it back so the caller can drop
+    /// its token at the caret. Index = highest live index + 1, so a token
+    /// already sitting in the draft is never reassigned.
+    @discardableResult
+    func registerPastedBlock(_ text: String) -> PastedBlock {
+        let index = (pastedBlocks.map(\.index).max() ?? 0) + 1
+        let firstLine = text
+            .split(omittingEmptySubsequences: true, whereSeparator: \.isNewline)
+            .first { !$0.allSatisfy(\.isWhitespace) }
+            .map { $0.trimmingCharacters(in: .whitespaces) } ?? ""
+        let preview = firstLine.count > 60 ? String(firstLine.prefix(60)) + "…" : firstLine
+        let block = PastedBlock(id: UUID(), index: index, text: text,
+                                preview: preview, charCount: text.count)
+        pastedBlocks.append(block)
+        logger.info("[PasteFold] registered \(block.token) (\(block.charCount) chars)")
+        return block
+    }
+
+    /// Blocks whose token is still in `text`, in the order they were pasted.
+    func pastedBlocks(visibleIn text: String) -> [PastedBlock] {
+        pastedBlocks.filter { text.contains($0.token) }
+    }
+
+    /// Drop blocks whose token the user deleted from the draft. Runs on every
+    /// draft change, so it only writes when something actually went away.
+    func prunePastedBlocks(against text: String) {
+        guard pastedBlocks.contains(where: { !text.contains($0.token) }) else { return }
+        pastedBlocks.removeAll { !text.contains($0.token) }
+    }
+
+    /// Remove one block and its token (plus the space the paste appended).
+    func removePastedBlock(_ block: PastedBlock) {
+        pastedBlocks.removeAll { $0.id == block.id }
+        let draft = inputText
+            .replacingOccurrences(of: block.token + " ", with: "")
+            .replacingOccurrences(of: block.token, with: "")
+        if draft != inputText { inputText = draft }
+    }
+
+    /// Splice every folded paste back into `text` for the model. A token with
+    /// no live block (typed by hand) is left as-is.
+    func expandPastedBlocks(in text: String) -> String {
+        var expanded = text
+        for block in pastedBlocks where expanded.contains(block.token) {
+            expanded = expanded.replacingOccurrences(
+                of: block.token,
+                with: "<pasted-text n=\"\(block.index)\">\n\(block.text)\n</pasted-text>"
+            )
+        }
+        return expanded
+    }
+}

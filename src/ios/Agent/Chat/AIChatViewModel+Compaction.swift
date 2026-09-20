@@ -47,6 +47,8 @@ extension AIChatViewModel {
         let text = pendingSendText ?? ""
         let atts = pendingSendAttachments
         pendingSendText = nil
+        pendingSendRawText = nil
+        pendingSendPastedBlocks = []
         pendingSendAttachments = []
 
         // Show the message as queued immediately
@@ -132,9 +134,13 @@ extension AIChatViewModel {
     /// Cancel the compact-before-send prompt, restoring text to input.
     func cancelCompactBeforeSend() {
         showCompactBeforeSendPrompt = false
-        inputText = pendingSendText ?? ""
+        // Restore the folded composer (tokens + chips), not the expanded body.
+        inputText = pendingSendRawText ?? pendingSendText ?? ""
+        pastedBlocks = pendingSendPastedBlocks
         attachments = pendingSendAttachments
         pendingSendText = nil
+        pendingSendRawText = nil
+        pendingSendPastedBlocks = []
         pendingSendAttachments = []
     }
 

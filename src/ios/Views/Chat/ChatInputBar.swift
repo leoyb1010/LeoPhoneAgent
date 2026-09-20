@@ -764,7 +764,27 @@ class PastableUITextView: UITextView, UIDropInteractionDelegate {
     var onArrowDown: (() -> Bool)?
     /// Returns true if Tab was consumed (slash menu autocomplete).
     var onTab: (() -> Bool)?
+    /// [T-long-paste-fold] Asked to fold a long plain-text paste; returns the
+    /// token to insert at the caret in place of the text. Nil = insert as-is.
+    var onFoldLongPaste: ((String) -> String)?
     var maxHeight: CGFloat = 120
+
+    /// [T-long-paste-fold] A plain-text paste above either bound is folded
+    /// into a chip; above the file bound it becomes a .txt attachment (the
+    /// pre-fold behaviour, kept so a pasted log can't swallow the context).
+    static let foldPasteCharThreshold = 800
+    static let foldPasteLineThreshold = 15
+    static let pasteToFileCharThreshold = 50_000
+
+    static func shouldFoldPaste(_ text: String) -> Bool {
+        if text.count > foldPasteCharThreshold { return true }
+        var lines = 1
+        for ch in text where ch.isNewline {
+            lines += 1
+            if lines > foldPasteLineThreshold { return true }
+        }
+        return false
+    }
 
     // [T-voice-text-switch-autofocus-race] Gate against UIKit promoting this
     // freshly-mounted text view to first responder unsolicited. When the user
@@ -1075,22 +1095,15 @@ class PastableUITextView: UITextView, UIDropInteractionDelegate {
             return
         }
 
-        // Priority 5: Long text → convert to text file attachment
-        // English-dominant (>50% ASCII letters): threshold = 1000 words
-        // Otherwise (CJK / mixed): threshold = 1200 characters
-        if let text = pb.string {
-            let asciiLetters = text.unicodeScalars.filter { ($0.value >= 0x41 && $0.value <= 0x5A) || ($0.value >= 0x61 && $0.value <= 0x7A) }.count
-            let isEnglishDominant = asciiLetters > text.count / 2
-            let isLong: Bool
-            if isEnglishDominant {
-                let wordCount = text.components(separatedBy: .whitespacesAndNewlines)
-                    .filter { !$0.isEmpty }.count
-                isLong = wordCount > 1000
-            } else {
-                isLong = text.count > 1200
-            }
-            if isLong {
-                pasteLog.debug("[Paste] long text (\(text.count) chars) → file attachment")
+        // Priority 5: Long plain text → fold into a [Pasted#N] chip
+        // [T-long-paste-fold] Borrowed from Minis Android 1.13: the draft
+        // keeps only the token, a chip above the field shows a preview, and
+        // send() splices the full text back in so the model still gets it
+        // all. Huge pastes (a whole log file) keep the older .txt-attachment
+        // path instead — the agent reads those with its file tools.
+        if let text = pb.string, !text.isEmpty {
+            if text.count > Self.pasteToFileCharThreshold {
+                pasteLog.debug("[Paste] huge text (\(text.count) chars) → file attachment")
                 let tmp = FileManager.default.temporaryDirectory
                     .appendingPathComponent("pasted_\(UUID().uuidString.prefix(8)).txt")
                 if let data = text.data(using: .utf8) {
@@ -1098,6 +1111,11 @@ class PastableUITextView: UITextView, UIDropInteractionDelegate {
                     onPasteFile?(tmp)
                     return
                 }
+            }
+            if let fold = onFoldLongPaste, Self.shouldFoldPaste(text) {
+                pasteLog.debug("[Paste] long text (\(text.count) chars) → folded chip")
+                insertText(fold(text))
+                return
             }
         }
 
@@ -1107,7 +1125,157 @@ class PastableUITextView: UITextView, UIDropInteractionDelegate {
     }
 }
 
-struct PastableTextView: UIViewRepresentable {
+/// [T-long-paste-fold] The composer field plus the row of `[Pasted#N]`
+/// chips above it. A thin wrapper so the chips sit next to the field they
+/// describe and AIChatView's call site stays as it was; the block store is
+/// the view model's, reached the same way ToolCapsuleView reaches it.
+struct PastableTextView: View {
+    @Binding var text: String
+    @Binding var isFocused: Bool
+    @Binding var hasSelection: Bool
+    @Binding var isScrollable: Bool
+    var placeholder: String
+    var onPasteImage: (UIImage) -> Void
+    var onPasteFile: (URL) -> Void
+    var onReturnKey: (() -> Void)?
+    var onArrowUp: (() -> Bool)?
+    var onArrowDown: (() -> Bool)?
+    var onTab: (() -> Bool)?
+    var onCaretChange: ((Int) -> Void)?
+    var onSelectionReplace: ((_ before: String, _ after: String) -> Void)?
+    var desiredCaret: Int?
+
+    @EnvironmentObject private var vm: AIChatViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        // Only chips whose token still sits in the draft: deleting the
+        // token from the text is the same as removing the chip.
+        let visible = vm.pastedBlocks(visibleIn: text)
+        VStack(alignment: .leading, spacing: 8) {
+            if !visible.isEmpty {
+                PastedBlockRow(blocks: visible) { vm.removePastedBlock($0) }
+                    .transition(.opacity)
+            }
+            PastableTextFieldRepresentable(
+                text: $text,
+                isFocused: $isFocused,
+                hasSelection: $hasSelection,
+                isScrollable: $isScrollable,
+                placeholder: placeholder,
+                onPasteImage: onPasteImage,
+                onPasteFile: onPasteFile,
+                onReturnKey: onReturnKey,
+                onArrowUp: onArrowUp,
+                onArrowDown: onArrowDown,
+                onTab: onTab,
+                onCaretChange: onCaretChange,
+                onSelectionReplace: onSelectionReplace,
+                desiredCaret: desiredCaret,
+                onFoldLongPaste: { pasted in vm.registerPastedBlock(pasted).token + " " }
+            )
+        }
+        .animation(LeoMotion.snappy(reduceMotion: reduceMotion), value: visible.map(\.id))
+        .onChange(of: text) { _, newValue in
+            vm.prunePastedBlocks(against: newValue)
+        }
+    }
+}
+
+/// [T-long-paste-fold] Chips for the folded pastes the draft still
+/// references, laid out like the attachment grid.
+private struct PastedBlockRow: View {
+    let blocks: [PastedBlock]
+    let onRemove: (PastedBlock) -> Void
+
+    var body: some View {
+        FlowLayout(hSpacing: 8, vSpacing: 8) {
+            ForEach(blocks) { block in
+                PastedBlockChip(block: block) { onRemove(block) }
+                    .transition(.opacity)
+            }
+        }
+    }
+}
+
+/// [T-long-paste-fold] One folded paste: token + first-line preview. Tap
+/// to read it all; removal lives in the sheet so a stray tap on the chip
+/// can't drop a few thousand characters.
+private struct PastedBlockChip: View {
+    let block: PastedBlock
+    let onRemove: () -> Void
+    @State private var showFull = false
+
+    var body: some View {
+        Button {
+            showFull = true
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "doc.plaintext")
+                    .font(.system(size: 14))
+                    .foregroundStyle(ChatColors.secondaryText)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(block.token)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ChatColors.primaryText)
+                    Text(block.preview)
+                        .font(.caption2)
+                        .foregroundStyle(ChatColors.secondaryText)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .frame(width: 200)
+            .background(ChatColors.secondaryBg)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.gray.opacity(0.4), lineWidth: 0.5))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("粘贴的文本 \(block.index)，\(block.charCount) 字，\(block.preview)")
+        .accessibilityHint("双击查看全文")
+        .accessibilityAction(named: "移除") { onRemove() }
+        .sheet(isPresented: $showFull) {
+            PastedBlockSheet(block: block) {
+                showFull = false
+                onRemove()
+            }
+        }
+    }
+}
+
+/// [T-long-paste-fold] Full text of one folded paste, selectable. "Remove"
+/// drops the block and its token from the draft.
+private struct PastedBlockSheet: View {
+    let block: PastedBlock
+    let onRemove: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                Text(block.text)
+                    .font(.system(.footnote, design: .monospaced))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(16)
+            }
+            .navigationTitle(block.token)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Remove", role: .destructive) { onRemove() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+struct PastableTextFieldRepresentable: UIViewRepresentable {
     @Binding var text: String
     @Binding var isFocused: Bool
     @Binding var hasSelection: Bool
@@ -1132,6 +1300,9 @@ struct PastableTextView: UIViewRepresentable {
     /// Signal from the view model that the caret should programmatically move
     /// to this offset (used after inserting a mention). Nil = no pending move.
     var desiredCaret: Int?
+    /// [T-long-paste-fold] Folds a long plain-text paste and returns the
+    /// token to insert. Wired by `PastableTextView`.
+    var onFoldLongPaste: ((String) -> String)?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
@@ -1172,6 +1343,7 @@ struct PastableTextView: UIViewRepresentable {
         tv.setContentHuggingPriority(.defaultHigh, for: .vertical)
         tv.onPasteImage = onPasteImage
         tv.onPasteFile = onPasteFile
+        tv.onFoldLongPaste = onFoldLongPaste
         tv.onReturnKey = onReturnKey
         tv.onArrowUp = onArrowUp
         tv.onArrowDown = onArrowDown
@@ -1279,6 +1451,7 @@ struct PastableTextView: UIViewRepresentable {
         }
         tv.onPasteImage = onPasteImage
         tv.onPasteFile = onPasteFile
+        tv.onFoldLongPaste = onFoldLongPaste
         tv.onReturnKey = onReturnKey
         tv.onArrowUp = onArrowUp
         tv.onArrowDown = onArrowDown
@@ -1387,12 +1560,12 @@ struct PastableTextView: UIViewRepresentable {
     }
 
     class Coordinator: NSObject, UITextViewDelegate {
-        var parent: PastableTextView
+        var parent: PastableTextFieldRepresentable
         /// Guard flag to prevent focus feedback loop between UIKit delegate → SwiftUI → updateUIView
         var isSyncingFocus = false
         /// [T-ios-composer-residual-text-33549] When `updateUIView` clears
 
-        init(_ parent: PastableTextView) {
+        init(_ parent: PastableTextFieldRepresentable) {
             self.parent = parent
         }
 

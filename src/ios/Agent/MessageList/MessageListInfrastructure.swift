@@ -997,6 +997,9 @@ final class CellStateBridgeV2: ObservableObject {
     @Published var canResume: Bool = false
     @Published var onResume: (() -> Void)?
     @Published var onCompact: (() -> Void)?
+    /// [T-delete-from-here] Nil while a turn runs (same gating as onRetry/onEdit),
+    /// so the menu item hides instead of refusing.
+    @Published var onDeleteFromHere: (() -> Void)?
     @Published var onForceSync: (() -> Void)?
     @Published var onCopyScreenshot: (() -> Void)?
     /// Read this whole reply aloud from the start (clears in-progress TTS).

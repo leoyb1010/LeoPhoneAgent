@@ -2484,6 +2484,21 @@ actor ChatStore {
         }
     }
 
+    /// [T-delete-from-here] "从此处删除": drop the row at 0-based canonical
+    /// position `fromRowIndex` AND every later row, then bump the session so
+    /// the list re-sorts (updated_at) and its preview — derived from the
+    /// remaining rows at load time — refreshes. Rows are addressed by
+    /// position, not id: DB message ids are fresh UUIDs the UI never sees
+    /// (`ChatMessage.id` is a separate in-memory UUID), and the established
+    /// truncation contract is agentHistory index == row index (see
+    /// deleteMessagesAfter / retryFromMessage).
+    func deleteMessagesFromHere(sessionId: String, fromRowIndex: Int) {
+        deleteMessagesAfter(sessionId: sessionId, keepCount: max(0, fromRowIndex))
+        touchSession(sessionId)
+        markDirty(recordType: "Session", recordId: sessionId)
+        NotificationCenter.default.post(name: .sessionDidUpdate, object: sessionId)
+    }
+
     // MARK: - Media File Management
 
     /// Save media data to disk, return a MediaRef.

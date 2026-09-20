@@ -75,7 +75,9 @@ extension AIChatViewModel {
         // "/model kimi" 回车,不拦的话它会作为字面提问进队列发给模型。
         if interceptModelCommand(inputText) { return }
         syncSelectedModelFromBinding()
-        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        // [T-long-paste-fold] Same expansion as send(): the queued bubble and
+        // the injected prompt must carry the pasted text, not the token.
+        let text = expandPastedBlocks(in: inputText).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !attachments.isEmpty, isProcessing else { return }
         if AgentChatCorrectness.shouldBlockImageAttachments(
             hasImages: attachments.contains(where: { $0.kind == .image }),
@@ -95,6 +97,7 @@ extension AIChatViewModel {
         messages.append(chatMsg)
         scrollToBottomSignal.send()
         inputText = ""
+        pastedBlocks.removeAll()
         attachments = []
         logger.info("Enqueued prompt (\(text.count)ch, \(pendingAttachments.count) attachments), queue size=\(self.promptQueue.count)")
         // Privacy: keep only structural diagnostics. Prompt text must never be

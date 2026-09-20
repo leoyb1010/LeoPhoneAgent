@@ -870,6 +870,11 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     var pendingSendText: String?
     /// Attachments held back while the compact-before-send prompt is shown.
     var pendingSendAttachments: [InputAttachment] = []
+    /// [T-long-paste-fold] The composer text as typed (folded `[Pasted#N]` tokens)
+    /// plus its blocks, so cancelling the compact prompt restores the chips
+    /// instead of dumping the expanded `<pasted-text>` body into the composer.
+    var pendingSendRawText: String?
+    var pendingSendPastedBlocks: [PastedBlock] = []
     /// When true, skip the needsCompactBeforeSend check (used after compactAndSend to avoid loop).
     var skipCompactCheck = false
     /// When false, memory_write tool calls are skipped (returns "Memory disabled") in this session.
@@ -1091,6 +1096,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     @Published var attachments: [InputAttachment] = []
     /// Number of videos currently being imported from the photo picker.
     @Published var loadingVideoCount = 0
+    /// [T-long-paste-fold] Long pastes folded out of the draft; the draft
+    /// holds "[Pasted#N]" tokens that send() expands back to the full text.
+    @Published var pastedBlocks: [PastedBlock] = []
 
     /// Old iOS releases visibly jitter when the actively streaming markdown block
     /// re-self-sizes during user scroll/deceleration. While this flag is set, the
@@ -2236,7 +2244,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // [T-model-quickswitch] "/model kimi" 是命令不是提问,在这里截住。
         if interceptModelCommand(inputText) { return }
         syncSelectedModelFromBinding()
-        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        // [T-long-paste-fold] Splice folded pastes back in first, so the
+        // compact prompts, the stored bubble and the model all see the full text.
+        let text = expandPastedBlocks(in: inputText).trimmingCharacters(in: .whitespacesAndNewlines)
         let treasuryContext = pendingTreasuryContext?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let pendingAttachments = attachments
@@ -2311,13 +2321,17 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     pendingSendText = text
                     pendingSendAttachments = pendingAttachments
                     inputText = ""
+                    pastedBlocks.removeAll()
                     attachments = []
                     compactAndSend()
                     return
                 }
                 pendingSendText = text
+                pendingSendRawText = inputText
+                pendingSendPastedBlocks = pastedBlocks
                 pendingSendAttachments = pendingAttachments
                 inputText = ""
+                pastedBlocks.removeAll()
                 attachments = []
                 showCompactBeforeSendPrompt = true
                 logger.info("[Context] Near capacity — prompting user to compact before send")
@@ -2334,6 +2348,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 pendingSendText = text
                 pendingSendAttachments = pendingAttachments
                 inputText = ""
+                pastedBlocks.removeAll()
                 attachments = []
                 showContextExhaustedPrompt = true
                 logger.info("[Context] Exhausted — prompting user to start new session or clear chat")
@@ -2351,6 +2366,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
         pendingTreasuryContext = nil
         inputText = ""
+        pastedBlocks.removeAll()
 
         // If editing a previous message, truncate conversation from that point first
         if let editIdx = editingMessageIndex {
