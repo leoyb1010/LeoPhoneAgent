@@ -35,6 +35,7 @@ declare global {
       onBatteryChanged?: (callback: (row: { on?: boolean }) => void) => () => void;
       getThermal?: () => Promise<{ state?: string; hot?: boolean; can?: boolean }>;
       onThermalChanged?: (callback: (row: { state?: string; hot?: boolean }) => void) => () => void;
+      onIdleBack?: (callback: (row: { back?: boolean }) => void) => () => void;
       getAppLock?: () => Promise<{ on?: boolean }>;
       setAppLock?: (on: boolean) => Promise<{ on?: boolean }>;
       onAppLockChanged?: (callback: (row: { on?: boolean }) => void) => () => void;

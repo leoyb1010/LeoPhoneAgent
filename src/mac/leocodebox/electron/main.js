@@ -18,6 +18,7 @@ import { CLI_MARK, cliBinPaths, cliShimBody, cwdFromArgv, localBinDir, pathHasLo
 import { cwdStillThere } from './cwd-missing.js';
 import { dockMenuLabels } from './dock-menu.js';
 import { showEmojiPanel } from './emoji-panel.js';
+import { idleCameBack, idleProbe } from './idle.js';
 import { LAST_RUN_FILE, cleanLastRun, dirtyLastRun, lastRunWasAbrupt, parseLastRun } from './last-crash.js';
 import { resolveLeoSchemeCwd } from './leo-scheme.js';
 import { expandDesktopFolderPath, isDesktopFolderAllowed } from './local-folder.js';
@@ -130,6 +131,18 @@ function getThermal() {
 
 function notifyThermal() {
   desktopWindow?.sendToActiveView?.('leocodebox-desktop:thermal-changed', getThermal());
+}
+
+function notifyIdleBack() {
+  desktopWindow?.sendToActiveView?.('leocodebox-desktop:idle-back', { back: true });
+}
+
+let lastIdleProbe = idleProbe(powerMonitor);
+
+function tickIdle() {
+  const next = idleProbe(powerMonitor);
+  if (idleCameBack(lastIdleProbe, next)) notifyIdleBack();
+  lastIdleProbe = next;
 }
 
 function setAppLock(on) {
@@ -947,6 +960,7 @@ function registerIpcHandlers() {
   trustedHandle('leocodebox-desktop:clear-cache', async () => clearWebCache());
   trustedHandle('leocodebox-desktop:battery', async () => getBattery());
   trustedHandle('leocodebox-desktop:thermal', async () => getThermal());
+  trustedHandle('leocodebox-desktop:idle', async () => idleProbe(powerMonitor));
   trustedHandle('leocodebox-desktop:app-lock', async (_event, raw) => (
     raw === undefined || raw === null ? getAppLock() : writeAppLock(Boolean(raw))
   ));
@@ -1495,6 +1509,11 @@ async function bootstrap() {
     powerMonitor.on('on-battery', () => notifyBattery());
     powerMonitor.on('on-ac', () => notifyBattery());
     powerMonitor.on('thermal-state-change', () => notifyThermal());
+    powerMonitor.on('user-did-become-active', () => tickIdle());
+  }
+  if (typeof powerMonitor?.getSystemIdleState === 'function') {
+    const idleTick = setInterval(tickIdle, 15_000);
+    idleTick.unref?.();
   }
   await openLocalInDesktop();
   flushLeoSchemes();

@@ -12,6 +12,7 @@ import { setSessionKeepAwake } from './desktop-awake';
 import { onBatteryChanged, readBattery } from './desktop-battery';
 import { onThermalChanged, readThermal } from './desktop-thermal';
 import { desktopHotkeyTools, readGlobalHotkey, writeGlobalHotkey } from './desktop-hotkey';
+import { onIdleBack } from './desktop-idle';
 import { desktopLoginTools, readOpenAtLogin, writeOpenAtLogin } from './desktop-login';
 import { desktopFloatTools, readAlwaysOnTop, writeAlwaysOnTop } from './desktop-float';
 import { desktopSpacesTools, readAllSpaces, writeAllSpaces } from './desktop-spaces';
@@ -50,6 +51,7 @@ import { canPrintTalk, clipPrintText, printTalkToast } from './session-print';
 import { canHideSecrets, hideSecretsToast } from './session-hide';
 import { canSetGlobalHotkey, globalHotkeyLabel, globalHotkeyToast } from './session-hotkey';
 import { icloudCwdToast, isIcloudPath } from './session-icloud';
+import { idleBackToast } from './session-idle';
 import { canSetOpenAtLogin, openAtLoginLabel, openAtLoginToast } from './session-login';
 import { alwaysOnTopLabel, alwaysOnTopToast, canSetAlwaysOnTop } from './session-float';
 import { allSpacesLabel, allSpacesToast, canSetAllSpaces } from './session-spaces';
@@ -392,6 +394,7 @@ export default function App2() {
     thermalSendWarned.current = true;
     toast(thermalSendToast());
   }, [thermalHot, toast]);
+  useEffect(() => onIdleBack(() => toast(idleBackToast())), [toast]);
   const warnIcloud = useCallback((cwd?: string | null) => {
     const path = String(cwd ?? '').trim();
     if (!isIcloudPath(path) || icloudWarned.current.has(path)) return;

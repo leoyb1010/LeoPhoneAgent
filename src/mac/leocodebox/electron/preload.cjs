@@ -132,6 +132,11 @@ if (isLocalHttpOrigin(window.location)) {
       ipcRenderer.on('leocodebox-desktop:thermal-changed', listener);
       return () => ipcRenderer.removeListener('leocodebox-desktop:thermal-changed', listener);
     },
+    onIdleBack: (callback) => {
+      const listener = (_event, row) => callback(row);
+      ipcRenderer.on('leocodebox-desktop:idle-back', listener);
+      return () => ipcRenderer.removeListener('leocodebox-desktop:idle-back', listener);
+    },
     getAppLock: () => ipcRenderer.invoke('leocodebox-desktop:app-lock'),
     setAppLock: (on) => ipcRenderer.invoke('leocodebox-desktop:app-lock', on),
     onAppLockChanged: (callback) => {
