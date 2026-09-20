@@ -103,6 +103,8 @@ if (isLocalHttpOrigin(window.location)) {
     keepAwake: (on) => ipcRenderer.invoke('leocodebox-desktop:keep-awake', on),
     getOpenAtLogin: () => ipcRenderer.invoke('leocodebox-desktop:open-at-login'),
     setOpenAtLogin: (on) => ipcRenderer.invoke('leocodebox-desktop:open-at-login', on),
+    getAlwaysOnTop: () => ipcRenderer.invoke('leocodebox-desktop:always-on-top'),
+    setAlwaysOnTop: (on) => ipcRenderer.invoke('leocodebox-desktop:always-on-top', on),
     pickFolder: () => ipcRenderer.invoke('leocodebox-desktop:pick-folder'),
     revealPath: (target) => ipcRenderer.invoke('leocodebox-desktop:reveal-path', target),
     openPath: (target) => ipcRenderer.invoke('leocodebox-desktop:open-path', target),

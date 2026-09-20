@@ -26,7 +26,9 @@ test('装机壳把选目录和揭示接到工作台', () => {
   assert.match(main, /webContents\.print/);
   assert.match(main, /leocodebox-desktop:keep-awake/);
   assert.match(main, /leocodebox-desktop:open-at-login/);
+  assert.match(main, /leocodebox-desktop:always-on-top/);
   assert.match(main, /setLoginItemSettings/);
+  assert.match(main, /setAlwaysOnTop/);
   assert.match(main, /powerSaveBlocker/);
   assert.match(main, /\/usr\/bin\/say/);
   assert.match(main, /showOpenDialog/);
@@ -42,4 +44,6 @@ test('装机壳把选目录和揭示接到工作台', () => {
   assert.match(preload, /keepAwake/);
   assert.match(preload, /getOpenAtLogin/);
   assert.match(preload, /setOpenAtLogin/);
+  assert.match(preload, /getAlwaysOnTop/);
+  assert.match(preload, /setAlwaysOnTop/);
 });

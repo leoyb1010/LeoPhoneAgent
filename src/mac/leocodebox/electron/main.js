@@ -46,6 +46,17 @@ function setOpenAtLogin(on) {
   return getOpenAtLogin();
 }
 
+function getAlwaysOnTop() {
+  const win = desktopWindow?.getMainWindow();
+  return { on: Boolean(win && !win.isDestroyed() && win.isAlwaysOnTop()) };
+}
+
+function setAlwaysOnTop(on) {
+  const win = desktopWindow?.getMainWindow();
+  if (win && !win.isDestroyed()) win.setAlwaysOnTop(Boolean(on));
+  return getAlwaysOnTop();
+}
+
 let sayChild = null;
 let sayVoicePromise = null;
 
@@ -619,6 +630,9 @@ function registerIpcHandlers() {
   trustedHandle('leocodebox-desktop:keep-awake', async (_event, raw) => setKeepAwake(Boolean(raw)));
   trustedHandle('leocodebox-desktop:open-at-login', async (_event, raw) => (
     raw === undefined || raw === null ? getOpenAtLogin() : setOpenAtLogin(Boolean(raw))
+  ));
+  trustedHandle('leocodebox-desktop:always-on-top', async (_event, raw) => (
+    raw === undefined || raw === null ? getAlwaysOnTop() : setAlwaysOnTop(Boolean(raw))
   ));
 
   trustedHandle('leocodebox-desktop:notify', async (event, payload) => {

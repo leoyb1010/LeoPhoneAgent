@@ -10,6 +10,7 @@ import { dropBrowserFile, pasteSessionImage, pickSessionFiles } from './desktop-
 import { onSessionNoticeAction, onSessionNoticeClick, setDockNeedBadge, showSessionNotice } from './desktop-notice';
 import { setSessionKeepAwake } from './desktop-awake';
 import { desktopLoginTools, readOpenAtLogin, writeOpenAtLogin } from './desktop-login';
+import { desktopFloatTools, readAlwaysOnTop, writeAlwaysOnTop } from './desktop-float';
 import { printSessionTalk } from './desktop-print';
 import { canAcceptSessionDrop, mentionDroppedFile } from './session-drop';
 import { canCommitSessionFiles, commitSessionFilesToast, defaultCommitMessage } from './session-commit';
@@ -26,6 +27,7 @@ import { canCopyTalk, copyTalkToast } from './session-copy-talk';
 import { canPrintTalk, clipPrintText, printTalkToast } from './session-print';
 import { canHideSecrets, hideSecretsToast } from './session-hide';
 import { canSetOpenAtLogin, openAtLoginLabel, openAtLoginToast } from './session-login';
+import { alwaysOnTopLabel, alwaysOnTopToast, canSetAlwaysOnTop } from './session-float';
 import { appendDictate, canDictate, clipDictateText, dictateListeningToast, dictateStoppedToast, dictateToast, dictateUnavailableToast, speechRecognitionCtor } from './session-dictate';
 import { canSpeakLastReply, speakLastReplyToast } from './session-speak';
 import { canRetryLastUser, lastUserPrompt, retryLastUserToast } from './session-retry';
@@ -195,6 +197,8 @@ export default function App2() {
   const [hideSecretsOn, setHideSecretsOn] = useState(false);
   const [openAtLogin, setOpenAtLogin] = useState(false);
   const canOpenAtLoginHere = canSetOpenAtLogin(desktopLoginTools());
+  const [alwaysOnTop, setAlwaysOnTop] = useState(false);
+  const canAlwaysOnTopHere = canSetAlwaysOnTop(desktopFloatTools());
   const [menu, setMenu] = useState<MenuState>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [newBox, setNewBox] = useState<NewBoxState | null>(null);
@@ -425,6 +429,10 @@ export default function App2() {
     if (!canOpenAtLoginHere) return;
     void readOpenAtLogin().then(setOpenAtLogin).catch(() => setOpenAtLogin(false));
   }, [canOpenAtLoginHere]);
+  useEffect(() => {
+    if (!canAlwaysOnTopHere) return;
+    void readAlwaysOnTop().then(setAlwaysOnTop).catch(() => setAlwaysOnTop(false));
+  }, [canAlwaysOnTopHere]);
 
   useEffect(() => {
     const next = allSessions.map((row) => {
@@ -951,6 +959,19 @@ export default function App2() {
       toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
     }
   }, [canOpenAtLoginHere, openAtLogin, toast]);
+  const toggleAlwaysOnTop = useCallback(async () => {
+    if (!canAlwaysOnTopHere) {
+      toast('这台电脑现在钉不了窗口', true);
+      return;
+    }
+    try {
+      const next = await writeAlwaysOnTop(!alwaysOnTop);
+      setAlwaysOnTop(next);
+      toast(alwaysOnTopToast(next));
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+    }
+  }, [canAlwaysOnTopHere, alwaysOnTop, toast]);
   const dictateHere = useCallback(() => {
     if (!canDictate(active?.machine)) {
       toast('只有本机能对着说', true);
@@ -1701,6 +1722,7 @@ export default function App2() {
     ...(canPrintTalkHere ? [{ v: 'printtalk', t: '打印这次对话', sub: '系统打印对话框' }] : []),
     ...(canHideHere ? [{ v: 'hidesecrets', t: hideSecretsOn ? '显示密钥' : '藏住密钥', sub: hideSecretsOn ? '现在藏着' : '只藏显示' }] : []),
     ...(canOpenAtLoginHere ? [{ v: 'openatlogin', t: openAtLoginLabel(openAtLogin), sub: openAtLogin ? '现在开机就开' : '登录后打开' }] : []),
+    ...(canAlwaysOnTopHere ? [{ v: 'alwaysontop', t: alwaysOnTopLabel(alwaysOnTop), sub: alwaysOnTop ? '现在钉着' : '盖过别的窗口' }] : []),
     ...(canDictateHere ? [{ v: 'dictate', t: dictating ? '停住' : '对着说', sub: dictating ? '正在听' : '写进输入框' }] : []),
     ...(canSearchHere ? [{ v: 'searchcwd', t: '在目录里搜', sub: activeSummary?.cwd || '会话目录' }] : []),
     ...(canShowSessionLog(active?.machine) ? [{ v: 'log', t: '最近提交', sub: activeSummary?.cwd || '会话目录' }] : []),
@@ -1774,6 +1796,7 @@ export default function App2() {
     else if (v === 'printtalk') void printTalk();
     else if (v === 'hidesecrets') toggleHideSecrets();
     else if (v === 'openatlogin') void toggleOpenAtLogin();
+    else if (v === 'alwaysontop') void toggleAlwaysOnTop();
     else if (v === 'dictate') dictateHere();
     else if (v === 'searchcwd') openSearch();
     else if (v === 'log') openLog();
@@ -1957,8 +1980,9 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...(canOpenAtLoginHere ? [{ g: '本机', t: openAtLoginLabel(openAtLogin), k: openAtLogin ? '现在开机就开' : '登录后打开', run: () => void toggleOpenAtLogin() }] : []),
+    ...(canAlwaysOnTopHere ? [{ g: '本机', t: alwaysOnTopLabel(alwaysOnTop), k: alwaysOnTop ? '现在钉着' : '盖过别的窗口', run: () => void toggleAlwaysOnTop() }] : []),
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, importTalk, canImportHere, copyTalk, canCopyTalkHere, printTalk, canPrintTalkHere, toggleHideSecrets, canHideHere, hideSecretsOn, toggleOpenAtLogin, canOpenAtLoginHere, openAtLogin, dictateHere, canDictateHere, dictating, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, speakLast, canSpeakLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openLastWritten, canOpenWritten, lastWritten, jumpLastFail, canJumpFail, lastFail, openLastRead, canOpenRead, lastRead, openHere, canHere, herePeers, showPulse, canPulse, pulseLabel, forkHere, canFork, openTalkLink, canLinks, talkLinks, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, importTalk, canImportHere, copyTalk, canCopyTalkHere, printTalk, canPrintTalkHere, toggleHideSecrets, canHideHere, hideSecretsOn, toggleOpenAtLogin, canOpenAtLoginHere, openAtLogin, toggleAlwaysOnTop, canAlwaysOnTopHere, alwaysOnTop, dictateHere, canDictateHere, dictating, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, speakLast, canSpeakLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openLastWritten, canOpenWritten, lastWritten, jumpLastFail, canJumpFail, lastFail, openLastRead, canOpenRead, lastRead, openHere, canHere, herePeers, showPulse, canPulse, pulseLabel, forkHere, canFork, openTalkLink, canLinks, talkLinks, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -2410,6 +2434,7 @@ export default function App2() {
                         {canPrintTalkHere ? <button className="link" type="button" onClick={() => { void printTalk(); }}>打印这次对话</button> : null}
                         {canHideHere ? <button className="link" type="button" onClick={toggleHideSecrets}>{hideSecretsOn ? '显示密钥' : '藏住密钥'}</button> : null}
                         {canOpenAtLoginHere ? <button className="link" type="button" onClick={() => { void toggleOpenAtLogin(); }}>{openAtLoginLabel(openAtLogin)}</button> : null}
+                        {canAlwaysOnTopHere ? <button className="link" type="button" onClick={() => { void toggleAlwaysOnTop(); }}>{alwaysOnTopLabel(alwaysOnTop)}</button> : null}
                         {canDictateHere ? <button className="link" type="button" onClick={dictateHere}>{dictating ? '停住' : '对着说'}</button> : null}
                         {canRecallHere ? <button className="link" onClick={() => void openRecall()}>找回来</button> : null}
                       </div>
