@@ -16,6 +16,7 @@ import { onDisplayChanged } from './desktop-display';
 import { onIdleBack } from './desktop-idle';
 import { desktopLoginTools, readOpenAtLogin, writeOpenAtLogin } from './desktop-login';
 import { onMemoryChanged, readMemory } from './desktop-memory';
+import { onNetpathChanged } from './desktop-netpath';
 import { onVolumeChanged } from './desktop-volume';
 import { desktopFloatTools, readAlwaysOnTop, writeAlwaysOnTop } from './desktop-float';
 import { desktopSpacesTools, readAllSpaces, writeAllSpaces } from './desktop-spaces';
@@ -58,6 +59,7 @@ import { displayChangeToast } from './session-display';
 import { idleBackToast } from './session-idle';
 import { canSetOpenAtLogin, openAtLoginLabel, openAtLoginToast } from './session-login';
 import { memoryLowToast, memoryOkToast, memorySendToast } from './session-memory';
+import { netpathChangeToast } from './session-netpath';
 import { volumeChangeToast } from './session-volume';
 import { alwaysOnTopLabel, alwaysOnTopToast, canSetAlwaysOnTop } from './session-float';
 import { allSpacesLabel, allSpacesToast, canSetAllSpaces } from './session-spaces';
@@ -405,6 +407,7 @@ export default function App2() {
   useEffect(() => onIdleBack(() => toast(idleBackToast())), [toast]);
   useEffect(() => onDisplayChanged((row) => toast(displayChangeToast(row.kind))), [toast]);
   useEffect(() => onVolumeChanged((row) => toast(volumeChangeToast(row.kind))), [toast]);
+  useEffect(() => onNetpathChanged(() => toast(netpathChangeToast())), [toast]);
   useEffect(() => {
     void readMemory().then(setMemoryLow);
     return onMemoryChanged((low) => {

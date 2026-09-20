@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { constants as fsConstants, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFile, spawn } from 'node:child_process';
 import { access, chmod, copyFile, mkdir, readFile, rm, stat, unlink, writeFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
+import { homedir, networkInterfaces } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
@@ -26,6 +26,7 @@ import { expandDesktopFolderPath, isDesktopFolderAllowed } from './local-folder.
 import { LocalServerController } from './localServer.js';
 import { disableConflictingLegacyLaunchAgent } from './legacyMigration.js';
 import { memoryState } from './memory.js';
+import { netpathShift, netpathState } from './netpath.js';
 import { accessibilityPaneUrls } from './privacy-pane.js';
 import { readProductVersion } from './productMetadata.js';
 import { cwdFromDroppedPath, rememberRecentCwd } from './recent-docs.js';
@@ -196,6 +197,23 @@ function tickVolume() {
 }
 
 let lastVolume = { count: 0, can: false, names: [] };
+
+function getNetpath() {
+  return netpathState(networkInterfaces());
+}
+
+function notifyNetpath() {
+  desktopWindow?.sendToActiveView?.('leocodebox-desktop:netpath-changed', getNetpath());
+}
+
+function tickNetpath() {
+  const next = getNetpath();
+  const kind = netpathShift(lastNetpath, next);
+  lastNetpath = next;
+  if (kind) notifyNetpath();
+}
+
+let lastNetpath = { key: '', can: false, addrs: [] };
 
 let lastIdleProbe = idleProbe(powerMonitor);
 
@@ -1024,6 +1042,7 @@ function registerIpcHandlers() {
   trustedHandle('leocodebox-desktop:display', async () => getDisplay());
   trustedHandle('leocodebox-desktop:memory', async () => getMemory());
   trustedHandle('leocodebox-desktop:volume', async () => getVolume());
+  trustedHandle('leocodebox-desktop:netpath', async () => getNetpath());
   trustedHandle('leocodebox-desktop:app-lock', async (_event, raw) => (
     raw === undefined || raw === null ? getAppLock() : writeAppLock(Boolean(raw))
   ));
@@ -1593,6 +1612,12 @@ async function bootstrap() {
   }
   const volumeTick = setInterval(tickVolume, 8_000);
   volumeTick.unref?.();
+  lastNetpath = getNetpath();
+  if (typeof systemPreferences?.subscribeNotification === 'function') {
+    systemPreferences.subscribeNotification('com.apple.system.config.network_change', () => tickNetpath());
+  }
+  const netpathTick = setInterval(tickNetpath, 8_000);
+  netpathTick.unref?.();
   await openLocalInDesktop();
   flushLeoSchemes();
   // The local server URL only exists now, so (re)connect the notification

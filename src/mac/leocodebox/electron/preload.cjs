@@ -153,6 +153,11 @@ if (isLocalHttpOrigin(window.location)) {
       ipcRenderer.on('leocodebox-desktop:volume-changed', listener);
       return () => ipcRenderer.removeListener('leocodebox-desktop:volume-changed', listener);
     },
+    onNetpathChanged: (callback) => {
+      const listener = () => callback();
+      ipcRenderer.on('leocodebox-desktop:netpath-changed', listener);
+      return () => ipcRenderer.removeListener('leocodebox-desktop:netpath-changed', listener);
+    },
     getAppLock: () => ipcRenderer.invoke('leocodebox-desktop:app-lock'),
     setAppLock: (on) => ipcRenderer.invoke('leocodebox-desktop:app-lock', on),
     onAppLockChanged: (callback) => {
