@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.0.76',
+    date: '2026-09-20',
+    items: [
+      '本机预览的文件可以用系统默认程序打开，不再只是在 Finder 里指一下。',
+    ],
+  },
+  {
     version: '2.0.75',
     date: '2026-09-20',
     items: [

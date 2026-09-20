@@ -104,6 +104,7 @@ export const api = {
 
   pickLocalFolder: () => sendJson<{ path?: string; cancelled?: boolean }>('/api/leophone/local/folder/pick', {}),
   revealLocalPath: (target: string) => sendJson<{ ok: true; path: string }>('/api/leophone/local/folder/reveal', { path: target }),
+  openLocalPath: (target: string) => sendJson<{ ok: true; path: string }>('/api/leophone/local/folder/open', { path: target }),
   dropLocalFile: (cwd: string, input: { name?: string; content?: string; fromPath?: string }) =>
     sendJson<{ path: string; name: string }>('/api/leophone/local/drop', { cwd, ...input }),
   ensureWorkspace: (cwd: string) =>

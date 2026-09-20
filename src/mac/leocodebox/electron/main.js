@@ -646,6 +646,15 @@ function registerIpcHandlers() {
     }
     return { path: target };
   });
+  trustedHandle('leocodebox-desktop:open-path', async (_event, raw) => {
+    const target = path.resolve(expandDesktopFolderPath(String(raw ?? '')));
+    if (!isDesktopFolderAllowed(target)) throw new Error('这个路径不能打开');
+    const info = await stat(target).catch(() => null);
+    if (!info) throw new Error('这个路径不存在');
+    const opened = await shell.openPath(target);
+    if (opened) throw new Error(opened);
+    return { path: target };
+  });
   // 云端 IPC 通道(connect-cloud / open-environment / refresh-environments ...)
   // 在 1.73.0 产品收缩时随云能力一起删掉了,这里不补空 handler:补了等于留下
   // 一个"调了什么都不发生"的接口,以后只会让人以为云还在。preload 与启动台

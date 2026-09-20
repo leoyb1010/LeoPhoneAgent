@@ -449,8 +449,10 @@ test('workbench 本机可以选目录并在 Finder 打开', () => {
   const source = fs.readFileSync(new URL('./workbench.routes.ts', import.meta.url), 'utf8');
   assert.match(source, /\/leophone\/local\/folder\/pick/);
   assert.match(source, /\/leophone\/local\/folder\/reveal/);
+  assert.match(source, /\/leophone\/local\/folder\/open/);
   assert.match(source, /pickLocalFolder/);
   assert.match(source, /revealLocalPath/);
+  assert.match(source, /openLocalPath/);
 });
 
 test('manager forget: 进行中的会话拒绝拿掉', async () => {

@@ -18,8 +18,10 @@ test('装机壳把选目录和揭示接到工作台', () => {
   const preload = readFileSync(new URL('./preload.cjs', import.meta.url), 'utf8');
   assert.match(main, /leocodebox-desktop:pick-folder/);
   assert.match(main, /leocodebox-desktop:reveal-path/);
+  assert.match(main, /leocodebox-desktop:open-path/);
   assert.match(main, /showOpenDialog/);
   assert.match(main, /showItemInFolder|openPath/);
   assert.match(preload, /pickFolder/);
   assert.match(preload, /revealPath/);
+  assert.match(preload, /openPath/);
 });

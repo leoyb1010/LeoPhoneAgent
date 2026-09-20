@@ -16,6 +16,11 @@ export function openRevealArgs(resolved: string, isDirectory: boolean): string[]
   return isDirectory ? [resolved] : ['-R', resolved];
 }
 
+/** 默认程序打开：目录和文件都直接 `open`，文件不再 `-R` 只揭示。 */
+export function openDefaultArgs(resolved: string): string[] {
+  return [resolved];
+}
+
 function defaultRunner(command: string, args: string[]): Promise<{ stdout: string; stderr: string; code: number }> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -40,6 +45,15 @@ export async function revealLocalPath(raw: string, run: FolderCommandRunner = de
   if (!stats) throw new Error('这个路径不存在');
   const result = await run('/usr/bin/open', openRevealArgs(resolved, stats.isDirectory()));
   if (result.code !== 0) throw new Error(result.stderr.trim() || 'Finder 打不开这个路径');
+  return { path: resolved };
+}
+
+export async function openLocalPath(raw: string, run: FolderCommandRunner = defaultRunner): Promise<{ path: string }> {
+  const resolved = resolveRevealablePath(raw);
+  const stats = await fs.stat(resolved).catch(() => null);
+  if (!stats) throw new Error('这个路径不存在');
+  const result = await run('/usr/bin/open', openDefaultArgs(resolved));
+  if (result.code !== 0) throw new Error(result.stderr.trim() || '打不开这个路径');
   return { path: resolved };
 }
 

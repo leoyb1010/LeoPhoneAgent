@@ -3,6 +3,7 @@ import { api } from './api';
 type DesktopFolderTools = {
   pickFolder?: () => Promise<{ path?: string; cancelled?: boolean }>;
   revealPath?: (target: string) => Promise<unknown>;
+  openPath?: (target: string) => Promise<unknown>;
 };
 
 function desktopTools(): DesktopFolderTools | undefined {
@@ -31,4 +32,19 @@ export async function revealSessionPath(target: string): Promise<void> {
     return;
   }
   await api.revealLocalPath(next);
+}
+
+export function canOpenSessionPath(machine?: string | null, target?: string | null): boolean {
+  return machine === 'local' && Boolean(target?.trim());
+}
+
+export async function openSessionPath(target: string): Promise<void> {
+  const next = target.trim();
+  if (!next) throw new Error('没有路径');
+  const desktop = desktopTools()?.openPath;
+  if (desktop) {
+    await desktop(next);
+    return;
+  }
+  await api.openLocalPath(next);
 }

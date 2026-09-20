@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { openRevealArgs, pickLocalFolder, resolveRevealablePath, revealLocalPath } from './local-folder.js';
+import { openDefaultArgs, openLocalPath, openRevealArgs, pickLocalFolder, resolveRevealablePath, revealLocalPath } from './local-folder.js';
 
 test('系统目录和根盘不能打开', () => {
   assert.throws(() => resolveRevealablePath('/etc/passwd'), /不能打开/);
@@ -15,6 +15,7 @@ test('系统目录和根盘不能打开', () => {
 test('目录用 open,文件用 open -R', () => {
   assert.deepEqual(openRevealArgs('/tmp/proj', true), ['/tmp/proj']);
   assert.deepEqual(openRevealArgs('/tmp/proj/a.ts', false), ['-R', '/tmp/proj/a.ts']);
+  assert.deepEqual(openDefaultArgs('/tmp/proj/a.ts'), ['/tmp/proj/a.ts']);
 });
 
 test('选目录取消不算失败,选中的路径会展开并拦系统目录', async () => {
@@ -43,4 +44,7 @@ test('揭示会先确认路径存在再调 open', async () => {
   assert.deepEqual(calls[0], { command: '/usr/bin/open', args: [dir] });
   assert.deepEqual(calls[1], { command: '/usr/bin/open', args: ['-R', file] });
   await assert.rejects(revealLocalPath(path.join(dir, 'missing'), run), /不存在/);
+  assert.deepEqual(await openLocalPath(file, run), { path: file });
+  assert.deepEqual(calls[2], { command: '/usr/bin/open', args: [file] });
+  await assert.rejects(openLocalPath('/etc/hosts', run), /不能打开/);
 });

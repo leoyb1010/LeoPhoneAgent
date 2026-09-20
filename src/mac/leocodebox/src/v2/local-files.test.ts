@@ -53,6 +53,8 @@ test('2.0 壳本机点已改文件会打开文件抽屉,不是只倒工具输出
   assert.match(app, /peekFileCaption/);
   assert.match(app, /local-files-name/);
   assert.match(app, /复制正文/);
+  assert.match(app, /用默认程序打开/);
+  assert.match(app, /openFocusFile/);
   assert.match(app, /isPeekDrawer/);
   assert.match(app, /mergeFilePins/);
   assert.doesNotMatch(app, /drawer !== 'diff'/);
