@@ -16,6 +16,7 @@ import { canRevertSessionFile, revertSessionFileToast } from './session-revert';
 import { canRenameSession, clipSessionTitle, renameSessionToast } from './session-title';
 import { canMentionLastReply, lastAiReply, mentionLastReply, mentionLastReplyToast } from './session-reply';
 import { PINNED_SESSIONS_KEY, comparePinnedFirst, pinSessionToast, readPinnedSessionKeys, sessionIsPinned, togglePinnedSessionKey } from './session-pin';
+import { canSearchSession, searchQueryReady, searchSessionToast, type SessionSearchHit } from './session-search';
 import { approvalChoiceActions, approvalToast, dockNeedBadge, firstPendingApproval, noticeNotifyPayload, noticesFromSnapshot, sessionPathTarget } from './session-notice';
 import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerCanFollowUp, composerNeedsModelSwitch, composerPlaceholder, composerRunningHint, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, followUpToast, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mentionWindowRead, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, pendingFollowUps, prettyModelName, providerOf, queueClearedToast, rankModelsForPicker, readHiddenSessionKeys, relativeTime, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionCanResume, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, usableWindowMenus, windowBoundLabel, windowMenuLabel, windowPadGesture, WINDOW_KEY_BUTTONS, type FlowRow, type Group, type SessionView } from './model';
 import { usableModelsFromProviders } from './settings-form';
@@ -162,6 +163,10 @@ export default function App2() {
     try { return readPinnedSessionKeys(localStorage.getItem(PINNED_SESSIONS_KEY)); } catch { return []; }
   });
   const pinnedSet = useMemo(() => new Set(pinnedKeys), [pinnedKeys]);
+  const [wsQuery, setWsQuery] = useState('');
+  const [wsHits, setWsHits] = useState<SessionSearchHit[]>([]);
+  const [wsTruncated, setWsTruncated] = useState(false);
+  const wsSearchRef = useRef<HTMLInputElement | null>(null);
   const flowRef = useRef<HTMLDivElement | null>(null);
   const headRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLDivElement | null>(null);
@@ -232,6 +237,7 @@ export default function App2() {
   );
   const canCommitHere = canCommitSessionFiles(active?.machine, pinFiles);
   const canExportHere = canExportSession(active?.machine, sessionView.rows);
+  const canSearchHere = canSearchSession(active?.machine);
   const lastReply = lastAiReply(sessionView.rows);
   const canMentionLast = canMentionLastReply(sessionView.rows);
   const findHits = useMemo(() => flowFindHitKeys(sessionView.rows, flowFind.query), [sessionView.rows, flowFind.query]);
@@ -462,7 +468,7 @@ export default function App2() {
   const [stickBottom, setStickBottom] = useState(true);
   const [unseen, setUnseen] = useState(0);
   const rowCountRef = useRef(0);
-  useEffect(() => { setStickBottom(true); setUnseen(0); rowCountRef.current = 0; }, [active?.machine, active?.id]);
+  useEffect(() => { setStickBottom(true); setUnseen(0); rowCountRef.current = 0; setWsHits([]); setWsTruncated(false); }, [active?.machine, active?.id]);
   useEffect(() => {
     const ta = taRef.current;
     if (!ta) return;
@@ -695,6 +701,23 @@ export default function App2() {
       toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
     }
   }, [active, activeSummary?.cwd, activeSummary?.title, draft, sessionView.model, sessionView.rows, sessionView.title, setDraft, toast]);
+  const searchHere = useCallback(async () => {
+    if (!active || !canSearchHere) return;
+    if (!searchQueryReady(wsQuery)) { toast('至少两个字才能搜', true); return; }
+    try {
+      const row = await api.searchLocalCwd(active, wsQuery);
+      setWsHits(row.hits);
+      setWsTruncated(row.truncated);
+      toast(searchSessionToast(row.hits.length, row.truncated));
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+    }
+  }, [active, canSearchHere, toast, wsQuery]);
+  const openSearch = useCallback(() => {
+    if (!canSearchHere) return;
+    setDrawer('files');
+    window.setTimeout(() => { wsSearchRef.current?.focus(); wsSearchRef.current?.select(); }, 0);
+  }, [canSearchHere]);
   const pickFolder = useCallback(async () => {
     try {
       const next = await pickSessionFolder();
@@ -923,6 +946,7 @@ export default function App2() {
     ...(active?.machine === 'local' && focusFile ? [{ v: 'openfile', t: '用默认程序打开', sub: peekFileCaption(focusFile) }, { v: 'savepeek', t: '写回当前文件', sub: '⌘S' }, { v: 'revertfile', t: '还原这次改动', sub: peekFileCaption(focusFile) }] : []),
     ...(canCommitHere ? [{ v: 'commitfiles', t: '记下这次改动', sub: defaultCommitMessage(commitDraft ?? (sessionView.title || activeSummary?.title || '')) }] : []),
     ...(canExportHere ? [{ v: 'exporttalk', t: '记下这次对话', sub: exportFileName(sessionView.title || activeSummary?.title || '') }] : []),
+    ...(canSearchHere ? [{ v: 'searchcwd', t: '在目录里搜', sub: activeSummary?.cwd || '会话目录' }] : []),
     ...(canMentionLast ? [{ v: 'lastreply', t: '带上上一句', sub: lastReply.slice(0, 40) }] : []),
     ...(activeSummary?.cwd?.trim() ? [{ v: 'cwd', t: '复制目录', sub: activeSummary.cwd }] : []),
     ...(canRenameSession(active?.machine) ? [{ v: 'rename', t: '改标题', sub: sessionView.title || activeSummary?.title || '给这条会话起个名字' }] : []),
@@ -952,6 +976,7 @@ export default function App2() {
     else if (v === 'revertfile') void revertFile();
     else if (v === 'commitfiles') void commitFiles();
     else if (v === 'exporttalk') void exportTalk();
+    else if (v === 'searchcwd') openSearch();
     else if (v === 'lastreply') mentionLast();
     else if (v === 'cwd') void copyCwd();
     else if (v === 'rename') beginRename();
@@ -1059,6 +1084,7 @@ export default function App2() {
     ...(canRevertSessionFile(active?.machine, focusFile) ? [{ g: '这条会话', t: '还原这次改动', k: focusFile || '', run: () => void revertFile() }] : []),
     ...(canCommitHere ? [{ g: '这条会话', t: '记下这次改动', k: defaultCommitMessage(commitDraft ?? (sessionView.title || activeSummary?.title || '')), run: () => void commitFiles() }] : []),
     ...(canExportHere ? [{ g: '这条会话', t: '记下这次对话', k: exportFileName(sessionView.title || activeSummary?.title || ''), run: () => void exportTalk() }] : []),
+    ...(canSearchHere ? [{ g: '这条会话', t: '在目录里搜', k: activeSummary?.cwd || '', run: openSearch }] : []),
     ...(canMentionLast ? [{ g: '这条会话', t: '带上上一句', k: lastReply.slice(0, 40), run: mentionLast }] : []),
     { g: '这条会话', t: '放入文件', k: '拖到输入框', run: () => void pickIntoSession() },
     { g: '这条会话', t: '粘贴截图', k: '⌘V', run: () => void pasteShot() },
@@ -1067,7 +1093,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, commitFiles, canCommitHere, commitDraft, exportTalk, canExportHere, mentionLast, canMentionLast, lastReply, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, commitFiles, canCommitHere, commitDraft, exportTalk, canExportHere, canSearchHere, openSearch, mentionLast, canMentionLast, lastReply, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -1525,6 +1551,27 @@ export default function App2() {
               <div className="remote-hint"><b>打不开这个目录。</b><p>{workspaceError}</p></div>
             ) : workspace?.projectId ? (
               <div className="local-files">
+                <form className="local-files-search" onSubmit={(e) => { e.preventDefault(); void searchHere(); }}>
+                  <input
+                    ref={wsSearchRef}
+                    value={wsQuery}
+                    onChange={(e) => setWsQuery(e.target.value)}
+                    placeholder="在这个目录里搜正文"
+                    aria-label="在这个目录里搜正文"
+                  />
+                  <button className="btn-s" type="submit" disabled={!searchQueryReady(wsQuery)}>搜</button>
+                </form>
+                {wsHits.length > 0 || wsTruncated ? (
+                  <ul className="remote-files">
+                    {wsHits.map((hit) => (
+                      <li key={`${hit.file}:${hit.line}:${hit.text}`}>
+                        <button className={`link ${focusFile === hit.file ? 'on' : ''}`} type="button" onClick={() => setFocusFile(hit.file)}><code>{hit.file}:{hit.line}</code></button>
+                        <span>{hit.text}</span>
+                      </li>
+                    ))}
+                    {wsTruncated ? <li><span>还有没列完的命中</span></li> : null}
+                  </ul>
+                ) : null}
                 {filePins.length > 0 ? (
                   <ul className="remote-files">
                     {filePins.map((row) => (

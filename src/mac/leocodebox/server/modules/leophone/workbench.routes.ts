@@ -15,6 +15,7 @@ import { commitSessionFiles } from './session-commit.js';
 import { diffSessionFile } from './session-diff.js';
 import { writeSessionExport } from './session-export.js';
 import { revertSessionFile } from './session-revert.js';
+import { searchSessionCwd } from './session-search.js';
 import { ensureSessionWorkspace } from './session-workspace.js';
 import { availableHarnesses } from './harness-specs.js';
 import { PI_AUTH_PATH, PI_MODELS_PATH, authStatus, clearAuth, ensureDirs, setApiKey } from './pi-runtime.js';
@@ -419,6 +420,17 @@ router.post('/leophone/local/sessions/:sessionId/file/revert', async (req, res) 
   const file = String(((req.body ?? {}) as Record<string, unknown>).file ?? '').trim();
   try {
     res.json(await revertSessionFile(session.cwd, file));
+  } catch (error) {
+    jsonError(res, 409, error instanceof Error ? error.message : String(error));
+  }
+});
+
+router.post('/leophone/local/sessions/:sessionId/search', async (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  const query = String(((req.body ?? {}) as Record<string, unknown>).query ?? '');
+  try {
+    res.json(await searchSessionCwd(session.cwd, query));
   } catch (error) {
     jsonError(res, 409, error instanceof Error ? error.message : String(error));
   }

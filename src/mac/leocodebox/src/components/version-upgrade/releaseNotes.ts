@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.0.90',
+    date: '2026-09-20',
+    items: [
+      '会话目录里的字可以直接搜到，点开那一行看正文。',
+    ],
+  },
+  {
     version: '2.0.89',
     date: '2026-09-20',
     items: [

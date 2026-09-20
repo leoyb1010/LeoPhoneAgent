@@ -121,6 +121,8 @@ export const api = {
     sendJson<{ hash: string; files: string[]; message: string }>(`${sessionBase(target)}/file/commit`, input),
   diffLocalFile: (target: SessionTarget, file: string) =>
     sendJson<{ file: string; kind: 'modified' | 'added' | 'clean' | 'binary'; patch: string }>(`${sessionBase(target)}/file/diff`, { file }),
+  searchLocalCwd: (target: SessionTarget, query: string) =>
+    sendJson<{ query: string; hits: Array<{ file: string; line: number; text: string }>; truncated: boolean }>(`${sessionBase(target)}/search`, { query }),
   exportLocalTalk: (target: SessionTarget, input: { name: string; markdown: string }) =>
     sendJson<{ path: string; name: string }>(`${sessionBase(target)}/export`, input),
   createLocalSession: (input: { cwd: string; prompt: string; model?: string | null; policy?: string; harness?: string }) =>
