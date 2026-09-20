@@ -15,6 +15,7 @@ import { canExportSession, exportFileName, exportSessionToast, flowRowsToMarkdow
 import { canRevertSessionFile, revertSessionFileToast } from './session-revert';
 import { canRenameSession, clipSessionTitle, renameSessionToast } from './session-title';
 import { canMentionLastReply, lastAiReply, mentionLastReply, mentionLastReplyToast } from './session-reply';
+import { canRetryLastUser, lastUserPrompt, retryLastUserToast } from './session-retry';
 import { PINNED_SESSIONS_KEY, comparePinnedFirst, pinSessionToast, readPinnedSessionKeys, sessionIsPinned, togglePinnedSessionKey } from './session-pin';
 import { canSearchSession, searchQueryReady, searchSessionToast, type SessionSearchHit } from './session-search';
 import { canShowSessionLog, type SessionCommit } from './session-log';
@@ -244,6 +245,8 @@ export default function App2() {
   const canSearchHere = canSearchSession(active?.machine);
   const lastReply = lastAiReply(sessionView.rows);
   const canMentionLast = canMentionLastReply(sessionView.rows);
+  const lastPrompt = lastUserPrompt(sessionView.rows);
+  const canRetryLast = canRetryLastUser({ canDrive, running: composerShowsSteer(sessionView.status), rows: sessionView.rows });
   const findHits = useMemo(() => flowFindHitKeys(sessionView.rows, flowFind.query), [sessionView.rows, flowFind.query]);
   const findIndex = findHits.length ? Math.min(Math.max(flowFind.index, 0), findHits.length - 1) : -1;
   const findKey = findIndex >= 0 ? findHits[findIndex] : null;
@@ -772,6 +775,20 @@ export default function App2() {
     toast(mentionLastReplyToast());
     window.setTimeout(() => taRef.current?.focus(), 0);
   }, [draft, sessionView.rows, setDraft, toast]);
+  const retryLast = useCallback(async () => {
+    if (!active || !canRetryLast) return;
+    const text = lastUserPrompt(sessionView.rows);
+    if (!text) { toast('还没有上一句', true); return; }
+    const blocked = composerNeedsModelSwitch(sessionView.model, sessionFailTexts({
+      lastEventText: activeSummary?.last_event?.text,
+      rows: sessionView.rows,
+    }));
+    if (blocked) {
+      toast('先换一个模型再发。当前这个账号用不了。', true);
+      return;
+    }
+    await withBusy(() => api.send(active, text), retryLastUserToast());
+  }, [active, activeSummary?.last_event?.text, canRetryLast, sessionView.model, sessionView.rows, toast, withBusy]);
   const beginRename = useCallback(() => {
     if (!canRenameSession(active?.machine)) return;
     setTitleDraft(sessionView.title || activeSummary?.title || '');
@@ -980,6 +997,7 @@ export default function App2() {
     ...(canSearchHere ? [{ v: 'searchcwd', t: '在目录里搜', sub: activeSummary?.cwd || '会话目录' }] : []),
     ...(canShowSessionLog(active?.machine) ? [{ v: 'log', t: '最近提交', sub: activeSummary?.cwd || '会话目录' }] : []),
     ...(canMentionLast ? [{ v: 'lastreply', t: '带上上一句', sub: lastReply.slice(0, 40) }] : []),
+    ...(canRetryLast ? [{ v: 'retrylast', t: '再发上一句', sub: lastPrompt.slice(0, 40) }] : []),
     ...(activeSummary?.cwd?.trim() ? [{ v: 'cwd', t: '复制目录', sub: activeSummary.cwd }] : []),
     ...(canRenameSession(active?.machine) ? [{ v: 'rename', t: '改标题', sub: sessionView.title || activeSummary?.title || '给这条会话起个名字' }] : []),
     ...((sessionView.title || activeSummary?.title || '').trim() ? [{ v: 'title', t: '复制标题', sub: (sessionView.title || activeSummary?.title || '').trim() }] : []),
@@ -1011,6 +1029,7 @@ export default function App2() {
     else if (v === 'searchcwd') openSearch();
     else if (v === 'log') openLog();
     else if (v === 'lastreply') mentionLast();
+    else if (v === 'retrylast') void retryLast();
     else if (v === 'cwd') void copyCwd();
     else if (v === 'rename') beginRename();
     else if (v === 'title') void copyTitle();
@@ -1120,6 +1139,7 @@ export default function App2() {
     ...(canSearchHere ? [{ g: '这条会话', t: '在目录里搜', k: activeSummary?.cwd || '', run: openSearch }] : []),
     ...(canShowSessionLog(active?.machine) ? [{ g: '这条会话', t: '最近提交', k: activeSummary?.cwd || '', run: openLog }] : []),
     ...(canMentionLast ? [{ g: '这条会话', t: '带上上一句', k: lastReply.slice(0, 40), run: mentionLast }] : []),
+    ...(canRetryLast ? [{ g: '这条会话', t: '再发上一句', k: lastPrompt.slice(0, 40), run: () => void retryLast() }] : []),
     { g: '这条会话', t: '放入文件', k: '拖到输入框', run: () => void pickIntoSession() },
     { g: '这条会话', t: '粘贴截图', k: '⌘V', run: () => void pasteShot() },
     { g: '这条会话', t: '终端', k: '⌘T', run: () => setDrawer('term') }, { g: '这条会话', t: '文件', k: '⌘E', run: () => setDrawer('files') },
@@ -1127,7 +1147,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, commitFiles, canCommitHere, commitDraft, exportTalk, canExportHere, canSearchHere, openSearch, openLog, mentionLast, canMentionLast, lastReply, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, commitFiles, canCommitHere, commitDraft, exportTalk, canExportHere, canSearchHere, openSearch, openLog, mentionLast, canMentionLast, lastReply, retryLast, canRetryLast, lastPrompt, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -1483,7 +1503,7 @@ export default function App2() {
                       <span className="composer-acts">
                         {composerShowsSteer(sessionView.status)
                           ? <><button className="btn-s" onClick={() => void send()} disabled={busy || !draft.trim() || needsModelSwitch}>插话</button>{canFollowUp ? <button className="btn-s" onClick={() => void followUp()} disabled={busy || !draft.trim() || needsModelSwitch}>接着</button> : null}{canMentionLast ? <button className="btn-s dim" type="button" onClick={mentionLast}>带上上一句</button> : null}{canFollowUp && queuedFollowUps.length ? <button className="btn-s dim" onClick={clearFollowUps} disabled={busy}>取消排队</button> : null}<button className="btn-s stop" onClick={() => void stop()} disabled={busy}>停止</button></>
-                          : <><button className="btn-s" onClick={() => void send()} disabled={busy || !draft.trim() || needsModelSwitch}>发送</button>{canMentionLast ? <button className="btn-s dim" type="button" onClick={mentionLast}>带上上一句</button> : null}</>}
+                          : <><button className="btn-s" onClick={() => void send()} disabled={busy || !draft.trim() || needsModelSwitch}>发送</button>{canRetryLast ? <button className="btn-s dim" type="button" onClick={() => void retryLast()} disabled={busy || needsModelSwitch}>再发上一句</button> : null}{canMentionLast ? <button className="btn-s dim" type="button" onClick={mentionLast}>带上上一句</button> : null}</>}
                       </span>
                     </div>
                   </div>
