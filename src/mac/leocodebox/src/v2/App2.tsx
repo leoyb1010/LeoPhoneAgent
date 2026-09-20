@@ -124,6 +124,7 @@ import { canSearchSession, searchQueryReady, searchSessionToast, type SessionSea
 import { canShowSessionLog, type SessionCommit } from './session-log';
 import { approvalChoiceActions, approvalToast, dockNeedBadge, firstPendingApproval, noticeNotifyPayload, noticesFromSnapshot, sessionPathTarget } from './session-notice';
 import { isBrowserOffline, offlineBanner, offlineToast, onlineToast } from './session-offline';
+import { openIdleToast } from './session-open-idle';
 import { HIDDEN_SESSIONS_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, removeHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerCanFollowUp, composerNeedsModelSwitch, composerPlaceholder, composerRunningHint, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, followUpToast, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mentionWindowRead, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, pendingFollowUps, prettyModelName, providerOf, queueClearedToast, rankModelsForPicker, readHiddenSessionKeys, relativeTime, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionCanResume, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, usableWindowMenus, windowBoundLabel, windowMenuLabel, windowPadGesture, WINDOW_KEY_BUTTONS, type FlowRow, type Group, type SessionView } from './model';
 import { usableModelsFromProviders } from './settings-form';
 import { artifactNameFromPath, clipFilePeek, cwdChipLabel, isPeekDrawer, isWorkspaceDrawer, machineChipLabel, peekCanWriteBack, peekFileCaption, sessionFilePath, titlebarHomeCopy } from './local-files';
@@ -2204,7 +2205,7 @@ export default function App2() {
       if (input.machine === 'local') {
         warnIcloud(input.cwd);
         saveCwdHabit(input.cwd, { model: input.model, policy: input.policy });
-        const created = await api.createLocalSession({ cwd: input.cwd, prompt: input.prompt, model: input.model, policy: input.policy });
+        const created = await api.createLocalSession({ cwd: input.cwd, prompt: input.prompt.trim() || null, model: input.model, policy: input.policy });
         setActive({ machine: 'local', id: created.session_id });
       } else {
         const created = await api.createRemoteSession({ machine: input.machine, cwd: input.cwd, prompt: input.prompt, model: input.model, policy: input.policy });
@@ -2212,7 +2213,7 @@ export default function App2() {
         setActive({ machine: input.machine, id: created.session_id });
       }
       setNewBox(null); setView('home');
-    });
+    }, input.machine === 'local' && !input.prompt.trim() ? openIdleToast() : undefined);
   }, [providers, withBusy, refreshFleet, toast, warnIcloud, warnMissing, warnBatterySend, warnThermalSend, warnMemorySend, warnLoadSend]);
 
   // -- 菜单 ------------------------------------------------------------------

@@ -159,7 +159,7 @@ export const api = {
     sendJson<{ path: string; name: string }>(`${sessionBase(target)}/export`, input),
   importLocalTalk: (target: SessionTarget, input: { name?: string } = {}) =>
     sendJson<{ name: string; markdown: string }>(`${sessionBase(target)}/import`, input),
-  createLocalSession: (input: { cwd: string; prompt: string; model?: string | null; policy?: string; harness?: string }) =>
+  createLocalSession: (input: { cwd: string; prompt?: string | null; model?: string | null; policy?: string; harness?: string }) =>
     sendJson<{ session_id: string; session: SessionSummary }>('/api/leophone/local/sessions', { harness: 'pi', ...input }),
   createRemoteSession: (input: { machine: string; prompt: string; cwd?: string; harness?: string; model?: string | null; policy?: string }) =>
     sendJson<{ session_id: string }>('/api/leophone/fleet/sessions', { harness: 'pi', ...input }),

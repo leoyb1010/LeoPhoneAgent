@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { LAST_CWD_KEY, LAST_MODEL_KEY, POLICY_LABEL, composerShouldSend, highlightQueryParts, isLiveRow, markupParts, modelChoiceHint, modelLikelyUnusable, pickInitialCwd, pickInitialModel, prettyModelName, userTurnLabel, type FlowRow, type Group } from './model';
 import { CWD_HABITS_KEY, pickCwdModel, pickCwdPolicy, saveCwdHabit } from './session-cwd-habit';
 import { hideSecrets } from './session-hide';
+import { canSubmitNewSession, openIdleLabel } from './session-open-idle';
 
 function shown(text: string, hide?: boolean): string {
   return hide ? hideSecrets(text) : text;
@@ -175,7 +176,7 @@ export function NewSessionBox({ machine, groups, models, defaultCwd, recentCwds,
   };
   const needModel = target === 'local' && models.length === 0;
   const submit = () => {
-    if (!prompt.trim() || needModel) return;
+    if (needModel || !canSubmitNewSession(target, prompt)) return;
     const nextCwd = cwd.trim();
     try {
       saveCwdHabit(nextCwd, { model, policy });
@@ -204,8 +205,8 @@ export function NewSessionBox({ machine, groups, models, defaultCwd, recentCwds,
         </div>
         {target === 'local' && onPickFolder ? <button type="button" className="btn-s" disabled={busy} onClick={() => { void onPickFolder().then((next) => { if (next) applyCwd(next); }); }}>选择…</button> : null}
       </div>
-      <div><label>第一句话</label><textarea autoFocus value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="要它做什么 · ↩ 开始,⇧↩ 换行" onKeyDown={(e) => { if (composerShouldSend(e) && prompt.trim()) { e.preventDefault(); submit(); } }} /></div>
-      <div className="acts"><button className="btn-g" onClick={onCancel}>取消</button><button className="btn-s" onClick={submit} disabled={busy || !prompt.trim() || needModel}>开始</button></div>
+      <div><label>第一句话</label><textarea autoFocus value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="要它做什么 · 空着就先开着 · ↩ 开始,⇧↩ 换行" onKeyDown={(e) => { if (composerShouldSend(e) && prompt.trim()) { e.preventDefault(); submit(); } }} /></div>
+      <div className="acts"><button className="btn-g" onClick={onCancel}>取消</button><button className="btn-s" onClick={submit} disabled={busy || needModel || !canSubmitNewSession(target, prompt)}>{openIdleLabel(Boolean(prompt.trim()) || target !== 'local')}</button></div>
     </div>
   );
 }
