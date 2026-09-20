@@ -27,6 +27,7 @@ import { accessibilityPaneUrls } from './privacy-pane.js';
 import { readProductVersion } from './productMetadata.js';
 import { cwdFromDroppedPath, rememberRecentCwd } from './recent-docs.js';
 import { TabsController } from './tabs.js';
+import { thermalState } from './thermal.js';
 import { isFirstPartyShellUrl } from './trustPolicy.js';
 import { DesktopUpdaterController, clearUpdaterTokenEnvironment } from './updater.js';
 
@@ -121,6 +122,14 @@ function getBattery() {
 
 function notifyBattery() {
   desktopWindow?.sendToActiveView?.('leocodebox-desktop:battery-changed', getBattery());
+}
+
+function getThermal() {
+  return thermalState(powerMonitor);
+}
+
+function notifyThermal() {
+  desktopWindow?.sendToActiveView?.('leocodebox-desktop:thermal-changed', getThermal());
 }
 
 function setAppLock(on) {
@@ -937,6 +946,7 @@ function registerIpcHandlers() {
   });
   trustedHandle('leocodebox-desktop:clear-cache', async () => clearWebCache());
   trustedHandle('leocodebox-desktop:battery', async () => getBattery());
+  trustedHandle('leocodebox-desktop:thermal', async () => getThermal());
   trustedHandle('leocodebox-desktop:app-lock', async (_event, raw) => (
     raw === undefined || raw === null ? getAppLock() : writeAppLock(Boolean(raw))
   ));
@@ -1484,6 +1494,7 @@ async function bootstrap() {
   if (typeof powerMonitor?.on === 'function') {
     powerMonitor.on('on-battery', () => notifyBattery());
     powerMonitor.on('on-ac', () => notifyBattery());
+    powerMonitor.on('thermal-state-change', () => notifyThermal());
   }
   await openLocalInDesktop();
   flushLeoSchemes();

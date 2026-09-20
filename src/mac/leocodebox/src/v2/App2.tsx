@@ -10,6 +10,7 @@ import { dropBrowserFile, pasteSessionImage, pickSessionFiles } from './desktop-
 import { onSessionNoticeAction, onSessionNoticeClick, setDockNeedBadge, showSessionNotice } from './desktop-notice';
 import { setSessionKeepAwake } from './desktop-awake';
 import { onBatteryChanged, readBattery } from './desktop-battery';
+import { onThermalChanged, readThermal } from './desktop-thermal';
 import { desktopHotkeyTools, readGlobalHotkey, writeGlobalHotkey } from './desktop-hotkey';
 import { desktopLoginTools, readOpenAtLogin, writeOpenAtLogin } from './desktop-login';
 import { desktopFloatTools, readAlwaysOnTop, writeAlwaysOnTop } from './desktop-float';
@@ -102,6 +103,7 @@ import { canRecallForgotten, recallSessionToast, type ForgottenSession } from '.
 import { canPushSessionRepo, pushSessionToast } from './session-push';
 import { canPullSessionRepo, pullSessionToast } from './session-pull';
 import { canSearchSessionTalk, talkQueryReady } from './session-talk';
+import { thermalCoolToast, thermalHotToast, thermalSendToast } from './session-thermal';
 import { PINNED_SESSIONS_KEY, comparePinnedFirst, pinSessionToast, readPinnedSessionKeys, sessionIsPinned, togglePinnedSessionKey } from './session-pin';
 import { canSearchSession, searchQueryReady, searchSessionToast, type SessionSearchHit } from './session-search';
 import { canShowSessionLog, type SessionCommit } from './session-log';
@@ -265,6 +267,8 @@ export default function App2() {
   const [netOffline, setNetOffline] = useState(() => typeof navigator !== 'undefined' && navigator.onLine === false);
   const [onBattery, setOnBattery] = useState(false);
   const batterySendWarned = useRef(false);
+  const [thermalHot, setThermalHot] = useState(false);
+  const thermalSendWarned = useRef(false);
   const canCheckUpdateHere = canCheckUpdate(desktopUpdater());
   const [updateState, setUpdateState] = useState<UpdateRow | null>(null);
   const chimePrev = useRef<Map<string, string>>(new Map());
@@ -372,6 +376,22 @@ export default function App2() {
     batterySendWarned.current = true;
     toast(batterySendToast());
   }, [onBattery, toast]);
+  useEffect(() => {
+    void readThermal().then((row) => setThermalHot(Boolean(row.hot)));
+    return onThermalChanged((row) => {
+      const next = Boolean(row.hot);
+      setThermalHot((prev) => {
+        if (prev !== next) toast(next ? thermalHotToast(row.state) : thermalCoolToast(), next);
+        if (!next) thermalSendWarned.current = false;
+        return next;
+      });
+    });
+  }, [toast]);
+  const warnThermalSend = useCallback(() => {
+    if (!thermalHot || thermalSendWarned.current) return;
+    thermalSendWarned.current = true;
+    toast(thermalSendToast());
+  }, [thermalHot, toast]);
   const warnIcloud = useCallback((cwd?: string | null) => {
     const path = String(cwd ?? '').trim();
     if (!isIcloudPath(path) || icloudWarned.current.has(path)) return;
@@ -1498,8 +1518,9 @@ export default function App2() {
       return;
     }
     warnBatterySend();
+    warnThermalSend();
     await withBusy(() => api.send(active, text), retryLastUserToast());
-  }, [active, activeSummary?.last_event?.text, canRetryLast, sessionView.model, sessionView.rows, toast, withBusy, warnBatterySend]);
+  }, [active, activeSummary?.last_event?.text, canRetryLast, sessionView.model, sessionView.rows, toast, withBusy, warnBatterySend, warnThermalSend]);
   const editLastPrompt = useCallback(() => {
     const text = lastUserPrompt(sessionView.rows);
     if (!text) { toast('还没有上一句', true); return; }
@@ -1814,9 +1835,10 @@ export default function App2() {
       return;
     }
     warnBatterySend();
+    warnThermalSend();
     setDraft('');
     await withBusy(() => api.send(active, text));
-  }, [active, activeSummary, draft, sessionView.model, sessionView.rows, toast, withBusy, setDraft, warnBatterySend]);
+  }, [active, activeSummary, draft, sessionView.model, sessionView.rows, toast, withBusy, setDraft, warnBatterySend, warnThermalSend]);
   const followUp = useCallback(async () => {
     if (!active || !composerCanFollowUp(active.machine, sessionView.status)) return;
     const text = draft.trim(); if (!text) return;
@@ -1833,9 +1855,10 @@ export default function App2() {
       return;
     }
     warnBatterySend();
+    warnThermalSend();
     setDraft('');
     await withBusy(() => api.rpc(active, { type: 'follow_up', message: text }), followUpToast());
-  }, [active, activeSummary, draft, sessionView.model, sessionView.rows, sessionView.status, toast, withBusy, setDraft, warnBatterySend]);
+  }, [active, activeSummary, draft, sessionView.model, sessionView.rows, sessionView.status, toast, withBusy, setDraft, warnBatterySend, warnThermalSend]);
   const clearFollowUps = useCallback(() => {
     if (!active || !composerCanFollowUp(active.machine, sessionView.status)) return;
     void withBusy(() => api.rpc(active, { type: 'clear_queue' }), queueClearedToast());
@@ -2075,7 +2098,10 @@ export default function App2() {
       toast(offlineToast(), true);
       return;
     }
-    if (input.machine === 'local') warnBatterySend();
+    if (input.machine === 'local') {
+      warnBatterySend();
+      warnThermalSend();
+    }
     if (input.machine === 'local' && await warnMissing(input.cwd)) return;
     if (input.machine === 'local' && (providers === null || usableModelsFromProviders(providers).length === 0)) {
       if (providers === null) return;
@@ -2097,7 +2123,7 @@ export default function App2() {
       }
       setNewBox(null); setView('home');
     });
-  }, [providers, withBusy, refreshFleet, toast, warnIcloud, warnMissing, warnBatterySend]);
+  }, [providers, withBusy, refreshFleet, toast, warnIcloud, warnMissing, warnBatterySend, warnThermalSend]);
 
   // -- 菜单 ------------------------------------------------------------------
   const openMenu = useCallback((el: HTMLElement, items: MenuItem[], onPick: (v: string) => void) => {

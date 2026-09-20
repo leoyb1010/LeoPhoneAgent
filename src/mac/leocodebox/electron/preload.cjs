@@ -126,6 +126,12 @@ if (isLocalHttpOrigin(window.location)) {
       ipcRenderer.on('leocodebox-desktop:battery-changed', listener);
       return () => ipcRenderer.removeListener('leocodebox-desktop:battery-changed', listener);
     },
+    getThermal: () => ipcRenderer.invoke('leocodebox-desktop:thermal'),
+    onThermalChanged: (callback) => {
+      const listener = (_event, row) => callback(row);
+      ipcRenderer.on('leocodebox-desktop:thermal-changed', listener);
+      return () => ipcRenderer.removeListener('leocodebox-desktop:thermal-changed', listener);
+    },
     getAppLock: () => ipcRenderer.invoke('leocodebox-desktop:app-lock'),
     setAppLock: (on) => ipcRenderer.invoke('leocodebox-desktop:app-lock', on),
     onAppLockChanged: (callback) => {
