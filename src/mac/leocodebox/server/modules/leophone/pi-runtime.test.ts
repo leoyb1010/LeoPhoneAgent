@@ -10,6 +10,7 @@ import {
   EVENT_APPROVAL_REQUEST,
   EVENT_RUN_COMPLETED,
   EVENT_RUN_FAILED,
+  EVENT_SESSION_RETRYING,
   EVENT_TOOL_COMPLETED,
   EVENT_TOOL_DELTA,
   EVENT_TOOL_STARTED,
@@ -72,6 +73,20 @@ test('confirm 的答复回 confirmed 布尔', () => {
 
 test('缺 request_id 的 pending 不能伪装成已送达', () => {
   assert.equal(new PiRpcDialect().approvalPayload({ method: 'select', choices: ['once'] }, 'once'), null);
+});
+
+test('过载 willRetry / auto_retry 不把会话打成完成', () => {
+  const dialect = new PiRpcDialect();
+  const hold = dialect.translateLine({ type: 'agent_end', willRetry: true, attempt: 1, maxAttempts: 3, delayMs: 2000 }).events;
+  assert.equal(hold[0]?.event, EVENT_SESSION_RETRYING);
+  const start = dialect.translateLine({
+    type: 'auto_retry_start', attempt: 1, maxAttempts: 3, delayMs: 2000, errorMessage: '529 overloaded',
+  }).events;
+  assert.equal(start[0]?.event, EVENT_SESSION_RETRYING);
+  assert.equal(start[0]?.attempt, 1);
+  assert.deepEqual(dialect.translateLine({ type: 'auto_retry_end', success: true, attempt: 2 }).events, []);
+  const dead = dialect.translateLine({ type: 'auto_retry_end', success: false, attempt: 3, finalError: '529 overloaded' }).events;
+  assert.equal(dead[0]?.event, EVENT_RUN_FAILED);
 });
 
 test('agent_end 才算一次运行完成;turn_end 只是透传', () => {

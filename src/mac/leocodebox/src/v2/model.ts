@@ -1,4 +1,5 @@
 import type { HarnessEvent, SessionSummary } from './api';
+import { sessionRetryLabel } from './session-retry';
 import { clipLiveToolOutput } from './session-tool-live';
 
 // 把 harness 事件流折叠成"流水行"。一行一个对象:你 / 模型 / 工具 / 编辑 / 需要确认 / 系统。
@@ -459,6 +460,14 @@ export function applyEvent(view: SessionView, event: HarnessEvent): SessionView 
       if (pendingApprovals.size === 0) status = 'running';
       break;
     }
+    case 'session.retrying':
+      rows = [...closeStreaming(rows), {
+        k: 'sys', key: nextKey(),
+        text: sessionRetryLabel({ attempt: event.attempt, max: event.max, delayMs: event.delayMs }),
+        tone: 'muted',
+      }];
+      status = 'running';
+      break;
     case 'run.completed':
       rows = closeStreaming(rows);
       status = 'idle';
@@ -646,6 +655,7 @@ export function lastLine(summary: Pick<SessionSummary, 'status' | 'last_event' |
     case 'reasoning.available': return '正在想…';
     case 'message.delta': return ev.text;
     case 'approval.request': return `需要确认:${ev.text.split('\n')[0]}`;
+    case 'session.retrying': return ev.text || sessionRetryLabel();
     case 'run.completed': return '已完成';
     case 'run.failed': return `失败 · ${humanizeError(ev.text)}`;
     case 'run.cancelled': return '已停止';

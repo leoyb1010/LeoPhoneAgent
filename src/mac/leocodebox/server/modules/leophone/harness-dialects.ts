@@ -19,6 +19,7 @@ export const EVENT_SESSION_CREATED = 'session.created';
 export const EVENT_RUN_COMPLETED = 'run.completed';
 export const EVENT_RUN_FAILED = 'run.failed';
 export const EVENT_RUN_CANCELLED = 'run.cancelled';
+export const EVENT_SESSION_RETRYING = 'session.retrying';
 
 export type HarnessEvent = { event: string } & Record<string, unknown>;
 
@@ -285,13 +286,32 @@ export class PiRpcDialect implements HarnessDialect {
       // 一次 prompt 的整个回合结束;中间的 turn_end 只是工具循环里的一拍,不算完成。
       // 助手把 stopReason=error 写在 message_* 上时,不能再报 run.completed,否则
       // 会话变 idle、流水是空白,ChatGPT 账号拒掉的模型就像「成功说完了」。
-      if (this.lastTurnError) {
+      // willRetry:过载/限流内核会自己再试,这时候报完成会让输入栏空出来撞上下一轮。
+      if (obj.willRetry === true) {
+        this.lastTurnError = null;
+        out.push({
+          event: EVENT_SESSION_RETRYING,
+          attempt: obj.attempt,
+          max: obj.maxAttempts,
+          delayMs: obj.delayMs,
+        });
+      } else if (this.lastTurnError) {
         const error = this.lastTurnError;
         this.lastTurnError = null;
         out.push({ event: EVENT_RUN_FAILED, error });
       } else {
         out.push({ event: EVENT_RUN_COMPLETED, output: '', usage: {} });
       }
+    } else if (kind === 'auto_retry_start') {
+      out.push({
+        event: EVENT_SESSION_RETRYING,
+        attempt: obj.attempt,
+        max: obj.maxAttempts,
+        delayMs: obj.delayMs,
+        error: obj.errorMessage,
+      });
+    } else if (kind === 'auto_retry_end' && obj.success === false) {
+      out.push({ event: EVENT_RUN_FAILED, error: str(obj.finalError ?? obj.errorMessage ?? 'retry failed') });
     } else if (kind === 'error') {
       out.push({ event: EVENT_RUN_FAILED, error: str(obj.message ?? obj.error ?? 'error') });
     } else if (kind === 'response' && obj.success === true && obj.command === 'set_model') {
@@ -349,7 +369,7 @@ export class PiRpcDialect implements HarnessDialect {
   }
 }
 
-const PI_SILENT_KINDS = new Set(['message_update', 'tool_execution_update', 'bash_execution_update']);
+const PI_SILENT_KINDS = new Set(['message_update', 'tool_execution_update', 'bash_execution_update', 'auto_retry_end']);
 
 function assistantTurnError(obj: JsonObject): string {
   const message = asObject(obj.message);
