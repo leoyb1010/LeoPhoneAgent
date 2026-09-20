@@ -210,8 +210,8 @@ test('keyBoundSessionWindow 先提到前面再打具名键,未知键不会动手
 });
 
 test('自动绑跳过自己,工作台按快照绑并能读到画面', async () => {
-  assert.equal(isOwnMacWindow({ app: 'leocodebox', bundleId: 'com.leoyuan.leocodebox', pid: 1, frontmost: true }), true);
-  assert.equal(isOwnMacWindow({ app: 'Finder', bundleId: 'com.apple.finder', pid: 99, frontmost: true }), false);
+  assert.equal(isOwnMacWindow({ app: 'leocodebox', bundleId: 'com.leoyuan.leocodebox', pid: 1 }), true);
+  assert.equal(isOwnMacWindow({ app: 'Finder', bundleId: 'com.apple.finder', pid: 99 }), false);
   const own = { ...observation, app: 'leocodebox', bundleId: 'com.leoyuan.leocodebox', pid: process.pid, frontmost: true };
   const other = { ...observation, app: 'Finder', title: 'Documents', pid: 88, windowId: '9', bundleId: 'com.apple.finder', frontmost: false };
   assert.equal(pickBindableWindow([own, other])?.app, 'Finder');
