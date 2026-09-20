@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
-import { addHiddenSessionKey, applyEvent, boundWindowChipKind, boundWindowFromUnknown, clickPointFromElement, composerNeedsModelSwitch, composerPlaceholder, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHits, flowFindHitText, flowFindStatus, flowRowMatchesQuery, highlightQueryParts, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isLiveRow, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, markupParts, mentionWindowRead, mergeSameMachineSessions, modelChoiceHint, modelLabel, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, pickInitialCwd, pickInitialModel, prettyModelName, prettifyUnknownModel, rankModelsForPicker, readHiddenSessionKeys, rejectedCodexModelId, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionCanResume, sessionFailTexts, sessionKey, sessionLooksFailed, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDot, statusDotForSession, usableWindowMenus, userTurnLabel, userTurnMode, windowBoundLabel, windowMenuLabel, windowPadGesture } from './model';
+import { addHiddenSessionKey, applyEvent, boundWindowChipKind, boundWindowFromUnknown, clickPointFromElement, composerCanFollowUp, composerNeedsModelSwitch, composerPlaceholder, composerRunningHint, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHits, flowFindHitText, flowFindStatus, flowRowMatchesQuery, followUpToast, highlightQueryParts, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isLiveRow, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, markupParts, mentionWindowRead, mergeSameMachineSessions, modelChoiceHint, modelLabel, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, pendingFollowUps, pickInitialCwd, pickInitialModel, prettyModelName, prettifyUnknownModel, queueClearedToast, rankModelsForPicker, readHiddenSessionKeys, rejectedCodexModelId, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionCanResume, sessionFailTexts, sessionKey, sessionLooksFailed, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDot, statusDotForSession, usableWindowMenus, userTurnLabel, userTurnMode, windowBoundLabel, windowMenuLabel, windowPadGesture } from './model';
 
 test('流水把思考事件折成独立行,后续 delta 续在同一行', () => {
   let view = emptyView();
@@ -225,11 +225,34 @@ test('进行中才显示插话,空闲仍是发送', () => {
   assert.equal(composerShowsSteer('waiting_for_approval'), false);
 });
 
+test('本机进行中才能排队下一句,远程仍只有插话', () => {
+  assert.equal(composerCanFollowUp('local', 'running'), true);
+  assert.equal(composerCanFollowUp('local', 'starting'), true);
+  assert.equal(composerCanFollowUp('local', 'idle'), false);
+  assert.equal(composerCanFollowUp('fold', 'running'), false);
+  assert.match(composerRunningHint('Grok 4.6', true), /接着会排在后面/);
+  assert.match(composerRunningHint('Grok 4.6', false), /插话/);
+  assert.doesNotMatch(composerRunningHint('Grok 4.6', false), /接着会排/);
+  const afterPrompt = applyEvent(emptyView(), { event: 'user.message', text: '先改这一处' });
+  const queued = applyEvent(afterPrompt, { event: 'user.message', text: '再说第二处', mode: 'follow_up' });
+  assert.deepEqual(pendingFollowUps(queued.rows), [{ key: queued.rows[1]?.k === 'user' ? queued.rows[1].key : '', text: '再说第二处' }]);
+  const cleared = applyEvent(queued, { event: 'session.queue_cleared' });
+  assert.deepEqual(pendingFollowUps(cleared.rows), []);
+  const last = cleared.rows[cleared.rows.length - 1];
+  if (last?.k === 'sys') assert.match(last.text, /已取消排队/);
+  assert.equal(followUpToast(), '已排在后面,这轮说完再执行');
+  assert.equal(queueClearedToast(), '已取消排队的下一句');
+});
+
 test('2.0 壳接上了插话、回车开会话和前台窗口', () => {
   const app = readFileSync(fileURLToPath(new URL('./App2.tsx', import.meta.url)), 'utf8');
   const flow = readFileSync(fileURLToPath(new URL('./flow.tsx', import.meta.url)), 'utf8');
   assert.match(app, /composerShowsSteer/);
   assert.match(app, />插话</);
+  assert.match(app, />接着</);
+  assert.match(app, /type: 'follow_up'/);
+  assert.match(app, /type: 'clear_queue'/);
+  assert.match(app, /composerCanFollowUp/);
   assert.match(app, /windowBoundLabel/);
   assert.match(app, /boundWindowChipKind/);
   assert.match(app, /raiseBoundWindow/);
@@ -368,6 +391,7 @@ test('插话在流水里标成插话,不跟首句混成「你」', () => {
   assert.equal(userTurnMode({ mode: 'steer' }), 'steer');
   assert.equal(userTurnMode({ steer: true }), 'steer');
   assert.equal(userTurnLabel('steer'), '插话');
+  assert.equal(userTurnLabel('follow_up'), '接着');
   assert.equal(userTurnLabel('prompt'), '你');
   const prompt = applyEvent(emptyView(), { event: 'user.message', text: '数到 40' });
   const steered = applyEvent(prompt, { event: 'user.message', text: '停', mode: 'steer' });
@@ -389,7 +413,10 @@ test('模型还在跑时插话走 steer,思考深度发 level', () => {
   assert.equal(composerShowsSteer('running'), true);
   assert.equal(composerShowsSteer('starting'), true);
   assert.equal(composerShowsSteer('idle'), false);
-  assert.match(humanizeError('Agent is already processing. Specify streamingBehavior (\'steer\' or \'followUp\') to queue the message.'), /插话/);
+  assert.match(humanizeError('Agent is already processing. Specify streamingBehavior (\'steer\' or \'followUp\') to queue the message.'), /接着会排在后面/);
+  const sessionSrc = readFileSync(fileURLToPath(new URL('../../server/modules/leophone/harness-session.service.ts', import.meta.url)), 'utf8');
+  assert.match(sessionSrc, /outgoing\.type === 'clear_queue'/);
+  assert.match(sessionSrc, /session\.queue_cleared/);
   const app = readFileSync(fileURLToPath(new URL('./App2.tsx', import.meta.url)), 'utf8');
   assert.match(app, /type: 'set_thinking_level', level/);
   assert.doesNotMatch(app, /thinkingLevel: level/);

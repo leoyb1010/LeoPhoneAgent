@@ -84,6 +84,40 @@ export function composerShowsSteer(status: string): boolean {
   return status === 'running' || status === 'starting';
 }
 
+/** 本机 pi 才能排队。远程没有 follow_up RPC。 */
+export function composerCanFollowUp(machine: string | null | undefined, status: string): boolean {
+  return machine === 'local' && composerShowsSteer(status);
+}
+
+export function composerRunningHint(modelLabel: string, canFollowUp: boolean): string {
+  const model = modelLabel.trim() || '当前模型';
+  if (canFollowUp) return `模型还在跑。插话会插进这一轮；接着会排在后面等它说完 · ${model}`;
+  return `模型还在跑。现在发出去的是插话,会插进当前这一轮 · ${model}`;
+}
+
+/** 这一轮发出之后、下一次你说/插话或取消排队之前的「接着」。 */
+export function pendingFollowUps(rows: readonly FlowRow[]): Array<{ key: string; text: string }> {
+  let start = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (row.k === 'user' && row.mode !== 'follow_up') start = i + 1;
+    if (row.k === 'sys' && row.text.includes('已取消排队')) start = i + 1;
+  }
+  const out: Array<{ key: string; text: string }> = [];
+  for (const row of rows.slice(start)) {
+    if (row.k === 'user' && row.mode === 'follow_up') out.push({ key: row.key, text: row.text });
+  }
+  return out;
+}
+
+export function followUpToast(): string {
+  return '已排在后面,这轮说完再执行';
+}
+
+export function queueClearedToast(): string {
+  return '已取消排队的下一句';
+}
+
 export function composerPlaceholder(cwdLabel: string, ended: boolean): string {
   const where = cwdLabel.trim();
   if (ended) return where ? `下一句会带到 ${where} 的新会话… ↩ 续写,⇧↩ 换行` : '下一句会带到新会话的第一句话… ↩ 续写,⇧↩ 换行';
@@ -410,6 +444,9 @@ export function applyEvent(view: SessionView, event: HarnessEvent): SessionView 
     case 'session.compacted':
       rows = [...rows, { k: 'sys', key: nextKey(), text: '已压缩:早先的轮次折成一条摘要,上下文变轻了', tone: 'muted' }];
       break;
+    case 'session.queue_cleared':
+      rows = [...closeStreaming(rows), { k: 'sys', key: nextKey(), text: '已取消排队的下一句。', tone: 'muted' }];
+      break;
     case 'session.resumed':
       rows = [...closeStreaming(rows), { k: 'sys', key: nextKey(), text: '这条会话已接着上次的上下文继续。', tone: 'muted' }];
       status = 'starting';
@@ -539,7 +576,7 @@ export function humanizeError(raw: string): string {
   if (/还没有登录任何模型/.test(text)) return '还没有登录任何模型 —— 先到「设置」授权或填密钥';
   if (/no api key/i.test(text)) return '这个模型还没有登录或密钥 —— 到「设置」登录一个供应商后再试';
   if (/already processing|streamingBehavior/i.test(text)) {
-    return '模型还在跑。现在发出去的应是插话,会插进当前这一轮';
+    return '模型还在跑。插话会插进这一轮；接着会排在后面等它说完';
   }
   if (/not supported when using Codex with a ChatGPT account/i.test(text)) {
     return '当前 ChatGPT 登录用不了这个模型 —— 换一个再试';

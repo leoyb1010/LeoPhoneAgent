@@ -10,7 +10,7 @@ import { dropBrowserFile, pasteSessionImage, pickSessionFiles } from './desktop-
 import { onSessionNoticeAction, onSessionNoticeClick, setDockNeedBadge, showSessionNotice } from './desktop-notice';
 import { canAcceptSessionDrop, mentionDroppedFile } from './session-drop';
 import { approvalChoiceActions, approvalToast, dockNeedBadge, firstPendingApproval, noticeNotifyPayload, noticesFromSnapshot, sessionPathTarget } from './session-notice';
-import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerNeedsModelSwitch, composerPlaceholder, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mentionWindowRead, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, prettyModelName, providerOf, rankModelsForPicker, readHiddenSessionKeys, relativeTime, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionCanResume, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, usableWindowMenus, windowBoundLabel, windowMenuLabel, windowPadGesture, WINDOW_KEY_BUTTONS, type FlowRow, type Group, type SessionView } from './model';
+import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerCanFollowUp, composerNeedsModelSwitch, composerPlaceholder, composerRunningHint, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, followUpToast, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mentionWindowRead, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, pendingFollowUps, prettyModelName, providerOf, queueClearedToast, rankModelsForPicker, readHiddenSessionKeys, relativeTime, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionCanResume, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, usableWindowMenus, windowBoundLabel, windowMenuLabel, windowPadGesture, WINDOW_KEY_BUTTONS, type FlowRow, type Group, type SessionView } from './model';
 import { usableModelsFromProviders } from './settings-form';
 import { artifactNameFromPath, clipFilePeek, cwdChipLabel, isPeekDrawer, isWorkspaceDrawer, machineChipLabel, peekCanWriteBack, peekFileCaption, sessionFilePath, titlebarHomeCopy } from './local-files';
 import { REMOTE_DRAWER_ACTION_LABEL, isRemoteDrawerKind, mergeFilePins, remoteDrawerActions, remoteDrawerCopy } from './remote-drawer';
@@ -204,6 +204,8 @@ export default function App2() {
   const activeSummary = activeEntry?.s ?? null;
   const { view: sessionView, stream } = useSessionStream(active, activeSummary);
   const canDrive = Boolean(activeSummary && sessionCanDrive(activeSummary.status, sessionView.status));
+  const canFollowUp = Boolean(active && composerCanFollowUp(active.machine, sessionView.status));
+  const queuedFollowUps = pendingFollowUps(sessionView.rows);
   const findHits = useMemo(() => flowFindHitKeys(sessionView.rows, flowFind.query), [sessionView.rows, flowFind.query]);
   const findIndex = findHits.length ? Math.min(Math.max(flowFind.index, 0), findHits.length - 1) : -1;
   const findKey = findIndex >= 0 ? findHits[findIndex] : null;
@@ -664,6 +666,24 @@ export default function App2() {
     setDraft('');
     await withBusy(() => api.send(active, text));
   }, [active, activeSummary, draft, sessionView.model, sessionView.rows, toast, withBusy, setDraft]);
+  const followUp = useCallback(async () => {
+    if (!active || !composerCanFollowUp(active.machine, sessionView.status)) return;
+    const text = draft.trim(); if (!text) return;
+    const blocked = composerNeedsModelSwitch(sessionView.model, sessionFailTexts({
+      lastEventText: activeSummary?.last_event?.text,
+      rows: sessionView.rows,
+    }));
+    if (blocked) {
+      toast('先换一个模型再发。当前这个账号用不了。', true);
+      return;
+    }
+    setDraft('');
+    await withBusy(() => api.rpc(active, { type: 'follow_up', message: text }), followUpToast());
+  }, [active, activeSummary, draft, sessionView.model, sessionView.rows, sessionView.status, toast, withBusy, setDraft]);
+  const clearFollowUps = useCallback(() => {
+    if (!active || !composerCanFollowUp(active.machine, sessionView.status)) return;
+    void withBusy(() => api.rpc(active, { type: 'clear_queue' }), queueClearedToast());
+  }, [active, sessionView.status, withBusy]);
   const stop = useCallback(() => active && withBusy(() => api.stop(active), '已停止'), [active, withBusy]);
   const approveTarget = useCallback((target: SessionTarget, approvalId: string, choice: string) => (
     withBusy(() => api.approve(target, approvalId, choice), approvalToast(choice))
@@ -780,11 +800,15 @@ export default function App2() {
     ...(activeSummary?.cwd?.trim() ? [{ v: 'cwd', t: '复制目录', sub: activeSummary.cwd }] : []),
     ...((sessionView.title || activeSummary?.title || '').trim() ? [{ v: 'title', t: '复制标题', sub: (sessionView.title || activeSummary?.title || '').trim() }] : []),
     ...(canResumeHere ? [{ v: 'resume', t: '接着这条会话', sub: '同一条上下文' }] : []),
+    ...(canFollowUp && draft.trim() ? [{ v: 'follow', t: '接着（排队）', sub: '等这轮说完' }] : []),
+    ...(canFollowUp && queuedFollowUps.length ? [{ v: 'clearq', t: '取消排队', sub: `${queuedFollowUps.length} 句` }] : []),
     ...(canDrive ? [] : [{ v: 'continue', t: '在同一目录新开', sub: '新开会话' }]),
     { v: 'compact', t: '压缩这条会话', sub: 'pi compact' }, { v: 'stop', t: '停止', sub: '进程组一起收' },
     ...(activeSummary && sessionCanForget(activeSummary.status) ? [{ v: 'forget', t: '从左栏拿掉', sub: active?.machine === 'local' ? '不再召回' : '只藏在这台 Mac' }] : []),
   ], (v) => {
     if (v === 'compact') void compact();
+    else if (v === 'follow') void followUp();
+    else if (v === 'clearq') clearFollowUps();
     else if (v === 'winbind' || v === 'winclick') openWindowOp();
     else if (v === 'winread') readBoundField();
     else if (v === 'stop') void stop();
@@ -882,6 +906,8 @@ export default function App2() {
     { g: '这条会话', t: '下一条查找', k: '⌘G', run: () => { if (!active) return; setView('home'); stepFind(1); } },
     { g: '这条会话', t: '复制当前命中', k: '⌘C', run: () => { if (!active) return; void copyFindHit(); } },
     ...(canResumeHere ? [{ g: '这条会话', t: '接着这条会话', k: '同一条上下文', run: resumeHere }] : []),
+    ...(canFollowUp && draft.trim() ? [{ g: '这条会话', t: '接着（排队）', k: '等这轮说完', run: () => void followUp() }] : []),
+    ...(canFollowUp && queuedFollowUps.length ? [{ g: '这条会话', t: '取消排队', k: `${queuedFollowUps.length} 句`, run: clearFollowUps }] : []),
     { g: '这条会话', t: '在同一目录新开', k: '新开会话', run: continueHere },
     { g: '这条会话', t: '复制标题', k: sessionView.title || activeSummary?.title || '', run: () => void copyTitle() },
     { g: '这条会话', t: '复制目录', k: activeSummary?.cwd || '', run: () => void copyCwd() },
@@ -899,7 +925,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, resumeHere, canResumeHere, forgetSession, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -1229,10 +1255,10 @@ export default function App2() {
                       </div>
                     ) : null}
                     <div className="composer-bar">
-                      <span className="cb info">{stream === 'reconnecting' ? '事件流在重连,发出去的话会等接通。' : needsModelSwitch ? `先换一个模型,再以这条会话继续 · 现在是 ${prettyModelName(sessionView.model)}` : composerShowsSteer(sessionView.status) ? `模型还在跑。现在发出去的是插话,会插进当前这一轮 · ${prettyModelName(sessionView.model)}` : `将在 ${machineChipLabel(activeGroup?.name) || '这台机器'} 上以 ${prettyModelName(sessionView.model)} 继续 · 审批:${POLICY_LABEL[sessionView.policy] ?? sessionView.policy}`}</span>
+                      <span className="cb info">{stream === 'reconnecting' ? '事件流在重连,发出去的话会等接通。' : needsModelSwitch ? `先换一个模型,再以这条会话继续 · 现在是 ${prettyModelName(sessionView.model)}` : composerShowsSteer(sessionView.status) ? composerRunningHint(prettyModelName(sessionView.model), canFollowUp) : `将在 ${machineChipLabel(activeGroup?.name) || '这台机器'} 上以 ${prettyModelName(sessionView.model)} 继续 · 审批:${POLICY_LABEL[sessionView.policy] ?? sessionView.policy}`}</span>
                       <span className="composer-acts">
                         {composerShowsSteer(sessionView.status)
-                          ? <><button className="btn-s" onClick={() => void send()} disabled={busy || !draft.trim() || needsModelSwitch}>插话</button><button className="btn-s stop" onClick={() => void stop()} disabled={busy}>停止</button></>
+                          ? <><button className="btn-s" onClick={() => void send()} disabled={busy || !draft.trim() || needsModelSwitch}>插话</button>{canFollowUp ? <button className="btn-s" onClick={() => void followUp()} disabled={busy || !draft.trim() || needsModelSwitch}>接着</button> : null}{canFollowUp && queuedFollowUps.length ? <button className="btn-s dim" onClick={clearFollowUps} disabled={busy}>取消排队</button> : null}<button className="btn-s stop" onClick={() => void stop()} disabled={busy}>停止</button></>
                           : <button className="btn-s" onClick={() => void send()} disabled={busy || !draft.trim() || needsModelSwitch}>发送</button>}
                       </span>
                     </div>

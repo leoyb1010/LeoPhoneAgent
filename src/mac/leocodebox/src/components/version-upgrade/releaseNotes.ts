@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.0.82',
+    date: '2026-09-20',
+    items: [
+      '模型还在跑时可以把下一句排在后面，等这轮说完再执行，不必打断；排错了也能取消。',
+    ],
+  },
+  {
     version: '2.0.81',
     date: '2026-09-20',
     items: [

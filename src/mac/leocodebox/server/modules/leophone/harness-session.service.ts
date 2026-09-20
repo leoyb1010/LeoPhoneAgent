@@ -436,6 +436,9 @@ export class HarnessSession {
       const level = String(outgoing.level ?? '').trim();
       if (level) this.emit({ event: 'session.thinking', level });
     }
+    if (outgoing.type === 'clear_queue') {
+      this.emit({ event: 'session.queue_cleared' });
+    }
     return true;
   }
 
