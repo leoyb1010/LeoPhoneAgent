@@ -19,6 +19,7 @@ import { canSetCwdRule, clipCwdRule, cwdRuleToast } from './session-cwd-rule';
 import { saveCwdHabit } from './session-cwd-habit';
 import { canMentionLastReply, lastAiReply, mentionLastReply, mentionLastReplyToast } from './session-reply';
 import { canCopyLastReply, copyLastReplyToast } from './session-copy-reply';
+import { canCopyTalk, copyTalkToast } from './session-copy-talk';
 import { canSpeakLastReply, speakLastReplyToast } from './session-speak';
 import { canRetryLastUser, lastUserPrompt, retryLastUserToast } from './session-retry';
 import { canEditLastPrompt, editLastPromptDraft, editLastPromptToast } from './session-edit-prompt';
@@ -295,6 +296,7 @@ export default function App2() {
   );
   const canCommitHere = canCommitSessionFiles(active?.machine, pinFiles);
   const canExportHere = canExportSession(active?.machine, sessionView.rows);
+  const canCopyTalkHere = canCopyTalk(active?.machine, sessionView.rows);
   const canSearchHere = canSearchSession(active?.machine);
   const lastReply = lastAiReply(sessionView.rows);
   const canMentionLast = canMentionLastReply(sessionView.rows);
@@ -861,6 +863,24 @@ export default function App2() {
       toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
     }
   }, [active, activeSummary?.cwd, activeSummary?.title, draft, sessionView.model, sessionView.rows, sessionView.title, setDraft, toast]);
+  const copyTalk = useCallback(async () => {
+    if (!canCopyTalk(active?.machine, sessionView.rows)) {
+      toast('还没有可复制的对话', true);
+      return;
+    }
+    const title = sessionView.title || activeSummary?.title || '';
+    try {
+      await navigator.clipboard.writeText(flowRowsToMarkdown({
+        title,
+        cwd: activeSummary?.cwd,
+        model: prettyModelName(sessionView.model),
+        rows: sessionView.rows,
+      }));
+      toast(copyTalkToast());
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+    }
+  }, [active?.machine, activeSummary?.cwd, activeSummary?.title, sessionView.model, sessionView.rows, sessionView.title, toast]);
   const searchHere = useCallback(async () => {
     if (!active || !canSearchHere) return;
     if (!searchQueryReady(wsQuery)) { toast('至少两个字才能搜', true); return; }
@@ -1532,6 +1552,7 @@ export default function App2() {
     ...(canPushHere ? [{ v: 'push', t: '推到远端', sub: 'git push' }] : []),
     ...(canPullHere ? [{ v: 'pull', t: '拉回远端', sub: '只快进，不改历史' }] : []),
     ...(canExportHere ? [{ v: 'exporttalk', t: '记下这次对话', sub: exportFileName(sessionView.title || activeSummary?.title || '') }] : []),
+    ...(canCopyTalkHere ? [{ v: 'copytalk', t: '复制这次对话', sub: '整段对话进剪贴板' }] : []),
     ...(canSearchHere ? [{ v: 'searchcwd', t: '在目录里搜', sub: activeSummary?.cwd || '会话目录' }] : []),
     ...(canShowSessionLog(active?.machine) ? [{ v: 'log', t: '最近提交', sub: activeSummary?.cwd || '会话目录' }] : []),
     ...(canApplyHere ? [{ v: 'apply', t: '贴上补丁', sub: '剪贴板里的 unified diff' }] : []),
@@ -1599,6 +1620,7 @@ export default function App2() {
     else if (v === 'push') void pushRepo();
     else if (v === 'pull') void pullRepo();
     else if (v === 'exporttalk') void exportTalk();
+    else if (v === 'copytalk') void copyTalk();
     else if (v === 'searchcwd') openSearch();
     else if (v === 'log') openLog();
     else if (v === 'apply') void applyPatch();
@@ -1749,6 +1771,7 @@ export default function App2() {
     ...(canPushHere ? [{ g: '这条会话', t: '推到远端', k: 'push', run: () => void pushRepo() }] : []),
     ...(canPullHere ? [{ g: '这条会话', t: '拉回远端', k: 'pull', run: () => void pullRepo() }] : []),
     ...(canExportHere ? [{ g: '这条会话', t: '记下这次对话', k: exportFileName(sessionView.title || activeSummary?.title || ''), run: () => void exportTalk() }] : []),
+    ...(canCopyTalkHere ? [{ g: '这条会话', t: '复制这次对话', k: '剪贴板', run: () => void copyTalk() }] : []),
     ...(canSearchHere ? [{ g: '这条会话', t: '在目录里搜', k: activeSummary?.cwd || '', run: openSearch }] : []),
     ...(canShowSessionLog(active?.machine) ? [{ g: '这条会话', t: '最近提交', k: activeSummary?.cwd || '', run: openLog }] : []),
     ...(canApplyHere ? [{ g: '这条会话', t: '贴上补丁', k: '剪贴板', run: () => void applyPatch() }] : []),
@@ -1776,7 +1799,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, speakLast, canSpeakLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openLastWritten, canOpenWritten, lastWritten, jumpLastFail, canJumpFail, lastFail, openLastRead, canOpenRead, lastRead, openHere, canHere, herePeers, showPulse, canPulse, pulseLabel, forkHere, canFork, openTalkLink, canLinks, talkLinks, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, copyTalk, canCopyTalkHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, speakLast, canSpeakLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openLastWritten, canOpenWritten, lastWritten, jumpLastFail, canJumpFail, lastFail, openLastRead, canOpenRead, lastRead, openHere, canHere, herePeers, showPulse, canPulse, pulseLabel, forkHere, canFork, openTalkLink, canLinks, talkLinks, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -2223,6 +2246,7 @@ export default function App2() {
                         {canPulse ? <button className="link" type="button" onClick={showPulse}>这条聊了多少</button> : null}
                         {canFork ? <button className="link" type="button" onClick={() => void forkHere()}>从这里分一条</button> : null}
                         {canLinks ? <button className="link" type="button" onClick={() => openTalkLink()}>打开对话里的链接</button> : null}
+                        {canCopyTalkHere ? <button className="link" type="button" onClick={() => { void copyTalk(); }}>复制这次对话</button> : null}
                         {canRecallHere ? <button className="link" onClick={() => void openRecall()}>找回来</button> : null}
                       </div>
                     </div>
