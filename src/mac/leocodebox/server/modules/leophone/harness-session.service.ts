@@ -32,6 +32,7 @@ import { applyOutgoingRules, readCwdRuleSidecar, writeCwdRuleSidecar } from './s
 import { lastPromptSeq, rewindPiLastUser } from './session-rewind.js';
 import { readRuleSidecar, writeRuleSidecar } from './session-rule.js';
 import { clipSessionTitle, readTitleSidecar, writeTitleSidecar } from './session-title.js';
+import { attachSessionImages, sessionImagesFromPrompt } from './session-vision.js';
 
 // LeoPhoneAgent harness 会话宿主——leoagent(Python)HarnessManager/HarnessSession
 // 的 TS 移植,跑在 leocodebox 服务进程里。三条设计约束原样保留:
@@ -498,6 +499,8 @@ export class HarnessSession {
       const text = String(outgoing.message ?? '').trim();
       if (!text) return false;
       outgoing.message = applyOutgoingRules(text, this.rule, readCwdRuleSidecar(this.cwd) || this.cwdRule);
+      const images = sessionImagesFromPrompt(text, this.cwd);
+      if (images.length) outgoing.images = images;
       if (outgoing.type === 'prompt') {
         this.promptTurns += 1;
         if (this.status === 'idle' || this.status === 'failed') this.status = 'running';
@@ -548,7 +551,14 @@ export class HarnessSession {
     }
     const result = this.dialect.userMessage(applyOutgoingRules(text, this.rule, readCwdRuleSidecar(this.cwd) || this.cwdRule));
     if ('frames' in result) {
-      this.writeFrames(result.frames);
+      const frames = result.frames.map((frame) => {
+        const row = frame && typeof frame === 'object' && !Array.isArray(frame)
+          ? frame as Record<string, unknown>
+          : null;
+        if (!row || row.type !== 'prompt') return frame;
+        return attachSessionImages(row, text, this.cwd);
+      });
+      this.writeFrames(frames);
     }
     this.promptTurns += 1;
     // queued:会话 id 还没回来,方言已排队,id 一到由翻译层代发。
