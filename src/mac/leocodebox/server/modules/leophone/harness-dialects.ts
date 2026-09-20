@@ -303,6 +303,8 @@ export class PiRpcDialect implements HarnessDialect {
           method,
           raw: obj,
         });
+      } else if (method === 'set_editor_text') {
+        out.push({ event: 'session.draft_fill', text: str(obj.text) });
       }
     } else if (kind === 'agent_end') {
       // 一次 prompt 的整个回合结束;中间的 turn_end 只是工具循环里的一拍,不算完成。

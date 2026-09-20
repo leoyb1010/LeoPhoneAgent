@@ -95,6 +95,15 @@ test('input/editor 问句变成审批卡,答 value,跳过 cancelled', () => {
   });
 });
 
+test('set_editor_text 变成 session.draft_fill', () => {
+  const dialect = new PiRpcDialect();
+  const { events } = dialect.translateLine({
+    type: 'extension_ui_request', id: 'ui-6', method: 'set_editor_text', text: '接着跑测试',
+  });
+  assert.equal(events[0]?.event, 'session.draft_fill');
+  assert.equal(events[0]?.text, '接着跑测试');
+});
+
 test('缺 request_id 的 pending 不能伪装成已送达', () => {
   assert.equal(new PiRpcDialect().approvalPayload({ method: 'select', choices: ['once'] }, 'once'), null);
 });

@@ -91,6 +91,7 @@ import { applyFileMention, canCompleteFileMention, fileMentionToken, matchMentio
 import { canMentionLastTool, lastToolOutput, mentionLastTool, mentionLastToolToast } from './session-mention-tool';
 import { canOpenLastWritten, lastWrittenFile, openLastWrittenToast } from './session-written';
 import { canJumpLastFail, jumpLastFailToast, lastFailedRow } from './session-fail';
+import { canFillComposerDraft, composerFillFromSkill } from './session-fill';
 import { canQueueOnEnter } from './session-follow-enter';
 import { canQueueWhileWaiting } from './session-follow-wait';
 import { canRetractFollowUp, retractLastFollowUp } from './session-queue-retract';
@@ -539,6 +540,10 @@ export default function App2() {
   const canDrive = Boolean(activeSummary && sessionCanDrive(activeSummary.status, sessionView.status));
   const canFollowUp = Boolean(active && composerCanFollowUp(active.machine, sessionView.status));
   const queuedFollowUps = pendingFollowUps(sessionView.rows);
+  useEffect(() => {
+    if (!canFillComposerDraft({ machine: active?.machine, fillId: sessionView.fillId })) return;
+    setDraft(composerFillFromSkill(sessionView.composerFill));
+  }, [active?.machine, sessionView.fillId, sessionView.composerFill, setDraft]);
   useEffect(() => { setCommitDraft(null); setTitleEditing(false); setTitleDraft(null); setRuleEditing(false); setRuleDraft(null); setSeedName(''); }, [active?.machine, active?.id]);
   const pinFiles = useMemo(
     () => mergeFilePins(

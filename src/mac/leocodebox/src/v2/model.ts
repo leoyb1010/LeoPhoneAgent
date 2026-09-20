@@ -1,6 +1,7 @@
 import type { HarnessEvent, SessionSummary } from './api';
 import { askRespondedLabel, isAskMethod } from './session-ask';
 import { sessionCompactedLabel, sessionCompactingLabel } from './session-compact-live';
+import { composerFillFromSkill, sessionFillLabel } from './session-fill';
 import { sessionRetryLabel } from './session-overload';
 import { clipLiveToolOutput } from './session-tool-live';
 
@@ -30,6 +31,8 @@ export type SessionView = {
   cwdRule: string;
   window: BoundWindow | null;
   pendingApprovals: Map<string, FlowRow & { k: 'ap' }>;
+  composerFill: string;
+  fillId: number;
 };
 
 export const POLICY_LABEL: Record<string, string> = {
@@ -51,6 +54,8 @@ export function emptyView(summary?: SessionSummary | null): SessionView {
     thinking: 'off',
     title: summary?.title ?? '',
     rule: summary?.rule ?? '',
+    composerFill: '',
+    fillId: 0,
     cwdRule: summary?.cwd_rule ?? '',
     window: boundWindowFromUnknown(summary?.window),
     pendingApprovals: new Map(),
@@ -357,7 +362,7 @@ export function applyEvent(view: SessionView, event: HarnessEvent): SessionView 
   if (typeof event.seq === 'number' && event.seq > 0 && event.seq <= view.seq) return view;
   const seq = typeof event.seq === 'number' ? event.seq : view.seq;
   let rows = view.rows;
-  let { status, policy, model, thinking, title, rule, cwdRule, window: bound } = view;
+  let { status, policy, model, thinking, title, rule, cwdRule, window: bound, composerFill, fillId } = view;
   const pendingApprovals = new Map(view.pendingApprovals);
 
   switch (name) {
@@ -574,10 +579,15 @@ export function applyEvent(view: SessionView, event: HarnessEvent): SessionView 
       rows = [...rows, { k: 'sys', key: nextKey(), text: `思考深度改为「${THINKING_LABEL[thinking] ?? thinking}」`, tone: 'muted' }];
       break;
     }
+    case 'session.draft_fill':
+      composerFill = composerFillFromSkill(event.text);
+      fillId = view.fillId + 1;
+      rows = [...rows, { k: 'sys', key: nextKey(), text: sessionFillLabel(), tone: 'muted' }];
+      break;
     default:
       break;
   }
-  return { rows, seq: Math.max(view.seq, seq), status, policy, model, thinking, title, rule, cwdRule, window: bound, pendingApprovals };
+  return { rows, seq: Math.max(view.seq, seq), status, policy, model, thinking, title, rule, cwdRule, window: bound, pendingApprovals, composerFill, fillId };
 }
 
 export function modelLabel(model: string | null | undefined): string {
