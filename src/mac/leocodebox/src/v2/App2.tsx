@@ -35,6 +35,7 @@ import { canMkdirSessionFolder, mkdirSessionToast, sanitizeFolderRel } from './s
 import { canMoveSessionFile, moveSessionToast, sanitizeMoveFolder } from './session-move';
 import { DRAFTS_KEY, readPersistedDrafts, writePersistedDrafts } from './session-draft';
 import { canHaltBusySessions, haltSessionsToast } from './session-halt';
+import { canStopSession, stopSessionToast, stoppableLocalSessions } from './session-stop';
 import { canForgetEndedSessions, endedLocalSessionIds, forgetEndedToast } from './session-forget';
 import { canRecallForgotten, recallSessionToast, type ForgottenSession } from './session-recall';
 import { canPushSessionRepo, pushSessionToast } from './session-push';
@@ -1188,7 +1189,20 @@ export default function App2() {
     if (!active || !composerCanFollowUp(active.machine, sessionView.status)) return;
     void withBusy(() => api.rpc(active, { type: 'clear_queue' }), queueClearedToast());
   }, [active, sessionView.status, withBusy]);
-  const stop = useCallback(() => active && withBusy(() => api.stop(active), '已停止'), [active, withBusy]);
+  const stopTarget = useCallback(async (target: SessionTarget, title?: string | null) => {
+    if (target.machine !== 'local') return;
+    try {
+      await api.stop(target);
+      toast(stopSessionToast(title));
+      await refreshLocal();
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+    }
+  }, [refreshLocal, toast]);
+  const stop = useCallback(() => {
+    if (!active || !canStopSession(active.machine, sessionView.status)) return;
+    void stopTarget(active, sessionView.title || activeSummary?.title);
+  }, [active, activeSummary?.title, sessionView.status, sessionView.title, stopTarget]);
   const haltBusy = useCallback(async () => {
     if (!canHaltBusy) return;
     try {
@@ -1540,6 +1554,12 @@ export default function App2() {
     { g: '这条会话', t: '压缩这条会话', k: 'pi compact', run: () => void compact() },
     { g: '这条会话', t: '停止', k: '', run: () => void stop() },
     ...(canHaltBusy ? [{ g: '本机', t: '停掉正在跑的', k: '全部', run: () => void haltBusy() }] : []),
+    ...stoppableLocalSessions(allSessions).map((row) => ({
+      g: '本机' as const,
+      t: '停掉这条',
+      k: row.s?.title || row.s?.session_id || '',
+      run: () => void stopTarget({ machine: row.machine || 'local', id: row.s!.session_id! }, row.s?.title),
+    })),
     ...(canForgetEnded ? [{ g: '本机', t: '清掉已经结束的', k: '终态', run: () => void forgetEnded() }] : []),
     ...(canRecallHere ? [{ g: '本机', t: '找回来', k: '拿掉的', run: () => void openRecall() }] : []),
     ...(active ? [{ g: '这条会话', t: sessionIsPinned(pinnedKeys, active.machine, active.id) ? '取消钉住' : '钉在左栏上面', k: '', run: () => togglePin(active) }] : []),
@@ -1576,7 +1596,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -1765,10 +1785,12 @@ export default function App2() {
                               y: Math.min(e.clientY + 4, window.innerHeight - 80),
                               items: [
                                 { v: 'pin', t: pinned ? '取消钉住' : '钉在左栏上面', sub: s.title || '新会话' },
+                                ...(canStopSession(g.id, s.status) ? [{ v: 'stopone', t: '停掉这条', sub: s.title || '正在跑' }] : []),
                                 ...(sessionCanForget(s.status) ? [{ v: 'forget', t: '从左栏拿掉', sub: g.id === 'local' ? '不再召回' : '只藏在这台 Mac' }] : []),
                               ],
                               onPick: (v) => {
                                 if (v === 'pin') togglePin({ machine: g.id, id: s.session_id });
+                                if (v === 'stopone') void stopTarget({ machine: g.id, id: s.session_id }, s.title);
                                 if (v === 'forget') void forgetSession({ machine: g.id, id: s.session_id });
                               },
                             });
