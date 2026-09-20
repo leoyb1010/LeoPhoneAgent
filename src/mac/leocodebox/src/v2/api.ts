@@ -137,6 +137,8 @@ export const api = {
     sendJson<{ ok: true; app: string; title: string; x: number; y: number }>(`${sessionBase(target)}/window/click`, point),
   typeBoundWindow: (target: SessionTarget, input: { text: string; elementId?: string }) =>
     sendJson<{ ok: true; app: string; title: string; elementId: string }>(`${sessionBase(target)}/window/type`, input),
+  readBoundWindow: (target: SessionTarget, elementId?: string) =>
+    sendJson<{ ok: true; app: string; title: string; elementId: string; text: string }>(`${sessionBase(target)}/window/read`, elementId ? { elementId } : {}),
   keyBoundWindow: (target: SessionTarget, key: string) =>
     sendJson<{ ok: true; app: string; title: string; key: string }>(`${sessionBase(target)}/window/key`, { key }),
   scrollBoundWindow: (target: SessionTarget, input: { x: number; y: number; dx?: number; dy?: number }) =>

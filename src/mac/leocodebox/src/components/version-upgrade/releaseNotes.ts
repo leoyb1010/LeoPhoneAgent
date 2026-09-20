@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.0.79',
+    date: '2026-09-20',
+    items: [
+      '本机绑过的窗口可以把输入框里的字读回来，放进这条会话，不用再对着屏幕手抄。',
+    ],
+  },
+  {
     version: '2.0.78',
     date: '2026-09-20',
     items: [

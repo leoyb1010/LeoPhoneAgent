@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 
-import { bindSessionWindow, clickBoundSessionWindow, createMacWindowDriver, dragBoundSessionWindow, keyBoundSessionWindow, listBindableSessionWindows, listBoundSessionMenus, menuBoundSessionWindow, peekBoundSessionWindow, raiseBoundSessionWindow, scrollBoundSessionWindow, typeBoundSessionWindow } from '../exact-window-macos.js';
-import { ExactWindowStore, isOwnMacWindow, parseNormalizedClickPoint, parseWindowAction, parseWindowDrag, parseWindowMenuPath, parseWindowNamedKey, parseWindowScroll, parseWindowTypeText, pickBindableWindow, pickUsableWindowMenus, pickWritableWindowField, type WindowElement, type WindowObservation, type WindowActionReceipt } from '../exact-window.js';
+import { bindSessionWindow, clickBoundSessionWindow, createMacWindowDriver, dragBoundSessionWindow, keyBoundSessionWindow, listBindableSessionWindows, listBoundSessionMenus, menuBoundSessionWindow, peekBoundSessionWindow, raiseBoundSessionWindow, readBoundSessionWindow, scrollBoundSessionWindow, typeBoundSessionWindow } from '../exact-window-macos.js';
+import { ExactWindowStore, clipWindowReadText, isOwnMacWindow, parseNormalizedClickPoint, parseWindowAction, parseWindowDrag, parseWindowMenuPath, parseWindowNamedKey, parseWindowScroll, parseWindowTypeText, pickBindableWindow, pickUsableWindowMenus, pickWritableWindowField, type WindowElement, type WindowObservation, type WindowActionReceipt } from '../exact-window.js';
 
 const observation: WindowObservation = {
   app: 'Fixture', pid: 42, windowId: '7', title: 'Fixture window', bounds: '0,0,800,600', frontmost: true,
@@ -174,6 +174,50 @@ test('typeBoundSessionWindow 先提到前面再写入焦点框,空字不会动�
   const missing = await typeBoundSessionWindow('hs_none', 'hello', undefined, undefined, store, driver, listed);
   assert.equal(missing.ok, false);
   if (!missing.ok) assert.equal(missing.reason, 'unknown-snapshot');
+});
+
+test('readBoundSessionWindow 先提到前面再读焦点框,没有框不会动手', async () => {
+  assert.equal(clipWindowReadText('hello'), 'hello');
+  assert.equal(clipWindowReadText('x'.repeat(5000)).length, 4096);
+  const store = new ExactWindowStore(() => 10_000, 'test');
+  const captured = store.capture(observation);
+  store.bindSession('hs_read', captured.snapshotId);
+  const kinds: string[] = [];
+  const withFields = { ...observation, frontmost: true, elements: [{ ...writable, value: '已经写好的字' }, other] };
+  const driver = createMacWindowDriver(async (request) => {
+    if (request.operation === 'observe') return { protocolVersion: 1, ok: true, observation: withFields };
+    if (request.operation === 'act') {
+      kinds.push(String(request.kind));
+      return {
+        protocolVersion: 1, ok: true, observation: withFields,
+        receipt: { attempted: true, verified: true, verification: 'focused-readback', action: 'focus', observedAt: 10_000 },
+      };
+    }
+    return { protocolVersion: 1, ok: true, windows: [withFields] };
+  });
+  const listed = async () => [withFields];
+  const emptyStore = new ExactWindowStore(() => 10_000, 'test');
+  emptyStore.capture(observation);
+  emptyStore.bindSession('hs_empty', emptyStore.capture({ ...observation, elements: [] }).snapshotId);
+  const none = await readBoundSessionWindow('hs_empty', undefined, undefined, emptyStore, createMacWindowDriver(async (request) => {
+    if (request.operation === 'observe') return { protocolVersion: 1, ok: true, observation: { ...observation, frontmost: true, elements: [] } };
+    if (request.operation === 'act') {
+      return {
+        protocolVersion: 1, ok: true, observation: { ...observation, frontmost: true, elements: [] },
+        receipt: { attempted: true, verified: true, verification: 'focused-readback', action: 'focus', observedAt: 10_000 },
+      };
+    }
+    return { protocolVersion: 1, ok: true, windows: [{ ...observation, frontmost: true }] };
+  }), async () => [{ ...observation, frontmost: true }]);
+  assert.equal(none.ok, false);
+  if (!none.ok) assert.equal(none.reason, 'element-unavailable');
+  const result = await readBoundSessionWindow('hs_read', undefined, undefined, store, driver, listed);
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.elementId, 'field-1');
+    assert.equal(result.text, '已经写好的字');
+  }
+  assert.deepEqual(kinds, ['ax']);
 });
 
 test('keyBoundSessionWindow 先提到前面再打具名键,未知键不会动手', async () => {

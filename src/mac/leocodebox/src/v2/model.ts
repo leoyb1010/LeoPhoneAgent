@@ -150,6 +150,15 @@ export function windowMenuLabel(path: string[]): string {
   return path.map((item) => item.trim()).filter(Boolean).join(' · ');
 }
 
+export function mentionWindowRead(draft: string, text: string): string {
+  const body = text.replace(/\s+$/, '');
+  if (!body) return draft;
+  const current = draft.replace(/\s+$/, '');
+  if (!current) return body;
+  if (current.includes(body)) return current;
+  return `${current}\n${body}`;
+}
+
 export function usableWindowMenus(menus: Array<{ path?: string[]; enabled?: boolean }> | undefined, limit = 24): Array<{ path: string[] }> {
   const seen = new Set<string>();
   const out: Array<{ path: string[] }> = [];

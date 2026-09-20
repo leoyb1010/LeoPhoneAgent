@@ -6,7 +6,7 @@ import express from 'express';
 import type { AuthInteraction, AuthPrompt } from '@earendil-works/pi-ai';
 import { ModelRuntime } from '@earendil-works/pi-coding-agent';
 
-import { bindFrontmostToSession, bindSessionWindow, clickBoundSessionWindow, dragBoundSessionWindow, exactWindows, keyBoundSessionWindow, listBindableSessionWindows, listBoundSessionMenus, menuBoundSessionWindow, peekBoundSessionWindow, raiseBoundSessionWindow, scrollBoundSessionWindow, typeBoundSessionWindow } from '../leocodebox/index.js';
+import { bindFrontmostToSession, bindSessionWindow, clickBoundSessionWindow, dragBoundSessionWindow, exactWindows, keyBoundSessionWindow, listBindableSessionWindows, listBoundSessionMenus, menuBoundSessionWindow, peekBoundSessionWindow, raiseBoundSessionWindow, readBoundSessionWindow, scrollBoundSessionWindow, typeBoundSessionWindow } from '../leocodebox/index.js';
 
 import { HarnessRequestError, getHarnessManager, type HarnessSession } from './harness-session.service.js';
 import { copyDroppedFile, writeDroppedBytes } from './local-drop.js';
@@ -330,6 +330,19 @@ router.post('/leophone/local/sessions/:sessionId/window/type', async (req, res) 
   }
   session.emit({ event: 'window.bound', ...(exactWindows.summary(session.sessionId) ?? {}) });
   res.json({ ok: true, app: result.app, title: result.title, elementId: result.elementId });
+});
+
+router.post('/leophone/local/sessions/:sessionId/window/read', async (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const result = await readBoundSessionWindow(session.sessionId, body.elementId, { timeoutMs: 2500 });
+  if (!result.ok) {
+    jsonError(res, result.reason === 'unknown-snapshot' ? 404 : result.reason === 'invalid-request' ? 400 : 409, result.message);
+    return;
+  }
+  session.emit({ event: 'window.bound', ...(exactWindows.summary(session.sessionId) ?? {}) });
+  res.json({ ok: true, app: result.app, title: result.title, elementId: result.elementId, text: result.text });
 });
 
 router.post('/leophone/local/sessions/:sessionId/window/key', async (req, res) => {

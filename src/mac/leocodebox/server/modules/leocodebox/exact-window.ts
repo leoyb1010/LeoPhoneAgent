@@ -196,6 +196,13 @@ export function pickWritableWindowField(elements: WindowElement[] | undefined, e
   return writable.find((item) => item.focused) ?? writable[0] ?? null;
 }
 
+export const WINDOW_READ_TEXT_MAX = 4096;
+
+export function clipWindowReadText(value: unknown): string {
+  const text = typeof value === 'string' ? value : '';
+  return text.length > WINDOW_READ_TEXT_MAX ? text.slice(0, WINDOW_READ_TEXT_MAX) : text;
+}
+
 export function parseWindowMenuPath(value: unknown): string[] | null {
   const raw = Array.isArray(value)
     ? value

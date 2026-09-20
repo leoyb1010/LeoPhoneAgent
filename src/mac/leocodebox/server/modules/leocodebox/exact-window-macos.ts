@@ -5,7 +5,7 @@ import path from 'node:path';
 import { findAppRoot, getModuleDir } from '../../utils/runtime-paths.js';
 
 import {
-  exactWindows, isOwnMacWindow, parseNormalizedClickPoint, parseWindowDrag, parseWindowMenuPath, parseWindowNamedKey, parseWindowScroll, parseWindowTypeText, pickBindableWindow, pickUsableWindowMenus, pickWritableWindowField, sameWindowMenuPath, WINDOW_SNAPSHOT_FRESH_MS, WindowOperationError,
+  clipWindowReadText, exactWindows, isOwnMacWindow, parseNormalizedClickPoint, parseWindowDrag, parseWindowMenuPath, parseWindowNamedKey, parseWindowScroll, parseWindowTypeText, pickBindableWindow, pickUsableWindowMenus, pickWritableWindowField, sameWindowMenuPath, WINDOW_SNAPSHOT_FRESH_MS, WindowOperationError,
   type BindableWindowRow,
   type ExactWindowDriver, type WindowAction, type WindowActionKind, type WindowActionReceipt,
   type WindowElement, type WindowFailureReason, type WindowObservation, type WindowOperationOptions,
@@ -319,6 +319,44 @@ export async function typeBoundSessionWindow(
   const result = await store.act(observed.snapshotId, 'ax', { name: 'setValue', elementId: field.id, value: text }, driver, options);
   if (!result.ok) return { ok: false, reason: result.reason, message: result.message };
   return { ok: true, app: result.snapshot.ref.app, title: result.snapshot.ref.title, elementId: field.id };
+}
+
+/** 读绑过窗口里焦点/第一个能写的框。先提到前面再观察，不改窗口里的字。 */
+export async function readBoundSessionWindow(
+  sessionId: string,
+  elementId?: unknown,
+  options?: WindowOperationOptions,
+  store = exactWindows,
+  driver = macWindowDriver,
+  list = listMacWindows,
+): Promise<{ ok: true; app: string; title: string; elementId: string; text: string } | { ok: false; reason: string; message: string }> {
+  const wantedId = typeof elementId === 'string' && elementId.trim() ? elementId.trim() : undefined;
+  const raised = await raiseBoundSessionWindow(sessionId, options, store, driver, list);
+  if (!raised.ok) return raised;
+  const current = store.sessionSnapshot(sessionId);
+  if (!current) return { ok: false, reason: 'unknown-snapshot', message: '这个会话还没有绑过窗口。' };
+  let observed;
+  try {
+    observed = await store.observe(current.snapshotId, driver, { ...options, elements: true, capture: false });
+  } catch (error) {
+    if (error instanceof WindowOperationError) return { ok: false, reason: error.reason, message: error.message };
+    return { ok: false, reason: 'observation-unavailable', message: '读不到这个窗口里的输入框。' };
+  }
+  const field = pickWritableWindowField(observed.observation?.elements, wantedId);
+  if (!field) {
+    return {
+      ok: false,
+      reason: 'element-unavailable',
+      message: wantedId ? '指定的输入框已经不在或不能读。' : '这个窗口里没有能读的输入框。',
+    };
+  }
+  return {
+    ok: true,
+    app: observed.ref.app,
+    title: observed.ref.title,
+    elementId: field.id,
+    text: clipWindowReadText(field.value),
+  };
 }
 
 /** 往绑过的窗口打一个具名按键。先提到前面，回车/Esc/方向键走 HID，不靠 AX。 */
