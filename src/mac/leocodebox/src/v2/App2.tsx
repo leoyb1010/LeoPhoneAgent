@@ -15,6 +15,7 @@ import { desktopHotkeyTools, readGlobalHotkey, writeGlobalHotkey } from './deskt
 import { onDisplayChanged } from './desktop-display';
 import { onIdleBack } from './desktop-idle';
 import { desktopLoginTools, readOpenAtLogin, writeOpenAtLogin } from './desktop-login';
+import { onMemoryChanged, readMemory } from './desktop-memory';
 import { desktopFloatTools, readAlwaysOnTop, writeAlwaysOnTop } from './desktop-float';
 import { desktopSpacesTools, readAllSpaces, writeAllSpaces } from './desktop-spaces';
 import { desktopProtectTools, readContentProtection, writeContentProtection } from './desktop-protect';
@@ -55,6 +56,7 @@ import { icloudCwdToast, isIcloudPath } from './session-icloud';
 import { displayChangeToast } from './session-display';
 import { idleBackToast } from './session-idle';
 import { canSetOpenAtLogin, openAtLoginLabel, openAtLoginToast } from './session-login';
+import { memoryLowToast, memoryOkToast, memorySendToast } from './session-memory';
 import { alwaysOnTopLabel, alwaysOnTopToast, canSetAlwaysOnTop } from './session-float';
 import { allSpacesLabel, allSpacesToast, canSetAllSpaces } from './session-spaces';
 import { canSetContentProtection, contentProtectionLabel, contentProtectionToast } from './session-protect';
@@ -273,6 +275,8 @@ export default function App2() {
   const batterySendWarned = useRef(false);
   const [thermalHot, setThermalHot] = useState(false);
   const thermalSendWarned = useRef(false);
+  const [memoryLow, setMemoryLow] = useState(false);
+  const memorySendWarned = useRef(false);
   const canCheckUpdateHere = canCheckUpdate(desktopUpdater());
   const [updateState, setUpdateState] = useState<UpdateRow | null>(null);
   const chimePrev = useRef<Map<string, string>>(new Map());
@@ -398,6 +402,21 @@ export default function App2() {
   }, [thermalHot, toast]);
   useEffect(() => onIdleBack(() => toast(idleBackToast())), [toast]);
   useEffect(() => onDisplayChanged((row) => toast(displayChangeToast(row.kind))), [toast]);
+  useEffect(() => {
+    void readMemory().then(setMemoryLow);
+    return onMemoryChanged((low) => {
+      setMemoryLow((prev) => {
+        if (prev !== low) toast(low ? memoryLowToast() : memoryOkToast(), low);
+        if (!low) memorySendWarned.current = false;
+        return low;
+      });
+    });
+  }, [toast]);
+  const warnMemorySend = useCallback(() => {
+    if (!memoryLow || memorySendWarned.current) return;
+    memorySendWarned.current = true;
+    toast(memorySendToast());
+  }, [memoryLow, toast]);
   const warnIcloud = useCallback((cwd?: string | null) => {
     const path = String(cwd ?? '').trim();
     if (!isIcloudPath(path) || icloudWarned.current.has(path)) return;
@@ -1525,8 +1544,9 @@ export default function App2() {
     }
     warnBatterySend();
     warnThermalSend();
+    warnMemorySend();
     await withBusy(() => api.send(active, text), retryLastUserToast());
-  }, [active, activeSummary?.last_event?.text, canRetryLast, sessionView.model, sessionView.rows, toast, withBusy, warnBatterySend, warnThermalSend]);
+  }, [active, activeSummary?.last_event?.text, canRetryLast, sessionView.model, sessionView.rows, toast, withBusy, warnBatterySend, warnThermalSend, warnMemorySend]);
   const editLastPrompt = useCallback(() => {
     const text = lastUserPrompt(sessionView.rows);
     if (!text) { toast('还没有上一句', true); return; }
@@ -1842,9 +1862,10 @@ export default function App2() {
     }
     warnBatterySend();
     warnThermalSend();
+    warnMemorySend();
     setDraft('');
     await withBusy(() => api.send(active, text));
-  }, [active, activeSummary, draft, sessionView.model, sessionView.rows, toast, withBusy, setDraft, warnBatterySend, warnThermalSend]);
+  }, [active, activeSummary, draft, sessionView.model, sessionView.rows, toast, withBusy, setDraft, warnBatterySend, warnThermalSend, warnMemorySend]);
   const followUp = useCallback(async () => {
     if (!active || !composerCanFollowUp(active.machine, sessionView.status)) return;
     const text = draft.trim(); if (!text) return;
@@ -1862,9 +1883,10 @@ export default function App2() {
     }
     warnBatterySend();
     warnThermalSend();
+    warnMemorySend();
     setDraft('');
     await withBusy(() => api.rpc(active, { type: 'follow_up', message: text }), followUpToast());
-  }, [active, activeSummary, draft, sessionView.model, sessionView.rows, sessionView.status, toast, withBusy, setDraft, warnBatterySend, warnThermalSend]);
+  }, [active, activeSummary, draft, sessionView.model, sessionView.rows, sessionView.status, toast, withBusy, setDraft, warnBatterySend, warnThermalSend, warnMemorySend]);
   const clearFollowUps = useCallback(() => {
     if (!active || !composerCanFollowUp(active.machine, sessionView.status)) return;
     void withBusy(() => api.rpc(active, { type: 'clear_queue' }), queueClearedToast());
@@ -2107,6 +2129,7 @@ export default function App2() {
     if (input.machine === 'local') {
       warnBatterySend();
       warnThermalSend();
+      warnMemorySend();
     }
     if (input.machine === 'local' && await warnMissing(input.cwd)) return;
     if (input.machine === 'local' && (providers === null || usableModelsFromProviders(providers).length === 0)) {
@@ -2129,7 +2152,7 @@ export default function App2() {
       }
       setNewBox(null); setView('home');
     });
-  }, [providers, withBusy, refreshFleet, toast, warnIcloud, warnMissing, warnBatterySend, warnThermalSend]);
+  }, [providers, withBusy, refreshFleet, toast, warnIcloud, warnMissing, warnBatterySend, warnThermalSend, warnMemorySend]);
 
   // -- 菜单 ------------------------------------------------------------------
   const openMenu = useCallback((el: HTMLElement, items: MenuItem[], onPick: (v: string) => void) => {

@@ -25,6 +25,7 @@ import { resolveLeoSchemeCwd } from './leo-scheme.js';
 import { expandDesktopFolderPath, isDesktopFolderAllowed } from './local-folder.js';
 import { LocalServerController } from './localServer.js';
 import { disableConflictingLegacyLaunchAgent } from './legacyMigration.js';
+import { memoryState } from './memory.js';
 import { accessibilityPaneUrls } from './privacy-pane.js';
 import { readProductVersion } from './productMetadata.js';
 import { cwdFromDroppedPath, rememberRecentCwd } from './recent-docs.js';
@@ -132,6 +133,29 @@ function getThermal() {
 
 function notifyThermal() {
   desktopWindow?.sendToActiveView?.('leocodebox-desktop:thermal-changed', getThermal());
+}
+
+function readSystemMemory() {
+  if (typeof process.getSystemMemoryInfo !== 'function') return null;
+  try { return process.getSystemMemoryInfo(); } catch { return null; }
+}
+
+function getMemory() {
+  return memoryState(readSystemMemory());
+}
+
+function notifyMemory() {
+  desktopWindow?.sendToActiveView?.('leocodebox-desktop:memory-changed', getMemory());
+}
+
+let lastMemory = { free: 0, total: 0, can: false, low: false };
+let memoryPrimed = false;
+
+function tickMemory() {
+  const next = getMemory();
+  if (memoryPrimed && lastMemory.low !== next.low && next.can) notifyMemory();
+  lastMemory = next;
+  memoryPrimed = true;
 }
 
 function notifyIdleBack() {
@@ -980,6 +1004,7 @@ function registerIpcHandlers() {
   trustedHandle('leocodebox-desktop:thermal', async () => getThermal());
   trustedHandle('leocodebox-desktop:idle', async () => idleProbe(powerMonitor));
   trustedHandle('leocodebox-desktop:display', async () => getDisplay());
+  trustedHandle('leocodebox-desktop:memory', async () => getMemory());
   trustedHandle('leocodebox-desktop:app-lock', async (_event, raw) => (
     raw === undefined || raw === null ? getAppLock() : writeAppLock(Boolean(raw))
   ));
@@ -1539,6 +1564,9 @@ async function bootstrap() {
     screen.on('display-added', () => tickDisplay());
     screen.on('display-removed', () => tickDisplay());
   }
+  tickMemory();
+  const memoryTick = setInterval(tickMemory, 20_000);
+  memoryTick.unref?.();
   await openLocalInDesktop();
   flushLeoSchemes();
   // The local server URL only exists now, so (re)connect the notification
