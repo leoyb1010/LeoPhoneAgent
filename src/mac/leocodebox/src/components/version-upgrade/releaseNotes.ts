@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.0.88',
+    date: '2026-09-20',
+    items: [
+      '模型上一句可以带进输入框，接着改，不用自己划。',
+    ],
+  },
+  {
     version: '2.0.87',
     date: '2026-09-20',
     items: [

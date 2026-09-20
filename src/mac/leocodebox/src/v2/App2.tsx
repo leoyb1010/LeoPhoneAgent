@@ -14,6 +14,7 @@ import { canShowSessionDiff } from './session-diff';
 import { canExportSession, exportFileName, exportSessionToast, flowRowsToMarkdown } from './session-export';
 import { canRevertSessionFile, revertSessionFileToast } from './session-revert';
 import { canRenameSession, clipSessionTitle, renameSessionToast } from './session-title';
+import { canMentionLastReply, lastAiReply, mentionLastReply, mentionLastReplyToast } from './session-reply';
 import { approvalChoiceActions, approvalToast, dockNeedBadge, firstPendingApproval, noticeNotifyPayload, noticesFromSnapshot, sessionPathTarget } from './session-notice';
 import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerCanFollowUp, composerNeedsModelSwitch, composerPlaceholder, composerRunningHint, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, followUpToast, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mentionWindowRead, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, pendingFollowUps, prettyModelName, providerOf, queueClearedToast, rankModelsForPicker, readHiddenSessionKeys, relativeTime, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionCanResume, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, usableWindowMenus, windowBoundLabel, windowMenuLabel, windowPadGesture, WINDOW_KEY_BUTTONS, type FlowRow, type Group, type SessionView } from './model';
 import { usableModelsFromProviders } from './settings-form';
@@ -226,6 +227,8 @@ export default function App2() {
   );
   const canCommitHere = canCommitSessionFiles(active?.machine, pinFiles);
   const canExportHere = canExportSession(active?.machine, sessionView.rows);
+  const lastReply = lastAiReply(sessionView.rows);
+  const canMentionLast = canMentionLastReply(sessionView.rows);
   const findHits = useMemo(() => flowFindHitKeys(sessionView.rows, flowFind.query), [sessionView.rows, flowFind.query]);
   const findIndex = findHits.length ? Math.min(Math.max(flowFind.index, 0), findHits.length - 1) : -1;
   const findKey = findIndex >= 0 ? findHits[findIndex] : null;
@@ -703,6 +706,13 @@ export default function App2() {
     try { await navigator.clipboard.writeText(text); toast('已复制标题'); }
     catch { toast('复制失败', true); }
   }, [activeSummary?.title, sessionView.title, toast]);
+  const mentionLast = useCallback(() => {
+    const reply = lastAiReply(sessionView.rows);
+    if (!reply) { toast('还没有模型上一句', true); return; }
+    setDraft(mentionLastReply(draft, reply));
+    toast(mentionLastReplyToast());
+    window.setTimeout(() => taRef.current?.focus(), 0);
+  }, [draft, sessionView.rows, setDraft, toast]);
   const beginRename = useCallback(() => {
     if (!canRenameSession(active?.machine)) return;
     setTitleDraft(sessionView.title || activeSummary?.title || '');
@@ -899,6 +909,7 @@ export default function App2() {
     ...(active?.machine === 'local' && focusFile ? [{ v: 'openfile', t: '用默认程序打开', sub: peekFileCaption(focusFile) }, { v: 'savepeek', t: '写回当前文件', sub: '⌘S' }, { v: 'revertfile', t: '还原这次改动', sub: peekFileCaption(focusFile) }] : []),
     ...(canCommitHere ? [{ v: 'commitfiles', t: '记下这次改动', sub: defaultCommitMessage(commitDraft ?? (sessionView.title || activeSummary?.title || '')) }] : []),
     ...(canExportHere ? [{ v: 'exporttalk', t: '记下这次对话', sub: exportFileName(sessionView.title || activeSummary?.title || '') }] : []),
+    ...(canMentionLast ? [{ v: 'lastreply', t: '带上上一句', sub: lastReply.slice(0, 40) }] : []),
     ...(activeSummary?.cwd?.trim() ? [{ v: 'cwd', t: '复制目录', sub: activeSummary.cwd }] : []),
     ...(canRenameSession(active?.machine) ? [{ v: 'rename', t: '改标题', sub: sessionView.title || activeSummary?.title || '给这条会话起个名字' }] : []),
     ...((sessionView.title || activeSummary?.title || '').trim() ? [{ v: 'title', t: '复制标题', sub: (sessionView.title || activeSummary?.title || '').trim() }] : []),
@@ -926,6 +937,7 @@ export default function App2() {
     else if (v === 'revertfile') void revertFile();
     else if (v === 'commitfiles') void commitFiles();
     else if (v === 'exporttalk') void exportTalk();
+    else if (v === 'lastreply') mentionLast();
     else if (v === 'cwd') void copyCwd();
     else if (v === 'rename') beginRename();
     else if (v === 'title') void copyTitle();
@@ -1030,6 +1042,7 @@ export default function App2() {
     ...(canRevertSessionFile(active?.machine, focusFile) ? [{ g: '这条会话', t: '还原这次改动', k: focusFile || '', run: () => void revertFile() }] : []),
     ...(canCommitHere ? [{ g: '这条会话', t: '记下这次改动', k: defaultCommitMessage(commitDraft ?? (sessionView.title || activeSummary?.title || '')), run: () => void commitFiles() }] : []),
     ...(canExportHere ? [{ g: '这条会话', t: '记下这次对话', k: exportFileName(sessionView.title || activeSummary?.title || ''), run: () => void exportTalk() }] : []),
+    ...(canMentionLast ? [{ g: '这条会话', t: '带上上一句', k: lastReply.slice(0, 40), run: mentionLast }] : []),
     { g: '这条会话', t: '放入文件', k: '拖到输入框', run: () => void pickIntoSession() },
     { g: '这条会话', t: '粘贴截图', k: '⌘V', run: () => void pasteShot() },
     { g: '这条会话', t: '终端', k: '⌘T', run: () => setDrawer('term') }, { g: '这条会话', t: '文件', k: '⌘E', run: () => setDrawer('files') },
@@ -1037,7 +1050,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, commitFiles, canCommitHere, commitDraft, exportTalk, canExportHere, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, commitFiles, canCommitHere, commitDraft, exportTalk, canExportHere, mentionLast, canMentionLast, lastReply, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -1386,8 +1399,8 @@ export default function App2() {
                       <span className="cb info">{stream === 'reconnecting' ? '事件流在重连,发出去的话会等接通。' : needsModelSwitch ? `先换一个模型,再以这条会话继续 · 现在是 ${prettyModelName(sessionView.model)}` : composerShowsSteer(sessionView.status) ? composerRunningHint(prettyModelName(sessionView.model), canFollowUp) : `将在 ${machineChipLabel(activeGroup?.name) || '这台机器'} 上以 ${prettyModelName(sessionView.model)} 继续 · 审批:${POLICY_LABEL[sessionView.policy] ?? sessionView.policy}`}</span>
                       <span className="composer-acts">
                         {composerShowsSteer(sessionView.status)
-                          ? <><button className="btn-s" onClick={() => void send()} disabled={busy || !draft.trim() || needsModelSwitch}>插话</button>{canFollowUp ? <button className="btn-s" onClick={() => void followUp()} disabled={busy || !draft.trim() || needsModelSwitch}>接着</button> : null}{canFollowUp && queuedFollowUps.length ? <button className="btn-s dim" onClick={clearFollowUps} disabled={busy}>取消排队</button> : null}<button className="btn-s stop" onClick={() => void stop()} disabled={busy}>停止</button></>
-                          : <button className="btn-s" onClick={() => void send()} disabled={busy || !draft.trim() || needsModelSwitch}>发送</button>}
+                          ? <><button className="btn-s" onClick={() => void send()} disabled={busy || !draft.trim() || needsModelSwitch}>插话</button>{canFollowUp ? <button className="btn-s" onClick={() => void followUp()} disabled={busy || !draft.trim() || needsModelSwitch}>接着</button> : null}{canMentionLast ? <button className="btn-s dim" type="button" onClick={mentionLast}>带上上一句</button> : null}{canFollowUp && queuedFollowUps.length ? <button className="btn-s dim" onClick={clearFollowUps} disabled={busy}>取消排队</button> : null}<button className="btn-s stop" onClick={() => void stop()} disabled={busy}>停止</button></>
+                          : <><button className="btn-s" onClick={() => void send()} disabled={busy || !draft.trim() || needsModelSwitch}>发送</button>{canMentionLast ? <button className="btn-s dim" type="button" onClick={mentionLast}>带上上一句</button> : null}</>}
                       </span>
                     </div>
                   </div>
@@ -1402,6 +1415,7 @@ export default function App2() {
                     <div className="composer-end">
                       <span className="composer-end-hint"><b>{endedComposerLead(activeSummary.status)}</b>{cwd ? ` · ${cwdChipLabel(cwd)}` : ''}</span>
                       <div className="composer-end-acts">
+                        {canMentionLast ? <button className="link" type="button" onClick={mentionLast}>带上上一句</button> : null}
                         {needsSettings ? <button className="btn-s" onClick={() => setView('settings')}>去设置</button> : canResumeHere ? <button className="btn-s" onClick={resumeHere}>接着这条会话</button> : <button className="btn-s" onClick={continueHere}>在同一目录新开</button>}
                         {needsSettings ? <button className="link" onClick={continueHere}>仍要新开</button> : canResumeHere ? <button className="link" onClick={continueHere}>在同一目录新开</button> : null}
                         {cwd && active?.machine === 'local' ? <button className="link" onClick={() => void revealCwd()}>在 Finder 打开</button> : null}
