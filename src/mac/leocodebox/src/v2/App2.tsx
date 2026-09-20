@@ -115,6 +115,7 @@ import { shouldDropDirtyPeekOnApprove } from './session-peek-approve';
 import { canSendFromPeek } from './session-peek-cmd';
 import { canFlushPeekOnSend, peekFlushedToast } from './session-peek-flush';
 import { canPeekLiveEdit } from './session-peek-live';
+import { canShowLiveProposal } from './session-peek-live-body';
 import { clearPeekFileDraft, peekFileDraftToRestore, writePeekFileDraft } from './session-peek-files';
 import { peekDraftToRestore, peekMemoryFile, peekMemoryKey, writePeekMemory, type PeekMemory } from './session-peek-memory';
 import { canPeekPendingEdit, pendingEditFile } from './session-peek-pending';
@@ -3007,6 +3008,13 @@ export default function App2() {
     dirty: peekDirty,
     focusFile,
     pendingFile: pendingProposal?.file ?? pendingFile,
+    content: pendingProposal?.content,
+  }) || canShowLiveProposal({
+    machine: active?.machine,
+    status: sessionView.status,
+    dirty: peekDirty,
+    focusFile,
+    liveFile: pendingProposal?.file ?? pendingFile,
     content: pendingProposal?.content,
   });
   const peekShown = showProposal ? (pendingProposal?.content ?? filePeek) : (filePeekDraft ?? filePeek);
