@@ -13,6 +13,7 @@ import { desktopLoginTools, readOpenAtLogin, writeOpenAtLogin } from './desktop-
 import { desktopFloatTools, readAlwaysOnTop, writeAlwaysOnTop } from './desktop-float';
 import { desktopChimeTools, playSessionChime } from './desktop-chime';
 import { desktopLogsTools, openDesktopLogs } from './desktop-applogs';
+import { onLeoScheme } from './desktop-scheme';
 import { printSessionTalk } from './desktop-print';
 import { canAcceptSessionDrop, mentionDroppedFile } from './session-drop';
 import { canCommitSessionFiles, commitSessionFilesToast, defaultCommitMessage } from './session-commit';
@@ -32,6 +33,7 @@ import { canSetOpenAtLogin, openAtLoginLabel, openAtLoginToast } from './session
 import { alwaysOnTopLabel, alwaysOnTopToast, canSetAlwaysOnTop } from './session-float';
 import { DONE_CHIME_KEY, canPlayDoneChime, chimesFromSnapshot, doneChimeLabel, doneChimeToast, readDoneChimeOn } from './session-chime';
 import { canOpenLogs, openLogsLabel, openLogsToast } from './session-applogs';
+import { leoSchemeToast, pickSchemeSession } from './session-scheme';
 import { autoCompactToast, shouldAutoCompact } from './session-autocompact';
 import { appendDictate, canDictate, clipDictateText, dictateListeningToast, dictateStoppedToast, dictateToast, dictateUnavailableToast, speechRecognitionCtor } from './session-dictate';
 import { canSpeakLastReply, speakLastReplyToast } from './session-speak';
@@ -433,6 +435,20 @@ export default function App2() {
     setActive(target);
     setView('home');
   }), []);
+  const schemeSessions = useRef(allSessions);
+  schemeSessions.current = allSessions;
+  useEffect(() => onLeoScheme((cwd) => {
+    const hit = pickSchemeSession(schemeSessions.current, cwd);
+    if (hit) {
+      setActive({ machine: 'local', id: hit.session_id });
+      setView('home');
+      toast(leoSchemeToast(hit.title));
+      return;
+    }
+    setNewBox({ open: true, machine: 'local', cwd });
+    setView('home');
+    toast(leoSchemeToast());
+  }), [toast]);
 
   useEffect(() => {
     void setDockNeedBadge(dockNeedBadge(allSessions.map((row) => row.s)));

@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { busyQuitCopy, shouldConfirmBusyQuit } from './busy-quit.js';
 import { DesktopWindowManager } from './desktopWindow.js';
 import { DesktopNotificationsController } from './desktopNotifications.js';
+import { resolveLeoSchemeCwd } from './leo-scheme.js';
 import { expandDesktopFolderPath, isDesktopFolderAllowed } from './local-folder.js';
 import { LocalServerController } from './localServer.js';
 import { disableConflictingLegacyLaunchAgent } from './legacyMigration.js';
@@ -1005,6 +1006,50 @@ async function createDesktopWindow() {
   await desktopWindow.createWindow();
 }
 
+const pendingLeoSchemes = [];
+
+function raiseMainWindow() {
+  const window = desktopWindow?.getMainWindow();
+  if (!window || window.isDestroyed()) return;
+  if (window.isMinimized()) window.restore();
+  window.show();
+  window.focus();
+}
+
+function deliverLeoScheme(raw) {
+  const cwd = resolveLeoSchemeCwd(raw);
+  if (!cwd) return true;
+  raiseMainWindow();
+  return Boolean(desktopWindow?.sendToActiveView('leocodebox-desktop:open-scheme', { cwd }));
+}
+
+function flushLeoSchemes() {
+  if (!desktopWindow?.getMainWindow()) return;
+  const leftover = [];
+  for (const raw of pendingLeoSchemes.splice(0)) {
+    if (!deliverLeoScheme(raw)) leftover.push(raw);
+  }
+  pendingLeoSchemes.push(...leftover);
+}
+
+function enqueueLeoScheme(raw) {
+  pendingLeoSchemes.push(String(raw ?? ''));
+  flushLeoSchemes();
+}
+
+function registerLeoScheme() {
+  if (!app.isDefaultProtocolClient('leocodebox')) {
+    app.setAsDefaultProtocolClient('leocodebox');
+  }
+  app.on('open-url', (event, url) => {
+    event.preventDefault();
+    enqueueLeoScheme(url);
+  });
+  for (const arg of process.argv) {
+    if (String(arg).startsWith('leocodebox:')) enqueueLeoScheme(arg);
+  }
+}
+
 function registerSingleInstance() {
   const gotSingleInstanceLock = app.requestSingleInstanceLock();
   if (!gotSingleInstanceLock) {
@@ -1012,13 +1057,10 @@ function registerSingleInstance() {
     return false;
   }
 
-  app.on('second-instance', () => {
-    const window = desktopWindow?.getMainWindow();
-    if (window) {
-      if (window.isMinimized()) window.restore();
-      window.show();
-      window.focus();
-    }
+  app.on('second-instance', (_event, argv) => {
+    const url = (argv || []).find((arg) => String(arg).startsWith('leocodebox:'));
+    if (url) enqueueLeoScheme(url);
+    raiseMainWindow();
   });
 
   return true;
@@ -1090,6 +1132,7 @@ async function bootstrap() {
   // Settings are already loaded and the window exists; arm the global hotkey.
   applyGlobalHotkey();
   await openLocalInDesktop();
+  flushLeoSchemes();
   // The local server URL only exists now, so (re)connect the notification
   // stream after the workspace is up.
   void desktopNotifications.sync().catch((error) => {
@@ -1102,6 +1145,7 @@ async function bootstrap() {
   }
 }
 
+registerLeoScheme();
 if (registerSingleInstance()) {
   bootstrap().catch(async (error) => {
     await showError('leocodebox failed to start', error);

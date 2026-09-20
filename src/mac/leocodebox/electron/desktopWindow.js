@@ -176,6 +176,10 @@ export class DesktopWindowManager {
     return this.viewHost.sendToActiveView('leocodebox-desktop:open-modal', tool);
   }
 
+  sendToActiveView(channel, payload) {
+    return this.viewHost.sendToActiveView(channel, payload);
+  }
+
   syncSettingsWindowBounds() {
     if (!this.mainWindow || !this.settingsWindow || this.settingsWindow.isDestroyed()) return;
     this.settingsWindow.setBounds(this.mainWindow.getBounds());

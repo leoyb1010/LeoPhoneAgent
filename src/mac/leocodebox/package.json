@@ -1,6 +1,6 @@
 {
   "name": "leocodebox",
-  "version": "2.1.39",
+  "version": "2.1.40",
   "productName": "leocodebox",
   "description": "LeoPhoneAgent Mac workstation for local coding agents",
   "type": "module",
@@ -96,6 +96,14 @@
       "!**/node_modules/@openai/codex-{darwin,linux,win32}-*/**",
       "!**/node_modules/playwright-core/.local-browsers/chromium-*/**"
     ],
+    "protocols": [
+      {
+        "name": "leocodebox",
+        "schemes": [
+          "leocodebox"
+        ]
+      }
+    ],
     "mac": {
       "category": "public.app-category.developer-tools",
       "icon": "electron/assets/logo-macos.icns",
@@ -108,7 +116,15 @@
       "extendInfo": {
         "CFBundleName": "leocodebox",
         "CFBundleDisplayName": "leocodebox",
-        "NSHumanReadableCopyright": "Copyright (c) 2026 leocodebox contributors. Third-party notices are included in NOTICE."
+        "NSHumanReadableCopyright": "Copyright (c) 2026 leocodebox contributors. Third-party notices are included in NOTICE.",
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLName": "com.leoyuan.leocodebox",
+            "CFBundleURLSchemes": [
+              "leocodebox"
+            ]
+          }
+        ]
       }
     },
     "win": {
