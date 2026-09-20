@@ -23,6 +23,7 @@ import { canPackSessionChanges, packFileName, packSessionToast } from './session
 import { canUnpackSessionZip, unpackSessionToast, unpackZipName } from './session-unpack';
 import { canSeedSessionFile, clipSeedText, sanitizeSeedRel, seedSessionToast } from './session-seed';
 import { canTrashSessionFile, trashSessionToast } from './session-trash';
+import { canDuplicateSessionFile, duplicateSessionToast } from './session-duplicate';
 import { canHaltBusySessions, haltSessionsToast } from './session-halt';
 import { canForgetEndedSessions, endedLocalSessionIds, forgetEndedToast } from './session-forget';
 import { canRecallForgotten, recallSessionToast, type ForgottenSession } from './session-recall';
@@ -274,6 +275,7 @@ export default function App2() {
   const canUnpackHere = canUnpackSessionZip(active?.machine);
   const canSeedHere = canSeedSessionFile(active?.machine);
   const canTrashHere = canTrashSessionFile(active?.machine, focusFile);
+  const canDuplicateHere = canDuplicateSessionFile(active?.machine, focusFile);
   const canHaltBusy = canHaltBusySessions(allSessions);
   const canForgetEnded = canForgetEndedSessions(allSessions, pinnedKeys);
   const canRecallHere = canRecallForgotten('local');
@@ -926,6 +928,22 @@ export default function App2() {
       toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
     }
   }, [active, focusFile, toast]);
+  const duplicateFile = useCallback(async (file = focusFile) => {
+    if (!active || !canDuplicateSessionFile(active.machine, file)) {
+      toast('先点开一份文件', true);
+      return;
+    }
+    try {
+      const result = await api.duplicateLocalFile(active, file!.trim());
+      toast(duplicateSessionToast(result.file));
+      setPeekTick((tick) => tick + 1);
+      setFocusCommit(null);
+      setFocusFile(result.file);
+      setDrawer((cur) => cur ?? 'files');
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+    }
+  }, [active, focusFile, toast]);
   const beginRename = useCallback(() => {
     if (!canRenameSession(active?.machine)) return;
     setTitleDraft(sessionView.title || activeSummary?.title || '');
@@ -1224,6 +1242,7 @@ export default function App2() {
     ...(activeSummary?.cwd?.trim() && active?.machine === 'local' ? [{ v: 'dropfile', t: '放入文件' }, { v: 'dropshot', t: '粘贴截图' }] : []),
     ...(active?.machine === 'local' && focusFile ? [{ v: 'openfile', t: '用默认程序打开', sub: peekFileCaption(focusFile) }, { v: 'savepeek', t: '写回当前文件', sub: '⌘S' }, { v: 'revertfile', t: '还原这次改动', sub: peekFileCaption(focusFile) }] : []),
     ...(canTrashHere ? [{ v: 'trash', t: '扔掉这份文件', sub: peekFileCaption(focusFile) }] : []),
+    ...(canDuplicateHere ? [{ v: 'duplicate', t: '复制一份', sub: peekFileCaption(focusFile) }] : []),
     ...(canCommitHere ? [{ v: 'commitfiles', t: '记下这次改动', sub: defaultCommitMessage(commitDraft ?? (sessionView.title || activeSummary?.title || '')) }] : []),
     ...(canPushHere ? [{ v: 'push', t: '推到远端', sub: 'git push' }] : []),
     ...(canPullHere ? [{ v: 'pull', t: '拉回远端', sub: '只快进，不改历史' }] : []),
@@ -1281,6 +1300,7 @@ export default function App2() {
     else if (v === 'unpack') void unpackZip();
     else if (v === 'seed') void seedFile();
     else if (v === 'trash') void trashFile();
+    else if (v === 'duplicate') void duplicateFile();
     else if (v === 'lastreply') mentionLast();
     else if (v === 'retrylast') void retryLast();
     else if (v === 'cwd') void copyCwd();
@@ -1397,6 +1417,7 @@ export default function App2() {
     { g: '这条会话', t: '写回当前文件', k: '⌘S', run: () => void savePeek() },
     ...(canRevertSessionFile(active?.machine, focusFile) ? [{ g: '这条会话', t: '还原这次改动', k: focusFile || '', run: () => void revertFile() }] : []),
     ...(canTrashHere ? [{ g: '这条会话', t: '扔掉这份文件', k: focusFile || '', run: () => void trashFile() }] : []),
+    ...(canDuplicateHere ? [{ g: '这条会话', t: '复制一份', k: focusFile || '', run: () => void duplicateFile() }] : []),
     ...(canCommitHere ? [{ g: '这条会话', t: '记下这次改动', k: defaultCommitMessage(commitDraft ?? (sessionView.title || activeSummary?.title || '')), run: () => void commitFiles() }] : []),
     ...(canPushHere ? [{ g: '这条会话', t: '推到远端', k: 'push', run: () => void pushRepo() }] : []),
     ...(canPullHere ? [{ g: '这条会话', t: '拉回远端', k: 'pull', run: () => void pullRepo() }] : []),
@@ -1416,7 +1437,7 @@ export default function App2() {
     { g: '页面', t: '主控', k: '⌘1', run: () => setView('home') }, { g: '页面', t: '设备', k: '⌘2', run: () => setView('devices') }, { g: '页面', t: '通道', k: '⌘3', run: () => setView('channels') }, { g: '页面', t: '设置', k: '⌘,', run: () => setView('settings') },
     { g: '外观', t: isDarkMode ? '切到亮色' : '切到暗色', k: '', run: toggleDarkMode },
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, retryLast, canRetryLast, lastPrompt, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, retryLast, canRetryLast, lastPrompt, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -1522,6 +1543,7 @@ export default function App2() {
           {canWritePeek ? <button className="link" type="button" disabled={!peekDirty} onClick={() => { void savePeek(); }}>{peekDirty ? '保存' : '已是最新'}</button> : null}
           {canRevertSessionFile(active?.machine, focusFile) ? <button className="link" type="button" onClick={() => { void revertFile(); }}>还原</button> : null}
           {canTrashHere ? <button className="link dim" type="button" onClick={() => { void trashFile(); }}>扔掉这份文件</button> : null}
+          {canDuplicateHere ? <button className="link" type="button" onClick={() => { void duplicateFile(); }}>复制一份</button> : null}
           {canOpenSessionPath(active?.machine, peekPath || cwd) ? <button className="link" type="button" onClick={() => { void openFocusFile(); }}>用默认程序打开</button> : null}
           {active?.machine === 'local' && (focusFile || cwd) ? <button className="link" type="button" onClick={() => { void revealFocusFile(); }}>在 Finder 显示</button> : null}
           {canOpenSessionPath(active?.machine, cwd) ? <button className="link" type="button" onClick={() => { void openCwdTerm(); }}>在终端打开</button> : null}
