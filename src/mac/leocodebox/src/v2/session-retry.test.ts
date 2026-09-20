@@ -3,31 +3,25 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
-import { applyEvent, emptyView, lastLine } from './model';
-import { sessionRetryLabel } from './session-retry';
+import { canRetryLastUser, lastUserPrompt, retryLastUserToast } from './session-retry';
 
-test('过载会自己再试', () => {
-  assert.equal(sessionRetryLabel({ attempt: 1, max: 3, delayMs: 2000 }), '过载，2 秒后再试 1/3。');
-  assert.equal(sessionRetryLabel({ attempt: 2, max: 3 }), '过载，正在再试 2/3。');
-  assert.equal(sessionRetryLabel({}), '过载，正在再试。');
-  let view = applyEvent(emptyView(), { event: 'user.message', text: '改测试' });
-  assert.equal(view.status, 'running');
-  view = applyEvent(view, { event: 'session.retrying', attempt: 1, max: 3, delayMs: 2000 });
-  assert.equal(view.status, 'running');
-  const sys = view.rows.filter((row) => row.k === 'sys');
-  assert.equal(sys.at(-1)?.text, '过载，2 秒后再试 1/3。');
-  assert.equal(lastLine({
-    status: 'running',
-    last_event: { event: 'session.retrying', text: '过载，2 秒后再试 1/3。', timestamp: 1 },
-    pending_approvals: [],
-  }), '过载，2 秒后再试 1/3。');
+test('只拿上一句正经提问，插话和排队不算', () => {
+  const rows = [
+    { k: 'user' as const, key: '1', text: '先改登录', mode: 'prompt' as const },
+    { k: 'ai' as const, key: '2', text: '改完了', streaming: false },
+    { k: 'user' as const, key: '3', text: '先停一下', mode: 'steer' as const },
+    { k: 'user' as const, key: '4', text: '接着再说', mode: 'follow_up' as const },
+  ];
+  assert.equal(lastUserPrompt(rows), '先改登录');
+  assert.equal(canRetryLastUser({ canDrive: true, running: false, rows }), true);
+  assert.equal(canRetryLastUser({ canDrive: true, running: true, rows }), false);
+  assert.equal(canRetryLastUser({ canDrive: false, running: false, rows }), false);
+  assert.equal(lastUserPrompt([]), '');
+  assert.match(retryLastUserToast(), /再发上一句/);
 });
 
-test('2.0 过载再试不进输入栏', () => {
+test('2.0 壳接上了再发上一句', () => {
   const app = readFileSync(fileURLToPath(new URL('./App2.tsx', import.meta.url)), 'utf8');
-  const model = readFileSync(fileURLToPath(new URL('./model.ts', import.meta.url)), 'utf8');
-  assert.match(model, /session\.retrying/);
-  assert.match(model, /sessionRetryLabel/);
-  const acts = app.match(/className="composer-acts"[\s\S]{0,800}/)?.[0] ?? '';
-  assert.doesNotMatch(acts, /再试|sessionRetryLabel|session\.retrying/);
+  assert.match(app, /retryLast/);
+  assert.match(app, /再发上一句/);
 });

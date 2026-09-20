@@ -1,5 +1,5 @@
 import type { HarnessEvent, SessionSummary } from './api';
-import { sessionRetryLabel } from './session-retry';
+import { sessionRetryLabel } from './session-overload';
 import { clipLiveToolOutput } from './session-tool-live';
 
 // 把 harness 事件流折叠成"流水行"。一行一个对象:你 / 模型 / 工具 / 编辑 / 需要确认 / 系统。

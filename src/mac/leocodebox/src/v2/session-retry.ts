@@ -1,19 +1,29 @@
-/** pi 过载/限流会自己再试；这里只把那一拍翻成一句能看的话。 */
+import type { FlowRow } from './model';
 
-export function sessionRetryLabel(input: {
-  attempt?: unknown;
-  max?: unknown;
-  delayMs?: unknown;
-} = {}): string {
-  const attempt = Number(input.attempt);
-  const max = Number(input.max);
-  const delay = Number(input.delayMs);
-  const n = Number.isFinite(attempt) && attempt > 0 ? String(Math.round(attempt)) : '';
-  const of = Number.isFinite(max) && max > 0 ? `/${Math.round(max)}` : '';
-  const slot = n ? `${n}${of}` : '';
-  const wait = Number.isFinite(delay) && delay > 0 ? `${Math.max(1, Math.round(delay / 1000))} 秒后` : '';
-  if (wait && slot) return `过载，${wait}再试 ${slot}。`;
-  if (wait) return `过载，${wait}再试。`;
-  if (slot) return `过载，正在再试 ${slot}。`;
-  return '过载，正在再试。';
+export const LAST_PROMPT_MAX = 8_000;
+
+export function clipLastPrompt(text: string, limit = LAST_PROMPT_MAX): string {
+  const clean = text.replace(/\u0000/g, '').trim();
+  if (clean.length <= limit) return clean;
+  return `${clean.slice(0, limit)}\n…(后面还有 ${clean.length - limit} 字)`;
+}
+
+export function lastUserPrompt(rows: readonly FlowRow[] | null | undefined): string {
+  if (!rows?.length) return '';
+  for (let i = rows.length - 1; i >= 0; i -= 1) {
+    const row = rows[i];
+    if (row.k !== 'user' || !row.text.trim()) continue;
+    if ((row.mode ?? 'prompt') !== 'prompt') continue;
+    return clipLastPrompt(row.text);
+  }
+  return '';
+}
+
+export function canRetryLastUser(input: { canDrive?: boolean; running?: boolean; rows?: readonly FlowRow[] | null }): boolean {
+  if (!input.canDrive || input.running) return false;
+  return Boolean(lastUserPrompt(input.rows));
+}
+
+export function retryLastUserToast(): string {
+  return '已再发上一句';
 }
