@@ -111,6 +111,23 @@ async function openAccessibilityPrefs() {
   throw new Error(lastError || '打不开辅助功能设置');
 }
 
+async function relaunchApp() {
+  isQuitting = true;
+  desktopNotifications?.stop();
+  try {
+    if (localServer && !localServer.getSettings().keepLocalServerRunning) {
+      await localServer.stopLocalServer();
+    } else {
+      localServer?.detachOwnedServer();
+    }
+  } catch {
+    // still relaunch
+  }
+  app.relaunch();
+  app.exit(0);
+  return { ok: true };
+}
+
 let sayChild = null;
 let sayVoicePromise = null;
 
@@ -717,6 +734,7 @@ function registerIpcHandlers() {
   trustedHandle('leocodebox-desktop:play-done-sound', async () => playDoneChime());
   trustedHandle('leocodebox-desktop:open-logs', async () => openAppLogs());
   trustedHandle('leocodebox-desktop:open-accessibility', async () => openAccessibilityPrefs());
+  trustedHandle('leocodebox-desktop:relaunch', async () => relaunchApp());
 
   trustedHandle('leocodebox-desktop:notify', async (event, payload) => {
     if (!Notification.isSupported()) return { shown: false };

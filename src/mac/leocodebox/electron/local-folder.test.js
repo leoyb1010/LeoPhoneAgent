@@ -57,4 +57,5 @@ test('装机壳把选目录和揭示接到工作台', () => {
   assert.match(preload, /playDoneSound/);
   assert.match(preload, /openLogs/);
   assert.match(preload, /openAccessibility/);
+  assert.match(preload, /relaunch/);
 });
