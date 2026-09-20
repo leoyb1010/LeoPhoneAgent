@@ -95,6 +95,22 @@ test('input/editor 问句变成审批卡,答 value,跳过 cancelled', () => {
   });
 });
 
+test('notify / extension_error 变成 session.note', () => {
+  const dialect = new PiRpcDialect();
+  const note = dialect.translateLine({
+    type: 'extension_ui_request', id: 'ui-7', method: 'notify', message: '这条命令被拦住了', notifyType: 'warning',
+  }).events;
+  assert.equal(note[0]?.event, 'session.note');
+  assert.equal(note[0]?.text, '这条命令被拦住了');
+  assert.equal(note[0]?.level, 'warning');
+  const boom = dialect.translateLine({
+    type: 'extension_error', extensionPath: '/tmp/x.ts', event: 'tool_call', error: 'hook failed',
+  }).events;
+  assert.equal(boom[0]?.event, 'session.note');
+  assert.equal(boom[0]?.level, 'error');
+  assert.equal(boom[0]?.text, 'hook failed');
+});
+
 test('set_editor_text 变成 session.draft_fill', () => {
   const dialect = new PiRpcDialect();
   const { events } = dialect.translateLine({

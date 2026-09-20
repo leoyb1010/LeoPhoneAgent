@@ -3,6 +3,7 @@ import { askRespondedLabel, isAskMethod } from './session-ask';
 import { sessionCompactedLabel, sessionCompactingLabel } from './session-compact-live';
 import { composerFillFromSkill, sessionFillLabel } from './session-fill';
 import { sessionRetryLabel } from './session-overload';
+import { skillNoteLabel, skillNoteTone } from './session-skill-note';
 import { clipLiveToolOutput } from './session-tool-live';
 
 // 把 harness 事件流折叠成"流水行"。一行一个对象:你 / 模型 / 工具 / 编辑 / 需要确认 / 系统。
@@ -584,6 +585,13 @@ export function applyEvent(view: SessionView, event: HarnessEvent): SessionView 
       fillId = view.fillId + 1;
       rows = [...rows, { k: 'sys', key: nextKey(), text: sessionFillLabel(), tone: 'muted' }];
       break;
+    case 'session.note':
+      rows = [...rows, {
+        k: 'sys', key: nextKey(),
+        text: skillNoteLabel({ text: event.text, level: event.level }),
+        tone: skillNoteTone(event.level),
+      }];
+      break;
     default:
       break;
   }
@@ -678,6 +686,7 @@ export function lastLine(summary: Pick<SessionSummary, 'status' | 'last_event' |
     case 'message.delta': return ev.text;
     case 'approval.request': return `需要确认:${ev.text.split('\n')[0]}`;
     case 'session.compacting': return ev.text || sessionCompactingLabel();
+    case 'session.note': return ev.text || skillNoteLabel();
     case 'session.retrying': return ev.text || sessionRetryLabel();
     case 'run.completed': return '已完成';
     case 'run.failed': return `失败 · ${humanizeError(ev.text)}`;

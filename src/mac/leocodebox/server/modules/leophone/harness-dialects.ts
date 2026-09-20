@@ -305,6 +305,8 @@ export class PiRpcDialect implements HarnessDialect {
         });
       } else if (method === 'set_editor_text') {
         out.push({ event: 'session.draft_fill', text: str(obj.text) });
+      } else if (method === 'notify') {
+        out.push({ event: 'session.note', text: str(obj.message), level: str(obj.notifyType) || 'info' });
       }
     } else if (kind === 'agent_end') {
       // 一次 prompt 的整个回合结束;中间的 turn_end 只是工具循环里的一拍,不算完成。
@@ -366,6 +368,8 @@ export class PiRpcDialect implements HarnessDialect {
           willRetry: obj.willRetry,
         });
       }
+    } else if (kind === 'extension_error') {
+      out.push({ event: 'session.note', text: str(obj.error), level: 'error' });
     } else if (kind === 'error') {
       this.skipSettledComplete = true;
       out.push({ event: EVENT_RUN_FAILED, error: str(obj.message ?? obj.error ?? 'error') });
