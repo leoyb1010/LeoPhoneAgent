@@ -123,6 +123,8 @@ if (isLocalHttpOrigin(window.location)) {
       ipcRenderer.on('leocodebox-desktop:app-lock-changed', listener);
       return () => ipcRenderer.removeListener('leocodebox-desktop:app-lock-changed', listener);
     },
+    getCliInstall: () => ipcRenderer.invoke('leocodebox-desktop:cli-install'),
+    setCliInstall: (on) => ipcRenderer.invoke('leocodebox-desktop:cli-install', on),
     pickFolder: () => ipcRenderer.invoke('leocodebox-desktop:pick-folder'),
     revealPath: (target) => ipcRenderer.invoke('leocodebox-desktop:reveal-path', target),
     openPath: (target) => ipcRenderer.invoke('leocodebox-desktop:open-path', target),

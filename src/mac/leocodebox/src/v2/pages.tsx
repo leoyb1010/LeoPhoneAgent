@@ -228,7 +228,7 @@ function providerStatusText(p: ProviderInfo): string {
   return '未配置';
 }
 
-export function SettingsPage({ toast, onProvidersChanged, openLegacy, onLegacyClosed, onShowWhatsNew, onCheckUpdate, checkUpdateLabel, onClearCache, onLockApp, lockLabel }: {
+export function SettingsPage({ toast, onProvidersChanged, openLegacy, onLegacyClosed, onShowWhatsNew, onCheckUpdate, checkUpdateLabel, onClearCache, onLockApp, lockLabel, onInstallCli, installCliLabel }: {
   toast: (text: string, error?: boolean) => void;
   onProvidersChanged: () => void;
   openLegacy?: boolean;
@@ -239,6 +239,8 @@ export function SettingsPage({ toast, onProvidersChanged, openLegacy, onLegacyCl
   onClearCache?: () => void;
   onLockApp?: () => void;
   lockLabel?: string;
+  onInstallCli?: () => void;
+  installCliLabel?: string;
 }) {
   const [providers, setProviders] = useState<ProviderInfo[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -457,7 +459,7 @@ export function SettingsPage({ toast, onProvidersChanged, openLegacy, onLegacyCl
         </button>
       ))}
       <div className="sec">更新与数据</div>
-      <div className="trow st"><span className="dot ok" /><div className="name">{version || '开发版'}</div><div className="sub" style={{ fontSize: 12 }}>{note ? `本次更新 · ${note.version} · ${note.date}` : '装机后首启弹「本次更新」;版本号不往前走就不弹'}</div><div className="acts">{onShowWhatsNew ? <button className="link" onClick={onShowWhatsNew}>再看一次</button> : null}{onCheckUpdate ? <button className="link" type="button" onClick={onCheckUpdate}>{checkUpdateLabel || '检查更新'}</button> : null}{onClearCache ? <button className="link" type="button" onClick={onClearCache}>清掉缓存</button> : null}{onLockApp ? <button className="link" type="button" onClick={onLockApp}>{lockLabel || '锁住软件'}</button> : null}<button className="link" onClick={() => setLegacyOpen(true)}>更多设置(中继 · 语音 · MCP · 通知)</button></div></div>
+      <div className="trow st"><span className="dot ok" /><div className="name">{version || '开发版'}</div><div className="sub" style={{ fontSize: 12 }}>{note ? `本次更新 · ${note.version} · ${note.date}` : '装机后首启弹「本次更新」;版本号不往前走就不弹'}</div><div className="acts">{onShowWhatsNew ? <button className="link" onClick={onShowWhatsNew}>再看一次</button> : null}{onCheckUpdate ? <button className="link" type="button" onClick={onCheckUpdate}>{checkUpdateLabel || '检查更新'}</button> : null}{onClearCache ? <button className="link" type="button" onClick={onClearCache}>清掉缓存</button> : null}{onLockApp ? <button className="link" type="button" onClick={onLockApp}>{lockLabel || '锁住软件'}</button> : null}{onInstallCli ? <button className="link" type="button" onClick={onInstallCli}>{installCliLabel || '装进终端'}</button> : null}<button className="link" onClick={() => setLegacyOpen(true)}>更多设置(中继 · 语音 · MCP · 通知)</button></div></div>
       {note && (
         <ul className="note-list">
           {note.items.map((item) => <li key={item}>{item}</li>)}

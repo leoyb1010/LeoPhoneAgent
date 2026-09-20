@@ -1,9 +1,10 @@
 import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Notification, powerMonitor, powerSaveBlocker, safeStorage, session, shell, systemPreferences, webContents } from 'electron';
 import updaterPackage from 'electron-updater';
 import { randomBytes } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
+import { constants as fsConstants, mkdirSync } from 'node:fs';
 import { execFile, spawn } from 'node:child_process';
-import { copyFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { access, chmod, copyFile, mkdir, readFile, rm, stat, unlink, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { busyQuitCopy, shouldConfirmBusyQuit } from './busy-quit.js';
 import { DesktopWindowManager } from './desktopWindow.js';
 import { DesktopNotificationsController } from './desktopNotifications.js';
+import { CLI_MARK, cliBinPaths, cliShimBody, cwdFromArgv, localBinDir, pathHasLocalBin, withLocalBinOnPath } from './cli-install.js';
 import { resolveLeoSchemeCwd } from './leo-scheme.js';
 import { expandDesktopFolderPath, isDesktopFolderAllowed } from './local-folder.js';
 import { LocalServerController } from './localServer.js';
@@ -121,6 +123,63 @@ async function writeAppLock(on) {
     }
   }
   return setAppLock(on);
+}
+
+async function isWritableDir(dir) {
+  try {
+    await access(dir, fsConstants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function getCliInstall() {
+  for (const file of cliBinPaths()) {
+    try {
+      const text = await readFile(file, 'utf8');
+      if (text.includes(CLI_MARK)) return { on: true, path: file };
+    } catch {
+      /* missing */
+    }
+  }
+  return { on: false, path: path.join(localBinDir(), 'leocodebox') };
+}
+
+async function ensureZprofilePath() {
+  if (pathHasLocalBin(process.env.PATH || '')) return;
+  const file = path.join(homedir(), '.zprofile');
+  let existing = '';
+  try {
+    existing = await readFile(file, 'utf8');
+  } catch {
+    existing = '';
+  }
+  const next = withLocalBinOnPath(existing);
+  if (next === existing) return;
+  await writeFile(file, next, { encoding: 'utf8' });
+}
+
+async function writeCliInstall(on) {
+  const paths = cliBinPaths();
+  if (!on) {
+    for (const file of paths) {
+      try {
+        const text = await readFile(file, 'utf8');
+        if (text.includes(CLI_MARK)) await unlink(file);
+      } catch {
+        /* missing */
+      }
+    }
+    return getCliInstall();
+  }
+  let dest = path.join(localBinDir(), 'leocodebox');
+  if (await isWritableDir('/usr/local/bin')) dest = paths[0];
+  else await mkdir(localBinDir(), { recursive: true, mode: 0o755 });
+  await writeFile(dest, cliShimBody(), { encoding: 'utf8', mode: 0o755 });
+  await chmod(dest, 0o755);
+  if (dest.startsWith(localBinDir())) await ensureZprofilePath();
+  return getCliInstall();
 }
 
 const DONE_CHIME = '/System/Library/Sounds/Glass.aiff';
@@ -797,6 +856,9 @@ function registerIpcHandlers() {
   trustedHandle('leocodebox-desktop:app-lock', async (_event, raw) => (
     raw === undefined || raw === null ? getAppLock() : writeAppLock(Boolean(raw))
   ));
+  trustedHandle('leocodebox-desktop:cli-install', async (_event, raw) => (
+    raw === undefined || raw === null ? getCliInstall() : writeCliInstall(Boolean(raw))
+  ));
 
   trustedHandle('leocodebox-desktop:notify', async (event, payload) => {
     if (!Notification.isSupported()) return { shown: false };
@@ -1176,6 +1238,21 @@ function enqueueLeoScheme(raw) {
   flushLeoSchemes();
 }
 
+function enqueueOpenCwd(raw) {
+  const text = String(raw ?? '').trim();
+  if (!text || !isDesktopFolderAllowed(text)) return;
+  const cwd = expandDesktopFolderPath(text);
+  enqueueLeoScheme(`leocodebox://open?cwd=${encodeURIComponent(cwd)}`);
+}
+
+function ingestArgv(argv) {
+  const cwd = cwdFromArgv(argv);
+  if (cwd) enqueueOpenCwd(cwd);
+  for (const arg of argv || []) {
+    if (String(arg).startsWith('leocodebox:')) enqueueLeoScheme(arg);
+  }
+}
+
 function registerLeoScheme() {
   if (!app.isDefaultProtocolClient('leocodebox')) {
     app.setAsDefaultProtocolClient('leocodebox');
@@ -1184,9 +1261,7 @@ function registerLeoScheme() {
     event.preventDefault();
     enqueueLeoScheme(url);
   });
-  for (const arg of process.argv) {
-    if (String(arg).startsWith('leocodebox:')) enqueueLeoScheme(arg);
-  }
+  ingestArgv(process.argv);
 }
 
 function registerSingleInstance() {
@@ -1197,8 +1272,7 @@ function registerSingleInstance() {
   }
 
   app.on('second-instance', (_event, argv) => {
-    const url = (argv || []).find((arg) => String(arg).startsWith('leocodebox:'));
-    if (url) enqueueLeoScheme(url);
+    ingestArgv(argv);
     raiseMainWindow();
   });
 
