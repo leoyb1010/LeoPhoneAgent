@@ -8,6 +8,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
+import { busyQuitCopy, shouldConfirmBusyQuit } from './busy-quit.js';
 import { DesktopWindowManager } from './desktopWindow.js';
 import { DesktopNotificationsController } from './desktopNotifications.js';
 import { expandDesktopFolderPath, isDesktopFolderAllowed } from './local-folder.js';
@@ -809,13 +810,43 @@ function registerAppEvents() {
     }
   });
 
-  app.on('before-quit', () => {
-    desktopNotifications?.stop();
-  });
-
+  let busyQuitAsking = false;
   app.on('before-quit', (event) => {
     if (isQuitting) return;
+    if (busyQuitAsking) {
+      event.preventDefault();
+      return;
+    }
+    const keepServer = Boolean(localServer?.getSettings()?.keepLocalServerRunning);
+    if (shouldConfirmBusyQuit({ busy: keepAwakeIds.length > 0, keepServer })) {
+      event.preventDefault();
+      busyQuitAsking = true;
+      const copy = busyQuitCopy();
+      void dialog.showMessageBox(desktopWindow?.getMainWindow() || undefined, {
+        type: 'warning',
+        buttons: [copy.stay, copy.quit],
+        defaultId: 0,
+        cancelId: 0,
+        message: copy.message,
+        detail: copy.detail,
+      }).then(({ response }) => {
+        busyQuitAsking = false;
+        if (response !== 1) return;
+        isQuitting = true;
+        desktopNotifications?.stop();
+        if (localServer && !localServer.getSettings().keepLocalServerRunning) {
+          void localServer.stopLocalServer().finally(() => app.quit());
+          return;
+        }
+        localServer?.detachOwnedServer();
+        app.quit();
+      }).catch(() => {
+        busyQuitAsking = false;
+      });
+      return;
+    }
     isQuitting = true;
+    desktopNotifications?.stop();
     if (!localServer) return;
 
     if (localServer.getSettings().keepLocalServerRunning) {

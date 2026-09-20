@@ -26,6 +26,8 @@ test('退出时收本地服务走 stopLocalServer —— 接管来的服务也�
   const handler = block(main, "app.on('before-quit', (event)", "app.on('window-all-closed'");
   assert.ok(handler.includes('localServer.stopLocalServer()'), '必须用 stopLocalServer,shutdownOwnedServer 管不到接管来的服务');
   assert.ok(handler.includes('keepLocalServerRunning'), '只有用户显式开了「退出后保温」才允许留后台服务');
+  assert.ok(handler.includes('shouldConfirmBusyQuit'), '还在跑时退出要先问');
+  assert.ok(handler.includes('busyQuitCopy'), '问的文案走 busyQuitCopy');
 });
 
 test('退出流程进行中不再重开窗口', () => {
