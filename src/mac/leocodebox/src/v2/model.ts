@@ -6,6 +6,7 @@ import { sessionRetryLabel } from './session-overload';
 import { skillNoteLabel, skillNoteTone } from './session-skill-note';
 import { toolImageDataUrls } from './session-tool-image';
 import { clipLiveToolOutput } from './session-tool-live';
+import { sessionToolSettleRows } from './session-tool-settle';
 import { sessionUsageLabel } from './session-usage';
 
 // 把 harness 事件流折叠成"流水行"。一行一个对象:你 / 模型 / 工具 / 编辑 / 需要确认 / 系统。
@@ -492,11 +493,11 @@ export function applyEvent(view: SessionView, event: HarnessEvent): SessionView 
       status = 'running';
       break;
     case 'run.completed':
-      rows = closeStreaming(rows);
+      rows = sessionToolSettleRows(closeStreaming(rows), false);
       status = 'idle';
       break;
     case 'run.failed':
-      rows = [...closeStreaming(rows), { k: 'sys', key: nextKey(), text: `失败:${humanizeError(str(event.error))}`, tone: 'error' }];
+      rows = [...sessionToolSettleRows(closeStreaming(rows), true), { k: 'sys', key: nextKey(), text: `失败:${humanizeError(str(event.error))}`, tone: 'error' }];
       status = 'failed';
       break;
     case 'harness.translate_error': {
@@ -505,7 +506,7 @@ export function applyEvent(view: SessionView, event: HarnessEvent): SessionView 
       break;
     }
     case 'run.cancelled':
-      rows = [...closeStreaming(rows), { k: 'sys', key: nextKey(), text: '已停止。进程不在了,可以在同一目录开一条新的接着干。', tone: 'muted' }];
+      rows = [...sessionToolSettleRows(closeStreaming(rows), true), { k: 'sys', key: nextKey(), text: '已停止。进程不在了,可以在同一目录开一条新的接着干。', tone: 'muted' }];
       status = 'cancelled';
       break;
     case 'session.title': {
@@ -552,7 +553,7 @@ export function applyEvent(view: SessionView, event: HarnessEvent): SessionView 
       break;
     case 'session.aborted':
       pendingApprovals.clear();
-      rows = [...closeStreaming(rows), { k: 'sys', key: nextKey(), text: '已停这一轮，会话还在', tone: 'muted' }];
+      rows = [...sessionToolSettleRows(closeStreaming(rows), true), { k: 'sys', key: nextKey(), text: '已停这一轮，会话还在', tone: 'muted' }];
       status = 'idle';
       break;
     case 'session.rewound': {

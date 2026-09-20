@@ -1,6 +1,6 @@
 {
   "name": "leocodebox",
-  "version": "2.2.11",
+  "version": "2.2.12",
   "productName": "leocodebox",
   "description": "LeoPhoneAgent Mac workstation for local coding agents",
   "type": "module",
