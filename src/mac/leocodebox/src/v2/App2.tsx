@@ -146,6 +146,7 @@ import { PINNED_SESSIONS_KEY, comparePinnedFirst, pinSessionToast, readPinnedSes
 import { canSearchSession, searchQueryReady, searchSessionToast, type SessionSearchHit } from './session-search';
 import { canRunSessionBash, parseComposerBash } from './session-shell';
 import { canRunSessionSlash, parseComposerSlash } from './session-slash';
+import { sessionTreeNeedsRefresh } from './session-tree-live';
 import { canShowSessionLog, type SessionCommit } from './session-log';
 import { approvalChoiceActions, approvalToast, dockNeedBadge, firstPendingApproval, noticeNotifyPayload, noticesFromSnapshot, sessionPathTarget } from './session-notice';
 import { isBrowserOffline, offlineBanner, offlineToast, onlineToast } from './session-offline';
@@ -196,15 +197,17 @@ function useInterval(fn: () => void, ms: number): void {
 }
 
 /** 会话事件流:先回放再跟随;断了按最后 seq 续传。 */
-function useSessionStream(target: SessionTarget | null, seed: SessionSummary | null): { view: SessionView; stream: 'off' | 'live' | 'reconnecting' } {
+function useSessionStream(target: SessionTarget | null, seed: SessionSummary | null): { view: SessionView; stream: 'off' | 'live' | 'reconnecting'; treeTick: number } {
   const [view, setView] = useState<SessionView>(() => emptyView(seed));
   const [stream, setStream] = useState<'off' | 'live' | 'reconnecting'>('off');
+  const [treeTick, setTreeTick] = useState(0);
   const seqRef = useRef(0);
   const statusRef = useRef(seed?.status ?? '');
   useEffect(() => {
     seqRef.current = 0;
     statusRef.current = seed?.status ?? '';
     setView(emptyView(seed));
+    setTreeTick(0);
     setStream(target && shouldReconnectSessionStream(seed?.status) ? 'reconnecting' : 'off');
     if (!target) return undefined;
     let cancelled = false;
@@ -219,6 +222,7 @@ function useSessionStream(target: SessionTarget | null, seed: SessionSummary | n
           statusRef.current = next.status;
           return next;
         });
+        if (sessionTreeNeedsRefresh(event)) setTreeTick((n) => n + 1);
       }, () => {
         if (cancelled) return;
         if (!shouldReconnectSessionStream(statusRef.current)) {
@@ -240,7 +244,7 @@ function useSessionStream(target: SessionTarget | null, seed: SessionSummary | n
     // 终态 → 活着(接着这条)必须重连;同一条活着时 running/idle 不要重挂。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target?.machine, target?.id, shouldReconnectSessionStream(seed?.status) ? 'live' : 'ended']);
-  return { view, stream };
+  return { view, stream, treeTick };
 }
 
 export default function App2() {
@@ -537,7 +541,7 @@ export default function App2() {
   const allSessions = useMemo(() => groups.flatMap((g) => g.sessions.map((s) => ({ machine: g.id, machineName: g.name, s }))).filter((x) => !hiddenSet.has(sessionKey(x.machine, x.s.session_id))), [groups, hiddenSet]);
   const activeEntry = useMemo(() => allSessions.find((x) => active && x.machine === active.machine && x.s.session_id === active.id) ?? null, [allSessions, active]);
   const activeSummary = activeEntry?.s ?? null;
-  const { view: sessionView, stream } = useSessionStream(active, activeSummary);
+  const { view: sessionView, stream, treeTick } = useSessionStream(active, activeSummary);
   const canDrive = Boolean(activeSummary && sessionCanDrive(activeSummary.status, sessionView.status));
   const canFollowUp = Boolean(active && composerCanFollowUp(active.machine, sessionView.status));
   const queuedFollowUps = pendingFollowUps(sessionView.rows);
@@ -3667,7 +3671,7 @@ export default function App2() {
                 ) : null}
                 {filePeekBlock}
                 <div className="drawer-host local-files-tree"><Suspense fallback={<div style={{ padding: 16, color: 'var(--fg3)' }}>加载中…</div>}>
-                  <FileTree selectedProject={workspace} onFileOpen={(filePath) => setFocusFile(filePath)} />
+                  <FileTree selectedProject={workspace} reloadToken={treeTick} onFileOpen={(filePath) => setFocusFile(filePath)} />
                 </Suspense></div>
               </div>
             ) : (

@@ -10,7 +10,7 @@ type UseFileTreeDataResult = {
   refreshFiles: () => void;
 };
 
-export function useFileTreeData(selectedProject: Project | null): UseFileTreeDataResult {
+export function useFileTreeData(selectedProject: Project | null, reloadToken = 0): UseFileTreeDataResult {
   const [files, setFiles] = useState<FileTreeNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -75,7 +75,7 @@ export function useFileTreeData(selectedProject: Project | null): UseFileTreeDat
       isActive = false;
       abortControllerRef.current?.abort();
     };
-  }, [selectedProject?.projectId, refreshKey]);
+  }, [selectedProject?.projectId, refreshKey, reloadToken]);
 
   return {
     files,
