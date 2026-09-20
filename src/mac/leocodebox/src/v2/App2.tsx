@@ -10,6 +10,7 @@ import { dropBrowserFile, pasteSessionImage, pickSessionFiles } from './desktop-
 import { onSessionNoticeAction, onSessionNoticeClick, setDockNeedBadge, showSessionNotice } from './desktop-notice';
 import { canAcceptSessionDrop, mentionDroppedFile } from './session-drop';
 import { canCommitSessionFiles, commitSessionFilesToast, defaultCommitMessage } from './session-commit';
+import { canShowSessionDiff } from './session-diff';
 import { canRevertSessionFile, revertSessionFileToast } from './session-revert';
 import { approvalChoiceActions, approvalToast, dockNeedBadge, firstPendingApproval, noticeNotifyPayload, noticesFromSnapshot, sessionPathTarget } from './session-notice';
 import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerCanFollowUp, composerNeedsModelSwitch, composerPlaceholder, composerRunningHint, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, followUpToast, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mentionWindowRead, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, pendingFollowUps, prettyModelName, providerOf, queueClearedToast, rankModelsForPicker, readHiddenSessionKeys, relativeTime, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionCanResume, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, usableWindowMenus, windowBoundLabel, windowMenuLabel, windowPadGesture, WINDOW_KEY_BUTTONS, type FlowRow, type Group, type SessionView } from './model';
@@ -383,6 +384,10 @@ export default function App2() {
     setFilePeek('正在读…');
     setFilePeekDraft('正在读…');
     const load = async (): Promise<string> => {
+      if (drawer === 'diff' && canShowSessionDiff(active.machine, focusFile)) {
+        const row = await api.diffLocalFile(active, focusFile);
+        return clipFilePeek(row.patch);
+      }
       if (active.machine === 'local' && workspace?.projectId && localPath) {
         try {
           const row = await api.readProjectFile(workspace.projectId, localPath);
@@ -1062,7 +1067,7 @@ export default function App2() {
   const drawerTitle = remoteCopy?.title
     ?? (drawer === 'diff' ? `本次改动${editRows.length ? ` · ${editRows.length}` : ''}` : ({ term: '终端', files: '文件', diff: '本次改动', browser: '浏览器' } as const)[drawer ?? 'term']);
   const peekPath = focusFile ? sessionFilePath(cwd || workspace?.fullPath || '', focusFile) : '';
-  const canWritePeek = peekCanWriteBack({ machine: active?.machine, projectId: workspace?.projectId, path: peekPath, peek: filePeek });
+  const canWritePeek = drawer !== 'diff' && peekCanWriteBack({ machine: active?.machine, projectId: workspace?.projectId, path: peekPath, peek: filePeek });
   const peekDirty = canWritePeek && filePeekDraft != null && filePeekDraft !== filePeek;
   const filePeekBlock = filePeek != null ? (
     <div className="local-files-peek-wrap">
@@ -1378,7 +1383,7 @@ export default function App2() {
             </div>
           ) : drawer === 'diff' ? (
             filePins.length === 0 && filePeek == null ? (
-              <div className="remote-hint"><b>这条会话还没有改动文件。</b><p>改过之后会出现在这里，点文件名看正文，不再只倒工具输出。</p></div>
+              <div className="remote-hint"><b>这条会话还没有改动文件。</b><p>改过之后会出现在这里，点文件名看这次改了哪几行。</p></div>
             ) : (
               <div className="local-files">
                 {artifactError ? <p className="remote-hint">{artifactError}</p> : null}

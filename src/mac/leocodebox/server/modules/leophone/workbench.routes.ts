@@ -12,6 +12,7 @@ import { HarnessRequestError, getHarnessManager, type HarnessSession } from './h
 import { copyDroppedFile, writeDroppedBytes } from './local-drop.js';
 import { openLocalPath, openLocalTerminal, pickLocalFolder, revealLocalPath } from './local-folder.js';
 import { commitSessionFiles } from './session-commit.js';
+import { diffSessionFile } from './session-diff.js';
 import { revertSessionFile } from './session-revert.js';
 import { ensureSessionWorkspace } from './session-workspace.js';
 import { availableHarnesses } from './harness-specs.js';
@@ -417,6 +418,17 @@ router.post('/leophone/local/sessions/:sessionId/file/revert', async (req, res) 
   const file = String(((req.body ?? {}) as Record<string, unknown>).file ?? '').trim();
   try {
     res.json(await revertSessionFile(session.cwd, file));
+  } catch (error) {
+    jsonError(res, 409, error instanceof Error ? error.message : String(error));
+  }
+});
+
+router.post('/leophone/local/sessions/:sessionId/file/diff', async (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  const file = String(((req.body ?? {}) as Record<string, unknown>).file ?? '').trim();
+  try {
+    res.json(await diffSessionFile(session.cwd, file));
   } catch (error) {
     jsonError(res, 409, error instanceof Error ? error.message : String(error));
   }

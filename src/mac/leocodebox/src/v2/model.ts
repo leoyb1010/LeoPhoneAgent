@@ -579,7 +579,9 @@ export function humanizeError(raw: string): string {
     return '模型还在跑。插话会插进这一轮；接着会排在后面等它说完';
   }
   if (/没有 git/.test(text) && /记下/.test(text)) return '这个目录没有 git，没法记下这次改动';
+  if (/没有 git/.test(text) && /看这次改了什么|看改动/.test(text)) return '这个目录没有 git，没法看这次改了什么';
   if (/没有 git/.test(text)) return '这个目录没有 git，没法还原到改之前';
+  if (/没有可看的改动/.test(text)) return '这个文件没有可看的改动';
   if (/没有可记下/.test(text)) return '这些文件没有可记下的改动';
   if (/没有可还原/.test(text)) return '这个文件没有可还原的改动';
   if (/还没设置 git 用户名/.test(text)) return '这个仓库还没设置 git 用户名，没法记下';
