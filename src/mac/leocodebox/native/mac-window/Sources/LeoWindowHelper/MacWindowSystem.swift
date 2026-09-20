@@ -335,6 +335,24 @@ import WindowCore
         guard AXIsProcessTrusted() else { throw WindowFailure("permission-denied", "Accessibility permission was revoked before input.") }
     }
 
+    private func hidPoint(_ window: WindowObservation, x: Double, y: Double) throws -> CGPoint {
+        let bounds = try rect(window.bounds)
+        let point = CGPoint(x: bounds.minX + x * bounds.width, y: bounds.minY + y * bounds.height)
+        guard NSScreen.screens.contains(where: { displayRect($0).contains(point) }) else {
+            throw WindowFailure("window-occluded", "The requested point is outside the visible displays.")
+        }
+        return point
+    }
+
+    private func requireHidTarget(_ window: WindowObservation, deadline: Double) throws {
+        let finalTarget = try selected(window.identity)
+        guard finalTarget.frontmost, !finalTarget.occluded, finalTarget.onScreen,
+              finalTarget.bounds == window.bounds, finalTarget.scale == window.scale else {
+            throw WindowFailure("window-changed", "The exact foreground target changed before coordinate input.")
+        }
+        try beforeInput(deadline)
+    }
+
     private static func keyCode(_ name: String) -> CGKeyCode? {
         switch name {
         case "return": return 36
@@ -419,6 +437,41 @@ import WindowCore
             }
             try beforeInput(deadline)
             down.post(tap: .cghidEventTap); up.post(tap: .cghidEventTap)
+        case "scroll":
+            guard CGPreflightPostEventAccess(), let x = action.x, let y = action.y,
+                  action.coordinateSpace == "normalized-window" else {
+                throw WindowFailure("permission-denied", "Scroll requires event posting permission and a window point.")
+            }
+            let point = try hidPoint(window, x: x, y: y)
+            let dx = Int32((action.dx ?? 0).rounded())
+            let dy = Int32((action.dy ?? 0).rounded())
+            guard dx != 0 || dy != 0,
+                  let move = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left),
+                  let wheel = CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 2, wheel1: -dy, wheel2: -dx, wheel3: 0) else {
+                throw WindowFailure("execution-failed", "The scroll events could not be created.")
+            }
+            try requireHidTarget(window, deadline: deadline)
+            move.post(tap: .cghidEventTap)
+            wheel.post(tap: .cghidEventTap)
+        case "drag":
+            guard CGPreflightPostEventAccess(), let x = action.x, let y = action.y, let x2 = action.x2, let y2 = action.y2,
+                  action.coordinateSpace == "normalized-window" else {
+                throw WindowFailure("permission-denied", "Drag requires event posting permission and two window points.")
+            }
+            let start = try hidPoint(window, x: x, y: y)
+            let end = try hidPoint(window, x: x2, y: y2)
+            try requireHidTarget(window, deadline: deadline)
+            let steps = 6
+            for index in 0...steps {
+                let t = Double(index) / Double(steps)
+                let point = CGPoint(x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t)
+                let type: CGEventType = index == 0 ? .leftMouseDown : (index == steps ? .leftMouseUp : .leftMouseDragged)
+                guard let event = CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: .left) else {
+                    throw WindowFailure("execution-failed", "The drag events could not be created.")
+                }
+                event.setIntegerValueField(.mouseEventClickState, value: 1)
+                event.post(tap: .cghidEventTap)
+            }
         default: throw WindowFailure("unsupported-action", "The native action is not supported.")
         }
     }

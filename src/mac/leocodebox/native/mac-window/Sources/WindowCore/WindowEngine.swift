@@ -88,6 +88,9 @@ import Foundation
         if action.name == "key" && !permission.postEvents {
             throw WindowFailure("permission-denied", "Named key input requires event posting permission.")
         }
+        if (action.name == "scroll" || action.name == "drag") && !permission.postEvents {
+            throw WindowFailure("permission-denied", "Scroll and drag require event posting permission.")
+        }
     }
     private func verifyIdentity(_ expected: WindowIdentity, _ actual: WindowObservation) throws {
         guard expected.pid == actual.pid, expected.windowId == actual.windowId,
@@ -122,6 +125,12 @@ import Foundation
         }
         if action.name == "key" {
             return after.frontmost && after.bounds == before.bounds ? "key-posted" : nil
+        }
+        if action.name == "scroll" {
+            return after.frontmost && after.bounds == before.bounds ? "scroll-posted" : nil
+        }
+        if action.name == "drag" {
+            return after.frontmost && after.bounds == before.bounds ? "drag-posted" : nil
         }
         return nil
     }

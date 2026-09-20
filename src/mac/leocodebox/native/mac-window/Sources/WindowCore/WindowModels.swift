@@ -96,9 +96,14 @@ public struct WindowAction: Codable, Equatable, Sendable {
     public var y: Double?
     public var coordinateSpace: String?
     public var key: String?
+    public var dx: Double?
+    public var dy: Double?
+    public var x2: Double?
+    public var y2: Double?
     public static let namedKeys: Set<String> = ["return", "escape", "tab", "space", "up", "down", "left", "right", "delete"]
-    public init(name: String, elementId: String? = nil, value: String? = nil, path: [String]? = nil, x: Double? = nil, y: Double? = nil, coordinateSpace: String? = nil, key: String? = nil) {
+    public init(name: String, elementId: String? = nil, value: String? = nil, path: [String]? = nil, x: Double? = nil, y: Double? = nil, coordinateSpace: String? = nil, key: String? = nil, dx: Double? = nil, dy: Double? = nil, x2: Double? = nil, y2: Double? = nil) {
         self.name = name; self.elementId = elementId; self.value = value; self.path = path; self.x = x; self.y = y; self.coordinateSpace = coordinateSpace; self.key = key
+        self.dx = dx; self.dy = dy; self.x2 = x2; self.y2 = y2
     }
     public func supported(kind: String) -> Bool {
         switch (kind, name) {
@@ -107,11 +112,27 @@ public struct WindowAction: Codable, Equatable, Sendable {
         case ("ax", "setValue"): return elementId?.isEmpty == false && elementId!.count <= 128 && value != nil && value!.count <= 4096
         case ("menu", "select"): return path != nil && (2...6).contains(path!.count) && path!.allSatisfy { !$0.isEmpty && $0.count <= 160 }
         case ("coord", "click"):
-            return coordinateSpace == "normalized-window" && x != nil && y != nil && x!.isFinite && y!.isFinite && x! > 0 && x! < 1 && y! > 0 && y! < 1
+            return coordinateSpace == "normalized-window" && Self.normalized(x) && Self.normalized(y)
+        case ("coord", "scroll"):
+            return coordinateSpace == "normalized-window" && Self.normalized(x) && Self.normalized(y)
+                && (Self.delta(dx) || Self.delta(dy))
+                && (dx == nil || (dx!.isFinite && abs(dx!) <= 24))
+                && (dy == nil || (dy!.isFinite && abs(dy!) <= 24))
+        case ("coord", "drag"):
+            return coordinateSpace == "normalized-window" && Self.normalized(x) && Self.normalized(y)
+                && Self.normalized(x2) && Self.normalized(y2) && (x != x2 || y != y2)
         case ("key", "key"):
             return key.map { Self.namedKeys.contains($0) } == true
         default: return false
         }
+    }
+    private static func normalized(_ value: Double?) -> Bool {
+        guard let value, value.isFinite, value > 0, value < 1 else { return false }
+        return true
+    }
+    private static func delta(_ value: Double?) -> Bool {
+        guard let value, value.isFinite, value != 0, abs(value) <= 24 else { return false }
+        return true
     }
 }
 public struct WindowRequest: Codable, Sendable {

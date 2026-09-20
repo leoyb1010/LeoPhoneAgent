@@ -62,6 +62,8 @@ export type WindowAction =
   | { name: 'setValue'; elementId: string; value: string }
   | { name: 'select'; path: string[] }
   | { name: 'click'; x: number; y: number; coordinateSpace: 'normalized-window' }
+  | { name: 'scroll'; x: number; y: number; coordinateSpace: 'normalized-window'; dx?: number; dy?: number }
+  | { name: 'drag'; x: number; y: number; x2: number; y2: number; coordinateSpace: 'normalized-window' }
   | { name: 'key'; key: WindowNamedKey };
 export type WindowActionReceipt = {
   attempted: boolean;
@@ -104,14 +106,36 @@ export function parseWindowAction(kind: string, value: unknown): WindowAction | 
     && action.path.every((item) => typeof item === 'string' && item.length > 0 && item.length <= 160)) {
     return { name: 'select', path: action.path as string[] };
   }
-  if (kind === 'coord' && action.name === 'click' && action.coordinateSpace === 'normalized-window'
-    && typeof action.x === 'number' && Number.isFinite(action.x) && action.x > 0 && action.x < 1
-    && typeof action.y === 'number' && Number.isFinite(action.y) && action.y > 0 && action.y < 1) {
-    return { name: 'click', x: action.x, y: action.y, coordinateSpace: 'normalized-window' };
+  if (kind === 'coord' && action.coordinateSpace === 'normalized-window') {
+    const x = parseNormalizedUnit(action.x);
+    const y = parseNormalizedUnit(action.y);
+    if (action.name === 'click' && x !== null && y !== null) return { name: 'click', x, y, coordinateSpace: 'normalized-window' };
+    if (action.name === 'scroll' && x !== null && y !== null) {
+      const dx = action.dx === undefined ? undefined : parseScrollDelta(action.dx);
+      const dy = action.dy === undefined ? undefined : parseScrollDelta(action.dy);
+      if ((dx !== undefined && dx === null) || (dy !== undefined && dy === null)) return null;
+      if (!dx && !dy) return null;
+      return { name: 'scroll', x, y, coordinateSpace: 'normalized-window', ...(dx ? { dx } : {}), ...(dy ? { dy } : {}) };
+    }
+    const x2 = parseNormalizedUnit(action.x2);
+    const y2 = parseNormalizedUnit(action.y2);
+    if (action.name === 'drag' && x !== null && y !== null && x2 !== null && y2 !== null && (x !== x2 || y !== y2)) {
+      return { name: 'drag', x, y, x2, y2, coordinateSpace: 'normalized-window' };
+    }
   }
   const namedKey = parseWindowNamedKey(action.key);
   if (kind === 'key' && action.name === 'key' && namedKey) return { name: 'key', key: namedKey };
   return null;
+}
+
+export function parseNormalizedUnit(value: unknown): number | null {
+  const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : Number.NaN;
+  return Number.isFinite(n) && n > 0 && n < 1 ? n : null;
+}
+
+export function parseScrollDelta(value: unknown): number | null {
+  const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : Number.NaN;
+  return Number.isFinite(n) && n !== 0 && Math.abs(n) <= 24 ? n : null;
 }
 
 export function parseWindowNamedKey(value: unknown): WindowNamedKey | null {
@@ -119,10 +143,22 @@ export function parseWindowNamedKey(value: unknown): WindowNamedKey | null {
 }
 
 export function parseNormalizedClickPoint(x: unknown, y: unknown): { x: number; y: number } | null {
-  const nx = typeof x === 'number' ? x : typeof x === 'string' && x.trim() !== '' ? Number(x) : Number.NaN;
-  const ny = typeof y === 'number' ? y : typeof y === 'string' && y.trim() !== '' ? Number(y) : Number.NaN;
-  const action = parseWindowAction('coord', { name: 'click', x: nx, y: ny, coordinateSpace: 'normalized-window' });
+  const action = parseWindowAction('coord', { name: 'click', x: parseLooseNumber(x), y: parseLooseNumber(y), coordinateSpace: 'normalized-window' });
   return action && action.name === 'click' ? { x: action.x, y: action.y } : null;
+}
+
+function parseLooseNumber(value: unknown): number {
+  return typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : Number.NaN;
+}
+
+export function parseWindowScroll(x: unknown, y: unknown, dx: unknown, dy: unknown): { x: number; y: number; dx?: number; dy?: number } | null {
+  const action = parseWindowAction('coord', { name: 'scroll', x: parseLooseNumber(x), y: parseLooseNumber(y), dx, dy, coordinateSpace: 'normalized-window' });
+  return action && action.name === 'scroll' ? { x: action.x, y: action.y, ...(action.dx ? { dx: action.dx } : {}), ...(action.dy ? { dy: action.dy } : {}) } : null;
+}
+
+export function parseWindowDrag(x: unknown, y: unknown, x2: unknown, y2: unknown): { x: number; y: number; x2: number; y2: number } | null {
+  const action = parseWindowAction('coord', { name: 'drag', x: parseLooseNumber(x), y: parseLooseNumber(y), x2: parseLooseNumber(x2), y2: parseLooseNumber(y2), coordinateSpace: 'normalized-window' });
+  return action && action.name === 'drag' ? { x: action.x, y: action.y, x2: action.x2, y2: action.y2 } : null;
 }
 
 export function parseWindowTypeText(value: unknown): string | null {

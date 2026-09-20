@@ -175,6 +175,34 @@ final class WindowEngineTests: XCTestCase {
         XCTAssertEqual(invalid.reason, "unsupported-action"); XCTAssertEqual(system.performed, 0)
     }
 
+    func testScrollAndDragRequirePostEventsAndStayOnTheSameForegroundWindow() async {
+        let system = FixtureSystem()
+        system.granted.postEvents = false
+        let denied = await WindowEngine(system: system).handle(request(WindowAction(name: "scroll", x: 0.5, y: 0.5, coordinateSpace: "normalized-window", dy: -3), kind: "coord"))
+        XCTAssertEqual(denied.reason, "permission-denied")
+        XCTAssertEqual(system.performed, 0)
+        system.granted.postEvents = true
+        let zero = await WindowEngine(system: system).handle(request(WindowAction(name: "scroll", x: 0.5, y: 0.5, coordinateSpace: "normalized-window", dy: 0), kind: "coord"))
+        XCTAssertEqual(zero.reason, "unsupported-action")
+        XCTAssertEqual(system.performed, 0)
+        let same = await WindowEngine(system: system).handle(request(WindowAction(name: "drag", x: 0.4, y: 0.4, coordinateSpace: "normalized-window", x2: 0.4, y2: 0.4), kind: "coord"))
+        XCTAssertEqual(same.reason, "unsupported-action")
+        XCTAssertEqual(system.performed, 0)
+        system.after.frontmost = false
+        let lost = await WindowEngine(system: system).handle(request(WindowAction(name: "scroll", x: 0.5, y: 0.5, coordinateSpace: "normalized-window", dy: -3), kind: "coord"))
+        XCTAssertEqual(lost.reason, "verification-failed")
+        XCTAssertEqual(lost.receipt?.attempted, true)
+        system.performed = 0
+        system.after.frontmost = true
+        let scrolled = await WindowEngine(system: system).handle(request(WindowAction(name: "scroll", x: 0.5, y: 0.5, coordinateSpace: "normalized-window", dy: -3), kind: "coord"))
+        XCTAssertTrue(scrolled.ok)
+        XCTAssertEqual(scrolled.receipt?.verification, "scroll-posted")
+        system.performed = 0
+        let dragged = await WindowEngine(system: system).handle(request(WindowAction(name: "drag", x: 0.2, y: 0.3, coordinateSpace: "normalized-window", x2: 0.7, y2: 0.8), kind: "coord"))
+        XCTAssertTrue(dragged.ok)
+        XCTAssertEqual(dragged.receipt?.verification, "drag-posted")
+    }
+
     func testNamedKeyRequiresPostEventsAndStaysOnTheSameForegroundWindow() async {
         let system = FixtureSystem()
         system.granted.postEvents = false

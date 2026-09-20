@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.0.70',
+    date: '2026-09-20',
+    items: [
+      '本机绑过的窗口可以滚动、拖动，装机包仍带着窗口 helper。',
+    ],
+  },
+  {
     version: '2.0.69',
     date: '2026-09-20',
     items: [

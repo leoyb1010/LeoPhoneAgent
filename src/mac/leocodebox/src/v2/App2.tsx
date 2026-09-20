@@ -5,7 +5,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import type { Project } from '../types/app';
 
 import { api, type FleetOverview, type HarnessEvent, type LocalOverview, type ProviderInfo, type SessionSummary, type SessionTarget } from './api';
-import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerNeedsModelSwitch, composerPlaceholder, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, prettyModelName, providerOf, rankModelsForPicker, readHiddenSessionKeys, relativeTime, sessionCanDrive, sessionCanForget, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, windowBoundLabel, WINDOW_KEY_BUTTONS, type FlowRow, type Group, type SessionView } from './model';
+import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerNeedsModelSwitch, composerPlaceholder, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, prettyModelName, providerOf, rankModelsForPicker, readHiddenSessionKeys, relativeTime, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, windowBoundLabel, windowPadGesture, WINDOW_KEY_BUTTONS, type FlowRow, type Group, type SessionView } from './model';
 import { usableModelsFromProviders } from './settings-form';
 import { artifactNameFromPath, clipFilePeek, cwdChipLabel, isPeekDrawer, isWorkspaceDrawer, machineChipLabel, peekFileCaption, sessionFilePath, titlebarHomeCopy } from './local-files';
 import { REMOTE_DRAWER_ACTION_LABEL, isRemoteDrawerKind, mergeFilePins, remoteDrawerActions, remoteDrawerCopy } from './remote-drawer';
@@ -147,6 +147,7 @@ export default function App2() {
   const railListRef = useRef<HTMLDivElement | null>(null);
   const drawerCloseRef = useRef<HTMLButtonElement | null>(null);
   const flowFindRef = useRef<HTMLInputElement | null>(null);
+  const winHitRef = useRef<{ x: number; y: number } | null>(null);
 
   const toast = useCallback((text: string, error = false) => {
     const id = Date.now() + Math.random();
@@ -1143,13 +1144,31 @@ export default function App2() {
             <button
               type="button"
               className="win-hit"
-              onClick={(e) => {
+              onPointerDown={(e) => {
                 const point = clickPointFromElement(e.clientX, e.clientY, e.currentTarget.getBoundingClientRect());
-                if (!point || !active) return;
-                void api.clickBoundWindow(active, point).then((result) => toast(`已点 ${result.app}`)).catch((error) => toast(humanizeError(error instanceof Error ? error.message : String(error)), true));
+                winHitRef.current = point;
+                e.currentTarget.setPointerCapture(e.pointerId);
+              }}
+              onPointerUp={(e) => {
+                const start = winHitRef.current;
+                winHitRef.current = null;
+                const end = clickPointFromElement(e.clientX, e.clientY, e.currentTarget.getBoundingClientRect());
+                if (!start || !end || !active) return;
+                const gesture = windowPadGesture(start, end);
+                const work = gesture.kind === 'drag'
+                  ? api.dragBoundWindow(active, { x: gesture.from.x, y: gesture.from.y, x2: gesture.to.x, y2: gesture.to.y }).then((result) => toast(`已拖 ${result.app}`))
+                  : api.clickBoundWindow(active, gesture.point).then((result) => toast(`已点 ${result.app}`));
+                void work.catch((error) => toast(humanizeError(error instanceof Error ? error.message : String(error)), true));
+              }}
+              onWheel={(e) => {
+                e.preventDefault();
+                const point = clickPointFromElement(e.clientX, e.clientY, e.currentTarget.getBoundingClientRect());
+                const delta = scrollDeltaFromWheel(e.deltaX, e.deltaY);
+                if (!point || !delta || !active) return;
+                void api.scrollBoundWindow(active, { ...point, ...delta }).then((result) => toast(`已滚 ${result.app}`)).catch((error) => toast(humanizeError(error instanceof Error ? error.message : String(error)), true));
               }}
             >
-              点这个窗口里同一处
+              点、滚、拖这个窗口里同一处
             </button>
             <textarea
               className="win-type"

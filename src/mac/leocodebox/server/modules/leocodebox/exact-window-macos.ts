@@ -5,7 +5,7 @@ import path from 'node:path';
 import { findAppRoot, getModuleDir } from '../../utils/runtime-paths.js';
 
 import {
-  exactWindows, parseNormalizedClickPoint, parseWindowNamedKey, parseWindowTypeText, pickWritableWindowField, WINDOW_SNAPSHOT_FRESH_MS, WindowOperationError,
+  exactWindows, parseNormalizedClickPoint, parseWindowDrag, parseWindowNamedKey, parseWindowScroll, parseWindowTypeText, pickWritableWindowField, WINDOW_SNAPSHOT_FRESH_MS, WindowOperationError,
   type ExactWindowDriver, type WindowAction, type WindowActionKind, type WindowActionReceipt,
   type WindowElement, type WindowFailureReason, type WindowObservation, type WindowOperationOptions,
   type WindowPermissions, type WindowRef, type WindowSnapshot,
@@ -289,6 +289,72 @@ export async function keyBoundSessionWindow(
   return { ok: true, app: result.snapshot.ref.app, title: result.snapshot.ref.title, key };
 }
 
+/** 在绑过的窗口里滚。先提到前面，再按窗口内相对位置打滚轮。 */
+export async function scrollBoundSessionWindow(
+  sessionId: string,
+  x: unknown,
+  y: unknown,
+  dx: unknown,
+  dy: unknown,
+  options?: WindowOperationOptions,
+  store = exactWindows,
+  driver = macWindowDriver,
+  list = listMacWindows,
+): Promise<{ ok: true; app: string; title: string; x: number; y: number; dx?: number; dy?: number } | { ok: false; reason: string; message: string }> {
+  const gesture = parseWindowScroll(x, y, dx, dy);
+  if (!gesture) return { ok: false, reason: 'invalid-request', message: '滚动要有窗口内相对位置，以及不超过 24 的滚动量。' };
+  const raised = await raiseBoundSessionWindow(sessionId, options, store, driver, list);
+  if (!raised.ok) return raised;
+  const current = store.sessionSnapshot(sessionId);
+  if (!current) return { ok: false, reason: 'unknown-snapshot', message: '这个会话还没有绑过窗口。' };
+  let snap = current;
+  if (store.isStale(snap) || !snap.frontmost) {
+    const listed = await list(options);
+    const { pid, windowId } = snap.ref;
+    const match = listed.find((row) => row.pid === pid && row.windowId === windowId);
+    if (!match) return { ok: false, reason: 'window-gone', message: '绑过的窗口已经不在了。' };
+    snap = store.capture(match);
+    store.bindSession(sessionId, snap.snapshotId);
+    if (!snap.frontmost) return { ok: false, reason: 'background-blocked', message: '窗口提到前面之后仍不在前台，不能滚。' };
+  }
+  const result = await store.act(snap.snapshotId, 'coord', { name: 'scroll', ...gesture, coordinateSpace: 'normalized-window' }, driver, options);
+  if (!result.ok) return { ok: false, reason: result.reason, message: result.message };
+  return { ok: true, app: result.snapshot.ref.app, title: result.snapshot.ref.title, ...gesture };
+}
+
+/** 在绑过的窗口里拖。先提到前面，再从相对起点拖到终点。 */
+export async function dragBoundSessionWindow(
+  sessionId: string,
+  x: unknown,
+  y: unknown,
+  x2: unknown,
+  y2: unknown,
+  options?: WindowOperationOptions,
+  store = exactWindows,
+  driver = macWindowDriver,
+  list = listMacWindows,
+): Promise<{ ok: true; app: string; title: string; x: number; y: number; x2: number; y2: number } | { ok: false; reason: string; message: string }> {
+  const gesture = parseWindowDrag(x, y, x2, y2);
+  if (!gesture) return { ok: false, reason: 'invalid-request', message: '拖动要有窗口内两个不同的相对位置。' };
+  const raised = await raiseBoundSessionWindow(sessionId, options, store, driver, list);
+  if (!raised.ok) return raised;
+  const current = store.sessionSnapshot(sessionId);
+  if (!current) return { ok: false, reason: 'unknown-snapshot', message: '这个会话还没有绑过窗口。' };
+  let snap = current;
+  if (store.isStale(snap) || !snap.frontmost) {
+    const listed = await list(options);
+    const { pid, windowId } = snap.ref;
+    const match = listed.find((row) => row.pid === pid && row.windowId === windowId);
+    if (!match) return { ok: false, reason: 'window-gone', message: '绑过的窗口已经不在了。' };
+    snap = store.capture(match);
+    store.bindSession(sessionId, snap.snapshotId);
+    if (!snap.frontmost) return { ok: false, reason: 'background-blocked', message: '窗口提到前面之后仍不在前台，不能拖。' };
+  }
+  const result = await store.act(snap.snapshotId, 'coord', { name: 'drag', ...gesture, coordinateSpace: 'normalized-window' }, driver, options);
+  if (!result.ok) return { ok: false, reason: result.reason, message: result.message };
+  return { ok: true, app: result.snapshot.ref.app, title: result.snapshot.ref.title, ...gesture };
+}
+
 export async function exactWindowCapabilities(options?: WindowOperationOptions, driver = macWindowDriver) {
   try {
     const granted = await driver.permissions(options);
@@ -296,6 +362,8 @@ export async function exactWindowCapabilities(options?: WindowOperationOptions, 
       observe: true, capture: granted.screenCapture, ax: granted.accessibility, menu: granted.accessibility,
       coord: granted.accessibility && granted.screenCapture && granted.postEvents,
       key: granted.accessibility && granted.postEvents,
+      scroll: granted.accessibility && granted.postEvents,
+      drag: granted.accessibility && granted.postEvents,
     } };
   } catch (error) {
     return { available: false, protocolVersion: 1, reason: error instanceof WindowOperationError ? error.reason : 'helper-unavailable' };

@@ -126,6 +126,26 @@ export function clickPointFromElement(clientX: number, clientY: number, rect: { 
   return { x: Math.min(0.999, Math.max(0.001, rawX)), y: Math.min(0.999, Math.max(0.001, rawY)) };
 }
 
+export function scrollDeltaFromWheel(deltaX: number, deltaY: number): { dx?: number; dy?: number } | null {
+  const tick = (delta: number) => {
+    if (!Number.isFinite(delta) || delta === 0) return 0;
+    const mag = Math.min(8, Math.max(1, Math.round(Math.abs(delta) / 40)));
+    return delta > 0 ? mag : -mag;
+  };
+  const dx = tick(deltaX);
+  const dy = tick(deltaY);
+  if (!dx && !dy) return null;
+  return { ...(dx ? { dx } : {}), ...(dy ? { dy } : {}) };
+}
+
+export function windowPadGesture(start: { x: number; y: number }, end: { x: number; y: number }):
+  | { kind: 'click'; point: { x: number; y: number } }
+  | { kind: 'drag'; from: { x: number; y: number }; to: { x: number; y: number } } {
+  return Math.hypot(end.x - start.x, end.y - start.y) >= 0.04
+    ? { kind: 'drag', from: start, to: end }
+    : { kind: 'click', point: start };
+}
+
 export function flowRowMatchesQuery(row: FlowRow, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;

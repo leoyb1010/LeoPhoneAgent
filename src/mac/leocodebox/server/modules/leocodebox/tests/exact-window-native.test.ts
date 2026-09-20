@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { clickBoundSessionWindow, createMacWindowDriver, keyBoundSessionWindow, raiseBoundSessionWindow, typeBoundSessionWindow } from '../exact-window-macos.js';
-import { ExactWindowStore, parseNormalizedClickPoint, parseWindowAction, parseWindowNamedKey, parseWindowTypeText, pickWritableWindowField, type WindowElement, type WindowObservation, type WindowActionReceipt } from '../exact-window.js';
+import { clickBoundSessionWindow, createMacWindowDriver, dragBoundSessionWindow, keyBoundSessionWindow, raiseBoundSessionWindow, scrollBoundSessionWindow, typeBoundSessionWindow } from '../exact-window-macos.js';
+import { ExactWindowStore, parseNormalizedClickPoint, parseWindowAction, parseWindowDrag, parseWindowNamedKey, parseWindowScroll, parseWindowTypeText, pickWritableWindowField, type WindowElement, type WindowObservation, type WindowActionReceipt } from '../exact-window.js';
 
 const observation: WindowObservation = {
   app: 'Fixture', pid: 42, windowId: '7', title: 'Fixture window', bounds: '0,0,800,600', frontmost: true,
@@ -24,6 +24,10 @@ test('action parser rejects missing actions, arbitrary kinds/code, bad paths and
   assert.deepEqual(parseNormalizedClickPoint('0.4', '0.6'), { x: 0.4, y: 0.6 });
   assert.equal(parseWindowAction('key', { name: 'key', key: 'command' }), null);
   assert.deepEqual(parseWindowAction('key', { name: 'key', key: 'return' }), { name: 'key', key: 'return' });
+  assert.equal(parseWindowAction('coord', { name: 'scroll', x: 0.5, y: 0.5, dy: 0, coordinateSpace: 'normalized-window' }), null);
+  assert.deepEqual(parseWindowScroll(0.5, 0.4, undefined, -3), { x: 0.5, y: 0.4, dy: -3 });
+  assert.equal(parseWindowDrag(0.4, 0.4, 0.4, 0.4), null);
+  assert.deepEqual(parseWindowDrag(0.2, 0.3, 0.7, 0.8), { x: 0.2, y: 0.3, x2: 0.7, y2: 0.8 });
 });
 
 test('re-observation uses live native data and retains bindings only for the same window identity', async () => {
@@ -202,6 +206,38 @@ test('keyBoundSessionWindow 先提到前面再打具名键,未知键不会动手
   const missing = await keyBoundSessionWindow('hs_none', 'return', undefined, store, driver, listed);
   assert.equal(missing.ok, false);
   if (!missing.ok) assert.equal(missing.reason, 'unknown-snapshot');
+});
+
+test('scrollBoundSessionWindow 和 dragBoundSessionWindow 先提到前面再动手,坏手势不会执行', async () => {
+  const store = new ExactWindowStore(() => 10_000, 'test');
+  const captured = store.capture({ ...observation, frontmost: false });
+  store.bindSession('hs_hid', captured.snapshotId);
+  const names: string[] = [];
+  const driver = createMacWindowDriver(async (request) => {
+    if (request.operation === 'act') {
+      names.push(String((request.action as { name?: string }).name));
+      return {
+        protocolVersion: 1, ok: true, observation: { ...observation, frontmost: true },
+        receipt: { attempted: true, verified: true, verification: 'posted', action: String((request.action as { name?: string }).name), observedAt: 10_000 },
+      };
+    }
+    return { protocolVersion: 1, ok: true, windows: [{ ...observation, frontmost: true }] };
+  });
+  const listed = async () => [{ ...observation, frontmost: true }];
+  const badScroll = await scrollBoundSessionWindow('hs_hid', 0.5, 0.5, 0, 0, undefined, store, driver, listed);
+  assert.equal(badScroll.ok, false);
+  if (!badScroll.ok) assert.equal(badScroll.reason, 'invalid-request');
+  const badDrag = await dragBoundSessionWindow('hs_hid', 0.4, 0.4, 0.4, 0.4, undefined, store, driver, listed);
+  assert.equal(badDrag.ok, false);
+  if (!badDrag.ok) assert.equal(badDrag.reason, 'invalid-request');
+  assert.deepEqual(names, []);
+  const scrolled = await scrollBoundSessionWindow('hs_hid', 0.5, 0.4, undefined, -3, undefined, store, driver, listed);
+  assert.equal(scrolled.ok, true);
+  if (scrolled.ok) assert.equal(scrolled.dy, -3);
+  const dragged = await dragBoundSessionWindow('hs_hid', 0.2, 0.3, 0.7, 0.8, undefined, store, driver, listed);
+  assert.equal(dragged.ok, true);
+  if (dragged.ok) assert.equal(dragged.x2, 0.7);
+  assert.deepEqual(names, ['focus', 'scroll', 'focus', 'drag']);
 });
 
 test('malformed native IPC output cannot enter the snapshot store', async () => {

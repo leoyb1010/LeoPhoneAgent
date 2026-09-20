@@ -125,6 +125,10 @@ export const api = {
     sendJson<{ ok: true; app: string; title: string; elementId: string }>(`${sessionBase(target)}/window/type`, input),
   keyBoundWindow: (target: SessionTarget, key: string) =>
     sendJson<{ ok: true; app: string; title: string; key: string }>(`${sessionBase(target)}/window/key`, { key }),
+  scrollBoundWindow: (target: SessionTarget, input: { x: number; y: number; dx?: number; dy?: number }) =>
+    sendJson<{ ok: true; app: string; title: string; x: number; y: number; dx?: number; dy?: number }>(`${sessionBase(target)}/window/scroll`, input),
+  dragBoundWindow: (target: SessionTarget, input: { x: number; y: number; x2: number; y2: number }) =>
+    sendJson<{ ok: true; app: string; title: string; x: number; y: number; x2: number; y2: number }>(`${sessionBase(target)}/window/drag`, input),
   forget: (target: SessionTarget) => sendJson(`${sessionBase(target)}/forget`, {}),
   approve: (target: SessionTarget, approvalId: string | null, choice: string) =>
     target.machine === 'local'

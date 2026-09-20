@@ -6,7 +6,7 @@ import express from 'express';
 import type { AuthInteraction, AuthPrompt } from '@earendil-works/pi-ai';
 import { ModelRuntime } from '@earendil-works/pi-coding-agent';
 
-import { bindFrontmostToSession, clickBoundSessionWindow, exactWindows, keyBoundSessionWindow, raiseBoundSessionWindow, typeBoundSessionWindow } from '../leocodebox/index.js';
+import { bindFrontmostToSession, clickBoundSessionWindow, dragBoundSessionWindow, exactWindows, keyBoundSessionWindow, raiseBoundSessionWindow, scrollBoundSessionWindow, typeBoundSessionWindow } from '../leocodebox/index.js';
 
 import { HarnessRequestError, getHarnessManager, type HarnessSession } from './harness-session.service.js';
 import { ensureSessionWorkspace } from './session-workspace.js';
@@ -237,6 +237,32 @@ router.post('/leophone/local/sessions/:sessionId/window/key', async (req, res) =
   }
   session.emit({ event: 'window.bound', ...(exactWindows.summary(session.sessionId) ?? {}) });
   res.json({ ok: true, app: result.app, title: result.title, key: result.key });
+});
+
+router.post('/leophone/local/sessions/:sessionId/window/scroll', async (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const result = await scrollBoundSessionWindow(session.sessionId, body.x, body.y, body.dx, body.dy, { timeoutMs: 2500 });
+  if (!result.ok) {
+    jsonError(res, result.reason === 'unknown-snapshot' ? 404 : result.reason === 'invalid-request' ? 400 : 409, result.message);
+    return;
+  }
+  session.emit({ event: 'window.bound', ...(exactWindows.summary(session.sessionId) ?? {}) });
+  res.json({ ok: true, app: result.app, title: result.title, x: result.x, y: result.y, dx: result.dx, dy: result.dy });
+});
+
+router.post('/leophone/local/sessions/:sessionId/window/drag', async (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const result = await dragBoundSessionWindow(session.sessionId, body.x, body.y, body.x2, body.y2, { timeoutMs: 2500 });
+  if (!result.ok) {
+    jsonError(res, result.reason === 'unknown-snapshot' ? 404 : result.reason === 'invalid-request' ? 400 : 409, result.message);
+    return;
+  }
+  session.emit({ event: 'window.bound', ...(exactWindows.summary(session.sessionId) ?? {}) });
+  res.json({ ok: true, app: result.app, title: result.title, x: result.x, y: result.y, x2: result.x2, y2: result.y2 });
 });
 
 router.post('/leophone/local/sessions/:sessionId/stop', async (req, res) => {
