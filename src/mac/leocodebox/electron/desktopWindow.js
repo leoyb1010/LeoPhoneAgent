@@ -1,6 +1,10 @@
-import { BrowserWindow, Menu, clipboard, nativeTheme, session, webContents as electronWebContents } from 'electron';
+import { BrowserWindow, Menu, app, clipboard, nativeTheme, screen, session, webContents as electronWebContents } from 'electron';
+import { readFileSync } from 'node:fs';
+import { writeFile } from 'node:fs/promises';
+import path from 'node:path';
 
 import { ViewHost } from './viewHost.js';
+import { DEFAULT_WINDOW, WINDOW_BOUNDS_FILE, sanitizeWindowBounds, snapshotWindowBounds } from './window-bounds.js';
 
 const TITLEBAR_HEIGHT = 44;
 const AUTH_TOKEN_STORAGE_KEY = 'auth-token';
@@ -61,6 +65,7 @@ export class DesktopWindowManager {
     this.settingsWindow = null;
     this.launcherLoaded = false;
     this.contentViewResizeTimer = null;
+    this.windowBoundsTimer = null;
     this.viewHost = new ViewHost({
       appName: this.appName,
       getMainWindow: () => this.mainWindow,
@@ -652,10 +657,43 @@ export class DesktopWindowManager {
     });
   }
 
+  windowBoundsPath() {
+    return path.join(app.getPath('userData'), WINDOW_BOUNDS_FILE);
+  }
+
+  readSavedWindowBounds() {
+    try {
+      const raw = JSON.parse(readFileSync(this.windowBoundsPath(), 'utf8'));
+      const bounds = sanitizeWindowBounds(raw, screen.getAllDisplays());
+      if (!bounds) return { bounds: null, maximized: false };
+      return { bounds, maximized: Boolean(raw?.maximized) };
+    } catch {
+      return { bounds: null, maximized: false };
+    }
+  }
+
+  persistWindowBounds() {
+    const win = this.mainWindow;
+    if (!win || win.isDestroyed()) return;
+    const snap = snapshotWindowBounds(win);
+    if (!snap) return;
+    void writeFile(this.windowBoundsPath(), `${JSON.stringify(snap)}\n`, 'utf8').catch(() => undefined);
+  }
+
+  schedulePersistWindowBounds() {
+    if (this.windowBoundsTimer) clearTimeout(this.windowBoundsTimer);
+    this.windowBoundsTimer = setTimeout(() => {
+      this.windowBoundsTimer = null;
+      this.persistWindowBounds();
+    }, 400);
+  }
+
   async createWindow() {
+    const saved = this.readSavedWindowBounds();
     this.mainWindow = new BrowserWindow({
-      width: 1440,
-      height: 960,
+      width: saved.bounds?.width ?? DEFAULT_WINDOW.width,
+      height: saved.bounds?.height ?? DEFAULT_WINDOW.height,
+      ...(saved.bounds ? { x: saved.bounds.x, y: saved.bounds.y } : {}),
       minWidth: 1024,
       minHeight: 720,
       show: false,
@@ -688,17 +726,23 @@ export class DesktopWindowManager {
     this.mainWindow.on('resize', () => {
       this.resizeContentView();
       this.syncSettingsWindowBounds();
+      this.schedulePersistWindowBounds();
     });
 
     for (const eventName of ['maximize', 'unmaximize', 'enter-full-screen', 'leave-full-screen']) {
-      this.mainWindow.on(eventName, () => this.resizeContentView());
+      this.mainWindow.on(eventName, () => {
+        this.resizeContentView();
+        this.schedulePersistWindowBounds();
+      });
     }
 
     this.mainWindow.on('move', () => {
       this.syncSettingsWindowBounds();
+      this.schedulePersistWindowBounds();
     });
 
     this.mainWindow.on('close', (event) => {
+      this.persistWindowBounds();
       if (this.actions.isAppQuitting?.()) return;
       event.preventDefault();
       // leocodebox owns the local server lifecycle: closing the app must be a
@@ -708,7 +752,11 @@ export class DesktopWindowManager {
       this.actions.requestQuit?.();
     });
 
+    if (saved.maximized) this.mainWindow.maximize();
+
     this.mainWindow.on('closed', () => {
+      if (this.windowBoundsTimer) clearTimeout(this.windowBoundsTimer);
+      this.windowBoundsTimer = null;
       if (this.contentViewResizeTimer) clearTimeout(this.contentViewResizeTimer);
       this.contentViewResizeTimer = null;
       this.viewHost.clear();
