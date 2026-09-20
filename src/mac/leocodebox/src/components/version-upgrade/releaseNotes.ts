@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.0.67',
+    date: '2026-09-20',
+    items: [
+      '本机绑过的窗口可以按相对位置点进去，不再只能提到前面。',
+    ],
+  },
+  {
     version: '2.0.66',
     date: '2026-09-20',
     items: [

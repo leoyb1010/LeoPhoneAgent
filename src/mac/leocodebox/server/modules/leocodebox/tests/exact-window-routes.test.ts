@@ -107,4 +107,6 @@ test('2.0 工作台本机新建同样先 202 再异步绑定前台窗口', () =>
   assert.match(create, /window\.bound/);
   assert.match(source, /raiseBoundSessionWindow/);
   assert.match(source, /window\/raise/);
+  assert.match(source, /clickBoundSessionWindow/);
+  assert.match(source, /window\/click/);
 });

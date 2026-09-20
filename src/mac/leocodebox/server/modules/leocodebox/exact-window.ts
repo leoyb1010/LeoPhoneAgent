@@ -109,6 +109,13 @@ export function parseWindowAction(kind: string, value: unknown): WindowAction | 
   return null;
 }
 
+export function parseNormalizedClickPoint(x: unknown, y: unknown): { x: number; y: number } | null {
+  const nx = typeof x === 'number' ? x : typeof x === 'string' && x.trim() !== '' ? Number(x) : Number.NaN;
+  const ny = typeof y === 'number' ? y : typeof y === 'string' && y.trim() !== '' ? Number(y) : Number.NaN;
+  const action = parseWindowAction('coord', { name: 'click', x: nx, y: ny, coordinateSpace: 'normalized-window' });
+  return action && action.name === 'click' ? { x: action.x, y: action.y } : null;
+}
+
 function sameWindow(ref: WindowRef, next: WindowObservation): boolean {
   return ref.pid === next.pid && ref.windowId === next.windowId
     && (!ref.bundleId || ref.bundleId === next.bundleId)

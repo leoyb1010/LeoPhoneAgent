@@ -6,7 +6,7 @@ import express from 'express';
 import type { AuthInteraction, AuthPrompt } from '@earendil-works/pi-ai';
 import { ModelRuntime } from '@earendil-works/pi-coding-agent';
 
-import { bindFrontmostToSession, exactWindows, raiseBoundSessionWindow } from '../leocodebox/index.js';
+import { bindFrontmostToSession, clickBoundSessionWindow, exactWindows, raiseBoundSessionWindow } from '../leocodebox/index.js';
 
 import { HarnessRequestError, getHarnessManager, type HarnessSession } from './harness-session.service.js';
 import { ensureSessionWorkspace } from './session-workspace.js';
@@ -198,6 +198,19 @@ router.post('/leophone/local/sessions/:sessionId/window/raise', async (req, res)
   }
   session.emit({ event: 'window.bound', ...(exactWindows.summary(session.sessionId) ?? {}) });
   res.json({ ok: true, app: result.app, title: result.title });
+});
+
+router.post('/leophone/local/sessions/:sessionId/window/click', async (req, res) => {
+  const session = requireSession(req, res);
+  if (!session) return;
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const result = await clickBoundSessionWindow(session.sessionId, body.x, body.y, { timeoutMs: 2500 });
+  if (!result.ok) {
+    jsonError(res, result.reason === 'unknown-snapshot' ? 404 : result.reason === 'invalid-request' ? 400 : 409, result.message);
+    return;
+  }
+  session.emit({ event: 'window.bound', ...(exactWindows.summary(session.sessionId) ?? {}) });
+  res.json({ ok: true, app: result.app, title: result.title, x: result.x, y: result.y });
 });
 
 router.post('/leophone/local/sessions/:sessionId/stop', async (req, res) => {

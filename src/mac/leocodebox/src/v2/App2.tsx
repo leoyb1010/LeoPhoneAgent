@@ -5,7 +5,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import type { Project } from '../types/app';
 
 import { api, type FleetOverview, type HarnessEvent, type LocalOverview, type ProviderInfo, type SessionSummary, type SessionTarget } from './api';
-import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, applyEvent, boundWindowFromUnknown, composerNeedsModelSwitch, composerPlaceholder, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, prettyModelName, providerOf, rankModelsForPicker, readHiddenSessionKeys, relativeTime, sessionCanDrive, sessionCanForget, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, windowBoundLabel, type FlowRow, type Group, type SessionView } from './model';
+import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerNeedsModelSwitch, composerPlaceholder, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, prettyModelName, providerOf, rankModelsForPicker, readHiddenSessionKeys, relativeTime, sessionCanDrive, sessionCanForget, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, windowBoundLabel, type FlowRow, type Group, type SessionView } from './model';
 import { usableModelsFromProviders } from './settings-form';
 import { artifactNameFromPath, clipFilePeek, cwdChipLabel, isPeekDrawer, isWorkspaceDrawer, machineChipLabel, peekFileCaption, sessionFilePath, titlebarHomeCopy } from './local-files';
 import { REMOTE_DRAWER_ACTION_LABEL, isRemoteDrawerKind, mergeFilePins, remoteDrawerActions, remoteDrawerCopy } from './remote-drawer';
@@ -135,6 +135,7 @@ export default function App2() {
   const [focusMachine, setFocusMachine] = useState<string | null>(null);
   const [whatsNew, setWhatsNew] = useState<ReturnType<typeof currentReleaseNote>>(null);
   const [flowFind, setFlowFind] = useState({ open: false, query: '', index: 0 });
+  const [windowOp, setWindowOp] = useState<{ label: string } | null>(null);
   const [hiddenKeys, setHiddenKeys] = useState<string[]>(() => {
     try { return readHiddenSessionKeys(localStorage.getItem(HIDDEN_SESSIONS_KEY)); } catch { return []; }
   });
@@ -538,6 +539,7 @@ export default function App2() {
     { v: 'find', t: '在这条会话里找', sub: '⌘F' },
     { v: 'findhit', t: '复制当前命中', sub: '⌘C' },
     { v: '', t: '', sep: true },
+    ...(boundWindowChipKind(active?.machine ?? '', windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window))) === 'raise' ? [{ v: 'winclick', t: '点这个窗口', sub: windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window)) }] : []),
     ...(activeSummary?.cwd?.trim() ? [{ v: 'cwd', t: '复制目录', sub: activeSummary.cwd }] : []),
     ...((sessionView.title || activeSummary?.title || '').trim() ? [{ v: 'title', t: '复制标题', sub: (sessionView.title || activeSummary?.title || '').trim() }] : []),
     ...(canDrive ? [] : [{ v: 'continue', t: '在同一目录续写', sub: '新开会话' }]),
@@ -545,6 +547,7 @@ export default function App2() {
     ...(activeSummary && sessionCanForget(activeSummary.status) ? [{ v: 'forget', t: '从左栏拿掉', sub: active?.machine === 'local' ? '不再召回' : '只藏在这台 Mac' }] : []),
   ], (v) => {
     if (v === 'compact') void compact();
+    else if (v === 'winclick') setWindowOp({ label: windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window)) });
     else if (v === 'stop') void stop();
     else if (v === 'continue') continueHere();
     else if (v === 'cwd') void copyCwd();
@@ -565,6 +568,7 @@ export default function App2() {
         if (palette.open) { setPalette({ open: false, query: '', index: 0 }); return; }
         if (menu) { setMenu(null); return; }
         if (flowFind.open) { setFlowFind({ open: false, query: '', index: 0 }); return; }
+        if (windowOp) { setWindowOp(null); return; }
         if (drawer) { setDrawer(null); return; }
         if (newBox) { setNewBox(null); return; }
         const first = sessionView.pendingApprovals.values().next().value as (FlowRow & { k: 'ap' }) | undefined;
@@ -616,7 +620,7 @@ export default function App2() {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [palette.open, picker, menu, drawer, newBox, draft, send, approveFirstPending, view, sessionView.pendingApprovals, approve, allSessions, matchesFilter, active, openSession, beginLocalNew, flowFind.open, stepFind, copyFindHit]);
+  }, [palette.open, picker, menu, drawer, newBox, draft, send, approveFirstPending, view, sessionView.pendingApprovals, approve, allSessions, matchesFilter, active, openSession, beginLocalNew, flowFind.open, windowOp, stepFind, copyFindHit]);
 
   // -- 命令面板 ---------------------------------------------------------------
   type Command = { g: string; t: string; k: string; run: () => void };
@@ -700,9 +704,10 @@ export default function App2() {
       pickerOpen: Boolean(picker),
       whatsNewOpen: Boolean(whatsNew),
       flowFindOpen: flowFind.open,
+      windowOpOpen: Boolean(windowOp),
     })) return;
     taRef.current?.focus({ preventScroll: true });
-  }, [active, view, drawer, newBox?.open, palette.open, picker, whatsNew, flowFind.open]);
+  }, [active, view, drawer, newBox?.open, palette.open, picker, whatsNew, flowFind.open, windowOp]);
 
   // -- 渲染 ------------------------------------------------------------------
   const activeGroup = active ? groups.find((g) => g.id === active.machine) ?? null : null;
@@ -1129,6 +1134,29 @@ export default function App2() {
       )}
 
       {toasts.map((t) => <div key={t.id} className={`toast ${t.error ? 'error' : ''}`}>{t.text}</div>)}
+      {windowOp && (
+        <div className="wn" role="dialog" aria-modal="true" aria-label="点这个窗口">
+          <div className="wn-mask" aria-hidden="true" onClick={() => setWindowOp(null)} />
+          <div className="wn-box">
+            <h2>点这个窗口</h2>
+            <p className="wn-ver">{windowOp.label}</p>
+            <button
+              type="button"
+              className="win-hit"
+              onClick={(e) => {
+                const point = clickPointFromElement(e.clientX, e.clientY, e.currentTarget.getBoundingClientRect());
+                if (!point || !active) return;
+                void api.clickBoundWindow(active, point).then((result) => toast(`已点 ${result.app}`)).catch((error) => toast(humanizeError(error instanceof Error ? error.message : String(error)), true));
+              }}
+            >
+              点这里的位置，对应绑过的窗口里同一处
+            </button>
+            <div className="wn-acts">
+              <button className="btn-s" type="button" onClick={() => setWindowOp(null)}>关闭</button>
+            </div>
+          </div>
+        </div>
+      )}
       {whatsNew && <WhatsNewOverlay note={whatsNew} onDismiss={() => { markWhatsNewSeen(); setWhatsNew(null); }} />}
     </div>
   );

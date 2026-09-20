@@ -119,6 +119,8 @@ export const api = {
   send: (target: SessionTarget, text: string) => sendJson(`${sessionBase(target)}/send`, { text }),
   stop: (target: SessionTarget) => sendJson(`${sessionBase(target)}/stop`, {}),
   raiseBoundWindow: (target: SessionTarget) => sendJson<{ ok: true; app: string; title: string }>(`${sessionBase(target)}/window/raise`, {}),
+  clickBoundWindow: (target: SessionTarget, point: { x: number; y: number }) =>
+    sendJson<{ ok: true; app: string; title: string; x: number; y: number }>(`${sessionBase(target)}/window/click`, point),
   forget: (target: SessionTarget) => sendJson(`${sessionBase(target)}/forget`, {}),
   approve: (target: SessionTarget, approvalId: string | null, choice: string) =>
     target.machine === 'local'

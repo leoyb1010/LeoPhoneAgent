@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
-import { addHiddenSessionKey, applyEvent, boundWindowChipKind, boundWindowFromUnknown, composerNeedsModelSwitch, composerPlaceholder, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHits, flowFindHitText, flowFindStatus, flowRowMatchesQuery, highlightQueryParts, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isLiveRow, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, markupParts, mergeSameMachineSessions, modelChoiceHint, modelLabel, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, pickInitialCwd, pickInitialModel, prettyModelName, prettifyUnknownModel, rankModelsForPicker, readHiddenSessionKeys, rejectedCodexModelId, sessionCanDrive, sessionCanForget, sessionFailTexts, sessionKey, sessionLooksFailed, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDot, statusDotForSession, userTurnLabel, userTurnMode, windowBoundLabel } from './model';
+import { addHiddenSessionKey, applyEvent, boundWindowChipKind, boundWindowFromUnknown, clickPointFromElement, composerNeedsModelSwitch, composerPlaceholder, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHits, flowFindHitText, flowFindStatus, flowRowMatchesQuery, highlightQueryParts, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isLiveRow, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, markupParts, mergeSameMachineSessions, modelChoiceHint, modelLabel, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, pickInitialCwd, pickInitialModel, prettyModelName, prettifyUnknownModel, rankModelsForPicker, readHiddenSessionKeys, rejectedCodexModelId, sessionCanDrive, sessionCanForget, sessionFailTexts, sessionKey, sessionLooksFailed, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDot, statusDotForSession, userTurnLabel, userTurnMode, windowBoundLabel } from './model';
 
 test('流水把思考事件折成独立行,后续 delta 续在同一行', () => {
   let view = emptyView();
@@ -179,6 +179,10 @@ test('前台窗口绑定会落成系统行,摘要里的窗口也能读出来', (
   assert.equal(boundWindowChipKind('local', 'Finder · Documents'), 'raise');
   assert.equal(boundWindowChipKind('LeodeMac-mini-2', 'Finder · Documents'), 'label');
   assert.equal(boundWindowChipKind('local', ''), 'none');
+  const box = { left: 100, top: 50, width: 200, height: 100 };
+  assert.deepEqual(clickPointFromElement(180, 80, box), { x: 0.4, y: 0.3 });
+  assert.deepEqual(clickPointFromElement(100, 50, box), { x: 0.001, y: 0.001 });
+  assert.equal(clickPointFromElement(90, 80, box), null);
 });
 
 test('进行中才显示插话,空闲仍是发送', () => {
@@ -196,7 +200,9 @@ test('2.0 壳接上了插话、回车开会话和前台窗口', () => {
   assert.match(app, /windowBoundLabel/);
   assert.match(app, /boundWindowChipKind/);
   assert.match(app, /raiseBoundWindow/);
+  assert.match(app, /clickBoundWindow/);
   assert.match(app, /点一下提到前面/);
+  assert.match(app, /点这个窗口/);
   assert.match(flow, /composerShouldSend/);
   assert.match(flow, /↩ 开始/);
 });
@@ -396,6 +402,7 @@ test('点开会话就能写,抽屉和弹层开着不抢焦点', () => {
   assert.equal(composerShouldFocus({ ...clear, drawer: 'files' }), false);
   assert.equal(composerShouldFocus({ ...clear, newBoxOpen: true }), false);
   assert.equal(composerShouldFocus({ ...clear, whatsNewOpen: true }), false);
+  assert.equal(composerShouldFocus({ ...clear, windowOpOpen: true }), false);
   assert.equal(composerShouldFocus({ ...clear, flowFindOpen: true }), false);
   const css = readFileSync(fileURLToPath(new URL('./v2.css', import.meta.url)), 'utf8');
   const app = readFileSync(fileURLToPath(new URL('./App2.tsx', import.meta.url)), 'utf8');

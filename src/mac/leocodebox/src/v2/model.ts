@@ -100,8 +100,18 @@ export function composerShouldFocus(input: {
   pickerOpen: boolean;
   whatsNewOpen: boolean;
   flowFindOpen?: boolean;
+  windowOpOpen?: boolean;
 }): boolean {
-  return input.hasSession && input.view === 'home' && !input.drawer && !input.newBoxOpen && !input.paletteOpen && !input.pickerOpen && !input.whatsNewOpen && !input.flowFindOpen;
+  return input.hasSession && input.view === 'home' && !input.drawer && !input.newBoxOpen && !input.paletteOpen && !input.pickerOpen && !input.whatsNewOpen && !input.flowFindOpen && !input.windowOpOpen;
+}
+
+/** 点选面里的像素 → 窗口内相对坐标。贴边会收进 (0,1),出框不算。 */
+export function clickPointFromElement(clientX: number, clientY: number, rect: { left: number; width: number; top: number; height: number }): { x: number; y: number } | null {
+  if (!(rect.width > 0) || !(rect.height > 0)) return null;
+  const rawX = (clientX - rect.left) / rect.width;
+  const rawY = (clientY - rect.top) / rect.height;
+  if (!Number.isFinite(rawX) || !Number.isFinite(rawY) || rawX < 0 || rawX > 1 || rawY < 0 || rawY > 1) return null;
+  return { x: Math.min(0.999, Math.max(0.001, rawX)), y: Math.min(0.999, Math.max(0.001, rawY)) };
 }
 
 export function flowRowMatchesQuery(row: FlowRow, query: string): boolean {

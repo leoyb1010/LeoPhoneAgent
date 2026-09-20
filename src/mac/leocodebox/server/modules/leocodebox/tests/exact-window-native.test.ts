@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createMacWindowDriver, raiseBoundSessionWindow } from '../exact-window-macos.js';
-import { ExactWindowStore, parseWindowAction, type WindowObservation, type WindowActionReceipt } from '../exact-window.js';
+import { clickBoundSessionWindow, createMacWindowDriver, raiseBoundSessionWindow } from '../exact-window-macos.js';
+import { ExactWindowStore, parseNormalizedClickPoint, parseWindowAction, type WindowObservation, type WindowActionReceipt } from '../exact-window.js';
 
 const observation: WindowObservation = {
   app: 'Fixture', pid: 42, windowId: '7', title: 'Fixture window', bounds: '0,0,800,600', frontmost: true,
@@ -19,6 +19,9 @@ test('action parser rejects missing actions, arbitrary kinds/code, bad paths and
   assert.equal(parseWindowAction('coord', { name: 'click', x: Number.NaN, y: 0.5, coordinateSpace: 'normalized-window' }), null);
   assert.equal(parseWindowAction('coord', { name: 'click', x: 800, y: 600 }), null);
   assert.deepEqual(parseWindowAction('ax', { name: 'setValue', elementId: 'control', value: 'plain text' }), { name: 'setValue', elementId: 'control', value: 'plain text' });
+  assert.equal(parseNormalizedClickPoint(0, 0.5), null);
+  assert.equal(parseNormalizedClickPoint('1', '0.2'), null);
+  assert.deepEqual(parseNormalizedClickPoint('0.4', '0.6'), { x: 0.4, y: 0.6 });
 });
 
 test('re-observation uses live native data and retains bindings only for the same window identity', async () => {
@@ -79,6 +82,40 @@ test('raiseBoundSessionWindow 过期快照也会按 pid 再认一次再 focus', 
   const gone = await raiseBoundSessionWindow('hs_raise', undefined, store, driver, async () => []);
   assert.equal(gone.ok, false);
   if (!gone.ok) assert.equal(gone.reason, 'window-gone');
+});
+
+test('clickBoundSessionWindow 先提到前面再按相对坐标点,坏坐标不会动手', async () => {
+  const store = new ExactWindowStore(() => 10_000, 'test');
+  const captured = store.capture({ ...observation, frontmost: false });
+  store.bindSession('hs_click', captured.snapshotId);
+  const kinds: string[] = [];
+  const driver = createMacWindowDriver(async (request) => {
+    if (request.operation === 'act') {
+      kinds.push(String(request.kind));
+      const action = request.action as { name?: string };
+      return {
+        protocolVersion: 1, ok: true, observation: { ...observation, frontmost: true },
+        receipt: { attempted: true, verified: true, verification: action.name === 'click' ? 'clicked-readback' : 'focused-readback', action: String(action.name), observedAt: 10_000 },
+      };
+    }
+    return { protocolVersion: 1, ok: true, windows: [{ ...observation, frontmost: true }] };
+  });
+  const listed = async () => [{ ...observation, frontmost: true }];
+  const bad = await clickBoundSessionWindow('hs_click', 1.5, 0.5, undefined, store, driver, listed);
+  assert.equal(bad.ok, false);
+  if (!bad.ok) assert.equal(bad.reason, 'invalid-request');
+  assert.deepEqual(kinds, []);
+  const result = await clickBoundSessionWindow('hs_click', 0.4, 0.6, undefined, store, driver, listed);
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.app, 'Fixture');
+    assert.equal(result.x, 0.4);
+    assert.equal(result.y, 0.6);
+  }
+  assert.deepEqual(kinds, ['ax', 'coord']);
+  const missing = await clickBoundSessionWindow('hs_none', 0.4, 0.6, undefined, store, driver, listed);
+  assert.equal(missing.ok, false);
+  if (!missing.ok) assert.equal(missing.reason, 'unknown-snapshot');
 });
 
 test('malformed native IPC output cannot enter the snapshot store', async () => {
