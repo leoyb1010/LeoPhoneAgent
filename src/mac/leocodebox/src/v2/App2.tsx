@@ -26,6 +26,7 @@ import { canTrashSessionFile, trashSessionToast } from './session-trash';
 import { canDuplicateSessionFile, duplicateSessionToast } from './session-duplicate';
 import { canMkdirSessionFolder, mkdirSessionToast, sanitizeFolderRel } from './session-mkdir';
 import { canMoveSessionFile, moveSessionToast, sanitizeMoveFolder } from './session-move';
+import { DRAFTS_KEY, readPersistedDrafts, writePersistedDrafts } from './session-draft';
 import { canHaltBusySessions, haltSessionsToast } from './session-halt';
 import { canForgetEndedSessions, endedLocalSessionIds, forgetEndedToast } from './session-forget';
 import { canRecallForgotten, recallSessionToast, type ForgottenSession } from './session-recall';
@@ -167,13 +168,18 @@ export default function App2() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [newBox, setNewBox] = useState<NewBoxState | null>(null);
   const [providers, setProviders] = useState<ProviderInfo[] | null>(null);
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [drafts, setDrafts] = useState<Record<string, string>>(() => {
+    try { return readPersistedDrafts(localStorage.getItem(DRAFTS_KEY)); } catch { return {}; }
+  });
   const draftKey = active ? `${active.machine}:${active.id}` : '';
   const draft = draftKey ? (drafts[draftKey] ?? '') : '';
   const setDraft = useCallback((text: string) => {
     if (!draftKey) return;
     setDrafts((d) => (d[draftKey] === text ? d : { ...d, [draftKey]: text }));
   }, [draftKey]);
+  useEffect(() => {
+    try { localStorage.setItem(DRAFTS_KEY, writePersistedDrafts(drafts)); } catch { /* ignore */ }
+  }, [drafts]);
   const [busy, setBusy] = useState(false);
   const [picker, setPicker] = useState<{ kind: Exclude<PickerKind, null>; query: string; index: number } | null>(null);
   const [openLegacy, setOpenLegacy] = useState(false);
