@@ -644,7 +644,7 @@ export default function App2() {
       toast('还没有可记下的改动', true);
       return;
     }
-    const message = defaultCommitMessage(commitDraft ?? sessionView.title || activeSummary?.title || '');
+    const message = defaultCommitMessage(commitDraft ?? (sessionView.title || activeSummary?.title || ''));
     try {
       const result = await api.commitLocalFiles(active, { message, files: pinFiles });
       toast(commitSessionFilesToast(result.hash));
@@ -843,7 +843,7 @@ export default function App2() {
     ...(activeSummary?.cwd?.trim() && active?.machine === 'local' ? [{ v: 'finder', t: '在 Finder 打开', sub: activeSummary.cwd }, { v: 'termapp', t: '在终端打开', sub: activeSummary.cwd }] : []),
     ...(activeSummary?.cwd?.trim() && active?.machine === 'local' ? [{ v: 'dropfile', t: '放入文件' }, { v: 'dropshot', t: '粘贴截图' }] : []),
     ...(active?.machine === 'local' && focusFile ? [{ v: 'openfile', t: '用默认程序打开', sub: peekFileCaption(focusFile) }, { v: 'savepeek', t: '写回当前文件', sub: '⌘S' }, { v: 'revertfile', t: '还原这次改动', sub: peekFileCaption(focusFile) }] : []),
-    ...(canCommitHere ? [{ v: 'commitfiles', t: '记下这次改动', sub: defaultCommitMessage(commitDraft ?? sessionView.title || activeSummary?.title || '') }] : []),
+    ...(canCommitHere ? [{ v: 'commitfiles', t: '记下这次改动', sub: defaultCommitMessage(commitDraft ?? (sessionView.title || activeSummary?.title || '')) }] : []),
     ...(activeSummary?.cwd?.trim() ? [{ v: 'cwd', t: '复制目录', sub: activeSummary.cwd }] : []),
     ...((sessionView.title || activeSummary?.title || '').trim() ? [{ v: 'title', t: '复制标题', sub: (sessionView.title || activeSummary?.title || '').trim() }] : []),
     ...(canResumeHere ? [{ v: 'resume', t: '接着这条会话', sub: '同一条上下文' }] : []),
@@ -968,7 +968,7 @@ export default function App2() {
     { g: '这条会话', t: '用默认程序打开', k: focusFile || '', run: () => void openFocusFile() },
     { g: '这条会话', t: '写回当前文件', k: '⌘S', run: () => void savePeek() },
     ...(canRevertSessionFile(active?.machine, focusFile) ? [{ g: '这条会话', t: '还原这次改动', k: focusFile || '', run: () => void revertFile() }] : []),
-    ...(canCommitHere ? [{ g: '这条会话', t: '记下这次改动', k: defaultCommitMessage(commitDraft ?? sessionView.title || activeSummary?.title || ''), run: () => void commitFiles() }] : []),
+    ...(canCommitHere ? [{ g: '这条会话', t: '记下这次改动', k: defaultCommitMessage(commitDraft ?? (sessionView.title || activeSummary?.title || '')), run: () => void commitFiles() }] : []),
     { g: '这条会话', t: '放入文件', k: '拖到输入框', run: () => void pickIntoSession() },
     { g: '这条会话', t: '粘贴截图', k: '⌘V', run: () => void pasteShot() },
     { g: '这条会话', t: '终端', k: '⌘T', run: () => setDrawer('term') }, { g: '这条会话', t: '文件', k: '⌘E', run: () => setDrawer('files') },
