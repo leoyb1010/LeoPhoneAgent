@@ -194,6 +194,7 @@ export class ClaudeStreamJsonDialect implements HarnessDialect {
 
 export class PiRpcDialect implements HarnessDialect {
   private lastTurnError: string | null = null;
+  private skipSettledComplete = false;
   private lastToolDelta = new Map<string, { at: number; text: string }>();
 
   handshake(): unknown[] {
@@ -204,8 +205,10 @@ export class PiRpcDialect implements HarnessDialect {
     const out: HarnessEvent[] = [];
     const kind = obj.type;
     const turnError = assistantTurnError(obj);
-    if (kind === 'agent_start') this.lastTurnError = null;
-    else if (turnError) this.lastTurnError = turnError;
+    if (kind === 'agent_start') {
+      this.lastTurnError = null;
+      this.skipSettledComplete = false;
+    } else if (turnError) this.lastTurnError = turnError;
 
     if (kind === 'message_update') {
       const ev = asObject(obj.assistantMessageEvent);
@@ -299,6 +302,17 @@ export class PiRpcDialect implements HarnessDialect {
       } else if (this.lastTurnError) {
         const error = this.lastTurnError;
         this.lastTurnError = null;
+        this.skipSettledComplete = true;
+        out.push({ event: EVENT_RUN_FAILED, error });
+      }
+      // 成功的 agent_end 还可能接着排队 / 压缩 / 再试;等 agent_settled 再报完成。
+    } else if (kind === 'agent_settled') {
+      if (this.skipSettledComplete) {
+        this.skipSettledComplete = false;
+      } else if (this.lastTurnError) {
+        const error = this.lastTurnError;
+        this.lastTurnError = null;
+        this.skipSettledComplete = true;
         out.push({ event: EVENT_RUN_FAILED, error });
       } else {
         out.push({ event: EVENT_RUN_COMPLETED, output: '', usage: {} });
@@ -312,6 +326,7 @@ export class PiRpcDialect implements HarnessDialect {
         error: obj.errorMessage,
       });
     } else if (kind === 'auto_retry_end' && obj.success === false) {
+      this.skipSettledComplete = true;
       out.push({ event: EVENT_RUN_FAILED, error: str(obj.finalError ?? obj.errorMessage ?? 'retry failed') });
     } else if (kind === 'compaction_start') {
       out.push({ event: EVENT_SESSION_COMPACTING, reason: obj.reason });
@@ -320,6 +335,7 @@ export class PiRpcDialect implements HarnessDialect {
       if (obj.aborted) {
         out.push({ event: 'session.compacted', aborted: true, reason: obj.reason });
       } else if (!obj.result && obj.errorMessage) {
+        this.skipSettledComplete = true;
         out.push({ event: EVENT_RUN_FAILED, error: str(obj.errorMessage) });
       } else {
         out.push({
@@ -331,6 +347,7 @@ export class PiRpcDialect implements HarnessDialect {
         });
       }
     } else if (kind === 'error') {
+      this.skipSettledComplete = true;
       out.push({ event: EVENT_RUN_FAILED, error: str(obj.message ?? obj.error ?? 'error') });
     } else if (kind === 'response' && obj.success === true && obj.command === 'set_model') {
       const data = asObject(obj.data);
@@ -356,6 +373,7 @@ export class PiRpcDialect implements HarnessDialect {
     } else if (kind === 'response' && obj.success === false && (obj.command === 'prompt' || obj.command === 'steer' || obj.command === 'follow_up')) {
       // 我们发的 prompt 被拒(典型:没配密钥)。不映射的话会话永远显示 running,
       // 各端都在等一个不会来的回复。
+      this.skipSettledComplete = true;
       out.push({ event: EVENT_RUN_FAILED, error: str(obj.error ?? 'prompt rejected') });
     }
 
@@ -387,7 +405,7 @@ export class PiRpcDialect implements HarnessDialect {
   }
 }
 
-const PI_SILENT_KINDS = new Set(['message_update', 'tool_execution_update', 'bash_execution_update', 'auto_retry_end']);
+const PI_SILENT_KINDS = new Set(['message_update', 'tool_execution_update', 'bash_execution_update', 'auto_retry_end', 'agent_end', 'agent_settled']);
 
 function assistantTurnError(obj: JsonObject): string {
   const message = asObject(obj.message);

@@ -117,7 +117,18 @@ test('阈值压缩变成 session.compacting / session.compacted,不报完成', (
 test('agent_end 才算一次运行完成;turn_end 只是透传', () => {
   const dialect = new PiRpcDialect();
   assert.equal(dialect.translateLine({ type: 'turn_end' }).events[0].event, 'harness.turn_end');
-  assert.equal(dialect.translateLine({ type: 'agent_end' }).events[0].event, EVENT_RUN_COMPLETED);
+  assert.deepEqual(dialect.translateLine({ type: 'agent_end' }).events, []);
+  assert.equal(dialect.translateLine({ type: 'agent_settled' }).events[0].event, EVENT_RUN_COMPLETED);
+});
+
+test('失败之后的 agent_settled 不再报完成', () => {
+  const dialect = new PiRpcDialect();
+  dialect.translateLine({
+    type: 'message_end',
+    message: { role: 'assistant', stopReason: 'error', errorMessage: 'nope' },
+  });
+  assert.equal(dialect.translateLine({ type: 'agent_end' }).events[0].event, EVENT_RUN_FAILED);
+  assert.deepEqual(dialect.translateLine({ type: 'agent_settled' }).events, []);
 });
 
 test('助手 stopReason=error 时 agent_end 是 run.failed,不是空白完成', () => {
@@ -133,7 +144,7 @@ test('助手 stopReason=error 时 agent_end 是 run.failed,不是空白完成', 
   const { events } = dialect.translateLine({ type: 'agent_end' });
   assert.equal(events[0].event, EVENT_RUN_FAILED);
   assert.match(String(events[0].error), /ChatGPT account/);
-  assert.equal(new PiRpcDialect().translateLine({ type: 'agent_end' }).events[0].event, EVENT_RUN_COMPLETED);
+  assert.deepEqual(new PiRpcDialect().translateLine({ type: 'agent_end' }).events, []);
 });
 
 test('prompt 被 pi 拒绝(如没配密钥)→ run.failed,而不是永远 running', () => {
