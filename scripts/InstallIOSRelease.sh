@@ -23,19 +23,25 @@ derived="$HOME/Library/Developer/Xcode/DerivedData/LeoPhoneAgent-release"
 if [ "$#" -gt 0 ]; then
   udids="$*"
 else
-  # 按 UDID 格式提取:设备名里含空格(如 "iPad Pro 13-inch"),按列取字段会
+  # 按 UDID 格式提取(新机型是 8-16 位:00008160-00084DCE3C200036;旧的是 8-4-4-4-12):设备名里含空格(如 "iPad Pro 13-inch"),按列取字段会
   # 抓到型号词而不是 UDID。另外 "unavailable" 里含 "available" 子串 ——
   # 不先排掉,离线的 Apple Watch 会被当成可装机目标。
   udids=$(xcrun devicectl list devices 2>/dev/null \
     | grep -i physical | grep -vi unavailable | grep -i 'available' \
-    | grep -oE '[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}')
+    | grep -oE '[0-9A-Fa-f]{8}-([0-9A-Fa-f]{16}|[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12})')
 fi
 [ -n "$udids" ] || { echo "没有在线真机" >&2; exit 1; }
 
+# 指定一台新设备时，让 Xcode 为实际设备更新描述文件；generic 目标不会注册新机。
+build_destination='generic/platform=iOS'
+if [ "$#" -eq 1 ]; then
+  build_destination="id=$1"
+fi
+
 echo "==> [2/3] 构建 Release"
 xcodebuild -project "$project" -scheme LeoPhoneAgent \
-  -configuration Release -destination 'generic/platform=iOS' \
-  -derivedDataPath "$derived" -allowProvisioningUpdates \
+  -configuration Release -destination "$build_destination" \
+  -derivedDataPath "$derived" -allowProvisioningUpdates -allowProvisioningDeviceRegistration \
   build >/tmp/ios-install-build.log 2>&1 || {
     echo "构建失败,尾部日志:" >&2; tail -25 /tmp/ios-install-build.log >&2; exit 1; }
 
