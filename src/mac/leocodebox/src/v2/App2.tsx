@@ -9,6 +9,7 @@ import { canOpenSessionPath, openSessionPath, openSessionTerm, openSessionUrl, p
 import { dropBrowserFile, pasteSessionImage, pickSessionFiles } from './desktop-drop';
 import { onSessionNoticeAction, onSessionNoticeClick, setDockNeedBadge, showSessionNotice } from './desktop-notice';
 import { setSessionKeepAwake } from './desktop-awake';
+import { onBatteryChanged, readBattery } from './desktop-battery';
 import { desktopHotkeyTools, readGlobalHotkey, writeGlobalHotkey } from './desktop-hotkey';
 import { desktopLoginTools, readOpenAtLogin, writeOpenAtLogin } from './desktop-login';
 import { desktopFloatTools, readAlwaysOnTop, writeAlwaysOnTop } from './desktop-float';
@@ -94,6 +95,7 @@ import { canMoveSessionFile, moveSessionToast, sanitizeMoveFolder } from './sess
 import { DRAFTS_KEY, readPersistedDrafts, writePersistedDrafts } from './session-draft';
 import { canHaltBusySessions, haltSessionsToast } from './session-halt';
 import { shouldKeepAwake } from './session-awake';
+import { batterySendToast, onAcToast, onBatteryToast } from './session-battery';
 import { canStopSession, stopSessionToast, stoppableLocalSessions } from './session-stop';
 import { canForgetEndedSessions, endedLocalSessionIds, forgetEndedToast } from './session-forget';
 import { canRecallForgotten, recallSessionToast, type ForgottenSession } from './session-recall';
@@ -261,6 +263,8 @@ export default function App2() {
   const canAppsHere = canMoveToApplications(desktopAppsTools());
   const [inApplications, setInApplications] = useState(false);
   const [netOffline, setNetOffline] = useState(() => typeof navigator !== 'undefined' && navigator.onLine === false);
+  const [onBattery, setOnBattery] = useState(false);
+  const batterySendWarned = useRef(false);
   const canCheckUpdateHere = canCheckUpdate(desktopUpdater());
   const [updateState, setUpdateState] = useState<UpdateRow | null>(null);
   const chimePrev = useRef<Map<string, string>>(new Map());
@@ -353,6 +357,21 @@ export default function App2() {
       if (hit) toast(lastAbruptToast(), true);
     });
   }, [toast]);
+  useEffect(() => {
+    void readBattery().then(setOnBattery);
+    return onBatteryChanged((on) => {
+      setOnBattery((prev) => {
+        if (prev !== on) toast(on ? onBatteryToast() : onAcToast(), on);
+        if (!on) batterySendWarned.current = false;
+        return on;
+      });
+    });
+  }, [toast]);
+  const warnBatterySend = useCallback(() => {
+    if (!onBattery || batterySendWarned.current) return;
+    batterySendWarned.current = true;
+    toast(batterySendToast());
+  }, [onBattery, toast]);
   const warnIcloud = useCallback((cwd?: string | null) => {
     const path = String(cwd ?? '').trim();
     if (!isIcloudPath(path) || icloudWarned.current.has(path)) return;
@@ -1478,8 +1497,9 @@ export default function App2() {
       toast(offlineToast(), true);
       return;
     }
+    warnBatterySend();
     await withBusy(() => api.send(active, text), retryLastUserToast());
-  }, [active, activeSummary?.last_event?.text, canRetryLast, sessionView.model, sessionView.rows, toast, withBusy]);
+  }, [active, activeSummary?.last_event?.text, canRetryLast, sessionView.model, sessionView.rows, toast, withBusy, warnBatterySend]);
   const editLastPrompt = useCallback(() => {
     const text = lastUserPrompt(sessionView.rows);
     if (!text) { toast('还没有上一句', true); return; }
@@ -1793,9 +1813,10 @@ export default function App2() {
       toast(offlineToast(), true);
       return;
     }
+    warnBatterySend();
     setDraft('');
     await withBusy(() => api.send(active, text));
-  }, [active, activeSummary, draft, sessionView.model, sessionView.rows, toast, withBusy, setDraft]);
+  }, [active, activeSummary, draft, sessionView.model, sessionView.rows, toast, withBusy, setDraft, warnBatterySend]);
   const followUp = useCallback(async () => {
     if (!active || !composerCanFollowUp(active.machine, sessionView.status)) return;
     const text = draft.trim(); if (!text) return;
@@ -1811,9 +1832,10 @@ export default function App2() {
       toast(offlineToast(), true);
       return;
     }
+    warnBatterySend();
     setDraft('');
     await withBusy(() => api.rpc(active, { type: 'follow_up', message: text }), followUpToast());
-  }, [active, activeSummary, draft, sessionView.model, sessionView.rows, sessionView.status, toast, withBusy, setDraft]);
+  }, [active, activeSummary, draft, sessionView.model, sessionView.rows, sessionView.status, toast, withBusy, setDraft, warnBatterySend]);
   const clearFollowUps = useCallback(() => {
     if (!active || !composerCanFollowUp(active.machine, sessionView.status)) return;
     void withBusy(() => api.rpc(active, { type: 'clear_queue' }), queueClearedToast());
@@ -2053,6 +2075,7 @@ export default function App2() {
       toast(offlineToast(), true);
       return;
     }
+    if (input.machine === 'local') warnBatterySend();
     if (input.machine === 'local' && await warnMissing(input.cwd)) return;
     if (input.machine === 'local' && (providers === null || usableModelsFromProviders(providers).length === 0)) {
       if (providers === null) return;
@@ -2074,7 +2097,7 @@ export default function App2() {
       }
       setNewBox(null); setView('home');
     });
-  }, [providers, withBusy, refreshFleet, toast, warnIcloud, warnMissing]);
+  }, [providers, withBusy, refreshFleet, toast, warnIcloud, warnMissing, warnBatterySend]);
 
   // -- 菜单 ------------------------------------------------------------------
   const openMenu = useCallback((el: HTMLElement, items: MenuItem[], onPick: (v: string) => void) => {

@@ -120,6 +120,12 @@ if (isLocalHttpOrigin(window.location)) {
     openExtraWindow: () => ipcRenderer.invoke('leocodebox-desktop:extra-window'),
     showEmojiPanel: () => ipcRenderer.invoke('leocodebox-desktop:emoji-panel'),
     clearCache: () => ipcRenderer.invoke('leocodebox-desktop:clear-cache'),
+    getBattery: () => ipcRenderer.invoke('leocodebox-desktop:battery'),
+    onBatteryChanged: (callback) => {
+      const listener = (_event, row) => callback(row);
+      ipcRenderer.on('leocodebox-desktop:battery-changed', listener);
+      return () => ipcRenderer.removeListener('leocodebox-desktop:battery-changed', listener);
+    },
     getAppLock: () => ipcRenderer.invoke('leocodebox-desktop:app-lock'),
     setAppLock: (on) => ipcRenderer.invoke('leocodebox-desktop:app-lock', on),
     onAppLockChanged: (callback) => {

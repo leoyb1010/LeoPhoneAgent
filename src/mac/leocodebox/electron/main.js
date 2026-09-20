@@ -10,6 +10,7 @@ import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
 import { appFolderState, shouldReplaceExistingApp } from './app-folder.js';
+import { batteryState } from './battery.js';
 import { busyQuitCopy, shouldConfirmBusyQuit } from './busy-quit.js';
 import { DesktopWindowManager } from './desktopWindow.js';
 import { DesktopNotificationsController } from './desktopNotifications.js';
@@ -112,6 +113,14 @@ function getAppLock() {
 
 function notifyAppLock() {
   desktopWindow?.sendToActiveView?.('leocodebox-desktop:app-lock-changed', getAppLock());
+}
+
+function getBattery() {
+  return batteryState(powerMonitor);
+}
+
+function notifyBattery() {
+  desktopWindow?.sendToActiveView?.('leocodebox-desktop:battery-changed', getBattery());
 }
 
 function setAppLock(on) {
@@ -927,6 +936,7 @@ function registerIpcHandlers() {
     return desktopWindow.openExtraWindow(url);
   });
   trustedHandle('leocodebox-desktop:clear-cache', async () => clearWebCache());
+  trustedHandle('leocodebox-desktop:battery', async () => getBattery());
   trustedHandle('leocodebox-desktop:app-lock', async (_event, raw) => (
     raw === undefined || raw === null ? getAppLock() : writeAppLock(Boolean(raw))
   ));
@@ -1470,6 +1480,10 @@ async function bootstrap() {
     powerMonitor.on('lock-screen', () => {
       setAppLock(true);
     });
+  }
+  if (typeof powerMonitor?.on === 'function') {
+    powerMonitor.on('on-battery', () => notifyBattery());
+    powerMonitor.on('on-ac', () => notifyBattery());
   }
   await openLocalInDesktop();
   flushLeoSchemes();

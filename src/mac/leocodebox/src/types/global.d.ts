@@ -31,6 +31,8 @@ declare global {
       openExtraWindow?: () => Promise<{ ok?: boolean }>;
       showEmojiPanel?: () => Promise<{ ok?: boolean }>;
       clearCache?: () => Promise<{ ok?: boolean }>;
+      getBattery?: () => Promise<{ on?: boolean; can?: boolean }>;
+      onBatteryChanged?: (callback: (row: { on?: boolean }) => void) => () => void;
       getAppLock?: () => Promise<{ on?: boolean }>;
       setAppLock?: (on: boolean) => Promise<{ on?: boolean }>;
       onAppLockChanged?: (callback: (row: { on?: boolean }) => void) => () => void;
