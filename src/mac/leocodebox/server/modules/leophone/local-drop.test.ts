@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { copyDroppedFile, resolveDropDest, writeDroppedBytes } from './local-drop.ts';
+import { copyDroppedFile, resolveDropDest, writeDroppedBytes } from './local-drop.js';
 
 test('放入会话目录:项目内能写,越界和系统目录不能写', async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'leo-drop-'));
