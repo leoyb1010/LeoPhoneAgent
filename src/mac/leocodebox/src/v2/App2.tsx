@@ -116,6 +116,7 @@ import { canFlushPeekOnSend, peekFlushedToast } from './session-peek-flush';
 import { clearPeekFileDraft, peekFileDraftToRestore, writePeekFileDraft } from './session-peek-files';
 import { peekDraftToRestore, peekMemoryFile, peekMemoryKey, writePeekMemory, type PeekMemory } from './session-peek-memory';
 import { canPeekPendingEdit, pendingEditFile } from './session-peek-pending';
+import { canShowPendingProposal, pendingEditProposal } from './session-peek-proposal';
 import { mentionPeekOnSend } from './session-peek-send';
 import { lastFinishedEdit, peekReloadedToast, shouldReloadPeek } from './session-peek-sync';
 import { canUnpackSessionZip, unpackSessionToast, unpackZipName } from './session-unpack';
@@ -2971,12 +2972,22 @@ export default function App2() {
   const peekPath = focusFile ? sessionFilePath(cwd || workspace?.fullPath || '', focusFile) : '';
   const canWritePeek = drawer !== 'diff' && peekCanWriteBack({ machine: active?.machine, projectId: workspace?.projectId, path: peekPath, peek: filePeek });
   const peekDirty = canWritePeek && filePeekDraft != null && filePeekDraft !== filePeek;
-  const filePeekBlock = filePeek != null ? (
+  const pendingProposal = pendingEditProposal(sessionView.rows);
+  const showProposal = canShowPendingProposal({
+    machine: active?.machine,
+    status: sessionView.status,
+    dirty: peekDirty,
+    focusFile,
+    pendingFile: pendingProposal?.file ?? pendingFile,
+    content: pendingProposal?.content,
+  });
+  const peekShown = showProposal ? (pendingProposal?.content ?? filePeek) : (filePeekDraft ?? filePeek);
+  const filePeekBlock = filePeek != null || showProposal ? (
     <div className="local-files-peek-wrap">
       <div className="local-files-peek-head">
         {focusCommit ? <b className="local-files-name">{commits.find((row) => row.hash === focusCommit)?.subject || focusCommit}</b> : peekFileCaption(focusFile) ? <b className="local-files-name">{peekFileCaption(focusFile)}</b> : <span />}
         <span className="local-files-peek-acts">
-          {canWritePeek ? <button className="link" type="button" disabled={!peekDirty} onClick={() => { void savePeek(); }}>{peekDirty ? '保存' : '已是最新'}</button> : null}
+          {canWritePeek && !showProposal ? <button className="link" type="button" disabled={!peekDirty} onClick={() => { void savePeek(); }}>{peekDirty ? '保存' : '已是最新'}</button> : null}
           {canRevertSessionFile(active?.machine, focusFile) ? <button className="link" type="button" onClick={() => { void revertFile(); }}>还原</button> : null}
           {canTrashHere ? <button className="link dim" type="button" onClick={() => { void trashFile(); }}>扔掉这份文件</button> : null}
           {canDuplicateHere ? <button className="link" type="button" onClick={() => { void duplicateFile(); }}>复制一份</button> : null}
@@ -2984,14 +2995,14 @@ export default function App2() {
           {canOpenSessionPath(active?.machine, peekPath || cwd) ? <button className="link" type="button" onClick={() => { void openFocusFile(); }}>用默认程序打开</button> : null}
           {active?.machine === 'local' && (focusFile || cwd) ? <button className="link" type="button" onClick={() => { void revealFocusFile(); }}>在 Finder 显示</button> : null}
           {canOpenSessionPath(active?.machine, cwd) ? <button className="link" type="button" onClick={() => { void openCwdTerm(); }}>在终端打开</button> : null}
-          <button className="link" type="button" onClick={() => { void navigator.clipboard.writeText(filePeekDraft ?? filePeek); toast('已复制正文'); }}>复制正文</button>
+          <button className="link" type="button" onClick={() => { void navigator.clipboard.writeText(peekShown ?? ''); toast('已复制正文'); }}>复制正文</button>
         </span>
       </div>
-      {canWritePeek ? (
+      {canWritePeek && !showProposal ? (
         <textarea className="local-files-peek" value={filePeekDraft ?? filePeek} spellCheck={false}
           onChange={(e) => setFilePeekDraft(e.target.value)} />
       ) : (
-        <pre className="local-files-peek">{filePeek}</pre>
+        <pre className="local-files-peek">{peekShown}</pre>
       )}
     </div>
   ) : null;

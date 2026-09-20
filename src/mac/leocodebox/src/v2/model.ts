@@ -8,7 +8,7 @@ export type FlowRow =
   | { k: 'ai'; key: string; text: string; streaming: boolean }
   | { k: 'think'; key: string; text: string; streaming: boolean }
   | { k: 'tool'; key: string; toolUseId: string | null; tool: string; preview: string; output: string; running: boolean; error: boolean }
-  | { k: 'edit'; key: string; toolUseId: string | null; tool: string; file: string; output: string; running: boolean; error: boolean }
+  | { k: 'edit'; key: string; toolUseId: string | null; tool: string; file: string; output: string; running: boolean; error: boolean; proposed?: string }
   | { k: 'ap'; key: string; approvalId: string; title: string; command: string; tool: string; cwd: string; host: string; choices: string[] }
   | { k: 'sys'; key: string; text: string; tone: 'muted' | 'remote' | 'error' };
 
@@ -334,6 +334,19 @@ function isEditTool(tool: string): boolean {
   return tool === 'edit' || tool === 'write';
 }
 
+function editProposalContent(args: unknown): string {
+  if (!args || typeof args !== 'object') return '';
+  const rec = args as Record<string, unknown>;
+  for (const key of ['content', 'newText', 'new_text', 'new_string', 'text']) {
+    const value = rec[key];
+    if (typeof value !== 'string' || !value) continue;
+    const text = value.replace(/\u0000/g, '');
+    if (!text) continue;
+    return text.length > 200_000 ? text.slice(0, 200_000) : text;
+  }
+  return '';
+}
+
 /** 纯函数:一条事件进来,返回新的视图。不认识的事件原样忽略,永远不抛。 */
 export function applyEvent(view: SessionView, event: HarnessEvent): SessionView {
   const name = event.event;
@@ -375,8 +388,13 @@ export function applyEvent(view: SessionView, event: HarnessEvent): SessionView 
       const tool = str(event.tool) || 'tool';
       const preview = str(event.preview);
       rows = closeStreaming(rows);
+      const proposed = isEditTool(tool) ? editProposalContent(event.args) : '';
       rows = isEditTool(tool)
-        ? [...rows, { k: 'edit', key: nextKey(), toolUseId: event.tool_use_id == null ? null : str(event.tool_use_id), tool, file: preview, output: '', running: true, error: false }]
+        ? [...rows, {
+          k: 'edit', key: nextKey(), toolUseId: event.tool_use_id == null ? null : str(event.tool_use_id),
+          tool, file: preview, output: '', running: true, error: false,
+          ...(proposed ? { proposed } : {}),
+        }]
         : [...rows, { k: 'tool', key: nextKey(), toolUseId: event.tool_use_id == null ? null : str(event.tool_use_id), tool, preview, output: '', running: true, error: false }];
       break;
     }
@@ -401,6 +419,12 @@ export function applyEvent(view: SessionView, event: HarnessEvent): SessionView 
         choices: Array.isArray(event.choices) && event.choices.length > 0 ? event.choices.map(String) : ['once', 'deny'],
       };
       rows = [...closeStreaming(rows), row];
+      const proposed = editProposalContent(event.args);
+      if (proposed) {
+        rows = rows.map((item) => (item.k === 'edit' && item.running && !item.proposed
+          ? { ...item, proposed }
+          : item));
+      }
       pendingApprovals.set(approvalId, row);
       status = 'waiting_for_approval';
       break;
