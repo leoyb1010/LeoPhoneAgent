@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.1.7',
+    date: '2026-09-20',
+    items: [
+      '这个目录里可以新建文件夹，不会建到目录外面。',
+    ],
+  },
+  {
     version: '2.1.6',
     date: '2026-09-20',
     items: [
