@@ -74,13 +74,14 @@ async function loadUrlWithTimeout(webContents, url, timeoutMs = TARGET_LOAD_TIME
 }
 
 export class ViewHost {
-  constructor({ appName, getMainWindow, getContentViewBounds, getPreloadPath, openExternalUrl, showError }) {
+  constructor({ appName, getMainWindow, getContentViewBounds, getPreloadPath, openExternalUrl, showError, applyZoom }) {
     this.appName = appName;
     this.getMainWindow = getMainWindow;
     this.getContentViewBounds = getContentViewBounds;
     this.getPreloadPath = getPreloadPath;
     this.openExternalUrl = openExternalUrl;
     this.showError = showError;
+    this.applyZoom = applyZoom;
     this.activeContentView = null;
     this.tabViews = new Map();
   }
@@ -107,7 +108,9 @@ export class ViewHost {
     });
     webContents.on('did-finish-load', () => {
       void this.applyCustomTheme(webContents);
+      this.applyZoom?.(webContents);
     });
+    this.applyZoom?.(webContents);
   }
 
   isAllowedInAppNavigation(webContents, targetUrl) {

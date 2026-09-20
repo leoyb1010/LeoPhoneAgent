@@ -5,6 +5,7 @@ import path from 'node:path';
 
 import { ViewHost } from './viewHost.js';
 import { DEFAULT_WINDOW, WINDOW_BOUNDS_FILE, sanitizeWindowBounds, snapshotWindowBounds } from './window-bounds.js';
+import { DEFAULT_ZOOM, WINDOW_ZOOM_FILE, sanitizeZoomFactor, snapshotZoomFactor } from './window-zoom.js';
 
 const TITLEBAR_HEIGHT = 44;
 const AUTH_TOKEN_STORAGE_KEY = 'auth-token';
@@ -66,6 +67,7 @@ export class DesktopWindowManager {
     this.launcherLoaded = false;
     this.contentViewResizeTimer = null;
     this.windowBoundsTimer = null;
+    this.windowZoomTimer = null;
     this.viewHost = new ViewHost({
       appName: this.appName,
       getMainWindow: () => this.mainWindow,
@@ -73,6 +75,7 @@ export class DesktopWindowManager {
       getPreloadPath: this.getPreloadPath,
       openExternalUrl: this.openExternalUrl,
       showError: this.actions.showError,
+      applyZoom: (webContents) => this.attachZoom(webContents),
     });
   }
 
@@ -692,6 +695,42 @@ export class DesktopWindowManager {
     }, 400);
   }
 
+  windowZoomPath() {
+    return path.join(app.getPath('userData'), WINDOW_ZOOM_FILE);
+  }
+
+  readSavedZoomFactor() {
+    try {
+      const raw = JSON.parse(readFileSync(this.windowZoomPath(), 'utf8'));
+      return sanitizeZoomFactor(raw) ?? DEFAULT_ZOOM;
+    } catch {
+      return DEFAULT_ZOOM;
+    }
+  }
+
+  persistWindowZoom(webContents) {
+    const factor = snapshotZoomFactor(webContents);
+    if (factor == null) return;
+    void writeFile(this.windowZoomPath(), `${JSON.stringify({ factor })}\n`, 'utf8').catch(() => undefined);
+  }
+
+  schedulePersistZoom(webContents) {
+    if (this.windowZoomTimer) clearTimeout(this.windowZoomTimer);
+    this.windowZoomTimer = setTimeout(() => {
+      this.windowZoomTimer = null;
+      this.persistWindowZoom(webContents);
+    }, 400);
+  }
+
+  attachZoom(webContents) {
+    if (!webContents || webContents.isDestroyed()) return;
+    const factor = this.readSavedZoomFactor();
+    try { webContents.setZoomFactor(factor); } catch { /* zoom API missing */ }
+    if (webContents.__leoZoomHooked) return;
+    webContents.__leoZoomHooked = true;
+    webContents.on('zoom-changed', () => this.schedulePersistZoom(webContents));
+  }
+
   async createWindow() {
     const saved = this.readSavedWindowBounds();
     this.mainWindow = new BrowserWindow({
@@ -722,6 +761,7 @@ export class DesktopWindowManager {
       },
     });
 
+    this.attachZoom(this.mainWindow.webContents);
     this.mainWindow.webContents.setWindowOpenHandler(({ url }) => {
       void this.openExternalUrl(url).catch((error) => this.actions.showError('Could not open external link', error));
       return { action: 'deny' };
@@ -747,6 +787,8 @@ export class DesktopWindowManager {
 
     this.mainWindow.on('close', (event) => {
       this.persistWindowBounds();
+      const view = this.viewHost?.getActiveView?.();
+      this.persistWindowZoom(view?.webContents || this.mainWindow.webContents);
       if (this.actions.isAppQuitting?.()) return;
       event.preventDefault();
       // leocodebox owns the local server lifecycle: closing the app must be a
@@ -761,6 +803,8 @@ export class DesktopWindowManager {
     this.mainWindow.on('closed', () => {
       if (this.windowBoundsTimer) clearTimeout(this.windowBoundsTimer);
       this.windowBoundsTimer = null;
+      if (this.windowZoomTimer) clearTimeout(this.windowZoomTimer);
+      this.windowZoomTimer = null;
       if (this.contentViewResizeTimer) clearTimeout(this.contentViewResizeTimer);
       this.contentViewResizeTimer = null;
       this.viewHost.clear();
