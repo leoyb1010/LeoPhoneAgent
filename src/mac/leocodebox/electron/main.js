@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Notification, powerMonitor, powerSaveBlocker, safeStorage, session, shell, systemPreferences, webContents } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, Notification, powerMonitor, powerSaveBlocker, safeStorage, session, shell, systemPreferences, webContents } from 'electron';
 import updaterPackage from 'electron-updater';
 import { randomBytes } from 'node:crypto';
 import { constants as fsConstants, mkdirSync } from 'node:fs';
@@ -13,6 +13,7 @@ import { busyQuitCopy, shouldConfirmBusyQuit } from './busy-quit.js';
 import { DesktopWindowManager } from './desktopWindow.js';
 import { DesktopNotificationsController } from './desktopNotifications.js';
 import { CLI_MARK, cliBinPaths, cliShimBody, cwdFromArgv, localBinDir, pathHasLocalBin, withLocalBinOnPath } from './cli-install.js';
+import { dockMenuLabels } from './dock-menu.js';
 import { resolveLeoSchemeCwd } from './leo-scheme.js';
 import { expandDesktopFolderPath, isDesktopFolderAllowed } from './local-folder.js';
 import { LocalServerController } from './localServer.js';
@@ -1217,6 +1218,26 @@ function raiseMainWindow() {
   window.focus();
 }
 
+function applyDockMenu() {
+  if (process.platform !== 'darwin' || !app.dock) return false;
+  const [newLabel, showLabel] = dockMenuLabels();
+  const menu = Menu.buildFromTemplate([
+    {
+      label: newLabel,
+      click: () => {
+        raiseMainWindow();
+        desktopWindow?.sendToActiveView?.('leocodebox-desktop:dock-new', {});
+      },
+    },
+    {
+      label: showLabel,
+      click: () => raiseMainWindow(),
+    },
+  ]);
+  app.dock.setMenu(menu);
+  return true;
+}
+
 function deliverLeoScheme(raw) {
   const cwd = resolveLeoSchemeCwd(raw);
   if (!cwd) return true;
@@ -1344,6 +1365,7 @@ async function bootstrap() {
   await createDesktopWindow();
   // Settings are already loaded and the window exists; arm the global hotkey.
   applyGlobalHotkey();
+  applyDockMenu();
   if (process.platform === 'darwin' && typeof powerMonitor?.on === 'function') {
     powerMonitor.on('lock-screen', () => {
       setAppLock(true);

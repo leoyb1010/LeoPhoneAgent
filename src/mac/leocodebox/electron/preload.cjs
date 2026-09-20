@@ -156,6 +156,11 @@ if (isLocalHttpOrigin(window.location)) {
       ipcRenderer.on('leocodebox-desktop:open-scheme', listener);
       return () => ipcRenderer.removeListener('leocodebox-desktop:open-scheme', listener);
     },
+    onDockNew: (callback) => {
+      const listener = () => callback();
+      ipcRenderer.on('leocodebox-desktop:dock-new', listener);
+      return () => ipcRenderer.removeListener('leocodebox-desktop:dock-new', listener);
+    },
   });
 }
 

@@ -58,6 +58,7 @@ declare global {
         choice?: string | null;
       }) => void) => () => void;
       onLeoScheme?: (callback: (row: { cwd?: string | null }) => void) => () => void;
+      onDockNew?: (callback: () => void) => () => void;
       /** 桌面壳发过来的"打开某个东西":本地工具页 / 设置窗。 */
       onOpenModal: (
         callback: (tool: 'settings' | 'leoapi' | 'feedback') => void,

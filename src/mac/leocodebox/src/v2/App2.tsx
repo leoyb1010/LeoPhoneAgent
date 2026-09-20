@@ -22,6 +22,7 @@ import { clearDesktopCache, desktopCacheTools } from './desktop-cache';
 import { desktopCliTools, readCliInstall, writeCliInstall } from './desktop-cli';
 import { desktopLockTools, onAppLockChanged, readAppLock, writeAppLock } from './desktop-lock';
 import { desktopUpdater, runDesktopUpdate } from './desktop-update';
+import { onDockNew } from './desktop-dock';
 import { onLeoScheme } from './desktop-scheme';
 import { printSessionTalk } from './desktop-print';
 import { canAcceptSessionDrop, mentionDroppedFile } from './session-drop';
@@ -49,6 +50,7 @@ import { canOpenLogs, openLogsLabel, openLogsToast } from './session-applogs';
 import { canRelaunch, relaunchBusy, relaunchBusyToast, relaunchLabel, relaunchToast } from './session-relaunch';
 import { canClearCache, clearCacheLabel, clearCacheToast } from './session-cache';
 import { canInstallCli, installCliLabel, installCliToast } from './session-cli';
+import { dockNewToast } from './session-dock';
 import { canLockApp, lockLabel, lockToast } from './session-lock';
 import { followSystemLabel, followSystemToast } from './session-theme';
 import { canCheckUpdate, checkUpdateLabel, checkUpdateToast, nextUpdateAction, type UpdateRow } from './session-update';
@@ -1972,6 +1974,10 @@ export default function App2() {
     setNewBox((current) => (current?.open ? null : { open: true, machine: 'local' }));
     setView('home');
   }, [configuredModels.length, providers, refreshProviders]);
+  useEffect(() => onDockNew(() => {
+    beginLocalNew();
+    toast(dockNewToast());
+  }), [beginLocalNew, toast]);
 
   const modelMenu = () => setPicker({ kind: 'model', query: '', index: 0 });
   const policyMenu = () => setPicker({ kind: 'policy', query: '', index: 0 });
