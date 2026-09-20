@@ -90,6 +90,7 @@ import { canDenyAllHere, deniableApprovalIds, denyAllLabel, denyAllToast } from 
 import { canMentionLastTool, lastToolOutput, mentionLastTool, mentionLastToolToast } from './session-mention-tool';
 import { canOpenLastWritten, lastWrittenFile, openLastWrittenToast } from './session-written';
 import { canJumpLastFail, jumpLastFailToast, lastFailedRow } from './session-fail';
+import { canQueueOnEnter } from './session-follow-enter';
 import { canOpenLastRead, lastReadFile, openLastReadToast, readFileFromRow } from './session-read';
 import { canForkSession, forkSeedText, forkSessionToast, forkTitle } from './session-fork';
 import { canImportTalk, importSeedText, importTalkName, importTalkToast, importTitle } from './session-import-talk';
@@ -3059,7 +3060,7 @@ export default function App2() {
                       onPaste={onComposerPaste}
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={onComposerDrop}
-                      onKeyDown={(e) => { if (composerShouldSend(e) && draft.trim() && !needsModelSwitch) { e.preventDefault(); void send(); } }} />
+                      onKeyDown={(e) => { if (composerShouldSend(e) && draft.trim() && !needsModelSwitch) { e.preventDefault(); if (canQueueOnEnter({ machine: active?.machine, status: sessionView.status, prompt: draft })) void followUp(); else void send(); } }} />
                     {needsModelSwitch ? (
                       <div className="newbox-warn">
                         <b>这个模型当前账号用不了。</b>
