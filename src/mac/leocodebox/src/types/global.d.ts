@@ -20,6 +20,7 @@ declare global {
       setContentProtection?: (on: boolean) => Promise<{ on?: boolean }>;
       playDoneSound?: () => Promise<{ ok?: boolean }>;
       openLogs?: () => Promise<{ path?: string }>;
+      openAccessibility?: () => Promise<{ ok?: boolean; url?: string }>;
       pickFolder?: () => Promise<{ path?: string; cancelled?: boolean }>;
       revealPath?: (target: string) => Promise<{ path: string }>;
       openPath?: (target: string) => Promise<{ path: string }>;

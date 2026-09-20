@@ -15,6 +15,7 @@ import { resolveLeoSchemeCwd } from './leo-scheme.js';
 import { expandDesktopFolderPath, isDesktopFolderAllowed } from './local-folder.js';
 import { LocalServerController } from './localServer.js';
 import { disableConflictingLegacyLaunchAgent } from './legacyMigration.js';
+import { accessibilityPaneUrls } from './privacy-pane.js';
 import { readProductVersion } from './productMetadata.js';
 import { TabsController } from './tabs.js';
 import { isFirstPartyShellUrl } from './trustPolicy.js';
@@ -95,6 +96,19 @@ async function openAppLogs() {
   const opened = await shell.openPath(logs);
   if (opened) throw new Error(opened);
   return { path: logs };
+}
+
+async function openAccessibilityPrefs() {
+  let lastError = '';
+  for (const url of accessibilityPaneUrls()) {
+    try {
+      await shell.openExternal(url);
+      return { ok: true, url };
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+    }
+  }
+  throw new Error(lastError || '打不开辅助功能设置');
 }
 
 let sayChild = null;
@@ -679,6 +693,7 @@ function registerIpcHandlers() {
   ));
   trustedHandle('leocodebox-desktop:play-done-sound', async () => playDoneChime());
   trustedHandle('leocodebox-desktop:open-logs', async () => openAppLogs());
+  trustedHandle('leocodebox-desktop:open-accessibility', async () => openAccessibilityPrefs());
 
   trustedHandle('leocodebox-desktop:notify', async (event, payload) => {
     if (!Notification.isSupported()) return { shown: false };

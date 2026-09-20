@@ -13,6 +13,7 @@ import { desktopLoginTools, readOpenAtLogin, writeOpenAtLogin } from './desktop-
 import { desktopFloatTools, readAlwaysOnTop, writeAlwaysOnTop } from './desktop-float';
 import { desktopProtectTools, readContentProtection, writeContentProtection } from './desktop-protect';
 import { desktopChimeTools, playSessionChime } from './desktop-chime';
+import { desktopA11yTools, openDesktopAccessibility } from './desktop-a11y';
 import { desktopLogsTools, openDesktopLogs } from './desktop-applogs';
 import { onLeoScheme } from './desktop-scheme';
 import { printSessionTalk } from './desktop-print';
@@ -34,6 +35,7 @@ import { canSetOpenAtLogin, openAtLoginLabel, openAtLoginToast } from './session
 import { alwaysOnTopLabel, alwaysOnTopToast, canSetAlwaysOnTop } from './session-float';
 import { canSetContentProtection, contentProtectionLabel, contentProtectionToast } from './session-protect';
 import { DONE_CHIME_KEY, canPlayDoneChime, chimesFromSnapshot, doneChimeLabel, doneChimeToast, readDoneChimeOn } from './session-chime';
+import { canOpenAccessibility, openAccessibilityLabel, openAccessibilityToast } from './session-a11y';
 import { canOpenLogs, openLogsLabel, openLogsToast } from './session-applogs';
 import { leoSchemeToast, pickSchemeSession } from './session-scheme';
 import { autoCompactToast, shouldAutoCompact } from './session-autocompact';
@@ -215,6 +217,7 @@ export default function App2() {
   });
   const canDoneChimeHere = canPlayDoneChime(desktopChimeTools());
   const canOpenLogsHere = canOpenLogs(desktopLogsTools());
+  const canOpenA11yHere = canOpenAccessibility(desktopA11yTools());
   const chimePrev = useRef<Map<string, string>>(new Map());
   const chimePrimed = useRef(false);
   const compactPrev = useRef<Map<string, string>>(new Map());
@@ -1079,6 +1082,18 @@ export default function App2() {
       toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
     }
   }, [canOpenLogsHere, toast]);
+  const openA11yHere = useCallback(async () => {
+    if (!canOpenA11yHere) {
+      toast('这台电脑现在打不开辅助功能设置', true);
+      return;
+    }
+    try {
+      await openDesktopAccessibility();
+      toast(openAccessibilityToast());
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+    }
+  }, [canOpenA11yHere, toast]);
   const dictateHere = useCallback(() => {
     if (!canDictate(active?.machine)) {
       toast('只有本机能对着说', true);
@@ -1833,6 +1848,7 @@ export default function App2() {
     ...(canProtectHere ? [{ v: 'protect', t: contentProtectionLabel(contentProtection), sub: contentProtection ? '现在分享时是黑的' : '录屏和分享里藏住' }] : []),
     ...(canDoneChimeHere ? [{ v: 'donechime', t: doneChimeLabel(doneChimeOn), sub: doneChimeOn ? '现在跑完会响' : '跑完不响' }] : []),
     ...(canOpenLogsHere ? [{ v: 'openlogs', t: openLogsLabel(), sub: '本机日志目录' }] : []),
+    ...(canOpenA11yHere ? [{ v: 'opena11y', t: openAccessibilityLabel(), sub: '系统隐私设置' }] : []),
     ...(canDictateHere ? [{ v: 'dictate', t: dictating ? '停住' : '对着说', sub: dictating ? '正在听' : '写进输入框' }] : []),
     ...(canSearchHere ? [{ v: 'searchcwd', t: '在目录里搜', sub: activeSummary?.cwd || '会话目录' }] : []),
     ...(canShowSessionLog(active?.machine) ? [{ v: 'log', t: '最近提交', sub: activeSummary?.cwd || '会话目录' }] : []),
@@ -1910,6 +1926,7 @@ export default function App2() {
     else if (v === 'protect') void toggleContentProtection();
     else if (v === 'donechime') toggleDoneChime();
     else if (v === 'openlogs') void openLogsHere();
+    else if (v === 'opena11y') void openA11yHere();
     else if (v === 'dictate') dictateHere();
     else if (v === 'searchcwd') openSearch();
     else if (v === 'log') openLog();
@@ -2097,8 +2114,9 @@ export default function App2() {
     ...(canProtectHere ? [{ g: '本机', t: contentProtectionLabel(contentProtection), k: contentProtection ? '现在分享时是黑的' : '录屏和分享里藏住', run: () => void toggleContentProtection() }] : []),
     ...(canDoneChimeHere ? [{ g: '本机', t: doneChimeLabel(doneChimeOn), k: doneChimeOn ? '现在跑完会响' : '跑完不响', run: () => toggleDoneChime() }] : []),
     ...(canOpenLogsHere ? [{ g: '本机', t: openLogsLabel(), k: '本机日志目录', run: () => void openLogsHere() }] : []),
+    ...(canOpenA11yHere ? [{ g: '本机', t: openAccessibilityLabel(), k: '系统隐私设置', run: () => void openA11yHere() }] : []),
     ...allSessions.map((x) => ({ g: '跳转', t: `会话:${x.s.title || x.s.session_id}`, k: x.machineName, run: () => openSession({ machine: x.machine, id: x.s.session_id }) })),
-  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, importTalk, canImportHere, copyTalk, canCopyTalkHere, printTalk, canPrintTalkHere, toggleHideSecrets, canHideHere, hideSecretsOn, toggleOpenAtLogin, canOpenAtLoginHere, openAtLogin, toggleAlwaysOnTop, canAlwaysOnTopHere, alwaysOnTop, toggleContentProtection, canProtectHere, contentProtection, toggleDoneChime, canDoneChimeHere, doneChimeOn, openLogsHere, canOpenLogsHere, dictateHere, canDictateHere, dictating, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, speakLast, canSpeakLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openLastWritten, canOpenWritten, lastWritten, jumpLastFail, canJumpFail, lastFail, openLastRead, canOpenRead, lastRead, openHere, canHere, herePeers, showPulse, canPulse, pulseLabel, forkHere, canFork, openTalkLink, canLinks, talkLinks, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
+  ], [groups, configuredModels, allSessions, approveFirstPending, setModel, setPolicy, setThinking, compact, stop, stopTarget, haltBusy, canHaltBusy, forgetEnded, canForgetEnded, openRecall, canRecallHere, continueHere, resumeHere, canResumeHere, canFollowUp, queuedFollowUps.length, followUp, clearFollowUps, draft, forgetSession, togglePin, pinnedKeys, active, activeSummary, isDarkMode, toggleDarkMode, openSession, beginLocalNew, copyTitle, beginRename, beginRule, beginCwdRule, canCwdRuleHere, copyCwd, revealCwd, openCwdTerm, readBoundField, copyFindHit, savePeek, revertFile, trashFile, canTrashHere, duplicateFile, canDuplicateHere, mkdirFolder, canMkdirHere, folderName, switchBranch, canBranchHere, branchName, initRepo, canInitHere, mergeBranch, canMergeHere, moveFile, canMoveHere, moveDest, commitFiles, canCommitHere, commitDraft, pushRepo, canPushHere, pullRepo, canPullHere, exportTalk, canExportHere, importTalk, canImportHere, copyTalk, canCopyTalkHere, printTalk, canPrintTalkHere, toggleHideSecrets, canHideHere, hideSecretsOn, toggleOpenAtLogin, canOpenAtLoginHere, openAtLogin, toggleAlwaysOnTop, canAlwaysOnTopHere, alwaysOnTop, toggleContentProtection, canProtectHere, contentProtection, toggleDoneChime, canDoneChimeHere, doneChimeOn, openLogsHere, canOpenLogsHere, openA11yHere, canOpenA11yHere, dictateHere, canDictateHere, dictating, canSearchHere, openSearch, openLog, applyPatch, canApplyHere, packChanges, canPackHere, unpackZip, canUnpackHere, seedFile, canSeedHere, mentionLast, canMentionLast, lastReply, copyLastReply, canCopyLast, speakLast, canSpeakLast, retryLast, canRetryLast, lastPrompt, editLastPrompt, canEditLast, mentionTool, canMentionTool, lastTool, openLastWritten, canOpenWritten, lastWritten, jumpLastFail, canJumpFail, lastFail, openLastRead, canOpenRead, lastRead, openHere, canHere, herePeers, showPulse, canPulse, pulseLabel, forkHere, canFork, openTalkLink, canLinks, talkLinks, openFocusFile, pickIntoSession, pasteShot, sessionView.title, sessionView.rule, sessionView.cwdRule, sessionView.window, stepFind, focusFile]);
   const filteredCommands = useMemo(() => {
     const q = palette.query.trim().toLowerCase();
     return q ? commands.filter((c) => `${c.t} ${c.k} ${c.g}`.toLowerCase().includes(q)) : commands;
@@ -2554,6 +2572,7 @@ export default function App2() {
                         {canProtectHere ? <button className="link" type="button" onClick={() => { void toggleContentProtection(); }}>{contentProtectionLabel(contentProtection)}</button> : null}
                         {canDoneChimeHere ? <button className="link" type="button" onClick={toggleDoneChime}>{doneChimeLabel(doneChimeOn)}</button> : null}
                         {canOpenLogsHere ? <button className="link" type="button" onClick={() => { void openLogsHere(); }}>{openLogsLabel()}</button> : null}
+                        {canOpenA11yHere ? <button className="link" type="button" onClick={() => { void openA11yHere(); }}>{openAccessibilityLabel()}</button> : null}
                         {canDictateHere ? <button className="link" type="button" onClick={dictateHere}>{dictating ? '停住' : '对着说'}</button> : null}
                         {canRecallHere ? <button className="link" onClick={() => void openRecall()}>找回来</button> : null}
                       </div>
