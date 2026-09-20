@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { clickBoundSessionWindow, createMacWindowDriver, raiseBoundSessionWindow } from '../exact-window-macos.js';
-import { ExactWindowStore, parseNormalizedClickPoint, parseWindowAction, type WindowObservation, type WindowActionReceipt } from '../exact-window.js';
+import { clickBoundSessionWindow, createMacWindowDriver, raiseBoundSessionWindow, typeBoundSessionWindow } from '../exact-window-macos.js';
+import { ExactWindowStore, parseNormalizedClickPoint, parseWindowAction, parseWindowTypeText, pickWritableWindowField, type WindowElement, type WindowObservation, type WindowActionReceipt } from '../exact-window.js';
 
 const observation: WindowObservation = {
   app: 'Fixture', pid: 42, windowId: '7', title: 'Fixture window', bounds: '0,0,800,600', frontmost: true,
@@ -114,6 +114,57 @@ test('clickBoundSessionWindow 先提到前面再按相对坐标点,坏坐标不�
   }
   assert.deepEqual(kinds, ['ax', 'coord']);
   const missing = await clickBoundSessionWindow('hs_none', 0.4, 0.6, undefined, store, driver, listed);
+  assert.equal(missing.ok, false);
+  if (!missing.ok) assert.equal(missing.reason, 'unknown-snapshot');
+});
+
+const writable: WindowElement = {
+  id: 'field-1', path: [0, 1], role: 'AXTextField', bounds: '10,10,120,24',
+  enabled: true, settableValue: true, redacted: false, actions: ['AXSetValue'], focused: true, title: 'Name',
+};
+const other: WindowElement = {
+  id: 'field-2', path: [0, 2], role: 'AXTextArea', bounds: '10,40,120,48',
+  enabled: true, settableValue: true, redacted: false, actions: ['AXSetValue'],
+};
+
+test('pickWritableWindowField 优先指定 id,否则焦点,否则第一个能写的框', () => {
+  assert.equal(parseWindowTypeText(''), null);
+  assert.equal(parseWindowTypeText('x'.repeat(4097)), null);
+  assert.equal(parseWindowTypeText('hello'), 'hello');
+  assert.equal(pickWritableWindowField(undefined), null);
+  assert.equal(pickWritableWindowField([{ ...writable, redacted: true, focused: false }]), null);
+  assert.equal(pickWritableWindowField([other, writable])?.id, 'field-1');
+  assert.equal(pickWritableWindowField([other, writable], 'field-2')?.id, 'field-2');
+  assert.equal(pickWritableWindowField([other, writable], 'gone'), null);
+});
+
+test('typeBoundSessionWindow 先提到前面再写入焦点框,空字不会动手', async () => {
+  const store = new ExactWindowStore(() => 10_000, 'test');
+  const captured = store.capture(observation);
+  store.bindSession('hs_type', captured.snapshotId);
+  const names: string[] = [];
+  const withFields = { ...observation, frontmost: true, elements: [other, writable] };
+  const driver = createMacWindowDriver(async (request) => {
+    if (request.operation === 'observe') return { protocolVersion: 1, ok: true, observation: withFields };
+    if (request.operation === 'act') {
+      names.push(String((request.action as { name?: string }).name));
+      return {
+        protocolVersion: 1, ok: true, observation: withFields,
+        receipt: { attempted: true, verified: true, verification: 'value-readback', action: String((request.action as { name?: string }).name), observedAt: 10_000 },
+      };
+    }
+    return { protocolVersion: 1, ok: true, windows: [withFields] };
+  });
+  const listed = async () => [withFields];
+  const empty = await typeBoundSessionWindow('hs_type', '', undefined, undefined, store, driver, listed);
+  assert.equal(empty.ok, false);
+  if (!empty.ok) assert.equal(empty.reason, 'invalid-request');
+  assert.deepEqual(names, []);
+  const result = await typeBoundSessionWindow('hs_type', 'hello', undefined, undefined, store, driver, listed);
+  assert.equal(result.ok, true);
+  if (result.ok) assert.equal(result.elementId, 'field-1');
+  assert.deepEqual(names, ['focus', 'setValue']);
+  const missing = await typeBoundSessionWindow('hs_none', 'hello', undefined, undefined, store, driver, listed);
   assert.equal(missing.ok, false);
   if (!missing.ok) assert.equal(missing.reason, 'unknown-snapshot');
 });

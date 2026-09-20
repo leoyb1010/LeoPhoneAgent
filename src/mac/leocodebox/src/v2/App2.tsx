@@ -135,7 +135,7 @@ export default function App2() {
   const [focusMachine, setFocusMachine] = useState<string | null>(null);
   const [whatsNew, setWhatsNew] = useState<ReturnType<typeof currentReleaseNote>>(null);
   const [flowFind, setFlowFind] = useState({ open: false, query: '', index: 0 });
-  const [windowOp, setWindowOp] = useState<{ label: string } | null>(null);
+  const [windowOp, setWindowOp] = useState<{ label: string; draft: string } | null>(null);
   const [hiddenKeys, setHiddenKeys] = useState<string[]>(() => {
     try { return readHiddenSessionKeys(localStorage.getItem(HIDDEN_SESSIONS_KEY)); } catch { return []; }
   });
@@ -547,7 +547,7 @@ export default function App2() {
     ...(activeSummary && sessionCanForget(activeSummary.status) ? [{ v: 'forget', t: '从左栏拿掉', sub: active?.machine === 'local' ? '不再召回' : '只藏在这台 Mac' }] : []),
   ], (v) => {
     if (v === 'compact') void compact();
-    else if (v === 'winclick') setWindowOp({ label: windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window)) });
+    else if (v === 'winclick') setWindowOp({ label: windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window)), draft: '' });
     else if (v === 'stop') void stop();
     else if (v === 'continue') continueHere();
     else if (v === 'cwd') void copyCwd();
@@ -1135,10 +1135,10 @@ export default function App2() {
 
       {toasts.map((t) => <div key={t.id} className={`toast ${t.error ? 'error' : ''}`}>{t.text}</div>)}
       {windowOp && (
-        <div className="wn" role="dialog" aria-modal="true" aria-label="点这个窗口">
+        <div className="wn" role="dialog" aria-modal="true" aria-label="操作这个窗口">
           <div className="wn-mask" aria-hidden="true" onClick={() => setWindowOp(null)} />
           <div className="wn-box">
-            <h2>点这个窗口</h2>
+            <h2>操作这个窗口</h2>
             <p className="wn-ver">{windowOp.label}</p>
             <button
               type="button"
@@ -1149,10 +1149,28 @@ export default function App2() {
                 void api.clickBoundWindow(active, point).then((result) => toast(`已点 ${result.app}`)).catch((error) => toast(humanizeError(error instanceof Error ? error.message : String(error)), true));
               }}
             >
-              点这里的位置，对应绑过的窗口里同一处
+              点这个窗口里同一处
             </button>
+            <textarea
+              className="win-type"
+              rows={3}
+              placeholder="写入焦点输入框，或窗口里第一个能写的框"
+              value={windowOp.draft}
+              onChange={(e) => setWindowOp((cur) => (cur ? { ...cur, draft: e.target.value } : cur))}
+            />
             <div className="wn-acts">
-              <button className="btn-s" type="button" onClick={() => setWindowOp(null)}>关闭</button>
+              <button
+                className="btn-s"
+                type="button"
+                disabled={!windowOp.draft.trim() || !active}
+                onClick={() => {
+                  if (!active || !windowOp.draft) return;
+                  void api.typeBoundWindow(active, { text: windowOp.draft }).then((result) => toast(`已写入 ${result.app}`)).catch((error) => toast(humanizeError(error instanceof Error ? error.message : String(error)), true));
+                }}
+              >
+                写入
+              </button>
+              <button className="link" type="button" onClick={() => setWindowOp(null)}>关闭</button>
             </div>
           </div>
         </div>

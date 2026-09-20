@@ -116,6 +116,19 @@ export function parseNormalizedClickPoint(x: unknown, y: unknown): { x: number; 
   return action && action.name === 'click' ? { x: action.x, y: action.y } : null;
 }
 
+export function parseWindowTypeText(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 4096) return null;
+  return value;
+}
+
+const WRITABLE_ROLES = new Set(['AXTextField', 'AXTextArea', 'AXComboBox']);
+
+export function pickWritableWindowField(elements: WindowElement[] | undefined, elementId?: string): WindowElement | null {
+  const writable = (elements ?? []).filter((item) => item.enabled && item.settableValue && !item.redacted && WRITABLE_ROLES.has(item.role));
+  if (elementId) return writable.find((item) => item.id === elementId) ?? null;
+  return writable.find((item) => item.focused) ?? writable[0] ?? null;
+}
+
 function sameWindow(ref: WindowRef, next: WindowObservation): boolean {
   return ref.pid === next.pid && ref.windowId === next.windowId
     && (!ref.bundleId || ref.bundleId === next.bundleId)

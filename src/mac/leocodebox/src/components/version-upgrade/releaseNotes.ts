@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.0.68',
+    date: '2026-09-20',
+    items: [
+      '本机绑过的窗口可以写入焦点输入框，不再只能点一下。',
+    ],
+  },
+  {
     version: '2.0.67',
     date: '2026-09-20',
     items: [
