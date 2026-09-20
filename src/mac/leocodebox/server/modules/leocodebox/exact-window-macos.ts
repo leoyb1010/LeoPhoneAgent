@@ -5,7 +5,7 @@ import path from 'node:path';
 import { findAppRoot, getModuleDir } from '../../utils/runtime-paths.js';
 
 import {
-  exactWindows, isOwnMacWindow, parseNormalizedClickPoint, parseWindowDrag, parseWindowNamedKey, parseWindowScroll, parseWindowTypeText, pickBindableWindow, pickWritableWindowField, WINDOW_SNAPSHOT_FRESH_MS, WindowOperationError,
+  exactWindows, isOwnMacWindow, parseNormalizedClickPoint, parseWindowDrag, parseWindowMenuPath, parseWindowNamedKey, parseWindowScroll, parseWindowTypeText, pickBindableWindow, pickUsableWindowMenus, pickWritableWindowField, sameWindowMenuPath, WINDOW_SNAPSHOT_FRESH_MS, WindowOperationError,
   type BindableWindowRow,
   type ExactWindowDriver, type WindowAction, type WindowActionKind, type WindowActionReceipt,
   type WindowElement, type WindowFailureReason, type WindowObservation, type WindowOperationOptions,
@@ -415,6 +415,67 @@ export async function dragBoundSessionWindow(
   const result = await store.act(snap.snapshotId, 'coord', { name: 'drag', ...gesture, coordinateSpace: 'normalized-window' }, driver, options);
   if (!result.ok) return { ok: false, reason: result.reason, message: result.message };
   return { ok: true, app: result.snapshot.ref.app, title: result.snapshot.ref.title, ...gesture };
+}
+
+export async function listBoundSessionMenus(
+  sessionId: string,
+  options?: WindowOperationOptions,
+  store = exactWindows,
+  driver = macWindowDriver,
+  list = listMacWindows,
+): Promise<{ ok: true; app: string; title: string; menus: Array<{ path: string[] }> } | { ok: false; reason: string; message: string }> {
+  const bound = store.sessionSnapshot(sessionId);
+  if (!bound) return { ok: false, reason: 'unknown-snapshot', message: '这个会话还没有绑过窗口。' };
+  const listed = await list(options);
+  const match = listed.find((row) => row.pid === bound.ref.pid && row.windowId === bound.ref.windowId);
+  if (!match) return { ok: false, reason: 'window-gone', message: '绑过的窗口已经不在了。' };
+  let snap = store.capture(match);
+  store.bindSession(sessionId, snap.snapshotId);
+  try {
+    snap = await store.observe(snap.snapshotId, driver, { ...options, capture: false, elements: true });
+  } catch (error) {
+    if (error instanceof WindowOperationError) return { ok: false, reason: error.reason, message: error.message };
+    return { ok: false, reason: 'observation-unavailable', message: '读不到这个窗口的菜单。' };
+  }
+  return {
+    ok: true,
+    app: snap.ref.app,
+    title: snap.ref.title,
+    menus: pickUsableWindowMenus(snap.observation?.menus),
+  };
+}
+
+/** 选绑过窗口的菜单。先提到前面再核对这条菜单还在且能用，再走 AX 菜单路径。 */
+export async function menuBoundSessionWindow(
+  sessionId: string,
+  rawPath: unknown,
+  options?: WindowOperationOptions,
+  store = exactWindows,
+  driver = macWindowDriver,
+  list = listMacWindows,
+): Promise<{ ok: true; app: string; title: string; path: string[] } | { ok: false; reason: string; message: string }> {
+  const path = parseWindowMenuPath(rawPath);
+  if (!path) return { ok: false, reason: 'invalid-request', message: '菜单路径要有 2 到 6 段，例如 文件 / 存储。' };
+  const raised = await raiseBoundSessionWindow(sessionId, options, store, driver, list);
+  if (!raised.ok) return raised;
+  const current = store.sessionSnapshot(sessionId);
+  if (!current) return { ok: false, reason: 'unknown-snapshot', message: '这个会话还没有绑过窗口。' };
+  let observed;
+  try {
+    observed = await store.observe(current.snapshotId, driver, { ...options, elements: true });
+  } catch (error) {
+    if (error instanceof WindowOperationError) return { ok: false, reason: error.reason, message: error.message };
+    return { ok: false, reason: 'observation-unavailable', message: '读不到这个窗口的菜单。' };
+  }
+  const hit = (observed.observation?.menus ?? []).find((row) => {
+    if (!row.enabled) return false;
+    const next = parseWindowMenuPath(row.path);
+    return next ? sameWindowMenuPath(next, path) : false;
+  });
+  if (!hit) return { ok: false, reason: 'element-unavailable', message: '没有这条菜单，或已经不可用。' };
+  const result = await store.act(observed.snapshotId, 'menu', { name: 'select', path }, driver, options);
+  if (!result.ok) return { ok: false, reason: result.reason, message: result.message };
+  return { ok: true, app: result.snapshot.ref.app, title: result.snapshot.ref.title, path };
 }
 
 export async function exactWindowCapabilities(options?: WindowOperationOptions, driver = macWindowDriver) {

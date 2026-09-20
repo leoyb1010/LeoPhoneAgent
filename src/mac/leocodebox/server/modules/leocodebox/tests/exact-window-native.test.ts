@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 
-import { bindSessionWindow, clickBoundSessionWindow, createMacWindowDriver, dragBoundSessionWindow, keyBoundSessionWindow, listBindableSessionWindows, peekBoundSessionWindow, raiseBoundSessionWindow, scrollBoundSessionWindow, typeBoundSessionWindow } from '../exact-window-macos.js';
-import { ExactWindowStore, isOwnMacWindow, parseNormalizedClickPoint, parseWindowAction, parseWindowDrag, parseWindowNamedKey, parseWindowScroll, parseWindowTypeText, pickBindableWindow, pickWritableWindowField, type WindowElement, type WindowObservation, type WindowActionReceipt } from '../exact-window.js';
+import { bindSessionWindow, clickBoundSessionWindow, createMacWindowDriver, dragBoundSessionWindow, keyBoundSessionWindow, listBindableSessionWindows, listBoundSessionMenus, menuBoundSessionWindow, peekBoundSessionWindow, raiseBoundSessionWindow, scrollBoundSessionWindow, typeBoundSessionWindow } from '../exact-window-macos.js';
+import { ExactWindowStore, isOwnMacWindow, parseNormalizedClickPoint, parseWindowAction, parseWindowDrag, parseWindowMenuPath, parseWindowNamedKey, parseWindowScroll, parseWindowTypeText, pickBindableWindow, pickUsableWindowMenus, pickWritableWindowField, type WindowElement, type WindowObservation, type WindowActionReceipt } from '../exact-window.js';
 
 const observation: WindowObservation = {
   app: 'Fixture', pid: 42, windowId: '7', title: 'Fixture window', bounds: '0,0,800,600', frontmost: true,
@@ -276,6 +276,57 @@ test('scrollBoundSessionWindow 和 dragBoundSessionWindow 先提到前面再动�
   assert.equal(dragged.ok, true);
   if (dragged.ok) assert.equal(dragged.x2, 0.7);
   assert.deepEqual(names, ['focus', 'scroll', 'focus', 'drag']);
+});
+
+test('菜单路径只要 2 到 6 段,关掉的和单级的不进可用列表', () => {
+  assert.deepEqual(parseWindowMenuPath(['文件', '存储']), ['文件', '存储']);
+  assert.equal(parseWindowMenuPath(['文件']), null);
+  assert.equal(parseWindowMenuPath([]), null);
+  assert.deepEqual(pickUsableWindowMenus([
+    { path: ['文件'], enabled: true },
+    { path: ['文件', '存储'], enabled: true },
+    { path: ['编辑', '剪切'], enabled: false },
+    { path: ['编辑', '拷贝'], enabled: true },
+  ]), [{ path: ['文件', '存储'] }, { path: ['编辑', '拷贝'] }]);
+});
+
+test('listBoundSessionMenus 和 menuBoundSessionWindow 先核对菜单再执行', async () => {
+  const store = new ExactWindowStore(() => 10_000, 'test');
+  const captured = store.capture({ ...observation, menus: [{ path: ['File', 'Save'], enabled: true }] });
+  store.bindSession('hs_menu', captured.snapshotId);
+  const kinds: string[] = [];
+  const driver = createMacWindowDriver(async (request) => {
+    if (request.operation === 'observe') {
+      return {
+        protocolVersion: 1, ok: true,
+        observation: { ...observation, frontmost: true, menus: [{ path: ['File', 'Save'], enabled: true }, { path: ['Edit', 'Cut'], enabled: false }] },
+      };
+    }
+    if (request.operation === 'act') {
+      kinds.push(String(request.kind));
+      return {
+        protocolVersion: 1, ok: true, observation: { ...observation, frontmost: true },
+        receipt: { attempted: true, verified: true, verification: 'menu-action-result', action: 'select', observedAt: 10_000 },
+      };
+    }
+    return { protocolVersion: 1, ok: true, windows: [{ ...observation, frontmost: true }] };
+  });
+  const listed = async () => [{ ...observation, frontmost: true }];
+  const menus = await listBoundSessionMenus('hs_menu', undefined, store, driver, listed);
+  assert.equal(menus.ok, true);
+  if (menus.ok) assert.deepEqual(menus.menus, [{ path: ['File', 'Save'] }]);
+  const bad = await menuBoundSessionWindow('hs_menu', ['File'], undefined, store, driver, listed);
+  assert.equal(bad.ok, false);
+  if (!bad.ok) assert.equal(bad.reason, 'invalid-request');
+  const missing = await menuBoundSessionWindow('hs_menu', ['Edit', 'Cut'], undefined, store, driver, listed);
+  assert.equal(missing.ok, false);
+  if (!missing.ok) assert.equal(missing.reason, 'element-unavailable');
+  assert.ok(!kinds.includes('menu'));
+  kinds.length = 0;
+  const selected = await menuBoundSessionWindow('hs_menu', ['File', 'Save'], undefined, store, driver, listed);
+  assert.equal(selected.ok, true);
+  if (selected.ok) assert.deepEqual(selected.path, ['File', 'Save']);
+  assert.deepEqual(kinds, ['ax', 'menu']);
 });
 
 test('malformed native IPC output cannot enter the snapshot store', async () => {

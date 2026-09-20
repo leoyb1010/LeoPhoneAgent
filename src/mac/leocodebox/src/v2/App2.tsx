@@ -10,7 +10,7 @@ import { dropBrowserFile, pasteSessionImage, pickSessionFiles } from './desktop-
 import { onSessionNoticeClick, setDockNeedBadge, showSessionNotice } from './desktop-notice';
 import { canAcceptSessionDrop, mentionDroppedFile } from './session-drop';
 import { dockNeedBadge, noticesFromSnapshot, sessionPathTarget } from './session-notice';
-import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerNeedsModelSwitch, composerPlaceholder, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, prettyModelName, providerOf, rankModelsForPicker, readHiddenSessionKeys, relativeTime, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, windowBoundLabel, windowPadGesture, WINDOW_KEY_BUTTONS, type FlowRow, type Group, type SessionView } from './model';
+import { HIDDEN_SESSIONS_KEY, LAST_MODEL_KEY, POLICY_LABEL, STATUS_LABEL, THINKING_LABEL, THINKING_LEVELS, addHiddenSessionKey, applyEvent, boundWindowFromUnknown, clickPointFromElement, composerNeedsModelSwitch, composerPlaceholder, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHitText, flowFindStatus, flowRowMatchesQuery, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, mergeSameMachineSessions, modelChoiceHint, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, prettyModelName, providerOf, rankModelsForPicker, readHiddenSessionKeys, relativeTime, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionFailTexts, sessionKey, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDotForSession, boundWindowChipKind, usableWindowMenus, windowBoundLabel, windowMenuLabel, windowPadGesture, WINDOW_KEY_BUTTONS, type FlowRow, type Group, type SessionView } from './model';
 import { usableModelsFromProviders } from './settings-form';
 import { artifactNameFromPath, clipFilePeek, cwdChipLabel, isPeekDrawer, isWorkspaceDrawer, machineChipLabel, peekCanWriteBack, peekFileCaption, sessionFilePath, titlebarHomeCopy } from './local-files';
 import { REMOTE_DRAWER_ACTION_LABEL, isRemoteDrawerKind, mergeFilePins, remoteDrawerActions, remoteDrawerCopy } from './remote-drawer';
@@ -141,7 +141,7 @@ export default function App2() {
   const [focusMachine, setFocusMachine] = useState<string | null>(null);
   const [whatsNew, setWhatsNew] = useState<ReturnType<typeof currentReleaseNote>>(null);
   const [flowFind, setFlowFind] = useState({ open: false, query: '', index: 0 });
-  const [windowOp, setWindowOp] = useState<{ label: string; draft: string; windows: Array<{ snapshotId: string; app: string; title: string; frontmost: boolean }>; peek: string | null } | null>(null);
+  const [windowOp, setWindowOp] = useState<{ label: string; draft: string; windows: Array<{ snapshotId: string; app: string; title: string; frontmost: boolean }>; peek: string | null; menus: Array<{ path: string[] }> } | null>(null);
   const [hiddenKeys, setHiddenKeys] = useState<string[]>(() => {
     try { return readHiddenSessionKeys(localStorage.getItem(HIDDEN_SESSIONS_KEY)); } catch { return []; }
   });
@@ -662,7 +662,7 @@ export default function App2() {
   const openWindowOp = useCallback(() => {
     if (!active || active.machine !== 'local') return;
     const label = windowBoundLabel(sessionView.window ?? boundWindowFromUnknown(activeSummary?.window)) || '还没绑窗口';
-    setWindowOp({ label, draft: '', windows: [], peek: null });
+    setWindowOp({ label, draft: '', windows: [], peek: null, menus: [] });
     void api.listSessionWindows(active).then((row) => {
       setWindowOp((cur) => (cur ? { ...cur, windows: row.windows } : cur));
     }).catch((error) => toast(humanizeError(error instanceof Error ? error.message : String(error)), true));
@@ -672,6 +672,11 @@ export default function App2() {
         setWindowOp((cur) => (cur ? { ...cur, peek, label: windowBoundLabel({ app: row.app, title: row.title }) || cur.label } : cur));
       }).catch(() => {
         // 没录屏权限时仍可绑、可点,只是看不见画面。
+      });
+      void api.listBoundWindowMenus(active).then((row) => {
+        setWindowOp((cur) => (cur ? { ...cur, menus: usableWindowMenus(row.menus), label: windowBoundLabel({ app: row.app, title: row.title }) || cur.label } : cur));
+      }).catch(() => {
+        setWindowOp((cur) => (cur ? { ...cur, menus: [] } : cur));
       });
     }
   }, [active, activeSummary?.window, sessionView.window, toast]);
@@ -1382,10 +1387,13 @@ export default function App2() {
                         if (!active) return;
                         void api.bindSessionWindow(active, item.snapshotId).then((result) => {
                           toast(`已绑 ${result.app}`);
-                          setWindowOp((cur) => (cur ? { ...cur, label: windowBoundLabel({ app: result.app, title: result.title }) || cur.label } : cur));
+                          setWindowOp((cur) => (cur ? { ...cur, label: windowBoundLabel({ app: result.app, title: result.title }) || cur.label, menus: [] } : cur));
                           void api.peekBoundWindow(active).then((row) => {
                             const peek = row.image?.data ? `data:${row.image.mimeType || 'image/jpeg'};base64,${row.image.data}` : null;
                             setWindowOp((cur) => (cur ? { ...cur, peek, label: windowBoundLabel({ app: row.app, title: row.title }) || cur.label } : cur));
+                          }).catch(() => undefined);
+                          void api.listBoundWindowMenus(active).then((row) => {
+                            setWindowOp((cur) => (cur ? { ...cur, menus: usableWindowMenus(row.menus), label: windowBoundLabel({ app: row.app, title: row.title }) || cur.label } : cur));
                           }).catch(() => undefined);
                         }).catch((error) => toast(humanizeError(error instanceof Error ? error.message : String(error)), true));
                       }}
@@ -1396,6 +1404,27 @@ export default function App2() {
                 ))}
               </ul>
             ) : <p className="wn-ver">正在列出本机窗口…</p>}
+            {windowOp.menus.length > 0 ? (
+              <ul className="win-list">
+                {windowOp.menus.map((item) => (
+                  <li key={item.path.join('/')}>
+                    <button
+                      type="button"
+                      className="link"
+                      disabled={!active}
+                      onClick={() => {
+                        if (!active) return;
+                        void api.menuBoundWindow(active, item.path).then((result) => {
+                          toast(`已选 ${windowMenuLabel(result.path)} · ${result.app}`);
+                        }).catch((error) => toast(humanizeError(error instanceof Error ? error.message : String(error)), true));
+                      }}
+                    >
+                      {windowMenuLabel(item.path)}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
             <button
               type="button"
               className="win-hit"

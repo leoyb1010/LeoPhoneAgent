@@ -19,6 +19,13 @@ export type LeoReleaseNote = {
 
 export const LEO_RELEASE_NOTES: LeoReleaseNote[] = [
   {
+    version: '2.0.77',
+    date: '2026-09-20',
+    items: [
+      '本机绑过的窗口可以点菜单栏里的项，不用再对着像素去点「文件 / 存储」。',
+    ],
+  },
+  {
     version: '2.0.76',
     date: '2026-09-20',
     items: [

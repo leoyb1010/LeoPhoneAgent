@@ -146,6 +146,26 @@ export function windowPadGesture(start: { x: number; y: number }, end: { x: numb
     : { kind: 'click', point: start };
 }
 
+export function windowMenuLabel(path: string[]): string {
+  return path.map((item) => item.trim()).filter(Boolean).join(' · ');
+}
+
+export function usableWindowMenus(menus: Array<{ path?: string[]; enabled?: boolean }> | undefined, limit = 24): Array<{ path: string[] }> {
+  const seen = new Set<string>();
+  const out: Array<{ path: string[] }> = [];
+  for (const row of menus ?? []) {
+    if (row.enabled === false) continue;
+    const path = (row.path ?? []).map((item) => item.trim()).filter((item) => item.length > 0 && item.length <= 160);
+    if (path.length < 2 || path.length > 6) continue;
+    const key = path.join('\0');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ path });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 export function flowRowMatchesQuery(row: FlowRow, query: string): boolean {
   const q = query.trim().toLowerCase();
   if (!q) return true;

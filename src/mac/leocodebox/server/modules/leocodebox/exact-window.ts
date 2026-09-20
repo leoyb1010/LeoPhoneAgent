@@ -196,6 +196,40 @@ export function pickWritableWindowField(elements: WindowElement[] | undefined, e
   return writable.find((item) => item.focused) ?? writable[0] ?? null;
 }
 
+export function parseWindowMenuPath(value: unknown): string[] | null {
+  const raw = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(/\s*[>/·]\s*/)
+      : null;
+  if (!raw) return null;
+  const path = raw.map((item) => String(item ?? '').trim()).filter((item) => item.length > 0 && item.length <= 160);
+  return path.length >= 2 && path.length <= 6 ? path : null;
+}
+
+export function sameWindowMenuPath(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((item, index) => item === right[index]);
+}
+
+export function pickUsableWindowMenus(
+  menus: Array<{ path: string[]; enabled: boolean }> | undefined,
+  limit = 24,
+): Array<{ path: string[] }> {
+  const seen = new Set<string>();
+  const out: Array<{ path: string[] }> = [];
+  for (const row of menus ?? []) {
+    if (!row.enabled) continue;
+    const path = parseWindowMenuPath(row.path);
+    if (!path) continue;
+    const key = path.join('\0');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ path });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 function sameWindow(ref: WindowRef, next: WindowObservation): boolean {
   return ref.pid === next.pid && ref.windowId === next.windowId
     && (!ref.bundleId || ref.bundleId === next.bundleId)

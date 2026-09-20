@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
-import { addHiddenSessionKey, applyEvent, boundWindowChipKind, boundWindowFromUnknown, clickPointFromElement, composerNeedsModelSwitch, composerPlaceholder, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHits, flowFindHitText, flowFindStatus, flowRowMatchesQuery, highlightQueryParts, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isLiveRow, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, markupParts, mergeSameMachineSessions, modelChoiceHint, modelLabel, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, pickInitialCwd, pickInitialModel, prettyModelName, prettifyUnknownModel, rankModelsForPicker, readHiddenSessionKeys, rejectedCodexModelId, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionFailTexts, sessionKey, sessionLooksFailed, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDot, statusDotForSession, userTurnLabel, userTurnMode, windowBoundLabel, windowPadGesture } from './model';
+import { addHiddenSessionKey, applyEvent, boundWindowChipKind, boundWindowFromUnknown, clickPointFromElement, composerNeedsModelSwitch, composerPlaceholder, composerShouldFocus, composerShouldSend, composerShowsSteer, continueSessionDraft, countFilteredSessions, emptyView, endedComposerLead, endedSessionHint, flowFindActLabel, flowFindEmptyHint, flowFindHitKeys, flowFindHits, flowFindHitText, flowFindStatus, flowRowMatchesQuery, highlightQueryParts, formatContextWindow, hiddenHistoryHint, homeEmptyCopy, humanizeError, isHistoryStatus, isLiveRow, isSameMachineName, keepActiveSession, lastLine, localCreateNeedsSettings, markupParts, mergeSameMachineSessions, modelChoiceHint, modelLabel, modelLikelyUnusable, nextFlowFindIndex, nextFocusIndex, nextProbeHealth, nextSessionIndex, nextUnseen, pickInitialCwd, pickInitialModel, prettyModelName, prettifyUnknownModel, rankModelsForPicker, readHiddenSessionKeys, rejectedCodexModelId, scrollDeltaFromWheel, sessionCanDrive, sessionCanForget, sessionFailTexts, sessionKey, sessionLooksFailed, sessionMatchesFilter, sessionMatchesQuery, sessionNeedsSettings, settingsNeededCopy, shouldReconnectSessionStream, statusDot, statusDotForSession, usableWindowMenus, userTurnLabel, userTurnMode, windowBoundLabel, windowMenuLabel, windowPadGesture } from './model';
 
 test('流水把思考事件折成独立行,后续 delta 续在同一行', () => {
   let view = emptyView();
@@ -189,6 +189,14 @@ test('前台窗口绑定会落成系统行,摘要里的窗口也能读出来', (
   assert.equal(scrollDeltaFromWheel(0, 0), null);
   assert.equal(windowPadGesture({ x: 0.2, y: 0.2 }, { x: 0.21, y: 0.2 }).kind, 'click');
   assert.deepEqual(windowPadGesture({ x: 0.2, y: 0.2 }, { x: 0.7, y: 0.8 }), { kind: 'drag', from: { x: 0.2, y: 0.2 }, to: { x: 0.7, y: 0.8 } });
+  assert.equal(windowMenuLabel(['文件', '存储']), '文件 · 存储');
+  assert.deepEqual(usableWindowMenus([
+    { path: ['文件'], enabled: true },
+    { path: ['文件', '存储'], enabled: true },
+    { path: ['文件', '存储'], enabled: true },
+    { path: ['编辑', '剪切'], enabled: false },
+    { path: ['编辑', '拷贝'], enabled: true },
+  ]), [{ path: ['文件', '存储'] }, { path: ['编辑', '拷贝'] }]);
 });
 
 test('进行中才显示插话,空闲仍是发送', () => {
@@ -211,6 +219,9 @@ test('2.0 壳接上了插话、回车开会话和前台窗口', () => {
   assert.match(app, /keyBoundWindow/);
   assert.match(app, /scrollBoundWindow/);
   assert.match(app, /dragBoundWindow/);
+  assert.match(app, /listBoundWindowMenus/);
+  assert.match(app, /menuBoundWindow/);
+  assert.match(app, /windowMenuLabel/);
   assert.match(app, /listSessionWindows/);
   assert.match(app, /bindSessionWindow/);
   assert.match(app, /peekBoundWindow/);

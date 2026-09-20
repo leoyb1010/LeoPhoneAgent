@@ -122,6 +122,10 @@ test('2.0 工作台本机新建同样先 202 再异步绑定前台窗口', () =>
   assert.match(source, /peekBoundSessionWindow/);
   assert.match(source, /window\/bind/);
   assert.match(source, /window\/peek/);
+  assert.match(source, /listBoundSessionMenus/);
+  assert.match(source, /menuBoundSessionWindow/);
+  assert.match(source, /window\/menus/);
+  assert.match(source, /window\/menu/);
 });
 
 test('装机包会带上窗口 helper,否则 /Applications 里点写按都是空的', () => {
