@@ -106,6 +106,7 @@ import { canInitSessionRepo, initSessionToast } from './session-init';
 import { canMergeSessionBranch, mergeSessionToast } from './session-merge';
 import { isMissingSessionCwd, missingCwdToast } from './session-missing';
 import { canPackSessionChanges, packFileName, packSessionToast } from './session-pack';
+import { canFlushPeekOnSend, peekFlushedToast } from './session-peek-flush';
 import { lastFinishedEdit, peekReloadedToast, shouldReloadPeek } from './session-peek-sync';
 import { canUnpackSessionZip, unpackSessionToast, unpackZipName } from './session-unpack';
 import { canSeedSessionFile, clipSeedText, sanitizeSeedRel, seedSessionToast } from './session-seed';
@@ -1141,6 +1142,27 @@ export default function App2() {
       toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
     }
   }, [active?.machine, activeSummary?.cwd, filePeek, filePeekDraft, focusFile, toast, workspace?.fullPath, workspace?.projectId]);
+  const flushPeekForSend = useCallback(async (): Promise<boolean> => {
+    const root = activeSummary?.cwd ?? workspace?.fullPath ?? '';
+    const path = focusFile ? sessionFilePath(root, focusFile) : '';
+    const projectId = workspace?.projectId;
+    if (!projectId || filePeekDraft == null || !canFlushPeekOnSend({
+      machine: active?.machine,
+      projectId,
+      path,
+      peek: filePeek,
+      draft: filePeekDraft,
+    })) return true;
+    try {
+      await api.writeProjectFile(projectId, path, filePeekDraft);
+      setFilePeek(filePeekDraft);
+      toast(peekFlushedToast(focusFile));
+      return true;
+    } catch (error) {
+      toast(humanizeError(error instanceof Error ? error.message : String(error)), true);
+      return false;
+    }
+  }, [active?.machine, activeSummary?.cwd, filePeek, filePeekDraft, focusFile, toast, workspace?.fullPath, workspace?.projectId]);
   const revertFile = useCallback(async (file = focusFile) => {
     if (!active || !canRevertSessionFile(active.machine, file)) {
       toast('这份改动不能还原', true);
@@ -1604,12 +1626,13 @@ export default function App2() {
       toast(offlineToast(), true);
       return;
     }
+    if (!(await flushPeekForSend())) return;
     warnBatterySend();
     warnThermalSend();
     warnMemorySend();
     warnLoadSend();
     await withBusy(() => api.send(active, text), retryLastUserToast());
-  }, [active, activeSummary?.last_event?.text, canRetryLast, sessionView.model, sessionView.rows, toast, withBusy, warnBatterySend, warnThermalSend, warnMemorySend, warnLoadSend]);
+  }, [active, activeSummary?.last_event?.text, canRetryLast, flushPeekForSend, sessionView.model, sessionView.rows, toast, withBusy, warnBatterySend, warnThermalSend, warnMemorySend, warnLoadSend]);
   const editLastPrompt = useCallback(() => {
     const text = lastUserPrompt(sessionView.rows);
     if (!text) { toast('还没有上一句', true); return; }
@@ -1935,6 +1958,7 @@ export default function App2() {
       toast(offlineToast(), true);
       return;
     }
+    if (!(await flushPeekForSend())) return;
     warnBatterySend();
     warnThermalSend();
     warnMemorySend();
@@ -1948,7 +1972,7 @@ export default function App2() {
       return;
     }
     await withBusy(() => api.send(active, text));
-  }, [active, activeSummary, canResumeHere, draft, sessionView.model, sessionView.rows, toast, withBusy, setDraft, warnBatterySend, warnThermalSend, warnMemorySend, warnLoadSend]);
+  }, [active, activeSummary, canResumeHere, draft, flushPeekForSend, sessionView.model, sessionView.rows, toast, withBusy, setDraft, warnBatterySend, warnThermalSend, warnMemorySend, warnLoadSend]);
   const followUp = useCallback(async () => {
     if (!active || !composerCanFollowUp(active.machine, sessionView.status)) return;
     const text = draft.trim(); if (!text) return;
@@ -1964,13 +1988,14 @@ export default function App2() {
       toast(offlineToast(), true);
       return;
     }
+    if (!(await flushPeekForSend())) return;
     warnBatterySend();
     warnThermalSend();
     warnMemorySend();
     warnLoadSend();
     setDraft('');
     await withBusy(() => api.rpc(active, { type: 'follow_up', message: text }), followUpToast());
-  }, [active, activeSummary, draft, sessionView.model, sessionView.rows, sessionView.status, toast, withBusy, setDraft, warnBatterySend, warnThermalSend, warnMemorySend, warnLoadSend]);
+  }, [active, activeSummary, draft, flushPeekForSend, sessionView.model, sessionView.rows, sessionView.status, toast, withBusy, setDraft, warnBatterySend, warnThermalSend, warnMemorySend, warnLoadSend]);
   const clearFollowUps = useCallback(() => {
     if (!active || !composerCanFollowUp(active.machine, sessionView.status)) return;
     void withBusy(() => api.rpc(active, { type: 'clear_queue' }), queueClearedToast());
@@ -2180,12 +2205,13 @@ export default function App2() {
     return withBusy(async () => {
       await api.rpc(active, { type: 'set_model', provider, modelId });
       if (!retry) return;
+      if (!(await flushPeekForSend())) return;
       if (canResumeThenSend({ machine: active.machine, canResume: canResumeHere, prompt })) {
         await api.continueLocal(active);
       }
       await api.send(active, prompt);
     }, retry ? retryAfterModelSwitchToast() : undefined);
-  }, [active, activeSummary?.cwd, activeSummary?.last_event?.text, canResumeHere, sessionView.model, sessionView.rows, withBusy]);
+  }, [active, activeSummary?.cwd, activeSummary?.last_event?.text, canResumeHere, flushPeekForSend, sessionView.model, sessionView.rows, withBusy]);
   const setThinking = useCallback((level: string) => active && withBusy(() => api.rpc(active, { type: 'set_thinking_level', level })), [active, withBusy]);
   const compact = useCallback(() => active && withBusy(() => api.rpc(active, { type: 'compact' }), '压缩请求已发出'), [active, withBusy]);
   const abortTurn = useCallback(() => {
