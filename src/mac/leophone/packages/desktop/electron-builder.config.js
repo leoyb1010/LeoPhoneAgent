@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Electron Builder config keeps related packaging hooks together so build order stays explicit. */
-import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -585,6 +585,26 @@ export default {
         }
       });
     }
+    // [leo] app-update.yml 由 electron-builder 在系统 afterPack 里写好(用户钩子总在最后执行),
+    // 其中 updaterCacheDirName 按包名派生成 @zcodedesktop-updater,会和官方客户端共用更新缓存。
+    // 在外层签名之前改成我们自己的目录名。
+    if (context.electronPlatformName === "darwin") {
+      runTimedSync("afterPack:leoUpdaterCacheDirName", () => {
+        const updateConfig = resolve(
+          context.appOutDir,
+          `${context.packager.appInfo.productFilename}.app`,
+          "Contents",
+          "Resources",
+          "app-update.yml",
+        );
+        if (!existsSync(updateConfig)) return;
+        const raw = readFileSync(updateConfig, "utf8");
+        writeFileSync(
+          updateConfig,
+          raw.replace(/^updaterCacheDirName:.*$/m, "updaterCacheDirName: leophoneagent-updater"),
+        );
+      });
+    }
     await runTimedAsync("afterPack:stripPackagedSourcemapReferences", () =>
       stripPackagedSourcemapReferences(context),
     );
@@ -803,7 +823,5 @@ export default {
     // 新客户端运行时使用服务端 manifest provider；这里仅保留 electron-builder 必需的
     // generic publish 占位，避免打包产物继续携带可配置的旧 stable feed。
     url: "http://localhost:8081",
-    // [leo] 更新缓存目录用我们自己的名字;默认值按包名派生成 @zcodedesktop-updater,会和官方客户端共用。
-    updaterCacheDirName: "leophoneagent-updater",
   },
 };
