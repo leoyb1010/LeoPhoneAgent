@@ -1,3 +1,6 @@
+// [leo] 关于窗口的图标:LeoPhoneAgent 标志(packages/ui/src/assets/leo-logo.svg 的 base64)。
+const LEO_ABOUT_LOGO_BASE64 = "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDI0IiBoZWlnaHQ9IjEwMjQiIHZpZXdCb3g9IjAgMCAxMDI0IDEwMjQiIHJvbGU9ImltZyIgYXJpYS1sYWJlbD0ibGVvY29kZWJveCI+CiAgPGRlZnM+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImJnIiB4MT0iMTY4IiB5MT0iOTYiIHgyPSI4NTYiIHkyPSI5MjgiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMTAxODIwIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iMC41NCIgc3RvcC1jb2xvcj0iIzE3MjYyQiIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMwRDExMTciLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9Im1hcmsiIHgxPSIyODgiIHkxPSIyMjQiIHgyPSI3NjAiIHkyPSI4MDAiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjRUFGN0YyIi8+CiAgICAgIDxzdG9wIG9mZnNldD0iMC41MiIgc3RvcC1jb2xvcj0iIzU2RjBCOCIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMyRkE3RkYiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImVkZ2UiIHgxPSIyMTYiIHkxPSIxNTIiIHgyPSI4MDgiIHkyPSI4NzIiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjNUVGMEM0IiBzdG9wLW9wYWNpdHk9IjAuOTIiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMkZBN0ZGIiBzdG9wLW9wYWNpdHk9IjAuODgiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgICA8ZmlsdGVyIGlkPSJzb2Z0U2hhZG93IiB4PSIxMDgiIHk9IjEwOCIgd2lkdGg9IjgwOCIgaGVpZ2h0PSI4MDgiIGNvbG9yLWludGVycG9sYXRpb24tZmlsdGVycz0ic1JHQiIgZmlsdGVyVW5pdHM9InVzZXJTcGFjZU9uVXNlIj4KICAgICAgPGZlRHJvcFNoYWRvdyBkeD0iMCIgZHk9IjI4IiBzdGREZXZpYXRpb249IjM4IiBmbG9vZC1jb2xvcj0iIzAwMDAwMCIgZmxvb2Qtb3BhY2l0eT0iMC4zNiIvPgogICAgICA8ZmVEcm9wU2hhZG93IGR4PSIwIiBkeT0iMCIgc3RkRGV2aWF0aW9uPSIxOCIgZmxvb2QtY29sb3I9IiM1NkYwQjgiIGZsb29kLW9wYWNpdHk9IjAuMTQiLz4KICAgIDwvZmlsdGVyPgogIDwvZGVmcz4KICA8cmVjdCB3aWR0aD0iMTAyNCIgaGVpZ2h0PSIxMDI0IiByeD0iMjI2IiBmaWxsPSJ1cmwoI2JnKSIvPgogIDxwYXRoIGQ9Ik0yNDYgMjM4SDc3OEM4MDIuMzAxIDIzOCA4MjIgMjU3LjY5OSA4MjIgMjgyVjc0MkM4MjIgNzY2LjMwMSA4MDIuMzAxIDc4NiA3NzggNzg2SDI0NkMyMjEuNjk5IDc4NiAyMDIgNzY2LjMwMSAyMDIgNzQyVjI4MkMyMDIgMjU3LjY5OSAyMjEuNjk5IDIzOCAyNDYgMjM4WiIgZmlsbD0iIzBCMEYxNCIgb3BhY2l0eT0iMC43NCIvPgogIDxwYXRoIGQ9Ik0yNDYgMjM4SDc3OEM4MDIuMzAxIDIzOCA4MjIgMjU3LjY5OSA4MjIgMjgyVjc0MkM4MjIgNzY2LjMwMSA4MDIuMzAxIDc4NiA3NzggNzg2SDI0NkMyMjEuNjk5IDc4NiAyMDIgNzY2LjMwMSAyMDIgNzQyVjI4MkMyMDIgMjU3LjY5OSAyMjEuNjk5IDIzOCAyNDYgMjM4WiIgc3Ryb2tlPSJ1cmwoI2VkZ2UpIiBzdHJva2Utd2lkdGg9IjI4IiBvcGFjaXR5PSIwLjc4Ii8+CiAgPGcgZmlsdGVyPSJ1cmwoI3NvZnRTaGFkb3cpIj4KICAgIDxwYXRoIGQ9Ik0zMTQgMzE0SDQzNlY2MTJINjUwVjcxMEgzMTRWMzE0WiIgZmlsbD0idXJsKCNtYXJrKSIvPgogICAgPHBhdGggZD0iTTU2MiA0MjBMNzEwIDUxMkw1NjIgNjA0VjUxNEw2NDAgNTEyTDU2MiA1MTBWNDIwWiIgZmlsbD0iI0VBRjdGMiIvPgogICAgPGNpcmNsZSBjeD0iNzEwIiBjeT0iNTEyIiByPSI0MyIgZmlsbD0iIzU2RjBCOCIvPgogIDwvZz4KICA8cGF0aCBkPSJNMzA4IDI0Mkg3MTYiIHN0cm9rZT0iI0ZGRkZGRiIgc3Ryb2tlLW9wYWNpdHk9IjAuMTYiIHN0cm9rZS13aWR0aD0iMTIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4K";
+
 interface CustomAboutDialogHtmlInput {
   applicationName: string;
   appVersion: string;
@@ -94,17 +97,16 @@ export function createCustomAboutDialogHtml(input: CustomAboutDialogHtmlInput): 
         display: flex;
         align-items: center;
         justify-content: center;
-        border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: 12px;
-        background: linear-gradient(180deg, #000000 0%, #151718 100%);
         color: #ffffff;
         box-shadow: 0 10px 13px -3px rgb(0 0 0 / 0.2), 0 4px 5px -3px rgb(0 0 0 / 0.2);
       }
 
       .app-logo {
-        width: 30px;
-        height: auto;
+        width: 52px;
+        height: 52px;
         display: block;
+        border-radius: 12px;
       }
 
       .title {
@@ -171,25 +173,7 @@ export function createCustomAboutDialogHtml(input: CustomAboutDialogHtmlInput): 
       <section class="about-card" role="dialog" aria-modal="true" aria-labelledby="about-title">
         <div class="content">
           <div class="app-icon" aria-hidden="true">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="118"
-              height="100"
-              fill="none"
-              viewBox="0 0 256 218"
-              class="app-logo"
-              focusable="false"
-            >
-              <path
-                fill="currentColor"
-                d="M134.4 0.130152L116.48 25.6022C113.665 29.5699 109.054 32.0019 104.064 32.0019H6.3999V0C6.3999 0.130149 134.4 0.130152 134.4 0.130152Z"
-              />
-              <path fill="currentColor" d="M256 0.130127L102.401 217.732H0L153.599 0.130127H256Z" />
-              <path
-                fill="currentColor"
-                d="M121.601 217.732L139.65 192.134C142.465 188.166 147.076 185.734 152.067 185.734H249.604V217.736H121.601V217.732Z"
-              />
-            </svg>
+            <img class="app-logo" src="data:image/svg+xml;base64,${LEO_ABOUT_LOGO_BASE64}" alt="" />
           </div>
           <h1 id="about-title" class="title">
             ${escapeHtml(input.applicationName)}<br />
