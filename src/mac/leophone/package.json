@@ -1,6 +1,6 @@
 {
   "name": "leophoneagent-mac",
-  "version": "3.14.100",
+  "version": "1.0.0",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",

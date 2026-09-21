@@ -89,7 +89,8 @@ function LoginPanel({ active, onComplete }: LoginPanelProps) {
   const loginEntryRequest = useZCodeStore((s) => s.loginEntryRequest);
   const clearLoginEntryRequest = useZCodeStore((s) => s.clearLoginEntryRequest);
   const markLoginEntryAttemptStatus = useZCodeStore((s) => s.markLoginEntryAttemptStatus);
-  const [loginMode, setLoginMode] = useState<"providers" | "apiKey">("providers");
+  // [leo] 没有账号入口,直接进 API key。
+  const [loginMode, setLoginMode] = useState<"providers" | "apiKey">("apiKey");
   const wasActiveRef = useRef(active);
   const consumedLoginRequestRef = useRef<number | null>(null);
   const observedOAuthSuccessSeqRef = useRef(oauthSuccessSeq);
@@ -244,7 +245,7 @@ function LoginPanel({ active, onComplete }: LoginPanelProps) {
   ]);
 
   const resetApiKeyForm = useCallback(() => {
-    setLoginMode("providers");
+    setLoginMode("apiKey");
   }, []);
 
   useEffect(() => {
@@ -536,12 +537,11 @@ function getProviderPriority(provider: OAuthProviderMeta): number {
   }
 }
 
-function resolveVisibleLoginProviders(providers: OAuthProviderMeta[]): OAuthProviderMeta[] {
-  // ZAI / BigModel 现在共享 App 登录事实源，未登录时登录入口必须同时展示两个入口。
-  // 不能临时隐藏 BigModel，否则用户无法主动选择 BigModel 作为 active provider。
-  return [...providers].sort((left, right) => {
-    return getProviderPriority(left) - getProviderPriority(right);
-  });
+function resolveVisibleLoginProviders(_providers: OAuthProviderMeta[]): OAuthProviderMeta[] {
+  // [leo] LeoPhoneAgent 是本地产品:不要求、也不提供任何平台账号登录。
+  // 上游这里会列出 Z.ai / BigModel 两个账号入口,我们一律不展示 ——
+  // 模型一律用 API key 或任意 OpenAI / Anthropic 兼容端点接入。
+  return [];
 }
 
 function resolveLoginRetryProvider({

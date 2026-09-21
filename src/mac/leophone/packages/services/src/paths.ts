@@ -39,9 +39,15 @@ export function getDataBaseDir(): string {
   return defaultDataBaseDir;
 }
 
-/** {dataBaseDir}/.zcode */
+/**
+ * [leo] 数据根目录。
+ *
+ * 这一版的产品是 LeoPhoneAgent,不是官方 ZCode 客户端:两者的会话、设置、登录
+ * 凭据必须各存各的。之前共用 `~/.zcode` 会直接读到官方客户端已登录的账号,
+ * 那是别人的东西,不该出现在这里。
+ */
 export function getZCodeDataRootDir(): string {
-  return join(getDataBaseDir(), ".zcode");
+  return join(getDataBaseDir(), ".leophoneagent");
 }
 
 /** 非项目对话共享的真实工作目录；默认 ~/.zcode/workspace/default。 */
@@ -229,8 +235,8 @@ export function getLegacyDeletedTaskSessionSnapshotPath(
  * state must only live at the default homedir location.
  */
 export async function copyDataDirectory(oldBaseDir: string, newBaseDir: string): Promise<void> {
-  const oldDir = join(oldBaseDir, ".zcode", "v2");
-  const newDir = join(newBaseDir, ".zcode", "v2");
+  const oldDir = join(oldBaseDir, ".leophoneagent", "v2");
+  const newDir = join(newBaseDir, ".leophoneagent", "v2");
   await cp(oldDir, newDir, {
     recursive: true,
     force: false,
