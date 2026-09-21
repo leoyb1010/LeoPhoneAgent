@@ -45,7 +45,9 @@ export function oauthRuntime(): Promise<ModelRuntime> {
         modelsPath: MODELS_PATH,
         modelsStorePath: leoPath("oauth", "models-store.json"),
         allowModelNetwork: false,
-        refreshOnCreate: false,
+        // 必须为 true:isUsingOAuth / hasConfiguredAuth 读的是 refresh 建好的快照;allowModelNetwork=false
+        // 时这一步只读本机凭据与内置模型表,不联网。设成 false 会导致登录后永远识别不到已登录的账号。
+        refreshOnCreate: true,
       }),
     );
     // 失败了下次再试,不把一次失败永久缓存下来。

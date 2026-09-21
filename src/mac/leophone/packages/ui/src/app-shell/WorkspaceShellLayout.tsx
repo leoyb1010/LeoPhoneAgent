@@ -93,6 +93,7 @@ import {
 } from "@/workspace-file-tree/model.js";
 import type { WorkspaceShellLayoutProps } from "@/app-shell/types.js";
 import { useTabStoreApi } from "@/store/TabStoreProvider.js";
+import { consumeModelSettingsAfterWelcome } from "@/leo/leoLocal.js";
 import { useZCodeSessionStore } from "@/store/zcodeSessionStore.js";
 import type { ComposerMentionPrefill } from "@/store/zcodeSessionStoreTypes.js";
 
@@ -337,6 +338,14 @@ export const WorkspaceShellLayout = memo(function WorkspaceShellLayoutComponent(
   const isOfficeMode = useIsOfficeMode();
   const baseServices = useBaseWorkspaceServices();
   const tabStoreApi = useTabStoreApi();
+  // [leo] 欢迎页选了「用 API Key 添加模型供应商」:工作区外壳就绪后打开 设置 → 模型供应商。
+  // 放在外壳里而不是 Root:Root 结束欢迎页时外壳还没挂上,那时开的设置页会被随后的工作区初始化顶掉。
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (consumeModelSettingsAfterWelcome()) tabStoreApi.getState().openSettingsTab();
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [tabStoreApi]);
   const isLinuxDesktop = Boolean(isDesktop && !isMacDesktop && !isWindowsDesktop);
   // Windows/Linux 也需要外层留白，避免独立面板贴住窗口边缘；桌面统一使用 4px 间距。
   const hasDesktopPanelInset = isMacDesktop || isWindowsDesktop || isLinuxDesktop;
