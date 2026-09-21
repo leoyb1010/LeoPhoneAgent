@@ -7,6 +7,7 @@
  * import 这个模块即生效,必须是进程入口的第一个 import。
  */
 import dns from "node:dns";
+import { syncBuiltinESMExports } from "node:module";
 
 const BLOCKED_HOST = /(^|\.)(z\.ai|bigmodel\.cn|zhipuai\.cn|zhipu\.ai|chatglm\.cn|zcode\.ai)\.?$/i;
 
@@ -52,4 +53,8 @@ if (!dnsState[guardFlag]) {
     if (isLeoBlockedHost(hostname)) return Promise.reject(blockedError(hostname));
     return originalPromiseLookup.apply(this, args);
   };
+
+  // 打包后各进程入口会先求值共享 chunk,再跑到这里;用 `import { lookup } from "node:dns"`
+  // 拿到的是 ESM 绑定,同步一次让这些绑定也指向带拦截的版本。
+  syncBuiltinESMExports();
 }
