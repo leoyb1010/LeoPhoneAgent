@@ -550,6 +550,39 @@ export default {
     await runTimedAsync("afterPack:injectHoistedRuntimeModulesIntoAsar", () =>
       injectHoistedRuntimeModulesIntoAsar(context),
     );
+    // [leo] 上游把 bfs / ripgrep / ugrep 这些工具当普通资源放进 Contents/Resources,
+    // electron-builder 只签它认识的可执行,于是这几个二进制没签名、没时间戳、没硬化
+    // 运行时,公证直接判 Invalid。这里在外层签名之前先把它们逐个签掉 —— 顺序必须
+    // 是 afterPack(pack 之后、mac.identity 签 .app 之前),否则外层签名会被破坏。
+    if (context.electronPlatformName === "darwin" && shouldEnableMacSigning) {
+      runTimedSync("afterPack:leoSignNestedBinaries", () => {
+        const appRoot = resolve(context.appOutDir, `${context.packager.appInfo.productFilename}.app`);
+        const resourcesDir = resolve(appRoot, "Contents", "Resources");
+        const machO = runCommandAndReadStdout("/usr/bin/find", [resourcesDir, "-type", "f", "-perm", "-u+x"])
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .filter((file) => {
+            try {
+              return runCommandAndReadStdout("/usr/bin/file", ["-b", file]).includes("Mach-O");
+            } catch {
+              return false;
+            }
+          });
+        console.log(`[afterPack][leo] 需要单独签名的嵌套二进制: ${machO.length}`);
+        for (const file of machO) {
+          runCommand("/usr/bin/codesign", [
+            "--force",
+            "--sign",
+            rawMacSigningIdentity ?? macSigningIdentity,
+            "--options",
+            "runtime",
+            "--timestamp",
+            file,
+          ]);
+        }
+      });
+    }
     await runTimedAsync("afterPack:stripPackagedSourcemapReferences", () =>
       stripPackagedSourcemapReferences(context),
     );
