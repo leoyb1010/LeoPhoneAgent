@@ -10,11 +10,11 @@
   `LeoReleaseCatalog.releases` 最前加对应条目,保证首启弹出"本次更新"。
   **装机走 `./scripts/InstallIOSRelease.sh`(唯一入口),闸门焊在第一步,漏写记录就装不进去。**
   不要再手敲 xcodebuild 直装 —— 那条路绕过闸门。
-- Mac 桌面端(`src/mac/leocodebox/`):bump `package.json` 的 version,并在
-  `src/components/version-upgrade/releaseNotes.ts` 的 `LEO_RELEASE_NOTES`
-  **最前面**加一条。发版链上有自动闸门(`npm run verify:release-notes`,挂在
-  `desktop:dist:mac:signed` 链首),漏写就构建不出来 —— 别去绕过它,补条目才是对的。
-  详见 `src/mac/leocodebox/CLAUDE.md`。
+- Mac 桌面端(`src/mac/leophone/`,ZCode 内核的 LeoPhoneAgent 1.x):bump 根 `package.json` 的
+  version,并在 `packages/ui/src/leo/leoReleaseNotes.ts` 的 `LEO_RELEASE_NOTES` **最前面**加一条。
+  发版链 `leo:bundle:mac` 链首就是闸门(`scripts/leo-verify-release-notes.mjs`),漏写就构建不出来 ——
+  别去绕过它,补条目才是对的。详见 `docs/mac-3.0/README.md`。
+  旧的 `src/mac/leocodebox/`(2.2.x)只作回退,不再发版。
 - Android 每次公开 APK 必须遵守 README「Android Agent 交接与发布铁律」：递增
   versionCode/versionName、双 flavor 门禁、固定 Alpha 签名指纹、上一可用版覆盖安装、
   Fold8 冷启动/Logcat、README/Release digest 一致，缺一不得上传。

@@ -1,5 +1,5 @@
 import { createContext, useContext, type ReactNode } from "react";
-import type { CodingPlanUpgradeDialogTarget } from "@/settings/CodingPlanUpgradeDialog.js";
+import type { CodingPlanUpgradeDialogTarget } from "@/settings/codingPlanUpgradeLoginRecovery.js";
 import type { CodingPlanEntryInventory } from "@/hooks/useCodingPlanEntryPlanList.js";
 
 interface CodingPlanUpgradeDialogContextValue {

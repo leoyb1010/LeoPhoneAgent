@@ -155,6 +155,60 @@ function sendJson(res: ServerResponse, status: number, payload: unknown): void {
   res.end(JSON.stringify(payload));
 }
 
+/**
+ * 上游失败 → 带真实 HTTP 状态的 OpenAI 错误体。
+ *
+ * Agent 按状态码决定怎么处理:401/403 提示重新登录且不重试,429 / 5xx 退避重试,
+ * 400 + context_length_exceeded 触发自动压缩上下文。所以不能把失败包进 200 的流里。
+ * pi 的错误文案一般以上游状态码开头(`401 {...}`、`429: ...`);上下文超窗用 pi 自带的
+ * 识别(覆盖 Claude / ChatGPT / Copilot / Kimi 等各家文案)。
+ */
+async function upstreamFailure(
+  failed: AssistantMessage | undefined,
+  fallbackMessage: string,
+  contextWindow: number | undefined,
+): Promise<{ status: number; body: Record<string, unknown> }> {
+  const message = (failed?.errorMessage ?? fallbackMessage).trim() || "模型调用失败";
+  let overflow = false;
+  if (failed) {
+    try {
+      const { isContextOverflow } = await import("@earendil-works/pi-ai");
+      overflow = isContextOverflow(failed, contextWindow);
+    } catch {
+      overflow = false;
+    }
+  }
+  if (overflow) {
+    return {
+      status: 400,
+      body: { error: { message, type: "invalid_request_error", code: "context_length_exceeded" } },
+    };
+  }
+  const leading = /^(\d{3})\b/.exec(message);
+  const upstream = leading ? Number(leading[1]) : 0;
+  const status = upstream >= 400 && upstream <= 599 ? upstream : 502;
+  const detail = message.slice(0, 600);
+  if (status === 401 || status === 403) {
+    return {
+      status,
+      body: {
+        error: {
+          message: `订阅账号授权无效或已过期,请到 设置 → 模型供应商 → 订阅账号登录 重新登录。(上游:${detail})`,
+          type: "authentication_error",
+          code: "invalid_api_key",
+        },
+      },
+    };
+  }
+  if (status === 429) {
+    return {
+      status,
+      body: { error: { message: `订阅额度已用完或请求过于频繁,稍后会自动重试。(上游:${detail})`, type: "rate_limit_error" } },
+    };
+  }
+  return { status, body: { error: { message: detail, type: status < 500 ? "invalid_request_error" : "upstream_error" } } };
+}
+
 export async function handleModelsRequest(res: ServerResponse): Promise<void> {
   const models = await loggedInModels();
   sendJson(res, 200, {
@@ -179,7 +233,12 @@ export async function handleChatCompletions(
   }
 
   const abort = new AbortController();
-  req.on("close", () => abort.abort());
+  // 用户在界面上停止生成 → Agent 断开连接 → 这里中止上游,不再白白消耗订阅额度。
+  // 听 res 而不是 req:请求体读完时 req 的 close 就已经触发过了。
+  res.on("close", () => {
+    if (!res.writableFinished) abort.abort();
+  });
+  void req;
   const maxTokens = request.max_completion_tokens ?? request.max_tokens;
   const stream = runtime.streamSimple(model, toPiContext(request), {
     signal: abort.signal,
@@ -193,12 +252,17 @@ export async function handleChatCompletions(
   if (!request.stream) {
     let final: AssistantMessage | null = null;
     let errorText: string | null = null;
+    let failedMessage: AssistantMessage | undefined;
     for await (const event of stream) {
       if (event.type === "done") final = event.message;
-      if (event.type === "error") errorText = event.error.errorMessage ?? "模型调用失败";
+      if (event.type === "error") {
+        failedMessage = event.error;
+        errorText = event.error.errorMessage ?? "模型调用失败";
+      }
     }
     if (!final) {
-      sendJson(res, 502, { error: { message: errorText ?? "模型没有返回", type: "upstream_error" } });
+      const failure = await upstreamFailure(failedMessage, errorText ?? "模型没有返回", model.contextWindow);
+      sendJson(res, failure.status, failure.body);
       return;
     }
     const text = final.content.filter((part): part is TextContent => part.type === "text").map((part) => part.text).join("");
@@ -236,20 +300,34 @@ export async function handleChatCompletions(
     return;
   }
 
-  res.writeHead(200, {
-    "content-type": "text/event-stream; charset=utf-8",
-    "cache-control": "no-cache",
-    connection: "keep-alive",
-  });
   const chunk = (delta: Record<string, unknown>, finish: string | null = null) =>
     res.write(
       `data: ${JSON.stringify({ id, object: "chat.completion.chunk", created, model: request.model, choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`,
     );
+  // 响应头推迟到第一段真正的输出:在那之前失败(授权失效、额度用完、超窗、上游 5xx)
+  // 还能用真实状态码回给 Agent;一旦写了 200,就只能在流里报错了。
+  let started = false;
+  const begin = () => {
+    if (started) return;
+    started = true;
+    res.writeHead(200, {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache",
+      connection: "keep-alive",
+    });
+    chunk({ role: "assistant" });
+  };
 
-  chunk({ role: "assistant" });
   let toolIndex = 0;
   try {
     for await (const event of stream) {
+      if (event.type === "start") continue;
+      if (event.type === "error" && !started) {
+        const failure = await upstreamFailure(event.error, "模型调用失败", model.contextWindow);
+        sendJson(res, failure.status, failure.body);
+        return;
+      }
+      begin();
       if (event.type === "text_delta") chunk({ content: event.delta });
       else if (event.type === "thinking_delta") chunk({ reasoning_content: event.delta });
       else if (event.type === "toolcall_end") {
@@ -277,8 +355,14 @@ export async function handleChatCompletions(
       }
     }
   } catch (error) {
+    if (!started) {
+      const failure = await upstreamFailure(undefined, String(error), model.contextWindow);
+      sendJson(res, failure.status, failure.body);
+      return;
+    }
     res.write(`data: ${JSON.stringify({ error: { message: String(error), type: "upstream_error" } })}\n\n`);
   }
+  begin();
   res.write("data: [DONE]\n\n");
   res.end();
 }

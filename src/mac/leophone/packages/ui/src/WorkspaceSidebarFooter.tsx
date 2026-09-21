@@ -42,7 +42,8 @@ import { useZCodeStore } from "@/store/StoreProvider.js";
 import { normalizeInterfaceMode } from "@/lib/interfaceMode.js";
 import type { Theme } from "@/useTheme.js";
 import { setPendingSettingsUsageIntent } from "@/lib/settingsNavigation.js";
-import type { WorkspaceSidebarFooterUsageSummaryContent } from "@/WorkspaceSidebarFooterUsageSummary.js";
+import type { CodingPlanFunnelContext } from "@/lib/codingPlanFunnelTelemetry.js";
+import type { SidebarUsageCodingPlanProviderId } from "@/lib/sidebarUsageCodingPlanProviderPreference.js";
 
 const DESKTOP_ZOOM_MIN_LEVEL = -3;
 const DESKTOP_ZOOM_MAX_LEVEL = 5;
@@ -70,9 +71,10 @@ export const WorkspaceSidebarFooter = memo(function WorkspaceSidebarFooterCompon
   onThemeChange: (value: string) => void;
   onSettingsButtonClick?: () => void;
   onUsageClick?: () => void;
-  onUpgradeClick?: Parameters<
-    typeof WorkspaceSidebarFooterUsageSummaryContent
-  >[0]["onUpgradeClick"];
+  onUpgradeClick?: (
+    providerId: SidebarUsageCodingPlanProviderId,
+    funnelContext: CodingPlanFunnelContext,
+  ) => void;
   onLogin?: () => void;
   onLogout?: () => void;
   settingsButtonMode?: "settings" | "back";
