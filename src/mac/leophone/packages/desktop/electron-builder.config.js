@@ -567,6 +567,8 @@ export default {
   },
   extraResources: [
     { from: resolve(workspaceRoot, noticesFileName), to: noticesFileName },
+    // [leo] 藏宝阁的 MCP 服务(stdio)。Agent 子进程按 process.resourcesPath 解析它。
+    { from: "leo/treasury-mcp.mjs", to: "leo/treasury-mcp.mjs" },
     ...(targetPlatform.os === "darwin"
       ? [
           {

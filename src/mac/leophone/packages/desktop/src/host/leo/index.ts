@@ -4,6 +4,7 @@ import { IZCodeTaskService } from "@zcode/services";
 import type { ServiceCollection } from "@zcode/services";
 
 import { startLeoHttpApi } from "./httpApi.js";
+import { registerTreasuryMcpServer } from "./registerTreasuryMcp.js";
 import { TelegramChannel } from "./telegram.js";
 import { TreasuryStore } from "./treasuryStore.js";
 
@@ -28,6 +29,7 @@ export function startLeoHostServices(deps: { services: ServiceCollection; logger
     store = new TreasuryStore();
     telegram = new TelegramChannel(taskService, deps.logger);
     httpServer = startLeoHttpApi({ store, telegram, logger: deps.logger });
+    registerTreasuryMcpServer(deps.logger);
     void telegram.start();
     deps.logger.info("[leo] treasury + telegram ready");
   } catch (error) {
