@@ -761,7 +761,8 @@ function applyManifestUpdateProvider(options: InitAutoUpdaterOptions): void {
     endpointOrigin: DEFAULT_ZCODE_ENDPOINT_ORIGIN,
     ...(manifestUrl ? { manifestUrl } : {}),
     releasePlatform: getElectronReleasePlatform(),
-    deviceMid: options.deviceMid,
+    // [leo] 更新源是 GitHub 上的静态文件,不带设备 ID(查询参数和 X-Device-Mid 头都不发)。
+    deviceMid: undefined,
     resolveEndpointOrigin:
       options.resolveEndpointOrigin ?? (() => resolveRuntimeZCodeEndpointOrigin(process.env)),
     resolveReleaseChannel: async () => {
