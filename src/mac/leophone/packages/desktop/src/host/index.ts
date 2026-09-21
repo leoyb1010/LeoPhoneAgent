@@ -14,6 +14,7 @@
  * 3. 后续远端 connect / scoped attachment 都由同一 Host 处理
  */
 import { createHostDatabaseStartup } from "./hostDatabaseStartup.js";
+import { startLeoHostServices } from "./leo/index.js";
 import { randomUUID } from "node:crypto";
 import {
   MessagePortProtocol,
@@ -2896,6 +2897,8 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
           });
         logWindowHostTopology("base-attachment-ready");
         logger.info("local services ready, all channels registered");
+        // [leo] 藏宝阁与 Telegram:用同一份 services,不另起 agent 进程。
+        startLeoHostServices({ services, logger });
       },
     });
     await databaseStartup.coordinator.start();

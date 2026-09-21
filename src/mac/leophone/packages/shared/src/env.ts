@@ -47,7 +47,9 @@ export const RUNTIME_ZCODE_DEBUG =
 
 // 恢复原因：写死 false 会让运行时已配置的数仓/ARMS 永远空转。
 // 功能保持可用；实际出网由各出口的运行时端点检查决定，未配置不上报。
-export const ZCODE_TELEMETRY_ENABLED: boolean = true;
+// [leo] LeoPhoneAgent 不向 Z.ai 上报遥测、崩溃与性能数据。ARMS RUM、数仓上报
+// 和远端 crash 上报都挂在这个开关上;要恢复上游行为改回 true。
+export const ZCODE_TELEMETRY_ENABLED: boolean = false;
 
 /** 数仓事件上报端点：由运行时环境变量提供，未配置即停用，构建产物不内嵌。 */
 export const ZCODE_TELEMETRY_REPORT_ENDPOINT =

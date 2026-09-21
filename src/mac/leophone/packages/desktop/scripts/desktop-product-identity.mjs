@@ -23,9 +23,30 @@ const PREVIEW_IDENTITY = Object.freeze({
   cuaHelperInstallVariant: "preview",
 });
 
+/**
+ * [leo] LeoPhoneAgent Mac 的产品身份。appId 沿用 leocodebox 2.x 的
+ * com.leoyuan.leocodebox —— 2.x 用户热更新过来才是原位覆盖,而不是并排装两个。
+ * 打包时 ZCODE_PRODUCT_IDENTITY=leo 选中;flavor 仍报 production,
+ * 避免上游按 flavor 分流的逻辑(预览包后缀、CUA helper 变体等)走偏。
+ */
+export const LEO_PRODUCT_IDENTITY_ENV = "ZCODE_PRODUCT_IDENTITY";
+const LEO_IDENTITY = Object.freeze({
+  flavor: "production",
+  appId: "com.leoyuan.leocodebox",
+  productName: "LeoPhoneAgent",
+  linuxExecutableName: "leophoneagent",
+  linuxPackageName: "leophoneagent",
+  cuaHelperInstallVariant: null,
+});
+
+export function isLeoIdentityRequested(env = process.env) {
+  return env[LEO_PRODUCT_IDENTITY_ENV]?.trim().toLowerCase() === "leo";
+}
+
 export const desktopProductIdentities = Object.freeze({
   production: PRODUCTION_IDENTITY,
   preview: PREVIEW_IDENTITY,
+  leo: LEO_IDENTITY,
 });
 
 function normalizeDesktopZCodeEnv(env) {
@@ -64,6 +85,9 @@ export function resolveDesktopProductFlavor(env = process.env) {
 }
 
 export function resolveDesktopProductIdentity(env = process.env) {
+  if (isLeoIdentityRequested(env)) {
+    return LEO_IDENTITY;
+  }
   return desktopProductIdentities[resolveDesktopProductFlavor(env)];
 }
 

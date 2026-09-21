@@ -8,6 +8,7 @@ import {
   type RemoteTarget,
 } from "@zcode/shared";
 import { TooltipProvider } from "@/components/ui/tooltip.js";
+import { LeoWhatsNew } from "@/leo/LeoWhatsNew.js";
 import { Button } from "@/components/ui/button.js";
 import { PlatformProvider } from "@/hooks/usePlatform.js";
 import { ServiceProvider } from "@/hooks/useServices.js";
@@ -128,6 +129,7 @@ export function Root(props: RootProps) {
                   >
                     <CodingPlanUpgradeDialogProvider>
                       <RootInner {...props} />
+                      <LeoWhatsNew />
                     </CodingPlanUpgradeDialogProvider>
                   </AssistantCodeCommentFeatureProvider>
                 </DiffsWorkerPoolProvider>
