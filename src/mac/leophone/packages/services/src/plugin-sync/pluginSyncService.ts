@@ -217,7 +217,7 @@ function resolveUserHomeDir(): string {
 }
 
 function getUserZcodeConfigPath(): string {
-  return join(resolveUserHomeDir(), ".zcode", "cli", "config.json");
+  return join(resolveUserHomeDir(), ".leophoneagent", "cli", "config.json");
 }
 
 function getUserZcodePluginRoot(): string {

@@ -1,3 +1,5 @@
+// [leo] 必须是第一个 import:进程内一切联网之前先装上官方服务拦截。
+import "@zcode/shared/leo-network-guard";
 // 常驻 cron scheduler 进程：由 desktop main 通过 electronUtilityProcess.fork 拉起。
 // 职责（tasks-index 属主方案）：
 //   - 轮询 tasks-index 的 automations，事务认领到期任务（AutomationRepo.claimDue：BEGIN IMMEDIATE + running 0→1）

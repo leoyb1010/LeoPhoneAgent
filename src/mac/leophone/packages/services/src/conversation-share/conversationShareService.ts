@@ -661,6 +661,9 @@ function selectRows(
   };
 }
 
+// [leo] 纯本地产品:会话分享依赖官方服务器,关闭。
+const LEO_SHARE_DISABLED: boolean = true;
+
 export class ConversationShareService implements IConversationShareService {
   private readonly zcodeAgentService: ConversationShareAgentService;
   private readonly client: ConversationShareHttpClient;
@@ -770,6 +773,8 @@ export class ConversationShareService implements IConversationShareService {
   async preflight(
     input: ConversationSharePreflightInput,
   ): Promise<ConversationSharePreflightResult> {
+    // [leo] 分享的上传/导入都经过官方服务器,整条链路关闭。
+    if (LEO_SHARE_DISABLED) throw new Error("LeoPhoneAgent 是纯本地产品,不提供会话分享(分享依赖官方服务器)。");
     try {
       return await this.preflightWithAgent(input, this.zcodeAgentService);
     } catch (error) {
@@ -1321,6 +1326,7 @@ export class ConversationShareService implements IConversationShareService {
     input: ImportConversationShareInput,
     operationId: string,
   ): Promise<ImportConversationShareResult> {
+    if (LEO_SHARE_DISABLED) throw new Error("LeoPhoneAgent 是纯本地产品,不提供会话分享(分享依赖官方服务器)。");
     await this.completedImportsLoaded;
     const workspaceKey = workspaceKeyOf(input.targetWorkspacePath, input.targetWorkspaceIdentity);
     const workspaceKeyedShare = importDedupeKey(input.shareCode, workspaceKey);
@@ -1832,6 +1838,7 @@ export class ConversationShareService implements IConversationShareService {
   }
 
   async publish(input: PublishTextConversationInput, operationId: string) {
+    if (LEO_SHARE_DISABLED) throw new Error("LeoPhoneAgent 是纯本地产品,不提供会话分享(分享依赖官方服务器)。");
     return this.publishWithAgent(input, operationId, this.zcodeAgentService);
   }
 

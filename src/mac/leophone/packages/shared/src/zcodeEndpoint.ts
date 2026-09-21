@@ -1,10 +1,15 @@
 import type { ZCodeEnv } from "./env.js";
 
-export const DEFAULT_ZCODE_ENDPOINT_ORIGIN = "https://zcode.z.ai";
-export const DEFAULT_BIGMODEL_API_ORIGIN = "https://bigmodel.cn";
-export const DEFAULT_ZAI_OAUTH_ORIGIN = "https://chat.z.ai";
-export const DEFAULT_ZAI_BUSINESS_BASE_URL = "https://api.z.ai";
-export const DEFAULT_ZAI_OAUTH_CLIENT_ID = "client_P8X5CMWmlaRO9gyO-KSqtg";
+// [leo] LeoPhoneAgent 是纯本地产品,不与 Z.ai 的服务端通信:客户端配置、强制升级、
+// 帮助入口、内置供应商目录刷新等请求都打到这里。指向本机一个不监听的端口,请求立即
+// 连接失败,上游各处都会回落到随包内置的默认值(这是它们本来就有的兜底路径)。
+// 真要连官方服务,用 ZCODE_ENDPOINT_ORIGIN 环境变量显式覆盖。
+export const DEFAULT_ZCODE_ENDPOINT_ORIGIN = "http://127.0.0.1:9";
+// [leo] 官方账号体系(Z.ai / BigModel 登录、Coding Plan、计费)同样全部指向本机死端口,不内置官方 OAuth client。
+export const DEFAULT_BIGMODEL_API_ORIGIN = "http://127.0.0.1:9";
+export const DEFAULT_ZAI_OAUTH_ORIGIN = "http://127.0.0.1:9";
+export const DEFAULT_ZAI_BUSINESS_BASE_URL = "http://127.0.0.1:9";
+export const DEFAULT_ZAI_OAUTH_CLIENT_ID = "";
 
 // 构建仅注入公开链接；Node 调用方仍可显式传 env，避免读取另一进程的配置。
 declare const __ZCODE_ENDPOINT_ENV__: Record<string, string | undefined> | undefined;

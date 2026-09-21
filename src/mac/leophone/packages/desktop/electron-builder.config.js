@@ -477,6 +477,8 @@ export default {
     mirror: resolveElectronDownloadMirror(),
   },
   productName: desktopProductIdentity.productName,
+  // [leo] 我们自己的版权行;ZCode 的 Apache-2.0 署名保留在随包 LICENSE / THIRD_PARTY_LICENSES 里。
+  copyright: "Copyright © 2026 Leo Yuan · Based on ZCode (Apache-2.0)",
   directories: {
     // macOS arm64/x64 CI 可能共享同一个 checkout 并行打包。
     // 输出根目录允许按架构隔离，避免一个 job 清理 dist 时删除另一个 job 正在签名的 .app。
@@ -602,6 +604,9 @@ export default {
     { from: resolve(workspaceRoot, noticesFileName), to: noticesFileName },
     // [leo] 藏宝阁的 MCP 服务(stdio)。Agent 子进程按 process.resourcesPath 解析它。
     { from: "leo/treasury-mcp.mjs", to: "leo/treasury-mcp.mjs" },
+    // [leo] Apache-2.0 要求随分发附上许可证与 NOTICE:ZCode 的原文放进 Resources/licenses/zcode。
+    { from: "../../LICENSE", to: "licenses/zcode/LICENSE" },
+    { from: "../../NOTICE.md", to: "licenses/zcode/NOTICE.md" },
     ...(targetPlatform.os === "darwin"
       ? [
           {
@@ -686,7 +691,8 @@ export default {
       // 协议处理器的展示名之前使用小写 scheme，打包产物里的协议描述无法体现产品名。
       // 展示名跟随安装包身份；scheme 仍保持 zcode，因此两个应用中最后注册者会成为默认 handler。
       name: desktopProductIdentity.productName,
-      schemes: ["zcode"],
+      // [leo] 自己的 scheme:不和官方 ZCode 客户端抢 zcode://(官方的登录回调也走那个)。
+      schemes: ["leophoneagent"],
     },
   ],
   mac: {
@@ -797,5 +803,7 @@ export default {
     // 新客户端运行时使用服务端 manifest provider；这里仅保留 electron-builder 必需的
     // generic publish 占位，避免打包产物继续携带可配置的旧 stable feed。
     url: "http://localhost:8081",
+    // [leo] 更新缓存目录用我们自己的名字;默认值按包名派生成 @zcodedesktop-updater,会和官方客户端共用。
+    updaterCacheDirName: "leophoneagent-updater",
   },
 };

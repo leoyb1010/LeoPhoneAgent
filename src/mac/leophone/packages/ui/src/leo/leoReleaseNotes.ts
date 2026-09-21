@@ -13,6 +13,16 @@ export interface LeoRelease {
 
 export const LEO_RELEASE_NOTES: LeoRelease[] = [
   {
+    version: "1.0.1",
+    date: "2026-09-21",
+    items: [
+      "彻底独立:不再连接 ZCode / Z.ai / 智谱的任何服务器。更新只走 LeoPhoneAgent 自己的更新源,官方的强制升级提示已移除;帮助配置、灰度配置、插件市场远端分片、官方 CDN、遥测全部停用;网络层另加一道兜底,所有官方域名一律拦截,漏网的调用也发不出去。",
+      "不接入任何官方账号:移除 Z.ai / BigModel 登录和 Coding Plan 订阅、购买入口;不再读取官方客户端 ~/.zcode 下的配置、账号和会话,agent 与各子进程的数据统一放在 ~/.leophoneagent。",
+      "新增订阅账号登录:Claude(Pro / Max)、ChatGPT(Plus / Pro)、GitHub Copilot,以及 Kimi、xAI、OpenRouter,在浏览器里授权即可使用。登录后模型自动出现在「订阅账号」供应商下,凭据只保存在本机。入口在欢迎页和设置里的模型供应商。",
+      "会话分享与导入依赖官方服务器,已关闭。SSH / Docker 远程工作区的远端运行时原本从官方 CDN 下载,这一版暂不可用,之后改由我们自己的更新源提供。",
+    ],
+  },
+  {
     version: "1.0.0",
     date: "2026-09-21",
     items: [

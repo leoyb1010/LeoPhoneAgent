@@ -402,7 +402,8 @@ export function registerDeepLinkProtocol(
   },
   options: { iconPath?: string } = {},
 ) {
-  const scheme = "zcode";
+  // [leo] 自己的 URL scheme,不和官方客户端抢 zcode://。
+  const scheme = "leophoneagent";
 
   if (process.defaultApp && process.argv.length >= 2) {
     const entry = resolve(process.argv[1]!);

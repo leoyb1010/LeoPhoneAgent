@@ -1,7 +1,8 @@
 import { ZCODE_VERSION, type ZCodeEnv } from "@zcode/shared";
 
 declare const __ZCODE_CDN_BASE_URL__: string | undefined;
-const DEFAULT_CDN_BASE_URL = "https://cdn-zcode.z.ai";
+// [leo] 不再从官方 CDN 拉任何资源。只有显式设置 ZCODE_CDN_BASE_URL(我们自己的 CDN)时才远程下载。
+const DEFAULT_CDN_BASE_URL = "";
 
 export interface ResolveRemoteCdnOptions {
   env?: ZCodeEnv;
@@ -26,6 +27,7 @@ export function resolveRemoteCdnBaseUrls(options: ResolveRemoteCdnOptions = {}):
     process.env.ZCODE_CDN_BASE_URL?.trim() ||
     (typeof __ZCODE_CDN_BASE_URL__ === "undefined" ? "" : __ZCODE_CDN_BASE_URL__) ||
     DEFAULT_CDN_BASE_URL;
+  if (!baseUrl) return [];
   return [
     `${normalizeBaseUrl(baseUrl)}/zcode/electron/releases/${options.version ?? ZCODE_VERSION}`,
   ];

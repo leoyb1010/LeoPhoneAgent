@@ -34,9 +34,11 @@ export const DEFAULT_PLUGIN_MARKETPLACES: DefaultPluginMarketplace[] = [
     // ZCode 官方唯一市场：本地 seed 分片与 CDN 分片在 Agent storage 内合并。
     // CDN manifest 的 name 必须与该 canonical id 一致。
     id: ZCODE_OFFICIAL_PLUGIN_MARKETPLACE_ID,
-    source: "https://cdn-zcode.z.ai/zcode/official-plugin/marketplace.json",
+    // [leo] 只保留随包内置的插件(本地 seed)。远端分片原本从官方 CDN 拉,这里指向本机死端口,
+    // 懒加载会立即失败而不出网;格式仍是 url,不改变 agent 的解析路径。
+    source: "http://127.0.0.1:9/zcode/official-plugin/marketplace.json",
     name: ZCODE_OFFICIAL_PLUGIN_MARKETPLACE_ID,
-    description: "Official ZCode plugins marketplace: built-in and community plugins for ZCode.",
+    description: "LeoPhoneAgent built-in plugins.",
     pluginCount: 0,
   },
 ];

@@ -33,7 +33,7 @@ export function readTelegramConfig(): TelegramConfig {
   try {
     if (!existsSync(configFile())) return { ...DEFAULTS };
     const raw = JSON.parse(readFileSync(configFile(), "utf8")) as { telegram?: Partial<TelegramConfig> };
-    return { ...DEFAULTS, ...(raw.telegram ?? {}) };
+    return { ...DEFAULTS, ...raw.telegram };
   } catch {
     return { ...DEFAULTS };
   }

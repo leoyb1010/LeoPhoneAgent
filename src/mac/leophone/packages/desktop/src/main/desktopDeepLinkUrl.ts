@@ -1,4 +1,5 @@
-const DEEP_LINK_SCHEME = "zcode";
+// [leo] 自己的 URL scheme,不和官方客户端抢 zcode://。
+const DEEP_LINK_SCHEME = "leophoneagent";
 const DEEP_LINK_RE = /\bzcode:(?:\/\/|\/)?[^\s"'<>]+/i;
 const OAUTH_CALLBACK_HOSTS = new Set(["oauth"]);
 const PAYMENT_CALLBACK_HOST = "payment";

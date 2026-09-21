@@ -47,7 +47,7 @@ export function registerTreasuryMcpServer(logger: Logger): void {
       command: process.execPath,
       args: [script],
       env: {
-        ...((existing["env"] as Record<string, string> | undefined) ?? {}),
+        ...(existing["env"] as Record<string, string> | undefined),
         ELECTRON_RUN_AS_NODE: "1",
         LEOAGENT_KEY: leoLocalKey(),
         LEOAGENT_PORT: String(LEO_HTTP_PORT),

@@ -29,6 +29,8 @@
   "dependencies": {
     "@arms/rum-electron": "^0.0.3",
     "@babel/runtime": "^7.24.5",
+    "@earendil-works/pi-ai": "0.85.1",
+    "@earendil-works/pi-coding-agent": "0.85.1",
     "@fiahfy/icns": "^0.0.7",
     "@lydell/node-pty-linux-arm64": "1.2.0-beta.10",
     "@lydell/node-pty-linux-x64": "1.2.0-beta.10",

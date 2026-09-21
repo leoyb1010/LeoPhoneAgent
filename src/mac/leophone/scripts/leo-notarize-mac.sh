@@ -26,6 +26,7 @@ DIST="$(dirname "$DMG")"
 ZIP="${DIST}/$(basename "${DMG%.dmg}").zip"
 rm -f "$ZIP"
 ditto -c -k --sequesterRsrc --keepParent "$STAGE/$(basename "$APP")" "$ZIP"
+echo "==> Gatekeeper 评估"
+spctl -a -t exec -vv "$STAGE/$(basename "$APP")"
 rm -rf "$STAGE"
 echo "==> 完成: $DMG 与 $ZIP 均已公证并 staple"
-spctl -a -t exec -vv "$STAGE/$(basename "$APP")" 2>/dev/null || true

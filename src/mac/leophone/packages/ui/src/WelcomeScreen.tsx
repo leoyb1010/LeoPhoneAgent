@@ -20,6 +20,8 @@ import { Alert, AlertDescription } from "./components/ui/alert.js";
 import { Button } from "./components/ui/button.js";
 import { ZCodeAboutLogo } from "@/components/ui/ZCodeAboutLogo.js";
 import { useOAuth } from "./hooks/useOAuth.js";
+import { usePlatform } from "@/hooks/usePlatform.js";
+import { LEO_OAUTH_PAGE_URL } from "./leo/leoLocal.js";
 import { useZCodeIntl } from "./i18n/IntlProvider.js";
 import { LoginApiKeyForm } from "./login/LoginApiKeyForm.js";
 import { renderOAuthProviderIcon } from "./lib/oauthProviderIcon.js";
@@ -91,6 +93,7 @@ function LoginPanel({ active, onComplete }: LoginPanelProps) {
   const markLoginEntryAttemptStatus = useZCodeStore((s) => s.markLoginEntryAttemptStatus);
   // [leo] 没有账号入口,直接进 API key。
   const [loginMode, setLoginMode] = useState<"providers" | "apiKey">("apiKey");
+  const platform = usePlatform();
   const wasActiveRef = useRef(active);
   const consumedLoginRequestRef = useRef<number | null>(null);
   const observedOAuthSuccessSeqRef = useRef(oauthSuccessSeq);
@@ -356,17 +359,36 @@ function LoginPanel({ active, onComplete }: LoginPanelProps) {
         )}
 
         {status === "idle" && loginMode === "apiKey" ? (
-          <LoginApiKeyForm
-            onCancel={() => setLoginMode("providers")}
-            onSaved={() => {
-              resetApiKeyForm();
-              return onComplete("apiKey");
-            }}
-            onSkipped={() => {
-              resetApiKeyForm();
-              return onComplete("skip");
-            }}
-          />
+          <>
+            <LoginApiKeyForm
+              onCancel={() => setLoginMode("providers")}
+              onSaved={() => {
+                resetApiKeyForm();
+                return onComplete("apiKey");
+              }}
+              onSkipped={() => {
+                resetApiKeyForm();
+                return onComplete("skip");
+              }}
+            />
+            {/* [leo] 订阅账号登录:在浏览器里完成授权,模型自动出现在「订阅账号」供应商下。 */}
+            <div className="mt-4 space-y-2 border-t border-border pt-4 text-center">
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  platform.openExternal(LEO_OAUTH_PAGE_URL);
+                  resetApiKeyForm();
+                  void onComplete("skip");
+                }}
+              >
+                用订阅账号登录(Claude / ChatGPT / Copilot)
+              </Button>
+              <p className="text-ui-sm text-foreground-subtle">
+                在浏览器里完成授权后,模型会出现在「订阅账号」供应商下。凭据只保存在本机。
+              </p>
+            </div>
+          </>
         ) : null}
 
         {status === "waiting" && (
@@ -521,20 +543,6 @@ function LoginOAuthRegionTag({ providerId }: { providerId: string }) {
       {intl.formatMessage({ id: messageId })}
     </span>
   );
-}
-
-function getProviderPriority(provider: OAuthProviderMeta): number {
-  switch (provider.id) {
-    // Windows 登录入口里 z.ai 入口需要固定排在最上面，
-    // 之前把 BigModel 设成更高优先级后，用户首屏会先看到次要入口。
-    // 这里直接调整排序权重，只改展示顺序，不影响 OAuth provider 的真实配置来源。
-    case ZAI_PROVIDER_ID:
-      return 0;
-    case BIGMODEL_PROVIDER_ID:
-      return 1;
-    default:
-      return 10 + provider.order;
-  }
 }
 
 function resolveVisibleLoginProviders(_providers: OAuthProviderMeta[]): OAuthProviderMeta[] {

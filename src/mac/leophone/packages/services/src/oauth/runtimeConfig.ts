@@ -1,6 +1,4 @@
 import type { OAuthProviderId } from "@zcode/shared";
-import { createBigModelProviderRuntimeConfig } from "./providers/bigmodelProviderConfig.js";
-import { createZaiProviderRuntimeConfig } from "./providers/zaiProviderConfig.js";
 
 /** Provider 运行时配置（仅 host process 可见） */
 export interface OAuthProviderRuntimeConfig {
@@ -27,8 +25,8 @@ export interface OAuthRuntimeConfig {
  *
  * 注意：这里只能在 host process 使用，避免把敏感配置暴露给 renderer。
  */
-export function createOAuthRuntimeConfig(env: NodeJS.ProcessEnv = process.env): OAuthRuntimeConfig {
-  return {
-    providers: [createBigModelProviderRuntimeConfig(env), createZaiProviderRuntimeConfig(env)],
-  };
+export function createOAuthRuntimeConfig(_env: NodeJS.ProcessEnv = process.env): OAuthRuntimeConfig {
+  // [leo] LeoPhoneAgent 不接入任何官方账号(Z.ai / BigModel)。没有 provider,就没有登录入口、
+  // 没有 token 刷新、也不会去官方 userinfo 校验;旧缓存的官方会话在 restore 时会被直接清掉。
+  return { providers: [] };
 }
