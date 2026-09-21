@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 
 import { sessionAssistantBlocks, sessionAssistantNeedsText } from './session-assistant-text.js';
 import { sessionIncompleteLabel } from './session-incomplete.js';
+import { sessionAbortedStopLabel } from './session-stop-reason.js';
 import { sessionToolFailed } from './session-tool-fail.js';
 import { sessionToolFullOutput } from './session-tool-full.js';
 import { sessionToolImages } from './session-tool-image.js';
@@ -425,7 +426,7 @@ export class PiRpcDialect implements HarnessDialect {
       if (sessionAssistantNeedsText({ streamed: this.streamedThinking, role: str(message.role), text: blocks.thinking })) {
         out.push({ event: EVENT_REASONING, text: blocks.thinking });
       }
-      if (str(message.role) === 'assistant' && str(message.stopReason) !== 'error' && !sessionIncompleteLabel(str(message.stopReason))) {
+      if (str(message.role) === 'assistant' && str(message.stopReason) !== 'error' && !sessionIncompleteLabel(str(message.stopReason)) && !sessionAbortedStopLabel(str(message.stopReason))) {
         const totalTokens = Number(usage.totalTokens ?? 0);
         const input = Number(usage.input ?? 0);
         const output = Number(usage.output ?? 0);
@@ -473,9 +474,10 @@ function assistantTurnError(obj: JsonObject): string {
   const message = asObject(obj.message);
   const err = str(message.errorMessage || message.error || obj.error);
   const incomplete = sessionIncompleteLabel(str(message.stopReason));
-  if (str(message.stopReason) === 'error' || err || incomplete) {
+  const aborted = sessionAbortedStopLabel(str(message.stopReason));
+  if (str(message.stopReason) === 'error' || err || incomplete || aborted) {
     if (str(obj.type) === 'message_start' || str(obj.type) === 'message_end' || str(obj.type) === 'turn_end') {
-      return err || incomplete || '模型这一轮失败了';
+      return err || incomplete || aborted || '模型这一轮失败了';
     }
   }
   return '';

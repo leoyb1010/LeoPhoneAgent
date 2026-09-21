@@ -236,6 +236,19 @@ test('没说完会停住', () => {
   assert.equal(length.translateLine({ type: 'agent_end' }).events[0].event, EVENT_RUN_FAILED);
 });
 
+test('中途停了会标停', () => {
+  const dialect = new PiRpcDialect();
+  const usage = dialect.translateLine({
+    type: 'message_end',
+    message: { role: 'assistant', stopReason: 'aborted', usage: { totalTokens: 400 } },
+  }).events;
+  assert.equal(usage.some((ev) => ev.event === 'session.usage'), false);
+  const { events } = dialect.translateLine({ type: 'agent_end' });
+  assert.equal(events[0].event, EVENT_RUN_FAILED);
+  assert.match(String(events[0].error), /中途停了/);
+  assert.deepEqual(dialect.translateLine({ type: 'agent_settled' }).events, []);
+});
+
 test('助手 stopReason=error 时 agent_end 是 run.failed,不是空白完成', () => {
   const dialect = new PiRpcDialect();
   dialect.translateLine({
