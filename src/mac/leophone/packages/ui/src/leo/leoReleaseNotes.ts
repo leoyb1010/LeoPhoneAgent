@@ -18,7 +18,7 @@ export const LEO_RELEASE_NOTES: LeoRelease[] = [
     items: [
       "彻底独立:不再连接 ZCode / Z.ai / 智谱的任何服务器。更新只走 LeoPhoneAgent 自己的更新源,官方强制升级提示已移除;官方远程开关(灰度、帮助配置、自动化模板)、插件市场远端分片、官方 CDN、遥测全部停用;网络层另加一道兜底,主进程、窗口进程和 agent 进程都会拦下所有官方域名。",
       "不接入任何官方账号:移除 Z.ai / BigModel 登录、Coding Plan 订阅与购买、账号头像与用量菜单,欢迎页也不再要智谱 API Key。不再读取官方客户端 ~/.zcode 下的任何内容:设置、MCP、技能、命令、Hooks、AGENTS.md、会话库和日志统一放在 ~/.leophoneagent;链接协议改为 leophoneagent://,不再和官方客户端抢。",
-      "新增订阅账号登录:Claude(Pro / Max)、ChatGPT(Plus / Pro)、GitHub Copilot,以及 Kimi、xAI、OpenRouter,在浏览器里授权即可使用,模型自动出现在「订阅账号」供应商下,凭据只保存在本机。入口在欢迎页和 设置 → 模型供应商。",
+      "新增订阅账号登录:Claude(Pro / Max)、ChatGPT(Plus / Pro)、GitHub Copilot,以及 Kimi、xAI、OpenRouter,在浏览器里授权即可使用,模型自动出现在「订阅账号」供应商下,凭据只保存在本机。授权失效会提示重新登录,额度用完或服务繁忙会自动重试,上下文超长会自动压缩。入口在欢迎页和 设置 → 模型供应商。",
       "动态工作流(多 agent 编排)原本由官方服务器灰度开放,现在本地默认开启。闲时任务依赖官方套餐,已隐藏。",
       "去掉依赖官方服务的入口:帮助菜单里的官方文档、社区与反馈,各处反馈按钮,会话分享与导入;插件商店只保留随包插件,「更新日志」改为打开我们自己的发布页。SSH / Docker 远程工作区的远端运行时原本从官方 CDN 下载,这一版暂不可用。",
     ],
