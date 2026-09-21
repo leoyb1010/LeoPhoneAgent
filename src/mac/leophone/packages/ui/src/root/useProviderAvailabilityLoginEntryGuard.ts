@@ -54,7 +54,10 @@ export function useProviderAvailabilityLoginEntryGuard({
         : modelSelectionView;
       const availability = resolveProviderAvailabilityState({ modelSelectionView: refreshedView });
       const { hasUsableProvider, providerCount } = availability;
-      const shouldOpenLoginEntry = !providerFamilyDomain || (!user && !hasUsableProvider);
+      // [leo] 官方版在「未选择 Z.ai / BigModel 区域」时也会强制弹登录页;LeoPhoneAgent 没有官方区域
+      // 这个概念,只在确实没有任何可用模型时才引导去接入模型。
+      void providerFamilyDomain;
+      const shouldOpenLoginEntry = !user && !hasUsableProvider;
 
       // 未登录且没有可用模型配置时必须引导用户连接账号或填写 API Key。
       // 启动检查、API Key 设置回流等入口统一走这里，避免各处复制判断后语义分叉。
