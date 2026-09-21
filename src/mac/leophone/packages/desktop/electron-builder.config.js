@@ -107,6 +107,10 @@ const asarCliPath = resolve(
   "bin",
   "asar.js",
 );
+// [leo] electron-builder 会把这些包打进 app.asar,但丢掉它们自带的嵌套 node_modules(版本和顶层不同的子依赖)。
+// 例:proper-lockfile 需要 signal-exit@3(嵌套),顶层是 4.x,加载时报 onExit is not a function。
+// 列在这里的包无论是否已在 asar 里,都从工作区整目录重新复制(连同嵌套 node_modules)。
+const FORCE_RECOPY_ASAR_RUNTIME_MODULES = new Set(["proper-lockfile"]);
 const REQUIRED_ASAR_RUNTIME_MODULES = [
   // [leo] 订阅账号登录(pi ModelRuntime)的运行时依赖。host 只内联 ModelRuntime 自己的模块,
   // 这些包按闭包根注入 app.asar,连同它们的子依赖(which、path-key、SDK 链等)一起补齐。
@@ -331,6 +335,9 @@ function resolveMissingRuntimeModules(appAsarPath) {
   });
   return resolvableRuntimeModules.filter((entry) => {
     const { moduleName } = entry;
+    if (FORCE_RECOPY_ASAR_RUNTIME_MODULES.has(moduleName)) {
+      return true;
+    }
     const moduleRoot = `/node_modules/${moduleName}`;
     if (asarEntrySet.has(moduleRoot)) {
       return false;
