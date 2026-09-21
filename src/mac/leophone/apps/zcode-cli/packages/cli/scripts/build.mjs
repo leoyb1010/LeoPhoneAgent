@@ -196,6 +196,11 @@ export const resolveBuildAliases = ({
     rootDirectory,
     "../../packages/shared/src/zcodeEndpoint.ts",
   ),
+  // [leo] agent 进程的网络兜底(官方域名一律不连),同样必须在通用前缀 alias 之前精确声明。
+  "@zcode/shared/leo-network-guard": resolve(
+    rootDirectory,
+    "../../packages/shared/src/leoNetworkGuard.ts",
+  ),
   "@zcode/shared/node": resolve(rootDirectory, "../../packages/shared/src/node.ts"),
   "@zcode/shared": resolve(rootDirectory, "../../packages/shared/src/index.ts"),
   "@zcode/core": resolve(cliDirectory, "../core/dist/index.js"),
