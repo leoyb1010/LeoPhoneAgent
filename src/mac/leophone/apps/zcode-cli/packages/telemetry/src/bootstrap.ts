@@ -121,6 +121,9 @@ export async function prepareModelTelemetryEnv(
   env: EnvRecord,
   options: PrepareModelTelemetryOptions = {},
 ): Promise<EnvRecord> {
+  // [leo] LeoPhoneAgent 不做任何遥测：无论 OTEL_* / ZCODE_TELEMETRY_* 怎么设，都不创建
+  // OTLP Trace/Metric 导出器，也不读写 telemetry-state.json。这是遥测唯一的装配入口。
+  return env;
   if (!resolveOtlpTraceEndpoint(env) || isExplicitlyDisabled(env.ZCODE_MODEL_TELEMETRY_ENABLED)) {
     return env;
   }
@@ -225,7 +228,7 @@ async function resolveStandaloneDeviceMid(
 ): Promise<string | undefined> {
   const stateFile = zcodeHome
     ? join(zcodeHome, "v2", "telemetry-state.json")
-    : join(homedir(), ".zcode", "v2", "telemetry-state.json");
+    : join(homedir(), ".leophoneagent", "v2", "telemetry-state.json");
   const pending = pendingStandaloneDeviceMidByStateFile.get(stateFile);
   if (pending) return pending;
   const resolution = resolveStandaloneDeviceMidFromFile(stateFile);

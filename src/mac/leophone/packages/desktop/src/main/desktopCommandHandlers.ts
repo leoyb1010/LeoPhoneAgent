@@ -13,7 +13,6 @@ import {
   resolveRuntimeZCodeEndpointOrigin,
   ZCODE_ENV,
   ZCODE_PRODUCT_FLAVOR,
-  buildZCodeEndpointUrls,
   getCommunityUrlFromConfigs,
   getFeedbackUrlFromConfig,
   resolveHelpAppConfig,
@@ -451,8 +450,10 @@ function resolveChangelogUrl(
 ): string {
   // 帮助菜单里的外链以前只有固定英文地址，切到中文界面后仍会落到英文 changelog。
   // 这里统一收口到主进程按当前应用语言分流，避免菜单模板里手写分支后续再出现多处不一致。
-  const origin = buildZCodeEndpointUrls(endpointOrigin).origin;
-  return locale === "zh-CN" ? `${origin}/cn/changelog` : `${origin}/en/changelog`;
+  // [leo] 更新日志是我们自己的发布页(每个版本都带「本次更新」),不再指向官方站点。
+  void locale;
+  void endpointOrigin;
+  return "https://github.com/leoyb1010/leocodebox-updates/releases";
 }
 
 export async function openChangelog(

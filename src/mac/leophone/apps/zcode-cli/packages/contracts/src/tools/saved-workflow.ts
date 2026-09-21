@@ -28,7 +28,8 @@ export const WORKFLOW_DRAFTS_DIR = ".zcode/workflow-drafts";
  * 全局作用域的存放目录（相对 agent 进程的家目录）。落点 `~/.zcode/workflows/<name>.dwf.ts`
  * ——与 legacy Workflow 工具的用户根同一处，对所有项目可见。
  */
-export const SAVED_WORKFLOW_GLOBAL_DIR = ".zcode/workflows";
+// [leo] 全局档在 ~/.leophoneagent/workflows，不读写官方 ZCode 客户端的 ~/.zcode/workflows。
+export const SAVED_WORKFLOW_GLOBAL_DIR = ".leophoneagent/workflows";
 
 /**
  * 名字的合法形状。与旧 `Workflow` 工具的解析器同一条模式（script-workflow-tool-port.ts）——

@@ -59,7 +59,8 @@ export interface PluginRemovePatchResult {
 }
 
 const DEFAULT_CONFIG_FILE = "config.json";
-const DEFAULT_BASE_DIR = "~/.zcode/cli";
+// [leo] 用户配置 ~/.leophoneagent/cli/config.json，不读官方 ZCode 的 ~/.zcode/cli/config.json。
+const DEFAULT_BASE_DIR = "~/.leophoneagent/cli";
 
 /**
  * Resolve path with ~ expansion

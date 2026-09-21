@@ -1,24 +1,6 @@
-import {
-  createContext,
-  useCallback,
-  useEffect,
-  useContext,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
-import {
-  CodingPlanUpgradeDialog,
-  type CodingPlanUpgradeDialogTarget,
-} from "@/settings/CodingPlanUpgradeDialog.js";
-
-import {
-  useCodingPlanEntryPlanList,
-  type CodingPlanEntryInventory,
-} from "@/hooks/useCodingPlanEntryPlanList.js";
-import { usePlatform } from "@/hooks/usePlatform.js";
-import { reportCodingPlanUpgradeClick } from "@/lib/codingPlanFunnelTelemetry.js";
+import { createContext, useContext, type ReactNode } from "react";
+import type { CodingPlanUpgradeDialogTarget } from "@/settings/CodingPlanUpgradeDialog.js";
+import type { CodingPlanEntryInventory } from "@/hooks/useCodingPlanEntryPlanList.js";
 
 interface CodingPlanUpgradeDialogContextValue {
   inventory: CodingPlanEntryInventory;
@@ -32,76 +14,18 @@ const CodingPlanUpgradeDialogContext = createContext<CodingPlanUpgradeDialogCont
   null,
 );
 
-export function CodingPlanUpgradeDialogProvider({ children }: { children: ReactNode }) {
-  const platform = usePlatform();
-  const inventory = useCodingPlanEntryPlanList();
-  const inventoryRef = useRef(inventory);
-  inventoryRef.current = inventory;
-  const [target, setTarget] = useState<CodingPlanUpgradeDialogTarget | undefined>(undefined);
-  const [openVersion, setOpenVersion] = useState(0);
-  const opening = useRef<((opened: boolean) => void) | null>(null);
-  const handleOpenResult = useCallback((opened: boolean) => opening.current?.(opened), []);
-  useEffect(() => () => opening.current?.(false), []);
-  const openCodingPlanUpgrade = useCallback(
-    (
-      nextTarget: CodingPlanUpgradeDialogTarget,
-      observation?: { signal: AbortSignal; onResult: (opened: boolean) => void },
-    ) => {
-      // 所有入口统一守卫；查询完成后不自动重放之前被拦截的点击。
-      const { status, entryPlanList } = inventoryRef.current;
-      if (observation?.signal.aborted) return false;
-      if (status !== "ready") {
-        if (observation && status === "error") inventoryRef.current.retry();
-        return false;
-      }
-      opening.current?.(false);
-      if (observation) {
-        const finish = (opened: boolean) => {
-          if (opening.current !== finish) return;
-          opening.current = null;
-          observation.signal.removeEventListener("abort", abort);
-          if (!opened) setTarget(undefined);
-          observation.onResult(opened);
-        };
-        const abort = () => finish(false);
-        opening.current = finish;
-        observation.signal.addEventListener("abort", abort, { once: true });
-      }
-      // 原入口只携带当前卡片的套餐；在点击时冻结全连接列表，App 与 WebView 共用同一快照。
-      nextTarget = nextTarget.funnelContext
-        ? {
-            ...nextTarget,
-            funnelContext: { ...nextTarget.funnelContext, entryPlanList },
-          }
-        : nextTarget;
-      if (nextTarget.funnelContext) {
-        void reportCodingPlanUpgradeClick(platform, nextTarget.funnelContext);
-      }
-      setTarget(nextTarget);
-      // 每次显式打开隔离旧 webview 事件，旧 dom-ready 不能确认新的观察请求。
-      setOpenVersion((version) => version + 1);
-      return true;
-    },
-    [platform],
-  );
-  const value = useMemo(
-    () => ({ openCodingPlanUpgrade, inventory }),
-    [openCodingPlanUpgrade, inventory],
-  );
+// [leo] 上游在这里挂载 Coding Plan 购买/升级面板（内嵌官方订阅网页、查询官方套餐与团队定价、上报购买漏斗）。
+// LeoPhoneAgent 没有官方订阅：Provider 保留导出与上下文（Root.tsx 和各调用方不用改），
+// 但不再查询套餐、不渲染任何弹框，openCodingPlanUpgrade 永远返回 false（等同“未打开”）。
+const LEO_DISABLED_CODING_PLAN_UPGRADE: CodingPlanUpgradeDialogContextValue = {
+  inventory: { entryPlanList: "", status: "ready", retry: () => {} },
+  openCodingPlanUpgrade: () => false,
+};
 
+export function CodingPlanUpgradeDialogProvider({ children }: { children: ReactNode }) {
   return (
-    <CodingPlanUpgradeDialogContext.Provider value={value}>
+    <CodingPlanUpgradeDialogContext.Provider value={LEO_DISABLED_CODING_PLAN_UPGRADE}>
       {children}
-      <CodingPlanUpgradeDialog
-        key={openVersion}
-        target={target}
-        onClose={() => {
-          handleOpenResult(false);
-          setTarget(undefined);
-        }}
-        onOpenResult={opening.current ?? undefined}
-        onReopen={setTarget}
-      />
     </CodingPlanUpgradeDialogContext.Provider>
   );
 }

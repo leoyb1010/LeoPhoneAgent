@@ -8,6 +8,8 @@ const GIT_MARKER = ".git";
 const HOME_PREFIX = "~/";
 const PRIORITY_STEP = 10;
 const ZCODE_DIR = ".zcode";
+// [leo] 用户级（家目录）根用 ~/.leophoneagent，不扫官方 ZCode 客户端的 ~/.zcode/commands；项目级仍是 <项目>/.zcode。
+const USER_ZCODE_DIR = ".leophoneagent";
 const AGENTS_DIR = ".agents";
 
 export interface CustomCommandRootResolutionOptions {
@@ -99,7 +101,12 @@ function commandRootsForBase(
   // 合并而不是 fallback：兼容 `.agents` 命令和原生 `.zcode` 命令需要同时可见。
   // 同一级别 `.zcode` 先扫描，命令同名时仍按“先到先赢”处理。
   return [
-    root(join(baseDirectory, ZCODE_DIR, COMMANDS_DIR), scope, "zcode", nextPriority()),
+    root(
+      join(baseDirectory, scope === "user" ? USER_ZCODE_DIR : ZCODE_DIR, COMMANDS_DIR),
+      scope,
+      "zcode",
+      nextPriority(),
+    ),
     root(join(baseDirectory, AGENTS_DIR, COMMANDS_DIR), scope, "agents", nextPriority()),
   ];
 }

@@ -132,12 +132,14 @@ export async function resolveWorkspaceHookTrustStorePath(
 ): Promise<string> {
   const home = resolve(options.homeDir ?? homedir());
   const userConfigPath = resolve(
-    options.userConfigPath ?? join(home, ".zcode", "cli", "config.json"),
+    options.userConfigPath ?? join(home, ".leophoneagent", "cli", "config.json"), // [leo]
   );
   const config = await readUserConfig(userConfigPath);
   const storage = isRecord(config.storage) ? config.storage : {};
   const configured = typeof storage.dir === "string" ? storage.dir.trim() : "";
-  const storageRoot = configured ? resolveTrustedUserPath(configured, home) : join(home, ".zcode");
+  const storageRoot = configured
+    ? resolveTrustedUserPath(configured, home)
+    : join(home, ".leophoneagent"); // [leo]
   return join(storageRoot, SECURITY_DIRECTORY, TRUST_STORE_FILE);
 }
 

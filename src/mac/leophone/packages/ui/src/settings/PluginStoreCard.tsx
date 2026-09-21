@@ -1,12 +1,4 @@
-import {
-  Crown,
-  Download,
-  Loader2,
-  MoreHorizontal,
-  Power,
-  TriangleAlert,
-  Trash2,
-} from "lucide-react";
+import { Download, Loader2, MoreHorizontal, Power, TriangleAlert, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button.js";
 import {
   DropdownMenu,
@@ -15,7 +7,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu.js";
-import { ControlHintTooltip } from "@/ControlHintTooltip.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import { PluginStoreAvatar } from "@/settings/PluginStoreAvatar.js";
 import {
@@ -59,28 +50,11 @@ function isItemBusy(item: StorePluginItem, actions: PluginStoreActions): boolean
  * hover 提示走 ControlHintTooltip（Root Provider 的 delayDuration=0，即时弹出），
  * 不用原生 title——后者有约 1s 系统延迟。
  */
-export function PluginStorePaidPlanBadge({
-  item,
-}: {
+export function PluginStorePaidPlanBadge(_props: {
   item: Pick<StorePluginItem, "id" | "listing">;
 }) {
-  const { intl } = useZCodeIntl();
-  if (!item.listing?.requiresPaidPlan) return null;
-  const label = intl.formatMessage({ id: "settings.plugins.store.requiresPaidPlan" });
-  const badgeLabel = intl.formatMessage({ id: "settings.plugins.store.paidPlanBadge" });
-  return (
-    <ControlHintTooltip title={label}>
-      <span
-        data-testid="plugin-store-paid-plan-badge"
-        data-plugin-id={item.id}
-        className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[var(--color-plugin-paid-plan-badge)] px-1.5 py-0.5 text-ui-sm leading-none whitespace-nowrap text-[var(--color-plugin-paid-plan-badge-foreground)]"
-        aria-label={label}
-      >
-        <Crown className="size-3" aria-hidden="true" />
-        {badgeLabel}
-      </span>
-    </ControlHintTooltip>
-  );
+  // [leo] 这个「编程套餐」徽标指向官方 Coding Plan 订阅；LeoPhoneAgent 没有官方订阅，不再渲染。
+  return null;
 }
 
 /** 已安装条目的「…」菜单：启用/禁用、更新（有更新时）、卸载。卡片与详情页共用。 */

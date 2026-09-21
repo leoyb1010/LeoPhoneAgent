@@ -85,9 +85,7 @@ interface CreateQuickPickCommandsOptions {
 
 export function createQuickPickCommands({
   allowOpenWorkspace,
-  canOpenCommunity,
   isSidebarVisible,
-  isLoggedIn,
   supportsEmbeddedBrowser = true,
   supportsTerminal = true,
   supportsReview = true,
@@ -229,65 +227,8 @@ export function createQuickPickCommands({
     },
   ];
 
-  commands.push({
-    id: "feedback",
-    sectionId: "app",
-    titleId: "quickPick.command.feedback",
-    icon: "feedback",
-    keywords: [
-      "feedback",
-      "issue",
-      "support",
-      "tickets",
-      "问题上报",
-      "问题反馈",
-      "反馈",
-      "我的反馈",
-      "工单",
-    ],
-    run: handlers.openFeedback,
-  });
-
-  if (canOpenCommunity) {
-    commands.push({
-      id: "community",
-      sectionId: "app",
-      titleId: "quickPick.command.community",
-      icon: "community",
-      keywords: ["community", "users", "chat", "用户社群", "社群"],
-      run: handlers.openCommunity,
-    });
-  }
-
-  commands.push({
-    id: "product-docs",
-    sectionId: "app",
-    titleId: "quickPick.command.productDocs",
-    icon: "book",
-    keywords: ["docs", "documentation", "product docs", "文档", "产品文档"],
-    run: handlers.openProductDocs,
-  });
-
-  if (isLoggedIn && handlers.logout) {
-    commands.push({
-      id: "logout",
-      sectionId: "app",
-      titleId: "quickPick.command.logout",
-      icon: "logout",
-      keywords: ["disconnect", "logout", "sign out", "断开连接", "登出"],
-      run: handlers.logout,
-    });
-  } else if (!isLoggedIn && handlers.login) {
-    commands.push({
-      id: "login",
-      sectionId: "app",
-      titleId: "quickPick.command.login",
-      icon: "login",
-      // 命令面板的账号动作对用户表达为“连接/断开连接”，搜索词也要同步。
-      keywords: ["connect", "login", "sign in", "连接", "登录"],
-      run: handlers.login,
-    });
-  }
+  // [leo] 上游在这里追加「反馈 / 用户社群 / 产品文档 / 登录·登出」命令，
+  // 它们都连官方服务或官方账号，LeoPhoneAgent 不提供，命令一并去掉。
 
   return commands.filter(
     (command) =>

@@ -1,6 +1,5 @@
-import { CodingPlanEntryButton } from "@/settings/CodingPlanEntryButton.js";
 import { useEffect, useRef } from "react";
-import { InfoIcon, RocketIcon, XIcon } from "lucide-react";
+import { InfoIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
 import type {
@@ -46,8 +45,6 @@ function formatPercent(value: number | null): string {
 
 export function ConversationQuotaBanner({
   state,
-  upgradeActionLabelId = "chat.quota.action.upgrade",
-  onUpgrade,
   onDismiss,
   onShown,
 }: {
@@ -110,17 +107,7 @@ export function ConversationQuotaBanner({
           <InfoIcon className="size-4 shrink-0" />
           <div className="min-w-0 break-words">{message}</div>
         </div>
-        {onUpgrade ? (
-          <CodingPlanEntryButton
-            type="button"
-            size="sm"
-            className="h-auto shrink-0 gap-1.5 rounded-full"
-            onClick={onUpgrade}
-          >
-            <RocketIcon className="size-3.5" />
-            {intl.formatMessage({ id: upgradeActionLabelId })}
-          </CodingPlanEntryButton>
-        ) : null}
+        {/* [leo] 上游在这里给 Coding Plan「升级 / 续期」按钮；LeoPhoneAgent 没有官方订阅，只保留提示与关闭。 */}
         {state.dismissible ? (
           <Button
             type="button"

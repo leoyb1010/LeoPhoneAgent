@@ -25,7 +25,6 @@ export function GroupedTaskContextMenuContent({
   onMarkTaskAsUnread,
   onOpenTaskPathInFileManager,
   onCopyText,
-  onOpenTaskFeedback,
   disabledReason,
 }: {
   task: ZCodeTaskMeta;
@@ -173,10 +172,7 @@ export function GroupedTaskContextMenuContent({
       >
         {intl.formatMessage({ id: "appHeader.copySessionId" })}
       </ContextMenuItem>
-      <ContextMenuSeparator />
-      <ContextMenuItem onSelect={onOpenTaskFeedback}>
-        {intl.formatMessage({ id: "taskList.feedback" })}
-      </ContextMenuItem>
+      {/* [leo] 上游在此放「反馈问题」入口（上传到官方反馈服务），LeoPhoneAgent 不提供。 */}
     </ContextMenuContent>
   );
 }

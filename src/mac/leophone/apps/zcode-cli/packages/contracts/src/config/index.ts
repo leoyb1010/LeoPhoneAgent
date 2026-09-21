@@ -298,9 +298,10 @@ export const DefaultRuntimeConfig: RuntimeConfig = {
     autoApproveHighRisk: false,
     allowMediumRiskInAuto: false,
   },
+  // [leo] 用户级数据根是 ~/.leophoneagent，不碰官方 ZCode 客户端的 ~/.zcode（ZCODE_STORAGE_DIR 仍可覆盖）。
   storage: {
-    dir: "~/.zcode",
-    sessionDbPath: "~/.zcode/cli/db/db.sqlite",
+    dir: "~/.leophoneagent",
+    sessionDbPath: "~/.leophoneagent/cli/db/db.sqlite",
   },
   network: {
     timeout: 180000,

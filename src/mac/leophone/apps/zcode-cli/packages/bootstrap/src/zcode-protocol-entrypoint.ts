@@ -35,12 +35,7 @@ import {
   createOfficialMcpAuthHeadersPort,
   type OfficialMcpAuthRequestContext,
 } from "./zcode-protocol/official-mcp-auth-port.js";
-import {
-  createOfficialMcpTrustedOriginRegistry,
-  OFFICIAL_MCP_DEV_TRUSTED_ORIGINS_ENV,
-  ZCODE_WORKSPACE_IDENTITY_ENV,
-  resolveRuntimeZCodeEndpointOrigin,
-} from "@zcode/shared";
+import { ZCODE_WORKSPACE_IDENTITY_ENV, resolveRuntimeZCodeEndpointOrigin } from "@zcode/shared";
 import { ZCodeProtocolAgentServer } from "./zcode-protocol/server.js";
 import { ZCodeProtocolNdjsonConnection } from "./zcode-protocol/transport.js";
 import { cleanupProtocolRuntime } from "./zcode-protocol/runtime-cleanup.js";
@@ -219,10 +214,11 @@ export async function runZCodeProtocolAgent(
       ...(workspaceIdentity ? { workspaceIdentity } : {}),
       // 信任判定只看一条：目标 origin 等于当前 ZCode API origin（https）。pluginId 不参与。
       // origin 运行时解析（跟随 production/test 与自建环境），不硬编码域名。
-      trustedOrigins: createOfficialMcpTrustedOriginRegistry({
-        devTrustedOriginsRaw: (options.env ?? process.env)[OFFICIAL_MCP_DEV_TRUSTED_ORIGINS_ENV],
-        resolveZCodeApiOrigin,
-      }),
+      // [leo] 官方（ZCode 账号鉴权）MCP 一律不受信：adapter 按 fail closed 处理——不向 host
+      // 请求账号身份头，HTTP 官方 MCP 发出的请求数为 0，stdio 官方 MCP 拿不到凭据。
+      trustedOrigins: {
+        isTrusted: async () => ({ detail: "zcode_origin_unresolved" as const, trusted: false }),
+      },
     };
     mcpConnectionPool =
       configResult.config.features.mcp === false

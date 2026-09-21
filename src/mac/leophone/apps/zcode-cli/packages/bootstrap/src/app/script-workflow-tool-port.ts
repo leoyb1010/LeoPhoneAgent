@@ -315,7 +315,7 @@ async function resolveNamedWorkflowPath(
   const fileName = workflowFileName(name);
   const candidates = [
     join(deps.workingDirectory, ".zcode", "workflows", fileName),
-    join(homedir(), ".zcode", "workflows", fileName),
+    join(homedir(), ".leophoneagent", "workflows", fileName), // [leo] 原 ~/.zcode/workflows
   ];
   const builtIn = BUILTIN_WORKFLOW_ALLOWLIST.get(name);
   if (builtIn) candidates.push(builtIn);

@@ -8,6 +8,8 @@ const HOME_PREFIX = "~/";
 const PRIORITY_STEP = 10;
 const SKILLS_DIR = "skills";
 const ZCODE_DIR = ".zcode";
+// [leo] 用户级（家目录）根用 ~/.leophoneagent，不扫官方 ZCode 客户端的 ~/.zcode/skills；项目级仍是 <项目>/.zcode。
+const USER_ZCODE_DIR = ".leophoneagent";
 const AGENTS_DIR = ".agents";
 
 export interface SkillRootResolutionOptions {
@@ -99,7 +101,12 @@ function skillRootsForBase(
   // 合并而不是 fallback：用户可能同时安装原生 `.zcode` skill 和兼容 `.agents` skill。
   // 同一级别仍保持 `.zcode` 优先，后续同名按 root 顺序解析。
   return [
-    root(join(baseDirectory, ZCODE_DIR, SKILLS_DIR), scope, "zcode", nextPriority()),
+    root(
+      join(baseDirectory, scope === "user" ? USER_ZCODE_DIR : ZCODE_DIR, SKILLS_DIR),
+      scope,
+      "zcode",
+      nextPriority(),
+    ),
     root(join(baseDirectory, AGENTS_DIR, SKILLS_DIR), scope, "agents", nextPriority()),
   ];
 }

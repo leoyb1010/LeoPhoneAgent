@@ -73,6 +73,11 @@ export class CliOAuthError extends Error {
 }
 
 export function createCliOAuthClient(options: CliOAuthClientOptions): CliOAuthClient {
+  // [leo] 不再支持 Z.ai / BigModel 平台账号登录（zcode.z.ai/api/v1/oauth/cli/*）。
+  // 在发出任何请求、打开任何浏览器页面之前直接失败；模型请用自己的 API Key 配置。
+  throw new CliOAuthError(
+    "Z.ai / BigModel account login is disabled in LeoPhoneAgent. Configure a provider API key instead.",
+  );
   const baseUrl = normalizeBaseUrl(options.baseUrl ?? DEFAULT_ZCODE_OAUTH_BASE_URL);
   const encoder = new TextEncoder();
 

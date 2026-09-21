@@ -32,7 +32,6 @@ export function TaskActionMenuContent({
   onMarkTaskAsUnread,
   onOpenInSplitPane,
   openInSplitPaneDisabled = false,
-  onOpenTaskFeedback,
   onOpenTaskPathInFileManager,
   onCopyWorkspacePath,
   onCopyTaskPath,
@@ -196,16 +195,7 @@ export function TaskActionMenuContent({
           </Item>
         </>
       ) : null}
-      {onOpenTaskFeedback ? (
-        <>
-          <Separator />
-          <Item disabled={taskTargetActionsDisabled} onSelect={onOpenTaskFeedback}>
-            {/* 任务菜单之前只有复制日志/路径，用户遇到任务问题时还要手动回到反馈中心。
-                “反馈问题”不是任务管理动作，单独放在菜单底部更符合兜底求助入口的层级。 */}
-            {intl.formatMessage({ id: "taskList.feedback" })}
-          </Item>
-        </>
-      ) : null}
+      {/* [leo] 上游在此放「反馈问题」入口（上传到官方反馈服务），LeoPhoneAgent 不提供。 */}
     </>
   );
 }

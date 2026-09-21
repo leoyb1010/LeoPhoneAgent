@@ -95,6 +95,8 @@ interface RemoteEnvelope<T> {
   data?: T | null;
 }
 
+const LEO_LOCAL_ONLY: boolean = true;
+
 interface ZCodeClientConfigEnvelope {
   code?: number;
   msg?: string;
@@ -597,6 +599,9 @@ export class BigModelCodingPlanSubscriptionProvider {
   }
 
   private async getClientConfigs(): Promise<ZCodeClientConfigEnvelope> {
+    // [leo] client/configs 是官方平台下发的开关(闲时任务、强制升级、套餐目录、灰度)。
+    // LeoPhoneAgent 不连官方服务器:一律按空配置处理,各消费方走自己的本地默认值。
+    if (LEO_LOCAL_ONLY) return {};
     if (this.clientConfigSnapshot && this.clientConfigSnapshotExpiresAt > Date.now()) {
       return this.clientConfigSnapshot;
     }

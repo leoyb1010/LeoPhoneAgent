@@ -35,6 +35,14 @@ git -c core.hooksPath=/dev/null subtree pull --prefix=src/mac/leophone \
 | `packages/services/src/{subagents/subagentStorage,subagents/subagentsService,plugin-sync/pluginSyncService,runtime-tools/providerRuntimeResolver}.ts` | 用户级 `~/.zcode` → `~/.leophoneagent` |
 | `packages/services/src/{paths,node}.ts` | 数据根 `~/.leophoneagent` |
 | `packages/ui/src/WelcomeScreen.tsx` | 去掉官方登录入口,加「用订阅账号登录」 |
+| `packages/services/src/{coding-plan-subscription/bigmodelCodingPlanSubscriptionProvider,client-config/clientConfigService,client-scenes/clientScenesService}.ts` | 官方 client/configs、client/scenes 本地给空配置,不发请求(闲时任务关、强制升级无、灰度走本地默认) |
+| `packages/shared/src/dynamic-workflow-feature.ts` | 动态工作流本地默认 `onDemand` |
+| `packages/services/src/**` 其余用户级路径(settings、settings-sync、skills、commands、hooks、mcp-sync、skill-sync、device、telemetry、storage roots、agent 日志/轨迹/插件管理目录) | `~/.zcode` → `~/.leophoneagent`;工作区级 `<项目>/.zcode/*` 不动 |
+| `packages/shared/src/zcode-agent-runtime.ts` | `nativeConfigDir` → `.leophoneagent/cli` |
+| `packages/desktop/src/main/mcpUserDirectory/*` | MCP 用户目录 → `~/.leophoneagent/cli` |
+| `packages/desktop/src/main/{desktopApplicationMenu,desktopCommandHandlers}.ts` | 去掉「反馈」菜单;「更新日志」打开 leocodebox-updates 发布页 |
+| `apps/zcode-cli/**`(约 35 个文件) | 官方 OAuth / 换 Key / 官方网关改写 / 远程供应商目录 / 官方市场 / 官方 MCP 信任 / 遥测全部切断;用户级数据根 `~/.leophoneagent`;`packages/cli/src/main.ts` 第一行 import 网络兜底 |
+| `packages/ui/src/**`(约 34 个文件) | 账号头像与套餐、升级、反馈、分享、官方文档/社区、智谱模板、CDN 图标与官方插件入口移除;设置 → 模型供应商加订阅登录按钮;Root 在欢迎页后按请求打开模型设置 |
 
 新增文件(零冲突):`packages/ui/src/leo/`、`packages/desktop/src/host/leo/`、
 `packages/desktop/leo/`、`packages/desktop/src/main/{leoUpdateFeed,leoSessionGuard,leoEarlyEnv}.ts`、
@@ -43,5 +51,8 @@ git -c core.hooksPath=/dev/null subtree pull --prefix=src/mac/leophone \
 **独立性红线(同步上游后逐条复查)**:不连任何 `*.z.ai / bigmodel.cn / zhipuai.cn / zcode.ai`;
 不读 `~/.zcode`;不接官方账号;更新只走 `leocodebox-updates`。上游新增的联网点,
 网络兜底会拦下并在日志里留下「属于官方服务,LeoPhoneAgent 不连接」,按日志补源头。
+
+已删除的上游文件(同步时若上游改了它们,按删除处理):`packages/ui/src/login/LoginApiKeyForm.tsx`、
+`packages/ui/src/login/LoginApiKeyForm.helpers.ts`、`packages/ui/src/onboarding/assets/feishu.png`。
 
 同步后必须跑:typecheck、lint、architecture:check、`leo:bundle:mac` 冒烟。

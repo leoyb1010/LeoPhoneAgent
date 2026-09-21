@@ -234,7 +234,7 @@ async function findDefaultUserInstructionFile(
     return undefined;
   }
 
-  const filePath = join(resolveUserHomeDir(env), ".zcode", "AGENTS.md");
+  const filePath = join(resolveUserHomeDir(env), ".leophoneagent", "AGENTS.md"); // [leo]
   if (await isFile(filePath)) {
     return { filePath, fileName: "AGENTS.md" };
   }

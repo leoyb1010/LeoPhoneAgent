@@ -44,7 +44,7 @@ const ACCEPTED_INPUT_PROJECTION_GRACE_MS = 2_000;
 const ACCEPTED_INPUT_COMMAND_TYPES = new Set(["sendText"]);
 
 /** 退避耗尽时展示给用户的 lastError（无底层 error 对象可引用的换代路径）。 */
-const RUNTIME_RECYCLED_ERROR = "ZCode agent runtime 已被回收，重连未成功";
+const RUNTIME_RECYCLED_ERROR = "LeoPhoneAgent agent runtime 已被回收，重连未成功";
 
 function monotonicNow(): number {
   return typeof performance !== "undefined" ? performance.now() : Date.now();

@@ -1,3 +1,5 @@
+// [leo] 必须是第一个 import:agent 进程也不连任何官方服务(DNS 层兜底,见 packages/shared/src/leoNetworkGuard.ts)。
+import "@zcode/shared/leo-network-guard";
 import { interceptTuiStderr, isTuiInvocation } from "./tui-stderr.js";
 import { interceptKnownRuntimeWarnings } from "./runtime-warnings.js";
 import { installStderrConsoleBoundary } from "./protocol-console.js";

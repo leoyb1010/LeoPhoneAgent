@@ -3,11 +3,7 @@ import type {
   AiSdkNetworkConfig,
   EnvRecord,
 } from "@zcode/adapters/model";
-import {
-  resolveRuntimeZCodeEnv,
-  resolveRuntimeZCodeEndpointOrigin,
-  ZCODE_APP_VERSION_ENV,
-} from "@zcode/shared";
+import { resolveRuntimeZCodeEnv, ZCODE_APP_VERSION_ENV } from "@zcode/shared";
 import {
   createRuntimePlatformHeaders,
   normalizePrintableHeaderValue,
@@ -52,8 +48,9 @@ function buildCliZCodeSourceHeaders(
   const appVersion = resolveAppVersionForHeaders(env, options);
   const locale = normalizePrintableHeaderValue(Intl.DateTimeFormat().resolvedOptions().locale);
   const timezone = normalizePrintableHeaderValue(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  // [leo] 不再带 HTTP-Referer：它取自 ZCODE_BASE_URL / ZCODE_ENDPOINT_ORIGIN（缺省官方 origin），
+  // 会把每次模型请求都归因到官方站点。
   return {
-    "HTTP-Referer": resolveRuntimeZCodeEndpointOrigin(env),
     "User-Agent": `ZCode/${appVersion ?? "unknown"}`,
     ...(appVersion ? { "X-ZCode-App-Version": appVersion } : {}),
     "X-Title": `Z Code@${sourceTitle}`,

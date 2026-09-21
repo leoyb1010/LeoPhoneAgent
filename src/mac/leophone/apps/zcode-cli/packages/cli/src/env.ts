@@ -135,5 +135,6 @@ function applyBetaStorageDefault(env: CliEnv, argv: readonly string[]): void {
   const explicitBeta = env.ZCODE_BETA === "1" || env.ZCODE_ENV === "beta";
   const invokedAsBeta = argv.some((arg) => /(^|[/\\])zcode-beta(?:$|\.)/u.test(arg));
   if (!explicitBeta && !invokedAsBeta) return;
-  env.ZCODE_STORAGE_DIR = join(homedir(), ".zcode-beta");
+  // [leo] beta 数据根也不能落到官方 ZCode beta 客户端的 ~/.zcode-beta。
+  env.ZCODE_STORAGE_DIR = join(homedir(), ".leophoneagent-beta");
 }

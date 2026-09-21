@@ -1637,10 +1637,11 @@ export function SettingsPage({
                                 })}
                               </span>
                             ) : null}
+                            {/* [leo] 使用统计只保留本机「应用用量」；Coding Plan 额度 tab（官方账号数据）不再展示。 */}
                             {activeSection === "usage" ? (
                               <SettingsUsageProviderTabs
-                                activeTab={usageActiveTab}
-                                codingPlanSources={usageCodingPlanSources}
+                                activeTab="app"
+                                codingPlanSources={[]}
                                 onTabChange={handleUsageTabSelect}
                               />
                             ) : null}
@@ -1884,9 +1885,9 @@ export function SettingsPage({
                           />
                         ) : activeSection === "usage" ? (
                           <UsageStatsSection
-                            activeTab={usageActiveTab}
+                            activeTab="app"
                             providerSourcesLoading={usageProviderSettingsLoading}
-                            selectedCodingPlanSource={selectedUsageCodingPlanSource}
+                            selectedCodingPlanSource={null}
                             workspaceIdentity={activeWorkspaceIdentity}
                             workspacePath={activeWorkspacePath ?? undefined}
                           />

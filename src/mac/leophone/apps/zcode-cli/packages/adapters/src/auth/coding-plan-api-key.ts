@@ -68,6 +68,9 @@ interface RemoteZaiBizToken {
 export function createCodingPlanApiKeyResolver(
   options: CodingPlanApiKeyResolverOptions,
 ): CodingPlanApiKeyResolver {
+  // [leo] 不再用平台账号 token 向 bigmodel.cn / api.z.ai（api/auth/*、biz 接口）换取
+  // Coding Plan API Key；在任何网络请求之前失败。
+  throw new CodingPlanApiKeyError("Coding Plan API key fetching is disabled in LeoPhoneAgent.");
   return {
     async resolve(
       input: ResolveCodingPlanApiKeyInput,

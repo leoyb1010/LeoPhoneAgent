@@ -225,6 +225,15 @@ export function buildStoreItems(input: {
 
   for (const summary of input.availablePlugins) {
     const info = infoById.get(summary.id);
+    // [leo] 官方市场里既没随包内置、也没安装过的条目只能从官方 CDN 下载，商店不展示；
+    // 已卸载的内置插件仍由下面的 restorableBuiltins 以「可恢复」出现，本地插件不受影响。
+    if (
+      summary.marketplace === ZCODE_OFFICIAL_PLUGIN_MARKETPLACE_ID &&
+      !summary.installed &&
+      info === undefined
+    ) {
+      continue;
+    }
     items.set(summary.id, {
       id: summary.id,
       name: summary.name,

@@ -45,6 +45,8 @@ interface BigmodelTokenEnvelope {
 export function createBigmodelOAuthClient(
   options: BigmodelOAuthClientOptions,
 ): BigmodelOAuthClient {
+  // [leo] 不再支持 BigModel 平台账号 OAuth（bigmodel.cn/login、api/auth/tokenByAuthCode）。
+  throw new BigmodelOAuthError("BigModel account login is disabled in LeoPhoneAgent.");
   const appId = options.appId ?? BIGMODEL_APP_ID;
   const appSecret = options.appSecret?.trim() ?? "";
   const authorizeUrl =

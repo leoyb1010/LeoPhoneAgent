@@ -7,6 +7,8 @@ import {
 } from "@zcode/shared";
 import type { IClientConfigService } from "./clientConfig.js";
 
+const LEO_LOCAL_ONLY: boolean = true;
+
 const CACHE_TTL_MS = 60 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 15_000;
 
@@ -30,6 +32,8 @@ export function createClientConfigService(dependencies: {
   const entries = new Map<string, CacheEntry>();
 
   async function fetchSnapshot(url: URL): Promise<ClientConfigSnapshot> {
+    // [leo] 公开客户端配置同样来自官方服务器:本地给默认快照,不发请求。
+    if (LEO_LOCAL_ONLY) return parseClientConfigSnapshot({ code: 0 });
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timedOut = new Promise<never>((_, reject) => {

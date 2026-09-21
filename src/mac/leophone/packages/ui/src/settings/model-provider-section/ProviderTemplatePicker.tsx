@@ -34,14 +34,10 @@ export function ProviderTemplatePicker({
   const { intl, locale } = useZCodeIntl();
   const { dismissFeedback, showFeedback } = useProviderDetailFeedback();
   const customLabel = intl.formatMessage({ id: "settings.modelProvider.newProviderName" });
+  // [leo] 智谱 / Z.ai 官方模板（及其「智谱」分组）整体不展示；其余模板（OpenAI、Anthropic、
+  // OpenRouter、DeepSeek、Kimi、MiniMax、Qwen、xAI 等）与「创建自定义供应商」保持不变。
   const zhipuIds = ["bigmodel-api", "zai-api", "bigmodel-standard-api", "zai-standard-api"];
   const groups = [
-    {
-      id: "zhipu",
-      templates: zhipuIds.flatMap((id) =>
-        templates.filter((template) => template.templateId === id),
-      ),
-    },
     {
       id: "other",
       templates: templates.filter((template) => !zhipuIds.includes(template.templateId)),

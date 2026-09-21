@@ -5,18 +5,12 @@ import {
   type AccountProviderConfigSnapshot,
   type AccountProviderStates,
 } from "@zcode/provider";
-import {
-  isBuiltinModelProviderId,
-  resolveRuntimeZCodeEndpointOrigin,
-  ZCODE_VERSION,
-} from "@zcode/shared";
+import { isBuiltinModelProviderId, resolveRuntimeZCodeEndpointOrigin } from "@zcode/shared";
 import { dirname, join } from "node:path";
 import {
   NodeModelSelectionConfigRepository,
   NodeProviderRegistryRuntime,
   resolveNodeProviderRuntimePaths,
-  downloadZCodeBuiltinRelease,
-  resolveZCodeBuiltinClientPlatform,
   ZCODE_BUILTIN_PROVIDER_BUNDLED_CONFIG_FILE_ENV,
   type ZCodeBuiltinRefreshEvent,
 } from "@zcode/provider-node";
@@ -71,14 +65,9 @@ export async function startProcessProviderRegistryRuntime(
               "zcode-builtin-refresh.json",
             ),
             resolveEndpointKey: () => resolveRuntimeZCodeEndpointOrigin(env),
-            fetchRelease: (endpointOrigin, signal) =>
-              downloadZCodeBuiltinRelease({
-                endpointOrigin,
-                signal,
-                appVersion: ZCODE_VERSION,
-                platform: resolveZCodeBuiltinClientPlatform(),
-                request: options.standalone?.request ?? globalThis.fetch,
-              }),
+            // [leo] 不再从 {ZCODE_BASE_URL}/api/v1/client/configs 与 CDN 远程拉取内置供应商目录，
+            // 只用随包的 zcode-builtin.json（返回 null = 远端没有新版本）。
+            fetchRelease: async () => null,
             onRefreshResult: options.standalone?.onBuiltinRefreshResult,
           },
         }

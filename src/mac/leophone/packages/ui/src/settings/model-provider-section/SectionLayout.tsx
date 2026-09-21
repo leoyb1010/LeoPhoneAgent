@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
 import { TID_MODEL_PROVIDER_ADD_PROVIDER_BUTTON } from "@zcode/shared";
+import { Button } from "@/components/ui/button.js";
+import { usePlatform } from "@/hooks/usePlatform.js";
+import { LEO_OAUTH_PAGE_URL } from "@/leo/leoLocal.js";
 import type { ModelProviderNavGroup } from "@/settings/model-provider-section/constants.js";
 import { ModelProviderSectionNavigation } from "@/settings/model-provider-section/Navigation.js";
 import { ProviderDetailFeedbackBoundary } from "@/settings/model-provider-section/ProviderDetailFeedback.js";
@@ -45,6 +48,7 @@ export function ModelProviderSectionLayout({
   reorderableProviderIds,
   children,
 }: ModelProviderSectionLayoutProps) {
+  const platform = usePlatform();
   const refreshButtonLoading = shouldShowModelProviderRefreshLoading({
     presetLoading,
     customLoading,
@@ -62,6 +66,21 @@ export function ModelProviderSectionLayout({
           newLabel={addProviderLabel}
           newTestId={TID_MODEL_PROVIDER_ADD_PROVIDER_BUTTON}
         />
+      </div>
+
+      {/* [leo] 订阅账号（Claude / ChatGPT / Copilot）登录页由本机 Leo 服务提供，在系统浏览器里打开。 */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <Button
+          type="button"
+          variant="outline"
+          className="rounded-lg"
+          onClick={() => platform.openExternal(LEO_OAUTH_PAGE_URL)}
+        >
+          订阅账号登录(Claude / ChatGPT / Copilot)
+        </Button>
+        <span className="text-ui-sm text-foreground-subtle">
+          在浏览器里完成授权;登录后模型出现在「订阅账号」供应商下,凭据只存本机。
+        </span>
       </div>
 
       <div className="overflow-clip rounded-xl border border-border bg-card">

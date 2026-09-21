@@ -22,6 +22,7 @@ import { SSHDialog } from "@/SSHDialog.js";
 import { SettingsPage } from "@/SettingsPage.js";
 import { CodingPlanUpgradeDialogProvider } from "@/settings/CodingPlanUpgradeDialogProvider.js";
 import { WelcomeScreen, type LoginCompleteReason } from "@/WelcomeScreen.js";
+import { consumeModelSettingsAfterWelcome } from "@/leo/leoLocal.js";
 import { setDefaultFileDisplayBasePath } from "@/lib/fileDisplay.js";
 import { readRendererLaunchTimings, shouldReportLaunchToInput } from "@/lib/launchToInputReport.js";
 import { reportUiLaunchToInput } from "@/lib/uiPerfArmsTelemetry.js";
@@ -854,12 +855,17 @@ function RootInner({
   const handleWelcomeScreenComplete = useCallback(
     async (reason: LoginCompleteReason) => {
       await refreshAppSettings();
+      // [leo] 欢迎页选了「用 API Key 添加模型供应商」:进主界面后直接打开设置 → 模型供应商。
+      const openModelSettings = () => {
+        if (consumeModelSettingsAfterWelcome()) tabStoreApi.getState().openSettingsTab();
+      };
       if (
         welcomeScreenOpenReason !== "startup-provider-required" ||
         workspaceShellPath ||
         !allowOpenWorkspace
       ) {
         setWelcomeScreenOpenReason(null);
+        openModelSettings();
         return;
       }
 
@@ -872,12 +878,14 @@ function RootInner({
         });
       } finally {
         setWelcomeScreenOpenReason(null);
+        openModelSettings();
       }
     },
     [
       allowOpenWorkspace,
       handleEnsureConversationWorkspace,
       refreshAppSettings,
+      tabStoreApi,
       welcomeScreenOpenReason,
       workspaceShellPath,
     ],

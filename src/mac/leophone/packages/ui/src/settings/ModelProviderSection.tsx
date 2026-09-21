@@ -1038,6 +1038,10 @@ export function ModelProviderSection({
   // 这里改为始终先渲染布局壳子，再按分组展示 loading，避免用户误以为页面坏了。
   const presetLoading = loading || modelProvidersRefreshing;
   const customLoading = loading || modelProvidersRefreshing;
+  // [leo] 官方账号预置入口已清空：还没有任何自定义供应商时，右侧直接给「添加供应商」模板页，
+  // 而不是停在一张永远等不到选中项的 loading 卡片上。
+  const showTemplatePicker =
+    templatePickerOpen || (!loading && navigationGroups.every((group) => group.items.length === 0));
 
   if (loadError) {
     return (
@@ -1083,7 +1087,7 @@ export function ModelProviderSection({
           })}
         </p>
       ) : null}
-      {templatePickerOpen ? (
+      {showTemplatePicker ? (
         <ProviderTemplatePicker
           templates={providerTemplates}
           creating={creatingProvider}
@@ -1149,7 +1153,8 @@ export function ModelProviderSection({
             setPresetSubscriptionProviderId((current) =>
               current === BUILTIN_MODEL_PROVIDER_IDS.bigmodelIndividualCodingPlan ? null : current,
             );
-            platform.openExternal(BIGMODEL_REGISTRATION_URL);
+            // [leo] 注册地址已置空；handleOpenApiKeyUrl 对空地址直接跳过，不会打开任何官方页面。
+            handleOpenApiKeyUrl(BIGMODEL_REGISTRATION_URL);
           }}
           onCodingPlanPurchaseComplete={async () => {
             await refreshProviderPanelAfterAuthChange({ refreshReason: "purchase" });

@@ -317,6 +317,8 @@ export async function ensureMarketplaceManifestAvailable(input: {
     (item) => item.id === input.marketplace,
   );
   if (!record) return null;
+  // [leo] 官方市场只用随包内置分片，不再从 cdn-zcode.z.ai 拉取 marketplace.json。
+  if (record.id === ZCODE_OFFICIAL_PLUGIN_MARKETPLACE) return null;
   // 受信任的内部懒加载：用 known record 的规范 source 拉取，并以 record.id 作为 trustedId，
   // 使官方 id 只能由本来就是该官方 id 的记录刷新得到。
   return await addMarketplace({
@@ -509,6 +511,8 @@ export async function updateMarketplace(input: {
   const updated: KnownMarketplaceRecord[] = [];
   for (const record of selected) {
     throwIfPluginOperationAborted(input.signal);
+    // [leo] 官方市场（cdn-zcode.z.ai）不联网刷新；用户自己添加的市场照常刷新。
+    if (record.id === ZCODE_OFFICIAL_PLUGIN_MARKETPLACE) continue;
 
     // 受信任的刷新会重新拉取已知 marketplace 自带的 source；record.id 作为 trustedId，
     // 使官方 id 只能由原本就是该 id 的记录刷新得到。

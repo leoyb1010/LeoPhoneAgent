@@ -286,7 +286,8 @@ export function resolveSharedZCodeCredentialsPath(
 
   const env = options.env ?? process.env;
   const baseDir = options.baseDir ?? env[ZCODE_DATA_BASE_DIR_ENV_KEY] ?? homedir();
-  return join(resolveUserPath(baseDir), ".zcode", "v2", "credentials.json");
+  // [leo] 只认 ~/.leophoneagent/v2/credentials.json，绝不读官方 ZCode 客户端的 ~/.zcode/v2/credentials.json。
+  return join(resolveUserPath(baseDir), ".leophoneagent", "v2", "credentials.json");
 }
 
 async function readRawCredentialRecord(filePath: string): Promise<Record<string, string>> {

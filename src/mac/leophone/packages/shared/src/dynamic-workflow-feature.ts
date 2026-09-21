@@ -20,7 +20,8 @@ export type DynamicWorkflowMode = (typeof DYNAMIC_WORKFLOW_MODES)[number];
 export const ZCODE_DYNAMIC_WORKFLOW_MODE_ENV = "ZCODE_DYNAMIC_WORKFLOW_MODE";
 
 /** 服务端缺省、格式非法或请求失败时的取值：fail-closed，与闲时任务灰度一致。 */
-export const DEFAULT_DYNAMIC_WORKFLOW_MODE: DynamicWorkflowMode = "disabled";
+// [leo] 官方靠服务端灰度决定谁能用动态工作流;LeoPhoneAgent 没有官方服务端,本地默认开启(按需调用)。
+export const DEFAULT_DYNAMIC_WORKFLOW_MODE: DynamicWorkflowMode = "onDemand";
 
 export function normalizeDynamicWorkflowMode(value: unknown): DynamicWorkflowMode | undefined {
   if (typeof value !== "string") return undefined;

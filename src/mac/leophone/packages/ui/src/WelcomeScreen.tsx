@@ -21,9 +21,8 @@ import { Button } from "./components/ui/button.js";
 import { ZCodeAboutLogo } from "@/components/ui/ZCodeAboutLogo.js";
 import { useOAuth } from "./hooks/useOAuth.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
-import { LEO_OAUTH_PAGE_URL } from "./leo/leoLocal.js";
+import { LEO_OAUTH_PAGE_URL, requestModelSettingsAfterWelcome } from "./leo/leoLocal.js";
 import { useZCodeIntl } from "./i18n/IntlProvider.js";
-import { LoginApiKeyForm } from "./login/LoginApiKeyForm.js";
 import { renderOAuthProviderIcon } from "./lib/oauthProviderIcon.js";
 import { ThemeHeroVisual } from "./openWorkspacePageThemeHero.js";
 import { useZCodeStore } from "./store/StoreProvider.js";
@@ -359,36 +358,36 @@ function LoginPanel({ active, onComplete }: LoginPanelProps) {
         )}
 
         {status === "idle" && loginMode === "apiKey" ? (
-          <>
-            <LoginApiKeyForm
-              onCancel={() => setLoginMode("providers")}
-              onSaved={() => {
+          // [leo] 首次进入的两种接模型方式,都不涉及任何官方账号;凭据只存本机。
+          <div className="space-y-3">
+            <Button
+              variant="default"
+              size="lg"
+              className="h-10 w-full text-ui-base"
+              onClick={() => {
+                platform.openExternal(LEO_OAUTH_PAGE_URL);
                 resetApiKeyForm();
-                return onComplete("apiKey");
+                void onComplete("skip");
               }}
-              onSkipped={() => {
+            >
+              用订阅账号登录(Claude / ChatGPT / Copilot)
+            </Button>
+            <Button
+              variant="outline"
+              size="lg"
+              className="h-10 w-full text-ui-base"
+              onClick={() => {
+                requestModelSettingsAfterWelcome();
                 resetApiKeyForm();
-                return onComplete("skip");
+                void onComplete("apiKey");
               }}
-            />
-            {/* [leo] 订阅账号登录:在浏览器里完成授权,模型自动出现在「订阅账号」供应商下。 */}
-            <div className="mt-4 space-y-2 border-t border-border pt-4 text-center">
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => {
-                  platform.openExternal(LEO_OAUTH_PAGE_URL);
-                  resetApiKeyForm();
-                  void onComplete("skip");
-                }}
-              >
-                用订阅账号登录(Claude / ChatGPT / Copilot)
-              </Button>
-              <p className="text-ui-sm text-foreground-subtle">
-                在浏览器里完成授权后,模型会出现在「订阅账号」供应商下。凭据只保存在本机。
-              </p>
-            </div>
-          </>
+            >
+              用 API Key 添加模型供应商
+            </Button>
+            <p className="text-center text-ui-sm text-foreground-subtle">
+              订阅账号在浏览器里授权,模型自动出现在「订阅账号」供应商下;API Key 支持 Anthropic、OpenAI、OpenRouter、DeepSeek 等及自定义端点。凭据只保存在本机。
+            </p>
+          </div>
         ) : null}
 
         {status === "waiting" && (
@@ -500,7 +499,7 @@ function LoginPanelLogo() {
     // 登录 logo 壳是固定深色底，边框不能跟随浅色主题 token，否则浅色主题下边框过重。
     <div
       className="relative mb-1 flex size-16 items-center justify-center rounded-2xl bg-[linear-gradient(180deg,#000000_0%,#151718_100%)] text-[#ffffff] shadow-lg/20 before:pointer-events-none before:absolute before:inset-0 before:rounded-2xl before:border before:border-[rgba(255,255,255,0.1)]"
-      aria-label="ZCode"
+      aria-label="LeoPhoneAgent"
       role="img"
     >
       <ZCodeAboutLogo className="h-auto w-10" />

@@ -8,4 +8,5 @@ export const CACHE_TTL_MS = 15 * 60 * 1000;
 export const CACHE_MAX_BYTES = 50 * 1024 * 1024;
 export const MAX_REDIRECTS = 10;
 
-export const WEBFETCH_USER_AGENT = "ZCode-WebFetch/0.1 (+https://zcode.ai; coding-agent-cli)";
+// [leo] zcode.ai 这里只是 User-Agent 里的产品链接，不是代理服务；换成本产品名。
+export const WEBFETCH_USER_AGENT = "LeoPhoneAgent";

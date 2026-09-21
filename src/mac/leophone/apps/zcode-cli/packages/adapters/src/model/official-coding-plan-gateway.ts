@@ -1,4 +1,3 @@
-import { resolveRuntimeZCodeEndpointOrigin } from "@zcode/shared";
 import type { EnvRecord } from "./model-execution.js";
 
 /**
@@ -62,9 +61,9 @@ export function resolveOfficialCodingPlanGatewayUrl(
   if (!gatewayPath) {
     return { viaGateway: false, url: requestUrl };
   }
-  const gatewayUrl = new URL(gatewayPath, resolveRuntimeZCodeEndpointOrigin(env));
-  gatewayUrl.search = parsed.search;
-  return { viaGateway: true, url: gatewayUrl.href };
+  // [leo] 命中官方 Coding Plan 端点也绝不改写到 ZCode 平台网关（{ZCODE_BASE_URL}/api/v1/ultra*，
+  // 用 ZCode 账号鉴权）。用户自己的 open.bigmodel.cn / api.z.ai 模型端点照常直连。
+  return { viaGateway: false, url: requestUrl };
 }
 
 /**

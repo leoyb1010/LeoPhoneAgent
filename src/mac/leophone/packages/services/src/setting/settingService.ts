@@ -53,7 +53,8 @@ function resolveUserHomeDir() {
 }
 
 function getSettingsDir() {
-  return join(resolveUserHomeDir(), ".zcode", "v2");
+  // [leo] 设置文件放在自己的目录,绝不和官方客户端共用 ~/.zcode/v2/setting.json。
+  return join(resolveUserHomeDir(), ".leophoneagent", "v2");
 }
 
 function getSettingsFile() {

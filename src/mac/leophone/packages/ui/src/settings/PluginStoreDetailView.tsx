@@ -44,6 +44,7 @@ import {
 } from "@/settings/pluginManagedResourceGroups.js";
 import type { PluginComponentDisplayGroup } from "@/settings/PluginComponentGroups.js";
 import type { PluginDescribeEntry } from "@/store/pluginManagementStore.js";
+import { isOfficialServiceUrl } from "@/lib/trustedImageUrl.js";
 
 // 组件分区顺序与截图一致：MCP 服务器 → 技能 → 命令 → 子智能体 → Hooks。
 const SECTION_ORDER: ZCodePluginComponentKind[] = ["mcp", "skill", "command", "agent", "hook"];
@@ -467,7 +468,10 @@ function InfoSection({
 function pickHttpsUrl(...candidates: Array<string | undefined>): string | undefined {
   return candidates.find(
     (candidate): candidate is string =>
-      typeof candidate === "string" && candidate.startsWith("https://"),
+      typeof candidate === "string" &&
+      candidate.startsWith("https://") &&
+      // [leo] 官方站点（z.ai / bigmodel.cn / zhipuai.cn）的链接不展示。
+      !isOfficialServiceUrl(candidate),
   );
 }
 
