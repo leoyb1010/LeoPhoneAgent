@@ -224,12 +224,29 @@ export default defineConfig([
       "@zcode/provider",
       "@zcode/provider-node",
       "@zcode/zcode-cua",
+      // [leo] 订阅账号登录只用 pi 的 ModelRuntime;包入口会连带加载它的 CLI / TUI(chalk、原生剪贴板等),
+      // 安装包里没有也不该有这些。这里把包名直接指到 ModelRuntime 文件并内联,只带它自己的 17 个模块;
+      // pi-ai / cross-spawn / proper-lockfile / typebox 仍是运行时外部依赖,由 electron-builder 的闭包注入补齐。
+      "@earendil-works/pi-coding-agent",
     ],
     define: createSharedDefines(),
     // 与 main 保持一致的 chunk 隔离策略，避免 host/main 产物相互覆盖。
     esbuildOptions(options) {
       applyDesktopTsupEsbuildSecurityOptions(options);
       options.chunkNames = "host/chunk-[hash]";
+      options.alias = {
+        ...options.alias,
+        "@earendil-works/pi-coding-agent": resolve(
+          import.meta.dirname,
+          "../../node_modules/@earendil-works/pi-coding-agent/dist/core/model-runtime.js",
+        ),
+      };
+      options.external = [
+        ...(options.external ?? []),
+        "cross-spawn",
+        "proper-lockfile",
+        "typebox",
+      ];
     },
     onSuccess: createDevReadyMarkerHook("host"),
     ...desktopTsupBundleSecurityOptions,

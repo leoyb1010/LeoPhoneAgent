@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 
 import type { AuthInteraction, AuthPrompt } from "@earendil-works/pi-ai";
-import { ModelRuntime } from "@earendil-works/pi-coding-agent";
+import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 
 import { leoPath } from "./leoPaths.js";
 
@@ -19,15 +20,39 @@ const MODELS_PATH = leoPath("oauth", "models.json");
 
 let runtimePromise: Promise<ModelRuntime> | null = null;
 
+/**
+ * 懒加载 pi:只有用到订阅账号时才加载。加载失败只影响订阅登录这一块,不会拖垮 Host
+ * (Host 起不来整个应用就起不来)。
+ */
+async function loadModelRuntimeClass(): Promise<typeof ModelRuntime> {
+  // pi 会从自己的 package.json 读版本与配置名;内联进 host 后按文件位置找不到它,这里指回包目录。
+  const packagedPiDir = process.resourcesPath
+    ? join(process.resourcesPath, "app.asar", "node_modules", "@earendil-works", "pi-coding-agent")
+    : "";
+  if (!process.env["PI_PACKAGE_DIR"] && packagedPiDir && existsSync(join(packagedPiDir, "package.json"))) {
+    process.env["PI_PACKAGE_DIR"] = packagedPiDir;
+  }
+  const mod = await import("@earendil-works/pi-coding-agent");
+  return mod.ModelRuntime;
+}
+
 export function oauthRuntime(): Promise<ModelRuntime> {
   if (!runtimePromise) {
     mkdirSync(OAUTH_DIR, { recursive: true, mode: 0o700 });
-    runtimePromise = ModelRuntime.create({
-      authPath: AUTH_PATH,
-      modelsPath: MODELS_PATH,
-      allowModelNetwork: false,
-      refreshOnCreate: false,
+    const created = loadModelRuntimeClass().then((Runtime) =>
+      Runtime.create({
+        authPath: AUTH_PATH,
+        modelsPath: MODELS_PATH,
+        modelsStorePath: leoPath("oauth", "models-store.json"),
+        allowModelNetwork: false,
+        refreshOnCreate: false,
+      }),
+    );
+    // 失败了下次再试,不把一次失败永久缓存下来。
+    created.catch(() => {
+      if (runtimePromise === created) runtimePromise = null;
     });
+    runtimePromise = created;
   }
   return runtimePromise;
 }

@@ -108,6 +108,12 @@ const asarCliPath = resolve(
   "asar.js",
 );
 const REQUIRED_ASAR_RUNTIME_MODULES = [
+  // [leo] 订阅账号登录(pi ModelRuntime)的运行时依赖。host 只内联 ModelRuntime 自己的模块,
+  // 这些包按闭包根注入 app.asar,连同它们的子依赖(which、path-key、SDK 链等)一起补齐。
+  "@earendil-works/pi-ai",
+  "cross-spawn",
+  "proper-lockfile",
+  "typebox",
   "module-details-from-path",
   "@opentelemetry/api-logs",
   // Bugfix: telemetry 的 OTLP exporter 会在启动阶段加载 sdk-metrics。pnpm 开发态可从
