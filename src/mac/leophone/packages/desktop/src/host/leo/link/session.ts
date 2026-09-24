@@ -39,7 +39,8 @@ const STOP_FALLBACK_MS = 5_000;
 const SUBSCRIBER_QUEUE_LIMIT = 512;
 
 type Subscriber = { queue: HarnessEvent[]; wake: (() => void) | null; closed: boolean };
-type Pending = { request: ZCodePermissionRequest; event: HarnessEvent; tool: string; target: string };
+/** announced:审批卡是否已经发给手机;自动放行的没发过,也就不用发回执。 */
+type Pending = { request: ZCodePermissionRequest; event: HarnessEvent; tool: string; target: string; announced: boolean };
 type Logger = { info: (msg: string, meta?: unknown) => void; warn: (msg: string, meta?: unknown) => void };
 
 export type LinkSessionDeps = {
@@ -237,12 +238,13 @@ export class LinkSession {
       description: described.description,
       choices: APPROVAL_CHOICES,
     };
-    const pending: Pending = { request, event, tool: described.tool, target: described.target };
+    const pending: Pending = { request, event, tool: described.tool, target: described.target, announced: false };
     this.pendingApprovals.set(request.requestId, pending);
     if (this.isFullAuto || this.grants.has(grantKey(described.tool, described.target))) {
       void this.answer(request.requestId, pending, "allow_once", "once");
       return;
     }
+    pending.announced = true;
     this.emit(event);
   }
 
@@ -264,7 +266,7 @@ export class LinkSession {
       this.deps.logger.warn("[leo/link] approval not delivered", { error: String(error) });
       return false;
     }
-    this.emit({ event: "approval.responded", approval_id: approvalId, choice });
+    if (pending.announced) this.emit({ event: "approval.responded", approval_id: approvalId, choice });
     return true;
   }
 

@@ -1,4 +1,6 @@
 import { execFile, spawn } from "node:child_process";
+import dns from "node:dns";
+import type { LookupFunction } from "node:net";
 import { promisify } from "node:util";
 
 import WebSocket from "ws";
@@ -25,6 +27,26 @@ const PONG_TIMEOUT_MS = 75_000;
 const STREAM_KEEPALIVE_MS = 25_000;
 const OUTBOX_LIMIT = 200;
 const CALLER_KINDS = new Set<CallerKind>(["iphone", "legacy", "master"]);
+const TAILNET_DNS = "100.100.100.100";
+
+/**
+ * tailnet 域名(`*.ts.net`)用 Tailscale 自己的 DNS 解析。本机开着代理(Clash TUN)时,系统解析
+ * 会给出代理的假 IP,和中继之间的常驻连接就绕到代理节点上:实测每个来回 2~3 秒,直连 tailnet 只要
+ * 几十毫秒。解析不到(没开 Tailscale、不是 tailnet 域名)就退回系统解析。
+ */
+export function tailnetLookup(servers: string[] = [TAILNET_DNS]): LookupFunction {
+  const resolver = new dns.Resolver({ timeout: 1500, tries: 1 });
+  resolver.setServers(servers);
+  return ((hostname: string, options: dns.LookupOptions, callback: (...args: unknown[]) => void) => {
+    const fallback = () => dns.lookup(hostname, options, callback as never);
+    if (!hostname.endsWith(".ts.net")) return fallback();
+    resolver.resolve4(hostname, (error, addresses) => {
+      if (error || addresses.length === 0) return fallback();
+      if (options.all) callback(null, addresses.map((address) => ({ address, family: 4 })));
+      else callback(null, addresses[0], 4);
+    });
+  }) as LookupFunction;
+}
 
 /** 中继 0.2 转发时附带调用方;0.1 没有,记成 unknown。 */
 export function callerFrom(frame: Record<string, unknown>): Caller {
@@ -107,7 +129,7 @@ export class RelayLink {
   private async runOnce(): Promise<void> {
     const machineKey = await this.machineKeys.get();
     await new Promise<void>((resolve, reject) => {
-      const ws = new WebSocket(this.config.wsUrl, { handshakeTimeout: 15_000 });
+      const ws = new WebSocket(this.config.wsUrl, { handshakeTimeout: 15_000, lookup: tailnetLookup() });
       this.activeWs = ws;
       let lastPong = Date.now();
       let pingTimer: NodeJS.Timeout | null = null;

@@ -74,3 +74,7 @@ git -c core.hooksPath=/dev/null subtree pull --prefix=src/mac/leophone \
 - `packages/desktop/src/host/leo/link/` 整个目录是我们的(手机桥接 Leo Link),不涉及上游文件。
 - 自建的 `packages/desktop/src/host/leo/telegram.ts` 已删除,Telegram 改走上游机器人。
 
+## Mac 1.2.1 补丁(2026-09-25)
+- `apps/zcode-cli/packages/core/src/permission/service.ts` 的 `checkAlwaysAsk`:在硬禁用、auto 保护、项目 deny 之后,
+  yolo(界面叫「完全访问」)且非 plan 时直接放行 alwaysAsk 工具(工作流的创建 / 保存 / 修改)。上游在 yolo 下仍会问;
+  同步时保留这一段(标了 `[leo]`)。

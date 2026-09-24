@@ -194,7 +194,8 @@ test("approvals: once, task-scoped always, deny, and answers given on the Mac", 
     const requests = events.filter((e) => e.event === "approval.request").map((e) => e["approval_id"]);
     const responded = events.filter((e) => e.event === "approval.responded").map((e) => e["approval_id"]);
     assert.deepEqual(requests, ["r1", "r3", "r4"]);
-    assert.deepEqual(responded, ["r1", "r2", "r3", "r4"]);
+    // r2 是「本次会话允许」自动放行的:手机上从没出现过它的卡片,也就不发回执。
+    assert.deepEqual(responded, ["r1", "r3", "r4"]);
     const first = events.find((e) => e.event === "approval.request");
     assert.equal(first?.["command"], "Bash: npm test");
     assert.deepEqual(first?.["choices"], ["once", "session", "deny"]);

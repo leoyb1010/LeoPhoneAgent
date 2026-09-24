@@ -13,6 +13,14 @@ export interface LeoRelease {
 
 export const LEO_RELEASE_NOTES: LeoRelease[] = [
   {
+    version: "1.2.1",
+    date: "2026-09-25",
+    items: [
+      "手机连 Mac 更快:这台 Mac 开着代理(比如 Clash)时,和中继之间的常驻连接改走 Tailscale 内网直连,每次来回从两三秒降到几十毫秒;没开 Tailscale 时照旧走原来的路。",
+      "「完全访问」模式下,创建、保存、修改工作流也不再询问,Mac 上自己开的任务和手机发来的全自动任务一样;被禁用的工具、项目里设为拒绝的规则照样拦住,计划模式照样要问。",
+    ],
+  },
+  {
     version: "1.2.0",
     date: "2026-09-25",
     items: [

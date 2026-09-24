@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import dns from "node:dns";
 import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:net";
@@ -9,7 +10,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import type { LinkBridge, LinkRequest } from "./bridge.js";
-import { RelayLink, type MachineKeyStore } from "./relayLink.js";
+import { RelayLink, tailnetLookup, type MachineKeyStore } from "./relayLink.js";
 
 /**
  * 契约测试:对着仓库里真的中继(src/mac/leoagent/relay.py,0.2)跑 RelayLink。
@@ -159,4 +160,24 @@ test("RelayLink against the real relay 0.2: pin, caller, request id, stream, pus
     relay.kill();
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test("tailnetLookup only touches *.ts.net names and falls back to the system resolver", async () => {
+  // 故意给一个不可达的 DNS:tailnet 名字解析失败时必须退回系统解析,而不是报错卡住连接。
+  const lookup = tailnetLookup(["127.0.0.1:9"]);
+  const resolve = (hostname: string) =>
+    new Promise<{ error: unknown; address: unknown }>((done) => {
+      lookup(hostname, { family: 4 }, (error, address) => done({ error, address }));
+    });
+  const local = await resolve("localhost");
+  assert.equal(local.error, null);
+  assert.equal(local.address, "127.0.0.1");
+  // tailnet DNS 不可达时,结果必须和系统解析一模一样(开着 Clash 假 IP 时系统解析也会给地址)。
+  const name = "no-such-machine.example-tailnet.ts.net";
+  const tailnet = await resolve(name);
+  const system = await new Promise<{ error: unknown; address: unknown }>((done) => {
+    dns.lookup(name, { family: 4 }, (error, address) => done({ error, address }));
+  });
+  assert.equal(Boolean(tailnet.error), Boolean(system.error));
+  assert.equal(tailnet.address, system.address);
 });

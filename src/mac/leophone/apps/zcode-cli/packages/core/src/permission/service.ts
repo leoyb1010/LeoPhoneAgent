@@ -360,6 +360,12 @@ export class PermissionService {
         `Tool ${context.toolName} is denied by project permission rules`,
       );
     }
+    // [leo] LeoPhoneAgent 的「全自动」(yolo)连 alwaysAsk 工具(创建、保存、修改工作流)也不再询问:
+    // 硬禁用、auto 保护、项目 deny 规则上面都已经挡过,这里只跳过"问一下"这一步。plan 仍然要问。
+    // 同步上游时保留;见 docs/mac-3.0/UPSTREAM.md。
+    if (context.mode === "yolo" && !(context.planEnabled ?? false)) {
+      return this.allow(context, capability, "mode.yolo", "Yolo mode bypasses permission prompts");
+    }
     // 会话免确认：阻断分支之后、ask 之前。命中即放行，不发 permission 事件、不弹窗；
     // 与 gate 本身一样不看模式（yolo / plan / build 一致）。
     if (this.matchesProjectRules(this.sessionRules, "allow", context, capability, rulePolicy)) {

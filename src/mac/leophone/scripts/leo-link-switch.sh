@@ -33,7 +33,17 @@ PY
 
 reload_leoagent() {
   launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true
-  launchctl bootstrap "$DOMAIN" "$PLIST"
+  # bootout 是异步的:旧实例没卸干净就 bootstrap 会报 "5: Input/output error"。等它消失,再重试几次。
+  for _ in {1..20}; do
+    launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1 || break
+    sleep 0.5
+  done
+  local loaded=0
+  for _ in {1..5}; do
+    if launchctl bootstrap "$DOMAIN" "$PLIST" 2>/dev/null; then loaded=1; break; fi
+    sleep 1
+  done
+  [[ $loaded == 1 ]] || { echo "launchctl bootstrap 失败:$PLIST" >&2; return 1; }
   for _ in {1..40}; do
     curl -fsS -m 2 http://127.0.0.1:8646/health >/dev/null 2>&1 && { echo "leoagent 已重载,8646 正常"; return 0; }
     sleep 0.5
