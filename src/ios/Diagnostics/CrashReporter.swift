@@ -278,7 +278,12 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
         }()
 
         let crashType: String
-        if lastPhase == "active" || lastPhase == "inactive" {
+        // [T-crash-noise] 在多任务里划掉 App、或调试工具重启它,进程都是在 inactive 时收到 SIGKILL,
+        // 以前一律记成"前台崩溃",真崩溃被淹没(一晚上 24 份全是这种)。inactive 且没在跑命令、内存不高的,
+        // 单独标成"被结束",排查时一眼能跳过;active 时的 SIGKILL(看门狗卡死等)仍按崩溃记。
+        if lastPhase == "inactive", !runningShell, (memoryMB ?? 0) < 350 {
+            crashType = "Terminated while inactive (swiped away or relaunched) — not a crash"
+        } else if lastPhase == "active" || lastPhase == "inactive" {
             if runningShell {
                 crashType = "⚠️ FOREGROUND CRASH during shell execution"
             } else if let mem = memoryMB, mem >= 350 {

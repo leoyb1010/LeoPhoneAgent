@@ -33,8 +33,13 @@ final class CapabilitySelfTest: ObservableObject {
     @Published private(set) var finishedAt: Date?
     /// 深链打开时置位,页面出现时消费。
     var autoRunRequested = false
+    /// 同时对每个模型供应商真发一句话(走和聊天完全相同的请求路径,带一个工具)。
+    /// 每项只花几十个 token;默认关,页面开关或深链 `?chat=1` 打开。
+    @Published var includeChat = false
+    /// chat 检查项 id → (供应商实例, 模型条目)。
+    private var chatTargets: [String: (instanceId: String, entryId: String)] = [:]
 
-    private static let sessionId = "__capability_selftest__"
+    private static let sessionId = OffloadPermissionManager.selfTestSessionId
 
     private init() {
         checks = Self.staticChecks()
@@ -96,6 +101,16 @@ final class CapabilitySelfTest: ObservableObject {
             list.append(Check(id: "mac-\(host.id)", group: "模型与连接", title: "Mac:\(host.name)", command: nil))
         }
         list.append(Check(id: "jev", group: "模型与连接", title: "Jev 快速判断", command: nil))
+        chatTargets = [:]
+        if includeChat {
+            for instance in ProviderConfigStore.shared.instances where instance.isEnabled {
+                for entry in Self.chatProbeEntries(for: instance) {
+                    let id = "chat-\(instance.id)-\(entry.id)"
+                    chatTargets[id] = (instance.id, entry.id)
+                    list.append(Check(id: id, group: "真实对话", title: "\(instance.label) · \(entry.model.displayName)", command: nil))
+                }
+            }
+        }
         checks = list
 
         // 先把内核起起来(和聊天走同一段启动代码)。
@@ -120,6 +135,7 @@ final class CapabilitySelfTest: ObservableObject {
         }
         finishedAt = Date()
         persist()
+        includeChat = false
     }
 
     /// 第一次用会弹系统授权框的能力。命令在等你点选时会超时,那不是坏了,是在等授权。
@@ -161,7 +177,17 @@ final class CapabilitySelfTest: ObservableObject {
             guard let host = GatewayHostStore.shared.activeHosts.first(where: { $0.id == id }) else {
                 return (.skipped, "已移除")
             }
-            return await GatewayHostStore.probe(host) ? (.passed, "可达") : (.failed, "连不上(Mac 可能在休眠)")
+            // 带钥匙问一次能开哪些会话:中继对没带钥匙的请求一律回 401,只看 /health 会把休眠的 Mac 算成可达。
+            guard let client = GatewayHostStore.shared.client(for: host) else { return (.failed, "缺少访问密钥") }
+            do {
+                let kinds = try await client.harnessKinds()
+                return (.passed, kinds.isEmpty ? "可达" : "可达 · " + kinds.map(\.name).joined(separator: " / "))
+            } catch {
+                return (.failed, "连不上(Mac 可能在休眠):\(error.localizedDescription.prefix(80))")
+            }
+        }
+        if let target = chatTargets[check.id] {
+            return await chatProbe(instanceId: target.instanceId, entryId: target.entryId)
         }
         if check.id == "jev" {
             guard JevClient.hasKey else { return (.skipped, "没填 Key(设置 → Agent → Jev 快速判断)") }
@@ -173,6 +199,71 @@ final class CapabilitySelfTest: ObservableObject {
             }
         }
         return (.skipped, "")
+    }
+
+    /// 每个供应商测它最新的模型(按 id 倒序近似"最新",跳过只出图的);ChatGPT 登录的测三个,新模型常常一次出好几个。
+    private static func chatProbeEntries(for instance: ProviderInstance) -> [ModelEntry] {
+        // 只挑能聊天的:出图、出视频、语音、向量这类生成 / 专用模型本来就不收对话请求(1.42.0 实测会误报失败)。
+        let mediaWords = ["image", "imagine", "video", "tts", "audio", "speech", "whisper", "transcribe", "embed", "realtime"]
+        let chatCapable = ProviderConfigStore.shared.visibleEntries(for: instance.id)
+            .filter { entry in
+                let id = entry.model.id.lowercased()
+                let modality = entry.model.modalityOverride ?? []
+                return !modality.contains(.imageOutput) && !modality.contains(.videoOutput)
+                    && !modality.contains(.audioOutput) && !mediaWords.contains { id.contains($0) }
+            }
+        let count = (instance.providerType == .openAI && instance.credentialType == .oauth) ? 3 : 1
+        // 先测你真正在用的(模型分组里的成员),再按 id 倒序补"最新的"。
+        let used = Set(ProviderConfigStore.shared.config.modelGroups.flatMap(\.memberEntryIds))
+        let inGroups = chatCapable.filter { used.contains($0.id) }
+        let newest = chatCapable
+            .filter { !used.contains($0.id) }
+            .sorted { $0.model.id.localizedStandardCompare($1.model.id) == .orderedDescending }
+        return Array((inGroups + newest).prefix(count))
+    }
+
+    /// 发一句 "只回复 OK",等流结束。成功 = 收到文字或正常结束;失败把服务端原话带回来。
+    private func chatProbe(instanceId: String, entryId: String) async -> (Status, String) {
+        guard let entry = ProviderConfigStore.shared.config.modelEntries.first(where: { $0.id == entryId }) else {
+            return (.skipped, "模型已删除")
+        }
+        let provider = await AIChatViewModel.makeAgentProvider(for: entry)
+        let probeTool = AgentToolDefinition(
+            name: "selftest_noop", description: "Self-test placeholder tool. Never call it.",
+            parameters: ["note": AgentToolParam(type: .string, description: "Unused.")], required: [])
+        let work = Task { () -> (Status, String) in
+            var text = ""
+            do {
+                let stream = try await provider.streamAgentMessage(
+                    messages: [AgentMessage(role: .user, parts: [.text("Reply with exactly: OK")])],
+                    systemPrompt: "You are a connectivity check. Reply with exactly OK.",
+                    tools: [probeTool], maxTokens: 64, thinkingLevel: .off)
+                for try await event in stream {
+                    if case .textDelta(let delta) = event { text += delta }
+                }
+                // 超时取消时流会悄悄结束、不抛错:不能当成通过。
+                if Task.isCancelled { return (.failed, "45 秒内没有回复") }
+                let reply = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                return (.passed, reply.isEmpty ? "请求成功(没有文字回复)" : "回复:\(reply.prefix(40))")
+            } catch {
+                let message = error.localizedDescription
+                let lowered = message.lowercased()
+                if lowered.contains("401") || lowered.contains("403") || lowered.contains("unauthorized") {
+                    return (.unauthorized, String(message.prefix(160)))
+                }
+                return (.failed, String(message.prefix(200)))
+            }
+        }
+        let timeout = Task {
+            try? await Task.sleep(nanoseconds: 45_000_000_000)
+            work.cancel()
+        }
+        let result = await work.value
+        timeout.cancel()
+        if Task.isCancelled || (result.0 == .failed && result.1.lowercased().contains("cancel")) {
+            return (.failed, "45 秒内没有回复")
+        }
+        return result
     }
 
     private func runShell(_ command: String) async -> (Status, String) {
@@ -258,6 +349,9 @@ struct CapabilitySelfTestView: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(test.isRunning)
                 }
+                Toggle("同时真发一句话测模型(每个供应商几十个 token)", isOn: $test.includeChat)
+                    .font(.footnote)
+                    .disabled(test.isRunning)
             } footer: {
                 Text("用只读方式把每项能力按 Agent 的同一条路跑一遍。\"未授权\"不是坏了,是系统或 App 里还没允许;点一项的说明看原因。")
             }

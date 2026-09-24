@@ -889,7 +889,8 @@ struct HarnessLauncherView: View {
                                     harness: HarnessKind(key: session.harness, name: session.name),
                                     cwd: session.cwd),
                                 firstPrompt: "",
-                                attachSessionId: session.id)
+                                attachSessionId: session.id,
+                                attachStatus: session.status)
                         } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: session.waitingForApproval
@@ -1028,6 +1029,8 @@ struct HarnessConsoleView: View {
     let firstPrompt: String
     /// 非空 = 接管 Mac 上已存在的会话(回放 + 跟随),而不是新建。
     var attachSessionId: String? = nil
+    /// 接管时列表里看到的状态(idle / available 直接显示空闲)。
+    var attachStatus: String? = nil
     var thinking: String? = nil
     @State private var input = ""
     @State private var started = false
@@ -1126,13 +1129,17 @@ struct HarnessConsoleView: View {
             if !started {
                 started = true
                 if let attachSessionId {
-                    driver.attach(existingSessionId: attachSessionId)
+                    driver.attach(existingSessionId: attachSessionId, knownStatus: attachStatus)
                 } else {
                     driver.start(prompt: firstPrompt, thinking: thinking)
                 }
             } else { driver.resumeIfNeeded() }
         }
         .onDisappear { driver.detach() }
+        // 建任务失败(Mac 离线、钥匙不对):把第一条指令放回输入框,改一下或直接再发,不会丢。
+        .onChange(of: driver.status) { newStatus in
+            if newStatus == "pending", input.isEmpty, !firstPrompt.isEmpty { input = firstPrompt }
+        }
     }
 }
 
@@ -1144,9 +1151,10 @@ struct ComposerMacTarget: Identifiable {
         ("claude", "Claude Code"), ("codex", "Codex"), ("grok", "Grok"),
     ]
 
-    /// 这台 Mac 能开的任务类型:升级到 LeoPhoneAgent 1.2 的 Mac 把它自己的 Agent 排第一。
+    /// 这台机器能开的任务类型:Android 机身只有它自己的 Agent;升级到 LeoPhoneAgent 1.2 的 Mac 把它自己的 Agent 排第一。
     static func clis(for host: GatewayHost) -> [(String, String)] {
-        host.runsLeoPhoneAgent ? [("zcode", "LeoPhoneAgent")] + clis : clis
+        if host.isAndroidBody { return [("minis", "LeoPhoneAgent")] }
+        return host.runsLeoPhoneAgent ? [("zcode", "LeoPhoneAgent")] + clis : clis
     }
     let host: GatewayHost
     let cliKey: String

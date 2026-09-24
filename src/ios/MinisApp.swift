@@ -79,6 +79,8 @@ struct MinisApp: App {
     /// init() makes it accurate). Used to tell a cold-launch LANDING chat
     /// apart from a chat the user navigated into minutes later.
     static let processLaunchedAt = Date()
+    /// 回前台时上一次重扫技能的时间(见 scenePhase .active)。
+    @MainActor static var lastForegroundSkillReload: Date = .distantPast
 
     // Minimal UIApplicationDelegate adapter — needed only to receive
     // `UIApplicationShortcutItem` events (Home Screen Quick Actions).
@@ -180,6 +182,12 @@ struct MinisApp: App {
                         ExternalFileImporter.ingest(url, into: shareCoordinator)
                         return
                     }
+                    // [T-whatsnew-hide] 真机巡检用:先收起「本次更新」再打开别的页面。只收起、不记成已读,
+                    // 下次冷启动还会再弹,不会让你错过这一版的说明。
+                    if url.host == "whatsnew", url.path == "/hide" {
+                        isPresentingReleaseNotes = false
+                        return
+                    }
                     DeepLinkRouter.handle(url: url, shareCoordinator: shareCoordinator)
                 }
                 // Force a full ContentView rebuild whenever the user-selected
@@ -234,6 +242,12 @@ struct MinisApp: App {
                     }
                     if ExternalFileImporter.canIngest(url) {
                         ExternalFileImporter.ingest(url, into: shareCoordinator)
+                        return
+                    }
+                    // [T-whatsnew-hide] 真机巡检用:先收起「本次更新」再打开别的页面。只收起、不记成已读,
+                    // 下次冷启动还会再弹,不会让你错过这一版的说明。
+                    if url.host == "whatsnew", url.path == "/hide" {
+                        isPresentingReleaseNotes = false
                         return
                     }
                     DeepLinkRouter.handle(url: url, shareCoordinator: shareCoordinator)
@@ -304,6 +318,7 @@ struct MinisApp: App {
                     // the old voice-only whitelist, so their text models + shadow
                     // voice rows recover promptly without waiting for a natural refresh.
                     ProviderConfigStore.shared.migrateVoiceModalityIfNeeded()
+                    ProviderConfigStore.shared.refreshCodexCatalogOnceIfNeeded()
                     // For existing users with no model groups, create a default group silently
                     Task { await ProviderConfigStore.shared.createDefaultGroupIfNeeded() }
                     shareLog.info("[Share] onAppear — checking for pending share")
@@ -384,7 +399,8 @@ struct MinisApp: App {
             // rotated) in ways the precise hooks (#1-#3) might not have observed
             // while suspended. Clear the credential cache once on resume so the
             // first resolve re-reads truth.
-            ProviderCredentialCache.shared.invalidateAll()
+            // 标成过期而不是清空:第一帧不再同步查钥匙串,先用旧值、后台重查。
+            ProviderCredentialCache.shared.markAllStale()
 
             // Unified audio re-assertion on foreground return: stop the background
             // keep-alive track and re-apply the correct session category for the
@@ -453,7 +469,13 @@ struct MinisApp: App {
                 // Activity is lingering (soft-finished, awaiting the user), the
                 // user is now back in the app — dismiss it.
                 AgentLiveActivityManager.shared.dismissFinishedActivityOnForeground()
-                SkillStore.shared.reload()
+                // 技能重扫(数据库 + 逐个读 SKILL.md)在主线程上:30 秒内切回来不重复做。
+                if Date().timeIntervalSince(Self.lastForegroundSkillReload) > 30 {
+                    Self.lastForegroundSkillReload = Date()
+                    let t0 = CFAbsoluteTimeGetCurrent()
+                    SkillStore.shared.reload()
+                    LeoPerf.record("skills.reload", ms: (CFAbsoluteTimeGetCurrent() - t0) * 1000)
+                }
 
                 if #available(iOS 17.0, *) {
                     SkillFilesystemNotifier.shared.drainIfDirtyAsync(reason: "scenePhase active")

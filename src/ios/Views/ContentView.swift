@@ -239,7 +239,8 @@ struct ContentView: View {
     // activeSessions / suspended flips, which regenerates each row's composite
     // diff key (see sessionRowKeys) so the ForEach can't skip re-materializing
     // the row whose running state changed.
-    @ObservedObject private var sidebarActivityTracker = SessionActivityTracker.shared
+    /// 只订阅"哪些会话在跑":tracker 上工具名、轮次、阶段每轮都在变,以前每变一次整个首页重算一遍。
+    @State private var runningSessionIds: Set<String> = []
     @ObservedObject private var sidebarConcurrencyManager = SessionConcurrencyManager.shared
     /// [T-session-attention-bar] The bar reads badge queues, so it has to
     /// observe them — SessionRow observes this store for its own badges, but
@@ -358,8 +359,6 @@ struct ContentView: View {
     @State private var torchSupported = false
     @State private var homeNativeResult: ActionRouter.ExecutionResult?
     @State private var homeNativeTask: Task<Void, Never>?
-    /// FAB position preference: false = right (default), true = left.
-    @AppStorage("fabOnLeft") private var fabOnLeft = false
     /// Mirror of `SyncV2Bootstrap.isEnabled` so SwiftUI re-evaluates
     /// the iCloud-gated menu entries (per-session Force Sync / Force
     /// Pull and the multi-select Force Sync) the moment the user
@@ -367,8 +366,6 @@ struct ContentView: View {
     /// static getter inline would only re-read on the next unrelated
     /// state change. `SyncV2Bootstrap.setEnabled` writes the same key.
     @AppStorage("cloudSync.v2.enabled") private var iCloudSyncEnabled: Bool = false
-    /// Current drag offset of the FAB (reset to 0 on drop).
-    @State private var fabDragOffset: CGFloat = 0
 
     // Multi-select
     @State private var isSelecting = false
@@ -406,8 +403,13 @@ struct ContentView: View {
 
     // Search
     @State private var showSearchBar = false
-    private var isSearching: Bool { showSearchBar && !searchText.isEmpty }
-    @State private var searchText = ""
+    private var isSearching: Bool { showSearchBar && searchHasQuery }
+    /// 搜索框文字在引用对象里,ContentView 不订阅:打字不再每个字重算整张列表。
+    @State private var searchDraft = HomeDraft()
+    /// 只在"有没有字"翻转时改,驱动 isSearching。
+    @State private var searchHasQuery = false
+    /// 当前结果对应的查询:行高亮跟着结果走,不跟着每个字走。
+    @State private var appliedSearchQuery: String?
     /// Session IDs that matched the current search query (nil = no active filter).
     @State private var searchMatchedIds: Set<String>?
     /// Per-session matched-content snippet for sessions whose match was on
@@ -607,6 +609,9 @@ struct ContentView: View {
                 consumedQuickActionTrigger = newValue
                 handleNewChatRequest()
             }
+            .onReceive(SessionActivityTracker.shared.$activeSessions.removeDuplicates()) { ids in
+                if runningSessionIds != ids { runningSessionIds = ids }
+            }
             .onReceive(QuickActionWorkflow.shared.$state) { newState in
                 // Workflow advanced to pendingDispatch (either same-runloop
                 // because we were already home, or after markHome fired
@@ -699,6 +704,11 @@ struct ContentView: View {
                     openSession(targetId)
                 } else {
                     guard currentStackSessionId != targetId else { return }
+                    // 已经在首页:直接推,不用白等 0.3 秒。
+                    if navigationPath.isEmpty {
+                        openSession(targetId)
+                        return
+                    }
                     // Pop current session off the navigation stack first, then push the target
                     navigationPath.removeLast(navigationPath.count)
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -715,15 +725,23 @@ struct ContentView: View {
                 // during its `await listSessions()`) doesn't clobber the target
                 // session with the Launch Session default afterwards.
                 NotificationNavigationStore.shared.markHandled()
+                // [T-open-session-over-sheet] 点通知、Siri、深链打开会话时,先收起盖在上面的面板(设置、藏宝阁、
+                // "/" 面板、命令面板)。以前会话在面板底下打开,人看到的是"点了没反应"(1.42.0 真机复现)。
+                let hadSheet = dismissSheetsForNavigation()
                 // Skip navigation if the target session is already visible
                 if isWideLayout {
                     guard selectedSessionId != sessionId && newSessionRealId != sessionId else { return }
                     openSession(sessionId)
                 } else {
                     guard currentStackSessionId != sessionId else { return }
+                    // 已经在首页、上面也没有面板:直接推,不用白等。
+                    if navigationPath.isEmpty && !hadSheet {
+                        openSession(sessionId)
+                        return
+                    }
                     // Pop entire stack back to root first, then push the target session
                     navigationPath.removeLast(navigationPath.count)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + (hadSheet ? 0.45 : 0.3)) {
                         openSession(sessionId)
                     }
                 }
@@ -1431,7 +1449,8 @@ struct ContentView: View {
     /// Search and multi-select temporarily reveal every row; normal browsing
     /// keeps older history folded until its header is tapped.
     private func visibleSessionIDs(in group: (label: String, ids: [String])) -> [String] {
-        guard !isSelecting, !isSearching, isCollapsibleHistoryGroup(group.label) else {
+        // 结果回来之前不展开:以前第一个字一敲就把几千条历史全摊开,300 ms 后再收回去。
+        guard !isSelecting, searchMatchedIds == nil, isCollapsibleHistoryGroup(group.label) else {
             return group.ids
         }
         return historyGroupIsExpanded(group.label) ? group.ids : []
@@ -1543,7 +1562,8 @@ struct ContentView: View {
                             harness: HarnessKind(key: row.session.harness, name: row.session.name),
                             cwd: row.session.cwd),
                         firstPrompt: "",
-                        attachSessionId: row.session.id)
+                        attachSessionId: row.session.id,
+                        attachStatus: row.session.status)
                     .navigationTitle("\(row.hostName) · \(row.session.displayTitle)")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
@@ -1797,42 +1817,6 @@ struct ContentView: View {
         .background(Color(.secondarySystemFill), in: Capsule())
     }
 
-    @ViewBuilder
-    private var homeLikelySection: some View {
-        if homeCardsEnabled, !isSelecting {
-            Section {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(enabledQuickControls, id: \.self) { id in
-                            quickControlButton(id)
-                        }
-                        Menu {
-                            ForEach(Self.allQuickControls, id: \.id) { item in
-                                Button {
-                                    toggleQuickControl(item.id)
-                                } label: {
-                                    if enabledQuickControls.contains(item.id) {
-                                        Label(item.label, systemImage: "checkmark")
-                                    } else {
-                                        Text(item.label)
-                                    }
-                                }
-                            }
-                        } label: {
-                            Image(systemName: "slider.horizontal.3")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                                .padding(8)
-                        }
-                    }
-                    .padding(.vertical, 2)
-                }
-                .onAppear { refreshHomeDeviceState() }
-            } header: {
-                Text("系统快捷")
-            }
-        }
-    }
 
     /// Plain List with NavigationLink for stack (iPhone) layout.
     private var stackList: some View {
@@ -1861,9 +1845,9 @@ struct ContentView: View {
                                 // Pass running/suspended as VALUES so a flip
                                 // changes the SessionRow value → body re-evals
                                 // in place (same identity, no cell rebuild).
-                                isActive: sidebarActivityTracker.isActive(session.id),
+                                isActive: sidebarIsActive(session.id),
                                 isSuspended: sidebarConcurrencyManager.isSuspended(session.id),
-                                highlightQuery: isSearching ? searchText : nil,
+                                highlightQuery: isSearching ? appliedSearchQuery : nil,
                                 matchSnippet: isSearching ? searchMatchSnippets[session.id] : nil
                             )
                                 // [T-ios-session-list-equatable-jank] Gate
@@ -1927,7 +1911,9 @@ struct ContentView: View {
         .overlay { if didInitialLoad, sessions.isEmpty, !isSearching, !showSearchBar { emptyState } }
         // [T-home-simplify-1.41] 底部是输入栏(它自己就是文本输入,跟随键盘上移是对的,
         // 所以不再忽略键盘安全区)。搜索时收起输入栏,免得两个输入框同时在屏上。
-        .safeAreaInset(edge: .bottom) { if isSelecting { selectionToolbar } else { homeBottomBar } }
+        // [T-home-composer-edge] safeAreaBar(iOS 26)而不是 safeAreaInset:系统会在输入栏后面给列表加一层
+        // 边缘模糊,滚到底下的会话文字不再透过玻璃和输入框的占位字叠在一起(1.42.0 真机截图)。
+        .safeAreaBar(edge: .bottom) { if isSelecting { selectionToolbar } else { homeBottomBar } }
         .sheet(isPresented: $showHomeActions, onDismiss: runPendingHomeAction) { homeActionSheet }
         .confirmationDialog("屏幕亮度", isPresented: $showBrightnessOptions, titleVisibility: .visible) {
             ForEach([("25%", 0.25), ("50%", 0.5), ("75%", 0.75), ("100%", 1.0)], id: \.0) { item in
@@ -1942,9 +1928,10 @@ struct ContentView: View {
     /// Selection-bound List for split (iPad) layout.
     private var splitList: some View {
         List(selection: $selectedSessionId) {
-            agentHomeListSection(hasSessions: !displaySessions.isEmpty)
+            // [T-ipad-home-simplify] iPad 侧栏与 iPhone 首页同一套:只剩搜索(搜的时候)、Mac 进行中和会话;
+            // 旧的工作区卡片、"猜你想做"、浮动按钮都换成底部同一条输入栏。
+            homeSearchSection
             macLiveSection
-            homeLikelySection
             // [T-ios-session-list-equatable-jank] Diff a (label, ids) projection
             // so SwiftUI compares a [String] id list, not a [ChatSession] value
             // array. Rows resolve the model via displaySessionsById.
@@ -1968,9 +1955,9 @@ struct ContentView: View {
                                 // Pass running/suspended as VALUES so a flip
                                 // changes the SessionRow value → body re-evals
                                 // in place (same identity, no cell rebuild).
-                                isActive: sidebarActivityTracker.isActive(session.id),
+                                isActive: sidebarIsActive(session.id),
                                 isSuspended: sidebarConcurrencyManager.isSuspended(session.id),
-                                highlightQuery: isSearching ? searchText : nil,
+                                highlightQuery: isSearching ? appliedSearchQuery : nil,
                                 matchSnippet: isSearching ? searchMatchSnippets[session.id] : nil
                             )
                                 // [T-ios-session-list-equatable-jank] Gate
@@ -2051,12 +2038,8 @@ struct ContentView: View {
         .opacity(didInitialLoad ? 1 : 0)
         // [T-session-filter-trap] 同 stackList:筛空 ≠ 没有会话。
         .overlay { if didInitialLoad, sessions.isEmpty, !isSearching { emptyState } }
-        .safeAreaInset(edge: .bottom) { if isSelecting { selectionToolbar } else { fabRow } }
-        // [T-home-fab-keyboard-inset] Same structural immunity as the compact
-        // list above — see that call site for the full rationale. On iPad the
-        // sidebar column never hosts a keyboard unless the inline search bar
-        // is open (the chat column's composer avoidance is its own subtree).
-        .ignoresSafeArea(.keyboard, edges: showSearchBar ? [] : .bottom)
+        // 输入栏在侧栏底部,要随键盘上移,所以不再忽略键盘安全区;safeAreaBar 给列表加边缘模糊。
+        .safeAreaBar(edge: .bottom) { if isSelecting { selectionToolbar } else { homeBottomBar } }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { sidebarToolbarContent }
     }
@@ -2342,7 +2325,8 @@ struct ContentView: View {
         }
         // [T-home-simplify-1.41] iPhone 标题栏只留:设置、搜索、藏宝阁。
         ToolbarItem(placement: .topBarTrailing) {
-            if !isSelecting, !isWideLayout {
+            // iPad 侧栏也给搜索按钮(以前靠浮动按钮行,现在那一行换成了输入栏)。
+            if !isSelecting {
                 Button {
                     withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { showSearchBar = true }
                     searchFocused = true
@@ -2525,6 +2509,7 @@ struct ContentView: View {
     /// `pendingDispatch` opens the new session.
     private func popToHomeForQuickAction() {
         let alreadyHome = isWideLayout ? (selectedSessionId == nil) : navigationPath.isEmpty
+        quickActionStartedAtHome = alreadyHome
         if alreadyHome {
             // Same-runloop advance — no SwiftUI commit needed.
             QuickActionWorkflow.shared.markHome()
@@ -2550,11 +2535,17 @@ struct ContentView: View {
     /// and open it; attach to the workflow so AIChatView's modifier
     /// can match.
     fileprivate func openSessionForPendingQuickAction() {
+        defer { quickActionStartedAtHome = false }
         guard case .pendingDispatch = QuickActionWorkflow.shared.state else { return }
         let newId = Self.makeNewSessionId()
         if isWideLayout {
             openSession(newId)
+        } else if quickActionStartedAtHome && !reduceMotion {
+            // 从首页输入框发出:正常推进去,不再"啪"一下切到对话里。
+            navigationPath = NavigationPath([newId])
+            currentStackSessionId = newId
         } else {
+            // 从别的对话里发起:刚无动画退回首页,再推一次会是两段动画,保持直接切换。
             var tx = Transaction()
             tx.disablesAnimations = true
             withTransaction(tx) {
@@ -2812,7 +2803,10 @@ struct ContentView: View {
     @ObservedObject private var macLive = MacLiveSessionsStore.shared
     @State private var macAttachTarget: MacLiveSessionsStore.Row?
     @State private var macChatTarget: MacChatTarget?
-    @State private var homePrompt = ""
+    /// 引用对象放在 @State 里:ContentView 不订阅它,打字只重画输入栏(见 HomeDraft)。
+    @State private var homeDraft = HomeDraft()
+    /// 这次快捷动作是不是从首页发起的(决定新对话要不要带推入动画)。
+    @State private var quickActionStartedAtHome = false
     @State private var homeExecutionTarget: HomeExecutionTarget = .iphone
     @FocusState private var homePromptFocused: Bool
     // [T-home-simplify-1.41] "/" 面板、亮度选项、Mac 控制台入口(从标题栏收进来)。
@@ -2918,7 +2912,7 @@ struct ContentView: View {
                 if isWideLayout {
                     startHomeChatAction(.prefillPrompt(text))
                 } else {
-                    homePrompt = text
+                    homeDraft.text = text
                     homePromptFocused = true
                 }
             },
@@ -2929,34 +2923,6 @@ struct ContentView: View {
         .background(LeoTheme.ColorToken.groupedBackground)
     }
 
-    /// The primary home surface is the Agent running on this iPhone. Macs are
-    /// selectable execution destinations, never a prerequisite or the product's
-    /// default identity.
-    @ViewBuilder
-    private func agentHomeListSection(hasSessions: Bool) -> some View {
-        if !isSelecting, !isSearching, hasSessions || shouldShowFilterChips {
-            Section {
-                if hasSessions {
-                    agentHomeCard(compact: true)
-                        .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
-                }
-                if shouldShowFilterChips {
-                    sessionFilterChips
-                        .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 8, trailing: 12))
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
-                }
-                if hasSessions == false, shouldShowFilterChips {
-                    emptyFilterHint
-                        .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
-                }
-            }
-        }
-    }
 
     /// [T-session-filter-trap] 筛选 chips 的显示**不能**跟着"筛选结果是否为空"走。
     ///
@@ -2981,14 +2947,8 @@ struct ContentView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")
                         .foregroundStyle(.secondary)
-                    TextField("搜索对话", text: $searchText)
-                        .textFieldStyle(.plain)
-                        .autocorrectionDisabled()
-                        .submitLabel(.search)
-                        .focused($searchFocused)
-                        .onChange(of: searchText) { _ in scheduleSearch() }
-                    Button("取消") { dismissSearch() }
-                        .font(.subheadline)
+                    HomeSearchField(draft: searchDraft, isFocused: $searchFocused,
+                                    onChange: { scheduleSearch() }, onCancel: { dismissSearch() })
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
@@ -3023,14 +2983,13 @@ struct ContentView: View {
                     HomeResultBanner(text: result.text,
                                      tone: result.outcome == .succeeded ? .success : .info) { homeNativeResult = nil }
                 }
-                HomeComposerBar(
-                    text: $homePrompt,
+                HomeComposerHost(
+                    draft: homeDraft,
                     isFocused: $homePromptFocused,
                     capsule: homeCapsuleLabel,
                     capsuleMenu: AnyView(homeCapsuleMenuContent),
                     plusMenu: AnyView(homePlusMenuContent),
                     isBusy: homeRoutingInProgress,
-                    canSend: canRunHomePrompt,
                     onSubmit: { runHomePrompt() },
                     onSlash: {
                         homePromptFocused = false
@@ -3042,6 +3001,17 @@ struct ContentView: View {
             }
             .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: homeNativeResult?.text)
             .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: homeRoutingError)
+            // 输入栏后面垫一层渐变到页面底色:列表滚到底下时在输入栏上方淡出。系统的边缘模糊太轻,
+            // 会话标题仍会糊在占位字下面,输入栏下面也露出半截会话(1.42.1 真机截图)。
+            .frame(maxWidth: .infinity)
+            .background(alignment: .bottom) {
+                LinearGradient(stops: [.init(color: Color(uiColor: .systemBackground).opacity(0), location: 0),
+                                       .init(color: Color(uiColor: .systemBackground), location: 0.3)],
+                               startPoint: .top, endPoint: .bottom)
+                    .padding(.top, -28)
+                    .ignoresSafeArea(edges: .bottom)
+                    .allowsHitTesting(false)
+            }
         }
     }
 
@@ -3184,250 +3154,6 @@ struct ContentView: View {
     // 很深的类型链。真机主线程栈只有 1MB,Swift 运行时解码这棵合并后的
     // 泛型元数据会递归爆栈(启动即 SIGSEGV);模拟器主线程栈 8MB 测不出。
     // AnyView 在卡片边界截断类型累积,祖先链只看到一个不透明节点。
-    private func agentHomeCard(compact: Bool) -> AnyView {
-        let hasProviders = !providerStore.instances.isEmpty
-        let hasModel = !providerStore.modelGroups.isEmpty
-        let activeCount = sidebarActivityTracker.activeSessions.count
-        let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
-
-        return AnyView(VStack(alignment: .leading, spacing: compact ? 14 : 18) {
-            HStack(spacing: 12) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.accentColor.opacity(0.14))
-                    Image(systemName: isIPad ? "ipad" : "iphone")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(.tint)
-                }
-                .frame(width: 44, height: 44)
-                .accessibilityHidden(true)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(isIPad ? "此 iPad 工作区" : "此 iPhone 工作区")
-                        .font(.headline.weight(.bold))
-                    Text("基础动作直接完成，复杂任务交给 Agent")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-
-                Spacer(minLength: 8)
-
-                HStack(spacing: 5) {
-                    Circle()
-                        .fill(activeCount > 0 ? LeoTheme.ColorToken.success : Color.accentColor)
-                        .frame(width: 7, height: 7)
-                        .leoPulse(active: activeCount > 0)
-                    Text(activeCount > 0
-                         ? String(localized: "本机运行中 \(activeCount)")
-                         : String(localized: "本机就绪"))
-                        .font(.caption2.weight(.semibold))
-                        .lineLimit(1)
-                }
-                .padding(.horizontal, 9)
-                .padding(.vertical, 6)
-                .background(LeoTheme.ColorToken.elevatedSurface, in: Capsule())
-            }
-
-            VStack(alignment: .leading, spacing: 10) {
-                Text("今天想完成什么？")
-                    .font(.subheadline.weight(.semibold))
-
-                TextField("说出目标，例如打开手电筒、记个待办…", text: $homePrompt, axis: .vertical)
-                    .focused($homePromptFocused)
-                    .onAppear { LeoPerf.coldStep("inputReady") }
-                    .lineLimit(compact ? 2...4 : 3...6)
-                    .textFieldStyle(.plain)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-                    .frame(minHeight: compact ? 72 : 92, alignment: .topLeading)
-                    .background(LeoTheme.ColorToken.background, in: RoundedRectangle(cornerRadius: LeoTheme.Radius.field, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: LeoTheme.Radius.field, style: .continuous)
-                            .stroke(LeoTheme.ColorToken.separator.opacity(0.45), lineWidth: 0.5)
-                    }
-                    .submitLabel(.send)
-                    .onSubmit { runHomePrompt() }
-                    .onChange(of: homePrompt) { _ in homeRoutingError = nil }
-
-                HStack(spacing: 10) {
-                    homeTargetMenu
-                    FullAutoBadge()
-                    Spacer(minLength: 8)
-                    if homeNativeTask != nil {
-                        Button("取消") {
-                            homeNativeTask?.cancel()
-                            homeNativeResult = .init(text: "等待已取消；已经发生的操作不会自动撤销。", outcome: .cancelled)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    Button(action: runHomePrompt) {
-                        HStack(spacing: 6) {
-                            if homeRoutingInProgress {
-                                ProgressView()
-                                    .tint(.white)
-                            } else {
-                                Text("开始")
-                                Image(systemName: "paperplane.fill")
-                            }
-                        }
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 15)
-                        .frame(minHeight: LeoTheme.TouchTarget.minimum)
-                        .background(Color.accentColor, in: Capsule())
-                    }
-                    .buttonStyle(LeoSquishButtonStyle())
-                    .disabled(!canRunHomePrompt)
-                    .opacity(canRunHomePrompt ? 1 : 0.35)
-                    .accessibilityLabel(Text("开始执行"))
-                    .accessibilityHint(Text(homeExecutionTargetHint))
-                }
-
-                if let homeRoutingError {
-                    Label(homeRoutingError, systemImage: "exclamationmark.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(LeoTheme.ColorToken.destructive)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                        .accessibilityLabel(Text("任务未发送：\(homeRoutingError)"))
-                }
-                if let result = homeNativeResult {
-                    Label(result.text, systemImage: result.outcome == .succeeded
-                        ? "checkmark.circle.fill" : "info.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(result.outcome == .succeeded ? Color.green : Color.secondary)
-                        .textSelection(.enabled)
-                        .transition(.opacity)
-                }
-            }
-            .padding(14)
-            .background(LeoTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
-
-            if !hasModel, homeTargetIsIPhone {
-                Button {
-                    if hasProviders { showSelectModels = true } else { showAddProvider = true }
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: "slider.horizontal.3")
-                            .foregroundStyle(.tint)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(hasProviders ? "选择本机默认模型" : "连接本机模型")
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.primary)
-                            Text("基础系统动作无需模型；连接后可处理更复杂的任务")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.tertiary)
-                    }
-                    .padding(12)
-                    .background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: LeoTheme.Radius.field, style: .continuous))
-                }
-                .buttonStyle(.plain)
-            }
-
-            VStack(alignment: .leading, spacing: 9) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("选择新任务方式")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Text("每一项都会打开对应的本机工作流")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-                LazyVGrid(columns: columns, spacing: 8) {
-                    homeCapabilityButton("语音模式", systemImage: "waveform", tint: .orange, index: 0) {
-                        startHomeChatAction(.startVoice)
-                    }
-                    homeCapabilityButton("相机识别", systemImage: "camera.viewfinder", tint: .pink, index: 1) {
-                        startHomeChatAction(.openCamera)
-                    }
-                    homeCapabilityButton("本机文件", systemImage: "folder.fill", tint: .blue, index: 2) {
-                        activeToolSheet = .rootfsManagement
-                    }
-                    homeCapabilityButton("自动化", systemImage: "bolt.fill", tint: .indigo, index: 3) {
-                        activeToolSheet = .quickTasks
-                    }
-                    homeCapabilityButton("网页研究", systemImage: "globe", tint: .teal, index: 4) {
-                        activeToolSheet = .browser
-                    }
-                    homeCapabilityButton("iSH 终端", systemImage: "terminal.fill", tint: .green, index: 5) {
-                        showTerminal = true
-                    }
-                }
-            }
-
-            if hasModel, !quickTaskStore.composerTasks.isEmpty {
-                VStack(alignment: .leading, spacing: 9) {
-                    Text("一键任务")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(quickTaskStore.composerTasks) { task in
-                                Button { openQuickTask(task) } label: {
-                                    Label(task.displayName, systemImage: task.symbolName)
-                                        .font(.caption.weight(.semibold))
-                                        .lineLimit(1)
-                                        .padding(.horizontal, 11)
-                                        .frame(minHeight: LeoTheme.TouchTarget.minimum)
-                                        .background(LeoTheme.ColorToken.elevatedSurface, in: Capsule())
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                }
-            }
-
-            Button {
-                activeToolSheet = .capabilities
-            } label: {
-                Label("全部系统能力", systemImage: "square.grid.2x2")
-                    .font(.subheadline.weight(.medium))
-                    .frame(minHeight: LeoTheme.TouchTarget.minimum)
-            }
-            .buttonStyle(.plain)
-
-            NavigationLink {
-                GatewaySettingsView()
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: "desktopcomputer")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 28, height: 28)
-                        .background(LeoTheme.ColorToken.elevatedSurface, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("需要时切换到 Mac")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.primary)
-                        Text(gatewayStore.activeHosts.isEmpty
-                             ? (isIPad
-                                ? String(localized: "未连接，不影响 iPad 独立工作")
-                                : String(localized: "未连接，不影响 iPhone 独立工作"))
-                             : String(localized: "已配置 \(gatewayStore.activeHosts.count) 台，发送时验证连接"))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                }
-                .frame(minHeight: LeoTheme.TouchTarget.minimum)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(compact ? 14 : 18)
-        .background(LeoTheme.ColorToken.background, in: RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous)
-                .stroke(LeoTheme.ColorToken.separator.opacity(0.32), lineWidth: 0.5)
-        }
-        .shadow(color: .black.opacity(compact ? 0.04 : 0.07), radius: compact ? 8 : 14, y: compact ? 3 : 6)
-        .accessibilityElement(children: .contain))
-    }
 
     private var homeTargetIsIPhone: Bool {
         if case .iphone = homeExecutionTarget { return true }
@@ -3435,8 +3161,7 @@ struct ContentView: View {
     }
 
     private var canRunHomePrompt: Bool {
-        !homeRoutingInProgress
-            && !homePrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !homeRoutingInProgress && !homeDraft.trimmed.isEmpty
     }
 
     private var homeExecutionTargetHint: String {
@@ -3508,15 +3233,9 @@ struct ContentView: View {
                 Section("远程机器") {
                     ForEach(gatewayStore.activeHosts) { host in
                         Menu(host.name) {
-                            if host.isAndroidBody {
-                                Button("本机 Agent") {
-                                    selectHomeMac(host, key: "minis", name: "LeoPhoneAgent")
-                                }
-                            } else {
-                                ForEach(ComposerMacTarget.clis(for: host), id: \.0) { cli in
-                                    Button(cli.1) {
-                                        selectHomeMac(host, key: cli.0, name: cli.1)
-                                    }
+                            ForEach(ComposerMacTarget.clis(for: host), id: \.0) { cli in
+                                Button(cli.1) {
+                                    selectHomeMac(host, key: cli.0, name: cli.1)
                                 }
                             }
                         }
@@ -3565,7 +3284,7 @@ struct ContentView: View {
     }
 
     private func runHomePrompt() {
-        let prompt = homePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let prompt = homeDraft.trimmed
         guard canRunHomePrompt else { return }
         switch homeExecutionTarget {
         case .iphone:
@@ -3584,7 +3303,7 @@ struct ContentView: View {
                 return
             }
             homeRoutingError = nil
-            homePrompt = ""
+            homeDraft.text = ""
             LeoHaptics.impact(.medium)
             startHomeChatAction(.sendPrompt(prompt))
         case .mac(let hostId, let cliKey, let cliName):
@@ -3601,7 +3320,7 @@ struct ContentView: View {
             homeRoutingError = nil
             // [T-quick-1.39.1] 先发后验:不再先探测(最长 8 秒)。连不上时 Mac 会话里报错,
             // 任务留在那里可重试(HarnessSessionDriver 失败后保持 pending 并保留首条)。
-            homePrompt = ""
+            homeDraft.text = ""
             LeoHaptics.impact(.medium)
             openMacChat(host, cliKey, cliName, prompt: prompt)
         }
@@ -3637,8 +3356,8 @@ struct ContentView: View {
             // homeNativeResult fires them. [T-home-sensory-feedback]
             if result.outcome == .succeeded,
                let clearingPrompt,
-               homePrompt.trimmingCharacters(in: .whitespacesAndNewlines) == clearingPrompt {
-                homePrompt = ""
+               homeDraft.trimmed == clearingPrompt {
+                homeDraft.text = ""
             }
         }
     }
@@ -3647,10 +3366,13 @@ struct ContentView: View {
 
     private func scheduleSearch() {
         searchTask?.cancel()
-        let query = searchText.trimmingCharacters(in: .whitespaces)
+        let hasQuery = !searchDraft.text.isEmpty
+        if searchHasQuery != hasQuery { searchHasQuery = hasQuery }
+        let query = searchDraft.text.trimmingCharacters(in: .whitespaces)
         guard !query.isEmpty else {
             searchMatchedIds = nil
             searchMatchSnippets = [:]
+            appliedSearchQuery = nil
             return
         }
         searchTask = Task {
@@ -3659,6 +3381,7 @@ struct ContentView: View {
             let results = await ChatStore.shared.searchSessions(query: query)
             if !Task.isCancelled {
                 searchMatchedIds = Set(results.map(\.session.id))
+                appliedSearchQuery = query
                 // Build a sessionId → snippet map for body-only matches
                 // (title matches don't need a snippet — the highlighted
                 // title already shows the hit). T-search-highlight 8edb74f2.
@@ -3675,7 +3398,9 @@ struct ContentView: View {
 
     private func dismissSearch() {
         withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { showSearchBar = false }
-        searchText = ""
+        searchDraft.text = ""
+        searchHasQuery = false
+        appliedSearchQuery = nil
         searchMatchedIds = nil
         searchMatchSnippets = [:]
         searchTask?.cancel()
@@ -3691,7 +3416,7 @@ struct ContentView: View {
     /// text counts as empty. No-op when the search bar isn't shown.
     private func dismissSearchIfEmptyOnNavigate() {
         guard showSearchBar else { return }
-        guard searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard searchDraft.trimmed.isEmpty else { return }
         dismissSearch()
     }
 
@@ -3741,6 +3466,12 @@ struct ContentView: View {
     /// [T-session-attention-bar] Sessions carrying an actionable badge.
     /// `.unread` = finished (or user-flagged) and not yet reviewed;
     /// `.paused` = interrupted and awaiting a resume.
+    private func sidebarIsActive(_ id: String) -> Bool {
+        if runningSessionIds.contains(id) { return true }
+        if let real = SessionActivityTracker.shared.draftAliases[id] { return runningSessionIds.contains(real) }
+        return false
+    }
+
     private var attentionSessions: [ChatSession] {
         displaySessions.filter { session in
             guard let states = badgeStore.badgeStates[session.id] else { return false }
@@ -3905,126 +3636,20 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - FAB Row (New Chat + Search)
-
-    @State private var fabDidDrag = false
     @FocusState private var searchFocused: Bool
 
-    @State private var searchDragOffset: CGFloat = 0
     @State private var searchDidDrag = false
 
-    private var fabRow: some View {
-        ZStack {
-            // New chat FAB (draggable)
-            DraggableFAB(
-                fabOnLeft: $fabOnLeft,
-                dragOffset: $fabDragOffset,
-                didDrag: $fabDidDrag
-            ) {
-                if !fabDidDrag { openSession(Self.makeNewSessionId()) }
-            } label: {
-                Circle()
-                    .fill(Color(UIColor { $0.userInterfaceStyle == .dark
-                        ? UIColor(red: 80/255, green: 76/255, blue: 66/255, alpha: 1)
-                        : UIColor(red: 183/255, green: 175/255, blue: 150/255, alpha: 1) }))
-                    .overlay {
-                        Image(systemName: {
-                            if #available(iOS 17.0, *) { return "bubble.left.and.text.bubble.right" }
-                            return "plus.message.fill"
-                        }())
-                            .font(.system(size: 22, weight: .semibold))
-                            .foregroundStyle(.white)
-                    }
-                    .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
-                    .contextMenu {
-                        let groups = Array(ProviderConfigStore.shared.config.modelGroups.prefix(10))
-                        if !groups.isEmpty {
-                            Section(String(localized: "New Chat with Group")) {
-                                ForEach(groups) { group in
-                                    Button {
-                                        openSession(Self.makeNewSessionId(groupId: group.id))
-                                    } label: {
-                                        Label(group.name, systemImage: "square.stack.3d.up")
-                                    }
-                                }
-                            }
-                        }
-                    }
-            }
-            .opacity(sessions.isEmpty && providerStore.modelGroups.isEmpty ? 0 : 1)
-            .allowsHitTesting(!(sessions.isEmpty && providerStore.modelGroups.isEmpty))
-            .accessibilityHidden(sessions.isEmpty && providerStore.modelGroups.isEmpty)
-
-            // Search FAB or inline search bar (hidden when no sessions)
-            if !sessions.isEmpty {
-                if showSearchBar {
-                    // Inline search bar — fills space between edges, leaving room for New Chat
-                    GeometryReader { geo in
-                        let fabSize: CGFloat = 56
-                        let edgePad: CGFloat = 16
-                        let gap: CGFloat = 10
-                        let barX: CGFloat = fabOnLeft
-                            ? edgePad + fabSize + gap
-                            : edgePad
-                        let barWidth: CGFloat = geo.size.width - edgePad * 2 - fabSize - gap
-
-                        HStack(spacing: 8) {
-                            Image(systemName: "magnifyingglass")
-                                .font(.system(size: 15, weight: .medium))
-                                .foregroundStyle(.secondary)
-                            TextField("Search chats...", text: $searchText)
-                                .textFieldStyle(.plain)
-                                .autocorrectionDisabled()
-                                .focused($searchFocused)
-                                .onChange(of: searchText) { _ in scheduleSearch() }
-                            Button { dismissSearch() } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .padding(.horizontal, 18)
-                        .frame(width: barWidth, height: fabSize)
-                        .background(Color(UIColor.secondarySystemBackground))
-                        .clipShape(Capsule())
-                        .shadow(color: .black.opacity(0.1), radius: 6, x: 0, y: 2)
-                        .position(x: barX + barWidth / 2, y: fabSize / 2)
-                    }
-                    .transition(.asymmetric(
-                        insertion: .scale(scale: 0.85, anchor: fabOnLeft ? .leading : .trailing).combined(with: .opacity),
-                        removal: .scale(scale: 0.85, anchor: fabOnLeft ? .leading : .trailing).combined(with: .opacity)
-                    ))
-                    .onAppear { searchFocused = true }
-                } else {
-                    // Search FAB (draggable, inverted side)
-                    DraggableFAB(
-                        fabOnLeft: $fabOnLeft,
-                        dragOffset: $searchDragOffset,
-                        didDrag: $searchDidDrag,
-                        inverted: true
-                    ) {
-                        if !searchDidDrag {
-                            withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { showSearchBar = true }
-                        }
-                    } label: {
-                        Circle()
-                            .fill(Color(UIColor.secondarySystemBackground))
-                            .overlay {
-                                Image(systemName: "magnifyingglass")
-                                    .font(.system(size: 22, weight: .semibold))
-                                    .foregroundStyle(Color(UIColor.label))
-                            }
-                            .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
-                    }
-                    .transition(.asymmetric(
-                        insertion: .scale(scale: 0.85, anchor: fabOnLeft ? .leading : .trailing).combined(with: .opacity),
-                        removal: .scale(scale: 0.85, anchor: fabOnLeft ? .leading : .trailing).combined(with: .opacity)
-                    ))
-                }
-            }
-        }
-        .frame(height: 56)
-        .padding(.bottom, 20)
+    /// 收起首页上盖着的面板,返回是否真的收起了什么(调用方据此多等一下再推页面)。
+    @discardableResult
+    private func dismissSheetsForNavigation() -> Bool {
+        let had = activeToolSheet != nil || showHomeActions || showCommandPalette
+        activeToolSheet = nil
+        showHomeActions = false
+        showCommandPalette = false
+        return had
     }
+
 
     // MARK: - Selectable Row
 
@@ -4040,7 +3665,9 @@ struct ContentView: View {
                 Image(systemName: selectedIds.contains(session.id) ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 22))
                     .foregroundStyle(selectedIds.contains(session.id) ? Color.accentColor : Color(UIColor.tertiaryLabel))
-                SessionRow(session: session)
+                SessionRow(session: session,
+                           isActive: sidebarIsActive(session.id),
+                           isSuspended: sidebarConcurrencyManager.isSuspended(session.id))
             }
             .padding(.leading, 16)
         }
@@ -5219,67 +4846,6 @@ private struct DocumentExportPicker: UIViewControllerRepresentable {
     func updateUIViewController(_ vc: UIDocumentPickerViewController, context: Context) {}
 }
 
-// MARK: - Draggable FAB
-
-/// A floating action button that can be dragged horizontally and snaps to the left or right edge.
-/// Uses UIKit's UIPanGestureRecognizer via UIViewRepresentable for reliable, low-latency drag tracking
-/// that doesn't conflict with SwiftUI's Button/tap gestures.
-private struct DraggableFAB<Label: View>: View {
-    @Binding var fabOnLeft: Bool
-    @Binding var dragOffset: CGFloat
-    @Binding var didDrag: Bool
-    /// When true, this FAB sits on the opposite side of `fabOnLeft` and inverts the snap logic.
-    var inverted: Bool = false
-    var onTap: () -> Void
-    @ViewBuilder var label: () -> Label
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private let fabSize: CGFloat = 56
-    private let edgePadding: CGFloat = 16
-
-    var body: some View {
-        GeometryReader { geo in
-            let screenWidth = geo.size.width
-            let leftX = edgePadding + fabSize / 2
-            let rightX = screenWidth - edgePadding - fabSize / 2
-            let onLeft = inverted ? !fabOnLeft : fabOnLeft
-            let restingX = onLeft ? leftX : rightX
-
-            label()
-                .frame(width: fabSize, height: fabSize)
-                .position(x: restingX + dragOffset, y: fabSize / 2)
-                .onTapGesture {
-                    onTap()
-                }
-                .simultaneousGesture(
-                    DragGesture(minimumDistance: 10)
-                        .onChanged { value in
-                            didDrag = true
-                            dragOffset = value.translation.width
-                        }
-                        .onEnded { value in
-                            let currentCenter = restingX + value.translation.width
-                            let droppedOnLeft = currentCenter < screenWidth / 2
-                            // For inverted FAB: dropping on left means the *other* FAB goes right
-                            let newFabOnLeft = inverted ? !droppedOnLeft : droppedOnLeft
-                            let changed = fabOnLeft != newFabOnLeft
-                            withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.75)) {
-                                fabOnLeft = newFabOnLeft
-                                dragOffset = 0
-                            }
-                            if changed {
-                                LeoHaptics.impact(.medium)
-                            }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                                didDrag = false
-                            }
-                        }
-                )
-        }
-        .frame(height: fabSize)
-    }
-}
-
 // MARK: - Equatable-gated context menu
 
 /// [T-ios-sidebar-contextmenu-memory] + [T-ios-crash-contextmenu-uaf]
@@ -5491,8 +5057,8 @@ private struct SessionRow: View, Equatable {
     /// observed trackers directly. [T-ios-ipad-sidebar-running-indicator-stale]
     var isActiveOverride: Bool? = nil
     var isSuspendedOverride: Bool? = nil
-    @ObservedObject private var activityTracker = SessionActivityTracker.shared
-    @ObservedObject private var concurrencyManager = SessionConcurrencyManager.shared
+    // 运行 / 挂起状态由列表按值传进来(见上),行本身不再订阅 tracker:它每轮都在变,
+    // 以前每次变化所有可见行都重画一遍。
     @ObservedObject private var lockStore = SessionLockStore.shared
     // [T-ios-session-paused-badge] Observe the badge-state queue so a session's
     // "!" paused badge appears/clears in place (same row identity) when the
@@ -5520,11 +5086,11 @@ private struct SessionRow: View, Equatable {
     }
 
     private var isActive: Bool {
-        isActiveOverride ?? activityTracker.isActive(session.id)
+        isActiveOverride ?? SessionActivityTracker.shared.isActive(session.id)
     }
 
     private var isSuspended: Bool {
-        isSuspendedOverride ?? concurrencyManager.isSuspended(session.id)
+        isSuspendedOverride ?? SessionConcurrencyManager.shared.isSuspended(session.id)
     }
 
     private var density: LeoSessionListDensity {
@@ -5849,14 +5415,39 @@ private struct SessionRow: View, Equatable {
             return String(localized: "Yesterday")
         } else {
             let diff = calendar.dateComponents([.day], from: date, to: now)
-            let formatter = DateFormatter()
-            if let days = diff.day, days < 7 {
-                formatter.setLocalizedDateFormatFromTemplate("EEEE")
-            } else {
-                formatter.setLocalizedDateFormatFromTemplate("Md")
-            }
-            return formatter.string(from: date)
+            let weekday = (diff.day ?? 7) < 7
+            return (weekday ? RowDateFormatters.weekday : RowDateFormatters.monthDay).string(from: date)
         }
+    }
+}
+
+/// 行时间用的两个格式器:建一个 DateFormatter 要几十微秒,以前每画一行建一个。
+/// 语言或时区变了(系统通知)就重建。只在主线程用。
+@MainActor
+private enum RowDateFormatters {
+    private static var cache: (weekday: DateFormatter, monthDay: DateFormatter)?
+    private static var observer: NSObjectProtocol?
+
+    static var weekday: DateFormatter { formatters().weekday }
+    static var monthDay: DateFormatter { formatters().monthDay }
+
+    private static func formatters() -> (weekday: DateFormatter, monthDay: DateFormatter) {
+        if let cache { return cache }
+        if observer == nil {
+            observer = NotificationCenter.default.addObserver(
+                forName: NSLocale.currentLocaleDidChangeNotification, object: nil, queue: .main
+            ) { _ in MainActor.assumeIsolated { RowDateFormatters.cache = nil } }
+            _ = NotificationCenter.default.addObserver(
+                forName: .NSSystemTimeZoneDidChange, object: nil, queue: .main
+            ) { _ in MainActor.assumeIsolated { RowDateFormatters.cache = nil } }
+        }
+        let weekday = DateFormatter()
+        weekday.setLocalizedDateFormatFromTemplate("EEEE")
+        let monthDay = DateFormatter()
+        monthDay.setLocalizedDateFormatFromTemplate("Md")
+        let made = (weekday: weekday, monthDay: monthDay)
+        cache = made
+        return made
     }
 }
 

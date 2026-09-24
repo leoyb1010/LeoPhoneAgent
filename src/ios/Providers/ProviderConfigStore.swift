@@ -2235,7 +2235,8 @@ final class ProviderConfigStore: ObservableObject {
     /// Manual refresh: fetch models from the API (with models.dev fallback) and merge into entries.
     /// Appends new models without removing user-added custom entries.
     /// Errors are logged but not thrown (fire-and-forget friendly).
-    func refreshModels(for instance: ProviderInstance) async {
+    @discardableResult
+    func refreshModels(for instance: ProviderInstance) async -> Bool {
         // [T-mimo-shadow-voice] No longer skipped for "voice-only" providers.
         // Refresh ALWAYS runs the real /models fetch so a mixed vendor (e.g.
         // MiMo: text chat + voice on one host) gets its text models; audio-modality
@@ -2247,8 +2248,10 @@ final class ProviderConfigStore: ObservableObject {
             replaceEntries(for: instance.id, models: result.models, caller: "refreshModels(manual)")
             logger.info("[ModelList] refreshModels (MANUAL): instance=\(instance.label) source=\(result.source) count=\(result.models.count)")
             for w in result.warnings { logger.warning("⚠️ \(w)") }
+            return true
         } catch {
             logger.error("[ModelList] refreshModels (MANUAL) FAILED type=\(String(describing: type(of: error)))")
+            return false
         }
     }
 
@@ -2309,6 +2312,23 @@ final class ProviderConfigStore: ObservableObject {
                 await self?.refreshModels(for: instance)
                 logger.info("[VoiceMigrate] one-time refresh done: instance=\(instance.label) hasVoiceModels=\(self?.hasVoiceModels(for: instance.id) ?? false)")
             }
+        }
+    }
+
+    /// [T-codex-live-models] 升级到读实时目录的这一版后,把已登录的 ChatGPT(OAuth)实例立即刷新一次:
+    /// 不等每日刷新,GPT-6 这类新模型装完就出现在列表里。只跑一次。
+    private static let codexLiveCatalogMigrationKey = "codexLiveCatalogMigration.v1.done"
+    func refreshCodexCatalogOnceIfNeeded() {
+        guard !UserDefaults.standard.bool(forKey: Self.codexLiveCatalogMigrationKey) else { return }
+        let targets = config.instances.filter {
+            $0.isEnabled && $0.providerType == .openAI && $0.credentialType == .oauth && $0.effectiveCustomBaseURL == nil
+        }
+        Task { [weak self] in
+            guard let self else { return }
+            var allOK = true
+            for instance in targets where !(await self.refreshModels(for: instance)) { allOK = false }
+            // 只有都成功了才记"做过":开机刚好离线,下次启动再试。
+            if allOK { UserDefaults.standard.set(true, forKey: Self.codexLiveCatalogMigrationKey) }
         }
     }
 
@@ -2411,7 +2431,9 @@ final class ProviderConfigStore: ObservableObject {
             if let manualToken = ProviderKeychainHelper.loadOAuthString(instanceId: instance.id, account: "manual-oauth-token") {
                 return try await OpenAIModelsAPI.fetchModels(apiKey: manualToken, baseURL: customBase, appendV1Suffix: appendV1, forceRefresh: forceRefresh, userAgent: ua)
             }
-            return OpenAIModelsAPI.fetchModelsOAuth()
+            let hasModels = await MainActor.run { !ProviderConfigStore.shared.visibleEntries(for: instance.id).isEmpty }
+            return try await OpenAIModelsAPI.fetchModelsCodexOAuth(
+                instanceId: instance.id, forceRefresh: forceRefresh, instanceHasModels: hasModels)
         case (.antigravity, .apiKey):
             // Antigravity only supports OAuth
             return ModelsDevAPI.enrichModels(AntigravityModelsAPI.fetchModelsBuiltIn())
@@ -2675,9 +2697,13 @@ final class ProviderConfigStore: ObservableObject {
 enum ModelRefreshError: LocalizedError {
     case noCredential
     case modelsDevNoMatch(warnings: [String])
+    /// [T-codex-live-models] ChatGPT 登录的模型目录这次拉不到:保留现有模型,不拿内置清单覆盖。
+    case catalogUnavailable(reason: String)
 
     var errorDescription: String? {
         switch self {
+        case .catalogUnavailable(let reason):
+            return "ChatGPT 模型目录暂时拉不到(\(reason)),已保留现有模型。"
         case .noCredential:
             return "No API key configured for this provider instance."
         case .modelsDevNoMatch(let warnings):

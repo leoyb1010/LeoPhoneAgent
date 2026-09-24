@@ -247,6 +247,12 @@ private let logger = AppLogger(category: "SessionsOffload")
         var output: [String: Any] = [:]
 
         Task { @MainActor in
+            // 能力自检保留的 id 不是聊天会话:不能往里发消息(它的探测命令免审批)。
+            if let sid = sessionId, OffloadPermissionManager.isReservedSessionId(sid) {
+                output = ["ok": false, "error": "session_unavailable"]
+                sem.signal()
+                return
+            }
             // Resolve / create the VM.
             let vm: AIChatViewModel
             let isNew: Bool
@@ -343,6 +349,11 @@ private let logger = AppLogger(category: "SessionsOffload")
         var output: [String: Any] = [:]
 
         Task { @MainActor in
+            if OffloadPermissionManager.isReservedSessionId(sessionId) {
+                output = ["ok": false, "error": "session_not_found"]
+                sem.signal()
+                return
+            }
             let (vm, fresh) = ViewModelCache.shared.getOrCreate(for: sessionId)
             if fresh { await vm.loadSession() }
 

@@ -218,7 +218,7 @@ struct StorageManagementView: View {
         }
     }
 
-    private func storageRow(icon: String, color: Color, label: String, value: String) -> some View {
+    private func storageRow(icon: String, color: Color, label: LocalizedStringKey, value: String) -> some View {
         HStack {
             Image(systemName: icon)
                 .font(.system(size: 9))

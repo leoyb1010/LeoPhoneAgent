@@ -2337,7 +2337,7 @@ struct AIChatView: View {
     @ViewBuilder
     private var kernelBootOverlay: some View {
         switch vm.kernelStatus {
-        case .booting:
+        case .booting where vm.kernelBootShowsOverlay:
             ZStack {
                 ChatColors.background
                     .ignoresSafeArea()
@@ -3388,7 +3388,7 @@ struct AIChatView: View {
             // min(measured, cap).
             let transcriptMaxHeight: CGFloat = 100
             let waveform = VStack(spacing: 6) {
-                AudioWaveformView(levels: speechManager.audioLevels)
+                LiveAudioWaveformView(meter: speechManager.levelMeter)
                     .frame(maxWidth: .infinity)
                     .padding(.horizontal, 8)
                 if !speechManager.recognizedText.isEmpty {

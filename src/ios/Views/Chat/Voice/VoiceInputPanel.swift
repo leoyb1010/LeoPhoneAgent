@@ -30,7 +30,8 @@ final class VoiceInputViewModel: ObservableObject {
         }
     }
     @Published var transcript: String = ""
-    @Published var waveformLevels: [Float] = Array(repeating: 0.1, count: 20)
+    /// 波形电平单独一个小对象,只有波形订阅;不再每 10 ms 让整个聊天页重算。
+    let waveformMeter = AudioLevelMeter(levels: Array(repeating: 0.1, count: 20))
     @Published var rippleScale: [CGFloat] = [1.0, 1.0, 1.0]
     /// Inline mode: user double-tapped the transcript to correct it by keyboard.
     /// While editing, VAD is paused so new speech doesn't clobber manual edits.
@@ -932,7 +933,7 @@ extension VoiceInputViewModel: VoiceActivityDelegate {
     }
 
     func voiceActivityDidUpdate(pcmData: Data) {
-        waveformLevels = Self.computeWaveformLevels(from: pcmData)
+        waveformMeter.set(Self.computeWaveformLevels(from: pcmData))
     }
 
     /// Capture was interrupted (call/Siri/route) and couldn't auto-resume — reset

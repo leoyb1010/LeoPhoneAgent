@@ -42,6 +42,8 @@ extension AIChatViewModel {
         // [T-composer-simplify-1.41] 原来输入框上方的两个 chip 收进 "/":快捷任务、交给 Mac。
         SlashCommand(id: "tasks", icon: "bolt.fill", title: "Tasks", subtitle: "快捷任务:浏览、运行或新建"),
         SlashCommand(id: "mac", icon: "desktopcomputer", title: "Mac", subtitle: "把这个任务交给一台 Mac 继续做"),
+        // [T-full-auto-quick] 全自动一键开关(只能你自己输入;Agent、快捷指令、机器人都没有这个动作)。
+        SlashCommand(id: "auto", icon: "bolt.fill", title: "Auto", subtitle: "全自动开 / 关:打开后不再逐项确认"),
     ]
 
     /// Show slash menu without replacing existing input text.
@@ -420,6 +422,15 @@ extension AIChatViewModel {
             NotificationCenter.default.post(name: .leoOpenQuickTaskPicker, object: nil)
         case "mac":
             NotificationCenter.default.post(name: .leoOpenMacSwitch, object: nil)
+        case "auto":
+            let on = !FullAutoStore.shared.enabled
+            FullAutoStore.shared.enabled = on
+            UserDefaults.standard.set(true, forKey: FullAutoBadge.explainedKey)
+            LeoHaptics.impact(on ? .medium : .light)
+            appendSystemInfo(on
+                ? "全自动已打开:写文件、跑命令、调用手机能力、改设置都不再逐项确认。点输入框上方的「全自动」或再发 /auto 关闭。"
+                : "全自动已关闭:敏感操作会先问你。",
+                icon: on ? "bolt.fill" : "bolt")
         default:
             break
         }

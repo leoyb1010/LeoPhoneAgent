@@ -17,6 +17,9 @@ final class AgentActivityLog: ObservableObject {
     @Published private(set) var persistenceAvailable = true
 
     private static let maxRows = 5000
+    /// 裁剪旧记录每 200 次写入做一次(启动时也做一次):以前每个工具边界都在主线程上整表排序删一遍。
+    private static let pruneEvery = 200
+    private var appendsSincePrune = 0
     private var db: OpaquePointer?
     private let dbURL: URL
 
@@ -30,6 +33,7 @@ final class AgentActivityLog: ObservableObject {
         try? base.setResourceValues(resourceValues)
         dbURL = databaseURL ?? base.appendingPathComponent("agent-activity.db")
         openAndMigrate()
+        if db != nil { _ = prune() }
         recoverRunsInterruptedByPreviousProcess()
     }
 
@@ -44,6 +48,8 @@ final class AgentActivityLog: ObservableObject {
             return
         }
         exec("PRAGMA journal_mode=WAL")
+        // 本机活动日志:WAL 下 NORMAL 只在断电时可能丢最后几条,换来每次提交少一次 fsync(写在主线程上)。
+        exec("PRAGMA synchronous=NORMAL")
         exec("""
             CREATE TABLE IF NOT EXISTS activity_event (
                 id          TEXT PRIMARY KEY,
@@ -73,6 +79,8 @@ final class AgentActivityLog: ObservableObject {
         """)
         exec("CREATE INDEX IF NOT EXISTS idx_run_state_session_updated ON agent_run_state(session_id, updated_at DESC)")
         exec("CREATE INDEX IF NOT EXISTS idx_run_state_phase ON agent_run_state(phase)")
+        exec("CREATE INDEX IF NOT EXISTS idx_activity_at ON activity_event(at DESC)")
+        exec("CREATE INDEX IF NOT EXISTS idx_run_state_updated ON agent_run_state(updated_at DESC)")
         ensureColumn("result_message_id", definition: "TEXT", table: "agent_run_state")
         // Backfill the latest privacy-safe event for databases created before
         // durable run state existed. This table is device-local and never
@@ -184,24 +192,31 @@ final class AgentActivityLog: ObservableObject {
         }
         sqlite3_finalize(statement)
         guard inserted, upsertRunState(from: event) else { return false }
-        guard exec("""
-            DELETE FROM activity_event
-            WHERE id NOT IN (
-                SELECT id FROM activity_event ORDER BY at DESC LIMIT \(Self.maxRows)
-            )
-        """) else { return false }
-        guard exec("""
-            DELETE FROM agent_run_state
-            WHERE run_id NOT IN (
-                SELECT run_id FROM agent_run_state
-                ORDER BY updated_at DESC LIMIT 1000
-            )
-        """) else { return false }
+        appendsSincePrune += 1
+        if appendsSincePrune >= Self.pruneEvery {
+            guard prune() else { return false }
+        }
         guard exec("COMMIT") else { return false }
         committed = true
         persistenceAvailable = true
         revision &+= 1
         return true
+    }
+
+    private func prune() -> Bool {
+        appendsSincePrune = 0
+        return exec("""
+            DELETE FROM activity_event
+            WHERE id NOT IN (
+                SELECT id FROM activity_event ORDER BY at DESC LIMIT \(Self.maxRows)
+            )
+        """) && exec("""
+            DELETE FROM agent_run_state
+            WHERE run_id NOT IN (
+                SELECT run_id FROM agent_run_state
+                ORDER BY updated_at DESC LIMIT 1000
+            )
+        """)
     }
 
     /// A new turn supersedes any resumable/nonterminal run left for the same

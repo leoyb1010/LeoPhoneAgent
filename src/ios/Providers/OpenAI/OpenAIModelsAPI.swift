@@ -37,12 +37,101 @@ enum OpenAIModelsAPI {
         return models
     }
 
-    /// OAuth mode: return built-in Codex model list enriched with models.dev data.
-    /// OAuth tokens cannot call /v1/models, so we use the static list.
+    /// OAuth mode, offline fallback: the built-in Codex model list enriched with models.dev data.
     static func fetchModelsOAuth() -> [LLMModel] {
         let enriched = ModelsDevAPI.enrichModels(LLMModel.allOpenAICodexOAuth)
         logger.info("Using built-in Codex OAuth model list (\(enriched.count) models, enriched)")
         return enriched
+    }
+
+    /// [T-codex-live-models] OAuth mode: the live Codex catalog, the same list Codex CLI shows.
+    ///
+    /// OAuth tokens cannot call /v1/models, but the Codex backend has its own catalog at
+    /// `GET https://chatgpt.com/backend-api/codex/models?client_version=…` → `{models:[ModelInfo]}`
+    /// (codex-rs/codex-api/src/endpoint/models.rs). The old built-in list never learned about new
+    /// models (GPT-6 was missing for everyone). Models the server hides (`visibility != "list"`) stay
+    /// hidden; image generation is not a catalog model, so gpt-image-2 is kept from the built-in list.
+    ///
+    /// Failure never shrinks what you have: the last good catalog is reused; with no cache it throws
+    /// `ModelRefreshError.catalogUnavailable`, and the refresh keeps the existing entries (and the model
+    /// groups built on them). Only an instance with no models at all gets the built-in list (fresh login
+    /// while offline). Returning the built-in list on every failure used to let an offline launch delete
+    /// catalog-only models and prune them from groups.
+    static func fetchModelsCodexOAuth(instanceId: String, forceRefresh: Bool = false,
+                                      instanceHasModels: Bool = true) async throws -> [LLMModel] {
+        let cacheKey = "codex-oauth-\(instanceId)"
+        if !forceRefresh, let cached = OpenAIModelsCache.load(credential: cacheKey) {
+            logger.info("Returning \(cached.count) cached Codex catalog models")
+            return cached
+        }
+        let reason: String
+        do {
+            let token = try await CodexOAuthManager.shared.validAccessToken(instanceId: instanceId)
+            var components = URLComponents(string: "https://chatgpt.com/backend-api/codex/models")!
+            components.queryItems = [URLQueryItem(name: "client_version", value: OpenAIProvider.codexClientVersion)]
+            var request = URLRequest(url: components.url!)
+            request.httpMethod = "GET"
+            request.timeoutInterval = 20
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            request.setValue(OpenAIProvider.codexClientVersion, forHTTPHeaderField: "Version")
+            request.setValue("codex_cli_rs/\(OpenAIProvider.codexClientVersion) (iOS; arm64)", forHTTPHeaderField: "User-Agent")
+            request.setValue("codex_cli_rs", forHTTPHeaderField: "Originator")
+            request.setValue("application/json", forHTTPHeaderField: "Accept")
+            if let accountId = await CodexOAuthManager.shared.accountId(instanceId: instanceId) {
+                request.setValue(accountId, forHTTPHeaderField: "Chatgpt-Account-Id")
+            }
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+            if (200..<300).contains(status) {
+                let models = parseCodexCatalog(data)
+                if !models.isEmpty {
+                    let result = ModelsDevAPI.enrichModels(models) + [LLMModel.gptImage2]
+                    OpenAIModelsCache.save(result, credential: cacheKey)
+                    logger.info("Codex catalog: \(models.count) models")
+                    return result
+                }
+                reason = "目录为空或无法解析"
+            } else {
+                reason = "HTTP \(status)"
+            }
+        } catch {
+            reason = error.localizedDescription
+        }
+        logger.error("Codex catalog unavailable: \(reason)")
+        if let cached = OpenAIModelsCache.loadAnyAge(credential: cacheKey) {
+            return cached
+        }
+        if !instanceHasModels {
+            return fetchModelsOAuth()
+        }
+        throw ModelRefreshError.catalogUnavailable(reason: reason)
+    }
+
+    /// `{models:[{slug, display_name, visibility, context_window, input_modalities, supported_reasoning_levels, priority}]}`.
+    /// Records each model's highest reasoning effort so the thinking picker offers exactly what the server accepts.
+    static func parseCodexCatalog(_ data: Data) -> [LLMModel] {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let rows = json["models"] as? [[String: Any]] else { return [] }
+        var ceilings: [String: String] = [:]
+        let listed = rows.filter { ($0["visibility"] as? String ?? "list") == "list" }
+            .sorted { ($0["priority"] as? Int ?? Int.max) < ($1["priority"] as? Int ?? Int.max) }
+        let models: [LLMModel] = listed.compactMap { row in
+            guard let slug = row["slug"] as? String, !slug.isEmpty else { return nil }
+            let efforts = (row["supported_reasoning_levels"] as? [[String: Any]] ?? []).compactMap { $0["effort"] as? String }
+            if let top = CodexReasoningCeiling.highest(of: efforts) { ceilings[slug] = top.rawValue }
+            let inputs = row["input_modalities"] as? [String] ?? ["text"]
+            var modality: ModelModality = [.textInput, .textOutput]
+            if inputs.contains("image") { modality.insert(.imageInput) }
+            return LLMModel(
+                id: slug,
+                displayName: (row["display_name"] as? String) ?? modelDisplayName(from: slug),
+                provider: "OpenAI",
+                modalityOverride: modality,
+                contextWindow: row["context_window"] as? Int,
+                supportsReasoning: !efforts.isEmpty)
+        }
+        if !ceilings.isEmpty { CodexReasoningCeiling.save(ceilings) }
+        return models
     }
 
     private static func performFetch(_ request: URLRequest, filterOpenAIOnly: Bool = true) async throws -> [LLMModel] {
@@ -192,6 +281,13 @@ private enum OpenAIModelsCache {
               Date().timeIntervalSince(entry.date) < ttl else {
             return nil
         }
+        return entry.models
+    }
+
+    /// 过期的也要:目录暂时拉不到时,上次成功的目录比内置清单准。
+    static func loadAnyAge(credential: String) -> [LLMModel]? {
+        guard let data = try? Data(contentsOf: cacheFile(for: credential)),
+              let entry = try? JSONDecoder().decode(Entry.self, from: data) else { return nil }
         return entry.models
     }
 

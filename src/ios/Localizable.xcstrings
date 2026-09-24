@@ -14699,6 +14699,58 @@
         }
       }
     },
+    "Cache Hit Rate (cache-capable models)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cache-Trefferquote (Modelle mit Cache)"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cache Hit Rate (cache-capable models)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taux de succès du cache (modèles compatibles)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キャッシュヒット率(キャッシュ対応モデル)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "캐시 적중률(캐시 지원 모델)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Частота попаданий в кэш (модели с кэшем)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓存命中率(支持缓存的模型)"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "緩存命中率(支援緩存的模型)"
+          }
+        }
+      }
+    },
     "Cache Read": {
       "localizations": {
         "de": {

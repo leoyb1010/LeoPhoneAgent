@@ -74,7 +74,17 @@ struct MCPServerConfig: Codable, Identifiable, Hashable {
     }
 
     static func redactedURL(_ raw: String) -> String {
-        guard var parts = URLComponents(string: raw), parts.host != nil else { return raw }
+        guard var parts = URLComponents(string: raw), parts.host != nil else {
+            // 解析不了的地址也不能原样露出:去掉 ?/# 之后的部分和 user:pass@。
+            var s = raw
+            var hidden = false
+            if let cut = s.firstIndex(where: { $0 == "?" || $0 == "#" }) { s = String(s[..<cut]); hidden = true }
+            if let at = s.lastIndex(of: "@") {
+                let schemeEnd = s.range(of: "://")?.upperBound ?? s.startIndex
+                if at >= schemeEnd { s = String(s[..<schemeEnd]) + String(s[s.index(after: at)...]); hidden = true }
+            }
+            return s + (hidden ? "?…" : "")
+        }
         let hidden = parts.query != nil || parts.user != nil || parts.password != nil || parts.fragment != nil
         parts.query = nil
         parts.fragment = nil

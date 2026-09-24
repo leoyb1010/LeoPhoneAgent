@@ -154,7 +154,9 @@ struct CollectionsView: View {
     }
 
     private func collectionList(usesSplit: Bool) -> some View {
-        List(selection: $selection) {
+        // 每次重画只筛一遍(以前 isEmpty 和 ForEach 各算一次,搜索时每个字都把全部条目小写化两遍)。
+        let shown = visible
+        return List(selection: $selection) {
             if !editMode.isEditing {
                 treasuryHero
                 captureActions
@@ -163,7 +165,7 @@ struct CollectionsView: View {
             }
             if items.isEmpty {
                 emptyState
-            } else if visible.isEmpty {
+            } else if shown.isEmpty {
                 // 判据必须是 visible 而不是 items:切到"查看归档"却没有
                 // 归档条目时,items 非空 → 不走 emptyState → 页面只剩几个
                 // 筛选胶囊和一片空白,没有任何解释。
@@ -175,7 +177,7 @@ struct CollectionsView: View {
                     .listRowSeparator(.hidden)
             } else {
                 if sources.count > 1 { sourceFilter }
-                ForEach(visible) { item in
+                ForEach(shown) { item in
                     // 卡片与上方概览卡同一条左右边线(14pt),内容在卡片里再缩 12pt;
                     // 之前背景是通栏的,列表卡片贴着屏幕边(1.41.0 真机截图)。
                     row(item, usesSplit: usesSplit)

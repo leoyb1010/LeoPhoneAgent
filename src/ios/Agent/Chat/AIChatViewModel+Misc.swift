@@ -14,17 +14,30 @@ extension AIChatViewModel {
 
     func ensureKernelBooted() {
         guard kernelStatus == .notBooted else { return }
+        // 内核已经起来、默认挂载也铺过了:直接可用,不再盖一层"Booting Kernel"。
+        if ISHKernel.shared.isBooted, RootfsManager.shared.isDefaultMountOverlayApplied {
+            // 覆盖层只铺一次,但 pip 的 EXTERNALLY-MANAGED 标记可能被 apk upgrade 装回来:每个新对话仍清一次。
+            RootfsManager.shared.removeExternallyManagedMarker()
+            kernelStatus = .booted
+            return
+        }
+        // 只有第一次要解包 rootfs(要几秒)时才盖「Booting Kernel」;平时启动内核约 130 ms,
+        // 盖一层整屏反而是一闪。
+        kernelBootShowsOverlay = !RootfsManager.shared.isInstalled
         kernelStatus = .booting
 
         Task {
             let bootStart = CFAbsoluteTimeGetCurrent()
             do {
                 try Self.bootKernelIfNeeded()
+                let bootMs = (CFAbsoluteTimeGetCurrent() - bootStart) * 1000
                 RootfsManager.shared.applyDefaultMountOverlay()
                 Task { @MainActor in MirrorSpeedTestViewModel.shared.autoDetectOnceIfNeeded() }
                 kernelStatus = .booted
                 let totalElapsed = (CFAbsoluteTimeGetCurrent() - bootStart) * 1000
                 logger.info("[KernelBoot] TOTAL: \(String(format: "%.1f", totalElapsed))ms")
+                LeoPerf.record("kernel.boot", ms: totalElapsed,
+                               extra: ["bootMs": bootMs.rounded(), "overlayMs": (totalElapsed - bootMs).rounded()])
             } catch {
                 kernelStatus = .failed(error.localizedDescription)
                 logger.error("[KernelBoot] error: \(error.localizedDescription)")

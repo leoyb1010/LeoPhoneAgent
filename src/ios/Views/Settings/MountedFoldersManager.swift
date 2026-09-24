@@ -336,9 +336,34 @@ final class MountedFoldersManager {
 
     /// Re-probe all active mounts. Called when the app returns to foreground
     /// so stale read-only state is corrected.
+    /// 探测放到后台线程,30 秒内不重复:每次回前台都在主线程上对每个挂载目录做一次协调写 + 删除,
+    /// iCloud Drive / SMB / U 盘上能卡几百毫秒。
     func refreshAllWritability() {
-        for entry in entries {
-            refreshWritability(id: entry.id)
+        let now = Date()
+        guard now.timeIntervalSince(lastWritabilityProbe) > 30 else { return }
+        lastWritabilityProbe = now
+        let targets: [(UUID, URL)] = entries.compactMap { entry in activeURLs[entry.id].map { (entry.id, $0) } }
+        guard !targets.isEmpty else { return }
+        Task.detached(priority: .utility) {
+            let results = targets.map { ($0.0, MountedFoldersManager.probeWritable(at: $0.1)) }
+            await MainActor.run { MountedFoldersManager.shared.applyWritability(results) }
+        }
+    }
+
+    private var lastWritabilityProbe: Date = .distantPast
+
+    private func applyWritability(_ results: [(UUID, Bool)]) {
+        var changed = false
+        for (id, writable) in results {
+            guard activeURLs[id] != nil, let idx = entries.firstIndex(where: { $0.id == id }),
+                  entries[idx].isWritable != writable else { continue }
+            entries[idx].isWritable = writable
+            changed = true
+            mountLog.info("refreshed writability for '\(entries[idx].name)' -> \(writable ? "R/W" : "read-only")")
+        }
+        if changed {
+            save()
+            pushExternalMountSnapshot()
         }
     }
 

@@ -26,6 +26,9 @@ struct ProviderInstanceDetailView: View {
     @State private var editingModelEntry: ModelEntry?
     @State private var pendingDeleteModelEntry: ModelEntry?
     @State private var showKeyRevealed = false
+    @State private var keySaveTask: Task<Void, Never>?
+    /// 钥匙行从钥匙串读过之后才允许写回:没读过的空输入框不能被当成"删掉钥匙"。
+    @State private var keyLoaded = false
 
     private var instance: ProviderInstance? {
         store.instance(for: instanceId)
@@ -136,11 +139,12 @@ struct ProviderInstanceDetailView: View {
         List {
             // MARK: Label
             Section("Label") {
+                // 名字在提交或离开页面时保存:以前每敲一个字就把整份供应商配置重写一遍(文件 + 数据库 + iCloud 标脏)。
                 TextField("Label", text: $editingLabel)
                     .textContentType(.none)
                     .onAppear { editingLabel = instance.label }
                     .onSubmit { saveLabel(instance) }
-                    .onChange(of: editingLabel) { _ in saveLabel(instance) }
+                    .onDisappear { saveLabel(instance) }
             }
 
             // MARK: Credential
@@ -231,6 +235,10 @@ struct ProviderInstanceDetailView: View {
                 Toggle("Enabled", isOn: Binding(
                     get: { instance.isEnabled },
                     set: { newValue in
+                        if instance.credentialType == .apiKey {
+                            keySaveTask?.cancel()
+                            commitKey(keyInputText, instanceId: instance.id)
+                        }
                         let hasApiKey = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) != nil
                         let hasOAuth = ProviderKeychainHelper.loadOAuthString(instanceId: instance.id, account: "manual-oauth-token") != nil
                             || (instance.providerType == .anthropic && ClaudeOAuthManager.shared.isAuthenticated(instanceId: instance.id))
@@ -370,8 +378,6 @@ struct ProviderInstanceDetailView: View {
 
     @ViewBuilder
     private func apiKeyCredentialView(_ instance: ProviderInstance) -> some View {
-        let rawKey = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id)
-
         HStack {
             // Always use TextField to keep the normal keyboard (SecureField
             // switches to a password keyboard that blocks some characters).
@@ -391,18 +397,17 @@ struct ProviderInstanceDetailView: View {
             }
             .font(.system(.body, design: .monospaced))
             .onAppear {
+                let rawKey = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id)
                 AppLogger(category: "Provider").info("apiKeyTextField onAppear instanceId=\(instance.id.prefix(8)) rawKeyHit=\(rawKey != nil) rawKeyLen=\(rawKey?.count ?? 0) prevTextLen=\(keyInputText.count)")
                 keyInputText = rawKey ?? ""
+                keyLoaded = true
             }
             .onChange(of: keyInputText) { newValue in
-                let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                if trimmed.isEmpty {
-                    AppLogger(category: "Provider").warning("apiKeyTextField onChange→DELETE instanceId=\(instance.id.prefix(8)) prevRawKeyHit=\(rawKey != nil) prevRawKeyLen=\(rawKey?.count ?? 0) newLen=\(newValue.count)")
-                    ProviderKeychainHelper.deleteAPIKey(instanceId: instance.id)
-                } else {
-                    AppLogger(category: "Provider").info("apiKeyTextField onChange→SAVE instanceId=\(instance.id.prefix(8)) newLen=\(trimmed.count)")
-                    ProviderKeychainHelper.saveAPIKey(trimmed, instanceId: instance.id)
-                }
+                scheduleKeySave(newValue, instanceId: instance.id)
+            }
+            .onDisappear {
+                keySaveTask?.cancel()
+                commitKey(keyInputText, instanceId: instance.id)
             }
 
             Button {
@@ -414,9 +419,9 @@ struct ProviderInstanceDetailView: View {
             .buttonStyle(.plain)
         }
         .contextMenu {
-            if let key = rawKey {
+            if !keyInputText.isEmpty {
                 Button {
-                    UIPasteboard.general.string = key
+                    UIPasteboard.general.string = keyInputText.trimmingCharacters(in: .whitespacesAndNewlines)
                 } label: {
                     Label("Copy API Key", systemImage: "doc.on.doc")
                 }
@@ -608,7 +613,10 @@ struct ProviderInstanceDetailView: View {
         }
     }
 
-    private func saveCustomUserAgent(_ instance: ProviderInstance) {
+    private func saveCustomUserAgent(_ captured: ProviderInstance) {
+        // 从 store 取最新的一份再改:离开页面时名字、地址、UA 几个字段各自保存,
+        // 用渲染时捕获的旧快照会互相覆盖掉对方刚存的值。
+        let instance = store.instance(for: captured.id) ?? captured
         let current = instance.customUserAgent ?? ""
         let trimmed = editingCustomUserAgent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed != current else { return }
@@ -867,6 +875,11 @@ struct ProviderInstanceDetailView: View {
     private func refreshModels(_ instance: ProviderInstance) {
         // Save any pending edits (e.g. custom base URL) before refreshing
         saveCustomBaseURL(instance)
+        // 刚粘贴的钥匙可能还在 0.8 秒防抖里:先落盘,拉模型才用得上。
+        if instance.credentialType == .apiKey {
+            keySaveTask?.cancel()
+            commitKey(keyInputText, instanceId: instance.id)
+        }
         // Re-read from store so we use the just-saved values
         guard let freshInstance = store.instance(for: instance.id) else { return }
         isFetchingModels = true
@@ -1058,7 +1071,34 @@ struct ProviderInstanceDetailView: View {
         }
     }
 
-    private func saveLabel(_ instance: ProviderInstance) {
+    /// 钥匙停手 0.8 秒再存,离开页面时立即存。以前打开页面、每敲一个字都会重写钥匙串并刷新
+    /// "保存时间",本机的旧钥匙可能因此在 iCloud 同步里盖掉别的设备上新换的钥匙。
+    private func scheduleKeySave(_ value: String, instanceId: String) {
+        keySaveTask?.cancel()
+        keySaveTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(800))
+            guard !Task.isCancelled else { return }
+            commitKey(value, instanceId: instanceId)
+        }
+    }
+
+    /// 和钥匙串里现有的一样就什么都不做。
+    private func commitKey(_ value: String, instanceId: String) {
+        guard keyLoaded else { return }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let stored = ProviderKeychainHelper.loadAPIKey(instanceId: instanceId) ?? ""
+        guard trimmed != stored else { return }
+        if trimmed.isEmpty {
+            AppLogger(category: "Provider").warning("apiKey DELETE instanceId=\(instanceId.prefix(8)) prevLen=\(stored.count)")
+            ProviderKeychainHelper.deleteAPIKey(instanceId: instanceId)
+        } else {
+            AppLogger(category: "Provider").info("apiKey SAVE instanceId=\(instanceId.prefix(8)) newLen=\(trimmed.count)")
+            ProviderKeychainHelper.saveAPIKey(trimmed, instanceId: instanceId)
+        }
+    }
+
+    private func saveLabel(_ captured: ProviderInstance) {
+        let instance = store.instance(for: captured.id) ?? captured  // 见 saveCustomUserAgent
         let trimmed = editingLabel.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty, trimmed != instance.label else { return }
         var updated = instance
@@ -1066,7 +1106,8 @@ struct ProviderInstanceDetailView: View {
         store.updateInstance(updated)
     }
 
-    private func saveCustomBaseURL(_ instance: ProviderInstance) {
+    private func saveCustomBaseURL(_ captured: ProviderInstance) {
+        let instance = store.instance(for: captured.id) ?? captured  // 见 saveCustomUserAgent
         let current = instance.customBaseURL ?? ""
         let trimmed = editingCustomBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed != current else { return }

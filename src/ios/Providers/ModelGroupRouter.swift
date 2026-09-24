@@ -18,7 +18,7 @@ enum ModelGroupRouter {
     /// 就能把真正的崩溃上下文全部挤掉。
     static func resolve(group: ModelGroup, sessionId: String, store: ProviderConfigStore,
                         verbose: Bool = true) -> String? {
-        let available = availableEntryIds(group: group, store: store)
+        let available = availableEntryIds(group: group, store: store, verbose: verbose)
         if verbose {
             logger.info("🔀ROUTE resolve group=\(group.name) strategy=\(group.strategy.rawValue) members=\(group.memberEntryIds) available=\(available)")
         }
@@ -104,26 +104,28 @@ enum ModelGroupRouter {
     /// a 403 `OAuth authentication is currently not allowed for this
     /// organization`. The factory would still build a provider for it, but
     /// the request would fail immediately and waste a fallback slot.
-    private static func availableEntryIds(group: ModelGroup, store: ProviderConfigStore) -> [String] {
+    /// verbose=false(胶囊等 UI 路径):不打过滤日志,否则每次重算都往崩溃日志环形缓冲里灌。
+    private static func availableEntryIds(group: ModelGroup, store: ProviderConfigStore,
+                                          verbose: Bool = true) -> [String] {
         group.memberEntryIds.filter { entryId in
             guard let entry = store.entry(for: entryId) else {
-                logger.warning("🔀ROUTE filter: entry \(entryId) not found in store")
+                if verbose { logger.warning("🔀ROUTE filter: entry \(entryId) not found in store") }
                 return false
             }
             guard !entry.isHidden else {
-                logger.info("🔀ROUTE filter: entry \(entryId) is hidden")
+                if verbose { logger.info("🔀ROUTE filter: entry \(entryId) is hidden") }
                 return false
             }
             guard let instance = store.instance(for: entry.providerInstanceId) else {
-                logger.warning("🔀ROUTE filter: instance \(entry.providerInstanceId) not found for entry \(entryId)")
+                if verbose { logger.warning("🔀ROUTE filter: instance \(entry.providerInstanceId) not found for entry \(entryId)") }
                 return false
             }
             guard instance.isEnabled else {
-                logger.info("🔀ROUTE filter: instance \(instance.label) (\(instance.id)) disabled for entry \(entryId)")
+                if verbose { logger.info("🔀ROUTE filter: instance \(instance.label) (\(instance.id)) disabled for entry \(entryId)") }
                 return false
             }
             guard instance.hasAnyCredential else {
-                logger.info("🔀ROUTE filter: instance \(instance.label) (\(instance.id)) has no credential for entry \(entryId)")
+                if verbose { logger.info("🔀ROUTE filter: instance \(instance.label) (\(instance.id)) has no credential for entry \(entryId)") }
                 return false
             }
             return true

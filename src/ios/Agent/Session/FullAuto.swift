@@ -14,8 +14,8 @@ import UserNotifications
 /// `OffloadPermissionManager`(原生能力里设为「询问」的一律放行;你设成「不允许」的仍不执行)、
 /// 配置修改确认(自动通过;`protectedConfigPaths` 里降低保护的几项 Agent 仍改不了)。
 ///
-/// 只有你能开关:设置 → 权限。配置注册表里是只读占位(Agent 写入返回 permission_denied),
-/// 快捷指令、Siri、机器人都没有这个动作。按设备存 UserDefaults,不进任何同步。
+/// 只有你能开关:设置 → 权限,或聊天 / 首页输入框上方的「全自动」开关、`/auto`。配置注册表里是只读
+/// 占位(Agent 写入返回 permission_denied),快捷指令、Siri、机器人都没有这个动作。按设备存 UserDefaults,不进任何同步。
 @MainActor
 final class FullAutoStore: ObservableObject {
     static let shared = FullAutoStore()
@@ -36,7 +36,14 @@ final class FullAutoStore: ObservableObject {
         Task { @MainActor in
             for host in GatewayHostStore.shared.activeHosts where host.runsLeoPhoneAgent {
                 guard let client = GatewayHostStore.shared.client(for: host) else { continue }
-                Task { try? await client.turnOffFullAuto() }
+                Task {
+                    // 手机或中继一时不通就重试几次(1 s、5 s、20 s);都不通时,之后发给这台 Mac 的每条消息也会带上"关"。
+                    for delay in [0, 1, 5, 20] as [UInt64] {
+                        if delay > 0 { try? await Task.sleep(nanoseconds: delay * 1_000_000_000) }
+                        guard await MainActor.run(body: { !FullAutoStore.shared.enabled }) else { return }
+                        if (try? await client.turnOffFullAuto()) != nil { return }
+                    }
+                }
             }
         }
     }
@@ -63,6 +70,11 @@ enum TaskSourceRegistry {
     /// 定时任务在派发前声明来源,`SendPromptIntent.dispatchRun` 取走。
     static func setPending(_ source: TaskSource?) {
         lock.lock(); pending = source; lock.unlock()
+    }
+
+    /// 你在 App 里发消息:这一轮起按"App"记,不再沿用之前快捷指令或定时任务打的标签。
+    static func clear(sessionId: String) {
+        lock.lock(); sources[sessionId] = nil; lock.unlock()
     }
 
     /// 经 App Intent 派发的任务:没有声明就是快捷指令。
@@ -109,27 +121,71 @@ enum FullAutoLog {
 // MARK: - 常驻标记
 
 /// 全自动打开时显示;点一下直接关掉。
+/// 全自动的一键开关:聊天和首页输入框上方常驻。关着显示「逐项确认」,点一下打开;开着显示橙色「全自动」,点一下关。
+/// 第一次打开先说明一次后果(之后一点即开);打开的瞬间标签展开成一句说明,两秒后收回。
 struct FullAutoBadge: View {
+    static let explainedKey = "fullAuto.explainedOnce"
+
     @ObservedObject private var store = FullAutoStore.shared
+    @AppStorage(FullAutoBadge.explainedKey) private var explainedOnce = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var confirming = false
+    @State private var flashToken = 0
+    @State private var flashing = false
 
     var body: some View {
-        if store.enabled {
-            Button {
-                store.enabled = false
-                LeoHaptics.impact(.light)
-            } label: {
-                Label("全自动", systemImage: "bolt.fill")
-                    .font(.caption2.weight(.semibold))
-                    .labelStyle(.titleAndIcon)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Capsule().fill(Color.orange.opacity(0.16)))
-                    .foregroundStyle(.orange)
+        Button {
+            if store.enabled {
+                setEnabled(false)
+            } else if explainedOnce {
+                setEnabled(true)
+            } else {
+                confirming = true
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("全自动已打开")
-            .accessibilityHint("点一下关闭全自动,之后敏感操作会先问你")
-            .transition(.opacity)
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: store.enabled ? "bolt.fill" : "bolt")
+                    .font(.system(size: 10, weight: .bold))
+                Text(store.enabled ? (flashing ? "全自动 · 不再逐项确认" : "全自动") : "逐项确认")
+                    .lineLimit(1)
+            }
+            .font(.caption2.weight(.semibold))
+            .fixedSize()
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(store.enabled ? Color.orange.opacity(0.16) : Color.primary.opacity(0.06)))
+            .foregroundStyle(store.enabled ? Color.orange : Color.secondary)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(store.enabled ? "全自动已打开" : "全自动已关闭,敏感操作会先问你")
+        .accessibilityHint(store.enabled ? "点一下关闭全自动" : "点一下打开全自动,之后不再逐项确认")
+        .confirmationDialog("打开全自动?", isPresented: $confirming, titleVisibility: .visible) {
+            Button("打开全自动") {
+                explainedOnce = true
+                setEnabled(true)
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("Agent 写文件、跑命令、调用手机能力、改设置都不再逐项确认,发给 Mac 的任务也一样。你设成「不允许」的能力仍然不执行。随时再点这里关掉。")
+        }
+        .animation(reduceMotion ? nil : .spring(duration: 0.3, bounce: 0.2), value: store.enabled)
+        .animation(reduceMotion ? nil : .spring(duration: 0.3, bounce: 0.15), value: flashing)
+    }
+
+    private func setEnabled(_ on: Bool) {
+        store.enabled = on
+        LeoHaptics.impact(on ? .medium : .light)
+        flashToken += 1
+        guard on else {
+            flashing = false
+            return
+        }
+        flashing = true
+        let token = flashToken
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_200_000_000)
+            if flashToken == token { flashing = false }
         }
     }
 }
@@ -146,7 +202,11 @@ struct FullAutoSettingsSection: View {
                 get: { store.enabled },
                 set: { newValue in
                     store.enabled = newValue
-                    if newValue { showSystemPermissions = true }
+                    if newValue {
+                        // 在这里打开就已经看过说明了,输入框上的开关之后一点即开。
+                        UserDefaults.standard.set(true, forKey: FullAutoBadge.explainedKey)
+                        showSystemPermissions = true
+                    }
                 }
             )) {
                 Label("全自动(不再询问)", systemImage: "bolt.fill")

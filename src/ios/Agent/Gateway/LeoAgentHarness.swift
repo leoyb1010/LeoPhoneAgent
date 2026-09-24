@@ -279,6 +279,10 @@ final class HarnessSessionDriver: ObservableObject {
                     id = try await self.client.createHarnessSession(
                         harness: self.harness.key, cwd: self.cwd, prompt: prompt, thinking: thinking)
                 }
+                // 建任务的路上你关掉了全自动:建好后立刻让 Mac 把它切回先问我。
+                if fullAuto, !FullAutoGate.isOn {
+                    try? await self.client.turnOffFullAuto()
+                }
                 await MainActor.run {
                     self.sessionId = id
                     self.status = "running"
@@ -350,10 +354,8 @@ final class HarnessSessionDriver: ObservableObject {
         }
         items.append(GatewayTranscriptItem(kind: .notice, text: "→ " + text))
         if status == "idle" { status = "running" }
-        Task { [client] in
-            do { try await client.steerHarness(sessionId: sessionId, text: text) }
-            catch { await MainActor.run { self.lastError = error.localizedDescription } }
-        }
+        // 每条后续消息都带上全自动开关的当前状态(LeoPhoneAgent 任务):开关关着时 Mac 会把全自动任务切回先问我。
+        Task { await self.sendSteer(sessionId: sessionId, text: text) }
         return true
     }
 
@@ -419,11 +421,13 @@ final class HarnessSessionDriver: ObservableObject {
 
     /// 接管 Mac 上已存在的会话:从 seq 0 全量回放再实时跟随。
     /// 这正是可续传协议的意义——桌面上开的会话,手机随时拿起来继续。
-    func attach(existingSessionId: String) {
+    /// `knownStatus`:列表里看到的状态。空闲的(包括 Mac 桌面上"可接着做"的任务)接上时就显示空闲,
+    /// 不再一直挂着"运行中"的打字动画,直到你发一条消息跑完一轮。
+    func attach(existingSessionId: String, knownStatus: String? = nil) {
         guard sessionId == nil, !isRunning else { return }
         sessionId = existingSessionId
         isRunning = true
-        status = "running"
+        status = ["idle", "available", "completed"].contains(knownStatus ?? "") ? "idle" : "running"
         HarnessLiveActivityBridge.shared.register(driver: self, hostName: client.hostName)
         streamTask = Task { [weak self] in
             await self?.follow(sessionId: existingSessionId)

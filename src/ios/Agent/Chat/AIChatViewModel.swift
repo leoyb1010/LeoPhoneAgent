@@ -805,6 +805,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     // Note: Stream throttle timestamps (lastTextDeltaFlush, lastFileWriteStreamUpdate,
     // lastToolInputStreamUpdate) are now local vars inside processStreamEvents().
     @Published var kernelStatus: KernelStatus = .notBooted
+    /// 启动内核时要不要盖「Booting Kernel」(见 ensureKernelBooted)。
+    var kernelBootShowsOverlay = false
     /// When enabled, agent responses and tool descriptions are spoken aloud.
     /// Initialized from the persisted "Read replies" preference so an already-on
     /// toggle drives streaming TTS for new chats.
@@ -2244,7 +2246,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // [T-model-quickswitch] "/model kimi" 是命令不是提问,在这里截住。
         if interceptModelCommand(inputText) { return }
         syncSelectedModelFromBinding()
-        LeoPerf.sendBegan(LeoPerf.key(self))
+        LeoPerf.sendBegan(LeoPerf.key(self), model: selectedModel.id)
         // [T-long-paste-fold] Splice folded pastes back in first, so the
         // compact prompts, the stored bubble and the model all see the full text.
         let text = expandPastedBlocks(in: inputText).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2264,6 +2266,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             logger.warning("🔑DRAFT [vm=\(self.vmInstanceId)] send() GUARD FAILED — text.isEmpty=\(text.isEmpty) attachments.isEmpty=\(pendingAttachments.isEmpty) treasury.isEmpty=\(treasuryContext?.isEmpty != false) isProcessing=\(self.isProcessing)")
             return
         }
+        // 这一轮真的要发出去了:之后的审批记录按"App"算,不再沿用之前快捷指令 / 定时任务打的标签。
+        // 放在守卫之后:被拒掉的发送(空消息、正在跑)不能抹掉别的回合的标签。
+        if let sid = sessionId { TaskSourceRegistry.clear(sessionId: sid) }
 
         // [T-intent-donation] Tell the system this happened. Without any
         // donations Siri and the Shortcuts "Suggestions" section can never

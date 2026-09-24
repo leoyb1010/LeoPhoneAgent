@@ -84,7 +84,9 @@ enum DeepLinkRouter {
 
         case "open_terminal":
             let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            // 只预填、不执行:去掉换行和其它控制字符,链接里的 %0A 不能替你按回车。
             coord.terminalInitCommand = components?.queryItems?.first(where: { $0.name == "init_command" })?.value
+                .map { String(String.UnicodeScalarView($0.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) })) }
             coord.showTerminal = true
 
         case "collections", "treasury":
@@ -100,8 +102,8 @@ enum DeepLinkRouter {
             // App Intents flow uses — which already pops the navigation
             // stack back to root before opening the target session.
             let id = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-            guard !id.isEmpty else {
-                deepLinkLog.info("\(host) URL missing id")
+            guard !id.isEmpty, !OffloadPermissionManager.isReservedSessionId(id) else {
+                deepLinkLog.info("\(host) URL missing or reserved id")
                 return
             }
             NotificationCenter.default.post(
@@ -198,7 +200,15 @@ enum DeepLinkRouter {
             coord.pendingSettingsTarget = .permissions
 
         case "selftest", "self-test", "self_test":
+            // `?chat=1`:连同"真发一句话"一起测(自检只发固定的 "OK",不带任何用户数据)。
+            if components?.queryItems?.first(where: { $0.name == "chat" })?.value == "1" {
+                CapabilitySelfTest.shared.includeChat = true
+            }
             coord.pendingSettingsTarget = .selfTest
+
+        case "mac", "mac-console", "gateway":
+            // Mac 控制台:在已连接的 Mac 上开任务、看进度、审批(只导航,不做任何动作)。
+            coord.pendingSettingsTarget = .macConsole
 
         case "environments":
             // `create_key` is the only required param. Missing

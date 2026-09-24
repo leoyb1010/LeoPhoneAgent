@@ -191,7 +191,13 @@ class RootfsManager {
         }
     }
 
+    /// 覆盖内容来自 App 包,进程内不会变:每个进程铺一次就够。以前每开一个对话都重铺一遍
+    /// (删掉重拷 20 多个文件、上百次 meta.db 读写),新对话会卡在"Booting Kernel"。只在主线程调用。
+    private(set) var isDefaultMountOverlayApplied = false
+
     func applyDefaultMountOverlay() {
+        guard !isDefaultMountOverlayApplied else { return }
+        isDefaultMountOverlayApplied = true
         let totalStart = CFAbsoluteTimeGetCurrent()
         logger.info("[DefaultMount] applyDefaultMountOverlay() called")
 
@@ -297,7 +303,8 @@ class RootfsManager {
     }
 
     /// Remove the PEP 668 EXTERNALLY-MANAGED marker file from all Python versions.
-    private func removeExternallyManagedMarker() {
+    /// 很便宜(列一次 /usr/lib),新对话打开时也会调:`apk upgrade` 重装 python3 后标记会回来。
+    func removeExternallyManagedMarker() {
         let fm = FileManager.default
         let usrLib = dataPath.appendingPathComponent("usr/lib")
         guard let contents = try? fm.contentsOfDirectory(atPath: usrLib.path) else { return }

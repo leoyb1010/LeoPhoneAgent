@@ -19,6 +19,66 @@ struct HomeCapsuleLabel: Equatable {
 
 // MARK: - 底部输入栏
 
+/// 首页输入框的文字放在一个引用对象里,只有输入栏订阅它:打字不再让整个首页
+/// (会话分组、置顶、胶囊标签)跟着每个字重算一遍。
+@MainActor
+final class HomeDraft: ObservableObject {
+    @Published var text = ""
+    var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
+}
+
+/// 首页搜索框:文字放在 HomeDraft 里,只有这一行订阅;每次改动交给首页做防抖搜索,
+/// 首页本身等结果回来才重画。
+struct HomeSearchField: View {
+    @ObservedObject var draft: HomeDraft
+    var isFocused: FocusState<Bool>.Binding
+    let onChange: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            TextField("搜索对话", text: $draft.text)
+                .textFieldStyle(.plain)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+                .focused(isFocused)
+                .onChange(of: draft.text) { _, _ in onChange() }
+            Button("取消") { onCancel() }
+                .font(.subheadline)
+        }
+    }
+}
+
+/// 订阅 `HomeDraft` 的那一层:文字变了只重画输入栏。
+struct HomeComposerHost: View {
+    @ObservedObject var draft: HomeDraft
+    var isFocused: FocusState<Bool>.Binding
+    let capsule: HomeCapsuleLabel
+    let capsuleMenu: AnyView
+    let plusMenu: AnyView
+    let isBusy: Bool
+    let onSubmit: () -> Void
+    let onSlash: () -> Void
+    let onMic: () -> Void
+    let onCancelBusy: () -> Void
+
+    var body: some View {
+        HomeComposerBar(
+            text: $draft.text,
+            isFocused: isFocused,
+            capsule: capsule,
+            capsuleMenu: capsuleMenu,
+            plusMenu: plusMenu,
+            isBusy: isBusy,
+            canSend: !isBusy && !draft.trimmed.isEmpty,
+            onSubmit: onSubmit,
+            onSlash: onSlash,
+            onMic: onMic,
+            onCancelBusy: onCancelBusy
+        )
+    }
+}
+
 struct HomeComposerBar: View {
     @Binding var text: String
     var isFocused: FocusState<Bool>.Binding

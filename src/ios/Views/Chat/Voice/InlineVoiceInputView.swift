@@ -1020,7 +1020,7 @@ struct InlineVoiceInputView: View {
 
                 switch viewModel.state {
                 case .recording:
-                    InlineMiniWaveform(levels: viewModel.waveformLevels)
+                    InlineMiniWaveform(meter: viewModel.waveformMeter)
                         .frame(width: expanded ? 38 : 26, height: expanded ? 24 : 18)
                 default:
                     if showCancelIcon {
@@ -1236,11 +1236,11 @@ private struct TranscriptContentHeightKey: PreferenceKey {
 }
 
 private struct InlineMiniWaveform: View {
-    let levels: [Float]
+    @ObservedObject var meter: AudioLevelMeter
 
     var body: some View {
         HStack(spacing: 3) {
-            ForEach(Array(levels.suffix(7).enumerated()), id: \.offset) { _, level in
+            ForEach(Array(meter.levels.suffix(7).enumerated()), id: \.offset) { _, level in
                 Capsule()
                     .fill(Color.black.opacity(0.85))
                     .frame(width: 3, height: max(5, CGFloat(level) * 26))

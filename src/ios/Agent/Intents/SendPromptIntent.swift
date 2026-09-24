@@ -234,8 +234,6 @@ struct SendPromptIntent: AppIntent {
     @MainActor
     static func dispatchRun(vm: AIChatViewModel, sessionId: String, pendingId: String,
                             action: () -> Void) throws -> String {
-        // [T-full-auto] 经 App Intent 派发的任务,日志来源记为快捷指令(定时任务会先声明)。
-        TaskSourceRegistry.tagIntentRun(sessionId: sessionId)
         var accepted = false
         defer {
             if !accepted { ShortcutRunTracker.markCompleted(recordId: pendingId, reason: "not_started") }
@@ -253,6 +251,9 @@ struct SendPromptIntent: AppIntent {
                                 reason: .providerFailure, source: "Intent.notStarted")
             throw QuickTaskIntentError.notStarted
         }
+        // [T-full-auto] 经 App Intent 派发的任务,日志来源记为快捷指令(定时任务会先声明)。放在真正开跑之后:
+        // send() 会先清掉旧标签;被"忙"拒掉的那次也不会留下标签。同一个主线程回合里,工具还没来得及执行。
+        TaskSourceRegistry.tagIntentRun(sessionId: sessionId)
         accepted = true
         return runId
     }

@@ -109,8 +109,9 @@ final class SessionActivityTracker: ObservableObject {
         if nameChanged {
             info.lastToolChange = Date()
         }
-        sessionToolInfo[sessionId] = info
+        // 没变就不写:@Published 的字典哪怕写回同一个值也会通知所有订阅者重画。
         guard nameChanged || statusChanged else { return }
+        sessionToolInfo[sessionId] = info
         if nameChanged, let runId = activityRunIds[sessionId] {
             let phase = AgentToolPresentation.phase(for: toolName)
             sessionActivityPhases[sessionId] = phase
@@ -156,6 +157,7 @@ final class SessionActivityTracker: ObservableObject {
 
     func updateLoopIteration(_ sessionId: String, iteration: Int) {
         var info = sessionToolInfo[sessionId] ?? SessionToolInfo()
+        guard info.loopIteration != iteration else { return }
         info.loopIteration = iteration
         sessionToolInfo[sessionId] = info
     }
@@ -165,10 +167,10 @@ final class SessionActivityTracker: ObservableObject {
         phase: AgentActivityPhase,
         reason: AgentActivityReason? = nil
     ) {
-        sessionActivityPhases[sessionId] = phase
+        if sessionActivityPhases[sessionId] != phase { sessionActivityPhases[sessionId] = phase }
         if let reason {
-            sessionActivityReasons[sessionId] = reason
-        } else {
+            if sessionActivityReasons[sessionId] != reason { sessionActivityReasons[sessionId] = reason }
+        } else if sessionActivityReasons[sessionId] != nil {
             sessionActivityReasons.removeValue(forKey: sessionId)
         }
         guard let runId = activityRunIds[sessionId] else { return }
@@ -222,7 +224,7 @@ final class SessionActivityTracker: ObservableObject {
 
     func setActive(_ sessionId: String, source: String = #function) {
         let wasPresent = activeSessions.contains(sessionId)
-        activeSessions.insert(sessionId)
+        if !wasPresent { activeSessions.insert(sessionId) }
         syncMirror()
         if !wasPresent {
             // [T-haptic-misfire] Skip placeholder ids (they precede the real

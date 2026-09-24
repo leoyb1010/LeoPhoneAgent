@@ -577,6 +577,27 @@ final class NoAnimationCollectionView: UICollectionView {
     /// [T-ios-ipad-rotate-collapse-scroll-jank]
     private var lastPrewarmedWidth: CGFloat = 0
 
+    /// 键盘弹起 / 收起只改列表高度:原本贴着底部就继续贴着底部,和键盘在同一段动画里走。
+    /// 以前最后几行先被键盘盖住,0.3 秒后才单独再滚一次。宽度变化(旋转、分栏)交给原有逻辑。
+    private var lastPinnedBoundsSize: CGSize = .zero
+
+    private func keepBottomPinnedOnHeightChange() {
+        let old = lastPinnedBoundsSize
+        let new = bounds.size
+        lastPinnedBoundsSize = new
+        guard old != .zero, abs(new.width - old.width) < 0.5, abs(new.height - old.height) > 0.5,
+              !isTracking, !isDecelerating,
+              (collectionViewLayout as? MessageListLayout)?.isAutoScrollPinning == true else { return }
+        let insets = adjustedContentInset
+        let oldMax = contentSize.height + insets.bottom - old.height
+        guard oldMax > -insets.top + 1 else { return }        // 内容不满一屏:不动
+        guard contentOffset.y >= oldMax - 40 else { return }    // 原本不在底部:不动
+        let newMax = max(-insets.top, contentSize.height + insets.bottom - new.height)
+        if abs(contentOffset.y - newMax) > 0.5 {
+            contentOffset = CGPoint(x: contentOffset.x, y: newMax)
+        }
+    }
+
     #if DEBUG
     /// [WatchdogProbe] previous bounds size — when this differs from the new
     /// bounds, UIKit goes down `_updateLayoutAttributesForExistingVisibleViewsFadingForBoundsChange`,
@@ -603,6 +624,8 @@ final class NoAnimationCollectionView: UICollectionView {
         // (animation-stripped or not) layout. Same shape as the background guard
         // above. The SelfSizingCell off-collection guard is the inner backstop.
         guard window != nil else { return }
+
+        keepBottomPinnedOnHeightChange()
 
         #if DEBUG
         let newSize = bounds.size

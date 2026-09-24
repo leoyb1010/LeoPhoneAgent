@@ -365,6 +365,7 @@ extension AIChatViewModel {
 
             switch event {
             case .contentBlockStart(let start):
+                LeoPerf.firstEvent(LeoPerf.key(self))
                 // Model started producing output — clear the "thinking" indicator
                 await MainActor.run {
                     guard msgIdx < messages.count else { return }
@@ -862,6 +863,8 @@ extension AIChatViewModel {
                 result.spokenTextOffset = 0
 
             case .thinkingDelta(let text):
+                LeoPerf.firstEvent(LeoPerf.key(self))
+                LeoPerf.firstThinking(LeoPerf.key(self))
                 // Each contiguous thinking segment becomes its own block, appended in
                 // arrival order so thinking interleaves naturally with text/tool blocks
                 // (matches how messages render after reload from RawMessage history).

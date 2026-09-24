@@ -32,6 +32,8 @@ enum SettingsDestination: Hashable {
     case mcpServerDetail(serverId: String)
     // [T-selftest-1.41]
     case selfTest
+    // [T-mac-console-deeplink] leophoneagent://settings/mac
+    case macConsole
 }
 
 struct SettingsSheet: View {
@@ -88,6 +90,8 @@ struct SettingsSheet: View {
                     SharedFoldersSettingsView()
                 case .selfTest:
                     CapabilitySelfTestView()
+                case .macConsole:
+                    GatewayEntryView()
                 case .logs:
                     // Pull a one-shot tab hint from the deep link router
                     // (e.g. `?tab=config-audit`). LogManagementView clears
@@ -208,6 +212,8 @@ struct SettingsSheet: View {
         case .selfTest:
             CapabilitySelfTest.shared.autoRunRequested = true
             navPath.append(SettingsDestination.selfTest)
+        case .macConsole:
+            navPath.append(SettingsDestination.macConsole)
         }
         deepLink.pendingSettingsTarget = nil
     }

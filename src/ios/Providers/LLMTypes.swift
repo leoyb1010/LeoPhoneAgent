@@ -204,6 +204,27 @@ struct LLMModel: Equatable, Hashable, Identifiable, Sendable, Codable {
 
     // MARK: - OpenAI Models
 
+    static let gpt6Astra = LLMModel(
+        id: "gpt-6-astra",
+        displayName: "GPT-6-Astra",
+        provider: "OpenAI",
+        contextWindow: 272_000
+    )
+
+    static let gpt6Sol = LLMModel(
+        id: "gpt-6-sol",
+        displayName: "GPT-6-Sol",
+        provider: "OpenAI",
+        contextWindow: 272_000
+    )
+
+    static let gpt6Luna = LLMModel(
+        id: "gpt-6-luna",
+        displayName: "GPT-6-Luna",
+        provider: "OpenAI",
+        contextWindow: 272_000
+    )
+
     static let gpt56Sol = LLMModel(
         id: "gpt-5.6-sol",
         displayName: "GPT-5.6 Sol",
@@ -359,6 +380,7 @@ struct LLMModel: Equatable, Hashable, Identifiable, Sendable, Codable {
 
     /// Models available via Codex OAuth (ChatGPT subscription).
     static let allOpenAICodexOAuth: [LLMModel] = [
+        .gpt6Astra, .gpt6Sol, .gpt6Luna,
         .gpt56Sol, .gpt56Terra, .gpt56Luna,
         .gpt55, .gpt54, .gpt53Codex, .gpt53CodexSpark,
         .gpt5CodexMini,

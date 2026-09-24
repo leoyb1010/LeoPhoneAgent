@@ -1122,6 +1122,8 @@ enum CollectionStore {
 /// OCR, hashing, or network work.
 final class TreasurySQLiteStore {
     private static let initializationLock = NSLock()
+    /// 受 initializationLock 保护。
+    nonisolated(unsafe) private static var initializedDatabases: Set<String> = []
 
     struct MigrationReport: Equatable {
         let importedCount: Int
@@ -1189,14 +1191,21 @@ final class TreasurySQLiteStore {
         self.directory = directory
         databaseURL = directory.appendingPathComponent("treasury.sqlite3")
         legacyURL = directory.appendingPathComponent("items.json")
-        try FileManager.default.createDirectory(at: directory,
-                                                withIntermediateDirectories: true)
         Self.initializationLock.lock()
         defer { Self.initializationLock.unlock() }
+        // 同一进程里建过表、迁移检查过的库不再重复做(每次读写都会新建一个 store,
+        // 以前每次都要 createDirectory + CREATE TABLE + 迁移检查)。库文件不在了就重新来。
+        if Self.initializedDatabases.contains(databaseURL.path),
+           FileManager.default.fileExists(atPath: databaseURL.path) {
+            return
+        }
+        try FileManager.default.createDirectory(at: directory,
+                                                withIntermediateDirectories: true)
         migrationReport = try withDatabase { db in
             try Self.createSchema(db)
             return try migrateLegacyJSONIfNeeded(db)
         }
+        Self.initializedDatabases.insert(databaseURL.path)
     }
 
     func load(includeDeleted: Bool = false, limit: Int? = nil,

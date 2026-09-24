@@ -753,10 +753,24 @@ extension AIChatViewModel {
         // [T-jev-1.41] TypeSafe Jev 快判断。state 可以是 JSON 或纯文本;questions 必须是 JSON 对象。
         case "jev_decide":
             let args = (try? JSONSerialization.jsonObject(with: Data(argsJson.utf8)) as? [String: Any]) ?? [:]
-            let stateText = (args["state"] as? String) ?? ""
-            let questionsText = (args["questions"] as? String) ?? ""
-            let state: Any = (try? JSONSerialization.jsonObject(with: Data(stateText.utf8), options: [.fragmentsAllowed])) ?? stateText
-            if let questions = (try? JSONSerialization.jsonObject(with: Data(questionsText.utf8))) as? [String: Any] {
+            // 模型常把 state / questions 直接传成对象而不是 JSON 字符串:两种都收。以前对象形态的 state 会被当成空串,
+            // Jev 在没有上下文的情况下照样给出概率,Agent 还会据此做判断。
+            let state: Any = {
+                guard let raw = args["state"] else { return "" }
+                if let text = raw as? String {
+                    return (try? JSONSerialization.jsonObject(with: Data(text.utf8), options: [.fragmentsAllowed])) ?? text
+                }
+                return raw
+            }()
+            let questions: [String: Any]? = {
+                if let dict = args["questions"] as? [String: Any] { return dict }
+                guard let text = args["questions"] as? String else { return nil }
+                return (try? JSONSerialization.jsonObject(with: Data(text.utf8))) as? [String: Any]
+            }()
+            if (state as? String)?.isEmpty == true {
+                toolOutput = "Error: 'state' is empty — pass the text or data Jev should judge."
+                toolSuccess = false
+            } else if let questions {
                 do {
                     let result = try await JevClient.decide(state: state, questions: questions)
                     let answers = result["answers"] ?? [:]

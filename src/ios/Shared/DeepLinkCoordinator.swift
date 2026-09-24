@@ -28,6 +28,7 @@ enum SettingsDeepLinkTarget: Equatable {
     case mcpServerDetail(serverId: String)
     /// [T-selftest-1.41] 能力自检;经深链打开时自动开跑。
     case selfTest
+    case macConsole
 }
 
 @MainActor

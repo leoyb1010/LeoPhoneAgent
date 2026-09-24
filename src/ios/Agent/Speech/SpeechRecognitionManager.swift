@@ -31,7 +31,9 @@ final class SpeechRecognitionManager: ObservableObject {
 
     @Published private(set) var state: State = .idle
     @Published var recognizedText: String = ""
-    @Published private(set) var audioLevels: [Float] = Array(repeating: 0, count: 40)
+    /// 波形电平:不挂在 @Published 上,免得每个音频缓冲都让订阅这个管理器的聊天页整页重算。
+    let levelMeter = AudioLevelMeter(levels: Array(repeating: 0, count: 40))
+    private var levelRing: [Float] = Array(repeating: 0, count: 40)
     private static let savedLocaleKey = "SpeechRecognitionLocale"
 
     @Published var locale: Locale {
@@ -390,9 +392,10 @@ final class SpeechRecognitionManager: ObservableObject {
     }
 
     private func pushLevel(_ level: Float) {
-        audioLevels.append(level)
-        if audioLevels.count > 40 {
-            audioLevels.removeFirst(audioLevels.count - 40)
+        levelRing.append(level)
+        if levelRing.count > 40 {
+            levelRing.removeFirst(levelRing.count - 40)
         }
+        levelMeter.set(levelRing)
     }
 }

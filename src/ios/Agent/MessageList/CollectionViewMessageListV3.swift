@@ -924,13 +924,15 @@ extension CollectionViewMessageListV3 {
         var maxContentWidth: CGFloat = 0
         var lastInputFocused: Bool = false
 
-        #if DEBUG
         deinit {
+            // 拖着列表离开页面(返回手势、切会话)时 didEnd 回调不会来,收掉 hitch 计时,不然下一次拖动不重新开始计。
+            DispatchQueue.main.async { ScrollHitchMeter.shared.end() }
+            #if DEBUG
             // [DecelDisplayLink] CADisplayLink retains its target — must
             // invalidate on Coordinator teardown to break the cycle.
             decelDisplayLink?.invalidate()
+            #endif
         }
-        #endif
 
         // === Scroll mode (replaces V2's 6+ mechanisms) ===
         var scrollMode: ScrollMode = .autoScrolling {

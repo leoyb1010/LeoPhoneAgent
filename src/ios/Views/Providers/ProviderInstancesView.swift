@@ -217,29 +217,25 @@ struct ProviderInstancesView: View {
 private struct InstanceRow: View {
     let instance: ProviderInstance
     @ObservedObject private var store = ProviderConfigStore.shared
+    /// 钥匙 / 登录状态只在出现时和 authRevision 变化时查一次钥匙串;以前每次重画每行要查 2–6 次。
+    @State private var cachedStatus: CredentialStatus?
 
-    private var isConfigured: Bool {
-        switch instance.credentialType {
-        case .apiKey:
-            return ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) != nil
-        case .oauth:
-            return oauthIsAuthenticated
-        }
+    private struct CredentialStatus: Equatable {
+        let configured: Bool
+        let summary: String
     }
 
-    private var oauthIsAuthenticated: Bool {
-        instance.isOAuthAuthenticated
-    }
-
-    private var credentialSummary: String {
+    private func computeStatus() -> CredentialStatus {
         switch instance.credentialType {
         case .apiKey:
             if let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id) {
-                return maskKey(key)
+                return CredentialStatus(configured: true, summary: maskKey(key))
             }
-            return String(localized: "No API key")
+            return CredentialStatus(configured: false, summary: String(localized: "No API key"))
         case .oauth:
-            return oauthIsAuthenticated ? String(localized: "Authenticated") : String(localized: "Not authenticated")
+            let ok = instance.isOAuthAuthenticated
+            return CredentialStatus(configured: ok,
+                                    summary: ok ? String(localized: "Authenticated") : String(localized: "Not authenticated"))
         }
     }
 
@@ -248,10 +244,10 @@ private struct InstanceRow: View {
     }
 
     var body: some View {
-        let _ = store.authRevision  // subscribe to OAuth state changes
+        let status = cachedStatus ?? computeStatus()
         HStack(spacing: 12) {
             Circle()
-                .fill(isConfigured && instance.isEnabled ? Color.green : Color(UIColor.quaternaryLabel))
+                .fill(status.configured && instance.isEnabled ? Color.green : Color(UIColor.quaternaryLabel))
                 .frame(width: 8, height: 8)
 
             VStack(alignment: .leading, spacing: 2) {
@@ -264,7 +260,7 @@ private struct InstanceRow: View {
                     Text("·")
                         .font(.caption)
                         .foregroundStyle(.quaternary)
-                    Text(credentialSummary)
+                    Text(status.summary)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -289,6 +285,8 @@ private struct InstanceRow: View {
             }
         }
         .padding(.vertical, 2)
+        .onAppear { cachedStatus = computeStatus() }  // 从详情页返回时也刷新
+        .onChange(of: store.authRevision) { _, _ in cachedStatus = computeStatus() }
     }
 
     private func maskKey(_ key: String) -> String {

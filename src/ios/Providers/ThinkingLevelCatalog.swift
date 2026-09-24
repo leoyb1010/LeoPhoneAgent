@@ -80,11 +80,38 @@ private extension String {
     }
 }
 
+/// [T-codex-live-models] 每个 Codex 模型最高支持的推理强度,取自服务端目录的
+/// `supported_reasoning_levels`。线上最高只发到 "max"(见 reasoningEffort(for:level:)),
+/// 所以目录里的 "ultra" 也记作 .max。
+enum CodexReasoningCeiling {
+    private static let key = "codex.reasoningCeiling.v1"
+    private static let order: [String: ThinkingLevel] = [
+        "low": .low, "medium": .medium, "high": .high, "xhigh": .xhigh, "max": .max, "ultra": .max,
+    ]
+
+    static func highest(of efforts: [String]) -> ThinkingLevel? {
+        efforts.compactMap { order[$0.lowercased()] }.max()
+    }
+
+    static func save(_ ceilings: [String: String]) {
+        var merged = UserDefaults.standard.dictionary(forKey: key) as? [String: String] ?? [:]
+        for (slug, level) in ceilings { merged[slug.lowercased()] = level }
+        UserDefaults.standard.set(merged, forKey: key)
+    }
+
+    static func level(for modelId: String) -> ThinkingLevel? {
+        guard let raw = (UserDefaults.standard.dictionary(forKey: key) as? [String: String])?[modelId.lowercased()] else { return nil }
+        return ThinkingLevel(rawValue: raw)
+    }
+}
+
 enum ThinkingLevelCatalog {
     private static let rules: [(match: @Sendable (String) -> Bool, max: ThinkingLevel)] = [
         // GPT-5.6 sol/terra/luna all reach .max. (.ultra is a client-side
         // "Max + orchestration" concept — the wire effort tops out at "max",
         // reasoningEffort(for:level:) maps both .max and .ultra to "max".)
+        // GPT-6 astra/sol/luna 都到 max(目录里 astra/sol 写的 ultra 同样按 max 发)。
+        ({ $0.hasPrefix("gpt-6") }, .max),
         ({ $0.hasPrefix("gpt-5.6-sol") || $0.hasPrefix("gpt-5.6-terra") }, .max),
         ({ $0.hasPrefix("gpt-5.6-luna") }, .max),
         ({ $0.hasPrefix("gpt-5.5") }, .xhigh),
@@ -111,6 +138,8 @@ enum ThinkingLevelCatalog {
         if let custom = ThinkingRuleStore.load().first(where: { lid.hasPrefix($0.prefix.lowercased()) }) {
             return custom.maxLevel
         }
+        // [T-codex-live-models] 服务端目录里写明的上限优先于内置规则:新模型(GPT-6 等)不用等发版。
+        if let live = CodexReasoningCeiling.level(for: lid) { return live }
         return rules.first { $0.match(lid) }?.max
     }
 

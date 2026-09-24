@@ -133,7 +133,10 @@ enum LeoPerf {
         signposter.emitEvent("cold", "\(step, privacy: .public) \(ms, format: .fixed(precision: 1), privacy: .public)ms")
         guard finished else { return }
         // 系统预热拉起的进程,启动时刻早于你点图标,单独标出来,算 p50 时剔除。
+        // 预热进程不一定带 ActivePrewarm(实测 1.41.2 记到过 12422909 ms = 3.4 小时):首帧晚于进程启动
+        // 一分钟以上的,一律按预热算。
         let prewarm = ProcessInfo.processInfo.environment["ActivePrewarm"] == "1"
+            || (steps["firstFrame"] ?? 0) > 60_000 || ms > 120_000
         var extra: [String: Any] = ["prewarm": prewarm]
         for (k, v) in steps where k != "inputReady" { extra[k] = (v * 10).rounded() / 10 }
         record("cold", ms: ms, extra: extra)
@@ -143,20 +146,51 @@ enum LeoPerf {
 
     private static var sendStarts: [String: CFTimeInterval] = [:]
     private static var ackPending: [String: CFTimeInterval] = [:]
+    /// 这次发送用的模型、第一次推理增量的时刻:首字慢时分得清是模型在想,还是网络 / 服务端慢。
+    private static var sendModels: [String: String] = [:]
+    private static var firstThought: [String: CFTimeInterval] = [:]
 
     static func key(_ object: AnyObject) -> String { "chat-\(ObjectIdentifier(object).hashValue)" }
 
-    static func sendBegan(_ key: String, at time: CFTimeInterval = CACurrentMediaTime()) {
-        lock.lock(); sendStarts[key] = time; lock.unlock()
+    static func sendBegan(_ key: String, at time: CFTimeInterval = CACurrentMediaTime(), model: String? = nil) {
+        lock.lock()
+        sendStarts[key] = time
+        sendModels[key] = model
+        firstThought[key] = nil
+        firstEvents[key] = nil
+        lock.unlock()
+    }
+
+    /// 第一个可见动静(工具卡片、思考、文字,谁先到算谁)。带工具的一轮,文字可能在十几次工具调用之后
+    /// 才出来,只看首字会把"很忙"误判成"很卡"(1.41.2 实测 88 s 首字其实是 15 次工具调用)。
+    private static var firstEvents: [String: CFTimeInterval] = [:]
+    static func firstEvent(_ key: String) {
+        lock.lock()
+        if sendStarts[key] != nil, firstEvents[key] == nil { firstEvents[key] = CACurrentMediaTime() }
+        lock.unlock()
+    }
+
+    /// 推理(思考)增量先到:只记第一次。
+    static func firstThinking(_ key: String) {
+        lock.lock()
+        if sendStarts[key] != nil, firstThought[key] == nil { firstThought[key] = CACurrentMediaTime() }
+        lock.unlock()
     }
 
     /// 同一次发送只记第一个增量。
     static func firstToken(_ key: String, event: String = "send.firstToken") {
         lock.lock()
         let began = sendStarts.removeValue(forKey: key)
+        let model = sendModels.removeValue(forKey: key)
+        let thought = firstThought.removeValue(forKey: key)
+        let firstSeen = firstEvents.removeValue(forKey: key)
         lock.unlock()
         guard let began else { return }
-        record(event, ms: (CACurrentMediaTime() - began) * 1000)
+        var extra: [String: Any] = [:]
+        if let model { extra["model"] = model }
+        if let thought { extra["thinkMs"] = ((thought - began) * 1000).rounded() }
+        if let firstSeen { extra["firstEventMs"] = ((firstSeen - began) * 1000).rounded() }
+        record(event, ms: (CACurrentMediaTime() - began) * 1000, extra: extra)
     }
 
     /// 发给 Mac:请求发出前调用。

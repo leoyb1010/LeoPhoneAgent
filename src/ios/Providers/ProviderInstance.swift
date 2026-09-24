@@ -247,12 +247,23 @@ struct ProviderInstance: Identifiable, Codable, Hashable {
     /// notifications, and wholesale on foreground; a 15s TTL is only a
     /// defensive backstop, never the primary mechanism.
     var hasAnyCredential: Bool {
-        ProviderCredentialCache.shared.value(for: id) { self.computeHasAnyCredential() }
+        let id = self.id
+        let providerType = self.providerType
+        return ProviderCredentialCache.shared.value(
+            for: id,
+            probe: { Self.probeCredential(id: id, providerType: providerType) },
+            refresh: { Self.probeCredential(id: id, providerType: providerType) }
+        )
     }
 
     /// The uncached credential probe. Kept separate so the cache wraps it and
     /// tests / diagnostics can force a fresh read.
     func computeHasAnyCredential() -> Bool {
+        Self.probeCredential(id: id, providerType: providerType)
+    }
+
+    /// 只依赖 id 和类型,后台线程也能调(缓存过期时在后台重查)。
+    static func probeCredential(id: String, providerType: ProviderType) -> Bool {
         // API-key path is identical across providers — query first.
         if ProviderKeychainHelper.loadAPIKey(instanceId: id, caller: "hasAnyCredential")?.isEmpty == false {
             return true
@@ -323,18 +334,42 @@ final class ProviderCredentialCache: @unchecked Sendable {
 
     private let lock = NSLock()
     private var entries: [String: (value: Bool, at: Date)] = [:]
+    /// 每次显式作废 +1:后台重查开始后若被作废过,它的结果就不写回(可能是写凭据之前查到的)。
+    private var generation = 0
+    private var refreshing: Set<String> = []
 
     private init() {}
 
     /// Return the cached result if fresh, otherwise compute via `probe`, store,
     /// and return. `probe` runs OUTSIDE the lock (it does Keychain XPC — must not
     /// serialize concurrent probes for *different* instances behind one lock).
-    func value(for instanceId: String, probe: () -> Bool) -> Bool {
+    ///
+    /// 过期(TTL 到了或回前台标记过期)但没被作废的条目:有 `refresh` 时先回旧值,后台重查,
+    /// 不在界面渲染路径上同步查钥匙串。被作废(刚写过凭据)的条目仍然同步重查。
+    func value(for instanceId: String, probe: () -> Bool,
+               refresh: (@Sendable () -> Bool)? = nil) -> Bool {
         let now = Date()
         lock.lock()
-        if let e = entries[instanceId], now.timeIntervalSince(e.at) < Self.ttl {
-            lock.unlock()
-            return e.value
+        if let e = entries[instanceId] {
+            if now.timeIntervalSince(e.at) < Self.ttl {
+                lock.unlock()
+                return e.value
+            }
+            if let refresh {
+                if !refreshing.contains(instanceId) {
+                    refreshing.insert(instanceId)
+                    let startGeneration = generation
+                    DispatchQueue.global(qos: .utility).async { [self] in
+                        let fresh = refresh()
+                        lock.lock()
+                        refreshing.remove(instanceId)
+                        if generation == startGeneration { entries[instanceId] = (fresh, Date()) }
+                        lock.unlock()
+                    }
+                }
+                lock.unlock()
+                return e.value
+            }
         }
         lock.unlock()
 
@@ -346,10 +381,18 @@ final class ProviderCredentialCache: @unchecked Sendable {
         return fresh
     }
 
+    /// 回前台的兜底:保留旧值但全部标成过期,下一次读先回旧值、后台重查。
+    func markAllStale() {
+        lock.lock()
+        for key in entries.keys { entries[key]?.at = .distantPast }
+        lock.unlock()
+    }
+
     /// Drop one instance's cached result — call after any credential write for it.
     func invalidate(_ instanceId: String) {
         lock.lock()
         entries.removeValue(forKey: instanceId)
+        generation &+= 1
         lock.unlock()
     }
 
@@ -358,6 +401,7 @@ final class ProviderCredentialCache: @unchecked Sendable {
     func invalidateAll() {
         lock.lock()
         entries.removeAll()
+        generation &+= 1
         lock.unlock()
     }
 }
