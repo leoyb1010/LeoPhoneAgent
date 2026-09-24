@@ -272,8 +272,13 @@ actor LeoAgentClient {
             throw GatewayError.malformedResponse("not an HTTP response")
         }
         guard (200..<300).contains(http.statusCode) else {
-            if http.statusCode == 401 || http.statusCode == 403 { throw GatewayError.unauthorized }
-            throw GatewayError.http(status: http.statusCode, message: Self.errorMessage(from: data))
+            let message = Self.errorMessage(from: data)
+            // 401 是钥匙不对;403 带了原因是"钥匙对、但这件事不允许"(例如全自动只接受 iPhone
+            // 设备钥匙),要把原因原样给人看,不能说成钥匙被拒。
+            if http.statusCode == 401 || (http.statusCode == 403 && (message ?? "").isEmpty) {
+                throw GatewayError.unauthorized
+            }
+            throw GatewayError.http(status: http.statusCode, message: message)
         }
     }
 

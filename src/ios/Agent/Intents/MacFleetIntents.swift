@@ -67,14 +67,15 @@ struct MacHostQuery: EntityStringQuery {
     }
 }
 
-/// 可指挥的编码 CLI。固定三种;某台 Mac 装没装由创建时的服务端报错兜底。
+/// 可指挥的编码 CLI。某台 Mac 装没装由创建时的服务端报错兜底;
+/// LeoPhoneAgent(zcode)只有升级到 Mac 1.2 的机器有。
 @available(iOS 16.0, *)
 enum MacCLIOption: String, AppEnum {
-    case claude, codex, grok
+    case claude, codex, grok, zcode
 
     static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "编码 CLI")
     static var caseDisplayRepresentations: [MacCLIOption: DisplayRepresentation] = [
-        .claude: "Claude Code", .codex: "Codex", .grok: "Grok",
+        .claude: "Claude Code", .codex: "Codex", .grok: "Grok", .zcode: "LeoPhoneAgent",
     ]
 
     var displayName: String {
@@ -82,6 +83,7 @@ enum MacCLIOption: String, AppEnum {
         case .claude: return "Claude Code"
         case .codex: return "Codex"
         case .grok: return "Grok"
+        case .zcode: return "LeoPhoneAgent"
         }
     }
 }

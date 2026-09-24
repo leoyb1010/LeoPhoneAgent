@@ -61,12 +61,13 @@ final class CapabilitySelfTest: ObservableObject {
             c("motion", "个人数据", "运动", "apple-motion status"),
             c("homekit", "个人数据", "家庭", "apple-homekit list"),
             c("weather", "系统服务", "天气", "apple-weather current"),
-            c("maps", "系统服务", "地图搜索", "apple-maps search --query 咖啡 --limit 1"),
+            // 地图搜索必须给中心点;用固定坐标,只测 MapKit 本身,不依赖定位。
+            c("maps", "系统服务", "地图搜索", "apple-maps search --query 咖啡 --lat 31.2304 --lon 121.4737 --limit 1"),
             c("nlp", "系统服务", "自然语言", "apple-nlp language --text '你好,世界'"),
             c("speak", "系统服务", "朗读音色", "apple-speak voices"),
             c("speech", "系统服务", "语音识别", "apple-speech status"),
             c("media", "系统服务", "正在播放", "apple-media now-playing"),
-            c("player", "系统服务", "播放器", "apple-player status"),
+            c("player", "系统服务", "播放器", "apple-player list"),
             c("shortcuts", "系统服务", "快捷指令", "apple-shortcuts list"),
             c("bluetooth", "系统服务", "蓝牙", "apple-bluetooth status"),
             c("ffmpeg", "系统服务", "FFmpeg", "ffmpeg -hide_banner -version"),
@@ -121,9 +122,18 @@ final class CapabilitySelfTest: ObservableObject {
         persist()
     }
 
+    /// 第一次用会弹系统授权框的能力。命令在等你点选时会超时,那不是坏了,是在等授权。
+    private static let permissionGated: Set<String> = [
+        "calendar", "reminders", "contacts", "photos", "location", "health", "motion", "homekit", "speech", "media", "bluetooth",
+    ]
+
     private func perform(_ check: Check) async -> (Status, String) {
         if let command = check.command {
-            return await runShell(command)
+            let (status, detail) = await runShell(command)
+            if status == .failed, detail.contains("timed out"), Self.permissionGated.contains(check.id) {
+                return (.unauthorized, "在等系统授权:请在弹窗里选「允许」或「不允许」,然后再测一次")
+            }
+            return (status, detail)
         }
         if check.id.hasPrefix("provider-") {
             let id = String(check.id.dropFirst("provider-".count))

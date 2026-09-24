@@ -3516,7 +3516,7 @@ struct AIChatView: View {
         }
         .confirmationDialog("交给哪台 Mac 继续", isPresented: $showMacSwitchDialog, titleVisibility: .visible) {
             ForEach(gatewayStore.activeHosts) { host in
-                ForEach(ComposerMacTarget.clis, id: \.0) { cli in
+                ForEach(ComposerMacTarget.clis(for: host), id: \.0) { cli in
                     Button("\(host.name) · \(cli.1)") {
                         macChatTarget = ComposerMacTarget(host: host, cliKey: cli.0, cliName: cli.1)
                     }

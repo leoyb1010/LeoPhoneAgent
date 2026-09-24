@@ -26,6 +26,18 @@ final class FullAutoStore: ObservableObject {
             guard enabled != oldValue else { return }
             UserDefaults.standard.set(enabled, forKey: Self.defaultsKey)
             AppLogger(category: "FullAuto").info("[FullAuto] \(enabled ? "打开" : "关闭")")
+            if !enabled { Self.turnOffOnMacs() }
+        }
+    }
+
+    /// 关掉开关时,已升级的 Mac(LeoPhoneAgent 1.2 起)上由这台手机发起、还在全自动跑的任务
+    /// 一并切回「先问我」。尽力而为:连不上的 Mac 下次收到这台手机的消息时也会按开关切回。
+    private static func turnOffOnMacs() {
+        Task { @MainActor in
+            for host in GatewayHostStore.shared.activeHosts where host.runsLeoPhoneAgent {
+                guard let client = GatewayHostStore.shared.client(for: host) else { continue }
+                Task { try? await client.turnOffFullAuto() }
+            }
         }
     }
 

@@ -40,6 +40,9 @@ struct GatewayHost: Codable, Identifiable, Hashable {
     var server: String? = nil
 
     var isAndroidBody: Bool { platform == "android" || server == "minis" }
+    /// Mac 1.2 起由 LeoPhoneAgent 自己接中继(`info.server = leophoneagent`):
+    /// 能直接开 LeoPhoneAgent 任务(harness `zcode`),也仍能开 Claude Code / Codex / Grok。
+    var runsLeoPhoneAgent: Bool { server == "leophoneagent" }
 
     var url: URL? { URL(string: baseURL) }
     var harnessBase: URL? {

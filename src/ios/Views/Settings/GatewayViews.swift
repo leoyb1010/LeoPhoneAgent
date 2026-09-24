@@ -1142,6 +1142,11 @@ struct ComposerMacTarget: Identifiable {
     static let clis: [(String, String)] = [
         ("claude", "Claude Code"), ("codex", "Codex"), ("grok", "Grok"),
     ]
+
+    /// 这台 Mac 能开的任务类型:升级到 LeoPhoneAgent 1.2 的 Mac 把它自己的 Agent 排第一。
+    static func clis(for host: GatewayHost) -> [(String, String)] {
+        host.runsLeoPhoneAgent ? [("zcode", "LeoPhoneAgent")] + clis : clis
+    }
     let host: GatewayHost
     let cliKey: String
     let cliName: String

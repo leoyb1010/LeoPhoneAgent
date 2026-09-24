@@ -3513,14 +3513,10 @@ struct ContentView: View {
                                     selectHomeMac(host, key: "minis", name: "LeoPhoneAgent")
                                 }
                             } else {
-                                Button("Claude Code") {
-                                    selectHomeMac(host, key: "claude", name: "Claude Code")
-                                }
-                                Button("Codex") {
-                                    selectHomeMac(host, key: "codex", name: "Codex")
-                                }
-                                Button("Grok") {
-                                    selectHomeMac(host, key: "grok", name: "Grok")
+                                ForEach(ComposerMacTarget.clis(for: host), id: \.0) { cli in
+                                    Button(cli.1) {
+                                        selectHomeMac(host, key: cli.0, name: cli.1)
+                                    }
                                 }
                             }
                         }

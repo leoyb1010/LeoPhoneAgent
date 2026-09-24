@@ -91,10 +91,14 @@ extension LeoAgentClient {
 
     // MARK: Control
 
-    func createHarnessSession(harness: String, cwd: String, prompt: String?, thinking: String? = nil) async throws -> String {
+    /// `fullAuto`:让 Mac 用全自动(免审批)跑这个任务。只有 LeoPhoneAgent 任务支持,
+    /// 且 Mac 只接受已配对 iPhone 设备钥匙发来的;不接受时返回 403 和原因。
+    func createHarnessSession(harness: String, cwd: String, prompt: String?, thinking: String? = nil,
+                              fullAuto: Bool = false) async throws -> String {
         var payload: [String: Any] = ["harness": harness, "cwd": cwd]
         if let prompt, !prompt.isEmpty { payload["prompt"] = prompt }
         if let thinking, !thinking.isEmpty { payload["thinking"] = thinking }
+        if fullAuto { payload["full_auto"] = true }
         let sentAt = CACurrentMediaTime()
         let obj = try await postJSON("/harness/sessions", body: payload, service: .harness)
         guard let id = obj["session_id"] as? String else {
@@ -105,11 +109,18 @@ extension LeoAgentClient {
         return id
     }
 
-    func steerHarness(sessionId: String, text: String) async throws {
+    /// `fullAuto` 非 nil 时,Mac 按它把这个任务切到全自动或切回「先问我」(接着聊的老任务也跟着开关走)。
+    func steerHarness(sessionId: String, text: String, fullAuto: Bool? = nil) async throws {
         LeoPerf.macSendBegan(sessionId)
-        _ = try await postJSON("/harness/sessions/\(sessionId)/send", body: ["text": text],
-                               service: .harness)
+        var body: [String: Any] = ["text": text]
+        if let fullAuto { body["full_auto"] = fullAuto }
+        _ = try await postJSON("/harness/sessions/\(sessionId)/send", body: body, service: .harness)
         LeoPerf.macAck(sessionId)
+    }
+
+    /// 手机关掉全自动:这台 Mac 上由本机发起、还在全自动跑的任务切回「先问我」。
+    func turnOffFullAuto() async throws {
+        _ = try await postJSON("/harness/full-auto", body: ["enabled": false], service: .harness)
     }
 
     /// `approvalId` is the server's own id for the request. Without it the
@@ -184,7 +195,7 @@ extension LeoAgentClient {
                         journal: HarnessJournalStatus.parse(obj) ?? HarnessJournalStatus()))
                     continue
                 }
-                if obj["type"] as? String == "message.delta" { LeoPerf.macDelta(sessionId) }
+                if obj["event"] as? String == "message.delta" { LeoPerf.macDelta(sessionId) }
                 continuation.yield(HarnessEvent(
                     seq: obj["seq"] as? Int ?? 0,
                     event: GatewayEvent.parse(obj), durability: obj["durability"] as? String))
@@ -241,12 +252,21 @@ final class HarnessSessionDriver: ObservableObject {
         firstPrompt = prompt
         isRunning = true
         status = "starting"
+        let fullAuto = wantsFullAuto
         streamTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let id = try await self.client.createHarnessSession(
-                    harness: self.harness.key, cwd: self.cwd, prompt: prompt,
-                    thinking: thinking)
+                let id: String
+                do {
+                    id = try await self.client.createHarnessSession(
+                        harness: self.harness.key, cwd: self.cwd, prompt: prompt,
+                        thinking: thinking, fullAuto: fullAuto)
+                } catch GatewayError.http(let status, _) where status == 403 && fullAuto {
+                    // Mac 还不接受这台手机开全自动(中继没认出 iPhone 设备钥匙):照常开,逐项审批。
+                    await MainActor.run { self.note(Self.fullAutoRefusedNote) }
+                    id = try await self.client.createHarnessSession(
+                        harness: self.harness.key, cwd: self.cwd, prompt: prompt, thinking: thinking)
+                }
                 await MainActor.run {
                     self.sessionId = id
                     self.status = "running"
@@ -268,11 +288,29 @@ final class HarnessSessionDriver: ObservableObject {
         let queued = queuedSteers
         queuedSteers = []
         guard !queued.isEmpty else { return }
-        Task { [client] in
+        Task {
             for text in queued {
-                do { try await client.steerHarness(sessionId: sessionId, text: text) }
-                catch { await MainActor.run { self.lastError = error.localizedDescription } }
+                await self.sendSteer(sessionId: sessionId, text: text)
             }
+        }
+    }
+
+    static let fullAutoRefusedNote = "这台 Mac 还不接受本机的全自动任务(中继升级后才认得出这台 iPhone),这次会逐项请你审批。"
+
+    /// 全自动只对 LeoPhoneAgent 任务有意义;Claude Code / Codex / Grok 仍按它们自己的审批走。
+    private var wantsFullAuto: Bool { harness.key == "zcode" && FullAutoGate.isOn }
+
+    /// 发一条后续消息;LeoPhoneAgent 任务顺带告诉 Mac 全自动开关的当前状态。
+    private func sendSteer(sessionId: String, text: String) async {
+        let fullAuto: Bool? = harness.key == "zcode" ? FullAutoGate.isOn : nil
+        do {
+            try await client.steerHarness(sessionId: sessionId, text: text, fullAuto: fullAuto)
+        } catch GatewayError.http(let status, _) where status == 403 && fullAuto == true {
+            note(Self.fullAutoRefusedNote)
+            do { try await client.steerHarness(sessionId: sessionId, text: text) }
+            catch { lastError = error.localizedDescription }
+        } catch {
+            lastError = error.localizedDescription
         }
     }
 
