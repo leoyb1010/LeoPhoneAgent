@@ -896,7 +896,7 @@ struct HarnessLauncherView: View {
                                     ? "hand.raised.fill" : "terminal")
                                     .foregroundStyle(session.waitingForApproval ? .orange : .secondary)
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(session.name).font(.system(size: 15))
+                                    Text(session.displayTitle).font(.system(size: 15)).lineLimit(1)
                                     if let window = session.windowLabel, !window.isEmpty {
                                         Text(window)
                                             .font(.system(size: 12))
@@ -916,9 +916,9 @@ struct HarnessLauncherView: View {
                         }
                     }
                 } header: {
-                    Text("进行中的会话")
+                    Text("Mac 上的会话")
                 } footer: {
-                    Text("这台 Mac 上正在跑的任务,点进去即可查看、审批、继续下指令。")
+                    Text("正在跑的,和最近在 Mac 上开的 LeoPhoneAgent 任务。点进去即可查看、审批、接着下指令。")
                 }
             }
 
@@ -1016,6 +1016,7 @@ struct HarnessLauncherView: View {
         case "running", "starting": return "运行中"
         case "idle": return "待命"
         case "waiting_for_approval": return "等审批"
+        case "available": return "在 Mac 上,可接着做"
         default: return status
         }
     }

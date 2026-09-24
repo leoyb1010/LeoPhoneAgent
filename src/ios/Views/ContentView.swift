@@ -1544,7 +1544,7 @@ struct ContentView: View {
                             cwd: row.session.cwd),
                         firstPrompt: "",
                         attachSessionId: row.session.id)
-                    .navigationTitle("\(row.hostName) · \(row.session.name)")
+                    .navigationTitle("\(row.hostName) · \(row.session.displayTitle)")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
@@ -1680,7 +1680,7 @@ struct ContentView: View {
                                 .fill(row.isWaiting ? Color.orange : Color.green)
                                 .frame(width: 7, height: 7)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("\(row.hostName) · \(row.session.name)")
+                                Text("\(row.hostName) · \(row.session.displayTitle)")
                                     .font(.system(size: 15, weight: .medium))
                                     .foregroundStyle(.primary)
                                 Text(row.isWaiting

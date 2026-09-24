@@ -35,6 +35,14 @@ struct HarnessSessionSummary: Sendable, Identifiable, Hashable {
     var pendingApprovalId: String? = nil
     var pendingApprovalCommand: String? = nil
     var windowLabel: String? = nil
+    /// 任务标题(LeoPhoneAgent 任务有;同一个项目里的几个任务靠它区分)。
+    var title: String? = nil
+
+    /// 列表里显示的名字:有标题用标题,没有就用会话类型名。
+    var displayTitle: String {
+        if let title, !title.isEmpty { return title }
+        return name
+    }
 }
 
 /// One event from a harness session. Same vocabulary as a gateway run, plus a
@@ -85,7 +93,8 @@ extension LeoAgentClient {
                     let title = window["title"] as? String ?? ""
                     let parts = [app, title].filter { !$0.isEmpty }
                     return parts.isEmpty ? nil : parts.joined(separator: " · ")
-                }())
+                }(),
+                title: (row["title"] as? String).flatMap { $0.isEmpty ? nil : $0 })
         }
     }
 

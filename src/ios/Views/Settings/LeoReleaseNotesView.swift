@@ -12,6 +12,15 @@ struct LeoRelease: Identifiable, Equatable {
 enum LeoReleaseCatalog {
     static let releases: [LeoRelease] = [
         LeoRelease(
+            version: "1.41.2",
+            date: "2026-09-25",
+            title: "在手机上接着做 Mac 桌面上的任务",
+            highlights: [
+                "Mac 升到 LeoPhoneAgent 1.2.2 后,「Mac 控制台」的会话列表里会出现最近在 Mac 上开的任务,标着「在 Mac 上,可接着做」;点进去就接过来,之后看进度、审批、停止都和手机开的任务一样。之前的对话留在 Mac 上,手机从接上那一刻开始同步。",
+                "Mac 上的会话按任务标题显示,同一个项目里的几个任务不再长得一模一样;首页「Mac 进行中」只放真正在跑或等你审批的,不会被桌面上的旧任务刷满。设置首页「多代理编排」改名「多 Agent 编排」。"
+            ]
+        ),
+        LeoRelease(
             version: "1.41.1",
             date: "2026-09-25",
             title: "设置页逐页打磨:说人话,不露内部名",
