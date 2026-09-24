@@ -612,6 +612,12 @@ final class HarnessSessionDriver: ObservableObject {
                 return
             }
             if name == "session.created" { return }   // metadata, already shown by the launcher
+            // Mac 端给人看的说明(例如"手机暂时答不了的提问已跳过"):只显示文字,不带事件名。
+            if name == "session.note" {
+                let text = payload["text"] ?? ""
+                if !text.isEmpty { note(text) }
+                return
+            }
             // Engine chatter (retries, init banners) shows up here. Surfacing
             // it is what made a broken CLI on the Mac diagnosable instead of
             // looking like a silent hang.
