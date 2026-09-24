@@ -197,6 +197,9 @@ enum DeepLinkRouter {
         case "permissions":
             coord.pendingSettingsTarget = .permissions
 
+        case "selftest", "self-test", "self_test":
+            coord.pendingSettingsTarget = .selfTest
+
         case "environments":
             // `create_key` is the only required param. Missing
             // `create_value`/`create_note` default to empty so a link

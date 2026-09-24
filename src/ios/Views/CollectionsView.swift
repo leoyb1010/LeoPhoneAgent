@@ -1732,8 +1732,21 @@ private struct CollectionCard: View {
     }
 
     private var displayTitle: String {
-        if let title = item.title, !title.isEmpty { return title }
-        return item.value
+        // [T-treasury-empty-title-1.41] 标题和正文都空的条目(比如只存了附件的笔记)
+        // 原来显示成只有头像和标签的一行空白,像是坏了。依次取:标题、正文首行、
+        // 摘要首行、批注首行,最后按类型给一个"未命名"。
+        func firstLine(_ text: String?) -> String? {
+            guard let text else { return nil }
+            let line = text.split(whereSeparator: \.isNewline)
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .first { !$0.isEmpty }
+            return line.map { String($0.prefix(80)) }
+        }
+        if let title = item.title?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty { return title }
+        if let line = firstLine(item.value) { return line }
+        if let line = firstLine(item.summary) { return line }
+        if let line = firstLine(item.annotation) { return line }
+        return item.kind == .note ? String(localized: "未命名笔记") : String(localized: "未命名条目")
     }
 
     @ViewBuilder

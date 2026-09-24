@@ -81,6 +81,9 @@ struct SettingsHomeView: View {
                               icon: "gearshape.circle.fill", color: .indigo) { ModelGroupsView() },
                 SettingsEntry("推理与模型", keywords: "thinking 推理 读图 压缩 标题 vision compact",
                               icon: "brain.head.profile", color: .indigo) { ThinkingAndModelSlotsView() },
+                SettingsEntry("Jev 快速判断", keywords: "jev typesafe system one 快速判断 分类 打分",
+                              icon: "bolt.horizontal.circle.fill", color: .indigo,
+                              hint: "TypeSafe 的快判断模型,填 Key 后 Agent 多一个 jev_decide 工具") { JevSettingsView() },
                 SettingsEntry("快速任务", keywords: "quick task 捷径",
                               icon: "bolt.fill", color: .indigo) { QuickTaskSettingsView() },
                 SettingsEntry("能力中心", keywords: "capabilities 权限 能干什么",
@@ -129,6 +132,9 @@ struct SettingsHomeView: View {
                               icon: "sparkles.rectangle.stack", color: .blue) {
                     LeoReleaseNotesView(mode: .history)
                 },
+                SettingsEntry("能力自检", keywords: "自检 测试 能力 诊断 health check selftest",
+                              icon: "checklist.checked", color: .green,
+                              hint: "把每项能力按 Agent 的路径只读跑一遍") { CapabilitySelfTestView() },
                 SettingsEntry("日志", keywords: "logs 日志 反馈 诊断",
                               icon: "doc.text.fill", color: .gray) { LogManagementView() },
                 SettingsEntry("隐私与数据", keywords: "privacy 隐私",

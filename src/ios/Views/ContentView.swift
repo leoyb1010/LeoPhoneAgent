@@ -1837,9 +1837,10 @@ struct ContentView: View {
     /// Plain List with NavigationLink for stack (iPhone) layout.
     private var stackList: some View {
         List {
-            agentHomeListSection(hasSessions: !filteredSessions.isEmpty)
+            // [T-home-simplify-1.41] 首屏只剩对话:工作区卡片、磁贴、系统快捷都收进
+            // 底部输入栏的 "/" 面板;筛选 chips 只在搜索时出现。
+            homeSearchSection
             macLiveSection
-            homeLikelySection
             // [T-ios-session-list-equatable-jank] id-list projection — see splitList.
             let groups = groupedSessionIDs(filteredSessions)
             ForEach(groups, id: \.label) { group in
@@ -1923,16 +1924,17 @@ struct ContentView: View {
         .opacity(didInitialLoad ? 1 : 0)
         // [T-session-filter-trap] 只有"库里真的没有会话"才铺满屏的空状态。
         // 筛选筛空时铺这层会把上面刚恢复的 chips 整个盖住,等于没修。
-        .overlay { if didInitialLoad, sessions.isEmpty, !isSearching { emptyState } }
-        .safeAreaInset(edge: .bottom) { if isSelecting { selectionToolbar } else { fabRow } }
-        // [T-home-fab-keyboard-inset] Mirror of the voice panel's structural
-        // immunity (604a9947 / T-voice-bg-fg-gap): with the inline search bar
-        // closed, nothing down here accepts text — any keyboard inset reaching
-        // this list is a stale/zombie one (stranded responder, interrupted
-        // bg-snapshot dismiss) and must not push the 新建/搜索 FABs up. With
-        // the search bar open its TextField legitimately rises with the
-        // keyboard, so normal avoidance is restored.
-        .ignoresSafeArea(.keyboard, edges: showSearchBar ? [] : .bottom)
+        .overlay { if didInitialLoad, sessions.isEmpty, !isSearching, !showSearchBar { emptyState } }
+        // [T-home-simplify-1.41] 底部是输入栏(它自己就是文本输入,跟随键盘上移是对的,
+        // 所以不再忽略键盘安全区)。搜索时收起输入栏,免得两个输入框同时在屏上。
+        .safeAreaInset(edge: .bottom) { if isSelecting { selectionToolbar } else { homeBottomBar } }
+        .sheet(isPresented: $showHomeActions, onDismiss: runPendingHomeAction) { homeActionSheet }
+        .confirmationDialog("屏幕亮度", isPresented: $showBrightnessOptions, titleVisibility: .visible) {
+            ForEach([("25%", 0.25), ("50%", 0.5), ("75%", 0.75), ("100%", 1.0)], id: \.0) { item in
+                Button(item.0) { setBrightness(item.1) }
+            }
+        }
+        .navigationDestination(isPresented: $showMacConsole) { GatewayEntryView() }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { sidebarToolbarContent }
     }
@@ -2338,6 +2340,18 @@ struct ContentView: View {
                 }
             }
         }
+        // [T-home-simplify-1.41] iPhone 标题栏只留:设置、搜索、藏宝阁。
+        ToolbarItem(placement: .topBarTrailing) {
+            if !isSelecting, !isWideLayout {
+                Button {
+                    withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { showSearchBar = true }
+                    searchFocused = true
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                }
+                .accessibilityLabel(Text("搜索对话"))
+            }
+        }
         // [T-collections] 收藏一级入口:分享进来的东西从这里翻。
         ToolbarItem(placement: .topBarTrailing) {
             if !isSelecting {
@@ -2347,9 +2361,10 @@ struct ContentView: View {
                 .accessibilityLabel(Text("Leo藏宝阁"))
             }
         }
-        // [T-settings-ia] Mac 控制台是主功能,不是设置项——一级入口常驻标题栏。
+        // [T-settings-ia] Mac 控制台是主功能,不是设置项——iPad 常驻标题栏;
+        // iPhone 收进首页胶囊菜单和 "/" 面板。
         ToolbarItem(placement: .topBarTrailing) {
-            if !isSelecting {
+            if !isSelecting, isWideLayout {
                 NavigationLink {
                     GatewayEntryView()
                 } label: {
@@ -2368,7 +2383,7 @@ struct ContentView: View {
                         selectedIds = Set(sessions.map(\.id))
                     }
                 }
-            } else if hasAlarms {
+            } else if hasAlarms, isWideLayout {
                 Button {
                     showAlarmList = true
                 } label: {
@@ -2378,7 +2393,7 @@ struct ContentView: View {
             }
         }
         ToolbarItem(placement: .topBarTrailing) {
-            if !isSelecting {
+            if !isSelecting, isWideLayout {
                 Menu {
                     Button {
                         showTerminal = true
@@ -2800,6 +2815,11 @@ struct ContentView: View {
     @State private var homePrompt = ""
     @State private var homeExecutionTarget: HomeExecutionTarget = .iphone
     @FocusState private var homePromptFocused: Bool
+    // [T-home-simplify-1.41] "/" 面板、亮度选项、Mac 控制台入口(从标题栏收进来)。
+    @State private var showHomeActions = false
+    @State private var pendingHomeAction: HomeAction?
+    @State private var showBrightnessOptions = false
+    @State private var showMacConsole = false
     @State private var homeRoutingError: String?
     @State private var homeRoutingInProgress = false
     /// [T-home-sensory-feedback] Bumped when a NATIVE action starts (not the
@@ -2892,12 +2912,20 @@ struct ContentView: View {
     }
 
     private var emptyState: some View {
-        ScrollView {
-            agentHomeCard(compact: false)
-                .frame(maxWidth: 560)
-                .padding(.horizontal, LeoTheme.Spacing.md)
-                .padding(.vertical, LeoTheme.Spacing.lg)
-        }
+        HomeEmptyState(
+            hasModel: !providerStore.modelGroups.isEmpty,
+            onSuggestion: { text in
+                if isWideLayout {
+                    startHomeChatAction(.prefillPrompt(text))
+                } else {
+                    homePrompt = text
+                    homePromptFocused = true
+                }
+            },
+            onConnectModel: {
+                if providerStore.instances.isEmpty { showAddProvider = true } else { showSelectModels = true }
+            }
+        )
         .background(LeoTheme.ColorToken.groupedBackground)
     }
 
@@ -2941,6 +2969,202 @@ struct ContentView: View {
     /// 默认筛选"这个兜底 —— 后者保证任何非 .all 状态下都一定有路可退。
     private var shouldShowFilterChips: Bool {
         !sessions.isEmpty || sessionExtras.filter != .all
+    }
+
+    // MARK: - Home 1.41「输入框优先」
+
+    /// 搜索时才出现:搜索框 + 筛选 chips(归档、分组都从这里进)。
+    @ViewBuilder
+    private var homeSearchSection: some View {
+        if showSearchBar, !isSelecting {
+            Section {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    TextField("搜索对话", text: $searchText)
+                        .textFieldStyle(.plain)
+                        .autocorrectionDisabled()
+                        .submitLabel(.search)
+                        .focused($searchFocused)
+                        .onChange(of: searchText) { _ in scheduleSearch() }
+                    Button("取消") { dismissSearch() }
+                        .font(.subheadline)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+                if shouldShowFilterChips {
+                    sessionFilterChips
+                        .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 8, trailing: 12))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                }
+                if filteredSessions.isEmpty, !sessions.isEmpty, !isSearching {
+                    emptyFilterHint
+                        .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                }
+            }
+        }
+    }
+
+    /// 底部:结果条 + 玻璃输入栏。搜索时收起。
+    @ViewBuilder
+    private var homeBottomBar: some View {
+        if !showSearchBar {
+            VStack(spacing: 8) {
+                if let homeRoutingError {
+                    HomeResultBanner(text: homeRoutingError, tone: .error) { self.homeRoutingError = nil }
+                } else if let result = homeNativeResult {
+                    HomeResultBanner(text: result.text,
+                                     tone: result.outcome == .succeeded ? .success : .info) { homeNativeResult = nil }
+                }
+                HomeComposerBar(
+                    text: $homePrompt,
+                    isFocused: $homePromptFocused,
+                    capsule: homeCapsuleLabel,
+                    capsuleMenu: AnyView(homeCapsuleMenuContent),
+                    plusMenu: AnyView(homePlusMenuContent),
+                    isBusy: homeRoutingInProgress,
+                    canSend: canRunHomePrompt,
+                    onSubmit: { runHomePrompt() },
+                    onSlash: {
+                        homePromptFocused = false
+                        showHomeActions = true
+                    },
+                    onMic: { startHomeChatAction(.startVoice) },
+                    onCancelBusy: { homeNativeTask?.cancel() }
+                )
+            }
+            .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: homeNativeResult?.text)
+            .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: homeRoutingError)
+        }
+    }
+
+    private var homeCapsuleLabel: HomeCapsuleLabel {
+        if homeTargetIsIPhone {
+            return HomeCapsuleLabel(icon: isIPad ? "ipad" : "iphone",
+                                    place: isIPad ? "此 iPad" : "此 iPhone",
+                                    model: ModelSwitcher.defaultLabel())
+        }
+        return HomeCapsuleLabel(icon: homeTargetMenuIcon, place: homeExecutionTargetTitle, model: nil)
+    }
+
+    /// 胶囊菜单:在哪里执行 + 用哪个模型。一个入口管两件事。
+    @ViewBuilder
+    private var homeCapsuleMenuContent: some View {
+        Section("在哪里执行") { homeTargetMenuItems }
+        if homeTargetIsIPhone {
+            Section("用哪个模型") {
+                ForEach(providerStore.modelGroups) { group in
+                    Button {
+                        providerStore.defaultPrimaryGroupId = group.id
+                        LeoHaptics.selection()
+                    } label: {
+                        if providerStore.defaultPrimaryGroupId == group.id {
+                            Label(group.name, systemImage: "checkmark")
+                        } else {
+                            Text(group.name)
+                        }
+                    }
+                }
+                Button {
+                    if providerStore.instances.isEmpty { showAddProvider = true } else { showSelectModels = true }
+                } label: {
+                    Label(providerStore.modelGroups.isEmpty ? "连接模型" : "管理模型", systemImage: "slider.horizontal.3")
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var homePlusMenuContent: some View {
+        Button { startHomeChatAction(.openCamera) } label: {
+            Label("拍照识别", systemImage: "camera")
+        }
+        Button { activeToolSheet = .rootfsManagement } label: {
+            Label("本机文件", systemImage: "folder")
+        }
+    }
+
+    /// "/" 面板的全部动作。顺序是首次打开时的默认顺序,之后按最近使用排。
+    private var homeActions: [HomeAction] {
+        var list: [HomeAction] = [
+            HomeAction(id: "voice", title: "语音模式", icon: "waveform", tint: .orange) { startHomeChatAction(.startVoice) },
+            HomeAction(id: "camera", title: "拍照识别", icon: "camera.viewfinder", tint: .pink) { startHomeChatAction(.openCamera) },
+        ]
+        if torchSupported {
+            list.append(HomeAction(id: "torch", title: torchOn ? "关手电筒" : "手电筒",
+                                   icon: torchOn ? "flashlight.off.fill" : "flashlight.on.fill", tint: .yellow) {
+                let enabled = !DeviceActions.shared.statusTorch().enabled
+                runHomeNative(.init(path: .native, kind: .toggleFlashlight,
+                    hour: nil, minute: nil, tomorrow: false, label: enabled ? "on" : "off"))
+            })
+        }
+        list += [
+            HomeAction(id: "files", title: "本机文件", icon: "folder.fill", tint: .blue) { activeToolSheet = .rootfsManagement },
+            HomeAction(id: "web", title: "网页研究", icon: "globe", tint: .teal) { activeToolSheet = .browser },
+            HomeAction(id: "automation", title: "自动化", icon: "bolt.fill", tint: .indigo) { activeToolSheet = .quickTasks },
+            HomeAction(id: "terminal", title: "iSH 终端", icon: "terminal.fill", tint: .green) { showTerminal = true },
+            HomeAction(id: "clipboard", title: "读剪贴板", icon: "doc.on.clipboard", tint: .gray) {
+                runHomeNative(.init(path: .native, kind: .readClipboard, hour: nil, minute: nil, tomorrow: false, label: ""))
+            },
+            HomeAction(id: "brightness", title: "亮度", icon: "sun.max.fill", tint: .orange) { showBrightnessOptions = true },
+            HomeAction(id: "device", title: "设备信息", icon: isIPad ? "ipad" : "iphone", tint: .gray) {
+                runHomeNative(.init(path: .native, kind: .deviceInfo, hour: nil, minute: nil, tomorrow: false, label: ""))
+            },
+            HomeAction(id: "capabilities", title: "全部能力", icon: "square.grid.2x2", tint: .purple) { activeToolSheet = .capabilities },
+            HomeAction(id: "mac", title: "Mac 控制台", icon: "desktopcomputer", tint: .secondary) { showMacConsole = true },
+        ]
+        if hasAlarms {
+            list.append(HomeAction(id: "alarms", title: "闹钟", icon: "alarm", tint: .red) { showAlarmList = true })
+        }
+        list.append(HomeAction(id: "browser-settings", title: "浏览器设置", icon: "globe.badge.chevron.backward", tint: .gray) {
+            activeToolSheet = .browserManagement
+        })
+        return list
+    }
+
+    private var homeActionSheet: some View {
+        HomeActionSheet(
+            actions: homeActions,
+            quickTasks: providerStore.modelGroups.isEmpty ? [] : quickTaskStore.composerTasks.map { task in
+                HomeAction(id: "qt-\(task.id)", title: task.displayName, icon: task.symbolName, tint: .accentColor) {
+                    openQuickTask(task)
+                }
+            },
+            skills: SkillStore.shared.skills
+                .filter(\.isEnabled)
+                .sorted { $0.useCount > $1.useCount }
+                .map { HomeSkillItem(id: $0.id, name: $0.name, summary: $0.description) },
+            onPick: { pendingHomeAction = $0 },
+            onSkill: { skill in
+                pendingHomeAction = HomeAction(id: "skill-\(skill.id)", title: skill.name, icon: "sparkles", tint: .accentColor) {
+                    startHomeChatAction(.prefillPrompt("/\(skill.name) "))
+                }
+            },
+            onManageSkills: {
+                pendingHomeAction = HomeAction(id: "manage-skills", title: "技能", icon: "sparkles", tint: .accentColor) {
+                    deepLink.pendingSettingsTarget = .skills
+                }
+            },
+            onManageMCP: {
+                pendingHomeAction = HomeAction(id: "manage-mcp", title: "MCP", icon: "point.3.connected.trianglepath.dotted", tint: .accentColor) {
+                    deepLink.pendingSettingsTarget = .mcpIntegrations
+                }
+            }
+        )
+    }
+
+    /// "/" 面板收起后再执行选中的动作(它可能再弹一个面板)。
+    private func runPendingHomeAction() {
+        guard let action = pendingHomeAction else { return }
+        pendingHomeAction = nil
+        action.run()
     }
 
     /// 有会话、但当前筛选下一条都不剩时的占位。没有它,用户看到的是
@@ -3251,6 +3475,27 @@ struct ContentView: View {
 
     private var homeTargetMenu: some View {
         Menu {
+            homeTargetMenuItems
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: homeTargetMenuIcon)
+                Text(homeExecutionTargetTitle)
+                    .lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 11)
+            .frame(minHeight: LeoTheme.TouchTarget.minimum)
+            .background(LeoTheme.ColorToken.elevatedSurface, in: Capsule())
+        }
+        .accessibilityLabel(Text("执行目标：\(homeExecutionTargetTitle)"))
+    }
+
+    /// 执行位置的菜单项:首页胶囊和旧的目标菜单共用。
+    @ViewBuilder
+    private var homeTargetMenuItems: some View {
             Button {
                 homeExecutionTarget = .iphone
                 homeRoutingError = nil
@@ -3282,21 +3527,6 @@ struct ContentView: View {
                     }
                 }
             }
-        } label: {
-            HStack(spacing: 7) {
-                Image(systemName: homeTargetMenuIcon)
-                Text(homeExecutionTargetTitle)
-                    .lineLimit(1)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 9, weight: .bold))
-            }
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.primary)
-            .padding(.horizontal, 11)
-            .frame(minHeight: LeoTheme.TouchTarget.minimum)
-            .background(LeoTheme.ColorToken.elevatedSurface, in: Capsule())
-        }
-        .accessibilityLabel(Text("执行目标：\(homeExecutionTargetTitle)"))
     }
 
     private func homeCapabilityButton(

@@ -285,6 +285,7 @@ struct AIChatView: View {
     @State private var showCamera = false
     /// [T-composer-quicktask-picker] Full quick-task list sheet.
     @State private var showQuickTaskPicker = false
+    @State private var showMacSwitchDialog = false
     @State private var showPhotoPicker = false
     @State private var showDocumentPicker = false
     @State private var showMoveToSheet = false
@@ -3468,33 +3469,18 @@ struct AIChatView: View {
         // showed the three composer-pinned tasks inline, which both crowded
         // the composer and implied the catalog was only three items — the
         // picker sheet already lists everything and can create new ones.
+        // [T-composer-simplify-1.41] 输入框上方只留模型胶囊和全自动标记;
+        // 快捷任务、交给 Mac 收进 "/"(/tasks、/mac),有字时才出现本机改写。
         let strip = HStack(spacing: 8) {
-            Button {
-                showQuickTaskPicker = true
-            } label: {
-            Label("快捷任务", systemImage: "bolt.fill")
-                    .font(.caption.weight(.semibold))
-                    .lineLimit(1)
-            }
-            .buttonStyle(.glass)
-            .controlSize(.small)
-            .accessibilityHint("Browse, run or create quick tasks")
-            // [T-ipad-pointer] Trackpad feedback; no-op on touch.
-            .hoverEffect(.lift)
+            // [T-model-quickswitch] 当前模型胶囊:点开就是最近用过的几个,
+            // 换回上一个模型两下搞定,不必再翻全量 picker。
+            modelCapsule
+            FullAutoBadge()
             // [T-local-brain] 输入框里有字且本机模型可用时,给一个改写入口。
             // 全程不出手机,弱网也能用。
             if !vm.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
                LocalBrain.shared.isReady {
                 rewriteMenu
-            }
-            // [T-model-quickswitch] 当前模型胶囊:点开就是最近用过的几个,
-            // 换回上一个模型两下搞定,不必再翻全量 picker。
-            modelCapsule
-            FullAutoBadge()
-            // [T-mac-composer] Quick Tasks 后面:选一台 Mac + 一个 CLI,
-            // 直接开聊。不去设置、不去控制台。
-            if !gatewayStore.activeHosts.isEmpty {
-                macCommandMenu
             }
             Spacer(minLength: 0)
         }
@@ -3521,6 +3507,25 @@ struct AIChatView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .leoOpenQuickModelSwitch)) { _ in
             showQuickModelSwitch = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .leoOpenQuickTaskPicker)) { _ in
+            showQuickTaskPicker = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .leoOpenMacSwitch)) { _ in
+            showMacSwitchDialog = true
+        }
+        .confirmationDialog("交给哪台 Mac 继续", isPresented: $showMacSwitchDialog, titleVisibility: .visible) {
+            ForEach(gatewayStore.activeHosts) { host in
+                ForEach(ComposerMacTarget.clis, id: \.0) { cli in
+                    Button("\(host.name) · \(cli.1)") {
+                        macChatTarget = ComposerMacTarget(host: host, cliKey: cli.0, cliName: cli.1)
+                    }
+                }
+            }
+        } message: {
+            if gatewayStore.activeHosts.isEmpty {
+                Text("还没有连接 Mac。到 设置 → 我的设备 → 远程机器 里添加。")
+            }
         }
         return AnyView(strip)
     }
@@ -3638,32 +3643,6 @@ struct AIChatView: View {
 
     /// [T-mac-composer] "指挥 Mac"菜单:一台 Mac 时直接列 3 个 CLI,
     /// 多台时按 Mac 分子菜单。小表达式,避免撞类型检查预算。
-    private var macCommandMenu: some View {
-        Menu {
-            let hosts = gatewayStore.activeHosts
-            if hosts.count == 1, let host = hosts.first {
-                ForEach(ComposerMacTarget.clis, id: \.0) { cli in
-                    Button(cli.1) { macChatTarget = ComposerMacTarget(host: host, cliKey: cli.0, cliName: cli.1) }
-                }
-            } else {
-                ForEach(hosts) { host in
-                    Menu(host.name) {
-                        ForEach(ComposerMacTarget.clis, id: \.0) { cli in
-                            Button(cli.1) { macChatTarget = ComposerMacTarget(host: host, cliKey: cli.0, cliName: cli.1) }
-                        }
-                    }
-                }
-            }
-        } label: {
-            Label("切换到 Mac", systemImage: "desktopcomputer")
-                .font(.caption.weight(.semibold))
-                .lineLimit(1)
-        }
-        .buttonStyle(.glass)
-        .controlSize(.small)
-        .hoverEffect(.lift)
-    }
-
     private func prepareComposer(with task: QuickTaskDefinition) {
         LeoHaptics.selection()
         let prepared = task.renderedPrompt()
@@ -6189,8 +6168,10 @@ private struct EmptyChatWorkspaceCard: View {
     var onPrompt: (String) -> Void
     var onBrowse: () -> Void
     var onUseMount: (UUID) -> Void = { _ in }
-    private let isIPad = UIDevice.current.userInterfaceIdiom == .pad
 
+    // [T-chat-empty-simplify-1.41] 新对话的空状态只留几个起手式,贴在输入栏上方。
+    // 原来那张"此 iPhone 工作区"大卡片(说明文字 + 状态 + 按钮)在键盘弹出后被
+    // 居中挤到导航栏底下,和标题叠在一起;说明文字也没人读。
     private let prompts = [
         (String(localized: "整理今天要做的事"), "checklist"),
         (String(localized: "分析一份本机文件"), "doc.text.magnifyingglass"),
@@ -6198,110 +6179,35 @@ private struct EmptyChatWorkspaceCard: View {
     ]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 10) {
-                Image(systemName: isIPad ? "ipad" : "iphone")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.tint)
-                    .frame(width: 36, height: 36)
-                    .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(isIPad ? "此 iPad 工作区" : "此 iPhone 工作区")
-                        .font(.headline.weight(.bold))
-                        .foregroundStyle(ChatColors.primaryText)
-                    Text("对话、文件、浏览器和 iSH 都在本机可用")
-                        .font(.caption)
-                        .foregroundStyle(ChatColors.secondaryText)
-                }
-                Spacer(minLength: 8)
-                HStack(spacing: 4) {
-                    Circle().fill(Color.green).frame(width: 6, height: 6)
-                    Text("本机")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(ChatColors.secondaryText)
-                }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .background(ChatColors.secondaryBg, in: Capsule())
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(prompts, id: \.0) { prompt in
+                pill(prompt.0, icon: prompt.1) { onPrompt(prompt.0) }
             }
-
-            Text("直接输入任务，或从下面开始。只有你主动选择“切换到 Mac”时，任务才会交给远端设备。")
-                .font(.subheadline)
-                .foregroundStyle(ChatColors.secondaryText)
-                .fixedSize(horizontal: false, vertical: true)
-
-            VStack(spacing: 7) {
-                ForEach(prompts, id: \.0) { prompt in
-                    Button { onPrompt(prompt.0) } label: {
-                        HStack(spacing: 9) {
-                            Image(systemName: prompt.1)
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.tint)
-                                .frame(width: 20)
-                            Text(prompt.0)
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(ChatColors.primaryText)
-                            Spacer()
-                            Image(systemName: "arrow.up.left")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(ChatColors.tertiaryText)
-                        }
-                        .padding(.horizontal, 10)
-                        .frame(minHeight: LeoTheme.TouchTarget.minimum)
-                        .background(ChatColors.secondaryBg.opacity(0.72), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
+            pill(String(localized: "浏览此对话的文件"), icon: "folder") { onBrowse() }
+            ForEach(mounts, id: \.id) { mount in
+                pill(String(localized: "工作区:\(mount.name)"),
+                     icon: selectedMountId == mount.id ? "checkmark.circle.fill" : "externaldrive") {
+                    onUseMount(mount.id)
                 }
-            }
-
-            Button(action: onBrowse) {
-                Label("浏览此对话的文件", systemImage: "folder")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(ChatColors.primaryText)
-                    .padding(.horizontal, 10)
-                    .frame(minHeight: LeoTheme.TouchTarget.minimum)
-                    .background(Capsule().fill(ChatColors.secondaryBg))
-                    .overlay(Capsule().stroke(ChatColors.toolBorder, lineWidth: 0.5))
-            }
-            .buttonStyle(.plain)
-
-            if !mounts.isEmpty {
-                Text("用已授权的文件夹当工作区，重启后仍可用")
-                    .font(.caption)
-                    .foregroundStyle(ChatColors.secondaryText)
-                ForEach(mounts, id: \.id) { mount in
-                    Button { onUseMount(mount.id) } label: {
-                        HStack(spacing: 9) {
-                            Image(systemName: selectedMountId == mount.id ? "checkmark.circle.fill" : "externaldrive")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.tint)
-                                .frame(width: 20)
-                            Text(mount.name)
-                                .font(.subheadline.weight(.medium))
-                                .foregroundStyle(ChatColors.primaryText)
-                            Spacer()
-                        }
-                        .padding(.horizontal, 10)
-                        .frame(minHeight: LeoTheme.TouchTarget.minimum)
-                        .background(ChatColors.secondaryBg.opacity(0.72), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("把 \(mount.name) 设为工作区")
-                }
+                .accessibilityLabel("把 \(mount.name) 设为工作区")
             }
         }
-        .padding(16)
-        .frame(maxWidth: 460, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(ChatColors.secondaryBg.opacity(0.48))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(ChatColors.toolBorder, lineWidth: 0.5)
-        )
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+        .padding(.bottom, 14)
         .accessibilityElement(children: .contain)
+    }
+
+    private func pill(_ title: String, icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(ChatColors.primaryText)
+                .lineLimit(1)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(ChatColors.secondaryBg.opacity(0.85), in: Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }
 

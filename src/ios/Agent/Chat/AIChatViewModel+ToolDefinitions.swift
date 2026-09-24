@@ -349,6 +349,21 @@ extension AIChatViewModel {
             ))
         }
 
+        // [T-jev-1.41] 填了 TypeSafe Key 才注册:快判断工具,不生成文字。
+        if JevClient.hasKey {
+            tools.append(AgentToolDefinition(
+                name: "jev_decide",
+                description: "Fast typed decisions from TypeSafe's Jev model (70-500 ms, very cheap). Give it the relevant state and one or more independent questions; each answer comes back as a calibrated probability, never free text. Question types: \"choice\" (pick one label from criteria, up to 255 labels; returns choice, probabilities, confidence), \"score\" (2-10 ordered levels in criteria as an array; returns a score that may land between levels, plus probabilities and confidence), \"noul\" (yes/no; returns the probability of yes). Use it for classification, routing, triage, relevance filtering, scoring or guard checks. Treat low confidence as uncertain and fall back to your own reasoning. Do not use it to write text.",
+                parameters: [
+                    "tool_title": AgentToolParam(type: .string, description: "A concise 5-10 word summary shown to the user."),
+                    "state": AgentToolParam(type: .string, description: "The situation to judge, as a JSON object/array or plain text. Include only what the questions need."),
+                    "questions": AgentToolParam(type: .string, description: "A JSON object mapping question names to specs, e.g. {\"topic\": {\"type\": \"choice\", \"instructions\": \"What is this about?\", \"criteria\": {\"billing\": \"Payments\", \"bug\": \"Something broken\", \"other\": \"Anything else\"}}, \"urgent\": {\"type\": \"noul\", \"instructions\": \"The message is urgent\"}}. Keep each question atomic."),
+                ],
+                required: ["tool_title", "state", "questions"],
+                propertyOrdering: ["tool_title", "state", "questions"]
+            ))
+        }
+
         return tools
     }
 

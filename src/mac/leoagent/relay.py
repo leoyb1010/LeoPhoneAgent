@@ -15,8 +15,17 @@
 /relay/api/m/{name}/... 前缀下,路径与 leoagent 本体完全同构——iOS 端
 不需要新协议,把 harness 地址指向这个前缀即可。
 
-安全模型:一把 relay key 保护全部端点(个人产品,一把钥匙);Mac 注册用
-同一把 key。事件流按帧转发,断线由两端各自重连,手机续传仍靠 ?after=N。
+安全模型(0.2):
+- 每台手机一把设备钥匙,中继只存哈希;iPhone 的设备钥匙只能访问客户端接口,
+  Android / 鸿蒙的"旧版设备钥匙"还能注册未钉扎的机器名。设备钥匙都不能签发一次性码。
+- 主钥匙(RELAY_KEY)在轮换前全权有效;轮换后再有效 30 天,到期作废。
+  轮换同时生成"Mac 注册钥匙":只能注册机器、领取机器专属钥匙。
+- 机器名钉扎:Mac 首次注册时带 pin=true 领取机器专属钥匙,之后这个名字只认它。
+- 配对:iPhone 用的一次性码兑换后进入待定,Mac 点允许才发钥匙;给 Android / 鸿蒙的
+  旧式短码兑换即发旧版设备钥匙(与 0.1 一致)。兑换接口按来源限速。
+- 转发给 Mac 的请求带上调用方类别(caller),Mac 据此决定能不能开全自动等。
+- 发给离线 Mac 的建任务 / 发送请求可以排队(X-Leo-Queue: 1),Mac 上线即投递。
+事件流按帧转发,断线由两端各自重连,手机续传仍靠 ?after=N。
 """
 
 from __future__ import annotations
@@ -37,12 +46,18 @@ from aiohttp import WSMsgType, web
 
 from .apns import build_pusher
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 DEFAULT_PORT = 8650
 REQUEST_TIMEOUT_S = 60
-JOIN_TTL_S = 15 * 60
-DEVICE_KEY_TTL_S = 90 * 24 * 3600
+JOIN_TTL_S = 5 * 60
+DEVICE_KEY_TTL_S = 90 * 24 * 3600          # 滑动:用一次续一次
+MASTER_GRACE_S = 30 * 24 * 3600            # 轮换后旧主钥匙再有效多久
+QUEUE_TTL_S = 24 * 3600
+QUEUE_LIMIT_PER_MACHINE = 200
+JOIN_FAIL_LIMIT = 5                        # 同一来源 60 秒内失败这么多次就暂停
+JOIN_FAIL_WINDOW_S = 60
 DEFAULT_DEVICE_KEYS_PATH = os.path.expanduser("~/.leoagent/device-keys.json")
+DEFAULT_STATE_PATH = os.path.expanduser("~/.leoagent/relay-state.json")
 DEFAULT_TREASURY_SYNC_PATH = os.path.expanduser("~/.leoagent/treasury-sync.json")
 TREASURY_CHANGE_LIMIT = 50_000
 TREASURY_SEEN_CHANGE_LIMIT = 200_000
@@ -52,6 +67,31 @@ TREASURY_ASSET_REQUEST_LIMIT = 10_000
 TREASURY_BODY_LIMIT = 8 * 1024 * 1024
 TREASURY_ATTACHMENT_LIMIT = 128 * 1024 * 1024
 TREASURY_ASSET_TTL_S = 30 * 24 * 3600
+
+
+class Caller:
+    """一次请求的调用方。kind ∈ master / register / iphone / legacy / machine。"""
+
+    __slots__ = ("kind", "device_id", "name", "machine")
+
+    def __init__(self, kind: str, device_id: Optional[str] = None,
+                 name: Optional[str] = None, machine: Optional[str] = None):
+        self.kind = kind
+        self.device_id = device_id
+        self.name = name
+        self.machine = machine
+
+    @property
+    def is_client(self) -> bool:
+        return self.kind in ("master", "iphone", "legacy")
+
+    @property
+    def is_admin(self) -> bool:
+        """能管理配对与设备:主钥匙或机器专属钥匙。"""
+        return self.kind in ("master", "machine")
+
+    def public(self) -> Dict[str, str]:
+        return {"kind": self.kind, "device_id": self.device_id or "", "name": self.name or ""}
 
 
 class Machine:
@@ -71,16 +111,30 @@ class Relay:
                  rejected_log: Optional[str] = None,
                  device_keys_path: Optional[str] = None,
                  treasury_sync_path: Optional[str] = None,
-                 treasury_asset_dir: Optional[str] = None):
+                 treasury_asset_dir: Optional[str] = None,
+                 state_path: Optional[str] = None):
         self.key = key
         # 多钥匙:手机端历史上可能存过任意一台 Mac 的旧钥匙,统一钥匙后
         # 旧钥匙会被拒。RELAY_KEYS 里列出的都放行,老用户无感迁移。
         self.keys = [key] + [k for k in (extra_keys or []) if len(k) >= 16]
-        # 短码入列签发的设备钥匙。旧 RELAY_KEY 本周期继续有效(双栈)。
+        # 0.2 身份状态:设备记录(只存钥匙哈希)、机器名钉扎、注册钥匙、主钥匙到期时间。
+        # 0.1 的 device-keys.json 在首次启动时原样迁成旧版设备。
         self.device_keys_path = device_keys_path or DEFAULT_DEVICE_KEYS_PATH
-        self.device_keys: Dict[str, float] = {}
+        self.state_path = state_path or (
+            os.path.join(os.path.dirname(device_keys_path), "relay-state.json")
+            if device_keys_path else DEFAULT_STATE_PATH)
+        self.devices: Dict[str, Dict[str, Any]] = {}
+        self.device_by_hash: Dict[str, str] = {}
+        self.pins: Dict[str, str] = {}
+        self.register_key_hash: Optional[str] = None
+        self.master_expires_at: Optional[float] = None
         self.join_tokens: Dict[str, Dict[str, Any]] = {}
-        self._load_device_keys()
+        self.pending_joins: Dict[str, Dict[str, Any]] = {}
+        self.join_failures: Dict[str, List[float]] = {}
+        self.offline_queue: Dict[str, List[Dict[str, Any]]] = {}
+        self.queue_results: Dict[str, Dict[str, Any]] = {}
+        self._last_touch_persist = 0.0
+        self._load_state()
         # 被拒的钥匙落盘(0600,仅本机可读),便于把它收编进 RELAY_KEYS。
         self.rejected_log = rejected_log
         self._last_rejected_log_at = float("-inf")
@@ -715,30 +769,173 @@ class Relay:
 
     # -- auth ---------------------------------------------------------------
 
-    def _authorized(self, request: web.Request) -> bool:
-        header = request.headers.get("Authorization", "")
+    @staticmethod
+    def _hash_key(key: str) -> str:
+        return hashlib.sha256(key.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _presented_key(header: str) -> str:
         if not header.startswith("Bearer "):
-            return False
+            return ""
         # 清洗复制残渣:从终端复制密钥时常带上 zsh 的行尾标记 % 或换行。
         # 我们生成的密钥不含这些字符,尾部剥掉是安全的。
-        presented = header[7:].strip().rstrip("%").strip()
+        return header[7:].strip().rstrip("%").strip()
+
+    def _master_valid(self, now: float) -> bool:
+        return self.master_expires_at is None or now < self.master_expires_at
+
+    def _caller_from_key(self, presented: str) -> Optional[Caller]:
+        if not presented:
+            return None
         now = time.time()
         try:
-            if any(hmac.compare_digest(presented, k) for k in self.keys):
-                return True
-            expired = [k for k, exp in self.device_keys.items() if exp < now]
-            for key in expired:
-                self.device_keys.pop(key, None)
-            for device_key in self.device_keys:
-                try:
-                    if hmac.compare_digest(presented, device_key):
-                        return True
-                except (TypeError, ValueError):
-                    continue
+            if self._master_valid(now) and any(hmac.compare_digest(presented, k) for k in self.keys):
+                return Caller("master")
         except (TypeError, ValueError):
+            return None
+        digest = self._hash_key(presented)
+        if self.register_key_hash and hmac.compare_digest(digest, self.register_key_hash):
+            return Caller("register")
+        device_id = self.device_by_hash.get(digest)
+        if device_id:
+            device = self.devices.get(device_id)
+            if device and float(device.get("expires_at") or 0) > now:
+                self._touch_device(device_id, now)
+                return Caller(str(device.get("kind") or "legacy"), device_id=device_id,
+                              name=str(device.get("name") or ""))
+        for machine, pin_hash in self.pins.items():
+            if hmac.compare_digest(digest, pin_hash):
+                return Caller("machine", machine=machine)
+        return None
+
+    def _caller(self, request: web.Request) -> Optional[Caller]:
+        return self._caller_from_key(self._presented_key(request.headers.get("Authorization", "")))
+
+    def _authorized(self, request: web.Request) -> bool:
+        """客户端接口:主钥匙(宽限期内)、iPhone / 旧版设备钥匙。"""
+        presented = self._presented_key(request.headers.get("Authorization", ""))
+        if not presented:
             return False
-        self._record_rejected(presented, request.path)
+        caller = self._caller_from_key(presented)
+        if caller is not None and caller.is_client:
+            return True
+        if caller is None:
+            self._record_rejected(presented, request.path)
         return False
+
+    def _admin(self, request: web.Request) -> Optional[Caller]:
+        caller = self._caller(request)
+        return caller if caller is not None and caller.is_admin else None
+
+    # -- 身份状态 -------------------------------------------------------------
+
+    def _load_state(self) -> None:
+        try:
+            with open(self.state_path, encoding="utf-8") as f:
+                saved = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            saved = {}
+        if isinstance(saved, dict):
+            devices = saved.get("devices")
+            if isinstance(devices, dict):
+                self.devices = {str(k): v for k, v in devices.items()
+                                if isinstance(v, dict) and isinstance(v.get("key_hash"), str)}
+            pins = saved.get("pins")
+            if isinstance(pins, dict):
+                self.pins = {str(k): str(v) for k, v in pins.items() if isinstance(v, str)}
+            register = saved.get("register_key_hash")
+            self.register_key_hash = register if isinstance(register, str) and register else None
+            expires = saved.get("master_expires_at")
+            self.master_expires_at = float(expires) if isinstance(expires, (int, float)) else None
+        self._migrate_device_keys_v01()
+        self._reindex_devices()
+
+    def _migrate_device_keys_v01(self) -> None:
+        """0.1 的 device-keys.json(明文钥匙 → 到期时间)迁成旧版设备,只留哈希。"""
+        path = self.device_keys_path
+        try:
+            with open(path, encoding="utf-8") as f:
+                saved = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            return
+        rows = saved.get("keys") if isinstance(saved, dict) else None
+        if not isinstance(rows, dict):
+            return
+        now = time.time()
+        known = {d.get("key_hash") for d in self.devices.values()}
+        n = 0
+        for key, exp in rows.items():
+            try:
+                expires = float(exp)
+            except (TypeError, ValueError):
+                continue
+            if not isinstance(key, str) or len(key) < 16 or expires <= now:
+                continue
+            digest = self._hash_key(key)
+            if digest in known:
+                continue
+            n += 1
+            device_id = uuid.uuid4().hex[:16]
+            self.devices[device_id] = {
+                "name": f"旧版设备 {n}", "kind": "legacy", "key_hash": digest,
+                "created_at": now, "last_seen": 0.0,
+                "expires_at": max(expires, now + DEVICE_KEY_TTL_S), "push": None,
+            }
+            known.add(digest)
+        self._save_state()
+        try:
+            migrated = path + ".migrated-0.2"
+            os.replace(path, migrated)
+            os.chmod(migrated, 0o600)
+        except OSError:
+            pass
+
+    def _reindex_devices(self) -> None:
+        self.device_by_hash = {str(d["key_hash"]): device_id for device_id, d in self.devices.items()}
+
+    def _save_state(self) -> None:
+        directory = os.path.dirname(self.state_path)
+        try:
+            os.makedirs(directory, mode=0o700, exist_ok=True)
+            tmp = self.state_path + ".tmp"
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump({
+                    "version": 2,
+                    "devices": self.devices,
+                    "pins": self.pins,
+                    "register_key_hash": self.register_key_hash,
+                    "master_expires_at": self.master_expires_at,
+                }, f)
+            os.replace(tmp, self.state_path)
+            os.chmod(self.state_path, 0o600)
+        except OSError:
+            pass
+
+    def _touch_device(self, device_id: str, now: float) -> None:
+        device = self.devices.get(device_id)
+        if device is None:
+            return
+        device["last_seen"] = now
+        device["expires_at"] = now + DEVICE_KEY_TTL_S
+        # 滑动续期只在内存里改;最多一小时落一次盘,别让每个请求都写文件。
+        if now - self._last_touch_persist > 3600:
+            self._last_touch_persist = now
+            self._save_state()
+
+    def _create_device(self, name: str, kind: str) -> tuple:
+        key = secrets.token_urlsafe(32)
+        device_id = uuid.uuid4().hex[:16]
+        now = time.time()
+        self.devices[device_id] = {
+            "name": (name or ("iPhone" if kind == "iphone" else "旧版设备"))[:60],
+            "kind": kind, "key_hash": self._hash_key(key),
+            "created_at": now, "last_seen": now,
+            "expires_at": now + DEVICE_KEY_TTL_S, "push": None,
+        }
+        self._reindex_devices()
+        self._save_state()
+        return key, device_id
 
     def _record_rejected(self, presented: str, path: str) -> None:
         if not self.rejected_log or not presented:
@@ -766,38 +963,15 @@ class Relay:
         except OSError:
             pass
 
-    def _load_device_keys(self) -> None:
-        try:
-            with open(self.device_keys_path, encoding="utf-8") as f:
-                saved = json.load(f)
-            now = time.time()
-            rows = saved.get("keys") if isinstance(saved, dict) else None
-            if isinstance(rows, dict):
-                self.device_keys = {
-                    str(key): float(exp)
-                    for key, exp in rows.items()
-                    if isinstance(key, str) and len(key) >= 16 and float(exp) > now
-                }
-        except (OSError, json.JSONDecodeError, TypeError, ValueError):
-            self.device_keys = {}
-
-    def _save_device_keys(self) -> None:
-        directory = os.path.dirname(self.device_keys_path)
-        try:
-            os.makedirs(directory, mode=0o700, exist_ok=True)
-            tmp = self.device_keys_path + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump({"keys": self.device_keys}, f)
-            os.replace(tmp, self.device_keys_path)
-            os.chmod(self.device_keys_path, 0o600)
-        except OSError:
-            pass
-
     def _purge_join_tokens(self) -> None:
         now = time.time()
         stale = [token for token, rec in self.join_tokens.items() if rec.get("exp", 0) < now]
         for token in stale:
             self.join_tokens.pop(token, None)
+        # 待定的配对:过期一小时后清掉(过期后手机轮询会看到 expired)。
+        dead = [pid for pid, rec in self.pending_joins.items() if rec.get("exp", 0) + 3600 < now]
+        for pid in dead:
+            self.pending_joins.pop(pid, None)
 
     @staticmethod
     def _unauthorized() -> web.Response:
@@ -806,43 +980,210 @@ class Relay:
             status=401,
         )
 
-    async def create_join_token(self, request: web.Request) -> web.Response:
-        """已入列的身体签发短码。新设备扫码换设备钥匙,不用再粘贴 RELAY_KEY。"""
-        if not self._authorized(request):
-            return self._unauthorized()
+    @staticmethod
+    def _source(request: web.Request) -> str:
+        forwarded = request.headers.get("X-Forwarded-For", "")
+        first = forwarded.split(",")[0].strip()
+        return first or (getattr(request, "remote", None) or "?")
+
+    def _join_locked(self, source: str) -> bool:
+        now = time.time()
+        recent = [t for t in self.join_failures.get(source, []) if now - t < JOIN_FAIL_WINDOW_S]
+        if recent:
+            self.join_failures[source] = recent
+        else:
+            self.join_failures.pop(source, None)
+        return len(recent) >= JOIN_FAIL_LIMIT
+
+    def _note_join_failure(self, source: str) -> None:
+        self.join_failures.setdefault(source, []).append(time.time())
+
+    @staticmethod
+    async def _json_body(request: web.Request) -> Dict[str, Any]:
         try:
             body = await request.json()
         except Exception:  # noqa: BLE001
-            body = {}
-        if not isinstance(body, dict):
-            body = {}
-        machine = str(body.get("machine") or "").strip()
+            return {}
+        return body if isinstance(body, dict) else {}
+
+    async def create_join_token(self, request: web.Request) -> web.Response:
+        """Mac(机器专属钥匙)或主钥匙签发一次性码。设备钥匙不能签发。
+
+        kind=iphone:兑换后待定,Mac 点允许才发钥匙(Mac 1.2 出的码默认如此)。
+        kind=legacy:兑换即发旧版设备钥匙,给 Android / 鸿蒙(主钥匙调用时默认,与 0.1 一致)。
+        """
+        caller = self._admin(request)
+        if caller is None:
+            return self._unauthorized()
+        body = await self._json_body(request)
+        machine = str(body.get("machine") or caller.machine or "").strip()
+        default_kind = "iphone" if caller.kind == "machine" else "legacy"
+        kind = str(body.get("kind") or default_kind)
+        if kind not in ("iphone", "legacy"):
+            kind = default_kind
         self._purge_join_tokens()
         token = secrets.token_urlsafe(16)
         exp = time.time() + JOIN_TTL_S
-        self.join_tokens[token] = {"machine": machine, "exp": exp}
-        return web.json_response({"token": token, "exp": exp, "machine": machine})
+        self.join_tokens[token] = {"machine": machine, "kind": kind, "exp": exp}
+        return web.json_response({"token": token, "exp": exp, "machine": machine, "kind": kind})
+
+    async def delete_join_token(self, request: web.Request) -> web.Response:
+        """Mac 关掉出码页时作废这个码。"""
+        if self._admin(request) is None:
+            return self._unauthorized()
+        self.join_tokens.pop(request.match_info["token"], None)
+        return web.json_response({"ok": True})
 
     async def join(self, request: web.Request) -> web.Response:
-        """新设备用短码换一把设备钥匙。旧共享 Key 本周期继续有效。"""
-        try:
-            body = await request.json()
-        except Exception:  # noqa: BLE001
-            return web.json_response({"error": {"message": "invalid json"}}, status=400)
-        token = str((body or {}).get("token") or "").strip()
+        """用一次性码配对。旧式码立即发钥匙;iPhone 码进入待定,等 Mac 点允许。"""
+        source = self._source(request)
+        if self._join_locked(source):
+            return web.json_response(
+                {"error": {"message": "尝试太频繁,请一分钟后再试"}}, status=429)
+        body = await self._json_body(request)
+        token = str(body.get("token") or "").strip()
         self._purge_join_tokens()
         rec = self.join_tokens.pop(token, None)
         if not rec or rec.get("exp", 0) < time.time():
+            self._note_join_failure(source)
             return web.json_response(
                 {"error": {"message": "join token expired or unknown"}}, status=409,
             )
-        access_key = secrets.token_urlsafe(24)
-        self.device_keys[access_key] = time.time() + DEVICE_KEY_TTL_S
-        self._save_device_keys()
-        return web.json_response({
-            "accessKey": access_key,
-            "machine": rec.get("machine") or "",
-        })
+        machine = str(rec.get("machine") or "")
+        name = str(body.get("name") or "").strip()[:60]
+        if rec.get("kind") == "iphone":
+            now = time.time()
+            pending_id = uuid.uuid4().hex
+            secret = secrets.token_urlsafe(24)
+            self.pending_joins[pending_id] = {
+                "id": pending_id, "name": name or "iPhone", "machine": machine,
+                "secret_hash": self._hash_key(secret), "created_at": now,
+                "exp": now + JOIN_TTL_S, "status": "pending",
+            }
+            return web.json_response({
+                "status": "pending", "pendingId": pending_id, "pollSecret": secret,
+                "machine": machine,
+            }, status=202)
+        access_key, device_id = self._create_device(name or "旧版设备", "legacy")
+        return web.json_response({"accessKey": access_key, "machine": machine, "deviceId": device_id})
+
+    async def join_status(self, request: web.Request) -> web.Response:
+        """手机轮询待定的配对。批准后只交付一次钥匙。"""
+        pending_id = request.match_info["pending_id"]
+        secret = request.query.get("secret", "")
+        rec = self.pending_joins.get(pending_id)
+        if rec is None or not secret or not hmac.compare_digest(self._hash_key(secret), rec["secret_hash"]):
+            return web.json_response({"error": {"message": "unknown pairing request"}}, status=404)
+        if rec["status"] == "pending" and rec["exp"] < time.time():
+            rec["status"] = "expired"
+        if rec["status"] == "approved":
+            self.pending_joins.pop(pending_id, None)
+            return web.json_response({
+                "status": "approved", "accessKey": rec.get("access_key"),
+                "deviceId": rec.get("device_id"), "machine": rec.get("machine"),
+            })
+        return web.json_response({"status": rec["status"]})
+
+    async def list_join_requests(self, request: web.Request) -> web.Response:
+        if self._admin(request) is None:
+            return self._unauthorized()
+        self._purge_join_tokens()
+        now = time.time()
+        pending = [
+            {"id": r["id"], "name": r["name"], "machine": r["machine"], "created_at": r["created_at"]}
+            for r in self.pending_joins.values() if r["status"] == "pending" and r["exp"] >= now
+        ]
+        return web.json_response({"requests": pending})
+
+    async def decide_join_request(self, request: web.Request) -> web.Response:
+        if self._admin(request) is None:
+            return self._unauthorized()
+        rec = self.pending_joins.get(request.match_info["pending_id"])
+        if rec is None or rec["status"] != "pending" or rec["exp"] < time.time():
+            return web.json_response({"error": {"message": "配对请求已过期或不存在"}}, status=404)
+        body = await self._json_body(request)
+        if str(body.get("decision") or "") == "allow":
+            access_key, device_id = self._create_device(rec["name"], "iphone")
+            rec.update({"status": "approved", "access_key": access_key, "device_id": device_id})
+            return web.json_response({"ok": True, "deviceId": device_id})
+        rec["status"] = "denied"
+        return web.json_response({"ok": True})
+
+    async def device_exchange(self, request: web.Request) -> web.Response:
+        """iOS 1.40 起首启:用旧主钥匙换一把自己的设备钥匙(只在主钥匙有效期内可用)。"""
+        caller = self._caller(request)
+        if caller is None or caller.kind != "master":
+            return self._unauthorized()
+        body = await self._json_body(request)
+        access_key, device_id = self._create_device(str(body.get("name") or "iPhone"), "iphone")
+        return web.json_response({"accessKey": access_key, "deviceId": device_id})
+
+    async def list_devices(self, request: web.Request) -> web.Response:
+        if self._admin(request) is None:
+            return self._unauthorized()
+        return web.json_response({"devices": [
+            {"id": device_id, "name": d.get("name"), "kind": d.get("kind"),
+             "created_at": d.get("created_at"), "last_seen": d.get("last_seen"),
+             "has_push": bool(d.get("push"))}
+            for device_id, d in sorted(self.devices.items(), key=lambda kv: -(kv[1].get("last_seen") or 0))
+        ]})
+
+    async def revoke_device(self, request: web.Request) -> web.Response:
+        """撤销一台设备:钥匙立即失效,推送 token 一并删除。"""
+        if self._admin(request) is None:
+            return self._unauthorized()
+        device = self.devices.pop(request.match_info["device_id"], None)
+        if device is None:
+            return web.json_response({"error": {"message": "unknown device"}}, status=404)
+        push = device.get("push")
+        if isinstance(push, dict) and push.get("token"):
+            forget = getattr(self.apns, "_forget", None)
+            if callable(forget):
+                try:
+                    forget(str(push.get("kind") or "device"), str(push.get("token")))
+                except Exception:  # noqa: BLE001
+                    pass
+        self._reindex_devices()
+        self._save_state()
+        return web.json_response({"ok": True})
+
+    async def rotate_keys(self, request: web.Request) -> web.Response:
+        """主钥匙轮换:生成 Mac 注册钥匙(只返回这一次),旧主钥匙再有效 grace_days 天。"""
+        caller = self._caller(request)
+        if caller is None or caller.kind != "master":
+            return self._unauthorized()
+        body = await self._json_body(request)
+        try:
+            grace_days = max(0.0, float(body.get("grace_days", MASTER_GRACE_S / 86400)))
+        except (TypeError, ValueError):
+            grace_days = MASTER_GRACE_S / 86400
+        register_key = secrets.token_urlsafe(32)
+        self.register_key_hash = self._hash_key(register_key)
+        self.master_expires_at = time.time() + grace_days * 86400
+        self._save_state()
+        return web.json_response({"registerKey": register_key, "masterExpiresAt": self.master_expires_at})
+
+    async def unpin_machine(self, request: web.Request) -> web.Response:
+        """解除机器名钉扎(回滚时用):只认这台机器自己的专属钥匙或主钥匙。"""
+        caller = self._caller(request)
+        name = request.match_info["name"]
+        if caller is None or not (caller.kind == "master" or (caller.kind == "machine" and caller.machine == name)):
+            return self._unauthorized()
+        self.pins.pop(name, None)
+        self._save_state()
+        return web.json_response({"ok": True})
+
+    async def queue_status(self, request: web.Request) -> web.Response:
+        if not self._authorized(request):
+            return self._unauthorized()
+        request_id = request.match_info["request_id"]
+        result = self.queue_results.get(request_id)
+        if result is not None:
+            return web.json_response(result)
+        for items in self.offline_queue.values():
+            if any(item["request_id"] == request_id for item in items):
+                return web.json_response({"status": "queued"})
+        return web.json_response({"status": "unknown"}, status=404)
 
     # -- Mac 侧:注册通道 ----------------------------------------------------
 
@@ -862,10 +1203,17 @@ class Relay:
                 kind = frame.get("type")
 
                 if kind == "register":
-                    if not hmac.compare_digest(str(frame.get("key") or ""), self.key):
+                    name = str(frame.get("name") or "mac")
+                    caller = self._caller_from_key(str(frame.get("key") or "").strip())
+                    pinned = name in self.pins
+                    if pinned:
+                        # 钉扎过的名字只认这台机器自己的专属钥匙:别人拿主钥匙也顶不掉它。
+                        if caller is None or caller.kind != "machine" or caller.machine != name:
+                            await ws.close(code=4003, message=b"name pinned")
+                            break
+                    elif caller is None or caller.kind not in ("master", "register", "legacy"):
                         await ws.close(code=4001, message=b"bad key")
                         break
-                    name = str(frame.get("name") or "mac")
                     # 同名重连顶掉旧连接(Mac 重启/网络切换后旧 ws 可能半死)
                     old = self.machines.pop(name, None)
                     if old is not None:
@@ -876,7 +1224,17 @@ class Relay:
                     machine = Machine(name, ws, dict(frame.get("info") or {}))
                     self.machines[name] = machine
                     print(f"[relay] {name} online", flush=True)
-                    await ws.send_json({"type": "registered"})
+                    ack: Dict[str, Any] = {"type": "registered", "version": VERSION}
+                    if not pinned and frame.get("pin") is True and caller.kind in ("master", "register"):
+                        machine_key = secrets.token_urlsafe(32)
+                        self.pins[name] = self._hash_key(machine_key)
+                        self._save_state()
+                        ack["machine_key"] = machine_key
+                    await ws.send_json(ack)
+                    if self.offline_queue.get(name):
+                        task = asyncio.get_running_loop().create_task(self._flush_queue(machine))
+                        self._bg_tasks.add(task)
+                        task.add_done_callback(self._bg_tasks.discard)
 
                 elif machine is None:
                     continue  # 未注册前只认 register
@@ -977,6 +1335,7 @@ class Relay:
                     body=str(event.get("command") or "")[:200],
                     user_info={
                         "harnessApproval": True,
+                        "sent_at": time.time(),
                         "machine": machine_name,
                         "harnessSessionId": str(event.get("session_id") or ""),
                         "approvalId": str(event.get("approval_id") or ""),
@@ -992,7 +1351,8 @@ class Relay:
                 await self.apns.send_alert(
                     title=f"🖥 {machine_name} 任务失败",
                     body=str(event.get("error") or "")[:200],
-                    user_info={"harnessSessionId": str(event.get("session_id") or "")},
+                    user_info={"harnessSessionId": str(event.get("session_id") or ""),
+                               "sent_at": time.time()},
                 
                     collapse_id=f"{kind}-{event.get('session_id', '')}",
                 )
@@ -1000,7 +1360,8 @@ class Relay:
                 await self.apns.send_alert(
                     title=f"✅ {machine_name} 任务完成",
                     body=str(event.get("output") or "任务已结束")[:200],
-                    user_info={"harnessSessionId": str(event.get("session_id") or "")},
+                    user_info={"harnessSessionId": str(event.get("session_id") or ""),
+                               "sent_at": time.time()},
                 
                     collapse_id=f"{kind}-{event.get('session_id', '')}",
                 )
@@ -1179,13 +1540,22 @@ class Relay:
         })
 
     async def register_device(self, request: web.Request) -> web.Response:
-        """手机登记推送 token。kind ∈ {device, push_to_start}。"""
-        if not self._authorized(request):
+        """手机登记推送 token。kind ∈ {device, push_to_start}。
+
+        设备钥匙调用时,token 记在这台设备名下:撤销设备就一并删掉它的推送。
+        """
+        caller = self._caller(request)
+        if caller is None or not caller.is_client:
             return self._unauthorized()
         try:
             body = await request.json()
         except Exception:  # noqa: BLE001
             return web.json_response({"error": {"message": "invalid json"}}, status=400)
+        if caller.device_id and caller.device_id in self.devices:
+            self.devices[caller.device_id]["push"] = {
+                "kind": str(body.get("kind") or "device"), "token": str(body.get("token") or ""),
+            }
+            self._save_state()
         ok = self.apns.register(
             kind=str(body.get("kind") or "device"),
             token=str(body.get("token") or ""),
@@ -1257,23 +1627,41 @@ class Relay:
             for m in self.machines.values()
         ]})
 
+    @staticmethod
+    def _queueable(method: str, tail: str) -> bool:
+        """只有建任务和发送可以排队;其余请求离线就是离线。"""
+        if method != "POST":
+            return False
+        path = tail.split("?", 1)[0].rstrip("/")
+        if path == "/harness/sessions":
+            return True
+        parts = path.split("/")
+        return len(parts) == 5 and parts[1] == "harness" and parts[2] == "sessions" and parts[4] == "send"
+
     async def forward(self, request: web.Request) -> web.StreamResponse:
-        if not self._authorized(request):
+        caller = self._caller(request)
+        if caller is None or not caller.is_client:
+            if caller is None:
+                self._record_rejected(self._presented_key(request.headers.get("Authorization", "")),
+                                      request.path)
             return self._unauthorized()
-        machine = self.machines.get(request.match_info["name"])
-        if machine is None:
-            return web.json_response(
-                {"error": {"message": "这台 Mac 当前不在线(它会自动重连,稍后再试)"}},
-                status=502,
-            )
+        name = request.match_info["name"]
+        machine = self.machines.get(name)
         tail = "/" + request.match_info["tail"]
         query = request.query_string
         if query:
             tail = f"{tail}?{query}"
+        if machine is None:
+            if request.headers.get("X-Leo-Queue") == "1" and self._queueable(request.method, tail):
+                return await self._enqueue(request, name, tail, caller)
+            return web.json_response(
+                {"error": {"message": "这台 Mac 当前不在线(它会自动重连,稍后再试)"}},
+                status=502,
+            )
 
         # 事件流:逐帧转发,其余:一问一答
         if request.method == "GET" and "/events" in tail:
-            return await self._forward_stream(request, machine, tail)
+            return await self._forward_stream(request, machine, tail, caller)
 
         body: Optional[Any] = None
         if request.method in ("POST", "PUT"):
@@ -1286,7 +1674,8 @@ class Relay:
         machine.pending[request_id] = fut
         await machine.ws.send_json({"type": "http", "id": request_id,
                                     "method": request.method, "path": tail,
-                                    "body": body})
+                                    "body": body, "caller": caller.public(),
+                                    "request_id": request.headers.get("X-Leo-Request-Id", "")})
         try:
             frame = await asyncio.wait_for(fut, timeout=REQUEST_TIMEOUT_S)
         except (asyncio.TimeoutError, ConnectionError):
@@ -1296,7 +1685,7 @@ class Relay:
         return web.json_response(frame.get("body"), status=int(frame.get("status") or 200))
 
     async def _forward_stream(self, request: web.Request, machine: Machine,
-                              tail: str) -> web.StreamResponse:
+                              tail: str, caller: Optional[Caller] = None) -> web.StreamResponse:
         stream_id = uuid.uuid4().hex
         queue: asyncio.Queue = asyncio.Queue(maxsize=1024)
         machine.streams[stream_id] = queue
@@ -1306,7 +1695,8 @@ class Relay:
             "X-Accel-Buffering": "no",
         })
         await response.prepare(request)
-        await machine.ws.send_json({"type": "stream_open", "id": stream_id, "path": tail})
+        await machine.ws.send_json({"type": "stream_open", "id": stream_id, "path": tail,
+                                    "caller": caller.public() if caller else {}})
         try:
             while True:
                 frame = await queue.get()
@@ -1337,6 +1727,57 @@ class Relay:
                 pass
         return response
 
+    # -- 离线排队 --------------------------------------------------------------
+
+    async def _enqueue(self, request: web.Request, name: str, tail: str, caller: Caller) -> web.Response:
+        try:
+            body = await request.json()
+        except Exception:  # noqa: BLE001
+            body = None
+        now = time.time()
+        items = [i for i in self.offline_queue.get(name, []) if now - i["queued_at"] < QUEUE_TTL_S]
+        if len(items) >= QUEUE_LIMIT_PER_MACHINE:
+            return web.json_response({"error": {"message": "排队的任务太多了,等 Mac 上线再发"}}, status=429)
+        request_id = request.headers.get("X-Leo-Request-Id", "").strip() or uuid.uuid4().hex
+        if not any(i["request_id"] == request_id for i in items):
+            items.append({"request_id": request_id, "method": request.method, "path": tail,
+                          "body": body, "caller": caller.public(), "queued_at": now})
+        self.offline_queue[name] = items
+        return web.json_response({"queued": True, "request_id": request_id}, status=202)
+
+    async def _flush_queue(self, machine: Machine) -> None:
+        """Mac 上线后按顺序投递排队的请求,结果留 24 小时供手机查询。"""
+        items = self.offline_queue.pop(machine.name, [])
+        now = time.time()
+        for item in items:
+            if now - item["queued_at"] >= QUEUE_TTL_S:
+                self.queue_results[item["request_id"]] = {"status": "expired", "at": now}
+                continue
+            if self.machines.get(machine.name) is not machine:
+                # 投递途中又断了:剩下的放回队首,等下一次上线。
+                rest = items[items.index(item):]
+                self.offline_queue[machine.name] = rest + self.offline_queue.get(machine.name, [])
+                return
+            fut: asyncio.Future = asyncio.get_running_loop().create_future()
+            frame_id = uuid.uuid4().hex
+            machine.pending[frame_id] = fut
+            try:
+                await machine.ws.send_json({"type": "http", "id": frame_id, "method": item["method"],
+                                            "path": item["path"], "body": item["body"],
+                                            "caller": item["caller"], "request_id": item["request_id"]})
+                frame = await asyncio.wait_for(fut, timeout=REQUEST_TIMEOUT_S)
+                self.queue_results[item["request_id"]] = {
+                    "status": "delivered", "at": time.time(),
+                    "http_status": int(frame.get("status") or 200), "response": frame.get("body"),
+                }
+            except (asyncio.TimeoutError, ConnectionError) as exc:
+                machine.pending.pop(frame_id, None)
+                self.queue_results[item["request_id"]] = {"status": "failed", "at": time.time(),
+                                                          "error": str(exc) or "timeout"}
+        cutoff = time.time() - QUEUE_TTL_S
+        for rid in [rid for rid, r in self.queue_results.items() if r.get("at", 0) < cutoff]:
+            self.queue_results.pop(rid, None)
+
     # -- wiring ---------------------------------------------------------------
 
     def build_app(self) -> web.Application:
@@ -1347,7 +1788,17 @@ class Relay:
         app.router.add_get("/relay/api/events", self.list_events)
         app.router.add_post("/relay/api/device", self.register_device)
         app.router.add_post("/relay/api/join-tokens", self.create_join_token)
+        app.router.add_delete("/relay/api/join-tokens/{token}", self.delete_join_token)
         app.router.add_post("/relay/api/join", self.join)
+        app.router.add_get("/relay/api/join/{pending_id}", self.join_status)
+        app.router.add_get("/relay/api/join-requests", self.list_join_requests)
+        app.router.add_post("/relay/api/join-requests/{pending_id}", self.decide_join_request)
+        app.router.add_post("/relay/api/device/exchange", self.device_exchange)
+        app.router.add_get("/relay/api/devices", self.list_devices)
+        app.router.add_delete("/relay/api/devices/{device_id}", self.revoke_device)
+        app.router.add_post("/relay/api/admin/rotate", self.rotate_keys)
+        app.router.add_post("/relay/api/machines/{name}/unpin", self.unpin_machine)
+        app.router.add_get("/relay/api/queue/{request_id}", self.queue_status)
         app.router.add_get("/relay/api/push-status", self.push_status)
         app.router.add_put("/relay/api/collections", self.put_collections)
         app.router.add_get("/relay/api/collections", self.get_collections)

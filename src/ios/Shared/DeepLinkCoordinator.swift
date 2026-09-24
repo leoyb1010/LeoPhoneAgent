@@ -26,6 +26,8 @@ enum SettingsDeepLinkTarget: Equatable {
     /// edit form (where the Authorize button lives).
     case mcpIntegrations
     case mcpServerDetail(serverId: String)
+    /// [T-selftest-1.41] 能力自检;经深链打开时自动开跑。
+    case selfTest
 }
 
 @MainActor

@@ -19,33 +19,7 @@ extension AIChatViewModel {
         Task {
             let bootStart = CFAbsoluteTimeGetCurrent()
             do {
-                if !ISHKernel.shared.isBooted {
-                    let installStart = CFAbsoluteTimeGetCurrent()
-                    try RootfsManager.shared.installIfNeeded()
-                    let installElapsed = (CFAbsoluteTimeGetCurrent() - installStart) * 1000
-                    logger.info("[KernelBoot] installIfNeeded: \(String(format: "%.1f", installElapsed))ms")
-
-                    let kernelStart = CFAbsoluteTimeGetCurrent()
-                    let rootPath = RootfsManager.shared.rootfsPath.path
-                    let err = ISHKernel.shared.boot(withRootPath: rootPath)
-                    let kernelElapsed = (CFAbsoluteTimeGetCurrent() - kernelStart) * 1000
-                    logger.info("[KernelBoot] kernel boot call: \(String(format: "%.1f", kernelElapsed))ms")
-                    if err < 0 {
-                        kernelStatus = .failed("Kernel boot failed: \(err)")
-                        return
-                    }
-                    // Wire fakefs change events into the iCloud Sync v2
-                    // SessionFile dirty pipeline. Must be done after boot
-                    // (the C-side dispatch source is created by this call)
-                    // and before any bind mount, so the first realfs op
-                    // already has a consumer registered.
-                    installSessionFileChangeTracker(kernel: ISHKernel.shared)
-
-                    // Install per-session path-translate hook. Must run
-                    // before any session task is spawned so the first
-                    // /var/minis/* access already routes correctly.
-                    MinisFsRouter.shared.installHook()
-                }
+                try Self.bootKernelIfNeeded()
                 RootfsManager.shared.applyDefaultMountOverlay()
                 Task { @MainActor in MirrorSpeedTestViewModel.shared.autoDetectOnceIfNeeded() }
                 kernelStatus = .booted
@@ -56,6 +30,39 @@ extension AIChatViewModel {
                 logger.error("[KernelBoot] error: \(error.localizedDescription)")
             }
         }
+    }
+
+    /// [T-selftest-1.41] 内核启动序列的唯一实现:聊天和能力自检都走这里,
+    /// 保证 fakefs 变更跟踪、路径钩子只装一次且顺序不变。已启动时直接返回。
+    struct KernelBootError: LocalizedError {
+        let code: Int32
+        var errorDescription: String? { "Kernel boot failed: \(code)" }
+    }
+
+    static func bootKernelIfNeeded() throws {
+        guard !ISHKernel.shared.isBooted else { return }
+        let installStart = CFAbsoluteTimeGetCurrent()
+        try RootfsManager.shared.installIfNeeded()
+        let installElapsed = (CFAbsoluteTimeGetCurrent() - installStart) * 1000
+        logger.info("[KernelBoot] installIfNeeded: \(String(format: "%.1f", installElapsed))ms")
+
+        let kernelStart = CFAbsoluteTimeGetCurrent()
+        let rootPath = RootfsManager.shared.rootfsPath.path
+        let err = ISHKernel.shared.boot(withRootPath: rootPath)
+        let kernelElapsed = (CFAbsoluteTimeGetCurrent() - kernelStart) * 1000
+        logger.info("[KernelBoot] kernel boot call: \(String(format: "%.1f", kernelElapsed))ms")
+        if err < 0 { throw KernelBootError(code: err) }
+        // Wire fakefs change events into the iCloud Sync v2
+        // SessionFile dirty pipeline. Must be done after boot
+        // (the C-side dispatch source is created by this call)
+        // and before any bind mount, so the first realfs op
+        // already has a consumer registered.
+        installSessionFileChangeTracker(kernel: ISHKernel.shared)
+
+        // Install per-session path-translate hook. Must run
+        // before any session task is spawned so the first
+        // /var/minis/* access already routes correctly.
+        MinisFsRouter.shared.installHook()
     }
 
     /// Explicit recovery path for the kernel failure overlay. A retry is only

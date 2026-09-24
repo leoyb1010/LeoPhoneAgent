@@ -30,6 +30,8 @@ enum SettingsDestination: Hashable {
     // [T-mcp-oauth-deeplink]
     case mcpIntegrations
     case mcpServerDetail(serverId: String)
+    // [T-selftest-1.41]
+    case selfTest
 }
 
 struct SettingsSheet: View {
@@ -84,6 +86,8 @@ struct SettingsSheet: View {
                     MountedFoldersSettingsView()
                 case .sharedFolders:
                     SharedFoldersSettingsView()
+                case .selfTest:
+                    CapabilitySelfTestView()
                 case .logs:
                     // Pull a one-shot tab hint from the deep link router
                     // (e.g. `?tab=config-audit`). LogManagementView clears
@@ -201,6 +205,9 @@ struct SettingsSheet: View {
             navPath.append(SettingsDestination.mcpIntegrations)
         case .mcpServerDetail(let id):
             navPath.append(SettingsDestination.mcpServerDetail(serverId: id))
+        case .selfTest:
+            CapabilitySelfTest.shared.autoRunRequested = true
+            navPath.append(SettingsDestination.selfTest)
         }
         deepLink.pendingSettingsTarget = nil
     }

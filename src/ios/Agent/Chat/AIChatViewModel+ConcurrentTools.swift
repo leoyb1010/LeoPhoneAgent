@@ -750,6 +750,32 @@ extension AIChatViewModel {
                 messages[msgIdx].blocks[blockIdx].content = toolOutput
             }
 
+        // [T-jev-1.41] TypeSafe Jev 快判断。state 可以是 JSON 或纯文本;questions 必须是 JSON 对象。
+        case "jev_decide":
+            let args = (try? JSONSerialization.jsonObject(with: Data(argsJson.utf8)) as? [String: Any]) ?? [:]
+            let stateText = (args["state"] as? String) ?? ""
+            let questionsText = (args["questions"] as? String) ?? ""
+            let state: Any = (try? JSONSerialization.jsonObject(with: Data(stateText.utf8), options: [.fragmentsAllowed])) ?? stateText
+            if let questions = (try? JSONSerialization.jsonObject(with: Data(questionsText.utf8))) as? [String: Any] {
+                do {
+                    let result = try await JevClient.decide(state: state, questions: questions)
+                    let answers = result["answers"] ?? [:]
+                    let data = try JSONSerialization.data(withJSONObject: ["answers": answers, "model": result["model"] ?? JevClient.defaultModel],
+                                                          options: [.sortedKeys])
+                    toolOutput = String(data: data, encoding: .utf8) ?? "{}"
+                    toolSuccess = true
+                } catch {
+                    toolOutput = "Error: \(error.localizedDescription)"
+                    toolSuccess = false
+                }
+            } else {
+                toolOutput = "Error: 'questions' must be a JSON object mapping names to {type, instructions, criteria}."
+                toolSuccess = false
+            }
+            if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {
+                messages[msgIdx].blocks[blockIdx].content = toolOutput
+            }
+
         case "memory_get":
             let memResult = executeMemoryGet(from: argsJson)
             if msgIdx < messages.count, blockIdx < messages[msgIdx].blocks.count {

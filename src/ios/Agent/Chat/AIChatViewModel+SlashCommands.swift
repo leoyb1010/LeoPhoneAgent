@@ -39,6 +39,9 @@ extension AIChatViewModel {
         SlashCommand(id: "thinking", icon: "lightbulb", title: "Thinking", subtitle: "Toggle deep thinking mode on/off"),
         // [T-model-quickswitch] /model kimi 一步切换;单独 /model 打开快切面板
         SlashCommand(id: "model", icon: "cpu", title: "Model", subtitle: "切换本会话模型,可直接跟名字:/model kimi"),
+        // [T-composer-simplify-1.41] 原来输入框上方的两个 chip 收进 "/":快捷任务、交给 Mac。
+        SlashCommand(id: "tasks", icon: "bolt.fill", title: "Tasks", subtitle: "快捷任务:浏览、运行或新建"),
+        SlashCommand(id: "mac", icon: "desktopcomputer", title: "Mac", subtitle: "把这个任务交给一台 Mac 继续做"),
     ]
 
     /// Show slash menu without replacing existing input text.
@@ -413,6 +416,10 @@ extension AIChatViewModel {
             clearChatConfirmRequested = true
         case "model":
             handleModelSlashCommand()
+        case "tasks":
+            NotificationCenter.default.post(name: .leoOpenQuickTaskPicker, object: nil)
+        case "mac":
+            NotificationCenter.default.post(name: .leoOpenMacSwitch, object: nil)
         default:
             break
         }
@@ -489,4 +496,6 @@ extension AIChatViewModel {
 extension Notification.Name {
     /// [T-model-quickswitch] `/model` 无参数时请视图层打开快切面板。
     static let leoOpenQuickModelSwitch = Notification.Name("leoOpenQuickModelSwitch")
+    static let leoOpenQuickTaskPicker = Notification.Name("leoOpenQuickTaskPicker")
+    static let leoOpenMacSwitch = Notification.Name("leoOpenMacSwitch")
 }
