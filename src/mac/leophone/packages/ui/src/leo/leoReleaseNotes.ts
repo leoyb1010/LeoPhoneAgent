@@ -13,6 +13,13 @@ export interface LeoRelease {
 
 export const LEO_RELEASE_NOTES: LeoRelease[] = [
   {
+    version: "1.2.4",
+    date: "2026-09-25",
+    items: [
+      "配合 iOS 1.42.1:手机发给 Mac 任务的每条消息都会带上「全自动」开关的状态。开关关着时,只把处在全自动(完全访问)的任务切回先问你;计划、编辑这类你在 Mac 上选好的模式不再被改成默认。",
+    ],
+  },
+  {
     version: "1.2.3",
     date: "2026-09-25",
     items: [

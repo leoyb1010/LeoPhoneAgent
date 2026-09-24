@@ -482,3 +482,15 @@ test("encoded path tricks in the session id are rejected", async () => {
     }
   });
 });
+
+test("full_auto:false on every phone message leaves plan/edit tasks alone and only downgrades yolo", async () => {
+  const workspace = "/Users/me/project";
+  await withBridge(async ({ bridge, zcode }) => {
+    zcode.setDesktopTasks([
+      { taskId: "desk-plan", workspacePath: workspace, title: "计划", status: "completed", mode: "plan", createdAt: 1, updatedAt: 2 },
+    ]);
+    await bridge.handle(req("GET", "/harness/sessions"));
+    assert.equal((await bridge.handle(req("POST", "/harness/sessions/desk-plan/send", { text: "看看", full_auto: false }, iphone))).status, 200);
+    assert.equal(zcode.named("setMode").length, 0, "plan 任务不该被改成 build");
+  }, { recentWorkspaces: [workspace] });
+});

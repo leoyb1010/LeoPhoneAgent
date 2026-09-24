@@ -405,10 +405,14 @@ export class LinkBridge {
     if (typeof body["full_auto"] === "boolean") {
       const wanted = body["full_auto"];
       if (wanted && !mayUseFullAuto(caller)) return error(403, "全自动只接受已配对 iPhone 发来的任务");
-      try {
-        await session.setMode(wanted ? "yolo" : "build");
-      } catch (cause) {
-        return error(502, `切换模式失败:${cause instanceof Error ? cause.message : String(cause)}`);
+      // "关"只把全自动任务切回先问我;计划、编辑这类别的模式不动(手机每条消息都会带开关状态)。
+      const target = wanted ? "yolo" : session.isFullAuto ? "build" : null;
+      if (target) {
+        try {
+          await session.setMode(target);
+        } catch (cause) {
+          return error(502, `切换模式失败:${cause instanceof Error ? cause.message : String(cause)}`);
+        }
       }
     }
     // 处在全自动(完全访问)的任务 —— 手机开的、Mac 桌面上自己设的、重启后认回来的 —— 只接受 iPhone 的消息:
