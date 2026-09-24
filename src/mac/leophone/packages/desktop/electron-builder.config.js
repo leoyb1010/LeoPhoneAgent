@@ -148,6 +148,9 @@ const REQUIRED_ASAR_RUNTIME_MODULES = [
   // 要到 bundle 校验阶段才报「缺少运行时依赖 pend」。这里以 yauzl 作为闭包根注入，
   // 与 bundle.mjs 的校验名单保持一致，让递归依赖收集把 pend 一起补进产物。
   "yauzl",
+  // Bugfix: 飞书 SDK 被 desktop main/host 外置后，安装包运行时必须能从 app.asar 解析到它。
+  // 这里显式注入 scoped 包，避免开发态正常、生产包启动时才报 Cannot find module。
+  "@larksuiteoapi/node-sdk",
   // 生产态里 ssh2 虽然被打进 app.asar，但它的依赖链偶发被 electron-builder 漏拷。
   // 已出现线上报错 Cannot find module 'asn1'（Require stack: ssh2 keyParser）。
   // 这里把 ssh2 关键依赖链一起注入，避免远程 SSH 连接在已安装应用里因缺包直接失败。
@@ -469,10 +472,10 @@ export default {
   extraMetadata: {
     version: buildMetadata.appVersion,
     zcodeProductFlavor: desktopProductIdentity.flavor,
-    homepage: "https://zcode.z.ai",
+    homepage: "https://github.com/leoyb1010/LeoPhoneAgent",
     author: {
-      name: "ZCode",
-      email: "dev@zcode.z.ai",
+      name: "LeoPhoneAgent",
+      email: "noreply@leophoneagent.invalid",
     },
   },
   // macOS 签名阶段会对 Electron Framework 下每个语言包逐个 codesign。
@@ -774,7 +777,7 @@ export default {
     // 与 /usr/share/icons/hicolor/*/apps/zcode.png 保持一致。
     executableName: desktopProductIdentity.linuxExecutableName,
     category: "Development",
-    maintainer: "ZCode <dev@zcode.z.ai>",
+    maintainer: "LeoPhoneAgent <noreply@leophoneagent.invalid>",
   },
   deb: {
     // 生产版与 Preview 必须是两个 dpkg package；只改可执行名仍会让安装器把另一版本当成升级替换。

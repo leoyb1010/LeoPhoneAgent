@@ -1,6 +1,6 @@
 {
   "name": "leophoneagent-mac",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
@@ -29,7 +29,7 @@
     "typecheck": "tsc -b packages/rpc packages/provider packages/provider-node packages/shared packages/services packages/client packages/server packages/zcode-server-cli packages/ui packages/web packages/desktop/tsconfig.host.json",
     "bundle:desktop": "pnpm --filter @zcode/desktop run bundle --",
     "leo:verify-release-notes": "node scripts/leo-verify-release-notes.mjs",
-    "leo:bundle:mac": "node scripts/leo-verify-release-notes.mjs && ZCODE_ENV=production ZCODE_PRODUCT_IDENTITY=leo pnpm --filter @zcode/desktop run bundle -- --os mac --arch arm64",
+    "leo:bundle:mac": "node scripts/leo-verify-release-notes.mjs && ZCODE_ENV=production ZCODE_PRODUCT_IDENTITY=leo ZCODE_ENABLE_MAC_SIGN=1 APPLE_SIGNING_IDENTITY=\"${APPLE_SIGNING_IDENTITY:-leo yuan (48H5Y3LNUK)}\" pnpm --filter @zcode/desktop run bundle -- --os mac --arch arm64",
     "leo:finalize:mac": "node scripts/leo-finalize-mac-artifacts.mjs",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",

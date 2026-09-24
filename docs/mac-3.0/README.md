@@ -38,7 +38,7 @@ SSH / Docker 远程工作区(远端运行时原本从官方 CDN 下载,后续改
 corepack pnpm@10.33.2 bootstrap                       # 首次
 corepack pnpm@10.33.2 typecheck && corepack pnpm@10.33.2 lint && corepack pnpm@10.33.2 architecture:check -- --changed
 ZCODE_ENABLE_MAC_SIGN=1 APPLE_SIGNING_IDENTITY="Developer ID Application: leo yuan (48H5Y3LNUK)" \
-  corepack pnpm@10.33.2 leo:bundle:mac                # 闸门 + 构建 + 签名
+  pnpm leo:bundle:mac                # 闸门 + 构建 + 签名(脚本里固定打开签名;不要经 corepack 调,嵌套的 pnpm 会变成 11.x 直接报错)
 bash scripts/leo-notarize-mac.sh packages/desktop/dist/LeoPhoneAgent-<版本>-mac-arm64.dmg
 corepack pnpm@10.33.2 leo:finalize:mac                # manifest + latest-mac.yml
 gh release create v<版本> -R leoyb1010/leocodebox-updates <dmg> <zip> \

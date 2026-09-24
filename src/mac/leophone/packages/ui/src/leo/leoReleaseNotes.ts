@@ -13,6 +13,15 @@ export interface LeoRelease {
 
 export const LEO_RELEASE_NOTES: LeoRelease[] = [
   {
+    version: "1.1.0",
+    date: "2026-09-24",
+    items: [
+      "同步上游 ZCode v3.14.3:动态工作流(多 agent 编排)更稳,运行中可调参数,运行面板和进度时间线重做,草稿修改不再反复询问。",
+      "新增聊天机器人遥控的配置界面(Telegram、飞书、微信、Webhook),默认全部关闭,不配置就不会连接任何平台;原有的 Telegram 通道这一版不变,下一版切到这套机器人。",
+      "保持独立:同步进来的新文案和机器人回复里的 ZCode 字样都改成 LeoPhoneAgent,安装包信息里不再写官方网址和邮箱。",
+    ],
+  },
+  {
     version: "1.0.1",
     date: "2026-09-21",
     items: [

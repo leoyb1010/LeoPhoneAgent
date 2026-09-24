@@ -1,6 +1,6 @@
 # ZCode 上游同步
 
-- 当前上游:`872ad960de7ec172591f7e1952f7849229f94521`(3.14.0,2026-09-21)
+- 当前上游:`29628c9a`(v3.14.3,2026-09-24 同步;上一次 `872ad960`,3.14.0)
 - 引入方式:`git subtree add --prefix=src/mac/leophone https://github.com/zai-org/ZCode.git <sha> --squash`
 
 ## 同步
@@ -56,3 +56,13 @@ git -c core.hooksPath=/dev/null subtree pull --prefix=src/mac/leophone \
 `packages/ui/src/login/LoginApiKeyForm.helpers.ts`、`packages/ui/src/onboarding/assets/feishu.png`。
 
 同步后必须跑:typecheck、lint、architecture:check、`leo:bundle:mac` 冒烟。
+
+## v3.14.3 同步记录(2026-09-24,Mac 1.1.0)
+- 上游 283 个文件:87 个新增、176 个原样取上游、17 个自动三方合并、3 个冲突(根 `package.json` 取我们的;`contracts/src/tools/save-workflow.ts` 取上游,新文案已不含 `~/.zcode`;`packages/ui/src/WorkspaceSidebarFooter.tsx` 手工合:保留我们删掉用量摘要后的 import,补上游的 `WorkspaceWebRemoteControlTrigger`,并恢复 `workspacePath`/`workspaceIdentity` 两个解构参数)。
+- 新增补丁,下次同步要复查:
+  - `packages/services/src/bots/{messages,feishuChannelRuntime,telegramChannelRuntime,weixinChannelRuntime}.ts`:回复与提示里的 ZCode 改成 LeoPhoneAgent。
+  - `packages/ui/src/i18n/locales/{zh-CN,en-US}.ts`:新增的机器人文案里的 ZCode 改名(14 行)。
+  - `packages/desktop/electron-builder.config.js`:`extraMetadata.homepage/author` 与 `linux.maintainer` 不再写官方网址和邮箱。
+  - 根 `package.json` 的 `leo:bundle:mac`:固定打开签名(`ZCODE_ENABLE_MAC_SIGN=1`,默认身份 `leo yuan (48H5Y3LNUK)`),不签名就打不出包。
+- 上游 3.14.3 把机器人任务硬锁成 yolo(`services/src/bots/botsService.ts` 的 `BOT_FORCED_MODE`),M1b 会改成 build 并加工具规则,到时记在这里。
+
