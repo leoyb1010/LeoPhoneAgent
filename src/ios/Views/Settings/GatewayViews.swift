@@ -153,7 +153,7 @@ struct GatewaySettingsView: View {
                         store.upsert(host)
                     }
                 } else {
-                    store.upsertDiscovered(machines, key: key)
+                    store.upsertDiscovered(machines, key: key, explicit: true)
                 }
                 showQuickSetup = false
                 Task { await refresh() }
@@ -207,7 +207,7 @@ struct GatewaySettingsView: View {
                         let joined = try await RelayMachinesClient.join(apiRoot: pair.apiRoot, token: join)
                         store.upsertDiscovered([
                             RelayDiscoveredMachine(name: pair.machine, online: false, platform: nil, server: nil, version: nil)
-                        ], key: joined.key, apiRoot: pair.apiRoot)
+                        ], key: joined.key, apiRoot: pair.apiRoot, explicit: true)
                         scanMessage = "已加入 \(pair.machine)"
                         Task { await refresh() }
                     } catch {
@@ -224,7 +224,7 @@ struct GatewaySettingsView: View {
                 }
                 store.upsertDiscovered([
                     RelayDiscoveredMachine(name: pair.machine, online: false, platform: nil, server: nil, version: nil)
-                ], key: credential.key, apiRoot: credential.apiRoot)
+                ], key: credential.key, apiRoot: credential.apiRoot, explicit: true)
                 scanMessage = "已加入 \(pair.machine)"
                 Task { await refresh() }
             }

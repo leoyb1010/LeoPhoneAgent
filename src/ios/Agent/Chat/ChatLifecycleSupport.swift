@@ -299,6 +299,9 @@ final class SessionActivityTracker: ObservableObject {
                 }
             }
         }
+        // 快捷指令 / 定时任务打的来源标签只管它自己那一轮:回合结束就清掉,
+        // 之后在 App 里重试、排队的消息不再沿用。
+        if finalPhase.isTerminal { TaskSourceRegistry.clear(sessionId: sessionId) }
         // Drop any alias pointing at this session — if the real session is
         // no longer active, its draft alias should not linger either.
         let orphanedAliases = draftAliases.filter { $0.value == sessionId }.map { $0.key }

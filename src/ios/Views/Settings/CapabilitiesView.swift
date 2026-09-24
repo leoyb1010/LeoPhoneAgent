@@ -148,9 +148,10 @@ private struct CapabilityDetailView: View {
                         get: { permissions.permissionLevel(for: info.name) },
                         set: { permissions.setPermissionLevel($0, for: info.name) }
                     )) {
-                        Text("Run directly").tag(OffloadPermissionLevel.bypass)
-                        Text("Ask every time").tag(OffloadPermissionLevel.askOnce)
-                        Text("Never allow").tag(OffloadPermissionLevel.notAllowed)
+                        // 和权限页同一套叫法(OffloadPermissionLevel.displayName)。
+                        Text(OffloadPermissionLevel.bypass.displayName).tag(OffloadPermissionLevel.bypass)
+                        Text(OffloadPermissionLevel.askOnce.displayName).tag(OffloadPermissionLevel.askOnce)
+                        Text(OffloadPermissionLevel.notAllowed.displayName).tag(OffloadPermissionLevel.notAllowed)
                     }
                 }
             }

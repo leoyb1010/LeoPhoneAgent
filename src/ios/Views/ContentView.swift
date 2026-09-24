@@ -3527,7 +3527,7 @@ struct ContentView: View {
         if approvalCount > 0 {
             return approvalCount == 1 ? "远程机器等你审批" : "\(approvalCount) 条远程审批待处理"
         }
-        return "\(sessionCount) sessions need you"
+        return "\(sessionCount) 个会话等你处理"
     }
 
     private func openMissedRelayApproval(_ item: RelayEventItem) {

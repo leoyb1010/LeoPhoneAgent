@@ -115,7 +115,7 @@ struct LeoPrivacyView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private func privacyRow(_ title: String, detail: String) -> some View {
+    private func privacyRow(_ title: LocalizedStringKey, detail: LocalizedStringKey) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(.body.weight(.medium))

@@ -120,7 +120,7 @@ struct AIDataSharingConsentView: View {
         }
     }
 
-    private func dataItem(_ text: String) -> some View {
+    private func dataItem(_ text: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Text("•")
                 .foregroundStyle(.secondary)
@@ -129,7 +129,7 @@ struct AIDataSharingConsentView: View {
         }
     }
 
-    private func providerRow(_ name: String, description: String, color: Color) -> some View {
+    private func providerRow(_ name: LocalizedStringKey, description: LocalizedStringKey, color: Color) -> some View {
         HStack(spacing: 10) {
             Circle()
                 .fill(color)

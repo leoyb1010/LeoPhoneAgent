@@ -67,6 +67,10 @@ struct MountDetailView: View {
     @State private var nameText: String
     @State private var allowWrite: Bool
     @State private var visibleInFiles: Bool
+    /// 开关改了立即生效(和别处的开关一样);这两个记录"已经生效的值",Save 只管改名。
+    /// 以前不点 Save 直接返回,开关的改动会被悄悄丢掉。
+    @State private var appliedAllowWrite: Bool
+    @State private var appliedVisibleInFiles: Bool
     @State private var showingBrowser = false
     @State private var showingUnmountConfirm = false
     @State private var errorText: String?
@@ -77,6 +81,8 @@ struct MountDetailView: View {
         _nameText = State(initialValue: context.initialName)
         _allowWrite = State(initialValue: context.initialUserAllowWrite)
         _visibleInFiles = State(initialValue: context.initialVisibleInFiles)
+        _appliedAllowWrite = State(initialValue: context.initialUserAllowWrite)
+        _appliedVisibleInFiles = State(initialValue: context.initialVisibleInFiles)
     }
 
     // MARK: - Dirty tracking
@@ -86,11 +92,11 @@ struct MountDetailView: View {
     }
 
     private var allowWriteChanged: Bool {
-        context.kind == .external && allowWrite != context.initialUserAllowWrite
+        context.kind == .external && allowWrite != appliedAllowWrite
     }
 
     private var visibilityChanged: Bool {
-        context.kind == .shared && visibleInFiles != context.initialVisibleInFiles
+        context.kind == .shared && visibleInFiles != appliedVisibleInFiles
     }
 
     private var hasChanges: Bool {
@@ -130,6 +136,19 @@ struct MountDetailView: View {
             if context.kind == .external {
                 unmountSection
             }
+        }
+        .onChange(of: allowWrite) { _, newValue in
+            guard context.kind == .external, let id = context.externalMountId,
+                  newValue != appliedAllowWrite else { return }
+            MountedFoldersManager.shared.setUserAllowWrite(id: id, to: newValue)
+            appliedAllowWrite = newValue
+        }
+        .onChange(of: visibleInFiles) { _, newValue in
+            guard context.kind == .shared, let name = context.sharedFolderName,
+                  newValue != appliedVisibleInFiles else { return }
+            SharedFolderVisibility.setVisible(name, to: newValue)
+            signalFileProviderRoot()
+            appliedVisibleInFiles = newValue
         }
         .navigationTitle(context.canRename ? String(localized: "Edit Mount") : String(localized: "Folder Details"))
         .navigationBarTitleDisplayMode(.inline)

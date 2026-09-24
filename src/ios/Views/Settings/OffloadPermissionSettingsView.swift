@@ -17,6 +17,7 @@ struct OffloadPermissionSettingsView: View {
     @ObservedObject private var configGate = MinisConfigPermissionStore.shared
     @ObservedObject private var correctionConsent = VoiceCorrectionCollectionConsent.shared
     @State private var showClearCorrectionConfirm = false
+    @State private var confirmAllBypass = false
     @State private var correctionDataCleared = false
 
     var body: some View {
@@ -99,17 +100,22 @@ struct OffloadPermissionSettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Set All Bypass") {
-                    manager.setAllBypass()
-                    // The minis-config master switch is a separate
-                    // store from OffloadPermissionManager (different
-                    // subsystem) so its own setAllBypass doesn't touch
-                    // it. Flip it on here so "Set All Bypass" really
-                    // does enable everything the user can see on this
-                    // screen.
-                    configGate.enabled = true
-                }
+                Button("Set All Bypass") { confirmAllBypass = true }
             }
+        }
+        .confirmationDialog("所有能力都改成「自动允许」?", isPresented: $confirmAllBypass, titleVisibility: .visible) {
+            Button("全部自动允许", role: .destructive) {
+                manager.setAllBypass()
+                // The minis-config master switch is a separate
+                // store from OffloadPermissionManager (different
+                // subsystem) so its own setAllBypass doesn't touch
+                // it. Flip it on here so "Set All Bypass" really
+                // does enable everything the user can see on this
+                // screen.
+                configGate.enabled = true
+            }
+        } message: {
+            Text("Agent 调用手机能力时不再先问你;你设成「不允许」的也会改成自动允许。之后可以逐项改回来。")
         }
     }
 
@@ -132,14 +138,14 @@ private enum CapabilityAuthorizationState: Equatable {
 
     var title: String {
         switch self {
-        case .authorized: return "Authorized"
-        case .limited: return "Limited"
-        case .notDetermined: return "Ask When Used"
-        case .denied: return "Denied"
-        case .unavailable: return "Unavailable"
-        case .ready: return "Integrated"
-        case .managed: return "Per-Item Access"
-        case .unknown: return "Checked on Use"
+        case .authorized: return String(localized: "Authorized")
+        case .limited: return String(localized: "Limited")
+        case .notDetermined: return String(localized: "Ask When Used")
+        case .denied: return String(localized: "Denied")
+        case .unavailable: return String(localized: "Unavailable")
+        case .ready: return String(localized: "Integrated")
+        case .managed: return String(localized: "Per-Item Access")
+        case .unknown: return String(localized: "Checked on Use")
         }
     }
 
@@ -325,11 +331,28 @@ private final class NativeCapabilityProbe: ObservableObject {
 
 private struct SupplementalCapability: Identifiable {
     let id: String
-    let title: String
     let systemImage: String
-    let summary: String
-    let actions: [String]
-    let dataDestination: String
+    // 存 key、读的时候再本地化(同 OffloadCommandInfo):`all` 是 static let,只算一次,
+    // 直接存译文会停在启动时的语言;以前干脆存英文原文,中文界面里整段是英文。
+    private let titleKey: String
+    private let summaryKey: String
+    private let actionKeys: [String]
+    private let destinationKey: String
+
+    var title: String { String(localized: String.LocalizationValue(titleKey)) }
+    var summary: String { String(localized: String.LocalizationValue(summaryKey)) }
+    var actions: [String] { actionKeys.map { String(localized: String.LocalizationValue($0)) } }
+    var dataDestination: String { String(localized: String.LocalizationValue(destinationKey)) }
+
+    init(id: String, title: String, systemImage: String, summary: String,
+         actions: [String], dataDestination: String) {
+        self.id = id
+        self.titleKey = title
+        self.systemImage = systemImage
+        self.summaryKey = summary
+        self.actionKeys = actions
+        self.destinationKey = dataDestination
+    }
 
     static let all: [SupplementalCapability] = [
         .init(id: "camera", title: "Camera", systemImage: "camera", summary: "Capture images for a conversation", actions: ["Take a photo", "Scan visual context", "Attach media to a task"], dataDestination: "Captured media stays in the current conversation and is sent only to its selected AI provider when used."),
@@ -465,12 +488,10 @@ private struct NativeCapabilityDetailView: View {
     let capability: OffloadCommandInfo
     let state: CapabilityAuthorizationState
     @ObservedObject private var manager = OffloadPermissionManager.shared
-    @State private var level: OffloadPermissionLevel
 
     init(capability: OffloadCommandInfo, state: CapabilityAuthorizationState) {
         self.capability = capability
         self.state = state
-        _level = State(initialValue: OffloadPermissionManager.shared.permissionLevel(for: capability.name))
     }
 
     var body: some View {
@@ -480,12 +501,15 @@ private struct NativeCapabilityDetailView: View {
                     Label(state.title, systemImage: state.systemImage)
                         .foregroundStyle(state.tint)
                 }
-                Picker("Agent Access", selection: $level) {
+                // 直接读写管理器:别处(权限页、全部自动允许)改了,这里回来就是新值。
+                Picker("Agent Access", selection: Binding(
+                    get: { manager.permissionLevel(for: capability.name) },
+                    set: { manager.setPermissionLevel($0, for: capability.name) }
+                )) {
                     ForEach(OffloadPermissionLevel.allCases, id: \.self) { item in
                         Text(item.displayName).tag(item)
                     }
                 }
-                .onChange(of: level) { manager.setPermissionLevel($0, for: capability.name) }
             } footer: {
                 Text("Agent Access applies to direct native tool calls. Shell wrappers or chained commands may not be identified by the preflight gate; native iOS permission remains authoritative.")
             }
@@ -542,11 +566,8 @@ private struct CommandPermissionRow: View {
     let command: OffloadCommandInfo
     @ObservedObject private var manager = OffloadPermissionManager.shared
 
-    @State private var level: OffloadPermissionLevel
-
     init(command: OffloadCommandInfo) {
         self.command = command
-        _level = State(initialValue: OffloadPermissionManager.shared.permissionLevel(for: command.name))
     }
 
     var body: some View {
@@ -558,15 +579,15 @@ private struct CommandPermissionRow: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Picker("", selection: $level) {
+            Picker("", selection: Binding(
+                get: { manager.permissionLevel(for: command.name) },
+                set: { manager.setPermissionLevel($0, for: command.name) }
+            )) {
                 ForEach(OffloadPermissionLevel.allCases, id: \.self) { lvl in
                     Text(lvl.displayName).tag(lvl)
                 }
             }
             .pickerStyle(.menu)
-            .onChange(of: level) { newValue in
-                manager.setPermissionLevel(newValue, for: command.name)
-            }
         }
     }
 }

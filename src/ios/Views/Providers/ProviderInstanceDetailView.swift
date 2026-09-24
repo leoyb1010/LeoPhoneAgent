@@ -27,8 +27,13 @@ struct ProviderInstanceDetailView: View {
     @State private var pendingDeleteModelEntry: ModelEntry?
     @State private var showKeyRevealed = false
     @State private var keySaveTask: Task<Void, Never>?
+    /// 登录失败的原因:显示在登录按钮下面(以前混在「模型」下面的拉取错误里,还跟着一句"可能要手动加模型")。
+    @State private var signInError: String?
     /// 钥匙行从钥匙串读过之后才允许写回:没读过的空输入框不能被当成"删掉钥匙"。
     @State private var keyLoaded = false
+    /// 页面读到(或最后一次写入)的钥匙 / 名字:只有你改过才写回,别处同步来的新值不会被页面上的旧值盖掉。
+    @State private var loadedKey = ""
+    @State private var loadedLabel: String?
 
     private var instance: ProviderInstance? {
         store.instance(for: instanceId)
@@ -142,7 +147,10 @@ struct ProviderInstanceDetailView: View {
                 // 名字在提交或离开页面时保存:以前每敲一个字就把整份供应商配置重写一遍(文件 + 数据库 + iCloud 标脏)。
                 TextField("Label", text: $editingLabel)
                     .textContentType(.none)
-                    .onAppear { editingLabel = instance.label }
+                    .onAppear {
+                        editingLabel = instance.label
+                        loadedLabel = instance.label
+                    }
                     .onSubmit { saveLabel(instance) }
                     .onDisappear { saveLabel(instance) }
             }
@@ -400,6 +408,7 @@ struct ProviderInstanceDetailView: View {
                 let rawKey = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id)
                 AppLogger(category: "Provider").info("apiKeyTextField onAppear instanceId=\(instance.id.prefix(8)) rawKeyHit=\(rawKey != nil) rawKeyLen=\(rawKey?.count ?? 0) prevTextLen=\(keyInputText.count)")
                 keyInputText = rawKey ?? ""
+                loadedKey = (rawKey ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
                 keyLoaded = true
             }
             .onChange(of: keyInputText) { newValue in
@@ -484,6 +493,13 @@ struct ProviderInstanceDetailView: View {
             }
             .buttonStyle(.glass)
             .controlSize(.small)
+
+            if let signInError {
+                Label(signInError, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .textSelection(.enabled)
+            }
 
             // [T-grok-via-mac] xAI 专属:登录直接从 Mac 借(推荐)。手机端
             // OAuth 依赖回环端口回调,iOS 上易碎;Mac 的 grok CLI 登录长期
@@ -996,6 +1012,7 @@ struct ProviderInstanceDetailView: View {
     }
 
     private func oauthLogin(_ instance: ProviderInstance) async {
+        await MainActor.run { signInError = nil }
         do {
             switch instance.providerType {
             case .anthropic: try await ClaudeOAuthManager.shared.login(instanceId: instance.id)
@@ -1009,8 +1026,12 @@ struct ProviderInstanceDetailView: View {
             case .unsupported: break
             }
         } catch {
+            // 你自己点了取消不算错误,不用提示。
+            let nsError = error as NSError
+            let cancelled = error is CancellationError
+                || (nsError.domain == "com.apple.AuthenticationServices.WebAuthenticationSession" && nsError.code == 1)
             await MainActor.run {
-                fetchError = error.localizedDescription
+                signInError = cancelled ? nil : error.localizedDescription
             }
         }
     }
@@ -1082,11 +1103,13 @@ struct ProviderInstanceDetailView: View {
         }
     }
 
-    /// 和钥匙串里现有的一样就什么都不做。
+    /// 只有你改过(和页面读到的不一样)才写;供应商已被删掉(本机或别的设备)就不写,免得把钥匙写回来。
     private func commitKey(_ value: String, instanceId: String) {
-        guard keyLoaded else { return }
+        guard keyLoaded, store.instance(for: instanceId) != nil else { return }
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed != loadedKey else { return }
         let stored = ProviderKeychainHelper.loadAPIKey(instanceId: instanceId) ?? ""
+        loadedKey = trimmed
         guard trimmed != stored else { return }
         if trimmed.isEmpty {
             AppLogger(category: "Provider").warning("apiKey DELETE instanceId=\(instanceId.prefix(8)) prevLen=\(stored.count)")
@@ -1098,9 +1121,12 @@ struct ProviderInstanceDetailView: View {
     }
 
     private func saveLabel(_ captured: ProviderInstance) {
-        let instance = store.instance(for: captured.id) ?? captured  // 见 saveCustomUserAgent
+        // 没改过就不写:页面开着时别的设备同步来的新名字不能被这里的旧值盖回去。
+        guard let instance = store.instance(for: captured.id),
+              editingLabel != loadedLabel else { return }
         let trimmed = editingLabel.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty, trimmed != instance.label else { return }
+        loadedLabel = editingLabel
         var updated = instance
         updated.label = trimmed
         store.updateInstance(updated)

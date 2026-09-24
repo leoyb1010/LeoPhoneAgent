@@ -163,19 +163,7 @@ struct AgentActivityLogView: View {
         if let toolName = event.toolName {
             return AgentToolPresentation.displayName(for: toolName)
         }
-        return switch event.phase {
-        case .idle: "Idle"
-        case .preparing: "Preparing"
-        case .thinking: "Thinking"
-        case .usingTool: "Using a tool"
-        case .waitingForPermission: "Waiting for permission"
-        case .waitingForUser: "Paused, ready to resume"
-        case .suspended: "Waiting for an execution slot"
-        case .completed: "Completed"
-        case .failed: "Failed"
-        case .cancelled: "Cancelled"
-        case .unverified: "Result unverified"
-        }
+        return event.phase.activityTitle
     }
 
     private func symbol(for event: AgentActivityEvent) -> String {
@@ -209,30 +197,15 @@ struct AgentActivityLogView: View {
     }
 
     private func reasonDescription(_ reason: AgentActivityReason) -> String {
-        return switch reason {
-        case .permissionApproval: "Waiting for device permission approval"
-        case .autoApproved: "全自动:已自动批准"
-        case .browserTakeover: "Waiting for browser control to return"
-        case .backgroundTimeExpired: "Paused after iOS background time expired"
-        case .unexpectedTermination: "Recovered after LeoPhoneAgent stopped unexpectedly"
-        case .concurrencyLimit: "Waiting for an execution slot"
-        case .userInterruption: "Paused by the user"
-        case .responseLimit: "The response reached its token limit"
-        case .connectionDropped: "The provider connection ended early"
-        case .toolFailure: "A tool step failed"
-        case .providerFailure: "The model provider request failed"
-        case .authenticationRequired: "Provider authentication needs attention"
-        case .rateLimited: "The provider rate limit was reached"
-        case .kernelUnavailable: "The local execution environment is unavailable"
-        }
+        reason.activityDescription
     }
 
     private func recoveryTitle(_ action: AgentRecoveryAction) -> String {
         switch action {
-        case .retry: "Retry from Last Safe Step"
-        case .resume: "Resume Task"
-        case .reviewProvider: "Review Provider Settings"
-        case .retryKernel: "Retry Local Environment"
+        case .retry: String(localized: "Retry from Last Safe Step")
+        case .resume: String(localized: "Resume Task")
+        case .reviewProvider: String(localized: "Review Provider Settings")
+        case .retryKernel: String(localized: "Retry Local Environment")
         }
     }
 
@@ -247,10 +220,10 @@ struct AgentActivityLogView: View {
 
     private func recoveryDescription(_ action: AgentRecoveryAction) -> String {
         switch action {
-        case .retry: "Keeps completed steps and retries from the last safe conversation state."
-        case .resume: "Continues from the interruption point already saved in this conversation."
-        case .reviewProvider: "Check the selected provider, credentials and model before retrying."
-        case .retryKernel: "Attempts to start the on-device Linux environment again."
+        case .retry: String(localized: "Keeps completed steps and retries from the last safe conversation state.")
+        case .resume: String(localized: "Continues from the interruption point already saved in this conversation.")
+        case .reviewProvider: String(localized: "Check the selected provider, credentials and model before retrying.")
+        case .retryKernel: String(localized: "Attempts to start the on-device Linux environment again.")
         }
     }
 }
@@ -422,49 +395,49 @@ struct AgentCurrentStatusCard: View {
             return AgentToolPresentation.displayName(for: toolName)
         }
         return switch phase {
-        case .waitingForUser: "Ready to Resume"
-        case .suspended: "Waiting for a Slot"
-        case .thinking: "Thinking"
-        case .preparing: "Preparing"
-        case .usingTool: "Using a Tool"
-        case .waitingForPermission: "Permission Required"
-        case .completed: "Completed"
-        case .failed: "Failed"
-        case .cancelled: "Cancelled"
-        case .unverified: "Result unverified"
-        case .idle: "Idle"
+        case .waitingForUser: String(localized: "Ready to Resume")
+        case .suspended: String(localized: "Waiting for a Slot")
+        case .thinking: String(localized: "Thinking…")
+        case .preparing: String(localized: "Preparing")
+        case .usingTool: String(localized: "Using a Tool")
+        case .waitingForPermission: String(localized: "Permission Required")
+        case .completed: String(localized: "Completed")
+        case .failed: String(localized: "Run failed")
+        case .cancelled: String(localized: "Cancelled")
+        case .unverified: String(localized: "Result unverified")
+        case .idle: String(localized: "Idle")
         }
     }
 
     private var subtitle: String {
         if let reason {
             return switch reason {
-            case .permissionApproval: "Review the device capability request"
-            case .autoApproved: "全自动放行,没有弹确认"
-            case .browserTakeover: "Finish browsing to return control"
-            case .backgroundTimeExpired: "Return to LeoPhoneAgent to continue"
-            case .unexpectedTermination: "The saved interruption point can be resumed"
-            case .concurrencyLimit: "Queued behind another task"
-            case .userInterruption: "The interruption point was saved"
-            case .responseLimit: "Resume to continue the response"
-            case .connectionDropped: "Resume when the connection is stable"
-            case .toolFailure: "Review the failed tool step"
-            case .providerFailure: "Review the provider error"
-            case .authenticationRequired: "Check the selected provider credentials"
-            case .rateLimited: "Wait briefly, then retry from the last safe step"
-            case .kernelUnavailable: "Restart the local execution environment"
+            case .permissionApproval: String(localized: "Review the device capability request")
+            case .autoApproved: String(localized: "Approved automatically (full auto), no prompt shown")
+            case .browserTakeover: String(localized: "Finish browsing to return control")
+            case .backgroundTimeExpired: String(localized: "Return to LeoPhoneAgent to continue")
+            case .unexpectedTermination: String(localized: "The saved interruption point can be resumed")
+            case .concurrencyLimit: String(localized: "Queued behind another task")
+            case .userInterruption: String(localized: "The interruption point was saved")
+            case .responseLimit: String(localized: "Resume to continue the response")
+            case .connectionDropped: String(localized: "Resume when the connection is stable")
+            case .toolFailure: String(localized: "Review the failed tool step")
+            case .providerFailure: String(localized: "Review the provider error")
+            case .authenticationRequired: String(localized: "Check the selected provider credentials")
+            case .rateLimited: String(localized: "Wait briefly, then retry from the last safe step")
+            case .kernelUnavailable: String(localized: "Restart the local execution environment")
             }
         }
         return switch phase {
-        case .waitingForUser: "The interruption point was saved"
-        case .suspended: "Queued behind another task"
-        case .thinking, .preparing, .usingTool: "View current agent activity"
-        case .waitingForPermission: "Review the pending request"
-        case .completed: "The run finished"
-        case .failed: "The run needs attention"
-        case .cancelled: "The run was stopped"
-        case .unverified: "Check the result before trying the action again"
-        case .idle: "No active run"
+        case .waitingForUser: String(localized: "The interruption point was saved")
+        case .suspended: String(localized: "Queued behind another task")
+        case .thinking, .preparing, .usingTool: String(localized: "View current agent activity")
+        case .waitingForPermission: String(localized: "Review the pending request")
+        case .completed: String(localized: "The run finished")
+        case .failed: String(localized: "The run needs attention")
+        case .cancelled: String(localized: "The run was stopped")
+        case .unverified: String(localized: "Check the result before trying the action again")
+        case .idle: String(localized: "No active run")
         }
     }
 
@@ -494,6 +467,46 @@ struct AgentCurrentStatusCard: View {
         case .completed: LeoTheme.ColorToken.success
         case .cancelled, .idle, .unverified: LeoTheme.ColorToken.secondaryText
         case .preparing, .thinking, .usingTool: LeoTheme.ColorToken.accent
+        }
+    }
+}
+
+// 活动记录、Agent 时间线共用的阶段名 / 原因说明(以前一边是英文原文,一边直接显示枚举原始值)。
+extension AgentActivityPhase {
+    var activityTitle: String {
+        switch self {
+        case .idle: String(localized: "Idle")
+        case .preparing: String(localized: "Preparing")
+        case .thinking: String(localized: "Thinking…")
+        case .usingTool: String(localized: "Using a tool")
+        case .waitingForPermission: String(localized: "Waiting for permission")
+        case .waitingForUser: String(localized: "Paused, ready to resume")
+        case .suspended: String(localized: "Waiting for an execution slot")
+        case .completed: String(localized: "Completed")
+        case .failed: String(localized: "Run failed")
+        case .cancelled: String(localized: "Cancelled")
+        case .unverified: String(localized: "Result unverified")
+        }
+    }
+}
+
+extension AgentActivityReason {
+    var activityDescription: String {
+        switch self {
+        case .permissionApproval: String(localized: "Waiting for device permission approval")
+        case .autoApproved: String(localized: "Auto-approved (full auto)")
+        case .browserTakeover: String(localized: "Waiting for browser control to return")
+        case .backgroundTimeExpired: String(localized: "Paused after iOS background time expired")
+        case .unexpectedTermination: String(localized: "Recovered after LeoPhoneAgent stopped unexpectedly")
+        case .concurrencyLimit: String(localized: "Waiting for an execution slot")
+        case .userInterruption: String(localized: "Paused by the user")
+        case .responseLimit: String(localized: "The response reached its token limit")
+        case .connectionDropped: String(localized: "The provider connection ended early")
+        case .toolFailure: String(localized: "A tool step failed")
+        case .providerFailure: String(localized: "The model provider request failed")
+        case .authenticationRequired: String(localized: "Provider authentication needs attention")
+        case .rateLimited: String(localized: "The provider rate limit was reached")
+        case .kernelUnavailable: String(localized: "The local execution environment is unavailable")
         }
     }
 }

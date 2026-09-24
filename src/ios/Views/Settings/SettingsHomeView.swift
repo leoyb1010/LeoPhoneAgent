@@ -105,8 +105,11 @@ struct SettingsHomeView: View {
                               icon: "chevron.left.forwardslash.chevron.right", color: .gray) { EnvironmentVariablesView() },
             ]),
             SettingsGroup(id: "general", title: "外观与通用", entries: [
-                SettingsEntry("外观", keywords: "appearance 深色 浅色 主题 主动卡 手电筒 待办",
+                SettingsEntry("外观", keywords: "appearance 深色 浅色 主题 语言 字体 字号 图标 启动 回车 复制 language font icon mac 进行中 手电筒 待办",
                               icon: "paintbrush.fill", color: .blue) { AppearanceSettingsView() },
+                // 以前只能从 权限 → 后台 进去,搜「后台」「通知」「灵动岛」都搜不到。
+                SettingsEntry("后台与通知", keywords: "background 后台 保活 keep alive 通知 notification 实时活动 灵动岛 live activity 定位 位置追踪 朗读 语音 音色 隐私模式",
+                              icon: "bell.badge.fill", color: .orange) { EnhancedBackgroundSettingsView() },
                 SettingsEntry("权限", keywords: "permission 审批 offload 全自动 自动批准 不再询问 yolo",
                               icon: "hand.raised.fill", color: .red,
                               hint: "Agent 动用某项能力前，是直接放行还是先问你") { OffloadPermissionSettingsView() },
@@ -425,11 +428,7 @@ struct ThinkingAndModelSlotsView: View {
                                 Text(level.displayName).tag(level)
                             }
                         }
-                        Picker("默认档", selection: $rule.defaultLevel) {
-                            ForEach(ThinkingLevel.allCases.filter { $0 != .off && $0 <= rule.maxLevel }, id: \.self) { level in
-                                Text(level.displayName).tag(level)
-                            }
-                        }
+                        // 「默认档」删掉了:存下来却没有任何地方读,选了等于没选。新会话沿用上一次的档位。
                     }
                     .padding(.vertical, 4)
                 }

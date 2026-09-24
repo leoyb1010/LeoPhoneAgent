@@ -141,7 +141,7 @@ import Foundation
                 let elapsedMs = Int((CFAbsoluteTimeGetCurrent() - bridgeStart) * 1000)
                 logger.info("[BridgeTiming] pool_not_found elapsed=\(elapsedMs)ms sid=\(sid.prefix(8))")
                 completion([
-                    "text": "Error: session \(sid) no longer exists — cannot run browser_use.",
+                    "text": "Error: session \(sid.prefix(8)) no longer exists — cannot run browser_use.",
                     "success": false,
                 ] as NSDictionary)
                 return

@@ -47,6 +47,1476 @@
         }
       }
     },
+    "A privacy-aware task snapshot is stored in the LeoPhoneAgent App Group. Live Activity content follows Task Status Privacy.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "任务快照(已按隐私设置处理)存在 LeoPhoneAgent 的 App Group 里;实时活动显示什么跟随「任务状态隐私模式」。"
+          }
+        }
+      }
+    },
+    "A tool step failed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有一步工具调用失败了"
+          }
+        }
+      }
+    },
+    "API keys and tokens are stored in the iOS Keychain; provider configuration may also sync through your iCloud account when iCloud Sync is enabled": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "API 密钥和令牌存在 iOS 钥匙串里;开启 iCloud 同步后,AI 服务商配置也会经你的 iCloud 账户同步"
+          }
+        }
+      }
+    },
+    "Approved automatically (full auto), no prompt shown": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全自动放行,没有弹确认"
+          }
+        }
+      }
+    },
+    "Ask me for a folder and organize the documents inside.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "让我选一个文件夹,把里面的文档整理好。"
+          }
+        }
+      }
+    },
+    "Ask When Used": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用到时询问"
+          }
+        }
+      }
+    },
+    "Ask you to pick a folder or file": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请你选择文件夹或文件"
+          }
+        }
+      }
+    },
+    "Attach media to a task": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "给任务附上图片或视频"
+          }
+        }
+      }
+    },
+    "Attach recorded audio": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "附上录音"
+          }
+        }
+      }
+    },
+    "Attempts to start the on-device Linux environment again.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新启动本机的 Linux 环境。"
+          }
+        }
+      }
+    },
+    "Audio is processed by the configured transcription path. The transcript enters the current conversation.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音频按你设置的转写方式处理,转写结果进入当前对话。"
+          }
+        }
+      }
+    },
+    "Audio submitted for transcription": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "送去转写的音频"
+          }
+        }
+      }
+    },
+    "Auto-approved (full auto)": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全自动:已自动批准"
+          }
+        }
+      }
+    },
+    "Back up app data": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备份 App 数据"
+          }
+        }
+      }
+    },
+    "Background Processing": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "后台处理"
+          }
+        }
+      }
+    },
+    "Browse app files": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "浏览 App 里的文件"
+          }
+        }
+      }
+    },
+    "Build routes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "规划路线"
+          }
+        }
+      }
+    },
+    "Camera": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "相机"
+          }
+        }
+      }
+    },
+    "Capture images for a conversation": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "为对话拍摄图片"
+          }
+        }
+      }
+    },
+    "Captured media stays in the current conversation and is sent only to its selected AI provider when used.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拍下的内容留在当前对话里,只有用到时才发给这次对话选的 AI 服务商。"
+          }
+        }
+      }
+    },
+    "Chats and Files": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "对话与文件"
+          }
+        }
+      }
+    },
+    "Check the result before trying the action again": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先确认结果,再决定要不要重做"
+          }
+        }
+      }
+    },
+    "Check the selected provider credentials": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查所选 AI 服务商的登录或密钥"
+          }
+        }
+      }
+    },
+    "Check the selected provider, credentials and model before retrying.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重试前先检查所选 AI 服务商、登录 / 密钥和模型。"
+          }
+        }
+      }
+    },
+    "Checked on Use": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用时检查"
+          }
+        }
+      }
+    },
+    "Classify visual content": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "识别画面内容"
+          }
+        }
+      }
+    },
+    "Contact names, phone numbers, emails, and groups": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "联系人姓名、电话、邮箱和分组"
+          }
+        }
+      }
+    },
+    "Continue across personal devices": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在你的其他设备上接着用"
+          }
+        }
+      }
+    },
+    "Continue user-started Agent work after locking": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "锁屏后继续你发起的 Agent 任务"
+          }
+        }
+      }
+    },
+    "Continues from the interruption point already saved in this conversation.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从这个对话里已保存的中断点继续。"
+          }
+        }
+      }
+    },
+    "Conversations, attachments, agent workspaces, and settings are stored in the app container.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "对话、附件、Agent 工作区和设置都存在 App 自己的目录里。"
+          }
+        }
+      }
+    },
+    "Create and manage supported alarms": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创建和管理闹钟"
+          }
+        }
+      }
+    },
+    "Create or update only with confirmation": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新建或修改前先征得你同意"
+          }
+        }
+      }
+    },
+    "Detect language": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "识别语言"
+          }
+        }
+      }
+    },
+    "Diagnostic Logs": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "诊断日志"
+          }
+        }
+      }
+    },
+    "Diagnostic logs can contain shell output and should be reviewed before export": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "诊断日志可能包含终端输出,导出前请先检查"
+          }
+        }
+      }
+    },
+    "Expose supported workspace folders": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在「文件」App 里显示工作区文件夹"
+          }
+        }
+      }
+    },
+    "Files & Share": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件与分享"
+          }
+        }
+      }
+    },
+    "Files app integration and Share Sheet intake": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接入「文件」App 和系统分享"
+          }
+        }
+      }
+    },
+    "Files remain in the app container, shared App Group, or folders you explicitly select.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件留在 App 自己的目录、共享 App Group 或你明确选择的文件夹里。"
+          }
+        }
+      }
+    },
+    "Find Zhang Wei's phone number in my contacts.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在通讯录里找张伟的电话。"
+          }
+        }
+      }
+    },
+    "Finish browsing to return control": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "看完网页后交还控制权"
+          }
+        }
+      }
+    },
+    "Folders and files you grant through the system picker": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你通过系统选择器授权的文件夹和文件"
+          }
+        }
+      }
+    },
+    "Handle system expiration": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "处理系统到时回收"
+          }
+        }
+      }
+    },
+    "Home Screen, Lock Screen, and Dynamic Island status": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主屏幕、锁屏和灵动岛上的状态"
+          }
+        }
+      }
+    },
+    "How many steps have I taken today?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我今天走了多少步?"
+          }
+        }
+      }
+    },
+    "iCloud & CloudKit": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud 与 CloudKit"
+          }
+        }
+      }
+    },
+    "Import shared content": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入分享来的内容"
+          }
+        }
+      }
+    },
+    "Integrated": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已集成"
+          }
+        }
+      }
+    },
+    "Jump to voice input": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "直接进入语音输入"
+          }
+        }
+      }
+    },
+    "Keep a registry of your shortcuts": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "记住你有哪些快捷指令"
+          }
+        }
+      }
+    },
+    "Keeps completed steps and retries from the last safe conversation state.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保留已完成的步骤,从上一个安全的对话状态重试。"
+          }
+        }
+      }
+    },
+    "Limited": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部分授权"
+          }
+        }
+      }
+    },
+    "List and open sessions": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "列出和打开会话"
+          }
+        }
+      }
+    },
+    "List granted folders": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "列出已授权的文件夹"
+          }
+        }
+      }
+    },
+    "Logs can contain shell output and technical details. Review them before exporting or sharing.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日志可能包含终端输出和技术细节,导出或分享前请先看一遍。"
+          }
+        }
+      }
+    },
+    "Media files opened in the native player": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在系统播放器里打开的媒体文件"
+          }
+        }
+      }
+    },
+    "Media library and supported playback controls": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "媒体库和播放控制"
+          }
+        }
+      }
+    },
+    "Microphone": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "麦克风"
+          }
+        }
+      }
+    },
+    "Motion": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "运动"
+          }
+        }
+      }
+    },
+    "No active run": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有正在跑的任务"
+          }
+        }
+      }
+    },
+    "OCR images": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "识别图片中的文字"
+          }
+        }
+      }
+    },
+    "Open approved URLs and system destinations": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开允许的网址和系统页面"
+          }
+        }
+      }
+    },
+    "Open map results": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开地图结果"
+          }
+        }
+      }
+    },
+    "Open the active session": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开进行中的会话"
+          }
+        }
+      }
+    },
+    "Open the camera for you to shoot": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开相机由你拍摄"
+          }
+        }
+      }
+    },
+    "Optional session, settings, and file synchronization": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可选的会话、设置和文件同步"
+          }
+        }
+      }
+    },
+    "Paused after iOS background time expired": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS 后台时间用完,已暂停"
+          }
+        }
+      }
+    },
+    "Paused by the user": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你暂停了任务"
+          }
+        }
+      }
+    },
+    "Paused, ready to resume": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已暂停,可以继续"
+          }
+        }
+      }
+    },
+    "Per-Item Access": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "逐项授权"
+          }
+        }
+      }
+    },
+    "Permission Required": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要你批准"
+          }
+        }
+      }
+    },
+    "Photos, barcodes, and documents you capture in the camera UI": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你在相机界面拍下的照片、条码和文档"
+          }
+        }
+      }
+    },
+    "Provider authentication needs attention": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AI 服务商的登录需要处理"
+          }
+        }
+      }
+    },
+    "Queued behind another task": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "排在另一个任务后面"
+          }
+        }
+      }
+    },
+    "Re-authorize stale grants": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新授权已失效的访问"
+          }
+        }
+      }
+    },
+    "Read barcodes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取条码"
+          }
+        }
+      }
+    },
+    "Read contact details": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取联系人详情"
+          }
+        }
+      }
+    },
+    "Read current conditions and forecasts": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取当前天气和预报"
+          }
+        }
+      }
+    },
+    "Read live step counts": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取实时步数"
+          }
+        }
+      }
+    },
+    "Read safe device metadata and system state": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取安全的设备信息和系统状态"
+          }
+        }
+      }
+    },
+    "Ready to Resume": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可以继续"
+          }
+        }
+      }
+    },
+    "Recovered after LeoPhoneAgent stopped unexpectedly": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LeoPhoneAgent 意外退出后已恢复"
+          }
+        }
+      }
+    },
+    "Remove pending notifications": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除待发送的通知"
+          }
+        }
+      }
+    },
+    "Report progress": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "汇报进度"
+          }
+        }
+      }
+    },
+    "Restart the local execution environment": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新启动本机运行环境"
+          }
+        }
+      }
+    },
+    "Result unverified": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "结果未核实"
+          }
+        }
+      }
+    },
+    "Resume interrupted work": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接着做被打断的任务"
+          }
+        }
+      }
+    },
+    "Resume Task": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "继续任务"
+          }
+        }
+      }
+    },
+    "Resume to continue the response": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "继续,把回复写完"
+          }
+        }
+      }
+    },
+    "Resume when the connection is stable": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "网络稳定后再继续"
+          }
+        }
+      }
+    },
+    "Retry from Last Safe Step": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从上一个安全点重试"
+          }
+        }
+      }
+    },
+    "Return to LeoPhoneAgent to continue": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回到 LeoPhoneAgent 继续"
+          }
+        }
+      }
+    },
+    "Review Provider Settings": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查 AI 服务商设置"
+          }
+        }
+      }
+    },
+    "Review the device capability request": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看手机能力的授权请求"
+          }
+        }
+      }
+    },
+    "Review the failed tool step": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看失败的那一步"
+          }
+        }
+      }
+    },
+    "Review the pending request": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看待批准的请求"
+          }
+        }
+      }
+    },
+    "Review the provider error": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看 AI 服务商返回的错误"
+          }
+        }
+      }
+    },
+    "Run a quick task": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "运行快捷任务"
+          }
+        }
+      }
+    },
+    "Run a shortcut by name": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按名称运行快捷指令"
+          }
+        }
+      }
+    },
+    "Run failed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "运行失败"
+          }
+        }
+      }
+    },
+    "Run my Good Morning shortcut.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "运行我的「早安」快捷指令。"
+          }
+        }
+      }
+    },
+    "Runs shortcuts you created in the Shortcuts app": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "运行你在「快捷指令」App 里建的快捷指令"
+          }
+        }
+      }
+    },
+    "Scan barcodes and QR codes": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描条码和二维码"
+          }
+        }
+      }
+    },
+    "Scan multi-page documents": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描多页文档"
+          }
+        }
+      }
+    },
+    "Scan this receipt and extract the total.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描这张小票,提取总金额。"
+          }
+        }
+      }
+    },
+    "Scan visual context": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描画面内容"
+          }
+        }
+      }
+    },
+    "Schedule local notifications": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安排本地通知"
+          }
+        }
+      }
+    },
+    "Search contacts": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索联系人"
+          }
+        }
+      }
+    },
+    "Search places": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索地点"
+          }
+        }
+      }
+    },
+    "See task state": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看任务状态"
+          }
+        }
+      }
+    },
+    "Shortcut inputs are handled by the app and the AI provider selected for the resulting session.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快捷指令传进来的内容由 App 和对应会话选的 AI 服务商处理。"
+          }
+        }
+      }
+    },
+    "Shortcuts": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快捷指令"
+          }
+        }
+      }
+    },
+    "Siri & Shortcuts": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Siri 与快捷指令"
+          }
+        }
+      }
+    },
+    "Start voice input": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开始语音输入"
+          }
+        }
+      }
+    },
+    "Start, inspect, and continue Agent tasks": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发起、查看和继续 Agent 任务"
+          }
+        }
+      }
+    },
+    "Step counts and motion activity from the last 7 days": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近 7 天的步数和运动记录"
+          }
+        }
+      }
+    },
+    "Summarize walking/driving activity": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "汇总步行 / 驾车活动"
+          }
+        }
+      }
+    },
+    "Sync supported records": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同步支持的记录"
+          }
+        }
+      }
+    },
+    "System information you authorize, such as calendar, health, location, photos, or nearby-device data": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你授权的系统信息,例如日历、健康、位置、照片或附近设备的数据"
+          }
+        }
+      }
+    },
+    "Take a photo": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拍照"
+          }
+        }
+      }
+    },
+    "Task state remains device-local. iOS can still stop work under resource pressure; LeoPhoneAgent preserves a recovery state.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "任务状态只存在本机。系统资源紧张时 iOS 仍可能停掉任务,LeoPhoneAgent 会留好恢复点。"
+          }
+        }
+      }
+    },
+    "The interruption point was saved": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中断的位置已保存"
+          }
+        }
+      }
+    },
+    "The local execution environment is unavailable": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本机运行环境不可用"
+          }
+        }
+      }
+    },
+    "The model provider request failed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请求 AI 服务商失败"
+          }
+        }
+      }
+    },
+    "The provider connection ended early": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "和 AI 服务商的连接提前断了"
+          }
+        }
+      }
+    },
+    "The provider rate limit was reached": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "触发了 AI 服务商的限流"
+          }
+        }
+      }
+    },
+    "The response reached its token limit": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回复达到了长度上限"
+          }
+        }
+      }
+    },
+    "The run finished": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "任务已完成"
+          }
+        }
+      }
+    },
+    "The run needs attention": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "任务需要你处理"
+          }
+        }
+      }
+    },
+    "The run was stopped": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "任务已停止"
+          }
+        }
+      }
+    },
+    "The saved interruption point can be resumed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可以从保存的中断点继续"
+          }
+        }
+      }
+    },
+    "Thinking…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "思考中…"
+          }
+        }
+      }
+    },
+    "Tokenize and analyze text": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分词和分析文本"
+          }
+        }
+      }
+    },
+    "Transcribe speech": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把语音转成文字"
+          }
+        }
+      }
+    },
+    "Using a Tool": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在用工具"
+          }
+        }
+      }
+    },
+    "Using a tool": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在用工具"
+          }
+        }
+      }
+    },
+    "View current agent activity": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看 Agent 正在做什么"
+          }
+        }
+      }
+    },
+    "Voice input and audio capture": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "语音输入和录音"
+          }
+        }
+      }
+    },
+    "Wait briefly, then retry from the last safe step": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "稍等一下,再从上一个安全点重试"
+          }
+        }
+      }
+    },
+    "Waiting for a Slot": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待执行名额"
+          }
+        }
+      }
+    },
+    "Waiting for an execution slot": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待执行名额"
+          }
+        }
+      }
+    },
+    "Waiting for browser control to return": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等浏览器控制权交回"
+          }
+        }
+      }
+    },
+    "Waiting for device permission approval": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等你批准手机能力"
+          }
+        }
+      }
+    },
+    "Waiting for permission": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等你批准"
+          }
+        }
+      }
+    },
+    "When enabled, supported records and provider configuration are stored in your private iCloud account.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开启后,支持同步的记录和 AI 服务商配置存在你自己的 iCloud 账户里。"
+          }
+        }
+      }
+    },
+    "Widgets & Live Activities": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小组件与实时活动"
+          }
+        }
+      }
+    },
     "—": {
       "localizations": {
         "de": {
@@ -11248,13 +12718,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "每次询问"
+            "value": "先问我"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "每次詢問"
+            "value": "先問我"
           }
         }
       }
@@ -96368,6 +97838,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "個任務"
+          }
+        }
+      }
+    },
+    "Gemini's OAuth (Cloud Code Assist) support is complete, but the Google client secret was removed when this project was open-sourced. Create your own OAuth client in Google Cloud Console — an \"iOS\" type client needs no secret and is recommended.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gemini's OAuth (Cloud Code Assist) support is complete, but the Google client secret was removed when this project was open-sourced. Create your own OAuth client in Google Cloud Console — an \"iOS\" type client needs no secret and is recommended."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gemini 的 OAuth(Cloud Code Assist)已经完整支持,但项目开源时移除了内置的 Google 客户端密钥。请在 Google Cloud Console 里建一个自己的 OAuth 客户端 —— 推荐「iOS」类型,不需要密钥。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gemini 的 OAuth(Cloud Code Assist)已經完整支援,但專案開源時移除了內建的 Google 用戶端密鑰。請在 Google Cloud Console 建立自己的 OAuth 用戶端 —— 建議選「iOS」類型,不需要密鑰。"
           }
         }
       }

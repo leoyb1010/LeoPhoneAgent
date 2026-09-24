@@ -18,32 +18,7 @@ struct AutomationSettingsView: View {
         List {
             Section {
                 ForEach(store.rules) { rule in
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack {
-                            Text(rule.name).font(.body.weight(.medium))
-                            Spacer()
-                            if !rule.isEnabled {
-                                Text("Paused").font(.caption2).foregroundStyle(.orange)
-                            }
-                        }
-                        Text(rule.trigger.title)
-                            .font(.caption).foregroundStyle(.secondary)
-                        HStack(spacing: 14) {
-                            Button { store.vote(id: rule.id, up: true) } label: {
-                                Label("\(rule.score)", systemImage: "hand.thumbsup")
-                                    .font(.caption)
-                            }
-                            .buttonStyle(.borderless)
-                            Button { store.vote(id: rule.id, up: false) } label: {
-                                Image(systemName: "hand.thumbsdown").font(.caption)
-                            }
-                            .buttonStyle(.borderless)
-                            if let last = rule.lastFiredAt {
-                                Text(last, style: .relative)
-                                    .font(.caption2).foregroundStyle(.tertiary)
-                            }
-                        }
-                    }
+                    ruleRow(rule)
                 }
                 .onDelete { offsets in
                     let ids = offsets.map { store.rules[$0].id }
@@ -59,6 +34,43 @@ struct AutomationSettingsView: View {
         .navigationTitle(Text("Automations"))
         .sheet(isPresented: $showEditor) { AutomationEditSheet() }
         .onAppear { AutomationEngine.shared.reloadMonitoring() }
+    }
+
+    private func ruleRow(_ rule: AutomationRule) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack {
+                Text(rule.name).font(.body.weight(.medium))
+                Spacer()
+                if !rule.isEnabled {
+                    Text("Paused").font(.caption2).foregroundStyle(.orange)
+                }
+            }
+            Text(rule.trigger.title)
+                .font(.caption).foregroundStyle(.secondary)
+            HStack(spacing: 14) {
+                Button { store.vote(id: rule.id, up: true) } label: {
+                    Label("\(rule.score)", systemImage: "hand.thumbsup")
+                        .font(.caption)
+                }
+                .buttonStyle(.borderless)
+                Button { store.vote(id: rule.id, up: false) } label: {
+                    Image(systemName: "hand.thumbsdown").font(.caption)
+                }
+                .buttonStyle(.borderless)
+                if let last = rule.lastFiredAt {
+                    Text(last, style: .relative)
+                        .font(.caption2).foregroundStyle(.tertiary)
+                }
+            }
+        }
+        // 以前被 3 个 👎 暂停后就再也开不回来了:右滑暂停 / 恢复。
+        .swipeActions(edge: .leading) {
+            if rule.isEnabled {
+                Button("暂停") { store.setEnabled(id: rule.id, false) }.tint(.orange)
+            } else {
+                Button("恢复") { store.setEnabled(id: rule.id, true) }.tint(.green)
+            }
+        }
     }
 }
 
@@ -85,7 +97,12 @@ private struct AutomationEditSheet: View {
                                 .multilineTextAlignment(.trailing)
                         }
                         if model.capturedLocation == nil {
-                            Text("Current location is captured when you save.")
+                            Text(model.locationDenied
+                                 ? "没有定位权限:在系统设置里给 LeoPhoneAgent 打开定位,才能按地点触发。"
+                                 : "正在获取当前位置…拿到后才能保存。")
+                                .font(.caption).foregroundStyle(model.locationDenied ? .orange : .secondary)
+                        } else {
+                            Text("已记下当前位置(半径 200 米)。")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     }
@@ -145,12 +162,17 @@ private final class AutomationEditModel: NSObject, ObservableObject, CLLocationM
 
     private let locationManager = CLLocationManager()
 
+    /// 没有定位权限:地点规则存不了,界面要说明原因,不能只把「保存」置灰。
+    @Published var locationDenied = false
+    private var locationRetries = 0
+
     func prepare() {
         locationManager.delegate = self
-        if locationManager.authorizationStatus == .notDetermined {
-            locationManager.requestWhenInUseAuthorization()
+        switch locationManager.authorizationStatus {
+        case .notDetermined: locationManager.requestWhenInUseAuthorization()
+        case .denied, .restricted: locationDenied = true
+        default: locationManager.requestLocation()
         }
-        locationManager.requestLocation()
     }
 
     var canSave: Bool {
@@ -190,5 +212,23 @@ private final class AutomationEditModel: NSObject, ObservableObject, CLLocationM
         Task { @MainActor in self.capturedLocation = latest }
     }
 
-    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {}
+    // 以前授权弹窗点了「允许」也不会再去定位,定位失败也不重试,「保存」一直是灰的。
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let status = manager.authorizationStatus
+        Task { @MainActor in
+            self.locationDenied = status == .denied || status == .restricted
+            if status == .authorizedWhenInUse || status == .authorizedAlways, self.capturedLocation == nil {
+                self.locationManager.requestLocation()
+            }
+        }
+    }
+
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        Task { @MainActor in
+            guard !self.locationDenied, self.capturedLocation == nil, self.locationRetries < 3 else { return }
+            self.locationRetries += 1
+            try? await Task.sleep(for: .seconds(2))
+            self.locationManager.requestLocation()
+        }
+    }
 }

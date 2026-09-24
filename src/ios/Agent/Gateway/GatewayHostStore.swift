@@ -81,11 +81,25 @@ final class GatewayHostStore: ObservableObject {
 
     var activeHosts: [GatewayHost] { hosts.filter(\.isEnabled) }
 
-    func upsertDiscovered(_ machines: [RelayDiscoveredMachine], key: String, apiRoot: String = RelayMachinesClient.defaultApiRoot) {
+    /// 你删掉的机器:中继刷新时不再自动加回来(以前一下拉刷新就又出现了)。
+    /// 手动添加、扫码、一键添加这类明确的操作会把它恢复(explicit: true)。
+    private static let deletedKey = "leo.gatewayHosts.deleted.v1"
+    private var deletedIds: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: Self.deletedKey) ?? []) }
+        set { UserDefaults.standard.set(Array(newValue), forKey: Self.deletedKey) }
+    }
+
+    func upsertDiscovered(_ machines: [RelayDiscoveredMachine], key: String,
+                          apiRoot: String = RelayMachinesClient.defaultApiRoot, explicit: Bool = false) {
         var changed = false
         for machine in machines {
             guard let name = RelayMachinesClient.sanitizeMachine(machine.name) else { continue }
             let id = name.lowercased()
+            if explicit {
+                deletedIds.remove(id)
+            } else if deletedIds.contains(id) {
+                continue
+            }
             let harness = RelayMachinesClient.harnessURL(for: name, apiRoot: apiRoot)
             // [T-relay-keychain-churn] 只在密钥真的变了时才写 Keychain。
             // 原来每台机器无条件写一次:下拉刷新一下就把每台主机的
@@ -130,6 +144,7 @@ final class GatewayHostStore: ObservableObject {
     }
 
     func upsert(_ host: GatewayHost) {
+        deletedIds.remove(host.id)
         if let index = hosts.firstIndex(where: { $0.id == host.id }) {
             hosts[index] = host
         } else {
@@ -141,6 +156,7 @@ final class GatewayHostStore: ObservableObject {
     }
 
     func delete(id: String) {
+        deletedIds.insert(id)
         hosts.removeAll { $0.id == id }
         clients.removeValue(forKey: id)
         Self.deleteKey(hostId: id)

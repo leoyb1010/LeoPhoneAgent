@@ -63,7 +63,7 @@ struct AgentTimelineView: View {
             if let tool = event.toolName, !tool.isEmpty {
                 title = AgentToolPresentation.displayName(for: tool)
             } else {
-                title = event.phase.rawValue.capitalized
+                title = event.phase.activityTitle
             }
             let symbol: String
             if let tool = event.toolName, !tool.isEmpty {
@@ -73,7 +73,7 @@ struct AgentTimelineView: View {
             }
             let subtitle = timeFormatter.string(from: event.at)
                 + " · " + String(event.sessionId.prefix(8))
-            let warning = event.reason.map { String(describing: $0) }
+            let warning = event.reason.map { $0.activityDescription }
             let row = Row(id: event.id, sessionId: event.sessionId,
                           symbol: symbol, title: title,
                           subtitle: subtitle, warning: warning)

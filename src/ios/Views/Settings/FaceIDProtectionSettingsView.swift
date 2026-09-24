@@ -17,7 +17,7 @@ struct FaceIDProtectionSettingsView: View {
     @AppStorage(SessionLockDefaultsKey.enabled) private var enabled: Bool = false
     @AppStorage(SessionLockDefaultsKey.idleSeconds) private var idleSeconds: Int = 300
     @AppStorage(SessionLockDefaultsKey.appLockEnabled) private var appLockEnabled: Bool = false
-    @AppStorage(SessionLockDefaultsKey.appLockIdleSeconds) private var appLockIdleSeconds: Int = -1
+    @AppStorage(SessionLockDefaultsKey.appLockIdleSeconds) private var appLockIdleSeconds: Int = 3600  // 与 SessionLockStore 的默认一致(1 小时)
 
     var body: some View {
         Form {

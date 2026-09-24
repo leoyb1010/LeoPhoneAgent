@@ -450,12 +450,22 @@ enum SystemPromptBuilder {
             return "\n\nResponse style (from SOUL.md `style` — apply to every reply unless the user explicitly asks otherwise; if it prescribes a reply language, it overrides the default match-the-user's-language rule):\n\(s)"
         }
 
+        // SOUL.md 的 `lang`(设置 → Soul → 语言):以前存下来却从没告诉模型,选了等于没选。
+        // 自动 = 跟着你说的语言回;中文 / English = 固定用这种语言回(你当场要求别的语言时除外)。
+        let languageBlock: String = {
+            switch (file?.metadata.lang ?? "auto").lowercased() {
+            case "zh": return "\n\nReply language (from SOUL.md `lang`): always reply in Simplified Chinese, unless the user explicitly asks for another language."
+            case "en": return "\n\nReply language (from SOUL.md `lang`): always reply in English, unless the user explicitly asks for another language."
+            default: return ""
+            }
+        }()
+
         guard let body = file?.body else {
-            return identityTrimmed + styleBlock(style) + "\n\n" + soulEditHint + "\n\n"
+            return identityTrimmed + styleBlock(style) + languageBlock + "\n\n" + soulEditHint + "\n\n"
         }
         let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            return identityTrimmed + styleBlock(style) + "\n\n" + soulEditHint + "\n\n"
+            return identityTrimmed + styleBlock(style) + languageBlock + "\n\n" + soulEditHint + "\n\n"
         }
 
         // Reject (NOT truncate) bodies that exceed the language-aware
@@ -471,7 +481,7 @@ enum SystemPromptBuilder {
         let check = SoulStore.isOverLimit(trimmed)
         guard !check.isOverLimit else {
             Self.logger.warning("[Soul] personality body is over the language-aware limit (\(check)) — falling back to identity-only system prompt.")
-            return identityTrimmed + styleBlock(style) + "\n\n" + soulEditHint + "\n\n"
+            return identityTrimmed + styleBlock(style) + languageBlock + "\n\n" + soulEditHint + "\n\n"
         }
 
         let personality = scrubInjections(trimmed)
@@ -482,6 +492,7 @@ enum SystemPromptBuilder {
             + "\n\nPersonality (from SOUL.md — your character and voice; defer to the user's latest message when it conflicts with anything here):\n"
             + personality
             + styleBlock(style)
+            + languageBlock
             + "\n\n"
             + soulEditHint
             + "\n\n"

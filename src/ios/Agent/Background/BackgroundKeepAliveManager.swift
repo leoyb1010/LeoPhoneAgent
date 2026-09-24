@@ -62,13 +62,23 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     /// Reactive: all inputs are @Published on this ObservableObject, so the
     /// Settings row re-renders on toggle/permission changes automatically.
     var survivalTier: BackgroundSurvivalTier {
-        let locationLeg = enhancedBackgroundEnabled
+        let locationLeg = enhancedBackgroundEnabled && locationTrackingEnabled
             && (locationAuthStatus == .authorizedAlways || locationAuthStatus == .authorizedWhenInUse)
         let audioLeg = backgroundSpeakEnabled
         if locationLeg || audioLeg {
             return .extended(location: locationLeg, audio: audioLeg)
         }
         return .short
+    }
+
+    /// 「位置追踪」从没动过的:按以前的实际行为算(开着「增强后台运行」就会用定位心跳),只迁移这一次;
+    /// 之后你关掉它,后台就真的不再用定位。
+    private static func initialLocationTracking() -> Bool {
+        let defaults = UserDefaults.standard
+        if let stored = defaults.object(forKey: "locationTrackingEnabled") as? Bool { return stored }
+        let migrated = defaults.bool(forKey: "enhancedBackgroundExecution")
+        defaults.set(migrated, forKey: "locationTrackingEnabled")
+        return migrated
     }
 
     @Published var enhancedBackgroundEnabled: Bool = UserDefaults.standard.bool(forKey: "enhancedBackgroundExecution") {
@@ -88,7 +98,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         }
     }
 
-    @Published var locationTrackingEnabled: Bool = UserDefaults.standard.bool(forKey: "locationTrackingEnabled") {
+    @Published var locationTrackingEnabled: Bool = BackgroundKeepAliveManager.initialLocationTracking() {
         didSet { UserDefaults.standard.set(locationTrackingEnabled, forKey: "locationTrackingEnabled") }
     }
 
@@ -505,6 +515,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.evaluateLocationUpdates()
+                self?.evaluateBackgroundActivitySession()
             }
             .store(in: &cancellables)
 
@@ -1032,7 +1043,8 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         // system location indicator) only starts 15s AFTER backgrounding, never
         // in the foreground. This gives a grace window so brief background blips
         // don't flash the indicator, and keeps the foreground free of location.
-        let shouldRun = isActive && enhancedBackgroundEnabled && hasPermission
+        // 「位置追踪」关着就不在后台用定位(以前这条只看「增强后台运行」,关掉位置追踪也照样用)。
+        let shouldRun = isActive && enhancedBackgroundEnabled && locationTrackingEnabled && hasPermission
             && appIsInBackground && backgroundLocationArmed
 
         // Singleton by construction: this manager is a `.shared` instance and

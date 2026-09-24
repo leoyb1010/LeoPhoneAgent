@@ -91,6 +91,15 @@ final class AutomationStore: ObservableObject {
         AutomationEngine.shared.reloadMonitoring()
     }
 
+    /// 手动暂停 / 恢复。恢复时把评分清零,免得再点一次 👎 又被自动暂停。
+    func setEnabled(id: String, _ enabled: Bool) {
+        guard let index = rules.firstIndex(where: { $0.id == id }), rules[index].isEnabled != enabled else { return }
+        rules[index].isEnabled = enabled
+        if enabled { rules[index].score = max(rules[index].score, 0) }
+        persist()
+        AutomationEngine.shared.reloadMonitoring()
+    }
+
     func vote(id: String, up: Bool) {
         guard let index = rules.firstIndex(where: { $0.id == id }) else { return }
         rules[index].score += up ? 1 : -1

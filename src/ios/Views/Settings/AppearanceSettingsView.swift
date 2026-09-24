@@ -155,11 +155,11 @@ struct AppearanceSettingsView: View {
             }
 
             Section {
-                Toggle("显示家页主动卡", isOn: $homeCardsEnabled)
+                Toggle("首页显示「Mac 进行中」", isOn: $homeCardsEnabled)
             } header: {
-                Text("主动卡")
+                Text("Mac 进行中")
             } footer: {
-                Text("会话列表最多三张：正在执行、等待审批、最可能需要的动作。关掉后一张都不显示。")
+                Text("在首页会话列表上方显示 Mac 上正在跑、或等你审批的任务。关掉后首页不显示,任务照常在 Mac 控制台里。")
             }
 
             Section {

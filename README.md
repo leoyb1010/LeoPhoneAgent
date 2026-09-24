@@ -1,6 +1,6 @@
 # LeoPhoneAgent
 
-[![iOS](https://img.shields.io/badge/iOS-1.36.0%20(111)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![iOS](https://img.shields.io/badge/iOS-1.42.4%20(124)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
 [![macOS](https://img.shields.io/badge/macOS-1.85.0-7C3AED.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/v1.85.0)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.17-D94B16.svg)](src/harmony/app/AppScope/app.json5)
@@ -150,7 +150,13 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 版本/构建:`1.38.0 (113)`;Bundle ID `com.leoyuan.leophoneagent`
+- 版本/构建:`1.42.4 (124)`;Bundle ID `com.leoyuan.leophoneagent`
+- 1.42.x:ChatGPT 登录读 Codex 实时模型目录(GPT-6-Astra / Sol / Luna);「全自动」在输入框上方一点即开(另有 `/auto`);
+  一轮丝滑改造 —— 新对话不再重铺 rootfs 覆盖层、语音电平独立刷新(≤30 Hz)、首页输入/搜索打字不重算会话列表、
+  键盘弹起时消息列表贴底、回前台不在第一帧同步查钥匙串;能力自检可真发一句话测每个供应商。
+  设置逐项说到做到(权限显示同步、位置追踪开关生效、Soul 语言生效、中文界面不再漏英文)。
+  经 3 轮对抗审查(独立审查员 + 真机自检 / 截图 / perf 日志)逐条修复
+- 1.39–1.41:手机开 LeoPhoneAgent 1.2 Mac 上的任务(审批、全自动、续传、接管 Mac 桌面任务);设置页逐页中文化与打磨
 - 1.38.0:会话行缩放转场;系统 `sensoryFeedback` 触感;长文本粘贴折叠为 `[Pasted#N]`(发送时展开);用户消息「从此处删除」;上翻时「↓ 新消息」胶囊;闹钟/命令面板半屏停靠。经 3 路审计 + 逐条反驳,13 条确认项已修
 - 1.37.0:冷启动回到退出时的页面;面容默认一小时免重复;出图模型直接在对话里回图(Gemini inlineData / OpenAI image_generation / delta.images);首页「系统快捷」可选按钮(手电筒 / 亮度 / 剪贴板 / 设备信息)
 - iPhone / iPad 本机动作：剪贴板读写和设备信息直接走系统能力，写入后读回核对；
@@ -167,6 +173,12 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
   借用登录」三条入口统一使用 `api.x.ai/v1`；内置完整目录不会因在线模型查询失败而缩减
 - 更新机制:每次发版内置更新说明,首启弹「本次更新」卡(发版铁律见
   [CLAUDE.md](CLAUDE.md))
+
+## 当前 Mac 桌面端(LeoPhoneAgent 1.x)
+
+- 版本:`1.2.4`(ZCode 内核,源码在 `src/mac/leophone/`,Apache-2.0,见其 LICENSE / NOTICE);
+  Developer ID 签名 + Apple 公证,本机安装;尚未发布到 GitHub Releases(旧的 leocodebox 2.x 只作回退)
+- Leo Link:手机经中继在 Mac 上开任务、流式看进度、审批、全自动、停止、断线续传,并能接着做 Mac 桌面上开的任务
 
 ## 当前 Android 版本
 

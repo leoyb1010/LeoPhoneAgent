@@ -210,7 +210,7 @@ struct EnhancedBackgroundSettingsView: View {
     // MARK: - Voice Picker
 
     @ViewBuilder
-    private func voicePicker(label: String, language: String, selection: Binding<String>) -> some View {
+    private func voicePicker(label: LocalizedStringKey, language: String, selection: Binding<String>) -> some View {
         let voices = AVSpeechSynthesisVoice.speechVoices()
             .filter { $0.language.hasPrefix(language) }
             .sorted { $0.name < $1.name }

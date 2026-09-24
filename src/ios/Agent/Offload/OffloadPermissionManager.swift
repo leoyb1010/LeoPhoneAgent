@@ -323,6 +323,8 @@ final class OffloadPermissionManager: ObservableObject {
     }
 
     func setPermissionLevel(_ level: OffloadPermissionLevel, for command: String, action: String? = nil) {
+        // 通知界面:权限页、能力中心、详情页三处都显示这个值,改了一处其他地方要跟着变。
+        objectWillChange.send()
         defaults.set(level.rawValue, forKey: defaultsKey(for: command, action: action))
         // A settings change invalidates prior grants immediately, including a
         // decision already visible in the sheet. The continuation rechecks too.
@@ -343,7 +345,8 @@ final class OffloadPermissionManager: ObservableObject {
 
     /// 自检保留的 id:不能被 minis-sessions-cli、深链当成聊天会话打开或发消息。
     nonisolated static func isReservedSessionId(_ id: String) -> Bool {
-        id.hasPrefix(selfTestSessionPrefix)
+        // 和 authorize 一样先去掉首尾空白再比,不能靠前面加个空格绕过去。
+        id.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix(selfTestSessionPrefix)
     }
 
     func setAllBypass() {
@@ -380,7 +383,11 @@ final class OffloadPermissionManager: ObservableObject {
         if level == .notAllowed { return .disabled }
         // 能力自检:你按了「开始自检」,跑的是 App 内置的只读探测(会话 id 由宿主发放,Agent 冒充不了),
         // 不再逐项等审批——以前审批框弹不到设置页上面,每项干等 25 秒后报「在等系统授权」。
-        if sid == Self.selfTestSessionId, CapabilitySelfTest.shared.isRunning { return .allowed }
+        // 只放行自检自己那几条只读探测的 (命令, 动作);同一会话里别的命令照常审批。
+        if sid == Self.selfTestSessionId, CapabilitySelfTest.shared.isRunning,
+           CapabilitySelfTest.probeScopes.contains("\(invocation.command).\(invocation.action)") {
+            return .allowed
+        }
         // [T-full-auto] 全自动:「询问」一律放行;你设成「不允许」的上面已经挡掉。
         // 只对正在跑的 Agent 回合生效:你自己在终端里敲(或被链接预填)的命令照旧先问。
         if FullAutoGate.isOn, let sid, SessionActivityTracker.shared.isActive(sid) {

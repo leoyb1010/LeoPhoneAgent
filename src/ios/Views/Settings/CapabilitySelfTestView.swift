@@ -45,6 +45,15 @@ final class CapabilitySelfTest: ObservableObject {
         checks = Self.staticChecks()
     }
 
+    /// 自检探测命令对应的 (命令.动作),权限层只对这些免审批(见 OffloadPermissionManager.authorize)。
+    static let probeScopes: Set<String> = Set(staticChecks().compactMap { check in
+        guard let command = check.command else { return nil }
+        let parts = command.split(separator: " ").map(String.init)
+        guard let name = parts.first, name.hasPrefix("apple-") else { return nil }
+        let invocation = OffloadPermissionInvocation(command: name, arguments: Array(parts.dropFirst()))
+        return "\(invocation.command).\(invocation.action)"
+    })
+
     private static func staticChecks() -> [Check] {
         func c(_ id: String, _ group: String, _ title: String, _ command: String) -> Check {
             Check(id: id, group: group, title: title, command: command)
