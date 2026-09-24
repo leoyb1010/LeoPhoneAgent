@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 
 import { LEO_HTTP_PORT, leoLocalKey } from "./leoPaths.js";
@@ -13,7 +14,6 @@ import {
 } from "./oauthRuntime.js";
 import { executeTreasuryTool, TREASURY_TOOLS } from "./treasuryTools.js";
 import type { TreasuryStore } from "./treasuryStore.js";
-import type { TelegramChannel } from "./telegram.js";
 
 type Logger = { info: (msg: string, meta?: unknown) => void; warn: (msg: string, meta?: unknown) => void };
 
@@ -23,16 +23,19 @@ type Logger = { info: (msg: string, meta?: unknown) => void; warn: (msg: string,
  */
 export function startLeoHttpApi(deps: {
   store: TreasuryStore;
-  telegram: TelegramChannel;
   logger: Logger;
   /** 订阅账号登录 / 退出后,重新同步模型清单。 */
   onSubscriptionChanged: () => void;
-  /** 端口绑定成功:只有抢到端口的那个 Host 才启动 Telegram、登记 MCP、同步订阅模型。 */
+  /** 端口绑定成功:只有抢到端口的那个 Host 才启动手机连接、登记 MCP、同步订阅模型。 */
   onListening: () => void;
   /** 端口被别的窗口的 Host 占着。 */
   onPortBusy: () => void;
 }): Server {
   const key = leoLocalKey();
+  // 钥匙比对用常数时间:先各自哈希成等长,再 timingSafeEqual,长度差也不泄露。
+  const expected = createHash("sha256").update(`Bearer ${key}`).digest();
+  const authorized = (header: string | undefined): boolean =>
+    timingSafeEqual(createHash("sha256").update(header ?? "").digest(), expected);
 
   const readBody = (req: IncomingMessage): Promise<Record<string, unknown>> =>
     new Promise((resolve) => {
@@ -127,10 +130,10 @@ export function startLeoHttpApi(deps: {
       }
 
       if (url.pathname === "/api/leo/health") {
-        json(res, 200, { ok: true, treasuryItems: deps.store.count(), telegram: deps.telegram.status() });
+        json(res, 200, { ok: true, treasuryItems: deps.store.count() });
         return;
       }
-      if (req.headers.authorization !== `Bearer ${key}`) {
+      if (!authorized(req.headers.authorization)) {
         json(res, 401, { error: "unauthorized" });
         return;
       }
@@ -155,19 +158,6 @@ export function startLeoHttpApi(deps: {
         } catch (error) {
           json(res, 400, { error: String(error) });
         }
-        return;
-      }
-      if (url.pathname === "/api/leo/telegram" && req.method === "GET") {
-        json(res, 200, deps.telegram.status());
-        return;
-      }
-      if (url.pathname === "/api/leo/telegram" && req.method === "PUT") {
-        deps.telegram.update((await readBody(req)) as never);
-        json(res, 200, deps.telegram.status());
-        return;
-      }
-      if (url.pathname === "/api/leo/telegram/pairing" && req.method === "POST") {
-        json(res, 200, { code: deps.telegram.newPairingCode() });
         return;
       }
       json(res, 404, { error: "not found" });

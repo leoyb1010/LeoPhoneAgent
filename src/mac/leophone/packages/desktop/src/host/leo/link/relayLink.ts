@@ -1,0 +1,291 @@
+import { execFile, spawn } from "node:child_process";
+import { promisify } from "node:util";
+
+import WebSocket from "ws";
+
+import type { LinkBridge, LinkRequest } from "./bridge.js";
+import type { HarnessEvent } from "./journal.js";
+import type { Caller, CallerKind } from "./session.js";
+
+type Logger = { info: (msg: string, meta?: unknown) => void; warn: (msg: string, meta?: unknown) => void };
+
+export type RelayConfig = {
+  /** wss://…/relay/agent */
+  wsUrl: string;
+  /** 本机在中继里的名字(和 leoagent 一样取短主机名),手机按它找到这台 Mac。 */
+  name: string;
+  /** 首次注册用的钥匙:中继 0.1 的主钥匙,或 0.2 的 Mac 注册钥匙。 */
+  registerKey: string;
+};
+
+export type MachineKeyStore = { get(): Promise<string | null>; set(key: string): Promise<void> };
+
+const PING_INTERVAL_MS = 25_000;
+const PONG_TIMEOUT_MS = 75_000;
+const STREAM_KEEPALIVE_MS = 25_000;
+const OUTBOX_LIMIT = 200;
+const CALLER_KINDS = new Set<CallerKind>(["iphone", "legacy", "master"]);
+
+/** 中继 0.2 转发时附带调用方;0.1 没有,记成 unknown。 */
+export function callerFrom(frame: Record<string, unknown>): Caller {
+  const raw = frame["caller"];
+  if (!raw || typeof raw !== "object") return { kind: "unknown" };
+  const obj = raw as Record<string, unknown>;
+  const kind = String(obj["kind"] ?? "") as CallerKind;
+  return {
+    kind: CALLER_KINDS.has(kind) ? kind : "unknown",
+    ...(obj["device_id"] ? { deviceId: String(obj["device_id"]) } : {}),
+    ...(obj["name"] ? { name: String(obj["name"]) } : {}),
+  };
+}
+
+/**
+ * [leo-link] 挂到自营中继上的出站 WebSocket(移植自 leocodebox relay-client.service.ts)。
+ * 帧协议与 relay.py 对偶:register / registered / http / resp / stream_open / stream_data /
+ * stream_keepalive / stream_close / stream_cancel / event。
+ * 与旧版的区别:请求在进程内交给 LinkBridge,不再绕本机 HTTP;注册时要求钉扎机器名(0.2),
+ * 领到的机器专属钥匙存进钥匙串,之后只用它注册。
+ */
+export class RelayLink {
+  private stopped = false;
+  private activeWs: WebSocket | null = null;
+  private readonly outbox: Record<string, unknown>[] = [];
+  private readonly streamAborts = new Map<string, AbortController>();
+
+  constructor(
+    private readonly config: RelayConfig,
+    private readonly bridge: LinkBridge,
+    private readonly machineKeys: MachineKeyStore,
+    private readonly logger: Logger,
+    private readonly appVersion: string | null,
+  ) {}
+
+  start(): void {
+    void this.runForever();
+  }
+
+  stop(): void {
+    this.stopped = true;
+    try {
+      this.activeWs?.terminate();
+    } catch {
+      // 已经断了
+    }
+  }
+
+  /** 已落盘的审批与终态推给中继(它决定发不发 APNs);断线时攒着,重连补发,超限丢最旧的。 */
+  pushEvent(event: HarnessEvent): void {
+    const frame = { type: "event", machine: this.config.name, event };
+    const ws = this.activeWs;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(JSON.stringify(frame));
+        return;
+      } catch {
+        // 落进 outbox
+      }
+    }
+    this.outbox.push(frame);
+    while (this.outbox.length > OUTBOX_LIMIT) this.outbox.shift();
+  }
+
+  private async runForever(): Promise<void> {
+    let backoff = 1;
+    while (!this.stopped) {
+      try {
+        await this.runOnce();
+        backoff = 1;
+      } catch (error) {
+        this.logger.warn("[leo/link] relay disconnected", { error: error instanceof Error ? error.message : String(error) });
+      }
+      if (this.stopped) break;
+      await new Promise((resolve) => setTimeout(resolve, backoff * 1000));
+      backoff = Math.min(backoff * 2, 30);
+    }
+  }
+
+  private async runOnce(): Promise<void> {
+    const machineKey = await this.machineKeys.get();
+    await new Promise<void>((resolve, reject) => {
+      const ws = new WebSocket(this.config.wsUrl, { handshakeTimeout: 15_000 });
+      this.activeWs = ws;
+      let lastPong = Date.now();
+      let pingTimer: NodeJS.Timeout | null = null;
+      let settled = false;
+
+      const finish = (error?: Error) => {
+        if (settled) return;
+        settled = true;
+        if (pingTimer) clearInterval(pingTimer);
+        if (this.activeWs === ws) this.activeWs = null;
+        for (const controller of this.streamAborts.values()) controller.abort();
+        this.streamAborts.clear();
+        try {
+          ws.terminate();
+        } catch {
+          // already closed
+        }
+        if (error) reject(error);
+        else resolve();
+      };
+
+      ws.on("open", () => {
+        ws.send(JSON.stringify({
+          type: "register",
+          name: this.config.name,
+          key: machineKey ?? this.config.registerKey,
+          // 中继 0.2:首次注册领取机器专属钥匙,名字从此只认它;0.1 忽略这个字段。
+          pin: true,
+          info: { platform: "leoagent", server: "leophoneagent", version: this.appVersion },
+        }));
+        lastPong = Date.now();
+        pingTimer = setInterval(() => {
+          if (Date.now() - lastPong > PONG_TIMEOUT_MS) {
+            finish(new Error("relay heartbeat lost"));
+            return;
+          }
+          try {
+            ws.ping();
+          } catch {
+            // closing
+          }
+        }, PING_INTERVAL_MS);
+      });
+      ws.on("pong", () => {
+        lastPong = Date.now();
+      });
+      ws.on("ping", () => {
+        lastPong = Date.now();
+      });
+
+      ws.on("message", (data) => {
+        let frame: Record<string, unknown>;
+        try {
+          frame = JSON.parse(String(data)) as Record<string, unknown>;
+        } catch {
+          return;
+        }
+        switch (frame["type"]) {
+          case "registered":
+            this.logger.info("[leo/link] connected to relay", { name: this.config.name });
+            if (typeof frame["machine_key"] === "string" && frame["machine_key"]) {
+              void this.machineKeys.set(frame["machine_key"]).catch((error: unknown) =>
+                this.logger.warn("[leo/link] storing machine key failed", { error: String(error) }));
+            }
+            this.flushOutbox(ws);
+            break;
+          case "http":
+            void this.handleHttp(ws, frame);
+            break;
+          case "stream_open":
+            void this.handleStream(ws, frame);
+            break;
+          case "stream_cancel":
+            this.streamAborts.get(String(frame["id"]))?.abort();
+            break;
+          default:
+            break;
+        }
+      });
+      ws.on("close", (code, reason) => {
+        finish(new Error(`relay closed (${code}${reason?.length ? ` ${reason.toString()}` : ""})`));
+      });
+      ws.on("error", (error) => finish(error instanceof Error ? error : new Error(String(error))));
+    });
+  }
+
+  private send(ws: WebSocket, frame: Record<string, unknown>): void {
+    if (ws.readyState !== WebSocket.OPEN) return;
+    try {
+      ws.send(JSON.stringify(frame));
+    } catch {
+      // 连接正在关;手机会重试
+    }
+  }
+
+  private flushOutbox(ws: WebSocket): void {
+    const pending = this.outbox.splice(0, this.outbox.length);
+    for (const frame of pending) {
+      if (ws.readyState !== WebSocket.OPEN) {
+        this.outbox.push(frame);
+        continue;
+      }
+      this.send(ws, frame);
+    }
+  }
+
+  private request(frame: Record<string, unknown>): LinkRequest {
+    const requestId = typeof frame["request_id"] === "string" && frame["request_id"] ? frame["request_id"] : undefined;
+    return {
+      method: String(frame["method"] ?? "GET"),
+      path: String(frame["path"] ?? "/"),
+      body: frame["body"],
+      caller: callerFrom(frame),
+      ...(requestId ? { requestId } : {}),
+    };
+  }
+
+  private async handleHttp(ws: WebSocket, frame: Record<string, unknown>): Promise<void> {
+    const id = frame["id"];
+    try {
+      const response = await this.bridge.handle(this.request(frame));
+      this.send(ws, { type: "resp", id, status: response.status, body: response.body });
+    } catch (error) {
+      this.send(ws, {
+        type: "resp",
+        id,
+        status: 500,
+        body: { error: { message: error instanceof Error ? error.message : String(error) } },
+      });
+    }
+  }
+
+  private async handleStream(ws: WebSocket, frame: Record<string, unknown>): Promise<void> {
+    const id = String(frame["id"]);
+    const controller = new AbortController();
+    this.streamAborts.set(id, controller);
+    // 经 NAT / 代理的长连接要有心跳;中继把它转成 SSE 注释帧。
+    const keepAlive = setInterval(() => this.send(ws, { type: "stream_keepalive", id }), STREAM_KEEPALIVE_MS);
+    try {
+      await this.bridge.stream(this.request(frame), (data) => this.send(ws, { type: "stream_data", id, data }), controller.signal);
+    } catch (error) {
+      if (!controller.signal.aborted) this.logger.warn("[leo/link] stream failed", { error: String(error) });
+    } finally {
+      clearInterval(keepAlive);
+      this.streamAborts.delete(id);
+      this.send(ws, { type: "stream_close", id });
+    }
+  }
+}
+
+/**
+ * 机器专属钥匙存 macOS 钥匙串。写入走 `security -i` 的标准输入,钥匙不出现在
+ * 命令行参数里(`ps` 看不到);Host 进程没有别的钥匙串通道。
+ */
+export function keychainMachineKeyStore(account: string, service = "com.leoyuan.leophoneagent.link"): MachineKeyStore {
+  const run = promisify(execFile);
+  return {
+    async get() {
+      try {
+        const { stdout } = await run("/usr/bin/security", ["find-generic-password", "-s", service, "-a", account, "-w"]);
+        const key = stdout.trim();
+        return key || null;
+      } catch {
+        return null;
+      }
+    },
+    async set(key: string) {
+      if (!/^[A-Za-z0-9_\-.~+/=]{16,512}$/.test(key)) throw new Error("unexpected machine key format");
+      await new Promise<void>((resolve, reject) => {
+        const child = spawn("/usr/bin/security", ["-i"], { stdio: ["pipe", "ignore", "pipe"] });
+        let stderr = "";
+        child.stderr.on("data", (chunk) => {
+          stderr += String(chunk);
+        });
+        child.on("error", reject);
+        child.on("close", (code) => (code === 0 && !stderr.trim() ? resolve() : reject(new Error(stderr.trim() || `security exited ${code}`))));
+        child.stdin.end(`add-generic-password -U -s "${service}" -a "${account}" -w "${key}"\n`);
+      });
+    },
+  };
+}

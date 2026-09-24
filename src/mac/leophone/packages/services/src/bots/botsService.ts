@@ -91,6 +91,7 @@ import {
   normalizeBotCurrentOptions,
 } from "./config.js";
 import { BOT_MENU_COMMAND_ORDER } from "./commandOrder.js";
+import { filterBotPermissionOptions, LEO_BOT_FORCED_MODE } from "./leoBotPolicy.js";
 import { parseBotCommand } from "./commandParser.js";
 import { BotsRepo } from "./repo.js";
 import type {
@@ -659,8 +660,9 @@ function delay(ms: number): Promise<void> {
 }
 
 const DEFAULT_BOT_ZCODE_PROVIDER: ZCodeProvider = ZCODE_AGENT_PROVIDER;
-// Bot 模式硬锁 yolo：所有 bot task 一律免交互权限，且禁止通过 /mode 切换运行模式。
-const BOT_FORCED_MODE = "yolo";
+// [leo] 上游硬锁 yolo(免审批);LeoPhoneAgent 改成 build,危险动作要批,见 leoBotPolicy.ts。
+// 仍禁止通过 /mode 切换运行模式。
+const BOT_FORCED_MODE = LEO_BOT_FORCED_MODE;
 const BOT_TYPING_INTERVAL_MS = 4_000;
 const BOT_TASK_META_RETRY_DELAYS_MS = [80, 160, 320] as const;
 const BOT_WORKSPACE_REFS_CACHE_TTL_MS = 5_000;
@@ -3990,7 +3992,10 @@ export function createBotsService(
         });
         // Bugfix: UI 会把 ZCode Agent 原始权限选项规整成“允许/始终允许/拒绝”的固定顺序和文案；
         // 机器人之前直接展示 provider 原始英文 name，还额外加取消按钮，导致同一个权限请求在飞书和 UI 看起来不一致。
-        const permissionOptions = sortBotPermissionOptions(event.options);
+        // [leo] 聊天里只能批只读工具和工作区内改文件,其余只能拒绝;不给项目级「总是允许」。
+        const permissionOptions = sortBotPermissionOptions(
+          filterBotPermissionOptions(event, context.workspacePath),
+        );
         const permissionSelection: SelectionPrompt = {
           id: `permission-${event.requestId}`,
           title: formatBotPermissionRequestSummary(event, {
