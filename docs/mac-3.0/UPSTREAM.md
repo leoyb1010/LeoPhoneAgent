@@ -66,3 +66,11 @@ git -c core.hooksPath=/dev/null subtree pull --prefix=src/mac/leophone \
   - 根 `package.json` 的 `leo:bundle:mac`:固定打开签名(`ZCODE_ENABLE_MAC_SIGN=1`,默认身份 `leo yuan (48H5Y3LNUK)`),不签名就打不出包。
 - 上游 3.14.3 把机器人任务硬锁成 yolo(`services/src/bots/botsService.ts` 的 `BOT_FORCED_MODE`),M1b 会改成 build 并加工具规则,到时记在这里。
 
+## Mac 1.2.0 补丁(2026-09-25,M1b)
+- `packages/services/src/bots/botsService.ts` 两处,同步时必须保留(`services/test/leoBotPolicy.test.ts` 会拦):
+  - `const BOT_FORCED_MODE = LEO_BOT_FORCED_MODE;` —— 机器人任务改为 build,不再免审批。
+  - 权限卡片的选项先过 `filterBotPermissionOptions(event, context.workspacePath)`:聊天里只能批只读工具与工作区内改文件,其余只能拒绝,不给项目级「总是允许」。三处 `respondPermission` 都只认这里留下的选项。
+  - 规则本体在我们自己的 `packages/services/src/bots/leoBotPolicy.ts`。
+- `packages/desktop/src/host/leo/link/` 整个目录是我们的(手机桥接 Leo Link),不涉及上游文件。
+- 自建的 `packages/desktop/src/host/leo/telegram.ts` 已删除,Telegram 改走上游机器人。
+
