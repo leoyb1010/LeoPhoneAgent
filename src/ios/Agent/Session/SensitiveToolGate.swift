@@ -279,7 +279,13 @@ final class SensitiveToolGate: ObservableObject {
     /// - host: 给用户看的目标(站点 / 命令摘要)。
     /// - grantScope: 参与授权键的范围;不传就等同于 host(Cookie 那条路径
     ///   本来就是"按站点授权",host 即 scope)。
-    func authorize(_ category: Category, host: String, grantScope: String? = nil) async -> Outcome {
+    func authorize(_ category: Category, host: String, grantScope: String? = nil,
+                   sessionId: String? = nil) async -> Outcome {
+        // [T-full-auto] 全自动:前台后台一律放行,不弹审批。
+        if FullAutoGate.isOn {
+            FullAutoGate.announce("\(category.humanName) \(host)", sessionId: sessionId)
+            return .allowed
+        }
         let scope = grantScope ?? host
         let key = grantKey(category, scope: scope)
         // 本会话已整体允许
@@ -456,4 +462,29 @@ final class SensitiveToolGate: ObservableObject {
 
 private extension String {
     var nilIfEmpty: String? { isEmpty ? nil : self }
+}
+
+
+/// [T-full-auto] 「全自动」开关的读取和"自动批准"广播。界面、日志在 FullAuto.swift。
+/// 放在这里是因为这个文件同时编进 App 和测试 target,各道闸都能直接用。
+enum FullAutoGate {
+    static let defaultsKey = "permissions.fullAuto.enabled"
+    static let approvedNotification = Notification.Name("LeoFullAutoApproved")
+
+    /// 随时可读(UserDefaults 线程安全)。按设备存,不进任何同步。
+    static var isOn: Bool { UserDefaults.standard.bool(forKey: defaultsKey) }
+
+    /// 全自动期间 Agent 也改不了的配置:改了会降低保护。
+    static let protectedConfigPaths: Set<String> = [
+        "permissions.fullAuto.enabled",
+        "permissions.minisConfig.enabled",
+        "envvars.privacyMode",
+        "background.locationTracking",
+    ]
+
+    static func announce(_ what: String, sessionId: String?) {
+        var info: [String: Any] = ["what": what]
+        if let sessionId { info["sessionId"] = sessionId }
+        NotificationCenter.default.post(name: approvedNotification, object: nil, userInfo: info)
+    }
 }

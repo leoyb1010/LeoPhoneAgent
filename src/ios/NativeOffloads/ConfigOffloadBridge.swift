@@ -593,6 +593,15 @@ private let logger = AppLogger(category: "ConfigOffload")
         let outcome: PendingConfigChange.Outcome
         if skipConfirmation {
             outcome = .approved(items: resolvedItems)
+        } else if FullAutoGate.isOn {
+            // [T-full-auto] 全自动:不弹确认;降低保护的几项 Agent 仍然改不了,直接拒绝、不弹窗。
+            if let blocked = resolvedItems.first(where: { FullAutoGate.protectedConfigPaths.contains($0.path) }) {
+                logger.info("full-auto blocked protected path=\(blocked.path)")
+                return ["ok": false, "error": "permission_denied",
+                        "reason": "「\(blocked.displayName)」是保护项,全自动期间只能你在设置里改。"]
+            }
+            FullAutoGate.announce("修改设置 \(resolvedItems.map(\.path).joined(separator: ", "))", sessionId: nil)
+            outcome = .approved(items: resolvedItems)
         } else {
             let pending = PendingConfigChange(items: resolvedItems, caption: caption)
             logger.info("confirmation requested id=\(pending.id) resolvedItems=\(resolvedItems.count) caption=\(caption ?? "")")

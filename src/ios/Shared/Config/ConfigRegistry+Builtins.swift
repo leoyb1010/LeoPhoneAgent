@@ -748,6 +748,21 @@ extension ConfigRegistry {
                     reason: "Master switch — toggle via Settings → Permissions only")
             }
         ))
+        // [T-full-auto] 全自动开关:Agent 能读(知道为什么不再弹确认),永远写不了。
+        r.register(ClosureField(
+            path: "permissions.fullAuto.enabled",
+            displayName: "Full auto",
+            description: "When ON, the agent runs tasks without asking for confirmation. Read-only here — only the user can toggle it in Settings → Permissions.",
+            valueSchema: .bool,
+            access: .readonly,
+            risk: .destructive,
+            revertable: false,
+            reader: { .bool(FullAutoGate.isOn) },
+            writer: { _ in
+                throw ConfigError.permissionDenied(
+                    reason: "Full auto — toggle via Settings → Permissions only")
+            }
+        ))
     }
 
     // MARK: Appearance & Display

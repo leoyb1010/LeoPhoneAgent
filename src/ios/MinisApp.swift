@@ -110,6 +110,9 @@ struct MinisApp: App {
         // [T-voice-input-mode-preference-ios] Pin the lazy static to the real
         // launch instant.
         _ = Self.processLaunchedAt
+        // [T-perf-1.39] 度量最先起:冷启动计时、回前台首帧、主线程卡顿计数。
+        LeoPerf.start()
+        FullAutoLog.install()
         #if DEBUG
         try? debugServer.start(port: 8321)
         #endif
@@ -121,7 +124,10 @@ struct MinisApp: App {
         // Install the attribute:atIndex:effectiveRange: recorder so the
         // last 10 typesetter attribute queries land in a ring buffer; the
         // HangDetector dump path will print them when a stall fires.
+        // [T-quick-1.39.1] 只在 DEBUG 装:它 swizzle 排版最热的方法,Release 不该付这笔开销。
+        #if DEBUG
         AttributeQueryRecorder.install()
+        #endif
         // Enable in-app language override for String(localized:) and UIKit strings
         Bundle.enableLanguageOverride()
         let lang = UserDefaults.standard.string(forKey: "appLanguage") ?? ""
@@ -137,8 +143,7 @@ struct MinisApp: App {
         // .onAppear refresh) locks the sidebar title to the default even when the
         // user set a custom name. refreshCache() only reads the tiny SOUL.md file.
         SoulStore.refreshCache()
-        // Pre-warm KaTeX WKWebView as fallback for formulas SwiftMath can't render
-        KaTeXRenderer.shared.warmUp()
+        // [T-quick-1.39.1] KaTeX 不再在启动时预热 WKWebView:第一次真遇到公式才建(KaTeXRenderer.render 里懒加载)。
         // Pre-warm the biometric capability probe off the main thread. The
         // first LAContext.canEvaluatePolicy call cold-starts the
         // LocalAuthentication XPC daemon (~500 ms); without this it would run

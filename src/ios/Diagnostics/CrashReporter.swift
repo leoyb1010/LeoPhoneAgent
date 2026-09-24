@@ -403,6 +403,9 @@ final class CrashReporter: NSObject, MXMetricManagerSubscriber {
 
     func didReceive(_ payloads: [MXMetricPayload]) {
         for payload in payloads {
+            if let hangTime = payload.applicationResponsivenessMetrics?.histogrammedApplicationHangTime {
+                LeoPerf.recordHangHistogram(hangTime)
+            }
             guard let exitMetrics = payload.applicationExitMetrics else { continue }
             let fg = exitMetrics.foregroundExitData
             let bg = exitMetrics.backgroundExitData

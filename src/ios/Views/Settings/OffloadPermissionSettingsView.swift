@@ -21,6 +21,7 @@ struct OffloadPermissionSettingsView: View {
 
     var body: some View {
         List {
+            FullAutoSettingsSection()
             Section {
                 NavigationLink {
                     NativeCapabilitiesCenterView()

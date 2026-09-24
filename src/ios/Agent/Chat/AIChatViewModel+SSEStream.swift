@@ -493,6 +493,7 @@ extension AIChatViewModel {
                 }
 
             case .textDelta(let text):
+                LeoPerf.firstToken(LeoPerf.key(self))
                 if let blockIdx = currentTextBlockIdx {
                     result.assistantText += text
 

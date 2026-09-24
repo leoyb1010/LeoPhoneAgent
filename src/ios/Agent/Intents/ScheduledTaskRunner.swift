@@ -68,6 +68,8 @@ enum ScheduledTaskRunner {
             let widgetRequestId = UUID().uuidString
             WidgetQuickTasksStore.beginRun(id: definition.id, requestId: widgetRequestId)
             do {
+                TaskSourceRegistry.setPending(.scheduled)
+                defer { TaskSourceRegistry.setPending(nil) }
                 let result = try await QuickTaskIntent.execute(
                     definition: definition,
                     files: nil,

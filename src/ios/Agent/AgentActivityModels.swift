@@ -37,6 +37,7 @@ enum AgentActivityEventKind: String, Codable, Sendable {
 /// Raw values are stable diagnostic codes, never provider/user-generated text.
 enum AgentActivityReason: String, Codable, CaseIterable, Sendable {
     case permissionApproval = "permission_approval"
+    case autoApproved = "auto_approved"
     case browserTakeover = "browser_takeover"
     case backgroundTimeExpired = "background_time_expired"
     case unexpectedTermination = "unexpected_termination"

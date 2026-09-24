@@ -15,6 +15,7 @@
 //
 
 import Foundation
+import QuartzCore
 
 struct HarnessKind: Sendable, Identifiable, Hashable {
     let key: String
@@ -94,16 +95,21 @@ extension LeoAgentClient {
         var payload: [String: Any] = ["harness": harness, "cwd": cwd]
         if let prompt, !prompt.isEmpty { payload["prompt"] = prompt }
         if let thinking, !thinking.isEmpty { payload["thinking"] = thinking }
+        let sentAt = CACurrentMediaTime()
         let obj = try await postJSON("/harness/sessions", body: payload, service: .harness)
         guard let id = obj["session_id"] as? String else {
             throw GatewayError.malformedResponse("missing session_id")
         }
+        LeoPerf.macSendBegan(id, at: sentAt)
+        LeoPerf.macAck(id)
         return id
     }
 
     func steerHarness(sessionId: String, text: String) async throws {
+        LeoPerf.macSendBegan(sessionId)
         _ = try await postJSON("/harness/sessions/\(sessionId)/send", body: ["text": text],
                                service: .harness)
+        LeoPerf.macAck(sessionId)
     }
 
     /// `approvalId` is the server's own id for the request. Without it the
@@ -178,6 +184,7 @@ extension LeoAgentClient {
                         journal: HarnessJournalStatus.parse(obj) ?? HarnessJournalStatus()))
                     continue
                 }
+                if obj["type"] as? String == "message.delta" { LeoPerf.macDelta(sessionId) }
                 continuation.yield(HarnessEvent(
                     seq: obj["seq"] as? Int ?? 0,
                     event: GatewayEvent.parse(obj), durability: obj["durability"] as? String))

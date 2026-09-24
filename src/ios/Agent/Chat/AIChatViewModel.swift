@@ -2244,6 +2244,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // [T-model-quickswitch] "/model kimi" 是命令不是提问,在这里截住。
         if interceptModelCommand(inputText) { return }
         syncSelectedModelFromBinding()
+        LeoPerf.sendBegan(LeoPerf.key(self))
         // [T-long-paste-fold] Splice folded pastes back in first, so the
         // compact prompts, the stored bubble and the model all see the full text.
         let text = expandPastedBlocks(in: inputText).trimmingCharacters(in: .whitespacesAndNewlines)

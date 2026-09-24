@@ -895,7 +895,9 @@ struct ContentView: View {
     private func withLifecycleHandlers<V: View>(_ content: V) -> some View {
         content
             .task {
+                LeoPerf.coldStep("firstFrame")
                 sessions = await ChatStore.shared.listSessions()
+                LeoPerf.coldStep("listLoaded")
                 let collectionsPending = deepLink.consumePendingCollections()
                     || TreasuryIntentRouteStore.consumeOpen()
                 let shareAlreadyHandled = shareCoordinator.bufferVersion > 0
@@ -986,9 +988,9 @@ struct ContentView: View {
                         } else if !sessions.isEmpty,
                            let latest = sessions.first,
                            Date().timeIntervalSince(latest.updatedAt) > 15 * 60 {
-                            var tx = Transaction()
-                            tx.disablesAnimations = true
-                            withTransaction(tx) { openSession(Self.makeNewSessionId()) }
+                            // [T-quick-1.39.1] 超过 24 小时回来:不再开空白新对话,留在首页、
+                            // 输入框聚焦,上次会话就在列表第一条。
+                            DispatchQueue.main.async { homePromptFocused = true }
                         } else if isWideLayout, let latest = sessions.first {
                             var tx = Transaction()
                             tx.disablesAnimations = true
@@ -2797,6 +2799,7 @@ struct ContentView: View {
     @State private var macChatTarget: MacChatTarget?
     @State private var homePrompt = ""
     @State private var homeExecutionTarget: HomeExecutionTarget = .iphone
+    @FocusState private var homePromptFocused: Bool
     @State private var homeRoutingError: String?
     @State private var homeRoutingInProgress = false
     /// [T-home-sensory-feedback] Bumped when a NATIVE action starts (not the
@@ -3007,6 +3010,8 @@ struct ContentView: View {
                     .font(.subheadline.weight(.semibold))
 
                 TextField("说出目标，例如打开手电筒、记个待办…", text: $homePrompt, axis: .vertical)
+                    .focused($homePromptFocused)
+                    .onAppear { LeoPerf.coldStep("inputReady") }
                     .lineLimit(compact ? 2...4 : 3...6)
                     .textFieldStyle(.plain)
                     .padding(.horizontal, 14)
@@ -3023,6 +3028,7 @@ struct ContentView: View {
 
                 HStack(spacing: 10) {
                     homeTargetMenu
+                    FullAutoBadge()
                     Spacer(minLength: 8)
                     if homeNativeTask != nil {
                         Button("取消") {
@@ -3367,22 +3373,11 @@ struct ContentView: View {
                 return
             }
             homeRoutingError = nil
-            homeRoutingInProgress = true
-            Task { @MainActor in
-                let reachable = await GatewayHostStore.probe(host)
-                defer { homeRoutingInProgress = false }
-                guard homeExecutionTarget == .mac(hostId: hostId, cliKey: cliKey, cliName: cliName),
-                      homePrompt.trimmingCharacters(in: .whitespacesAndNewlines) == prompt
-                else { return }
-                guard reachable else {
-                    homeRoutingError = String(localized: "这台机器当前没有响应，任务仍保留在输入框")
-                    LeoHaptics.notification(.error)
-                    return
-                }
-                homePrompt = ""
-                LeoHaptics.impact(.medium)
-                openMacChat(host, cliKey, cliName, prompt: prompt)
-            }
+            // [T-quick-1.39.1] 先发后验:不再先探测(最长 8 秒)。连不上时 Mac 会话里报错,
+            // 任务留在那里可重试(HarnessSessionDriver 失败后保持 pending 并保留首条)。
+            homePrompt = ""
+            LeoHaptics.impact(.medium)
+            openMacChat(host, cliKey, cliName, prompt: prompt)
         }
     }
 

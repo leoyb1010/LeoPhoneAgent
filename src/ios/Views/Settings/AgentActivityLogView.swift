@@ -211,6 +211,7 @@ struct AgentActivityLogView: View {
     private func reasonDescription(_ reason: AgentActivityReason) -> String {
         return switch reason {
         case .permissionApproval: "Waiting for device permission approval"
+        case .autoApproved: "全自动:已自动批准"
         case .browserTakeover: "Waiting for browser control to return"
         case .backgroundTimeExpired: "Paused after iOS background time expired"
         case .unexpectedTermination: "Recovered after LeoPhoneAgent stopped unexpectedly"
@@ -439,6 +440,7 @@ struct AgentCurrentStatusCard: View {
         if let reason {
             return switch reason {
             case .permissionApproval: "Review the device capability request"
+            case .autoApproved: "全自动放行,没有弹确认"
             case .browserTakeover: "Finish browsing to return control"
             case .backgroundTimeExpired: "Return to LeoPhoneAgent to continue"
             case .unexpectedTermination: "The saved interruption point can be resumed"

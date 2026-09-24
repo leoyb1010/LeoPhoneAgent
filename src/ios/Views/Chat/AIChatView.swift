@@ -1257,7 +1257,8 @@ struct AIChatView: View {
             } else {
                 minisLogger.info("🔄SESSION AIChatView.onAppear nil sessionId — draft mode")
                 // Draft session — auto-focus input for immediate typing
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                // [T-quick-1.39.1] 去掉 0.6 秒等待:下一轮 runloop 就聚焦。
+                DispatchQueue.main.async {
                     guard !hasOverlayPresented, isChatViewVisible else { return }
                     inputFocused = true
                 }
@@ -3489,6 +3490,7 @@ struct AIChatView: View {
             // [T-model-quickswitch] 当前模型胶囊:点开就是最近用过的几个,
             // 换回上一个模型两下搞定,不必再翻全量 picker。
             modelCapsule
+            FullAutoBadge()
             // [T-mac-composer] Quick Tasks 后面:选一台 Mac + 一个 CLI,
             // 直接开聊。不去设置、不去控制台。
             if !gatewayStore.activeHosts.isEmpty {
@@ -3722,6 +3724,8 @@ struct AIChatView: View {
 
     private var inputBar: some View {
         VStack(spacing: 0) {
+            Color.clear.frame(height: 0)
+                .onAppear { LeoPerf.coldStep("inputReady") }
             AgentCurrentStatusCard(
                 sessionId: vm.sessionId ?? sessionId ?? draftId,
                 isProcessing: vm.isProcessing,

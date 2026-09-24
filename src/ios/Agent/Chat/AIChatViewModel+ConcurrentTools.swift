@@ -218,7 +218,8 @@ extension AIChatViewModel {
             // [T-gate-scope] 展示用的 host 和授权用的 scope 分开传:本机 shell /
             // 文件写按会话授权一次,remote_* 按「主机 + 完整参数的 SHA-256」逐条授权。
             let scope = SensitiveToolGate.Category.grantScope(tool: tu.name, args: toolArgs)
-            let outcome = await SensitiveToolGate.shared.authorize(category, host: host, grantScope: scope)
+            let outcome = await SensitiveToolGate.shared.authorize(category, host: host, grantScope: scope,
+                                                                   sessionId: sessionId)
             if !outcome.isAllowed {
                 // 拒绝原因决定话术:后台硬拒 / 等待超时 / 用户真的说了不。
                 // 之前是按"当前是不是前台"猜的,分级策略下必须按实际结果来。

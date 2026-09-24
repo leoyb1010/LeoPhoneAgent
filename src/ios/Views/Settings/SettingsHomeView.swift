@@ -104,7 +104,7 @@ struct SettingsHomeView: View {
             SettingsGroup(id: "general", title: "外观与通用", entries: [
                 SettingsEntry("外观", keywords: "appearance 深色 浅色 主题 主动卡 手电筒 待办",
                               icon: "paintbrush.fill", color: .blue) { AppearanceSettingsView() },
-                SettingsEntry("权限", keywords: "permission 审批 offload",
+                SettingsEntry("权限", keywords: "permission 审批 offload 全自动 自动批准 不再询问 yolo",
                               icon: "hand.raised.fill", color: .red,
                               hint: "Agent 动用某项能力前，是直接放行还是先问你") { OffloadPermissionSettingsView() },
                 SettingsEntry("生物识别保护", keywords: "face id touch id 解锁 保护",

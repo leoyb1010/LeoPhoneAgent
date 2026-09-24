@@ -367,6 +367,11 @@ final class OffloadPermissionManager: ObservableObject {
         if permissionLevel(for: command) == .notAllowed { return .disabled }
         let level = permissionLevel(for: invocation.command, action: invocation.action)
         if level == .notAllowed { return .disabled }
+        // [T-full-auto] 全自动:「询问」一律放行;你设成「不允许」的上面已经挡掉。
+        if FullAutoGate.isOn {
+            FullAutoGate.announce("\(command) \(arguments.prefix(3).joined(separator: " "))", sessionId: sid)
+            return .allowed
+        }
         if level == .bypass || invocation.isStatusOnly { return .allowed }
         if let sid, sessionGrants[sid]?.contains(invocation.grantScope) == true { return .allowed }
         guard UIApplication.shared.applicationState == .active, !presenters.isEmpty else { return .needsForeground }

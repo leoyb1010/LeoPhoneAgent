@@ -234,6 +234,8 @@ struct SendPromptIntent: AppIntent {
     @MainActor
     static func dispatchRun(vm: AIChatViewModel, sessionId: String, pendingId: String,
                             action: () -> Void) throws -> String {
+        // [T-full-auto] 经 App Intent 派发的任务,日志来源记为快捷指令(定时任务会先声明)。
+        TaskSourceRegistry.tagIntentRun(sessionId: sessionId)
         var accepted = false
         defer {
             if !accepted { ShortcutRunTracker.markCompleted(recordId: pendingId, reason: "not_started") }
@@ -444,6 +446,7 @@ final class ShortcutNotificationDelegate: NSObject, UNUserNotificationCenterDele
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
+        LeoPerf.pushArrived(notification.request.content.userInfo)
         completionHandler([.banner, .sound])
     }
 }
