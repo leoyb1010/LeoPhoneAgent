@@ -89,7 +89,8 @@ struct AppearanceSettingsView: View {
             } header: {
                 Text("Launch Session")
             } footer: {
-                Text("Choose what to show when the app starts. \"Auto\" opens a new chat if the last session is older than 15 minutes.")
+                // 与 ContentView 的启动逻辑一致(1.39.1 起):一天内回到离开的那一页,更久停在首页并聚焦输入框。
+                Text("启动时显示什么。「自动」:一天之内回来,回到上次离开的那一页;更久没用,停在首页,输入框可以直接打字。")
             }
 
             Section {

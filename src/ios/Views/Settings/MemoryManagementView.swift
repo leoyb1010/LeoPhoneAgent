@@ -121,7 +121,13 @@ struct MemoryManagementView: View {
         let globalContent = (try? String(contentsOf: globalURL, encoding: .utf8)) ?? ""
         let globalPreview = firstMemoryLine(from: globalContent)
         let globalSize = (try? fm.attributesOfItem(atPath: globalURL.path)[.size] as? Int) ?? 0
-        items.append(MemoryFileItem(name: "GLOBAL.md", isGlobal: true, modifiedDate: formatDate(globalModDate), fileSize: formatFileSize(globalSize), preview: globalPreview))
+        // 还没建过 GLOBAL.md 时不要拿"现在"冒充修改时间、显示 0 B:看起来像刚被清空。
+        let globalExists = fm.fileExists(atPath: globalURL.path)
+        items.append(MemoryFileItem(
+            name: "GLOBAL.md", isGlobal: true,
+            modifiedDate: globalExists ? formatDate(globalModDate) : "",
+            fileSize: globalExists ? formatFileSize(globalSize) : "",
+            preview: globalExists ? globalPreview : "还没有内容。写下长期的偏好和约定,Agent 每次对话都会参考。"))
 
         // Daily logs sorted by name descending
         if let files = try? fm.contentsOfDirectory(at: memDir, includingPropertiesForKeys: [.contentModificationDateKey], options: [.skipsHiddenFiles]) {

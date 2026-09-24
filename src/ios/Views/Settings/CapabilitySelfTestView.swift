@@ -140,6 +140,10 @@ final class CapabilitySelfTest: ObservableObject {
             guard let instance = ProviderConfigStore.shared.instances.first(where: { $0.id == id }) else {
                 return (.skipped, "已删除")
             }
+            // 未登录的 OAuth 供应商也能从缓存列出模型,不能据此算"通过"。
+            if instance.credentialType == .oauth, !instance.isOAuthAuthenticated {
+                return (.unauthorized, "还没登录(设置 → 模型供应商 → \(instance.label))")
+            }
             do {
                 let models = try await ProviderConfigStore.fetchModelsForInstance(instance, forceRefresh: true)
                 return models.isEmpty ? (.failed, "连上了,但没有返回模型") : (.passed, "\(models.count) 个模型")

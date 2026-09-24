@@ -161,7 +161,6 @@ struct SettingsHomeView: View {
                 if searching {
                     searchResults
                 } else {
-                    controlCenterIntro
                     groupCard(groups[0], isOpen: $openDevice, index: 0)
                     groupCard(groups[1], isOpen: $openAgent, index: 1)
                     orchestrationCard
@@ -205,28 +204,6 @@ struct SettingsHomeView: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(LeoTheme.ColorToken.separator.opacity(0.25), lineWidth: 0.5)
         }
-    }
-
-    private var controlCenterIntro: some View {
-        HStack(spacing: 13) {
-            Image(systemName: "switch.2")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(.tint)
-                .frame(width: 42, height: 42)
-                .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            VStack(alignment: .leading, spacing: 3) {
-                Text("控制中心")
-                    .font(.headline.weight(.bold))
-                Text("我的设备、Agent、外观与通用、数据与关于，按使用场景收纳在一处。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(16)
-        .background(LeoTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: LeoTheme.Radius.surface, style: .continuous))
-        .leoStaggerEntrance(index: 0)
     }
 
     private var searchResults: some View {
@@ -334,7 +311,7 @@ struct SettingsHomeView: View {
                     .frame(width: 34, height: 34)
                     .background(Color.purple.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("多代理编排").font(.subheadline.weight(.semibold))
+                    Text("多 Agent 编排").font(.subheadline.weight(.semibold))
                     Text("让多个 Agent 分工协作").font(.caption2).foregroundStyle(.secondary)
                 }
             }

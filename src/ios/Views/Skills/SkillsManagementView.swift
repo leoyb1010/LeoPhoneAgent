@@ -114,6 +114,8 @@ struct SkillsManagementView: View {
             }
         }
         .navigationTitle("Skills")
+        // 与其他设置子页一致用小标题:大标题 + 常驻搜索栏在设置表单里会叠到列表第一行上(真机 1.41.0 截图)。
+        .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchQuery, placement: .navigationBarDrawer(displayMode: .always),
                     prompt: Text(String(localized: "Search skills")))
         .onAppear { store.reload() }

@@ -62,13 +62,25 @@ struct MCPServerConfig: Codable, Identifiable, Hashable {
     var isSTDIO: Bool { !(command?.isEmpty ?? true) }
 
     /// Human-readable transport target for list rows ("https://…" or "npx …").
+    /// 列表里一行的摘要。HTTP 只显示主机和路径:不少服务把钥匙放在查询参数里(例如高德的 ?key=),
+    /// 列表上不该露出来;完整地址在详情页编辑时才看得到。
     var transportSummary: String {
-        if isHTTP { return url ?? "" }
+        if isHTTP { return Self.redactedURL(url ?? "") }
         if isSTDIO {
             let argStr = (args ?? []).joined(separator: " ")
             return argStr.isEmpty ? (command ?? "") : "\(command ?? "") \(argStr)"
         }
         return ""
+    }
+
+    static func redactedURL(_ raw: String) -> String {
+        guard var parts = URLComponents(string: raw), parts.host != nil else { return raw }
+        let hidden = parts.query != nil || parts.user != nil || parts.password != nil || parts.fragment != nil
+        parts.query = nil
+        parts.fragment = nil
+        parts.user = nil
+        parts.password = nil
+        return (parts.string ?? raw) + (hidden ? "?…" : "")
     }
 }
 

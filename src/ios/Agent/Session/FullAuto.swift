@@ -156,7 +156,7 @@ struct FullAutoSettingsSection: View {
                 Button("一次授完系统权限") { showSystemPermissions = true }
             }
         } footer: {
-            Text("打开后,Agent 执行任务时写文件、跑命令、读写网站登录状态、调用手机能力、改设置都不再逐次确认,手机发给 Mac 的任务也一样(连上新 Mac 后生效)。你设成「不允许」的能力仍然不执行;相册、定位这类系统弹窗由 iOS 控制,任何 App 都跳不过,可以在这里一次授完。关闭后立即恢复询问。")
+            Text("打开后,Agent 执行任务时写文件、跑命令、读写网站登录状态、调用手机能力、改设置都不再逐次确认,发给 LeoPhoneAgent Mac 的任务也一样(中继升级后生效,之前 Mac 仍会逐项请你审批)。你设成「不允许」的能力仍然不执行;相册、定位这类系统弹窗由 iOS 控制,任何 App 都跳不过,可以在这里一次授完。关闭后立即恢复询问。")
         }
         .sheet(isPresented: $showSystemPermissions) {
             SystemPermissionsSheet()

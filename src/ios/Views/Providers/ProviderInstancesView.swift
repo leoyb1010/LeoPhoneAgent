@@ -228,21 +228,7 @@ private struct InstanceRow: View {
     }
 
     private var oauthIsAuthenticated: Bool {
-        // Manual OAuth token is always considered authenticated
-        if ProviderKeychainHelper.loadOAuthString(instanceId: instance.id, account: "manual-oauth-token") != nil {
-            return true
-        }
-        switch instance.providerType {
-        case .anthropic: return ClaudeOAuthManager.shared.isAuthenticated(instanceId: instance.id)
-        case .gemini: return GeminiOAuthManager.shared.isAuthenticated(instanceId: instance.id)
-        case .openAI: return CodexOAuthManager.shared.isAuthenticated(instanceId: instance.id)
-        case .antigravity: return AntigravityOAuthManager.shared.isAuthenticated(instanceId: instance.id)
-        case .openRouter: return OpenRouterOAuthManager.shared.isAuthenticated(instanceId: instance.id)
-        case .openAIResponses: return false // API key only
-        case .xAI: return XAIOAuthManager.shared.isAuthenticated(instanceId: instance.id)
-        case .kimiCode: return KimiOAuthManager.shared.isAuthenticated(instanceId: instance.id)
-        case .unsupported: return false // synced from newer build
-        }
+        instance.isOAuthAuthenticated
     }
 
     private var credentialSummary: String {
@@ -341,5 +327,27 @@ private struct ShadowVoiceRow: View {
         if asr > 0 { parts.append(String(localized: "\(asr) speech-to-text", comment: "ASR model count")) }
         if tts > 0 { parts.append(String(localized: "\(tts) text-to-speech", comment: "TTS model count")) }
         return parts.joined(separator: " · ")
+    }
+}
+
+/// OAuth 类供应商是否已登录。列表页的「已认证 / 未认证」和能力自检共用这一个判断。
+extension ProviderInstance {
+    @MainActor
+    var isOAuthAuthenticated: Bool {
+        // Manual OAuth token is always considered authenticated
+        if ProviderKeychainHelper.loadOAuthString(instanceId: self.id, account: "manual-oauth-token") != nil {
+            return true
+        }
+        switch self.providerType {
+        case .anthropic: return ClaudeOAuthManager.shared.isAuthenticated(instanceId: self.id)
+        case .gemini: return GeminiOAuthManager.shared.isAuthenticated(instanceId: self.id)
+        case .openAI: return CodexOAuthManager.shared.isAuthenticated(instanceId: self.id)
+        case .antigravity: return AntigravityOAuthManager.shared.isAuthenticated(instanceId: self.id)
+        case .openRouter: return OpenRouterOAuthManager.shared.isAuthenticated(instanceId: self.id)
+        case .openAIResponses: return false // API key only
+        case .xAI: return XAIOAuthManager.shared.isAuthenticated(instanceId: self.id)
+        case .kimiCode: return KimiOAuthManager.shared.isAuthenticated(instanceId: self.id)
+        case .unsupported: return false // synced from newer build
+        }
     }
 }

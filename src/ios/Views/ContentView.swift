@@ -149,9 +149,9 @@ enum LeoSessionListDensity: Int, CaseIterable {
 
     var title: String {
         switch self {
-        case .compact: return "Compact"
-        case .standard: return "Standard"
-        case .comfortable: return "Comfortable"
+        case .compact: return "紧凑"
+        case .standard: return "标准"
+        case .comfortable: return "宽松"
         }
     }
 

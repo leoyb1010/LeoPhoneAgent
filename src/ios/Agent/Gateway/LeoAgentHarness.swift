@@ -263,7 +263,10 @@ final class HarnessSessionDriver: ObservableObject {
                         thinking: thinking, fullAuto: fullAuto)
                 } catch GatewayError.http(let status, _) where status == 403 && fullAuto {
                     // Mac 还不接受这台手机开全自动(中继没认出 iPhone 设备钥匙):照常开,逐项审批。
-                    await MainActor.run { self.note(Self.fullAutoRefusedNote) }
+                    await MainActor.run {
+                        self.fullAutoRefused = true
+                        self.note(Self.fullAutoRefusedNote)
+                    }
                     id = try await self.client.createHarnessSession(
                         harness: self.harness.key, cwd: self.cwd, prompt: prompt, thinking: thinking)
                 }
@@ -297,15 +300,19 @@ final class HarnessSessionDriver: ObservableObject {
 
     static let fullAutoRefusedNote = "这台 Mac 还不接受本机的全自动任务(中继升级后才认得出这台 iPhone),这次会逐项请你审批。"
 
+    /// Mac 已经拒过这台手机的全自动(中继还认不出 iPhone):这个会话里不再请求,免得每条消息都提示一遍。
+    private var fullAutoRefused = false
+
     /// 全自动只对 LeoPhoneAgent 任务有意义;Claude Code / Codex / Grok 仍按它们自己的审批走。
-    private var wantsFullAuto: Bool { harness.key == "zcode" && FullAutoGate.isOn }
+    private var wantsFullAuto: Bool { harness.key == "zcode" && FullAutoGate.isOn && !fullAutoRefused }
 
     /// 发一条后续消息;LeoPhoneAgent 任务顺带告诉 Mac 全自动开关的当前状态。
     private func sendSteer(sessionId: String, text: String) async {
-        let fullAuto: Bool? = harness.key == "zcode" ? FullAutoGate.isOn : nil
+        let fullAuto: Bool? = harness.key == "zcode" ? (FullAutoGate.isOn && !fullAutoRefused) : nil
         do {
             try await client.steerHarness(sessionId: sessionId, text: text, fullAuto: fullAuto)
         } catch GatewayError.http(let status, _) where status == 403 && fullAuto == true {
+            fullAutoRefused = true
             note(Self.fullAutoRefusedNote)
             do { try await client.steerHarness(sessionId: sessionId, text: text) }
             catch { lastError = error.localizedDescription }

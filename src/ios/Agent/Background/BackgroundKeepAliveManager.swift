@@ -18,8 +18,8 @@ enum LeoRunPolicy: Int, CaseIterable, Sendable {
 
     var title: String {
         switch self {
-        case .standard: return "Standard"
-        case .backgroundReady: return "Background Ready"
+        case .standard: return "标准"
+        case .backgroundReady: return "后台就绪"
         }
     }
 }

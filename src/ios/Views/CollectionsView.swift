@@ -176,12 +176,15 @@ struct CollectionsView: View {
             } else {
                 if sources.count > 1 { sourceFilter }
                 ForEach(visible) { item in
+                    // 卡片与上方概览卡同一条左右边线(14pt),内容在卡片里再缩 12pt;
+                    // 之前背景是通栏的,列表卡片贴着屏幕边(1.41.0 真机截图)。
                     row(item, usesSplit: usesSplit)
-                        .listRowInsets(EdgeInsets(top: 5, leading: 14, bottom: 5, trailing: 14))
+                        .listRowInsets(EdgeInsets(top: 5, leading: 26, bottom: 5, trailing: 26))
                         .listRowSeparator(.hidden)
                         .listRowBackground(
                             RoundedRectangle(cornerRadius: 16, style: .continuous)
                                 .fill(LeoTheme.ColorToken.surface)
+                                .padding(.horizontal, 14)
                                 .padding(.vertical, 2)
                         )
                 }

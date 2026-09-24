@@ -9,11 +9,12 @@ enum OffloadPermissionLevel: Int, CaseIterable {
     case askOnce = 1
     case notAllowed = 2
 
+    /// 设置页的选项名。必须走本地化:`Text(String)` 不查字符串表,原来中文界面里会露出英文。
     var displayName: String {
         switch self {
-        case .bypass: return "Bypass"
-        case .askOnce: return "Ask Once"
-        case .notAllowed: return "Not Allowed"
+        case .bypass: return String(localized: "Bypass")
+        case .askOnce: return String(localized: "Ask Once")
+        case .notAllowed: return String(localized: "Not Allowed")
         }
     }
 }

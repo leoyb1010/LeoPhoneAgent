@@ -5974,7 +5974,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "个人 iOS 代理，在您的设备上运行工具并连接到您选择的 AI 提供商。"
+            "value": "个人 iOS Agent，在您的设备上运行工具并连接到您选择的 AI 提供商。"
           }
         },
         "zh-Hant": {
@@ -7064,7 +7064,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "添加 MCP 服务器，为智能体提供额外工具。点按 + 手动添加，或导入 JSON 配置。"
+            "value": "添加 MCP 服务器，为 Agent 提供额外工具。点按 + 手动添加，或导入 JSON 配置。"
           }
         },
         "zh-Hant": {
@@ -8179,7 +8179,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "智能体访问权限"
+            "value": "Agent 权限"
           }
         },
         "zh-Hant": {
@@ -8225,7 +8225,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "代理访问适用于直接本机工具调用。 Shell 包装器或链接命令可能无法被预检门识别；本机 iOS 权限仍然具有权威性。"
+            "value": "这里只管 Agent 直接调用手机能力;经 Shell 间接调用时预检可能认不出来,但 iOS 自己的系统授权始终有效。"
           }
         },
         "zh-Hant": {
@@ -8329,7 +8329,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "智能体运行时"
+            "value": "Agent 运行时"
           }
         },
         "zh-Hant": {
@@ -8381,7 +8381,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "智能体任务"
+            "value": "Agent 任务"
           }
         },
         "zh-Hant": {
@@ -9251,7 +9251,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "允许 minis-config"
+            "value": "允许 Agent 改设置"
           }
         },
         "zh-Hant": {
@@ -12968,7 +12968,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "智能体循环中可用模型"
+            "value": "Agent 循环中可用模型"
           }
         },
         "zh-Hant": {
@@ -19423,7 +19423,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "配置智能体使用的模型，管理各 AI 服务商的 API Key 和 OAuth，以及创建模型分组以实现回退或负载均衡。"
+            "value": "配置 Agent 使用的模型，管理各 AI 服务商的 API Key 和 OAuth，以及创建模型分组以实现回退或负载均衡。"
           }
         },
         "zh-Hant": {
@@ -34001,7 +34001,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "获取 LeoPhoneAgent 会话的当前状态，包括代理是否仍在运行、最新消息和最后的工具调用。"
+            "value": "获取 LeoPhoneAgent 会话的当前状态，包括 Agent 是否仍在运行、最新消息和最后的工具调用。"
           }
         },
         "zh-Hant": {
@@ -39747,7 +39747,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "保持智能体在后台运行。通过锁屏和灵动岛的实时活动显示进度。同时开启后台语音播报，让朗读不会被打断。"
+            "value": "保持 Agent 在后台运行。通过锁屏和灵动岛的实时活动显示进度。同时开启后台语音播报，让朗读不会被打断。"
           }
         },
         "zh-Hant": {
@@ -41809,7 +41809,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "LeoPhoneAgent 是您完全本地、完全私密的设备端代理。"
+            "value": "LeoPhoneAgent 是您完全本地、完全私密的设备端 Agent。"
           }
         },
         "zh-Hant": {
@@ -42163,7 +42163,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "让智能体在后台继续工作，并使任务实时活动保持实时刷新。仅使用粗略的低精度位置作为后台心跳，不会追踪或存储你的精确位置。"
+            "value": "让 Agent 在后台继续工作，并使任务实时活动保持实时刷新。仅使用粗略的低精度位置作为后台心跳，不会追踪或存储你的精确位置。"
           }
         },
         "zh-Hant": {
@@ -43203,7 +43203,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在每次代理执行开始时加载到系统提示中。"
+            "value": "在每次 Agent 执行开始时加载到系统提示中。"
           }
         },
         "zh-Hant": {
@@ -45926,7 +45926,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "代理在此会话期间执行的记忆读写操作。"
+            "value": "Agent 在此会话期间执行的记忆读写操作。"
           }
         },
         "zh-Hant": {
@@ -47285,7 +47285,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "此处列出的模型和分组可通过终端 minis-model-use 命令调用。仅这些对代理可见。"
+            "value": "此处列出的模型和分组可通过终端 minis-model-use 命令调用。仅这些对 Agent 可见。"
           }
         },
         "zh-Hant": {
@@ -48876,7 +48876,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "新的代理运行将出现在此处。"
+            "value": "新的 Agent 运行将出现在此处。"
           }
         },
         "zh-Hant": {
@@ -52896,7 +52896,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "备注（展示给智能体）"
+            "value": "备注（展示给 Agent）"
           }
         },
         "zh-Hant": {
@@ -56765,7 +56765,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "每个会话中对智能体可见的持久指令和偏好。你可以在此手动编辑，也可以让智能体帮你整理和更新这份记忆。"
+            "value": "每个会话中对 Agent 可见的持久指令和偏好。你可以在此手动编辑，也可以让 Agent 帮你整理和更新这份记忆。"
           }
         },
         "zh-Hant": {
@@ -58299,7 +58299,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "主模型用于智能体的主要任务。副模型用于标题生成等轻量任务。语音输入/输出会选择一个分组,由其支持音频的模型驱动语音转文字和文字转语音;若未设置,则使用离线的系统语音。"
+            "value": "主模型用于 Agent 的主要任务。副模型用于标题生成等轻量任务。语音输入/输出会选择一个分组,由其支持音频的模型驱动语音转文字和文字转语音;若未设置,则使用离线的系统语音。"
           }
         },
         "zh-Hant": {
@@ -60138,7 +60138,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "从会话中的特定用户消息重新运行 AI 代理。展示用户消息列表供选择，然后从该点重试。"
+            "value": "从会话中的特定用户消息重新运行 AI Agent。展示用户消息列表供选择，然后从该点重试。"
           }
         },
         "zh-Hant": {
@@ -65932,7 +65932,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "可供智能体复用的技能"
+            "value": "可供 Agent 复用的技能"
           }
         },
         "zh-Hant": {
@@ -66343,7 +66343,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "查看每个本机功能、其当前系统访问、可用操作、代理策略和数据目标。"
+            "value": "查看每个本机功能、其当前系统访问、可用操作、Agent 策略和数据目标。"
           }
         },
         "zh-Hant": {
@@ -68760,7 +68760,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "向现有 LeoPhoneAgent 会话发送跟进提示，继续与 AI 代理的对话。"
+            "value": "向现有 LeoPhoneAgent 会话发送跟进提示，继续与 AI Agent 的对话。"
           }
         },
         "zh-Hant": {
@@ -68812,7 +68812,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "向 LeoPhoneAgent AI 代理发送提示。任务在后台运行时立即返回会话信息。"
+            "value": "向 LeoPhoneAgent AI Agent 发送提示。任务在后台运行时立即返回会话信息。"
           }
         },
         "zh-Hant": {
@@ -71046,7 +71046,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在锁定屏幕和灵动岛上显示智能体任务进度。关闭后会同时移除当前正在显示的实时活动。"
+            "value": "在锁定屏幕和灵动岛上显示 Agent 任务进度。关闭后会同时移除当前正在显示的实时活动。"
           }
         },
         "zh-Hant": {
@@ -71098,7 +71098,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在锁定屏幕和灵动岛上显示智能体任务进度。关闭后也会移除当前显示的实时活动。提示：开启下方的“位置追踪”可让实时活动在应用位于后台时持续刷新；未开启时，离开应用约 30 秒后更新会暂停。"
+            "value": "在锁定屏幕和灵动岛上显示 Agent 任务进度。关闭后也会移除当前显示的实时活动。提示：开启下方的“位置追踪”可让实时活动在应用位于后台时持续刷新；未开启时，离开应用约 30 秒后更新会暂停。"
           }
         },
         "zh-Hant": {
@@ -71407,7 +71407,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在代理任务开始和完成时显示本地通知，包括快捷指令触发的任务。"
+            "value": "在 Agent 任务开始和完成时显示本地通知，包括快捷指令触发的任务。"
           }
         },
         "zh-Hant": {
@@ -76586,7 +76586,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "使用智能体功能时您授权的系统信息（日历、健康、通讯录等）"
+            "value": "使用 Agent 功能时您授权的系统信息（日历、健康、通讯录等）"
           }
         },
         "zh-Hant": {
@@ -78627,7 +78627,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "代理想要使用 **%@**"
+            "value": "Agent 想要使用 **%@**"
           }
         },
         "zh-Hant": {
@@ -80934,7 +80934,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "此模型可能无法作为智能体使用"
+            "value": "此模型可能无法作为 Agent 使用"
           }
         },
         "zh-Hant": {
@@ -87204,7 +87204,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "使用低精度定位更新，防止 iOS 在后台运行智能体任务时挂起应用。"
+            "value": "使用低精度定位更新，防止 iOS 在后台运行 Agent 任务时挂起应用。"
           }
         },
         "zh-Hant": {
@@ -89863,7 +89863,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "禁用后，代理无法通过 minis-config 读取或修改任何设置。日志 → 设置更改 中的更改历史仍可访问。代理将收到 permission_denied 错误，并可以改为通过深层链接为你引导。"
+            "value": "关掉后,Agent 不能再读取或修改 App 设置;改动记录仍在「日志 → 设置更改」里。需要改设置时,它会给你一个直达设置页的链接。"
           }
         },
         "zh-Hant": {
@@ -90575,7 +90575,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "当您批准本机功能时，代理可以读取或更改请求的数据。例如，照片可以查找、组织、保存或删除项目，日历可以读取或创建事件。"
+            "value": "当您批准本机功能时，Agent 可以读取或更改请求的数据。例如，照片可以查找、组织、保存或删除项目，日历可以读取或创建事件。"
           }
         },
         "zh-Hant": {
@@ -91961,7 +91961,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "您的首个本地智能体即将就绪。"
+            "value": "您的首个本地 Agent 即将就绪。"
           }
         },
         "zh-Hant": {
@@ -92014,7 +92014,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "完全本地、完全原生、隐私至上的 AI 智能体"
+            "value": "完全本地、完全原生、隐私至上的 AI Agent"
           }
         },
         "zh-Hant": {
@@ -98341,7 +98341,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "多代理编排"
+            "value": "多 Agent 编排"
           }
         },
         "zh-Hant": {
@@ -99752,7 +99752,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "还没有网关。添加运行 Hermes 代理的那台 Mac。"
+            "value": "还没有网关。添加运行 Hermes Agent 的那台 Mac。"
           }
         },
         "zh-Hant": {
@@ -99769,7 +99769,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "网关是跑在你自己 Mac 上的 Hermes 代理。手机休眠时它照常干活,而这个 App 可以在 tailnet 的任何地方观察、审批、停止它。"
+            "value": "网关是跑在你自己 Mac 上的 Hermes Agent。手机休眠时它照常干活,而这个 App 可以在 tailnet 的任何地方观察、审批、停止它。"
           }
         },
         "zh-Hant": {
