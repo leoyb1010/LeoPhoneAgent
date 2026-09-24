@@ -1,6 +1,6 @@
 import type { Server } from "node:http";
 
-import { IProviderSettingsService, IZCodeTaskService } from "@zcode/services";
+import { IProviderSettingsService, ISettingService, IZCodeTaskService } from "@zcode/services";
 import type { ServiceCollection } from "@zcode/services";
 import { ZCODE_VERSION } from "@zcode/shared";
 
@@ -54,7 +54,12 @@ export function startLeoHostServices(deps: { services: ServiceCollection; logger
           const syncLink = () => {
             const wanted = linkEnabled();
             if (wanted && !link) {
-              link = startLeoLink({ taskService, logger: deps.logger, appVersion: ZCODE_VERSION }).catch((error: unknown) => {
+              link = startLeoLink({
+                taskService,
+                settingService: deps.services.get(ISettingService),
+                logger: deps.logger,
+                appVersion: ZCODE_VERSION,
+              }).catch((error: unknown) => {
                 deps.logger.warn("[leo/link] failed to start", { error: String(error) });
                 return null;
               });

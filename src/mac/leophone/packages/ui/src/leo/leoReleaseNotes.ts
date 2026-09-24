@@ -13,6 +13,13 @@ export interface LeoRelease {
 
 export const LEO_RELEASE_NOTES: LeoRelease[] = [
   {
+    version: "1.2.2",
+    date: "2026-09-25",
+    items: [
+      "手机能看到 Mac 上开的任务了:最近打开的项目里的任务会出现在手机的任务列表中;在手机上点开或接着发消息,这台 Mac 就把它接过来,之后流式进度、审批、停止都和手机开的任务一样。之前的对话留在 Mac 上,手机从接上那一刻开始同步。",
+    ],
+  },
+  {
     version: "1.2.1",
     date: "2026-09-25",
     items: [

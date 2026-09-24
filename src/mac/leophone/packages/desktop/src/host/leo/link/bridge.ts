@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 
 import type { IZCodeTaskService } from "@zcode/services";
+import type { ZCodeTaskMode } from "@zcode/shared";
 
 import type { HarnessEvent } from "./journal.js";
 import { resumeEnvelope } from "./resumeEnvelope.js";
@@ -21,7 +22,21 @@ export type LinkBridgeDeps = {
   journalDir: string;
   /** 本机 leoagent(Python,:8646)跑 claude / codex / grok;没有就只剩 ZCode。 */
   leoagent: { url: string; key: () => string | null };
+  /** Mac 上最近打开的本机工作区(设置里的 lastWorkspaceSession);手机据此看到桌面上开的任务。 */
+  recentWorkspaces?: () => Promise<string[]>;
 };
+
+/** 桌面上开的任务:手机列表里能看到,点开或发消息时桥接当场接过来。 */
+type DesktopTask = {
+  taskId: string;
+  cwd: string;
+  title: string;
+  status: string;
+  mode: ZCodeTaskMode;
+  createdAt: number;
+  updatedAt: number;
+};
+const DESKTOP_TASK_LIMIT = 20;
 
 const VERSION = "0.4.0";
 const ZCODE = "zcode";
@@ -69,6 +84,8 @@ function mayUseFullAuto(caller: Caller): boolean {
 export class LinkBridge {
   private readonly sessions = new Map<string, LinkSession>();
   private readonly done = new Map<string, { at: number; response: Promise<LinkResponse> }>();
+  /** 最近一次列出的桌面任务;接管时按它找工作区。 */
+  private desktopTasks = new Map<string, DesktopTask>();
 
   constructor(private readonly deps: LinkBridgeDeps) {}
 
@@ -117,7 +134,7 @@ export class LinkBridge {
     }
   }
 
-  private newSession(taskId: string, cwd: string, mode: "yolo" | "build"): LinkSession {
+  private newSession(taskId: string, cwd: string, mode: ZCodeTaskMode): LinkSession {
     return new LinkSession({ taskId, cwd, mode }, {
       taskService: this.deps.taskService,
       journalDir: this.deps.journalDir,
@@ -150,7 +167,7 @@ export class LinkBridge {
     const match = /^\/harness\/sessions\/([^/]+)\/events$/.exec(url.pathname);
     if (!match) return;
     const sessionId = decodeURIComponent(match[1]!);
-    const session = this.sessions.get(sessionId);
+    const session = this.sessions.get(sessionId) ?? (await this.adoptDesktopTask(sessionId));
     if (!session) {
       await this.forwardStream(req.path, write, signal);
       return;
@@ -190,7 +207,7 @@ export class LinkBridge {
     const match = /^\/harness\/sessions\/([^/]+)\/(send|approval|stop)$/.exec(pathname);
     if (!match || method !== "POST") return error(405, "Method not allowed");
     const sessionId = decodeURIComponent(match[1]!);
-    const session = this.sessions.get(sessionId);
+    const session = this.sessions.get(sessionId) ?? (await this.adoptDesktopTask(sessionId));
     if (!session) return this.forward("POST", req.path, req.body);
     const body = record(req.body);
     switch (match[2]) {
@@ -202,6 +219,56 @@ export class LinkBridge {
         await session.stop();
         return { status: 200, body: { ok: true, status: session.status } };
     }
+  }
+
+  /** Mac 最近打开的项目里的任务(手机自己开的已经在 sessions 里,不重复列)。读不到就当没有。 */
+  private async listDesktopTasks(): Promise<DesktopTask[]> {
+    const workspaces = await this.deps.recentWorkspaces?.().catch(() => []) ?? [];
+    if (workspaces.length === 0) return [];
+    try {
+      const result = await this.deps.taskService.listTaskList({
+        kind: "timeline",
+        workspaceScopes: workspaces.map((workspacePath) => ({ workspacePath })),
+        sortBy: "updated",
+        limit: DESKTOP_TASK_LIMIT,
+      });
+      const tasks = result.items
+        .filter((item) => !this.sessions.has(item.taskId))
+        .map((item): DesktopTask => ({
+          taskId: item.taskId,
+          cwd: item.workspacePath,
+          title: item.title,
+          // 没在跑的桌面任务报 "available" 而不是 "idle":手机首页和 Siri 把 idle 当成"进行中",
+          // 最近 20 个桌面任务会把首页刷满;available 只出现在 Mac 控制台的列表里,点开即接管。
+          status: item.status === "running" ? "running" : "available",
+          mode: item.mode,
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
+        }));
+      this.desktopTasks = new Map(tasks.map((task) => [task.taskId, task]));
+      return tasks;
+    } catch (cause) {
+      this.deps.logger.warn("[leo/link] listing desktop tasks failed", { error: String(cause) });
+      return [];
+    }
+  }
+
+  /** 手机点开或给桌面任务发消息:接过来,之后和手机开的任务一样续传、审批、停止。 */
+  private async adoptDesktopTask(taskId: string): Promise<LinkSession | null> {
+    const task = this.desktopTasks.get(taskId);
+    if (!task) return null;
+    const session = this.newSession(task.taskId, task.cwd, task.mode);
+    session.title = task.title;
+    session.createdAt = task.createdAt / 1000;
+    session.needsResume = true;
+    this.sessions.set(taskId, session);
+    this.desktopTasks.delete(taskId);
+    await session.open();
+    if (session.seq === 0) {
+      session.emit({ event: "session.note", text: `接上了 Mac 上的任务「${task.title || "未命名"}」:之前的对话在 Mac 上,这里从现在开始同步。` });
+    }
+    void this.saveIndex();
+    return session;
   }
 
   /** 手机没指定目录(空或 "~")时,默认手机上次在这台 Mac 用过的项目;都没有才用主目录。 */
@@ -243,6 +310,21 @@ export class LinkBridge {
     const ours = [...this.sessions.values()]
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .map((session) => session.summary());
+    const desktop = (await this.listDesktopTasks()).map((task) => ({
+      session_id: task.taskId,
+      harness: ZCODE,
+      name: "LeoPhoneAgent",
+      cwd: task.cwd,
+      status: task.status,
+      title: task.title,
+      source: "desktop",
+      created_at: task.createdAt / 1000,
+      updated_at: task.updatedAt / 1000,
+      seq: 0,
+      waiting_for_approval: false,
+      pending_approvals: [],
+    }));
+    ours.push(...desktop);
     const upstream = await this.forward("GET", "/harness/sessions");
     const theirs = upstream.status === 200 ? ((record(upstream.body)["sessions"] as unknown[] | undefined) ?? []) : [];
     return { status: 200, body: { sessions: [...ours, ...theirs] } };

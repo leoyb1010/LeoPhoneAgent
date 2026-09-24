@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
 
-import type { IZCodeTaskService } from "@zcode/services";
+import type { ISettingService, IZCodeTaskService } from "@zcode/services";
 
 import { leoPath } from "../leoPaths.js";
 import { LinkBridge } from "./bridge.js";
@@ -65,6 +65,7 @@ function leoagentKey(): string | null {
  */
 export async function startLeoLink(deps: {
   taskService: IZCodeTaskService;
+  settingService?: ISettingService;
   logger: Logger;
   appVersion: string | null;
 }): Promise<{ stop(): Promise<void> } | null> {
@@ -85,6 +86,12 @@ export async function startLeoLink(deps: {
     appVersion: deps.appVersion,
     journalDir: leoPath("link", "journals"),
     leoagent: { url: LEOAGENT_URL, key: leoagentKey },
+    recentWorkspaces: async () => {
+      const settings = await deps.settingService?.get();
+      return (settings?.lastWorkspaceSession ?? [])
+        .filter((entry) => entry.kind === "local")
+        .map((entry) => entry.workspacePath);
+    },
   });
   await bridge.restore();
   link = new RelayLink(relay, bridge, keychainMachineKeyStore(relay.name), deps.logger, deps.appVersion);

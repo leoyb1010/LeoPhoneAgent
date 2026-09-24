@@ -35,6 +35,11 @@ function fakeZCode() {
     stopGeneration: record("stopGeneration"),
     respondPermission: record("respondPermission"),
     respondElicitation: record("respondElicitation"),
+    desktopTasks: [] as Record<string, unknown>[],
+    async listTaskList(params: Record<string, unknown>) {
+      calls.push(["listTaskList", params]);
+      return { items: this.desktopTasks, total: this.desktopTasks.length, hasMore: false };
+    },
     onDynamicTaskEvent(params: { taskId: string }) {
       return (listener: (event: unknown) => void) => {
         listeners.set(params.taskId, listener);
@@ -44,6 +49,9 @@ function fakeZCode() {
   };
   return {
     service: service as unknown as IZCodeTaskService,
+    setDesktopTasks: (items: Record<string, unknown>[]) => {
+      service.desktopTasks = items;
+    },
     calls,
     named: (name: string) => calls.filter(([n]) => n === name).map(([, p]) => p),
     fire: (taskId: string, event: Record<string, unknown>) => listeners.get(taskId)?.({ taskId, traceId: "trace", ...event }),
@@ -74,7 +82,7 @@ function permission(requestId: string, toolName: string, input: Record<string, u
 
 async function withBridge(
   run: (ctx: { bridge: LinkBridge; zcode: ReturnType<typeof fakeZCode>; dir: string; pushed: HarnessEvent[] }) => Promise<void>,
-  options: { leoagentUrl?: string; dir?: string } = {},
+  options: { leoagentUrl?: string; dir?: string; recentWorkspaces?: string[] } = {},
 ) {
   const dir = options.dir ?? (await mkdtemp(path.join(os.tmpdir(), "leo-link-")));
   const zcode = fakeZCode();
@@ -86,6 +94,7 @@ async function withBridge(
     appVersion: "test",
     journalDir: path.join(dir, "journals"),
     leoagent: { url: options.leoagentUrl ?? "http://127.0.0.1:9", key: () => "local-key-0123456789" },
+    ...(options.recentWorkspaces ? { recentWorkspaces: async () => options.recentWorkspaces! } : {}),
   });
   try {
     await run({ bridge, zcode, dir, pushed });
@@ -382,4 +391,33 @@ test("claude / codex / grok go to the local leoagent with its own key; the phone
   } finally {
     server.close();
   }
+});
+
+test("tasks opened on the Mac desktop show up on the phone and are adopted on first use", async () => {
+  const workspace = "/Users/me/project";
+  await withBridge(async ({ bridge, zcode }) => {
+    zcode.setDesktopTasks([
+      { taskId: "desk-1", workspacePath: workspace, title: "重构登录", status: "completed", mode: "build", createdAt: 1_000, updatedAt: 2_000 },
+    ]);
+    const list = (await bridge.handle(req("GET", "/harness/sessions"))).body as { sessions: Record<string, unknown>[] };
+    const row = list.sessions.find((s) => s["session_id"] === "desk-1");
+    assert.equal(row?.["source"], "desktop");
+    assert.equal(row?.["status"], "available", "空闲的桌面任务不能冒充手机首页的「进行中」");
+    assert.equal(row?.["title"], "重构登录");
+    assert.deepEqual(zcode.named("listTaskList")[0]?.["workspaceScopes"], [{ workspacePath: workspace }]);
+
+    const sent = await bridge.handle(req("POST", "/harness/sessions/desk-1/send", { text: "接着做" }));
+    assert.equal(sent.status, 200);
+    assert.deepEqual(zcode.calls.filter(([n]) => n !== "listTaskList").map(([n]) => n), ["resumeTask", "sendPrompt"]);
+    zcode.fire("desk-1", { type: "agent_message_chunk", content: "好" });
+    zcode.fire("desk-1", { type: "task_complete", stopReason: "success" });
+    const events = await collect(bridge, "desk-1", 0, (all) => all.some((e) => e.event === "run.completed"));
+    assert.deepEqual(events.map((e) => e.event), ["session.note", "user.message", "message.delta", "run.completed"]);
+
+    // 接过来之后,列表里只出现一次(作为手机侧会话)
+    const again = (await bridge.handle(req("GET", "/harness/sessions"))).body as { sessions: Record<string, unknown>[] };
+    assert.equal(again.sessions.filter((s) => s["session_id"] === "desk-1").length, 1);
+    // 没列过的 id 不会被当成桌面任务
+    assert.equal((await bridge.handle(req("POST", "/harness/sessions/nope/send", { text: "x" }))).status, 502);
+  }, { recentWorkspaces: [workspace] });
 });
