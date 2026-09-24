@@ -40,7 +40,9 @@ function fakeZCode() {
       calls.push(["listTaskList", params]);
       return { items: this.desktopTasks, total: this.desktopTasks.length, hasMore: false };
     },
+    subscriptions: 0,
     onDynamicTaskEvent(params: { taskId: string }) {
+      service.subscriptions += 1;
       return (listener: (event: unknown) => void) => {
         listeners.set(params.taskId, listener);
         return { dispose: () => listeners.delete(params.taskId) };
@@ -52,6 +54,7 @@ function fakeZCode() {
     setDesktopTasks: (items: Record<string, unknown>[]) => {
       service.desktopTasks = items;
     },
+    subscriptionCount: () => service.subscriptions,
     calls,
     named: (name: string) => calls.filter(([n]) => n === name).map(([, p]) => p),
     fire: (taskId: string, event: Record<string, unknown>) => listeners.get(taskId)?.({ taskId, traceId: "trace", ...event }),
@@ -420,4 +423,62 @@ test("tasks opened on the Mac desktop show up on the phone and are adopted on fi
     // 没列过的 id 不会被当成桌面任务
     assert.equal((await bridge.handle(req("POST", "/harness/sessions/nope/send", { text: "x" }))).status, 502);
   }, { recentWorkspaces: [workspace] });
+});
+
+test("full-auto tasks only take messages from a paired iPhone, wherever the yolo mode came from", async () => {
+  const workspace = "/Users/me/project";
+  await withBridge(async ({ bridge, zcode }) => {
+    zcode.setDesktopTasks([
+      { taskId: "desk-yolo", workspacePath: workspace, title: "完全访问的任务", status: "completed", mode: "yolo", createdAt: 1, updatedAt: 2 },
+    ]);
+    await bridge.handle(req("GET", "/harness/sessions"));
+    for (const caller of [legacy, unknown, { kind: "master" } as Caller]) {
+      const refused = await bridge.handle(req("POST", "/harness/sessions/desk-yolo/send", { text: "rm -rf" }, caller));
+      assert.equal(refused.status, 403, JSON.stringify(caller));
+    }
+    assert.equal(zcode.named("sendPrompt").length, 0);
+    // 旧版设备可以先把它切回先问我,再发
+    const downgraded = await bridge.handle(req("POST", "/harness/sessions/desk-yolo/send", { text: "继续", full_auto: false }, legacy));
+    assert.equal(downgraded.status, 200);
+    assert.deepEqual(zcode.named("setMode").at(-1), { taskId: "desk-yolo", mode: "build" });
+    assert.equal((await bridge.handle(req("POST", "/harness/sessions/desk-yolo/send", { text: "再来", full_auto: true }, iphone))).status, 200);
+  }, { recentWorkspaces: [workspace] });
+});
+
+test("two simultaneous requests adopt a desktop task once", async () => {
+  const workspace = "/Users/me/project";
+  await withBridge(async ({ bridge, zcode }) => {
+    zcode.setDesktopTasks([
+      { taskId: "desk-2", workspacePath: workspace, title: "并发", status: "completed", mode: "build", createdAt: 1, updatedAt: 2 },
+    ]);
+    await bridge.handle(req("GET", "/harness/sessions"));
+    const controller = new AbortController();
+    const streaming = bridge.stream(req("GET", "/harness/sessions/desk-2/events?after=0"), () => {}, controller.signal);
+    const sent = await bridge.handle(req("POST", "/harness/sessions/desk-2/send", { text: "hi" }));
+    assert.equal(sent.status, 200);
+    controller.abort();
+    await streaming;
+    assert.equal(zcode.subscriptionCount(), 1);
+  }, { recentWorkspaces: [workspace] });
+});
+
+test("callers without an identity are restricted only once the relay can identify callers (0.2)", async () => {
+  await withBridge(async ({ bridge, zcode, dir }) => {
+    const id = await createSession(bridge, dir);
+    zcode.fire(id, permission("s1", "Bash", { command: "ls" }));
+    bridge.strictCallers = true;
+    assert.equal((await bridge.handle(req("POST", `/harness/sessions/${id}/approval`, { choice: "once", approval_id: "s1" }, unknown))).status, 403);
+    bridge.strictCallers = false;
+    assert.equal((await bridge.handle(req("POST", `/harness/sessions/${id}/approval`, { choice: "once", approval_id: "s1" }, unknown))).status, 200);
+  });
+});
+
+test("encoded path tricks in the session id are rejected", async () => {
+  await withBridge(async ({ bridge }) => {
+    for (const bad of ["..%2F..%2Fv1%2Fmodels", "a%2Fb", "%2E%2E"]) {
+      const res = await bridge.handle(req("POST", `/harness/sessions/${bad}/send`, { text: "x" }));
+      // 400 = 会话 id 被拒;404 = URL 规范化后已不是手机接口。两者都没被转发(转发会是 502)。
+      assert.ok(res.status === 400 || res.status === 404, `${bad} → ${res.status}`);
+    }
+  });
 });

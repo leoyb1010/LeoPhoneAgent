@@ -26,6 +26,11 @@ export type LinkBridgeDeps = {
   recentWorkspaces?: () => Promise<string[]>;
 };
 
+/** 会话 id 就是任务 id:只允许普通字符,挡掉编码后的 `/`、`..` 这类路径花样。 */
+function validSessionId(id: string): boolean {
+  return id.length > 0 && id.length <= 200 && !id.includes("/") && !id.includes("..") && !/[\\\s]/.test(id);
+}
+
 /** 桌面上开的任务:手机列表里能看到,点开或发消息时桥接当场接过来。 */
 type DesktopTask = {
   taskId: string;
@@ -84,6 +89,13 @@ function mayUseFullAuto(caller: Caller): boolean {
 export class LinkBridge {
   private readonly sessions = new Map<string, LinkSession>();
   private readonly done = new Map<string, { at: number; response: Promise<LinkResponse> }>();
+  /** 正在接管的桌面任务:同一个任务同时来两个请求时只接一次(否则两份日志写同一个文件、订阅泄漏)。 */
+  private readonly adopting = new Map<string, Promise<LinkSession | null>>();
+  /**
+   * 连着的是中继 0.2(注册回执带 version):它会给每个请求附上调用方,这时认不出身份的请求一律按旧版设备对待。
+   * 中继 0.1 不附调用方,所有请求都是 unknown —— 那时不能收紧,否则连你的 iPhone 也批不了命令。
+   */
+  strictCallers = false;
   /** 最近一次列出的桌面任务;接管时按它找工作区。 */
   private desktopTasks = new Map<string, DesktopTask>();
 
@@ -140,6 +152,7 @@ export class LinkBridge {
       journalDir: this.deps.journalDir,
       push: this.deps.push,
       logger: this.deps.logger,
+      strictCallers: () => this.strictCallers,
     });
   }
 
@@ -154,10 +167,14 @@ export class LinkBridge {
     if (seen) return seen.response;
     const response = this.route(method, url, req);
     this.done.set(req.requestId, { at: Date.now(), response });
-    // 5xx 是没做成,允许重试。
-    void response.then((result) => {
-      if (result.status >= 500) this.done.delete(req.requestId!);
-    });
+    // 5xx 是没做成,允许重试;抛异常同样允许重试,且不能留下没人接的 rejection 拖垮 Host。
+    const requestId = req.requestId;
+    void response.then(
+      (result) => {
+        if (result.status >= 500) this.done.delete(requestId);
+      },
+      () => this.done.delete(requestId),
+    );
     return response;
   }
 
@@ -167,9 +184,10 @@ export class LinkBridge {
     const match = /^\/harness\/sessions\/([^/]+)\/events$/.exec(url.pathname);
     if (!match) return;
     const sessionId = decodeURIComponent(match[1]!);
+    if (!validSessionId(sessionId)) return;
     const session = this.sessions.get(sessionId) ?? (await this.adoptDesktopTask(sessionId));
     if (!session) {
-      await this.forwardStream(req.path, write, signal);
+      await this.forwardStream(url.pathname + url.search, write, signal);
       return;
     }
     const parsed = Number.parseInt(url.searchParams.get("after") ?? "0", 10);
@@ -197,7 +215,7 @@ export class LinkBridge {
       return { status: 200, body: { status: "ok", platform: "leoagent", version: VERSION, server: "leophoneagent", app_version: this.deps.appVersion } };
     }
     if (pathname === "/v1/capabilities" && method === "GET") return this.capabilities();
-    if (pathname === "/v1/grok/token" && method === "GET") return this.forward("GET", req.path);
+    if (pathname === "/v1/grok/token" && method === "GET") return this.forward("GET", url.pathname);
     if (pathname === "/harness/full-auto" && method === "POST") return this.fullAutoOff(req);
     if (pathname === "/harness/sessions") {
       if (method === "GET") return this.list();
@@ -207,8 +225,9 @@ export class LinkBridge {
     const match = /^\/harness\/sessions\/([^/]+)\/(send|approval|stop)$/.exec(pathname);
     if (!match || method !== "POST") return error(405, "Method not allowed");
     const sessionId = decodeURIComponent(match[1]!);
+    if (!validSessionId(sessionId)) return error(400, "会话 id 不合法");
     const session = this.sessions.get(sessionId) ?? (await this.adoptDesktopTask(sessionId));
-    if (!session) return this.forward("POST", req.path, req.body);
+    if (!session) return this.forward("POST", url.pathname, req.body);
     const body = record(req.body);
     switch (match[2]) {
       case "send":
@@ -254,7 +273,15 @@ export class LinkBridge {
   }
 
   /** 手机点开或给桌面任务发消息:接过来,之后和手机开的任务一样续传、审批、停止。 */
-  private async adoptDesktopTask(taskId: string): Promise<LinkSession | null> {
+  private adoptDesktopTask(taskId: string): Promise<LinkSession | null> {
+    const inFlight = this.adopting.get(taskId);
+    if (inFlight) return inFlight;
+    const adoption = this.adopt(taskId).finally(() => this.adopting.delete(taskId));
+    this.adopting.set(taskId, adoption);
+    return adoption;
+  }
+
+  private async adopt(taskId: string): Promise<LinkSession | null> {
     const task = this.desktopTasks.get(taskId);
     if (!task) return null;
     const session = this.newSession(task.taskId, task.cwd, task.mode);
@@ -353,7 +380,13 @@ export class LinkBridge {
     const session = this.newSession(taskId, cwd, fullAuto ? "yolo" : "build");
     session.lastCaller = req.caller;
     this.sessions.set(taskId, session);
-    await session.open();
+    try {
+      await session.open();
+    } catch (cause) {
+      this.sessions.delete(taskId);
+      await session.close().catch(() => undefined);
+      return error(502, `Mac 上打开任务日志失败:${cause instanceof Error ? cause.message : String(cause)}`);
+    }
     session.emit({ event: "session.created", harness: ZCODE, cwd, full_auto: fullAuto });
     if (prompt) {
       try {
@@ -377,6 +410,11 @@ export class LinkBridge {
       } catch (cause) {
         return error(502, `切换模式失败:${cause instanceof Error ? cause.message : String(cause)}`);
       }
+    }
+    // 处在全自动(完全访问)的任务 —— 手机开的、Mac 桌面上自己设的、重启后认回来的 —— 只接受 iPhone 的消息:
+    // 否则旧版设备或主钥匙给它发一句话,就能让 Mac 免审批地跑命令。
+    if (session.isFullAuto && !mayUseFullAuto(caller)) {
+      return error(403, "这个任务在 Mac 上是全自动(完全访问)模式,只接受已配对 iPhone 发来的消息;要继续,请在 iPhone 上发,或在 Mac 上把它切回「先问我」");
     }
     try {
       await session.send(text, caller);

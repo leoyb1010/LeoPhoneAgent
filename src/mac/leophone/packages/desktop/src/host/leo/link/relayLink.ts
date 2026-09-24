@@ -189,7 +189,9 @@ export class RelayLink {
         }
         switch (frame["type"]) {
           case "registered":
-            this.logger.info("[leo/link] connected to relay", { name: this.config.name });
+            this.logger.info("[leo/link] connected to relay", { name: this.config.name, relay: frame["version"] ?? "0.1" });
+            // 0.2 起回执带 version,并且每个请求都附调用方:从此认不出身份的请求按旧版设备对待。
+            this.bridge.strictCallers = typeof frame["version"] === "string";
             if (typeof frame["machine_key"] === "string" && frame["machine_key"]) {
               void this.machineKeys.set(frame["machine_key"]).catch((error: unknown) =>
                 this.logger.warn("[leo/link] storing machine key failed", { error: String(error) }));
@@ -284,8 +286,10 @@ export class RelayLink {
  * 机器专属钥匙存 macOS 钥匙串。写入走 `security -i` 的标准输入,钥匙不出现在
  * 命令行参数里(`ps` 看不到);Host 进程没有别的钥匙串通道。
  */
-export function keychainMachineKeyStore(account: string, service = "com.leoyuan.leophoneagent.link"): MachineKeyStore {
+export function keychainMachineKeyStore(rawAccount: string, service = "com.leoyuan.leophoneagent.link"): MachineKeyStore {
   const run = promisify(execFile);
+  // 机器名来自主机名或环境变量,会被写进 `security -i` 的命令行:只留安全字符,挡掉引号、反引号、$ 这类注入。
+  const account = rawAccount.replace(/[^A-Za-z0-9._-]/g, "_") || "mac";
   return {
     async get() {
       try {

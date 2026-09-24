@@ -10,6 +10,16 @@ type Logger = { info: (msg: string, meta?: unknown) => void; warn: (msg: string,
 const PROVIDER_NAME = "订阅账号(Claude / ChatGPT / Copilot)";
 const ID_FILE = leoPath("oauth", "provider-id");
 
+function isLocalProxy(baseUrl: string | null | undefined): boolean {
+  if (!baseUrl) return true;
+  try {
+    const url = new URL(baseUrl);
+    return (url.hostname === "127.0.0.1" || url.hostname === "localhost") && Number(url.port) === LEO_HTTP_PORT;
+  } catch {
+    return false;
+  }
+}
+
 function readProviderId(): string | null {
   try {
     return existsSync(ID_FILE) ? readFileSync(ID_FILE, "utf8").trim() || null : null;
@@ -31,10 +41,25 @@ export async function syncSubscriptionProvider(
   try {
     const models = await loggedInModels();
     const view = (await providerSettings.getView()) as unknown as {
-      providers?: Array<{ providerId: string; personalModelIds?: readonly string[]; models?: Array<{ modelId: string }> }>;
+      providers?: Array<{
+        providerId: string;
+        personalModelIds?: readonly string[];
+        models?: Array<{ modelId: string }>;
+        effectiveConfig?: { api?: { baseUrl?: string | null } };
+      }>;
     };
     let providerId = readProviderId();
-    const existing = providerId ? view.providers?.find((p) => p.providerId === providerId) : undefined;
+    let existing = providerId ? view.providers?.find((p) => p.providerId === providerId) : undefined;
+
+    // 这个供应商只在还指向本机代理时归我们管。你在设置里把它改成了自己的网关(地址不是本机代理),
+    // 它就是你的了:不删你加的模型、不改你的地址和钥匙;订阅账号登录后另建一个供应商。
+    // 以前没有这道判断,没登订阅账号时每次启动都会清空它的模型。
+    if (existing && !isLocalProxy(existing.effectiveConfig?.api?.baseUrl)) {
+      logger.info("[leo] 订阅供应商已被改成自定义网关,不再同步它");
+      existing = undefined;
+      providerId = null;
+      if (models.length === 0) return;
+    }
 
     if (models.length === 0) {
       // 一个账号都没登:有登记过的就清空模型,但保留供应商条目(下次登录直接复用)。

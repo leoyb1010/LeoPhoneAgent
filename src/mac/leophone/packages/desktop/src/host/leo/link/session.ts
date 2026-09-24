@@ -49,6 +49,8 @@ export type LinkSessionDeps = {
   /** 已落盘的关键事件交给中继(APNs)。 */
   push: (event: HarnessEvent) => void;
   logger: Logger;
+  /** 中继 0.2 起为 true:认不出身份的调用方按旧版设备对待(见 LinkBridge.strictCallers)。 */
+  strictCallers?: () => boolean;
 };
 
 /**
@@ -186,6 +188,7 @@ export class LinkSession {
       return;
     }
     // 正在跑的,等流里的 task_complete(cancelled);内核没回就兜底,别让手机一直转圈。
+    if (this.stopTimer) clearTimeout(this.stopTimer);
     this.stopTimer = setTimeout(() => {
       this.stopTimer = null;
       if (!TERMINAL.has(this.status)) this.emit({ event: "run.cancelled" });
@@ -272,7 +275,8 @@ export class LinkSession {
 
   /** 旧版设备钥匙与主钥匙只能批只读工具和工作区内的改文件;命令、联网、MCP、工作流只能拒绝。 */
   private callerMayAllow(caller: Caller, pending: Pending): boolean {
-    if (caller.kind === "iphone" || caller.kind === "unknown") return true;
+    if (caller.kind === "iphone") return true;
+    if (caller.kind === "unknown" && !(this.deps.strictCallers?.() ?? false)) return true;
     if (LEGACY_READ_ONLY_TOOLS.has(pending.tool)) return true;
     if (LEGACY_EDIT_TOOLS.has(pending.tool)) return isInside(this.cwd, pending.target);
     return false;

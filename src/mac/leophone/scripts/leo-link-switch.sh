@@ -31,6 +31,14 @@ print("桥接开关 link.json:", "开" if enabled else "关")
 PY
 }
 
+has_relay() {
+  python3 - "$1" <<'PY'
+import plistlib, sys
+env = plistlib.load(open(sys.argv[1], "rb")).get("EnvironmentVariables", {})
+sys.exit(0 if env.get("LEOAGENT_RELAY_URL") else 1)
+PY
+}
+
 reload_leoagent() {
   launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true
   # bootout 是异步的:旧实例没卸干净就 bootstrap 会报 "5: Input/output error"。等它消失,再重试几次。
@@ -57,23 +65,39 @@ case "${1:-}" in
     status
     ;;
   --rollback)
-    backup=$(ls -t "$PLIST".bak-link-* 2>/dev/null | head -1 || true)
-    [[ -n "$backup" ]] || { echo "找不到 plist 备份($PLIST.bak-link-*),不动任何东西" >&2; exit 1; }
+    # 只认还带中继地址的备份:连着切换两次时,较新的备份可能已经是切换后的版本。
+    backup=""
+    for candidate in $(ls -t "$PLIST".bak-link-* 2>/dev/null); do
+      if has_relay "$candidate"; then backup=$candidate; break; fi
+    done
+    [[ -n "$backup" ]] || { echo "找不到带中继地址的 plist 备份($PLIST.bak-link-*),不动任何东西" >&2; exit 1; }
     umask 077
     print '{"enabled": false}' > "$SWITCH"
     echo "桥接开关已关,等 App 让出机器名…"
     sleep 20
     cp "$backup" "$PLIST"
     echo "已恢复 $backup"
-    reload_leoagent
+    if ! reload_leoagent; then
+      # leoagent 起不来就把机器名还给桥接,手机至少还有一条路。
+      print '{"enabled": true}' > "$SWITCH"
+      echo "leoagent 没起来,已重新打开桥接开关" >&2
+      exit 1
+    fi
     status
     ;;
   "")
     [[ -f "$PLIST" ]] || { echo "没有 $PLIST" >&2; exit 1; }
+    umask 077
+    if ! has_relay "$PLIST"; then
+      # 已经切换过:不再备份(否则备份的是没有中继地址的版本,回滚时就回不去了),只确保桥接开着。
+      print '{"enabled": true}' > "$SWITCH"
+      echo "已经切换过了:leoagent 不注册中继,桥接开关已开"
+      status
+      exit 0
+    fi
     ts=$(date +%Y%m%d%H%M%S)
     cp "$PLIST" "$PLIST.bak-link-$ts"
     echo "已备份 → $PLIST.bak-link-$ts"
-    umask 077
     python3 - "$PLIST" <<'PY'
 import plistlib, sys
 path = sys.argv[1]
@@ -83,7 +107,13 @@ env.pop("LEOAGENT_RELAY_URL", None)
 env.pop("LEOAGENT_RELAY_KEY", None)
 plistlib.dump(data, open(path, "wb"))
 PY
-    reload_leoagent
+    if ! reload_leoagent; then
+      # 改完 leoagent 起不来:恢复原 plist 让它照旧注册中继,桥接不开,手机走原来的路。
+      cp "$PLIST.bak-link-$ts" "$PLIST"
+      reload_leoagent || true
+      echo "切换失败,已恢复原来的 leoagent 配置" >&2
+      exit 1
+    fi
     print '{"enabled": true}' > "$SWITCH"
     echo "桥接开关已开:LeoPhoneAgent 15 秒内接管中继连接"
     status
