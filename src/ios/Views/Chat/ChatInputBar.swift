@@ -369,10 +369,6 @@ private struct AttachmentChip: View {
         }
     }
 
-    private static func loadImage(from url: URL) -> UIImage? {
-        downsampleImage(fileURL: url, maxPixelSize: 256)
-    }
-
     /// URL-based downsample: lets ImageIO stream the source from disk, so
     /// thumbnailing a very large image file (Files app allows 100MB+ picks)
     /// never loads the full bytes into memory the way `Data(contentsOf:)` +
@@ -751,7 +747,6 @@ struct QueuedAttachmentPreview: View {
 
 /// Async image tile for local cache URLs (InputAttachment).
 // MARK: - PastableTextView (paste image/file support)
-
 
 class PastableUITextView: UITextView, UIDropInteractionDelegate {
     var onPasteImage: ((UIImage) -> Void)?
@@ -1651,7 +1646,6 @@ struct PastableTextFieldRepresentable: UIViewRepresentable {
         }
     }
 }
-
 
 // MARK: - UIView helpers (local copy for cross-file access)
 

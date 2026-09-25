@@ -41,19 +41,45 @@ enum ModelSwitcher {
     static func isPinned(_ key: String) -> Bool { pinnedKeys.contains(key) }
 
     /// 钉/取消钉。已满时钉入失败,返回 false 让调用方能如实提示。
+    ///
+    /// 上限只数**看得见**的常用:删掉的供应商留下的钉选不显示,却曾照样
+    /// 占名额 —— 6 个里删掉一个供应商,只剩 2 个可见,却提示"已满 6 个"。
     @discardableResult
-    static func togglePin(_ key: String) -> Bool {
+    static func togglePin(_ key: String, store: ProviderConfigStore = .shared) -> Bool {
         guard !key.isEmpty else { return false }
+        // 顺手清掉已删除供应商的遗留(实例 id 不会复用,删了就是永久的)。
+        forget(instanceIds: store.deletedInstanceIds)
         var list = pinnedKeys
         if let idx = list.firstIndex(of: key) {
             list.remove(at: idx)
             pinnedKeys = list
             return true
         }
-        guard list.count < maxPinned else { return false }
+        guard pinnedEntries(store: store).count < maxPinned else { return false }
         list.append(key)
         pinnedKeys = list
         return true
+    }
+
+    /// 删掉供应商 / 模型 / 分组时,把指向它们的钉选和最近使用一起摘掉。
+    ///
+    /// 只在**删除**时调用,停用不调:停用的供应商回头启用,它的常用应该回来。
+    static func forget(instanceIds: Set<String> = [], entryIds: Set<String> = [], groupIds: Set<String> = []) {
+        guard !instanceIds.isEmpty || !entryIds.isEmpty || !groupIds.isEmpty else { return }
+        func isGone(_ key: String) -> Bool {
+            ModelChoiceKey.isGone(key, instanceIds: instanceIds, entryIds: entryIds, groupIds: groupIds)
+        }
+        let pins = pinnedKeys
+        let keptPins = pins.filter { !isGone($0) }
+        if keptPins.count != pins.count {
+            pinnedKeys = keptPins
+            ModelPinStore.shared.reload()
+        }
+        let recents = recentKeys
+        let keptRecents = recents.filter { !isGone($0) }
+        if keptRecents.count != recents.count {
+            (SharedContainerStore.sharedDefaults ?? .standard).set(keptRecents, forKey: recentsKey)
+        }
     }
 
     /// 按 key 重排。

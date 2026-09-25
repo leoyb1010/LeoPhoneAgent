@@ -20,8 +20,6 @@
 
 import Foundation
 
-private let logger = AppLogger(category: "Gateway")
-
 // MARK: - Wire types
 
 /// One frame of a run's server-sent event stream.

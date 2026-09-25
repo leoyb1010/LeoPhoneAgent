@@ -855,31 +855,6 @@ enum ChatStoreSyncHydrators {
 
     // MARK: - EnvVars
 
-    private static func buildEnvVars() async -> PortableRecord? {
-        let library = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first!
-        let envURL = library.appendingPathComponent("MinisChat/env-vars.json")
-        guard let data = try? Data(contentsOf: envURL),
-              let json = String(data: data, encoding: .utf8) else { return nil }
-        let secrets: String = {
-            if #available(iOS 17.0, *) {
-                return CloudSyncEngine.exportEnvVarSecrets(envJson: json)
-            }
-            return "[]"
-        }()
-        // [T-apikey fc9a35ec] Stamp upload hash so v1's merger recognises
-        // our own echo. Same rationale as buildProviderConfig.
-        if #available(iOS 17.0, *) {
-            CloudSyncEngine.lastUploadedEnvVarHash =
-                SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-        }
-        let synced = SyncedEnvVars(
-            envVarsJson: json,
-            envSecretsJsonBase64: secrets,
-            updatedAt: Date()
-        )
-        return SyncableTypeRegistry.shared.metadata(for: "EnvVarV2")?.buildPortable(synced)
-    }
-
     private static func mergeEnvVars(record: PortableRecord) async {
         guard let json = stringField(record, "envVarsJson") else { return }
         // [T-apikey fc9a35ec] Delegate to v1 merger (echo detection +

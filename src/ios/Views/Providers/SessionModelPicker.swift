@@ -1,7 +1,5 @@
 import SwiftUI
 
-private let pickerLog = AppLogger(category: "ModelPicker")
-
 /// In-session model picker — thin wrapper around `UnifiedModelPicker` that adds
 /// session binding logic and the non-text-output confirmation alert.
 struct SessionModelPicker: View {

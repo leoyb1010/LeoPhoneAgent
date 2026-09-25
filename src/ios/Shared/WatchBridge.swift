@@ -4,22 +4,21 @@
 //
 //  [T-watch-companion] iPhone side of the Apple Watch companion.
 //
-//  IMPORTANT correction to an earlier assumption: App Group UserDefaults do
-//  NOT cross from iPhone to Watch — an App Group is shared between processes
-//  on ONE device. So the widget snapshot the Home Screen reads is unreachable
-//  from watchOS, and the companion needs WatchConnectivity instead. This file
-//  is that transport.
+//  The watch is a voice device: you speak, it shows (and can read out) the
+//  answer. Everything else — task lists, schedules, session browsing — lives
+//  on the phone. Two ways an answer comes back:
+//    • iPhone in reach: the wrist records, the phone transcribes and runs the
+//      full agent, the final text returns over WatchConnectivity.
+//    • iPhone out of reach (cellular watch): the watch dictates and calls the
+//      user's model directly with a config this file hands it ahead of time
+//      (see `WatchStandalone`).
 //
-//  Direction of travel:
-//    • phone → watch  `updateApplicationContext` with the current agent
-//      status. Last-value-wins semantics are exactly right for "what is the
-//      agent doing"; a queue would just deliver stale frames.
-//    • watch → phone  `sendMessage` naming a quick task to run, which lands
-//      in the same runner the Home Screen widget uses.
-//
-//  Inert when no watch is paired, so shipping it costs nothing.
+//  App Group UserDefaults do NOT cross from iPhone to Watch — an App Group is
+//  shared between processes on ONE device — so everything here goes over
+//  WatchConnectivity. Inert when no watch is paired, so shipping it costs nothing.
 //
 
+import CryptoKit
 import Foundation
 #if canImport(WatchConnectivity)
 import WatchConnectivity
@@ -37,33 +36,109 @@ enum WatchPayloadKey {
     static let status = "status"
     static let activeCount = "activeCount"
     static let updatedAt = "updatedAt"
-    static let quickTasks = "quickTasks"      // [[id, name, symbol]]
-    static let taskId = "taskId"
-
-    static let briefingTask = "briefingTask"
-    static let briefingText = "briefingText"
-    static let sessions = "sessions"          // [[id, title, state, unread]]
-    static let scheduled = "scheduled"        // [[id, name, timeText, enabled]]
     static let requestId = "requestId"
     static let text = "text"
     static let sessionId = "sessionId"
 
     static let kindStatus = "status"
-    static let kindRunQuickTask = "runQuickTask"
-    static let kindStopAll = "stopAll"
     static let kindAsk = "ask"                // watch → phone: run a prompt
     static let kindAskAudio = "askAudio"      // watch → phone: raw audio to transcribe
     static let kindAskReply = "askReply"      // phone → watch: final answer
-    static let kindTranscript = "transcript"  // watch → phone (replyHandler)
-    static let kindStopSession = "stopSession"
+    static let kindCancelAsk = "cancelAsk"    // watch → phone: stop the run behind a request
     // [T-leogateway] Remote-gateway approvals. The wrist is the fastest place
     // to unblock a Mac that is waiting on a yes/no.
     static let kindApprovalRequest = "approvalRequest"   // phone → watch
     static let kindApprovalReply = "approvalReply"       // watch → phone
     static let choices = "choices"
     static let choice = "choice"
-    static let kindScheduledRun = "scheduledRun"
-    static let kindScheduledToggle = "scheduledToggle"
+    // [T-watch-standalone] phone → watch (transferUserInfo): the model the
+    // watch calls directly when the phone is out of reach.
+    static let kindStandaloneConfig = "standaloneConfig"
+}
+
+// MARK: - Standalone answers
+
+/// [T-watch-standalone] Which model a cellular watch calls on its own.
+///
+/// Only API-key providers that speak OpenAI Chat Completions or Anthropic
+/// Messages qualify: OAuth tokens need refreshing on the phone, and the watch
+/// has to stay a small, dependable client. The first usable member of the
+/// default model group wins, so the wrist answers with the same model the
+/// phone would pick.
+enum WatchStandalone {
+    static let enabledKey = "watch.standalone.enabled"
+
+    /// On unless the user turns it off: answering from a cellular watch is
+    /// the point of the feature. Turning it off deletes the key on the watch.
+    static var isEnabled: Bool {
+        get { UserDefaults.standard.object(forKey: enabledKey) as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: enabledKey) }
+    }
+
+    struct Config: Equatable {
+        let format: String          // "openai" | "anthropic"
+        let endpoint: String
+        let model: String
+        let modelName: String
+        let providerName: String
+        let userAgent: String?
+        let apiKey: String
+    }
+
+    enum Unavailable: Error, Equatable {
+        case disabled
+        case noDefaultModel
+        case noSupportedModel
+
+        var explanation: String {
+            switch self {
+            case .disabled: return String(localized: "已关闭。手表离开 iPhone 时不会自己回答。")
+            case .noDefaultModel: return String(localized: "还没有默认模型分组。")
+            case .noSupportedModel:
+                return String(localized: "默认分组里没有 API Key 方式、OpenAI 兼容或 Anthropic 接口的模型。订阅登录（OAuth）的模型只能经 iPhone 使用。")
+            }
+        }
+    }
+
+    @MainActor
+    static func resolve(store: ProviderConfigStore = .shared) -> Result<Config, Unavailable> {
+        guard isEnabled else { return .failure(.disabled) }
+        guard let groupId = store.defaultPrimaryGroupId, let group = store.group(for: groupId) else {
+            return .failure(.noDefaultModel)
+        }
+        for entryId in group.memberEntryIds {
+            guard let entry = store.entry(for: entryId), !entry.isHidden,
+                  let instance = store.instance(for: entry.providerInstanceId),
+                  instance.isEnabled, instance.credentialType == .apiKey, !instance.azureMode,
+                  let key = ProviderKeychainHelper.loadAPIKey(instanceId: instance.id), !key.isEmpty
+            else { continue }
+            let format: String
+            let defaultBase: String
+            let path: String
+            switch instance.providerType {
+            case .openAI:
+                (format, defaultBase, path) = ("openai", "https://api.openai.com", "/chat/completions")
+            case .openRouter:
+                (format, defaultBase, path) = ("openai", "https://openrouter.ai/api", "/chat/completions")
+            case .anthropic:
+                (format, defaultBase, path) = ("anthropic", "https://api.anthropic.com", "/messages")
+            default:
+                continue
+            }
+            let (base, appendV1) = instance.resolvedBaseURL(default: defaultBase)
+            let endpoint = URLBuilding.join(base, appendV1 ? "/v1" : "", path)
+            return .success(Config(
+                format: format,
+                endpoint: endpoint,
+                model: entry.baseModel.id,
+                modelName: entry.model.displayName,
+                providerName: instance.label,
+                userAgent: instance.customUserAgent?.trimmingCharacters(in: .whitespacesAndNewlines),
+                apiKey: key
+            ))
+        }
+        return .failure(.noSupportedModel)
+    }
 }
 
 #if canImport(WatchConnectivity)
@@ -77,12 +152,16 @@ final class WatchBridge: NSObject, ObservableObject {
     }
 
     private var lastPushedSignature: String = ""
+    /// Cheap fingerprint of what the standalone config depends on; the keychain
+    /// is only read when it changes.
+    private var lastStandaloneInputs: String = ""
+    private var lastStandaloneSignature: String = ""
 
     func resetDedupe() { lastPushedSignature = "" }
 
     /// Last ask answer, folded into the application context as a fallback for
     /// when the live message can't be delivered (watch briefly unreachable).
-    private var pendingAskReply: (id: String, text: String)?
+    private var pendingAskReply: (id: String, text: String, sessionId: String)?
 
     /// Handlers keyed by approval id.
     ///
@@ -134,16 +213,19 @@ final class WatchBridge: NSObject, ObservableObject {
         ], replyHandler: nil, errorHandler: { _ in })
     }
 
-    func sendAskReply(requestId: String, text: String) {
+    /// - Parameter sessionId: the phone session that produced the answer, so a
+    ///   follow-up from the wrist continues it.
+    func sendAskReply(requestId: String, text: String, sessionId: String = "") {
         // [T-automation-watch-isolation] Automation runs reuse this delivery
         // path but their answers belong to notifications, not the wrist.
         guard !requestId.hasPrefix("automation-") else { return }
-        pendingAskReply = (requestId, text)
+        pendingAskReply = (requestId, text, sessionId)
         if let session, session.isReachable {
             session.sendMessage([
                 WatchPayloadKey.kind: WatchPayloadKey.kindAskReply,
                 WatchPayloadKey.requestId: requestId,
                 WatchPayloadKey.text: text,
+                WatchPayloadKey.sessionId: sessionId,
             ], replyHandler: nil, errorHandler: { _ in })
         }
         resetDedupe()
@@ -168,32 +250,23 @@ final class WatchBridge: NSObject, ObservableObject {
         #if os(iOS)
         guard session.isPaired, session.isWatchAppInstalled else { return }
         #endif
+        syncStandaloneConfigIfNeeded()
 
         let snapshot = AgentWidgetSnapshotStore.load()
-        let tasks = WidgetQuickTasksStore.load().prefix(4).map { [$0.id, $0.name, $0.symbolName] }
-
         let context: [String: Any] = [
             WatchPayloadKey.kind: WatchPayloadKey.kindStatus,
             WatchPayloadKey.state: snapshot.state.rawValue,
             WatchPayloadKey.title: snapshot.title,
             WatchPayloadKey.status: snapshot.status,
             WatchPayloadKey.activeCount: snapshot.activeCount,
-            WatchPayloadKey.briefingTask: WidgetBriefingStore.load()?.taskName ?? "",
-            WatchPayloadKey.briefingText: String(WatchTextSanitizer.plain(WidgetBriefingStore.load()?.summary ?? "").prefix(300)),
-            WatchPayloadKey.sessions: Self.sessionsPayload(),
-            WatchPayloadKey.scheduled: Self.scheduledPayload(),
             "askReplyId": pendingAskReply?.id ?? "",
             "askReplyText": pendingAskReply?.text ?? "",
+            "askReplySessionId": pendingAskReply?.sessionId ?? "",
             WatchPayloadKey.updatedAt: snapshot.updatedAt.timeIntervalSince1970,
-            WatchPayloadKey.quickTasks: tasks,
         ]
-
-        // [T-watch-signature-count-only] Dedupe on the actual payload. The
-        // signature only counted the tasks, so renaming a quick task or
-        // changing its icon produced an identical signature and the watch kept
-        // showing the old label indefinitely.
-        let taskSignature = tasks.map { $0.joined(separator: "\u{1}") }.joined(separator: "\u{2}")
-        let signature = "\(snapshot.state.rawValue)|\(snapshot.activeCount)|\(snapshot.title)|\(snapshot.status)|\(taskSignature)"
+        // The reply id is part of the signature: the fallback delivery of an
+        // answer must go out even when the agent state itself didn't change.
+        let signature = "\(snapshot.state.rawValue)|\(snapshot.activeCount)|\(snapshot.title)|\(snapshot.status)|\(pendingAskReply?.id ?? "")"
         guard signature != lastPushedSignature else { return }
         lastPushedSignature = signature
 
@@ -203,6 +276,50 @@ final class WatchBridge: NSObject, ObservableObject {
         } catch {
             logger.error("watch context push failed: \(error.localizedDescription)")
         }
+    }
+
+    /// [T-watch-standalone] Hands the watch the model it calls when the phone
+    /// is out of reach, or tells it to forget the key. `transferUserInfo` is
+    /// queued and delivered even if the watch app isn't running; the payload
+    /// travels over the system's encrypted watch channel and the watch moves
+    /// the key into its own Keychain on arrival.
+    func syncStandaloneConfigIfNeeded(force: Bool = false) {
+        guard let session, session.activationState == .activated else { return }
+        #if os(iOS)
+        guard session.isPaired, session.isWatchAppInstalled else { return }
+        #endif
+        let store = ProviderConfigStore.shared
+        let inputs = "\(WatchStandalone.isEnabled)|\(store.configRevision)|\(store.authRevision)|\(store.defaultPrimaryGroupId ?? "")"
+        guard force || inputs != lastStandaloneInputs else { return }
+        lastStandaloneInputs = inputs
+
+        var payload: [String: Any] = [WatchPayloadKey.kind: WatchPayloadKey.kindStandaloneConfig]
+        let signature: String
+        switch WatchStandalone.resolve(store: store) {
+        case .success(let config):
+            let keyDigest = SHA256.hash(data: Data(config.apiKey.utf8)).map { String(format: "%02x", $0) }.joined()
+            signature = [config.format, config.endpoint, config.model, config.modelName, config.userAgent ?? "", keyDigest].joined(separator: "|")
+            payload["format"] = config.format
+            payload["endpoint"] = config.endpoint
+            payload["model"] = config.model
+            payload["modelName"] = config.modelName
+            payload["providerName"] = config.providerName
+            payload["userAgent"] = config.userAgent ?? ""
+            payload["apiKey"] = config.apiKey
+        case .failure(let reason):
+            signature = "none|\(reason)"
+            payload["clear"] = true
+            payload["reason"] = reason.explanation
+        }
+        guard force || signature != lastStandaloneSignature else { return }
+        lastStandaloneSignature = signature
+        // Only the newest config matters; drop any still queued.
+        for transfer in session.outstandingUserInfoTransfers
+        where (transfer.userInfo[WatchPayloadKey.kind] as? String) == WatchPayloadKey.kindStandaloneConfig {
+            transfer.cancel()
+        }
+        session.transferUserInfo(payload)
+        logger.info("standalone config sent to watch (clear=\(payload["clear"] != nil))")
     }
 }
 
@@ -223,6 +340,7 @@ extension WatchBridge: WCSessionDelegate {
             // push to the previous watch, the dedupe skipped the send and the
             // new watch stayed blank until the agent state next changed.
             WatchBridge.shared.resetDedupe()
+            WatchBridge.shared.syncStandaloneConfigIfNeeded(force: true)
             WatchBridge.shared.pushStatus()
         }
     }
@@ -237,9 +355,6 @@ extension WatchBridge: WCSessionDelegate {
     }
     #endif
 
-    /// Watch asked us to run a quick task. Route it through the same runner
-    /// the widget button uses so badges, briefing capture and keep-alive all
-    /// behave identically no matter which surface started the run.
     /// [T-watch-native-voice] Audio envelope from the wrist: JSON header line
     /// + 0x0A + AAC. Transcribed with the SAME system speech stack the app's
     /// voice mode uses, then handed to the ordinary ask runner.
@@ -275,90 +390,31 @@ extension WatchBridge: WCSessionDelegate {
         replyHandler: @escaping ([String: Any]) -> Void
     ) {
         let kind = message[WatchPayloadKey.kind] as? String
-        if kind == WatchPayloadKey.kindAsk {
-            let requestId = (message[WatchPayloadKey.requestId] as? String) ?? UUID().uuidString
+        let requestId = (message[WatchPayloadKey.requestId] as? String) ?? ""
+        switch kind {
+        case WatchPayloadKey.kindAsk:
             let text = (message[WatchPayloadKey.text] as? String) ?? ""
             let sessionId = message[WatchPayloadKey.sessionId] as? String
             replyHandler(["ok": !text.isEmpty])
             guard !text.isEmpty else { return }
+            let id = requestId.isEmpty ? UUID().uuidString : requestId
             Task { @MainActor in
-                await WatchAskRunner.run(requestId: requestId, prompt: text, sessionId: sessionId)
+                await WatchAskRunner.run(requestId: id, prompt: text, sessionId: sessionId)
             }
-            return
-        }
-        if kind == WatchPayloadKey.kindTranscript {
-            let sessionId = (message[WatchPayloadKey.sessionId] as? String) ?? ""
+        case WatchPayloadKey.kindCancelAsk:
             Task { @MainActor in
-                let lines = await WatchAskRunner.transcript(sessionId: sessionId)
-                replyHandler([WatchPayloadKey.text: lines])
+                let stopped = WatchAskRunner.cancel(requestId: requestId)
+                replyHandler(["ok": stopped])
             }
-            return
-        }
-        if kind == WatchPayloadKey.kindApprovalReply {
-            let runId = (message[WatchPayloadKey.requestId] as? String) ?? ""
+        case WatchPayloadKey.kindApprovalReply:
             let choice = (message[WatchPayloadKey.choice] as? String) ?? ""
-            replyHandler(["ok": !runId.isEmpty && !choice.isEmpty])
-            guard !runId.isEmpty, !choice.isEmpty else { return }
+            replyHandler(["ok": !requestId.isEmpty && !choice.isEmpty])
+            guard !requestId.isEmpty, !choice.isEmpty else { return }
             Task { @MainActor in
-                WatchBridge.shared.resolveApproval(approvalId: runId, choice: choice)
+                WatchBridge.shared.resolveApproval(approvalId: requestId, choice: choice)
             }
-            return
-        }
-        if kind == WatchPayloadKey.kindStopSession {
-            let sessionId = (message[WatchPayloadKey.sessionId] as? String) ?? ""
-            Task { @MainActor in
-                ViewModelCache.shared.get(for: sessionId)?.cancel(queuePolicy: .discardQueuedPrompts)
-                WatchBridge.shared.resetDedupe()
-                WatchBridge.shared.pushStatus()
-            }
-            replyHandler(["ok": true])
-            return
-        }
-        if kind == WatchPayloadKey.kindScheduledRun || kind == WatchPayloadKey.kindScheduledToggle {
-            let id = (message[WatchPayloadKey.sessionId] as? String) ?? ""
-            let isRun = (kind == WatchPayloadKey.kindScheduledRun)
-            Task { @MainActor in
-                if isRun {
-                    if let task = ScheduledTaskStore.shared.tasks.first(where: { $0.id == id }) {
-                        _ = await QuickTaskWidgetRunner.run(taskId: task.quickTaskId)
-                    }
-                } else {
-                    if let task = ScheduledTaskStore.shared.tasks.first(where: { $0.id == id }) {
-                        ScheduledTaskStore.shared.setEnabled(!task.isEnabled, id: id)
-                    }
-                }
-                WatchBridge.shared.resetDedupe()
-                WatchBridge.shared.pushStatus()
-            }
-            replyHandler(["ok": true])
-            return
-        }
-        if kind == WatchPayloadKey.kindStopAll {
-            Task { @MainActor in
-                await WidgetIntentBridge.shared.stopAllTasks()
-                WatchBridge.shared.resetDedupe()
-                WatchBridge.shared.pushStatus()
-            }
-            replyHandler(["ok": true])
-            return
-        }
-        guard (message[WatchPayloadKey.kind] as? String) == WatchPayloadKey.kindRunQuickTask,
-              let taskId = message[WatchPayloadKey.taskId] as? String else {
+        default:
             replyHandler(["ok": false])
-            return
-        }
-        // [T-watch-reply-before-dispatch] The reply used to be sent here,
-        // synchronously, before the task had even been looked up — so the watch
-        // said "started on iPhone" for a task id that did not exist, or for a
-        // run that failed immediately. Worse: a watch message often wakes the
-        // iPhone app from not-running, and returning the reply releases the
-        // process assertion that delivery holds, so the work could be suspended
-        // before it began. Reply only once the run has actually been dispatched,
-        // and report what really happened.
-        Task { @MainActor in
-            let started = await QuickTaskWidgetRunner.run(taskId: taskId)
-            WatchBridge.shared.pushStatus()
-            replyHandler(["ok": started])
         }
     }
 }
@@ -372,6 +428,7 @@ final class WatchBridge {
     static let shared = WatchBridge()
     func activate() {}
     func pushStatus() {}
+    func syncStandaloneConfigIfNeeded(force: Bool = false) {}
 }
 
 #endif
@@ -456,33 +513,15 @@ enum WatchTextSanitizer {
     }
 }
 
-// MARK: - Watch payload builders
-
-extension WatchBridge {
-    /// Top sessions for the wrist: id, title, state, unread. Small and cold —
-    /// rides the same deduped application context as everything else.
-    @MainActor static func sessionsPayload() -> [[String]] {
-        let items = WidgetRecentSessionsStore.load().prefix(5)
-        return items.map { item in
-            let running = SessionActivityTracker.shared.activeSessions.contains(item.id)
-            let unread = SessionBadgeStore.shared.badgeStates[item.id]?.contains(.unread) ?? false
-            return [item.id, item.title, running ? "running" : "idle", unread ? "1" : "0"]
-        }
-    }
-
-    @MainActor static func scheduledPayload() -> [[String]] {
-        ScheduledTaskStore.shared.tasks.prefix(6).map { task in
-            let name = QuickTaskStore.shared.definition(for: task.quickTaskId)?.displayName ?? task.quickTaskId
-            return [task.id, name, "\(task.cadence.title) \(task.timeText)", task.isEnabled ? "1" : "0"]
-        }
-    }
-}
-
 /// [T-watch-ask] Runs a wrist-dictated prompt through the ordinary agent
 /// loop (new session, or follow-up into an existing one) and delivers the
 /// final assistant text back to the watch.
 @MainActor
 enum WatchAskRunner {
+    /// Request id → session id of runs started from the wrist, so the watch
+    /// can cancel the one it is waiting on.
+    private static var running: [String: String] = [:]
+
     static func run(requestId: String, prompt: String, sessionId: String?) async {
         let previousActive = AIChatViewModel.activeSessionId
         let vm: AIChatViewModel
@@ -498,6 +537,8 @@ enum WatchAskRunner {
             deliver(requestId: requestId, text: "无法创建会话。")
             return
         }
+        running[requestId] = sid
+        defer { running.removeValue(forKey: requestId) }
         vm.inputText = prompt
         vm.send()
         // Wait for the run to settle (same observation pattern as the widget
@@ -514,25 +555,17 @@ enum WatchAskRunner {
         }
         let reply = await lastAssistantText(sessionId: sid, limit: 2000)
         deliver(requestId: requestId,
-                text: reply.isEmpty ? "任务已执行，但没有产生文本回复。可在 iPhone 上查看会话。" : reply)
+                text: reply.isEmpty ? "任务已执行，但没有产生文本回复。可在 iPhone 上查看会话。" : reply,
+                sessionId: sid)
         WatchBridge.shared.resetDedupe()
         WatchBridge.shared.pushStatus()
     }
 
-    static func transcript(sessionId: String) async -> String {
-        let messages = await ChatStore.shared.loadMessages(sessionId: sessionId)
-        let recent = messages.suffix(6)
-        var lines: [String] = []
-        for message in recent {
-            let text = message.parts.compactMap { part -> String? in
-                if case .text(let value) = part { return value }
-                return nil
-            }.joined(separator: " ")
-            guard !text.isEmpty else { continue }
-            let speaker = message.role == .user ? "你" : "Leo"
-            lines.append("\(speaker): \(String(WatchTextSanitizer.plain(text).prefix(400)))")
-        }
-        return lines.isEmpty ? "（此会话暂无文本内容）" : lines.joined(separator: "\n\n")
+    /// Stops the run behind a wrist request. False when it already finished.
+    static func cancel(requestId: String) -> Bool {
+        guard let sid = running[requestId], let vm = ViewModelCache.shared.get(for: sid) else { return false }
+        vm.cancel(queuePolicy: .discardQueuedPrompts)
+        return true
     }
 
     private static func lastAssistantText(sessionId: String, limit: Int) async -> String {
@@ -545,7 +578,7 @@ enum WatchAskRunner {
         return String(text.prefix(limit))
     }
 
-    private static func deliver(requestId: String, text: String) {
-        WatchBridge.shared.sendAskReply(requestId: requestId, text: WatchTextSanitizer.plain(text))
+    private static func deliver(requestId: String, text: String, sessionId: String = "") {
+        WatchBridge.shared.sendAskReply(requestId: requestId, text: WatchTextSanitizer.plain(text), sessionId: sessionId)
     }
 }

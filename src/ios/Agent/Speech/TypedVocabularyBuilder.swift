@@ -21,8 +21,6 @@ actor TypedVocabularyBuilder {
     private static let cursorKey = "vocab_last_built_at"
     private static let lastBuildKey = "vocab_last_build_time"
 
-    /// Don't rebuild on every message — batch up (§12.3-2).
-    private let minNewMessages = 20
     private let minInterval: TimeInterval = 3600
 
     private var isBuilding = false

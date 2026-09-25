@@ -5,7 +5,8 @@
 //  [T-watch-motion] The wrist edition of the leotexiao selections. Watch hard
 //  lines: one looping effect on screen at a time, loops only while active,
 //  entrances ≤0.5s, transform/opacity/strokeEnd only, every signature moment
-//  pairs with a haptic, Reduce Motion degrades to static.
+//  pairs with a haptic, Reduce Motion and Always On (wrist down, luminance
+//  reduced) degrade to static.
 //
 
 import SwiftUI
@@ -17,9 +18,12 @@ struct LifeRing: View {
     /// "idle" | "running" | "completed" | "failed"
     let state: String
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.isLuminanceReduced) private var isLuminanceReduced
     @Environment(\.scenePhase) private var scenePhase
     @State private var breathe = false
     @State private var beamAngle = 0.0
+
+    private var still: Bool { reduceMotion || isLuminanceReduced }
 
     private var ringColor: Color {
         switch state {
@@ -34,7 +38,7 @@ struct LifeRing: View {
         ZStack {
             Circle()
                 .stroke(ringColor.opacity(0.25), lineWidth: 4)
-            if state == "running", !reduceMotion {
+            if state == "running", !still {
                 // Border Beam: a bright arc travelling the ring.
                 Circle()
                     .trim(from: 0, to: 0.18)
@@ -45,23 +49,23 @@ struct LifeRing: View {
                     .stroke(ringColor.opacity(state == "idle" ? 0.6 : 1), lineWidth: 4)
             }
         }
-        .scaleEffect(state == "idle" && breathe && !reduceMotion ? 1.04 : 1)
+        .scaleEffect(state == "idle" && breathe && !still ? 1.04 : 1)
         .onAppear { startLoops() }
         .onChange(of: state) { _ in startLoops() }
         .onChange(of: scenePhase) { phase in
             if phase == .active { startLoops() }
         }
+        .onChange(of: still) { _ in startLoops() }
     }
 
     private func startLoops() {
-        guard scenePhase != .background, !reduceMotion else { return }
+        breathe = false
+        beamAngle = 0
+        guard scenePhase != .background, !still else { return }
         if state == "idle" {
             withAnimation(.easeInOut(duration: 1.6).repeatForever(autoreverses: true)) { breathe = true }
-        } else {
-            breathe = false
         }
         if state == "running" {
-            beamAngle = 0
             withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) { beamAngle = 360 }
         }
     }
@@ -91,23 +95,43 @@ struct RadarPulseOnce: View {
 
 struct WorkingBars: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var on = false
+    @Environment(\.isLuminanceReduced) private var isLuminanceReduced
 
     var body: some View {
-        HStack(spacing: 3) {
-            ForEach(0..<4, id: \.self) { index in
-                RoundedRectangle(cornerRadius: 1.5)
-                    .fill(.teal)
-                    .frame(width: 3, height: on ? 14 : 5)
-                    .animation(
-                        reduceMotion ? nil : .easeInOut(duration: 0.45)
-                            .repeatForever(autoreverses: true)
-                            .delay(Double(index) * 0.12),
-                        value: on)
-            }
+        // The looping bars are their own view so each wrist raise starts a
+        // fresh loop, and Always On drops the loop entirely.
+        if reduceMotion || isLuminanceReduced {
+            Bars(on: false, animated: false)
+        } else {
+            LoopingBars()
         }
-        .frame(height: 16)
-        .onAppear { on = true }
+    }
+
+    private struct LoopingBars: View {
+        @State private var on = false
+        var body: some View {
+            Bars(on: on, animated: true).onAppear { on = true }
+        }
+    }
+
+    private struct Bars: View {
+        let on: Bool
+        let animated: Bool
+        var body: some View {
+            HStack(spacing: 3) {
+                ForEach(0..<4, id: \.self) { index in
+                    RoundedRectangle(cornerRadius: 1.5)
+                        .fill(.teal)
+                        .frame(width: 3, height: on ? 14 : 5)
+                        .animation(
+                            animated ? .easeInOut(duration: 0.45)
+                                .repeatForever(autoreverses: true)
+                                .delay(Double(index) * 0.12) : nil,
+                            value: on)
+                }
+            }
+            .frame(height: 16)
+        }
     }
 }
 
@@ -126,42 +150,6 @@ struct LiveLevelBars: View {
         }
         .frame(height: 34)
         .animation(.linear(duration: 0.08), value: level)
-    }
-}
-
-// MARK: - Hold-to-confirm (Countdown Ring fill + escalating haptics)
-
-struct HoldToConfirmButton<Label: View>: View {
-    let duration: Double
-    let tint: Color
-    let action: () -> Void
-    @ViewBuilder let label: () -> Label
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var pressing = false
-    @State private var fired = false
-
-    var body: some View {
-        label()
-            .padding(.vertical, 6)
-            .frame(maxWidth: .infinity)
-            .background(tint.opacity(0.18), in: Capsule())
-            .overlay(
-                Capsule()
-                    .trim(from: 0, to: pressing || fired ? 1 : 0.0001)
-                    .stroke(tint, lineWidth: 2.5)
-                    .animation(pressing ? .linear(duration: duration) : .easeOut(duration: 0.15), value: pressing)
-            )
-            .scaleEffect(pressing && !reduceMotion ? 0.96 : 1)
-            .onLongPressGesture(minimumDuration: duration, perform: {
-                fired = true
-                WKInterfaceDevice.current().play(.success)
-                action()
-                Task { try? await Task.sleep(nanoseconds: 400_000_000); fired = false }
-            }, onPressingChanged: { isPressing in
-                pressing = isPressing
-                if isPressing { WKInterfaceDevice.current().play(.start) }
-            })
     }
 }
 

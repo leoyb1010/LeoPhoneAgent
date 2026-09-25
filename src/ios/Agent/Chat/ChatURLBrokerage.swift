@@ -1,8 +1,6 @@
 import AVFoundation
 import Foundation
 
-private let logger = AppLogger(category: "AIChatVM")
-
 // MARK: - Speech Finished Delegate
 
 /// Restarts silent audio keep-alive after TTS finishes speaking,

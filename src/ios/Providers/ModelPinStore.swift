@@ -38,6 +38,12 @@ final class ModelPinStore: ObservableObject {
         return ok
     }
 
+    /// 存储被别处改过(删除供应商时的级联清理)后重新读一次。
+    func reload() {
+        let stored = ModelSwitcher.pinnedKeys
+        if stored != keys { keys = stored }
+    }
+
     func move(visibleKeys: [String], from source: IndexSet, to destination: Int) {
         ModelSwitcher.movePinned(visibleKeys: visibleKeys, from: source, to: destination)
         keys = ModelSwitcher.pinnedKeys

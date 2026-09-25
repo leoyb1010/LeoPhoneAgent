@@ -14,8 +14,6 @@
 
 import Foundation
 
-private let coordLog = AppLogger(category: "MountedFolderCoordinator")
-
 enum MountedFolderCoordinator {
     /// iCloud download wait timeout for placeholder files. Short because
     /// `ensureDownloaded` blocks the calling thread via polling — keeping it

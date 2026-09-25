@@ -17,8 +17,8 @@ extension AIChatViewModel {
         if #available(iOS 26.0, *) {
             AgentContinuedProcessingManager.shared.begin(
                 sessionKey: continuedKey,
-                title: "LeoPhoneAgent task",
-                subtitle: "Preparing",
+                title: "LeoPhoneAgent",
+                subtitle: String(localized: "Preparing"),
                 onExpiration: { [weak self] in
                     guard let self else { return }
                     // [T-bg-false-fail] 继续处理授权到期 ≠ 任务失败。静音
@@ -135,10 +135,26 @@ extension AIChatViewModel {
         let lastAssistantError = messages.last(where: { $0.role == .assistant })?.error
         let completionHasError = lastAssistantError != nil || errorMessage != nil
         if #available(iOS 26.0, *), !continuedKey.isEmpty {
-            // 与通知同一套语义:用户主动停止不算失败,挂起也不算。
+            // 与通知同一套语义:挂起、用户主动停止都不算失败;可恢复的中断如实说
+            // "已中断",不可恢复的错误才报失败。系统横幅只有成功/失败两态,
+            // 所以把真实情况写进副标题再收尾。
+            let failed = completionHasError && !backgroundSuspended && !userDidCancel
+            let subtitle: String
+            if backgroundSuspended && !userDidCancel {
+                subtitle = String(localized: "已暂停，回到 App 继续")
+            } else if userDidCancel {
+                subtitle = String(localized: "Stopped")
+            } else if failed && canResume {
+                subtitle = String(localized: "已中断，回到 App 继续")
+            } else if failed {
+                subtitle = String(localized: "Needs attention")
+            } else {
+                subtitle = String(localized: "Completed")
+            }
             AgentContinuedProcessingManager.shared.finish(
                 sessionKey: continuedKey,
-                success: !(completionHasError && !backgroundSuspended && !userDidCancel)
+                success: !failed,
+                subtitle: subtitle
             )
         }
         continuedProcessingSessionKey = nil
@@ -246,16 +262,27 @@ extension AIChatViewModel {
             backgroundTaskID = .invalid
             let otherActive = SessionActivityTracker.shared.activeSessions
                 .filter { $0 != sid }
-            logger.info("[BKA][BGTask] otherActive=\(otherActive.count) ids=[\(otherActive.map { $0.prefix(8) }.joined(separator: ","))] before Task")
+            // [T-la-honest-outcome] A run parked in waitIfBackgroundSuspended is
+            // still in the tracker and resumes by itself on foreground. Resting
+            // it as "completed" here was the Dynamic Island saying done/failed
+            // while the task was about to carry on.
+            let activityKey = sessionId ?? draftId ?? ""
+            let runStillActive = !activityKey.isEmpty && SessionActivityTracker.shared.isActive(activityKey)
+            let restingMessage = hasError
+                ? String((errorMessage ?? lastAssistantError ?? responseSummary).prefix(200))
+                : responseSummary
+            logger.info("[BKA][BGTask] otherActive=\(otherActive.count) ids=[\(otherActive.map { $0.prefix(8) }.joined(separator: ","))] runStillActive=\(runStillActive) before Task")
             Task {
-                if otherActive.isEmpty {
+                if runStillActive {
+                    BackgroundKeepAliveManager.shared.updateLiveActivityIfNeeded(source: "bgTaskEndedRunParked")
+                } else if otherActive.isEmpty {
                     await AgentLiveActivityManager.shared.finishActivity(
-                        lastMessages: sid.isEmpty ? [:] : [sid: responseSummary]
+                        lastMessages: sid.isEmpty ? [:] : [sid: restingMessage]
                     )
                 } else {
                     AgentLiveActivityManager.shared.markSessionCompleted(
                         sessionId: sid,
-                        lastMessage: responseSummary
+                        lastMessage: restingMessage
                     )
                 }
                 let sessionTitle: String
@@ -408,15 +435,33 @@ extension AIChatViewModel {
         }
 
         let summary = "tool=\(toolName) status=\(statusStr) elapsed=\(elapsed)\(pidInfo)\(outputInfo)\(browserInfo)"
-        SessionActivityTracker.shared.currentToolStatus = "\(toolName): \(statusStr)"
+        // [T-la-honest-outcome] `statusStr` is log vocabulary ("failed",
+        // "streaming(1234B)"). It used to go straight onto the Dynamic Island, so
+        // one failed tool call — an ordinary step the model recovers from — read
+        // "Shell · failed" while the task carried on. Show what the run is doing
+        // now: a finished tool means the model is choosing the next step.
+        let toolFinished: Bool
+        switch toolBlock.toolStatus {
+        case .success, .failed, .cancelled: toolFinished = true
+        default: toolFinished = false
+        }
+        let liveTool: String
+        if assistantMsg.blocks.last?.kind == .text {
+            liveTool = "text"
+        } else {
+            liveTool = toolFinished ? "thinking" : toolName
+        }
         if let sid = self.sessionId {
-            SessionActivityTracker.shared.updateToolInfo(sessionId: sid, toolName: toolName, toolStatus: statusStr)
+            let tracker = SessionActivityTracker.shared
+            let existing = tracker.sessionToolInfo[sid]
+            // Keep the detail the stream wrote (the command, the URL) while the
+            // same tool is still the one running.
+            let detail = existing?.toolName == liveTool ? (existing?.toolStatus ?? "") : ""
+            tracker.updateToolInfo(sessionId: sid, toolName: liveTool, toolStatus: detail)
             if #available(iOS 26.0, *) {
-                let iteration = SessionActivityTracker.shared.sessionToolInfo[sid]?.loopIteration ?? 0
-                AgentContinuedProcessingManager.shared.update(
+                AgentContinuedProcessingManager.shared.noteProgress(
                     sessionKey: continuedProcessingSessionKey ?? sid,
-                    subtitle: toolName.replacingOccurrences(of: "_", with: " ").capitalized,
-                    loopIteration: iteration
+                    subtitle: AgentToolPresentation.displayName(for: liveTool)
                 )
             }
         }
@@ -717,7 +762,8 @@ final class AgentContinuedProcessingManager {
         let identifier: String
         let expiration: () -> Void
         var task: BGContinuedProcessingTask?
-        var lastProgress: Int64 = 1
+        var lastProgress: Int64 = 0
+        var progressEvents = 0
 
         init(sessionKey: String, identifier: String, expiration: @escaping () -> Void) {
             self.sessionKey = sessionKey
@@ -725,6 +771,7 @@ final class AgentContinuedProcessingManager {
             self.expiration = expiration
         }
     }
+
 
     private var runs: [String: Run] = [:]
 
@@ -781,20 +828,25 @@ final class AgentContinuedProcessingManager {
         runs[sessionKey]?.task != nil
     }
 
-    func update(sessionKey: String, subtitle: String, loopIteration: Int) {
+    /// One tick of real work (the 5-second background status tick while the
+    /// loop runs). Advances the reported progress and names the current step.
+    func noteProgress(sessionKey: String, subtitle: String) {
         guard let run = runs[sessionKey] else { return }
-        let measured = Int64(min(92, max(Int(run.lastProgress), 8 + (loopIteration * 8))))
-        run.lastProgress = measured
+        run.progressEvents += 1
+        run.lastProgress = ContinuedProcessingProgress.next(after: run.lastProgress, events: run.progressEvents)
         guard let task = run.task else { return }
-        task.progress.completedUnitCount = measured
-        task.updateTitle("LeoPhoneAgent task", subtitle: subtitle.isEmpty ? "Working" : subtitle)
+        task.progress.completedUnitCount = run.lastProgress
+        task.updateTitle("LeoPhoneAgent", subtitle: subtitle.isEmpty ? String(localized: "Working") : subtitle)
     }
 
-    func finish(sessionKey: String, success: Bool) {
+    /// - Parameter subtitle: what actually happened. The system banner only
+    ///   knows success/failure, so the words carry "paused" or "interrupted".
+    func finish(sessionKey: String, success: Bool, subtitle: String) {
         guard let run = runs.removeValue(forKey: sessionKey) else { return }
         BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: run.identifier)
         if let task = run.task {
-            task.progress.completedUnitCount = success ? 100 : max(1, run.lastProgress)
+            task.updateTitle("LeoPhoneAgent", subtitle: subtitle)
+            task.progress.completedUnitCount = success ? ContinuedProcessingProgress.scale : max(1, run.lastProgress)
             task.setTaskCompleted(success: success)
         }
         logger.info("[Background][Continued] finished session=\(sessionKey.prefix(8)) success=\(success)")
@@ -806,17 +858,24 @@ final class AgentContinuedProcessingManager {
             return
         }
         run.task = task
-        task.progress.totalUnitCount = 100
-        task.progress.completedUnitCount = run.lastProgress
+        task.progress.totalUnitCount = ContinuedProcessingProgress.scale
+        task.progress.completedUnitCount = max(1, run.lastProgress)
         task.expirationHandler = { [weak self, weak run] in
             Task { @MainActor in
                 guard let self, let run,
                       self.runs.removeValue(forKey: run.sessionKey) != nil else { return }
-                // [T-bg-false-fail] 授权到期时任务往往还活着(静音保活兜底)。
-                // success:false 会让系统横幅显示"任务失败"——只有真无保活、
-                // 工作确实要被挂起时才如实报失败。
+                // [T-bg-false-fail] 授权到期不是任务失败:保活生效时任务照常跑,
+                // 没有保活时循环停在 waitIfBackgroundSuspended,回到前台自动续。
+                // 两种情况都不能让系统横幅报"失败"——那正是"灵动岛说失败、点进去
+                // 还在跑"的来源。把真实状态写进副标题,再按未失败收尾。
                 let stillAlive = BackgroundKeepAliveManager.shared.enhancedBackgroundEffective
-                run.task?.setTaskCompleted(success: stillAlive)
+                run.task?.updateTitle(
+                    "LeoPhoneAgent",
+                    subtitle: stillAlive
+                        ? String(localized: "仍在后台运行")
+                        : String(localized: "已暂停，回到 App 继续")
+                )
+                run.task?.setTaskCompleted(success: true)
                 run.expiration()
             }
         }

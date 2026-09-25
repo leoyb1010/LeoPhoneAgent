@@ -39,6 +39,14 @@ private enum TreasuryView: String, CaseIterable, Identifiable {
 }
 
 struct CollectionsView: View {
+    /// Set when presented as a sheet: the view then owns its navigation
+    /// container and shows 完成. Pushed onto a stack (iPhone home, settings) it
+    /// stays nil and borrows the host's stack.
+    private let onClose: (() -> Void)?
+
+    init(onClose: (() -> Void)? = nil) {
+        self.onClose = onClose
+    }
     @State private var items: [CollectedItem] = []
     @State private var query = ""
     @State private var filterSource: String? = nil
@@ -143,12 +151,27 @@ struct CollectionsView: View {
                 if usesSplit {
                     NavigationSplitView {
                         collectionList(usesSplit: true)
+                            .toolbar { closeToolbarItem }
                     } detail: {
                         splitReadingDetail
+                    }
+                } else if onClose != nil {
+                    NavigationStack {
+                        collectionList(usesSplit: false)
+                            .toolbar { closeToolbarItem }
                     }
                 } else {
                     collectionList(usesSplit: false)
                 }
+            }
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var closeToolbarItem: some ToolbarContent {
+        if let onClose {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("完成", action: onClose)
             }
         }
     }

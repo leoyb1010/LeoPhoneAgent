@@ -604,13 +604,6 @@ extension AIChatViewModel {
         }
     }
 
-    /// Remove persistent minis data for a given session.
-    private func cleanupMinis(for sid: String) {
-        let fm = FileManager.default
-        let persistDir = Self.minisPersistentBase.appendingPathComponent(sid, isDirectory: true)
-        try? fm.removeItem(at: persistDir)
-    }
-
     /// Sync a single minis subdirectory bidirectionally between persistent storage and iSH-visible path.
     /// One-time migration: moves old `Library/MinisChat/offloads/<sid>/` to
     /// `Library/MinisChat/minis/<sid>/offloads/`.

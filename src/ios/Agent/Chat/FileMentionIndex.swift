@@ -104,9 +104,6 @@ final class FileMentionIndex: ObservableObject {
     /// Cache window — within this interval, repeated `@` triggers reuse results.
     let cacheTTL: TimeInterval = 600
 
-    /// Depth cap applied when walking mount directories.
-    private let mountScanMaxDepth = 3
-
     /// Total number of entries collected across *all* roots in a single scan.
     /// Acts as a hard upper bound so a giant external mount can't balloon the
     /// in-memory index past a reasonable size.

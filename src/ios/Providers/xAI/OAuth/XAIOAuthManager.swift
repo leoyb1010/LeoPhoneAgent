@@ -12,7 +12,6 @@ final class XAIOAuthManager: NSObject, ObservableObject {
 
     // MARK: - OAuth Config
 
-    private let issuer = "https://auth.x.ai"
     private let discoveryURL = "https://auth.x.ai/.well-known/openid-configuration"
     private let clientID = "b1a00492-073a-47ea-816f-4c329264a828"
     /// xAI redirect_uri allow-list pins port 56121 — must not change.

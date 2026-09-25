@@ -365,7 +365,10 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyThreeKilometers
         locationManager.pausesLocationUpdatesAutomatically = false
-        locationAuthStatus = locationManager.authorizationStatus
+        // No synchronous `authorizationStatus` read here: it is a round trip to
+        // locationd on the main thread during the first frame. Setting the
+        // delegate makes the system call locationManagerDidChangeAuthorization
+        // with the current status, which re-runs every evaluation.
     }
 
     private var didSetup = false
@@ -1542,7 +1545,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         } else if !displayName.isEmpty {
             status = displayName
         } else {
-            status = state == .running ? "Working" : ""
+            status = state == .running ? String(localized: "Working") : ""
         }
 
         let snapshot = AgentWidgetSnapshot(
@@ -1607,10 +1610,15 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             let title = info?.title ?? ""
             let toolName = info?.toolName ?? ""
             let toolStatus = info?.toolStatus ?? ""
-            let icon = AgentLiveActivityManager.sfSymbol(forTool: toolName)
+            var icon = AgentLiveActivityManager.sfSymbol(forTool: toolName)
             let displayName = AgentLiveActivityManager.displayName(forTool: toolName)
             let statusText: String
-            if toolName.isEmpty {
+            if tracker.sessionActivityPhases[sid] == .suspended {
+                // [T-la-honest-outcome] Parked in waitIfBackgroundSuspended: it
+                // carries on by itself once the app is back. Not done, not failed.
+                icon = "pause.circle.fill"
+                statusText = String(localized: "已暂停，回到 App 继续")
+            } else if toolName.isEmpty {
                 statusText = String(localized: "Working...")
             } else if toolStatus.isEmpty {
                 statusText = displayName

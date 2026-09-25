@@ -73,9 +73,6 @@ private class PlayerSession {
     private static let videoExtensions: Set<String> = [
         "mp4", "m4v", "mov", "avi", "mkv", "webm", "ts", "mts", "3gp", "3g2"
     ]
-    private static let audioExtensions: Set<String> = [
-        "mp3", "m4a", "aac", "wav", "flac", "ogg", "opus", "aiff", "aif", "wma", "caf"
-    ]
 
     private static func detectMediaType(for url: URL) -> PlayerSession.MediaType {
         let ext = url.pathExtension.lowercased()

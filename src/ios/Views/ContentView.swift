@@ -354,8 +354,6 @@ struct ContentView: View {
     @AppStorage("launchScreen") private var launchScreen: Int = 0
     @AppStorage("leo.homeCardsEnabled") private var homeCardsEnabled = true
     @AppStorage("leo.torchOn") private var torchOn = false
-    /// 首页「系统快捷」启用的按钮,逗号分隔,顺序即显示顺序。
-    @AppStorage("home.quickControls") private var quickControlsRaw = "torch,brightness,clipboard,device"
     @State private var torchSupported = false
     @State private var homeNativeResult: ActionRouter.ExecutionResult?
     @State private var homeNativeTask: Task<Void, Never>?
@@ -501,6 +499,14 @@ struct ContentView: View {
                     stackLayout
                 }
             }
+            // Home "/" panel and brightness picker: shared by both layouts (they
+            // used to hang off the iPhone list only, so "/" was dead on iPad).
+            .sheet(isPresented: $showHomeActions, onDismiss: runPendingHomeAction) { homeActionSheet }
+            .confirmationDialog("屏幕亮度", isPresented: $showBrightnessOptions, titleVisibility: .visible) {
+                ForEach([("25%", 0.25), ("50%", 0.5), ("75%", 0.75), ("100%", 1.0)], id: \.0) { item in
+                    Button(item.0) { setBrightness(item.1) }
+                }
+            }
             .overlay(alignment: .top) {
                 if let toast = forceSyncToast {
                     ForceSyncToastBanner(text: toast)
@@ -512,8 +518,8 @@ struct ContentView: View {
             // entry reads as "arrived", not "faded in".
             .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.72), value: forceSyncToast)
             // [T-home-sensory-feedback] Declarative haptics for the home shell:
-            // state-driven, so they fire no matter which surface (prompt card
-            // or 系统快捷 row) produced the result. Replaces the per-call-site
+            // state-driven, so they fire no matter which surface produced the
+            // result. Replaces the per-call-site
             // `LeoHaptics.notification` in setBrightness / runHomeNative so a
             // result pulses exactly once.
             .sensoryFeedback(trigger: HomeResultPulse(homeNativeResult)) { _, new in
@@ -525,11 +531,10 @@ struct ContentView: View {
                 }
             }
             // One light tick when a NATIVE action starts, wherever it was
-            // started from (prompt card or 系统快捷 row, on or off screen).
+            // started from, on or off screen.
             // Counter, not homeRoutingInProgress: that flag is shared with
             // the Mac send path, which has its own haptic.
             .sensoryFeedback(.impact(weight: .light), trigger: homeNativeStartCount) { _, _ in hapticsEnabled }
-            .sensoryFeedback(.selection, trigger: quickControlsRaw) { _, _ in hapticsEnabled }
             // [T-home-sheet-detents] The non-modal sheets hang off rootLayout,
             // above the NavigationStack: a push behind them must dismiss them
             // or a chat lands underneath a still-presented sheet.
@@ -788,18 +793,12 @@ struct ContentView: View {
                 }
             }
             .sheet(item: $activeToolSheet) { sheet in
+                Group {
                 switch sheet {
                 case .settings:
                     SettingsSheet(showTerminal: $showTerminal)
                 case .collections:
-                    NavigationStack {
-                        CollectionsView()
-                            .toolbar {
-                                ToolbarItem(placement: .cancellationAction) {
-                                    Button("Done") { activeToolSheet = nil }
-                                }
-                            }
-                    }
+                    CollectionsView(onClose: { activeToolSheet = nil })
                 case .rootfsManagement:
                     NavigationStack {
                         RootfsManagementView()
@@ -843,6 +842,9 @@ struct ContentView: View {
                             }
                     }
                 }
+                }
+                // iPad: a page-sized sheet, not a ~540pt form card lost in the middle of the screen.
+                .modifier(WideSheetSizingModifier())
             }
             .sheet(item: $sessionToDelete) { session in
                 DeleteConfirmSheet(info: $singleDeleteInfo, isLoading: false) {
@@ -1275,6 +1277,20 @@ struct ContentView: View {
             detailView
                 .appFontScale()
         }
+        // iPhone pushes the Mac console; on iPad a push would squeeze it into
+        // the sidebar column, so it gets a page-sized sheet instead.
+        .sheet(isPresented: $showMacConsole) {
+            NavigationStack {
+                GatewayEntryView()
+                    .navigationTitle("Mac 控制台")
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("完成") { showMacConsole = false }
+                        }
+                    }
+            }
+            .modifier(WideSheetSizingModifier())
+        }
     }
 
     // MARK: - Stack Layout (iPhone / narrow window)
@@ -1338,18 +1354,62 @@ struct ContentView: View {
                     draftLog.info("🔑DRAFT detailView DISAPPEAR id=\(id)")
                 }
         } else {
-            VStack(spacing: 12) {
-                Image(systemName: "bubble.left.and.bubble.right")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.secondary)
-                Text("No Conversation Selected")
-                    .font(.title3.bold())
-                Text("Select a conversation or start a new one")
+            homeWorkbench
+        }
+    }
+
+    /// [T-ipad-home-workbench] iPad 打开就能交代任务。没选对话时右边以前只有一句
+    /// 「未选择对话」,竖屏侧栏又是收起的,整屏空白。现在这里就是首页:和 iPhone
+    /// 首页同一条输入栏(执行位置 · 模型胶囊、/、麦克风),放在可读宽度里、略高于中线。
+    private var homeWorkbench: some View {
+        VStack(spacing: 28) {
+            Spacer(minLength: 0)
+            VStack(spacing: 10) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 30, weight: .medium))
+                    .foregroundStyle(.tint)
+                Text("交代一个任务")
+                    .font(.largeTitle.weight(.bold))
+                Text(isIPad ? "让此 iPad 帮你分析、查找、写作或执行，也可以交给 Mac。"
+                            : "让此 iPhone 帮你分析、查找、写作或执行，也可以交给 Mac。")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            VStack(spacing: 14) {
+                homeComposerStack
+                if sessions.isEmpty {
+                    HStack(spacing: 8) {
+                        ForEach(HomeEmptyState.suggestions, id: \.self) { item in
+                            Button {
+                                homeDraft.text = item
+                                homePromptFocused = true
+                            } label: {
+                                Text(item)
+                                    .font(.subheadline)
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 9)
+                                    .background(Color.primary.opacity(0.06), in: Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .hoverEffect(.highlight)
+                        }
+                    }
+                }
+                if providerStore.modelGroups.isEmpty {
+                    Button("连接模型,处理更复杂的任务") {
+                        if providerStore.instances.isEmpty { showAddProvider = true } else { showSelectModels = true }
+                    }
+                    .font(.footnote.weight(.semibold))
+                }
+            }
+            .frame(maxWidth: 720)
+            Spacer(minLength: 0)
+            Spacer(minLength: 0)
         }
+        .padding(.horizontal, 32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Display Sessions
@@ -1468,7 +1528,6 @@ struct ContentView: View {
         }
         LeoHaptics.selection()
     }
-
 
     /// [T-ios-session-list-equatable-jank] Rebuild the id→ChatSession cache.
     /// Called from `.onChange(of: sessions)` — NOT per body eval — so the
@@ -1722,27 +1781,6 @@ struct ContentView: View {
         }
     }
 
-    /// 首页「系统快捷」:一排可选按钮,点一下直接操控系统能力,不经过模型。
-    /// 只放 iOS 允许第三方 App 真正做到的:手电筒、屏幕亮度、剪贴板、设备信息。
-    /// 音量 / Wi-Fi / 蓝牙 / 专注模式 / 低电量 iOS 不对第三方开放,不做假按钮。
-    private static let allQuickControls: [(id: String, label: String, icon: String)] = [
-        ("torch", "手电筒", "flashlight.on.fill"),
-        ("brightness", "亮度", "sun.max"),
-        ("clipboard", "读剪贴板", "doc.on.clipboard"),
-        ("device", "设备信息", "iphone"),
-    ]
-
-    private var enabledQuickControls: [String] {
-        let ids = quickControlsRaw.split(separator: ",").map(String.init)
-        return Self.allQuickControls.map(\.id).filter { ids.contains($0) }
-    }
-
-    private func toggleQuickControl(_ id: String) {
-        var ids = enabledQuickControls
-        if let i = ids.firstIndex(of: id) { ids.remove(at: i) } else { ids.append(id) }
-        quickControlsRaw = ids.joined(separator: ",")
-    }
-
     private func setBrightness(_ level: Double) {
         guard !homeRoutingInProgress else { return }
         homeRoutingInProgress = true
@@ -1764,59 +1802,6 @@ struct ContentView: View {
             }
         }
     }
-
-    @ViewBuilder
-    private func quickControlButton(_ id: String) -> some View {
-        switch id {
-        case "torch":
-            Button {
-                let enabled = !DeviceActions.shared.statusTorch().enabled
-                runHomeNative(.init(path: .native, kind: .toggleFlashlight,
-                    hour: nil, minute: nil, tomorrow: false, label: enabled ? "on" : "off"))
-            } label: {
-                quickControlLabel(torchOn ? "关手电筒" : "手电筒", icon: torchOn ? "flashlight.off.fill" : "flashlight.on.fill", on: torchOn)
-            }
-            .buttonStyle(.plain)
-            .disabled(!torchSupported || homeRoutingInProgress)
-        case "brightness":
-            Menu {
-                ForEach([("25%", 0.25), ("50%", 0.5), ("75%", 0.75), ("100%", 1.0)], id: \.0) { item in
-                    Button(item.0) { setBrightness(item.1) }
-                }
-            } label: {
-                quickControlLabel("亮度", icon: "sun.max", on: false)
-            }
-            .disabled(homeRoutingInProgress)
-        case "clipboard":
-            Button {
-                runHomeNative(.init(path: .native, kind: .readClipboard, hour: nil, minute: nil, tomorrow: false, label: ""))
-            } label: { quickControlLabel("读剪贴板", icon: "doc.on.clipboard", on: false) }
-            .buttonStyle(.plain)
-            .disabled(homeRoutingInProgress)
-        case "device":
-            Button {
-                runHomeNative(.init(path: .native, kind: .deviceInfo, hour: nil, minute: nil, tomorrow: false, label: ""))
-            } label: { quickControlLabel("设备信息", icon: "iphone", on: false) }
-            .buttonStyle(.plain)
-            .disabled(homeRoutingInProgress)
-        default:
-            EmptyView()
-        }
-    }
-
-    private func quickControlLabel(_ text: String, icon: String, on: Bool) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 13, weight: .semibold))
-            Text(text)
-                .font(.system(size: 13, weight: .medium))
-        }
-        .foregroundStyle(on ? Color.accentColor : .primary)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color(.secondarySystemFill), in: Capsule())
-    }
-
 
     /// Plain List with NavigationLink for stack (iPhone) layout.
     private var stackList: some View {
@@ -1914,12 +1899,6 @@ struct ContentView: View {
         // [T-home-composer-edge] safeAreaBar(iOS 26)而不是 safeAreaInset:系统会在输入栏后面给列表加一层
         // 边缘模糊,滚到底下的会话文字不再透过玻璃和输入框的占位字叠在一起(1.42.0 真机截图)。
         .safeAreaBar(edge: .bottom) { if isSelecting { selectionToolbar } else { homeBottomBar } }
-        .sheet(isPresented: $showHomeActions, onDismiss: runPendingHomeAction) { homeActionSheet }
-        .confirmationDialog("屏幕亮度", isPresented: $showBrightnessOptions, titleVisibility: .visible) {
-            ForEach([("25%", 0.25), ("50%", 0.5), ("75%", 0.75), ("100%", 1.0)], id: \.0) { item in
-                Button(item.0) { setBrightness(item.1) }
-            }
-        }
         .navigationDestination(isPresented: $showMacConsole) { GatewayEntryView() }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { sidebarToolbarContent }
@@ -2036,10 +2015,20 @@ struct ContentView: View {
         .listStyle(.plain)
         .navigationSplitViewColumnWidth(min: 340, ideal: 380, max: 500)
         .opacity(didInitialLoad ? 1 : 0)
-        // [T-session-filter-trap] 同 stackList:筛空 ≠ 没有会话。
-        .overlay { if didInitialLoad, sessions.isEmpty, !isSearching { emptyState } }
-        // 输入栏在侧栏底部,要随键盘上移,所以不再忽略键盘安全区;safeAreaBar 给列表加边缘模糊。
-        .safeAreaBar(edge: .bottom) { if isSelecting { selectionToolbar } else { homeBottomBar } }
+        // [T-session-filter-trap] 同 stackList:筛空 ≠ 没有会话。起手建议在右侧工作台,侧栏只留一句话。
+        .overlay {
+            if didInitialLoad, sessions.isEmpty, !isSearching {
+                VStack(spacing: 6) {
+                    Text("还没有对话").font(.headline)
+                    Text("交代的任务会按时间排在这里。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        // [T-ipad-home-workbench] 输入栏在右侧首页工作台,侧栏只剩对话;多选时的工具条仍在底部。
+        .safeAreaBar(edge: .bottom) { if isSelecting { selectionToolbar } }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { sidebarToolbarContent }
     }
@@ -2168,78 +2157,6 @@ struct ContentView: View {
         }
     }
 
-    @ViewBuilder
-    private func syncSubtitleView(_ state: SyncSubtitleState) -> some View {
-        HStack(spacing: 5) {
-            switch state {
-            case .paused:
-                Image(systemName: "pause.circle.fill")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Text("Sync paused")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            case .migrating(let pct, let byType):
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Text("\(pct)%")
-                    .font(.caption2.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(.secondary)
-                ForEach(byType.indices, id: \.self) { i in
-                    syncTypeChip(label: byType[i].label, count: byType[i].count)
-                }
-            case .syncing(let byType):
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                ForEach(byType.indices, id: \.self) { i in
-                    syncTypeChip(label: byType[i].label, count: byType[i].count)
-                }
-            case .upToDate:
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(.green)
-                Text("Up to date")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            case .waiting:
-                Image(systemName: "clock")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                Text("Waiting")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .lineLimit(1)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 3)
-        .background(Color.secondary.opacity(0.12), in: Capsule())
-    }
-
-    @ViewBuilder
-    private func syncTypeChip(label: String, count: Int) -> some View {
-        HStack(spacing: 3) {
-            Text(label)
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(.secondary)
-            Text(formatCompact(count))
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    /// Compact integer formatting: 89,401 → "89k", 1,234 → "1.2k", 740 → "740".
-    private func formatCompact(_ n: Int) -> String {
-        if n < 1000 { return "\(n)" }
-        if n < 10_000 {
-            let v = Double(n) / 1000.0
-            return String(format: "%.1fk", v)
-        }
-        return "\(n / 1000)k"
-    }
-
     @ToolbarContentBuilder
     private var sidebarToolbarContent: some ToolbarContent {
         ToolbarItem(placement: .principal) {
@@ -2336,21 +2253,40 @@ struct ContentView: View {
                 .accessibilityLabel(Text("搜索对话"))
             }
         }
-        // [T-collections] 收藏一级入口:分享进来的东西从这里翻。
+        // [T-ipad-home-workbench] 开着某个对话时,回到右侧首页工作台开新任务。
         ToolbarItem(placement: .topBarTrailing) {
-            if !isSelecting {
-                NavigationLink { CollectionsView() } label: {
-                    Image(systemName: "star.square.on.square")
+            if !isSelecting, isWideLayout, selectedSessionId != nil {
+                Button {
+                    selectedSessionId = nil
+                } label: {
+                    Image(systemName: "square.and.pencil")
                 }
-                .accessibilityLabel(Text("Leo藏宝阁"))
+                .accessibilityLabel(Text("新任务"))
             }
         }
-        // [T-settings-ia] Mac 控制台是主功能,不是设置项——iPad 常驻标题栏;
+        // [T-collections] 收藏一级入口:分享进来的东西从这里翻。iPad 侧栏只有 380pt 宽,
+        // 推进去太挤,改成整页面板。
+        ToolbarItem(placement: .topBarTrailing) {
+            if !isSelecting {
+                if isWideLayout {
+                    Button { activeToolSheet = .collections } label: {
+                        Image(systemName: "star.square.on.square")
+                    }
+                    .accessibilityLabel(Text("Leo藏宝阁"))
+                } else {
+                    NavigationLink { CollectionsView() } label: {
+                        Image(systemName: "star.square.on.square")
+                    }
+                    .accessibilityLabel(Text("Leo藏宝阁"))
+                }
+            }
+        }
+        // [T-settings-ia] Mac 控制台是主功能,不是设置项——iPad 常驻标题栏(整页面板);
         // iPhone 收进首页胶囊菜单和 "/" 面板。
         ToolbarItem(placement: .topBarTrailing) {
             if !isSelecting, isWideLayout {
-                NavigationLink {
-                    GatewayEntryView()
+                Button {
+                    showMacConsole = true
                 } label: {
                     Image(systemName: "desktopcomputer")
                         .font(.system(size: 15, weight: .medium))
@@ -2909,12 +2845,8 @@ struct ContentView: View {
         HomeEmptyState(
             hasModel: !providerStore.modelGroups.isEmpty,
             onSuggestion: { text in
-                if isWideLayout {
-                    startHomeChatAction(.prefillPrompt(text))
-                } else {
-                    homeDraft.text = text
-                    homePromptFocused = true
-                }
+                homeDraft.text = text
+                homePromptFocused = true
             },
             onConnectModel: {
                 if providerStore.instances.isEmpty { showAddProvider = true } else { showSelectModels = true }
@@ -2922,7 +2854,6 @@ struct ContentView: View {
         )
         .background(LeoTheme.ColorToken.groupedBackground)
     }
-
 
     /// [T-session-filter-trap] 筛选 chips 的显示**不能**跟着"筛选结果是否为空"走。
     ///
@@ -2972,35 +2903,40 @@ struct ContentView: View {
         }
     }
 
-    /// 底部:结果条 + 玻璃输入栏。搜索时收起。
+    /// 结果条 + 玻璃输入栏:iPhone 首页底部和 iPad 首页工作台共用这一条。
+    private var homeComposerStack: some View {
+        VStack(spacing: 8) {
+            if let homeRoutingError {
+                HomeResultBanner(text: homeRoutingError, tone: .error) { self.homeRoutingError = nil }
+            } else if let result = homeNativeResult {
+                HomeResultBanner(text: result.text,
+                                 tone: result.outcome == .succeeded ? .success : .info) { homeNativeResult = nil }
+            }
+            HomeComposerHost(
+                draft: homeDraft,
+                isFocused: $homePromptFocused,
+                capsule: homeCapsuleLabel,
+                capsuleMenu: AnyView(homeCapsuleMenuContent),
+                plusMenu: AnyView(homePlusMenuContent),
+                isBusy: homeRoutingInProgress,
+                onSubmit: { runHomePrompt() },
+                onSlash: {
+                    homePromptFocused = false
+                    showHomeActions = true
+                },
+                onMic: { startHomeChatAction(.startVoice) },
+                onCancelBusy: { homeNativeTask?.cancel() }
+            )
+        }
+        .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: homeNativeResult?.text)
+        .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: homeRoutingError)
+    }
+
+    /// iPhone 首页底部:输入栏。搜索时收起。
     @ViewBuilder
     private var homeBottomBar: some View {
         if !showSearchBar {
-            VStack(spacing: 8) {
-                if let homeRoutingError {
-                    HomeResultBanner(text: homeRoutingError, tone: .error) { self.homeRoutingError = nil }
-                } else if let result = homeNativeResult {
-                    HomeResultBanner(text: result.text,
-                                     tone: result.outcome == .succeeded ? .success : .info) { homeNativeResult = nil }
-                }
-                HomeComposerHost(
-                    draft: homeDraft,
-                    isFocused: $homePromptFocused,
-                    capsule: homeCapsuleLabel,
-                    capsuleMenu: AnyView(homeCapsuleMenuContent),
-                    plusMenu: AnyView(homePlusMenuContent),
-                    isBusy: homeRoutingInProgress,
-                    onSubmit: { runHomePrompt() },
-                    onSlash: {
-                        homePromptFocused = false
-                        showHomeActions = true
-                    },
-                    onMic: { startHomeChatAction(.startVoice) },
-                    onCancelBusy: { homeNativeTask?.cancel() }
-                )
-            }
-            .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: homeNativeResult?.text)
-            .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15), value: homeRoutingError)
+            homeComposerStack
             // 输入栏后面垫一层渐变到页面底色:列表滚到底下时在输入栏上方淡出。系统的边缘模糊太轻,
             // 会话标题仍会糊在占位字下面,输入栏下面也露出半截会话(1.42.1 真机截图)。
             .frame(maxWidth: .infinity)
@@ -3164,17 +3100,6 @@ struct ContentView: View {
         !homeRoutingInProgress && !homeDraft.trimmed.isEmpty
     }
 
-    private var homeExecutionTargetHint: String {
-        switch homeExecutionTarget {
-        case .iphone:
-            return isIPad
-                ? String(localized: "在此 iPad 的新对话中立即开始")
-                : String(localized: "在此 iPhone 的新对话中立即开始")
-        case .mac(_, _, let cliName):
-            return String(localized: "交给所选机器的 \(cliName)")
-        }
-    }
-
     private var homeExecutionTargetTitle: String {
         switch homeExecutionTarget {
         case .iphone:
@@ -3196,26 +3121,6 @@ struct ContentView: View {
             }
             return "desktopcomputer"
         }
-    }
-
-    private var homeTargetMenu: some View {
-        Menu {
-            homeTargetMenuItems
-        } label: {
-            HStack(spacing: 7) {
-                Image(systemName: homeTargetMenuIcon)
-                Text(homeExecutionTargetTitle)
-                    .lineLimit(1)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 9, weight: .bold))
-            }
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.primary)
-            .padding(.horizontal, 11)
-            .frame(minHeight: LeoTheme.TouchTarget.minimum)
-            .background(LeoTheme.ColorToken.elevatedSurface, in: Capsule())
-        }
-        .accessibilityLabel(Text("执行目标：\(homeExecutionTargetTitle)"))
     }
 
     /// 执行位置的菜单项:首页胶囊和旧的目标菜单共用。
@@ -3242,34 +3147,6 @@ struct ContentView: View {
                     }
                 }
             }
-    }
-
-    private func homeCapabilityButton(
-        _ title: String,
-        systemImage: String,
-        tint: Color,
-        index: Int,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button {
-            LeoHaptics.impact(.light)
-            action()
-        } label: {
-            VStack(spacing: 6) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(tint)
-                Text(title)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-            }
-            .frame(maxWidth: .infinity, minHeight: 56)
-            .background(LeoTheme.ColorToken.surface, in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-        }
-        .buttonStyle(LeoSquishButtonStyle())
-        .accessibilityLabel(Text(title))
-        .leoStaggerEntrance(index: index)
     }
 
     private func selectHomeMac(_ host: GatewayHost, key: String, name: String) {
@@ -3638,8 +3515,6 @@ struct ContentView: View {
 
     @FocusState private var searchFocused: Bool
 
-    @State private var searchDidDrag = false
-
     /// 收起首页上盖着的面板,返回是否真的收起了什么(调用方据此多等一下再推页面)。
     @discardableResult
     private func dismissSheetsForNavigation() -> Bool {
@@ -3649,7 +3524,6 @@ struct ContentView: View {
         showCommandPalette = false
         return had
     }
-
 
     // MARK: - Selectable Row
 
@@ -5349,7 +5223,6 @@ private struct SessionRow: View, Equatable {
         return attr
     }
 
-
     private var categoryIcon: (systemName: String, color: Color) {
         switch session.category {
         case "code":         return ("terminal.fill", .orange)
@@ -5744,7 +5617,6 @@ struct InteractivePopGestureDisabler: UIViewRepresentable {
         }
     }
 }
-
 
 // MARK: - Local Feedback Composer
 

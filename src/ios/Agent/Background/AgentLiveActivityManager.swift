@@ -591,10 +591,7 @@ final class AgentLiveActivityManager {
             sessionId: sessionId, title: String(localized: "Agent Task"),
             toolIcon: "checkmark.circle.fill", toolStatus: "", loopIteration: 0
         )
-        snap.isCompleted = true
-        snap.toolIcon = "checkmark.circle.fill"
-        snap.toolStatus = String(localized: "Completed")
-        snap.lastMessage = Self.collapseLastMessage(lastMessage)
+        Self.applyOutcome(to: &snap, lastMessage: Self.collapseLastMessage(lastMessage))
         completedSessionSnapshots[sessionId] = snap
         logger.info("[LiveActivity][markCompleted] sid=\(sessionId.prefix(8)) — other sessions still active, updating in-place")
         BackgroundKeepAliveManager.shared.updateLiveActivityIfNeeded(source: "sessionCompleted")
@@ -933,11 +930,13 @@ final class AgentLiveActivityManager {
         }
         let completedSessions = runningSessions.map { s -> LiveSessionSnapshot in
             var c = s
-            c.isCompleted = true
-            c.toolStatus = String(localized: "Completed")
-            c.lastMessage = resolvedMessages[s.sessionId] ?? ""
+            // A session already rested by markSessionCompleted keeps its outcome.
+            if !s.isCompleted {
+                Self.applyOutcome(to: &c, lastMessage: resolvedMessages[s.sessionId] ?? "")
+            }
             return c
         }
+        let anyAttention = completedSessions.contains { $0.outcome == .attention }
         // [T-ios-live-activity-audio-toggle] Keep the audio control alive into the
         // completed resting state — the TTS narration of the just-finished reply
         // is often still playing, and the user should be able to pause it from the
@@ -947,7 +946,7 @@ final class AgentLiveActivityManager {
             sessions: completedSessions,
             carouselIndex: 0,
             soulName: soul,
-            latestToolIcon: "checkmark.circle.fill",
+            latestToolIcon: anyAttention ? "exclamationmark.circle.fill" : "checkmark.circle.fill",
             minimalShowsTool: false,
             allCompleted: true
         )
@@ -965,6 +964,36 @@ final class AgentLiveActivityManager {
         self.lastPushedState = finished
         self.lastPushDate = Date()
         logger.info("[LiveActivity][finish] activity id=\(activity.id) flipped to completed (\(completedSessions.count) session(s)) — awaiting foreground dismissal")
+    }
+
+    /// Rest a snapshot according to how its run actually ended.
+    ///
+    /// The outcome comes from `SessionActivityTracker.lastOutcomes`, the one
+    /// place every run ending is recorded — not from whichever caller happens to
+    /// finish the activity first (the keep-alive teardown and the view model race
+    /// here, and the teardown knows nothing about the result).
+    static func applyOutcome(to snap: inout LiveSessionSnapshot, lastMessage: String) {
+        let phase = SessionActivityTracker.shared.lastOutcomes[snap.sessionId]
+        snap.isCompleted = true
+        switch phase {
+        case .cancelled:
+            snap.outcome = .stopped
+            snap.toolIcon = "stop.circle.fill"
+            snap.toolStatus = String(localized: "Stopped")
+            snap.lastMessage = lastMessage
+        case .failed, .suspended, .waitingForUser, .waitingForPermission, .unverified:
+            snap.outcome = .attention
+            snap.toolIcon = "exclamationmark.circle.fill"
+            snap.toolStatus = String(localized: "Needs attention")
+            snap.lastMessage = phase == .suspended
+                ? String(localized: "已暂停，回到 App 继续")
+                : lastMessage
+        default:
+            snap.outcome = .done
+            snap.toolIcon = "checkmark.circle.fill"
+            snap.toolStatus = String(localized: "Completed")
+            snap.lastMessage = lastMessage
+        }
     }
 
     /// Collapse a stored last-message body to a single trimmed line, capped.

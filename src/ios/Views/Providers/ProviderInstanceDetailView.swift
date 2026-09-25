@@ -915,7 +915,6 @@ struct ProviderInstanceDetailView: View {
         }
     }
 
-
     // MARK: - OAuth Helpers
 
     private func oauthIsAuthenticated(_ instance: ProviderInstance) -> Bool {
@@ -1142,12 +1141,6 @@ struct ProviderInstanceDetailView: View {
         store.updateInstance(updated)
     }
 
-    private func maskKey(_ key: String) -> String {
-        guard key.count > 8 else { return "••••" }
-        let prefixLen = min(key.count / 4, 10)
-        let suffixLen = min(key.count / 4, 6)
-        return String(key.prefix(prefixLen)) + "..." + String(key.suffix(suffixLen))
-    }
 }
 
 // MARK: - Add Custom Model Sheet
@@ -1535,19 +1528,6 @@ struct ModelEntryDetailSheet: View {
                 Text(String(localized: "This will clear all customizations (including force-enabled thinking) and restore the provider's default values."))
             }
         }
-    }
-
-    /// Format token count into a human-readable string (e.g. "200K tokens", "1M tokens").
-    private static func formatContextWindow(_ tokens: Int) -> String {
-        if tokens >= 1_000_000 && tokens % 1_000_000 == 0 {
-            return "\(tokens / 1_000_000)M tokens"
-        } else if tokens >= 1_000_000 {
-            let value = Double(tokens) / 1_000_000.0
-            return String(format: "%.1fM tokens", value)
-        } else if tokens >= 1_000 {
-            return "\(tokens / 1_000)K tokens"
-        }
-        return "\(tokens) tokens"
     }
 
     /// Placeholder text for the Max Output Tokens field — shows the API-reported value

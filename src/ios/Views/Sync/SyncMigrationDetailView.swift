@@ -804,25 +804,6 @@ struct SyncMigrationDetailView: View {
         )
     }
 
-    @ViewBuilder
-    private func actionRowLabel(
-        systemImage: String,
-        tint: Color,
-        title: LocalizedStringKey,
-        titleColor: Color? = nil
-    ) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: systemImage)
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 20, height: 20)
-                .background(tint, in: Circle())
-            Text(title)
-                .foregroundStyle(titleColor ?? Color.primary)
-        }
-        .frame(maxWidth: .infinity, alignment: .center)
-    }
-
     private func progressRow(title: String, done: Int, total: Int) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {

@@ -199,7 +199,6 @@ struct AIChatView: View {
         AIChatViewModel.onAppearTimestamp = CFAbsoluteTimeGetCurrent()
     }
     @StateObject private var oauth = ClaudeOAuthManager.shared
-    @StateObject private var geminiOAuth = GeminiOAuthManager.shared
     // Face ID lock state moved into `SessionLockGateOverlay` (separate
     // struct) — keeping the @State / @ObservedObject here pushed the
     // body's generic-type depth past iOS 26's runtime metadata budget
@@ -218,7 +217,6 @@ struct AIChatView: View {
     @State private var showQuickModelSwitch = false
     // [T-local-brain] 本机改写:选项菜单 + 进行中状态
     @State private var rewriting = false
-    @ObservedObject private var fontSettings = FontSettings.shared
     @ObservedObject private var deepLink = DeepLinkCoordinator.shared
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -2547,7 +2545,12 @@ struct AIChatView: View {
                         LeoHaptics.selection()
                     }
                 )
-                    .padding(.horizontal, 24)
+                // Same column as the composer (capped width on iPad, 12pt
+                // margins) and clear of it: the composer overlays this stack,
+                // so without its height the lower pills sat underneath it.
+                .frame(maxWidth: maxContentWidth ?? .infinity)
+                .padding(.horizontal, 12)
+                .padding(.bottom, inputBarHeight)
             }
         }
         .overlay(alignment: .bottom) {
@@ -2744,21 +2747,6 @@ struct AIChatView: View {
     // in MinisApp beside AudioPiPCapsule) so it persists across chat → home. No
     // per-session copy is rendered here anymore.
     private var floatingSpeechButton: some View { EmptyView() }
-
-    /// Height the floating scroll-jump button stack occupies right now (0 when
-    /// hidden), used to lift the speech control so the two never overlap. Mirrors
-    /// the visibility conditions of the jump-button overlay above.
-    private var scrollJumpButtonsHeight: CGFloat {
-        guard !vm.messages.isEmpty else { return 0 }
-        // Up and down buttons now share one condition (!isNearBottom): both are
-        // present together or both hidden.
-        guard !vm.isNearBottom else { return 0 }
-        // Sized for the TALLEST case (both buttons: 2×36 + 10 spacing = 82pt). The
-        // control already rests +48pt above the buttons' baseline, so lift the
-        // excess over that head start, plus a 10pt gap.
-        let maxStack: CGFloat = 2 * 36 + 10
-        return max(0, maxStack + 10 - 48)
-    }
 
     // MARK: - Fork Banner (Read-Only Mode)
 
@@ -3222,21 +3210,6 @@ struct AIChatView: View {
         }
     }
 
-    /// Speech language badge shown only while recording.
-    private var languageBadgeButton: some View {
-        Button {
-            speechManager.showLanguagePicker = true
-        } label: {
-            Text(speechManager.languageLabel)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(ChatColors.secondaryText)
-                .frame(width: 34, height: 34)
-                .background(ChatColors.inputIconBg)
-                .clipShape(Circle())
-                .overlay(Circle().stroke(ChatColors.inputIconBorder, lineWidth: 0.5))
-        }
-    }
-
     /// Mic button plus the attached language-picker sheet.
     private var micButtonContainer: some View {
         MicButton(speechManager: speechManager, inputFocused: $inputFocused, onTap: {
@@ -3338,7 +3311,7 @@ struct AIChatView: View {
                 // 会话绑定确实会变(iOS 上"只此一条"需要另一套临时覆写,
                 // 那属于后续工作),所以文案照实说"改用 X 并发送"。
                 // [T-model-pin] 用钉选的常用,不用"最近使用"猜。
-                let quick = ModelPinStore.shared.entries(store: ProviderConfigStore.shared).prefix(4)
+                let quick = pinStore.entries(store: ProviderConfigStore.shared).prefix(4)
                 if !quick.isEmpty {
                     Divider()
                     ForEach(Array(quick), id: \.compositeKey) { entry in
@@ -3579,12 +3552,7 @@ struct AIChatView: View {
         Button {
             showQuickModelSwitch = true
         } label: {
-            // 顺序:本会话绑定 → 默认分组解析(新对话实际会用的)→ 遗留字段。
-            // 直接落到 selectedModel 会显示一个根本不会被使用的模型名。
-            Label(ModelSwitcher.currentLabel(sessionId: vm.sessionId)
-                    ?? ModelSwitcher.defaultLabel()
-                    ?? vm.selectedModel.displayName,
-                  systemImage: "cpu")
+            Label(modelCapsuleLabel, systemImage: "cpu")
                 .font(.caption.weight(.semibold))
                 .lineLimit(1)
         }
@@ -3595,10 +3563,27 @@ struct AIChatView: View {
         .contextMenu { pinnedQuickMenu }
     }
 
+    /// 胶囊上写的必须是"发出去会用谁"。
+    ///
+    /// 已有会话:本会话绑定 → 发送时解析器真正会落到的模型。绑定的模型被删
+    /// (删了供应商)时解析器会回落到别的条目,以前胶囊却改显示默认分组的
+    /// 模型,和实际用的对不上。新对话:默认分组会用的;什么都解析不到就如实
+    /// 写「未选择模型」,和标题一致(以前退回一个没配置过的内置模型名)。
+    private var modelCapsuleLabel: String {
+        if vm.sessionId != nil,
+           let label = ModelSwitcher.currentLabel(sessionId: vm.sessionId)
+                ?? vm.resolveCurrentEntry()?.model.displayName {
+            return label
+        }
+        return ModelSwitcher.defaultLabel()
+            ?? vm.resolveCurrentEntry()?.model.displayName
+            ?? String(localized: "No model selected")
+    }
+
     /// 长按胶囊弹出的常用列表。空的时候给一句话指路,不给一个空菜单。
     @ViewBuilder
     private var pinnedQuickMenu: some View {
-        let pinned = ModelPinStore.shared.entries(store: ProviderConfigStore.shared)
+        let pinned = pinStore.entries(store: ProviderConfigStore.shared)
         let currentKey = ModelSwitcher.currentChoiceId(sessionId: vm.sessionId)
         if pinned.isEmpty {
             Button {
@@ -4116,20 +4101,6 @@ struct AIChatView: View {
         )
     }
 
-    /// Single overlay containing whichever input popup is active (slash or
-    /// `@`-mention). Kept in one overlay slot to avoid compounding SwiftUI
-    /// generic types on the body, which previously caused a runtime
-    /// type-metadata recursion crash.
-    /// [T-slash-picker-constant-band] Fixed top reserve for the slash /
-    /// mention popup. Dynamic Island + navbar + a comfortable visual
-    /// gap below the title block. Using a constant beats reading
-    /// `topSafeAreaInset` because that value reports the bare safe-area
-    /// inset (status bar + Dynamic Island, ~59pt) and skips the
-    /// principal-toolbar title — so any computation off it leaves the
-    /// popup overlapping the title row. 260pt covers the worst case
-    /// (iOS 18, 3-line custom titleView).
-    private static let slashPickerTopReserve: CGFloat = 260
-    private static let slashPickerBottomMargin: CGFloat = 16
     /// [T-slash-picker-fixed-height] Locked popup height: shows up to
     /// 4 rows, then scrolls. Row visual height ≈ 46pt (13pt title +
     /// 11pt subtitle + per-row vertical padding); +8pt accounts for
@@ -4296,10 +4267,10 @@ struct AIChatView: View {
                     // the slash popup (which is always 4-rows tall).
                     VStack {
                         HStack(spacing: 8) {
-                            if FileMentionIndex.shared.isScanning {
+                            if mentionIndex.isScanning {
                                 ProgressView().scaleEffect(0.7)
                             }
-                            Text(FileMentionIndex.shared.isScanning
+                            Text(mentionIndex.isScanning
                                  ? String(localized: "Scanning files…")
                                  : String(localized: "No matching files"))
                                 .font(.system(size: 13))
@@ -4352,7 +4323,7 @@ struct AIChatView: View {
                             }
                         }
                     }
-                    if FileMentionIndex.shared.isScanning {
+                    if mentionIndex.isScanning {
                         HStack(spacing: 6) {
                             ProgressView().scaleEffect(0.6)
                             Text("Scanning more locations…")
@@ -4617,7 +4588,6 @@ struct AIChatView: View {
         !vm.inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !vm.attachments.isEmpty
     }
-
 
     /// [T-model-quickswitch] 先切模型再发这一条。
     private func sendWithModel(choiceId: String) {
@@ -4911,7 +4881,6 @@ private struct NavBarStyleModifier: ViewModifier {
     }
 }
 
-
 // MARK: - Chat Trailing "…" Menu
 
 /// [T-ios-trailing-menu-streaming-stability] The chat page's "…" menu,
@@ -4950,24 +4919,6 @@ enum NavbarEvalStats {
     static let logger = AppLogger(category: "NavbarEval")
 }
 #endif
-
-private struct EquatableByValue<Key: Equatable, Content: View>: View, Equatable {
-    let key: Key
-    @ViewBuilder let content: () -> Content
-
-    static func == (lhs: Self, rhs: Self) -> Bool { lhs.key == rhs.key }
-
-    @ViewBuilder
-    var body: some View {
-        #if DEBUG
-        let _ = {
-            NavbarEvalStats.titleEval += 1
-            NavbarEvalStats.logger.info("[NavbarEval] titleEval=\(NavbarEvalStats.titleEval) (toolbarPass=\(NavbarEvalStats.toolbarPass))")
-        }()
-        #endif
-        content()
-    }
-}
 
 /// [T-ios-navbar-principal-streaming-stability] Every display input the navbar
 /// principal titleView renders, snapshotted as an Equatable key. While this is
@@ -5093,221 +5044,6 @@ private struct ChatToolbarHost<Title: View, Trailing: View>: View, Equatable {
                 ToolbarItem(placement: .principal) { title() }
                 ToolbarItem(placement: .topBarTrailing) { trailing() }
             }
-    }
-}
-
-/// [T-ios-navbar-uikit-menu] UIKit-owned replacement for ChatTrailingMenu.
-///
-/// Instrumented device run (NavbarEval, 2026-07-17 19:35): during a streaming
-/// reply the toolbar builder ran 34 times while BOTH equatable gates held
-/// (titleEval=3, menuEval=2) — yet the presented menu still refreshed. The
-/// leak is below SwiftUI: the toolbar bridge re-pushes the navigation item's
-/// bar buttons every host pass even when the content views compare equal, and
-/// UIKit refreshes/re-anchors a presented UIMenu whenever its bar's items are
-/// re-set. No amount of view-level Equatable can stop that.
-///
-/// Fix: own the button AND the menu in UIKit. The UIViewRepresentable's
-/// UIButton instance survives SwiftUI updates, the presented UIMenu is
-/// anchored to that stable instance, and updateUIView only touches
-/// `button.menu` when the DISPLAYED state actually changed — a no-op SwiftUI
-/// pass physically cannot reach the menu. Field names/order are identical to
-/// ChatTrailingMenu so the call site only swaps the type name. The DEBUG
-/// request-count rows use UIDeferredMenuElement.uncached to stay fresh at
-/// each open, matching the SwiftUI Menu's lazy content read.
-/// [T-ios-navbar-toolbar-host] Native SwiftUI "..." menu, restored. The
-/// UIKit ChatTrailingMenuButton below remains as the proven fallback (it
-/// verifiably stops the mid-stream refresh but loses the system's round
-/// Liquid-Glass chrome); with the toolbar now hosted in the equatable-gated
-/// ChatToolbarHost the ToolbarContent is never rebuilt during streaming, so
-/// the native Menu — and its native appearance — should be stable. Item set
-/// mirrors the UIKit buildMenu exactly (incl. Compact Messages + the divider
-/// between Clear Chat and the iCloud actions from T-chat-menu-compact-entry).
-// NOTE [T-session-export]: this dormant SwiftUI fallback intentionally does
-// NOT mirror the UIKit menu's Export as Markdown/PDF entries -- add them if
-// this struct is ever swapped back in.
-private struct ChatTrailingMenu: View, Equatable {
-    let messagesEmpty: Bool
-    let hasSession: Bool
-    let isForcePulling: Bool
-    let iCloudSyncEnabled: Bool
-    let memoryEnabled: Bool
-    let speakEnabled: Bool
-    let showEnhancedCacheToggle: Bool
-    let enhancedCacheEnabled: Bool
-    /// [T-codex-fast-mode] Mirrors ChatTrailingMenuButton.
-    let showFastModeToggle: Bool
-    let fastModeEnabled: Bool
-
-    let onNewChat: () -> Void
-    let onCompact: () -> Void
-    let onClearChat: () -> Void
-    let onForceSync: () -> Void
-    let onForcePull: () -> Void
-    let onOpenTerminal: () -> Void
-    let onOpenBrowser: () -> Void
-    let onBrowseFiles: () -> Void
-    let onArtifacts: () -> Void
-    let onSkills: () -> Void
-    let onMCPs: () -> Void
-    let onInspector: () -> Void
-    let onDistillSkill: () -> Void
-    let onMemories: () -> Void
-    let setSpeakEnabled: (Bool) -> Void
-    let setEnhancedCache: (Bool) -> Void
-    let setFastMode: (Bool) -> Void
-    let onTokenUsage: () -> Void
-    let onCopyRequests: () -> Void
-    let onCopySessionData: () -> Void
-
-    static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.messagesEmpty == rhs.messagesEmpty
-            && lhs.hasSession == rhs.hasSession
-            && lhs.isForcePulling == rhs.isForcePulling
-            && lhs.iCloudSyncEnabled == rhs.iCloudSyncEnabled
-            && lhs.memoryEnabled == rhs.memoryEnabled
-            && lhs.speakEnabled == rhs.speakEnabled
-            && lhs.showEnhancedCacheToggle == rhs.showEnhancedCacheToggle
-            && lhs.enhancedCacheEnabled == rhs.enhancedCacheEnabled
-            && lhs.showFastModeToggle == rhs.showFastModeToggle
-            && lhs.fastModeEnabled == rhs.fastModeEnabled
-    }
-
-    var body: some View {
-        #if DEBUG
-        let _ = {
-            NavbarEvalStats.menuEval += 1
-            NavbarEvalStats.logger.info("[NavbarEval] menuEval=\(NavbarEvalStats.menuEval) (toolbarPass=\(NavbarEvalStats.toolbarPass))")
-        }()
-        #endif
-        return Menu {
-            Button { onNewChat() } label: {
-                Label(String(localized: "New Chat"), systemImage: "square.and.pencil")
-            }
-
-            Divider()
-
-            // [T-chat-menu-compact-entry] Compact above Clear Chat.
-            Button { onCompact() } label: {
-                Label(String(localized: "Compact Messages"), systemImage: "arrow.down.right.and.arrow.up.left")
-            }
-            .disabled(messagesEmpty)
-
-            Button(role: .destructive) { onClearChat() } label: {
-                Label(String(localized: "Clear Chat"), systemImage: "trash")
-            }
-            .disabled(messagesEmpty)
-
-            Divider()
-
-            // iCloud sync actions: iOS 17+ (v2 sync engine) AND the user's
-            // iCloud Sync toggle on.
-            if #available(iOS 17.0, *), iCloudSyncEnabled {
-                Button { onForceSync() } label: {
-                    Label(String(localized: "Force iCloud Sync"), systemImage: "icloud.and.arrow.up")
-                }
-                .disabled(!hasSession || isForcePulling)
-
-                Button { onForcePull() } label: {
-                    Label(String(localized: "Force Pull Messages"), systemImage: "icloud.and.arrow.down")
-                }
-                .disabled(!hasSession || isForcePulling)
-
-                Divider()
-            }
-
-            Button { onOpenTerminal() } label: {
-                Label(String(localized: "Open Terminal"), systemImage: "terminal")
-            }
-
-            Button { onOpenBrowser() } label: {
-                Label(String(localized: "Open Browser"), systemImage: "globe")
-            }
-
-            Button { onBrowseFiles() } label: {
-                Label(String(localized: "Browse Chat Files"), systemImage: "folder")
-            }
-
-            Button { onArtifacts() } label: {
-                Label(String(localized: "Artifacts"), systemImage: "shippingbox")
-            }
-
-            Divider()
-
-            Button { onSkills() } label: {
-                Label(String(localized: "Skills in Session"), systemImage: "puzzlepiece.extension")
-            }
-
-            Button { onMCPs() } label: {
-                Label(String(localized: "MCPs in Session"), systemImage: "wrench.and.screwdriver")
-            }
-
-            if memoryEnabled {
-                Button { onMemories() } label: {
-                    Label(String(localized: "Memories in Session"), systemImage: "brain.head.profile")
-                }
-            }
-
-            Toggle(isOn: Binding(
-                get: { speakEnabled },
-                set: { setSpeakEnabled($0) }
-            )) {
-                Label(String(localized: "Speak Responses"), systemImage: "speaker.wave.2")
-            }
-
-            // [T-codex-fast-mode-menu-group] Model-control toggles in their
-            // own divider-separated section (mirrors the UIKit buildMenu).
-            if showEnhancedCacheToggle || showFastModeToggle {
-                Divider()
-
-                if showEnhancedCacheToggle {
-                    Toggle(isOn: Binding(
-                        get: { enhancedCacheEnabled },
-                        set: { setEnhancedCache($0) }
-                    )) {
-                        Label(String(localized: "Enhanced Cache"), systemImage: "clock.arrow.circlepath")
-                    }
-                }
-
-                if showFastModeToggle {
-                    Toggle(isOn: Binding(
-                        get: { fastModeEnabled },
-                        set: { setFastMode($0) }
-                    )) {
-                        Label(String(localized: "Enable Fast Mode"), systemImage: "bolt.fill")
-                    }
-                }
-            }
-
-            Divider()
-
-            Button { onInspector() } label: {
-                Label("Session Inspector", systemImage: "gauge.with.dots.needle.bottom.50percent")
-            }
-            Button { onDistillSkill() } label: {
-                Label("Save as Skill", systemImage: "book.and.wrench")
-            }
-
-            Button { onTokenUsage() } label: {
-                Label(String(localized: "Token Usage"), systemImage: "number")
-            }
-
-            #if DEBUG
-            Divider()
-
-            Button { onCopyRequests() } label: {
-                let n = LastAPIRequestBody.shared.getAll().count
-                Label("Copy Requests (\(n))", systemImage: "arrow.up.doc")
-            }
-
-            Button { onCopySessionData() } label: {
-                Label("Copy Session Data", systemImage: "tray.and.arrow.up")
-            }
-            #endif
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(ChatColors.primaryText)
-        }
     }
 }
 
@@ -5544,7 +5280,6 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
         return UIMenu(children: groups)
     }
 }
-
 
 // MARK: - Move To Session Sheet
 
@@ -6193,7 +5928,7 @@ private struct EmptyChatWorkspaceCard: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-        .padding(.bottom, 14)
+        .padding(.bottom, 6)
         .accessibilityElement(children: .contain)
     }
 
@@ -6210,7 +5945,6 @@ private struct EmptyChatWorkspaceCard: View {
         .buttonStyle(.plain)
     }
 }
-
 
 // MARK: - Session Loading Card
 

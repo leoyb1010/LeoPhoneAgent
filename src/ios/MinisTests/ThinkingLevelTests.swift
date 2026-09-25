@@ -112,4 +112,34 @@ final class ThinkingLevelTests: XCTestCase {
         let cfg = try JSONDecoder().decode(SessionInferenceConfig.self, from: json)
         XCTAssertEqual(cfg.thinkingLevel, .xhigh)
     }
+
+    // MARK: - Deleting a provider frees its pins
+
+    /// Pins and recents come in every shape ever stored; all of them must be
+    /// recognised when their provider, entry or group is deleted, and nothing
+    /// else may be dropped.
+    func testModelChoiceKeyMatchesEveryStoredShape() {
+        func gone(_ key: String) -> Bool {
+            ModelChoiceKey.isGone(key, instanceIds: ["inst-a"], entryIds: ["entry-x"], groupIds: ["g1"])
+        }
+        XCTAssertTrue(gone("inst-a/gpt-5"))
+        XCTAssertTrue(gone("inst-a/anthropic/claude-sonnet"))   // model id with "/"
+        XCTAssertTrue(gone("inst-a:gpt-5"))                     // legacy separator
+        XCTAssertTrue(gone("entry-x"))
+        XCTAssertTrue(gone("group:g1"))
+        XCTAssertFalse(gone("inst-b/gpt-5"))
+        XCTAssertFalse(gone("inst-ab/gpt-5"))                   // prefix of another id
+        XCTAssertFalse(gone("group:g2"))
+        XCTAssertFalse(gone("group:inst-a"))                    // groups are matched by group id only
+    }
+
+    func testCompactSlotForgetsDeletedEntryOnly() {
+        let saved = AgentModelSlots.compactEntryId
+        defer { AgentModelSlots.compactEntryId = saved }
+        AgentModelSlots.compactEntryId = "entry-keep"
+        AgentModelSlots.forget(entryIds: ["entry-gone"])
+        XCTAssertEqual(AgentModelSlots.compactEntryId, "entry-keep")
+        AgentModelSlots.forget(entryIds: ["entry-keep"])
+        XCTAssertNil(AgentModelSlots.compactEntryId)
+    }
 }

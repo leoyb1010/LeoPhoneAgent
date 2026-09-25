@@ -384,15 +384,15 @@ struct AgentLiveActivityWidget: Widget {
                   Group {
                     if context.state.allCompleted {
                         HStack(spacing: 3) {
-                            Image(systemName: "checkmark.circle.fill")
+                            Image(systemName: context.state.restingSymbol)
                                 .font(.caption)
-                                .foregroundStyle(.green)
+                                .foregroundStyle(context.state.restingTint)
                             Text("\(context.state.sessions.count)")
                                 .font(.caption.bold())
                         }
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(.green.opacity(0.18), in: Capsule())
+                        .background(context.state.restingTint.opacity(0.18), in: Capsule())
                         .padding(.trailing, 8)
                     } else {
                         HStack(spacing: 5) {
@@ -468,9 +468,9 @@ struct AgentLiveActivityWidget: Widget {
                             }
                             if session.isCompleted {
                                 HStack(alignment: .top, spacing: 5) {
-                                    Image(systemName: "checkmark.circle.fill")
+                                    Image(systemName: session.restingSymbol)
                                         .font(.caption)
-                                        .foregroundStyle(.green)
+                                        .foregroundStyle(session.restingTint)
                                     if !session.lastMessage.isEmpty {
                                         Text(session.lastMessage)
                                             .font(.caption)
@@ -640,15 +640,20 @@ struct AgentLockScreenView: View {
                 Spacer()
                 if state.allCompleted {
                     HStack(spacing: 3) {
-                        Image(systemName: "checkmark.circle.fill")
+                        Image(systemName: state.restingSymbol)
                             .font(.caption)
-                            .foregroundStyle(.green)
-                        Text("\(state.sessions.count) completed")
-                            .font(.caption.bold())
+                            .foregroundStyle(state.restingTint)
+                        if state.anyNeedsAttention {
+                            Text("Needs attention")
+                                .font(.caption.bold())
+                        } else {
+                            Text("\(state.sessions.count) completed")
+                                .font(.caption.bold())
+                        }
                     }
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(.green.opacity(0.18), in: Capsule())
+                    .background(state.restingTint.opacity(0.18), in: Capsule())
                 } else {
                     HStack(spacing: 3) {
                         Text("\(state.activeSessionCount)")
@@ -704,9 +709,9 @@ struct AgentLockScreenView: View {
                     }
                     if session.isCompleted {
                         HStack(alignment: .top, spacing: 5) {
-                            Image(systemName: "checkmark.circle.fill")
+                            Image(systemName: session.restingSymbol)
                                 .font(.caption)
-                                .foregroundStyle(.green)
+                                .foregroundStyle(session.restingTint)
                             if !session.lastMessage.isEmpty {
                                 Text(session.lastMessage)
                                     .font(.caption)
@@ -2135,4 +2140,45 @@ private struct ArtifactsWidgetView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
+}
+
+// MARK: - Resting-state outcome [T-la-honest-outcome]
+
+/// A finished run is done (green check), needs the user (orange exclamation)
+/// or was stopped (grey). The resting state used to paint every ending green,
+/// so a failed run showed a checkmark next to its error text.
+extension LiveSessionSnapshot.RestingOutcome {
+    var symbol: String {
+        switch self {
+        case .done: "checkmark.circle.fill"
+        case .attention: "exclamationmark.circle.fill"
+        case .stopped: "stop.circle.fill"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .done: .green
+        case .attention: .orange
+        case .stopped: .gray
+        }
+    }
+}
+
+extension LiveSessionSnapshot {
+    var restingSymbol: String { outcome.symbol }
+    var restingTint: Color { outcome.tint }
+}
+
+@available(iOSApplicationExtension 16.2, *)
+extension AgentActivityAttributes.ContentState {
+    /// The most urgent outcome decides the shared capsule.
+    private var restingOutcome: LiveSessionSnapshot.RestingOutcome {
+        if sessions.contains(where: { $0.outcome == .attention }) { return .attention }
+        if !sessions.isEmpty, sessions.allSatisfy({ $0.outcome == .stopped }) { return .stopped }
+        return .done
+    }
+    var anyNeedsAttention: Bool { restingOutcome == .attention }
+    var restingSymbol: String { restingOutcome.symbol }
+    var restingTint: Color { restingOutcome.tint }
 }

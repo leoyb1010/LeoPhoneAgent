@@ -31,7 +31,6 @@ final class SystemVoiceProvider: NSObject, VoiceInputCapable, VoiceOutputCapable
         createdAt: Date(timeIntervalSince1970: 0)
     )
 
-    private let logger = AppLogger(category: "SystemVoice")
     private let synthesizer = AVSpeechSynthesizer()
     private let locale: Locale
 

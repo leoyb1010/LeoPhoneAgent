@@ -12,7 +12,6 @@ import SwiftUI
 struct CommandPaletteView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
-    @FocusState private var focused: Bool
 
     /// Actions the host wires: open session / run quick task / open surface.
     let openSession: (String) -> Void

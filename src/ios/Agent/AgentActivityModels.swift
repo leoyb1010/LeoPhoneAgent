@@ -324,21 +324,21 @@ enum AgentToolPresentation {
 
     static func displayName(for toolName: String) -> String {
         switch toolName {
-        case "browser", "browser_use":          return "Browser"
-        case "shell", "shell_execute":          return "Shell"
-        case "file_read":                       return "Read File"
-        case "file_write":                      return "Write File"
-        case "file_edit":                       return "Edit File"
-        case "read_image":                      return "Read Image"
-        case "memory":                          return "Memory"
-        case "treasury_search":                 return "Search Treasury"
-        case "treasury_get":                    return "Read Treasury"
-        case "treasury_save":                   return "Save to Treasury"
-        case "treasury_update":                 return "Update Treasury"
-        case "text":                            return "Responding"
-        case "thinking":                        return "Thinking"
-        case "code_interpret":                  return "Code"
-        default:                                return "Working"
+        case "browser", "browser_use":          return String(localized: "Browser")
+        case "shell", "shell_execute":          return String(localized: "Shell")
+        case "file_read":                       return String(localized: "Read File")
+        case "file_write":                      return String(localized: "Write File")
+        case "file_edit":                       return String(localized: "Edit File")
+        case "read_image":                      return String(localized: "Read Image")
+        case "memory":                          return String(localized: "Memory")
+        case "treasury_search":                 return String(localized: "Search Treasury")
+        case "treasury_get":                    return String(localized: "Read Treasury")
+        case "treasury_save":                   return String(localized: "Save to Treasury")
+        case "treasury_update":                 return String(localized: "Update Treasury")
+        case "text":                            return String(localized: "Responding")
+        case "thinking":                        return String(localized: "Thinking…")
+        case "code_interpret":                  return String(localized: "Code")
+        default:                                return String(localized: "Working")
         }
     }
 
@@ -348,5 +348,25 @@ enum AgentToolPresentation {
         case "text": .preparing
         default: .usingTool
         }
+    }
+}
+
+/// Progress reported to the system for a background agent run
+/// (BGContinuedProcessingTask).
+///
+/// An agent run has no known length. The old estimate (8% per loop, capped at
+/// 92%) froze after eleven iterations and between long iterations, and the
+/// scheduler force-expires tasks that "appear stalled" — which is how long runs
+/// ended in a system "failed" banner. This curve approaches 95% and then keeps
+/// moving one unit per event, so progress changes exactly as long as work does.
+enum ContinuedProcessingProgress {
+    /// Large so the curve can keep creeping forward for days without hitting the end.
+    static let scale: Int64 = 1_000_000
+
+    /// Next value after one more unit of real work: always higher than
+    /// `previous`, never the finished value.
+    static func next(after previous: Int64, events: Int) -> Int64 {
+        let curve = Int64(Double(scale) * 0.95 * (1 - exp(-Double(events) / 120)))
+        return min(scale - 1, max(previous + 1, curve))
     }
 }

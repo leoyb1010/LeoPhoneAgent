@@ -4,8 +4,6 @@ import AVFoundation
 import UIKit
 import VisionKit
 
-private let logger = AppLogger(category: "CameraOffloadBridge")
-
 @MainActor @objc public class CameraOffloadBridge: NSObject {
     private final class CaptureSession {
         let operation: CameraCaptureOperation

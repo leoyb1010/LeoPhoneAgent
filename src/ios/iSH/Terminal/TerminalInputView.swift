@@ -428,20 +428,6 @@ class TerminalKeyInputView: UIView, UITextInput {
 
     // MARK: - Helpers
 
-    private func sendArrow(_ direction: ArrowDirection) {
-        // Normal mode: ESC [ A/B/C/D
-        // Application mode: ESC O A/B/C/D
-        let prefix: UInt8 = applicationCursorKeys ? 0x4F : 0x5B // O or [
-        let code: UInt8
-        switch direction {
-        case .up:    code = 0x41 // A
-        case .down:  code = 0x42 // B
-        case .right: code = 0x43 // C
-        case .left:  code = 0x44 // D
-        }
-        sendBytes([0x1B, prefix, code])
-    }
-
     /// Send arrow key with modifier: ESC[1;{mod}A/B/C/D
     /// Modifier codes: 2=Shift, 3=Alt, 4=Shift+Alt, 5=Ctrl, 6=Ctrl+Shift, 7=Ctrl+Alt
     private func sendModifiedArrow(_ arrowCode: UInt8, _ flags: UIKeyModifierFlags) {

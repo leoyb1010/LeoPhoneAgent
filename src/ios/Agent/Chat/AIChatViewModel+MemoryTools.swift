@@ -387,10 +387,4 @@ extension AIChatViewModel {
         return FileToolResult(output: globalNote + summary + "\n\n" + output + truncatedNote, success: true)
     }
 
-    /// Escape single quotes for shell arguments.
-    private func shellEscape(_ s: String) -> String {
-        s.replacingOccurrences(of: "'", with: "'\\''")
-    }
-
-
 }

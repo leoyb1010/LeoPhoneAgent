@@ -228,4 +228,35 @@ final class AgentActivityModelsTests: XCTestCase {
             completed
         )
     }
+
+    // MARK: - Background run progress
+
+    /// A stalled value lets the system expire the task and show "failed";
+    /// reaching the end would claim the run finished.
+    func testContinuedProcessingProgressAlwaysMovesAndNeverFinishes() {
+        var value: Int64 = 0
+        for event in 1...5_000 {
+            let next = ContinuedProcessingProgress.next(after: value, events: event)
+            XCTAssertGreaterThan(next, value, "event \(event)")
+            XCTAssertLessThan(next, ContinuedProcessingProgress.scale, "event \(event)")
+            value = next
+        }
+    }
+
+    // MARK: - Live Activity resting outcome
+
+    /// A Live Activity started by the previous build carries no `outcome`;
+    /// it must still decode (as a plain completion), and the new field must
+    /// round-trip.
+    func testLiveSessionSnapshotDecodesPayloadWithoutOutcome() throws {
+        let old = #"{"sessionId":"s1","title":"T","toolIcon":"terminal","toolStatus":"Running","loopIteration":2,"isCompleted":true,"lastMessage":"hi"}"#
+        let snapshot = try JSONDecoder().decode(LiveSessionSnapshot.self, from: Data(old.utf8))
+        XCTAssertEqual(snapshot.outcome, .done)
+        XCTAssertEqual(snapshot.lastMessage, "hi")
+
+        var attention = snapshot
+        attention.outcome = .attention
+        let decoded = try JSONDecoder().decode(LiveSessionSnapshot.self, from: JSONEncoder().encode(attention))
+        XCTAssertEqual(decoded.outcome, .attention)
+    }
 }

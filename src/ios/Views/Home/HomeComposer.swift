@@ -275,7 +275,8 @@ struct HomeEmptyState: View {
     let onSuggestion: (String) -> Void
     let onConnectModel: () -> Void
 
-    private let suggestions = ["帮我整理今天要做的事", "打开手电筒", "总结剪贴板里的内容"]
+    /// Also offered under the iPad home workbench composer.
+    static let suggestions = ["帮我整理今天要做的事", "打开手电筒", "总结剪贴板里的内容"]
 
     var body: some View {
         VStack(spacing: 18) {
@@ -289,7 +290,7 @@ struct HomeEmptyState: View {
             Text("有什么要我做的?")
                 .font(.title2.weight(.semibold))
             VStack(spacing: 8) {
-                ForEach(suggestions, id: \.self) { item in
+                ForEach(Self.suggestions, id: \.self) { item in
                     Button { onSuggestion(item) } label: {
                         Text(item)
                             .font(.subheadline)

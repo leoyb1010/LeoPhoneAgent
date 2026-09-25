@@ -71,6 +71,12 @@ enum AgentModelSlots {
         get { UserDefaults.standard.string(forKey: compactKey)?.nilIfEmpty }
         set { UserDefaults.standard.set(newValue, forKey: compactKey) }
     }
+
+    /// 槽里的模型被删掉时清空,设置页不再显示一个不存在的选项(用的时候本来
+    /// 就会回落到当前会话模型)。
+    static func forget(entryIds: Set<String>) {
+        if let id = compactEntryId, entryIds.contains(id) { compactEntryId = nil }
+    }
 }
 
 private extension String {

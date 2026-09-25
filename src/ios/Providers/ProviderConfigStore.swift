@@ -865,6 +865,11 @@ final class ProviderConfigStore: ObservableObject {
         // which also deleted a user's intentionally-empty group (newly created,
         // or temporarily cleared) and propagated that deletion via tombstone.
         config.modelGroups.removeAll { removedGroupIds.contains($0.id) }
+        // A group deleted as a side effect must not stay the default: nothing
+        // else repairs a dangling pointer until the next launch, and the model
+        // capsule / voice correction read it meanwhile. Same rule as load-time
+        // normalisation — fall back to the first remaining group.
+        Self.repointDefaults(in: &config, removedGroupIds: removedGroupIds)
         // Remove from agent loop list
         config.agentLoopModelEntryIds.removeAll { removedEntryIds.contains($0) }
         // Stamp tombstones so iCloud sync can propagate the delete instead
@@ -881,6 +886,11 @@ final class ProviderConfigStore: ObservableObject {
         ProviderKeychainHelper.deleteOAuthString(instanceId: instanceId, account: "oauth-gcp-project")
         ProviderKeychainHelper.deleteOAuthString(instanceId: instanceId, account: "manual-oauth-token")
         save()
+        // Pins / recents / the compact slot live outside the config. They used
+        // to outlive the provider: its pinned models kept counting toward the
+        // six-pin cap while showing nowhere.
+        ModelSwitcher.forget(instanceIds: [instanceId], entryIds: removedEntryIds, groupIds: removedGroupIds)
+        AgentModelSlots.forget(entryIds: removedEntryIds)
         // [T-icloud-provider-sync-consistency] Explicit V3 delete tombstones —
         // emitV3MarkDirty no longer diff-infers deletions, so the instance, its
         // cascaded entries, and any groups emptied by the removal must each
@@ -1359,6 +1369,8 @@ final class ProviderConfigStore: ObservableObject {
         config.agentLoopModelEntryIds.removeAll { $0 == entryId }
         Self.recordTombstone(in: &config.deletedModelEntries, ids: [entryId])
         save()
+        ModelSwitcher.forget(entryIds: [entryId])
+        AgentModelSlots.forget(entryIds: [entryId])
         // [T-icloud-provider-sync-consistency] emitV3MarkDirty no longer
         // infers deletes from the snapshot diff, so an explicit removal must
         // emit its own V3 delete tombstone here.
@@ -1603,11 +1615,10 @@ final class ProviderConfigStore: ObservableObject {
 
     func removeGroup(_ groupId: String) {
         config.modelGroups.removeAll { $0.id == groupId }
-        if config.defaultPrimaryGroupId == groupId { config.defaultPrimaryGroupId = nil }
-        if config.defaultSubGroupId == groupId { config.defaultSubGroupId = nil }
-        config.agentLoopGroupIds.removeAll { $0 == groupId }
+        Self.repointDefaults(in: &config, removedGroupIds: [groupId])
         Self.recordTombstone(in: &config.deletedModelGroups, ids: [groupId])
         save()
+        ModelSwitcher.forget(groupIds: [groupId])
         // [T-icloud-provider-sync-consistency] Explicit V3 delete tombstone —
         // emitV3MarkDirty no longer diff-infers group deletions.
         Task { await ChatStore.shared.markDirty(recordType: "ProviderModelGroupV3", recordId: groupId, operation: "delete") }
@@ -1615,6 +1626,28 @@ final class ProviderConfigStore: ObservableObject {
 
     func group(for id: String) -> ModelGroup? {
         config.modelGroups.first { $0.id == id }
+    }
+
+    /// Provider instances the user deleted. Instance ids are never reused, so
+    /// anything still pointing at one of these is garbage.
+    var deletedInstanceIds: Set<String> {
+        Set(config.deletedInstances.map(\.id))
+    }
+
+    /// Point defaults and the agent-loop list away from groups that were just
+    /// removed. The primary default falls back to the first remaining group,
+    /// matching what load-time normalisation does (a nil default is restored
+    /// to the first group on the next launch anyway, but the UI read the
+    /// dangling id until then).
+    private static func repointDefaults(in config: inout ProviderConfig, removedGroupIds: Set<String>) {
+        guard !removedGroupIds.isEmpty else { return }
+        if let def = config.defaultPrimaryGroupId, removedGroupIds.contains(def) {
+            config.defaultPrimaryGroupId = config.modelGroups.first?.id
+        }
+        if let def = config.defaultSubGroupId, removedGroupIds.contains(def) {
+            config.defaultSubGroupId = nil
+        }
+        config.agentLoopGroupIds.removeAll { removedGroupIds.contains($0) }
     }
 
     // MARK: - Agent Loop Models
@@ -1765,6 +1798,14 @@ final class ProviderConfigStore: ObservableObject {
     func removeBinding(for sessionId: String) {
         config.sessionBindings.removeValue(forKey: sessionId)
         save()
+    }
+
+    /// A deleted session's model binding and inference settings go with it.
+    /// They used to stay forever, and every config save rewrites all of them.
+    func forgetSession(_ sessionId: String) {
+        let hadBinding = config.sessionBindings.removeValue(forKey: sessionId) != nil
+        let hadInference = config.sessionInferenceConfigs.removeValue(forKey: sessionId) != nil
+        if hadBinding || hadInference { save() }
     }
 
     // MARK: - Session Inference Config

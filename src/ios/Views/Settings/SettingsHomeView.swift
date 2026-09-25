@@ -66,7 +66,7 @@ struct SettingsHomeView: View {
                 SettingsEntry("Mac 控制台", keywords: "控制台 console 编码 任务 遥控",
                               icon: "terminal.fill", color: .teal,
                               hint: "在已连接的 Mac 上发任务、看进度、审批") { GatewayEntryView() },
-                SettingsEntry("Siri 指挥中心", keywords: "siri 语音 快捷指令 shortcuts 审批 action button 自动化",
+                SettingsEntry("Siri 指挥中心", keywords: "siri 语音 快捷指令 shortcuts 审批 action button 自动化 手表 apple watch 蜂窝",
                               icon: "mic.fill", color: .purple) { SiriCommandCenterView() },
                 SettingsEntry("本机模型", keywords: "本机 端上 离线 apple intelligence foundation models 改写 摘要 隐私",
                               icon: "cpu.fill", color: .pink) { LocalBrainSettingsView() },

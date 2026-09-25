@@ -1,6 +1,6 @@
 # LeoPhoneAgent
 
-[![iOS](https://img.shields.io/badge/iOS-1.42.4%20(124)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![iOS](https://img.shields.io/badge/iOS-1.43.0%20(125)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
 [![macOS](https://img.shields.io/badge/macOS-1.85.0-7C3AED.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/v1.85.0)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.17-D94B16.svg)](src/harmony/app/AppScope/app.json5)
@@ -150,7 +150,7 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 版本/构建:`1.42.4 (124)`;Bundle ID `com.leoyuan.leophoneagent`
+- 版本/构建:`1.43.0 (125)`;Bundle ID `com.leoyuan.leophoneagent`
 - 1.42.x:ChatGPT 登录读 Codex 实时模型目录(GPT-6-Astra / Sol / Luna);「全自动」在输入框上方一点即开(另有 `/auto`);
   一轮丝滑改造 —— 新对话不再重铺 rootfs 覆盖层、语音电平独立刷新(≤30 Hz)、首页输入/搜索打字不重算会话列表、
   键盘弹起时消息列表贴底、回前台不在第一帧同步查钥匙串;能力自检可真发一句话测每个供应商。

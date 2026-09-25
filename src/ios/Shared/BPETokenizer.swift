@@ -14,10 +14,6 @@ final class BPETokenizer: @unchecked Sendable {
     private var isLoaded = false
     private let lock = NSLock()
 
-    // cl100k_base special token count (for overhead estimation)
-    private static let tokensPerMessage = 3 // every message has <|start|>{role}\n and \n
-    private static let tokensPerReply = 3   // every reply is primed with <|start|>assistant<|message|>
-
     private init() {}
 
     // MARK: - Public API

@@ -377,28 +377,6 @@ struct ToolLiveSheet: View {
         return false
     }
 
-    /// [T-step-timestamp v2 aa8b1128] Human-readable elapsed-or-final
-    /// duration for the current block. Pulls block.toolDuration when the
-    /// tool has finished (set in runStreamProcessing on tool result),
-    /// otherwise computes live elapsed from `started`. Format matches
-    /// the cross-platform contract:
-    ///   < 60s        → "3s"
-    ///   60-3600s     → "2m30s"
-    ///   ≥ 3600s      → "1h12m"
-    /// While still running the live value is suffixed "…".
-    private func durationLabel(started: Date) -> String {
-        let secs: TimeInterval
-        let stillRunning: Bool
-        if let dur = block.toolDuration {
-            secs = dur
-            stillRunning = false
-        } else {
-            secs = max(0, Date().timeIntervalSince(started))
-            stillRunning = isLive
-        }
-        return MinisStepTimestampFormatter.duration(seconds: secs, stillRunning: stillRunning)
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             // Top nav bar
@@ -657,34 +635,6 @@ struct ToolLiveSheet: View {
             return cmd
         }
         return nil
-    }
-
-    /// Tool name + truncated parameters for the nav bar subtitle.
-    private var navToolDetail: String {
-        switch block.kind {
-        case .text, .thinking:
-            return ""
-        case .shellTool(let cmd):
-            return "shell_execute(\(truncateParam(cmd)))"
-        case .fileReadTool(let path):
-            return "file_read(\(truncateParam(path)))"
-        case .fileWriteTool(let path):
-            return "file_write(\(truncateParam(path)))"
-        case .fileEditTool(let path):
-            return "file_edit(\(truncateParam(path)))"
-        case .browserTool(let action):
-            return "browser_use(\(truncateParam(action)))"
-        case .readImageTool(let path):
-            return "read_image(\(truncateParam(path)))"
-        case .memoryTool(let action):
-            return "\(truncateParam(action))"
-        case .info:
-            return ""
-        }
-    }
-
-    private func truncateParam(_ s: String) -> String {
-        s.count > 100 ? String(s.prefix(100)) + "..." : s
     }
 
     @ViewBuilder
@@ -974,11 +924,6 @@ struct ToolLiveSheet: View {
         }
     }
 
-    /// Zoomable image: fits width, supports pinch-to-zoom and drag.
-    private func zoomableImage(_ img: UIImage) -> some View {
-        ZoomableImageView(image: img)
-    }
-
     /// Rendered snapshot text (last N lines of tool output).
     private func snapshotTextContent(_ text: String) -> some View {
         GeometryReader { geo in
@@ -1046,25 +991,6 @@ struct ToolLiveSheet: View {
                 }
             }
         }
-    }
-
-    /// Minimal info stub for file_read in snapshot view — avoids duplicating content already shown in chat.
-    private func fileReadInfoView(fileName: String, charCount: Int) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "doc.text")
-                .font(.system(size: 12))
-                .foregroundStyle(Color(UIColor.secondaryLabel))
-            Text(fileName)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Color(UIColor.label))
-                .lineLimit(1)
-            Text("(\(Self.formatCharCount(charCount)))")
-                .font(.system(size: 11))
-                .foregroundStyle(Color(UIColor.tertiaryLabel))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
     }
 
     /// Editor-style preview for file_read / file_write tool results.
@@ -1510,12 +1436,6 @@ struct ToolLiveSheet: View {
             }
             .padding(.bottom, 16)
         }
-    }
-
-    private static func formatCharCount(_ count: Int) -> String {
-        if count < 1000 { return "\(count) chars" }
-        if count < 1_000_000 { return String(format: "%.1fK chars", Double(count) / 1000.0) }
-        return String(format: "%.1fM chars", Double(count) / 1_000_000.0)
     }
 
     private static func formatBytes(_ bytes: Int) -> String {

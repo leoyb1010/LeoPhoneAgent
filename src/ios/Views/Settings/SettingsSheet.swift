@@ -218,38 +218,6 @@ struct SettingsSheet: View {
         deepLink.pendingSettingsTarget = nil
     }
 
-    /// Compose the feedback mailto URL with a prefilled body that includes
-    /// app version, iOS version, and a machine identifier, plus a prompt
-    /// asking the user to attach a screenshot manually (mailto:// can't
-    /// auto-attach). Using URLComponents so the subject and body go through
-    /// proper URL encoding without hand-rolling addingPercentEncoding calls.
-    fileprivate static func makeFeedbackEmailURL() -> URL? {
-        let bundle = Bundle.main
-        let appVersion = bundle.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
-        let build = bundle.infoDictionary?["CFBundleVersion"] as? String ?? "?"
-        let iosVersion = UIDevice.current.systemVersion
-        let device = machineIdentifier()
-
-        let body = """
-        Please describe your feedback:
-
-
-        ---
-        App Version: \(appVersion) (\(build))
-        iOS Version: \(iosVersion)
-        Device: \(device)
-
-        Screenshot (optional): Please attach a screenshot if relevant.
-        """
-
-        var components = URLComponents(string: "https://github.com/leoyb1010/LeoPhoneAgent/issues/new")!
-        components.queryItems = [
-            URLQueryItem(name: "title", value: "[Feedback] "),
-            URLQueryItem(name: "body", value: body),
-        ]
-        return components.url
-    }
-
     /// Build the GitHub Issue URL with a bilingual bug-report template
     /// pre-filled with platform / OS / app / device info. SwiftUI `Link`
     /// hands the URL to UIApplication.shared.open, which routes to Safari.
@@ -264,7 +232,6 @@ struct SettingsSheet: View {
         ## 📝 Problem Summary
 
         <!-- Briefly describe the issue you encountered -->
-
 
         ## 📱 Basic Information
 
@@ -288,8 +255,6 @@ struct SettingsSheet: View {
         ```
 
         ## ✅ Expected Behavior
-
-
 
         ## 🗂️ Additional Information
 

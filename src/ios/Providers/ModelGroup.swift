@@ -98,3 +98,18 @@ struct ModelGroup: Identifiable, Codable, Hashable {
         removedMembers = try container.decodeIfPresent([String: Date].self, forKey: .removedMembers) ?? [:]
     }
 }
+
+/// A pinned or recent model choice as stored in defaults: "instanceId/modelId",
+/// legacy "instanceId:modelId", a bare entry id, or "group:<groupId>".
+enum ModelChoiceKey {
+    /// Whether `key` points at a provider instance, entry or group that was
+    /// just deleted. Model ids may themselves contain "/" or ":"; instance ids
+    /// are UUIDs and contain neither, so the instance is everything before the
+    /// first separator.
+    static func isGone(_ key: String, instanceIds: Set<String>, entryIds: Set<String>, groupIds: Set<String>) -> Bool {
+        if key.hasPrefix("group:") { return groupIds.contains(String(key.dropFirst("group:".count))) }
+        if entryIds.contains(key) { return true }
+        let instance = key.split(maxSplits: 1, whereSeparator: { $0 == "/" || $0 == ":" }).first.map(String.init) ?? key
+        return instanceIds.contains(instance)
+    }
+}

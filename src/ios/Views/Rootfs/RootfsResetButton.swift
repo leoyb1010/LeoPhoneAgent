@@ -159,15 +159,6 @@ struct RootfsResetButton: View {
     }
 }
 
-/// Quick access reset toolbar item
-struct RootfsResetToolbarItem: ToolbarContent {
-    var body: some ToolbarContent {
-        ToolbarItem(placement: .navigationBarTrailing) {
-            RootfsResetButton(style: .compact)
-        }
-    }
-}
-
 // MARK: - Usage Examples
 
 /*

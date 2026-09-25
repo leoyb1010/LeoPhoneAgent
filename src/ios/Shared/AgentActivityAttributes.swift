@@ -608,6 +608,38 @@ struct LiveSessionSnapshot: Codable, Hashable {
     var isCompleted: Bool = false
     /// One-line summary of the final assistant reply, shown when `isCompleted`.
     var lastMessage: String = ""
+    /// How the run ended, for the resting state. Only `.done` earns the green
+    /// checkmark: a failed or interrupted run rests as `.attention` (orange),
+    /// a run the user stopped as `.stopped` (grey). Runs parked waiting for the
+    /// app to return are not finished at all and stay in the running form (see
+    /// `BackgroundKeepAliveManager.buildSessionSnapshots`).
+    var outcome: RestingOutcome = .done
+
+    enum RestingOutcome: String, Codable, Hashable {
+        case done, attention, stopped
+    }
+}
+
+extension LiveSessionSnapshot {
+    private enum CodingKeys: String, CodingKey {
+        case sessionId, title, toolIcon, toolStatus, loopIteration, isCompleted, lastMessage, outcome
+    }
+
+    /// Fields added after the first release decode with defaults. A property
+    /// default alone does not make synthesized decoding tolerant of a missing
+    /// key, and an activity started by the previous build is re-decoded after
+    /// an update.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        sessionId = try c.decode(String.self, forKey: .sessionId)
+        title = try c.decode(String.self, forKey: .title)
+        toolIcon = try c.decode(String.self, forKey: .toolIcon)
+        toolStatus = try c.decode(String.self, forKey: .toolStatus)
+        loopIteration = try c.decodeIfPresent(Int.self, forKey: .loopIteration) ?? 0
+        isCompleted = try c.decodeIfPresent(Bool.self, forKey: .isCompleted) ?? false
+        lastMessage = try c.decodeIfPresent(String.self, forKey: .lastMessage) ?? ""
+        outcome = (try? c.decodeIfPresent(RestingOutcome.self, forKey: .outcome)) ?? .done
+    }
 }
 
 @available(iOS 16.2, *)

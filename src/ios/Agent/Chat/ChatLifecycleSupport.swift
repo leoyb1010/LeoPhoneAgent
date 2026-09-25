@@ -24,7 +24,6 @@ final class SessionActivityTracker: ObservableObject {
     /// reflect the live state of their underlying real session without
     /// double-inserting into `activeSessions`.
     @Published var draftAliases: [String: String] = [:]
-    @Published var currentToolStatus: String = ""
     /// Authoritative, presentation-ready phase for each live or resumable
     /// session. Chat, Live Activity and future widgets should consume this
     /// instead of independently inferring permission/takeover/background waits.
@@ -33,6 +32,12 @@ final class SessionActivityTracker: ObservableObject {
     /// Runtime-only correlation. Events themselves are persisted in the
     /// device-local AgentActivityLog; no prompt or tool payload is retained.
     private var activityRunIds: [String: String] = [:]
+    /// How each session's most recent run ended (the `finalPhase` it left the
+    /// active set with). The Live Activity rests every session by this, so the
+    /// Dynamic Island can never call a failed run done or a paused run failed,
+    /// no matter which code path ends the activity. Cleared when the session
+    /// starts running again.
+    private(set) var lastOutcomes: [String: AgentActivityPhase] = [:]
     private var lastActivityPhases: [String: AgentActivityPhase] = [:]
     private var lastActivityReasons: [String: AgentActivityReason] = [:]
 
@@ -225,6 +230,7 @@ final class SessionActivityTracker: ObservableObject {
     func setActive(_ sessionId: String, source: String = #function) {
         let wasPresent = activeSessions.contains(sessionId)
         if !wasPresent { activeSessions.insert(sessionId) }
+        lastOutcomes.removeValue(forKey: sessionId)
         syncMirror()
         if !wasPresent {
             // [T-haptic-misfire] Skip placeholder ids (they precede the real
@@ -274,6 +280,7 @@ final class SessionActivityTracker: ObservableObject {
         var receiptStored = false
         activeSessions.remove(sessionId)
         sessionToolInfo.removeValue(forKey: sessionId)
+        if wasPresent { lastOutcomes[sessionId] = finalPhase }
         if wasPresent, let runId = activityRunIds[sessionId] {
             receiptStored = AgentActivityLog.shared.append(AgentActivityEvent(
                 runId: runId,

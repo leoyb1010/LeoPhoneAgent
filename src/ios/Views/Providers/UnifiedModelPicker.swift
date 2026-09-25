@@ -1,8 +1,6 @@
 import SwiftUI
 import AVFoundation
 
-private let pickerLog = AppLogger(category: "UnifiedPicker")
-
 // MARK: - Virtual System Voice Entries
 
 extension ModelEntry {

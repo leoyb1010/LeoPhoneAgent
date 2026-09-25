@@ -1009,7 +1009,6 @@ extension CollectionViewMessageListV3 {
         /// Trailing-edge work item so the final streaming update isn't lost.
         private var pendingStreamingLayout: DispatchWorkItem?
 
-
         /// Scroll coalescing: batches rapid scroll signals into one 80ms action.
         private var pendingScrollWork: DispatchWorkItem?
 
@@ -1202,11 +1201,6 @@ extension CollectionViewMessageListV3 {
 
         // MARK: - Cell Configuration
 
-        private func currentIndex(for item: MessageListItem) -> Int? {
-            return itemToIndex[item]
-        }
-
-        private static let cellLogger = AppLogger(category: "CellPerf")
         private let screenshotLogger = AppLogger(category: "TurnScreenshot")
         /// [T-ios-copy-screenshot-diag-logs] Verbose stage-by-stage trace of
         /// captureScrollingTurnScreenshot used to chase the "top blank when

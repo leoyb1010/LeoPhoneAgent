@@ -154,35 +154,38 @@ final class AutomationEngine: NSObject, CLLocationManagerDelegate {
         }
     }
 
+    /// Whether region monitors registered by an earlier run may still exist.
+    /// Missing (first run after upgrading) counts as yes, so stale monitors
+    /// get cleaned once.
+    private static let mayOwnRegionsKey = "leo.automations.mayOwnRegions"
+
     /// Call at launch + whenever rules change: (re)register region monitors.
     func reloadMonitoring() {
         let rules = AutomationStore.shared.rules
+        let wanted = rules.compactMap(Self.region(for:))
+        // `monitoredRegions` is a synchronous round trip to locationd, and the
+        // launch call runs on the main thread: a slow or wedged locationd held
+        // the app on its launch screen. No location rules and nothing left
+        // registered means there is nothing to ask about.
+        let defaults = UserDefaults.standard
+        guard !wanted.isEmpty || (defaults.object(forKey: Self.mayOwnRegionsKey) as? Bool ?? true) else { return }
+        let monitored = locationManager.monitoredRegions
         // Drop monitors we no longer need.
-        for region in locationManager.monitoredRegions {
-            if !rules.contains(where: { $0.id == region.identifier && $0.isEnabled }) {
-                locationManager.stopMonitoring(for: region)
-            }
+        for region in monitored where !wanted.contains(where: { $0.identifier == region.identifier }) {
+            locationManager.stopMonitoring(for: region)
         }
-        var needsAuth = false
-        for rule in rules where rule.isEnabled {
-            switch rule.trigger {
-            case .arriveLocation(let lat, let lon, let radius, _),
-                 .leaveLocation(let lat, let lon, let radius, _):
-                needsAuth = true
-                guard !locationManager.monitoredRegions.contains(where: { $0.identifier == rule.id }) else { continue }
-                let region = CLCircularRegion(
-                    center: CLLocationCoordinate2D(latitude: lat, longitude: lon),
-                    radius: max(100, radius), identifier: rule.id)
-                if case .arriveLocation = rule.trigger {
-                    region.notifyOnEntry = true; region.notifyOnExit = false
-                } else {
-                    region.notifyOnEntry = false; region.notifyOnExit = true
-                }
-                locationManager.startMonitoring(for: region)
-            default: break
-            }
+        // Register new ones; re-register when the place or direction changed
+        // (starting a region with an existing identifier replaces it).
+        for region in wanted {
+            if let current = monitored.first(where: { $0.identifier == region.identifier }) as? CLCircularRegion,
+               current.center.latitude == region.center.latitude,
+               current.center.longitude == region.center.longitude,
+               current.radius == region.radius,
+               current.notifyOnEntry == region.notifyOnEntry { continue }
+            locationManager.startMonitoring(for: region)
         }
-        if needsAuth {
+        defaults.set(!wanted.isEmpty, forKey: Self.mayOwnRegionsKey)
+        if !wanted.isEmpty {
             switch locationManager.authorizationStatus {
             case .notDetermined, .authorizedWhenInUse:
                 // Region wakes in background require Always; ask honestly.
@@ -190,7 +193,25 @@ final class AutomationEngine: NSObject, CLLocationManagerDelegate {
             default: break
             }
         }
-        logger.info("monitoring \(self.locationManager.monitoredRegions.count) regions, \(rules.count) rules total")
+        logger.info("monitoring \(wanted.count) regions, \(rules.count) rules total")
+    }
+
+    private static func region(for rule: AutomationRule) -> CLCircularRegion? {
+        guard rule.isEnabled else { return nil }
+        switch rule.trigger {
+        case .arriveLocation(let lat, let lon, let radius, _),
+             .leaveLocation(let lat, let lon, let radius, _):
+            let region = CLCircularRegion(
+                center: CLLocationCoordinate2D(latitude: lat, longitude: lon),
+                radius: max(100, radius), identifier: rule.id)
+            let arriving: Bool
+            if case .arriveLocation = rule.trigger { arriving = true } else { arriving = false }
+            region.notifyOnEntry = arriving
+            region.notifyOnExit = !arriving
+            return region
+        default:
+            return nil
+        }
     }
 
     /// Reconcile tick — call on foreground (same cadence the scheduled-task

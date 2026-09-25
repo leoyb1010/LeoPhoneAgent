@@ -387,20 +387,6 @@ struct MinisAudioPreviewView: View {
 
 // MARK: - Audio Preview Helpers
 
-private struct CircleIconButton: View {
-    let icon: String
-    let hasArtwork: Bool
-    var body: some View {
-        Image(systemName: icon)
-            .font(.system(size: 16, weight: .medium))
-            .foregroundColor(hasArtwork ? .white : Color(UIColor.secondaryLabel))
-            .frame(width: 36, height: 36)
-            .background(
-                Circle().fill(hasArtwork ? Color.white.opacity(0.2) : Color(UIColor.tertiarySystemBackground))
-            )
-    }
-}
-
 // MARK: - UIImage dominant color helper
 
 private extension UIImage {

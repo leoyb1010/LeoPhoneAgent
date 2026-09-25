@@ -136,44 +136,6 @@ struct ChatMessageRow: View {
             .joined(separator: "\n\n")
     }
 
-    /// Full message including tool calls and their results, for clipboard export.
-    private var fullMessageText: String {
-        var parts: [String] = []
-        for block in message.blocks {
-            switch block.kind {
-            case .text:
-                if !block.content.isEmpty { parts.append(block.content) }
-            case .shellTool(let command):
-                let cmd = command.isEmpty ? block.toolDescription : command
-                var s = "$ \(cmd)"
-                if !block.content.isEmpty {
-                    // content is "$ cmd\noutput…", strip the command line
-                    let output = block.content.hasPrefix("$ ") ?
-                        String(block.content.drop(while: { $0 != "\n" }).dropFirst()) : block.content
-                    if !output.isEmpty { s += "\n\(output)" }
-                }
-                parts.append(s)
-            case .fileReadTool(let path):
-                parts.append("Read: \(path)\n\(block.content)")
-            case .fileWriteTool(let path):
-                parts.append("Write: \(path)\n\(block.content)")
-            case .fileEditTool(let path):
-                parts.append("Edit: \(path)\n\(block.content)")
-            case .browserTool(let action):
-                parts.append("Browser: \(action)\n\(block.content)")
-            case .readImageTool(let path):
-                parts.append("Image: \(path)")
-            case .memoryTool(let action):
-                parts.append("Memory: \(action)\n\(block.content)")
-            case .thinking:
-                if !block.content.isEmpty { parts.append("[Thinking]\n\(block.content)") }
-            case .info:
-                if !block.content.isEmpty { parts.append(block.content) }
-            }
-        }
-        return parts.joined(separator: "\n\n")
-    }
-
     var body: some View {
         switch message.role {
         case .user:

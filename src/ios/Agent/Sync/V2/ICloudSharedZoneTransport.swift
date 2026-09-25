@@ -1132,12 +1132,6 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
         sendCompletion = nil
     }
 
-    private func completeSendWithError(_ error: Error) {
-        sendCompletion?.resume(throwing: error)
-        sendCompletion = nil
-        pendingOutcomes.removeAll()
-    }
-
     // MARK: - fetch
 
     func fetchChanges(trigger: SyncFetchTrigger) async throws -> SyncInboundBatch {

@@ -2,11 +2,13 @@
 //  WatchRootView.swift
 //  LeoWatch
 //
-//  Four vertical pages: Ask (home), Quick Tasks, Sessions, Schedule+Briefing.
-//  The wrist's job is "ask in three seconds": mic front and centre, double
-//  tap triggers it, everything else one crown-scroll away.
+//  The watch is for talking: speak, read (or hear) the answer. Two vertical
+//  pages — Ask and History — plus the approval card that pops over either when
+//  a Mac is waiting on a yes/no. Task lists, schedules and session browsing
+//  live on the phone.
 //
 
+import AVFoundation
 import SwiftUI
 import WatchKit
 
@@ -15,10 +17,8 @@ struct WatchRootView: View {
 
     var body: some View {
         TabView {
-            HomePage()
-            QuickTasksPage()
-            SessionsPage()
-            SchedulePage()
+            AskPage()
+            HistoryPage()
         }
         .tabViewStyle(.verticalPage)
         // [T-leogateway] An approval outranks whatever page you were on:
@@ -79,77 +79,116 @@ private struct WatchApprovalSheet: View {
 
 // MARK: - Page 1: Ask
 
-private struct HomePage: View {
+private struct AskPage: View {
     @EnvironmentObject private var client: WatchConnectivityClient
+    @ObservedObject private var standalone = WatchStandaloneClient.shared
     @StateObject private var recorder = WatchVoiceRecorder.shared
     @State private var pulseTrigger = 0
     @State private var showReply = false
 
-    private var isStale: Bool {
-        client.state == "running" && Date().timeIntervalSince(client.updatedAt) > 12 * 60
+    private var isWaiting: Bool {
+        if case .waiting = client.askState { return true }
+        return false
     }
 
     var body: some View {
         VStack(spacing: 8) {
             ZStack {
-                LifeRing(state: client.state)
+                LifeRing(state: ringState)
                     .frame(width: 92, height: 92)
                 RadarPulseOnce(trigger: pulseTrigger)
                     .frame(width: 92, height: 92)
-                Button {
-                    toggleVoice()
-                } label: {
-                    if recorder.isRecording {
-                        LiveLevelBars(level: recorder.level)
-                    } else if case .waiting = client.askState {
-                        WorkingBars()
-                    } else {
-                        Image(systemName: "mic.fill")
-                            .font(.title2)
-                            .foregroundStyle(.teal)
-                    }
-                }
-                .buttonStyle(.plain)
-                .frame(width: 72, height: 72)
-                .handGestureShortcut(.primaryAction)
+                micControl
+                    .frame(width: 72, height: 72)
             }
             Text(statusLine)
                 .font(.caption2)
-                .foregroundStyle(isStale ? .orange : .secondary)
-                .lineLimit(2)
+                .foregroundStyle(client.lastActionMessage == nil ? Color.secondary : Color.orange)
+                .lineLimit(3)
                 .multilineTextAlignment(.center)
-            if client.state == "running" || client.activeCount > 0 {
-                HoldToConfirmButton(duration: 1.0, tint: .red, action: { client.stopAll() }) {
-                    Label("按住停止全部", systemImage: "stop.fill")
-                        .font(.caption2)
-                        .foregroundStyle(.red)
-                }
+            if isWaiting {
+                Button("取消", role: .cancel) { client.cancelAsk() }
+                    .font(.caption2)
+                    .buttonStyle(.borderless)
             }
         }
         .sheet(isPresented: $showReply) { ReplySheet() }
-        .onChange(of: client.replyPulse) { _ in showReply = true }
+        .onChange(of: client.replyPulse) { _, _ in showReply = true }
         .onAppear {
+            // Siri / Action Button "问 Leo" lands here with a pending ask.
+            // Dictation can't be opened programmatically, so only the phone
+            // route starts listening by itself; the flag is cleared either way.
             if UserDefaults.standard.bool(forKey: "leo.watch.pendingVoiceAsk") {
                 UserDefaults.standard.set(false, forKey: "leo.watch.pendingVoiceAsk")
-                startAsk()
+                if client.route == .phone { toggleVoice() }
             }
         }
+    }
+
+    /// Recording goes to the phone (its speech stack is better and the full
+    /// agent runs there). Without the phone the watch dictates and answers
+    /// directly; with neither, the mic is off and the line below says why.
+    @ViewBuilder
+    private var micControl: some View {
+        if isWaiting {
+            WorkingBars()
+        } else {
+            switch client.route {
+            case .phone:
+                Button { toggleVoice() } label: { micLabel }
+                    .buttonStyle(.plain)
+                    .handGestureShortcut(.primaryAction)
+                    .accessibilityLabel(recorder.isRecording ? "发送" : "说话")
+            case .direct:
+                TextFieldLink(prompt: Text("说吧")) {
+                    micLabel
+                } onSubmit: { text in
+                    pulseTrigger += 1
+                    client.ask(text)
+                }
+                .buttonStyle(.plain)
+                .handGestureShortcut(.primaryAction)
+                .accessibilityLabel("说话")
+            case nil:
+                micLabel.opacity(0.35).accessibilityLabel("暂不可用")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var micLabel: some View {
+        if recorder.isRecording {
+            LiveLevelBars(level: recorder.level)
+        } else {
+            Image(systemName: "mic.fill")
+                .font(.title2)
+                .foregroundStyle(.teal)
+        }
+    }
+
+    private var ringState: String {
+        if isWaiting { return "running" }
+        if case .replied = client.askState { return "completed" }
+        return client.lastActionMessage == nil ? "idle" : "failed"
     }
 
     private var statusLine: String {
         if recorder.isRecording { return "说完再点一下发送" }
-        if case .waiting = client.askState { return "Leo 正在处理…" }
-        if isStale { return "数据可能过期 · 打开 iPhone 同步" }
-        switch client.state {
-        case "running": return client.status.isEmpty ? "任务运行中" : client.status
-        case "failed": return "上个任务失败"
-        default: return "点一下开始说话"
+        if isWaiting {
+            return client.route == .direct
+                ? "\(standalone.config?.modelName ?? "模型")正在回答…"
+                : "iPhone 上的 Leo 正在处理…"
+        }
+        if let message = client.lastActionMessage { return message }
+        switch client.route {
+        case .phone: return "点一下说话 · 经 iPhone"
+        case .direct: return "点一下说话 · 直连 \(standalone.config?.modelName ?? "")"
+        case nil: return standalone.unavailableReason ?? "iPhone 不在身边，也没有可直连的模型。"
         }
     }
 
     /// [T-watch-native-voice] One tap records with the product's own pipeline;
-    /// second tap sends. System dictation remains only as the fallback when
-    /// mic permission is denied.
+    /// second tap sends.
     private func toggleVoice() {
         if recorder.isRecording {
             if let audio = recorder.stop() {
@@ -163,220 +202,148 @@ private struct HomePage: View {
         recorder.onAutoStop = { data in Task { @MainActor in client.askAudio(data) } }
         pulseTrigger += 1
         Task {
-            let started = await recorder.start()
-            if !started { dictationFallback() }
+            if await !recorder.start() {
+                client.noteMicUnavailable()
+            }
         }
     }
-
-    private func dictationFallback() {
-        WKExtension.shared().visibleInterfaceController?.presentTextInputController(
-            withSuggestions: nil,
-            allowedInputMode: .plain
-        ) { results in
-            guard let text = results?.first as? String, !text.isEmpty else { return }
-            Task { @MainActor in WatchConnectivityClient.shared.ask(text) }
-        }
-    }
-
-    private func startAsk() { toggleVoice() }
 }
 
 private struct ReplySheet: View {
     @EnvironmentObject private var client: WatchConnectivityClient
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var speaker = WatchSpeaker.shared
 
     var body: some View {
         ScrollView {
-            if case .replied(let text) = client.askState {
-                Text(text)
-                    .font(.footnote)
-                    .settleIn(trigger: client.replyPulse)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                WorkingBars().padding(.top, 20)
+            VStack(alignment: .leading, spacing: 10) {
+                if case .replied(let text) = client.askState {
+                    Text(text)
+                        .font(.footnote)
+                        .settleIn(trigger: client.replyPulse)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    HStack {
+                        Button {
+                            speaker.toggle(text)
+                        } label: {
+                            Image(systemName: speaker.isSpeaking ? "stop.fill" : "speaker.wave.2.fill")
+                        }
+                        .accessibilityLabel(speaker.isSpeaking ? "停止朗读" : "朗读")
+                        TextFieldLink(prompt: Text("追问")) {
+                            Image(systemName: "mic.fill")
+                        } onSubmit: { followUp in
+                            speaker.stop()
+                            dismiss()
+                            client.ask(followUp)
+                        }
+                        .accessibilityLabel("追问")
+                    }
+                } else {
+                    WorkingBars().padding(.top, 20)
+                }
             }
         }
         .navigationTitle("Leo")
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("完成") { client.askState = .idle; dismiss() }
+                Button("完成") {
+                    speaker.stop()
+                    client.askState = .idle
+                    dismiss()
+                }
             }
         }
     }
 }
 
-// MARK: - Page 2: Quick tasks (crown-native list)
+// MARK: - Page 2: History
 
-private struct QuickTasksPage: View {
-    @EnvironmentObject private var client: WatchConnectivityClient
-
-    var body: some View {
-        List {
-            Section("快捷任务") {
-                if client.quickTasks.isEmpty {
-                    Text("打开一次 iPhone App 后这里会显示任务。")
-                        .font(.caption2).foregroundStyle(.secondary)
-                }
-                ForEach(client.quickTasks) { task in
-                    Button {
-                        client.runQuickTask(task)
-                    } label: {
-                        Label(task.name, systemImage: task.symbolName)
-                            .font(.caption)
-                    }
-                }
-            }
-            if let message = client.lastActionMessage {
-                Text(message).font(.caption2).foregroundStyle(.secondary)
-            }
-        }
-    }
-}
-
-// MARK: - Page 3: Sessions
-
-private struct SessionsPage: View {
+private struct HistoryPage: View {
     @EnvironmentObject private var client: WatchConnectivityClient
 
     var body: some View {
         NavigationStack {
             List {
-                Section("最近会话") {
-                    if client.sessions.isEmpty {
-                        Text("暂无会话数据").font(.caption2).foregroundStyle(.secondary)
-                    }
-                    ForEach(client.sessions) { item in
-                        NavigationLink {
-                            SessionDetailPage(item: item)
-                        } label: {
-                            HStack(spacing: 6) {
-                                Circle()
-                                    .fill(item.state == "running" ? Color.orange : Color.secondary.opacity(0.4))
-                                    .frame(width: 6, height: 6)
-                                    .leoWatchPulse(active: item.state == "running")
-                                Text(item.title.isEmpty ? "未命名会话" : item.title)
-                                    .font(.caption)
-                                    .lineLimit(1)
-                                if item.unread {
-                                    Circle().fill(.teal).frame(width: 5, height: 5)
-                                }
-                            }
+                if client.history.isEmpty {
+                    Text("问过的问题会留在这里。")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+                ForEach(client.history) { entry in
+                    NavigationLink {
+                        HistoryDetail(entry: entry)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(entry.question).font(.caption).lineLimit(1)
+                            Text(entry.answer).font(.caption2).foregroundStyle(.secondary).lineLimit(2)
                         }
                     }
                 }
             }
+            .navigationTitle("记录")
         }
     }
 }
 
-private struct SessionDetailPage: View {
-    @EnvironmentObject private var client: WatchConnectivityClient
-    let item: WatchSessionItem
-    @State private var transcript: String?
+private struct HistoryDetail: View {
+    let entry: WatchHistoryEntry
+    @ObservedObject private var speaker = WatchSpeaker.shared
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
-                if let transcript {
-                    Text(transcript)
-                        .font(.system(size: 12))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    HStack { Spacer(); WorkingBars(); Spacer() }
+                Text(entry.question).font(.caption).foregroundStyle(.secondary)
+                Text(entry.answer).font(.footnote)
+                HStack(spacing: 6) {
+                    Image(systemName: entry.route == .phone ? "iphone" : "antenna.radiowaves.left.and.right")
+                    Text(entry.date, style: .relative)
                 }
+                .font(.caption2).foregroundStyle(.tertiary)
                 Button {
-                    askFollowUp()
+                    speaker.toggle(entry.answer)
                 } label: {
-                    Label("语音追问", systemImage: "mic.fill").font(.caption)
-                }
-                if item.state == "running" {
-                    HoldToConfirmButton(duration: 1.0, tint: .red, action: { client.stopSession(item.id) }) {
-                        Label("按住停止此任务", systemImage: "stop.fill")
-                            .font(.caption2).foregroundStyle(.red)
-                    }
+                    Label(speaker.isSpeaking ? "停止" : "朗读",
+                          systemImage: speaker.isSpeaking ? "stop.fill" : "speaker.wave.2.fill")
                 }
             }
         }
-        .navigationTitle(Text(item.title.isEmpty ? "会话" : item.title))
-        .onAppear {
-            client.requestTranscript(sessionId: item.id) { transcript = $0 }
-        }
-    }
-
-    private func askFollowUp() {
-        let sessionId = item.id
-        WKExtension.shared().visibleInterfaceController?.presentTextInputController(
-            withSuggestions: nil, allowedInputMode: .plain
-        ) { results in
-            guard let text = results?.first as? String, !text.isEmpty else { return }
-            Task { @MainActor in WatchConnectivityClient.shared.ask(text, sessionId: sessionId) }
-        }
+        .onDisappear { speaker.stop() }
     }
 }
 
-// MARK: - Page 4: Schedule + briefing
+// MARK: - Speech out
 
-private struct SchedulePage: View {
-    @EnvironmentObject private var client: WatchConnectivityClient
+/// Reads an answer aloud — the other half of "a watch you talk to".
+@MainActor
+final class WatchSpeaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
+    static let shared = WatchSpeaker()
 
-    var body: some View {
-        List {
-            if !client.briefingText.isEmpty {
-                Section(client.briefingTask.isEmpty ? "简报" : client.briefingTask) {
-                    Text(client.briefingText)
-                        .font(.caption2)
-                        .lineLimit(8)
-                }
-            }
-            Section("定时任务") {
-                if client.scheduled.isEmpty {
-                    Text("暂无定时任务").font(.caption2).foregroundStyle(.secondary)
-                }
-                ForEach(client.scheduled) { task in
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack {
-                            Text(task.name).font(.caption).lineLimit(1)
-                            Spacer()
-                            Button {
-                                client.toggleScheduled(task.id)
-                            } label: {
-                                Image(systemName: task.enabled ? "checkmark.circle.fill" : "circle")
-                                    .foregroundStyle(task.enabled ? .teal : .secondary)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        HStack {
-                            Text(task.timeText).font(.caption2).foregroundStyle(.secondary)
-                            Spacer()
-                            Button("立即跑") { client.runScheduled(task.id) }
-                                .font(.caption2)
-                                .buttonStyle(.borderless)
-                                .foregroundStyle(.teal)
-                        }
-                    }
-                }
-            }
-        }
+    @Published private(set) var isSpeaking = false
+    private let synthesizer = AVSpeechSynthesizer()
+
+    override private init() {
+        super.init()
+        synthesizer.delegate = self
     }
-}
 
-// MARK: - Tiny pulse for list dots
-
-private struct WatchDotPulse: ViewModifier {
-    let active: Bool
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var dim = false
-
-    func body(content: Content) -> some View {
-        content
-            .opacity(active && dim && !reduceMotion ? 0.35 : 1)
-            .onAppear {
-                guard active, !reduceMotion else { return }
-                withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { dim = true }
-            }
+    func toggle(_ text: String) {
+        if isSpeaking { return stop() }
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.voice = AVSpeechSynthesisVoice(language: Locale.current.identifier.hasPrefix("zh") ? "zh-CN" : nil)
+        synthesizer.speak(utterance)
+        isSpeaking = true
     }
-}
 
-extension View {
-    func leoWatchPulse(active: Bool) -> some View { modifier(WatchDotPulse(active: active)) }
+    func stop() {
+        guard isSpeaking else { return }
+        synthesizer.stopSpeaking(at: .immediate)
+        isSpeaking = false
+    }
+
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        Task { @MainActor in self.isSpeaking = false }
+    }
+
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        Task { @MainActor in self.isSpeaking = false }
+    }
 }

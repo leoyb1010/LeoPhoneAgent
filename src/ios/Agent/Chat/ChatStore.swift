@@ -598,7 +598,6 @@ actor ChatStore {
             }
         }
 
-
         // iCloud sync tables
         exec("""
             CREATE TABLE IF NOT EXISTS sync_dirty_records (
@@ -1133,26 +1132,6 @@ actor ChatStore {
         sessionListCacheDirty = false
         return sessions
     }
-
-    /// Query sync_devices table and check UserDefaults to find which remote devices have sync enabled.
-    private func enabledRemoteDeviceIdsFromDefaults() -> Set<String> {
-        let selfDeviceId = syncZoneName.replacingOccurrences(of: "device-", with: "")
-        var ids = Set<String>()
-        let sql = "SELECT device_id FROM sync_devices WHERE device_id != ?"
-        var stmt: OpaquePointer?
-        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (selfDeviceId as NSString).utf8String, -1, nil)
-            while sqlite3_step(stmt) == SQLITE_ROW {
-                let deviceId = String(cString: sqlite3_column_text(stmt, 0))
-                if UserDefaults.standard.bool(forKey: "cloudSync.device.\(deviceId).enabled") {
-                    ids.insert(deviceId)
-                }
-            }
-        }
-        sqlite3_finalize(stmt)
-        return ids
-    }
-
 
     /// Ordered, pre-compiled markdown-stripping regexes for session previews.
     ///
@@ -1833,9 +1812,6 @@ actor ChatStore {
         // 30-day TTL on launch (ids are UUIDs, so it never blocks a real
         // future session).
         recordDeletedSessionTombstone(id)
-        // [T-spotlight-sessions] Drop it from system search too, or the result
-        // survives the session and opens an empty chat.
-        Task { @MainActor in SessionSpotlightIndexer.remove(sessionId: id) }
     }
 
     /// Hard-delete a session and its children locally without queuing any
@@ -1892,6 +1868,12 @@ actor ChatStore {
         Task { @MainActor in
             SessionActivityTracker.shared.setInactive(id, source: "sessionDeleted")
             AgentLiveActivityManager.shared.handleSessionDeleted(id)
+            // Same funnel for the rest of what points at the session. Spotlight
+            // used to be dropped only for local deletes, so a conversation
+            // deleted on another device still opened an empty chat from search.
+            // [T-spotlight-sessions]
+            SessionSpotlightIndexer.remove(sessionId: id)
+            ProviderConfigStore.shared.forgetSession(id)
         }
     }
 
@@ -2980,41 +2962,6 @@ actor ChatStore {
         _ = sqlite3_step(stmt)
     }
 
-    /// Resolve the parent sessionId for a v1/v2 record being marked dirty,
-    /// when it falls under a session-scoped record type. Used by markDirty
-    /// to detect "this write belongs to a tombstoned session → cascade".
-    /// Returns nil for global / non-session-scoped types.
-    private func parentSessionId(forV1 recordType: String, recordId: String) -> String? {
-        switch recordType {
-        case "Session":
-            return recordId
-        case "Message":
-            return messageSessionId(id: recordId)
-        case "CompactMarker":
-            return compactMarkerSessionId(id: recordId)
-        case "SessionFile":
-            // SessionFile recordId is "sessionId:relativePath".
-            let parts = recordId.split(separator: ":", maxSplits: 1)
-            guard parts.count == 2 else { return nil }
-            return String(parts[0])
-        default:
-            return nil
-        }
-    }
-
-    /// SessionId of the parent for a CompactMarker id. Light wrapper —
-    /// keeps the SQL away from callers.
-    private func compactMarkerSessionId(id: String) -> String? {
-        let sql = "SELECT session_id FROM compact_markers WHERE id = ? LIMIT 1"
-        var stmt: OpaquePointer?
-        defer { sqlite3_finalize(stmt) }
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
-        sqlite3_bind_text(stmt, 1, (id as NSString).utf8String, -1, nil)
-        guard sqlite3_step(stmt) == SQLITE_ROW,
-              let cstr = sqlite3_column_text(stmt, 0) else { return nil }
-        return String(cString: cstr)
-    }
-
     /// Returns every locally-stored session id (for §3.6.0 scenario E
     /// fullFetch reconciliation).
     func allSessionIds() -> [String] {
@@ -3290,22 +3237,6 @@ actor ChatStore {
 
         let deleted = Int(sqlite3_changes(db))
         logger.info("[Prune] session \(sessionId.prefix(8)): deleted \(deleted) oldest messages (was \(totalCount), threshold \(Self.pruneThreshold))")
-    }
-
-    /// Delete all compact markers except the latest one.
-    private func deleteOldCompactMarkers(sessionId: String) {
-        let sql = """
-            DELETE FROM compact_markers WHERE session_id = ? AND id != (
-                SELECT id FROM compact_markers WHERE session_id = ? ORDER BY created_at DESC LIMIT 1
-            )
-        """
-        var stmt: OpaquePointer?
-        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, (sessionId as NSString).utf8String, -1, nil)
-            sqlite3_bind_text(stmt, 2, (sessionId as NSString).utf8String, -1, nil)
-            sqlite3_step(stmt)
-        }
-        sqlite3_finalize(stmt)
     }
 
     // MARK: - Session Repair (Phase A)

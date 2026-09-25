@@ -163,7 +163,6 @@ final class SyncCore {
     // MARK: - State
 
     private var pendingSendTask: Task<Void, Never>?
-    private var inboundHandlers: [(SyncInboundBatch) -> Void] = []
     private var isSending = false
 
     /// recordIds we just successfully pushed to a transport. When the

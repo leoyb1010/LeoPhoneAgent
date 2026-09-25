@@ -269,59 +269,6 @@ final class MessageListV3UITests: XCTestCase {
         XCTAssertTrue(waitForCells(min: 1, timeout: 10), "First cell should appear")
     }
 
-    /// Swipe and capture screenshots from drag start through deceleration.
-    @discardableResult
-    private func swipeAndCapture(
-        direction: String,
-        captureDuration: TimeInterval = 2.0,
-        context: String,
-        file: StaticString = #file,
-        line: UInt = #line
-    ) -> VisualJitterReport {
-        currentAction += 1
-
-        let lock = NSLock()
-        var frames: [CGImage] = []
-        var capturing = true
-
-        let captureThread = Thread {
-            while true {
-                lock.lock()
-                let shouldContinue = capturing
-                lock.unlock()
-                guard shouldContinue else { break }
-
-                let screenshot = XCUIScreen.main.screenshot()
-                if let cgImage = screenshot.image.cgImage {
-                    lock.lock()
-                    frames.append(cgImage)
-                    lock.unlock()
-                }
-                Thread.sleep(forTimeInterval: 0.1)
-            }
-        }
-        captureThread.start()
-
-        // Execute swipe
-        switch direction {
-        case "up": cv.swipeUp()
-        case "down": cv.swipeDown()
-        default: break
-        }
-
-        // Continue capturing during deceleration + 1s post-settle observation
-        Thread.sleep(forTimeInterval: captureDuration + 1.0)
-
-        lock.lock()
-        capturing = false
-        let capturedFrames = frames
-        lock.unlock()
-
-        let report = analyzeFrames(capturedFrames)
-        assertNoVisualJitter(report, context: context, file: file, line: line)
-        return report
-    }
-
     private func fling(fromY: CGFloat, toY: CGFloat, velocity: XCUIGestureVelocity = .fast) {
         // Use dx: 0.05 (far left edge) to avoid gesture conflicts with code block horizontal scroll
         let s = cv.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: fromY))

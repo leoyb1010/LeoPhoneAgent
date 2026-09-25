@@ -3,7 +3,6 @@ import AVKit
 import Photos
 import QuickLook
 
-
 private let minisLogger = AppLogger(category: "MinisMedia")
 // MARK: - leophoneagent:// Media Provider
 
@@ -245,34 +244,6 @@ func resolveMinisFileURL(url: URL) -> URL? {
 
 // MARK: - leophoneagent:// Link Handling
 
-/// SF Symbol icon for a given file extension.
-private func minisFileIcon(for ext: String) -> String {
-    switch ext.lowercased() {
-    case "py": return "chevron.left.forwardslash.chevron.right"
-    case "js", "ts", "jsx", "tsx": return "chevron.left.forwardslash.chevron.right"
-    case "swift", "c", "cpp", "h", "rs", "go", "java", "rb": return "chevron.left.forwardslash.chevron.right"
-    case "json", "yaml", "yml", "toml", "xml", "plist": return "doc.text"
-    case "csv", "tsv": return "tablecells"
-    case "txt", "md", "log": return "doc.plaintext"
-    case "pdf": return "doc.richtext"
-    case "doc", "docx": return "doc.richtext"
-    case "xls", "xlsx": return "tablecells"
-    case "ppt", "pptx": return "doc.text.image"
-    case "pages": return "doc.richtext"
-    case "numbers": return "tablecells"
-    case "key": return "doc.text.image"
-    case "rtf", "rtfd": return "doc.richtext"
-    case "zip", "tar", "gz", "bz2": return "doc.zipper"
-    case "sh", "bash", "zsh": return "terminal"
-    case "html", "css": return "globe"
-    case "png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff", "svg": return "photo"
-    case "mp3", "m4a", "wav", "aac", "ogg", "flac": return "music.note"
-    case "mp4", "mov", "m4v", "avi", "mkv", "webm": return "film"
-    default: return "doc"
-    }
-}
-
-
 /// Displays user-attached files above the message bubble.
 /// Uses the same 64×64 tile style as the input bar: image/video thumbnails + file icon tiles.
 struct AsyncImageTile: View {
@@ -477,13 +448,9 @@ struct MinisOpenURLHandler: ViewModifier {
     }
 }
 
-
 extension URL: @retroactive Identifiable {
     public var id: String { absoluteString }
 }
-
-
-
 
 // MARK: - leophoneagent:// Image File Preview (from URL handler)
 
@@ -836,7 +803,6 @@ struct MinisHTMLPreviewView: View {
         .preferredColorScheme(appearanceMode == 1 ? .light : appearanceMode == 2 ? .dark : nil)
     }
 }
-
 
 // MARK: - leophoneagent:// Document Preview
 
