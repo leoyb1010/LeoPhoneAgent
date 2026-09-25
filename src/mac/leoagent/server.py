@@ -277,8 +277,13 @@ class LeoAgentServer:
                 {"error": {"message": f"Invalid choice; expected one of: {', '.join(allowed)}"}},
                 status=400,
             )
-        delivered = await session.respond_to_approval(
-            choice, approval_id=str(approval_id) if approval_id else None)
+        try:
+            delivered = await session.respond_to_approval(
+                choice, approval_id=str(approval_id) if approval_id else None)
+        except OSError:
+            # The CLI died with the approval open (its stdin is gone): nothing
+            # is waiting any more, which is what 409 tells the phone.
+            return web.json_response({"error": {"message": "The session has ended"}}, status=409)
         if not delivered:
             # The card must not clear on the client while the CLI still waits.
             return web.json_response(

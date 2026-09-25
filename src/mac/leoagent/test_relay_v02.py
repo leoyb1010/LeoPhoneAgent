@@ -220,6 +220,45 @@ class RelayV02Tests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(status["status"], "delivered")
         self.assertEqual(status["response"], {"session_id": "s1"})
 
+    async def test_queued_requests_read_queued_while_the_first_is_delivered(self):
+        exchanged = await (await self.client.post("/relay/api/device/exchange", json={"name": "iPhone"},
+                                                  headers=self.auth(MASTER))).json()
+        key = exchanged["accessKey"]
+        for rid in ("req-1", "req-2"):
+            headers = {**self.auth(key), "X-Leo-Queue": "1", "X-Leo-Request-Id": rid}
+            r = await self.client.post("/relay/api/m/MacBook/harness/sessions/s1/send", json={"text": rid},
+                                       headers=headers)
+            self.assertEqual(r.status, 202)
+        ws, _ = await self.pinned_mac("MacBook")
+        first = json.loads((await ws.receive(timeout=3)).data)
+        self.assertEqual(first["request_id"], "req-1")
+        # req-2 is out of the queue but not sent yet: still "queued", never an unknown 404
+        r = await self.client.get("/relay/api/queue/req-2", headers=self.auth(key))
+        self.assertEqual((r.status, (await r.json())["status"]), (200, "queued"))
+        await ws.send_json({"type": "resp", "id": first["id"], "status": 200, "body": {}})
+        second = json.loads((await ws.receive(timeout=3)).data)
+        self.assertEqual(second["request_id"], "req-2")
+
+    async def test_a_revoked_devices_queued_request_is_not_delivered(self):
+        ws, machine_key = await self.pinned_mac("MacBook")
+        exchanged = await (await self.client.post("/relay/api/device/exchange", json={"name": "iPhone"},
+                                                  headers=self.auth(MASTER))).json()
+        await ws.close()
+        for _ in range(50):
+            if "MacBook" not in self.relay.machines:
+                break
+            await asyncio.sleep(0.02)
+        headers = {**self.auth(exchanged["accessKey"]), "X-Leo-Queue": "1", "X-Leo-Request-Id": "req-9"}
+        r = await self.client.post("/relay/api/m/MacBook/harness/sessions", json={"prompt": "hi", "full_auto": True},
+                                   headers=headers)
+        self.assertEqual(r.status, 202)
+        r = await self.client.delete(f"/relay/api/devices/{exchanged['deviceId']}", headers=self.auth(machine_key))
+        self.assertEqual(r.status, 200)
+        ws2, _ = await self.register("MacBook", machine_key)
+        with self.assertRaises(asyncio.TimeoutError):
+            await ws2.receive(timeout=0.5)   # nothing delivered on the revoked device's behalf
+        self.assertEqual(self.relay.queue_results["req-9"]["status"], "failed")
+
     async def test_join_is_rate_limited_per_source(self):
         for _ in range(5):
             r = await self.client.post("/relay/api/join", json={"token": "nope"})

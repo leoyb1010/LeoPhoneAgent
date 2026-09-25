@@ -206,7 +206,7 @@ def _translate_claude(obj: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "event": EVENT_APPROVAL_REQUEST,
                 "command": req.get("tool_name") or req.get("command") or "",
                 "description": description,
-                "choices": ["once", "always", "deny"],
+                "choices": ["once", "session", "always", "deny"],
                 "request_id": obj.get("request_id"),
                 "raw": req,
             })
@@ -296,7 +296,7 @@ def _translate_codex(obj: Dict[str, Any]) -> List[Dict[str, Any]]:
             "event": EVENT_APPROVAL_REQUEST,
             "command": " ".join(msg.get("command") or []) or str(msg.get("path") or ""),
             "description": msg.get("reason") or "",
-            "choices": ["once", "always", "deny"],
+            "choices": ["once", "session", "always", "deny"],
             "request_id": obj.get("id") or msg.get("call_id"),
             "raw": msg,
         })
@@ -583,8 +583,7 @@ class HarnessSession:
                 capture_thread(result.get("threadId")
                                or (result.get("thread") or {}).get("id"))
             if obj.get("error"):
-                out.append({"event": "harness.stderr",
-                            "text": f"rpc error: {json.dumps(obj['error'], ensure_ascii=False)[:200]}"})
+                out.append(self._rpc_error_event(obj["error"]))
             return out
 
         if "id" in obj:
@@ -598,7 +597,7 @@ class HarnessSession:
                     "event": EVENT_APPROVAL_REQUEST,
                     "command": str(command)[:300],
                     "description": str(params.get("reason") or ""),
-                    "choices": ["once", "always", "deny"],
+                    "choices": ["once", "session", "always", "deny"],
                     "request_id": obj.get("id"),
                     "raw": params,
                 })
@@ -689,8 +688,7 @@ class HarnessSession:
                 else:
                     out.append({"event": EVENT_RUN_COMPLETED, "output": "", "usage": {}})
             elif obj.get("error"):
-                out.append({"event": "harness.stderr",
-                            "text": f"rpc error: {json.dumps(obj['error'], ensure_ascii=False)[:200]}"})
+                out.append(self._rpc_error_event(obj["error"]))
             return out
 
         if "id" in obj:
@@ -844,6 +842,7 @@ class HarnessSession:
                     pass
 
         code = await self.process.wait() if self.process else -1
+        self._close_pending_approvals()
         if self.status not in ("completed", "failed", "cancelled"):
             if code == 0:
                 self.status = "completed"
@@ -904,6 +903,24 @@ class HarnessSession:
         # replays a transcript of answers with no questions.
         self._emit({"event": EVENT_USER_MESSAGE, "text": text})
 
+    def _rpc_error_event(self, error: Any) -> Dict[str, Any]:
+        """Before the CLI has a thread (Codex) / session (Grok) an RPC error is
+        the handshake failing — logged out, bad config. Nothing will ever run:
+        fail the turn so the phone stops waiting, and drop what was queued."""
+        if self._thread_id is None:
+            self._pending_inputs.clear()
+            message = error.get("message") if isinstance(error, dict) else None
+            return {"event": EVENT_RUN_FAILED, "error": str(message or error)[:300]}
+        return {"event": "harness.stderr",
+                "text": f"rpc error: {json.dumps(error, ensure_ascii=False)[:200]}"}
+
+    def _close_pending_approvals(self) -> None:
+        """A CLI that ended can't take an answer: log every open approval as
+        denied, so no client keeps a card or a notification for it."""
+        for approval_id in list(self.pending_approvals):
+            self._emit({"event": EVENT_APPROVAL_RESPONDED, "choice": "deny",
+                        "approval_id": approval_id, "reason": "session ended"})
+
     async def respond_to_approval(self, choice: str, approval_id: Optional[str] = None) -> bool:
         """Answer one specific pending approval in the CLI's own dialect.
 
@@ -930,7 +947,7 @@ class HarnessSession:
             return False
         # Deny by default: dialects can supply their own choice labels, and an
         # unrecognised label must never read as consent.
-        allowed = choice in ("once", "always", "yes", "approve", "allow")
+        allowed = choice in ("once", "session", "always", "yes", "approve", "allow")
 
         if self.spec.dialect == "claude_stream_json":
             # Agent-SDK control protocol shape: subtype + request_id inside
@@ -939,8 +956,14 @@ class HarnessSession:
             inner: Dict[str, Any] = {"behavior": "allow" if allowed else "deny"}
             if not allowed:
                 inner["message"] = "denied by operator"
-            elif choice == "always":
+            elif choice in ("session", "always"):
                 suggestions = (pending.get("raw") or {}).get("permission_suggestions")
+                if suggestions and choice == "session":
+                    # The phone's "allow for this session": the CLI's own
+                    # suggestions, kept to this session instead of written
+                    # into the project's settings.
+                    suggestions = [dict(item, destination="session") if isinstance(item, dict) else item
+                                   for item in suggestions]
                 if suggestions:
                     inner["updatedPermissions"] = suggestions
             payload = {
@@ -958,11 +981,12 @@ class HarnessSession:
                 result = allowed
             payload = {"id": request_id, "type": "extension_ui_response", "result": result}
         elif self.spec.dialect == "codex_proto":
-            decision = {"once": "approved", "always": "approved_for_session", "deny": "denied"}.get(choice, "denied")
+            decision = {"once": "approved", "session": "approved_for_session",
+                        "always": "approved_for_session", "deny": "denied"}.get(choice, "denied")
             payload = {"id": str(uuid.uuid4()),
                        "op": {"type": "exec_approval", "id": request_id, "decision": decision}}
         elif self.spec.dialect == "codex_app_server":
-            decision = {"once": "accept", "always": "acceptForSession",
+            decision = {"once": "accept", "session": "acceptForSession", "always": "acceptForSession",
                         "deny": "decline"}.get(choice, "decline")
             payload = {"jsonrpc": "2.0", "id": request_id,
                        "result": {"decision": decision}}
@@ -970,7 +994,7 @@ class HarnessSession:
             # 选项 id 由 CLI 提供(kind: allow_once/allow_always/reject_once…),
             # 按语义挑;找不到就退回第一个 reject,绝不误放行。
             options = (pending.get("raw") or {}).get("options") or []
-            want = {"once": "allow_once", "always": "allow_always",
+            want = {"once": "allow_once", "session": "allow_once", "always": "allow_always",
                     "deny": "reject_once"}.get(choice, "reject_once")
             option_id = None
             for opt in options:
@@ -1030,6 +1054,7 @@ class HarnessSession:
         # "cancelled",这 5 秒窗口里新接上来的 SSE 订阅会因为
         # `status in TERMINAL` 回放完直接 return,永远收不到 run.cancelled ——
         # 手机上点了停止,界面就一直卡在 running。
+        self._close_pending_approvals()
         self.status = "cancelled"
         self._emit({"event": EVENT_RUN_CANCELLED})
         proc = self.process
@@ -1110,6 +1135,12 @@ class HarnessManager:
         work_dir = os.path.expanduser(cwd)
         if not os.path.isdir(work_dir):
             raise ValueError(f"not a directory: {cwd}")
+        if self._live_count() >= self.MAX_LIVE_SESSIONS:
+            # Finished turns leave their CLI idle forever; make room with the
+            # oldest of those before refusing.
+            idle = next((s for s in self.sessions.values() if s.status == "idle"), None)
+            if idle is not None:
+                await idle.stop()
         if self._live_count() >= self.MAX_LIVE_SESSIONS:
             raise RuntimeError(f"too many live sessions (max {self.MAX_LIVE_SESSIONS})")
 

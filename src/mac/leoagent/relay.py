@@ -1846,13 +1846,21 @@ class Relay:
         items = self.offline_queue.pop(machine.name, [])
         now = time.time()
         for item in items:
+            # 取走的每一条都还在等:这时来查的手机要看到 queued,而不是 404(它会当作遗忘)。
+            self.queue_results[item["request_id"]] = {"status": "queued", "at": now}
+        for index, item in enumerate(items):
             if now - item["queued_at"] >= QUEUE_TTL_S:
                 self.queue_results[item["request_id"]] = {"status": "expired", "at": now}
                 continue
+            device_id = (item.get("caller") or {}).get("device_id")
+            if device_id and device_id not in self.devices:
+                # 排队后这台设备被吊销了:不能再拿它当时的身份(和全自动权限)去执行。
+                self.queue_results[item["request_id"]] = {"status": "failed", "at": now,
+                                                          "error": "device revoked"}
+                continue
             if self.machines.get(machine.name) is not machine:
-                # 投递途中又断了:剩下的放回队首,等下一次上线。
-                rest = items[items.index(item):]
-                self.offline_queue[machine.name] = rest + self.offline_queue.get(machine.name, [])
+                # 投递途中又断了:剩下的放回队首。
+                self._requeue(machine, items[index:])
                 return
             fut: asyncio.Future = asyncio.get_running_loop().create_future()
             frame_id = uuid.uuid4().hex
@@ -1866,13 +1874,32 @@ class Relay:
                     "status": "delivered", "at": time.time(),
                     "http_status": int(frame.get("status") or 200), "response": frame.get("body"),
                 }
-            except (asyncio.TimeoutError, ConnectionError) as exc:
+            except asyncio.TimeoutError:
                 machine.pending.pop(frame_id, None)
                 self.queue_results[item["request_id"]] = {"status": "failed", "at": time.time(),
-                                                          "error": str(exc) or "timeout"}
+                                                          "error": "timeout"}
+            except ConnectionError:
+                # 连接断了,不是 Mac 拒了:这条连同后面的放回去,下次上线再投。
+                # (Mac 桥按 request id 去重;老的 Python 路径可能收过这一条。)
+                machine.pending.pop(frame_id, None)
+                self._requeue(machine, items[index:])
+                return
         cutoff = time.time() - QUEUE_TTL_S
         for rid in [rid for rid, r in self.queue_results.items() if r.get("at", 0) < cutoff]:
             self.queue_results.pop(rid, None)
+
+    def _requeue(self, machine: Machine, rest: List[Dict[str, Any]]) -> None:
+        """Back to the front of the queue. A connection that registered while this
+        run was delivering saw an empty queue and started nothing, so it gets its
+        own run now; otherwise the rest waited for the next reconnect."""
+        for item in rest:
+            self.queue_results.pop(item["request_id"], None)   # the queue lookup answers "queued"
+        self.offline_queue[machine.name] = rest + self.offline_queue.get(machine.name, [])
+        current = self.machines.get(machine.name)
+        if current is not None and current is not machine:
+            task = asyncio.get_running_loop().create_task(self._flush_queue(current))
+            self._bg_tasks.add(task)
+            task.add_done_callback(self._bg_tasks.discard)
 
     # -- wiring ---------------------------------------------------------------
 

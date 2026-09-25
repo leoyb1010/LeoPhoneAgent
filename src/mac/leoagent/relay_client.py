@@ -18,6 +18,9 @@ from typing import List, Any, Dict, Optional
 import aiohttp
 
 LOCAL_BASE = "http://{host}:{port}"
+# Idle SSE streams get a keep-alive frame this often (the relay and the Mac
+# desktop app use the same 25 s; phones read with a 30 s timeout).
+KEEPALIVE_S = 25
 
 
 class RelayClient:
@@ -201,6 +204,7 @@ class RelayClient:
         cancel = asyncio.Event()
         self._stream_cancels[stream_id] = cancel
         cancel_wait = asyncio.ensure_future(cancel.wait())
+        read: Optional[asyncio.Future] = None
         try:
             async with session.get(
                 self.local_base + path, headers=self._headers(),
@@ -211,13 +215,19 @@ class RelayClient:
                     # "下一行到达之后"才被看见,而 SSE 空闲流可能几十分钟不出一行
                     # ——sock_read=3600 意味着手机关掉面板后,这条上游连接最长还要
                     # 挂一个小时。这里让读和 cancel 赛跑,取消立刻生效。
-                    read = asyncio.ensure_future(resp.content.readline())
+                    if read is None:
+                        read = asyncio.ensure_future(resp.content.readline())
                     done, _ = await asyncio.wait(
-                        {read, cancel_wait}, return_when=asyncio.FIRST_COMPLETED)
-                    if read not in done:
-                        read.cancel()
+                        {read, cancel_wait}, timeout=KEEPALIVE_S, return_when=asyncio.FIRST_COMPLETED)
+                    if cancel_wait in done:
                         break
+                    if not done:
+                        # 本机服务自己不发保活:空闲 25 秒就替它往中继→手机那段补一个,
+                        # 免得代理 / NAT 静默掐断;没读完的那一行接着等。
+                        await ws.send_json({"type": "stream_keepalive", "id": stream_id})
+                        continue
                     raw = read.result()
+                    read = None
                     if not raw:
                         break
                     line = raw.decode("utf-8", errors="replace").strip()
@@ -235,6 +245,8 @@ class RelayClient:
             print(f"[relay-client] stream {stream_id} error: {exc}", flush=True)
         finally:
             cancel_wait.cancel()
+            if read is not None:
+                read.cancel()
             self._stream_cancels.pop(stream_id, None)
             try:
                 await ws.send_json({"type": "stream_close", "id": stream_id})
