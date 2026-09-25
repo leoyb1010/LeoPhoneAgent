@@ -45,6 +45,8 @@ Android 端以 OpenMinis 的 Kotlin/Compose 共同历史为底座，提供 Stand
   Developer ID 签名、双仓热更新发布和本机安装；iPhone 1.34.0 (109) 已通过 Wi-Fi 真机覆盖安装并启动。
   iPad 真机与 Mac Apple 公证仍为 HOLD，不能把源码门禁等同于全部实机发版。
   最新追加审计已补齐三端相关正文/相关收藏、有限重试、用户标题保护、Mac PDF 重试完整性、iOS 持久增强任务执行、三端安全缓存清理、Android 系统快速捕获，以及正文/附件按需读取与 HTTP Range 断点续传；真实弱网、进程死亡和设备 HOLD 边界不变。
+  下一轮 iPhone / iPad / Apple Watch 体验升级计划（吸收开源项目经验 + iOS 27 新特性，只是计划、尚未施工）：
+  [`docs/upgrade-2026-09-25/PLAN.md`](docs/upgrade-2026-09-25/PLAN.md)。
   鸿蒙 7 交付计划：
   [`docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md`](docs/superpowers/plans/2026-08-19-harmonyos7-delivery.md)；
   工程落地在 `src/harmony/`。当前船是 `0.3.0-alpha.17`，只走 `hdc install`。
