@@ -259,12 +259,6 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.leoyuan.leophoneagent.offload.OffloadPermissionManager
-import com.mikepenz.markdown.compose.components.markdownComponents
-import com.mikepenz.markdown.m3.Markdown
-import com.mikepenz.markdown.m3.markdownColor
-import com.mikepenz.markdown.m3.markdownTypography
-import org.intellij.markdown.ast.ASTNode
-import org.intellij.markdown.ast.getTextInNode
 import com.leoyuan.leophoneagent.data.model.LLMModel
 import com.leoyuan.leophoneagent.data.model.ModelEntry
 import com.leoyuan.leophoneagent.data.model.ModelGroup
@@ -6007,9 +6001,10 @@ fun ChatScreen(
 // [T-android-split-chat] fuzzyMatch / ModelPickerSheet / providerDotColor moved
 // verbatim to ChatModelPickerSheet.kt (ModelPickerSheet now internal).
 
-// [T-android-split-chat] BorderedMarkdownTable / FallbackInfoBlock /
-// CompactSummarySheet / parseInlineMarkdown / rememberBrowserLiveSnapshot /
-// ResumeBanner / SwipeToSendHint moved verbatim to ChatMiscViews.kt.
+// [T-android-split-chat] FallbackInfoBlock / CompactSummarySheet /
+// rememberBrowserLiveSnapshot / ResumeBanner / SwipeToSendHint moved verbatim
+// to ChatMiscViews.kt (the never-called BorderedMarkdownTable /
+// parseInlineMarkdown were later deleted).
 // Sun May 24 11:01:25 CST 2026
 
 /**

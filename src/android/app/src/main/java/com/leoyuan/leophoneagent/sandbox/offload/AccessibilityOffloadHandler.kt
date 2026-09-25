@@ -432,6 +432,7 @@ First-run: enable "LeoPhoneAgent" under Settings → Accessibility, then `servic
             ?: return NativeOffloadResult(2, "$TOOL tap node: missing <nodeId>\n")
         val n = svc.nodeRegistry.get(nodeId)
             ?: return err(args, "NODE_NOT_FOUND", "no live node with id=$nodeId")
+        svc.mark(n)
         val action = if (args.hasFlag("long")) AccessibilityNodeInfo.ACTION_LONG_CLICK
                      else AccessibilityNodeInfo.ACTION_CLICK
         if (!n.isClickable && !args.hasFlag("long")) {
@@ -449,6 +450,7 @@ First-run: enable "LeoPhoneAgent" under Settings → Accessibility, then `servic
             ?: return NativeOffloadResult(2, "$TOOL tap xy: missing <x>\n")
         val y = args.positional.getOrNull(3)?.toIntOrNull()
             ?: return NativeOffloadResult(2, "$TOOL tap xy: missing <y>\n")
+        svc.highlightTarget(Rect(x, y, x, y))
         return tapXYRaw(svc, x, y, args)
     }
 
@@ -478,6 +480,7 @@ First-run: enable "LeoPhoneAgent" under Settings → Accessibility, then `servic
         val n = matches.getOrNull(index)
             ?: return err(args, "NODE_NOT_FOUND",
                 "no node with text${if (contains) " containing " else "="}\"$text\" (matches: ${matches.size})")
+        svc.mark(n)
         if (n.isClickable) n.performAction(AccessibilityNodeInfo.ACTION_CLICK)
         else {
             val r = Rect(); n.getBoundsInScreen(r)
@@ -509,6 +512,7 @@ First-run: enable "LeoPhoneAgent" under Settings → Accessibility, then `servic
         for (root in svc.rootNodes()) findByResourceId(root, rid, 30, 0, matches)
         val n = matches.firstOrNull()
             ?: return err(args, "NODE_NOT_FOUND", "no node with resource-id=$rid")
+        svc.mark(n)
         return if (n.performAction(AccessibilityNodeInfo.ACTION_CLICK))
             ok(args, JSONObject().put("resourceId", rid).put("action", "click"))
         else err(args, "ACTION_FAILED", "performAction(CLICK) returned false")
@@ -541,6 +545,7 @@ First-run: enable "LeoPhoneAgent" under Settings → Accessibility, then `servic
             ?: return NativeOffloadResult(2, "$TOOL input text: missing <text>\n")
         val node = resolveTargetEditable(svc, args)
             ?: return err(args, "NODE_NOT_FOUND", "no editable focus and no --node specified")
+        svc.mark(node)
         val finalText = when {
             args.hasFlag("clear")  -> text
             args.hasFlag("append") -> (node.text?.toString() ?: "") + text
@@ -555,6 +560,7 @@ First-run: enable "LeoPhoneAgent" under Settings → Accessibility, then `servic
         val svc = svcOrThrow()
         val node = resolveTargetEditable(svc, args)
             ?: return err(args, "NODE_NOT_FOUND", "no editable focus and no --node specified")
+        svc.mark(node)
         return if (svc.setNodeText(node, ""))
             ok(args, JSONObject().put("action", "clear"))
         else err(args, "ACTION_FAILED", "ACTION_SET_TEXT('') failed")
@@ -601,6 +607,7 @@ First-run: enable "LeoPhoneAgent" under Settings → Accessibility, then `servic
             ?: return NativeOffloadResult(2, "$TOOL scroll node: missing <nodeId>\n")
         val n = svc.nodeRegistry.get(nodeId)
             ?: return err(args, "NODE_NOT_FOUND", "no live node with id=$nodeId")
+        svc.mark(n)
         val direction = args.get("direction") ?: "down"
         val times = args.getInt("times") ?: 1
         val action = when (direction) {
@@ -957,6 +964,7 @@ First-run: enable "LeoPhoneAgent" under Settings → Accessibility, then `servic
             for (root in svc.rootNodes()) findByTextOrDesc(root, label, contains = false, 30, 0, matches)
             val btn = matches.firstOrNull { it.isClickable } ?: matches.firstOrNull()
             if (btn != null) {
+                svc.mark(btn)
                 val clicked = if (btn.isClickable) btn.performAction(AccessibilityNodeInfo.ACTION_CLICK) else {
                     val r = Rect(); btn.getBoundsInScreen(r)
                     svc.dispatchSimpleGesture(
@@ -1070,6 +1078,13 @@ First-run: enable "LeoPhoneAgent" under Settings → Accessibility, then `servic
     // ── helpers ──────────────────────────────────────────────────────────
 
     private class NotRunning(msg: String) : RuntimeException(msg)
+
+    /** Flash [node]'s bounds on screen right before acting on it (Power a11y overlay). */
+    private fun MinisAccessibilityService.mark(node: AccessibilityNodeInfo) {
+        val r = Rect()
+        node.getBoundsInScreen(r)
+        highlightTarget(r)
+    }
 
     private fun svcOrThrow(): MinisAccessibilityService =
         MinisAccessibilityService.getInstance()

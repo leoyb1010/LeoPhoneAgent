@@ -254,12 +254,6 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.leoyuan.leophoneagent.offload.OffloadPermissionManager
-import com.mikepenz.markdown.compose.components.markdownComponents
-import com.mikepenz.markdown.m3.Markdown
-import com.mikepenz.markdown.m3.markdownColor
-import com.mikepenz.markdown.m3.markdownTypography
-import org.intellij.markdown.ast.ASTNode
-import org.intellij.markdown.ast.getTextInNode
 import com.leoyuan.leophoneagent.data.model.LLMModel
 import com.leoyuan.leophoneagent.data.model.ModelEntry
 import com.leoyuan.leophoneagent.data.model.ModelGroup

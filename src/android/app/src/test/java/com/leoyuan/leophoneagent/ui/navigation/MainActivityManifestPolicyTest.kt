@@ -50,6 +50,21 @@ class MainActivityManifestPolicyTest {
     }
 
     @Test
+    fun `text selection menu entry routes PROCESS_TEXT into the share receiver`() {
+        val at = manifest.indexOf("android:name=\".share.ProcessTextAlias\"")
+        assertTrue("ProcessTextAlias missing", at >= 0)
+        val alias = manifest.substring(
+            manifest.lastIndexOf("<activity-alias", at),
+            manifest.indexOf("</activity-alias>", at),
+        )
+        assertTrue(alias.contains("android:targetActivity=\".share.ShareReceiverActivity\""))
+        assertTrue(alias.contains("android:exported=\"true\""))
+        assertTrue(alias.contains("android:label=\"@string/process_text_label\""))
+        assertTrue(alias.contains("android:name=\"android.intent.action.PROCESS_TEXT\""))
+        assertTrue(alias.contains("android:mimeType=\"text/plain\""))
+    }
+
+    @Test
     fun `Power manifest alone declares privileged package visibility`() {
         val power = flavorManifest("power")
         val standard = flavorManifest("standard")

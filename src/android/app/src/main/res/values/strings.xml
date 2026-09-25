@@ -1644,6 +1644,7 @@
     <string name="shizuku_command_denied">Privileged command was not approved for this call.</string>
     <string name="alarm_notification_title">LeoPhoneAgent Alarm</string>
     <string name="share_size_limit">Shared content is too large. Each file is limited to 100 MB and each share to 200 MB.</string>
+    <string name="process_text_label">Ask LeoPhoneAgent</string>
     <string name="common_ok">OK</string>
     <string name="selection_copied_markdown">Copied as Markdown</string>
     <string name="selection_copied_rich_text">Copied as Rich Text</string>

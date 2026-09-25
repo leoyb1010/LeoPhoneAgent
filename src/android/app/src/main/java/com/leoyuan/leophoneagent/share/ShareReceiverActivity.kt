@@ -12,7 +12,9 @@ import kotlinx.coroutines.launch
 
 /**
  * Activity that handles ACTION_SEND / ACTION_SEND_MULTIPLE / ACTION_VIEW
- * intents. Mirrors iOS ShareExtension/ShareViewModel.swift wire format
+ * intents, plus ACTION_PROCESS_TEXT via the `.share.ProcessTextAlias`
+ * activity-alias (system text-selection menu). Mirrors iOS
+ * ShareExtension/ShareViewModel.swift wire format
  * (`{items: [{kind, value}], timestamp}`) so a future cross-platform
  * sync (if it ever lands) reads the same `PendingShare` JSON.
  *
@@ -57,10 +59,26 @@ class ShareReceiverActivity : ComponentActivity() {
                 Intent.ACTION_SEND -> handleSingleSend(intent, items)
                 Intent.ACTION_SEND_MULTIPLE -> handleMultipleSend(intent, items)
                 Intent.ACTION_VIEW -> handleView(intent, items)
+                // Text-selection menu "Ask LeoPhoneAgent" (ProcessTextAlias). We
+                // never setResult() replacement text, so the caller's selection is
+                // left untouched whether or not EXTRA_PROCESS_TEXT_READONLY is set.
+                Intent.ACTION_PROCESS_TEXT -> addSharedText(
+                    intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT)?.toString(),
+                    subject = null,
+                    out = items,
+                )
                 else -> AppLogger.warning(TAG, "unhandled action: ${intent?.action}")
             }
         } catch (e: Throwable) {
             AppLogger.error(TAG, "extraction failed: ${e.message}")
+        }
+
+        // Selected text is an explicit "ask": skip the Treasury-or-chat prompt and
+        // prefill the chat composer. Empty selections fall through to the
+        // existing "nothing shared" toast below.
+        if (intent?.action == Intent.ACTION_PROCESS_TEXT && items.isNotEmpty()) {
+            finishWithAttachmentFlow(items)
+            return
         }
 
         // [T-android-json-open-provider-import-prompt] If exactly one item was
@@ -228,28 +246,11 @@ class ShareReceiverActivity : ComponentActivity() {
     private fun handleSingleSend(intent: Intent, out: MutableList<PendingShare.Item>) {
         val type = intent.type ?: ""
         when {
-            type == "text/plain" -> {
-                val text = intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }
-                    ?: return
-                if (text.length <= INLINE_TEXT_LIMIT) {
-                    out += PendingShare.Item(
-                        PendingShare.Item.Kind.INLINE_TEXT,
-                        text,
-                        mimeType = "text/plain",
-                        displayName = intent.getStringExtra(Intent.EXTRA_SUBJECT),
-                    )
-                } else {
-                    val name = "shared-text-${shortId()}.txt"
-                    File(SharedShareStore.sharedFileDirectory(this), name)
-                        .writeText(text, Charsets.UTF_8)
-                    out += PendingShare.Item(
-                        PendingShare.Item.Kind.ATTACHMENT,
-                        name,
-                        mimeType = "text/plain",
-                        displayName = intent.getStringExtra(Intent.EXTRA_SUBJECT) ?: "共享文本.txt",
-                    )
-                }
-            }
+            type == "text/plain" -> addSharedText(
+                intent.getStringExtra(Intent.EXTRA_TEXT),
+                intent.getStringExtra(Intent.EXTRA_SUBJECT),
+                out,
+            )
             else -> {
                 val uri = getParcelableExtra<Uri>(intent, Intent.EXTRA_STREAM) ?: return
                 copyUriToStaging(uri, type)?.let {
@@ -261,6 +262,33 @@ class ShareReceiverActivity : ComponentActivity() {
                     )
                 }
             }
+        }
+    }
+
+    /**
+     * Shared by SEND text/plain and PROCESS_TEXT. Blank text is dropped; up to
+     * [INLINE_TEXT_LIMIT] chars prefill the composer, anything longer is staged
+     * as a .txt attachment so a huge selection never floods the input field.
+     */
+    private fun addSharedText(raw: String?, subject: String?, out: MutableList<PendingShare.Item>) {
+        val text = raw?.takeIf { it.isNotBlank() } ?: return
+        if (text.length <= INLINE_TEXT_LIMIT) {
+            out += PendingShare.Item(
+                PendingShare.Item.Kind.INLINE_TEXT,
+                text,
+                mimeType = "text/plain",
+                displayName = subject,
+            )
+        } else {
+            val name = "shared-text-${shortId()}.txt"
+            File(SharedShareStore.sharedFileDirectory(this), name)
+                .writeText(text, Charsets.UTF_8)
+            out += PendingShare.Item(
+                PendingShare.Item.Kind.ATTACHMENT,
+                name,
+                mimeType = "text/plain",
+                displayName = subject ?: "共享文本.txt",
+            )
         }
     }
 

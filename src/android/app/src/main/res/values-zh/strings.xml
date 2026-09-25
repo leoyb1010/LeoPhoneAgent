@@ -1575,6 +1575,7 @@
     <string name="shizuku_command_denied">本次高权限命令未获批准。</string>
     <string name="alarm_notification_title">LeoPhoneAgent 闹钟</string>
     <string name="share_size_limit">分享内容过大。单个文件上限为 100 MB，单次分享上限为 200 MB。</string>
+    <string name="process_text_label">问 LeoPhoneAgent</string>
     <string name="common_ok">确定</string>
     <string name="selection_copied_markdown">已复制为 Markdown</string>
     <string name="selection_copied_rich_text">已复制为富文本</string>

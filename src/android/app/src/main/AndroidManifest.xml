@@ -335,6 +335,23 @@
             </intent-filter>
         </activity>
 
+        <!-- System text-selection menu entry "Ask LeoPhoneAgent"
+             (ACTION_PROCESS_TEXT). The alias only supplies its own label; the
+             target reuses the share → PendingShare → composer-prefill path.
+             Text is read, never returned, so read-only and editable selections
+             are both left untouched in the calling app. -->
+        <activity-alias
+            android:name=".share.ProcessTextAlias"
+            android:targetActivity=".share.ShareReceiverActivity"
+            android:exported="true"
+            android:label="@string/process_text_label">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity-alias>
+
         <!-- T-pwa-1 (renamed Pwa → WebApp): WebApp shortcut host.
              Reachable only via explicit Intent from a pinned launcher
              shortcut (ACTION_OPEN_WEBAPP + extras). Old ACTION_OPEN_PWA

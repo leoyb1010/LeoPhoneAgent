@@ -3,23 +3,36 @@ package com.leoyuan.leophoneagent.accessibility
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.accessibilityservice.GestureDescription
+import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.ColorSpace
+import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.PixelFormat
+import android.graphics.Rect
+import android.graphics.RectF
+import android.graphics.Typeface
 import android.hardware.HardwareBuffer
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.Display
+import android.view.View
+import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityWindowInfo
 import androidx.annotation.RequiresApi
 import com.leoyuan.leophoneagent.logging.AppLogger
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.security.MessageDigest
 
 /**
@@ -37,6 +50,12 @@ class MinisAccessibilityService : AccessibilityService() {
                 return "$pkg/.accessibility.MinisAccessibilityService"
             }
         private const val EVENT_RING_CAP = 1024
+        private const val HIGHLIGHT_MS = 600L
+        // Step badges restart at 1 after a pause, so each burst of agent actions counts from 1.
+        private const val HIGHLIGHT_STEP_RESET_MS = 30_000L
+        // ponytail: fixed settle delay so the compositor drops the overlay before a screenshot;
+        // if it still leaks into shots on slow devices, wait on a frame callback instead.
+        private const val HIGHLIGHT_CAPTURE_SETTLE_MS = 100L
 
         @Volatile
         private var _instance: MinisAccessibilityService? = null
@@ -56,6 +75,13 @@ class MinisAccessibilityService : AccessibilityService() {
     private val eventListeners = CopyOnWriteArrayList<(RecordedEvent) -> Unit>()
 
     val nodeRegistry: NodeRegistry = NodeRegistry(::snapshotToken)
+
+    // Target highlight overlay (see [highlightTarget]); main thread only.
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var highlightView: TargetHighlightView? = null
+    private var highlightStep = 0
+    private var lastHighlightAt = 0L
+    private val hideHighlight = Runnable { removeHighlight() }
 
     override fun onCreate() {
         super.onCreate()
@@ -104,6 +130,8 @@ class MinisAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         super.onDestroy()
         if (_instance === this) _instance = null
+        mainHandler.removeCallbacksAndMessages(null)
+        removeHighlight()
         eventRing.clear()
         nodeRegistry.clear()
         eventListeners.clear()
@@ -161,6 +189,7 @@ class MinisAccessibilityService : AccessibilityService() {
         val out = ArrayList<AccessibilityNodeInfo>()
         try {
             for (w in windows ?: emptyList()) {
+                if (isOwnOverlay(w)) continue
                 w.root?.let { out.add(it) }
             }
         } catch (_: Throwable) {}
@@ -170,10 +199,16 @@ class MinisAccessibilityService : AccessibilityService() {
         return out
     }
 
+    /** Our highlight window must never show up in dumps, snapshot tokens or window lists. */
+    private fun isOwnOverlay(w: AccessibilityWindowInfo): Boolean =
+        w.type == AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY &&
+            w.root?.packageName?.toString() == packageName
+
     fun windowInfos(): List<Map<String, Any?>> {
         val out = ArrayList<Map<String, Any?>>()
         try {
             for (w in windows ?: emptyList()) {
+                if (isOwnOverlay(w)) continue
                 out.add(mapOf(
                     "windowId" to w.id,
                     "type" to when (w.type) {
@@ -260,6 +295,7 @@ class MinisAccessibilityService : AccessibilityService() {
      */
     @RequiresApi(Build.VERSION_CODES.R)
     fun captureScreenshot(displayId: Int = Display.DEFAULT_DISPLAY, timeoutMs: Long = 5_000): ShotResult {
+        hideHighlightForCapture()
         val done = CountDownLatch(1)
         val resultRef = java.util.concurrent.atomic.AtomicReference(
             ShotResult(null, "TIMEOUT", "takeScreenshot timed out")
@@ -309,5 +345,131 @@ class MinisAccessibilityService : AccessibilityService() {
             putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
         }
         return node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+    }
+
+    /**
+     * Briefly outlines [bounds] (screen coordinates) with a numbered step badge right
+     * before the agent acts on it, then removes it after [HIGHLIGHT_MS]. The window is
+     * a TYPE_ACCESSIBILITY_OVERLAY owned by this service (no SYSTEM_ALERT_WINDOW); it is
+     * non-touchable and a trusted overlay, so it neither eats nor obscures the gesture
+     * that follows. Callable from any thread; silently skipped once disconnected.
+     */
+    fun highlightTarget(bounds: Rect) {
+        val target = Rect(bounds)
+        if (target.width() <= 0 || target.height() <= 0) {
+            // A bare point (tap xy) or a zero-size node: box 48dp around it.
+            val half = (24 * resources.displayMetrics.density).toInt()
+            val cx = target.centerX()
+            val cy = target.centerY()
+            target.set(cx - half, cy - half, cx + half, cy + half)
+        }
+        mainHandler.post {
+            if (_instance !== this) return@post
+            val now = SystemClock.uptimeMillis()
+            highlightStep = if (now - lastHighlightAt > HIGHLIGHT_STEP_RESET_MS) 1 else highlightStep + 1
+            lastHighlightAt = now
+            try {
+                val view = highlightView ?: TargetHighlightView(this).also {
+                    (getSystemService(WINDOW_SERVICE) as WindowManager).addView(it, highlightParams())
+                    highlightView = it
+                }
+                view.show(target, highlightStep.toString())
+                mainHandler.removeCallbacks(hideHighlight)
+                mainHandler.postDelayed(hideHighlight, HIGHLIGHT_MS)
+            } catch (t: Throwable) {
+                // BadTokenException etc. once the service lost its connection: the
+                // highlight is cosmetic, never let it fail the action.
+                AppLogger.warning(TAG, "highlight skipped: ${t.javaClass.simpleName}")
+            }
+        }
+    }
+
+    private fun highlightParams() = WindowManager.LayoutParams(
+        WindowManager.LayoutParams.MATCH_PARENT,
+        WindowManager.LayoutParams.MATCH_PARENT,
+        WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+        PixelFormat.TRANSLUCENT,
+    ).apply {
+        // Cover status/nav bar and cutout areas too; the view maps to screen space itself.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) fitInsetsTypes = 0
+    }
+
+    /** Main thread only. Returns true when an overlay was actually attached. */
+    private fun removeHighlight(): Boolean {
+        mainHandler.removeCallbacks(hideHighlight)
+        val view = highlightView ?: return false
+        highlightView = null
+        runCatching { (getSystemService(WINDOW_SERVICE) as WindowManager).removeViewImmediate(view) }
+        return true
+    }
+
+    /**
+     * Screenshots must show the real UI only. Goes through the main queue so a
+     * highlight that is posted but not yet attached is removed as well.
+     */
+    private fun hideHighlightForCapture() {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            removeHighlight()
+            return
+        }
+        val removed = AtomicBoolean(false)
+        val done = CountDownLatch(1)
+        mainHandler.post { removed.set(removeHighlight()); done.countDown() }
+        done.await(500, TimeUnit.MILLISECONDS)
+        if (removed.get()) Thread.sleep(HIGHLIGHT_CAPTURE_SETTLE_MS)
+    }
+}
+
+/** Theme.kt TealPrimary, so the highlight reads as LeoPhoneAgent's own. */
+private const val HIGHLIGHT_ACCENT = 0xFF2E8B8B.toInt()
+
+/** Full-screen transparent canvas drawing one rounded outline + step badge in screen space. */
+private class TargetHighlightView(context: Context) : View(context) {
+    private val dp = resources.displayMetrics.density
+    private val box = RectF()
+    private val loc = IntArray(2)
+    private var label = ""
+    private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 3 * dp
+        color = HIGHLIGHT_ACCENT
+    }
+    private val badge = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = HIGHLIGHT_ACCENT }
+    private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textSize = 12 * dp
+        typeface = Typeface.DEFAULT_BOLD
+    }
+
+    init {
+        // Purely visual: keep it out of TalkBack and every accessibility tree.
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+    }
+
+    fun show(bounds: Rect, step: String) {
+        box.set(bounds)
+        box.inset(-4 * dp, -4 * dp)
+        label = step
+        invalidate()
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        // The window may not start at the screen origin, so translate into screen space.
+        getLocationOnScreen(loc)
+        canvas.translate(-loc[0].toFloat(), -loc[1].toFloat())
+        canvas.drawRoundRect(box, 8 * dp, 8 * dp, stroke)
+        val h = text.textSize + 6 * dp
+        val w = text.measureText(label) + 12 * dp
+        // Badge sits above the box's top-left corner; drops inside when that would leave the window.
+        val top = if (box.top - h >= loc[1]) box.top - h else box.top
+        canvas.drawRoundRect(box.left, top, box.left + w, top + h, h / 2, h / 2, badge)
+        canvas.drawText(label, box.left + 6 * dp, top + h / 2 - (text.descent() + text.ascent()) / 2, text)
     }
 }
