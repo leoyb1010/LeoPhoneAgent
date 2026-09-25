@@ -370,6 +370,16 @@ class RelayV02Tests(unittest.IsolatedAsyncioTestCase):
         # 越过空洞的帧一条都不能发:否则手机游标跳过被挤掉的那条,续传也补不回来
         self.assertEqual(seqs, list(range(1, len(seqs) + 1)))
 
+    async def test_a_mac_that_reconnects_closes_the_old_connections_streams(self):
+        mac, key = await self.pinned_mac()
+        resp, opened = await self.phone_stream(mac)
+        await self.mac_sends(mac, opened["id"], [self.delta(1, "a")])
+        # Mac 换网:新连接先注册上,旧连接这时才断
+        _, ack = await self.register("MacBook", key)
+        self.assertEqual(ack["type"], "registered")
+        got = await self.read_sse(resp)  # 流必须结束,不能一直挂着
+        self.assertEqual([e["seq"] for e in got], [1])
+
     # -- 推送路由 ------------------------------------------------------------------
 
     async def test_run_failed_sends_no_alert_push(self):

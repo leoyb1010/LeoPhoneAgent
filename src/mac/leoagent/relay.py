@@ -110,6 +110,15 @@ class Machine:
         self.streams: Dict[str, asyncio.Queue] = {}
 
 
+
+def _close_stream(queue: "asyncio.Queue[Dict[str, Any]]", close: Dict[str, Any]) -> None:
+    """Swap whatever is still queued for a close. The phone reconnects and replays
+    from its cursor, which sits before every frame that never reached it; a full
+    queue must still get the close (put_nowait on it would drop it)."""
+    while not queue.empty():
+        queue.get_nowait()
+    queue.put_nowait(close)
+
 class Relay:
     def __init__(self, key: str, extra_keys: Optional[list] = None,
                  rejected_log: Optional[str] = None,
@@ -1272,11 +1281,8 @@ class Relay:
                             # 必须整队清掉:只挤掉队首一帧的话,后面的帧照发,手机
                             # 的续传游标越过被挤掉的那条,它就再也补不回来了。队列
                             # 里的帧都还没到手机,游标停在它们之前,replay 一条不少。
-                            while not queue.empty():
-                                queue.get_nowait()
-                            queue.put_nowait({"type": "stream_close",
-                                              "id": frame.get("id"),
-                                              "reason": "slow consumer"})
+                            _close_stream(queue, {"type": "stream_close", "id": frame.get("id"),
+                                                  "reason": "slow consumer"})
                         # 已缓冲的一大批帧(比如接管长会话时的整段回放)这个循环会一口气
                         # 读完、不让出事件循环,转发协程插不上手,好好的手机也会被挤爆。
                         # 过半就让一下,让它先把队列清掉。
@@ -1289,18 +1295,18 @@ class Relay:
                     self._record_event(str(frame.get("machine") or machine.name),
                                        dict(frame.get("event") or {}))
         finally:
-            if machine is not None and self.machines.get(machine.name) is machine:
-                del self.machines[machine.name]
-                print(f"[relay] {machine.name} offline", flush=True)
-                # 挂着的请求全部立刻失败,别让手机等超时
+            if machine is not None:
+                if self.machines.get(machine.name) is machine:
+                    del self.machines[machine.name]
+                    print(f"[relay] {machine.name} offline", flush=True)
+                # 请求和流跟着这条连接走,被同名重连顶掉时也一样(Mac 换网、睡醒:
+                # 新连接先到,旧的这时才断)。新连接不认识它们,这里不了结,手机就
+                # 一直挂着——生产环境 aiohttp 不会替断开的手机取消处理协程。
                 for fut in machine.pending.values():
                     if not fut.done():
                         fut.set_exception(ConnectionError("machine disconnected"))
                 for queue in machine.streams.values():
-                    try:
-                        queue.put_nowait({"type": "stream_close", "reason": "machine disconnected"})
-                    except asyncio.QueueFull:
-                        pass  # 满 = 消费端已死,close 帧丢了也会随连接一起清
+                    _close_stream(queue, {"type": "stream_close", "reason": "machine disconnected"})
         return ws
 
     # -- 事件缓冲 -------------------------------------------------------------
