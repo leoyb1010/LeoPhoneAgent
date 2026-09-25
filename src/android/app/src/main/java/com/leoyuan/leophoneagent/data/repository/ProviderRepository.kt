@@ -1,5 +1,6 @@
 package com.leoyuan.leophoneagent.data.repository
 
+import com.leoyuan.leophoneagent.auth.OAuthManager
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Base64
@@ -86,6 +87,17 @@ class ProviderRepository(private val context: Context) {
         ProviderDatabase.getInstance(context).providerConfigDao()
 
     companion object {
+        /**
+         * Groups a removal empties: non-empty groups whose members are all in
+         * [removedEntryIds]. Groups the user created empty on purpose stay
+         * (iOS fixed the same bug in T-icloud-provider-sync-consistency).
+         */
+        internal fun groupsEmptiedBy(groups: List<ModelGroup>, removedEntryIds: Set<String>): Set<String> =
+            groups
+                .filter { g -> g.memberEntryIds.isNotEmpty() && g.memberEntryIds.all { it in removedEntryIds } }
+                .map { it.id }
+                .toSet()
+
         /**
          * Per-instance model-cache TTL. Matches iOS's daily calendar-day
          * refresh window (24h rolling here — simpler than calendar-day math
@@ -675,6 +687,9 @@ class ProviderRepository(private val context: Context) {
             .filter { it.providerInstanceId == instanceId }
             .map { it.id }
             .toSet()
+        // Only groups this removal empties go with it; filtering every empty
+        // group also deleted ones the user created empty on purpose.
+        val emptiedGroupIds = groupsEmptiedBy(config.modelGroups, removedEntryIds)
         config.instances.removeAll { it.id == instanceId }
         config.modelEntries.removeAll { it.providerInstanceId == instanceId }
 
@@ -684,15 +699,20 @@ class ProviderRepository(private val context: Context) {
             }
             config.agentLoopModelEntryIds.removeAll { it in removedEntryIds }
         }
-        val emptyGroupIds = config.modelGroups.filter { it.memberEntryIds.isEmpty() }.map { it.id }.toSet()
-        if (emptyGroupIds.isNotEmpty()) {
-            config.modelGroups.removeAll { it.id in emptyGroupIds }
-            if (config.defaultPrimaryGroupId in emptyGroupIds) config.defaultPrimaryGroupId = null
-            if (config.defaultSubGroupId in emptyGroupIds) config.defaultSubGroupId = null
+        if (emptiedGroupIds.isNotEmpty()) {
+            config.modelGroups.removeAll { it.id in emptiedGroupIds }
+            // Same pointer cleanup removeGroup() does — voice routing and the
+            // agent-loop list used to keep ids of groups that no longer exist.
+            if (config.defaultPrimaryGroupId in emptiedGroupIds) config.defaultPrimaryGroupId = null
+            if (config.defaultSubGroupId in emptiedGroupIds) config.defaultSubGroupId = null
+            if (config.voiceInputGroupId in emptiedGroupIds) config.voiceInputGroupId = null
+            if (config.voiceOutputGroupId in emptiedGroupIds) config.voiceOutputGroupId = null
+            config.agentLoopGroupIds.removeAll { it in emptiedGroupIds }
         }
 
         saveConfig(config)
         deleteApiKey(instanceId)
+        OAuthManager.purgeInstance(context, instanceId)
     }
 
     /**

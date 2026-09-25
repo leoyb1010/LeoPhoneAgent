@@ -59,6 +59,19 @@ abstract class OAuthManager(
             return diff == 0
         }
 
+        /**
+         * Drop every OAuth credential stored for [instanceId]: the token bundle,
+         * the manual bearer and any per-instance OAuth strings. Called when the
+         * provider itself is deleted — those credentials used to outlive it.
+         */
+        fun purgeInstance(context: Context, instanceId: String) {
+            val prefs = com.leoyuan.leophoneagent.util.EncryptedPrefsFactory.safeCreate(context, "oauth_prefs")
+            val suffix = "_$instanceId"
+            val stale = prefs.all.keys.filter { it.startsWith("oauth_") && it.endsWith(suffix) }
+            if (stale.isEmpty()) return
+            prefs.edit().apply { stale.forEach { remove(it) } }.apply()
+        }
+
         /** Credential-presence probe for routing; refresh still happens on request. */
         fun hasStoredCredential(context: Context, instanceId: String): Boolean {
             val prefs = com.leoyuan.leophoneagent.util.EncryptedPrefsFactory.safeCreate(context, "oauth_prefs")
