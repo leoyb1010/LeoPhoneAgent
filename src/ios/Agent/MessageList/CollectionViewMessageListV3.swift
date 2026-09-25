@@ -183,12 +183,16 @@ struct CollectionViewMessageListV3: UIViewControllerRepresentable {
 /// matching the Soul Settings UI.
 /// [T-worked-fold] Fold state shared by every summary row of one list.
 final class WorkFoldState: ObservableObject {
-    @Published var expanded: Set<UUID> = []
+    @Published var expanded: Set<String> = []   // WorkFold.expansionKey
 }
 
 /// [T-worked-fold] A finished turn's steps as one quiet line:
 /// "已工作 9 步 · 1 分 12 秒". Orange when one of them failed.
 private struct WorkSummaryRowV3: View {
+    /// One footnote line (~16) + 7+7 capsule + 4+4 row padding. A 44 estimate made
+    /// each row shrink mid-scroll the first time it appeared.
+    static let estimatedHeight: CGFloat = 38
+
     @ObservedObject var message: ChatMessage
     @ObservedObject var state: WorkFoldState
     var maxWidth: CGFloat = 0
@@ -199,8 +203,8 @@ private struct WorkSummaryRowV3: View {
         let work = message.blocks.filter { folded.contains($0.id) }
         let steps = work.filter { $0.toolStatus != nil }.count
         let failed = work.contains { if case .failed = $0.toolStatus { return true }; return false }
-        let seconds = work.compactMap(\.toolDuration).reduce(0, +)
-        let expanded = state.expanded.contains(message.id)
+        let seconds = WorkFold.elapsed(work)
+        let expanded = state.expanded.contains(WorkFold.expansionKey(message))
         Button(action: onToggle) {
             HStack(spacing: 8) {
                 Image(systemName: failed ? "exclamationmark.triangle.fill" : "checklist")
@@ -1020,8 +1024,9 @@ extension CollectionViewMessageListV3 {
         /// Show / hide a finished turn's steps. The tap means the user is reading
         /// above the bottom now, so the list stops following — the tapped row
         /// stays put and the steps open below it.
-        func toggleWork(_ messageId: UUID) {
-            if workFold.expanded.remove(messageId) == nil { workFold.expanded.insert(messageId) }
+        func toggleWork(_ message: ChatMessage) {
+            let key = WorkFold.expansionKey(message)
+            if workFold.expanded.remove(key) == nil { workFold.expanded.insert(key) }
             scrollMode = .userBrowsing
             LeoHaptics.selection()
             if let vm { applySnapshot(messages: vm.messages, caller: "workFold") }
@@ -1392,7 +1397,7 @@ extension CollectionViewMessageListV3 {
                 cell.backgroundColor = .clear
                 let config = UIHostingConfiguration {
                     WorkSummaryRowV3(message: message, state: workFold, maxWidth: width) { [weak self] in
-                        self?.toggleWork(msgId)
+                        self?.toggleWork(message)
                     }
                     .transaction { $0.disablesAnimations = true }
                 }.minSize(width: 0, height: 0).margins(.all, 0)
@@ -1489,7 +1494,8 @@ extension CollectionViewMessageListV3 {
                layout.cachedHeight(at: indexPath.item) == nil,
                !layout.hasPrecalcHeight(at: indexPath.item) {
                 let est = Self.estimateItemHeight(item, messages: messages,
-                                                  width: viewController?.collectionView.bounds.width ?? 390)
+                                                  width: viewController?.collectionView.bounds.width ?? 390,
+                                                  maxContentWidth: maxContentWidth)
                 layout.setEstimatedHeight(est, at: indexPath.item)
             }
         }
@@ -2418,6 +2424,7 @@ extension CollectionViewMessageListV3 {
 
             // Build items
             var newItems: [MessageListItem] = []
+            let previousIds = Set(previousSnapshotIds)
             for message in messages {
                 switch message.role {
                 case .user, .compactDivider, .systemInfo:
@@ -2429,9 +2436,14 @@ extension CollectionViewMessageListV3 {
                     // so folding only ever happens above a list pinned at the
                     // bottom after you send — never under your reading position.
                     let isLatestReply = message.id == messages.last(where: { $0.role == .assistant })?.id
-                    let folded = isLatestReply ? nil : WorkFold.foldedBlockIds(message.blocks)
+                    // A reply can stop being the latest while you read it (queued prompt,
+                    // Siri, notification reply): it folds once the list follows again.
+                    let shownFlatToReader = scrollMode != .autoScrolling
+                        && previousIds.contains(.assistantHeader(message.id))
+                        && !previousIds.contains(.workSummary(message.id))
+                    let folded = isLatestReply || shownFlatToReader ? nil : WorkFold.foldedBlockIds(message.blocks)
                     if folded != nil { newItems.append(.workSummary(message.id)) }
-                    let hideSteps = folded != nil && !workFold.expanded.contains(message.id)
+                    let hideSteps = folded != nil && !workFold.expanded.contains(WorkFold.expansionKey(message))
                     for block in message.blocks where !(hideSteps && folded?.contains(block.id) == true) {
                         newItems.append(.assistantBlock(message.id, block.id))
                     }
@@ -2517,7 +2529,7 @@ extension CollectionViewMessageListV3 {
                         layout.setEstimatedHeight(28, at: i)
 
                     case .workSummary:
-                        layout.setEstimatedHeight(44, at: i)
+                        layout.setEstimatedHeight(WorkSummaryRowV3.estimatedHeight, at: i)
 
                     case .assistantFooter:
                         // Prominent banners (error/resume/typing) measure
@@ -2538,7 +2550,7 @@ extension CollectionViewMessageListV3 {
                             // Results are cached by NSAttributedString identity to avoid
                             // redundant TextKit layout on repeated snapshots.
                             if let attrStr = block.cachedAttributedString {
-                                let textWidth = max(cvWidth - 32, 100)
+                                let textWidth = Self.assistantTextWidth(listWidth: cvWidth, maxContentWidth: maxContentWidth)
                                 let key = ObjectIdentifier(attrStr)
                                 let height: CGFloat
                                 if let cached = attrStringHeightCache[key] {
@@ -2596,7 +2608,7 @@ extension CollectionViewMessageListV3 {
                                 // The +4 padding compensation now lives inside
                                 // estimateTextBlockHeight, so all estimate paths
                                 // agree — no per-call-site fudge here.
-                                let est = Self.estimateItemHeight(item, messages: messages, width: cvWidth)
+                                let est = Self.estimateItemHeight(item, messages: messages, width: cvWidth, maxContentWidth: maxContentWidth)
                                 layout.setEstimatedHeight(est, at: i)
                             }
                         case .thinking:
@@ -2604,7 +2616,7 @@ extension CollectionViewMessageListV3 {
                             // or header + capped content height when expanded. Hard-coded 88
                             // caused a -48pt correction per cell on first render, producing a
                             // contentSize-shrink jitter chain when scrolling through history.
-                            let est = Self.estimateItemHeight(item, messages: messages, width: cvWidth)
+                            let est = Self.estimateItemHeight(item, messages: messages, width: cvWidth, maxContentWidth: maxContentWidth)
                             layout.setEstimatedHeight(est, at: i)
                         case .readImageTool:
                             // In V3 block cells, readImageTool renders as a
@@ -2663,11 +2675,11 @@ extension CollectionViewMessageListV3 {
                             } else {
                                 // empty text (attachment-only) — coarse estimate
                                 layout.setEstimatedHeight(
-                                    Self.estimateItemHeight(item, messages: messages, width: cvWidth), at: i)
+                                    Self.estimateItemHeight(item, messages: messages, width: cvWidth, maxContentWidth: maxContentWidth), at: i)
                             }
                         } else {
                             // compactDivider / systemInfo — coarse estimate is fine
-                            let est = Self.estimateItemHeight(item, messages: messages, width: cvWidth)
+                            let est = Self.estimateItemHeight(item, messages: messages, width: cvWidth, maxContentWidth: maxContentWidth)
                             layout.setEstimatedHeight(est, at: i)
                         }
                     }
@@ -3115,7 +3127,16 @@ extension CollectionViewMessageListV3 {
             }
         }
 
-        static func estimateItemHeight(_ item: MessageListItem, messages: [ChatMessage], width: CGFloat) -> CGFloat {
+        /// Assistant text wraps inside the reading-width cap (800 pt on iPad), not
+        /// across the whole list; measuring at the list width made cells grow on
+        /// first display in an iPad landscape split.
+        static func assistantTextWidth(listWidth: CGFloat, maxContentWidth: CGFloat) -> CGFloat {
+            let full = listWidth - 32
+            return max(maxContentWidth > 0 ? min(full, maxContentWidth) : full, 100)
+        }
+
+        static func estimateItemHeight(_ item: MessageListItem, messages: [ChatMessage], width: CGFloat,
+                                       maxContentWidth: CGFloat) -> CGFloat {
             let scale = FontSettings.shared.scaledMessage(16)
             let lineHeight = scale * 1.4
             let hPad: CGFloat = 80
@@ -3161,14 +3182,14 @@ extension CollectionViewMessageListV3 {
             case .assistantHeader:
                 return 28
             case .workSummary:
-                return 44
+                return WorkSummaryRowV3.estimatedHeight
             case .assistantBlock(let msgId, let blockId):
                 guard let msg = messages.first(where: { $0.id == msgId }),
                       let block = msg.blocks.first(where: { $0.id == blockId }) else { return 44 }
                 switch block.kind {
                 case .text:
                     if let attrStr = block.cachedAttributedString {
-                        let textWidth = max(width - 32, 100)
+                        let textWidth = assistantTextWidth(listWidth: width, maxContentWidth: maxContentWidth)
                         // [T-ios-longreply-boundingRect-watchdog] CTFramesetter instead
                         // of NSAttributedString.boundingRect. estimateItemHeight runs
                         // in prefetch/scroll-back for every not-yet-measured cell;
@@ -4304,7 +4325,9 @@ extension CollectionViewMessageListV3 {
             // or a concurrent loadSession() swap makes every lookup miss and
             // estimates collapse to the 44pt fallback. [T-ios-blocks-lost-render]
             let messages = snapshotMessages.isEmpty ? vm.messages : snapshotMessages
-            let width = maxContentWidth
+            // The list width (maxContentWidth is 0 on iPhone, which measured every
+            // prefetched reply at the 100 pt floor).
+            let width = collectionView.bounds.width
             for indexPath in indexPaths {
                 let index = indexPath.item
                 // Skip if we already have a measured or precalculated height.
@@ -4317,7 +4340,7 @@ extension CollectionViewMessageListV3 {
                       !layout.hasPrecalcHeight(at: index) else { continue }
                 guard index < previousSnapshotIds.count else { continue }
                 let item = previousSnapshotIds[index]
-                let est = Self.estimateItemHeight(item, messages: messages, width: width)
+                let est = Self.estimateItemHeight(item, messages: messages, width: width, maxContentWidth: maxContentWidth)
                 layout.setEstimatedHeight(est, at: index)
             }
         }

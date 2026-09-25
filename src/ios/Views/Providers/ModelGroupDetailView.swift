@@ -56,7 +56,7 @@ struct ModelGroupDetailView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .navigationTitle(group?.name ?? "Group")
+        .navigationTitle(group?.name ?? String(localized: "Group"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .secondaryAction) {

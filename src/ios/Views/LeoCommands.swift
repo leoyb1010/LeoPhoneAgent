@@ -47,11 +47,22 @@ enum WorkspaceCommand: Equatable {
 
 extension Notification.Name {
     static let workspaceCommand = Notification.Name("leo.workspaceCommand")
-    /// Show / hide the chat inspector column (iPad split layout).
-    static let toggleChatInspector = Notification.Name("leo.toggleChatInspector")
+}
+
+/// The chat in the window you're using, published by ChatDetailContainer.
+/// `AIChatViewModel.activeSessionId` is the last chat opened in ANY window.
+struct ChatWindowTarget {
+    let sessionId: String?
+    let inspectorVisible: Binding<Bool>
+}
+
+extension FocusedValues {
+    @Entry var chatWindow: ChatWindowTarget?
 }
 
 struct LeoCommands: Commands {
+    @FocusedValue(\.chatWindow) private var chatWindow
+
     var body: some Commands {
         CommandGroup(replacing: .newItem) {
             Button {
@@ -90,29 +101,31 @@ struct LeoCommands: Commands {
         }
         CommandMenu("对话") {
             Button {
-                ChatCommandTarget.stopActiveRun()
+                ChatCommandTarget.stopRun(sessionId: chatWindow?.sessionId)
             } label: {
                 Label("停止当前任务", systemImage: "stop.circle")
             }
             .keyboardShortcut(".", modifiers: .command)
             Button {
-                NotificationCenter.default.post(name: .toggleChatInspector, object: nil)
+                withAnimation(LeoMotion.standardEase(reduceMotion: UIAccessibility.isReduceMotionEnabled)) {
+                    chatWindow?.inspectorVisible.wrappedValue.toggle()
+                }
             } label: {
                 Label("显示或隐藏检查器", systemImage: "sidebar.right")
             }
             .keyboardShortcut("i", modifiers: [.command, .option])
+            .disabled(chatWindow == nil)
         }
         SidebarCommands()
     }
 }
 
-/// The chat on screen in the frontmost window. `activeSessionId` is kept by
-/// the chat view that is actually visible, so a stop never hits a chat the
-/// user isn't looking at.
+/// ⌘. stops the chat in the window you're using; a narrow window has no
+/// inspector container, so it falls back to the last chat opened.
 @MainActor
 enum ChatCommandTarget {
-    static func stopActiveRun() {
-        guard let sid = AIChatViewModel.activeSessionId,
+    static func stopRun(sessionId: String?) {
+        guard let sid = sessionId ?? AIChatViewModel.activeSessionId,
               let vm = ViewModelCache.shared.get(for: sid),
               vm.isProcessing else { return }
         vm.cancel()
@@ -141,6 +154,28 @@ enum SessionWindow {
         activity.userInfo?["sessionId"] as? String
     }
 
+    /// The app's own scene delegate keeps activities from SwiftUI's
+    /// `.onContinueUserActivity` (same as URLs, see SceneDelegate), so it hands
+    /// a window's session over here, keyed by that window's scene session.
+    @MainActor private static var requests: [String: String] = [:]
+    static let requestPosted = Notification.Name("leo.sessionWindowRequest")
+
+    /// Called by SceneDelegate for new and existing windows. False when the
+    /// activity isn't a session window.
+    @MainActor
+    static func accept(_ activity: NSUserActivity, in scene: UIScene) -> Bool {
+        guard activity.activityType == activityType, let id = sessionId(from: activity) else { return false }
+        requests[scene.session.persistentIdentifier] = id
+        NotificationCenter.default.post(name: requestPosted, object: scene)
+        return true
+    }
+
+    @MainActor
+    static func takeRequest(for scene: UIScene?) -> String? {
+        guard let key = scene?.session.persistentIdentifier else { return nil }
+        return requests.removeValue(forKey: key)
+    }
+
     @MainActor
     static func open(_ sessionId: String) {
         var request = UISceneSessionActivationRequest(role: .windowApplication)
@@ -164,7 +199,7 @@ enum SessionWindow {
 /// before closing a window whose task is still running. What a window shows
 /// at launch stays with the app's own launch-screen setting.
 struct SceneSessionHost: View {
-    /// Real id of the session on screen; nil on home or an unsent draft.
+    /// The session on screen (a draft's own id until it has a real one); nil on home.
     let sessionId: String?
     let sessionCount: Int
     let onWindow: (UIWindow) -> Void
@@ -176,8 +211,12 @@ struct SceneSessionHost: View {
     @State private var window: UIWindow?
     @ObservedObject private var activity = SessionActivityTracker.shared
 
-    private var isRunning: Bool {
-        sessionId.map { activity.activeSessions.contains($0) } ?? false
+    /// The run this window would stop. A new chat's run is tracked under its
+    /// real id, which a narrow window never gets handed.
+    private var runningId: String? {
+        guard let sid = sessionId else { return nil }
+        let real = activity.draftAliases[sid] ?? sid
+        return activity.activeSessions.contains(real) ? real : nil
     }
 
     var body: some View {
@@ -185,33 +224,41 @@ struct SceneSessionHost: View {
             window = captured
             onWindow(captured)
             updateClosureConfirmation()
+            takeRequest()   // a new window's request arrives before its views exist
         }
         .frame(width: 0, height: 0)
         .onChange(of: sessionCount) { _, _ in openRequested() }
         // Keyed on WHICH session is running, so switching between two running
         // chats re-targets "stop and close" too.
-        .onChange(of: isRunning ? sessionId : nil) { _, _ in updateClosureConfirmation() }
-        .onContinueUserActivity(SessionWindow.activityType) { activity in
-            requestedSessionId = SessionWindow.sessionId(from: activity)
-            openRequested()
+        .onChange(of: runningId) { _, _ in updateClosureConfirmation() }
+        .onReceive(NotificationCenter.default.publisher(for: SessionWindow.requestPosted)) { note in
+            guard let scene = note.object as? UIScene, scene === window?.windowScene else { return }
+            takeRequest()
         }
     }
 
-    /// Sessions load asynchronously; a request waits for the list.
+    private func takeRequest() {
+        guard let id = SessionWindow.takeRequest(for: window?.windowScene) else { return }
+        requestedSessionId = id
+        openRequested()
+    }
+
+    /// Sessions load asynchronously; a request waits for the list (and for the
+    /// session itself, when it isn't in the list yet).
     private func openRequested() {
-        guard let id = requestedSessionId, sessionCount > 0 else { return }
+        guard let id = requestedSessionId, sessionCount > 0, open(id) else { return }
         requestedSessionId = nil
-        _ = open(id)
     }
 
     private func updateClosureConfirmation() {
         guard #available(iOS 27, *), let scene = window?.windowScene else { return }
-        guard isRunning, let sid = sessionId else {
+        guard let sid = runningId else {
             scene.closureConfirmation = nil
             return
         }
+        let onScreen = sessionId
         let stop = UIAlertAction(title: String(localized: "停止任务并关闭"), style: .default) { _ in
-            ViewModelCache.shared.get(for: sid)?.cancel()
+            (ViewModelCache.shared.get(for: sid) ?? onScreen.flatMap { ViewModelCache.shared.get(for: $0) })?.cancel()
         }
         scene.closureConfirmation = UISceneClosureConfirmation(
             title: String(localized: "这个窗口的任务还在运行"),

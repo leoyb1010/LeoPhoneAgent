@@ -24,11 +24,12 @@ struct LeoWatchApp: App {
         // The system relaunches us (possibly in the background) to deliver a
         // direct answer that finished while we were suspended.
         .backgroundTask(.urlSession(WatchStandaloneClient.backgroundSessionId)) {
-            await MainActor.run {
-                _ = WatchConnectivityClient.shared   // installs the answer handler
-                WatchStandaloneClient.shared.reconnectBackgroundSession()
+            await BackgroundAskDelegate.shared.waitForEvents {
+                Task { @MainActor in
+                    _ = WatchConnectivityClient.shared   // installs the answer handler
+                    WatchStandaloneClient.shared.reconnectBackgroundSession()
+                }
             }
-            await BackgroundAskDelegate.shared.waitForEvents()
         }
     }
 }

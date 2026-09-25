@@ -678,7 +678,7 @@ private struct SkillDetailView: View {
                 Text(String(localized: "Skill not found.")).foregroundStyle(.secondary)
             }
         }
-        .navigationTitle(skill?.name ?? "Skill")
+        .navigationTitle(skill?.name ?? String(localized: "Skill"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

@@ -199,7 +199,7 @@ struct SessionModelDisplay {
             }
             return entryId
         case .group(let groupId, _):
-            return store.group(for: groupId)?.name ?? "Group"
+            return store.group(for: groupId)?.name ?? String(localized: "Group")
         }
     }
 

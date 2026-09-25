@@ -61,12 +61,14 @@ final class HarnessLiveActivityBridge {
             // the Mac keeps going and reopening picks it back up.
             let phase: AgentActivityPhase
             switch driver.status {
-            case "idle", "completed": phase = .completed
+            case "idle": phase = driver.lastTurnFailed ? .failed : .completed
+            case "completed": phase = .completed
             case "cancelled": phase = .cancelled
             case "failed": phase = .failed
             default: phase = .suspended
             }
-            SessionActivityTracker.shared.setInactive(sid, finalPhase: phase, source: "HarnessLiveActivityBridge")
+            SessionActivityTracker.shared.setInactive(sid, finalPhase: phase, haptic: false,
+                                                      source: "HarnessLiveActivityBridge")
         }
         entries.removeValue(forKey: ObjectIdentifier(driver))
         refresh()
@@ -78,6 +80,13 @@ final class HarnessLiveActivityBridge {
         let snapshots: [LiveSessionSnapshot] = entries.values.compactMap { entry in
             guard let d = entry.driver, d.isRunning, let sid = d.sessionId else { return nil }
             let waiting = d.pendingApproval
+            let title = "🖥 \(entry.hostName) · \(d.harness.name)"
+            // The keep-alive timer rebuilds the card from the tracker every 10 s: give
+            // it the same title and "waiting for you", or it paints over the approval
+            // (and the next push here would buzz for the same approval again).
+            SessionActivityTracker.shared.updateSessionTitle(sid, title: title)
+            SessionActivityTracker.shared.updateActivityPhase(
+                sid, phase: waiting != nil ? .waitingForPermission : .usingTool)
             let status: String
             let icon: String
             if let waiting {
@@ -92,7 +101,7 @@ final class HarnessLiveActivityBridge {
             }
             return LiveSessionSnapshot(
                 sessionId: sid,
-                title: "🖥 \(entry.hostName) · \(d.harness.name)",
+                title: title,
                 toolIcon: icon,
                 toolStatus: status,
                 loopIteration: 0)

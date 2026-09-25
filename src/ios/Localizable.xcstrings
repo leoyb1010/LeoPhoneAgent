@@ -107791,46 +107791,46 @@
         }
       }
     },
-    "有一个任务想%@——%@。这条命令可能删除数据或改动系统,确认是你要它做的再允许。": {
+    "有一个任务想%@：%@。这条命令可能删除数据或改动系统,确认是你要它做的再允许。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "A task wants to %@ — %@. This command may delete data or change the system; allow it only if you meant it to."
+            "value": "A task wants to %@: %@. This command may delete data or change the system; allow it only if you meant it to."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "有一个任务想%@——%@。这条命令可能删除数据或改动系统,确认是你要它做的再允许。"
+            "value": "有一个任务想%@：%@。这条命令可能删除数据或改动系统,确认是你要它做的再允许。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "有一個任務想%@——%@。這條指令可能刪除資料或改動系統，確認是你要它做的再允許。"
+            "value": "有一個任務想%@：%@。這條指令可能刪除資料或改動系統，確認是你要它做的再允許。"
           }
         }
       }
     },
-    "有一个任务想%@——来自 %@。只在你确实要它这么做时允许。": {
+    "有一个任务想%@：%@。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "A task wants to %@ — from %@. Allow it only if you really want it to."
+            "value": "A task wants to %@: %@."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "有一个任务想%@——来自 %@。只在你确实要它这么做时允许。"
+            "value": "有一个任务想%@：%@。"
           }
         },
         "zh-Hant": {
           "stringUnit": {
             "state": "translated",
-            "value": "有一個任務想%@——來自 %@。只在你確實要它這麼做時允許。"
+            "value": "有一個任務想%@：%@。"
           }
         }
       }

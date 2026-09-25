@@ -178,10 +178,12 @@ enum LeoWindowMetrics {
     /// The screen the app is on (brightness is a per-display setting).
     static var screen: UIScreen? { window?.screen ?? firstScreen }
 
-    /// For nonisolated layout code (TextKit attachments): the key window's
-    /// height on the main thread, the screen's anywhere else.
+    /// For nonisolated layout code (TextKit attachments, image caps): the
+    /// screen's height. Stable on purpose — a cap that followed the key window
+    /// changed as focus moved between windows, and image views already built at
+    /// the old size stopped matching their space in the text.
     nonisolated static var layoutHeight: CGFloat {
-        if Thread.isMainThread { return MainActor.assumeIsolated { bounds.height } }
+        if Thread.isMainThread { return MainActor.assumeIsolated { (screen?.bounds ?? bounds).height } }
         return UIScreen.main.bounds.height   // ponytail: off-main fallback only
     }
 

@@ -2994,7 +2994,13 @@ struct AIChatView: View {
             // Safari / Notes goes into the message, not in as a file attachment
             // (public.url and plain text both conform to public.data, so the file
             // path below used to swallow links and silently drop text).
-            if !types.contains(UTType.fileURL.identifier), types.contains(UTType.url.identifier),
+            // An image dragged out of Safari also carries its web address: attach the image.
+            let carriesMedia = types.contains { id in
+                guard let ut = UTType(id) else { return false }
+                return ut.conforms(to: .image) || ut.conforms(to: .movie) || ut.conforms(to: .pdf)
+            }
+            let isFile = carriesMedia || types.contains(UTType.fileURL.identifier)
+            if !isFile, types.contains(UTType.url.identifier),
                provider.canLoadObject(ofClass: URL.self) {
                 _ = provider.loadObject(ofClass: URL.self) { url, _ in
                     guard let url, ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return }
@@ -3002,7 +3008,9 @@ struct AIChatView: View {
                 }
                 continue
             }
-            if types.allSatisfy({ UTType($0)?.conforms(to: .plainText) ?? false }),
+            // Selections from Notes / Mail / Safari also carry RTF and HTML; the plain
+            // text is what goes into the message.
+            if !isFile, types.contains(where: { UTType($0)?.conforms(to: .plainText) ?? false }),
                provider.canLoadObject(ofClass: String.self) {
                 _ = provider.loadObject(ofClass: String.self) { text, _ in
                     guard let text, !text.isEmpty else { return }

@@ -42,40 +42,27 @@ final class SensitiveToolGateTests: XCTestCase {
         XCTAssertNotEqual(a, f1)
     }
 
-    /// 截断复用:授权键取完整命令的 SHA-256,不再是前 160 字符。
-    /// 否则模型拿到一条 ≥160 字符良性命令的「本会话允许」后,
-    /// 追加 `; rm -rf ~` 就能免审批执行。
-    func testRemoteShellScopeIsNotTruncatable() {
-        let benign = String(repeating: "echo hello; ", count: 40)   // 远超 160 字符
-        XCTAssertGreaterThan(benign.count, 160)
-        let a = SensitiveToolGate.Category.grantScope(
-            tool: "remote_shell", args: ["host": "studio", "command": benign])
-        let b = SensitiveToolGate.Category.grantScope(
-            tool: "remote_shell", args: ["host": "studio", "command": benign + "; rm -rf ~"])
-        XCTAssertNotEqual(a, b)
-    }
+    /// 远程也按会话授权:「本次会话允许」之后,同一台主机的下一条命令不再问;
+    /// 换一台主机、或本机 shell,还是各问各的。
+    func testRemoteSessionGrantCoversTheHost() {
+        let ls = SensitiveToolGate.Category.grantScope(
+            tool: "remote_shell", args: ["host": "studio", "command": "ls"])
+        let build = SensitiveToolGate.Category.grantScope(
+            tool: "remote_shell", args: ["host": "studio", "command": "make release"])
+        let otherHost = SensitiveToolGate.Category.grantScope(
+            tool: "remote_shell", args: ["host": "mini", "command": "ls"])
+        let local = SensitiveToolGate.Category.grantScope(
+            tool: "shell_execute", args: ["command": "ls"])
+        XCTAssertEqual(ls, build)
+        XCTAssertNotEqual(ls, otherHost)
+        XCTAssertNotEqual(ls, local)
 
-    /// remote_agent 实际执行 `zsh -lc 'cd <workdir> && ...'`,
-    /// 换 workdir 就是另一件事,不能复用同一条授权。
-    func testRemoteAgentScopeIncludesWorkdir() {
-        let base: [String: Any] = ["host": "studio", "prompt": "run the tests"]
-        let noDir = SensitiveToolGate.Category.grantScope(tool: "remote_agent", args: base)
-        var withDir = base
-        withDir["workdir"] = "~/secret-repo"
-        let dirA = SensitiveToolGate.Category.grantScope(tool: "remote_agent", args: withDir)
-        withDir["workdir"] = "~/other-repo"
-        let dirB = SensitiveToolGate.Category.grantScope(tool: "remote_agent", args: withDir)
-        XCTAssertNotEqual(noDir, dirA)
-        XCTAssertNotEqual(dirA, dirB)
-    }
-
-    /// 拼接歧义不能撞成同一个哈希。
-    func testRemoteAgentScopeSeparatesWorkdirFromPrompt() {
-        let a = SensitiveToolGate.Category.grantScope(
-            tool: "remote_agent", args: ["host": "h", "workdir": "ab", "prompt": "c"])
-        let b = SensitiveToolGate.Category.grantScope(
-            tool: "remote_agent", args: ["host": "h", "workdir": "a", "prompt": "bc"])
-        XCTAssertNotEqual(a, b)
+        let agentA = SensitiveToolGate.Category.grantScope(
+            tool: "remote_agent", args: ["host": "studio", "workdir": "~/a", "prompt": "run the tests"])
+        let agentB = SensitiveToolGate.Category.grantScope(
+            tool: "remote_agent", args: ["host": "studio", "workdir": "~/b", "prompt": "fix the build"])
+        XCTAssertEqual(agentA, agentB)
+        XCTAssertNotEqual(agentA, ls)
     }
 
     /// 远程主机名大小写/空白不同不该产生两条授权。

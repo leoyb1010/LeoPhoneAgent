@@ -167,7 +167,7 @@ final class CapabilitySelfTest: ObservableObject {
             }
             // 未登录的 OAuth 供应商也能从缓存列出模型,不能据此算"通过"。
             if instance.credentialType == .oauth, !instance.isOAuthAuthenticated {
-                return (.unauthorized, "还没登录(设置 → 模型供应商 → \(instance.label))")
+                return (.unauthorized, "还没登录(设置 → AI 服务商 → \(instance.label))")
             }
             do {
                 let models = try await ProviderConfigStore.fetchModelsForInstance(instance, forceRefresh: true)

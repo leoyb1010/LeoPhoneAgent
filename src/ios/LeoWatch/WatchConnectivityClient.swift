@@ -190,6 +190,7 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
         do {
             try WatchStandaloneClient.shared.askInBackground(requestId: context.requestId, text: context.text,
                                                              history: context.history)
+            directContext = nil   // handed off once; the next trip to the background must not upload it again
             if let reason { lastActionMessage = reason }
         } catch {
             finish(requestId: context.requestId, text: error.localizedDescription, sessionId: nil, failed: true)
@@ -264,6 +265,7 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
         directContext = nil
         directTask?.cancel()
         directTask = nil
+        WatchStandaloneClient.shared.cancelBackground(requestId: requestId)
         if let session, session.isReachable {
             session.sendMessage(["kind": "cancelAsk", "requestId": requestId], replyHandler: nil, errorHandler: { _ in })
         }
@@ -321,6 +323,7 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
         pendingQuestion = nil
         directContext = nil
         directTask = nil
+        lastActionMessage = nil   // "moved to the background" is over once the answer is here
     }
 
     // MARK: - History

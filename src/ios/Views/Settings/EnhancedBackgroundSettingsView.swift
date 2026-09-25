@@ -75,7 +75,10 @@ struct EnhancedBackgroundSettingsView: View {
                 // `liveActivityPrivacyMode` so existing installs keep their setting.
                 Toggle("Task Status Privacy", isOn: $keepAlive.liveActivityPrivacyMode)
             } footer: {
-                Text("Hide session content on the Lock Screen, in the Dynamic Island and in notifications. Only the number of completed tasks and the elapsed time are shown — no session titles, tool status or reply content.")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Hide session content on the Lock Screen, in the Dynamic Island and in notifications. Only the number of completed tasks and the elapsed time are shown — no session titles, tool status or reply content.")
+                    Text("审批通知仍会写出要执行的命令，方便在锁屏上直接批准。")
+                }
             }
 
             Section {

@@ -590,11 +590,11 @@ struct MinisTextPreviewView: View {
         let url = fileURL
         let content: String = await Task.detached(priority: .userInitiated) {
             guard let data = try? Data(contentsOf: url) else {
-                return "Unable to read file."
+                return String(localized: "无法读取文件。")
             }
             return String(data: data, encoding: .utf8)
                 ?? String(data: data, encoding: .ascii)
-                ?? "Unable to decode file content."
+                ?? String(localized: "无法解析文件内容。")
         }.value
         await MainActor.run {
             text = content
@@ -719,7 +719,7 @@ struct MinisMarkdownPreviewView: View {
     private func loadFileContent() async {
         let url = fileURL
         let content: String = await Task.detached(priority: .userInitiated) {
-            (try? String(contentsOf: url, encoding: .utf8)) ?? "Unable to read file."
+            (try? String(contentsOf: url, encoding: .utf8)) ?? String(localized: "无法读取文件。")
         }.value
         await MainActor.run {
             markdownContent = content

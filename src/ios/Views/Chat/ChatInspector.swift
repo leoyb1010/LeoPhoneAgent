@@ -17,7 +17,8 @@ struct ChatDetailContainer<Content: View>: View {
     let sessionId: String?
     @ViewBuilder let content: Content
 
-    @AppStorage("leo.ipad.inspectorVisible") private var inspectorVisible = false
+    /// Per window: two windows side by side each keep their own.
+    @SceneStorage("leo.ipad.inspectorVisible") private var inspectorVisible = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var contentFrame: CGRect = .zero
     @State private var inspectorFrame: CGRect = .zero
@@ -53,11 +54,8 @@ struct ChatDetailContainer<Content: View>: View {
                     .accessibilityLabel(inspectorVisible ? "隐藏检查器" : "显示检查器")
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: .toggleChatInspector)) { _ in
-                // Only the chat actually on screen answers the menu command.
-                guard AIChatViewModel.activeSessionId == sessionId || sessionId == nil else { return }
-                withAnimation(LeoMotion.standardEase(reduceMotion: reduceMotion)) { inspectorVisible.toggle() }
-            }
+            // ⌘. and ⌥⌘I act on the chat in the window you're using.
+            .focusedSceneValue(\.chatWindow, ChatWindowTarget(sessionId: sessionId, inspectorVisible: $inspectorVisible))
     }
 }
 
@@ -105,7 +103,9 @@ struct ChatInspectorPanel: View {
                 case .session:
                     if let vm { SessionInspectorView(vm: vm, embedded: true) } else { draftPlaceholder }
                 case .artifacts:
-                    ArtifactTrayView(sessionId: sessionId, embedded: true)
+                    // A nil id would list every session's artifacts; `.id` rescopes
+                    // the tray when the draft becomes a real session.
+                    if let sessionId { ArtifactTrayView(sessionId: sessionId, embedded: true).id(sessionId) } else { draftPlaceholder }
                 case .files:
                     NavigationStack {
                         let base = RootfsManager.shared.dataPath

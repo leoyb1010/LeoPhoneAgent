@@ -7,16 +7,20 @@
 //  for iPad + hardware keyboard but perfectly usable by touch.
 //
 
+import GameController
 import SwiftUI
 
 struct CommandPaletteView: View {
-    @Environment(\.dismiss) private var dismiss
     @State private var query = ""
+    @State private var searchActive = false
 
     /// Actions the host wires: open session / run quick task / open surface.
     let openSession: (String) -> Void
     let runQuickTask: (String) -> Void
     let openSurface: (String) -> Void   // "automations" | "remoteHosts" | "timeline" | "artifacts" | "scheduled"
+    /// Closes the sheet. Not `dismiss`: with the search field active that only
+    /// ends the search, so a picked row ran but the palette stayed open.
+    let close: () -> Void
 
     private struct Item: Identifiable {
         let id: String
@@ -72,7 +76,7 @@ struct CommandPaletteView: View {
             List(items) { item in
                 Button {
                     item.action()
-                    dismiss()
+                    close()
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: item.symbol)
@@ -87,13 +91,28 @@ struct CommandPaletteView: View {
                 }
             }
             .listStyle(.plain)
-            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always),
+            .searchable(text: $query, isPresented: $searchActive,
+                        placement: .navigationBarDrawer(displayMode: .always),
                         prompt: Text("Search sessions, tasks, pages…"))
+            // ⌘K on a hardware keyboard: type straight away, Return takes the top match.
+            // Not on touch — an active, empty search dims the list and the first tap
+            // only cancels it. Activating mid-slide-in is unreliable, hence the wait.
+            .task {
+                guard GCKeyboard.coalesced != nil else { return }
+                try? await Task.sleep(for: .milliseconds(450))
+                searchActive = true
+            }
+            .onSubmit(of: .search) {
+                guard let first = items.first else { return }
+                first.action()
+                close()
+            }
             .navigationTitle(Text("Command Palette"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "Cancel")) { dismiss() }
+                    Button(String(localized: "Cancel")) { close() }
+                        .keyboardShortcut(.cancelAction)   // Esc; iPadOS 26 doesn't bind it for sheets
                 }
             }
         }

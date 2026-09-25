@@ -6468,7 +6468,10 @@ struct SelectableMarkdownView: UIViewRepresentable {
         if _curW > 1 {
             context.coordinator.lastRenderedWidth = _curW
         }
-        guard markdown != context.coordinator.lastMarkdown || fontChanged else {
+        // [T-stream-table-tail] A reply can finish without new text (the last
+        // flush already carried it); the plain tail still has to become a table row.
+        let tailNeedsFinalRender = context.coordinator.lastHadPlainSuffix && !isStreaming
+        guard markdown != context.coordinator.lastMarkdown || fontChanged || tailNeedsFinalRender else {
             let shouldRecover = textView.window != nil
                 && textView.needsAttachmentRecovery
                 && !textView.hasScheduledRecoveryForCurrentContent
@@ -6597,6 +6600,11 @@ struct SelectableMarkdownView: UIViewRepresentable {
         let _isFinalised = !isStreaming
         let _splitForUpdate = _isFinalised ? (prefix: markdown, plainSuffix: "") : splitStreamingTableTail(markdown)
         let _hasPlainSuffix = !_splitForUpdate.plainSuffix.isEmpty
+        if context.coordinator.lastHadPlainSuffix != _hasPlainSuffix {
+            // Same text length, different layout: the height cache is stale.
+            context.coordinator.cachedSizes.removeAll(keepingCapacity: true)
+            context.coordinator.lastHadPlainSuffix = _hasPlainSuffix
+        }
         let prepared = prepareMarkdownForRender(_splitForUpdate.prefix)
         // If we split off a suffix, the prebuilt cache (which was rendered
         // from the full markdown) no longer matches what we'll render —
@@ -6624,6 +6632,7 @@ struct SelectableMarkdownView: UIViewRepresentable {
         var hasher = Hasher()
         hasher.combine(cachedContent != nil ? cachedContent!.blocks.hashValue : markdown.hashValue)
         hasher.combine(FontSettings.shared.scaledMessage(16.5))
+        hasher.combine(_hasPlainSuffix)
         let contentHash: Int = hasher.finalize()
         if contentHash == context.coordinator.lastRenderedContentHash {
             // [DIAG-RENDER-3] Content hash matches — skip re-render.
@@ -6748,7 +6757,7 @@ struct SelectableMarkdownView: UIViewRepresentable {
         // [T-fade-scope] Only text arriving live fades. A finished message
         // growing (catch-up after a reconnect, a replayed transcript) just
         // appears — re-fading words the reader has already seen is noise.
-        if isStreaming, TextFadeAnimator.isEnabled,
+        if isStreaming || context.coordinator.lastRenderWasStreaming, TextFadeAnimator.isEnabled,
            let oldStorage = textView.textStorage as? NSTextStorage,
            oldStorage.length > 0,
            attributed.length > oldStorage.length {
@@ -6801,6 +6810,7 @@ struct SelectableMarkdownView: UIViewRepresentable {
             context.coordinator.fadeTextView = textView
             context.coordinator.fadeAnimator.scheduleAnimation(for: revealRange, in: liveStorage)
         }
+        context.coordinator.lastRenderWasStreaming = isStreaming
         let assignElapsed = (CFAbsoluteTimeGetCurrent() - assignStart) * 1000
         textView.rawMarkdown = markdown
         textView.resetAttachmentRecoveryState()
@@ -7042,7 +7052,7 @@ struct SelectableMarkdownView: UIViewRepresentable {
 
     @available(iOS 16.0, *)
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: SelectableMarkdownTextView, context: Context) -> CGSize? {
-        let width = proposal.width ?? LeoWindowMetrics.bounds.width
+        let width = proposal.width ?? uiView.window?.bounds.width ?? LeoWindowMetrics.bounds.width
         // Key the size cache on the SwiftUI binding length, not
         // uiView.textStorage.length. Within a single render pass SwiftUI calls
         // sizeThatFits BEFORE updateUIView, so textStorage still reflects the
@@ -7605,6 +7615,11 @@ struct SelectableMarkdownView: UIViewRepresentable {
     final class Coordinator: NSObject, UITextViewDelegate {
         var lastMarkdown: String = ""
         var lastRenderedContentHash: Int? = nil
+        /// The last render drew a streaming table tail as plain text.
+        var lastHadPlainSuffix = false
+        /// The final flush arrives with `isStreaming` already false; its words
+        /// still fade like the rest of the live reply.
+        var lastRenderWasStreaming = false
         /// [FGReload] Markdown whose render was skipped because the app was
         /// not `.active` (see the `!= .active` guard in `updateUIView`). The
         /// skip exists to avoid the expensive `setAttributedText` +

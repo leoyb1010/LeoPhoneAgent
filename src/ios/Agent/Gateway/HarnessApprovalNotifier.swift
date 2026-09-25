@@ -77,6 +77,14 @@ enum HarnessApprovalNotifier {
         center.removePendingNotificationRequests(withIdentifiers: [id])
     }
 
+    /// Tapping an action removes the notification; show it again when the answer
+    /// didn't reach the Mac, so the owner can retry or open the app.
+    private static func redeliver(_ response: UNNotificationResponse) {
+        let old = response.notification.request
+        UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: old.identifier, content: old.content, trigger: nil))
+    }
+
     private static func notificationId(sessionId: String, approvalId: String) -> String {
         "harness-approval-\(sessionId)-\(approvalId)"
     }
@@ -136,9 +144,27 @@ enum HarnessApprovalNotifier {
                         return waiting.count == 1 ? waiting[0].id : nil
                     }()
             }
-            guard let sessionId else { return }
-            try? await client.approveHarness(sessionId: sessionId, choice: choice,
-                                             approvalId: approvalId)
+            guard let sessionId else { return redeliver(response) }
+            // Claude Code / Codex / Grok offer once · always · deny; only Leo's own
+            // agent has "session". The Mac answers 400 to a choice it doesn't list.
+            let attempts = choice == "session" ? ["session", "always", "once"] : [choice]
+            var delivered = false
+            for attempt in attempts {
+                do {
+                    try await client.approveHarness(sessionId: sessionId, choice: attempt, approvalId: approvalId)
+                    delivered = true
+                    break
+                } catch GatewayError.http(status: 400, _) {
+                    continue
+                } catch GatewayError.http(status: 409, _) {
+                    delivered = true   // already answered elsewhere; nothing left to do
+                    break
+                } catch {
+                    break
+                }
+            }
+            // The CLI is still waiting: put the card back instead of losing it.
+            guard delivered else { return redeliver(response) }
             if stopAfter { try? await client.stopHarness(sessionId: sessionId) }
             HarnessApprovalNotifier.clear(sessionId: sessionId, approvalId: approvalId)
         }

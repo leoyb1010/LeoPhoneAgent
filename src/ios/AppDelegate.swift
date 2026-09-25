@@ -245,13 +245,15 @@ final class SceneDelegate: NSObject, UIWindowSceneDelegate {
             Self.handleURLContexts(connectionOptions.urlContexts, phase: "willConnectTo")
         }
         // [T-spotlight-sessions] Cold-launch tap on a Spotlight result.
-        for activity in connectionOptions.userActivities {
+        // [T-ipad-multiwindow] Or a session opened in a window of its own.
+        for activity in connectionOptions.userActivities where !SessionWindow.accept(activity, in: scene) {
             Self.handleUserActivity(activity, phase: "willConnectTo")
         }
     }
 
-    /// Warm tap on a Spotlight result.
+    /// Warm tap on a Spotlight result, or a session dropped on this window.
     func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
+        guard !SessionWindow.accept(userActivity, in: scene) else { return }
         Self.handleUserActivity(userActivity, phase: "continue")
     }
 

@@ -42,16 +42,38 @@ enum MessageListItem: Hashable {
 }
 
 /// [T-worked-fold] Which blocks of a finished turn fold behind the summary
-/// row: everything before the final answer, once that includes at least two
-/// tool calls. A turn with no written answer, or only one tool call, stays flat.
+/// row: the tool calls and thinking before the final answer, once there are at
+/// least two tool calls. A turn with no written answer stays flat.
 enum WorkFold {
     static func foldedBlockIds(_ blocks: [AssistantBlock]) -> Set<UUID>? {
         guard let answer = blocks.lastIndex(where: {
             $0.kind == .text && !$0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }) else { return nil }
-        let work = blocks[..<answer]
-        guard work.filter({ $0.toolStatus != nil }).count >= 2 else { return nil }
-        return Set(work.map(\.id))
+        // Text and images stay in the flow: an earlier text block can be the real
+        // answer (answer → memory_write ×2 → "已记住。"), and a generated image is output.
+        let hidden = blocks[..<answer].filter { $0.kind != .text && $0.imageFilePath == nil }
+        guard hidden.filter({ $0.toolStatus != nil }).count >= 2 else { return nil }
+        return Set(hidden.map(\.id))
+    }
+
+    /// Wall-clock span of the tool calls: calls from one response run in parallel,
+    /// so their durations overlap. Start times are live-only; after a reload the
+    /// durations are added up. Thinking time isn't counted (it isn't saved either).
+    static func elapsed(_ blocks: [AssistantBlock]) -> TimeInterval {
+        let tools = blocks.filter { $0.toolStatus != nil }
+        let spans = tools.compactMap { b in
+            b.toolStartTime.flatMap { start in b.toolDuration.map { (start, start.addingTimeInterval($0)) } }
+        }
+        if spans.count == tools.count, let first = spans.map(\.0).min(), let last = spans.map(\.1).max() {
+            return last.timeIntervalSince(first)
+        }
+        return tools.compactMap(\.toolDuration).reduce(0, +)
+    }
+
+    /// Remembers an unfolded turn across reloads: `ChatMessage.id` is new on every
+    /// `loadSession()`, the first tool call's id is saved with the message.
+    static func expansionKey(_ message: ChatMessage) -> String {
+        message.blocks.lazy.compactMap(\.toolUseId).first ?? message.id.uuidString
     }
 }
 

@@ -331,10 +331,20 @@ final class OffloadPermissionManager: ObservableObject {
         // 通知界面:权限页、能力中心、详情页三处都显示这个值,改了一处其他地方要跟着变。
         objectWillChange.send()
         defaults.set(level.rawValue, forKey: defaultsKey(for: command, action: action))
-        // A settings change invalidates prior grants immediately, including a
+        if action == nil {
+            // Settings sets the whole capability: that also takes back any
+            // 「始终允许」 given to one of its actions, or the old value wins.
+            let actionPrefix = defaultsKey(for: command) + ".action."
+            for key in defaults.dictionaryRepresentation().keys where key.hasPrefix(actionPrefix) {
+                defaults.removeObject(forKey: key)
+            }
+        }
+        // A stricter setting invalidates prior grants immediately, including a
         // decision already visible in the sheet. The continuation rechecks too.
-        for sid in Array(sessionGrants.keys) {
-            sessionGrants[sid] = sessionGrants[sid]?.filter { !$0.hasPrefix(command + ".") }
+        if level != .bypass {
+            for sid in Array(sessionGrants.keys) {
+                sessionGrants[sid] = sessionGrants[sid]?.filter { !$0.hasPrefix(command + ".") }
+            }
         }
         queue.cancel(where: { pending in
             let invocation = pending.invocation
@@ -448,7 +458,7 @@ final class OffloadPermissionManager: ObservableObject {
     }
 
     /// [T-approval-vocab] 「始终允许」:放行这一次,并把这个能力的这个动作设成
-    /// 不再询问。设置 → 权限 里随时能改回「询问」。
+    /// 不再询问。设置 → 权限 里改这个能力的档位,就一并收回。
     func respondAlwaysAllow(_ request: PermissionRequest) {
         respond(to: request.id, allowed: true)
         guard !request.command.isEmpty else { return }

@@ -335,7 +335,9 @@ enum ShortcutNotification {
 
         let content = UNMutableNotificationContent()
         content.title = title
-        content.body = body
+        // Task Status Privacy (on by default) promises no prompt or reply text here.
+        let privacy = UserDefaults.standard.object(forKey: "liveActivityPrivacyMode") as? Bool ?? true
+        content.body = privacy ? String(localized: "打开 App 查看") : body
         content.sound = .default
         content.categoryIdentifier = categoryId
         content.userInfo = ["sessionId": sessionId]
@@ -536,20 +538,35 @@ enum NotificationQuickReply {
         Task { @MainActor in
             defer { completion() }
             BackgroundKeepAliveManager.shared.setup()
-            let eager = BackgroundKeepAliveManager.shared.armEagerlyForShortcut(
+            _ = BackgroundKeepAliveManager.shared.armEagerlyForShortcut(
                 sessionId: sessionId, caller: "NotificationQuickReply")
             let (vm, isNew) = ViewModelCache.shared.getOrCreate(for: sessionId)
-            if isNew { await vm.loadSession() }
+            if isNew {
+                // loadSession() marks this session as the one on screen; it isn't.
+                let onScreen = AIChatViewModel.activeSessionId
+                await vm.loadSession()
+                AIChatViewModel.activeSessionId = onScreen
+            }
+            // Send just the reply; an unsent draft in that chat stays where it was.
+            let draft = (text: vm.inputText, attachments: vm.attachments)
             vm.inputText = text
+            vm.attachments = []
+            var sent = true
             if vm.isProcessing {
                 vm.enqueuePrompt()
-                return
+            } else {
+                // Not a Shortcut run: no pending record, which would come back as a
+                // false "automation may not have completed" warning on the next open.
+                sent = (try? SendPromptIntent.dispatchRun(vm: vm, sessionId: vm.sessionId ?? sessionId,
+                                                          pendingId: UUID().uuidString) { vm.send() }) != nil
             }
-            let pendingId = ShortcutRunTracker.markPending(
-                intent: "NotificationQuickReply", sessionId: sessionId,
-                eagerKeepAliveArmed: eager.armed, eagerKeepAliveSkippedReason: eager.skipReason)
-            _ = try? SendPromptIntent.dispatchRun(vm: vm, sessionId: vm.sessionId ?? sessionId,
-                                                  pendingId: pendingId) { vm.send() }
+            if sent {
+                vm.inputText = draft.text
+            } else {
+                // A reply that didn't go out waits in the composer, after the draft.
+                vm.inputText = draft.text.isEmpty ? text : draft.text + "\n" + text
+            }
+            vm.attachments = draft.attachments
         }
         return true
     }

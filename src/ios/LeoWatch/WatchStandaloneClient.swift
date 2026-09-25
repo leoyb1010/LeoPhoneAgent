@@ -221,6 +221,18 @@ final class WatchStandaloneClient: ObservableObject {
         task.resume()
     }
 
+    /// Stop from the wrist: drop the record (a late answer is then ignored) and
+    /// the transfer itself.
+    func cancelBackground(requestId: String) {
+        var pending = Self.loadPending()
+        guard pending.removeValue(forKey: requestId) != nil else { return }
+        Self.savePending(pending)
+        try? FileManager.default.removeItem(at: Self.bodyFile(requestId))
+        backgroundSession.getAllTasks { tasks in
+            tasks.first { $0.taskDescription == requestId }?.cancel()
+        }
+    }
+
     /// Recreating the session with the same identifier is what lets the
     /// system deliver events for transfers that finished while we were away.
     func reconnectBackgroundSession() {
@@ -357,11 +369,15 @@ final class BackgroundAskDelegate: NSObject, URLSessionDataDelegate, @unchecked 
     /// Holds the system's background-task assertion until the session has
     /// delivered everything it woke us for (bounded, so a lost callback can't
     /// keep the task open until watchOS kills us).
-    func waitForEvents(timeout seconds: Double = 25) async {
+    /// `afterArming` reconnects the session: it can deliver everything at once,
+    /// and a "finished" callback that finds nothing armed is lost (then this
+    /// waits out the whole timeout).
+    func waitForEvents(timeout seconds: Double = 25, afterArming: @escaping @Sendable () -> Void) async {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             let once = OnceFlag()
-            let finish = { if once.claim() { continuation.resume() } }
+            let finish: @Sendable () -> Void = { if once.claim() { continuation.resume() } }
             lock.withLock { eventsFinished = finish }
+            afterArming()
             DispatchQueue.global().asyncAfter(deadline: .now() + seconds, execute: finish)
         }
     }

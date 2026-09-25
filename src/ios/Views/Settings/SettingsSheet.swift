@@ -52,7 +52,8 @@ struct SettingsSheet: View {
     @State private var measuredWide: Bool?
     @Environment(\.horizontalSizeClass) private var hSizeClass
     /// Opens on a real page (the most used one), never an empty detail column.
-    @AppStorage("settings.split.selection") private var splitSelection = "模型供应商"
+    @AppStorage("settings.split.selection") private var splitSelection = Self.defaultSplitSelection
+    private static let defaultSplitSelection = "AI 服务商"
 
     var body: some View {
         Group {
@@ -190,14 +191,18 @@ struct SettingsSheet: View {
     /// Deep link / legacy flags / language-change reopen, on first appear —
     /// shared by the single-column and the split layout.
     private func applyLaunchNavigation() {
+        // A saved entry that has since been renamed would open on an empty column.
+        if !SettingsHomeView.groups.flatMap(\.entries).contains(where: { $0.id == splitSelection }) {
+            splitSelection = Self.defaultSplitSelection
+        }
         applyPendingDeepLink()
         // Legacy flags — kept so older call sites keep working.
         if deepLink.showEnvironmentVariables {
-            navPath.append(SettingsDestination.environments)
+            show(.environments)
             deepLink.showEnvironmentVariables = false
         }
         if deepLink.showPermissions {
-            navPath.append(SettingsDestination.permissions)
+            show(.permissions)
             deepLink.showPermissions = false
         }
         // Restore the user's location after a language-change rebuild.
@@ -211,7 +216,7 @@ struct SettingsSheet: View {
             UserDefaults.standard.removeObject(forKey: "pendingSettingsReopen")
             switch dest {
             case "appearance":
-                navPath.append(SettingsDestination.appearance)
+                show(.appearance)
             default:
                 break
             }
@@ -228,59 +233,57 @@ struct SettingsSheet: View {
     /// appear, so we only have to navigate here.
     private func applyPendingDeepLink() {
         guard let target = deepLink.pendingSettingsTarget else { return }
-        // Reset path so deep links are predictable: a deep link always
-        // lands on the requested destination as the only stack entry,
-        // not on top of whatever the user was browsing earlier.
-        navPath = NavigationPath()
+        // A deep link always lands on the requested destination as the only
+        // stack entry, not on top of whatever the user was browsing earlier.
         switch target {
-        case .home:
-            break // already at Settings root
-        case .providers:
-            navPath.append(SettingsDestination.providers)
-        case .providerDetail(let id):
-            navPath.append(SettingsDestination.providers)
-            navPath.append(SettingsDestination.providerDetail(instanceId: id))
-        case .modelGroups:
-            navPath.append(SettingsDestination.modelGroups)
-        case .modelGroupDetail(let id):
-            navPath.append(SettingsDestination.modelGroups)
-            navPath.append(SettingsDestination.modelGroupDetail(groupId: id))
-        case .usage:
-            navPath.append(SettingsDestination.usage)
-        case .skills:
-            navPath.append(SettingsDestination.skills)
-        case .memory:
-            navPath.append(SettingsDestination.memory)
-        case .storage:
-            navPath.append(SettingsDestination.storage)
-        case .mountedFolders:
-            navPath.append(SettingsDestination.mountedFolders)
-        case .sharedFolders:
-            navPath.append(SettingsDestination.sharedFolders)
-        case .logs:
-            navPath.append(SettingsDestination.logs)
-        case .appearance:
-            navPath.append(SettingsDestination.appearance)
-        case .background:
-            navPath.append(SettingsDestination.background)
-        case .about:
-            navPath.append(SettingsDestination.about)
-        case .permissions:
-            navPath.append(SettingsDestination.permissions)
-        case .environments:
-            navPath.append(SettingsDestination.environments)
-        case .mcpIntegrations:
-            navPath.append(SettingsDestination.mcpIntegrations)
-        case .mcpServerDetail(let id):
-            navPath.append(SettingsDestination.mcpServerDetail(serverId: id))
+        case .home: show()
+        case .providers: show(.providers)
+        case .providerDetail(let id): show(.providers, .providerDetail(instanceId: id))
+        case .modelGroups: show(.modelGroups)
+        case .modelGroupDetail(let id): show(.modelGroups, .modelGroupDetail(groupId: id))
+        case .usage: show(.usage)
+        case .skills: show(.skills)
+        case .memory: show(.memory)
+        case .storage: show(.storage)
+        case .mountedFolders: show(.mountedFolders)
+        case .sharedFolders: show(.sharedFolders)
+        case .logs: show(.logs)
+        case .appearance: show(.appearance)
+        case .background: show(.background)
+        case .about: show(.about)
+        case .permissions: show(.permissions)
+        case .environments: show(.environments)
+        case .mcpIntegrations: show(.mcpIntegrations)
+        case .mcpServerDetail(let id): show(.mcpServerDetail(serverId: id))
         case .selfTest:
             CapabilitySelfTest.shared.autoRunRequested = true
-            navPath.append(SettingsDestination.selfTest)
-        case .macConsole:
-            navPath.append(SettingsDestination.macConsole)
+            show(.selfTest)
+        case .macConsole: show(.macConsole)
         }
         deepLink.pendingSettingsTarget = nil
     }
+
+    /// Two columns: a link's first page is a sidebar entry, so select that entry
+    /// and push only what lies beyond it (pushing everything stacked the page on
+    /// top of whichever entry happened to be selected).
+    private func show(_ path: SettingsDestination...) {
+        var rest = path[...]
+        if measuredWide ?? (hSizeClass == .regular), let first = rest.first,
+           let entry = Self.sidebarEntry[first] {
+            splitSelection = entry
+            rest = rest.dropFirst()
+        }
+        navPath = NavigationPath(rest)
+    }
+
+    /// Pages that are also sidebar entries (titles as in SettingsHomeView). Logs
+    /// stay a push: the link can ask for a tab the sidebar page doesn't open on.
+    private static let sidebarEntry: [SettingsDestination: String] = [
+        .providers: "AI 服务商", .modelGroups: "模型分组", .usage: "Token 用量", .skills: "技能",
+        .memory: "记忆", .storage: "存储", .mountedFolders: "挂载外部文件夹", .sharedFolders: "共享文件夹",
+        .appearance: "外观", .background: "后台与通知", .about: "关于", .permissions: "权限",
+        .environments: "环境变量", .mcpIntegrations: "MCP 集成", .selfTest: "能力自检", .macConsole: "Mac 控制台",
+    ]
 
     /// Build the GitHub Issue URL with a bilingual bug-report template
     /// pre-filled with platform / OS / app / device info. SwiftUI `Link`

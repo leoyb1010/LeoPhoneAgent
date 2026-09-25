@@ -39,14 +39,10 @@
 //    · hostHint  —— 弹窗上给人看的,尽量具体。
 //    · grantScope —— 参与 grantKey 的,按"这次授权到底该覆盖多大范围"取。
 //  本机 shell / 文件写是会话级授权(一轮任务几十条命令,按命令逐条问等于
-//  不可用);remote_* 保持逐条授权,并且用**完整**命令/参数的 SHA-256,
-//  不再截断——截断意味着模型只要先拿到一条 ≥160 字符良性命令的"本会话
-//  允许",再往后追加 `; rm -rf ~` 就能免审批执行。remote_agent 还要把
-//  workdir 算进去:实际执行的是 `zsh -lc 'cd <workdir> && ...'`,换个目录
-//  就是另一件事。
+//  不可用)。remote_* 从 1.44 起也按主机做会话级授权:以前按完整命令的
+//  SHA-256 逐条授权,点了「本次会话允许」下一条命令照样再问。
 //
 
-import CryptoKit
 import Foundation
 import SwiftUI
 import UIKit
@@ -153,18 +149,13 @@ final class SensitiveToolGate: ObservableObject {
                 return "local-file"
             case "shell_execute":
                 return "local-shell"
+            // 「本次会话允许」对这台主机整体生效,和本机 shell 一样。以前按「主机 +
+            // 完整命令哈希」逐条授权,点了本次会话允许,下一条命令照样再问(用户自用,
+            // 要的是方便;要一律不问就用全自动)。
             case "remote_shell":
-                let host = normalizedHost(args["host"])
-                let command = (args["command"] as? String) ?? ""
-                return "\(host)|sha256:\(Self.digest(command))"
+                return "remote-shell|\(normalizedHost(args["host"]))"
             case "remote_agent":
-                let host = normalizedHost(args["host"])
-                let workdir = (args["workdir"] as? String) ?? ""
-                let prompt = (args["prompt"] as? String) ?? ""
-                // workdir 与 prompt 之间用 \u{0} 分隔:普通文本不会含 NUL,
-                // 拼接歧义(workdir="a", prompt="b" 与 workdir="a\nb", prompt="")
-                // 就不会撞成同一个哈希。
-                return "\(host)|sha256:\(Self.digest(workdir + "\u{0}" + prompt))"
+                return "remote-agent|\(normalizedHost(args["host"]))"
             default:
                 return "本机"
             }
@@ -173,12 +164,6 @@ final class SensitiveToolGate: ObservableObject {
         private static func normalizedHost(_ raw: Any?) -> String {
             ((raw as? String)?.trimmingCharacters(in: .whitespacesAndNewlines))
                 .flatMap { $0.isEmpty ? nil : $0.lowercased() } ?? "未指定主机"
-        }
-
-        static func digest(_ text: String) -> String {
-            SHA256.hash(data: Data(text.utf8))
-                .map { String(format: "%02x", $0) }
-                .joined()
         }
     }
 

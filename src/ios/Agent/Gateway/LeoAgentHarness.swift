@@ -239,6 +239,8 @@ final class HarnessSessionDriver: ObservableObject {
     /// unanswerable from any surface, CLI blocked forever.
     @Published private(set) var pendingApprovals: [GatewayApprovalRequest] = []
     @Published private(set) var lastError: String?
+    /// How the last turn ended; "idle" alone can't tell a finished turn from a failed one.
+    private(set) var lastTurnFailed = false
     @Published private(set) var resumeCount = 0
     @Published private(set) var journalStatus = HarnessJournalStatus()
 
@@ -623,6 +625,7 @@ final class HarnessSessionDriver: ObservableObject {
             // instruction, and marking it dead here froze the console after
             // the first exchange.
             status = "idle"
+            lastTurnFailed = false
         case .runFailed(let message):
             // A failed TURN, not a dead session — surface it and stay
             // steerable; a dead process ends via stream close + reconcile.
@@ -631,6 +634,7 @@ final class HarnessSessionDriver: ObservableObject {
                 kind: .failure,
                 text: message ?? String(localized: "The turn failed.")))
             status = "idle"
+            lastTurnFailed = true
         case .runCancelled:
             status = "cancelled"
             isRunning = false

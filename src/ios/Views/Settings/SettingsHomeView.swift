@@ -85,7 +85,7 @@ struct SettingsHomeView: View {
                               hint: "旧通道，只在中继不可用时使用") { RemoteHostSettingsView() },
             ]),
             SettingsGroup(id: "agent", title: "Agent", entries: [
-                SettingsEntry("模型供应商", keywords: "provider api key oauth 模型 llm",
+                SettingsEntry("AI 服务商", keywords: "provider api key oauth 模型 llm 模型供应商",
                               icon: "key.circle.fill", color: .indigo) { ProviderInstancesView() },
                 SettingsEntry("模型分组", keywords: "model group 回退 负载",
                               icon: "gearshape.circle.fill", color: .indigo) { ModelGroupsView() },

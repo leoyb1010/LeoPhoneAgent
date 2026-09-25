@@ -38,6 +38,20 @@ final class CommandRiskTests: XCTestCase {
         ])
     }
 
+    /// Multi-line scripts, substitutions and write flags hidden in clusters.
+    func testScriptsAndHiddenWritesAreNotLow() {
+        assert(.medium, [
+            "git status\ngit add -A\ngit commit -m wip", "cat package.json\nnpm install", "ls -la\r\nrm notes.txt",
+            "echo $(rm notes.txt)", "echo `mv a b`", "diff <(python3 x.py) <(ls)", "command rm notes.txt",
+            "sed -Ei 's/a/b/' f", "sed --in-place=.bak 's/a/b/' f", "yq -i '.a = 1' f.yaml",
+            "find . -fprint out.txt", "sort -o out.txt in.txt", "sort -uo out.txt in.txt", "tree -o out.txt",
+            "uniq in.txt out.txt", "git log --output=log.txt",
+        ])
+        assert(.low, [
+            "git status\ngit diff", "ls -la\npwd", "sed -n '1,5p' f", "sort -n f", "uniq -c f", "yq .a f.yaml",
+        ])
+    }
+
     func testCompoundCommandTakesTheHighestSegment() {
         XCTAssertEqual(CommandRisk.assess("git status && rm -rf /tmp/x"), .high)
         XCTAssertEqual(CommandRisk.assess("ls; mv a b"), .medium)

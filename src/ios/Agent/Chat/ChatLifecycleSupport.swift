@@ -15,8 +15,10 @@ extension SessionActivityTracker {
         SensitiveToolGate.waitingChanged = { sessionId, waiting in
             let tracker = SessionActivityTracker.shared
             guard tracker.isActive(sessionId) else { return }
+            // No reason: `.permissionApproval` reads "review the device capability
+            // request", and this gate asks about commands, files and cookies.
             tracker.updateActivityPhase(sessionId, phase: waiting ? .waitingForPermission : .usingTool,
-                                        reason: waiting ? .permissionApproval : nil)
+                                        reason: nil)
         }
     }
 }
@@ -289,6 +291,7 @@ final class SessionActivityTracker: ObservableObject {
         finalPhase: AgentActivityPhase = .cancelled,
         reason: AgentActivityReason? = nil,
         resultMessageId: String? = nil,
+        haptic: Bool = true,
         source: String = #function
     ) {
         let wasPresent = activeSessions.contains(sessionId)
@@ -340,7 +343,9 @@ final class SessionActivityTracker: ObservableObject {
         // DEFAULT finalPhase, used by draft→real migration, intent placeholder
         // cleanup and session deletion — with the old `isTerminal` condition a
         // plain new-message send ended with a spurious "task completed" buzz.
-        if wasPresent, finalPhase == .completed || finalPhase == .failed,
+        // `haptic: false` for bookkeeping ends (a Mac session leaves the tracker when
+        // you leave its screen, not when its turn lands).
+        if haptic, wasPresent, finalPhase == .completed || finalPhase == .failed,
            !sessionId.hasPrefix("intent-eager:"),
            UIApplication.shared.applicationState == .active {
             LeoHaptics.agent(finalPhase == .failed ? .taskFailed : .taskCompleted)

@@ -563,7 +563,7 @@ struct ContentView: View {
             // neither of which scenePhase or onDisappear can provide under
             // Stage Manager.
             .background(SceneSessionHost(
-                sessionId: Self.isNewSessionId(onScreenSessionId) ? newSessionRealId : onScreenSessionId,
+                sessionId: Self.isNewSessionId(onScreenSessionId) ? (newSessionRealId ?? onScreenSessionId) : onScreenSessionId,
                 sessionCount: sessions.count,
                 onWindow: { window in WindowRegistry.shared.register(windowId, window: window) },
                 open: { id in
@@ -785,7 +785,8 @@ struct ContentView: View {
                     // sheet (deep-link to the page: follow-up).
                     activeToolSheet = .settings
                     _ = key
-                }
+                },
+                close: { showCommandPalette = false }
             )
             // [T-home-sheet-detents] A jump list, not an editor: half-height
             // by default. Pick-or-cancel, so no background interaction — a
@@ -1606,7 +1607,7 @@ struct ContentView: View {
         // Not yet persisted — show a "New Chat" placeholder
         let placeholder = ChatSession(
             id: selId,
-            title: "New Chat",
+            title: String(localized: "New Chat"),
             category: nil,
             modelId: "",
             createdAt: Date(),
@@ -2021,7 +2022,8 @@ struct ContentView: View {
         .opacity(didInitialLoad ? 1 : 0)
         // [T-session-filter-trap] 同 stackList:筛空 ≠ 没有会话。起手建议在右侧工作台,侧栏只留一句话。
         .overlay {
-            if didInitialLoad, sessions.isEmpty, !isSearching {
+            // The unsaved New-Chat placeholder row counts: it sits right above this text.
+            if didInitialLoad, sessions.isEmpty, displaySessions.isEmpty, !isSearching {
                 VStack(spacing: 6) {
                     Text("还没有对话").font(.headline)
                     Text("交代的任务会按时间排在这里。")
@@ -4320,7 +4322,7 @@ struct ContentView: View {
             if i > 0 {
                 try handle.write(contentsOf: Data(("\n\n" + String(repeating: "=", count: 60) + "\n\n").utf8))
             }
-            var header = "# \(session.title ?? "Untitled")\n"
+            var header = "# \(session.title ?? String(localized: "Untitled"))\n"
             header += "Model: \(session.modelId)\n"
             header += "Created: \(dateFmt.string(from: session.createdAt))\n"
             header += String(repeating: "-", count: 40) + "\n"
@@ -5073,7 +5075,7 @@ private struct SessionRow: View, Equatable {
             // overlay sit outside this VStack so they stay crisp.
             VStack(alignment: .leading, spacing: 4) {
                 highlightedText(
-                    session.title ?? "New Chat",
+                    session.title ?? String(localized: "New Chat"),
                     font: .system(size: fontSettings.scaledApp(16), weight: .semibold),
                     color: Color(UIColor.label)
                 )
@@ -5093,7 +5095,7 @@ private struct SessionRow: View, Equatable {
                     .lineLimit(2)
                 } else {
                     highlightedText(
-                        session.lastMessage ?? "No messages yet",
+                        session.lastMessage ?? String(localized: "No messages yet"),
                         font: .system(size: fontSettings.scaledApp(14)),
                         color: Color(UIColor.secondaryLabel)
                     )
@@ -5386,7 +5388,7 @@ private struct RemoteSessionRow: View {
                 }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(session.title ?? "Untitled")
+                Text(session.title ?? String(localized: "Untitled"))
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Color(UIColor.label))
                     .lineLimit(1)

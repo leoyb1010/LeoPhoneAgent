@@ -254,10 +254,10 @@ extension AIChatViewModel {
                     return String(t.prefix(200))
                 }
                 logger.info("[BackgroundNotification] source=fallback")
-                return "Task completed."
+                return String(localized: "任务已完成。")
             }()
             logger.info("[BackgroundNotification] responseSummary ready length=\(responseSummary.count) wasBackground=\(wasBackground)")
-            let fallbackTitle = messages.first(where: { $0.role == .user })?.content.prefix(60).description ?? "Agent task"
+            let fallbackTitle = messages.first(where: { $0.role == .user })?.content.prefix(60).description ?? String(localized: "Agent 任务")
             let bgTaskID = backgroundTaskID
             backgroundTaskID = .invalid
             let otherActive = SessionActivityTracker.shared.activeSessions
@@ -819,6 +819,12 @@ final class AgentContinuedProcessingManager {
                 do {
                     try await BGTaskScheduler.shared.submitTaskRequest(request)
                     logger.info("[Background][Continued] submitted session=\(sessionKey.prefix(8))")
+                    // The run may have finished while this was in flight; finish()'s
+                    // cancel came too early then, and the system would start a task
+                    // nobody claims (a false "failed" banner).
+                    if self?.runs[sessionKey]?.identifier != identifier {
+                        BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: identifier)
+                    }
                 } catch {
                     self?.submitFailed(sessionKey: sessionKey, identifier: identifier, error: error)
                 }

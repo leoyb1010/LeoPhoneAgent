@@ -119,7 +119,7 @@ struct QuickModelSwitchSheet: View {
         if others.isEmpty {
             if pins.entries(store: store).isEmpty {
                 Section {
-                    Text("还没有可用的模型——先到「模型供应商」里添加或启用一个。")
+                    Text("还没有可用的模型——先到「AI 服务商」里添加或启用一个。")
                         .font(.callout).foregroundStyle(.secondary)
                 }
             }

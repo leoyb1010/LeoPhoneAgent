@@ -105,7 +105,9 @@ enum WatchStandalone {
     }
 
     @MainActor
-    static func resolve(store: ProviderConfigStore = .shared) -> Result<Config, Unavailable> {
+    static func resolve(store: ProviderConfigStore? = nil) -> Result<Config, Unavailable> {
+        // A `.shared` default argument is evaluated outside the main actor (Swift 6 warning).
+        let store = store ?? .shared
         guard isEnabled else { return .failure(.disabled) }
         guard let groupId = store.defaultPrimaryGroupId, let group = store.group(for: groupId) else {
             return .failure(.noDefaultModel)

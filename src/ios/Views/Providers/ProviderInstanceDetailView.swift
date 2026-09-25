@@ -48,7 +48,7 @@ struct ProviderInstanceDetailView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .navigationTitle(instance?.label ?? "Provider")
+        .navigationTitle(instance?.label ?? String(localized: "Provider"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

@@ -404,7 +404,7 @@ private struct NativeCapabilitiesCenterView: View {
                     } label: {
                         NativeCapabilityRow(
                             title: capability.displayLabel,
-                            subtitle: capability.description.isEmpty ? capability.actions.first ?? "Native device capability" : capability.description,
+                            subtitle: capability.description.isEmpty ? capability.actions.first ?? String(localized: "本机能力") : capability.description,
                             systemImage: capability.systemImage,
                             state: probe.state(for: capability.name)
                         )

@@ -216,7 +216,7 @@ extension AIChatViewModel {
         if let category = SensitiveToolGate.Category.forToolName(tu.name) {
             let host = SensitiveToolGate.Category.hostHint(tool: tu.name, args: toolArgs)
             // [T-gate-scope] 展示用的 host 和授权用的 scope 分开传:本机 shell /
-            // 文件写按会话授权一次,remote_* 按「主机 + 完整参数的 SHA-256」逐条授权。
+            // 文件写按会话授权一次,remote_* 按主机授权一次。
             let scope = SensitiveToolGate.Category.grantScope(tool: tu.name, args: toolArgs)
             // 风险看完整命令原文(host 可能截断),智能批准据此放行只读命令。
             let outcome = await SensitiveToolGate.shared.authorize(category, host: host, grantScope: scope,

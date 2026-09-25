@@ -25,18 +25,22 @@ enum CommandRisk: String, Codable, Comparable, Sendable {
     }
 
     static func assess(_ command: String) -> CommandRisk {
+        // Newlines are separators: collapsing them judged only the first line of a
+        // script ("git status\ngit commit -m wip" read as `git status`).
         let text = command.lowercased()
-            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-            .trimmingCharacters(in: .whitespaces)
+            .replacingOccurrences(of: "[ \\t]+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return .medium }
         if matches(text, highPatterns) { return .high }
+        // Command substitution runs whatever is inside, whatever the outer command is.
+        if text.contains("$(") || text.contains("`") || text.contains("<(") { return .medium }
         // Redirections that write nothing (2>&1, >/dev/null) are not changes,
         // and their "&" must not split the command into a bogus segment.
         let plain = text.replacingOccurrences(of: #"\d*>&\d+|&?\d*>>?\s*/dev/null"#, with: " ",
                                               options: .regularExpression)
         // Split on shell separators; any segment that isn't plainly read-only
         // makes the whole command medium.
-        let segments = plain.components(separatedBy: CharacterSet(charactersIn: ";|&\n"))
+        let segments = plain.components(separatedBy: CharacterSet(charactersIn: ";|&\n\r"))
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
         if segments.isEmpty { return .medium }
@@ -74,7 +78,7 @@ enum CommandRisk: String, Codable, Comparable, Sendable {
         "pwd", "echo", "printf", "wc", "which", "whoami", "date", "uname", "stat", "file",
         "du", "df", "tree", "sort", "uniq", "cut", "tr", "jq", "yq", "ps", "id", "hostname",
         "diff", "cmp", "basename", "dirname", "realpath", "readlink", "true", "false", "test",
-        "type", "command", "man", "whatis", "uptime", "sw_vers", "nl", "column", "xxd", "od",
+        "type", "man", "whatis", "uptime", "sw_vers", "nl", "column", "xxd", "od",
         "md5", "md5sum", "shasum", "sha256sum", "awk",
     ]
     private static let readOnlyGitVerbs: Set<String> = [
@@ -97,16 +101,27 @@ enum CommandRisk: String, Codable, Comparable, Sendable {
                 return words.dropFirst(2).allSatisfy { $0.hasPrefix("-") && !["-d", "-D", "--delete", "-m", "-M"].contains($0) }
                     || words.count == 2
             }
-            return readOnlyGitVerbs.contains(verb)
+            return readOnlyGitVerbs.contains(verb) && !segment.contains("--output")
         case "find":
-            return !words.contains(where: { ["-delete", "-exec", "-execdir", "-ok"].contains($0) })
-        case "sed":
-            return !words.contains(where: { $0 == "-i" || $0.hasPrefix("-i") || $0 == "--in-place" })
+            return !words.contains(where: {
+                ["-delete", "-exec", "-execdir", "-ok", "-okdir", "-fprint", "-fprint0", "-fprintf", "-fls"].contains($0)
+            })
+        case "sed", "yq":
+            // -i anywhere in a flag cluster (-Ei, -ni) or --in-place[=suffix] / --inplace.
+            return !words.contains(where: { isShortFlagCluster($0, containing: "i") || $0.hasPrefix("--in") })
+        case "sort", "tree":
+            return !words.contains(where: { isShortFlagCluster($0, containing: "o") || $0.hasPrefix("--output") })
+        case "uniq":
+            return words.dropFirst().filter { !$0.hasPrefix("-") }.count < 2   // `uniq in out` writes out
         case "awk":
             return !segment.contains("system(")
         default:
             return readOnlyCommands.contains(command)
         }
+    }
+
+    private static func isShortFlagCluster(_ word: String, containing flag: Character) -> Bool {
+        word.hasPrefix("-") && !word.hasPrefix("--") && word.contains(flag)
     }
 
     private static func matches(_ text: String, _ patterns: [String]) -> Bool {

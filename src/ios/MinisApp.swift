@@ -1078,8 +1078,8 @@ private struct CredentialGateAlertHost: View {
                 Button("拒绝", role: .cancel) { credGate.resolve(.deny, requestId: p.id) }
             } message: { p in
                 Text(p.risk == .high
-                     ? "有一个任务想\(p.category.humanName)——\(p.host)。这条命令可能删除数据或改动系统,确认是你要它做的再允许。"
-                     : "有一个任务想\(p.category.humanName)——来自 \(p.host)。只在你确实要它这么做时允许。")
+                     ? "有一个任务想\(p.category.humanName)：\(p.host)。这条命令可能删除数据或改动系统,确认是你要它做的再允许。"
+                     : "有一个任务想\(p.category.humanName)：\(p.host)。")   // host is a site, a command or a path
             }
     }
 }
