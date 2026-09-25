@@ -1,4 +1,4 @@
-"""中继 0.2:设备身份、配对确认、机器名钉扎、钥匙轮换、离线排队。
+"""中继 0.2:设备身份、配对确认、机器名钉扎、钥匙轮换、离线排队、事件流合并与推送路由。
 
 走真实的 HTTP / WebSocket(aiohttp TestServer),不 mock handler。
 """
@@ -9,9 +9,12 @@ import os
 import tempfile
 import time
 import unittest
+from unittest import mock
+from urllib.parse import parse_qs, urlsplit
 
 try:
     import aiohttp
+    from aiohttp import web
     from aiohttp.test_utils import TestClient, TestServer
     HAS_AIOHTTP = True
 except ModuleNotFoundError:  # pragma: no cover
@@ -223,6 +226,177 @@ class RelayV02Tests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(r.status, 409)
         r = await self.client.post("/relay/api/join", json={"token": "nope"})
         self.assertEqual(r.status, 429)
+
+    # -- 事件流:message.delta 合并 ------------------------------------------------
+
+    async def phone_stream(self, mac, after=0):
+        """手机经中继开一条会话事件流;返回 (SSE 响应, 假 Mac 收到的 stream_open 帧)。"""
+        resp = await self.client.get(f"/relay/api/m/MacBook/harness/sessions/s1/events?after={after}",
+                                     headers=self.auth(MASTER))
+        self.assertEqual(resp.status, 200)
+        while True:  # 跳过上一条流的 stream_cancel
+            frame = json.loads((await mac.receive(timeout=3)).data)
+            if frame["type"] == "stream_open":
+                return resp, frame
+
+    @staticmethod
+    async def mac_sends(mac, stream_id, events, close=False):
+        for event in events:
+            await mac.send_json({"type": "stream_data", "id": stream_id, "data": json.dumps(event)})
+        if close:
+            await mac.send_json({"type": "stream_close", "id": stream_id})
+
+    @staticmethod
+    async def read_sse(resp, until=None):
+        """读手机收到的 data 帧,直到流结束或 until(已收到的帧) 为真。"""
+        got = []
+        while until is None or not until(got):
+            line = await asyncio.wait_for(resp.content.readline(), 3)
+            if not line:
+                break
+            if line.startswith(b"data: "):
+                got.append(json.loads(line[6:]))
+        return got
+
+    @staticmethod
+    def delta(seq, text):
+        return {"event": "message.delta", "delta": text, "seq": seq, "session_id": "s1"}
+
+    async def test_rapid_deltas_become_fewer_events_with_identical_text(self):
+        mac, _ = await self.pinned_mac()
+        resp, opened = await self.phone_stream(mac)
+        chunks = [f"第{n}段 " for n in range(1, 41)]
+        await self.mac_sends(mac, opened["id"], [self.delta(n, c) for n, c in enumerate(chunks, 1)])
+        # 不关流:全文照样到齐,说明 60 ms 窗口到点自己会发,不必等下一帧
+        got = await self.read_sse(resp, until=lambda got: got and got[-1]["seq"] == 40)
+        self.assertLess(len(got), 40)
+        self.assertEqual("".join(e["delta"] for e in got), "".join(chunks))
+        seqs = [e["seq"] for e in got]
+        self.assertEqual(seqs, sorted(set(seqs)))
+        self.assertTrue(all(e["event"] == "message.delta" and e["session_id"] == "s1" for e in got))
+
+    async def test_other_frames_flush_pending_text_first_and_in_order(self):
+        from . import relay as relay_module
+        mac, _ = await self.pinned_mac()
+
+        def status(latest):
+            return {"event": "journal.status", "type": "durability", "session_id": "s1",
+                    "state": "pending", "latest_seq": latest}
+
+        # 窗口拉到 30 秒:只有别的帧和关流能让正文发出去,结果与机器快慢无关
+        with mock.patch.object(relay_module, "DELTA_COALESCE_S", 30):
+            resp, opened = await self.phone_stream(mac)
+            await self.mac_sends(mac, opened["id"], [
+                {"type": "resume", "status": "ok", "after": 0, "min_after": 0},
+                status(0), self.delta(1, "a"), status(1), self.delta(2, "b"), status(2),
+                {"event": "tool.started", "tool": "Bash", "seq": 3, "session_id": "s1"},
+                self.delta(4, "c"), self.delta(5, "d"),
+                {"event": "run.completed", "output": "ok", "seq": 6, "session_id": "s1"},
+                self.delta(7, "e"), self.delta(8, "f"), status(8),
+            ], close=True)
+            got = await self.read_sse(resp)
+        self.assertEqual([(e.get("event") or e["type"], e.get("delta", e.get("latest_seq")), e.get("seq"))
+                          for e in got], [
+            ("resume", None, None),
+            ("journal.status", 0, None),   # 没攒正文时状态帧照常直发
+            ("message.delta", "ab", 2),
+            ("journal.status", 2, None),   # 攒正文期间只留最新一条,紧跟在正文后面
+            ("tool.started", None, 3),
+            ("message.delta", "cd", 5),
+            ("run.completed", None, 6),
+            ("message.delta", "ef", 8),    # 关流时攒着的也要发出去
+            ("journal.status", 8, None),
+        ])
+
+    async def test_resume_from_a_coalesced_event_replays_exactly_what_live_got(self):
+        from . import relay as relay_module
+        mac, _ = await self.pinned_mac()
+        # 假 Mac 的事件日志,按 ?after=N 回放(与 harness 的 subscribe 同语义)
+        log = [self.delta(n, f"w{n} ") for n in range(1, 11)]
+        log.append({"event": "tool.started", "tool": "Bash", "seq": 11, "session_id": "s1"})
+        log += [self.delta(n, f"w{n} ") for n in range(12, 21)]
+        with mock.patch.object(relay_module, "DELTA_COALESCE_S", 30):
+            live, opened = await self.phone_stream(mac)
+            await self.mac_sends(mac, opened["id"], log, close=True)
+            live_events = await self.read_sse(live)
+            cursor = live_events[0]["seq"]
+            self.assertEqual(cursor, 10, "前 10 段合成一条,游标是最后一段的 seq")
+            # 手机拿这条的 seq 续传:回放一口气到,合并后必须和实时流收到的一模一样
+            replay, opened = await self.phone_stream(mac, after=cursor)
+            after = int(parse_qs(urlsplit(opened["path"]).query)["after"][0])
+            await self.mac_sends(mac, opened["id"], [e for e in log if e["seq"] > after], close=True)
+            replayed = await self.read_sse(replay)
+        self.assertEqual(replayed, [e for e in live_events if e["seq"] > cursor])
+        self.assertEqual("".join(e.get("delta", "") for e in live_events[:1] + replayed),
+                         "".join(e.get("delta", "") for e in log))
+
+    async def test_burst_bigger_than_the_relay_queue_reaches_a_healthy_phone_whole(self):
+        mac, _ = await self.pinned_mac()
+        resp, opened = await self.phone_stream(mac)
+        # 接管长会话时 Mac 一口气回放几千条:中继要是读 ws 时不让出事件循环,
+        # 转发协程插不上手,读得好好的手机也会被当成慢消费者丢帧、关流
+        chunks = [f"w{n} " for n in range(1, 5001)]
+        await self.mac_sends(mac, opened["id"], [self.delta(n, c) for n, c in enumerate(chunks, 1)], close=True)
+        got = await self.read_sse(resp)
+        self.assertEqual("".join(e["delta"] for e in got), "".join(chunks))
+        self.assertEqual(got[-1]["seq"], 5000)
+
+    async def test_slow_phone_is_closed_before_any_frame_past_a_dropped_one(self):
+        mac, _ = await self.pinned_mac()
+        entered, gate = asyncio.Event(), asyncio.Event()
+        real_write = web.StreamResponse.write
+
+        async def stalled_write(response, data):  # 手机读不动:中继往手机写就卡住
+            entered.set()
+            await gate.wait()
+            return await real_write(response, data)
+
+        tools = [{"event": "tool.started", "tool": "Bash", "seq": n, "session_id": "s1"} for n in range(1, 1100)]
+        with mock.patch.object(web.StreamResponse, "write", stalled_write):
+            resp, opened = await self.phone_stream(mac)
+            await self.mac_sends(mac, opened["id"], tools[:1])
+            await asyncio.wait_for(entered.wait(), 3)
+            await self.mac_sends(mac, opened["id"], tools[1:])  # 队列 1024 帧,挤爆
+            # 事件帧排在它们后面:中继处理到它,上面的帧都已处理完
+            await mac.send_json({"type": "event", "event": {"event": "marker"}})
+            for _ in range(300):
+                if self.relay.recent_events:
+                    break
+                await asyncio.sleep(0.01)
+            gate.set()
+            got = await self.read_sse(resp)
+        seqs = [e["seq"] for e in got]
+        self.assertEqual(seqs[:1], [1])
+        # 越过空洞的帧一条都不能发:否则手机游标跳过被挤掉的那条,续传也补不回来
+        self.assertEqual(seqs, list(range(1, len(seqs) + 1)))
+
+    # -- 推送路由 ------------------------------------------------------------------
+
+    async def test_run_failed_sends_no_alert_push(self):
+        class FakePusher:
+            enabled = True
+
+            def __init__(self):
+                self.alerts = []
+
+            async def send_alert(self, **kwargs):
+                self.alerts.append(kwargs)
+                return 1
+
+        pusher = self.relay.apns = FakePusher()
+        mac, _ = await self.pinned_mac()
+        for name in ("run.failed", "run.completed"):
+            await mac.send_json({"type": "event", "event": {"event": name, "session_id": "s1", "error": "boom"}})
+        for _ in range(300):
+            if len(self.relay.recent_events) == 2:
+                break
+            await asyncio.sleep(0.01)
+        await asyncio.gather(*list(self.relay._bg_tasks))
+        # 完成照推(对照组:推送这条路是通的),失败不推
+        self.assertEqual([a["collapse_id"] for a in pusher.alerts], ["run.completed-s1"])
+        # 失败事件照样留在最近事件里,手机回前台能补齐
+        events = (await (await self.client.get("/relay/api/events", headers=self.auth(MASTER))).json())["events"]
+        self.assertIn("run.failed", [e["event"]["event"] for e in events])
 
 
 if __name__ == "__main__":

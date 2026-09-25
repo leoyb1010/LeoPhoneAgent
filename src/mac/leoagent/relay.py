@@ -25,7 +25,8 @@
   旧式短码兑换即发旧版设备钥匙(与 0.1 一致)。兑换接口按来源限速。
 - 转发给 Mac 的请求带上调用方类别(caller),Mac 据此决定能不能开全自动等。
 - 发给离线 Mac 的建任务 / 发送请求可以排队(X-Leo-Queue: 1),Mac 上线即投递。
-事件流按帧转发,断线由两端各自重连,手机续传仍靠 ?after=N。
+事件流按帧转发(正文增量 message.delta 每 60 ms 合成一条),断线由两端各自重连,
+手机续传仍靠 ?after=N。
 """
 
 from __future__ import annotations
@@ -49,6 +50,9 @@ from .apns import build_pusher
 VERSION = "0.2.0"
 DEFAULT_PORT = 8650
 REQUEST_TIMEOUT_S = 60
+# 同一条事件流里的 message.delta 最多每 60 ms 合成一条发给手机:逐 token 转发的话,
+# 一轮回答就是几百个 SSE 事件,手机每条都要解析、重绘,蜂窝网络下还费电。
+DELTA_COALESCE_S = 0.06
 JOIN_TTL_S = 5 * 60
 DEVICE_KEY_TTL_S = 90 * 24 * 3600          # 滑动:用一次续一次
 MASTER_GRACE_S = 30 * 24 * 3600            # 轮换后旧主钥匙再有效多久
@@ -1262,19 +1266,22 @@ class Relay:
                         except asyncio.QueueFull:
                             # 手机端读得慢。绝不能让 QueueFull 冲出消息循环
                             # ——那会注销整台 Mac 的中继连接;但静默丢帧会给
-                            # live 流留下 seq 空洞且对端毫无感知。挤掉一帧改塞
+                            # live 流留下 seq 空洞且对端毫无感知。清空队列改塞
                             # stream_close,让手机立刻走重连 + replay 补齐
                             # (与 harness 端慢订阅者哨兵同一策略)。
-                            try:
+                            # 必须整队清掉:只挤掉队首一帧的话,后面的帧照发,手机
+                            # 的续传游标越过被挤掉的那条,它就再也补不回来了。队列
+                            # 里的帧都还没到手机,游标停在它们之前,replay 一条不少。
+                            while not queue.empty():
                                 queue.get_nowait()
-                            except asyncio.QueueEmpty:
-                                pass
-                            try:
-                                queue.put_nowait({"type": "stream_close",
-                                                  "id": frame.get("id"),
-                                                  "reason": "slow consumer"})
-                            except asyncio.QueueFull:
-                                pass
+                            queue.put_nowait({"type": "stream_close",
+                                              "id": frame.get("id"),
+                                              "reason": "slow consumer"})
+                        # 已缓冲的一大批帧(比如接管长会话时的整段回放)这个循环会一口气
+                        # 读完、不让出事件循环,转发协程插不上手,好好的手机也会被挤爆。
+                        # 过半就让一下,让它先把队列清掉。
+                        if queue.qsize() >= queue.maxsize // 2:
+                            await asyncio.sleep(0)
 
                 elif kind == "event":
                     # [T-leophone-push] Mac 主动上报的关键事件。手机不在线
@@ -1347,15 +1354,8 @@ class Relay:
                     # outbox 补发的同一条审批依然被折叠。
                     collapse_id=f"{kind}-{event.get('approval_id') or event.get('session_id', '')}",
                 )
-            elif kind == "run.failed":
-                await self.apns.send_alert(
-                    title=f"🖥 {machine_name} 任务失败",
-                    body=str(event.get("error") or "")[:200],
-                    user_info={"harnessSessionId": str(event.get("session_id") or ""),
-                               "sent_at": time.time()},
-                
-                    collapse_id=f"{kind}-{event.get('session_id', '')}",
-                )
+            # run.failed 故意不推:错误在 app 里、实时活动上都看得到,计划定的是"错误不推送"。
+            # 事件本身照样进 recent_events,手机回前台拉 /relay/api/events 仍能补齐。
             elif kind == "run.completed":
                 await self.apns.send_alert(
                     title=f"✅ {machine_name} 任务完成",
@@ -1684,6 +1684,41 @@ class Relay:
                 {"error": {"message": "这台 Mac 没有按时响应"}}, status=504)
         return web.json_response(frame.get("body"), status=int(frame.get("status") or 200))
 
+    @staticmethod
+    def _coalescible(data: Any) -> Optional[Dict[str, Any]]:
+        """转发时可以合并的帧:正文增量 message.delta,和不带 seq 的 journal.status 状态快照。
+
+        思考(reasoning.available)不合并:iOS 每条思考单独成一行,桌面端本来就整段发一次;
+        按到达时间拼起来,实时流和续传看到的分行会不一样。
+        """
+        if not isinstance(data, str) or ('"message.delta"' not in data
+                                         and '"journal.status"' not in data):
+            return None
+        try:
+            event = json.loads(data)
+        except ValueError:
+            return None
+        if not isinstance(event, dict):
+            return None
+        if event.get("event") == "message.delta" and isinstance(event.get("delta"), str):
+            return event
+        if event.get("event") == "journal.status" and "seq" not in event:
+            return event
+        return None
+
+    @staticmethod
+    def _joins(prev: Dict[str, Any], event: Dict[str, Any]) -> bool:
+        """两条正文增量只差 delta / seq / timestamp 才合并;durability 之类一变就分开发。
+
+        seq 必须递增:万一来了重复帧,要留给手机按 seq 去重,不能拼进正文里。
+        """
+        if event.get("event") != "message.delta" or prev.keys() != event.keys():
+            return False
+        if "seq" in event and not (isinstance(prev["seq"], int) and isinstance(event["seq"], int)
+                                   and event["seq"] > prev["seq"]):
+            return False
+        return all(prev[k] == event[k] for k in event if k not in ("delta", "seq", "timestamp"))
+
     async def _forward_stream(self, request: web.Request, machine: Machine,
                               tail: str, caller: Optional[Caller] = None) -> web.StreamResponse:
         stream_id = uuid.uuid4().hex
@@ -1697,18 +1732,73 @@ class Relay:
         await response.prepare(request)
         await machine.ws.send_json({"type": "stream_open", "id": stream_id, "path": tail,
                                     "caller": caller.public() if caller else {}})
+        loop = asyncio.get_running_loop()
+        # 攒着还没发的正文:[首帧原文, 最近一帧, 各段 delta];外加攒的这段时间里最新的
+        # 一条 journal.status(iOS 带 journal_status=1 时,桌面端每条事件前后都插一条
+        # 状态快照;新的覆盖旧的,正文发完紧跟着发——要是见一条就先发正文,iOS 这条
+        # 最常用的路径上一段也合并不了)。
+        # 攒着的正文 seq 还没到手机,续传游标停在它们之前:手机断线时这截直接丢掉
+        # 也不少字,重连 ?after=N 由 Mac 的事件日志原样补回。
+        pending: Optional[List[Any]] = None
+        status: Optional[str] = None
+        deadline = 0.0
+
+        async def flush() -> None:
+            nonlocal pending, status
+            if pending is not None:
+                raw, last, parts = pending
+                pending = None
+                if len(parts) > 1:
+                    # 合成帧 = 最后一帧换上拼好的正文,seq 用最后一段的:手机按它续传正好
+                    # 接在这截之后,不重不漏。ensure_ascii 保持默认:拼接处可能是被切开的
+                    # 代理对,转义输出永远是合法 JSON,手机解析时自动拼回。
+                    raw = json.dumps({**last, "delta": "".join(parts)})
+                await response.write(f"data: {raw}\n\n".encode("utf-8"))
+            if status is not None:
+                raw, status = status, None
+                await response.write(f"data: {raw}\n\n".encode("utf-8"))
+
         try:
             while True:
-                frame = await queue.get()
-                if frame.get("type") == "stream_close":
+                if pending is not None and loop.time() >= deadline:
+                    await flush()
+                # 队列里有就直接拿,一口气清完(一帧一个 wait_for 在 3.9 上每帧要转好几圈
+                # 事件循环,大段回放时追不上 Mac,好好的手机也会被当成慢消费者关流)。
+                try:
+                    frame = queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    if pending is None:
+                        frame = await queue.get()
+                    else:
+                        try:
+                            frame = await asyncio.wait_for(
+                                queue.get(), max(0.0, deadline - loop.time()))
+                        except asyncio.TimeoutError:
+                            await flush()
+                            continue
+                kind = frame.get("type")
+                data = frame.get("data")
+                event = self._coalescible(data) if kind == "stream_data" else None
+                if pending is not None and event is not None:
+                    if event["event"] == "journal.status":
+                        status = data
+                        continue
+                    if self._joins(pending[1], event):
+                        pending[1] = event
+                        pending[2].append(event["delta"])
+                        continue
+                # 其余一切(工具、审批、终态、续传信封、保活、关流)先把攒着的发出去,顺序不变。
+                await flush()
+                if event is not None and event["event"] == "message.delta":
+                    pending = [data, event, [event["delta"]]]
+                    deadline = loop.time() + DELTA_COALESCE_S
+                elif kind == "stream_close":
                     break
-                if frame.get("type") == "stream_keepalive":
+                elif kind == "stream_keepalive":
                     # SSE 注释帧:客户端(iOS / 中继 / 网页)都只认 `data:` 前缀,
                     # 会安全跳过它,但它足以让中间的代理和 NAT 知道这条连接还活着。
                     await response.write(b": keep-alive\n\n")
-                    continue
-                data = frame.get("data")
-                if data:
+                elif data:
                     await response.write(f"data: {data}\n\n".encode("utf-8"))
         except (ConnectionResetError, asyncio.CancelledError):
             pass  # 手机走了;通知 Mac 停推
