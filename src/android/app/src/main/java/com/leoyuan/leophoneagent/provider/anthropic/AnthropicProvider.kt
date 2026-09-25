@@ -186,6 +186,8 @@ class AnthropicProvider(
         var currentToolId: String? = null
         var currentToolName: String? = null
         val toolInputBuffer = StringBuilder()
+        // Set by the final message_delta (it carries stop_reason), message_stop or [DONE].
+        var ended = false
 
         try {
             var line: String?
@@ -193,7 +195,10 @@ class AnthropicProvider(
                 val l = line ?: continue
                 if (!l.startsWith("data: ")) continue
                 val payload = l.removePrefix("data: ")
-                if (payload == "[DONE]") break
+                if (payload == "[DONE]") {
+                    ended = true
+                    break
+                }
 
                 val event = try { JSONObject(payload) } catch (_: Exception) { continue }
                 android.util.Log.d("ToolChain[Provider]", "RAW SSE: $payload")
@@ -258,9 +263,22 @@ class AnthropicProvider(
                         val stopReason = event.optJSONObject("delta")
                             ?.safeOptString("stop_reason", "")?.ifEmpty { null }
                         send(LLMStreamChunk.Finished(stopReason))
+                        ended = true
+                    }
+                    "message_stop" -> ended = true
+                    // A failure after the 200 (e.g. overloaded_error) comes as an event.
+                    // Unhandled, the cut-off answer was kept as if it were complete.
+                    "error" -> {
+                        val error = event.optJSONObject("error")
+                        throw LLMError.TransientError(
+                            "[${error?.safeOptString("type", "") ?: "error"}] ${error?.safeOptString("message", "") ?: ""}",
+                        )
                     }
                 }
             }
+            // The body ended mid-answer (connection dropped): retry instead of
+            // showing the partial text as the full reply.
+            if (!ended) throw LLMError.NetworkError(java.io.EOFException("stream ended before the answer finished"))
         } catch (e: Exception) {
             cancel("Stream error", mapError(e))
         } finally {

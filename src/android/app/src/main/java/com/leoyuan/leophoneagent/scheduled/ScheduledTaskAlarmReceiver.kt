@@ -42,7 +42,10 @@ class ScheduledTaskAlarmReceiver : BroadcastReceiver() {
                 // prompt doesn't block tomorrow's fire even if we crash.
                 manager.rescheduleNext(taskId)
 
-                ScheduledAgentRunner.run(appContext, task)
+                // Don't hold the broadcast for the whole run: Android gives an alarm
+                // broadcast about a minute, then kills a background app. The runner
+                // starts the foreground service, which keeps the run alive.
+                ScheduledAgentRunner.run(appContext, task, waitForCompletion = false)
             } catch (t: Throwable) {
                 AppLogger.error(TAG, "task $taskId fire failed: ${t.message}")
             } finally {

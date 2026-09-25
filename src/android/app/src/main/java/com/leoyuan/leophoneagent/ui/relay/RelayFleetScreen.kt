@@ -60,6 +60,7 @@ import com.leoyuan.leophoneagent.relay.RelayApproval
 import com.leoyuan.leophoneagent.relay.RelayFleetClient
 import com.leoyuan.leophoneagent.relay.RelayFleetStore
 import com.leoyuan.leophoneagent.relay.RelayEventsExpiredException
+import com.leoyuan.leophoneagent.relay.RelayException
 import com.leoyuan.leophoneagent.relay.RelayMachine
 import com.leoyuan.leophoneagent.relay.RelaySession
 import kotlinx.coroutines.async
@@ -153,6 +154,13 @@ fun RelayFleetScreen(onBack: () -> Unit) {
                 eventWatermark = batch.now
                 approvals = (approvals + batch.approvals)
                     .distinctBy { "${it.machine}|${it.sessionId}|${it.approvalId}" }
+                    // The relay's event log keeps requests already answered on the lock
+                    // screen, the watch or the Mac: a card only while its session still
+                    // lists it as pending.
+                    .filter { approval ->
+                        sessions[approval.machine].orEmpty().firstOrNull { it.id == approval.sessionId }
+                            ?.pendingApprovalIds?.contains(approval.approvalId) == true
+                    }
             }.onFailure { error = it.message ?: "刷新失败" }
             publishRemote()
             loading = false
@@ -211,6 +219,13 @@ fun RelayFleetScreen(onBack: () -> Unit) {
                                         status = newStatus ?: row.status,
                                         lastEvent = preview,
                                     ) else row
+                                }
+                                if (event.event == "approval.responded" || event.event.startsWith("run.")) {
+                                    // Answered somewhere else, or its run ended: the card goes.
+                                    approvals = approvals.filterNot {
+                                        it.machine == machine && it.sessionId == sessionId &&
+                                            (event.event.startsWith("run.") || it.approvalId == event.approvalId)
+                                    }
                                 }
                                 if (event.event == "approval.request" && event.approvalId != null) {
                                     approvals = (approvals + RelayApproval(
@@ -433,7 +448,14 @@ fun RelayFleetScreen(onBack: () -> Unit) {
                                     approval.machine, approval.sessionId, approval.approvalId, choice,
                                 )
                                 approvals = approvals.filterNot { it.approvalId == approval.approvalId }
-                            }.onFailure { error = it.message }
+                            }.onFailure {
+                                // 409: already answered elsewhere or its run ended — nothing to answer.
+                                if ((it as? RelayException)?.status == 409) {
+                                    approvals = approvals.filterNot { a -> a.approvalId == approval.approvalId }
+                                } else {
+                                    error = it.message
+                                }
+                            }
                             loading = false
                         }
                     }

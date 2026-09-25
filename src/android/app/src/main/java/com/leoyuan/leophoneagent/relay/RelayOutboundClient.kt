@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -238,11 +239,33 @@ class RelayOutboundClient(
             try {
                 val result = router.handle("GET", path, null)
                 if (result.stream == null) {
-                    send(ws, RelayOutboundCodec.resp(streamId, result.status, result.body))
+                    // The relay has already answered this stream with 200, so a `resp`
+                    // never reaches the watcher: it saw an empty stream and reconnected
+                    // forever (every session after the app restarts is 404). End the
+                    // run inside the stream instead.
+                    val after = path.substringAfter("after=", "0").substringBefore("&").toIntOrNull() ?: 0
+                    val failed = JSONObject()
+                        .put("event", "run.failed")
+                        .put("seq", after + 1)
+                        .put("error", result.body.optJSONObject("error")?.optString("message") ?: "HTTP ${result.status}")
+                    send(ws, RelayOutboundCodec.streamData(streamId, failed.toString()))
                     return@launch
                 }
-                result.stream.collect { event ->
-                    send(ws, RelayOutboundCodec.streamData(streamId, event.toString()))
+                // Like the Mac: a heartbeat while the stream is quiet (long tools, idle
+                // sessions). Without it watchers with a 30 s read timeout reconnected
+                // every 30 s, and NAT / proxies drop idle connections.
+                val keepAlive = launch {
+                    while (true) {
+                        delay(STREAM_KEEPALIVE_MS)
+                        send(ws, RelayOutboundCodec.streamKeepAlive(streamId))
+                    }
+                }
+                try {
+                    result.stream.collect { event ->
+                        send(ws, RelayOutboundCodec.streamData(streamId, event.toString()))
+                    }
+                } finally {
+                    keepAlive.cancel()
                 }
             } catch (error: Throwable) {
                 if (error !is kotlinx.coroutines.CancellationException) {
@@ -281,6 +304,7 @@ class RelayOutboundClient(
         private const val TAG = "RelayOutbound"
         private const val OUTBOX_LIMIT = 200
         private const val MAX_BACKOFF_SECONDS = 30L
+        private const val STREAM_KEEPALIVE_MS = 25_000L
         private fun defaultClient() = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(0, TimeUnit.SECONDS)

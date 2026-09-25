@@ -30,6 +30,8 @@ data class RelaySession(
     val cwd: String? = null,
     val lastEvent: String? = null,
     val windowLabel: String? = null,
+    /** Approvals the machine still waits on, from the session list. */
+    val pendingApprovalIds: Set<String> = emptySet(),
 ) {
     val isTerminal: Boolean get() = status in setOf("completed", "failed", "cancelled")
 }
@@ -74,7 +76,8 @@ val LeoFleetPresets = listOf(
     FleetPreset("Mac Studio", "LeoMac-Studio-2"),
 )
 
-open class RelayException(message: String) : Exception(message)
+/** [status] is the HTTP status when the relay or the machine answered with an error. */
+open class RelayException(message: String, val status: Int? = null) : Exception(message)
 
 class RelayEventsExpiredException(val minAfter: Int) :
     RelayException("远程事件已过期，将从可用水位 $minAfter 重新同步")

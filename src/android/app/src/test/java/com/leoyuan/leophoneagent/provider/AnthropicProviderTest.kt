@@ -304,6 +304,43 @@ class AnthropicProviderTest {
         assertTrue(body.getBoolean("stream"))
     }
 
+    /** The error the stream ended with: thrown directly, or as the cause of its cancellation. */
+    private fun streamFailure(sseBody: String): Throwable? = runBlocking {
+        server.enqueue(MockResponse().setBody(sseBody).setHeader("Content-Type", "text/event-stream"))
+        try {
+            provider.streamMessage(listOf(LLMMessage(LLMMessage.Role.USER, "Hi")), null, 1024).toList()
+            null
+        } catch (e: Throwable) {
+            generateSequence(e) { it.cause }.firstOrNull { it is LLMError } ?: e
+        }
+    }
+
+    @Test
+    fun `streamMessage turns a mid-stream error event into a retryable error`() {
+        val failure = streamFailure(buildString {
+            appendLine("data: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":1}}}")
+            appendLine()
+            appendLine("data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"Chapter 2\"}}")
+            appendLine()
+            appendLine("event: error")
+            appendLine("data: {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}")
+            appendLine()
+        })
+        assertTrue("got $failure", failure is LLMError.TransientError)
+        assertTrue((failure as LLMError).isRetryable)
+    }
+
+    @Test
+    fun `streamMessage treats a body that ends mid-answer as a dropped connection`() {
+        val failure = streamFailure(buildString {
+            appendLine("data: {\"type\":\"message_start\",\"message\":{\"usage\":{\"input_tokens\":1}}}")
+            appendLine()
+            appendLine("data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"It was a dark and\"}}")
+            appendLine()
+        })
+        assertTrue("got $failure", failure is LLMError.NetworkError)
+    }
+
     // -- Error handling --
 
     @Test(expected = LLMError.InvalidApiKey::class)

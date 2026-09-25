@@ -244,12 +244,16 @@ class AgentForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // Safe-mode: system restarted us under START_STICKY (intent==null)
-        // after a crash. Satisfy the 5-second startForeground deadline
-        // with a stub notification, then unwind. The crash share dialog
-        // owns the UX from here; running a background service in this
-        // state would re-trip the lateinit access that brought us down.
-        if (com.leoyuan.leophoneagent.crash.CrashFrequencyDetector.isSafeMode()) {
+        // The system restarted us under START_STICKY (intent==null) after the
+        // process died. Satisfy the 5-second startForeground deadline with a
+        // stub notification, then unwind:
+        //  - no run survives the process dying, so there is nothing to keep
+        //    alive (staying up held the wake lock behind an "Idle"
+        //    notification until a chat was next opened and closed);
+        //  - in safe mode the crash share dialog owns the UX, and running a
+        //    background service would re-trip the lateinit access that brought
+        //    us down.
+        if (intent == null || com.leoyuan.leophoneagent.crash.CrashFrequencyDetector.isSafeMode()) {
             try {
                 val stub = androidx.core.app.NotificationCompat.Builder(this, CHANNEL_ID)
                     .setContentTitle("LeoPhoneAgent")
@@ -277,7 +281,7 @@ class AgentForegroundService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        if (intent?.action == ACTION_STOP) {
+        if (intent.action == ACTION_STOP) {
             // T50: the notification's Stop action — also cancel every
             // running agent loop. Without this, stopSelf() alone leaves
             // streamJobs running until the OS reclaims the process; the
@@ -290,8 +294,8 @@ class AgentForegroundService : Service() {
             return START_NOT_STICKY
         }
 
-        val sessionCount = intent?.getIntExtra(EXTRA_SESSION_COUNT, 0) ?: 0
-        val toolStatus = intent?.getStringExtra(EXTRA_TOOL_STATUS) ?: "Idle"
+        val sessionCount = intent.getIntExtra(EXTRA_SESSION_COUNT, 0)
+        val toolStatus = intent.getStringExtra(EXTRA_TOOL_STATUS) ?: "Idle"
 
         val notification = buildNotification(sessionCount, toolStatus)
 

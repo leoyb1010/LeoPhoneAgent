@@ -208,8 +208,8 @@ class MinisHarnessRouterTest {
     }
 
     /**
-     * P0#5 回归：事件表是有界环形缓冲，被丢弃区段的 after 必须显式回 410，
-     * 而不是静默地少发一段（控制端会拼出残缺输出）。
+     * P0#5 回归：事件表是有界环形缓冲，after 落在被丢弃的区段时，流的第一帧必须是
+     * gap 续传信封，而不是静默地少发一段（控制端会拼出残缺输出）。
      */
     @Test
     fun subscribeStartsWithResumeOk() = runBlocking {
@@ -230,16 +230,14 @@ class MinisHarnessRouterTest {
             .body.getString("session_id")
         waitForCompleted(r, id)
 
+        // 流照开（经中继开的流拿不到 410），第一帧就是 gap 续传信封。
         val stale = r.handle("GET", "/harness/sessions/$id/events?after=0", null)
-        assertEquals(410, stale.status)
-        assertEquals("gap", stale.body.getString("status"))
-        assertEquals("resume", stale.body.getString("type"))
-        val minAfter = stale.body.getInt("min_after")
+        assertEquals(200, stale.status)
+        val envelope = stale.stream!!.take(1).toList().single()
+        assertEquals("resume", envelope.getString("type"))
+        assertEquals("gap", envelope.getString("status"))
+        val minAfter = envelope.getInt("min_after")
         assertTrue("nothing was evicted; ring buffer did not engage", minAfter > 0)
-
-        // 按 410 给出的水位重新订阅就能正常开流（这条是 live stream，
-        // 只断言状态，不 collect —— 它要等到订阅方主动断开才结束）。
-        assertEquals(200, r.handle("GET", "/harness/sessions/$id/events?after=$minAfter", null).status)
 
         // 保留区段本身必须是连续的：环形缓冲不能在中间挖洞。
         val replayed = r.eventsAfter(id, minAfter).toList()

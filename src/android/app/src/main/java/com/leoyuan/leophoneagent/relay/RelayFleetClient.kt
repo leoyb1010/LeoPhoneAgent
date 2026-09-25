@@ -2,8 +2,10 @@ package com.leoyuan.leophoneagent.relay
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -65,6 +67,8 @@ class RelayFleetClient(
                     cwd = row.optStringOrNull("cwd"),
                     lastEvent = row.optStringOrNull("last_event"),
                     windowLabel = label,
+                    pendingApprovalIds = row.optJSONArray("pending_approvals").objects()
+                        .mapNotNull { it.optStringOrNull("approval_id") }.toSet(),
                 )
             }
         }
@@ -181,6 +185,9 @@ class RelayFleetClient(
         )
         awaitClose { source.cancel() }
     }
+        // A replay burst outran the default 64-slot buffer and trySend dropped what
+        // didn't fit; the cursor moved past those events, so they were never fetched again.
+        .buffer(Channel.UNLIMITED)
 
     private fun machinePath(machine: String, tail: String) = "/m/${enc(machine)}$tail"
 
@@ -208,7 +215,9 @@ class RelayFleetClient(
                     .takeUnless { it.isNullOrBlank() }
                     ?: obj.optString("message").takeUnless { it.isBlank() }
                     ?: "HTTP ${response.code}"
-                throw RelayException(if (response.code in listOf(401, 403)) "中继密钥被拒绝" else message)
+                // Only 401 is the relay refusing the key; a 403 is the machine's own
+                // answer (e.g. "这台设备只能拒绝这类操作") and says why.
+                throw RelayException(if (response.code == 401) "中继密钥被拒绝" else message, response.code)
             }
             return obj
         }

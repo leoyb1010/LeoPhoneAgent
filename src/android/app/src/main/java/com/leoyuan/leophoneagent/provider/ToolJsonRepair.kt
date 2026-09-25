@@ -4,25 +4,26 @@ import com.leoyuan.leophoneagent.data.model.AgentToolDefinition
 import org.json.JSONObject
 
 /**
- * JSON repair for malformed / incomplete tool calls (T-tool-json-repair b2c4f8a6).
+ * JSON repair for malformed tool calls (T-tool-json-repair b2c4f8a6).
  *
- * Mirrors the iOS implementation in AIChatViewModel.swift (repairToolArgs / preflight
- * pre-pass). Operates on the already-parsed [JSONObject] that the streaming provider
- * surfaced, optionally consulting a raw stream "tail" snapshot from the tool-input
- * chunk ring when the dict is empty (truncation case).
+ * Mirrors the iOS implementation in AIChatViewModel+ToolPreflight.swift (repairToolArgs).
+ * Operates on the already-parsed [JSONObject] that the streaming provider surfaced.
  *
- * Three strategies, applied in order, each gated on actually being needed:
+ * Two strategies, applied in order, each gated on actually being needed:
  *
- * 1. Truncation repair — if [args] is empty but [rawTail] looks like a JSON object
- *    that just got cut, retry parsing with a small set of closure suffixes appended.
- * 2. Type coercion — for each required field present but not a String, coerce via
+ * 1. Type coercion — for each required field present but not a String, coerce via
  *    `toString()` so the downstream blank-string preflight check has something usable.
- * 3. Fuzzy field-name match — for each missing required field, look for a sibling key
+ * 2. Fuzzy field-name match — for each missing required field, look for a sibling key
  *    whose Levenshtein distance is exactly 1 and rename it. Catches one-off typos
  *    like `comand` → `command`.
  *
+ * Arguments cut off mid-stream (output limit, dropped connection) are never patched up:
+ * closing the cut string turned half a `file_write` into a valid call that overwrote the
+ * file with the fragment, and half a shell command into one that ran. Preflight rejects
+ * the empty args and the model sends the call again.
+ *
  * The repaired [JSONObject] shadows the original at the preflight call site; the
- * caller logs the [Outcome.repairs] tags at WARNING level when non-empty.
+ * caller logs the returned repair tags at WARNING level when non-empty.
  */
 object ToolJsonRepair {
 
@@ -34,7 +35,6 @@ object ToolJsonRepair {
     fun repair(
         toolName: String,
         args: JSONObject,
-        rawTail: String?,
         tools: List<AgentToolDefinition>,
     ): List<String> {
         val toolDef = tools.firstOrNull { it.name == toolName }
@@ -42,24 +42,7 @@ object ToolJsonRepair {
 
         val repairs = mutableListOf<String>()
 
-        // Strategy 1: truncation repair. Only fires when the dict is empty
-        // (or otherwise unusable) but the raw stream tail looks like a JSON
-        // object that just got cut. Try appending closure suffixes; the
-        // first one that parses wins, and we copy fields back into [args].
-        if (args.length() == 0 && !rawTail.isNullOrBlank()) {
-            val tail = rawTail.trim()
-            val suffixes = listOf("", "\"", "\"}", "\"]}", "}", "}}", "]}", "]}}", "]", "]]")
-            for (suffix in suffixes) {
-                val candidate = tail + suffix
-                val parsed = tryParseObject(candidate) ?: continue
-                val keys = parsed.keys().asSequence().toList()
-                for (k in keys) args.put(k, parsed.opt(k))
-                repairs.add("truncation+" + if (suffix.isEmpty()) "noop" else suffix)
-                break
-            }
-        }
-
-        // Strategy 2: type coercion on required fields.
+        // Strategy 1: type coercion on required fields.
         for (field in toolDef.required) {
             if (!args.has(field)) continue
             val raw = args.opt(field) ?: continue
@@ -72,7 +55,7 @@ object ToolJsonRepair {
             }
         }
 
-        // Strategy 3: fuzzy field-name match for missing required fields. Skip
+        // Strategy 2: fuzzy field-name match for missing required fields. Skip
         // sibling keys that are themselves a recognized schema field — don't
         // steal a sibling that the tool helper would have read directly.
         val schemaFields = toolDef.parameters.keys
@@ -88,12 +71,6 @@ object ToolJsonRepair {
         }
 
         return repairs
-    }
-
-    private fun tryParseObject(s: String): JSONObject? = try {
-        JSONObject(s)
-    } catch (_: Throwable) {
-        null
     }
 
     /**

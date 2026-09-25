@@ -113,6 +113,17 @@ class RelayOutboundClientTest {
         agent.send("""{"type":"stream_cancel","id":"s1"}""")
         assertTrue(streamClosed.await(5, TimeUnit.SECONDS))
 
+        // A session this phone doesn't know (all of them after the app restarts): the
+        // run ends inside the stream, so the watcher stops instead of reconnecting forever.
+        agent.send("""{"type":"stream_open","id":"s2","path":"/harness/sessions/nope/events?after=7"}""")
+        repeat(40) {
+            if (streamFrames.any { it.optString("id") == "s2" }) return@repeat
+            Thread.sleep(50)
+        }
+        val failed = JSONObject(streamFrames.first { it.optString("id") == "s2" }.getString("data"))
+        assertEquals("run.failed", failed.getString("event"))
+        assertEquals(8, failed.getInt("seq"))
+
         agent.close(1000, "done")
         run.join(2000)
         client.stop()

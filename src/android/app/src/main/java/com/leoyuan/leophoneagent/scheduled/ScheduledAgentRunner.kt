@@ -64,18 +64,20 @@ object ScheduledAgentRunner {
             return null
         }
 
+        val sessionId = withContext(Dispatchers.IO) {
+            resolveSessionId(app, task)
+        } ?: return null
+
         // Kick the FGS so the agent loop survives Doze / screen-off. The
         // existing service is idempotent and reused by chat UI; we pass a
         // generic status string so it shows up in the ongoing notification.
+        // Only once there is a session to run: started before an abort, it
+        // stayed up with its wake lock and nothing to do.
         AgentForegroundService.startService(
             context = app,
             sessionCount = 1,
             toolStatus = "Scheduled: ${task.label.ifBlank { "task" }}",
         )
-
-        val sessionId = withContext(Dispatchers.IO) {
-            resolveSessionId(app, task)
-        } ?: return null
 
         AppLogger.info(
             TAG,
@@ -88,7 +90,8 @@ object ScheduledAgentRunner {
             val preview = (result.responseText ?: "").take(200).ifBlank { "(no response)" }
             val ok = result.status != "Error" && result.status != "Timeout"
             ScheduledTaskManager(app).markFired(task.id, sessionId, preview, ok = ok)
-            postCompletionNotification(app, task, sessionId, preview)
+            // Past the wait limit the run is still going: not "completed".
+            if (!result.timedOut) postCompletionNotification(app, task, sessionId, preview)
             return sessionId
         }
 
@@ -103,7 +106,8 @@ object ScheduledAgentRunner {
             val preview = (result.responseText ?: "").take(200).ifBlank { "(no response)" }
             val ok = result.status != "Error" && result.status != "Timeout"
             ScheduledTaskManager(app).markFired(task.id, sessionId, preview, ok = ok)
-            postCompletionNotification(app, task, sessionId, preview)
+            // Past the wait limit the run is still going: not "completed".
+            if (!result.timedOut) postCompletionNotification(app, task, sessionId, preview)
         }
         return sessionId
     }

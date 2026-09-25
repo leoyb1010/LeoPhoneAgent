@@ -5207,6 +5207,9 @@ class ChatViewModel(
             }
 
             if (cliToolId != null) {
+                // Stopped during the setup above (DB writes, attachments, token refresh):
+                // cancelStream had no stream to cancel yet, so don't start one now.
+                if (!_isStreaming.value) return@launch
                 streamLaunched = true
                 streamJob = launch(Dispatchers.IO) {
                     try {
@@ -5269,6 +5272,9 @@ class ChatViewModel(
             } else baseSystemPrompt
 
             // Start agent loop with fallback. _isStreaming was set synchronously at top.
+            // Stopped during the setup above (DB writes, attachments, token refresh):
+            // cancelStream had no stream to cancel yet, so don't start one now.
+            if (!_isStreaming.value) return@launch
             streamLaunched = true
             streamJob = launch(Dispatchers.IO) {
                 AppLogger.info(TAG_STREAM, "send streamJob ENTER sid=$activeSessionId")
@@ -5718,6 +5724,9 @@ class ChatViewModel(
             } else baseSystemPrompt
 
             // _isStreaming was already set synchronously at the top.
+            // Stopped during the setup above (DB writes, attachments, token refresh):
+            // cancelStream had no stream to cancel yet, so don't start one now.
+            if (!_isStreaming.value) return@launch
             streamLaunched = true
             streamJob = launch(Dispatchers.IO) {
                 AppLogger.info(TAG_STREAM, "retryLast streamJob ENTER sid=$activeSessionId")
@@ -7111,24 +7120,22 @@ class ChatViewModel(
             }
             AppLogger.info(TAG_STREAM, "runAgentLoop turn=$turn dispatching ${toolCalls.size} tool call(s), continuing")
 
-            // [T-android-session-last-message-live-tool-call] Push a live
-            // preview to the session list NOW, before the (possibly long-
-            // running) tools execute. The authoritative assistant row isn't
-            // written until turn end (persistAssistantTurn below), so without
-            // this the home list shows a stale preview — or "No messages yet"
-            // for a turn that opened with a tool call and no prior text —
-            // for the entire tool duration. extractTextPreview prefers the
-            // assistant's partial text and falls back to the tool summary, so
-            // the list reflects exactly what the model just emitted. Mirrors
-            // iOS overlaying the live VM's last message over the DB value.
-            run {
-                val livePreviewParts = buildTurnParts(allToolBlocks, turnStartBlockIndex, toolInputMap)
-                val liveMeta = allToolBlocks.filter { it.kind == "tool_use" }.associateBy { it.id }
-                if (livePreviewParts.isNotEmpty()) {
-                    chatRepository.updateSessionPreview(
-                        realSessionId.ifEmpty { sessionId },
-                        buildAssistantPartsJson(livePreviewParts, liveMeta),
-                    )
+            // [T-android-persist-before-tools] Write the assistant row NOW, before the
+            // (possibly long-running) tools execute; it's refreshed after them with
+            // what they fill in (titles, page URLs, image paths). Written only at
+            // turn end, an app killed mid-tool lost the whole turn and Resume re-ran
+            // calls that had already happened. The row also gives the session list
+            // its live preview for the tool duration
+            // ([T-android-session-last-message-live-tool-call]).
+            val assistantDbId = persistAssistantTurn(
+                buildTurnParts(allToolBlocks, turnStartBlockIndex, toolInputMap),
+                lastUsage, turnReasoningContent,
+                allToolBlocks.filter { it.kind == "tool_use" }.associateBy { it.id },
+            )
+            if (assistantDbId != null) {
+                val lastIdx = agentHistory.indexOfLast { it.role == LLMMessage.Role.ASSISTANT && it.dbMessageId == null }
+                if (lastIdx >= 0) {
+                    agentHistory[lastIdx] = agentHistory[lastIdx].copy(dbMessageId = assistantDbId)
                 }
             }
 
@@ -7150,13 +7157,12 @@ class ChatViewModel(
                     isRunning = true,
                     toolTitle = dispatchToolTitle,
                 )
-                // JSON repair (T-tool-json-repair b2c4f8a6): salvage truncated /
-                // type-mismatched / typo'd args BEFORE preflight rejects them.
+                // JSON repair (T-tool-json-repair b2c4f8a6): salvage type-mismatched /
+                // typo'd args BEFORE preflight rejects them (never truncated ones).
                 // Mutates `args` in place; downstream argsStr and preflight see
-                // the repaired payload. Mirrors iOS repairToolArgs in
-                // AIChatViewModel.swift.
+                // the repaired payload. Mirrors iOS repairToolArgs.
                 val repairs = com.leoyuan.leophoneagent.provider.ToolJsonRepair.repair(
-                    name, args, toolInputChunkRings[id]?.lastOrNull(), agentTools,
+                    name, args, agentTools,
                 )
                 if (repairs.isNotEmpty()) {
                     AppLogger.warning(
@@ -7357,17 +7363,13 @@ class ChatViewModel(
                 )
             }
 
-            // Persist the assistant+tools turn (with full input JSON and thinking).
-            // Capture the persisted DB id so we can back-fill agentHistory's last
-            // assistant entry — compact-marker boundary resolution depends on it.
-            val turnParts = buildTurnParts(allToolBlocks, turnStartBlockIndex, toolInputMap)
-            val blockMeta = allToolBlocks.filter { it.kind == "tool_use" }.associateBy { it.id }
-            val assistantDbId = persistAssistantTurn(turnParts, lastUsage, turnReasoningContent, blockMeta)
+            // Refresh the row written before the tools with what they filled in.
             if (assistantDbId != null) {
-                val lastIdx = agentHistory.indexOfLast { it.role == LLMMessage.Role.ASSISTANT && it.dbMessageId == null }
-                if (lastIdx >= 0) {
-                    agentHistory[lastIdx] = agentHistory[lastIdx].copy(dbMessageId = assistantDbId)
-                }
+                val blockMeta = allToolBlocks.filter { it.kind == "tool_use" }.associateBy { it.id }
+                chatRepository.updateMessageParts(
+                    assistantDbId,
+                    buildAssistantPartsJson(buildTurnParts(allToolBlocks, turnStartBlockIndex, toolInputMap), blockMeta),
+                )
             }
 
             // Persist tool results as user-role message (mirrors iOS)
@@ -9309,6 +9311,8 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
 
     fun cancelStream() {
         AppLogger.info(TAG_STREAM, "cancelStream invoked _isStreaming=false (sid=$activeSessionId)")
+        // Before cancel(): a cancelled job no longer reads as active.
+        val streamRunning = streamJob?.isActive == true
         streamJob?.cancel()
         _isStreaming.value = false
         // T-streaming-side-channel: flush any in-flight delta back into the
@@ -9340,7 +9344,10 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
             // Mid-turn rename: sweep any lingering draft shell too.
             ExecutionCoordinator.stopCurrentCommand(sessionId)
         }
-        handleUserCancelledCleanup()
+        // Only for a turn that was actually streaming. Stopped during setup (or
+        // while idle), the last answer is the previous turn's: it used to be
+        // re-saved as a "stopped" reply that offered Resume.
+        if (streamRunning) handleUserCancelledCleanup()
 
         // T189: iOS parity (AIChatViewModel.swift L2592-2610). If the user
         // enqueued prompts during the cancelled stream, auto-resume the drain

@@ -43,6 +43,10 @@ class AndroidMinisSessionEngine(private val context: Context) : MinisSessionEngi
                     sessionId = chatId,
                     text = text,
                     thinkingLevel = parseThinking(thinking),
+                    // No time limit: the remote side watches the run and can stop or
+                    // steer it. The old 10-minute cap reported a still-running turn as
+                    // completed (with the previous answer as its output).
+                    timeoutMs = Long.MAX_VALUE,
                     // delta 仍然用 trySend：onDelta 是同步回调（跑在
                     // HeadlessChatRunner 的 Default 收集协程上），拿不到挂起点。
                     // 缓冲已放大到 DELTA_BUFFER，溢出时至少留下日志而不是完全静默。
@@ -63,9 +67,7 @@ class AndroidMinisSessionEngine(private val context: Context) : MinisSessionEngi
                     result.status == "Error" -> EngineChunk.Failed(
                         withForegroundServiceHint(result.responseText ?: "minis turn failed"),
                     )
-                    // 注：`result.timedOut` 目前仍然走 Completed 分支（与改动前
-                    // 一致）。把超时改成 run.failed 会丢掉已经产出的部分文本，
-                    // 属于本次 review 之外的行为变更，故不动。
+                    // 远程回合不设时限（见上面 timeoutMs），不会有 timedOut。
                     else -> EngineChunk.Completed(result.responseText.orEmpty())
                 }
                 send(terminal)

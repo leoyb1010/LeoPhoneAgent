@@ -203,7 +203,11 @@ class ChatRepository(internal val dao: ChatDao) {
      * target tool_use. Mirrors iOS ChatStore.updateMessageParts.
      */
     suspend fun updateMessageParts(id: String, partsJson: String) =
-        dao.updateMessageParts(id, partsJson)
+        dao.updateMessageParts(
+            id,
+            // Same cap as appendMessage: an oversize row fails CursorWindow on read.
+            if (partsJson.length > MAX_MESSAGE_PARTS_JSON_LENGTH) buildTruncatedPartsJson(partsJson) else partsJson,
+        )
 
     /** [T-error-persist-android] Set/clear the error sticker on a row by id. */
     suspend fun updateMessageErrorInfo(messageId: String, errorInfo: String?) =
@@ -251,25 +255,6 @@ class ChatRepository(internal val dao: ChatDao) {
         val preview = extractTextPreview(capped)
         dao.updateLastMessage(sessionId, preview, now)
         return message
-    }
-
-    /**
-     * [T-android-session-last-message-live-tool-call] Update ONLY the session's
-     * `last_message` preview (and `updated_at`) from an in-progress assistant
-     * turn's parts_json — WITHOUT inserting a message row. The agent loop
-     * persists the authoritative assistant row only at turn end (after tools
-     * execute); during a long tool call the session list would otherwise show a
-     * stale preview (or "No messages yet" for a turn with no prior text). This
-     * pushes the live tool-call summary / partial text into the list the moment
-     * the model emits it, mirroring how iOS overlays the live VM's last message.
-     *
-     * Uses the same [extractTextPreview] as [appendMessage], so a text-only turn
-     * shows its text and a tool-only turn shows the tool summary. No-op when the
-     * payload yields no preview (avoids overwriting a good preview with null).
-     */
-    suspend fun updateSessionPreview(sessionId: String, partsJson: String) {
-        val preview = extractTextPreview(partsJson) ?: return
-        dao.updateLastMessage(sessionId, preview, System.currentTimeMillis())
     }
 
     private fun extractTextPreview(partsJson: String): String? {

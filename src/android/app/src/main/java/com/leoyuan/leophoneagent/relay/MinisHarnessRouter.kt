@@ -108,28 +108,10 @@ class MinisHarnessRouter(
                 val id = EVENTS.matchEntire(path)?.groupValues?.get(1) ?: return notFound()
                 val after = query.substringAfter("after=", "0").toIntOrNull() ?: 0
                 val session = sessions[id] ?: return notFound()
-                // why 410：事件表是有界环形缓冲（见 MinisHarnessSession），超出
-                // 容量的旧事件会被丢弃。如果控制端要求的 after 落在已丢弃的区
-                // 段里，静默地"从还剩下的最老一条开始发"会让它以为中间没有事件，
-                // 拼出来的输出是残缺的。这里显式回 410 + 可用的最小水位，让控制
-                // 端知道要按新的 after 重新订阅（或整体重拉一次快照）。
-                val oldest = session.oldestRetainedWatermark()
-                if (after < oldest) {
-                    val gap = ResumeEnvelopes.of(after, oldest)
-                    return HarnessHttpResult(
-                        410,
-                        ResumeEnvelopes.toJson(gap)
-                            .put(
-                                "error",
-                                JSONObject().put(
-                                    "message",
-                                    "events up to seq=$oldest were evicted; re-subscribe with after=$oldest",
-                                ),
-                            )
-                            .put("evicted_through", oldest)
-                            .put("min_after", oldest),
-                    )
-                }
+                // 事件表是有界环形缓冲：after 落在已丢弃的区段时，subscribe() 发的第一帧
+                // 就是 gap 续传信封（带可用的最小水位），控制端据此知道中间缺了一段。
+                // 以前这里先回 410：经中继开的流早已回了 200，410 到不了控制端，它只看到
+                // 空流、无限重连。
                 HarnessHttpResult(200, JSONObject().put("streaming", true), session.subscribe(after))
             }
             method == "POST" && path.matches(SEND) -> {

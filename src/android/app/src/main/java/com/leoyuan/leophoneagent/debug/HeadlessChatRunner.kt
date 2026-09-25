@@ -275,6 +275,20 @@ internal object HeadlessChatRunner {
      * Same as [prompt] but yields assistant-text suffixes as they grow so a
      * remote harness can emit `message.delta` instead of one lump at the end.
      */
+    /**
+     * What to send when the remote side already shows [sent] and the answer now reads
+     * [text]; null when there is nothing new.
+     */
+    internal fun nextDelta(sent: String, text: String): String? = when {
+        text.startsWith(sent) -> text.substring(sent.length).ifEmpty { null }
+        // Restarted (automatic retry, model fallback) and still behind what the
+        // remote side already shows: nothing new yet.
+        sent.startsWith(text) -> null
+        // Went a different way: deltas can't take text back, so only what is past
+        // the shared start, not all of it again.
+        else -> text.substring(text.commonPrefixWith(sent).length)
+    }
+
     suspend fun streamPrompt(
         context: Context,
         sessionId: String,
@@ -300,16 +314,17 @@ internal object HeadlessChatRunner {
                 timedOut = false,
             )
         }
-        var last = ""
+        // The answer already on screen belongs to the previous turn: its text
+        // used to go out as this turn's first delta, on every follow-up.
+        val previousAnswer = vm.messages.value.lastOrNull { it.role == "assistant" }?.id
+        var sent = ""
         val collector = launch(Dispatchers.Default) {
             vm.messages.collect { msgs -> // collect assistant deltas for remote minis harness
-                val assistant = msgs.lastOrNull { it.role == "assistant" }?.content.orEmpty()
-                if (assistant.length > last.length && assistant.startsWith(last)) {
-                    onDelta(assistant.removePrefix(last))
-                    last = assistant
-                } else if (assistant.isNotEmpty() && assistant != last) {
-                    onDelta(assistant)
-                    last = assistant
+                val message = msgs.lastOrNull { it.role == "assistant" }
+                if (message == null || message.id == previousAnswer) return@collect
+                nextDelta(sent, message.content)?.let { delta ->
+                    onDelta(delta)
+                    sent = message.content
                 }
             }
         }

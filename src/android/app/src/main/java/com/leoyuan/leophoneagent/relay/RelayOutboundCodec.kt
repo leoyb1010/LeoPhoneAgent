@@ -40,6 +40,9 @@ object RelayOutboundCodec {
     fun streamClose(id: String): JSONObject =
         JSONObject().put("type", "stream_close").put("id", id)
 
+    fun streamKeepAlive(id: String): JSONObject =
+        JSONObject().put("type", "stream_keepalive").put("id", id)
+
     fun event(machine: String, event: JSONObject): JSONObject =
         JSONObject().put("type", "event").put("machine", machine).put("event", event)
 
