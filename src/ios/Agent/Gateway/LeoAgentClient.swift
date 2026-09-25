@@ -300,6 +300,18 @@ actor LeoAgentClient {
         try Self.json(try await send(try request(path, service: service)))
     }
 
+    /// [T-relay-outbox] What the relay recorded for a queued request
+    /// (`/relay/api/queue/<id>`, outside the machine prefix): queued, delivered
+    /// with the Mac's status, failed or expired. Throws 404 once forgotten.
+    func relayQueueResult(requestId: String) async throws -> [String: Any] {
+        guard let base = harnessBaseURL, let range = base.absoluteString.range(of: "/relay/api/"),
+              let url = URL(string: String(base.absoluteString[..<range.upperBound]) + "queue/" + requestId)
+        else { throw GatewayError.badURL }
+        var req = try request("/", service: .harness)
+        req.url = url
+        return try Self.json(try await send(req))
+    }
+
     func postJSON(_ path: String, body: [String: Any],
                   service: GatewayService = .engine,
                   headers: [String: String] = [:]) async throws -> [String: Any] {

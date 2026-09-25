@@ -336,13 +336,18 @@ struct StopMacTaskIntent: AppIntent {
             return .result(dialog: "找不到 \(mac.name) 的访问密钥。")
         }
         let sessions = (try? await client.harnessSessions()) ?? []
-        // 最近的活跃会话 = 列表末尾的活跃项(服务端按创建序返回)
-        guard let target = sessions.last(where: MacFleetScan.isActive) else {
-            return .result(dialog: "\(mac.name) 上没有进行中的任务。")
+        // What is actually working, not "active": idle sessions only wait for a
+        // message (the desktop app lists up to 50 of them, newest first, the
+        // Python service oldest first — picking by position stopped the wrong one).
+        let working = sessions.filter { ["starting", "running", "waiting_for_approval"].contains($0.status) }
+        guard !working.isEmpty else {
+            return .result(dialog: "\(mac.name) 上没有正在跑的任务。")
         }
         do {
-            try await client.stopHarness(sessionId: target.id)
-            return .result(dialog: "已停止 \(mac.name) 上的 \(target.name) 任务。")
+            for session in working { try await client.stopHarness(sessionId: session.id) }
+            return working.count == 1
+                ? .result(dialog: "已停止 \(mac.name) 上的 \(working[0].displayTitle) 任务。")
+                : .result(dialog: "已停止 \(mac.name) 上正在跑的 \(working.count) 个任务。")
         } catch {
             return .result(dialog: "停止失败:\(error.localizedDescription)")
         }

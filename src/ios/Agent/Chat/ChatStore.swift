@@ -439,6 +439,10 @@ actor ChatStore {
         if result != SQLITE_OK {
             logger.error("Failed to open database at \(self.dbURL.path): \(result)")
         }
+        // Artifacts and the widget mirror open this file on their own connections;
+        // without a timeout a write that meets their lock fails at once (SQLITE_BUSY)
+        // and the message is only on screen, gone after a restart.
+        sqlite3_busy_timeout(db, 5_000)
         // Enable WAL mode for better concurrent read performance
         exec("PRAGMA journal_mode=WAL")
         exec("PRAGMA foreign_keys=ON")
@@ -4227,9 +4231,23 @@ extension ChatStore {
         }
         let zoneName = syncZoneName
         let now = Date().timeIntervalSince1970
+        // A chat deleted here stays deleted: a late write for it (Stop's cleanup
+        // save, a title that arrives after the delete) used to turn the pending
+        // delete back into an upsert, and the chat lived on on other devices.
+        // Only chat records: their ids are never reused, unlike e.g. a model
+        // entry deleted and added again.
         let sql = """
-            INSERT OR REPLACE INTO sync_dirty_records (record_type, record_id, zone_name, operation, priority, created_at)
+            INSERT INTO sync_dirty_records (record_type, record_id, zone_name, operation, priority, created_at)
             VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(record_type, record_id) DO UPDATE SET
+                zone_name = excluded.zone_name,
+                operation = CASE
+                    WHEN sync_dirty_records.operation = 'delete' AND excluded.operation = 'upsert'
+                         AND sync_dirty_records.record_type IN
+                             ('Session', 'SessionV2', 'Message', 'MessageV2', 'SessionFile', 'SessionFileV2')
+                    THEN 'delete' ELSE excluded.operation END,
+                priority = excluded.priority,
+                created_at = excluded.created_at
         """
         // When V2 is the active sync engine and this recordType has a v2
         // counterpart, skip the v1 row entirely. The legacy dual-write was
@@ -4937,6 +4955,11 @@ extension ChatStore {
     /// untouched, and the swap is committed atomically only after we
     /// know cloud has something to give us.
     func forcePullSession(sessionId: String) async -> ForcePullOutcome {
+        // The replay below goes through mergeRemoteMessage, which skips a chat
+        // that is running here: pulling one would delete its rows and put nothing back.
+        if SessionActivityTracker.isActiveThreadSafe(sessionId) {
+            return .failed(String(localized: "这个对话正在运行，停下后再拉取"))
+        }
         invalidateSessionListCache()
         iCloudLogger.warning("[ForcePull] sid=\(sessionId.prefix(8)) START — pulling cloud first, local untouched")
 

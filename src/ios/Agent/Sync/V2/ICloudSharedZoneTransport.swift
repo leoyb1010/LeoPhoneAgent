@@ -865,21 +865,31 @@ final class ICloudSharedZoneTransport: NSObject, SyncTransport {
             logger.info("[iCloudTrace] fetchSessionPortables querying type=\(type) sid=\(sessionId.prefix(8))")
             let query = CKQuery(recordType: type, predicate: predicate)
             do {
-                let result = try await container.privateCloudDatabase.records(
+                var page = try await container.privateCloudDatabase.records(
                     matching: query,
                     inZoneWith: zoneID,
                     desiredKeys: nil,
                     resultsLimit: CKQueryOperation.maximumResults
                 )
-                for (_, recResult) in result.matchResults {
-                    if case .success(let rec) = recResult {
-                        byType[type, default: 0] += 1
-                        serverRecordCache[rec.recordID] = rec
-                        etagCacheDirty = true
-                        if let portable = toPortable(rec, registry: registry) {
-                            portables.append(portable)
+                while true {
+                    for (_, recResult) in page.matchResults {
+                        if case .success(let rec) = recResult {
+                            byType[type, default: 0] += 1
+                            serverRecordCache[rec.recordID] = rec
+                            etagCacheDirty = true
+                            if let portable = toPortable(rec, registry: registry) {
+                                portables.append(portable)
+                            }
                         }
                     }
+                    // The caller replaces the chat's local rows with what comes
+                    // back, so a long chat must be read to its last page.
+                    guard let cursor = page.queryCursor else { break }
+                    page = try await container.privateCloudDatabase.records(
+                        continuingMatchFrom: cursor,
+                        desiredKeys: nil,
+                        resultsLimit: CKQueryOperation.maximumResults
+                    )
                 }
                 logger.info("[iCloudTrace] fetchSessionPortables type=\(type) count=\(byType[type] ?? 0)")
             } catch {

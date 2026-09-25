@@ -682,7 +682,9 @@ final class ViewModelCache {
     func remove(sessionId: String) {
         lruOrder.removeAll { $0 == sessionId }
         if let removed = cache.removeValue(forKey: sessionId) {
-            removed.cancel()
+            // The chat is being deleted: its queued prompts go with it (the default
+            // policy ran them, calling the model and tools for a chat that is gone).
+            removed.cancel(queuePolicy: .discardQueuedPrompts)
             logger.info("🔄SESSION ViewModelCache REMOVE session=\(sessionId) vm=\(removed.vmInstanceId)")
         }
     }

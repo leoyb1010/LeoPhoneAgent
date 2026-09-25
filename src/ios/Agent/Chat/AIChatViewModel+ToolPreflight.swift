@@ -29,29 +29,28 @@ extension AIChatViewModel {
         let repairs: [String]
     }
 
-    /// Attempt to salvage a malformed / incomplete tool call's args BEFORE
-    /// the preflight validator rejects it. Three strategies, applied in
-    /// order, each gated on actually being needed:
+    /// Attempt to salvage a malformed tool call's args BEFORE the preflight
+    /// validator rejects it. Two strategies, each gated on actually being needed:
     ///
-    /// 1. **Truncation repair** — if `args` is empty but the raw stream
-    ///    tail is a non-empty string, retry JSON parsing with up to a
-    ///    handful of `}` / `]` / `"` closures appended. Models occasionally
-    ///    cut off mid-stream and leave a parseable object behind a single
-    ///    missing brace.
-    /// 2. **Type coercion** — for each required field whose value is
+    /// 1. **Type coercion** — for each required field whose value is
     ///    present but not a String, convert via `String(describing:)` so
     ///    downstream parsers (which uniformly expect strings) see a usable
     ///    value instead of failing the preflight string-non-blank check.
-    /// 3. **Fuzzy field-name match** — for each missing required field,
+    /// 2. **Fuzzy field-name match** — for each missing required field,
     ///    look for a sibling key whose Levenshtein distance is ≤ 1 and
     ///    rename it. Catches one-off typos like `comand` → `command`.
+    ///
+    /// Arguments cut off mid-stream (output limit, dropped connection) are
+    /// never patched up: closing the cut string turned half a `file_write`
+    /// into a valid call that overwrote the file with the fragment, and half
+    /// a shell command into one that ran. Preflight rejects the empty args and
+    /// the model sends the call again.
     ///
     /// `static` so it can be called from any actor isolation context
     /// during stream processing.
     static func repairToolArgs(
         name: String,
         args: [String: Any],
-        rawTail: String?,
         tools: [AgentToolDefinition]
     ) -> ToolArgsRepairOutcome {
         guard let toolDef = tools.first(where: { $0.name == name }) else {
@@ -60,35 +59,14 @@ extension AIChatViewModel {
         var working = args
         var repairs: [String] = []
 
-        // Strategy 1: truncation repair. Only fires when the dict is empty
-        // (or otherwise unusable) but the raw stream tail looks like a JSON
-        // object that just got cut. Try appending up to 3 closures of each
-        // type — that covers the common "object inside object inside array
-        // missing the final ]}" patterns without going wild.
-        if working.isEmpty, let tail = rawTail?.trimmingCharacters(in: .whitespacesAndNewlines), !tail.isEmpty {
-            let suffixes: [String] = [
-                "", "\"", "\"}", "\"]}", "}", "}}", "]}", "]}}", "]", "]]"
-            ]
-            for suffix in suffixes {
-                let candidate = tail + suffix
-                guard let data = candidate.data(using: .utf8),
-                      let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                    continue
-                }
-                working = parsed
-                repairs.append("truncation+\(suffix.isEmpty ? "noop" : suffix)")
-                break
-            }
-        }
-
-        // Strategy 2: type coercion on required fields. Models sometimes
+        // Strategy 1: type coercion on required fields. Models sometimes
         // emit `{"command": 123}` or `{"path": true}` — coerce scalar
         // non-string required values to their textual form so the preflight
         // blank-string check still has something usable to pass through.
         //
         // We intentionally restrict to PRIMITIVE scalars:
         //   - String:       skip (already correct)
-        //   - NSNull:       treat as missing — wipe so Strategy 3 can fuzzy
+        //   - NSNull:       treat as missing — wipe so Strategy 2 can fuzzy
         //                   the sibling into this slot rather than letting
         //                   preflight see a non-nil-but-useless NSNull
         //   - NSNumber:     use .stringValue (preserves bool→"true"/"false"
@@ -134,7 +112,7 @@ extension AIChatViewModel {
             }
         }
 
-        // Strategy 3: fuzzy field-name match for missing required fields.
+        // Strategy 2: fuzzy field-name match for missing required fields.
         // Only consider sibling keys that are themselves NOT already a
         // recognized schema field (don't steal a sibling that the tool
         // helper would have read directly).

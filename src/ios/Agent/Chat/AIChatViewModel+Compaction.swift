@@ -476,6 +476,9 @@ extension AIChatViewModel {
             return
         }
         guard let sessionId else { return }
+        // In-loop compaction runs inside a live turn: that turn still owns
+        // isProcessing (Stop, the Live Activity) and drains its own queue.
+        let wasProcessing = isProcessing
 
         // Find the boundary UI message.
         guard let boundaryIndex = messages.firstIndex(where: { $0.id == chatMessageId }) else { return }
@@ -606,7 +609,7 @@ extension AIChatViewModel {
 
         defer {
             isCompacting = false
-            isProcessing = false
+            if !wasProcessing { isProcessing = false }
             compactTask = nil
         }
 
@@ -839,8 +842,8 @@ extension AIChatViewModel {
         // drain task starts after this function returns, i.e. after the defer
         // above has reset isCompacting/isProcessing/compactTask to a clean
         // idle state. Failure exits intentionally don't drain (messages stay
-        // queued and user-cancellable).
-        schedulePostCompactDrain()
+        // queued and user-cancellable). A live turn drains its own queue.
+        if !wasProcessing { schedulePostCompactDrain() }
     }
 
     /// Build a text representation of messages for summarization.

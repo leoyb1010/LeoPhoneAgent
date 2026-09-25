@@ -47,7 +47,6 @@ final class MacLiveSessionsStore: ObservableObject {
     @Published private(set) var rows: [Row] = []
 
     private var pollTask: Task<Void, Never>?
-    private var refreshing = false
 
     /// 轮询间隔:主界面可见时才跑。20 秒足够"知道有没有事",
     /// 又不会把电池和流量当消耗品。
@@ -70,15 +69,24 @@ final class MacLiveSessionsStore: ObservableObject {
         pollTask = nil
     }
 
+    /// Returns once `rows` is fresh. A caller that arrives mid-refresh waits for
+    /// that one (it used to return at once, with the rows from before).
     func refresh() async {
-        guard !refreshing else { return }
+        if let inFlight { return await inFlight.value }
+        let load = Task { await self.load() }
+        inFlight = load
+        await load.value
+        inFlight = nil
+    }
+
+    private var inFlight: Task<Void, Never>?
+
+    private func load() async {
         let hosts = GatewayHostStore.shared.activeHosts
         guard !hosts.isEmpty else {
             if !rows.isEmpty { rows = [] }
             return
         }
-        refreshing = true
-        defer { refreshing = false }
 
         // 请求失败 ≠ 没有会话。网络抖动时保留该主机上一轮的行,
         // 否则整节一闪一闪;只有确认成功且为空才移除。

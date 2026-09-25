@@ -81,7 +81,11 @@ final class HarnessLiveActivityBridge {
     /// driver 状态变化时喊一声(update 在后台也合法,start 只在前台发生)。
     func refresh() {
         entries = entries.filter { $0.value.driver != nil }
-        Self.onScreenSessionIds = Set(entries.values.compactMap { $0.driver?.sessionId })
+        // Only consoles still following: one that gave up reconnecting shows no
+        // card, so its approvals must still banner.
+        Self.onScreenSessionIds = Set(entries.values.compactMap { entry in
+            entry.driver.flatMap { $0.isRunning ? $0.sessionId : nil }
+        })
         let snapshots: [LiveSessionSnapshot] = entries.values.compactMap { entry in
             guard let d = entry.driver, d.isRunning, let sid = d.sessionId else { return nil }
             let waiting = d.pendingApproval

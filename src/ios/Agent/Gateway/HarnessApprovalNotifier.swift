@@ -146,9 +146,10 @@ enum HarnessApprovalNotifier {
                     }()
             }
             guard let sessionId else { return redeliver(response) }
-            // Claude Code / Codex / Grok offer once · always · deny; only Leo's own
-            // agent has "session". The Mac answers 400 to a choice it doesn't list.
-            let attempts = choice == "session" ? ["session", "always", "once"] : [choice]
+            // Older Mac services list only once · always · deny and answer 400 to
+            // "session". Fall back to once, never to always: for Claude Code "always"
+            // writes a permanent allow rule into the project's settings.
+            let attempts = choice == "session" ? ["session", "once"] : [choice]
             var delivered = false
             for attempt in attempts {
                 do {

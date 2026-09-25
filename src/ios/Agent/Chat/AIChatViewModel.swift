@@ -2819,8 +2819,22 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         //   ... user(tool_results) assistant(failed/partial)
         // We need to remove just the trailing assistant entry so the API call retries
         // with the tool results as the last message.
+        //
+        // [T-retry-finished-answer] The replaced answer leaves the bubble and the
+        // database too. Retry on a finished answer used to stream the new one
+        // in under the old text, and leave the old row behind, which breaks the
+        // agentHistory index == row index contract every later Edit / Retry /
+        // Delete-from-here truncates by.
+        var staleRowKeepCount: Int?
         if agentHistory.last?.role == .assistant {
-            agentHistory.removeLast()
+            let replaced = agentHistory.removeLast()
+            if !replaced.parts.contains(where: { if case .toolUse = $0 { return true }; return false }) {
+                // A text-only step: its blocks are the text/thinking after the last tool.
+                let firstOfStep = (lastMsg.blocks.lastIndex { $0.toolStatus != nil } ?? -1) + 1
+                lastMsg.blocks = Array(lastMsg.blocks[..<firstOfStep])
+                    + lastMsg.blocks[firstOfStep...].filter { $0.kind != .text && $0.kind != .thinking }
+            }
+            if replaced.dbMessageId != nil { staleRowKeepCount = agentHistory.count }
         }
 
         // Clean orphaned tool_results that reference tool_uses no longer in history.
@@ -2854,6 +2868,11 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
 
         currentTask = Task { [weak self] in
             guard let self else { return }
+
+            // Before the new answer is saved, so the row it replaces is gone first.
+            if let keep = staleRowKeepCount, let sid = self.sessionId {
+                await ChatStore.shared.deleteMessagesAfter(sessionId: sid, keepCount: keep)
+            }
 
             while self.kernelStatus == .booting {
                 try? await Task.sleep(nanoseconds: 100_000_000)
@@ -2933,6 +2952,15 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
     /// into agentHistory so the model knows to pick up where it left off.
     func resume() {
         guard !isProcessing, canResume else { return }
+        // Killed before the turn's first reply was saved: the saved tail is the
+        // prompt itself, and there is no reply bubble to continue (a new chat has
+        // none; in an older chat the last one is the previous turn's). Run the
+        // turn again from that prompt.
+        if let tail = agentHistory.last, Self.isUserBubbleEntry(tail),
+           let prompt = messages.last(where: { $0.role == .user && !$0.isQueued }) {
+            retryFromMessage(prompt.id)
+            return
+        }
         // Same candidate rule as Stop: a queued user row can sit after the
         // assistant bubble. `messages.last` would then make Resume a silent no-op.
         guard let candidateIdx = AgentChatCorrectness.lastAssistantIndex(
@@ -2968,7 +2996,10 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // Inject a "Continue" user message only when history ends with assistant
         // (Case 2a: text streaming cancel). For Case 1 (tool cancel), history already
         // ends with tool_result (user role) and is valid for the next API call.
-        if agentHistory.last?.role == .assistant {
+        // A tail that called tools (app killed mid-batch) gets its placeholder
+        // results from runAgentLoop's orphan pass instead, and continues from them.
+        if let tail = agentHistory.last, tail.role == .assistant,
+           !tail.parts.contains(where: { if case .toolUse = $0 { return true }; return false }) {
             let continueMsg = AgentMessage(role: .user, parts: [
                 .text("<system-reminder>The user stopped the previous response but now wants to continue. Pick up exactly where you left off.</system-reminder>")
             ])
@@ -4570,7 +4601,9 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         // any retry / fallback catch path we resync `msgIdx` via this id
         // before touching `messages[msgIdx]`; if the message is gone we
         // bail out cleanly instead of crashing with Index out of range.
-        let runMsgId: UUID = msgIdx < messages.count ? messages[msgIdx].id : UUID()
+        // var: a queued prompt injected as a new turn moves the run to a new bubble,
+        // and the stream finds its bubble by this id.
+        var runMsgId: UUID = msgIdx < messages.count ? messages[msgIdx].id : UUID()
         /// Track how many blocks were already committed to agentHistory
         /// so subsequent iterations only add new blocks.
         var committedBlockCount = committedBlocks ?? 0
@@ -4679,7 +4712,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
             let placeholderParts = orphanedToolUses.map { (id, name) in
                 AgentContentPart.toolResult(
                     id: id, name: name,
-                    content: "Tool execution was interrupted by an unexpected error.",
+                    content: "The app stopped before this tool finished, so its result was lost."
+                        + " It may already have run: check its effects before running it again.",
                     isError: true
                 )
             }
@@ -4689,6 +4723,12 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
         }
         for insertion in insertions.reversed() {
             agentHistory.insert(insertion.message, at: insertion.index)
+            // At the tail (the app was killed mid-batch): saved too, keeping
+            // agentHistory index == row index.
+            if insertion.index == agentHistory.count - 1,
+               let pid = await persistAgentMessage(insertion.message), insertion.index < agentHistory.count {
+                agentHistory[insertion.index].dbMessageId = pid
+            }
         }
         if !insertions.isEmpty {
             logger.warning("Injected placeholder tool results for \(insertions.count) assistant message(s) with orphaned tool_use(s)")
@@ -4769,6 +4809,8 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     compactionsThisLoop += 1
                     logger.info("[Context] In-loop near capacity — auto-compacting (\(compactionsThisLoop)/\(Self.maxInLoopCompactions)) turnCount=\(turnCount)")
                     await compactBefore(anchorId, allowDuringProcessing: true)
+                    // The divider and the folded rows moved the live bubble.
+                    if let moved = messages.firstIndex(where: { $0.id == runMsgId }) { msgIdx = moved }
                     turnCount -= 1   // cancel this iteration's defer increment
                     continue
                 }
@@ -5387,6 +5429,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     committedBlockCount: &committedBlockCount,
                     turnUsage: turnUsage
                 ) {
+                    runMsgId = messages[msgIdx].id
                     // We're continuing with the user's new turn, so this session is
                     // no longer in an interrupted/resumable state. Reset per-turn
                     // usage for the fresh assistant message.
@@ -5397,14 +5440,15 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 break
             }
 
-            // Build assistant RawMessage now but defer DB write until tool results
-            // are ready, so both can be persisted in a single SQLite transaction.
-            let deferredAssistantRaw = await buildRawMessage(assistantMessage, thoughtSignatures: sigMap)
-            // Phase B: write the DB id back into agentHistory immediately — even though
-            // we defer the actual appendMessages to batch with the tool results below,
-            // the id is deterministic and compact lookups rely on it.
-            if let raw = deferredAssistantRaw, assistantAgentIdx < agentHistory.count {
-                agentHistory[assistantAgentIdx].dbMessageId = raw.id
+            // [T-persist-before-tools] Saved before the tools run. It used to wait
+            // for the whole batch, so an app killed during a slow tool lost the
+            // step (text and every finished result), and Resume ran the calls
+            // that had already happened again.
+            if let raw = await buildRawMessage(assistantMessage, thoughtSignatures: sigMap) {
+                await ChatStore.shared.appendMessage(raw)
+                if assistantAgentIdx < agentHistory.count {
+                    agentHistory[assistantAgentIdx].dbMessageId = raw.id
+                }
             }
             // Flush any remaining unspoken text (streaming TTS already spoke most sentences)
             do {
@@ -5563,22 +5607,15 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                 }
             }
 
-            // Batch-persist the deferred assistant message + tool results in one transaction
             let uiBlockCountMid = await MainActor.run { msgIdx < messages.count ? messages[msgIdx].blocks.count : -1 }
             logger.info("[BlocksLost] PERSIST mid-loop (tool) sid=\(sessionId?.prefix(8) ?? "nil") agentParts=\(assistantMessage.parts.count) uiBlocks=\(uiBlockCountMid)")
             if let toolResultRaw = await buildRawMessage(toolResultMessage, snapshots: pendingSnapshots, toolStatuses: toolStatusStrings) {
-                var batch: [RawMessage] = []
-                if let assistantRaw = deferredAssistantRaw { batch.append(assistantRaw) }
-                batch.append(toolResultRaw)
-                await ChatStore.shared.appendMessages(batch)
+                await ChatStore.shared.appendMessage(toolResultRaw)
                 // Phase B: write the DB id back into agentHistory entries so compact
                 // can resolve boundaries by id.
                 if toolResultAgentIdx < agentHistory.count {
                     agentHistory[toolResultAgentIdx].dbMessageId = toolResultRaw.id
                 }
-            } else if let assistantRaw = deferredAssistantRaw {
-                await ChatStore.shared.appendMessage(assistantRaw)
-                // (assistantAgentIdx was already populated above via deferredAssistantRaw path)
             }
 
             // Signal that tools are done and we're waiting for the model's next response.
@@ -5628,6 +5665,7 @@ final class AIChatViewModel: ObservableObject, SpeechControlling {
                     committedBlockCount: &committedBlockCount,
                     turnUsage: turnUsage
                 ) {
+                    runMsgId = messages[msgIdx].id
                     canResume = false
                     turnUsage = TokenUsage()
                     continue

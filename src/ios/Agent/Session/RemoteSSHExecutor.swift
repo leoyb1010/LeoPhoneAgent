@@ -107,8 +107,12 @@ actor RemoteSSHExecutor {
                 succeeded: false)
         } catch {
             // [T-ssh-auth-fallback] A stale stored password must not permanently
-            // shadow working key auth: retry once with the device key.
-            if usedPassword, RemoteHostStore.devicePrivateKey() != nil, !isKeyRetry {
+            // shadow working key auth: retry once with the device key — only when
+            // the server refused the password. Any other error (a dropped network,
+            // Stop, the command failing) used to delete the password and run the
+            // command a second time.
+            if case SSHClientError.allAuthenticationOptionsFailed = error,
+               usedPassword, RemoteHostStore.devicePrivateKey() != nil, !isKeyRetry {
                 logger.info("password auth failed for \(host.name) — retrying with device key")
                 RemoteHostStore.deletePassword(hostId: host.id)
                 return await run(host: host, command: command, timeout: timeout, isKeyRetry: true)

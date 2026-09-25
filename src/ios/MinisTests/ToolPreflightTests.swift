@@ -33,6 +33,18 @@ final class ToolPreflightTests: XCTestCase {
         AIChatViewModel.preflightValidateToolCall(name: name, args: args, tools: tools)
     }
 
+    // MARK: - Cut-off arguments
+
+    /// A call cut off mid-arguments (output limit, dropped stream) arrives with
+    /// empty args. It is never patched into a runnable call (half a command, or a
+    /// file_write of a fragment): preflight rejects it and the model sends it again.
+    func testCutOffArguments_areRejectedNotPatched() {
+        let outcome = AIChatViewModel.repairToolArgs(name: "shell_execute", args: [:], tools: tools)
+        XCTAssertTrue(outcome.repairs.isEmpty)
+        XCTAssertTrue(outcome.args.isEmpty)
+        XCTAssertNotNil(validate("shell_execute", outcome.args))
+    }
+
     // MARK: - file_edit.new_string empty-string whitelist
 
     func testFileEdit_emptyNewString_isAllowed() {

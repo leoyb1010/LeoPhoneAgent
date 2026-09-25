@@ -1725,7 +1725,11 @@ extension AIChatViewModel {
     /// only if set on RawMessage; for the common "set error after persist" ordering
     /// this UPDATE is what writes it. iCloud is untouched (error_info is device-local).
     func persistErrorInfo(_ error: String?) async {
-        guard let dbId = agentHistory.last(where: { $0.role == .assistant && $0.dbMessageId != nil })?.dbMessageId else {
+        // Only this turn's rows (after the last user bubble): when the first
+        // request fails the turn has none yet, and the previous turn's good
+        // answer used to take the error — red, permanently, after a reload.
+        let turnStart = agentHistory.lastIndex(where: { Self.isUserBubbleEntry($0) }).map { $0 + 1 } ?? 0
+        guard let dbId = agentHistory[turnStart...].last(where: { $0.role == .assistant && $0.dbMessageId != nil })?.dbMessageId else {
             logger.info("[ErrorPersist] skip — no persisted assistant message id yet (error=\(error != nil))")
             return
         }

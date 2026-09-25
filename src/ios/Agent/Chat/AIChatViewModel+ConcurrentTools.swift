@@ -163,13 +163,10 @@ extension AIChatViewModel {
             return false
         }()
         if needsRepair {
-            let rawJoined = tu.inputChunkRing.joined()
-            let repairOutcome = Self.repairToolArgs(
-                name: tu.name, args: tu.args, rawTail: rawJoined, tools: tools
-            )
+            let repairOutcome = Self.repairToolArgs(name: tu.name, args: tu.args, tools: tools)
             if !repairOutcome.repairs.isEmpty {
                 AppLogger(category: "ToolPreflight").warning(
-                    "[ToolRepair] REPAIRED tool=\(tu.name) id=\(tu.id) strategies=[\(repairOutcome.repairs.joined(separator: ", "))] beforeKeys=[\(tu.args.keys.sorted().joined(separator: ","))] afterKeys=[\(repairOutcome.args.keys.sorted().joined(separator: ","))] rawBytes=\(rawJoined.utf8.count)"
+                    "[ToolRepair] REPAIRED tool=\(tu.name) id=\(tu.id) strategies=[\(repairOutcome.repairs.joined(separator: ", "))] beforeKeys=[\(tu.args.keys.sorted().joined(separator: ","))] afterKeys=[\(repairOutcome.args.keys.sorted().joined(separator: ","))]"
                 )
                 toolArgs = repairOutcome.args
             }
@@ -380,6 +377,10 @@ extension AIChatViewModel {
                 // dispatcher resets it once per batch.
                 toolOutput = "<system-reminder>The user cancelled this operation. The returned result may be incomplete.</system-reminder>\n" + result.output
                 cancelledHere = true
+            } else if backgroundSuspended {
+                toolOutput = "<system-reminder>iOS suspended the app in the background while this command ran, which may have stopped it"
+                    + " before it finished. The output may be incomplete: check it, and run the command again if you still need it.</system-reminder>\n"
+                    + result.output
             } else {
                 toolOutput = result.output
             }

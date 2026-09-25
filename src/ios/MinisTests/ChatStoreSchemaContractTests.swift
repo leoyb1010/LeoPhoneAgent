@@ -47,6 +47,29 @@ final class ChatStoreSchemaContractTests: XCTestCase {
         XCTAssertEqual(ChatStoreSchemaContract.validate(db), [])
     }
 
+    /// ArtifactRepository runs migrate on its own connection on every launch and
+    /// foreground while the chat is writing. At the current contract it must not
+    /// need the write lock: it used to take it (and rewrite every message row),
+    /// and the chat's own inserts failed with SQLITE_BUSY.
+    func testCurrentDatabaseMigratesWithoutTheWriteLock() throws {
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent("contract-\(UUID().uuidString).db").path
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        var chat: OpaquePointer?
+        var artifacts: OpaquePointer?
+        XCTAssertEqual(sqlite3_open(path, &chat), SQLITE_OK)
+        XCTAssertEqual(sqlite3_open(path, &artifacts), SQLITE_OK)
+        defer { sqlite3_close(chat); sqlite3_close(artifacts) }
+        guard let chat, let artifacts else { throw ChatStoreSchemaContract.MigrationError.databaseUnavailable }
+        _ = try ChatStoreSchemaContract.migrate(chat)
+
+        try execute(chat, "BEGIN IMMEDIATE TRANSACTION")
+        defer { _ = sqlite3_exec(chat, "COMMIT", nil, nil, nil) }
+        let report = try ChatStoreSchemaContract.migrate(artifacts)
+
+        XCTAssertEqual(report.previousVersion, ChatStoreSchemaContract.currentVersion)
+        XCTAssertTrue(report.addedColumns.isEmpty)
+    }
+
     func testVersionTwoArtifactSchemaGainsSourcePathWithoutLosingRows() throws {
         let db = try openTemporaryDatabase()
         defer { sqlite3_close(db) }

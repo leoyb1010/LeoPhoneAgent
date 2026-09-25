@@ -110,6 +110,12 @@ enum ChatStoreSchemaContract {
     @discardableResult
     static func migrate(_ db: OpaquePointer?) throws -> Report {
         guard let db else { throw MigrationError.databaseUnavailable }
+        // Already at this contract (every launch and foreground after the first):
+        // no write transaction and no full-table UPDATE holding the write lock
+        // against the chat's own inserts. Swift writes set part_flags themselves.
+        if readContractVersion(db) == currentVersion, validate(db).isEmpty {
+            return Report(previousVersion: currentVersion, currentVersion: currentVersion, addedColumns: [])
+        }
         try execute(db, "BEGIN IMMEDIATE TRANSACTION")
         do {
             try execute(db, """

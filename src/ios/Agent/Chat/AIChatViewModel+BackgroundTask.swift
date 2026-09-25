@@ -38,7 +38,7 @@ extension AIChatViewModel {
                         reason: .backgroundTimeExpired
                     )
                     BackgroundInterruptionTracker.shared.recordInterruption()
-                    self.stopCurrentCommand()
+                    self.stopCurrentCommand(byUser: false)
                     self.endBackgroundProcessing()
                 }
             )
@@ -118,7 +118,7 @@ extension AIChatViewModel {
                 }
             }
             // Scope the kill to THIS session — see [T-bg-expiry-cross-session-kill].
-            self.stopCurrentCommand(scope: .thisSessionOnly)
+            self.stopCurrentCommand(scope: .thisSessionOnly, byUser: false)
             // Must end the background task to avoid termination.
             self.endBackgroundProcessing()
         }
@@ -676,7 +676,10 @@ extension AIChatViewModel {
     /// Concurrent tool batches are within one session, so the batch is still
     /// cancelled whole. `.allSessions` remains for a deliberate stop-everything
     /// caller, which today reaches each session through its own view model.
-    func stopCurrentCommand(scope: StopScope = .thisSessionOnly) {
+    /// `byUser: false` is iOS taking the background time back: the command is
+    /// killed so the app isn't, but the run is not stopped. It parks at
+    /// waitIfBackgroundSuspended and goes on when the app is opened again.
+    func stopCurrentCommand(scope: StopScope = .thisSessionOnly, byUser: Bool = true) {
         // A tool can be in several cancellable states:
         //   - one or more live iSH processes (runningCommandPids non-empty),
         //   - a pre-execution delay countdown (toolDelayWaitActive),
@@ -689,7 +692,7 @@ extension AIChatViewModel {
         let browserLoading = browserTabPool.hasLoadingTab
         let browserActionActive = browserTabPool.hasActiveAgentAction
         guard !runningCommandPids.isEmpty || toolDelayWaitActive || browserLoading || browserActionActive else { return }
-        commandCancelledByUser = true
+        if byUser { commandCancelledByUser = true }
         // Stop any in-flight browser page loads. stopLoading() resolves the
         // manager's navigationContinuation, so the awaited browserTabPool
         // .execute(action:) returns and the hung tool call completes.

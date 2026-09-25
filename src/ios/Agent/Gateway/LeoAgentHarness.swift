@@ -232,8 +232,14 @@ extension LeoAgentClient {
 @MainActor
 final class HarnessSessionDriver: ObservableObject {
     @Published private(set) var items: [GatewayTranscriptItem] = []
-    @Published private(set) var isRunning = false
-    @Published private(set) var status = "idle"
+    // The Mac card on the Lock Screen follows both (it used to change only on
+    // approvals, and kept saying "running" for a finished task).
+    @Published private(set) var isRunning = false {
+        didSet { if isRunning != oldValue { HarnessLiveActivityBridge.shared.refresh() } }
+    }
+    @Published private(set) var status = "idle" {
+        didSet { if status != oldValue { HarnessLiveActivityBridge.shared.refresh() } }
+    }
     /// A queue, not a slot: a CLI can raise a second approval before the
     /// first is answered, and a single slot silently dropped the first one —
     /// unanswerable from any surface, CLI blocked forever.
@@ -343,30 +349,94 @@ final class HarnessSessionDriver: ObservableObject {
     /// 发一条后续消息;LeoPhoneAgent 任务顺带告诉 Mac 全自动开关的当前状态。
     private func sendSteer(sessionId: String, text: String) async {
         let fullAuto: Bool? = harness.key == "zcode" ? (FullAutoGate.isOn && !fullAutoRefused) : nil
+        let requestId = UUID().uuidString
         do {
-            let queued = try await client.steerHarness(sessionId: sessionId, text: text, fullAuto: fullAuto)
-            if queued { note(Self.queuedWhileOfflineNote) }
+            if try await client.steerHarness(sessionId: sessionId, text: text, fullAuto: fullAuto, requestId: requestId) {
+                queuedAtRelay(requestId, text: text, fullAuto: fullAuto)
+            }
         } catch GatewayError.http(let status, _) where status == 403 && fullAuto == true {
             fullAutoRefused = true
             note(Self.fullAutoRefusedNote)
             do {
                 // A fresh request id: the Mac refused the first one, this is a different request.
-                if try await client.steerHarness(sessionId: sessionId, text: text) {
-                    note(Self.queuedWhileOfflineNote)
+                let retryId = UUID().uuidString
+                if try await client.steerHarness(sessionId: sessionId, text: text, requestId: retryId) {
+                    queuedAtRelay(retryId, text: text, fullAuto: nil)
                 }
-            } catch { steerFailed(text, error) }
+            } catch { steerFailed(text, error.localizedDescription) }
         } catch {
-            steerFailed(text, error)
+            steerFailed(text, error.localizedDescription)
         }
     }
 
     /// The Mac never got it: say so, stop claiming it's working, give the text back.
-    private func steerFailed(_ text: String, _ error: Error) {
-        lastError = error.localizedDescription
-        items.append(GatewayTranscriptItem(kind: .failure,
-                                           text: String(localized: "没送到 Mac：\(error.localizedDescription)")))
+    private func steerFailed(_ text: String, _ reason: String) {
+        lastError = reason
+        items.append(GatewayTranscriptItem(kind: .failure, text: String(localized: "没送到 Mac：\(reason)")))
         if status == "running" { status = "idle" }
         unsentText = text
+    }
+
+    // MARK: [T-relay-outbox] follow-ups queued at the relay
+
+    /// The relay answers "queued" at once and learns the Mac's answer only when
+    /// it delivers, later. Without asking, a follow-up the Mac then refused
+    /// (full auto from a sender it doesn't recognise, a finished session)
+    /// vanished while the console said it would arrive.
+    private var relayQueued: [(id: String, text: String, fullAuto: Bool?)] = []
+    private var relayQueueWatch: Task<Void, Never>?
+
+    private func queuedAtRelay(_ requestId: String, text: String, fullAuto: Bool?) {
+        note(Self.queuedWhileOfflineNote)
+        relayQueued.append((requestId, text, fullAuto))
+        watchRelayQueue()
+    }
+
+    private func watchRelayQueue() {
+        guard relayQueueWatch == nil, !relayQueued.isEmpty else { return }
+        relayQueueWatch = Task { [weak self] in
+            // ponytail: polls every 15 s for up to an hour while this console is
+            // open; a push from the relay on delivery would replace it.
+            for _ in 0..<240 {
+                try? await Task.sleep(for: .seconds(15))
+                guard let self, !Task.isCancelled else { return }
+                if await self.checkRelayQueue() { break }
+            }
+            self?.relayQueueWatch = nil
+        }
+    }
+
+    /// True once nothing is left waiting at the relay.
+    private func checkRelayQueue() async -> Bool {
+        for item in relayQueued {
+            let result: [String: Any]
+            do {
+                result = try await client.relayQueueResult(requestId: item.id)
+            } catch GatewayError.http(status: 404, _) {
+                relayQueued.removeAll { $0.id == item.id }   // the relay no longer knows it
+                continue
+            } catch {
+                continue   // relay unreachable: ask again next round
+            }
+            switch result["status"] as? String {
+            case "delivered":
+                relayQueued.removeAll { $0.id == item.id }
+                let http = result["http_status"] as? Int ?? 200
+                if http == 403, item.fullAuto == true, let sessionId {
+                    fullAutoRefused = true
+                    note(Self.fullAutoRefusedNote)
+                    await sendSteer(sessionId: sessionId, text: item.text)
+                } else if !(200..<300).contains(http) {
+                    steerFailed(item.text, String(localized: "Mac 拒绝了排队的这条（HTTP \(http)）"))
+                }
+            case "failed", "expired":
+                relayQueued.removeAll { $0.id == item.id }
+                steerFailed(item.text, (result["error"] as? String) ?? String(localized: "排队太久，已过期"))
+            default:
+                break   // still waiting for the Mac
+            }
+        }
+        return relayQueued.isEmpty
     }
 
     private static let queuedWhileOfflineNote = String(localized: "Mac 暂时不在线，这条已排队，上线后自动送达。")
@@ -392,8 +462,14 @@ final class HarnessSessionDriver: ObservableObject {
         items.append(GatewayTranscriptItem(kind: .notice, text: "→ " + text))
         lastError = nil
         if status == "idle" { status = "running" }
-        // Reconnects gave up earlier: follow the stream again, or the reply never shows.
-        if status == "detached" { resumeIfNeeded() }
+        if !isRunning {
+            // Not following any more (reconnects gave up, the session read as over):
+            // follow again, or the reply never shows.
+            isRunning = true
+            status = "running"
+            streamTask?.cancel()
+            streamTask = Task { [weak self] in await self?.follow(sessionId: sessionId) }
+        }
         // 每条后续消息都带上全自动开关的当前状态(LeoPhoneAgent 任务):开关关着时 Mac 会把全自动任务切回先问我。
         Task { await self.sendSteer(sessionId: sessionId, text: text) }
         return true
@@ -417,6 +493,9 @@ final class HarnessSessionDriver: ObservableObject {
             do {
                 try await client.approveHarness(sessionId: sessionId, choice: choice,
                                                 approvalId: approval.approvalId)
+            } catch GatewayError.http(status: 409, _) {
+                // Nothing is waiting for it any more (answered elsewhere, or the
+                // run ended): the card is right to stay gone.
             } catch {
                 await MainActor.run {
                     guard let self else { return }
@@ -438,6 +517,8 @@ final class HarnessSessionDriver: ObservableObject {
     func detach() {
         streamTask?.cancel()
         streamTask = nil
+        relayQueueWatch?.cancel()
+        relayQueueWatch = nil
         HarnessLiveActivityBridge.shared.unregister(driver: self)
         guard isRunning else { return }
         isRunning = false
@@ -448,6 +529,7 @@ final class HarnessSessionDriver: ObservableObject {
     }
 
     func resumeIfNeeded() {
+        watchRelayQueue()   // back on screen: keep asking about anything still queued
         guard !isRunning else { return }
         if let sessionId, status == "detached" {
             isRunning = true
@@ -480,7 +562,6 @@ final class HarnessSessionDriver: ObservableObject {
         var attempt = 0
         var seenAtAttemptStart = lastSeq
         while !Task.isCancelled {
-            var ended = false
             var cleanClose = false
             do {
                 await MainActor.run { self.journalStatus = HarnessJournalStatus() }
@@ -505,10 +586,9 @@ final class HarnessSessionDriver: ObservableObject {
                         if item.seq > 0 { self.lastSeq = item.seq }
                         self.apply(item.event)
                     }
-                    // run.completed / run.failed are TURN boundaries here — the
-                    // CLI stays alive and steerable. Only a cancel ends the
-                    // session from inside the stream.
-                    if case .runCancelled = item.event { ended = true }
+                    // run.* are all TURN boundaries: after a stop the Mac desktop
+                    // app still takes follow-ups. A session that really ended
+                    // closes the stream, and the reconcile below reads that.
                 }
                 cleanClose = true
             } catch {
@@ -520,7 +600,7 @@ final class HarnessSessionDriver: ObservableObject {
                     await MainActor.run { self.lastError = error.localizedDescription }
                 }
             }
-            if ended || Task.isCancelled { return }
+            if Task.isCancelled { return }
 
             if cleanClose {
                 // The server closes the stream deliberately when a session is
@@ -564,6 +644,7 @@ final class HarnessSessionDriver: ObservableObject {
             await MainActor.run {
                 self.status = "completed"
                 self.isRunning = false
+                self.clearApprovals()
                 self.note(String(localized: "Session is gone from the Mac."))
             }
             return true
@@ -572,6 +653,7 @@ final class HarnessSessionDriver: ObservableObject {
             await MainActor.run {
                 self.status = summary.status
                 self.isRunning = false
+                self.clearApprovals()
                 self.note(summary.status == "failed"
                     ? String(localized: "The session failed on the Mac.")
                     : String(localized: "Session ended."))
@@ -649,6 +731,7 @@ final class HarnessSessionDriver: ObservableObject {
             // the first exchange.
             status = "idle"
             lastTurnFailed = false
+            clearApprovals()
         case .runFailed(let message):
             // A failed TURN, not a dead session — surface it and stay
             // steerable; a dead process ends via stream close + reconcile.
@@ -658,9 +741,11 @@ final class HarnessSessionDriver: ObservableObject {
                 text: message ?? String(localized: "The turn failed.")))
             status = "idle"
             lastTurnFailed = true
+            clearApprovals()
         case .runCancelled:
-            status = "cancelled"
-            isRunning = false
+            // The turn stopped; keep following — a follow-up may come next.
+            status = "idle"
+            clearApprovals()
             note(String(localized: "Session stopped."))
         case .unknown(let name, let payload):
             if name == "user.message" {
@@ -689,6 +774,17 @@ final class HarnessSessionDriver: ObservableObject {
     }
 
     /// Mirror an approval to the wrist and accept an answer from there.
+    /// A finished turn waits on nothing: drop its cards everywhere (the Mac
+    /// clears its own without always saying so, and a replay would bring them back).
+    private func clearApprovals() {
+        for approval in pendingApprovals {
+            WatchBridge.shared.clearApprovalRequest(approvalId: approval.approvalId)
+            if let sessionId { HarnessApprovalNotifier.clear(sessionId: sessionId, approvalId: approval.approvalId) }
+        }
+        pendingApprovals = []
+        HarnessLiveActivityBridge.shared.refresh()
+    }
+
     private func armWatch(for approval: GatewayApprovalRequest) {
         WatchBridge.shared.registerApprovalHandler(approvalId: approval.approvalId) { [weak self] choice in
             guard let self, let pending = self.pendingApproval,
