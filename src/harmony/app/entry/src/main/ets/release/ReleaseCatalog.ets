@@ -6,15 +6,25 @@ export class LeoRelease {
 }
 
 export class ReleaseCatalog {
-  static readonly currentVersion: string = '0.3.0-alpha.17';
-  static readonly currentBuild: number = 100022;
+  static readonly currentVersion: string = '0.3.0-alpha.18';
+  static readonly currentBuild: number = 100023;
 
   static all(): LeoRelease[] {
     const first = new LeoRelease();
-    first.version = '0.3.0-alpha.17';
-    first.date = '2026-08-26';
-    first.title = '没网也能开手电、记待办';
+    first.version = '0.3.0-alpha.18';
+    first.date = '2026-09-26';
+    first.title = '本机能用手机能力，远控接得上';
     first.highlights = [
+      '本机对话能查天气和位置、设闹钟和提醒、发通知、开手电、复制、打开拨号盘和链接。写文件前先问你；输入框上方可以切成「全自动」，也可以「本次会话允许」。',
+      '「后天八点」「下周三」这类时间都听得懂，出行会在出发前一小时再提醒一次；缺时间会先问，不让模型瞎猜。模型卡在同一步会先提醒、再停下。',
+      '打开 Mac 不再每次建一个空任务：可以接着没做完的任务，或接手 Mac 桌面上的任务。审批按钮和 Mac 给的一样，多了「拒绝并停止任务」。',
+      '断线重连不再重复显示，停下后不再一直重连；出错时显示中继和 Mac 的原话。用 Mac 给的配对码加入时，会等 Mac 那边同意。'
+    ];
+    const t7 = new LeoRelease();
+    t7.version = '0.3.0-alpha.17';
+    t7.date = '2026-08-26';
+    t7.title = '没网也能开手电、记待办';
+    t7.highlights = [
       '飞行模式下说「打开手电筒」或「记个待办」会直接做，不走模型。闹钟和日程也走本机提醒。',
       '会话列表最多三张卡：正在执行、等待审批、最可能需要的动作。可在外观里整组关掉。设置能搜到每一项。'
     ];
@@ -189,6 +199,6 @@ export class ReleaseCatalog {
       '填中继钥匙后读取 /machines，不再写死三台 Mac。',
       '可对在线 Mac 或 Android 身体开新任务，断线按序号续上。'
     ];
-    return [first, t6, face, prev, kimi, detail, scroll, login, icons, layout, model, pick, blank, chain, codex, oauth, body, tools, providers, local, previous, firstShip];
+    return [first, t7, t6, face, prev, kimi, detail, scroll, login, icons, layout, model, pick, blank, chain, codex, oauth, body, tools, providers, local, previous, firstShip];
   }
 }
