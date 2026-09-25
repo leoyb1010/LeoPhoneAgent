@@ -126,6 +126,20 @@ private struct OffloadPermissionDialogContent: View {
                 .buttonStyle(.glassProminent)
                 .tint(LeoTheme.ColorToken.accent)
 
+                // [T-approval-vocab] 不再为同一件事反复点头:放行并记住。
+                if !request.command.isEmpty {
+                    Button {
+                        LeoHaptics.notification(.success)
+                        OffloadPermissionManager.shared.respondAlwaysAllow(request)
+                    } label: {
+                        Text("始终允许")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                    }
+                    .buttonStyle(.glass)
+                }
+
                 Button {
                     LeoHaptics.notification(.warning)
                     OffloadPermissionManager.shared.respond(to: request.id, allowed: false)

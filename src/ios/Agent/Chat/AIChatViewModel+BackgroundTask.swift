@@ -812,13 +812,32 @@ final class AgentContinuedProcessingManager {
             subtitle: subtitle
         )
         request.strategy = .queue
-        do {
-            try BGTaskScheduler.shared.submit(request)
-            logger.info("[Background][Continued] submitted session=\(sessionKey.prefix(8))")
-        } catch {
-            runs.removeValue(forKey: sessionKey)
-            logger.warning("[Background][Continued] submit failed code=\((error as NSError).code)")
+        // [T-ios27-bg-submit] iOS 27 submits without blocking the main thread
+        // and reports every refusal as an error; the old sync call is deprecated.
+        if #available(iOS 27, *) {
+            Task { @MainActor [weak self] in
+                do {
+                    try await BGTaskScheduler.shared.submitTaskRequest(request)
+                    logger.info("[Background][Continued] submitted session=\(sessionKey.prefix(8))")
+                } catch {
+                    self?.submitFailed(sessionKey: sessionKey, identifier: identifier, error: error)
+                }
+            }
+        } else {
+            do {
+                try BGTaskScheduler.shared.submit(request)
+                logger.info("[Background][Continued] submitted session=\(sessionKey.prefix(8))")
+            } catch {
+                submitFailed(sessionKey: sessionKey, identifier: identifier, error: error)
+            }
         }
+    }
+
+    private func submitFailed(sessionKey: String, identifier: String, error: Error) {
+        // Only drop the run this request belonged to — a later begin() for the
+        // same session may already have replaced it.
+        if runs[sessionKey]?.identifier == identifier { runs.removeValue(forKey: sessionKey) }
+        logger.warning("[Background][Continued] submit failed code=\((error as NSError).code)")
     }
 
     func isActive(sessionKey: String) -> Bool {

@@ -621,6 +621,13 @@ struct LiveSessionSnapshot: Codable, Hashable {
 }
 
 extension LiveSessionSnapshot {
+    /// [T-la-approval] A run parked on "needs your OK" (local gate or a Mac
+    /// harness) wears this icon; the manager, privacy redaction and the views
+    /// all key off it instead of adding a field old activities can't decode.
+    static let approvalIcon = "hand.raised.fill"
+
+    var needsApproval: Bool { !isCompleted && toolIcon == Self.approvalIcon }
+
     private enum CodingKeys: String, CodingKey {
         case sessionId, title, toolIcon, toolStatus, loopIteration, isCompleted, lastMessage, outcome
     }

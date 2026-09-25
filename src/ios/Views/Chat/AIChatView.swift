@@ -278,7 +278,6 @@ struct AIChatView: View {
     @State private var showBrowserSheet = false
     @State private var showTerminal = false
     @State private var terminalInitCommand: String?
-    @State private var showAttachmentMenu = false
     @State private var isDropTargeted = false
     @State private var showCamera = false
     /// [T-composer-quicktask-picker] Full quick-task list sheet.
@@ -970,7 +969,12 @@ struct AIChatView: View {
         .sheet(isPresented: $showArtifactTray) {
             ArtifactTrayView(sessionId: vm.sessionId)
         }
-        .sheet(isPresented: $showBrowserSheet) {
+        // [T-browser-takeover-handback] Closing the sheet hands the browser
+        // back: the floating tool bar's path already did, this one left the
+        // agent waiting on a takeover nobody was in any more.
+        .sheet(isPresented: $showBrowserSheet, onDismiss: {
+            if vm.browserTakeoverActive { vm.resumeFromBrowserTakeover() }
+        }) {
             BrowserSheetView(pool: vm.browserTabPool, isAgentBusy: vm.browserTabPool.isAgentBrowsing, onTakeover: {
                 vm.browserTakeoverActive = true
             })
@@ -1883,7 +1887,7 @@ struct AIChatView: View {
         // every current OS has been taking the plain-frame branch anyway — the
         // else branch was unreachable dead code that only looked like a
         // fallback. Keeping the branch that actually runs, unconditionally.
-        let cap = max(120, UIScreen.main.bounds.width - 140)
+        let cap = max(120, LeoWindowMetrics.bounds.width - 140)
         titleView
             .frame(maxWidth: cap)
     }
@@ -2974,11 +2978,38 @@ struct AIChatView: View {
         return .handled
     }
 
+    private func appendDroppedText(_ text: String) {
+        let separator = vm.inputText.isEmpty || vm.inputText.hasSuffix("\n") || vm.inputText.hasSuffix(" ") ? "" : " "
+        vm.inputText += separator + text
+        inputFocused = true
+    }
+
     private func handleDropProviders(_ providers: [NSItemProvider]) {
         minisLogger.info("[Drop] handleDropProviders called with \(providers.count) provider(s)")
         for (index, provider) in providers.enumerated() {
             let types = provider.registeredTypeIdentifiers
             minisLogger.info("[Drop] provider[\(index)] types=\(types) suggestedName=\(provider.suggestedName ?? "nil")")
+
+            // [T-ipad-drop-links] A web link or a text selection dragged in from
+            // Safari / Notes goes into the message, not in as a file attachment
+            // (public.url and plain text both conform to public.data, so the file
+            // path below used to swallow links and silently drop text).
+            if !types.contains(UTType.fileURL.identifier), types.contains(UTType.url.identifier),
+               provider.canLoadObject(ofClass: URL.self) {
+                _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                    guard let url, ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return }
+                    DispatchQueue.main.async { appendDroppedText(url.absoluteString) }
+                }
+                continue
+            }
+            if types.allSatisfy({ UTType($0)?.conforms(to: .plainText) ?? false }),
+               provider.canLoadObject(ofClass: String.self) {
+                _ = provider.loadObject(ofClass: String.self) { text, _ in
+                    guard let text, !text.isEmpty else { return }
+                    DispatchQueue.main.async { appendDroppedText(String(text.prefix(20_000))) }
+                }
+                continue
+            }
 
             // Determine if this provider represents a file (vs. inline text).
             let hasFileType = types.contains { id in
@@ -3067,10 +3098,6 @@ struct AIChatView: View {
     }
 
     /// Attachment "+" button.
-    /// iOS 16's Menu has a vertical alignment bug inside HStack that causes it
-    /// to sit higher than sibling buttons when the keyboard is up.
-    /// Use confirmationDialog on iOS 16, Menu on iOS 17+.
-    @ViewBuilder
     private var attachmentMenuButton: some View {
         let icon = Image(systemName: "plus")
             .font(.system(size: 18, weight: .medium))
@@ -3080,26 +3107,15 @@ struct AIChatView: View {
             .clipShape(Circle())
             .overlay(Circle().stroke(ChatColors.inputIconBorder, lineWidth: 0.5))
 
-        if #available(iOS 17, *) {
-            Menu {
-                Button { showCamera = true } label: { Label("Take Photo", systemImage: "camera") }
-                Button { showPhotoPicker = true } label: { Label("Choose Photos & Videos", systemImage: "photo.on.rectangle") }
-                Button { showDocumentPicker = true } label: { Label("Add File", systemImage: "doc") }
-            } label: {
-                icon
-            }
-            .accessibilityLabel("Add attachment")
-        } else {
-            Button { showAttachmentMenu = true } label: {
-                icon
-            }
-            .accessibilityLabel("Add attachment")
-            .confirmationDialog("Add Attachment", isPresented: $showAttachmentMenu) {
-                Button { showCamera = true } label: { Label("Take Photo", systemImage: "camera") }
-                Button { showPhotoPicker = true } label: { Label("Choose Photos & Videos", systemImage: "photo.on.rectangle") }
-                Button { showDocumentPicker = true } label: { Label("Add File", systemImage: "doc") }
-            }
+        return Menu {
+            Button { showCamera = true } label: { Label("Take Photo", systemImage: "camera") }
+            Button { showPhotoPicker = true } label: { Label("Choose Photos & Videos", systemImage: "photo.on.rectangle") }
+            Button { showDocumentPicker = true } label: { Label("Add File", systemImage: "doc") }
+        } label: {
+            icon
         }
+        .hoverEffect(.highlight)
+        .accessibilityLabel("Add attachment")
     }
 
     /// Bottom toolbar under the text field (+ / edit-exit / mic / send).
@@ -3190,6 +3206,7 @@ struct AIChatView: View {
                 .clipShape(Circle())
                 .overlay(Circle().stroke(ChatColors.inputIconBorder, lineWidth: 0.5))
         }
+        .hoverEffect(.highlight)
         .accessibilityLabel("Commands")
         .accessibilityHint("Shows slash commands")
     }
@@ -3233,99 +3250,94 @@ struct AIChatView: View {
         }, isVoiceActive: voiceInputActive)
     }
 
+    /// What the round button does right now.
+    private enum SendButtonMode { case send, enqueue, stop }
+
+    private var sendButtonMode: SendButtonMode {
+        guard vm.isProcessing else { return .send }
+        return canEnqueue ? .enqueue : .stop
+    }
+
     /// Send / Enqueue / Stop circular button.
-    @ViewBuilder
+    ///
+    /// [T-morphing-send] ONE button whose glyph morphs (arrow ↔ stop) instead
+    /// of three buttons swapped in and out: a stable identity is what lets the
+    /// symbol transition play and keeps the pointer/keyboard focus from
+    /// jumping. ⌘↩ only sends — it never stops a run. Queue control (stop all
+    /// and clear) lives in the long-press menu.
     private var sendButton: some View {
-        if vm.isProcessing && canEnqueue {
-            Button { performEnqueue() } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 34))
-                    .foregroundStyle(ChatColors.sendButton)
+        let mode = sendButtonMode
+        return Button {
+            switch mode {
+            case .send: performSend()
+            case .enqueue: performEnqueue()
+            case .stop: vm.cancel()
             }
-            .keyboardShortcut(.return, modifiers: .command)
-            .contextMenu {
+        } label: {
+            Image(systemName: mode == .stop ? "stop.circle.fill" : "arrow.up.circle.fill")
+                .font(.system(size: 34))
+                .foregroundStyle(mode == .stop ? Color.red
+                                 : (mode == .send && !canSend ? ChatColors.sendButtonDisabled : ChatColors.sendButton))
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .disabled(mode == .send && !canSend)
+        .hoverEffect(.lift)
+        .keyboardShortcut(mode == .stop ? nil : KeyboardShortcut(.return, modifiers: .command))
+        .animation(LeoMotion.snappy(reduceMotion: reduceMotion), value: mode)
+        .accessibilityLabel(mode == .stop ? Text("停止当前任务") : Text("Send task"))
+        .accessibilityHint(mode == .send ? Text("Long press to choose task continuity")
+                           : mode == .enqueue ? Text("轻点加入队列；长按可停止任务")
+                           : Text(vm.promptQueue.isEmpty ? "" : "停止后继续排队的任务；长按可清空队列"))
+        .contextMenu { sendButtonMenu(mode) }
+    }
+
+    @ViewBuilder
+    private func sendButtonMenu(_ mode: SendButtonMode) -> some View {
+        switch mode {
+        case .send:
+            Button {
+                performSend(runPolicy: .standard)
+            } label: {
+                Label("Send Standard", systemImage: "paperplane")
+            }
+            Button {
+                performSend(runPolicy: .backgroundReady)
+            } label: {
+                Label("Send Background Ready", systemImage: "moon.stars")
+            }
+            // [T-model-quickswitch] 用别的模型发这一条:切绑定后立即发送。
+            // 会话绑定确实会变(iOS 上"只此一条"需要另一套临时覆写,
+            // 那属于后续工作),所以文案照实说"改用 X 并发送"。
+            // [T-model-pin] 用钉选的常用,不用"最近使用"猜。
+            let quick = pinStore.entries(store: ProviderConfigStore.shared).prefix(4)
+            if !quick.isEmpty {
+                Divider()
+                ForEach(Array(quick), id: \.compositeKey) { entry in
+                    Button {
+                        sendWithModel(choiceId: entry.compositeKey)
+                    } label: {
+                        Label("改用 \(entry.model.displayName) 并发送", systemImage: "cpu")
+                    }
+                }
+            }
+            Button {
+                showQuickModelSwitch = true
+            } label: {
+                Label("切换模型…", systemImage: "arrow.triangle.swap")
+            }
+        case .enqueue, .stop:
+            if mode == .enqueue {
                 Button {
                     vm.cancel()
                 } label: {
-                    Label("停止当前任务", systemImage: "stop.circle")
-                }
-                if !vm.promptQueue.isEmpty {
-                    Button(role: .destructive) {
-                        vm.cancelAndClearQueue()
-                    } label: {
-                        Label("停止全部并清空队列", systemImage: "trash")
-                    }
+                    Label(vm.promptQueue.isEmpty ? "停止当前任务" : "停止当前任务并继续队列", systemImage: "stop.circle")
                 }
             }
-            .accessibilityHint("轻点加入队列；长按可停止任务")
-        } else if vm.isProcessing {
-            if vm.promptQueue.isEmpty {
-                Button { vm.cancel() } label: {
-                    Image(systemName: "stop.circle.fill")
-                        .font(.system(size: 34))
-                        .foregroundStyle(.red)
-                }
-                .accessibilityLabel("停止当前任务")
-            } else {
-                Menu {
-                    Button {
-                        vm.cancel()
-                    } label: {
-                        Label("停止当前任务并继续队列", systemImage: "stop.circle")
-                    }
-                    Button(role: .destructive) {
-                        vm.cancelAndClearQueue()
-                    } label: {
-                        Label("停止全部并清空队列", systemImage: "trash")
-                    }
+            if !vm.promptQueue.isEmpty {
+                Button(role: .destructive) {
+                    vm.cancelAndClearQueue()
                 } label: {
-                    Image(systemName: "stop.circle.fill")
-                        .font(.system(size: 34))
-                        .foregroundStyle(.red)
-                }
-                .accessibilityLabel("停止选项")
-                .accessibilityHint("选择停止当前任务后继续队列，或停止全部并清空队列")
-            }
-        } else {
-            Button { performSend() } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 34))
-                    .foregroundStyle(canSend ? ChatColors.sendButton : ChatColors.sendButtonDisabled)
-            }
-            .disabled(!canSend)
-            .keyboardShortcut(.return, modifiers: .command)
-            .accessibilityLabel("Send task")
-            .accessibilityHint("Long press to choose task continuity")
-            .contextMenu {
-                Button {
-                    performSend(runPolicy: .standard)
-                } label: {
-                    Label("Send Standard", systemImage: "paperplane")
-                }
-                Button {
-                    performSend(runPolicy: .backgroundReady)
-                } label: {
-                    Label("Send Background Ready", systemImage: "moon.stars")
-                }
-                // [T-model-quickswitch] 用别的模型发这一条:切绑定后立即发送。
-                // 会话绑定确实会变(iOS 上"只此一条"需要另一套临时覆写,
-                // 那属于后续工作),所以文案照实说"改用 X 并发送"。
-                // [T-model-pin] 用钉选的常用,不用"最近使用"猜。
-                let quick = pinStore.entries(store: ProviderConfigStore.shared).prefix(4)
-                if !quick.isEmpty {
-                    Divider()
-                    ForEach(Array(quick), id: \.compositeKey) { entry in
-                        Button {
-                            sendWithModel(choiceId: entry.compositeKey)
-                        } label: {
-                            Label("改用 \(entry.model.displayName) 并发送", systemImage: "cpu")
-                        }
-                    }
-                }
-                Button {
-                    showQuickModelSwitch = true
-                } label: {
-                    Label("切换模型…", systemImage: "arrow.triangle.swap")
+                    Label("停止全部并清空队列", systemImage: "trash")
                 }
             }
         }
@@ -4150,7 +4162,7 @@ struct AIChatView: View {
             .compactMap { $0 as? UIWindowScene }
             .flatMap(\.windows)
             .first(where: \.isKeyWindow)
-        guard let window else { return UIScreen.main.bounds }
+        guard let window else { return LeoWindowMetrics.bounds }
         // SwiftUI's .global space is the window's own coordinate space, so the
         // window's bounds (origin .zero) — not its frame — is the right rect.
         return window.bounds
@@ -4674,8 +4686,10 @@ struct AIChatView: View {
 
     /// Max content width — unconstrained in compact (portrait iPhone),
     /// capped in regular (landscape / iPad) for readability.
+    /// [T-readable-width] About 45 CJK characters a line on iPad; the list's
+    /// scroll indicator stays at the window edge (only the content is capped).
     private var maxContentWidth: CGFloat? {
-        hSizeClass == .regular ? 900 : nil
+        hSizeClass == .regular ? 800 : nil
     }
 
 }
@@ -5141,7 +5155,10 @@ private struct ChatTrailingMenuButton: UIViewRepresentable {
     /// as a plain toolbar icon (a representable otherwise accepts the full
     /// proposed width -> stretched capsule, the 2026-07-17 regression).
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UIButton, context: Context) -> CGSize? {
-        uiView.intrinsicContentSize
+        // [T-a11y-audit] At least 44×44: at the glyph's own ~20pt, a tap on the
+        // glass ring around it did nothing. Square, so the glass stays round.
+        let glyph = uiView.intrinsicContentSize
+        return CGSize(width: max(glyph.width, 44), height: max(glyph.height, 44))
     }
 
     func updateUIView(_ button: UIButton, context: Context) {

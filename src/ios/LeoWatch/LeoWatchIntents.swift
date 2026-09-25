@@ -10,14 +10,18 @@ import AppIntents
 import Foundation
 
 struct AskLeoIntent: AppIntent {
+    static let pendingKey = "leo.watch.pendingVoiceAsk"
+    static let requested = Notification.Name("leo.watch.askRequested")
+
     static var title: LocalizedStringResource = "问 Leo"
     static var description = IntentDescription("打开 LeoPhoneAgent 并开始语音提问。")
     static var openAppWhenRun = true
 
     @MainActor
     func perform() async throws -> some IntentResult {
-        // The root view observes this flag and launches dictation on appear.
-        UserDefaults.standard.set(true, forKey: "leo.watch.pendingVoiceAsk")
+        // The flag covers a cold launch; the post covers an app already in front.
+        UserDefaults.standard.set(true, forKey: Self.pendingKey)
+        NotificationCenter.default.post(name: Self.requested, object: nil)
         return .result()
     }
 }

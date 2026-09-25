@@ -30,9 +30,9 @@ private final class AppleTorchHardware: DeviceTorchHardware {
 
 @MainActor
 private final class AppleBrightnessHardware: DeviceBrightnessHardware {
-    var level: Double { Double(UIScreen.main.brightness) }
+    var level: Double { Double(LeoWindowMetrics.screen?.brightness ?? 0.5) }
     var canSet: Bool { UIApplication.shared.applicationState == .active }
-    func set(level: Double) { UIScreen.main.brightness = CGFloat(level) }
+    func set(level: Double) { LeoWindowMetrics.screen?.brightness = CGFloat(level) }
 }
 
 extension DeviceActions {

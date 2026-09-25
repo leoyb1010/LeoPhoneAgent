@@ -152,6 +152,7 @@ struct MinisApp: App {
         // inline on the first sessionContextMenu builder during scroll and
         // hang a frame. (T-ios-biometric-probe-scroll-hang)
         BiometricAuth.prewarm()
+        SessionActivityTracker.installApprovalPhaseHook()
         // Clean up Live Activities left over from a previous app session (e.g. app was killed)
         AgentLiveActivityManager.shared.cleanupStaleActivities(source: "MinisApp.init")
         // Start screen-awake controller — it will observe running tasks
@@ -359,14 +360,10 @@ struct MinisApp: App {
                     }
                 }
         }
-        .commands {
-            CommandGroup(replacing: .newItem) {
-                Button("New Chat") {
-                    NotificationCenter.default.post(name: .newChatRequested, object: nil)
-                }
-                .keyboardShortcut("n", modifiers: .command)
-            }
-        }
+        // [T-ipad-menu-bar] Menu bar + ⌘-overlay shortcuts. Scene-level, so
+        // nothing is added to the root view chain (see the metadata-depth
+        // note on CredentialGateAlertHost).
+        .commands { LeoCommands() }
         .onChange(of: scenePhase) { newPhase in
             handleScenePhaseChange(newPhase)
         }
@@ -1055,7 +1052,7 @@ private struct CredentialGateAlertHost: View {
 
     var body: some View {
         Color.clear
-            .alert("需要确认",
+            .alert(credGate.pending?.risk == .high ? "高风险操作，需要确认" : "需要确认",
                    isPresented: Binding(
                     get: { credGate.pending != nil },
                     set: { presented in
@@ -1068,11 +1065,21 @@ private struct CredentialGateAlertHost: View {
                         }
                     }),
                    presenting: credGate.pending) { p in
-                Button("本会话允许") { credGate.resolve(.allowSession, requestId: p.id) }
+                // [T-approval-vocab] 统一措辞:允许一次 / 本次会话允许 / 拒绝 / 拒绝并停止。
+                // 风险只影响标题和说明,不减选项。
                 Button("允许一次") { credGate.resolve(.allowOnce, requestId: p.id) }
+                Button("本次会话允许") { credGate.resolve(.allowSession, requestId: p.id) }
+                if let sid = p.sessionId {
+                    Button("拒绝并停止任务", role: .destructive) {
+                        credGate.resolve(.deny, requestId: p.id)
+                        ViewModelCache.shared.get(for: sid)?.cancel()
+                    }
+                }
                 Button("拒绝", role: .cancel) { credGate.resolve(.deny, requestId: p.id) }
             } message: { p in
-                Text("有一个任务想\(p.category.humanName)——来自 \(p.host)。只在你确实要它这么做时允许。")
+                Text(p.risk == .high
+                     ? "有一个任务想\(p.category.humanName)——\(p.host)。这条命令可能删除数据或改动系统,确认是你要它做的再允许。"
+                     : "有一个任务想\(p.category.humanName)——来自 \(p.host)。只在你确实要它这么做时允许。")
             }
     }
 }

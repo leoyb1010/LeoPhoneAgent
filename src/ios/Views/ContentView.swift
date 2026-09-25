@@ -440,6 +440,8 @@ struct ContentView: View {
     @State private var windowId = UUID()
     /// Tracks the session ID currently visible on the compact navigation stack.
     @State private var currentStackSessionId: String?
+    /// What this window shows: the split view's selection or the pushed chat.
+    private var onScreenSessionId: String? { isWideLayout ? selectedSessionId : currentStackSessionId }
     /// The real session ID after a draft session is persisted (iPad only).
     /// While set, the AIChatView for this session stays alive even though
     /// selectedSessionId may still be a draft ID.
@@ -560,9 +562,15 @@ struct ContentView: View {
             // and the reliable focus signal (isKeyWindow / key notifications),
             // neither of which scenePhase or onDisappear can provide under
             // Stage Manager.
-            .background(WindowCaptureView { window in
-                WindowRegistry.shared.register(windowId, window: window)
-            })
+            .background(SceneSessionHost(
+                sessionId: Self.isNewSessionId(onScreenSessionId) ? newSessionRealId : onScreenSessionId,
+                sessionCount: sessions.count,
+                onWindow: { window in WindowRegistry.shared.register(windowId, window: window) },
+                open: { id in
+                    guard sessionsByIdCache[id] != nil else { return false }
+                    jumpToSession(id)
+                    return true
+                }))
         }
     }
 
@@ -571,6 +579,23 @@ struct ContentView: View {
             .onReceive(NotificationCenter.default.publisher(for: .newChatRequested)) { _ in
                 guard WindowRegistry.shared.isPrimary(windowId) else { return }
                 handleNewChatRequest()
+            }
+            // [T-ipad-menu-bar] ⌘F / ⌘K / ⌘, / ⌘1…9 from LeoCommands, for the
+            // frontmost window only (same rule as ⌘N above).
+            .onReceive(NotificationCenter.default.publisher(for: .workspaceCommand)) { note in
+                guard WindowRegistry.shared.isPrimary(windowId),
+                      let command = WorkspaceCommand(userInfo: note.userInfo) else { return }
+                switch command {
+                case .search:
+                    if isWideLayout { columnVisibility = .all }
+                    focusSearch()
+                case .palette:
+                    showCommandPalette = true
+                case .settings:
+                    activeToolSheet = .settings
+                case .session(let index):
+                    selectSession(at: index - 1)
+                }
             }
             // [T-widget-recent-sessions] Mirror the visible session list into the
             // App Group for the Home Screen "最近会话" widget — the chat database
@@ -1312,6 +1337,7 @@ struct ContentView: View {
                         }
                     } else {
                         let chat = AIChatView(sessionId: Self.isNewSessionId(id) ? nil : id, draftId: Self.isNewSessionId(id) ? id : nil, initialGroupId: Self.extractGroupId(from: id))
+                            .modifier(ChatToolbarMinimization())
                             .id(id)
                             .onAppear {
                                 if currentStackSessionId != id { currentStackSessionId = id }
@@ -1345,14 +1371,18 @@ struct ContentView: View {
             // on first send. The .id() ensures each draft gets its own View lifecycle.
             let isDraft = Self.isNewSessionId(id)
             let effectiveId: String? = isDraft ? nil : id
-            AIChatView(sessionId: effectiveId, draftId: isDraft ? id : nil, initialGroupId: Self.extractGroupId(from: id))
-                .id(id)
-                .onAppear {
-                    draftLog.info("🔑DRAFT detailView APPEAR id=\(id) effectiveId=\(effectiveId ?? "nil") isDraft=\(isDraft)")
-                }
-                .onDisappear {
-                    draftLog.info("🔑DRAFT detailView DISAPPEAR id=\(id)")
-                }
+            // [T-ipad-inspector] The inspector column lives on this small
+            // container, not on AIChatView's own (deep) modifier chain.
+            ChatDetailContainer(sessionId: isDraft ? newSessionRealId : id) {
+                AIChatView(sessionId: effectiveId, draftId: isDraft ? id : nil, initialGroupId: Self.extractGroupId(from: id))
+                    .onAppear {
+                        draftLog.info("🔑DRAFT detailView APPEAR id=\(id) effectiveId=\(effectiveId ?? "nil") isDraft=\(isDraft)")
+                    }
+                    .onDisappear {
+                        draftLog.info("🔑DRAFT detailView DISAPPEAR id=\(id)")
+                    }
+            }
+            .id(id)
         } else {
             homeWorkbench
         }
@@ -1680,36 +1710,6 @@ struct ContentView: View {
         .safeAreaInset(edge: .top, spacing: 0) {
             attentionBar
         }
-        // Hardware ⌘F → focus search, available while the session list is on
-        // screen (iPad/Mac keyboards). A zero-opacity button carries the
-        // shortcut without affecting layout; it lives in the list's view tree so
-        // the command only fires when the list is visible, not inside a chat.
-        .background {
-            // [T-ipad-keyboard] Hardware-keyboard commands for the session
-            // list. All carried by zero-opacity buttons in the list's own
-            // view tree, so they only fire while the list is on screen.
-            ZStack {
-                Button(action: focusSearch) { EmptyView() }
-                    .keyboardShortcut("f", modifiers: .command)
-                // [T-cmdk] Command palette: fuzzy jump anywhere.
-                Button(action: { showCommandPalette = true }) { EmptyView() }
-                    .keyboardShortcut("k", modifiers: .command)
-                // [T-cmd-n-double-binding] ⌘N is owned by MinisApp's
-                // `CommandGroup(replacing: .newItem)`, which posts
-                // `.newChatRequested` — already observed above. A second
-                // binding here made one keystroke take two paths into
-                // handleNewChatRequest() and could create two draft sessions.
-                Button { activeToolSheet = .settings } label: { EmptyView() }
-                    .keyboardShortcut(",", modifiers: .command)
-                // ⌘1…⌘9 jump to the Nth visible session.
-                ForEach(1...9, id: \.self) { index in
-                    Button { selectSession(at: index - 1) } label: { EmptyView() }
-                        .keyboardShortcut(KeyEquivalent(Character("\(index)")), modifiers: .command)
-                }
-            }
-            .opacity(0)
-            .accessibilityHidden(true)
-        }
         // [T-ios-migration-timer-toolbar-uaf-crash / T-ios-migration-timer-sessionlist-uaf-crash]
         // Own the migration-subtitle refresh driver here, on the stable sidebar list
         // body, instead of on the churny toolbar principal item (see `titleLabel`).
@@ -1991,6 +1991,10 @@ struct ContentView: View {
                                         )
                                         .equatable()
                                     }
+                                }
+                                // [T-ipad-multiwindow] Drag a row to the screen edge → its own window.
+                                .onDrag { [sid = Self.isNewSessionId(session.id) ? newSessionRealId : session.id] in
+                                    SessionWindow.itemProvider(for: sid)
                                 }
                                 .tag(session.id)
                                 .listRowInsets(EdgeInsets())
@@ -4749,6 +4753,13 @@ private struct SessionContextMenu: View, Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.key == rhs.key }
 
     var body: some View {
+        if SessionWindow.isSupported {
+            Button {
+                SessionWindow.open(key.sid)
+            } label: {
+                Label("在新窗口打开", systemImage: "macwindow.badge.plus")
+            }
+        }
         // [T-session-unread-manual] "I've seen this but I'm not done with it."
         // The unread dot already existed, but only the app could set it (on
         // background completion). Letting the user set it turns the session
@@ -5727,6 +5738,9 @@ struct FeedbackComposerSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
+        // [T-ios27-dismiss-confirm] Swiping away a half-written report asks first.
+        .modifier(UnsentDraftDismissConfirmation(hasDraft: savedURL == nil
+            && !(title + detail).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
     }
 }
 

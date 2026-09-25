@@ -1306,6 +1306,9 @@ struct PastableTextFieldRepresentable: UIViewRepresentable {
     func makeUIView(context: Context) -> PastableUITextView {
         let tv = PastableUITextView()
         tv.delegate = context.coordinator
+        // [T-a11y-audit] The placeholder is a separate SwiftUI overlay, so the
+        // text view itself had no name: VoiceOver said just "text field".
+        tv.accessibilityLabel = String(localized: "给 Agent 的消息")
         tv.font = UIFont.systemFont(ofSize: FontSettings.shared.scaledChatInput(16.5))
         tv.backgroundColor = .clear
         tv.isScrollEnabled = false
@@ -1375,7 +1378,7 @@ struct PastableTextFieldRepresentable: UIViewRepresentable {
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView tv: PastableUITextView, context: Context) -> CGSize? {
-        let width = proposal.width ?? UIScreen.main.bounds.width
+        let width = proposal.width ?? tv.window?.bounds.width ?? LeoWindowMetrics.bounds.width
         // [T-share-url-input-height] UITextView.sizeThatFits returns the
         // height typeset against the CURRENT textContainer width, not the
         // requested one. When a large block of text lands via the shared-

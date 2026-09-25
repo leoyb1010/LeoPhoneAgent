@@ -12,6 +12,7 @@
 //
 
 import Foundation
+import UserNotifications
 import WatchConnectivity
 import WatchKit
 
@@ -45,7 +46,10 @@ struct WatchApproval: Identifiable, Equatable {
     /// Rendered verbatim — the gateway narrows this set for risky commands,
     /// so a hardcoded button row would offer permissions it will reject.
     let choices: [String]
+    /// "low" | "medium" | "high", assessed on the phone from the command.
+    let risk: String
     var id: String { runId }
+    var isHighRisk: Bool { risk == "high" }
 }
 
 @MainActor
@@ -54,6 +58,8 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
 
     @Published private(set) var state: String = "idle"
     @Published private(set) var status: String = ""
+    /// Tasks running on the phone right now (from its status push).
+    @Published private(set) var activeCount = 0
     @Published private(set) var updatedAt: Date = .distantPast
     @Published private(set) var isPhoneReachable = false
     @Published private(set) var lastActionMessage: String?
@@ -64,6 +70,8 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
     @Published var pendingApproval: WatchApproval?
     /// Bumps when a reply lands, for the settle-in animation.
     @Published private(set) var replyPulse = 0
+    /// The last reply was an error message, not an answer: shown, not spoken.
+    @Published private(set) var lastReplyFailed = false
 
     private static let historyKey = "leo.watch.history.v1"
     private static let historyLimit = 20
@@ -86,6 +94,9 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
         if let data = UserDefaults.standard.data(forKey: Self.historyKey),
            let saved = try? JSONDecoder().decode([WatchHistoryEntry].self, from: data) {
             history = saved
+        }
+        WatchStandaloneClient.shared.onBackgroundAnswer = { [weak self] requestId, question, result in
+            self?.backgroundAnswered(requestId: requestId, question: question, result: result)
         }
     }
 
@@ -149,16 +160,78 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
     private func askDirect(_ text: String) {
         let requestId = begin(text, route: .direct)
         let context = recentContext
+        directContext = (requestId, text, context)
+        requestNotificationPermissionOnce()
         directTask = Task {
             do {
                 let answer = try await WatchStandaloneClient.shared.ask(text, history: context)
                 self.finish(requestId: requestId, text: answer, sessionId: nil)
             } catch is CancellationError {
-                // cancelAsk() already reset the state.
+                // cancelAsk() or the background hand-off took over.
+            } catch WatchStandaloneError.network {
+                // A flaky link: let the system retry it and bring the answer back.
+                self.handOffToBackground(reason: "网络不稳，已转到后台，答案会送到通知里。")
             } catch {
                 self.finish(requestId: requestId, text: error.localizedDescription, sessionId: nil, failed: true)
             }
         }
+    }
+
+    /// The direct question in flight, kept so it can move to the background.
+    private var directContext: (requestId: String, text: String, history: [(question: String, answer: String)])?
+
+    /// Called when the app leaves the foreground (and on network failure):
+    /// the foreground request would die with the suspended app, so the same
+    /// question continues as a background transfer.
+    func handOffToBackground(reason: String? = nil) {
+        guard let context = directContext, case .waiting(let id, _) = askState, id == context.requestId else { return }
+        directTask?.cancel()
+        directTask = nil
+        do {
+            try WatchStandaloneClient.shared.askInBackground(requestId: context.requestId, text: context.text,
+                                                             history: context.history)
+            if let reason { lastActionMessage = reason }
+        } catch {
+            finish(requestId: context.requestId, text: error.localizedDescription, sessionId: nil, failed: true)
+        }
+    }
+
+    private func backgroundAnswered(requestId: String, question: String, result: Result<String, Error>) {
+        let text: String
+        let failed: Bool
+        switch result {
+        case .success(let answer): (text, failed) = (answer, false)
+        case .failure(let error): (text, failed) = (error.localizedDescription, true)
+        }
+        if case .waiting(let id, _) = askState, id == requestId {
+            finish(requestId: requestId, text: text, sessionId: nil, failed: failed)
+        } else if !failed {
+            // The app was relaunched just to receive this: file it anyway.
+            record(WatchHistoryEntry(id: requestId, question: question, answer: text,
+                                     route: .direct, date: Date(), sessionId: nil))
+        }
+        if WKApplication.shared().applicationState != .active {
+            let content = UNMutableNotificationContent()
+            content.title = failed ? "Leo 没能回答" : "Leo"
+            content.body = failed ? text : String(text.prefix(180))
+            content.sound = .default
+            UNUserNotificationCenter.current().add(
+                UNNotificationRequest(identifier: "answer-\(requestId)", content: content, trigger: nil))
+        }
+    }
+
+    private func requestNotificationPermissionOnce() {
+        let key = "leo.watch.notificationsRequested"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        UserDefaults.standard.set(true, forKey: key)
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    }
+
+    /// Cheap nudge as recording starts: the phone app is awake by the time
+    /// the audio arrives, which saves a second or two on the answer.
+    func wakePhone() {
+        guard let session, session.isReachable else { return }
+        session.sendMessage(["kind": "wake"], replyHandler: nil, errorHandler: { _ in })
     }
 
     /// Product-voice path: raw audio to the phone, transcription + agent run
@@ -188,6 +261,7 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
         guard case .waiting(let requestId, _) = askState else { return }
         askState = .idle
         pendingQuestion = nil
+        directContext = nil
         directTask?.cancel()
         directTask = nil
         if let session, session.isReachable {
@@ -237,6 +311,7 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
         // automations reuse the delivery path and must not buzz the wrist.
         guard case .waiting(let id, _) = askState, id == requestId else { return }
         askState = .replied(text: text)
+        lastReplyFailed = failed
         replyPulse += 1
         WKInterfaceDevice.current().play(failed ? .failure : .success)
         if !failed, let pending = pendingQuestion, pending.requestId == requestId {
@@ -244,6 +319,7 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
                                      route: pending.route, date: Date(), sessionId: sessionId))
         }
         pendingQuestion = nil
+        directContext = nil
         directTask = nil
     }
 
@@ -276,23 +352,29 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
     // MARK: - Approvals
 
     /// Answer a pending gateway approval from the wrist.
+    ///
+    /// Live message when the phone is reachable; otherwise (or when the live
+    /// send fails) the reply is queued with transferUserInfo and delivered the
+    /// moment the phone is back. The phone resolves each approval once, so a
+    /// reply that arrives on both channels is harmless. Never claim "handled"
+    /// for a queued reply: the Mac stays blocked until it lands.
     func answerApproval(choice: String) {
-        guard let approval = pendingApproval else { return }
-        // Reachability FIRST. Clearing the card and playing a success haptic
-        // before knowing the phone can hear us tells the user "handled" while
-        // the Mac stays blocked — the worst possible lie for this control.
-        guard let session, session.isReachable else {
-            WKInterfaceDevice.current().play(.failure)
-            lastActionMessage = "iPhone 不可达,请在手机上处理"
-            return
-        }
+        guard let approval = pendingApproval, let session else { return }
         pendingApproval = nil
-        WKInterfaceDevice.current().play(choice == "deny" ? .failure : .success)
-        session.sendMessage([
-            "kind": "approvalReply",
-            "requestId": approval.runId,
-            "choice": choice,
-        ], replyHandler: nil, errorHandler: { _ in })
+        let payload: [String: Any] = ["kind": "approvalReply", "requestId": approval.runId, "choice": choice]
+        if session.isReachable {
+            WKInterfaceDevice.current().play(choice == "deny" ? .failure : .success)
+            session.sendMessage(payload, replyHandler: { _ in }, errorHandler: { _ in
+                Task { @MainActor in
+                    session.transferUserInfo(payload)
+                    WatchConnectivityClient.shared.lastActionMessage = "iPhone 没有回应，已排队，连上后生效。"
+                }
+            })
+        } else {
+            session.transferUserInfo(payload)
+            WKInterfaceDevice.current().play(.click)
+            lastActionMessage = "iPhone 暂时不可达，已排队，连上后生效。"
+        }
     }
 
     // MARK: - Inbound
@@ -302,6 +384,7 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
         phoneFailedAt = nil
         state = (context["state"] as? String) ?? "idle"
         status = (context["status"] as? String) ?? ""
+        activeCount = (context["activeCount"] as? Int) ?? 0
         if let ts = context["updatedAt"] as? TimeInterval {
             updatedAt = Date(timeIntervalSince1970: ts)
         }
@@ -325,7 +408,8 @@ final class WatchConnectivityClient: NSObject, ObservableObject {
             if runId.isEmpty || choices.isEmpty {
                 if pendingApproval?.runId == runId || runId.isEmpty { pendingApproval = nil }
             } else {
-                pendingApproval = WatchApproval(runId: runId, detail: detail, choices: choices)
+                pendingApproval = WatchApproval(runId: runId, detail: detail, choices: choices,
+                                                risk: (message["risk"] as? String) ?? "medium")
                 WKInterfaceDevice.current().play(.notification)
             }
         case "askReply":

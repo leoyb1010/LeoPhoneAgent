@@ -129,6 +129,7 @@ struct AssistantBlockView: View {
             markdown: block.content,
             cachedContent: block.cachedMarkdown,
             cachedAttributedString: block.cachedAttributedString,
+            isStreaming: block.isStreamingText,
             messageId: message.id,
             blockId: block.id,
             onTapBlank: onTapBlank,
@@ -761,9 +762,13 @@ struct ThinkingBlockView: View {
                     .resizable()
                     .frame(width: 14, height: 14)
                     .foregroundStyle(.blue)
-                Text(String(localized: "Deep Thinking"))
+                // [T-thinking-duration] "思考了 12 秒" once it's done — how long
+                // it took is what you want to know; reloaded history keeps the old label.
+                Text(block.toolDuration.map { String(localized: "思考了 \(LeoDuration.short($0))") }
+                     ?? String(localized: "Deep Thinking"))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.blue)
+                    .contentTransition(.numericText())
                 if isStreaming {
                     ProgressView()
                         .controlSize(.mini)

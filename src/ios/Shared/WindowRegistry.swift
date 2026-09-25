@@ -155,3 +155,37 @@ struct WindowCaptureView: UIViewRepresentable {
         }
     }
 }
+
+/// [T-resizable-windows] Sizes a layout cap should use: the key window, not the
+/// whole screen. `UIScreen.main` (deprecated since iOS 26) is wrong in Split
+/// View, Slide Over, Stage Manager and iPhone Mirroring, where the app's
+/// window is a fraction of the screen.
+@MainActor
+enum LeoWindowMetrics {
+    static var window: UIWindow? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        return scenes.flatMap(\.windows).first(where: \.isKeyWindow) ?? scenes.first?.windows.first
+    }
+
+    /// Key window bounds; before any window exists, the first scene's screen.
+    static var bounds: CGRect {
+        if let window { return window.bounds }
+        return firstScreen?.bounds ?? CGRect(x: 0, y: 0, width: 390, height: 844)
+    }
+
+    static var scale: CGFloat { window?.screen.scale ?? firstScreen?.scale ?? 3 }
+
+    /// The screen the app is on (brightness is a per-display setting).
+    static var screen: UIScreen? { window?.screen ?? firstScreen }
+
+    /// For nonisolated layout code (TextKit attachments): the key window's
+    /// height on the main thread, the screen's anywhere else.
+    nonisolated static var layoutHeight: CGFloat {
+        if Thread.isMainThread { return MainActor.assumeIsolated { bounds.height } }
+        return UIScreen.main.bounds.height   // ponytail: off-main fallback only
+    }
+
+    private static var firstScreen: UIScreen? {
+        UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.screen }.first
+    }
+}

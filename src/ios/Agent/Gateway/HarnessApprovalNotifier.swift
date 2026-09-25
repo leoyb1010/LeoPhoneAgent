@@ -11,8 +11,9 @@
 //  - 按钮回调不开 app,直接经中继把决定送回那台 Mac;
 //  - 审批被任何端解决(手机/手表/桌面)→ 撤回对应通知,不留死卡。
 //
-//  安全:批准按钮要求设备已解锁(authenticationRequired)——审批放行的
-//  是 shell 命令,锁屏上任何人可按是不可接受的。拒绝不受限。
+//  [T-approval-vocab] 按钮和 App 里一致:批准一次 / 本次会话允许 / 拒绝 /
+//  拒绝并停止。个人工具以方便为先:批准不再要求先解锁,手表上双指互点
+//  就是「批准一次」(排第一)。
 //
 
 import Foundation
@@ -22,22 +23,22 @@ import UserNotifications
 enum HarnessApprovalNotifier {
     static let categoryId = "HARNESS_APPROVAL"
     static let approveAction = "HARNESS_APPROVE_ONCE"
+    static let approveSessionAction = "HARNESS_APPROVE_SESSION"
     static let denyAction = "HARNESS_DENY"
+    static let denyAndStopAction = "HARNESS_DENY_STOP"
 
     /// 与 BACKGROUND_TASK 一起注册(setNotificationCategories 是整体替换,
     /// 谁单独 set 谁就把别人的按钮抹掉——两处调用都必须用这份并集)。
     static var category: UNNotificationCategory {
-        let approve = UNNotificationAction(
-            identifier: approveAction,
-            title: String(localized: "批准一次"),
-            options: [.authenticationRequired])
-        let deny = UNNotificationAction(
-            identifier: denyAction,
-            title: String(localized: "拒绝"),
-            options: [.destructive])
-        return UNNotificationCategory(
+        UNNotificationCategory(
             identifier: categoryId,
-            actions: [approve, deny],
+            actions: [
+                UNNotificationAction(identifier: approveAction, title: String(localized: "批准一次")),
+                UNNotificationAction(identifier: approveSessionAction, title: String(localized: "本次会话允许")),
+                UNNotificationAction(identifier: denyAction, title: String(localized: "拒绝"), options: [.destructive]),
+                UNNotificationAction(identifier: denyAndStopAction, title: String(localized: "拒绝并停止任务"),
+                                     options: [.destructive]),
+            ],
             intentIdentifiers: [])
     }
 
@@ -98,10 +99,12 @@ enum HarnessApprovalNotifier {
         let choice: String?
         switch response.actionIdentifier {
         case approveAction: choice = "once"
-        case denyAction: choice = "deny"
+        case approveSessionAction: choice = "session"
+        case denyAction, denyAndStopAction: choice = "deny"
         default: choice = nil   // 点通知本体 → 只打开 app,不代作决定
         }
         guard let choice else { return false }
+        let stopAfter = response.actionIdentifier == denyAndStopAction
 
         // APNs 路径的推送里往往只有 machine + approval_id,没有 session_id。
         // 逐级补齐,顺序刻意如此:
@@ -136,6 +139,7 @@ enum HarnessApprovalNotifier {
             guard let sessionId else { return }
             try? await client.approveHarness(sessionId: sessionId, choice: choice,
                                              approvalId: approvalId)
+            if stopAfter { try? await client.stopHarness(sessionId: sessionId) }
             HarnessApprovalNotifier.clear(sessionId: sessionId, approvalId: approvalId)
         }
         return true

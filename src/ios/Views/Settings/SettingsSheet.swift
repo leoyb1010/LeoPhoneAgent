@@ -47,8 +47,65 @@ struct SettingsSheet: View {
     @ObservedObject private var deepLink = DeepLinkCoordinator.shared
     @State private var navPath = NavigationPath()
     @State private var showFeedbackDialog = false
+    /// [T-ipad-settings-split] 面板够宽(iPad 整页面板)时用双栏。量到宽度之前
+    /// 先按尺寸类别猜,免得第一帧先画单列再跳成双栏。
+    @State private var measuredWide: Bool?
+    @Environment(\.horizontalSizeClass) private var hSizeClass
+    /// Opens on a real page (the most used one), never an empty detail column.
+    @AppStorage("settings.split.selection") private var splitSelection = "模型供应商"
 
     var body: some View {
+        Group {
+            if measuredWide ?? (hSizeClass == .regular) { splitSettings } else { stackSettings }
+        }
+        .onGeometryChange(for: Bool.self) { $0.size.width >= 700 } action: { measuredWide = $0 }
+    }
+
+    private var splitSettings: some View {
+        NavigationSplitView {
+            SettingsSidebar(selection: Binding(
+                get: { splitSelection },
+                set: { newValue in
+                    guard let newValue else { return }
+                    splitSelection = newValue
+                    navPath = NavigationPath()
+                }),
+                orchestrationEnabled: $orchestrationEnabled,
+                onFeedback: { showFeedbackDialog = true })
+            .navigationTitle("Settings")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 380)
+        } detail: {
+            NavigationStack(path: $navPath) {
+                Group {
+                    if let entry = SettingsHomeView.groups.flatMap(\.entries).first(where: { $0.id == splitSelection }) {
+                        entry.destination()
+                    } else {
+                        ContentUnavailableView("选择一项设置", systemImage: "gearshape.2",
+                                               description: Text("左边按分组列出了全部设置，也可以直接搜索。"))
+                    }
+                }
+                .navigationDestination(for: SettingsDestination.self) { settingsDestination($0) }
+            }
+            // 换一项就从这一项的首页开始,不留上一项推进去的页面。
+            .id(splitSelection)
+        }
+        .sheet(isPresented: $showFeedbackDialog) {
+            FeedbackComposerSheet()
+        }
+        .onAppear(perform: applyLaunchNavigation)
+        .onChange(of: deepLink.pendingSettingsTarget) { _, _ in
+            applyPendingDeepLink()
+        }
+        .preferredColorScheme(appearanceMode == 1 ? .light : appearanceMode == 2 ? .dark : nil)
+        .appFontScale()
+    }
+
+    private var stackSettings: some View {
         NavigationStack(path: $navPath) {
             // [T-settings-ia] 设置首页拆到 SettingsHomeView(5 组折叠 + 搜索)。
             // 旧 400 行单体 List 三次折叠尝试都撞类型检查超时,数据驱动是正解。
@@ -66,92 +123,99 @@ struct SettingsSheet: View {
                     Button("Done") { dismiss() }
                 }
             }
-            .navigationDestination(for: SettingsDestination.self) { dest in
-                switch dest {
-                case .providers:
-                    ProviderInstancesView()
-                case .providerDetail(let id):
-                    ProviderInstanceDetailView(instanceId: id)
-                case .modelGroups:
-                    ModelGroupsView()
-                case .modelGroupDetail(let id):
-                    ModelGroupDetailView(groupId: id)
-                case .usage:
-                    UsageStatsView()
-                case .skills:
-                    SkillsManagementView()
-                case .memory:
-                    MemoryManagementView()
-                case .storage:
-                    StorageManagementView()
-                case .mountedFolders:
-                    MountedFoldersSettingsView()
-                case .sharedFolders:
-                    SharedFoldersSettingsView()
-                case .selfTest:
-                    CapabilitySelfTestView()
-                case .macConsole:
-                    GatewayEntryView()
-                case .logs:
-                    // Pull a one-shot tab hint from the deep link router
-                    // (e.g. `?tab=config-audit`). LogManagementView clears
-                    // its local state independently; the published value
-                    // here is consumed once and reset to nil.
-                    LogManagementView(initialTab: deepLink.pendingLogsTab ?? "logs")
-                        .onAppear { deepLink.pendingLogsTab = nil }
-                case .appearance:
-                    AppearanceSettingsView()
-                case .background:
-                    EnhancedBackgroundSettingsView()
-                case .about:
-                    AboutView()
-                case .environments:
-                    EnvironmentVariablesView()
-                case .permissions:
-                    OffloadPermissionSettingsView()
-                // [T-mcp-oauth-deeplink] Detail = the list view told to open
-                // the server's edit sheet on appear; a deleted/unknown server
-                // just lands on the list (no crash, sensible fallback).
-                case .mcpIntegrations:
-                    MCPIntegrationsView()
-                case .mcpServerDetail(let serverId):
-                    MCPIntegrationsView(initialEditServerId: serverId)
-                }
-            }
-            .onAppear {
-                applyPendingDeepLink()
-                // Legacy flags — kept so older call sites keep working.
-                if deepLink.showEnvironmentVariables {
-                    navPath.append(SettingsDestination.environments)
-                    deepLink.showEnvironmentVariables = false
-                }
-                if deepLink.showPermissions {
-                    navPath.append(SettingsDestination.permissions)
-                    deepLink.showPermissions = false
-                }
-                // Restore the user's location after a language-change rebuild.
-                // AppearanceSettingsView's language picker writes this flag
-                // right before flipping `appLanguage`, knowing the root
-                // `.id(appLanguage)` will tear the whole tree down. ContentView
-                // re-opens the sheet on re-mount; here we push back to the
-                // destination so the user lands where they were, now rendered
-                // in the new language.
-                if let dest = UserDefaults.standard.string(forKey: "pendingSettingsReopen") {
-                    UserDefaults.standard.removeObject(forKey: "pendingSettingsReopen")
-                    switch dest {
-                    case "appearance":
-                        navPath.append(SettingsDestination.appearance)
-                    default:
-                        break
-                    }
-                }
-            }
-            .onChange(of: deepLink.pendingSettingsTarget) { _ in
+            .navigationDestination(for: SettingsDestination.self) { settingsDestination($0) }
+            .onAppear(perform: applyLaunchNavigation)
+            .onChange(of: deepLink.pendingSettingsTarget) { _, _ in
                 applyPendingDeepLink()
             }
         }
         .preferredColorScheme(appearanceMode == 1 ? .light : appearanceMode == 2 ? .dark : nil)
         .appFontScale()
+    }
+
+    @ViewBuilder
+    private func settingsDestination(_ dest: SettingsDestination) -> some View {
+        switch dest {
+        case .providers:
+            ProviderInstancesView()
+        case .providerDetail(let id):
+            ProviderInstanceDetailView(instanceId: id)
+        case .modelGroups:
+            ModelGroupsView()
+        case .modelGroupDetail(let id):
+            ModelGroupDetailView(groupId: id)
+        case .usage:
+            UsageStatsView()
+        case .skills:
+            SkillsManagementView()
+        case .memory:
+            MemoryManagementView()
+        case .storage:
+            StorageManagementView()
+        case .mountedFolders:
+            MountedFoldersSettingsView()
+        case .sharedFolders:
+            SharedFoldersSettingsView()
+        case .selfTest:
+            CapabilitySelfTestView()
+        case .macConsole:
+            GatewayEntryView()
+        case .logs:
+            // Pull a one-shot tab hint from the deep link router
+            // (e.g. `?tab=config-audit`). LogManagementView clears
+            // its local state independently; the published value
+            // here is consumed once and reset to nil.
+            LogManagementView(initialTab: deepLink.pendingLogsTab ?? "logs")
+                .onAppear { deepLink.pendingLogsTab = nil }
+        case .appearance:
+            AppearanceSettingsView()
+        case .background:
+            EnhancedBackgroundSettingsView()
+        case .about:
+            AboutView()
+        case .environments:
+            EnvironmentVariablesView()
+        case .permissions:
+            OffloadPermissionSettingsView()
+        // [T-mcp-oauth-deeplink] Detail = the list view told to open
+        // the server's edit sheet on appear; a deleted/unknown server
+        // just lands on the list (no crash, sensible fallback).
+        case .mcpIntegrations:
+            MCPIntegrationsView()
+        case .mcpServerDetail(let serverId):
+            MCPIntegrationsView(initialEditServerId: serverId)
+        }
+    }
+
+    /// Deep link / legacy flags / language-change reopen, on first appear —
+    /// shared by the single-column and the split layout.
+    private func applyLaunchNavigation() {
+        applyPendingDeepLink()
+        // Legacy flags — kept so older call sites keep working.
+        if deepLink.showEnvironmentVariables {
+            navPath.append(SettingsDestination.environments)
+            deepLink.showEnvironmentVariables = false
+        }
+        if deepLink.showPermissions {
+            navPath.append(SettingsDestination.permissions)
+            deepLink.showPermissions = false
+        }
+        // Restore the user's location after a language-change rebuild.
+        // AppearanceSettingsView's language picker writes this flag
+        // right before flipping `appLanguage`, knowing the root
+        // `.id(appLanguage)` will tear the whole tree down. ContentView
+        // re-opens the sheet on re-mount; here we push back to the
+        // destination so the user lands where they were, now rendered
+        // in the new language.
+        if let dest = UserDefaults.standard.string(forKey: "pendingSettingsReopen") {
+            UserDefaults.standard.removeObject(forKey: "pendingSettingsReopen")
+            switch dest {
+            case "appearance":
+                navPath.append(SettingsDestination.appearance)
+            default:
+                break
+            }
+        }
     }
 
     /// Translate `DeepLinkCoordinator.pendingSettingsTarget` into a

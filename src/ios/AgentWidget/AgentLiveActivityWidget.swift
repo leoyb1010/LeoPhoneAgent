@@ -358,9 +358,10 @@ struct AgentLiveActivityWidget: Widget {
             // [T-widget-localization] The Live Activity renders in the same
             // extension process as the widgets and is the MOST visible surface
             // — it needs the same locale override the Home Screen widgets get.
-            AgentLockScreenView(
+            AgentActivityFamilyView(
                 attributes: context.attributes,
-                state: context.state
+                state: context.state,
+                isStale: context.isStale
             )
             .leoWidgetLocale()
         } dynamicIsland: { context in
@@ -488,12 +489,12 @@ struct AgentLiveActivityWidget: Widget {
                                 }
                             } else {
                                 HStack(spacing: 5) {
-                                    Image(systemName: session.toolIcon)
+                                    Image(systemName: context.isStale ? LiveActivityStale.symbol : session.toolIcon)
                                         .font(.caption)
-                                        .foregroundStyle(.blue)
+                                        .foregroundStyle(context.isStale ? .gray : session.liveTint)
                                         .id(session.toolIcon)
                                         .transition(.opacity.animation(.easeInOut(duration: 0.35)))
-                                    Text(session.toolStatus)
+                                    Text(context.isStale ? LiveActivityStale.text : session.toolStatus)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                         .lineLimit(1)
@@ -515,19 +516,99 @@ struct AgentLiveActivityWidget: Widget {
                   .leoWidgetLocale()
                 }
             } compactLeading: {
-                HStack(spacing: 3) {
-                    Image(systemName: "list.bullet.circle")
-                        .font(.callout)
-                    Text("\(context.state.activeSessionCount)")
-                        .font(.callout.bold())
-                        .contentTransition(.numericText())
-                }
+                CompactLeadingView(state: context.state)
             } compactTrailing: {
-                CompactTrailingView(state: context.state)
+                CompactTrailingView(state: context.state, isStale: context.isStale)
             } minimal: {
                 MinimalIconView(state: context.state)
             }
         }
+        // [T-la-small] Apple Watch Smart Stack and CarPlay get a layout made
+        // for their size instead of a squeezed lock-screen card.
+        .supplementalActivityFamilies([.small])
+    }
+}
+
+/// [T-la-stale] What a running card says once the app stopped refreshing it
+/// (process gone, relay unreachable) — instead of "running" forever.
+enum LiveActivityStale {
+    static let symbol = "clock.badge.exclamationmark"
+    static var text: String { String(localized: "可能已中断 · 打开 App 查看") }
+}
+
+/// Lock screen / banner at full size, or the small layout on the watch.
+@available(iOSApplicationExtension 16.2, *)
+struct AgentActivityFamilyView: View {
+    let attributes: AgentActivityAttributes
+    let state: AgentActivityAttributes.ContentState
+    let isStale: Bool
+    @Environment(\.activityFamily) private var family
+
+    var body: some View {
+        if family == .small {
+            AgentSmallActivityView(state: state, isStale: isStale)
+        } else {
+            AgentLockScreenView(attributes: attributes, state: state, isStale: isStale)
+        }
+    }
+}
+
+/// [T-la-small] One glance: what's happening and whether it needs you.
+@available(iOSApplicationExtension 16.2, *)
+struct AgentSmallActivityView: View {
+    let state: AgentActivityAttributes.ContentState
+    let isStale: Bool
+
+    private var waiting: LiveSessionSnapshot? { state.sessions.first(where: \.needsApproval) }
+
+    var body: some View {
+        let session = waiting ?? state.currentSession
+        HStack(spacing: 8) {
+            Image(systemName: symbol(session))
+                .font(.title3)
+                .foregroundStyle(tint(session))
+                .contentTransition(.symbolEffect(.replace))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title(session))
+                    .font(.caption.bold())
+                    .lineLimit(1)
+                Text(line(session))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+    }
+
+    private func symbol(_ s: LiveSessionSnapshot?) -> String {
+        if state.allCompleted { return state.restingSymbol }
+        if isStale { return LiveActivityStale.symbol }
+        return s?.toolIcon ?? "sparkles"
+    }
+
+    private func tint(_ s: LiveSessionSnapshot?) -> Color {
+        if state.allCompleted { return state.restingTint }
+        if isStale { return .gray }
+        return s?.liveTint ?? .blue
+    }
+
+    private func title(_ s: LiveSessionSnapshot?) -> String {
+        if state.allCompleted {
+            return state.anyNeedsAttention ? String(localized: "Needs attention") : String(localized: "\(state.sessions.count) completed")
+        }
+        if state.activeSessionCount > 1, waiting == nil {
+            return String(localized: "\(state.activeSessionCount) 个任务在跑")
+        }
+        return s?.title ?? "LeoPhoneAgent"
+    }
+
+    private func line(_ s: LiveSessionSnapshot?) -> String {
+        if isStale, !state.allCompleted { return LiveActivityStale.text }
+        guard let s else { return "" }
+        return s.isCompleted ? s.lastMessage : s.toolStatus
     }
 }
 
@@ -615,6 +696,7 @@ struct StopTasksPill: View {
 struct AgentLockScreenView: View {
     let attributes: AgentActivityAttributes
     let state: AgentActivityAttributes.ContentState
+    var isStale = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -683,7 +765,8 @@ struct AgentLockScreenView: View {
                                 .foregroundStyle(.tertiary)
                         }
                         Spacer(minLength: 6)
-                        if !session.isCompleted {
+                        // A stale card stops the clock — it would count time nobody is spending.
+                        if !session.isCompleted, !isStale {
                             Text("00:00")
                                 .font(.caption2.monospacedDigit())
                                 .hidden()
@@ -721,12 +804,12 @@ struct AgentLockScreenView: View {
                         }
                     } else {
                         HStack(spacing: 5) {
-                            Image(systemName: session.toolIcon)
+                            Image(systemName: isStale ? LiveActivityStale.symbol : session.toolIcon)
                                 .font(.caption)
-                                .foregroundStyle(.blue)
+                                .foregroundStyle(isStale ? .gray : session.liveTint)
                                 .id(session.toolIcon)
                                 .transition(.opacity.animation(.easeInOut(duration: 0.35)))
-                            Text(session.toolStatus)
+                            Text(isStale ? LiveActivityStale.text : session.toolStatus)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
@@ -781,14 +864,59 @@ struct MinimalIconView: View {
 @available(iOSApplicationExtension 16.2, *)
 struct CompactTrailingView: View {
     let state: AgentActivityAttributes.ContentState
+    var isStale = false
 
     var body: some View {
-        let icon = state.currentSession?.toolIcon ?? "ellipsis.circle"
+        // Waiting for your OK beats whatever the carousel is on.
+        let session = state.sessions.first(where: \.needsApproval) ?? state.currentSession
+        let icon = isStale && !state.allCompleted ? LiveActivityStale.symbol : (session?.toolIcon ?? "ellipsis.circle")
         Image(systemName: icon)
             .font(.body)
-            .foregroundStyle(.blue)
+            .foregroundStyle(isStale && !state.allCompleted ? .gray : (session?.liveTint ?? .blue))
             .id(icon)
             .transition(.opacity.animation(.easeInOut(duration: 0.35)))
+    }
+}
+
+/// Session count; on iOS 27 a narrowed island drops the glyph and keeps the number.
+@available(iOSApplicationExtension 16.2, *)
+struct CompactLeadingView: View {
+    let state: AgentActivityAttributes.ContentState
+
+    var body: some View {
+        if #available(iOS 27, *) {
+            LimitedWidthCompactLeading(state: state)
+        } else {
+            CompactLeadingContent(state: state, showsGlyph: true)
+        }
+    }
+}
+
+@available(iOS 27, *)
+private struct LimitedWidthCompactLeading: View {
+    let state: AgentActivityAttributes.ContentState
+    @Environment(\.isDynamicIslandLimitedInWidth) private var limited
+
+    var body: some View {
+        CompactLeadingContent(state: state, showsGlyph: !limited)
+    }
+}
+
+@available(iOSApplicationExtension 16.2, *)
+private struct CompactLeadingContent: View {
+    let state: AgentActivityAttributes.ContentState
+    let showsGlyph: Bool
+
+    var body: some View {
+        HStack(spacing: 3) {
+            if showsGlyph {
+                Image(systemName: "list.bullet.circle")
+                    .font(.callout)
+            }
+            Text("\(state.activeSessionCount)")
+                .font(.callout.bold())
+                .contentTransition(.numericText())
+        }
     }
 }
 
@@ -2168,6 +2296,8 @@ extension LiveSessionSnapshot.RestingOutcome {
 extension LiveSessionSnapshot {
     var restingSymbol: String { outcome.symbol }
     var restingTint: Color { outcome.tint }
+    /// In-flight tint: orange while it waits for your OK, blue otherwise.
+    var liveTint: Color { needsApproval ? .orange : .blue }
 }
 
 @available(iOSApplicationExtension 16.2, *)

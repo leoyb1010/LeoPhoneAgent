@@ -112,17 +112,16 @@ struct CollectionViewMessageListV3: UIViewControllerRepresentable {
         if baseChanged {
             let cv = vc.collectionView!
             let wasSmaller = coord.baseBottomInset < bottomPad
-            // Capture follow-intent BEFORE mutating the inset: enlarging the
-            // inset enlarges maxOffset, so a user pinned at the bottom would
-            // measure as >20pt away from it and fail the isNearBottom() guard.
-            let wasNearBottomBefore = coord.isNearBottom()
             coord.baseBottomInset = bottomPad
             // Apply the base immediately so contentInset.bottom reflects the
             // new base before applySubViewportCompensation runs (which may
             // further inflate it). Compensation will overwrite if needed.
             cv.contentInset.bottom = bottomPad
-            if wasSmaller && (coord.scrollMode == .autoScrolling || wasNearBottomBefore) {
-                coord.scrollMode = .autoScrolling
+            // [T-follow-policy] A growing inset (the tool bar appearing) keeps
+            // a FOLLOWING list pinned, and never turns following back on: a
+            // reader 10pt up used to get yanked to the bottom here. Only the
+            // user's own signals re-acquire (send, ↓, settling at the bottom).
+            if wasSmaller && coord.scrollMode == .autoScrolling {
                 coord.scrollToBottomNow(animated: false)
             }
         }
@@ -182,6 +181,57 @@ struct CollectionViewMessageListV3: UIViewControllerRepresentable {
 /// Name comes from SOUL.md (user-editable in Soul Settings); the
 /// sparkles glyph is fixed — custom emoji is no longer supported,
 /// matching the Soul Settings UI.
+/// [T-worked-fold] Fold state shared by every summary row of one list.
+final class WorkFoldState: ObservableObject {
+    @Published var expanded: Set<UUID> = []
+}
+
+/// [T-worked-fold] A finished turn's steps as one quiet line:
+/// "已工作 9 步 · 1 分 12 秒". Orange when one of them failed.
+private struct WorkSummaryRowV3: View {
+    @ObservedObject var message: ChatMessage
+    @ObservedObject var state: WorkFoldState
+    var maxWidth: CGFloat = 0
+    let onToggle: () -> Void
+
+    var body: some View {
+        let folded = WorkFold.foldedBlockIds(message.blocks) ?? []
+        let work = message.blocks.filter { folded.contains($0.id) }
+        let steps = work.filter { $0.toolStatus != nil }.count
+        let failed = work.contains { if case .failed = $0.toolStatus { return true }; return false }
+        let seconds = work.compactMap(\.toolDuration).reduce(0, +)
+        let expanded = state.expanded.contains(message.id)
+        Button(action: onToggle) {
+            HStack(spacing: 8) {
+                Image(systemName: failed ? "exclamationmark.triangle.fill" : "checklist")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(failed ? Color.orange : ChatColors.secondaryText)
+                Text(seconds > 0 ? "已工作 \(steps) 步 · \(LeoDuration.short(seconds))" : "已工作 \(steps) 步")
+                    .font(.footnote.weight(.medium))
+                    .monospacedDigit()
+                    .foregroundStyle(ChatColors.secondaryText)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                    .rotationEffect(.degrees(expanded ? 90 : 0))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(Color.primary.opacity(0.045), in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .hoverEffect(.highlight)
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: maxWidth > 0 ? maxWidth : .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 16)
+        .opacity(message.isCompactedHistory ? 0.5 : 1.0)
+        .accessibilityHint(expanded ? Text("收起这些步骤") : Text("展开这些步骤"))
+    }
+}
+
 private struct BridgedAssistantHeaderV3: View {
     @ObservedObject var message: ChatMessage
     var maxWidth: CGFloat = 0
@@ -885,6 +935,7 @@ private final class WholeMessageCellV3: SelfSizingCell {}
 private final class AssistantHeaderCellV3: SelfSizingCell {}
 private final class AssistantBlockCellV3: SelfSizingCell {}
 private final class AssistantFooterCellV3: SelfSizingCell {}
+private final class WorkSummaryCellV3: SelfSizingCell {}
 
 // MARK: - V3 Coordinator
 
@@ -963,6 +1014,18 @@ extension CollectionViewMessageListV3 {
 
         // === Bridges ===
         private var cellBridges: [UUID: CellStateBridgeV2] = [:]
+        /// [T-worked-fold] Which finished turns the user unfolded.
+        let workFold = WorkFoldState()
+
+        /// Show / hide a finished turn's steps. The tap means the user is reading
+        /// above the bottom now, so the list stops following — the tapped row
+        /// stays put and the steps open below it.
+        func toggleWork(_ messageId: UUID) {
+            if workFold.expanded.remove(messageId) == nil { workFold.expanded.insert(messageId) }
+            scrollMode = .userBrowsing
+            LeoHaptics.selection()
+            if let vm { applySnapshot(messages: vm.messages, caller: "workFold") }
+        }
 
         // === Height Measurement Cache ===
         /// Caches measureAttributedStringHeight results by NSAttributedString identity.
@@ -1069,6 +1132,10 @@ extension CollectionViewMessageListV3 {
                 [weak self] cell, indexPath, item in
                 self?.configureCell(cell, item: item, indexPath: indexPath)
             }
+            let workReg = UICollectionView.CellRegistration<WorkSummaryCellV3, MessageListItem> {
+                [weak self] cell, indexPath, item in
+                self?.configureCell(cell, item: item, indexPath: indexPath)
+            }
 
             dataSource = UICollectionViewDiffableDataSource<Section, MessageListItem>(
                 collectionView: collectionView
@@ -1082,6 +1149,8 @@ extension CollectionViewMessageListV3 {
                     return cv.dequeueConfiguredReusableCell(using: blockReg, for: indexPath, item: item)
                 case .assistantFooter:
                     return cv.dequeueConfiguredReusableCell(using: footerReg, for: indexPath, item: item)
+                case .workSummary:
+                    return cv.dequeueConfiguredReusableCell(using: workReg, for: indexPath, item: item)
                 }
             }
 
@@ -1314,6 +1383,18 @@ extension CollectionViewMessageListV3 {
                     )
                     .transaction { $0.disablesAnimations = true }
                     .environmentObject(vm)
+                }.minSize(width: 0, height: 0).margins(.all, 0)
+                cell.applyContentConfiguration(config)
+
+            case .workSummary(let msgId):
+                guard let msgIdx = messageIndex[msgId], msgIdx < messages.count else { return }
+                let message = messages[msgIdx]
+                cell.backgroundColor = .clear
+                let config = UIHostingConfiguration {
+                    WorkSummaryRowV3(message: message, state: workFold, maxWidth: width) { [weak self] in
+                        self?.toggleWork(msgId)
+                    }
+                    .transaction { $0.disablesAnimations = true }
                 }.minSize(width: 0, height: 0).margins(.all, 0)
                 cell.applyContentConfiguration(config)
             }
@@ -2343,7 +2424,15 @@ extension CollectionViewMessageListV3 {
                     newItems.append(.wholeMessage(message.id))
                 case .assistant:
                     newItems.append(.assistantHeader(message.id))
-                    for block in message.blocks {
+                    // [T-worked-fold] Earlier turns fold their steps; the last
+                    // reply (the one being read or still running) stays flat,
+                    // so folding only ever happens above a list pinned at the
+                    // bottom after you send — never under your reading position.
+                    let isLatestReply = message.id == messages.last(where: { $0.role == .assistant })?.id
+                    let folded = isLatestReply ? nil : WorkFold.foldedBlockIds(message.blocks)
+                    if folded != nil { newItems.append(.workSummary(message.id)) }
+                    let hideSteps = folded != nil && !workFold.expanded.contains(message.id)
+                    for block in message.blocks where !(hideSteps && folded?.contains(block.id) == true) {
                         newItems.append(.assistantBlock(message.id, block.id))
                     }
                     // Only emit a footer cell when it will actually render
@@ -2426,6 +2515,9 @@ extension CollectionViewMessageListV3 {
                     case .assistantHeader:
                         // Header is always a fixed "sparkles LeoPhoneAgent" label row (measured: 28pt)
                         layout.setEstimatedHeight(28, at: i)
+
+                    case .workSummary:
+                        layout.setEstimatedHeight(44, at: i)
 
                     case .assistantFooter:
                         // Prominent banners (error/resume/typing) measure
@@ -2654,7 +2746,8 @@ extension CollectionViewMessageListV3 {
             // loadSession() rebuilds every ChatMessage with fresh UUIDs, so
             // "inserted == everything" there is not new content either:
             // require an existing snapshot and a non-sessionLoad caller.
-            if scrollMode != .autoScrolling, oldCount > 0, caller != "bind3-sessionLoad",
+            // Unfolding a finished turn's steps isn't new content either.
+            if scrollMode != .autoScrolling, oldCount > 0, caller != "bind3-sessionLoad", caller != "workFold",
                inserted.contains(where: { if case .assistantFooter = $0 { return false }; return true }) {
                 setUnseenContent(true)
             }
@@ -2946,6 +3039,7 @@ extension CollectionViewMessageListV3 {
             case .wholeMessage(let id): return id
             case .assistantHeader(let id): return id
             case .assistantFooter(let id): return id
+            case .workSummary(let id): return id
             case .assistantBlock(let mid, _): return mid
             }
         }
@@ -2987,6 +3081,9 @@ extension CollectionViewMessageListV3 {
             case .assistantFooter(let id):
                 let c = msg(id)?.blocks.first?.content ?? ""
                 return "f#\(digest(c))"
+            case .workSummary(let id):
+                let c = msg(id)?.blocks.first?.content ?? ""
+                return "s#\(digest(c))"
             case .assistantBlock(let mid, let bid):
                 guard let b = msg(mid)?.blocks.first(where: { $0.id == bid }) else { return "b#?" }
                 let c = b.content
@@ -3009,6 +3106,8 @@ extension CollectionViewMessageListV3 {
                 return "h:\(id.uuidString)"
             case .assistantFooter(let id):
                 return "f:\(id.uuidString)"
+            case .workSummary(let id):
+                return "s:\(id.uuidString)"
             case .assistantBlock(let mid, let bid):
                 let block = msg(mid)?.blocks.first(where: { $0.id == bid })
                 let n = block?.content.count ?? 0
@@ -3061,6 +3160,8 @@ extension CollectionViewMessageListV3 {
                 }
             case .assistantHeader:
                 return 28
+            case .workSummary:
+                return 44
             case .assistantBlock(let msgId, let blockId):
                 guard let msg = messages.first(where: { $0.id == msgId }),
                       let block = msg.blocks.first(where: { $0.id == blockId }) else { return 44 }
@@ -3231,7 +3332,7 @@ extension CollectionViewMessageListV3 {
             if let cached = NativeMediaImageCache.shared.image(for: src) {
                 let imgWidth = min(min(containerWidth, cached.size.width), maxImageWidth)
                 let aspect = cached.size.height / max(cached.size.width, 1)
-                let maxH = UIScreen.main.bounds.height / 2
+                let maxH = LeoWindowMetrics.bounds.height / 2
                 return min(imgWidth * aspect, maxH) + 6
             }
             return 200
@@ -3262,6 +3363,7 @@ extension CollectionViewMessageListV3 {
             switch item {
             case .assistantBlock(let mid, _): return mid == messageId
             case .assistantFooter(let mid): return mid == messageId
+            case .workSummary(let mid): return mid == messageId
             case .wholeMessage, .assistantHeader: return false
             }
         }
@@ -3920,7 +4022,7 @@ extension CollectionViewMessageListV3 {
 
             screenshotLogger.info("captureScrolling: turn=[\(Int(turnTopY)),\(Int(turnBottomY))] totalH=\(Int(totalH)) usableH=\(Int(usableH))")
 
-            let scale = UIScreen.main.scale
+            let scale = LeoWindowMetrics.scale
             let cvWidth = cv.bounds.width
 
             // --- DEBUG: log appearance state ---

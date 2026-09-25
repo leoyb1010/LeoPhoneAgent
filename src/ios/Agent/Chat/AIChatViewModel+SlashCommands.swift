@@ -429,7 +429,7 @@ extension AIChatViewModel {
             LeoHaptics.impact(on ? .medium : .light)
             appendSystemInfo(on
                 ? "全自动已打开:写文件、跑命令、调用手机能力、改设置都不再逐项确认。点输入框上方的「全自动」或再发 /auto 关闭。"
-                : "全自动已关闭:敏感操作会先问你。",
+                : "全自动已关闭,回到「\(FullAutoStore.shared.mode.title)」。",
                 icon: on ? "bolt.fill" : "bolt")
         default:
             break

@@ -228,7 +228,7 @@ final class SpeechCapsulePlacement: ObservableObject {
     /// transitions — negative X, off-screen, or absurd sizes — which made the
     /// capsule lift jump wildly. We reject those.
     private func isSaneRect(_ r: CGRect) -> Bool {
-        let s = UIScreen.main.bounds
+        let s = LeoWindowMetrics.bounds
         guard r.width > 0.5, r.height > 0.5 else { return false }
         guard r.minX >= -2, r.maxX <= s.width + 2 else { return false }   // within screen X
         guard r.maxY > 0, r.minY < s.height + 2 else { return false }     // intersects screen
@@ -303,7 +303,7 @@ final class SpeechCapsulePlacement: ObservableObject {
         let onKB: @Sendable (Notification) -> Void = { [weak self] note in
             let end = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect) ?? .zero
             Task { @MainActor in
-                let screenH = UIScreen.main.bounds.height
+                let screenH = LeoWindowMetrics.bounds.height
                 let visible = end.minY < screenH - 1 && end.height > 1
                 // DEBOUNCED: the keyboard fires willChangeFrame many times during its
                 // show/hide animation with intermediate frames (e.g. 318…874 then
@@ -326,7 +326,7 @@ final class SpeechCapsulePlacement: ObservableObject {
 struct CapsuleProtectedFrame: ViewModifier {
     let key: String
     private static func isSane(_ f: CGRect) -> Bool {
-        let s = UIScreen.main.bounds
+        let s = LeoWindowMetrics.bounds
         return f.width > 0.5 && f.height > 0.5
             && f.minX >= -2 && f.maxX <= s.width + 2
             && f.maxY > 0 && f.minY < s.height + 2

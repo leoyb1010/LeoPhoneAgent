@@ -6,6 +6,21 @@ private let logger = AppLogger(category: "AIChatVM")
 
 // MARK: - Session Activity Tracker
 
+@MainActor
+extension SessionActivityTracker {
+    /// [T-approval-phase] The permission gate reports "waiting for you" through
+    /// a hook (it also builds into the logic tests, without the chat stack).
+    /// The phase is what the Live Activity, home attention bar and session rows show.
+    static func installApprovalPhaseHook() {
+        SensitiveToolGate.waitingChanged = { sessionId, waiting in
+            let tracker = SessionActivityTracker.shared
+            guard tracker.isActive(sessionId) else { return }
+            tracker.updateActivityPhase(sessionId, phase: waiting ? .waitingForPermission : .usingTool,
+                                        reason: waiting ? .permissionApproval : nil)
+        }
+    }
+}
+
 /// Tracks which sessions are currently processing, so the home screen
 /// can display a spinner even when the user navigates away from the chat.
 @MainActor

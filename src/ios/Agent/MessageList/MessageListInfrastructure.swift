@@ -27,14 +27,31 @@ enum MessageListItem: Hashable {
     case assistantBlock(UUID, UUID)  // (messageId, blockId)
     /// Footer area: typing indicator, error, resume, usage.
     case assistantFooter(UUID)
+    /// [T-worked-fold] "已工作 9 步 · 1 分 12 秒" — a finished turn's steps,
+    /// folded above its answer. Tapping it shows / hides them.
+    case workSummary(UUID)
 
     /// The message ID this item belongs to.
     var messageId: UUID {
         switch self {
         case .wholeMessage(let id), .assistantHeader(let id),
-             .assistantFooter(let id): return id
+             .assistantFooter(let id), .workSummary(let id): return id
         case .assistantBlock(let msgId, _): return msgId
         }
+    }
+}
+
+/// [T-worked-fold] Which blocks of a finished turn fold behind the summary
+/// row: everything before the final answer, once that includes at least two
+/// tool calls. A turn with no written answer, or only one tool call, stays flat.
+enum WorkFold {
+    static func foldedBlockIds(_ blocks: [AssistantBlock]) -> Set<UUID>? {
+        guard let answer = blocks.lastIndex(where: {
+            $0.kind == .text && !$0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }) else { return nil }
+        let work = blocks[..<answer]
+        guard work.filter({ $0.toolStatus != nil }).count >= 2 else { return nil }
+        return Set(work.map(\.id))
     }
 }
 

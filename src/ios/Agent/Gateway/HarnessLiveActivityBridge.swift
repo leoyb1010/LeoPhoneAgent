@@ -56,7 +56,17 @@ final class HarnessLiveActivityBridge {
 
     func unregister(driver: HarnessSessionDriver) {
         if let sid = driver.sessionId {
-            SessionActivityTracker.shared.setInactive(sid, source: "HarnessLiveActivityBridge")
+            // [T-la-honest-outcome] A round the Mac finished rests as done, a stop
+            // as stopped; leaving the screen mid-run is "paused here", not stopped —
+            // the Mac keeps going and reopening picks it back up.
+            let phase: AgentActivityPhase
+            switch driver.status {
+            case "idle", "completed": phase = .completed
+            case "cancelled": phase = .cancelled
+            case "failed": phase = .failed
+            default: phase = .suspended
+            }
+            SessionActivityTracker.shared.setInactive(sid, finalPhase: phase, source: "HarnessLiveActivityBridge")
         }
         entries.removeValue(forKey: ObjectIdentifier(driver))
         refresh()
@@ -72,7 +82,7 @@ final class HarnessLiveActivityBridge {
             let icon: String
             if let waiting {
                 status = "等你审批:\(String((waiting.command ?? "").prefix(40)))"
-                icon = "hand.raised.fill"
+                icon = LiveSessionSnapshot.approvalIcon
             } else if d.status == "idle" {
                 status = "已完成一轮,可继续下指令"
                 icon = "checkmark.circle"

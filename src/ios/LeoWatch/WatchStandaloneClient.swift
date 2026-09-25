@@ -45,7 +45,9 @@ enum WatchStandaloneError: LocalizedError {
         case .emptyReply:
             return "模型没有返回文字。"
         case .network(let detail):
-            return "网络不可用：\(detail)"
+            // The watch may be riding a nearby iPhone's connection, and there
+            // is no API to force its own cellular or Wi-Fi (TN3135).
+            return "网络不可用（\(detail)）。手表离开 iPhone 时要靠自己的蜂窝或 Wi-Fi；答案会在联网后送到通知里。"
         }
     }
 }
@@ -120,6 +122,30 @@ final class WatchStandaloneClient: ObservableObject {
 
     /// One plain-chat turn. `history` is oldest-first (question, answer).
     func ask(_ text: String, history: [(question: String, answer: String)]) async throws -> String {
+        let (config, request) = try makeRequest(text, history: history)
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as URLError where error.code == .cancelled {
+            throw CancellationError()
+        } catch {
+            throw WatchStandaloneError.network(error.localizedDescription)
+        }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else {
+            throw WatchStandaloneError.http(status, Self.errorDetail(from: data))
+        }
+        let reply = Self.replyText(from: data, format: config.format)
+        guard !reply.isEmpty else { throw WatchStandaloneError.emptyReply }
+        return Self.plain(reply)
+    }
+
+    private func makeRequest(_ text: String,
+                             history: [(question: String, answer: String)]) throws -> (WatchStandaloneConfig, URLRequest) {
         guard let config, let key = Self.loadKey(), let url = URL(string: config.endpoint) else {
             throw WatchStandaloneError.notConfigured(unavailableReason ?? "还没有可直连的模型。打开一次 iPhone 上的 LeoPhoneAgent 同步。")
         }
@@ -145,25 +171,92 @@ final class WatchStandaloneClient: ObservableObject {
                     "messages": [["role": "system", "content": Self.systemPrompt]] + turns]
         }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        return (config, request)
+    }
 
-        let data: Data
-        let response: URLResponse
-        do {
-            (data, response) = try await session.data(for: request)
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch let error as URLError where error.code == .cancelled {
-            throw CancellationError()
-        } catch {
-            throw WatchStandaloneError.network(error.localizedDescription)
+    // MARK: - Background delivery
+
+    /// watchOS suspends the app soon after the wrist drops, and a foreground
+    /// request dies with it. A background URLSession hands the transfer to the
+    /// system, which finishes it (over cellular if needed) and wakes us with
+    /// the result; the answer then arrives as a notification.
+    static let backgroundSessionId = "com.leoyuan.leophoneagent.watch.direct"
+
+    private struct PendingBackgroundAsk: Codable {
+        let question: String
+        let format: String
+        let createdAt: Date
+    }
+    private static let pendingKey = "leo.watch.standalone.pending"
+
+    /// Result of a background ask, delivered on the main actor — possibly after
+    /// the system relaunched the app just for it.
+    var onBackgroundAnswer: ((_ requestId: String, _ question: String, _ result: Result<String, Error>) -> Void)?
+
+    private lazy var backgroundSession: URLSession = {
+        let configuration = URLSessionConfiguration.background(withIdentifier: Self.backgroundSessionId)
+        configuration.sessionSendsLaunchEvents = true
+        configuration.isDiscretionary = false
+        configuration.allowsCellularAccess = true
+        configuration.allowsExpensiveNetworkAccess = true
+        configuration.allowsConstrainedNetworkAccess = true
+        configuration.timeoutIntervalForResource = 15 * 60
+        return URLSession(configuration: configuration, delegate: BackgroundAskDelegate.shared, delegateQueue: nil)
+    }()
+
+    /// Background sessions only accept upload tasks with a file body.
+    func askInBackground(requestId: String, text: String,
+                         history: [(question: String, answer: String)]) throws {
+        let (config, request) = try makeRequest(text, history: history)
+        guard let body = request.httpBody else { throw WatchStandaloneError.emptyReply }
+        let file = Self.bodyFile(requestId)
+        try body.write(to: file, options: .atomic)
+        var upload = request
+        upload.httpBody = nil
+        var pending = Self.loadPending()
+        pending[requestId] = PendingBackgroundAsk(question: text, format: config.format, createdAt: Date())
+        Self.savePending(pending)
+        let task = backgroundSession.uploadTask(with: upload, fromFile: file)
+        task.taskDescription = requestId
+        task.resume()
+    }
+
+    /// Recreating the session with the same identifier is what lets the
+    /// system deliver events for transfers that finished while we were away.
+    func reconnectBackgroundSession() {
+        _ = backgroundSession
+    }
+
+    fileprivate func completeBackground(requestId: String, data: Data, status: Int, error: Error?) {
+        var pending = Self.loadPending()
+        guard let ask = pending.removeValue(forKey: requestId) else { return }
+        Self.savePending(pending)
+        try? FileManager.default.removeItem(at: Self.bodyFile(requestId))
+        let result: Result<String, Error>
+        if let error {
+            result = .failure(WatchStandaloneError.network(error.localizedDescription))
+        } else if !(200..<300).contains(status) {
+            result = .failure(WatchStandaloneError.http(status, Self.errorDetail(from: data)))
+        } else {
+            let reply = Self.replyText(from: data, format: ask.format)
+            result = reply.isEmpty ? .failure(WatchStandaloneError.emptyReply) : .success(Self.plain(reply))
         }
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard (200..<300).contains(status) else {
-            throw WatchStandaloneError.http(status, Self.errorDetail(from: data))
-        }
-        let reply = Self.replyText(from: data, format: config.format)
-        guard !reply.isEmpty else { throw WatchStandaloneError.emptyReply }
-        return Self.plain(reply)
+        onBackgroundAnswer?(requestId, ask.question, result)
+    }
+
+    private static func bodyFile(_ requestId: String) -> URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent("leo-ask-\(requestId).json")
+    }
+
+    private static func loadPending() -> [String: PendingBackgroundAsk] {
+        guard let data = UserDefaults.standard.data(forKey: pendingKey),
+              let saved = try? JSONDecoder().decode([String: PendingBackgroundAsk].self, from: data) else { return [:] }
+        // A transfer the system never finished within a day is not coming back.
+        return saved.filter { Date().timeIntervalSince($0.value.createdAt) < 24 * 3600 }
+    }
+
+    private static func savePending(_ pending: [String: PendingBackgroundAsk]) {
+        UserDefaults.standard.set(try? JSONEncoder().encode(pending), forKey: pendingKey)
     }
 
     // MARK: - Response parsing
@@ -229,5 +322,59 @@ final class WatchStandaloneClient: ObservableObject {
 
     private static func deleteKey() {
         SecItemDelete(baseQuery() as CFDictionary)
+    }
+}
+
+/// Collects background-session responses. Runs on URLSession's own queue.
+final class BackgroundAskDelegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+    static let shared = BackgroundAskDelegate()
+
+    private let lock = NSLock()
+    private var buffers: [Int: Data] = [:]
+    private var eventsFinished: (() -> Void)?
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        lock.withLock { buffers[dataTask.taskIdentifier, default: Data()].append(data) }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        let data = lock.withLock { buffers.removeValue(forKey: task.taskIdentifier) ?? Data() }
+        let status = (task.response as? HTTPURLResponse)?.statusCode ?? 0
+        let requestId = task.taskDescription ?? ""
+        Task { @MainActor in
+            WatchStandaloneClient.shared.completeBackground(requestId: requestId, data: data, status: status, error: error)
+        }
+    }
+
+    func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
+        let done = lock.withLock { () -> (() -> Void)? in
+            defer { eventsFinished = nil }
+            return eventsFinished
+        }
+        done?()
+    }
+
+    /// Holds the system's background-task assertion until the session has
+    /// delivered everything it woke us for (bounded, so a lost callback can't
+    /// keep the task open until watchOS kills us).
+    func waitForEvents(timeout seconds: Double = 25) async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let once = OnceFlag()
+            let finish = { if once.claim() { continuation.resume() } }
+            lock.withLock { eventsFinished = finish }
+            DispatchQueue.global().asyncAfter(deadline: .now() + seconds, execute: finish)
+        }
+    }
+}
+
+/// Lets exactly one of several racing callbacks resume a continuation.
+private final class OnceFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var claimed = false
+    func claim() -> Bool {
+        lock.withLock {
+            defer { claimed = true }
+            return !claimed
+        }
     }
 }

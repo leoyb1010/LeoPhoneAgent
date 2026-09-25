@@ -484,7 +484,7 @@ final class AgentLiveActivityManager {
             minimalShowsTool: minimalShowsTool
         ))
         let attributes = AgentActivityAttributes(startDate: now)
-        let content = ActivityContent(state: state, staleDate: nil)
+        let content = ActivityContent(state: state, staleDate: Self.staleDate(for: state))
 
         do {
             let activity = try Activity.request(
@@ -665,7 +665,10 @@ final class AgentLiveActivityManager {
             minimalShowsTool: minimalShowsTool
         ))
 
-        if let prev = lastPushedState as? AgentActivityAttributes.ContentState, prev == state {
+        // [T-la-stale] Unchanged state is skipped — except for the heartbeat
+        // that pushes the stale date forward while work is in flight.
+        if let prev = lastPushedState as? AgentActivityAttributes.ContentState, prev == state,
+           Date().timeIntervalSince(lastPushDate) < Self.heartbeatInterval {
             logger.info("[LiveActivity][update] #\(self.updateCount) DEDUP-SKIP (state unchanged)")
             return
         }
@@ -765,8 +768,10 @@ final class AgentLiveActivityManager {
             // In-flight rows get a content-free "working" label; completed rows
             // show a content-free "Completed" beside the checkmark (the slot
             // where the reply summary appears outside Privacy Mode).
-            redacted.toolStatus = snap.isCompleted ? "" : Self.privacyWorkingStatus
-            redacted.toolIcon = snap.isCompleted ? "checkmark.circle.fill" : Self.privacyNeutralIcon
+            // A run waiting for your OK says so even in Privacy Mode (no command text).
+            redacted.toolStatus = snap.isCompleted ? "" : (snap.needsApproval ? Self.privacyApprovalStatus : Self.privacyWorkingStatus)
+            redacted.toolIcon = snap.isCompleted ? "checkmark.circle.fill"
+                : (snap.needsApproval ? LiveSessionSnapshot.approvalIcon : Self.privacyNeutralIcon)
             redacted.lastMessage = snap.isCompleted ? Self.privacyCompletedStatus : ""
             return redacted
         }
@@ -778,20 +783,55 @@ final class AgentLiveActivityManager {
     private static var privacyTaskTitle: String { String(localized: "Agent Task") }
     private static var privacyWorkingStatus: String { String(localized: "Working…") }
     private static var privacyCompletedStatus: String { String(localized: "Completed") }
+    private static var privacyApprovalStatus: String { String(localized: "等你批准") }
+
+    /// [T-la-stale] A running card whose app stopped updating it (killed,
+    /// frozen, relay gone) turns "stale" after this long; while work is in
+    /// flight the heartbeat re-pushes well before that.
+    static let staleInterval: TimeInterval = 5 * 60
+    static let heartbeatInterval: TimeInterval = 2 * 60
+
+    @available(iOS 16.2, *)
+    static func staleDate(for state: AgentActivityAttributes.ContentState) -> Date? {
+        state.allCompleted || state.sessions.isEmpty ? nil : Date().addingTimeInterval(staleInterval)
+    }
     private static let privacyNeutralIcon = "circle.dashed"
 
     @available(iOS 16.2, *)
     private func pushState(_ rawState: AgentActivityAttributes.ContentState, activity: Activity<AgentActivityAttributes>) {
         let state = withAudioState(rawState)
+        let previous = lastPushedState as? AgentActivityAttributes.ContentState
         lastPushedState = state
         lastPushDate = Date()
         updateCount += 1
         let count = updateCount
-        let content = ActivityContent(state: state, staleDate: nil)
-        logger.info("[LiveActivity][push] #\(count) active=\(state.activeSessionCount) sessions=\(state.sessions.count)")
-        Task {
-            await activity.update(content)
+        let content = ActivityContent(state: state, staleDate: Self.staleDate(for: state))
+        // [T-la-approval] Entering "needs your OK" is worth a buzz (it also
+        // lights up the Dynamic Island and taps the watch); nothing else is.
+        let newlyWaiting = state.sessions.filter { snap in
+            snap.needsApproval && !(previous?.sessions.contains { $0.sessionId == snap.sessionId && $0.needsApproval } ?? false)
+        }
+        let alert = newlyWaiting.isEmpty ? nil : AlertConfiguration(
+            title: LocalizedStringResource("需要你批准"),
+            body: LocalizedStringResource(stringLiteral: state.privacyMode ? String(localized: "有一步在等你批准") : newlyWaiting[0].title),
+            sound: .default)
+        logger.info("[LiveActivity][push] #\(count) active=\(state.activeSessionCount) sessions=\(state.sessions.count) alert=\(alert != nil)")
+        enqueueUpdate {
+            await activity.update(content, alertConfiguration: alert)
             logger.info("[LiveActivity][push] #\(count) activity.update() returned")
+        }
+    }
+
+    /// [T-la-serial] ActivityKit calls run strictly in the order they were
+    /// made. Separate `Task { await update }` calls can land out of order, and
+    /// a late "running" landing after "completed" resurrected finished cards.
+    private var updateChain: Task<Void, Never>?
+
+    private func enqueueUpdate(_ operation: @escaping @Sendable () async -> Void) {
+        let previous = updateChain
+        updateChain = Task {
+            await previous?.value
+            await operation()
         }
     }
 
@@ -829,7 +869,7 @@ final class AgentLiveActivityManager {
             logger.info("[LiveActivity][renew] old id=\(oldId) ended")
 
             let attributes = AgentActivityAttributes(startDate: self.startTime ?? Date())
-            let content = ActivityContent(state: state, staleDate: nil)
+            let content = ActivityContent(state: state, staleDate: Self.staleDate(for: state))
             do {
                 let newActivity = try Activity.request(
                     attributes: attributes,
@@ -867,7 +907,7 @@ final class AgentLiveActivityManager {
             return
         }
         let attributes = AgentActivityAttributes(startDate: startTime ?? Date())
-        let content = ActivityContent(state: state, staleDate: nil)
+        let content = ActivityContent(state: state, staleDate: Self.staleDate(for: state))
         do {
             let activity = try Activity.request(attributes: attributes, content: content, pushType: nil)
             currentActivity = activity
@@ -960,6 +1000,8 @@ final class AgentLiveActivityManager {
             return
         }
         let content = ActivityContent(state: finished, staleDate: nil)
+        // Behind any running-state update still in flight, never ahead of it.
+        await updateChain?.value
         await activity.update(content)
         self.lastPushedState = finished
         self.lastPushDate = Date()

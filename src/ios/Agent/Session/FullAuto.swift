@@ -48,8 +48,58 @@ final class FullAutoStore: ObservableObject {
         }
     }
 
+    /// [T-smart-approve] 全自动关着时回到哪一档(逐项确认 / 智能批准)。
+    @Published private var smartWhenOff: Bool {
+        didSet { UserDefaults.standard.set(smartWhenOff ? FullAutoGate.Mode.smart.rawValue : FullAutoGate.Mode.ask.rawValue,
+                                           forKey: FullAutoGate.modeKey) }
+    }
+
+    /// 三档审批;`enabled` 仍是全自动本身(配置注册表、Mac 转发都读它)。
+    var mode: FullAutoGate.Mode {
+        get { enabled ? .full : (smartWhenOff ? .smart : .ask) }
+        set {
+            if newValue != .full { smartWhenOff = newValue == .smart }
+            enabled = newValue == .full
+        }
+    }
+
     private init() {
         enabled = UserDefaults.standard.bool(forKey: Self.defaultsKey)
+        smartWhenOff = UserDefaults.standard.string(forKey: FullAutoGate.modeKey) == FullAutoGate.Mode.smart.rawValue
+    }
+}
+
+extension FullAutoGate.Mode {
+    var title: String {
+        switch self {
+        case .ask: String(localized: "逐项确认")
+        case .smart: String(localized: "智能批准")
+        case .full: String(localized: "全自动")
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .ask: "hand.raised"
+        case .smart: "checkmark.shield"
+        case .full: "bolt.fill"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .ask: String(localized: "写文件、跑命令、调用手机能力前都先问你。")
+        case .smart: String(localized: "只读、不碰个人数据的操作直接放行；会改动的先问你，一个会话里允许过就不再问。")
+        case .full: String(localized: "不再逐项确认。设成「不允许」的能力仍然不执行。")
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .ask: .secondary
+        case .smart: .teal
+        case .full: .orange
+        }
     }
 }
 
@@ -120,9 +170,8 @@ enum FullAutoLog {
 
 // MARK: - 常驻标记
 
-/// 全自动打开时显示;点一下直接关掉。
-/// 全自动的一键开关:聊天和首页输入框上方常驻。关着显示「逐项确认」,点一下打开;开着显示橙色「全自动」,点一下关。
-/// 第一次打开先说明一次后果(之后一点即开);打开的瞬间标签展开成一句说明,两秒后收回。
+/// 审批档位:聊天和首页输入框上方常驻,点开是三档菜单(逐项确认 / 智能批准 / 全自动)。
+/// 第一次切到全自动先说明一次后果(之后一选即开);切换的瞬间标签展开成一句说明,两秒后收回。
 struct FullAutoBadge: View {
     static let explainedKey = "fullAuto.explainedOnce"
 
@@ -134,50 +183,69 @@ struct FullAutoBadge: View {
     @State private var flashing = false
 
     var body: some View {
-        Button {
-            if store.enabled {
-                setEnabled(false)
-            } else if explainedOnce {
-                setEnabled(true)
-            } else {
-                confirming = true
+        let mode = store.mode
+        Menu {
+            Picker("审批方式", selection: Binding(get: { store.mode }, set: choose)) {
+                ForEach(FullAutoGate.Mode.allCases, id: \.self) { option in
+                    Label {
+                        Text(option.title)
+                        Text(option.detail)
+                    } icon: {
+                        Image(systemName: option.symbol)
+                    }
+                    .tag(option)
+                }
             }
+            .pickerStyle(.inline)
         } label: {
             HStack(spacing: 4) {
-                Image(systemName: store.enabled ? "bolt.fill" : "bolt")
+                Image(systemName: mode.symbol)
                     .font(.system(size: 10, weight: .bold))
-                Text(store.enabled ? (flashing ? "全自动 · 不再逐项确认" : "全自动") : "逐项确认")
+                    .contentTransition(.symbolEffect(.replace))
+                Text(flashing ? "\(mode.title) · \(mode == .full ? String(localized: "不再逐项确认") : String(localized: "只读的直接放行"))" : mode.title)
                     .lineLimit(1)
+                    .contentTransition(.interpolate)
             }
             .font(.caption2.weight(.semibold))
             .fixedSize()
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(Capsule().fill(store.enabled ? Color.orange.opacity(0.16) : Color.primary.opacity(0.06)))
-            .foregroundStyle(store.enabled ? Color.orange : Color.secondary)
+            .background(Capsule().fill(mode == .ask ? Color.primary.opacity(0.06) : mode.tint.opacity(0.16)))
+            .foregroundStyle(mode.tint)
             .contentShape(Capsule())
         }
+        .menuStyle(.button)
         .buttonStyle(.plain)
-        .accessibilityLabel(store.enabled ? "全自动已打开" : "全自动已关闭,敏感操作会先问你")
-        .accessibilityHint(store.enabled ? "点一下关闭全自动" : "点一下打开全自动,之后不再逐项确认")
+        .hoverEffect(.highlight)
+        .accessibilityLabel(String(localized: "审批方式：\(mode.title)"))
+        .accessibilityHint(mode.detail)
         .confirmationDialog("打开全自动?", isPresented: $confirming, titleVisibility: .visible) {
             Button("打开全自动") {
                 explainedOnce = true
-                setEnabled(true)
+                setMode(.full)
             }
             Button("取消", role: .cancel) {}
         } message: {
             Text("Agent 写文件、跑命令、调用手机能力、改设置都不再逐项确认,发给 Mac 的任务也一样。你设成「不允许」的能力仍然不执行。随时再点这里关掉。")
         }
-        .animation(reduceMotion ? nil : .spring(duration: 0.3, bounce: 0.2), value: store.enabled)
+        .animation(reduceMotion ? nil : .spring(duration: 0.3, bounce: 0.2), value: mode)
         .animation(reduceMotion ? nil : .spring(duration: 0.3, bounce: 0.15), value: flashing)
     }
 
-    private func setEnabled(_ on: Bool) {
-        store.enabled = on
-        LeoHaptics.impact(on ? .medium : .light)
+    private func choose(_ mode: FullAutoGate.Mode) {
+        if mode == .full, !explainedOnce, store.mode != .full {
+            confirming = true
+        } else {
+            setMode(mode)
+        }
+    }
+
+    private func setMode(_ mode: FullAutoGate.Mode) {
+        guard mode != store.mode else { return }
+        store.mode = mode
+        LeoHaptics.impact(mode == .ask ? .light : .medium)
         flashToken += 1
-        guard on else {
+        guard mode != .ask else {
             flashing = false
             return
         }
@@ -198,25 +266,35 @@ struct FullAutoSettingsSection: View {
 
     var body: some View {
         Section {
-            Toggle(isOn: Binding(
-                get: { store.enabled },
+            Picker(selection: Binding(
+                get: { store.mode },
                 set: { newValue in
-                    store.enabled = newValue
-                    if newValue {
-                        // 在这里打开就已经看过说明了,输入框上的开关之后一点即开。
+                    store.mode = newValue
+                    if newValue == .full {
+                        // 在这里选过就已经看过说明了,输入框上的菜单之后一选即开。
                         UserDefaults.standard.set(true, forKey: FullAutoBadge.explainedKey)
                         showSystemPermissions = true
                     }
                 }
             )) {
-                Label("全自动(不再询问)", systemImage: "bolt.fill")
+                ForEach(FullAutoGate.Mode.allCases, id: \.self) { option in
+                    Label {
+                        Text(option.title)
+                        Text(option.detail)
+                    } icon: {
+                        Image(systemName: option.symbol).foregroundStyle(option.tint)
+                    }
+                    .tag(option)
+                }
+            } label: {
+                Label("审批方式", systemImage: "checkmark.shield")
             }
-            .tint(.orange)
+            .pickerStyle(.inline)
             if store.enabled {
                 Button("一次授完系统权限") { showSystemPermissions = true }
             }
         } footer: {
-            Text("打开后,Agent 执行任务时写文件、跑命令、读写网站登录状态、调用手机能力、改设置都不再逐次确认,发给 LeoPhoneAgent Mac 的任务也一样(中继升级后生效,之前 Mac 仍会逐项请你审批)。你设成「不允许」的能力仍然不执行;相册、定位这类系统弹窗由 iOS 控制,任何 App 都跳不过,可以在这里一次授完。关闭后立即恢复询问。")
+            Text("智能批准直接放行只读、不碰个人数据的操作(查看文件、git status、天气、地图这类);会改动的先问你,审批框上会标出删除、强推、sudo 这类高风险命令。全自动下什么都不再问,发给 LeoPhoneAgent Mac 的任务也一样;你设成「不允许」的能力仍然不执行;相册、定位这类系统弹窗由 iOS 控制,任何 App 都跳不过,可以在这里一次授完。")
         }
         .sheet(isPresented: $showSystemPermissions) {
             SystemPermissionsSheet()

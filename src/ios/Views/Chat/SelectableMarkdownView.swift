@@ -3213,6 +3213,27 @@ final class MathAttachment: NSTextAttachment {
     }
 }
 
+/// [T-ipad-drag-out] A reply's image can be dragged into Files, Notes, Mail…
+/// iPad only (on iPhone the lift would steal the long-press). Drags the
+/// original file when there is one, so it keeps its name and full resolution.
+final class DraggableImageView: UIImageView, UIDragInteractionDelegate {
+    var fileURL: URL?
+
+    func enableDrag() {
+        let drag = UIDragInteraction(delegate: self)
+        drag.isEnabled = true
+        addInteraction(drag)
+    }
+
+    func dragInteraction(_ interaction: UIDragInteraction, itemsForBeginning session: UIDragSession) -> [UIDragItem] {
+        if let fileURL, let provider = NSItemProvider(contentsOf: fileURL) {
+            return [UIDragItem(itemProvider: provider)]
+        }
+        guard let image else { return [] }
+        return [UIDragItem(itemProvider: NSItemProvider(object: image))]
+    }
+}
+
 // MARK: - Image Attachment
 
 final class ImageAttachment: NSTextAttachment {
@@ -3361,7 +3382,7 @@ final class ImageAttachment: NSTextAttachment {
             let boxWidth = min(min(width, img.size.width + Self.imageShadowInset * 2), Self.maxImageWidth)
             let imgWidth = max(boxWidth - Self.imageShadowInset * 2, 40)
             let aspect = img.size.height / max(img.size.width, 1)
-            let maxH = UIScreen.main.bounds.height / 2
+            let maxH = LeoWindowMetrics.layoutHeight / 2
             let h = min(imgWidth * aspect, maxH)
 
             // Re-downsample if the loaded image is much larger than needed.
@@ -3437,7 +3458,7 @@ final class ImageAttachment: NSTextAttachment {
             let boxWidth = min(min(width, knownSize.width + Self.imageShadowInset * 2), Self.maxImageWidth)
             let imgWidth = max(boxWidth - Self.imageShadowInset * 2, 40)
             let aspect = knownSize.height / max(knownSize.width, 1)
-            let maxH = UIScreen.main.bounds.height / 2
+            let maxH = LeoWindowMetrics.layoutHeight / 2
             let h = min(imgWidth * aspect, maxH)
             return CGRect(x: 0, y: 0, width: imgWidth + Self.imageShadowInset * 2,
                           height: h + Self.imageShadowInset * 2)
@@ -3631,7 +3652,7 @@ final class ImageAttachment: NSTextAttachment {
         let boxWidth = min(min(width, img.size.width + Self.imageShadowInset * 2), Self.maxImageWidth)
         let imgWidth = max(boxWidth - Self.imageShadowInset * 2, 40)
         let aspect = img.size.height / max(img.size.width, 1)
-        let maxH = UIScreen.main.bounds.height / 2
+        let maxH = LeoWindowMetrics.layoutHeight / 2
         let h = min(imgWidth * aspect, maxH)
         imgLogger.info("[MinisImage][MakeView] layout src=\(self.source) displayWidth=\(imgWidth) displayHeight=\(h) aspect=\(aspect) maxImageWidth=\(Self.maxImageWidth)")
 
@@ -3652,7 +3673,9 @@ final class ImageAttachment: NSTextAttachment {
         shadowView.layer.shadowPath = UIBezierPath(roundedRect: CGRect(x: 0, y: 0, width: imgWidth, height: h), cornerRadius: 8).cgPath
 
         // Image view — clipped to rounded corners, black background for transparent/white images
-        let imageView = UIImageView(image: img)
+        let imageView = DraggableImageView(image: img)
+        imageView.fileURL = resolvedFileURL
+        if UIDevice.current.userInterfaceIdiom == .pad { imageView.enableDrag() }
         imageView.contentMode = .scaleAspectFit
         imageView.backgroundColor = .black
         imageView.frame = shadowView.bounds
@@ -3792,7 +3815,7 @@ final class VideoAttachment: NSTextAttachment {
         let width = min(lineFrag.width, 400)
         if let thumb = thumbnail {
             let aspect = thumb.size.height / max(thumb.size.width, 1)
-            let h = min(width * aspect, UIScreen.main.bounds.height / 2)
+            let h = min(width * aspect, LeoWindowMetrics.layoutHeight / 2)
             // +24 for filename label below
             return CGRect(x: 0, y: 0, width: lineFrag.width, height: h + 24)
         }
@@ -3877,7 +3900,7 @@ final class VideoAttachment: NSTextAttachment {
 
     private func makeThumbnailView(_ thumb: UIImage, maxWidth: CGFloat, totalWidth: CGFloat) -> UIView {
         let aspect = thumb.size.height / max(thumb.size.width, 1)
-        let h = min(maxWidth * aspect, UIScreen.main.bounds.height / 2)
+        let h = min(maxWidth * aspect, LeoWindowMetrics.layoutHeight / 2)
 
         let container = UIView(frame: CGRect(x: 0, y: 0, width: totalWidth, height: h + 24))
         container.backgroundColor = .clear
@@ -6306,6 +6329,9 @@ struct SelectableMarkdownView: UIViewRepresentable {
     let markdown: String
     var cachedContent: MarkdownContent?
     var cachedAttributedString: NSAttributedString?
+    /// True while the text is still arriving: an in-flight table tail is kept
+    /// out of cmark (see REPRO-FIX 2026-05-16). Static text renders whole.
+    var isStreaming = false
     /// Optional owning assistant message id. When set, inline image tap
     /// gestures route to a paged gallery of all markdown-embedded images in
     /// that message. Leave nil for standalone markdown rendering.
@@ -6562,14 +6588,13 @@ struct SelectableMarkdownView: UIViewRepresentable {
         // inline syntax (`*`, `**`, `` ` ``, `_`) inside the partial
         // table cells is parsed during streaming.
         //
-        // Don't split once the message has finished streaming — the
-        // presence of either a prebuilt `cachedAttributedString` or a
-        // prebuilt `cachedContent` is the finalised-message signal sent
-        // by `AIChatViewModel.cacheAttributedString(for:)`. After that
-        // point cmark must see the full markdown so a trailing
-        // un-terminated `|...|` final row (no trailing `\n`) is still
-        // rendered as a real table row.
-        let _isFinalised = cachedAttributedString != nil || cachedContent != nil
+        // Don't split once the message has finished streaming: cmark must
+        // then see the full markdown so a trailing un-terminated `|...|`
+        // final row (no trailing `\n`) is still rendered as a real table row.
+        // [T-stream-table-tail] `isStreaming`, not "has a cached parse": the
+        // stream hands its off-main parse in on every flush, so that signal
+        // was true all through streaming and this split never ran.
+        let _isFinalised = !isStreaming
         let _splitForUpdate = _isFinalised ? (prefix: markdown, plainSuffix: "") : splitStreamingTableTail(markdown)
         let _hasPlainSuffix = !_splitForUpdate.plainSuffix.isEmpty
         let prepared = prepareMarkdownForRender(_splitForUpdate.prefix)
@@ -6720,7 +6745,11 @@ struct SelectableMarkdownView: UIViewRepresentable {
         // styles) must NOT gate it. We only require the OLD text to be a literal
         // prefix of the NEW text — true for every streamed token. [T-ios-word-fade-animation]
         var fadeRevealRange: NSRange? = nil
-        if let oldStorage = textView.textStorage as? NSTextStorage,
+        // [T-fade-scope] Only text arriving live fades. A finished message
+        // growing (catch-up after a reconnect, a replayed transcript) just
+        // appears — re-fading words the reader has already seen is noise.
+        if isStreaming, TextFadeAnimator.isEnabled,
+           let oldStorage = textView.textStorage as? NSTextStorage,
            oldStorage.length > 0,
            attributed.length > oldStorage.length {
             let oldLen = oldStorage.length
@@ -7013,7 +7042,7 @@ struct SelectableMarkdownView: UIViewRepresentable {
 
     @available(iOS 16.0, *)
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: SelectableMarkdownTextView, context: Context) -> CGSize? {
-        let width = proposal.width ?? UIScreen.main.bounds.width
+        let width = proposal.width ?? LeoWindowMetrics.bounds.width
         // Key the size cache on the SwiftUI binding length, not
         // uiView.textStorage.length. Within a single render pass SwiftUI calls
         // sizeThatFits BEFORE updateUIView, so textStorage still reflects the
@@ -7194,12 +7223,10 @@ struct SelectableMarkdownView: UIViewRepresentable {
                 // font. This avoids the per-chunk `TableAttachment` rebuild
                 // + `_fillLayoutHole` storm that hangs iPhone 17 Pro Max.
                 //
-                // Skip the split once the message has finished streaming
-                // (the presence of `cachedAttributedString` or
-                // `cachedContent` is the finalised signal): a message
-                // whose final row never gets a trailing `\n` must still
-                // be rendered as a real table after stream-end.
-                let _isFinalisedSTF = cachedAttributedString != nil || cachedContent != nil
+                // Skip the split once the message has finished streaming: a
+                // message whose final row never gets a trailing `\n` must
+                // still be rendered as a real table after stream-end.
+                let _isFinalisedSTF = !isStreaming
                 let split = _isFinalisedSTF
                     ? (prefix: markdown, plainSuffix: "")
                     : splitStreamingTableTail(markdown)

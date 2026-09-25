@@ -109,7 +109,7 @@ struct InlineVoiceInputView: View {
     }
 
     /// Hard ceiling: the whole panel may not exceed 60% of the screen height.
-    private var maxPanelHeight: CGFloat { UIScreen.main.bounds.height * 0.6 }
+    private var maxPanelHeight: CGFloat { LeoWindowMetrics.bounds.height * 0.6 }
 
     /// Tallest the transcript band may grow before it starts scrolling.
     private var transcriptMaxHeight: CGFloat {

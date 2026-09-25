@@ -77,6 +77,19 @@ struct OffloadPermissionInvocation: Equatable, Sendable {
             || (command == "apple-speak" && action == "voices")
     }
 
+    /// [T-smart-approve] What "smart approve" lets through without asking:
+    /// reads that touch no personal data (weather, maps, device info, text
+    /// analysis…). Reading contacts, photos, health, location, the clipboard or
+    /// files still asks — "only reads" is not the same as "harmless".
+    var isSmartApprovable: Bool {
+        !isMutation && Self.nonPersonalCapabilities.contains(command)
+    }
+
+    private static let nonPersonalCapabilities: Set<String> = [
+        "apple-device", "apple-weather", "apple-maps", "apple-media", "apple-nlp",
+        "apple-vision", "apple-alarm", "apple-shortcuts", "apple-speak",
+    ]
+
     var isMutation: Bool {
         if isStatusOnly { return false }
         if command == "apple-media", action == "volume" { return arguments.contains("--set") }

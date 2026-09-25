@@ -343,7 +343,7 @@ struct SpeechPlayerControl: View {
     private static func windowBounds() -> CGRect {
         UIApplication.shared.connectedScenes
             .compactMap { ($0 as? UIWindowScene)?.keyWindow }
-            .first?.bounds ?? UIScreen.main.bounds
+            .first?.bounds ?? LeoWindowMetrics.bounds
     }
 
     /// Restore the saved dragged offset. IDEMPOTENT and safe to call on every

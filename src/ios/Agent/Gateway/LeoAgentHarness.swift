@@ -119,12 +119,20 @@ extension LeoAgentClient {
     }
 
     /// `fullAuto` 非 nil 时,Mac 按它把这个任务切到全自动或切回「先问我」(接着聊的老任务也跟着开关走)。
-    func steerHarness(sessionId: String, text: String, fullAuto: Bool? = nil) async throws {
+    ///
+    /// [T-relay-outbox] Mac 不在线时中继替它排队(`X-Leo-Queue`),上线即按顺序投递;
+    /// `X-Leo-Request-Id` 让重试不会投递两次。返回 true = 已排队、还没到 Mac。
+    @discardableResult
+    func steerHarness(sessionId: String, text: String, fullAuto: Bool? = nil,
+                      requestId: String = UUID().uuidString) async throws -> Bool {
         LeoPerf.macSendBegan(sessionId)
         var body: [String: Any] = ["text": text]
         if let fullAuto { body["full_auto"] = fullAuto }
-        _ = try await postJSON("/harness/sessions/\(sessionId)/send", body: body, service: .harness)
-        LeoPerf.macAck(sessionId)
+        let obj = try await postJSON("/harness/sessions/\(sessionId)/send", body: body, service: .harness,
+                                     headers: ["X-Leo-Queue": "1", "X-Leo-Request-Id": requestId])
+        let queued = (obj["queued"] as? Bool) == true
+        if !queued { LeoPerf.macAck(sessionId) }
+        return queued
     }
 
     /// 手机关掉全自动:这台 Mac 上由本机发起、还在全自动跑的任务切回「先问我」。
@@ -323,16 +331,23 @@ final class HarnessSessionDriver: ObservableObject {
     private func sendSteer(sessionId: String, text: String) async {
         let fullAuto: Bool? = harness.key == "zcode" ? (FullAutoGate.isOn && !fullAutoRefused) : nil
         do {
-            try await client.steerHarness(sessionId: sessionId, text: text, fullAuto: fullAuto)
+            let queued = try await client.steerHarness(sessionId: sessionId, text: text, fullAuto: fullAuto)
+            if queued { note(Self.queuedWhileOfflineNote) }
         } catch GatewayError.http(let status, _) where status == 403 && fullAuto == true {
             fullAutoRefused = true
             note(Self.fullAutoRefusedNote)
-            do { try await client.steerHarness(sessionId: sessionId, text: text) }
-            catch { lastError = error.localizedDescription }
+            do {
+                // A fresh request id: the Mac refused the first one, this is a different request.
+                if try await client.steerHarness(sessionId: sessionId, text: text) {
+                    note(Self.queuedWhileOfflineNote)
+                }
+            } catch { lastError = error.localizedDescription }
         } catch {
             lastError = error.localizedDescription
         }
     }
+
+    private static let queuedWhileOfflineNote = String(localized: "Mac 暂时不在线，这条已排队，上线后自动送达。")
 
     /// Send a follow-up. Never a dead tap: with no session yet the text is
     /// queued (create in flight) or becomes the first prompt of a fresh

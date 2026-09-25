@@ -89,6 +89,11 @@ final class SensitiveToolGate: ObservableObject {
         }
 
         /// 见文件头 [T-gate-bg-policy]。
+        /// Categories whose single request can be judged by `CommandRisk`
+        /// (a shell command line). Files, credentials and remote agents always
+        /// ask outside full auto.
+        var allowsSmartApproval: Bool { self == .shell || self == .remoteShell }
+
         var backgroundPolicy: BackgroundPolicy {
             switch self {
             case .shell, .fileWrite:
@@ -200,8 +205,13 @@ final class SensitiveToolGate: ObservableObject {
     /// 后台等待用户回来批准的上限。到点判拒而不是无限挂起:进程随时可能
     /// 被系统挂起,continuation 一旦被冻住,整条 agent run 表现为"卡死"。
     static let backgroundWaitTimeout: TimeInterval = 180
+    /// 前台也不能无限等:人走开了,任务就一直挂着。十分钟没人理就判拒,
+    /// 回给模型的话和后台超时一样(批准后可以重试)。
+    static let foregroundWaitTimeout: TimeInterval = 600
 
-    /// 本会话已授予"整会话允许"的「动作类别 + 授权范围」。会话切换即清空。
+    /// 已授予"整会话允许"的「会话 + 动作类别 + 授权范围」。
+    /// 按会话分开存:以前是全局一个集合,加载任何会话都整个清空 —— 顺带把
+    /// 另一个正在跑的会话里等着的审批判成了「用户拒绝」。
     /// 不能只按类别授权，否则给 example.com 的 Cookie 放行会顺带放行
     /// bank.example；个人自用也不该用这种隐式扩大来换便利。
     private var sessionGrants: Set<String> = []
@@ -229,6 +239,9 @@ final class SensitiveToolGate: ObservableObject {
         let category: Category
         let host: String           // 展示用:哪个站点 / 哪条命令
         let grantScope: String     // 授权键用:这次放行覆盖多大范围
+        let sessionId: String?
+        /// Shell 类请求的风险等级(弹窗上的标记);其他类别为 nil。
+        let risk: CommandRisk?
         let continuation: CheckedContinuation<Outcome, Never>
     }
 
@@ -244,7 +257,7 @@ final class SensitiveToolGate: ObservableObject {
                 guard let self, let request = self.pending else { return }
                 guard request.category.backgroundPolicy == .notifyAndWait else { return }
                 self.notifyIfNeeded(request)
-                self.armTimeoutIfNeeded(request)
+                self.armTimeout(request, after: Self.backgroundWaitTimeout)
             }
         }
         didBecomeActiveObserver = NotificationCenter.default.addObserver(
@@ -258,36 +271,41 @@ final class SensitiveToolGate: ObservableObject {
         }
     }
 
-    private func grantKey(_ category: Category, scope: String) -> String {
-        "\(category.rawValue)|\(scope.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())"
+    private func grantKey(_ category: Category, scope: String, sessionId: String?) -> String {
+        "\(sessionId ?? "")|\(category.rawValue)|\(scope.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())"
     }
 
-    /// 会话切换时清空整会话授权 —— 授权不跨会话继承。
-    func resetSession() {
-        sessionGrants.removeAll()
-        timeoutTasks.values.forEach { $0.cancel() }
-        timeoutTasks.removeAll()
-        notifiedIds.removeAll()
-        backgroundTimedOutCategories.removeAll()
-        pending?.continuation.resume(returning: .deniedByUser)
-        pending = nil
-        queued.forEach { $0.continuation.resume(returning: .deniedByUser) }
-        queued.removeAll()
+    private func grantKey(for request: PendingApproval) -> String {
+        grantKey(request.category, scope: request.grantScope, sessionId: request.sessionId)
+    }
+
+    /// 删除会话时丢掉它的整会话授权。授权不跨会话继承,所以切换会话不用清。
+    func forgetSession(_ sessionId: String) {
+        sessionGrants = sessionGrants.filter { !$0.hasPrefix("\(sessionId)|") }
     }
 
     /// 请求执行一个敏感动作。
     /// - host: 给用户看的目标(站点 / 命令摘要)。
     /// - grantScope: 参与授权键的范围;不传就等同于 host(Cookie 那条路径
     ///   本来就是"按站点授权",host 即 scope)。
+    /// - riskSubject: 用来判断风险的**完整**命令行(shell 类)。host 可能被截断,
+    ///   截断的命令可能把尾巴上的 `; rm -rf` 藏掉,所以风险一律看完整原文。
     func authorize(_ category: Category, host: String, grantScope: String? = nil,
-                   sessionId: String? = nil) async -> Outcome {
+                   sessionId: String? = nil, riskSubject: String? = nil) async -> Outcome {
         // [T-full-auto] 全自动:前台后台一律放行,不弹审批。
         if FullAutoGate.isOn {
             FullAutoGate.announce("\(category.humanName) \(host)", sessionId: sessionId)
             return .allowed
         }
+        let risk = category.allowsSmartApproval ? riskSubject.map(CommandRisk.assess) : nil
+        // [T-smart-approve] 智能批准:只读的命令直接放行,其余照常问。风险等级
+        // 只用来提示(弹窗标题、手表颜色),不加额外步骤。
+        if FullAutoGate.mode == .smart, risk == .low {
+            FullAutoGate.announce(String(localized: "智能批准 · 只读命令 \(host)"), sessionId: sessionId)
+            return .allowed
+        }
         let scope = grantScope ?? host
-        let key = grantKey(category, scope: scope)
+        let key = grantKey(category, scope: scope, sessionId: sessionId)
         // 本会话已整体允许
         if sessionGrants.contains(key) { return .allowed }
 
@@ -304,13 +322,18 @@ final class SensitiveToolGate: ObservableObject {
 
         return await withCheckedContinuation { (cont: CheckedContinuation<Outcome, Never>) in
             let request = PendingApproval(
-                category: category, host: host, grantScope: scope, continuation: cont)
+                category: category, host: host, grantScope: scope, sessionId: sessionId,
+                risk: risk, continuation: cont)
+            // 灵动岛、首页提醒条、会话行都靠这个阶段知道"在等你批准"。
+            self.markWaiting(sessionId)
             if self.pending == nil {
                 self.pending = request
                 if UIApplication.shared.applicationState != .active {
                     // 后台等待型:通知用户回来处理,并起超时。
                     self.notifyIfNeeded(request)
-                    self.armTimeoutIfNeeded(request)
+                    self.armTimeout(request, after: Self.backgroundWaitTimeout)
+                } else {
+                    self.armTimeout(request, after: Self.foregroundWaitTimeout)
                 }
             } else {
                 // 多工具并发时排队，不能覆盖 pending;覆盖会让前一个
@@ -330,7 +353,7 @@ final class SensitiveToolGate: ObservableObject {
         guard let p = pending else { return }
         if let requestId, requestId != p.id { return }
         if case .allowSession = decision {
-            sessionGrants.insert(grantKey(p.category, scope: p.grantScope))
+            sessionGrants.insert(grantKey(for: p))
         }
         let outcome: Outcome = {
             switch decision {
@@ -344,7 +367,12 @@ final class SensitiveToolGate: ObservableObject {
     /// 超时判拒:和用户点「拒绝」区分开,回给模型的话术不同。
     private func timeOut(requestId: UUID) {
         guard let p = pending, p.id == requestId else { return }
-        backgroundTimedOutCategories.insert(p.category)
+        // Only a timeout while away counts toward "this background stretch
+        // already waited once"; a foreground timeout must not pre-deny the
+        // next background request of the same kind.
+        if UIApplication.shared.applicationState != .active {
+            backgroundTimedOutCategories.insert(p.category)
+        }
         finish(p, outcome: .deniedByTimeout)
     }
 
@@ -354,6 +382,7 @@ final class SensitiveToolGate: ObservableObject {
         clearNotification(for: p)
         p.continuation.resume(returning: outcome)
         pending = nil
+        clearWaitingIfDone(p.sessionId)
         // 推迟到下一个 runloop 再提升队列下一条:同一轮里 alert 还没
         // 完全 dismiss,同步换 pending 会让迟到的 dismiss 回调打在新
         // 请求上,也会让 SwiftUI 的呈现状态和数据打架。
@@ -365,21 +394,26 @@ final class SensitiveToolGate: ObservableObject {
     private func presentNextIfNeeded() {
         while pending == nil, !queued.isEmpty {
             let next = queued.removeFirst()
-            let key = grantKey(next.category, scope: next.grantScope)
-            if sessionGrants.contains(key) {
+            let granted = sessionGrants.contains(grantKey(for: next))
+            if granted {
                 next.continuation.resume(returning: .allowed)
+                clearWaitingIfDone(next.sessionId)
             } else if UIApplication.shared.applicationState != .active,
                       next.category.backgroundPolicy == .denyImmediately {
                 next.continuation.resume(returning: .deniedInBackground)
+                clearWaitingIfDone(next.sessionId)
             } else if UIApplication.shared.applicationState != .active,
                       backgroundTimedOutCategories.contains(next.category) {
                 // 同一类别本次后台已经等超时过,排队里的同类不再各等一轮。
                 next.continuation.resume(returning: .deniedByTimeout)
+                clearWaitingIfDone(next.sessionId)
             } else {
                 pending = next
                 if UIApplication.shared.applicationState != .active {
                     notifyIfNeeded(next)
-                    armTimeoutIfNeeded(next)
+                    armTimeout(next, after: Self.backgroundWaitTimeout)
+                } else {
+                    armTimeout(next, after: Self.foregroundWaitTimeout)
                 }
             }
         }
@@ -387,17 +421,61 @@ final class SensitiveToolGate: ObservableObject {
 
     // MARK: - 后台等待:通知 + 超时
 
-    private static let notifyCategoryId = "SENSITIVE_TOOL_PENDING"
+    nonisolated static let notifyCategoryId = "SENSITIVE_TOOL_PENDING"
+    nonisolated static let notifyAllowOnceAction = "SENSITIVE_ALLOW_ONCE"
+    nonisolated static let notifyAllowSessionAction = "SENSITIVE_ALLOW_SESSION"
+    nonisolated static let notifyDenyAction = "SENSITIVE_DENY"
 
-    private func armTimeoutIfNeeded(_ request: PendingApproval) {
-        guard timeoutTasks[request.id] == nil else { return }
+    /// [T-approval-vocab] 锁屏、横幅、手表上直接批,不用先打开 App。
+    nonisolated static var notificationCategory: UNNotificationCategory {
+        UNNotificationCategory(identifier: notifyCategoryId, actions: [
+            UNNotificationAction(identifier: notifyAllowOnceAction, title: String(localized: "允许一次")),
+            UNNotificationAction(identifier: notifyAllowSessionAction, title: String(localized: "本次会话允许")),
+            UNNotificationAction(identifier: notifyDenyAction, title: String(localized: "拒绝"), options: [.destructive]),
+        ], intentIdentifiers: [])
+    }
+
+    /// 通知按钮 → 决定;不是这类按钮(比如点了通知本体)返回 nil。
+    nonisolated static func decision(forNotificationAction id: String) -> Decision? {
+        switch id {
+        case notifyAllowOnceAction: return .allowOnce
+        case notifyAllowSessionAction: return .allowSession
+        case notifyDenyAction: return .deny
+        default: return nil
+        }
+    }
+
+    /// (Re)arms the request's deadline: ten minutes in the foreground, three
+    /// once the app leaves it (the process may be frozen any moment).
+    private func armTimeout(_ request: PendingApproval, after seconds: TimeInterval) {
+        timeoutTasks.removeValue(forKey: request.id)?.cancel()
         let id = request.id
         timeoutTasks[id] = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(Self.backgroundWaitTimeout * 1_000_000_000))
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
             guard !Task.isCancelled else { return }
             guard let self, self.pending?.id == id else { return }
             self.timeOut(requestId: id)
         }
+    }
+
+    // MARK: - 等待审批的阶段
+
+    /// Set by the app (`SessionActivityTracker.installApprovalPhaseHook`): a
+    /// session's run starts / stops waiting for you. A hook rather than a direct
+    /// call so this file still builds into the logic-test bundle on its own.
+    static var waitingChanged: ((_ sessionId: String, _ waiting: Bool) -> Void)?
+
+    private func markWaiting(_ sessionId: String?) {
+        guard let sessionId else { return }
+        Self.waitingChanged?(sessionId, true)
+    }
+
+    /// Back to "using a tool" once nothing of this session is still waiting.
+    private func clearWaitingIfDone(_ sessionId: String?) {
+        guard let sessionId else { return }
+        let stillWaiting = pending?.sessionId == sessionId || queued.contains { $0.sessionId == sessionId }
+        guard !stillWaiting else { return }
+        Self.waitingChanged?(sessionId, false)
     }
 
     private func notifyIfNeeded(_ request: PendingApproval) {
@@ -405,17 +483,17 @@ final class SensitiveToolGate: ObservableObject {
         notifiedIds.insert(request.id)
 
         let center = UNUserNotificationCenter.current()
-        // [T-siri-approval-notify] set 是整体替换;并集注册,别抹掉其他类别的按钮。
-        let category = UNNotificationCategory(
-            identifier: Self.notifyCategoryId, actions: [], intentIdentifiers: [])
+        // [T-siri-approval-notify] set 是整体替换;按标识换掉旧定义再并入,别抹掉其他类别的按钮。
+        let category = Self.notificationCategory
         center.getNotificationCategories { existing in
-            center.setNotificationCategories(existing.union([category]))
+            center.setNotificationCategories(existing.filter { $0.identifier != category.identifier }.union([category]))
         }
 
         let content = UNMutableNotificationContent()
         content.title = "任务需要你确认一下"
         content.body = "「\(request.category.humanName)」在等你批准:\(String(request.host.prefix(80)))"
         content.sound = .default
+        content.interruptionLevel = .timeSensitive
         content.categoryIdentifier = Self.notifyCategoryId
         content.userInfo = ["sensitiveToolApprovalId": request.id.uuidString]
 
@@ -440,10 +518,9 @@ final class SensitiveToolGate: ObservableObject {
     nonisolated static let backgroundDeniedMessage =
         "这个操作需要你在前台确认一次。请打开 app 后重试这一步。"
 
-    /// 后台等待审批超时的回执文案。和上面分开:超时说明通知已经发出去过,
-    /// 用户只是没来得及处理,重试是有意义的。
+    /// 等待审批超时的回执文案。和上面分开:用户只是没来得及处理,重试是有意义的。
     nonisolated static let backgroundTimeoutMessage =
-        "等你确认这一步超时了(已经发过一条通知)。打开 app 批准后就能继续。"
+        "等你确认这一步超时了。打开 app 批准后就能继续。"
 
     /// 给模型的拒绝回执。
     nonisolated static func denialMessage(_ outcome: Outcome, category: Category, host: String) -> String {
@@ -469,10 +546,28 @@ private extension String {
 /// 放在这里是因为这个文件同时编进 App 和测试 target,各道闸都能直接用。
 enum FullAutoGate {
     static let defaultsKey = "permissions.fullAuto.enabled"
+    /// ask / smart —— 全自动关着时回到哪一档。全自动本身仍以 `defaultsKey`
+    /// 为准(配置注册表、Mac 转发都读它)。
+    static let modeKey = "permissions.approvalMode"
     static let approvedNotification = Notification.Name("LeoFullAutoApproved")
+
+    /// [T-smart-approve] 三档审批。
+    enum Mode: String, CaseIterable, Sendable {
+        /// 逐项确认:敏感操作每次都问(本会话允许过的除外)。
+        case ask
+        /// 智能批准:只读、不碰个人数据的操作直接放行,其余照旧问(本会话允许过的不再问)。
+        case smart
+        /// 全自动:不再询问(设成「不允许」的能力仍不执行)。
+        case full
+    }
 
     /// 随时可读(UserDefaults 线程安全)。按设备存,不进任何同步。
     static var isOn: Bool { UserDefaults.standard.bool(forKey: defaultsKey) }
+
+    static var mode: Mode {
+        if isOn { return .full }
+        return UserDefaults.standard.string(forKey: modeKey) == Mode.smart.rawValue ? .smart : .ask
+    }
 
     /// 全自动期间 Agent 也改不了的配置:改了会降低保护。
     static let protectedConfigPaths: Set<String> = [

@@ -53,6 +53,16 @@ final class TextFadeAnimator {
     /// naturally rather than queueing into an ever-growing tail.
     private static let staggerWindow: CFTimeInterval = 0.10
 
+    /// Whether a streamed append should fade at all. Reduce Motion means a
+    /// plain cut (not a shorter animation); on iOS 27 the system can also ask
+    /// apps to go easy on resources, and a per-frame display link is the first
+    /// thing to give up.
+    static var isEnabled: Bool {
+        if UIAccessibility.isReduceMotionEnabled { return false }
+        if #available(iOS 27, *), UIApplication.shared.systemPrefersReducedResourceUsage { return false }
+        return true
+    }
+
     private static func stagger(forWordCount count: Int) -> CFTimeInterval {
         guard count > 0 else { return 0 }
         return staggerWindow / CFTimeInterval(count)
@@ -121,7 +131,11 @@ final class TextFadeAnimator {
         // SwiftStreamingMarkdown's `splitIntoWords`. We collect ranges first
         // (cheap, read-only) so we can bail before mutating on a huge paste.
         let nsString = targetStorage.string as NSString
+        // Code (monospaced) and attachments (images, tables, formulas) appear
+        // as they are: fading code leaves its background box empty for half a
+        // second, and attachment views ignore the text color anyway.
         let wordRanges = Self.revealUnits(in: nsString, within: safeRange, cap: Self.maxAnimatedWords)
+            .filter { !Self.isStatic($0, in: targetStorage) }
 
         // Word count over the cap → skip the animation for this batch. The
         // text is already in the storage at full opacity, so it just appears.
@@ -286,6 +300,14 @@ final class TextFadeAnimator {
         appendGap(tailStart, NSMaxRange(range))
         if units.count > cap { return [] }
         return units
+    }
+
+    private static func isStatic(_ range: NSRange, in storage: NSTextStorage) -> Bool {
+        guard range.location < storage.length else { return true }
+        if storage.attribute(.attachment, at: range.location, effectiveRange: nil) != nil { return true }
+        if let font = storage.attribute(.font, at: range.location, effectiveRange: nil) as? UIFont,
+           font.fontDescriptor.symbolicTraits.contains(.traitMonoSpace) { return true }
+        return false
     }
 
     /// The foreground color a glyph currently carries, defaulting to label.

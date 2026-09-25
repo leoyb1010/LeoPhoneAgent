@@ -240,7 +240,7 @@ extension KaTeXRenderer: WKScriptMessageHandler {
         wv.frame = CGRect(x: -2048, y: -2048, width: cssWidth, height: cssHeight)
 
         // Use device screen scale for crisp retina rendering
-        let scale = UIScreen.main.scale
+        let scale = LeoWindowMetrics.scale
         let snapshotConfig = WKSnapshotConfiguration()
         snapshotConfig.rect = CGRect(origin: .zero, size: CGSize(width: cssWidth, height: cssHeight))
         // afterScreenUpdates ensures the resized frame is applied before capture

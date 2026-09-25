@@ -198,7 +198,7 @@ private final class OverlayLayer: CALayer {
         textLayer.fontSize = 9
         textLayer.foregroundColor = UIColor.white.cgColor
         textLayer.alignmentMode = .left
-        textLayer.contentsScale = UIScreen.main.scale
+        textLayer.contentsScale = MainActor.assumeIsolated { LeoWindowMetrics.scale }   // overlay layers are built on main
         textLayer.isWrapped = true
         textLayer.actions = ["position": NSNull(), "bounds": NSNull(), "string": NSNull()]
         addSublayer(textLayer)

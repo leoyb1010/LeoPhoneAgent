@@ -1874,6 +1874,7 @@ actor ChatStore {
             // [T-spotlight-sessions]
             SessionSpotlightIndexer.remove(sessionId: id)
             ProviderConfigStore.shared.forgetSession(id)
+            SensitiveToolGate.shared.forgetSession(id)
         }
     }
 

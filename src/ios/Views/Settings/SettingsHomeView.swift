@@ -39,6 +39,13 @@ struct SettingsEntry: Identifiable {
     }
 }
 
+extension SettingsEntry {
+    func matches(_ query: String) -> Bool {
+        let haystack = (title + " " + keywords).lowercased()
+        return query.lowercased().split(separator: " ").allSatisfy { haystack.contains($0) }
+    }
+}
+
 struct SettingsGroup: Identifiable {
     let id: String
     let title: String
@@ -56,8 +63,11 @@ struct SettingsHomeView: View {
     @AppStorage("settings.group.data") private var openData = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    private var groups: [SettingsGroup] { Self.groups }
+
     // ── 分组数据(个人版信息架构)────────────────────────────────────────
-    private var groups: [SettingsGroup] {
+    /// 单列首页和 iPad 双栏的侧栏共用这一份。
+    static var groups: [SettingsGroup] {
         [
             SettingsGroup(id: "device", title: "我的设备", entries: [
                 SettingsEntry("远程机器", keywords: "mac android 舰队 中继 relay 密钥 macbook cortex studio fold ipad",
@@ -152,10 +162,7 @@ struct SettingsHomeView: View {
         !query.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
-    private func matches(_ entry: SettingsEntry) -> Bool {
-        let haystack = (entry.title + " " + entry.keywords).lowercased()
-        return query.lowercased().split(separator: " ").allSatisfy { haystack.contains($0) }
-    }
+    private func matches(_ entry: SettingsEntry) -> Bool { entry.matches(query) }
 
     var body: some View {
         ScrollView {
@@ -244,7 +251,7 @@ struct SettingsHomeView: View {
     /// 无图标框、带数量胶囊;子项白底、向右缩进、图标框更小、常规字重 ——
     /// 颜色、字号、缩进三个维度同时区分,任何一个维度失效仍能分开。
     private func groupCard(_ group: SettingsGroup, isOpen: Binding<Bool>, index: Int) -> some View {
-        let tint = groupTint(group.id)
+        let tint = Self.groupTint(group.id)
         return VStack(spacing: 0) {
             Button {
                 withAnimation(LeoMotion.spring(reduceMotion: reduceMotion, dampingFraction: 0.86)) {
@@ -253,7 +260,7 @@ struct SettingsHomeView: View {
                 LeoHaptics.selection()
             } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: groupSymbol(group.id))
+                    Image(systemName: Self.groupSymbol(group.id))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(tint)
                         .frame(width: 22)
@@ -345,7 +352,7 @@ struct SettingsHomeView: View {
         .foregroundStyle(.primary)
     }
 
-    private func groupSymbol(_ id: String) -> String {
+    static func groupSymbol(_ id: String) -> String {
         switch id {
         case "device": return "macbook.and.iphone"
         case "agent": return "sparkles"
@@ -355,7 +362,7 @@ struct SettingsHomeView: View {
         }
     }
 
-    private func groupTint(_ id: String) -> Color {
+    static func groupTint(_ id: String) -> Color {
         switch id {
         case "device": return .teal
         case "agent": return .indigo
@@ -463,5 +470,66 @@ struct ThinkingAndModelSlotsView: View {
         }
         .navigationTitle("推理与模型")
         .onChange(of: rules) { _ in ThinkingRuleStore.save(rules) }
+    }
+}
+
+// MARK: - iPad 双栏
+
+/// [T-ipad-settings-split] 宽窗口里的设置:左边分组、右边详情,和系统「设置」一样。
+/// 条目、搜索词和首页同一份数据;窄窗口(iPhone、分屏窄栏)仍是单列首页。
+struct SettingsSidebar: View {
+    @Binding var selection: String?
+    @Binding var orchestrationEnabled: Bool
+    let onFeedback: () -> Void
+    @State private var query = ""
+
+    private var visibleGroups: [SettingsGroup] {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return SettingsHomeView.groups }
+        return SettingsHomeView.groups.compactMap { group in
+            let hits = group.entries.filter { $0.matches(trimmed) }
+            return hits.isEmpty ? nil : SettingsGroup(id: group.id, title: group.title, entries: hits)
+        }
+    }
+
+    var body: some View {
+        List(selection: $selection) {
+            ForEach(visibleGroups) { group in
+                Section {
+                    ForEach(group.entries) { entry in
+                        Label {
+                            Text(entry.title)
+                        } icon: {
+                            Image(systemName: entry.icon)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(entry.color)
+                                .frame(width: 28, height: 28)
+                                .background(entry.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        }
+                        .tag(entry.id)
+                    }
+                } header: {
+                    Label(group.title, systemImage: SettingsHomeView.groupSymbol(group.id))
+                        .foregroundStyle(SettingsHomeView.groupTint(group.id))
+                }
+            }
+            if query.isEmpty {
+                Section {
+                    Toggle(isOn: $orchestrationEnabled) {
+                        Label("多 Agent 编排", systemImage: "person.3.sequence.fill")
+                    }
+                    Button(action: onFeedback) {
+                        Label("反馈与建议", systemImage: "bubble.left.and.bubble.right.fill")
+                    }
+                }
+            }
+        }
+        .listStyle(.sidebar)
+        .searchable(text: $query, placement: .sidebar, prompt: "搜索设置、能力或设备")
+        .overlay {
+            if visibleGroups.isEmpty {
+                ContentUnavailableView.search(text: query)
+            }
+        }
     }
 }

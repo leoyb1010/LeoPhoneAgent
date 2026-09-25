@@ -1,6 +1,6 @@
 # LeoPhoneAgent
 
-[![iOS](https://img.shields.io/badge/iOS-1.43.0%20(125)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
+[![iOS](https://img.shields.io/badge/iOS-1.44.0%20(126)-0A84FF.svg)](src/ios/Views/Settings/LeoReleaseNotesView.swift)
 [![Android](https://img.shields.io/badge/Android-1.0.0--alpha.27-3DDC84.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/android-v1.0.0-alpha.27)
 [![macOS](https://img.shields.io/badge/macOS-1.85.0-7C3AED.svg)](https://github.com/leoyb1010/LeoPhoneAgent/releases/tag/v1.85.0)
 [![HarmonyOS](https://img.shields.io/badge/HarmonyOS-0.3.0--alpha.17-D94B16.svg)](src/harmony/app/AppScope/app.json5)
@@ -152,7 +152,12 @@ deps/  docs/  scripts/  原生依赖构建、文档、工具
 
 ## 当前 iOS 版本
 
-- 版本/构建:`1.43.0 (125)`;Bundle ID `com.leoyuan.leophoneagent`
+- 版本/构建:`1.44.0 (126)`;Bundle ID `com.leoyuan.leophoneagent`
+- 1.44.0:审批三档(逐项确认 / 智能批准 / 全自动,风险分级只提示不加步骤);iPad 菜单栏、聊天检查器、
+  多窗口(右键或拖出会话开新窗口、iPadOS 27 关窗确认)、设置双栏、拖入链接与文字;做完的一轮收成
+  「已工作 N 步 · 用时」;灵动岛等待批准变橙并提醒、5 分钟没更新标「可能已中断」、手表 Smart Stack 小尺寸;
+  通知里直接回复与审批;手表朗读礼仪、后台续答、风险着色审批;iOS 27:省资源时停动画、后台任务异步提交、
+  快捷指令长任务、只听不看的 Siri 短回答、导航栏滚动收起、未发草稿关闭确认
 - 1.42.x:ChatGPT 登录读 Codex 实时模型目录(GPT-6-Astra / Sol / Luna);「全自动」在输入框上方一点即开(另有 `/auto`);
   一轮丝滑改造 —— 新对话不再重铺 rootfs 覆盖层、语音电平独立刷新(≤30 Hz)、首页输入/搜索打字不重算会话列表、
   键盘弹起时消息列表贴底、回前台不在第一帧同步查钥匙串;能力自检可真发一句话测每个供应商。

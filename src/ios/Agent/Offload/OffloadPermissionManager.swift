@@ -28,6 +28,9 @@ struct PermissionRequest: Identifiable {
     let fullCommand: String
     /// Native argv is already tokenized; never split quoted values or shell-looking data.
     var nativeArguments: [String]? = nil
+    /// The capability family and action this asks for ("apple-calendar", "create").
+    var command = ""
+    var action = ""
 
     /// Parse the command arguments into displayable key-value pairs.
     /// Handles patterns like: `command subcommand --key value --flag`.
@@ -298,7 +301,9 @@ final class OffloadPermissionManager: ObservableObject {
                     description: info?.description ?? "",
                     fullCommand: ([invocation.registeredCommand] + invocation.arguments)
                         .map { "'" + $0.replacingOccurrences(of: "'", with: "'\"'\"'") + "'" }.joined(separator: " "),
-                    nativeArguments: invocation.arguments
+                    nativeArguments: invocation.arguments,
+                    command: invocation.command,
+                    action: invocation.action
                 )
             }
         }
@@ -335,7 +340,7 @@ final class OffloadPermissionManager: ObservableObject {
             let invocation = pending.invocation
             return (invocation.command == command || invocation.registeredCommand == command)
                 && (action == nil || invocation.action == action)
-        }, decision: level == .notAllowed ? .disabled : .cancelled)
+        }, decision: level == .notAllowed ? .disabled : (level == .bypass ? .allowed : .cancelled))
     }
 
     /// 能力自检专用的会话 id(CapabilitySelfTestView 用它跑命令)。每个进程随机一段,
@@ -394,6 +399,11 @@ final class OffloadPermissionManager: ObservableObject {
             FullAutoGate.announce("\(command) \(arguments.prefix(3).joined(separator: " "))", sessionId: sid)
             return .allowed
         }
+        // [T-smart-approve] 智能批准:只读、不碰个人数据的能力直接放行(同样只对正在跑的回合)。
+        if FullAutoGate.mode == .smart, invocation.isSmartApprovable, let sid, SessionActivityTracker.shared.isActive(sid) {
+            FullAutoGate.announce(String(localized: "智能批准 · \(command) \(invocation.action)"), sessionId: sid)
+            return .allowed
+        }
         if level == .bypass || invocation.isStatusOnly { return .allowed }
         if let sid, sessionGrants[sid]?.contains(invocation.grantScope) == true { return .allowed }
         guard UIApplication.shared.applicationState == .active, !presenters.isEmpty else { return .needsForeground }
@@ -435,6 +445,14 @@ final class OffloadPermissionManager: ObservableObject {
 
     func respond(to requestId: String, allowed: Bool) {
         queue.respond(id: requestId, decision: allowed ? .allowed : .denied)
+    }
+
+    /// [T-approval-vocab] 「始终允许」:放行这一次,并把这个能力的这个动作设成
+    /// 不再询问。设置 → 权限 里随时能改回「询问」。
+    func respondAlwaysAllow(_ request: PermissionRequest) {
+        respond(to: request.id, allowed: true)
+        guard !request.command.isEmpty else { return }
+        setPermissionLevel(.bypass, for: request.command, action: request.action.isEmpty ? nil : request.action)
     }
 
     func cancelRequest(_ id: String) {

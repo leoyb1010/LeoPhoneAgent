@@ -161,7 +161,12 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     /// value keep that choice because the persisted key still wins.
     @Published var liveActivityPrivacyMode: Bool =
         UserDefaults.standard.object(forKey: "liveActivityPrivacyMode") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(liveActivityPrivacyMode, forKey: "liveActivityPrivacyMode") }
+        didSet {
+            UserDefaults.standard.set(liveActivityPrivacyMode, forKey: "liveActivityPrivacyMode")
+            // [T-la-privacy-repush] The card on screen follows the switch now,
+            // not at the next tool call.
+            if liveActivityPrivacyMode != oldValue { updateLiveActivityIfNeeded(source: "privacyToggle") }
+        }
     }
 
     // MARK: - Speech Settings
@@ -843,7 +848,7 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
     // MARK: - Background Task Notifications
 
     /// Notification category for background task completion.
-    private static let bgTaskCategoryId = "BACKGROUND_TASK"
+    private static let bgTaskCategoryId = LeoNotificationCategories.backgroundTaskId
 
     /// Post a local notification when a background task completes.
     /// - Parameters:
@@ -884,15 +889,8 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
 
-        let category = UNNotificationCategory(
-            identifier: Self.bgTaskCategoryId,
-            actions: [],
-            intentIdentifiers: []
-        )
-        center.getNotificationCategories { existing in
-            // [T-siri-approval-notify] set 是整体替换;并集注册,别抹掉其他类别的按钮。
-            center.setNotificationCategories(existing.union([category]))
-        }
+        // 带「回复」输入框的类别;统一注册,别用空按钮把它覆盖掉。
+        LeoNotificationCategories.register()
 
         let content = UNMutableNotificationContent()
         if liveActivityPrivacyMode {
@@ -1613,7 +1611,11 @@ final class BackgroundKeepAliveManager: NSObject, ObservableObject, CLLocationMa
             var icon = AgentLiveActivityManager.sfSymbol(forTool: toolName)
             let displayName = AgentLiveActivityManager.displayName(forTool: toolName)
             let statusText: String
-            if tracker.sessionActivityPhases[sid] == .suspended {
+            if tracker.sessionActivityPhases[sid] == .waitingForPermission {
+                // [T-la-approval] Parked on the permission gate: say so, not "Working…".
+                icon = LiveSessionSnapshot.approvalIcon
+                statusText = String(localized: "等你批准")
+            } else if tracker.sessionActivityPhases[sid] == .suspended {
                 // [T-la-honest-outcome] Parked in waitIfBackgroundSuspended: it
                 // carries on by itself once the app is back. Not done, not failed.
                 icon = "pause.circle.fill"

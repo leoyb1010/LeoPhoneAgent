@@ -15,6 +15,8 @@ import SwiftUI
 
 struct SessionInspectorView: View {
     @ObservedObject var vm: AIChatViewModel
+    /// Inside the iPad inspector column there is nothing to dismiss.
+    var embedded = false
     @Environment(\.dismiss) private var dismiss
 
     @ObservedObject private var skills = SkillStore.shared
@@ -119,8 +121,10 @@ struct SessionInspectorView: View {
             .navigationTitle("Session Inspector")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
+                if !embedded {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Done") { dismiss() }
+                    }
                 }
             }
         }

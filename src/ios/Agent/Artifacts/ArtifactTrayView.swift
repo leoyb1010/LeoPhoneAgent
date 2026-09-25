@@ -94,9 +94,12 @@ struct ArtifactTrayView: View {
     @State private var versionHistory: ArtifactSnapshot?
     @State private var pendingPurge: ArtifactSnapshot?
     @State private var actionError: String?
+    /// Inside the iPad inspector column there is nothing to dismiss.
+    private let embedded: Bool
 
-    init(sessionId: String?) {
+    init(sessionId: String?, embedded: Bool = false) {
         _viewModel = StateObject(wrappedValue: ArtifactTrayViewModel(sessionId: sessionId))
+        self.embedded = embedded
     }
 
     var body: some View {
@@ -123,8 +126,10 @@ struct ArtifactTrayView: View {
                         ? String(localized: "Shows active artifacts")
                         : String(localized: "Shows deleted artifacts"))
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(String(localized: "Done")) { dismiss() }
+                if !embedded {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(String(localized: "Done")) { dismiss() }
+                    }
                 }
             }
             .refreshable { await viewModel.load() }

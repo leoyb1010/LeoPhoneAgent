@@ -2,14 +2,11 @@
 //  LeoWatchApp.swift
 //  LeoWatch — Apple Watch companion
 //
-//  [T-watch-companion] Deliberately NOT a chat client. The phone app is where
-//  conversations happen; the watch answers the two questions you actually
-//  raise your wrist for:
-//    1. "is the agent still working?"
-//    2. "run my usual task, now."
-//
-//  All state arrives over WatchConnectivity — App Groups are per-device, so
-//  the widget snapshot on the phone is not visible here.
+//  The watch is something you talk to: ask by voice, read or hear the
+//  answer, approve a Mac's yes/no. Near the iPhone the phone's agent does the
+//  work; a cellular watch on its own asks the model directly (see
+//  WatchStandaloneClient), finishing in a background URLSession when the
+//  wrist drops.
 //
 
 import SwiftUI
@@ -23,6 +20,15 @@ struct LeoWatchApp: App {
             WatchRootView()
                 .environmentObject(client)
                 .onAppear { client.activate() }
+        }
+        // The system relaunches us (possibly in the background) to deliver a
+        // direct answer that finished while we were suspended.
+        .backgroundTask(.urlSession(WatchStandaloneClient.backgroundSessionId)) {
+            await MainActor.run {
+                _ = WatchConnectivityClient.shared   // installs the answer handler
+                WatchStandaloneClient.shared.reconnectBackgroundSession()
+            }
+            await BackgroundAskDelegate.shared.waitForEvents()
         }
     }
 }

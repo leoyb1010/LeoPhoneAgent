@@ -35,7 +35,7 @@ struct MessageContextMenuPreview: View {
     private let maxCardWidth: CGFloat = 360
     /// Long messages cap the platter to this fraction of screen height and
     /// scroll inside; short messages size to content (min of the two).
-    private var maxCardHeight: CGFloat { UIScreen.main.bounds.height * 0.55 }
+    private var maxCardHeight: CGFloat { LeoWindowMetrics.bounds.height * 0.55 }
 
     @State private var contentSize: CGSize = .zero
 

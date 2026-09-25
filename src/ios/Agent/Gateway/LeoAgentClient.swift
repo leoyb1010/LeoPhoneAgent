@@ -301,9 +301,12 @@ actor LeoAgentClient {
     }
 
     func postJSON(_ path: String, body: [String: Any],
-                  service: GatewayService = .engine) async throws -> [String: Any] {
+                  service: GatewayService = .engine,
+                  headers: [String: String] = [:]) async throws -> [String: Any] {
         let data = try JSONSerialization.data(withJSONObject: body)
-        let raw = try await send(try request(path, method: "POST", body: data, service: service))
+        var req = try request(path, method: "POST", body: data, service: service)
+        for (name, value) in headers { req.setValue(value, forHTTPHeaderField: name) }
+        let raw = try await send(req)
         return (try? Self.json(raw)) ?? [:]
     }
 

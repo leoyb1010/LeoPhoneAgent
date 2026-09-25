@@ -12,6 +12,47 @@
 import SwiftUI
 import WatchKit
 
+// MARK: - Reduced resources (watchOS 27)
+
+private struct ReducedResourcesKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// watchOS 27's `systemPrefersReducedResourceUsage`, readable on 26 too
+    /// (always false there). Loops treat it like Reduce Motion.
+    var leoReducedResources: Bool {
+        get { self[ReducedResourcesKey.self] }
+        set { self[ReducedResourcesKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Apply once at the root so every motion view can read the system's
+    /// "use less" signal without its own availability check.
+    func reducedResourceAware() -> some View {
+        modifier(ReducedResourceBridge())
+    }
+}
+
+private struct ReducedResourceBridge: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(watchOS 27.0, *) {
+            content.modifier(Reader())
+        } else {
+            content
+        }
+    }
+
+    @available(watchOS 27.0, *)
+    private struct Reader: ViewModifier {
+        @Environment(\.systemPrefersReducedResourceUsage) private var reduced
+        func body(content: Content) -> some View {
+            content.environment(\.leoReducedResources, reduced)
+        }
+    }
+}
+
 // MARK: - Life Ring (Breathing Orb + Border Beam + Success Check / Error Shake)
 
 struct LifeRing: View {
@@ -19,11 +60,12 @@ struct LifeRing: View {
     let state: String
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.isLuminanceReduced) private var isLuminanceReduced
+    @Environment(\.leoReducedResources) private var reducedResources
     @Environment(\.scenePhase) private var scenePhase
     @State private var breathe = false
     @State private var beamAngle = 0.0
 
-    private var still: Bool { reduceMotion || isLuminanceReduced }
+    private var still: Bool { reduceMotion || isLuminanceReduced || reducedResources }
 
     private var ringColor: Color {
         switch state {
@@ -96,11 +138,12 @@ struct RadarPulseOnce: View {
 struct WorkingBars: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.isLuminanceReduced) private var isLuminanceReduced
+    @Environment(\.leoReducedResources) private var reducedResources
 
     var body: some View {
         // The looping bars are their own view so each wrist raise starts a
         // fresh loop, and Always On drops the loop entirely.
-        if reduceMotion || isLuminanceReduced {
+        if reduceMotion || isLuminanceReduced || reducedResources {
             Bars(on: false, animated: false)
         } else {
             LoopingBars()

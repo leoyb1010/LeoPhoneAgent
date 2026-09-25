@@ -45,12 +45,16 @@ enum WatchPayloadKey {
     static let kindAskAudio = "askAudio"      // watch → phone: raw audio to transcribe
     static let kindAskReply = "askReply"      // phone → watch: final answer
     static let kindCancelAsk = "cancelAsk"    // watch → phone: stop the run behind a request
+    static let kindWake = "wake"              // watch → phone: recording started, get ready
     // [T-leogateway] Remote-gateway approvals. The wrist is the fastest place
     // to unblock a Mac that is waiting on a yes/no.
     static let kindApprovalRequest = "approvalRequest"   // phone → watch
     static let kindApprovalReply = "approvalReply"       // watch → phone
     static let choices = "choices"
     static let choice = "choice"
+    /// CommandRisk raw value; the wrist colors the card and asks for a crown
+    /// turn before allowing a high-risk command.
+    static let risk = "risk"
     // [T-watch-standalone] phone → watch (transferUserInfo): the model the
     // watch calls directly when the phone is out of reach.
     static let kindStandaloneConfig = "standaloneConfig"
@@ -198,6 +202,7 @@ final class WatchBridge: NSObject, ObservableObject {
             WatchPayloadKey.requestId: approvalId,
             WatchPayloadKey.text: WatchTextSanitizer.plain(command ?? reason ?? ""),
             WatchPayloadKey.choices: choices,
+            WatchPayloadKey.risk: (command.map(CommandRisk.assess) ?? .medium).rawValue,
         ], replyHandler: nil, errorHandler: { _ in })
     }
 
@@ -384,6 +389,20 @@ extension WatchBridge: WCSessionDelegate {
         }
     }
 
+    /// Messages sent without a reply handler land here, not in the variant
+    /// below — cancelAsk and wake are sent that way, and used to be dropped.
+    nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
+        self.session(session, didReceiveMessage: message, replyHandler: { _ in })
+    }
+
+    /// Queued delivery from the wrist: an approval answered while the phone
+    /// was out of reach. Each approval resolves once, so a reply that also
+    /// arrived live is ignored here.
+    nonisolated func session(_ session: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
+        guard (userInfo[WatchPayloadKey.kind] as? String) == WatchPayloadKey.kindApprovalReply else { return }
+        self.session(session, didReceiveMessage: userInfo, replyHandler: { _ in })
+    }
+
     nonisolated func session(
         _ session: WCSession,
         didReceiveMessage message: [String: Any],
@@ -406,6 +425,9 @@ extension WatchBridge: WCSessionDelegate {
                 let stopped = WatchAskRunner.cancel(requestId: requestId)
                 replyHandler(["ok": stopped])
             }
+        case WatchPayloadKey.kindWake:
+            // Receiving it is the point: iOS has already woken the app.
+            replyHandler(["ok": true])
         case WatchPayloadKey.kindApprovalReply:
             let choice = (message[WatchPayloadKey.choice] as? String) ?? ""
             replyHandler(["ok": !requestId.isEmpty && !choice.isEmpty])
@@ -539,7 +561,9 @@ enum WatchAskRunner {
         }
         running[requestId] = sid
         defer { running.removeValue(forKey: requestId) }
-        vm.inputText = prompt
+        // The answer is read on a 45 mm screen and often spoken: ask for it in
+        // that shape. Hidden from the chat bubble like every system reminder.
+        vm.inputText = prompt + wristReminder
         vm.send()
         // Wait for the run to settle (same observation pattern as the widget
         // runner): give it up to 3 minutes, then report whatever exists.
@@ -560,6 +584,8 @@ enum WatchAskRunner {
         WatchBridge.shared.resetDedupe()
         WatchBridge.shared.pushStatus()
     }
+
+    private static let wristReminder = "\n\n<system-reminder>This message was spoken on the user's Apple Watch. Do the task as usual, but write the final reply for a watch face that may read it aloud: plain Chinese text, no Markdown, tables or code blocks, lead with the answer, at most about 120 characters unless the user asked for detail.</system-reminder>"
 
     /// Stops the run behind a wrist request. False when it already finished.
     static func cancel(requestId: String) -> Bool {

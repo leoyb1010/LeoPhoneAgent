@@ -246,6 +246,22 @@ final class AssistantBlock: Identifiable, ObservableObject {
         }
     }
 
+    /// [T-stream-hops] The off-main stream keeps the running thinking text and
+    /// hands it over at flush time: one main-actor hop per flush instead of
+    /// one per token. `full` always extends what the buffer already holds.
+    func syncThinkingBuffer(_ full: String) {
+        guard kind == .thinking, full.count > thinkingContentBuffer.count else { return }
+        thinkingContentBuffer = full
+        contentUpdateSeq += 1
+    }
+
+    /// [T-thinking-duration] Closes the thinking clock once (the header then
+    /// reads "思考了 N 秒"). Reuses the tool timing fields: display only.
+    func finishThinkingClock() {
+        guard kind == .thinking, toolDuration == nil, let start = toolStartTime else { return }
+        toolDuration = Date().timeIntervalSince(start)
+    }
+
     // [T-thinking-stream-jank] Adaptive flush throttle for streaming thinking
     // content. Each flush costs a body re-eval + windowed Text re-layout + a
     // nested animated scrollTo in the EXPANDED view, and that cost grows with
@@ -309,6 +325,12 @@ final class AssistantBlock: Identifiable, ObservableObject {
     @Published var wasBackgroundSuspended: Bool = false
     /// Cached parsed markdown for completed text blocks.
     @Published var cachedMarkdown: MarkdownContent?
+    /// [T-stream-table-tail] True between the first streamed flush and the
+    /// finalize. `cachedMarkdown` can't tell the two apart any more — the
+    /// stream parses off-main and hands that parse in on every flush — so the
+    /// renderer asks this instead. Not published: it only changes together
+    /// with `content`, which already triggers the re-render.
+    var isStreamingText = false
     /// Cached rendered NSAttributedString for completed text blocks.
     /// Set once when cachedMarkdown is finalized; avoids re-running MarkdownNSRenderer
     /// on every SwiftUI updateUIView triggered by unrelated state changes.

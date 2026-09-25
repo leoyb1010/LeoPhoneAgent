@@ -240,6 +240,8 @@ extension AIChatViewModel {
         var result = StreamResult()
         var currentTextBlockIdx: Int? = nil
         var currentThinkingBlockIdx: Int? = nil
+        var liveSpeak = false
+        var liveSpeakCheckedAt = Date.distantPast
         let speakEnabled = await MainActor.run { self.speakEnabled }
         await MainActor.run { VoiceLog.log("stream start: speakEnabled snapshot=\(self.speakEnabled)") }
 
@@ -377,10 +379,13 @@ extension AIChatViewModel {
                 case .text:
                     // Finalize thinking block content if it was streaming
                     if let thinkIdx = currentThinkingBlockIdx, !result.thinkingText.isEmpty {
+                        let finalThinking = result.thinkingText
                         await MainActor.run {
                             guard msgIdx < messages.count,
                                   thinkIdx < messages[msgIdx].blocks.count else { return }
+                            messages[msgIdx].blocks[thinkIdx].syncThinkingBuffer(finalThinking)
                             messages[msgIdx].blocks[thinkIdx].flushThinkingBuffer()
+                            messages[msgIdx].blocks[thinkIdx].finishThinkingClock()
                         }
                         currentThinkingBlockIdx = nil
                         result.thinkingText = ""
@@ -411,10 +416,13 @@ extension AIChatViewModel {
                     // Finalize any in-flight thinking block before the tool block appends,
                     // so the next thinking segment (after this tool) opens its own block.
                     if let thinkIdx = currentThinkingBlockIdx, !result.thinkingText.isEmpty {
+                        let finalThinking = result.thinkingText
                         await MainActor.run {
                             guard msgIdx < messages.count,
                                   thinkIdx < messages[msgIdx].blocks.count else { return }
+                            messages[msgIdx].blocks[thinkIdx].syncThinkingBuffer(finalThinking)
                             messages[msgIdx].blocks[thinkIdx].flushThinkingBuffer()
+                            messages[msgIdx].blocks[thinkIdx].finishThinkingClock()
                         }
                         currentThinkingBlockIdx = nil
                         result.thinkingText = ""
@@ -503,7 +511,12 @@ extension AIChatViewModel {
                     // so toggling read-replies ON mid-reply takes effect this turn.
                     // `speakQueued` itself re-checks `canSpeakNow`, so when off this
                     // just advances the spoken offset cheaply.
-                    let liveSpeak = await MainActor.run { self.speakEnabled }
+                    // [T-stream-hops] Read the switch at most twice a second,
+                    // not with a main-actor hop per token.
+                    if Date().timeIntervalSince(liveSpeakCheckedAt) > 0.5 {
+                        liveSpeak = await MainActor.run { self.speakEnabled }
+                        liveSpeakCheckedAt = Date()
+                    }
                     if liveSpeak {
                         // On the FIRST textDelta of this TURN, clear THIS session's
                         // previous reply from the TTS queue so the new content takes
@@ -871,9 +884,9 @@ extension AIChatViewModel {
                 if currentThinkingBlockIdx == nil {
                     let idx = await MainActor.run { () -> Int in
                         guard msgIdx < messages.count else { return -1 }
-                        messages[msgIdx].blocks.append(
-                            AssistantBlock(kind: .thinking, content: "")
-                        )
+                        let thinking = AssistantBlock(kind: .thinking, content: "")
+                        thinking.toolStartTime = Date()   // [T-thinking-duration]
+                        messages[msgIdx].blocks.append(thinking)
                         return messages[msgIdx].blocks.count - 1
                     }
                     guard idx >= 0 else { continue }
@@ -881,14 +894,9 @@ extension AIChatViewModel {
                     // Reset accumulator — each thinking block has its own text.
                     result.thinkingText = ""
                 }
+                // [T-stream-hops] Accumulated here, off the main actor; the
+                // block's buffer catches up at the throttled flush below.
                 result.thinkingText += text
-                // Append to the block's non-published buffer (O(1) for SwiftUI).
-                await MainActor.run {
-                    guard msgIdx < self.messages.count,
-                          let thinkIdx = currentThinkingBlockIdx,
-                          thinkIdx < self.messages[msgIdx].blocks.count else { return }
-                    self.messages[msgIdx].blocks[thinkIdx].appendThinkingDelta(text)
-                }
                 // Throttled flush to @Published content — only fires
                 // objectWillChange when we actually push to `content`. The
                 // interval is ADAPTIVE [T-thinking-stream-jank]: it widens as
@@ -900,10 +908,12 @@ extension AIChatViewModel {
                 let flushInterval = AssistantBlock.thinkingFlushInterval(forLength: result.thinkingText.count)
                 if thinkNow.timeIntervalSince(lastThinkingDeltaFlush) >= flushInterval {
                     lastThinkingDeltaFlush = thinkNow
+                    let thinkingSoFar = result.thinkingText
                     await MainActor.run {
                         guard msgIdx < self.messages.count,
                               let thinkIdx = currentThinkingBlockIdx,
                               thinkIdx < self.messages[msgIdx].blocks.count else { return }
+                        self.messages[msgIdx].blocks[thinkIdx].syncThinkingBuffer(thinkingSoFar)
                         self.messages[msgIdx].blocks[thinkIdx].flushThinkingBuffer()
                         self.objectWillChange.send()
                         if self.isNearBottom { self.scrollToBottomSignal.send() }
@@ -940,6 +950,7 @@ extension AIChatViewModel {
                         guard msgIdx < messages.count,
                               thinkIdx < messages[msgIdx].blocks.count else { return }
                         messages[msgIdx].blocks[thinkIdx].content = finalThinking
+                        messages[msgIdx].blocks[thinkIdx].finishThinkingClock()
                     }
                 }
                 result.stopReason = reason
@@ -968,10 +979,14 @@ extension AIChatViewModel {
                     )
                 }
             }
+            await syncThinkingTail(msgIdx: msgIdx, thinkIdx: currentThinkingBlockIdx, text: result.thinkingText)
             throw CancellationError()
         } catch {
             result.isStreamInterrupted = true
             _streamError = error
+        }
+        if _streamError != nil {
+            await syncThinkingTail(msgIdx: mutableMsgIdx, thinkIdx: currentThinkingBlockIdx, text: result.thinkingText)
         }
         if let err = _streamError { throw err }
         // Stream ended cleanly. First drain any un-extracted tail past
@@ -1294,6 +1309,18 @@ extension AIChatViewModel {
     }
 
     /// Format byte count into a human-readable string.
+    /// [T-stream-hops] A stream cut short (cancel / error) hands the thinking
+    /// it already received to the block, so nothing between flushes is lost.
+    nonisolated func syncThinkingTail(msgIdx: Int, thinkIdx: Int?, text: String) async {
+        guard let thinkIdx, !text.isEmpty else { return }
+        await MainActor.run {
+            guard msgIdx < messages.count, thinkIdx < messages[msgIdx].blocks.count else { return }
+            messages[msgIdx].blocks[thinkIdx].syncThinkingBuffer(text)
+            messages[msgIdx].blocks[thinkIdx].flushThinkingBuffer()
+            messages[msgIdx].blocks[thinkIdx].finishThinkingClock()
+        }
+    }
+
     nonisolated func formatBytes(_ bytes: Int) -> String {
         if bytes < 1024 { return "\(bytes) B" }
         let kb = Double(bytes) / 1024.0

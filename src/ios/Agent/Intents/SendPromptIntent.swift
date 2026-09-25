@@ -145,7 +145,11 @@ struct SendPromptIntent: AppIntent {
             throw QuickTaskIntentError.cancelledBeforeStart
         }
 
-        vm.inputText = prompt
+        // [T-ios27-voice-only] Siri with no screen (AirPods, CarPlay, a locked
+        // phone): the answer is heard, not read — ask for a short spoken reply.
+        var voiceOnly = false
+        if #available(iOS 27, *) { voiceOnly = systemContext.isVoiceOnly }
+        vm.inputText = voiceOnly ? prompt + Self.voiceOnlyReminder : prompt
         let sid = vm.sessionId ?? "unknown"
         let runId = try Self.dispatchRun(vm: vm, sessionId: sid, pendingId: pendingId) { vm.send() }
 
@@ -175,9 +179,19 @@ struct SendPromptIntent: AppIntent {
         )
 
         if waitForResult {
-            let settled = await Self.settleRun(
-                sessionId: sid, runId: runId, pendingId: pendingId,
-                title: "LeoPhoneAgent Task", notificationId: "shortcut-done")
+            let settle = {
+                await Self.settleRun(
+                    sessionId: sid, runId: runId, pendingId: pendingId,
+                    title: "LeoPhoneAgent Task", notificationId: "shortcut-done")
+            }
+            // [T-ios27-long-running] iOS 27 lets a waiting shortcut outlive the
+            // ~30 s intent budget instead of being cut off mid-answer.
+            let settled: (outcome: AgentRunOutcome, text: String)
+            if #available(iOS 27, *) {
+                settled = try await performBackgroundTask { await settle() }
+            } else {
+                settled = await settle()
+            }
             let responseText = settled.text
 
             let result = SendPromptResult(
@@ -190,7 +204,8 @@ struct SendPromptIntent: AppIntent {
                 artifactFileNames: await SendPromptResult.artifactNames(for: sid),
                 runId: runId
             )
-            return .result(value: result, dialog: "\(responseText.prefix(500))")
+            let spoken = voiceOnly ? String(VoiceTextSanitizer.sanitize(responseText).prefix(240)) : String(responseText.prefix(500))
+            return .result(value: result, dialog: "\(spoken)")
         }
 
         // Async mode: return immediately, notify on completion in background
@@ -211,6 +226,9 @@ struct SendPromptIntent: AppIntent {
 
         return .result(value: result, dialog: "Task started with \(modelName). I'll notify you when it's done.")
     }
+
+    /// Appended to a voice-only prompt; stripped from what the chat displays.
+    static let voiceOnlyReminder = "\n\n<system-reminder>This request came through Siri with no screen — the reply will be read aloud. Do the task as usual, but answer in plain spoken language: no Markdown, lists, tables or code, lead with the answer, about three short sentences unless the user asked for detail.</system-reminder>"
 
     /// Ensures the IntentFile has a usable filename with a correct extension.
     /// Shortcuts often passes files with no extension (e.g. "IMG_1234") or a
@@ -294,6 +312,9 @@ struct SendPromptIntent: AppIntent {
     }
 }
 
+@available(iOS 27, *)
+extension SendPromptIntent: LongRunningIntent {}
+
 /// Helper for posting local notifications from Shortcuts intents.
 /// Tapping the notification opens the associated session.
 enum ShortcutNotification {
@@ -310,16 +331,7 @@ enum ShortcutNotification {
         // Request permission if needed (no-op if already granted)
         center.requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
 
-        // Register category (idempotent)
-        let category = UNNotificationCategory(
-            identifier: categoryId,
-            actions: [],
-            intentIdentifiers: []
-        )
-        center.getNotificationCategories { existing in
-            // [T-siri-approval-notify] set 是整体替换;并集注册,别抹掉其他类别的按钮。
-            center.setNotificationCategories(existing.union([category]))
-        }
+        LeoNotificationCategories.register()
 
         let content = UNMutableNotificationContent()
         content.title = title
@@ -405,13 +417,9 @@ final class ShortcutNotificationDelegate: NSObject, UNUserNotificationCenterDele
     /// notification on a killed app used to land on the Launch Session
     /// default instead of the tapped session).
     func register() {
-        let center = UNUserNotificationCenter.current()
-        center.delegate = self
-        // [T-siri-approval-notify] Mac 审批通知的「批准/拒绝」按钮类别。
-        // 启动即注册(并集式),按钮才会出现在锁屏与横幅上。
-        center.getNotificationCategories { existing in
-            center.setNotificationCategories(existing.union([HarnessApprovalNotifier.category]))
-        }
+        UNUserNotificationCenter.current().delegate = self
+        // 审批按钮、回复框的类别启动即注册,锁屏与横幅上才有按钮。
+        LeoNotificationCategories.register()
     }
 
     /// Called when user taps the notification (app in foreground or background).
@@ -425,7 +433,20 @@ final class ShortcutNotificationDelegate: NSObject, UNUserNotificationCenterDele
         if HarnessApprovalNotifier.handle(response: response, completion: completionHandler) {
             return
         }
+        if NotificationQuickReply.handle(response: response, completion: completionHandler) {
+            return
+        }
         let userInfo = response.notification.request.content.userInfo
+        // [T-approval-vocab] 本机敏感操作的审批按钮:在锁屏 / 手表上直接裁决。
+        if let decision = SensitiveToolGate.decision(forNotificationAction: response.actionIdentifier),
+           let idString = userInfo["sensitiveToolApprovalId"] as? String,
+           let requestId = UUID(uuidString: idString) {
+            Task { @MainActor in
+                SensitiveToolGate.shared.resolve(decision, requestId: requestId)
+                completionHandler()
+            }
+            return
+        }
         if let sessionId = userInfo["sessionId"] as? String {
             DispatchQueue.main.async {
                 // Buffer first (cold-launch consumer), then post (warm-path
@@ -447,7 +468,89 @@ final class ShortcutNotificationDelegate: NSObject, UNUserNotificationCenterDele
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        LeoPerf.pushArrived(notification.request.content.userInfo)
+        let info = notification.request.content.userInfo
+        LeoPerf.pushArrived(info)
+        // [T-presence] You're looking at that very session: keep it in the
+        // list, but no banner or sound over what's already on screen.
+        let sessionId = (info["sessionId"] ?? info["harnessSessionId"] ?? info["session_id"]) as? String
+        if let sessionId, !sessionId.isEmpty, sessionId == AIChatViewModel.activeSessionId {
+            completionHandler([.list])
+            return
+        }
         completionHandler([.banner, .sound])
+    }
+}
+
+// MARK: - Notification categories
+
+/// Every actionable category, registered in one place.
+///
+/// `setNotificationCategories` replaces the whole set, and a category is
+/// matched by identifier — so each post site used to re-register ITS category
+/// with no actions, which is how buttons could vanish depending on which
+/// notification fired last. All sites now call this one function.
+enum LeoNotificationCategories {
+    static let backgroundTaskId = "BACKGROUND_TASK"
+
+    static var all: [UNNotificationCategory] {
+        [
+            HarnessApprovalNotifier.category,
+            SensitiveToolGate.notificationCategory,
+            UNNotificationCategory(identifier: backgroundTaskId, actions: [NotificationQuickReply.action],
+                                   intentIdentifiers: []),
+            UNNotificationCategory(identifier: ShortcutNotification.categoryId, actions: [NotificationQuickReply.action],
+                                   intentIdentifiers: []),
+        ]
+    }
+
+    static func register() {
+        let center = UNUserNotificationCenter.current()
+        let ours = all
+        let ids = Set(ours.map(\.identifier))
+        center.getNotificationCategories { existing in
+            center.setNotificationCategories(existing.filter { !ids.contains($0.identifier) }.union(ours))
+        }
+    }
+}
+
+/// [T-notification-reply] "Task finished" → reply right from the notification
+/// (lock screen, banner, watch) without opening the app. The text goes into
+/// the same session: sent now, or queued if that session is still running.
+enum NotificationQuickReply {
+    static let actionId = "LEO_QUICK_REPLY"
+
+    static var action: UNTextInputNotificationAction {
+        UNTextInputNotificationAction(identifier: actionId, title: String(localized: "回复"), options: [],
+                                      textInputButtonTitle: String(localized: "发送"),
+                                      textInputPlaceholder: String(localized: "接着说…"))
+    }
+
+    /// Returns true when it handled the response (and owns `completion`).
+    static func handle(response: UNNotificationResponse, completion: @escaping () -> Void) -> Bool {
+        guard response.actionIdentifier == actionId,
+              let reply = response as? UNTextInputNotificationResponse,
+              let sessionId = response.notification.request.content.userInfo["sessionId"] as? String
+        else { return false }
+        let text = String(reply.userText.trimmingCharacters(in: .whitespacesAndNewlines).prefix(20_000))
+        guard !text.isEmpty else { completion(); return true }
+        Task { @MainActor in
+            defer { completion() }
+            BackgroundKeepAliveManager.shared.setup()
+            let eager = BackgroundKeepAliveManager.shared.armEagerlyForShortcut(
+                sessionId: sessionId, caller: "NotificationQuickReply")
+            let (vm, isNew) = ViewModelCache.shared.getOrCreate(for: sessionId)
+            if isNew { await vm.loadSession() }
+            vm.inputText = text
+            if vm.isProcessing {
+                vm.enqueuePrompt()
+                return
+            }
+            let pendingId = ShortcutRunTracker.markPending(
+                intent: "NotificationQuickReply", sessionId: sessionId,
+                eagerKeepAliveArmed: eager.armed, eagerKeepAliveSkippedReason: eager.skipReason)
+            _ = try? SendPromptIntent.dispatchRun(vm: vm, sessionId: vm.sessionId ?? sessionId,
+                                                  pendingId: pendingId) { vm.send() }
+        }
+        return true
     }
 }
